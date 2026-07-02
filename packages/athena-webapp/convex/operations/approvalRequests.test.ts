@@ -562,6 +562,51 @@ describe("approval request helpers", () => {
     });
   });
 
+  it("rejects unsupported service deposit reviews before consuming manager proof", async () => {
+    const { ctx, tables } = createApprovalRequestMutationCtx({
+      authUserId: "auth-user-1",
+      role: "full_admin",
+    });
+    tables.approvalRequest.set("approval-service-deposit", {
+      _id: "approval-service-deposit",
+      organizationId: "org-1",
+      requestType: "service_deposit_review",
+      status: "pending",
+      storeId: "store-1",
+      subjectId: "service-case-1",
+      subjectType: "service_case",
+    });
+    tables.approvalProof.set("proof-service-deposit", {
+      _id: "proof-service-deposit",
+      actionKey: "operations.approval_request.decide",
+      approvedByCredentialId: "credential-1",
+      approvedByStaffProfileId: "staff-manager-1",
+      createdAt: 1,
+      expiresAt: Date.now() + 60_000,
+      requiredRole: "manager",
+      storeId: "store-1",
+      subjectId: "approval-service-deposit",
+      subjectLabel: "service_deposit_review",
+      subjectType: "approval_request",
+    });
+
+    await expect(
+      decideApprovalRequestAsAuthenticatedUserWithCtx(ctx, {
+        approvalProofId: "proof-service-deposit" as Id<"approvalProof">,
+        approvalRequestId:
+          "approval-service-deposit" as Id<"approvalRequest">,
+        decision: "approved",
+      }),
+    ).rejects.toThrow("Service deposit approval reviews can only be retired.");
+
+    expect(tables.approvalProof.get("proof-service-deposit")).not.toHaveProperty(
+      "consumedAt",
+    );
+    expect(tables.approvalRequest.get("approval-service-deposit")).toMatchObject({
+      status: "pending",
+    });
+  });
+
   it("rejects ambiguous duplicate Athena user matches for the authenticated reviewer", async () => {
     const { ctx } = createApprovalRequestMutationCtx({
       athenaUsers: [
@@ -707,6 +752,267 @@ describe("approval request helpers", () => {
           "This transaction already has an item adjustment waiting for approval.",
       },
     });
+  });
+
+  it("rejects unsupported service deposit approval while allowing retirement", async () => {
+    const { ctx, tables } = createApprovalRequestMutationCtx({
+      authUserId: "auth-user-1",
+      role: "full_admin",
+    });
+    tables.approvalRequest.set("approval-service-deposit-1", {
+      _id: "approval-service-deposit-1",
+      organizationId: "org-1",
+      requestType: "service_deposit_review",
+      status: "pending",
+      storeId: "store-1",
+      subjectId: "service-case-1",
+      subjectType: "service_case",
+      workItemId: "work-item-service-1",
+    });
+    tables.operationalWorkItem.set("work-item-service-1", {
+      _id: "work-item-service-1",
+      approvalRequestId: "approval-service-deposit-1",
+      approvalState: "pending",
+      organizationId: "org-1",
+      status: "open",
+      storeId: "store-1",
+      type: "service_deposit_review",
+    });
+    tables.approvalProof.set("proof-1", {
+      ...tables.approvalProof.get("proof-1"),
+      subjectId: "approval-service-deposit-1",
+      subjectLabel: "service_deposit_review",
+    });
+
+    await expect(
+      decideApprovalRequestAsCommandWithCtx(ctx, {
+        approvalProofId: "proof-1" as Id<"approvalProof">,
+        approvalRequestId:
+          "approval-service-deposit-1" as Id<"approvalRequest">,
+        decision: "approved",
+      }),
+    ).resolves.toMatchObject({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+        message: "Service deposit approval reviews can only be retired.",
+      },
+    });
+    expect(
+      tables.approvalRequest.get("approval-service-deposit-1"),
+    ).toMatchObject({
+      status: "pending",
+    });
+    expect(tables.approvalProof.get("proof-1")).not.toHaveProperty(
+      "consumedAt",
+    );
+
+    await expect(
+      decideApprovalRequestAsCommandWithCtx(ctx, {
+        approvalProofId: "proof-1" as Id<"approvalProof">,
+        approvalRequestId:
+          "approval-service-deposit-1" as Id<"approvalRequest">,
+        decision: "rejected",
+      }),
+    ).resolves.toMatchObject({
+      kind: "ok",
+      data: {
+        status: "rejected",
+      },
+    });
+    expect(
+      tables.operationalWorkItem.get("work-item-service-1"),
+    ).toMatchObject({
+      approvalState: "rejected",
+      status: "cancelled",
+    });
+  });
+
+  it("does not retire unrelated work items from stale legacy approval links", async () => {
+    const { ctx, tables } = createApprovalRequestMutationCtx({
+      authUserId: "auth-user-1",
+      role: "full_admin",
+    });
+    tables.approvalRequest.set("approval-service-deposit-stale", {
+      _id: "approval-service-deposit-stale",
+      organizationId: "org-1",
+      requestType: "service_deposit_review",
+      status: "pending",
+      storeId: "store-1",
+      subjectId: "service-case-1",
+      subjectType: "service_case",
+      workItemId: "work-item-unrelated",
+    });
+    tables.operationalWorkItem.set("work-item-unrelated", {
+      _id: "work-item-unrelated",
+      approvalRequestId: "approval-other",
+      approvalState: "pending",
+      organizationId: "org-1",
+      status: "open",
+      storeId: "store-1",
+      type: "service_deposit_review",
+    });
+    tables.approvalProof.set("proof-stale", {
+      ...tables.approvalProof.get("proof-1"),
+      _id: "proof-stale",
+      subjectId: "approval-service-deposit-stale",
+      subjectLabel: "service_deposit_review",
+    });
+
+    await expect(
+      decideApprovalRequestAsCommandWithCtx(ctx, {
+        approvalProofId: "proof-stale" as Id<"approvalProof">,
+        approvalRequestId:
+          "approval-service-deposit-stale" as Id<"approvalRequest">,
+        decision: "rejected",
+      }),
+    ).resolves.toMatchObject({
+      kind: "ok",
+      data: {
+        status: "rejected",
+      },
+    });
+    expect(tables.operationalWorkItem.get("work-item-unrelated")).toMatchObject({
+      approvalRequestId: "approval-other",
+      approvalState: "pending",
+      status: "open",
+    });
+  });
+
+  it.each([
+    {
+      field: "storeId",
+      value: "store-2",
+    },
+    {
+      field: "organizationId",
+      value: "org-2",
+    },
+  ])(
+    "does not retire unsupported approval work items when $field does not match",
+    async ({ field, value }) => {
+      const { ctx, tables } = createApprovalRequestMutationCtx({
+        authUserId: "auth-user-1",
+        role: "full_admin",
+      });
+      tables.approvalRequest.set("approval-service-deposit-mismatch", {
+        _id: "approval-service-deposit-mismatch",
+        organizationId: "org-1",
+        requestType: "service_deposit_review",
+        status: "pending",
+        storeId: "store-1",
+        subjectId: "service-case-1",
+        subjectType: "service_case",
+        workItemId: "work-item-mismatch",
+      });
+      tables.operationalWorkItem.set("work-item-mismatch", {
+        _id: "work-item-mismatch",
+        approvalRequestId: "approval-service-deposit-mismatch",
+        approvalState: "pending",
+        organizationId: "org-1",
+        status: "open",
+        storeId: "store-1",
+        type: "service_deposit_review",
+        [field]: value,
+      });
+      tables.approvalProof.set("proof-mismatch", {
+        ...tables.approvalProof.get("proof-1"),
+        _id: "proof-mismatch",
+        subjectId: "approval-service-deposit-mismatch",
+        subjectLabel: "service_deposit_review",
+      });
+
+      await expect(
+        decideApprovalRequestAsCommandWithCtx(ctx, {
+          approvalProofId: "proof-mismatch" as Id<"approvalProof">,
+          approvalRequestId:
+            "approval-service-deposit-mismatch" as Id<"approvalRequest">,
+          decision: "rejected",
+        }),
+      ).resolves.toMatchObject({
+        kind: "ok",
+        data: {
+          status: "rejected",
+        },
+      });
+      expect(tables.operationalWorkItem.get("work-item-mismatch")).toMatchObject(
+        {
+          approvalState: "pending",
+          status: "open",
+          [field]: value,
+        },
+      );
+    },
+  );
+
+  it("rejects unsupported approval-only request types before consuming proof", async () => {
+    const { ctx, tables } = createApprovalRequestMutationCtx({
+      authUserId: "auth-user-1",
+      role: "full_admin",
+    });
+    tables.approvalRequest.set("approval-online-return-1", {
+      _id: "approval-online-return-1",
+      organizationId: "org-1",
+      requestType: "online_order_return_review",
+      status: "pending",
+      storeId: "store-1",
+      subjectId: "online-order-1",
+      subjectType: "online_order",
+    });
+    tables.approvalRequest.set("approval-legacy-item-1", {
+      _id: "approval-legacy-item-1",
+      organizationId: "org-1",
+      requestType: "pos_item_adjustment_review",
+      status: "pending",
+      storeId: "store-1",
+      subjectId: "adjustment-1",
+      subjectType: "pos_item_adjustment",
+    });
+    tables.approvalProof.set("proof-online-return", {
+      ...tables.approvalProof.get("proof-1"),
+      _id: "proof-online-return",
+      subjectId: "approval-online-return-1",
+      subjectLabel: "online_order_return_review",
+    });
+    tables.approvalProof.set("proof-legacy-item", {
+      ...tables.approvalProof.get("proof-1"),
+      _id: "proof-legacy-item",
+      subjectId: "approval-legacy-item-1",
+      subjectLabel: "pos_item_adjustment_review",
+    });
+
+    await expect(
+      decideApprovalRequestAsCommandWithCtx(ctx, {
+        approvalProofId: "proof-online-return" as Id<"approvalProof">,
+        approvalRequestId: "approval-online-return-1" as Id<"approvalRequest">,
+        decision: "approved",
+      }),
+    ).resolves.toMatchObject({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+        message: "Online return approval reviews are not supported yet.",
+      },
+    });
+    await expect(
+      decideApprovalRequestAsCommandWithCtx(ctx, {
+        approvalProofId: "proof-legacy-item" as Id<"approvalProof">,
+        approvalRequestId: "approval-legacy-item-1" as Id<"approvalRequest">,
+        decision: "approved",
+      }),
+    ).resolves.toMatchObject({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+        message: "Legacy item adjustment approval reviews can only be retired.",
+      },
+    });
+    expect(tables.approvalProof.get("proof-online-return")).not.toHaveProperty(
+      "consumedAt",
+    );
+    expect(tables.approvalProof.get("proof-legacy-item")).not.toHaveProperty(
+      "consumedAt",
+    );
   });
 
   it("maps queued void resolver precondition failures to command user errors", async () => {

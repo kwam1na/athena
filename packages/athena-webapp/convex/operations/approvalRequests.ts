@@ -27,6 +27,13 @@ import { consumeApprovalProofWithCtx } from "./approvalProofs";
 const APPROVAL_DECISION_ACTION_KEY = "operations.approval_request.decide";
 const ITEM_ADJUSTMENT_REQUEST_TYPE = "pos_item_adjustment";
 const ITEM_ADJUSTMENT_SUBJECT_TYPE = "pos_transaction_item_adjustment";
+const SERVICE_DEPOSIT_REVIEW_REQUEST_TYPE = "service_deposit_review";
+const APPROVAL_APPLY_UNSUPPORTED_REQUEST_TYPES = new Set([
+  SERVICE_DEPOSIT_REVIEW_REQUEST_TYPE,
+  "online_order_return_review",
+  "pos_item_adjustment_review",
+]);
+const TERMINAL_WORK_ITEM_STATUSES = new Set(["completed", "cancelled"]);
 const ITEM_ADJUSTMENT_RETIRED_PRECONDITION_MESSAGES = new Set([
   "Register session expected cash cannot be negative.",
 ]);
@@ -124,6 +131,83 @@ function shouldRetireItemAdjustmentApprovalAfterApplyFailure(error: unknown) {
   return ITEM_ADJUSTMENT_RETIRED_PRECONDITION_MESSAGES.has(message);
 }
 
+function unsupportedApprovalDecisionMessage(requestType: string) {
+  if (requestType === SERVICE_DEPOSIT_REVIEW_REQUEST_TYPE) {
+    return "Service deposit approval reviews can only be retired.";
+  }
+
+  if (requestType === "online_order_return_review") {
+    return "Online return approval reviews are not supported yet.";
+  }
+
+  if (requestType === "pos_item_adjustment_review") {
+    return "Legacy item adjustment approval reviews can only be retired.";
+  }
+
+  return null;
+}
+
+function assertApprovalDecisionCanApply(args: {
+  decision: DecideApprovalRequestArgs["decision"];
+  requestType: string;
+}) {
+  if (
+    args.decision === "approved" &&
+    APPROVAL_APPLY_UNSUPPORTED_REQUEST_TYPES.has(args.requestType)
+  ) {
+    throw new Error(
+      unsupportedApprovalDecisionMessage(args.requestType) ??
+        "Approval reviews of this type are not supported yet.",
+    );
+  }
+}
+
+async function retireLinkedUnsupportedApprovalWorkItemWithCtx(
+  ctx: MutationCtx,
+  args: {
+    approvalRequest: {
+      _id: Id<"approvalRequest">;
+      organizationId?: Id<"organization">;
+      requestType: string;
+      storeId: Id<"store">;
+      workItemId?: Id<"operationalWorkItem">;
+    };
+    decision: Exclude<DecideApprovalRequestArgs["decision"], "approved">;
+  },
+) {
+  if (!APPROVAL_APPLY_UNSUPPORTED_REQUEST_TYPES.has(args.approvalRequest.requestType)) {
+    return;
+  }
+
+  if (!args.approvalRequest.workItemId) {
+    return;
+  }
+
+  const workItem = await ctx.db.get(
+    "operationalWorkItem",
+    args.approvalRequest.workItemId,
+  );
+  if (!workItem) {
+    return;
+  }
+
+  if (
+    workItem.storeId !== args.approvalRequest.storeId ||
+    workItem.organizationId !== args.approvalRequest.organizationId ||
+    workItem.approvalRequestId !== args.approvalRequest._id ||
+    TERMINAL_WORK_ITEM_STATUSES.has(workItem.status)
+  ) {
+    return;
+  }
+
+  await ctx.db.patch("operationalWorkItem", workItem._id, {
+    approvalState: args.decision,
+    ...(workItem.type === SERVICE_DEPOSIT_REVIEW_REQUEST_TYPE
+      ? { status: "cancelled" }
+      : {}),
+  });
+}
+
 async function retireItemAdjustmentApprovalAfterApplyFailure(
   ctx: MutationCtx,
   args: {
@@ -208,6 +292,11 @@ export async function decideApprovalRequestWithCtx(
     throw new Error("Only full admins can resolve approval requests.");
   }
 
+  assertApprovalDecisionCanApply({
+    decision: args.decision,
+    requestType: approvalRequest.requestType,
+  });
+
   if (
     approvalRequest.requestType === "inventory_adjustment_review" &&
     approvalRequest.subjectType === "stock_adjustment_batch"
@@ -261,6 +350,13 @@ export async function decideApprovalRequestWithCtx(
       ? approvalRequest.notes ?? approvalRequest.reason
       : undefined);
 
+  if (args.decision !== "approved") {
+    await retireLinkedUnsupportedApprovalWorkItemWithCtx(ctx, {
+      approvalRequest,
+      decision: args.decision,
+    });
+  }
+
   await ctx.db.patch("approvalRequest", args.approvalRequestId, {
     status: args.decision,
     decisionApprovedByStaffProfileId: args.decisionApprovedByStaffProfileId,
@@ -306,6 +402,11 @@ export async function decideApprovalRequestAsAuthenticatedUserWithCtx(
     failureMessage: "Only full admins can resolve approval requests.",
     organizationId: approvalRequest.organizationId,
     userId: reviewer._id,
+  });
+
+  assertApprovalDecisionCanApply({
+    decision: args.decision,
+    requestType: approvalRequest.requestType,
   });
 
   if (!args.approvalProofId) {
@@ -375,6 +476,9 @@ function mapDecideApprovalRequestError(
 
   if (
     message === "Approval request has already been decided." ||
+    message === "Service deposit approval reviews can only be retired." ||
+    message === "Online return approval reviews are not supported yet." ||
+    message === "Legacy item adjustment approval reviews can only be retired." ||
     message === "Approval proof was not found." ||
     message === "Approval proof does not match this command." ||
     message === "Approval proof has already been used." ||

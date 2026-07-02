@@ -169,6 +169,7 @@ import type * as operations_helpers_eventBuilders from "../operations/helpers/ev
 import type * as operations_helpers_linking from "../operations/helpers/linking.js";
 import type * as operations_inventoryMovements from "../operations/inventoryMovements.js";
 import type * as operations_managerElevations from "../operations/managerElevations.js";
+import type * as operations_openWorkInventoryReviews from "../operations/openWorkInventoryReviews.js";
 import type * as operations_operationalEvents from "../operations/operationalEvents.js";
 import type * as operations_operationalWorkItems from "../operations/operationalWorkItems.js";
 import type * as operations_paymentAllocations from "../operations/paymentAllocations.js";
@@ -595,6 +596,7 @@ declare const fullApi: ApiFromModules<{
   "operations/helpers/linking": typeof operations_helpers_linking;
   "operations/inventoryMovements": typeof operations_inventoryMovements;
   "operations/managerElevations": typeof operations_managerElevations;
+  "operations/openWorkInventoryReviews": typeof operations_openWorkInventoryReviews;
   "operations/operationalEvents": typeof operations_operationalEvents;
   "operations/operationalWorkItems": typeof operations_operationalWorkItems;
   "operations/paymentAllocations": typeof operations_paymentAllocations;

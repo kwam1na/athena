@@ -1,6 +1,5 @@
 import { v } from "convex/values";
 import { mutation, query } from "../_generated/server";
-import { buildApprovalRequest } from "./approvalRequestHelpers";
 import { resolveRegisterSessionForInStoreCollectionWithCtx } from "../cashControls/paymentAllocationAttribution";
 import { normalizeLookupValue, normalizePhoneNumber } from "./helpers/linking";
 import { recordInventoryMovementWithCtx } from "./inventoryMovements";
@@ -9,6 +8,10 @@ import { recordOperationalEventWithCtx } from "./operationalEvents";
 import { recordPaymentAllocationWithCtx } from "./paymentAllocations";
 import { createServiceCaseWithCtx } from "../serviceOps/serviceCases";
 import { recordServiceCaseTraceBestEffort } from "../serviceOps/serviceCaseTracing";
+import {
+  requireAuthenticatedAthenaUserWithCtx,
+  requireOrganizationMemberRoleWithCtx,
+} from "../lib/athenaUserAuth";
 import { ok, userError } from "../../shared/commandResult";
 import { validateServiceIntakeInput } from "../../shared/serviceIntake";
 
@@ -237,6 +240,15 @@ export const createServiceIntake = mutation({
       });
     }
 
+    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+    await requireOrganizationMemberRoleWithCtx(ctx, {
+      allowedRoles: ["full_admin"],
+      failureMessage: "Only store admins can create service intake work.",
+      organizationId: store.organizationId,
+      userId: athenaUser._id,
+    });
+    const actorUserId = athenaUser._id;
+
     const assignedStaffProfile = await ctx.db.get(
       "staffProfile",
       args.assignedStaffProfileId
@@ -253,14 +265,12 @@ export const createServiceIntake = mutation({
       });
     }
 
-    const createdByStaffProfile = args.createdByUserId
-      ? await ctx.db
-          .query("staffProfile")
-          .withIndex("by_storeId_linkedUserId", (q) =>
-            q.eq("storeId", args.storeId).eq("linkedUserId", args.createdByUserId!)
-          )
-          .first()
-      : null;
+    const createdByStaffProfile = await ctx.db
+      .query("staffProfile")
+      .withIndex("by_storeId_linkedUserId", (q) =>
+        q.eq("storeId", args.storeId).eq("linkedUserId", actorUserId)
+      )
+      .first();
 
     const customerProfileResult = await resolveServiceIntakeCustomerProfile(ctx, {
       customerEmail: args.customerEmail,
@@ -287,16 +297,16 @@ export const createServiceIntake = mutation({
     const resolvedRegisterSessionId = hasDeposit && collectedInStore
       ? await resolveRegisterSessionForInStoreCollectionWithCtx(ctx, {
           actorStaffProfileId: createdByStaffProfile?._id,
-          actorUserId: args.createdByUserId,
+          actorUserId,
           registerSessionId: args.registerSessionId,
           storeId: args.storeId,
         })
       : undefined;
     const workItem = await createOperationalWorkItemWithCtx(ctx, {
-      approvalState: hasDeposit ? "pending" : "not_required",
+      approvalState: "not_required",
       assignedToStaffProfileId: args.assignedStaffProfileId,
       createdByStaffProfileId: createdByStaffProfile?._id,
-      createdByUserId: args.createdByUserId,
+      createdByUserId: actorUserId,
       customerProfileId: customerProfile._id,
       dueAt: args.scheduledAt,
       metadata: {
@@ -320,7 +330,7 @@ export const createServiceIntake = mutation({
 
     const serviceCase = await createServiceCaseWithCtx(ctx, {
       assignedStaffProfileId: args.assignedStaffProfileId,
-      createdByUserId: args.createdByUserId,
+      createdByUserId: actorUserId,
       customerProfileId: customerProfile._id,
       notes: trimOptional(args.notes),
       operationalWorkItemId: workItem._id,
@@ -334,41 +344,9 @@ export const createServiceIntake = mutation({
 
     const createdServiceCase = serviceCase.data;
 
-    const approvalRequest = hasDeposit
-      ? await (async () => {
-          const approvalRequestId = await ctx.db.insert(
-            "approvalRequest",
-            buildApprovalRequest({
-              metadata: {
-                depositAmount: args.depositAmount,
-                depositMethod: args.depositMethod,
-                intakeChannel: args.intakeChannel,
-              },
-              notes: trimOptional(args.notes),
-              organizationId: store.organizationId,
-              reason: `Approve deposit for ${args.serviceTitle.trim()}`,
-              requestType: "service_deposit_review",
-              registerSessionId: resolvedRegisterSessionId,
-              requestedByStaffProfileId: createdByStaffProfile?._id,
-              requestedByUserId: args.createdByUserId,
-              storeId: args.storeId,
-              subjectId: createdServiceCase._id,
-              subjectType: "service_case",
-              workItemId: workItem._id,
-            })
-          );
-
-          await ctx.db.patch("operationalWorkItem", workItem._id, {
-            approvalRequestId,
-          });
-
-          return ctx.db.get("approvalRequest", approvalRequestId);
-        })()
-      : null;
-
     const inventoryMovement = await recordInventoryMovementWithCtx(ctx, {
       actorStaffProfileId: createdByStaffProfile?._id,
-      actorUserId: args.createdByUserId,
+      actorUserId,
       customerProfileId: customerProfile._id,
       movementType: "service_item_received",
       notes: trimOptional(args.itemDescription) ?? args.serviceTitle.trim(),
@@ -385,7 +363,7 @@ export const createServiceIntake = mutation({
       hasDeposit && args.depositMethod
         ? await recordPaymentAllocationWithCtx(ctx, {
             actorStaffProfileId: createdByStaffProfile?._id,
-            actorUserId: args.createdByUserId,
+            actorUserId,
             allocationType: "service_deposit",
             amount: args.depositAmount!,
             collectedInStore,
@@ -402,8 +380,7 @@ export const createServiceIntake = mutation({
 
     await recordOperationalEventWithCtx(ctx, {
       actorStaffProfileId: createdByStaffProfile?._id,
-      actorUserId: args.createdByUserId,
-      approvalRequestId: approvalRequest?._id,
+      actorUserId,
       customerProfileId: customerProfile._id,
       eventType: "service_intake_created",
       inventoryMovementId: inventoryMovement?._id,
@@ -424,9 +401,8 @@ export const createServiceIntake = mutation({
 
     await recordServiceCaseTraceBestEffort(ctx, {
       actorStaffProfileId: createdByStaffProfile?._id,
-      actorUserId: args.createdByUserId,
+      actorUserId,
       amount: args.depositAmount,
-      approvalRequestId: approvalRequest?._id,
       direction: hasDeposit ? "in" : undefined,
       inventoryMovementId: inventoryMovement?._id,
       method: args.depositMethod,
@@ -437,7 +413,6 @@ export const createServiceIntake = mutation({
     });
 
     return ok({
-      approvalRequestId: approvalRequest?._id,
       customerProfileId: customerProfile._id,
       serviceCaseId: createdServiceCase._id,
       workItemId: workItem._id,

@@ -2379,6 +2379,7 @@ async function createSkippedInventoryReviewWorkItem(
       skippedMutationItems: input.inventoryValidation.skippedMutationItems,
       sourceId: input.sale.transactionId,
       sourceType,
+      terminalId: args.terminalId,
       trustedInventoryLines: trustedLines,
     },
     notes:

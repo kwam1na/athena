@@ -73,6 +73,7 @@ import {
   listRegisterCatalogSnapshot,
   listRegisterCatalogAvailability,
   listRegisterCatalogAvailabilitySnapshot,
+  mapPendingCheckoutReviewStatusToWorkItemPatch,
   quickAddSku,
   resolvePendingCheckoutItemReview,
 } from "./catalog";
@@ -202,6 +203,27 @@ describe("POS public catalog queries", () => {
       resolvePendingCheckoutItemReview,
       pendingReviewItem,
     );
+  });
+
+  it("maps pending checkout review decisions to source-owned work item states", () => {
+    expect(mapPendingCheckoutReviewStatusToWorkItemPatch("approved")).toEqual({
+      approvalState: "approved",
+      status: "completed",
+    });
+    expect(
+      mapPendingCheckoutReviewStatusToWorkItemPatch("linked_to_catalog"),
+    ).toEqual({
+      approvalState: "approved",
+      status: "completed",
+    });
+    expect(mapPendingCheckoutReviewStatusToWorkItemPatch("rejected")).toEqual({
+      approvalState: "rejected",
+      status: "completed",
+    });
+    expect(mapPendingCheckoutReviewStatusToWorkItemPatch("flagged")).toEqual({
+      approvalState: "needs_review",
+      status: "open",
+    });
   });
 
   it("requires same-organization POS access before returning full-store availability", async () => {

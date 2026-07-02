@@ -2705,6 +2705,7 @@ describe("projectLocalSyncEvent", () => {
             }),
           ],
           sourceType: "posTransaction",
+          terminalId: "terminal-1",
           trustedInventoryLines: [
             expect.objectContaining({
               productSkuId: "sku-1",
@@ -2718,6 +2719,26 @@ describe("projectLocalSyncEvent", () => {
         type: "synced_sale_inventory_review",
       }),
     ]);
+    expect(repository.mappings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          cloudId: "service-work-item-1",
+          cloudTable: "operationalWorkItem",
+          localId: "local-txn-1:inventory-review",
+          localIdKind: "inventoryReviewWorkItem",
+          localRegisterSessionId: "local-register-1",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+        }),
+      ]),
+    );
+    expect(
+      repository.mappings.filter(
+        (mapping) =>
+          mapping.localIdKind === "inventoryReviewWorkItem" &&
+          mapping.localId === "local-txn-1:inventory-review",
+      ),
+    ).toHaveLength(1);
   });
 
   it("keeps existing reviewed sale mappings against closed drawers as conflict evidence", async () => {

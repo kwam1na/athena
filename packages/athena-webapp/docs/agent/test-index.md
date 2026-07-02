@@ -97,6 +97,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`convex/operations/helpers/eventBuilders.test.ts`](../../convex/operations/helpers/eventBuilders.test.ts)
 - [`convex/operations/inventoryMovements.test.ts`](../../convex/operations/inventoryMovements.test.ts)
 - [`convex/operations/managerElevations.test.ts`](../../convex/operations/managerElevations.test.ts)
+- [`convex/operations/openWorkInventoryReviews.test.ts`](../../convex/operations/openWorkInventoryReviews.test.ts)
 - [`convex/operations/operationalEvents.test.ts`](../../convex/operations/operationalEvents.test.ts)
 - [`convex/operations/operationalWorkItems.test.ts`](../../convex/operations/operationalWorkItems.test.ts)
 - [`convex/operations/operationsQueryIndexes.test.ts`](../../convex/operations/operationsQueryIndexes.test.ts)

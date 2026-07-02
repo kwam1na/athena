@@ -1,9 +1,16 @@
 /* eslint-disable @convex-dev/no-collect-in-query -- V26-276 keeps service appointment screens and staff overlap checks store-scoped until we add pagination and time-windowed query helpers; truncating these indexed reads would hide real conflicts and appointments. */
 
-import { mutation, query } from "../_generated/server";
-import { Id } from "../_generated/dataModel";
+import { mutation, query, type MutationCtx } from "../_generated/server";
+import { Doc, Id } from "../_generated/dataModel";
 import { v } from "convex/values";
-import { createOperationalWorkItemWithCtx } from "../operations/operationalWorkItems";
+import {
+  createOperationalWorkItemWithCtx,
+  updateOperationalWorkItemStatusWithCtx,
+} from "../operations/operationalWorkItems";
+import {
+  requireAuthenticatedAthenaUserWithCtx,
+  requireOrganizationMemberRoleWithCtx,
+} from "../lib/athenaUserAuth";
 import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
 import { createServiceCaseWithCtx } from "./serviceCases";
 import { recordServiceCaseTraceBestEffort } from "./serviceCaseTracing";
@@ -14,6 +21,8 @@ const NON_BLOCKING_APPOINTMENT_STATUSES = new Set([
   "completed",
   "converted_to_walk_in",
 ]);
+const CURRENT_WORK_ITEM_STATUSES = ["open", "in_progress"] as const;
+const LEGACY_APPOINTMENT_WORK_ITEM_PROBE_LIMIT = 1_000;
 
 export function buildServiceAppointment(args: {
   assignedStaffProfileId: Id<"staffProfile">;
@@ -83,6 +92,74 @@ export function findOverlappingAppointment(
       );
     }) ?? null
   );
+}
+
+export async function closeCurrentServiceAppointmentWorkItemsWithCtx(
+  ctx: MutationCtx,
+  args: {
+    appointmentId: Id<"serviceAppointment">;
+    status: "completed" | "cancelled";
+    storeId: Id<"store">;
+  },
+) {
+  const indexedWorkItemGroups = await Promise.all(
+    CURRENT_WORK_ITEM_STATUSES.map((status) =>
+      ctx.db
+        .query("operationalWorkItem")
+        .withIndex("by_storeId_type_status_appointmentId", (q) =>
+          q
+            .eq("storeId", args.storeId)
+            .eq("type", "service_appointment")
+            .eq("status", status)
+            .eq("appointmentId", args.appointmentId),
+        )
+        .collect(),
+    ),
+  );
+  const legacyWorkItemGroups = await Promise.all(
+    CURRENT_WORK_ITEM_STATUSES.map((status) =>
+      ctx.db
+        .query("operationalWorkItem")
+        .withIndex("by_storeId_type_status", (q) =>
+          q
+            .eq("storeId", args.storeId)
+            .eq("type", "service_appointment")
+            .eq("status", status),
+        )
+        .take(LEGACY_APPOINTMENT_WORK_ITEM_PROBE_LIMIT),
+    ),
+  );
+  const workItemsById = new Map<
+    Id<"operationalWorkItem">,
+    Doc<"operationalWorkItem">
+  >();
+
+  for (const workItem of indexedWorkItemGroups.flat()) {
+    workItemsById.set(workItem._id, workItem);
+  }
+
+  for (const workItem of legacyWorkItemGroups.flat()) {
+    if (
+      workItem.appointmentId ||
+      workItem.metadata?.appointmentId !== args.appointmentId
+    ) {
+      continue;
+    }
+
+    workItemsById.set(workItem._id, workItem);
+  }
+
+  const patchedWorkItemIds: Array<Id<"operationalWorkItem">> = [];
+
+  for (const workItem of workItemsById.values()) {
+    await updateOperationalWorkItemStatusWithCtx(ctx, {
+      status: args.status,
+      workItemId: workItem._id,
+    });
+    patchedWorkItemIds.push(workItem._id);
+  }
+
+  return patchedWorkItemIds;
 }
 
 export const listAppointments = query({
@@ -294,16 +371,68 @@ export const cancelAppointment = mutation({
       });
     }
 
+    if (!appointment.organizationId) {
+      return userError({
+        code: "precondition_failed",
+        message: "Appointment is missing organization context.",
+      });
+    }
+
+    const store = await ctx.db.get("store", appointment.storeId);
+
+    if (!store) {
+      return userError({
+        code: "not_found",
+        message: "Store not found.",
+      });
+    }
+
+    if (store.organizationId !== appointment.organizationId) {
+      return userError({
+        code: "precondition_failed",
+        message: "Appointment store does not match its organization.",
+      });
+    }
+
+    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+    await requireOrganizationMemberRoleWithCtx(ctx, {
+      allowedRoles: ["full_admin"],
+      failureMessage: "Only store admins can cancel service appointments.",
+      organizationId: store.organizationId,
+      userId: athenaUser._id,
+    });
+
+    const actorUserId = athenaUser._id;
+    const actorStaffProfile = await ctx.db
+      .query("staffProfile")
+      .withIndex("by_storeId_linkedUserId", (q) =>
+        q.eq("storeId", appointment.storeId).eq("linkedUserId", actorUserId),
+      )
+      .first();
+
     await ctx.db.patch("serviceAppointment", appointment._id, {
       cancelledAt: Date.now(),
       notes: args.notes ?? appointment.notes,
       status: "cancelled",
       updatedAt: Date.now(),
     });
+    const closedWorkItemIds =
+      await closeCurrentServiceAppointmentWorkItemsWithCtx(ctx, {
+        appointmentId: appointment._id,
+        status: "cancelled",
+        storeId: appointment.storeId,
+      });
 
     await recordOperationalEventWithCtx(ctx, {
+      actorStaffProfileId: actorStaffProfile?._id,
+      actorUserId,
       customerProfileId: appointment.customerProfileId,
       eventType: "service_appointment_cancelled",
+      metadata: {
+        closedWorkItemIds,
+        nextWorkItemStatus: "cancelled",
+        previousStatus: appointment.status,
+      },
       organizationId: appointment.organizationId,
       storeId: appointment.storeId,
       subjectId: appointment._id,
@@ -336,6 +465,20 @@ export const convertAppointmentToWalkIn = mutation({
       });
     }
 
+    if (NON_BLOCKING_APPOINTMENT_STATUSES.has(appointment.status)) {
+      return userError({
+        code: "precondition_failed",
+        message: "This appointment can no longer be converted.",
+      });
+    }
+
+    if (!appointment.organizationId) {
+      return userError({
+        code: "precondition_failed",
+        message: "Appointment is missing organization context.",
+      });
+    }
+
     const [catalogItem, customerProfile, store] = await Promise.all([
       ctx.db.get("serviceCatalog", appointment.serviceCatalogId),
       ctx.db.get("customerProfile", appointment.customerProfileId),
@@ -363,21 +506,35 @@ export const convertAppointmentToWalkIn = mutation({
       });
     }
 
-    const createdByStaffProfile = args.createdByUserId
-      ? await ctx.db
-          .query("staffProfile")
-          .withIndex("by_storeId_linkedUserId", (q) =>
-            q
-              .eq("storeId", appointment.storeId)
-              .eq("linkedUserId", args.createdByUserId!)
-          )
-          .first()
-      : null;
+    if (store.organizationId !== appointment.organizationId) {
+      return userError({
+        code: "precondition_failed",
+        message: "Appointment store does not match its organization.",
+      });
+    }
+
+    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+    await requireOrganizationMemberRoleWithCtx(ctx, {
+      allowedRoles: ["full_admin"],
+      failureMessage:
+        "Only store admins can convert service appointments to cases.",
+      organizationId: store.organizationId,
+      userId: athenaUser._id,
+    });
+
+    const actorUserId = athenaUser._id;
+    const createdByStaffProfile = await ctx.db
+      .query("staffProfile")
+      .withIndex("by_storeId_linkedUserId", (q) =>
+        q.eq("storeId", appointment.storeId).eq("linkedUserId", actorUserId),
+      )
+      .first();
 
     const workItem = await createOperationalWorkItemWithCtx(ctx, {
       assignedToStaffProfileId: appointment.assignedStaffProfileId,
+      appointmentId: appointment._id,
       createdByStaffProfileId: createdByStaffProfile?._id,
-      createdByUserId: args.createdByUserId,
+      createdByUserId: actorUserId,
       customerProfileId: appointment.customerProfileId,
       metadata: {
         appointmentId: appointment._id,
@@ -390,7 +547,7 @@ export const convertAppointmentToWalkIn = mutation({
       status: "open",
       storeId: appointment.storeId,
       title: catalogItem.name,
-      type: "service_appointment",
+      type: "service_case",
     });
 
     if (!workItem) {
@@ -403,7 +560,7 @@ export const convertAppointmentToWalkIn = mutation({
     const serviceCase = await createServiceCaseWithCtx(ctx, {
       appointmentId: appointment._id,
       assignedStaffProfileId: appointment.assignedStaffProfileId,
-      createdByUserId: args.createdByUserId,
+      createdByUserId: actorUserId,
       customerProfileId: appointment.customerProfileId,
       notes: appointment.notes,
       operationalWorkItemId: workItem._id,
@@ -425,12 +582,25 @@ export const convertAppointmentToWalkIn = mutation({
       status: "converted_to_walk_in",
       updatedAt: Date.now(),
     });
+    const closedAppointmentWorkItemIds =
+      await closeCurrentServiceAppointmentWorkItemsWithCtx(ctx, {
+        appointmentId: appointment._id,
+        status: "completed",
+        storeId: appointment.storeId,
+      });
 
     await recordOperationalEventWithCtx(ctx, {
       actorStaffProfileId: createdByStaffProfile?._id,
-      actorUserId: args.createdByUserId,
+      actorUserId,
       customerProfileId: customerProfile._id,
       eventType: "service_appointment_converted_to_walk_in",
+      metadata: {
+        closedAppointmentWorkItemIds,
+        nextAppointmentWorkItemStatus: "completed",
+        previousStatus: appointment.status,
+        serviceCaseId: createdServiceCase._id,
+        serviceCaseWorkItemId: workItem._id,
+      },
       organizationId: store.organizationId,
       storeId: appointment.storeId,
       subjectId: appointment._id,
@@ -441,7 +611,7 @@ export const convertAppointmentToWalkIn = mutation({
 
     await recordServiceCaseTraceBestEffort(ctx, {
       actorStaffProfileId: createdByStaffProfile?._id,
-      actorUserId: args.createdByUserId,
+      actorUserId,
       appointmentId: appointment._id,
       serviceCase: createdServiceCase,
       stage: "appointment_converted",

@@ -152,9 +152,13 @@ function buildPurchaseOrderNumber() {
   return `PO-${Date.now().toString(36).toUpperCase()}`;
 }
 
-function getOperationalWorkItemStatus(status: string) {
-  if (["received", "cancelled"].includes(status)) {
+export function mapPurchaseOrderStatusToWorkItemStatus(status: string) {
+  if (status === "received") {
     return "completed";
+  }
+
+  if (status === "cancelled") {
+    return "cancelled";
   }
 
   if (
@@ -523,7 +527,7 @@ export async function updatePurchaseOrderStatusWithCtx(
     await ctx.runMutation(
       internal.operations.operationalWorkItems.updateOperationalWorkItemStatus,
       {
-        status: getOperationalWorkItemStatus(args.nextStatus),
+        status: mapPurchaseOrderStatusToWorkItemStatus(args.nextStatus),
         workItemId: purchaseOrder.operationalWorkItemId,
       },
     );

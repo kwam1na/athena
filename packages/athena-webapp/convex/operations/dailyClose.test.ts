@@ -12,6 +12,8 @@ import {
   getDailyCloseOpeningContext,
   getDailyCloseOpeningContextWithCtx,
   listCompletedDailyCloseHistoryWithCtx,
+  resolveDailyCloseCarryForward,
+  resolveDailyCloseCarryForwardWithCtx,
   reopenDailyClose,
   reopenDailyCloseWithCtx,
 } from "./dailyClose";
@@ -27,6 +29,7 @@ type TableName =
   | "approvalRequest"
   | "automationRun"
   | "dailyClose"
+  | "dailyOpening"
   | "expenseSession"
   | "expenseTransaction"
   | "expenseTransactionItem"
@@ -306,6 +309,26 @@ function dailyCloseReopenApprovalProof(overrides: Partial<Row> = {}): Row {
     subjectId: "daily-close-1",
     subjectLabel: "EOD Review 2026-05-07",
     subjectType: "daily_close",
+    ...overrides,
+  };
+}
+
+function dailyCloseCarryForwardApprovalProof(
+  overrides: Partial<Row> = {},
+): Row {
+  return {
+    _id: "approval-proof-carry-forward-1",
+    actionKey: "operations.daily_close.resolve_carry_forward",
+    approvedByCredentialId: "credential-manager-1",
+    approvedByStaffProfileId: "staff-manager-1",
+    createdAt: Date.UTC(2026, 4, 8, 10),
+    expiresAt: Date.UTC(2026, 4, 8, 12),
+    requiredRole: "manager",
+    requestedByStaffProfileId: "staff-1",
+    storeId: "store-1",
+    subjectId: "daily-close-1:customer-follow-up:completed",
+    subjectLabel: "Carry-forward follow-up for EOD Review 2026-05-07",
+    subjectType: "daily_close_carry_forward",
     ...overrides,
   };
 }
@@ -3065,6 +3088,719 @@ describe("end-of-day review backend foundation", () => {
     ).not.toThrow();
   });
 
+  it("requires source-bound manager proof before completing carry-forward work", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 8, 10));
+    const { db, inserts, patches, tables } = createDb({
+      approvalProof: [dailyCloseCarryForwardApprovalProof()],
+      dailyClose: [
+        completedDailyCloseRow({
+          carryForwardWorkItemIds: ["work-1"],
+        }),
+      ],
+      dailyOpening: [
+        {
+          _id: "daily-opening-1",
+          acknowledgedItemKeys: ["operational_work_item:work-1:carry_forward"],
+          actorStaffProfileId: "staff-1",
+          actorUserId: "user-1",
+          carryForwardWorkItemIds: ["work-1"],
+          createdAt: Date.UTC(2026, 4, 8, 8),
+          operatingDate: "2026-05-08",
+          organizationId: "org-1",
+          priorDailyCloseId: "daily-close-1",
+          readiness: {
+            blockerCount: 0,
+            carryForwardCount: 1,
+            readyCount: 1,
+            reviewCount: 0,
+            status: "needs_attention",
+          },
+          sourceSubjects: [
+            { id: "work-1", label: "Call customer", type: "operational_work_item" },
+          ],
+          startedAt: Date.UTC(2026, 4, 8, 8),
+          status: "started",
+          storeId: "store-1",
+          updatedAt: Date.UTC(2026, 4, 8, 8),
+        },
+      ],
+      operationalWorkItem: [
+        {
+          _id: "work-1",
+          approvalState: "not_required",
+          createdAt: Date.UTC(2026, 4, 7, 20),
+          metadata: {
+            businessDate: "2026-05-07",
+            carryForwardSourceId: "customer-follow-up",
+            dailyCloseId: "daily-close-1",
+            source: "daily_close",
+          },
+          organizationId: "org-1",
+          priority: "normal",
+          status: "open",
+          storeId: "store-1",
+          title: "Call customer",
+          type: "daily_close_carry_forward",
+        },
+      ],
+      store: [store],
+    });
+
+    const proofRequired = await resolveDailyCloseCarryForwardWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+        actorUserId: "user-1" as Id<"athenaUser">,
+        businessDate: "2026-05-07",
+        dailyCloseId: "daily-close-1" as Id<"dailyClose">,
+        outcome: "completed",
+        reason: "Customer follow-up completed.",
+        sourceId: "customer-follow-up",
+        storeId: "store-1" as Id<"store">,
+        workItemId: "work-1" as Id<"operationalWorkItem">,
+      },
+    );
+
+    expect(proofRequired).toMatchObject({
+      kind: "approval_required",
+      approval: {
+        action: {
+          key: "operations.daily_close.resolve_carry_forward",
+        },
+        subject: {
+          id: "daily-close-1:customer-follow-up:completed",
+          type: "daily_close_carry_forward",
+        },
+      },
+    });
+    expect(patches).toEqual([]);
+
+    const result = await resolveDailyCloseCarryForwardWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+        actorUserId: "user-1" as Id<"athenaUser">,
+        approvalProofId:
+          "approval-proof-carry-forward-1" as Id<"approvalProof">,
+        businessDate: "2026-05-07",
+        dailyCloseId: "daily-close-1" as Id<"dailyClose">,
+        outcome: "completed",
+        reason: "Customer follow-up completed.",
+        sourceId: "customer-follow-up",
+        storeId: "store-1" as Id<"store">,
+        workItemId: "work-1" as Id<"operationalWorkItem">,
+      },
+    );
+
+    expect(result).toMatchObject({
+      kind: "ok",
+      data: {
+        action: "completed",
+        workItem: {
+          _id: "work-1",
+          status: "completed",
+        },
+      },
+    });
+    expect(() =>
+      assertConformsToExportedReturns(resolveDailyCloseCarryForward, result),
+    ).not.toThrow();
+    expect(tables.get("approvalProof")?.get("approval-proof-carry-forward-1"))
+      .toMatchObject({
+        consumedAt: Date.UTC(2026, 4, 8, 10),
+      });
+    expect(tables.get("operationalWorkItem")?.get("work-1")).toMatchObject({
+      status: "completed",
+      completedAt: Date.UTC(2026, 4, 8, 10),
+      metadata: {
+        carryForwardResolution: {
+          actorStaffProfileId: "staff-1",
+          actorUserId: "user-1",
+          approvalProofId: "approval-proof-carry-forward-1",
+          approvedByStaffProfileId: "staff-manager-1",
+          businessDate: "2026-05-07",
+          dailyCloseId: "daily-close-1",
+          handoff: {
+            dailyOpeningIds: ["daily-opening-1"],
+          },
+          nextStatus: "completed",
+          outcome: "completed",
+          priorStatus: "open",
+          reason: "Customer follow-up completed.",
+          resolvedAt: Date.UTC(2026, 4, 8, 10),
+          sourceId: "customer-follow-up",
+        },
+      },
+    });
+    expect(inserts.at(-1)).toMatchObject({
+      table: "operationalEvent",
+      value: {
+        actorStaffProfileId: "staff-1",
+        actorUserId: "user-1",
+        eventType: "daily_close_carry_forward_completed",
+        reason: "Customer follow-up completed.",
+        subjectId: "work-1",
+        subjectType: "daily_close_carry_forward",
+        metadata: {
+          approvalProofId: "approval-proof-carry-forward-1",
+          approvedByStaffProfileId: "staff-manager-1",
+          businessDate: "2026-05-07",
+          dailyCloseId: "daily-close-1",
+          handoff: {
+            dailyOpeningIds: ["daily-opening-1"],
+          },
+          nextState: {
+            status: "completed",
+          },
+          outcome: "completed",
+          priorState: {
+            status: "open",
+          },
+          sourceReference: {
+            sourceId: "customer-follow-up",
+            workItemId: "work-1",
+          },
+        },
+      },
+    });
+  });
+
+  it("resolves carry-forward work through the public mutation boundary", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 8, 10));
+    vi.mocked(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).mockResolvedValue({
+      _creationTime: 0,
+      _id: "user-1" as Id<"athenaUser">,
+      email: "manager@wigclub.store",
+    });
+    vi.mocked(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).mockResolvedValue({
+      _creationTime: 0,
+      _id: "member-1" as Id<"organizationMember">,
+      organizationId: "org-1" as Id<"organization">,
+      role: "full_admin",
+      userId: "user-1" as Id<"athenaUser">,
+    });
+    const { db, tables } = createDb({
+      approvalProof: [
+        dailyCloseCarryForwardApprovalProof({
+          requestedByStaffProfileId: undefined,
+        }),
+      ],
+      dailyClose: [
+        completedDailyCloseRow({
+          carryForwardWorkItemIds: ["work-1"],
+        }),
+      ],
+      operationalWorkItem: [
+        {
+          _id: "work-1",
+          approvalState: "not_required",
+          createdAt: Date.UTC(2026, 4, 7, 20),
+          metadata: {
+            businessDate: "2026-05-07",
+            carryForwardSourceId: "customer-follow-up",
+            dailyCloseId: "daily-close-1",
+            source: "daily_close",
+          },
+          organizationId: "org-1",
+          priority: "normal",
+          status: "open",
+          storeId: "store-1",
+          title: "Call customer",
+          type: "daily_close_carry_forward",
+        },
+      ],
+      staffProfile: [
+        {
+          _id: "staff-1",
+          linkedUserId: "user-1",
+          storeId: "store-1",
+        },
+      ],
+      store: [store],
+    });
+
+    const result = await getHandler(resolveDailyCloseCarryForward)(
+      { db } as unknown as MutationCtx,
+      {
+        actorStaffProfileId: "staff-spoof" as Id<"staffProfile">,
+        approvalProofId:
+          "approval-proof-carry-forward-1" as Id<"approvalProof">,
+        businessDate: "2026-05-07",
+        dailyCloseId: "daily-close-1" as Id<"dailyClose">,
+        outcome: "completed",
+        reason: "Customer follow-up completed.",
+        sourceId: "customer-follow-up",
+        storeId: "store-1" as Id<"store">,
+        workItemId: "work-1" as Id<"operationalWorkItem">,
+      } as never,
+    );
+
+    expect(result).toMatchObject({
+      kind: "ok",
+      data: {
+        action: "completed",
+        workItem: {
+          _id: "work-1",
+          status: "completed",
+        },
+      },
+    });
+    expect(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        allowedRoles: ["full_admin", "pos_only"],
+        organizationId: "org-1",
+        userId: "user-1",
+      }),
+    );
+    expect(tables.get("operationalWorkItem")?.get("work-1")).toMatchObject({
+      completedAt: Date.UTC(2026, 4, 8, 10),
+      metadata: expect.objectContaining({
+        carryForwardResolution: expect.objectContaining({
+          actorStaffProfileId: "staff-1",
+        }),
+      }),
+      status: "completed",
+    });
+  });
+
+  it("rejects carry-forward resolution when manager proof is bound to another source", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 8, 10));
+    const { db, tables } = createDb({
+      approvalProof: [
+        dailyCloseCarryForwardApprovalProof({
+          subjectId: "daily-close-1:other-source",
+        }),
+      ],
+      dailyClose: [
+        completedDailyCloseRow({
+          carryForwardWorkItemIds: ["work-1"],
+        }),
+      ],
+      operationalWorkItem: [
+        {
+          _id: "work-1",
+          approvalState: "not_required",
+          createdAt: Date.UTC(2026, 4, 7, 20),
+          metadata: {
+            businessDate: "2026-05-07",
+            carryForwardSourceId: "customer-follow-up",
+            dailyCloseId: "daily-close-1",
+            source: "daily_close",
+          },
+          organizationId: "org-1",
+          priority: "normal",
+          status: "open",
+          storeId: "store-1",
+          title: "Call customer",
+          type: "daily_close_carry_forward",
+        },
+      ],
+      store: [store],
+    });
+
+    const result = await resolveDailyCloseCarryForwardWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+        actorUserId: "user-1" as Id<"athenaUser">,
+        approvalProofId:
+          "approval-proof-carry-forward-1" as Id<"approvalProof">,
+        businessDate: "2026-05-07",
+        dailyCloseId: "daily-close-1" as Id<"dailyClose">,
+        outcome: "completed",
+        reason: "Customer follow-up completed.",
+        sourceId: "customer-follow-up",
+        storeId: "store-1" as Id<"store">,
+        workItemId: "work-1" as Id<"operationalWorkItem">,
+      },
+    );
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+        message: "Approval proof does not match this command.",
+      },
+    });
+    expect(
+      tables.get("approvalProof")?.get("approval-proof-carry-forward-1"),
+    ).not.toHaveProperty("consumedAt");
+    expect(tables.get("operationalWorkItem")?.get("work-1")).toMatchObject({
+      status: "open",
+    });
+  });
+
+  it("rejects carry-forward resolution when manager proof is bound to another outcome", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 8, 10));
+    const seed = {
+      dailyClose: [
+        completedDailyCloseRow({
+          carryForwardWorkItemIds: ["work-1"],
+        }),
+      ],
+      operationalWorkItem: [
+        {
+          _id: "work-1",
+          approvalState: "not_required",
+          createdAt: Date.UTC(2026, 4, 7, 20),
+          metadata: {
+            businessDate: "2026-05-07",
+            carryForwardSourceId: "customer-follow-up",
+            dailyCloseId: "daily-close-1",
+            source: "daily_close",
+          },
+          organizationId: "org-1",
+          priority: "normal",
+          status: "open",
+          storeId: "store-1",
+          title: "Call customer",
+          type: "daily_close_carry_forward",
+        },
+      ],
+      store: [store],
+    };
+
+    const completeProofDb = createDb({
+      ...seed,
+      approvalProof: [dailyCloseCarryForwardApprovalProof()],
+    });
+    const completeProofCancelResult = await resolveDailyCloseCarryForwardWithCtx(
+      { db: completeProofDb.db } as unknown as MutationCtx,
+      {
+        actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+        actorUserId: "user-1" as Id<"athenaUser">,
+        approvalProofId:
+          "approval-proof-carry-forward-1" as Id<"approvalProof">,
+        businessDate: "2026-05-07",
+        dailyCloseId: "daily-close-1" as Id<"dailyClose">,
+        outcome: "cancelled",
+        reason: "Customer follow-up cancelled.",
+        sourceId: "customer-follow-up",
+        storeId: "store-1" as Id<"store">,
+        workItemId: "work-1" as Id<"operationalWorkItem">,
+      },
+    );
+
+    expect(completeProofCancelResult).toEqual({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+        message: "Approval proof does not match this command.",
+      },
+    });
+    expect(
+      completeProofDb.tables
+        .get("approvalProof")
+        ?.get("approval-proof-carry-forward-1"),
+    ).not.toHaveProperty("consumedAt");
+    expect(
+      completeProofDb.tables.get("operationalWorkItem")?.get("work-1"),
+    ).toMatchObject({
+      status: "open",
+    });
+
+    const cancelProofDb = createDb({
+      ...seed,
+      approvalProof: [
+        dailyCloseCarryForwardApprovalProof({
+          _id: "approval-proof-cancel-1",
+          subjectId: "daily-close-1:customer-follow-up:cancelled",
+        }),
+      ],
+    });
+    const cancelProofCompleteResult =
+      await resolveDailyCloseCarryForwardWithCtx(
+        { db: cancelProofDb.db } as unknown as MutationCtx,
+        {
+          actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+          actorUserId: "user-1" as Id<"athenaUser">,
+          approvalProofId: "approval-proof-cancel-1" as Id<"approvalProof">,
+          businessDate: "2026-05-07",
+          dailyCloseId: "daily-close-1" as Id<"dailyClose">,
+          outcome: "completed",
+          reason: "Customer follow-up completed.",
+          sourceId: "customer-follow-up",
+          storeId: "store-1" as Id<"store">,
+          workItemId: "work-1" as Id<"operationalWorkItem">,
+        },
+      );
+
+    expect(cancelProofCompleteResult).toEqual({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+        message: "Approval proof does not match this command.",
+      },
+    });
+    expect(
+      cancelProofDb.tables.get("approvalProof")?.get("approval-proof-cancel-1"),
+    ).not.toHaveProperty("consumedAt");
+    expect(
+      cancelProofDb.tables.get("operationalWorkItem")?.get("work-1"),
+    ).toMatchObject({
+      status: "open",
+    });
+  });
+
+  it("cancels carry-forward work with a terminal reason and rejects replay", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 8, 11));
+    const { db, tables } = createDb({
+      approvalProof: [
+        dailyCloseCarryForwardApprovalProof({
+          _id: "approval-proof-cancel-1",
+          subjectId: "daily-close-1:customer-follow-up:cancelled",
+        }),
+      ],
+      dailyClose: [
+        completedDailyCloseRow({
+          carryForwardWorkItemIds: ["work-1"],
+        }),
+      ],
+      operationalWorkItem: [
+        {
+          _id: "work-1",
+          approvalState: "not_required",
+          createdAt: Date.UTC(2026, 4, 7, 20),
+          metadata: {
+            businessDate: "2026-05-07",
+            carryForwardSourceId: "customer-follow-up",
+            dailyCloseId: "daily-close-1",
+            source: "daily_close",
+          },
+          organizationId: "org-1",
+          priority: "normal",
+          status: "open",
+          storeId: "store-1",
+          title: "Call customer",
+          type: "daily_close_carry_forward",
+        },
+      ],
+      store: [store],
+    });
+
+    const result = await resolveDailyCloseCarryForwardWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+        actorUserId: "user-1" as Id<"athenaUser">,
+        approvalProofId: "approval-proof-cancel-1" as Id<"approvalProof">,
+        businessDate: "2026-05-07",
+        dailyCloseId: "daily-close-1" as Id<"dailyClose">,
+        outcome: "cancelled",
+        reason: "Follow-up is no longer applicable.",
+        sourceId: "customer-follow-up",
+        storeId: "store-1" as Id<"store">,
+        workItemId: "work-1" as Id<"operationalWorkItem">,
+      },
+    );
+
+    expect(result).toMatchObject({
+      kind: "ok",
+      data: {
+        action: "cancelled",
+        workItem: {
+          status: "cancelled",
+        },
+      },
+    });
+    expect(tables.get("operationalWorkItem")?.get("work-1")).toMatchObject({
+      status: "cancelled",
+      metadata: {
+        carryForwardResolution: {
+          nextStatus: "cancelled",
+          outcome: "cancelled",
+          reason: "Follow-up is no longer applicable.",
+        },
+      },
+    });
+
+    const replay = await resolveDailyCloseCarryForwardWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+        actorUserId: "user-1" as Id<"athenaUser">,
+        approvalProofId: "approval-proof-cancel-1" as Id<"approvalProof">,
+        businessDate: "2026-05-07",
+        dailyCloseId: "daily-close-1" as Id<"dailyClose">,
+        outcome: "cancelled",
+        reason: "Follow-up is no longer applicable.",
+        sourceId: "customer-follow-up",
+        storeId: "store-1" as Id<"store">,
+        workItemId: "work-1" as Id<"operationalWorkItem">,
+      },
+    );
+
+    expect(replay).toMatchObject({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+        message: "Carry-forward work is already completed or cancelled.",
+      },
+    });
+  });
+
+  it("reuses the current carry-forward row for the same business date and source", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 7, 22));
+    const { db, inserts } = createDb({
+      approvalProof: [dailyCloseApprovalProof()],
+      operationalWorkItem: [
+        {
+          _id: "work-existing",
+          approvalState: "not_required",
+          createdAt: Date.UTC(2026, 4, 7, 19),
+          metadata: {
+            businessDate: "2026-05-07",
+            carryForwardSourceId: "customer-follow-up",
+            source: "daily_close",
+          },
+          organizationId: "org-1",
+          priority: "normal",
+          status: "open",
+          storeId: "store-1",
+          title: "Call customer",
+          type: "daily_close_carry_forward",
+        },
+      ],
+      store: [store],
+    });
+
+    const result = await completeDailyCloseWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+        actorUserId: "user-1" as Id<"athenaUser">,
+        approvalProofId: "approval-proof-1" as Id<"approvalProof">,
+        createCarryForwardWorkItems: [
+          {
+            title: "Call customer",
+            metadata: {
+              carryForwardSourceId: "customer-follow-up",
+            },
+          },
+        ],
+        operatingDate: "2026-05-07",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result).toMatchObject({
+      kind: "ok",
+      data: {
+        carryForwardWorkItems: [
+          {
+            _id: "work-existing",
+          },
+        ],
+        dailyClose: {
+          carryForwardWorkItemIds: ["work-existing"],
+          readiness: {
+            carryForwardCount: 1,
+          },
+        },
+      },
+    });
+    expect(
+      inserts.filter((insert) => insert.table === "operationalWorkItem"),
+    ).toHaveLength(0);
+    expect(
+      inserts.filter(
+        (insert) =>
+          insert.table === "operationalEvent" &&
+          insert.value.eventType === "daily_close_carry_forward_created",
+      ),
+    ).toHaveLength(0);
+  });
+
+  it("reuses matching carry-forward work beyond the standard daily close query window", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 7, 22));
+    const nonMatchingCarryForwardItems = Array.from({ length: 200 }, (_, index) => ({
+      _id: `work-existing-${index}`,
+      approvalState: "not_required",
+      createdAt: Date.UTC(2026, 4, 7, 18, index % 60),
+      metadata: {
+        businessDate: "2026-05-07",
+        carryForwardSourceId: `other-follow-up-${index}`,
+        source: "daily_close",
+      },
+      organizationId: "org-1",
+      priority: "normal",
+      status: "open",
+      storeId: "store-1",
+      title: `Other follow-up ${index}`,
+      type: "daily_close_carry_forward",
+    }));
+    const { db, inserts } = createDb({
+      approvalProof: [dailyCloseApprovalProof()],
+      operationalWorkItem: [
+        ...nonMatchingCarryForwardItems,
+        {
+          _id: "work-existing-target",
+          approvalState: "not_required",
+          createdAt: Date.UTC(2026, 4, 7, 19),
+          metadata: {
+            businessDate: "2026-05-07",
+            carryForwardSourceId: "customer-follow-up",
+            source: "daily_close",
+          },
+          organizationId: "org-1",
+          priority: "normal",
+          status: "open",
+          storeId: "store-1",
+          title: "Call customer",
+          type: "daily_close_carry_forward",
+        },
+      ],
+      store: [store],
+    });
+
+    const result = await completeDailyCloseWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+        actorUserId: "user-1" as Id<"athenaUser">,
+        approvalProofId: "approval-proof-1" as Id<"approvalProof">,
+        createCarryForwardWorkItems: [
+          {
+            title: "Call customer",
+            metadata: {
+              carryForwardSourceId: "customer-follow-up",
+            },
+          },
+        ],
+        operatingDate: "2026-05-07",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result).toMatchObject({
+      kind: "ok",
+      data: {
+        carryForwardWorkItems: [
+          {
+            _id: "work-existing-target",
+          },
+        ],
+      },
+    });
+    expect(
+      inserts.filter((insert) => insert.table === "operationalWorkItem"),
+    ).toHaveLength(0);
+    expect(
+      inserts.filter(
+        (insert) =>
+          insert.table === "operationalEvent" &&
+          insert.value.eventType === "daily_close_carry_forward_created",
+      ),
+    ).toHaveLength(0);
+  });
+
   it("completes a ready day through automation with durable attribution and no approval proof metadata", async () => {
     vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 7, 22));
     const { db, inserts } = createDb({
@@ -3970,6 +4706,9 @@ describe("end-of-day review backend foundation", () => {
         carryForwardWorkItemIds: ["work-1"],
       },
     });
+    expect(
+      dailyClose?.reportSnapshot?.carryForwardItems[0],
+    ).not.toHaveProperty("carryForwardResolution");
     expect(inserts.map((insert) => insert.table)).toEqual([
       "dailyClose",
       "operationalEvent",
@@ -3986,6 +4725,74 @@ describe("end-of-day review backend foundation", () => {
         readiness: {
           carryForwardCount: 1,
         },
+      },
+    });
+  });
+
+  it("stamps automation carry-forward work metadata when snapshot exposes resolution", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 7, 22));
+    const { db, tables } = createDb({
+      operationalWorkItem: [
+        {
+          _id: "work-1",
+          approvalState: "not_required",
+          createdAt: 4,
+          organizationId: "org-1",
+          priority: "normal",
+          status: "open",
+          storeId: "store-1",
+          title: "Call customer tomorrow",
+          type: "daily_close_carry_forward",
+        },
+      ],
+      store: [store],
+    });
+
+    const result = await completeDailyCloseForAutomationWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        automationDecisionReason: "EOD Review passed policy checks.",
+        automationPolicyVersion: "daily-close-auto-complete.v1",
+        automationRunId: "automation-run-carry-forward" as Id<"automationRun">,
+        eodAutoCompletePolicy: {
+          cleanDayAutoCompleteEnabled: true,
+          maxAbsoluteCashVariance: 500,
+          maxVoidedSaleCount: 2,
+          maxVoidedSaleTotal: 1000,
+        },
+        operatingDate: "2026-05-07",
+        policyReviewedItemKeys: [],
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result).toMatchObject({
+      kind: "ok",
+      data: {
+        dailyClose: {
+          _id: "dailyClose-1",
+          carryForwardWorkItemIds: ["work-1"],
+        },
+      },
+    });
+    expect(
+      result.kind === "ok"
+        ? result.data.dailyClose.reportSnapshot?.carryForwardItems[0]
+        : null,
+    ).toMatchObject({
+      carryForwardResolution: {
+        businessDate: "2026-05-07",
+        dailyCloseId: "dailyClose-1",
+        sourceId: "work-1",
+        workItemId: "work-1",
+      },
+    });
+    expect(tables.get("operationalWorkItem")?.get("work-1")).toMatchObject({
+      metadata: {
+        businessDate: "2026-05-07",
+        carryForwardSourceId: "work-1",
+        dailyCloseId: "dailyClose-1",
+        source: "daily_close",
       },
     });
   });

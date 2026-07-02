@@ -74,7 +74,9 @@ const SERVICE_CASE_STATUS_TRANSITIONS: Record<
   cancelled: [],
 };
 
-function mapServiceCaseStatusToWorkItemStatus(status: ServiceCaseStatus) {
+export function mapServiceCaseStatusToWorkItemStatus(
+  status: ServiceCaseStatus,
+) {
   switch (status) {
     case "intake":
     case "scheduled":

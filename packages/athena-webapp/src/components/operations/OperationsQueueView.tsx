@@ -10,9 +10,11 @@ import { Link, useParams, useSearch } from "@tanstack/react-router";
 import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import {
   ArrowUpRight,
+  CalendarClock,
   ClipboardCheck,
   Lock,
   LockOpen,
+  PackageCheck,
   ReceiptText,
   Scissors,
   ShoppingCart,
@@ -74,9 +76,15 @@ const operationsApi = api.operations;
 const stockOpsApi = api.stockOps;
 const ghsCurrencyFormatter = currencyFormatter("GHS");
 const APPROVAL_DECISION_ACTION_KEY = "operations.approval_request.decide";
+const REGISTER_SESSION_SYNC_REVIEW_APPROVAL_ACTION_KEY =
+  "cash_controls.register_session.resolve_sync_review";
+const REGISTER_VARIANCE_REVIEW_ACTION_KEY =
+  "cash_controls.register_session.review_variance";
 const APPROVAL_PAGE_UNLOCK_TTL_MS = 5 * 60 * 1000;
 const OPEN_WORK_ITEMS_PER_PAGE = 5;
 const UNCATEGORIZED_COUNT_SCOPE_KEY = "__uncategorized";
+const openWorkActionLinkClassName =
+  "inline-flex items-center gap-1.5 text-sm font-medium text-foreground underline-offset-4 transition-colors hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
 
 type ProductSkuSearchResponse = {
   results: Array<{
@@ -86,13 +94,37 @@ type ProductSkuSearchResponse = {
 
 type QueueWorkItem = {
   _id: Id<"operationalWorkItem">;
+  approvalRequestId?: Id<"approvalRequest">;
   approvalState: string;
   assignedStaffName?: string | null;
+  completedAt?: number | null;
   createdAt: number;
   customerName?: string | null;
+  details?: {
+    businessDate?: string | null;
+    displayNumber?: string | null;
+    followUpReason?: string | null;
+    inventoryReviewLineCount?: number | null;
+    itemCount?: number | null;
+    localRegisterSessionId?: string | null;
+    localTransactionId?: string | null;
+    lookupCode?: string | null;
+    price?: number | null;
+    primaryProductSkuId?: string | null;
+    purchaseOrderNumber?: string | null;
+    quantitySold?: number | null;
+    reasonLabel?: string | null;
+    receiptNumber?: string | null;
+    registerSessionId?: string | null;
+    sourceId?: string | null;
+    terminalId?: string | null;
+    totalQuantitySold?: number | null;
+    vendorName?: string | null;
+  } | null;
   dueAt?: number | null;
-  metadata?: Record<string, unknown> | null;
   priority: string;
+  sourceIdentity?: string;
+  startedAt?: number | null;
   status: string;
   title: string;
   type: string;
@@ -103,6 +135,14 @@ type QueueWorkItemMixEntry = {
   label: string;
   percent: number;
   type: string;
+};
+
+type QueueOverflow = {
+  approvalRequests: boolean;
+  workItems: {
+    inProgress: boolean;
+    open: boolean;
+  };
 };
 
 type QueueApprovalRequest = {
@@ -173,10 +213,8 @@ type QueueApprovalRequest = {
 };
 
 export type OperationsWorkflow = "stock" | "queue" | "approvals";
-export type OpenWorkSortOrder = "latest" | "oldest";
 export type OpenWorkSearchState = {
   page?: number;
-  sort?: OpenWorkSortOrder;
 };
 export type OpenWorkSearchPatch = Partial<OpenWorkSearchState>;
 
@@ -201,22 +239,6 @@ function formatApprovalsHeaderTitle(count: number) {
   if (count === 0) return "No pending approvals";
 
   return `${count.toLocaleString()} pending ${count === 1 ? "approval" : "approvals"}`;
-}
-
-function sortQueueWorkItems(
-  workItems: QueueWorkItem[],
-  sortOrder: OpenWorkSortOrder,
-) {
-  return [...workItems].sort((left, right) => {
-    const createdAtDelta =
-      sortOrder === "latest"
-        ? right.createdAt - left.createdAt
-        : left.createdAt - right.createdAt;
-
-    if (createdAtDelta !== 0) return createdAtDelta;
-
-    return left._id.localeCompare(right._id);
-  });
 }
 
 function formatQueueWorkItemValue(value: string) {
@@ -265,8 +287,32 @@ function getQueueWorkItemTypeLabel(type: string) {
     return "Synced sale inventory";
   }
 
-  if (type === "service_case" || type === "service_intake") {
+  if (type === "service_case") {
+    return "Service case";
+  }
+
+  if (type === "service_appointment") {
+    return "Service appointment";
+  }
+
+  if (type === "service_intake") {
     return "Service intake";
+  }
+
+  if (type === "purchase_order") {
+    return "Purchase order";
+  }
+
+  if (type === "stock_adjustment_review") {
+    return "Stock adjustment approval";
+  }
+
+  if (type === "daily_close_carry_forward") {
+    return "Daily close follow-up";
+  }
+
+  if (type === "service_deposit_review") {
+    return "Unsupported work type";
   }
 
   return formatQueueWorkItemValue(type);
@@ -307,6 +353,38 @@ function formatOpenWorkMixCount(count: number) {
   return `${count.toLocaleString()} ${count === 1 ? "item" : "items"}`;
 }
 
+function hasOpenWorkOverflow(overflow?: QueueOverflow | null) {
+  return Boolean(overflow?.workItems.open || overflow?.workItems.inProgress);
+}
+
+function CappedQueueNotice({
+  children,
+  title,
+}: {
+  children: ReactNode;
+  title: string;
+}) {
+  return (
+    <div
+      className="rounded-lg border border-warning/30 bg-warning/10 p-layout-sm text-sm leading-6 text-warning-foreground"
+      role="status"
+    >
+      <p className="font-medium text-foreground">{title}</p>
+      <p className="mt-1 text-muted-foreground">{children}</p>
+    </div>
+  );
+}
+
+function hasSyncedSaleInventoryResolverDetails(item: QueueWorkItem) {
+  return Boolean(
+    getQueueWorkItemStringDetail(item, "terminalId") &&
+      getQueueWorkItemStringDetail(item, "localRegisterSessionId") &&
+      getQueueWorkItemStringDetail(item, "localTransactionId") &&
+      getQueueWorkItemStringDetail(item, "registerSessionId") &&
+      getQueueWorkItemStringDetail(item, "sourceId"),
+  );
+}
+
 function getQueueWorkItemContextPresentation(type: string) {
   if (type === "pos_pending_checkout_item_review") {
     return {
@@ -327,12 +405,35 @@ function getQueueWorkItemContextPresentation(type: string) {
     };
   }
 
-  if (type === "service_case" || type === "service_intake") {
+  if (
+    type === "service_case" ||
+    type === "service_appointment" ||
+    type === "service_intake"
+  ) {
     return {
       cardClassName: "bg-surface-raised hover:border-border",
       Icon: Scissors,
       iconClassName: "border-success/25 bg-success/10 text-success",
       contextLabelClassName: "text-success",
+    };
+  }
+
+  if (type === "purchase_order") {
+    return {
+      cardClassName: "bg-surface-raised hover:border-border",
+      Icon: PackageCheck,
+      iconClassName:
+        "border-action-workflow-border bg-action-workflow-soft text-action-workflow",
+      contextLabelClassName: "text-action-workflow",
+    };
+  }
+
+  if (type === "daily_close_carry_forward") {
+    return {
+      cardClassName: "bg-surface-raised hover:border-border",
+      Icon: CalendarClock,
+      iconClassName: "border-warning-border bg-warning-soft text-warning",
+      contextLabelClassName: "text-warning",
     };
   }
 
@@ -365,60 +466,34 @@ function WorkItemContextIcon({
   );
 }
 
-function getQueueWorkItemStringMetadata(
+function getQueueWorkItemStringDetail(
   item: QueueWorkItem,
-  key: string,
+  key: keyof NonNullable<QueueWorkItem["details"]>,
 ): string | undefined {
-  const value = item.metadata?.[key];
+  const value = item.details?.[key];
   return typeof value === "string" && value.trim() ? value : undefined;
 }
 
-function getQueueWorkItemNumberMetadata(
+function getQueueWorkItemNumberDetail(
   item: QueueWorkItem,
-  key: string,
+  key: keyof NonNullable<QueueWorkItem["details"]>,
 ): number | undefined {
-  const value = item.metadata?.[key];
+  const value = item.details?.[key];
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
-function getQueueWorkItemArrayMetadataCount(
-  item: QueueWorkItem,
-  key: string,
-): number | undefined {
-  const value = item.metadata?.[key];
-  return Array.isArray(value) ? value.length : undefined;
-}
-
 function getQueueWorkItemInventoryReviewLineCount(item: QueueWorkItem) {
-  const skippedLineCount = getQueueWorkItemArrayMetadataCount(
+  return getQueueWorkItemNumberDetail(
     item,
-    "skippedMutationItems",
+    "inventoryReviewLineCount",
   );
-
-  if (skippedLineCount && skippedLineCount > 0) {
-    return skippedLineCount;
-  }
-
-  const trustedLineCount = getQueueWorkItemArrayMetadataCount(
-    item,
-    "trustedInventoryLines",
-  );
-
-  return trustedLineCount && trustedLineCount > 0 ? trustedLineCount : undefined;
 }
 
 function getQueueWorkItemStockAdjustmentSkuId(item: QueueWorkItem) {
   if (item.type === "synced_sale_inventory_review") {
-    return getQueueWorkItemStringMetadata(
+    return getQueueWorkItemStringDetail(
       item,
       "primaryProductSkuId",
-    ) as Id<"productSku"> | undefined;
-  }
-
-  if (item.type === "pos_pending_checkout_item_review") {
-    return getQueueWorkItemStringMetadata(
-      item,
-      "provisionalProductSkuId",
     ) as Id<"productSku"> | undefined;
   }
 
@@ -437,6 +512,14 @@ function formatOptionalLineCount(value: number | undefined) {
   return `${value.toLocaleString()} ${value === 1 ? "line" : "lines"}`;
 }
 
+function formatOptionalItemCount(value: number | undefined) {
+  if (typeof value !== "number") {
+    return "Not recorded";
+  }
+
+  return `${value.toLocaleString()} ${value === 1 ? "item" : "items"}`;
+}
+
 function formatOptionalMoney(value: number | undefined) {
   return typeof value === "number"
     ? formatStoredAmount(ghsCurrencyFormatter, value)
@@ -447,16 +530,24 @@ function formatReceiptNumber(value: string | undefined) {
   return value ? `#${value}` : "Unknown";
 }
 
+function formatBusinessDate(value: string | undefined) {
+  if (!value) return "Not recorded";
+
+  const date = new Date(`${value}T00:00:00`);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "long",
+  }).format(date);
+}
+
 function getQueueWorkItemTransactionId(item: QueueWorkItem) {
-  const sourceType = getQueueWorkItemStringMetadata(item, "sourceType");
-  const sourceId = getQueueWorkItemStringMetadata(item, "sourceId");
-  const transactionId = getQueueWorkItemStringMetadata(item, "transactionId");
+  const sourceId = getQueueWorkItemStringDetail(item, "sourceId");
 
-  if (transactionId) return transactionId as Id<"posTransaction">;
-
-  return sourceType === "posTransaction" && sourceId
-    ? (sourceId as Id<"posTransaction">)
-    : undefined;
+  return sourceId ? (sourceId as Id<"posTransaction">) : undefined;
 }
 
 function ReceiptReferenceLink({
@@ -479,7 +570,7 @@ function ReceiptReferenceLink({
   return (
     <Link
       aria-label={`Open transaction ${receiptLabel}`}
-      className="inline-flex items-center gap-1 text-foreground underline-offset-4 transition-colors hover:text-primary hover:underline"
+      className="inline-flex items-center gap-1 text-foreground underline-offset-4 transition-colors hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
       params={{
         orgUrlSlug,
         storeUrlSlug,
@@ -511,7 +602,7 @@ function StockAdjustmentReferenceLink({
 
   return (
     <Link
-      className="inline-flex items-center gap-1 text-foreground underline-offset-4 transition-colors hover:text-primary hover:underline"
+      className="inline-flex items-center gap-1 text-foreground underline-offset-4 transition-colors hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
       params={{
         orgUrlSlug,
         storeUrlSlug,
@@ -527,6 +618,155 @@ function StockAdjustmentReferenceLink({
       <ArrowUpRight aria-hidden="true" className="h-3 w-3" />
     </Link>
   );
+}
+
+function QueueWorkItemActionSlot({
+  isSyncedSaleInventoryReviewResolutionDisabled,
+  isResolvingSyncedSaleInventoryReview,
+  item,
+  onResolveSyncedSaleInventoryReview,
+  orgUrlSlug,
+  stockAdjustmentSkuId,
+  storeUrlSlug,
+}: {
+  isSyncedSaleInventoryReviewResolutionDisabled?: boolean;
+  isResolvingSyncedSaleInventoryReview?: boolean;
+  item: QueueWorkItem;
+  onResolveSyncedSaleInventoryReview?: (item: QueueWorkItem) => void;
+  orgUrlSlug?: string;
+  stockAdjustmentSkuId?: Id<"productSku">;
+  storeUrlSlug?: string;
+}) {
+  if (!orgUrlSlug || !storeUrlSlug) return null;
+
+  if (item.type === "pos_pending_checkout_item_review") {
+    return (
+      <Link
+        className={openWorkActionLinkClassName}
+        params={{ orgUrlSlug, storeUrlSlug }}
+        search={{ o: getOrigin() }}
+        to="/$orgUrlSlug/store/$storeUrlSlug/products/unresolved"
+      >
+        Review unresolved catalog
+        <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
+      </Link>
+    );
+  }
+
+  if (item.type === "synced_sale_inventory_review") {
+    return (
+      <div className="flex flex-wrap items-center gap-3">
+        {stockAdjustmentSkuId ? (
+          <Link
+            className={openWorkActionLinkClassName}
+            params={{ orgUrlSlug, storeUrlSlug }}
+            search={{
+              mode: "manual",
+              o: getOrigin(),
+              sku: stockAdjustmentSkuId,
+            }}
+            to="/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments"
+          >
+            Open stock adjustments
+            <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
+          </Link>
+        ) : null}
+        {onResolveSyncedSaleInventoryReview &&
+        hasSyncedSaleInventoryResolverDetails(item) ? (
+          <LoadingButton
+            className="h-8 px-3 text-xs"
+            disabled={Boolean(
+              isSyncedSaleInventoryReviewResolutionDisabled,
+            )}
+            isLoading={Boolean(isResolvingSyncedSaleInventoryReview)}
+            onClick={() => onResolveSyncedSaleInventoryReview(item)}
+            size="sm"
+            type="button"
+            variant="secondary"
+          >
+            Mark reviewed
+          </LoadingButton>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (item.type === "service_case" || item.type === "service_intake") {
+    return (
+      <Link
+        className={openWorkActionLinkClassName}
+        params={{ orgUrlSlug, storeUrlSlug }}
+        search={{ o: getOrigin() }}
+        to="/$orgUrlSlug/store/$storeUrlSlug/services/active-cases"
+      >
+        Open service case
+        <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
+      </Link>
+    );
+  }
+
+  if (item.type === "service_appointment") {
+    return (
+      <Link
+        className={openWorkActionLinkClassName}
+        params={{ orgUrlSlug, storeUrlSlug }}
+        search={{ o: getOrigin() }}
+        to="/$orgUrlSlug/store/$storeUrlSlug/services/appointments"
+      >
+        Open appointment
+        <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
+      </Link>
+    );
+  }
+
+  if (item.type === "purchase_order") {
+    return (
+      <Link
+        className={openWorkActionLinkClassName}
+        params={{ orgUrlSlug, storeUrlSlug }}
+        search={{ o: getOrigin() }}
+        to="/$orgUrlSlug/store/$storeUrlSlug/procurement"
+      >
+        Open purchase order
+        <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
+      </Link>
+    );
+  }
+
+  if (item.type === "stock_adjustment_review") {
+    return (
+      <Link
+        className={openWorkActionLinkClassName}
+        params={{ orgUrlSlug, storeUrlSlug }}
+        search={{ o: getOrigin() }}
+        to="/$orgUrlSlug/store/$storeUrlSlug/operations/approvals"
+      >
+        Review approval
+        <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
+      </Link>
+    );
+  }
+
+  if (item.type === "daily_close_carry_forward") {
+    const businessDate = getQueueWorkItemStringDetail(item, "businessDate");
+
+    return (
+      <Link
+        className={openWorkActionLinkClassName}
+        params={{ orgUrlSlug, storeUrlSlug }}
+        search={{
+          o: getOrigin(),
+          ...(businessDate ? { operatingDate: businessDate } : {}),
+        }}
+        to="/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close"
+      >
+        Open Daily Close
+        <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
+      </Link>
+    );
+  }
+
+  return null;
 }
 
 function OpenWorkMixSummary({ workItems }: { workItems: QueueWorkItem[] }) {
@@ -579,18 +819,24 @@ function OpenWorkMixSummary({ workItems }: { workItems: QueueWorkItem[] }) {
 }
 
 function QueueWorkItemCard({
+  isSyncedSaleInventoryReviewResolutionDisabled,
+  isResolvingSyncedSaleInventoryReview,
   item,
+  onResolveSyncedSaleInventoryReview,
   orgUrlSlug,
   storeUrlSlug,
 }: {
+  isSyncedSaleInventoryReviewResolutionDisabled?: boolean;
+  isResolvingSyncedSaleInventoryReview?: boolean;
   item: QueueWorkItem;
+  onResolveSyncedSaleInventoryReview?: (item: QueueWorkItem) => void;
   orgUrlSlug?: string;
   storeUrlSlug?: string;
 }) {
   const stockAdjustmentSkuId = getQueueWorkItemStockAdjustmentSkuId(item);
-  const receiptNumber = getQueueWorkItemStringMetadata(item, "receiptNumber");
+  const receiptNumber = getQueueWorkItemStringDetail(item, "receiptNumber");
   const receiptTransactionId = getQueueWorkItemTransactionId(item);
-  const title = formatWorkItemTitle(item.title);
+  const fallbackTitle = formatWorkItemTitle(item.title);
   const pendingCheckoutTitleSubject =
     item.type === "pos_pending_checkout_item_review"
       ? getWorkItemTitleSubject(item.title, "Review pending checkout item: ")
@@ -600,22 +846,125 @@ function QueueWorkItemCard({
       ? getWorkItemTitleSubject(item.title, "Review inventory for ")
       : null;
   const contextPresentation = getQueueWorkItemContextPresentation(item.type);
-  const serviceCollapsedMetadataEntries: OperationReviewMetadataEntry[] = [
+  const serviceCollapsedMetadataEntries: OperationReviewMetadataEntry[] =
+    item.type === "service_appointment"
+      ? [
+          {
+            label: "Owner",
+            value: item.assignedStaffName ?? "Unassigned",
+          },
+          {
+            label: "Customer",
+            value: item.customerName ?? "No customer",
+          },
+          {
+            label: "Scheduled",
+            value: item.dueAt ? getRelativeTime(item.dueAt) : "Not scheduled",
+          },
+          {
+            label: "Created",
+            value: getRelativeTime(item.createdAt),
+          },
+        ]
+      : [
+          {
+            label: "Owner",
+            value: item.assignedStaffName ?? "Unassigned",
+          },
+          {
+            label: "Customer",
+            value: item.customerName ?? "No customer",
+          },
+          {
+            label: "Created",
+            value: getRelativeTime(item.createdAt),
+          },
+          {
+            label: "Due",
+            value: item.dueAt ? getRelativeTime(item.dueAt) : "Not scheduled",
+          },
+        ];
+  const purchaseOrderCollapsedMetadataEntries: OperationReviewMetadataEntry[] = [
     {
-      label: "Owner",
-      value: item.assignedStaffName ?? "Unassigned",
+      label: "Purchase order",
+      value:
+        getQueueWorkItemStringDetail(item, "purchaseOrderNumber") ??
+        getQueueWorkItemStringDetail(item, "displayNumber") ??
+        "Not recorded",
     },
     {
-      label: "Customer",
-      value: item.customerName ?? "No customer",
+      label: "Vendor",
+      value: getQueueWorkItemStringDetail(item, "vendorName") ?? "No vendor",
+    },
+    {
+      label: "Items",
+      value: formatOptionalItemCount(
+        getQueueWorkItemNumberDetail(item, "itemCount"),
+      ),
+    },
+    {
+      label: "Next action",
+      value: "Continue procurement",
+    },
+  ];
+  const stockAdjustmentReviewCollapsedMetadataEntries: OperationReviewMetadataEntry[] =
+    [
+      {
+        label: "Owner",
+        value: "Approval requests",
+      },
+      {
+        label: "Next action",
+        value:
+          item.approvalState === "pending"
+            ? "Review pending approval"
+            : "Check approval status",
+      },
+      {
+        label: "Reason",
+        value:
+          getQueueWorkItemStringDetail(item, "reasonLabel") ??
+          "Stock review",
+      },
+      {
+        label: "Created",
+        value: getRelativeTime(item.createdAt),
+      },
+    ];
+  const dailyCloseCollapsedMetadataEntries: OperationReviewMetadataEntry[] = [
+    {
+      label: "Business date",
+      value: formatBusinessDate(
+        getQueueWorkItemStringDetail(item, "businessDate"),
+      ),
+    },
+    {
+      label: "Owner",
+      value: "Daily Close",
+    },
+    {
+      label: "Follow-up",
+      value:
+        getQueueWorkItemStringDetail(item, "followUpReason") ??
+        "Review carry-forward work",
     },
     {
       label: "Created",
       value: getRelativeTime(item.createdAt),
     },
+  ];
+  const unsupportedCollapsedMetadataEntries: OperationReviewMetadataEntry[] = [
     {
-      label: "Due",
-      value: item.dueAt ? getRelativeTime(item.dueAt) : "Not scheduled",
+      label: "Owner",
+      value: "Not surfaced here",
+    },
+    {
+      label: "Next action",
+      value: "Wait for supported approval handling",
+    },
+    {
+      label: "Created",
+      value: getRelativeTime(item.createdAt),
     },
   ];
   const pendingCheckoutCollapsedMetadataEntries: OperationReviewMetadataEntry[] =
@@ -623,23 +972,23 @@ function QueueWorkItemCard({
       {
         label: "Item code",
         value:
-          getQueueWorkItemStringMetadata(item, "lookupCode") ?? "Not captured",
+          getQueueWorkItemStringDetail(item, "lookupCode") ?? "Not captured",
       },
       {
         label: "Quantity sold",
         value: formatOptionalQuantity(
-          getQueueWorkItemNumberMetadata(item, "quantitySold"),
+          getQueueWorkItemNumberDetail(item, "quantitySold"),
         ),
       },
       {
         label: "Total sold",
         value: formatOptionalQuantity(
-          getQueueWorkItemNumberMetadata(item, "totalQuantitySold"),
+          getQueueWorkItemNumberDetail(item, "totalQuantitySold"),
         ),
       },
       {
         label: "Price",
-        value: formatOptionalMoney(getQueueWorkItemNumberMetadata(item, "price")),
+        value: formatOptionalMoney(getQueueWorkItemNumberDetail(item, "price")),
       },
     ];
   const syncedSaleCollapsedMetadataEntries: OperationReviewMetadataEntry[] = [
@@ -668,7 +1017,15 @@ function QueueWorkItemCard({
       ? pendingCheckoutCollapsedMetadataEntries
       : item.type === "synced_sale_inventory_review"
         ? syncedSaleCollapsedMetadataEntries
-        : serviceCollapsedMetadataEntries;
+        : item.type === "purchase_order"
+          ? purchaseOrderCollapsedMetadataEntries
+          : item.type === "stock_adjustment_review"
+            ? stockAdjustmentReviewCollapsedMetadataEntries
+            : item.type === "daily_close_carry_forward"
+              ? dailyCloseCollapsedMetadataEntries
+              : item.type === "service_deposit_review"
+                ? unsupportedCollapsedMetadataEntries
+                : serviceCollapsedMetadataEntries;
   const expandedOnlyMetadataEntries: OperationReviewMetadataEntry[] =
     item.type === "synced_sale_inventory_review"
       ? [
@@ -696,28 +1053,31 @@ function QueueWorkItemCard({
       value: formatQueueWorkItemValue(item.approvalState),
     },
   ];
+  const title =
+    item.type === "service_deposit_review"
+      ? "Service deposit review is not available in Open Work."
+      : item.type === "daily_close_carry_forward"
+        ? "Daily close carry-forward follow-up"
+        : fallbackTitle;
 
   return (
     <OperationReviewItemCard
       actionSlot={
-        stockAdjustmentSkuId && orgUrlSlug && storeUrlSlug ? (
-          <Link
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-foreground underline-offset-4 transition-colors hover:text-primary hover:underline"
-            params={{
-              orgUrlSlug,
-              storeUrlSlug,
-            }}
-            search={{
-              mode: "manual",
-              o: getOrigin(),
-              sku: stockAdjustmentSkuId,
-            }}
-            to="/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments"
-          >
-            Open stock adjustments
-            <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
-          </Link>
-        ) : null
+        <QueueWorkItemActionSlot
+          isSyncedSaleInventoryReviewResolutionDisabled={
+            isSyncedSaleInventoryReviewResolutionDisabled
+          }
+          isResolvingSyncedSaleInventoryReview={
+            isResolvingSyncedSaleInventoryReview
+          }
+          item={item}
+          onResolveSyncedSaleInventoryReview={
+            onResolveSyncedSaleInventoryReview
+          }
+          orgUrlSlug={orgUrlSlug}
+          stockAdjustmentSkuId={stockAdjustmentSkuId}
+          storeUrlSlug={storeUrlSlug}
+        />
       }
       badgeSlot={
         <>
@@ -743,7 +1103,7 @@ function QueueWorkItemCard({
           Icon={contextPresentation.Icon}
         />
       }
-      contextLabel={formatQueueWorkItemValue(item.type)}
+      contextLabel={getQueueWorkItemTypeLabel(item.type)}
       contextLabelClassName={contextPresentation.contextLabelClassName}
       description={null}
       itemId={item._id}
@@ -751,14 +1111,7 @@ function QueueWorkItemCard({
       title={
         pendingCheckoutTitleSubject ? (
           <>
-            Review pending checkout item:{" "}
-            <StockAdjustmentReferenceLink
-              orgUrlSlug={orgUrlSlug}
-              skuId={stockAdjustmentSkuId}
-              storeUrlSlug={storeUrlSlug}
-            >
-              {pendingCheckoutTitleSubject}
-            </StockAdjustmentReferenceLink>
+            Review pending checkout item: {pendingCheckoutTitleSubject}
           </>
         ) : syncedSaleTitleSubject ? (
           <>
@@ -802,10 +1155,7 @@ function getApprovalRequestCopy(requestType: string) {
     };
   }
 
-  if (
-    requestType === "pos_item_adjustment" ||
-    requestType === "pos_item_adjustment_review"
-  ) {
+  if (requestType === "pos_item_adjustment") {
     return {
       approveLabel: "Approve adjustment",
       approvedToast: "Item adjustment approved",
@@ -846,6 +1196,37 @@ function getApprovalRequestCopy(requestType: string) {
         "Manager approval voids the completed sale and records the payment, drawer, inventory, and audit reversal.",
       rejectedToast: "Completed sale void rejected",
       rejectLabel: "Reject void",
+    };
+  }
+
+  return null;
+}
+
+function getRetireOnlyApprovalRequestCopy(requestType: string) {
+  if (requestType === "service_deposit_review") {
+    return {
+      description:
+        "This legacy service deposit review cannot be approved from Open Work. Reject it to retire the pending approval and clear the linked review.",
+      rejectedToast: "Service deposit review retired",
+      rejectLabel: "Retire review",
+    };
+  }
+
+  if (requestType === "online_order_return_review") {
+    return {
+      description:
+        "Online return reviews need a dedicated resolver before approval can apply return changes. Reject it to retire the pending approval.",
+      rejectedToast: "Online return review retired",
+      rejectLabel: "Retire review",
+    };
+  }
+
+  if (requestType === "pos_item_adjustment_review") {
+    return {
+      description:
+        "This legacy item adjustment review cannot be approved from Open Work. Reject it to retire the pending approval.",
+      rejectedToast: "Item adjustment review retired",
+      rejectLabel: "Retire review",
     };
   }
 
@@ -1128,6 +1509,7 @@ type OperationsQueueViewContentProps = {
   isLoadingPermissions: boolean;
   isLoadingQueue: boolean;
   isLoadingStock?: boolean;
+  isResolvingSyncedSaleInventoryReviewId?: Id<"operationalWorkItem"> | null;
   isSubmittingStockBatch: boolean;
   onDecideApprovalRequest: (args: {
     approvalRequestId: string;
@@ -1139,6 +1521,7 @@ type OperationsQueueViewContentProps = {
   onLoadMoreInventoryItems?: () => void;
   onRequestApprovalDecisionUnlock?: () => void;
   onOpenWorkSearchChange?: (patch: OpenWorkSearchPatch) => void;
+  onResolveSyncedSaleInventoryReview?: (item: QueueWorkItem) => void;
   onDiscardCycleCountDraft?: () => Promise<NormalizedCommandResult<unknown>>;
   onRefreshCycleCountDraftLineBaseline?: (args: {
     productSkuId: Id<"productSku">;
@@ -1155,6 +1538,7 @@ type OperationsQueueViewContentProps = {
   }) => Promise<NormalizedCommandResult<unknown>>;
   onStockAdjustmentSearchChange?: (patch: StockAdjustmentSearchPatch) => void;
   orgUrlSlug?: string;
+  queueOverflow?: QueueOverflow | null;
   showBackButton?: boolean;
   storeId?: Id<"store">;
   storeUrlSlug?: string;
@@ -1181,6 +1565,7 @@ export function OperationsQueueViewContent({
   isLoadingPermissions,
   isLoadingQueue,
   isLoadingStock = isLoadingQueue,
+  isResolvingSyncedSaleInventoryReviewId,
   isSubmittingStockBatch,
   onDecideApprovalRequest,
   onDiscardCycleCountDraft,
@@ -1188,12 +1573,14 @@ export function OperationsQueueViewContent({
   onLoadMoreInventoryItems,
   onOpenWorkSearchChange,
   onRequestApprovalDecisionUnlock,
+  onResolveSyncedSaleInventoryReview,
   onRefreshCycleCountDraftLineBaseline,
   onSaveCycleCountDraftLine,
   onSubmitStockBatch,
   onSubmitCycleCountDraft,
   onStockAdjustmentSearchChange,
   orgUrlSlug,
+  queueOverflow,
   showBackButton = false,
   storeId,
   storeUrlSlug,
@@ -1202,24 +1589,17 @@ export function OperationsQueueViewContent({
   workItems,
 }: OperationsQueueViewContentProps) {
   const requestedOpenWorkPage = openWorkSearch?.page ?? 1;
-  const requestedOpenWorkSortOrder = openWorkSearch?.sort ?? "latest";
   const [openWorkPage, setOpenWorkPage] = useState(requestedOpenWorkPage);
-  const [openWorkSortOrder, setOpenWorkSortOrder] =
-    useState<OpenWorkSortOrder>(requestedOpenWorkSortOrder);
   const resolvedWorkflow =
     activeWorkflow ?? getDefaultWorkflow({ approvalRequests, workItems });
-  const sortedWorkItems = useMemo(
-    () => sortQueueWorkItems(workItems, openWorkSortOrder),
-    [openWorkSortOrder, workItems],
-  );
   const openWorkPageCount = Math.max(
     1,
-    Math.ceil(sortedWorkItems.length / OPEN_WORK_ITEMS_PER_PAGE),
+    Math.ceil(workItems.length / OPEN_WORK_ITEMS_PER_PAGE),
   );
   const clampedOpenWorkPage = Math.min(openWorkPage, openWorkPageCount);
   const openWorkPageStart =
     (clampedOpenWorkPage - 1) * OPEN_WORK_ITEMS_PER_PAGE;
-  const visibleWorkItems = sortedWorkItems.slice(
+  const visibleWorkItems = workItems.slice(
     openWorkPageStart,
     openWorkPageStart + OPEN_WORK_ITEMS_PER_PAGE,
   );
@@ -1257,14 +1637,12 @@ export function OperationsQueueViewContent({
 
   const shouldAnimateApprovalsHeader =
     isLoadingQueue || hasRenderedApprovalsLoadingHeaderRef.current;
+  const openWorkOverflow = hasOpenWorkOverflow(queueOverflow);
+  const approvalsOverflow = Boolean(queueOverflow?.approvalRequests);
 
   useEffect(() => {
     setOpenWorkPage(requestedOpenWorkPage);
   }, [requestedOpenWorkPage]);
-
-  useEffect(() => {
-    setOpenWorkSortOrder(requestedOpenWorkSortOrder);
-  }, [requestedOpenWorkSortOrder]);
 
   const handleOpenWorkPageChange = useCallback(
     (page: number) => {
@@ -1276,18 +1654,6 @@ export function OperationsQueueViewContent({
       });
     },
     [onOpenWorkSearchChange, openWorkPageCount],
-  );
-
-  const handleOpenWorkSortOrderChange = useCallback(
-    (sortOrder: OpenWorkSortOrder) => {
-      setOpenWorkSortOrder(sortOrder);
-      setOpenWorkPage(1);
-      onOpenWorkSearchChange?.({
-        page: undefined,
-        sort: sortOrder,
-      });
-    },
-    [onOpenWorkSearchChange],
   );
 
   useEffect(() => {
@@ -1379,6 +1745,13 @@ export function OperationsQueueViewContent({
             ) : (
               <PageWorkspaceGrid className="xl:grid-cols-[minmax(15rem,0.32fr)_minmax(0,1fr)]">
                 <PageWorkspaceRail className="gap-layout-md">
+                  {openWorkOverflow ? (
+                    <CappedQueueNotice title="More open work is available">
+                      Showing the first {workItems.length.toLocaleString()} open
+                      work items. Resolve visible work to continue through the
+                      remaining items.
+                    </CappedQueueNotice>
+                  ) : null}
                   <OpenWorkMixSummary workItems={workItems} />
                 </PageWorkspaceRail>
 
@@ -1387,7 +1760,7 @@ export function OperationsQueueViewContent({
                   className="space-y-0 rounded-lg border border-border bg-surface-raised shadow-surface"
                 >
                   <div className="border-b border-border px-layout-md py-layout-md">
-                    <div className="flex flex-col gap-layout-md sm:flex-row sm:items-end sm:justify-between">
+                    <div className="flex flex-col gap-layout-xs">
                       <div>
                         <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
                           Work queue
@@ -1396,42 +1769,6 @@ export function OperationsQueueViewContent({
                           Open items
                         </h2>
                       </div>
-
-                      <div
-                        aria-label="Sort open work"
-                        className="inline-flex w-fit rounded-md border border-border bg-background p-1"
-                        role="group"
-                      >
-                        {[
-                          ["latest", "Latest"],
-                          ["oldest", "Oldest"],
-                        ].map(([sortOrder, label]) => {
-                          const isSelected = openWorkSortOrder === sortOrder;
-
-                          return (
-                            <Button
-                              aria-pressed={isSelected}
-                              className={cn(
-                                "h-7 px-3 text-xs",
-                                isSelected
-                                  ? "bg-action-workflow-soft text-action-workflow hover:bg-action-workflow-soft/75"
-                                  : "text-muted-foreground hover:text-foreground",
-                              )}
-                              key={sortOrder}
-                              onClick={() =>
-                                handleOpenWorkSortOrderChange(
-                                  sortOrder as OpenWorkSortOrder,
-                                )
-                              }
-                              size="sm"
-                              type="button"
-                              variant="ghost"
-                            >
-                              {label}
-                            </Button>
-                          );
-                        })}
-                      </div>
                     </div>
                   </div>
 
@@ -1439,8 +1776,17 @@ export function OperationsQueueViewContent({
                     <div className="space-y-layout-2xl">
                       {visibleWorkItems.map((item) => (
                         <QueueWorkItemCard
+                          isSyncedSaleInventoryReviewResolutionDisabled={
+                            Boolean(isResolvingSyncedSaleInventoryReviewId)
+                          }
+                          isResolvingSyncedSaleInventoryReview={
+                            isResolvingSyncedSaleInventoryReviewId === item._id
+                          }
                           item={item}
                           key={item._id}
+                          onResolveSyncedSaleInventoryReview={
+                            onResolveSyncedSaleInventoryReview
+                          }
                           orgUrlSlug={orgUrlSlug}
                           storeUrlSlug={storeUrlSlug}
                         />
@@ -1484,6 +1830,14 @@ export function OperationsQueueViewContent({
             ) : (
               <PageWorkspaceGrid className="xl:grid-cols-[minmax(15rem,0.32fr)_minmax(0,1fr)]">
                 <PageWorkspaceRail className="gap-layout-md">
+                  {approvalsOverflow ? (
+                    <CappedQueueNotice title="More approvals are available">
+                      Showing the first{" "}
+                      {approvalRequests.length.toLocaleString()} pending
+                      approvals. Resolve visible approvals to continue through
+                      the remaining requests.
+                    </CappedQueueNotice>
+                  ) : null}
                   <OperationsSummaryMetric
                     helper="Pending approvals"
                     label="Waiting for review"
@@ -1563,6 +1917,10 @@ export function OperationsQueueViewContent({
                         const approvalCopy = getApprovalRequestCopy(
                           request.requestType,
                         );
+                        const retireOnlyApprovalCopy =
+                          getRetireOnlyApprovalRequestCopy(
+                            request.requestType,
+                          );
                         const requestLabel = request.workItemTitle
                           ? formatWorkItemTitle(request.workItemTitle)
                           : formatApprovalRequestType(request.requestType);
@@ -2432,7 +2790,9 @@ export function OperationsQueueViewContent({
                                           approvalRequestId: request._id,
                                           decision: "approved",
                                           ...(request.requestType ===
-                                          "register_sync_review"
+                                            "register_sync_review" ||
+                                          request.requestType ===
+                                            "variance_review"
                                             ? {
                                                 registerSessionId:
                                                   request.registerSessionSummary
@@ -2458,7 +2818,9 @@ export function OperationsQueueViewContent({
                                           approvalRequestId: request._id,
                                           decision: "rejected",
                                           ...(request.requestType ===
-                                          "register_sync_review"
+                                            "register_sync_review" ||
+                                          request.requestType ===
+                                            "variance_review"
                                             ? {
                                                 registerSessionId:
                                                   request.registerSessionSummary
@@ -2472,6 +2834,35 @@ export function OperationsQueueViewContent({
                                       variant="outline"
                                     >
                                       {approvalCopy.rejectLabel}
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+                            ) : null}
+
+                            {retireOnlyApprovalCopy ? (
+                              <div className="border-t border-border/70 bg-surface px-layout-md py-layout-md">
+                                <div className="flex flex-col gap-layout-md lg:flex-row lg:items-center lg:justify-between">
+                                  <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
+                                    {retireOnlyApprovalCopy.description}
+                                  </p>
+                                  <div className="flex shrink-0 flex-wrap gap-2">
+                                    <Button
+                                      disabled={Boolean(
+                                        isDecidingApprovalRequestId ||
+                                          (approvalDecisionUnlockRequired &&
+                                            !approvalDecisionUnlocked),
+                                      )}
+                                      onClick={() =>
+                                        onDecideApprovalRequest({
+                                          approvalRequestId: request._id,
+                                          decision: "rejected",
+                                        })
+                                      }
+                                      size="sm"
+                                      variant="outline"
+                                    >
+                                      {retireOnlyApprovalCopy.rejectLabel}
                                     </Button>
                                   </div>
                                 </div>
@@ -2533,6 +2924,10 @@ export function OperationsQueueView({
   const [isSavingCycleCountDraft, setIsSavingCycleCountDraft] = useState(false);
   const [decisioningApprovalRequestId, setDecisioningApprovalRequestId] =
     useState<string | null>(null);
+  const [
+    resolvingSyncedSaleInventoryReviewId,
+    setResolvingSyncedSaleInventoryReviewId,
+  ] = useState<Id<"operationalWorkItem"> | null>(null);
   const [isApprovalUnlockOpen, setIsApprovalUnlockOpen] = useState(false);
   const [approvalDecisionUnlock, setApprovalDecisionUnlock] =
     useState<ApprovalDecisionUnlock | null>(null);
@@ -2543,6 +2938,7 @@ export function OperationsQueueView({
   ) as
     | {
         approvalRequests: QueueApprovalRequest[];
+        overflow?: QueueOverflow;
         workItems: QueueWorkItem[];
       }
     | undefined;
@@ -2672,6 +3068,9 @@ export function OperationsQueueView({
   const decideApprovalRequest = useMutation(
     operationsApi.approvalRequests.decideApprovalRequest,
   );
+  const resolveSyncedSaleInventoryReview = useMutation(
+    operationsApi.openWorkInventoryReviews.resolveSyncedSaleInventoryReview,
+  );
   const resolveRegisterSessionSyncReview = useMutation(
     api.cashControls.deposits.resolveRegisterSessionSyncReview,
   );
@@ -2695,6 +3094,9 @@ export function OperationsQueueView({
   );
   const submitCycleCountDraft = useMutation(
     stockOpsApi.cycleCountDrafts.submitActiveCycleCountDrafts,
+  );
+  const reviewRegisterSessionCloseout = useMutation(
+    api.cashControls.closeouts.reviewRegisterSessionCloseout,
   );
   const cycleCountDraft = useMemo<CycleCountDraftState | null>(() => {
     if (!activeCycleCountDraft?.draft) return null;
@@ -2883,21 +3285,49 @@ export function OperationsQueueView({
       return;
     }
 
+    if (
+      (args.requestType === "register_sync_review" ||
+        args.requestType === "variance_review") &&
+      !args.registerSessionId
+    ) {
+      presentCommandToast({
+        kind: "user_error",
+        error: {
+          code: "not_found",
+          message:
+            args.requestType === "variance_review"
+              ? "Register session was not available for this closeout review."
+              : "Register session was not available for this synced activity review.",
+        },
+      });
+      return;
+    }
+
     setDecisioningApprovalRequestId(args.approvalRequestId);
 
     try {
       const request = queue?.approvalRequests.find(
         (approvalRequest) => approvalRequest._id === args.approvalRequestId,
       );
-      const approvalProofResult = await runCommand(
-        () =>
-          authenticateStaffCredentialForApproval({
-            actionKey: APPROVAL_DECISION_ACTION_KEY,
-            pinHash: activeUnlock.pinHash,
-            reason: "Resolve pending approval request.",
-            requiredRole: "manager",
-            storeId: activeStore._id,
-            subject: {
+      const approvalActionKey =
+        args.requestType === "variance_review"
+          ? REGISTER_VARIANCE_REVIEW_ACTION_KEY
+          : args.requestType === "register_sync_review"
+            ? REGISTER_SESSION_SYNC_REVIEW_APPROVAL_ACTION_KEY
+            : APPROVAL_DECISION_ACTION_KEY;
+      const approvalSubject =
+        args.registerSessionId &&
+        (args.requestType === "register_sync_review" ||
+          args.requestType === "variance_review")
+          ? {
+              id: String(args.registerSessionId),
+              label:
+                request?.registerSessionSummary?.registerNumber ??
+                request?.workItemTitle ??
+                undefined,
+              type: "register_session",
+            }
+          : {
               id: String(args.approvalRequestId),
               label:
                 request?.workItemTitle ??
@@ -2905,7 +3335,16 @@ export function OperationsQueueView({
                   ? formatApprovalRequestType(request.requestType)
                   : undefined),
               type: "approval_request",
-            },
+            };
+      const approvalProofResult = await runCommand(
+        () =>
+          authenticateStaffCredentialForApproval({
+            actionKey: approvalActionKey,
+            pinHash: activeUnlock.pinHash,
+            reason: "Resolve pending approval request.",
+            requiredRole: "manager",
+            storeId: activeStore._id,
+            subject: approvalSubject,
             username: activeUnlock.username,
           }) as Promise<
             CommandResult<{
@@ -2926,27 +3365,25 @@ export function OperationsQueueView({
       let result: NormalizedApprovalCommandResult<unknown>;
 
       if (args.requestType === "register_sync_review") {
-        if (!args.registerSessionId) {
-          result = {
-            kind: "user_error",
-            error: {
-              code: "not_found",
-              message:
-                "Register session was not available for this synced activity review.",
-            },
-          };
-        } else {
-          const registerSessionId = args.registerSessionId;
-          result = await runCommand(() =>
-            resolveRegisterSessionSyncReview({
-              actorStaffProfileId:
-                approvalProofResult.data.approvedByStaffProfileId,
-              decision: args.decision,
-              registerSessionId,
-              storeId: activeStore._id,
-            }),
-          );
-        }
+        const registerSessionId = args.registerSessionId as Id<"registerSession">;
+        result = await runCommand(() =>
+          resolveRegisterSessionSyncReview({
+            approvalProofId: approvalProofResult.data.approvalProofId,
+            decision: args.decision,
+            registerSessionId,
+            storeId: activeStore._id,
+          }),
+        );
+      } else if (args.requestType === "variance_review") {
+        const registerSessionId = args.registerSessionId as Id<"registerSession">;
+        result = await runCommand(() =>
+          reviewRegisterSessionCloseout({
+            approvalProofId: approvalProofResult.data.approvalProofId,
+            decision: args.decision,
+            registerSessionId,
+            storeId: activeStore._id,
+          }),
+        );
       } else {
         result = await runCommand(() =>
           decideApprovalRequest({
@@ -2965,14 +3402,82 @@ export function OperationsQueueView({
       const approvalCopy = request
         ? getApprovalRequestCopy(request.requestType)
         : null;
+      const retireOnlyApprovalCopy = request
+        ? getRetireOnlyApprovalRequestCopy(request.requestType)
+        : null;
 
       toast.success(
         args.decision === "approved"
           ? (approvalCopy?.approvedToast ?? "Approval request approved")
-          : (approvalCopy?.rejectedToast ?? "Approval request rejected"),
+          : (approvalCopy?.rejectedToast ??
+            retireOnlyApprovalCopy?.rejectedToast ??
+            "Approval request rejected"),
       );
     } finally {
       setDecisioningApprovalRequestId(null);
+    }
+  };
+
+  const handleResolveSyncedSaleInventoryReview = async (item: QueueWorkItem) => {
+    if (resolvingSyncedSaleInventoryReviewId) return;
+
+    if (!activeStore?._id) {
+      presentCommandToast({
+        kind: "user_error",
+        error: {
+          code: "authentication_failed",
+          message: "Select a store before resolving inventory review work.",
+        },
+      });
+      return;
+    }
+
+    const localRegisterSessionId = getQueueWorkItemStringDetail(
+      item,
+      "localRegisterSessionId",
+    );
+    const localTransactionId = getQueueWorkItemStringDetail(
+      item,
+      "localTransactionId",
+    );
+    const receiptNumber = getQueueWorkItemStringDetail(item, "receiptNumber");
+    const registerSessionId = getQueueWorkItemStringDetail(
+      item,
+      "registerSessionId",
+    ) as Id<"registerSession"> | undefined;
+    const sourceId = getQueueWorkItemStringDetail(item, "sourceId") as
+      | Id<"posTransaction">
+      | undefined;
+    const terminalId = getQueueWorkItemStringDetail(item, "terminalId") as
+      | Id<"posTerminal">
+      | undefined;
+
+    setResolvingSyncedSaleInventoryReviewId(item._id);
+
+    try {
+      const result = await runCommand(() =>
+        resolveSyncedSaleInventoryReview({
+          localRegisterSessionId,
+          localTransactionId,
+          outcome: "completed",
+          reason: "Inventory review handled from Open Work.",
+          receiptNumber,
+          registerSessionId,
+          sourceId,
+          storeId: activeStore._id,
+          terminalId,
+          workItemId: item._id,
+        }),
+      );
+
+      if (result.kind !== "ok") {
+        presentCommandToast(result);
+        return;
+      }
+
+      toast.success("Inventory review marked complete");
+    } finally {
+      setResolvingSyncedSaleInventoryReviewId(null);
     }
   };
 
@@ -3047,6 +3552,9 @@ export function OperationsQueueView({
         isLoadingPermissions={false}
         isLoadingQueue={queue === undefined || isInventorySnapshotLoadingFirstPage}
         isLoadingStock={isInventorySnapshotLoadingFirstPage}
+        isResolvingSyncedSaleInventoryReviewId={
+          resolvingSyncedSaleInventoryReviewId
+        }
         onDiscardCycleCountDraft={handleDiscardCycleCountDraft}
         onDecideApprovalRequest={handleDecideApprovalRequest}
         onLoadMoreInventoryItems={() => inventorySnapshotPage.loadMore(100)}
@@ -3056,12 +3564,16 @@ export function OperationsQueueView({
           handleRefreshCycleCountDraftLineBaseline
         }
         onRequestApprovalDecisionUnlock={() => setIsApprovalUnlockOpen(true)}
+        onResolveSyncedSaleInventoryReview={
+          handleResolveSyncedSaleInventoryReview
+        }
         onSaveCycleCountDraftLine={handleSaveCycleCountDraftLine}
         isSubmittingStockBatch={isSubmittingStockBatch}
         onSubmitStockBatch={handleSubmitStockBatch}
         onSubmitCycleCountDraft={handleSubmitCycleCountDraft}
         onStockAdjustmentSearchChange={onStockAdjustmentSearchChange}
         orgUrlSlug={routeParams?.orgUrlSlug}
+        queueOverflow={queue?.overflow ?? null}
         showBackButton={typeof search.o === "string" && search.o.length > 0}
         storeId={activeStore._id}
         storeUrlSlug={routeParams?.storeUrlSlug}

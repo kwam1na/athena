@@ -260,6 +260,16 @@ function createProjectedInventoryReviewQueryCtx(input: {
         cloudTable: "registerSession",
         cloudId: "session_open",
       },
+      {
+        _id: "sync_mapping_inventory_work",
+        storeId: "store_1",
+        terminalId: "terminal_1",
+        localRegisterSessionId: "local-register-1",
+        localIdKind: "inventoryReviewWorkItem",
+        localId: "local-transaction-1:inventory-review",
+        cloudTable: "operationalWorkItem",
+        cloudId: "work_item_inventory",
+      },
     ],
     registerSession: [
       {
@@ -1697,6 +1707,78 @@ describe("cash control deposits", () => {
         }),
       ]),
     );
+  });
+
+  it("rejects synced register reviews with an inline manager approval proof", async () => {
+    const ctx = createAuthorizedRegisterDepositCtx({
+      ...createMissingMappingRepairSeed(),
+      approvalProof: [
+        {
+          _id: "approval_proof_1",
+          actionKey: "cash_controls.register_session.resolve_sync_review",
+          approvedByCredentialId: "credential_manager_1",
+          approvedByStaffProfileId: "manager_1",
+          createdAt: 1,
+          expiresAt: Date.now() + 60_000,
+          requestedByStaffProfileId: "staff_1",
+          requiredRole: "manager",
+          storeId: "store_1",
+          subjectId: "session_open",
+          subjectLabel: "1",
+          subjectType: "register_session",
+        },
+      ],
+      staffProfile: [
+        {
+          _id: "manager_1",
+          linkedUserId: "athena_user_2",
+          organizationId: "org_1",
+          status: "active",
+          storeId: "store_1",
+        },
+        {
+          _id: "staff_1",
+          linkedUserId: "athena_user_1",
+          organizationId: "org_1",
+          status: "active",
+          storeId: "store_1",
+        },
+      ],
+    });
+
+    const result = await getHandler(resolveRegisterSessionSyncReview)(
+      ctx as never,
+      {
+        approvalProofId: "approval_proof_1" as Id<"approvalProof">,
+        decision: "rejected",
+        registerSessionId: "session_open" as Id<"registerSession">,
+        requestedByStaffProfileId: "staff_1" as Id<"staffProfile">,
+        reviewConflictIds: ["sync_conflict_missing_mapping"],
+        storeId: "store_1" as Id<"store">,
+      },
+    );
+
+    expect(result).toEqual(
+      ok({
+        action: "rejected",
+        projectedCount: 0,
+        registerSession: expect.objectContaining({ _id: "session_open" }),
+        resolvedCount: 1,
+      }),
+    );
+    expect(ctx.tables.get("approvalProof")).toEqual([
+      expect.objectContaining({
+        _id: "approval_proof_1",
+        consumedAt: expect.any(Number),
+      }),
+    ]);
+    expect(ctx.tables.get("posLocalSyncConflict")).toEqual([
+      expect.objectContaining({
+        _id: "sync_conflict_missing_mapping",
+        resolvedByStaffProfileId: "manager_1",
+        status: "resolved",
+      }),
+    ]);
   });
 
   it("repairs missing register-session mappings for completed synced sales", async () => {
@@ -3844,7 +3926,23 @@ describe("cash control deposits", () => {
     ).resolves.toEqual(new Map());
   });
 
-  it("keeps projected inventory sales in cash-controls review when inventory work is closed", async () => {
+  it("does not keep projected inventory sales in cash-controls review after terminal Operations resolution", async () => {
+    for (const workItemStatus of ["completed", "cancelled"] as const) {
+      const ctx = createProjectedInventoryReviewQueryCtx({
+        workItemStatus,
+      });
+
+      await expect(
+        listOpenLocalSyncConflictsByRegisterSession(
+          ctx as never,
+          "store_1" as Id<"store">,
+          { includeRejectedEvidence: true },
+        ),
+      ).resolves.toEqual(new Map());
+    }
+  });
+
+  it("keeps projected inventory sales in cash-controls review when inventory work has an unknown status", async () => {
     const ctx = createProjectedInventoryReviewQueryCtx({
       workItemStatus: "resolved",
     });
