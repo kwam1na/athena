@@ -62,7 +62,7 @@ const COMPOUND_SENSITIVE_PATTERNS = [
   /^package\.json$/,
 ] as const;
 const SOLUTION_REFERENCE_PATTERN =
-  /(?:^|[\s('"`])((?:\.\/)?docs\/solutions\/[A-Za-z0-9._/-]+\.md)(?=$|[\s)'"`,.])/g;
+  /(?:^|[\s('"`])((?:(?:\.\.?\/)+)?docs\/solutions\/[A-Za-z0-9._/-]+\.md)(?=$|[\s)'"`,.])/g;
 
 function normalizeRepoPath(repoPath: string) {
   return repoPath.replaceAll("\\", "/").replace(/^\.\//, "");
@@ -112,9 +112,32 @@ export function isCompoundSensitiveWorkflowPath(repoPath: string) {
   return COMPOUND_SENSITIVE_PATTERNS.some((pattern) => pattern.test(normalizedPath));
 }
 
-export function extractSolutionReferences(markdown: string) {
+function normalizeSolutionReference(reference: string, markdownFilePath?: string) {
+  const normalizedReference = normalizeRepoPath(reference);
+
+  if (
+    normalizedReference.startsWith("docs/solutions/") ||
+    normalizedReference.startsWith("./docs/solutions/")
+  ) {
+    return normalizeRepoPath(normalizedReference);
+  }
+
+  if (!markdownFilePath) {
+    return normalizeRepoPath(path.posix.normalize(normalizedReference));
+  }
+
+  return normalizeRepoPath(
+    path.posix.normalize(
+      path.posix.join(path.posix.dirname(normalizeRepoPath(markdownFilePath)), normalizedReference)
+    )
+  );
+}
+
+export function extractSolutionReferences(markdown: string, markdownFilePath?: string) {
   return sortUniquePaths(
-    [...markdown.matchAll(SOLUTION_REFERENCE_PATTERN)].map((match) => match[1])
+    [...markdown.matchAll(SOLUTION_REFERENCE_PATTERN)].map((match) =>
+      normalizeSolutionReference(match[1], markdownFilePath)
+    )
   );
 }
 
@@ -181,7 +204,7 @@ function hasAgentDocSolutionReference(
       continue;
     }
 
-    if (markdown.includes(solutionDocPath)) {
+    if (extractSolutionReferences(markdown, filePath).includes(solutionDocPath)) {
       return true;
     }
   }
@@ -223,8 +246,13 @@ export function collectCompoundSolutionFindings({
     isCompoundSensitiveWorkflowPath(filePath)
   );
 
-  for (const [filePath, markdown] of markdownContents) {
-    const references = extractSolutionReferences(markdown);
+  const referenceMarkdownContents = new Map([
+    ...agentDocContents,
+    ...markdownContents,
+  ]);
+
+  for (const [filePath, markdown] of referenceMarkdownContents) {
+    const references = extractSolutionReferences(markdown, filePath);
 
     for (const reference of references) {
       if (!existingFiles.has(reference)) {

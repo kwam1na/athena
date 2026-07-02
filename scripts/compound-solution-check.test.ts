@@ -139,6 +139,17 @@ describe("extractSolutionReferences", () => {
       )
     ).toEqual(["docs/solutions/harness/compound-solution-gate-2026-05-05.md"]);
   });
+
+  it("resolves package-agent relative solution doc links to repo paths", () => {
+    expect(
+      extractSolutionReferences(
+        "See [context primitives](../../../../docs/solutions/architecture/athena-intelligence-context-primitives-2026-06-21.md).",
+        "packages/storefront-webapp/docs/agent/architecture.md"
+      )
+    ).toEqual([
+      "docs/solutions/architecture/athena-intelligence-context-primitives-2026-06-21.md",
+    ]);
+  });
 });
 
 describe("isConsiderableSourcePath", () => {
@@ -242,6 +253,52 @@ describe("collectCompoundSolutionFindings", () => {
     });
 
     expect(findings).toEqual([]);
+  });
+
+  it("fails when changed agent docs contain a relative solution link that does not resolve", () => {
+    const findings = collectCompoundSolutionFindings({
+      changedFiles: ["packages/athena-webapp/docs/agent/architecture.md"],
+      existingFiles: new Set(["packages/athena-webapp/docs/agent/architecture.md"]),
+      markdownContents: new Map([
+        [
+          "packages/athena-webapp/docs/agent/architecture.md",
+          "See [missing](../../../../docs/solutions/architecture/missing-foundation.md).",
+        ],
+      ]),
+      sourceLineChanges: lineChanges([]),
+    });
+
+    expect(findings).toEqual([
+      {
+        message:
+          "packages/athena-webapp/docs/agent/architecture.md references docs/solutions/architecture/missing-foundation.md, but that solution doc does not exist.",
+      },
+    ]);
+  });
+
+  it("fails when existing agent docs contain a relative solution link that does not resolve", () => {
+    const findings = collectCompoundSolutionFindings({
+      changedFiles: ["docs/harness.md"],
+      existingFiles: new Set([
+        "docs/harness.md",
+        "packages/athena-webapp/docs/agent/architecture.md",
+      ]),
+      markdownContents: new Map([["docs/harness.md", "# Harness\n"]]),
+      agentDocContents: new Map([
+        [
+          "packages/athena-webapp/docs/agent/architecture.md",
+          "See [missing](../../../../docs/solutions/architecture/missing-foundation.md).",
+        ],
+      ]),
+      sourceLineChanges: lineChanges([]),
+    });
+
+    expect(findings).toEqual([
+      {
+        message:
+          "packages/athena-webapp/docs/agent/architecture.md references docs/solutions/architecture/missing-foundation.md, but that solution doc does not exist.",
+      },
+    ]);
   });
 
   it("fails substantial source changes without a changed solution doc", () => {
@@ -441,13 +498,53 @@ describe("collectCompoundSolutionFindings", () => {
       agentDocContents: new Map([
         [
           "packages/athena-webapp/docs/agent/architecture.md",
-          "See docs/solutions/architecture/terminal-boundary.md.\n",
+          "See [terminal boundary](../../../../docs/solutions/architecture/terminal-boundary.md).\n",
         ],
       ]),
       sourceLineChanges: lineChanges([]),
     });
 
     expect(findings).toEqual([]);
+  });
+
+  it("does not accept a broken relative agent-doc link as foundational discoverability", () => {
+    const findings = collectCompoundSolutionFindings({
+      changedFiles: ["docs/solutions/architecture/terminal-boundary.md"],
+      existingFiles: new Set([
+        "docs/solutions/architecture/terminal-boundary.md",
+        "packages/athena-webapp/docs/agent/architecture.md",
+      ]),
+      markdownContents: new Map([
+        [
+          "docs/solutions/architecture/terminal-boundary.md",
+          architectureSolutionNote(),
+        ],
+      ]),
+      solutionDocContents: new Map([
+        [
+          "docs/solutions/architecture/terminal-boundary.md",
+          architectureSolutionNote(),
+        ],
+      ]),
+      agentDocContents: new Map([
+        [
+          "packages/athena-webapp/docs/agent/architecture.md",
+          "See [terminal boundary](../../../docs/solutions/architecture/terminal-boundary.md).\n",
+        ],
+      ]),
+      sourceLineChanges: lineChanges([]),
+    });
+
+    expect(findings).toEqual([
+      {
+        message:
+          "packages/athena-webapp/docs/agent/architecture.md references packages/docs/solutions/architecture/terminal-boundary.md, but that solution doc does not exist.",
+      },
+      {
+        message:
+          "Foundational architecture solution note docs/solutions/architecture/terminal-boundary.md is missing an agent-doc discovery reference. Link it from packages/*/docs/agent/{architecture.md,code-map.md,testing.md} so future agents can find the durable concept.",
+      },
+    ]);
   });
 
   it("fails existing foundational architecture notes that are not agent-discoverable", () => {

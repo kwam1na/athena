@@ -12,6 +12,7 @@ symptoms:
 root_cause: missing_validation
 resolution_type: guardrail
 severity: medium
+last_updated: 2026-07-02
 tags:
   - compound
   - docs-solutions
@@ -45,6 +46,8 @@ repo-local invariants:
 - Foundational architecture solution notes must be linked from a relevant
   package agent doc under
   `packages/*/docs/agent/{architecture.md,code-map.md,testing.md}`.
+- Solution-doc links in package agent docs are resolved relative to the
+  markdown file and must point to an existing `docs/solutions/**/*.md` file.
 
 The source threshold intentionally ignores generated files, test files, and
 docs-only changes. The goal is to catch meaningful implementation deliveries,
@@ -77,9 +80,12 @@ same command that would otherwise accept them.
 The discoverability check keeps architecture foundations from becoming isolated
 archive entries. If a solution note describes a foundation, primitive,
 aggregate, contract, policy, or architecture pattern, at least one package
-agent doc must point to it. That makes the package architecture and code-map
-docs the entrypoint for future agents while `docs/solutions/` remains the
-durable knowledge store.
+agent doc must point to it with a real link. The checker resolves relative
+markdown links such as `../../../../docs/solutions/...` from the agent doc's
+location, so a raw substring or an off-by-one `../` path does not satisfy
+discoverability. That makes the package architecture and code-map docs the
+entrypoint for future agents while `docs/solutions/` remains the durable
+knowledge store.
 
 ## Prevention
 
@@ -94,6 +100,8 @@ durable knowledge store.
   need.
 - When a note captures foundational architecture, add a direct reference from
   the relevant package agent architecture, code-map, or testing doc.
+- Prefer normal markdown links in package agent docs and let `compound:check`
+  verify that the relative path resolves to the intended solution note.
 - Treat the final integration branch as the unit of compounding. Parallel
   subagent work is evaluated in aggregate, so the final branch needs the durable
   learning artifact even if no single worker owned the note.
