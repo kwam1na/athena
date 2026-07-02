@@ -227,15 +227,16 @@ describe("PointOfSaleView", () => {
     ).toBeInTheDocument();
   });
 
-  it("prewarms POS register offline snapshots from the POS landing page", () => {
+  it("prewarms register metadata without refreshing full availability from the POS landing page", () => {
     render(<PointOfSaleView />);
 
     expect(usePrewarmRegisterCatalogOfflineSnapshotsMock).toHaveBeenCalledWith({
+      refreshAvailabilitySnapshot: false,
       storeId: "store-1",
     });
   });
 
-  it("prewarms POS register offline snapshots from local entry context when live store context is unavailable", () => {
+  it("prewarms register metadata from local entry context when live store context is unavailable", () => {
     useGetActiveStoreMock.mockReturnValue({
       activeStore: null,
     });
@@ -251,6 +252,7 @@ describe("PointOfSaleView", () => {
     render(<PointOfSaleView />);
 
     expect(usePrewarmRegisterCatalogOfflineSnapshotsMock).toHaveBeenCalledWith({
+      refreshAvailabilitySnapshot: false,
       storeId: "local-store-1",
     });
   });

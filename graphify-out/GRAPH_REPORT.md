@@ -5,7 +5,7 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 8411 nodes · 10077 edges · 2083 communities detected
+- 8412 nodes · 10080 edges · 2083 communities detected
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
@@ -2341,12 +2341,12 @@ Cohesion: 0.18
 Nodes (23): buildEventMessage(), buildNextEvidence(), buildNextSaleEvidence(), buildReviewPriority(), buildWorkItemPriority(), createOrReusePendingCheckoutItem(), createProvisionalCatalogAnchors(), findMatchingPendingCheckoutItem() (+15 more)
 
 ### Community 55 - "Community 55"
-Cohesion: 0.12
-Nodes (11): checkIfItemsHaveChanged(), createOnlineOrder(), createPatchObject(), findBestValuePromoCode(), handleExistingSession(), handleOrderCreation(), handlePlaceOrder(), listSessionItems() (+3 more)
+Cohesion: 0.14
+Nodes (18): findCurrentStoreDayOpening(), findLatestStoreDayOpening(), getTodaySummary(), getTransactionById(), isActivePosSummaryOpeningAt(), isValidPosSummaryWindowRange(), listMixedServiceLinesForTransaction(), listStaffNames() (+10 more)
 
 ### Community 56 - "Community 56"
-Cohesion: 0.15
-Nodes (17): findCurrentStoreDayOpening(), getTodaySummary(), getTransactionById(), isActivePosSummaryOpeningAt(), isValidPosSummaryWindowRange(), listMixedServiceLinesForTransaction(), listStaffNames(), loadCorrectionEvents() (+9 more)
+Cohesion: 0.12
+Nodes (11): checkIfItemsHaveChanged(), createOnlineOrder(), createPatchObject(), findBestValuePromoCode(), handleExistingSession(), handleOrderCreation(), handlePlaceOrder(), listSessionItems() (+3 more)
 
 ### Community 57 - "Community 57"
 Cohesion: 0.17
@@ -3377,8 +3377,8 @@ Cohesion: 0.53
 Nodes (3): handleUpdateFees(), parseDeliveryFeeInputs(), parseOptionalDeliveryFeeInput()
 
 ### Community 314 - "Community 314"
-Cohesion: 0.47
-Nodes (3): onDrop(), removeImage(), unmarkForDeletion()
+Cohesion: 0.33
+Nodes (0):
 
 ### Community 315 - "Community 315"
 Cohesion: 0.33
@@ -3393,76 +3393,76 @@ Cohesion: 0.33
 Nodes (0):
 
 ### Community 318 - "Community 318"
-Cohesion: 0.33
-Nodes (0):
-
-### Community 319 - "Community 319"
 Cohesion: 0.53
 Nodes (4): derivePosLocalSyncStatus(), getContiguousSyncedSequence(), getSyncState(), isLocallySettledSyncStatus()
 
-### Community 320 - "Community 320"
+### Community 319 - "Community 319"
 Cohesion: 0.4
 Nodes (2): buildRecoveryCommandStore(), storeFactory()
+
+### Community 320 - "Community 320"
+Cohesion: 0.33
+Nodes (0):
 
 ### Community 321 - "Community 321"
 Cohesion: 0.33
 Nodes (0):
 
 ### Community 322 - "Community 322"
-Cohesion: 0.33
-Nodes (0):
-
-### Community 323 - "Community 323"
 Cohesion: 0.53
 Nodes (4): isBarcodeShapedSearchQuery(), matchesSkuSearchTerms(), normalizeIdentifier(), scoreSkuSearchTerms()
 
-### Community 324 - "Community 324"
+### Community 323 - "Community 323"
 Cohesion: 0.6
 Nodes (5): isExcludedFromPosAppShellCache(), isPosAppShellNavigationRequest(), isPosAppShellRoutePath(), isPosAppShellStaticAssetRequest(), readHeader()
 
-### Community 325 - "Community 325"
+### Community 324 - "Community 324"
 Cohesion: 0.33
 Nodes (1): MemoryCache
 
-### Community 326 - "Community 326"
+### Community 325 - "Community 325"
 Cohesion: 0.33
 Nodes (0):
+
+### Community 326 - "Community 326"
+Cohesion: 0.4
+Nodes (2): onSubmit(), saveStoreChanges()
 
 ### Community 327 - "Community 327"
 Cohesion: 0.4
 Nodes (2): onSubmit(), saveStoreChanges()
 
 ### Community 328 - "Community 328"
-Cohesion: 0.4
-Nodes (2): onSubmit(), saveStoreChanges()
-
-### Community 329 - "Community 329"
 Cohesion: 0.33
 Nodes (0):
 
-### Community 330 - "Community 330"
+### Community 329 - "Community 329"
 Cohesion: 0.47
 Nodes (4): fetchPosTransaction(), getBaseUrl(), getPosTransactionByReceiptToken(), PosTransactionReceiptError
 
-### Community 331 - "Community 331"
+### Community 330 - "Community 330"
 Cohesion: 0.47
 Nodes (3): getBaseUrl(), getPromoCodes(), redeemPromoCode()
+
+### Community 331 - "Community 331"
+Cohesion: 0.33
+Nodes (0):
 
 ### Community 332 - "Community 332"
 Cohesion: 0.33
 Nodes (0):
 
 ### Community 333 - "Community 333"
-Cohesion: 0.33
-Nodes (0):
-
-### Community 334 - "Community 334"
 Cohesion: 0.4
 Nodes (2): handleConfirm(), handlePrimaryAction()
 
-### Community 335 - "Community 335"
+### Community 334 - "Community 334"
 Cohesion: 0.33
 Nodes (0):
+
+### Community 335 - "Community 335"
+Cohesion: 0.47
+Nodes (3): onDrop(), removeImage(), unmarkForDeletion()
 
 ### Community 336 - "Community 336"
 Cohesion: 0.53

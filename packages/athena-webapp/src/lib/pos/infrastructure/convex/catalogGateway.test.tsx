@@ -7,6 +7,7 @@ import type {
   PosServiceCatalogRowDto,
 } from "@/lib/pos/application/dto";
 import type { Id } from "~/convex/_generated/dataModel";
+import { api } from "~/convex/_generated/api";
 import {
   useConvexRegisterCatalog,
   useConvexRegisterCatalogState,
@@ -288,6 +289,32 @@ describe("catalogGateway", () => {
         storeId: "store-1",
       }),
     );
+  });
+
+  it("can prewarm POS metadata without refreshing the full availability snapshot", async () => {
+    const refreshedRows = [buildRegisterCatalogRow({ sku: "DW-LIGHT" })];
+    convexMocks.query.mockResolvedValue(refreshedRows);
+
+    renderHook(() =>
+      usePrewarmRegisterCatalogOfflineSnapshots({
+        refreshAvailabilitySnapshot: false,
+        storeId: "store-1" as Id<"store">,
+      }),
+    );
+
+    await waitFor(() =>
+      expect(catalogStoreMocks.writeRegisterCatalogSnapshot).toHaveBeenCalledWith({
+        rows: refreshedRows,
+        storeId: "store-1",
+      }),
+    );
+    expect(convexMocks.useQuery).toHaveBeenCalledWith(
+      api.pos.public.catalog.listRegisterCatalogAvailabilitySnapshot,
+      "skip",
+    );
+    expect(
+      catalogStoreMocks.writeRegisterAvailabilitySnapshot,
+    ).not.toHaveBeenCalled();
   });
 
   it("returns the local service catalog snapshot before live service rows refresh it", async () => {

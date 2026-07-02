@@ -75,7 +75,10 @@ export default function PointOfSaleView() {
     (localEntryContext.status === "ready"
       ? (localEntryContext.storeId as Id<"store">)
       : undefined);
-  usePrewarmRegisterCatalogOfflineSnapshots({ storeId: snapshotStoreId });
+  usePrewarmRegisterCatalogOfflineSnapshots({
+    refreshAvailabilitySnapshot: false,
+    storeId: snapshotStoreId,
+  });
   const { canAccessPOS, hasFullAdminAccess } = usePermissions();
   const visibleStorePulseWindow = hasFullAdminAccess
     ? storePulseWindow

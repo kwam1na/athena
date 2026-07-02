@@ -540,8 +540,8 @@ describe("getTodaySummary", () => {
       1,
       expect.anything(),
       {
-        completedFrom: Date.parse("2026-06-30T00:00:00.000Z"),
-        completedTo: Date.parse("2026-06-30T23:59:59.999Z"),
+        completedFrom: Date.parse("2026-06-30T04:00:00.000Z"),
+        completedTo: Date.parse("2026-07-01T03:59:59.999Z"),
         storeId: "store-1",
       },
     );
@@ -563,8 +563,8 @@ describe("getTodaySummary", () => {
     });
   });
 
-  it("falls back to the server calendar day when the latest opening is already closed", async () => {
-    vi.setSystemTime(new Date("2026-06-20T00:49:30.000Z"));
+  it("does not include the closed previous store day in the fallback POS summary window", async () => {
+    vi.setSystemTime(new Date("2026-07-02T04:03:59.000Z"));
     vi.mocked(listCompletedTransactionsForDay).mockResolvedValue([] as never);
     const query = vi.fn((tableName: string) => ({
       withIndex: vi.fn(() => ({
@@ -572,9 +572,9 @@ describe("getTodaySummary", () => {
           tableName === "dailyClose"
             ? [
                 {
-                  _id: "close-2026-06-19",
+                  _id: "close-2026-07-01",
                   lifecycleStatus: "active",
-                  operatingDate: "2026-06-19",
+                  operatingDate: "2026-07-01",
                   status: "completed",
                   storeId: "store-1",
                 },
@@ -585,9 +585,9 @@ describe("getTodaySummary", () => {
           tableName === "dailyClose"
             ? [
                 {
-                  _id: "close-2026-06-19",
+                  _id: "close-2026-07-01",
                   lifecycleStatus: "active",
-                  operatingDate: "2026-06-19",
+                  operatingDate: "2026-07-01",
                   status: "completed",
                   storeId: "store-1",
                 },
@@ -599,8 +599,10 @@ describe("getTodaySummary", () => {
             tableName === "dailyOpening"
               ? [
                   {
-                    _id: "opening-2026-06-19",
-                    operatingDate: "2026-06-19",
+                    _id: "opening-2026-07-01",
+                    endAt: Date.parse("2026-07-02T04:00:00.000Z"),
+                    operatingDate: "2026-07-01",
+                    startAt: Date.parse("2026-07-01T04:00:00.000Z"),
                     status: "started",
                     storeId: "store-1",
                   },
@@ -623,14 +625,14 @@ describe("getTodaySummary", () => {
     expect(listCompletedTransactionsForDay).toHaveBeenCalledWith(
       expect.anything(),
       {
-        endOfDay: Date.parse("2026-06-20T23:59:59.999Z"),
-        startOfDay: Date.parse("2026-06-20T00:00:00.000Z"),
+        endOfDay: Date.parse("2026-07-03T03:59:59.999Z"),
+        startOfDay: Date.parse("2026-07-02T04:00:00.000Z"),
         storeId: "store-1",
       },
     );
     expect(result).toEqual({
       averageTransaction: 0,
-      date: "2026-06-20",
+      date: "2026-07-02",
       operatorSnapshot: expect.objectContaining({
         historyDays: 14,
         paymentMix: [],

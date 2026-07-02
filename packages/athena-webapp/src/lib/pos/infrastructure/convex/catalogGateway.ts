@@ -438,6 +438,7 @@ export function useConvexRegisterCatalogAvailability(
 }
 
 export function usePrewarmRegisterCatalogOfflineSnapshots(input: {
+  refreshAvailabilitySnapshot?: boolean;
   storeId?: Id<"store">;
 }) {
   useConvexRegisterCatalog({
@@ -446,7 +447,7 @@ export function usePrewarmRegisterCatalogOfflineSnapshots(input: {
   });
   useConvexRegisterServiceCatalog({ storeId: input.storeId });
   useConvexRegisterCatalogAvailabilityState({
-    refreshFullAvailabilitySnapshot: true,
+    refreshFullAvailabilitySnapshot: input.refreshAvailabilitySnapshot ?? true,
     storeId: input.storeId,
     productSkuIds: [],
   });
