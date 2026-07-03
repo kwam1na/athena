@@ -58,6 +58,7 @@ export type PosLocalSyncSaleItemPayload = {
   productId: string;
   productSkuId: string;
   pendingCheckoutItemId?: string;
+  pendingCheckoutAliasState?: "linked_to_catalog";
   inventoryImportProvisionalSkuId?: string;
   productName: string;
   productSku: string;

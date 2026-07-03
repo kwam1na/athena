@@ -75,6 +75,7 @@ export function mapCatalogRowToProduct(
     pendingCheckoutItemId: row.pendingCheckoutItemId as
       | Id<"posPendingCheckoutItem">
       | undefined,
+    pendingCheckoutAliasState: row.pendingCheckoutAliasState ?? undefined,
     availabilityPolicy,
     areProcessingFeesAbsorbed: Boolean(row.areProcessingFeesAbsorbed),
   };

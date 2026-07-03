@@ -3,6 +3,7 @@ import type { QueryCtx } from "../../../_generated/server";
 
 import {
   findActiveProvisionalImportSkuForStoreSku,
+  findActivePendingCheckoutLookupAliasByCode,
   findStoreSkuByBarcode,
   findStoreSkuBySku,
   getCategoryById,
@@ -30,6 +31,8 @@ type CatalogResult = {
   productId: Id<"product">;
   skuId: Id<"productSku">;
   areProcessingFeesAbsorbed: boolean;
+  pendingCheckoutItemId?: Id<"posPendingCheckoutItem">;
+  pendingCheckoutAliasState?: "linked_to_catalog";
 };
 
 const POS_OPERATIONAL_CATEGORY_SLUGS = new Set([
@@ -96,6 +99,8 @@ async function mapSkuToCatalogResult(
     sku: Doc<"productSku">;
     category?: Awaited<ReturnType<typeof getCategoryById>>;
     categoryName?: string;
+    pendingCheckoutItemId?: Id<"posPendingCheckoutItem">;
+    pendingCheckoutAliasState?: "linked_to_catalog";
   },
 ): Promise<CatalogResult | null> {
   const category =
@@ -134,6 +139,8 @@ async function mapSkuToCatalogResult(
     productId: args.product._id,
     skuId: args.sku._id,
     areProcessingFeesAbsorbed: args.product.areProcessingFeesAbsorbed || false,
+    pendingCheckoutItemId: args.pendingCheckoutItemId,
+    pendingCheckoutAliasState: args.pendingCheckoutAliasState,
   };
 }
 
@@ -195,6 +202,35 @@ export async function searchProducts(
     storeId: args.storeId,
     searchQuery: query,
   });
+  const aliasMatchesBySkuId = new Map<
+    Id<"productSku">,
+    {
+      pendingCheckoutItemId: Id<"posPendingCheckoutItem">;
+      pendingCheckoutAliasState: "linked_to_catalog";
+    }
+  >();
+  const aliasMatch = await findActivePendingCheckoutLookupAliasByCode(ctx, {
+    storeId: args.storeId,
+    lookupCode: query,
+  });
+  if (aliasMatch) {
+    aliasMatchesBySkuId.set(aliasMatch.productSkuId, {
+      pendingCheckoutItemId: aliasMatch.pendingCheckoutItemId,
+      pendingCheckoutAliasState: "linked_to_catalog",
+    });
+    const aliasSku = await ctx.db.get("productSku", aliasMatch.productSkuId);
+    const aliasProduct = aliasSku
+      ? await getProductById(ctx, aliasSku.productId)
+      : null;
+    if (
+      aliasSku &&
+      aliasProduct &&
+      aliasProduct.storeId === args.storeId &&
+      !matchingSkus.some(({ sku }) => sku._id === aliasSku._id)
+    ) {
+      matchingSkus.unshift({ product: aliasProduct, sku: aliasSku });
+    }
+  }
   const results = await Promise.all(
     matchingSkus.map(async ({ product, sku }) => {
       const category =
@@ -217,6 +253,7 @@ export async function searchProducts(
         product,
         sku,
         category,
+        ...aliasMatchesBySkuId.get(sku._id),
       });
     }),
   );
@@ -242,6 +279,19 @@ export async function lookupByBarcode(
       storeId: args.storeId,
       sku: args.barcode,
     });
+  }
+
+  let aliasMatch:
+    | Awaited<ReturnType<typeof findActivePendingCheckoutLookupAliasByCode>>
+    | null = null;
+  if (!sku) {
+    aliasMatch = await findActivePendingCheckoutLookupAliasByCode(ctx, {
+      storeId: args.storeId,
+      lookupCode: args.barcode,
+    });
+    sku = aliasMatch
+      ? await ctx.db.get("productSku", aliasMatch.productSkuId)
+      : null;
   }
 
   if (!sku) {
@@ -322,5 +372,7 @@ export async function lookupByBarcode(
     product,
     sku,
     category,
+    pendingCheckoutItemId: aliasMatch?.pendingCheckoutItemId,
+    pendingCheckoutAliasState: aliasMatch ? "linked_to_catalog" : undefined,
   });
 }

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Id } from "../../../_generated/dataModel";
 
 const mocks = vi.hoisted(() => ({
+  findActivePendingCheckoutLookupAliasByCode: vi.fn(),
   findActiveProvisionalImportSkuForStoreSku: vi.fn(),
   findStoreSkuByBarcode: vi.fn(),
   findStoreSkuBySku: vi.fn(),
@@ -15,6 +16,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("../../infrastructure/repositories/catalogRepository", () => ({
+  findActivePendingCheckoutLookupAliasByCode:
+    mocks.findActivePendingCheckoutLookupAliasByCode,
   findActiveProvisionalImportSkuForStoreSku:
     mocks.findActiveProvisionalImportSkuForStoreSku,
   findStoreSkuByBarcode: mocks.findStoreSkuByBarcode,
@@ -29,7 +32,12 @@ vi.mock("../../infrastructure/repositories/catalogRepository", () => ({
 
 import { lookupByBarcode, searchProducts } from "./searchCatalog";
 
-const ctx = {} as never;
+const ctx = {
+  db: {
+    get: async (table: string, id: string) =>
+      table === "productSku" ? skuById[id as keyof typeof skuById] ?? null : null,
+  },
+} as never;
 const storeId = "store-1" as Id<"store">;
 
 describe("searchCatalog", () => {
@@ -43,6 +51,7 @@ describe("searchCatalog", () => {
     mocks.isConvexProductId.mockReturnValue(false);
     mocks.findStoreSkuByBarcode.mockResolvedValue(null);
     mocks.findStoreSkuBySku.mockResolvedValue(null);
+    mocks.findActivePendingCheckoutLookupAliasByCode.mockResolvedValue(null);
     mocks.findActiveProvisionalImportSkuForStoreSku.mockResolvedValue(null);
     mocks.getProductById.mockImplementation(
       async (_ctx, productId) =>
@@ -179,6 +188,51 @@ describe("searchCatalog", () => {
         price: 4000,
       }),
     );
+  });
+
+  it("resolves a linked pending checkout lookup alias to the trusted SKU", async () => {
+    mocks.findActivePendingCheckoutLookupAliasByCode.mockResolvedValueOnce({
+      pendingCheckoutItemId: "pending-1",
+      productSkuId: "sku-live",
+    });
+
+    await expect(
+      lookupByBarcode(ctx, { storeId, barcode: "999888777666" }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        id: "sku-live",
+        pendingCheckoutAliasState: "linked_to_catalog",
+        pendingCheckoutItemId: "pending-1",
+        productId: "product-live",
+        skuId: "sku-live",
+      }),
+    );
+    expect(
+      mocks.findActivePendingCheckoutLookupAliasByCode,
+    ).toHaveBeenCalledWith(ctx, {
+      storeId,
+      lookupCode: "999888777666",
+    });
+  });
+
+  it("includes a linked pending checkout lookup alias in text search results", async () => {
+    mocks.listMatchingStoreSkus.mockResolvedValue([]);
+    mocks.findActivePendingCheckoutLookupAliasByCode.mockResolvedValueOnce({
+      pendingCheckoutItemId: "pending-1",
+      productSkuId: "sku-live",
+    });
+
+    await expect(
+      searchProducts(ctx, { storeId, searchQuery: "999888777666" }),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        id: "sku-live",
+        pendingCheckoutAliasState: "linked_to_catalog",
+        pendingCheckoutItemId: "pending-1",
+        productId: "product-live",
+        skuId: "sku-live",
+      }),
+    ]);
   });
 
   it("keeps active legacy-import trusted rows suppressed until provisional finalization closes", async () => {

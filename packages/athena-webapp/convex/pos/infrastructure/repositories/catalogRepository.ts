@@ -89,6 +89,34 @@ export async function findStoreSkuBySku(
     .first();
 }
 
+function normalizeLookupCode(value: string) {
+  const normalized = value.trim().toLowerCase();
+  return normalized ? normalized : undefined;
+}
+
+export async function findActivePendingCheckoutLookupAliasByCode(
+  ctx: QueryCtx,
+  args: {
+    storeId: Id<"store">;
+    lookupCode: string;
+  },
+) {
+  const normalizedLookupCode = normalizeLookupCode(args.lookupCode);
+  if (!normalizedLookupCode) {
+    return null;
+  }
+
+  return ctx.db
+    .query("posPendingCheckoutLookupAlias")
+    .withIndex("by_storeId_normalizedLookupCode_status", (q) =>
+      q
+        .eq("storeId", args.storeId)
+        .eq("normalizedLookupCode", normalizedLookupCode)
+        .eq("status", "active"),
+    )
+    .first();
+}
+
 export async function findActiveProvisionalImportSkuForStoreSku(
   ctx: QueryCtx,
   args: {

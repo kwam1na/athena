@@ -68,6 +68,7 @@ import {
   posLocalSyncEventSchema,
   posLocalSyncMappingSchema,
   posPendingCheckoutItemSchema,
+  posPendingCheckoutLookupAliasSchema,
   posLocalStaffProofSchema,
   posRecoveryCredentialSchema,
   posTerminalRecoveryCommandSchema,
@@ -619,10 +620,9 @@ const schema = defineSchema({
       "registerSessionId",
       "completedAt",
     ]),
-  posTransactionItem: defineTable(posTransactionItemSchema).index(
-    "by_transactionId",
-    ["transactionId"]
-  ),
+  posTransactionItem: defineTable(posTransactionItemSchema)
+    .index("by_transactionId", ["transactionId"])
+    .index("by_pendingCheckoutItemId", ["pendingCheckoutItemId"]),
   posTransactionServiceLine: defineTable(posTransactionServiceLineSchema)
     .index("by_transactionId", ["transactionId"])
     .index("by_serviceCaseId", ["serviceCaseId"])
@@ -651,6 +651,11 @@ const schema = defineSchema({
     .index("by_productSkuId", ["productSkuId"]),
   posPendingCheckoutItem: defineTable(posPendingCheckoutItemSchema)
     .index("by_storeId_status_updatedAt", ["storeId", "status", "updatedAt"])
+    .index("by_storeId_status_approvedProductSkuId", [
+      "storeId",
+      "status",
+      "approvedProductSkuId",
+    ])
     .index("by_storeId_lookup_status", [
       "storeId",
       "normalizedLookupCode",
@@ -667,6 +672,17 @@ const schema = defineSchema({
       "provisionalProductSkuId",
     ])
     .index("by_operationalWorkItemId", ["operationalWorkItemId"]),
+  posPendingCheckoutLookupAlias: defineTable(posPendingCheckoutLookupAliasSchema)
+    .index("by_storeId_normalizedLookupCode_status", [
+      "storeId",
+      "normalizedLookupCode",
+      "status",
+    ])
+    .index("by_storeId_productSkuId_status", [
+      "storeId",
+      "productSkuId",
+      "status",
+    ]),
   posSession: defineTable(posSessionSchema)
     .index("by_storeId", ["storeId"])
     .index("by_status", ["status"])

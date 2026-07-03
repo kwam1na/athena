@@ -46,9 +46,11 @@ type ExpenseSessionItemRecord = {
 type PendingCheckoutItemRecord = {
   _id: string;
   storeId: string;
-  status: "pending_review" | "flagged" | "resolved";
+  status: "pending_review" | "flagged" | "linked_to_catalog" | "resolved";
   provisionalProductId?: string;
   provisionalProductSkuId?: string;
+  approvedProductId?: string;
+  approvedProductSkuId?: string;
 };
 
 type ProvisionalImportSkuRecord = {
@@ -398,6 +400,7 @@ describe("createExpenseSessionCommandService", () => {
       createDependencies({
         repository,
         inventoryCalls,
+        inventoryAcquireResult: { success: true, holdApplied: true },
         now: 1_000,
         nextExpiration: 61_000,
       }),
@@ -423,6 +426,77 @@ describe("createExpenseSessionCommandService", () => {
     expect(inventoryCalls).toEqual([]);
     expect(repository.items).toContainEqual(
       expect.objectContaining({
+        pendingCheckoutItemId: "pending-checkout-1",
+        productSkuId: "sku-1",
+        quantity: 1,
+      }),
+    );
+  });
+
+  it("treats linked pending checkout aliases as trusted expense inventory", async () => {
+    const commandService = await loadCommandService();
+    const inventoryCalls: InventoryCall[] = [];
+    const repository = createFakeRepository({
+      sessions: [
+        buildSession({
+          _id: "expense-session-1",
+          sessionNumber: "EXP-001",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+          staffProfileId: "staff-1",
+          registerNumber: "1",
+          status: "active",
+          expiresAt: 10_000,
+          updatedAt: 900,
+          createdAt: 100,
+        }),
+      ],
+      pendingCheckoutItems: [
+        {
+          _id: "pending-checkout-1",
+          storeId: "store-1",
+          status: "linked_to_catalog",
+          provisionalProductId: "product-pending",
+          provisionalProductSkuId: "sku-pending",
+          approvedProductId: "product-1",
+          approvedProductSkuId: "sku-1",
+        },
+      ],
+    });
+
+    const result = await commandService(
+      createDependencies({
+        repository,
+        inventoryCalls,
+        inventoryAcquireResult: { success: true, holdApplied: true },
+        now: 1_000,
+        nextExpiration: 61_000,
+      }),
+    ).upsertSessionItem({
+      sessionId: "expense-session-1",
+      staffProfileId: "staff-1",
+      productId: "product-1",
+      productSkuId: "sku-1",
+      pendingCheckoutItemId: "pending-checkout-1",
+      productSku: "SKU-1",
+      productName: "Trusted expense item",
+      price: 100,
+      quantity: 1,
+    });
+
+    expect(result).toEqual({
+      status: "ok",
+      data: {
+        itemId: "item-1",
+        expiresAt: 61_000,
+      },
+    });
+    expect(inventoryCalls).toEqual([
+      { kind: "acquire", skuId: "sku-1", quantity: 1 },
+    ]);
+    expect(repository.items).toContainEqual(
+      expect.objectContaining({
+        inventoryHoldApplied: true,
         pendingCheckoutItemId: "pending-checkout-1",
         productSkuId: "sku-1",
         quantity: 1,

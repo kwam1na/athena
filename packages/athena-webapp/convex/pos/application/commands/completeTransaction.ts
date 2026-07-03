@@ -1956,6 +1956,7 @@ export async function createTransactionFromSessionHandler(
   }
 
   const skuQuantityMap = new Map<Id<"productSku">, number>();
+  const linkedPendingTrustedItemIds = new Set<Id<"posPendingCheckoutItem">>();
   const provisionalImportLinesById = new Map<
     InventoryImportProvisionalSkuId,
     ActiveProvisionalImportSaleLine
@@ -1967,6 +1968,20 @@ export async function createTransactionFromSessionHandler(
         "posPendingCheckoutItem",
         item.pendingCheckoutItemId,
       );
+      if (
+        pendingItem?.storeId === session.storeId &&
+        pendingItem.status === "linked_to_catalog" &&
+        pendingItem.approvedProductId === item.productId &&
+        pendingItem.approvedProductSkuId === item.productSkuId
+      ) {
+        linkedPendingTrustedItemIds.add(item.pendingCheckoutItemId);
+        skuQuantityMap.set(
+          item.productSkuId,
+          (skuQuantityMap.get(item.productSkuId) || 0) + item.quantity,
+        );
+        continue;
+      }
+
       if (
         !pendingItem ||
         pendingItem.storeId !== session.storeId ||
@@ -2171,7 +2186,8 @@ export async function createTransactionFromSessionHandler(
     items: items
       .filter(
         (item) =>
-          !item.pendingCheckoutItemId &&
+          (!item.pendingCheckoutItemId ||
+            linkedPendingTrustedItemIds.has(item.pendingCheckoutItemId)) &&
           !(
             item.inventoryImportProvisionalSkuId &&
             provisionalImportLinesById.has(item.inventoryImportProvisionalSkuId)
@@ -2250,7 +2266,11 @@ export async function createTransactionFromSessionHandler(
       const quantityAvailableToSubtract =
         consumedHoldQuantity >= item.quantity ? item.quantity : 0;
 
-      if (!provisionalSku && !item.pendingCheckoutItemId) {
+      const linkedPendingTrustedLine =
+        item.pendingCheckoutItemId &&
+        linkedPendingTrustedItemIds.has(item.pendingCheckoutItemId);
+
+      if (!provisionalSku && (!item.pendingCheckoutItemId || linkedPendingTrustedLine)) {
         await patchProductSku(ctx, item.productSkuId, {
           quantityAvailable: Math.max(
             0,

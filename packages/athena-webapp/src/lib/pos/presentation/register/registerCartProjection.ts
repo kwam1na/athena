@@ -25,6 +25,7 @@ export function mapProductToOptimisticCartItem(
     productId: product.productId,
     skuId: product.skuId,
     pendingCheckoutItemId: product.pendingCheckoutItemId,
+    pendingCheckoutAliasState: product.pendingCheckoutAliasState,
     inventoryImportProvisionalSkuId: product.inventoryImportProvisionalSkuId,
     areProcessingFeesAbsorbed: product.areProcessingFeesAbsorbed,
   };
@@ -41,6 +42,7 @@ export function buildLocalCartItemPayload(input: {
     productId: product.productId,
     productSkuId: product.skuId,
     pendingCheckoutItemId: product.pendingCheckoutItemId ?? null,
+    pendingCheckoutAliasState: product.pendingCheckoutAliasState ?? null,
     inventoryImportProvisionalSkuId:
       product.inventoryImportProvisionalSkuId ?? null,
     productSku: product.sku || "",
@@ -59,12 +61,16 @@ export function buildLocalCartItemPayload(input: {
 
 export function productCartSourceKey(product: {
   pendingCheckoutItemId?: string | null;
+  pendingCheckoutAliasState?: "linked_to_catalog" | null;
   inventoryImportProvisionalSkuId?: string | null;
 }) {
   if (product.inventoryImportProvisionalSkuId) {
     return `provisional_import:${product.inventoryImportProvisionalSkuId}`;
   }
-  if (product.pendingCheckoutItemId) {
+  if (
+    product.pendingCheckoutItemId &&
+    product.pendingCheckoutAliasState !== "linked_to_catalog"
+  ) {
     return `pending_checkout:${product.pendingCheckoutItemId}`;
   }
   return "trusted_inventory";
@@ -72,6 +78,7 @@ export function productCartSourceKey(product: {
 
 export function cartLineSourceKey(item: {
   pendingCheckoutItemId?: string | null;
+  pendingCheckoutAliasState?: "linked_to_catalog" | null;
   inventoryImportProvisionalSkuId?: string | null;
 }) {
   return productCartSourceKey(item);
@@ -86,6 +93,10 @@ export function renderedCartLineSourceKey(item: CartItem) {
     pendingCheckoutItemId:
       "pendingCheckoutItemId" in item
         ? (item.pendingCheckoutItemId ?? null)
+        : null,
+    pendingCheckoutAliasState:
+      "pendingCheckoutAliasState" in item
+        ? (item.pendingCheckoutAliasState ?? null)
         : null,
   });
 }
@@ -110,6 +121,10 @@ export function buildLocalCartItemPayloadFromCartItem(input: {
     pendingCheckoutItemId:
       "pendingCheckoutItemId" in item
         ? (item.pendingCheckoutItemId ?? null)
+        : null,
+    pendingCheckoutAliasState:
+      "pendingCheckoutAliasState" in item
+        ? (item.pendingCheckoutAliasState ?? null)
         : null,
     inventoryImportProvisionalSkuId:
       "inventoryImportProvisionalSkuId" in item
@@ -161,6 +176,7 @@ export function mapLocalCartItemToCartItem(
     pendingCheckoutItemId: item.pendingCheckoutItemId as
       | Id<"posPendingCheckoutItem">
       | undefined,
+    pendingCheckoutAliasState: item.pendingCheckoutAliasState,
     inventoryImportProvisionalSkuId: item.inventoryImportProvisionalSkuId as
       | Id<"inventoryImportProvisionalSku">
       | undefined,
@@ -241,6 +257,10 @@ export function mapPendingCheckoutCartItemToProduct(item: CartItem): Product {
         ? (item.pendingCheckoutItemId as
             | Id<"posPendingCheckoutItem">
             | undefined)
+        : undefined,
+    pendingCheckoutAliasState:
+      "pendingCheckoutAliasState" in item
+        ? item.pendingCheckoutAliasState
         : undefined,
     areProcessingFeesAbsorbed: item.areProcessingFeesAbsorbed,
   };
@@ -381,6 +401,7 @@ export function cartItemSkuEntry(item: CartItem): readonly [string, CartItem][] 
 function cartItemLineEventKey(input: {
   productSkuId?: string | null;
   pendingCheckoutItemId?: string | null;
+  pendingCheckoutAliasState?: "linked_to_catalog" | null;
   inventoryImportProvisionalSkuId?: string | null;
 }) {
   if (!input.productSkuId) return null;
@@ -391,6 +412,7 @@ function cartItemLineEventKey(input: {
       inventoryImportProvisionalSkuId:
         input.inventoryImportProvisionalSkuId ?? null,
       pendingCheckoutItemId: input.pendingCheckoutItemId ?? null,
+      pendingCheckoutAliasState: input.pendingCheckoutAliasState ?? null,
     }),
   ].join(":");
 }
@@ -405,6 +427,10 @@ function cartItemLineKey(item: CartItem) {
     pendingCheckoutItemId:
       "pendingCheckoutItemId" in item
         ? (item.pendingCheckoutItemId?.toString() ?? null)
+        : null,
+    pendingCheckoutAliasState:
+      "pendingCheckoutAliasState" in item
+        ? (item.pendingCheckoutAliasState ?? null)
         : null,
   });
 }
@@ -582,6 +608,11 @@ export function cartItemsFromLocalRegisterModel(
         "inventoryImportProvisionalSkuId",
       ),
       pendingCheckoutItemId: stringFromPayload(payload, "pendingCheckoutItemId"),
+      pendingCheckoutAliasState:
+        stringFromPayload(payload, "pendingCheckoutAliasState") ===
+        "linked_to_catalog"
+          ? "linked_to_catalog"
+          : null,
     });
     const quantity = payload.quantity;
     if ((!productSkuId && !localItemId) || typeof quantity !== "number") {

@@ -323,8 +323,52 @@ export async function listProductOperationalTimelineWithCtx(
     )
   );
 
-  return [...directEventGroups, ...pendingCheckoutItemGroups.flat()]
-    .flat()
+  const linkedPendingCheckoutItemGroups = await Promise.all(
+    productSkus.map((sku) =>
+      ctx.db
+        .query("posPendingCheckoutItem")
+        .withIndex("by_storeId_status_approvedProductSkuId", (q) =>
+          q
+            .eq("storeId", args.storeId)
+            .eq("status", "linked_to_catalog")
+            .eq("approvedProductSkuId", sku._id)
+        )
+        .take(PRODUCT_OPERATIONAL_EVENT_LIMIT)
+        .then((items) =>
+          Promise.all(
+            items.map((item) =>
+              ctx.db
+                .query("operationalEvent")
+                .withIndex("by_storeId_subject", (q) =>
+                  q
+                    .eq("storeId", args.storeId)
+                    .eq("subjectType", "pos_pending_checkout_item")
+                    .eq("subjectId", String(item._id))
+                )
+                .take(PRODUCT_OPERATIONAL_EVENT_LIMIT)
+                .then((events) =>
+                  events.map((event) => ({
+                    ...event,
+                    subjectSku: sku.sku || undefined,
+                  }))
+                )
+            )
+          )
+        )
+    )
+  );
+
+  const eventsById = new Map(
+    [
+      ...directEventGroups,
+      ...pendingCheckoutItemGroups.flat(),
+      ...linkedPendingCheckoutItemGroups.flat(),
+    ]
+      .flat()
+      .map((event) => [event._id, event]),
+  );
+
+  return Array.from(eventsById.values())
     .sort((left, right) => right.createdAt - left.createdAt)
     .slice(0, PRODUCT_OPERATIONAL_EVENT_LIMIT)
     .map((event) => ({

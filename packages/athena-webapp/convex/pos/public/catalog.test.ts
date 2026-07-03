@@ -1313,6 +1313,325 @@ describe("POS public catalog queries", () => {
     );
   });
 
+  it("creates a lookup alias instead of overwriting an existing trusted SKU barcode", async () => {
+    const ctx = buildCtx({
+      pendingCheckoutItem: {
+        _id: "pending-1",
+        evidence: {
+          observedLookupCodes: ["123456789012"],
+          observedPrices: [12000],
+          totalQuantitySold: 1,
+          transactionCount: 1,
+        },
+        lookupCode: "123456789012",
+        name: "Missing item",
+        provisionalPrice: 12000,
+        reviewPriority: "normal",
+        status: "pending_review",
+        storeId: "store-1",
+        updatedAt: 1,
+      },
+      product: {
+        _id: "product-live-1",
+        availability: "live",
+        isVisible: true,
+        storeId: "store-1",
+      },
+      productSku: {
+        _id: "sku-live-1",
+        barcode: "TRUSTED-BARCODE",
+        isVisible: true,
+        productId: "product-live-1",
+        storeId: "store-1",
+      },
+    });
+
+    await getHandler(resolvePendingCheckoutItemReview)(ctx as never, {
+      approvedProductId: "product-live-1",
+      approvedProductSkuId: "sku-live-1",
+      pendingCheckoutItemId: "pending-1",
+      status: "linked_to_catalog",
+      storeId: "store-1",
+    });
+
+    expect(ctx.db.patch).not.toHaveBeenCalledWith(
+      "productSku",
+      "sku-live-1",
+      expect.anything(),
+    );
+    expect(ctx.db.insert).toHaveBeenCalledWith(
+      "posPendingCheckoutLookupAlias",
+      expect.objectContaining({
+        normalizedLookupCode: "123456789012",
+        pendingCheckoutItemId: "pending-1",
+        productId: "product-live-1",
+        productSkuId: "sku-live-1",
+        status: "active",
+      }),
+    );
+    expect(mocks.recordOperationalEventWithCtx).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          attachedLookupCode: undefined,
+          lookupAliasId: "inserted-posPendingCheckoutLookupAlias",
+        }),
+      }),
+    );
+  });
+
+  it("reuses an existing lookup alias for the same pending item and SKU", async () => {
+    const ctx = buildCtx({
+      lookupAliases: [
+        {
+          _id: "alias-1",
+          normalizedLookupCode: "123456789012",
+          pendingCheckoutItemId: "pending-1",
+          productId: "product-live-1",
+          productSkuId: "sku-live-1",
+          status: "active",
+          storeId: "store-1",
+        },
+      ],
+      pendingCheckoutItem: {
+        _id: "pending-1",
+        evidence: {
+          observedLookupCodes: ["123456789012"],
+          observedPrices: [12000],
+          totalQuantitySold: 1,
+          transactionCount: 1,
+        },
+        lookupCode: "123456789012",
+        name: "Missing item",
+        provisionalPrice: 12000,
+        reviewPriority: "normal",
+        status: "pending_review",
+        storeId: "store-1",
+        updatedAt: 1,
+      },
+      product: {
+        _id: "product-live-1",
+        availability: "live",
+        isVisible: true,
+        storeId: "store-1",
+      },
+      productSku: {
+        _id: "sku-live-1",
+        barcode: "TRUSTED-BARCODE",
+        isVisible: true,
+        productId: "product-live-1",
+        storeId: "store-1",
+      },
+    });
+
+    await getHandler(resolvePendingCheckoutItemReview)(ctx as never, {
+      approvedProductId: "product-live-1",
+      approvedProductSkuId: "sku-live-1",
+      pendingCheckoutItemId: "pending-1",
+      status: "linked_to_catalog",
+      storeId: "store-1",
+    });
+
+    expect(ctx.db.insert).not.toHaveBeenCalledWith(
+      "posPendingCheckoutLookupAlias",
+      expect.anything(),
+    );
+    expect(ctx.db.patch).toHaveBeenCalledWith(
+      "posPendingCheckoutLookupAlias",
+      "alias-1",
+      expect.objectContaining({
+        productId: "product-live-1",
+        productSkuId: "sku-live-1",
+      }),
+    );
+  });
+
+  it("rejects lookup aliases already owned by another pending item", async () => {
+    const ctx = buildCtx({
+      lookupAliases: [
+        {
+          _id: "alias-1",
+          normalizedLookupCode: "123456789012",
+          pendingCheckoutItemId: "pending-other",
+          productId: "product-other",
+          productSkuId: "sku-other",
+          status: "active",
+          storeId: "store-1",
+        },
+      ],
+      pendingCheckoutItem: {
+        _id: "pending-1",
+        evidence: {
+          observedLookupCodes: ["123456789012"],
+          observedPrices: [12000],
+          totalQuantitySold: 1,
+          transactionCount: 1,
+        },
+        lookupCode: "123456789012",
+        name: "Missing item",
+        provisionalPrice: 12000,
+        reviewPriority: "normal",
+        status: "pending_review",
+        storeId: "store-1",
+        updatedAt: 1,
+      },
+      product: {
+        _id: "product-live-1",
+        availability: "live",
+        isVisible: true,
+        storeId: "store-1",
+      },
+      productSku: {
+        _id: "sku-live-1",
+        barcode: "TRUSTED-BARCODE",
+        isVisible: true,
+        productId: "product-live-1",
+        storeId: "store-1",
+      },
+    });
+
+    await expect(
+      getHandler(resolvePendingCheckoutItemReview)(ctx as never, {
+        approvedProductId: "product-live-1",
+        approvedProductSkuId: "sku-live-1",
+        pendingCheckoutItemId: "pending-1",
+        status: "linked_to_catalog",
+        storeId: "store-1",
+      }),
+    ).rejects.toThrow("This lookup code is already linked to another SKU.");
+  });
+
+  it("retires active lookup aliases when a linked item changes before attribution", async () => {
+    const ctx = buildCtx({
+      lookupAliases: [
+        {
+          _id: "alias-1",
+          normalizedLookupCode: "123456789012",
+          pendingCheckoutItemId: "pending-1",
+          productId: "product-live-1",
+          productSkuId: "sku-live-1",
+          status: "active",
+          storeId: "store-1",
+        },
+      ],
+      pendingCheckoutItem: {
+        _id: "pending-1",
+        approvedProductId: "product-live-1",
+        approvedProductSkuId: "sku-live-1",
+        evidence: {
+          observedLookupCodes: ["123456789012"],
+          observedPrices: [12000],
+          totalQuantitySold: 1,
+          transactionCount: 1,
+        },
+        lookupCode: "123456789012",
+        name: "Missing item",
+        provisionalPrice: 12000,
+        reviewPriority: "normal",
+        status: "linked_to_catalog",
+        storeId: "store-1",
+        updatedAt: 1,
+      },
+      product: {
+        _id: "product-live-1",
+        availability: "live",
+        isVisible: true,
+        storeId: "store-1",
+      },
+      productSku: {
+        _id: "sku-live-1",
+        barcode: "123456789012",
+        isVisible: true,
+        productId: "product-live-1",
+        storeId: "store-1",
+      },
+    });
+
+    await getHandler(resolvePendingCheckoutItemReview)(ctx as never, {
+      pendingCheckoutItemId: "pending-1",
+      status: "flagged",
+      storeId: "store-1",
+    });
+
+    expect(ctx.db.patch).toHaveBeenCalledWith(
+      "posPendingCheckoutLookupAlias",
+      "alias-1",
+      expect.objectContaining({
+        status: "retired",
+      }),
+    );
+    expect(ctx.db.patch).toHaveBeenCalledWith(
+      "productSku",
+      "sku-live-1",
+      expect.objectContaining({
+        barcode: undefined,
+      }),
+    );
+    expect(ctx.db.patch).toHaveBeenCalledWith(
+      "posPendingCheckoutItem",
+      "pending-1",
+      expect.objectContaining({
+        status: "flagged",
+      }),
+    );
+  });
+
+  it("rejects relinking a linked pending item after transaction attribution", async () => {
+    const ctx = buildCtx({
+      pendingCheckoutItem: {
+        _id: "pending-1",
+        approvedProductId: "product-live-1",
+        approvedProductSkuId: "sku-live-1",
+        evidence: {
+          observedLookupCodes: ["123456789012"],
+          observedPrices: [12000],
+          totalQuantitySold: 1,
+          transactionCount: 1,
+        },
+        lookupCode: "123456789012",
+        name: "Missing item",
+        provisionalPrice: 12000,
+        reviewPriority: "normal",
+        status: "linked_to_catalog",
+        storeId: "store-1",
+        updatedAt: 1,
+      },
+      posTransactionItems: [
+        {
+          _id: "transaction-item-1",
+          pendingCheckoutItemId: "pending-1",
+        },
+      ],
+      product: {
+        _id: "product-live-2",
+        availability: "live",
+        isVisible: true,
+        storeId: "store-1",
+      },
+      productSku: {
+        _id: "sku-live-2",
+        barcode: "",
+        isVisible: true,
+        productId: "product-live-2",
+        storeId: "store-1",
+      },
+    });
+
+    await expect(
+      getHandler(resolvePendingCheckoutItemReview)(ctx as never, {
+        approvedProductId: "product-live-2",
+        approvedProductSkuId: "sku-live-2",
+        pendingCheckoutItemId: "pending-1",
+        status: "linked_to_catalog",
+        storeId: "store-1",
+      }),
+    ).rejects.toThrow(
+      "This pending checkout item is already linked to a trusted SKU.",
+    );
+
+    expect(ctx.db.patch).not.toHaveBeenCalled();
+  });
+
   it("does not attach a pending lookup code that belongs to another SKU", async () => {
     mocks.findStoreSkuByBarcode.mockResolvedValueOnce({
       _id: "sku-other",
@@ -1401,6 +1720,8 @@ function buildCtx(seed?: {
   products?: Array<Record<string, unknown>>;
   productSku?: Record<string, unknown>;
   productSkus?: Array<Record<string, unknown>>;
+  posTransactionItems?: Array<Record<string, unknown>>;
+  lookupAliases?: Array<Record<string, unknown>>;
   registerSession?: Record<string, unknown>;
   staffProfile?: Record<string, unknown>;
   terminal?: Record<string, unknown>;
@@ -1479,6 +1800,7 @@ function buildCtx(seed?: {
 
         return null;
       }),
+      insert: vi.fn(async (tableName: string) => `inserted-${tableName}`),
       query: vi.fn((tableName: string) => {
         const filters: Record<string, unknown> = {};
 
@@ -1496,19 +1818,31 @@ function buildCtx(seed?: {
               };
               applyIndex(builder);
 
+              const rowsForTable = () => {
+                if (tableName === "posPendingCheckoutItem") {
+                  return seed?.pendingCheckoutItems ?? [];
+                }
+                if (tableName === "posTransactionItem") {
+                  return seed?.posTransactionItems ?? [];
+                }
+                if (tableName === "posPendingCheckoutLookupAlias") {
+                  return seed?.lookupAliases ?? [];
+                }
+                return [];
+              };
+              const matchingRows = () =>
+                rowsForTable().filter((item) =>
+                  Object.entries(filters).every(
+                    ([field, value]) => item[field] === value,
+                  ),
+                );
               const take = vi.fn(async (limit: number) => {
-                if (tableName !== "posPendingCheckoutItem") return [];
-
-                return (seed?.pendingCheckoutItems ?? [])
-                  .filter((item) =>
-                    Object.entries(filters).every(
-                      ([field, value]) => item[field] === value,
-                    ),
-                  )
+                return matchingRows()
                   .slice(0, limit);
               });
 
               return {
+                first: vi.fn(async () => matchingRows()[0] ?? null),
                 take,
                 order: vi.fn(() => ({
                   take,

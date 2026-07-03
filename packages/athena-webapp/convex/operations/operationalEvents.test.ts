@@ -229,6 +229,62 @@ describe("operational events", () => {
     });
   });
 
+  it("includes linked pending checkout item events under the approved trusted SKU", async () => {
+    const ctx = createCtx({
+      product: [
+        {
+          _id: "product-1",
+          storeId: "store-1",
+        },
+      ],
+      productSku: [
+        {
+          _id: "sku-1",
+          productId: "product-1",
+          sku: "TRUSTED-001",
+        },
+      ],
+      posPendingCheckoutItem: [
+        {
+          _id: "pending-1",
+          approvedProductId: "product-1",
+          approvedProductSkuId: "sku-1",
+          provisionalProductId: "product-provisional",
+          provisionalProductSkuId: "sku-provisional",
+          status: "linked_to_catalog",
+          storeId: "store-1",
+        },
+      ],
+      operationalEvent: [
+        {
+          _id: "event-pending-linked",
+          createdAt: 300,
+          eventType: "pos_pending_checkout_item_reviewed",
+          message: "Linked pending checkout item to Trusted Wig.",
+          storeId: "store-1",
+          subjectId: "pending-1",
+          subjectLabel: "Loose wave",
+          subjectType: "pos_pending_checkout_item",
+        },
+      ],
+    });
+
+    const result = await listProductOperationalTimelineWithCtx(ctx, {
+      productId: "product-1" as Id<"product">,
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        id: "event-pending-linked",
+        subject: expect.objectContaining({
+          sku: "TRUSTED-001",
+          type: "pos_pending_checkout_item",
+        }),
+      }),
+    ]);
+  });
+
   it("returns no events when the product is outside the requested store", async () => {
     const ctx = createCtx({
       product: [

@@ -45,9 +45,16 @@ type SessionItemRecord = {
 type PendingCheckoutItemRecord = {
   _id: string;
   storeId: string;
-  status: "pending_review" | "approved" | "rejected" | "flagged";
-  provisionalProductId: string;
-  provisionalProductSkuId: string;
+  status:
+    | "pending_review"
+    | "approved"
+    | "linked_to_catalog"
+    | "rejected"
+    | "flagged";
+  provisionalProductId?: string;
+  provisionalProductSkuId?: string;
+  approvedProductId?: string;
+  approvedProductSkuId?: string;
 };
 
 type ProvisionalImportSkuRecord = {
@@ -1240,6 +1247,85 @@ describe("createPosSessionCommandService", () => {
     );
     },
   );
+
+  it("treats a linked pending checkout alias as trusted inventory in active sessions", async () => {
+    const commandService = await loadCommandService();
+    const repository = createFakeRepository({
+      sessions: [
+        buildSession({
+          _id: "session-5",
+          sessionNumber: "SES-005",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+          staffProfileId: "cashier-1",
+          status: "active",
+          registerNumber: "1",
+          registerSessionId: "drawer-1",
+          expiresAt: 8_000,
+          updatedAt: 500,
+        }),
+      ],
+      registerSessions: [
+        buildRegisterSession({
+          _id: "drawer-1",
+          storeId: "store-1",
+          status: "open",
+          terminalId: "terminal-1",
+          registerNumber: "1",
+        }),
+      ],
+      pendingCheckoutItems: [
+        {
+          _id: "pending-item-1",
+          storeId: "store-1",
+          status: "linked_to_catalog",
+          provisionalProductId: "product-pending-1",
+          provisionalProductSkuId: "sku-pending-1",
+          approvedProductId: "product-1",
+          approvedProductSkuId: "sku-1",
+        },
+      ],
+    });
+    const inventoryCalls: InventoryCall[] = [];
+
+    const result = await commandService(
+      createDependencies({
+        repository,
+        inventoryCalls,
+        now: 1_000,
+        nextExpiration: 61_000,
+      }),
+    ).upsertSessionItem({
+      sessionId: "session-5",
+      staffProfileId: "cashier-1",
+      productId: "product-1",
+      productSkuId: "sku-1",
+      pendingCheckoutItemId: "pending-item-1",
+      productSku: "SKU-1",
+      productName: "Trusted bundle",
+      price: 15,
+      quantity: 2,
+    });
+
+    expect(result).toEqual({
+      status: "ok",
+      data: {
+        itemId: "item-1",
+        expiresAt: 61_000,
+      },
+    });
+    expect(inventoryCalls).toEqual([
+      { kind: "acquire", skuId: "sku-1", quantity: 2 },
+    ]);
+    expect(repository.items).toContainEqual(
+      expect.objectContaining({
+        _id: "item-1",
+        pendingCheckoutItemId: "pending-item-1",
+        productSkuId: "sku-1",
+        quantity: 2,
+      }),
+    );
+  });
 
   it("rejects pending checkout IDs that do not belong to the submitted sale line", async () => {
     const commandService = await loadCommandService();

@@ -160,6 +160,7 @@ export interface PosCatalogItemDto {
   availabilityPolicy?: PosRegisterCatalogAvailabilityPolicy;
   inventoryImportProvisionalSkuId?: Id<"inventoryImportProvisionalSku">;
   pendingCheckoutItemId?: Id<"posPendingCheckoutItem">;
+  pendingCheckoutAliasState?: "linked_to_catalog";
 }
 
 export type PosRegisterCatalogAvailabilityPolicy =
@@ -186,6 +187,7 @@ export interface PosRegisterCatalogRowDto {
   areProcessingFeesAbsorbed: boolean;
   availabilityPolicy?: PosRegisterCatalogAvailabilityPolicy;
   pendingCheckoutItemId?: Id<"posPendingCheckoutItem">;
+  pendingCheckoutAliasState?: "linked_to_catalog";
 }
 
 export interface PosRegisterCatalogInput {

@@ -40,6 +40,7 @@ export interface PosLocalCartItemReadModel {
   productId: string;
   productSkuId: string;
   pendingCheckoutItemId?: string;
+  pendingCheckoutAliasState?: "linked_to_catalog";
   inventoryImportProvisionalSkuId?: string;
   productSku: string;
   barcode?: string;
@@ -751,6 +752,10 @@ function parseCartItemPayload(
     productId: stringField(payload, "productId") ?? "",
     productSkuId,
     pendingCheckoutItemId: optionalString(payload.pendingCheckoutItemId),
+    pendingCheckoutAliasState:
+      stringField(payload, "pendingCheckoutAliasState") === "linked_to_catalog"
+        ? "linked_to_catalog"
+        : undefined,
     inventoryImportProvisionalSkuId: optionalString(
       payload.inventoryImportProvisionalSkuId,
     ),
@@ -905,12 +910,16 @@ function upsertCartItem(
 
 function cartItemSourceKey(item: {
   pendingCheckoutItemId?: string;
+  pendingCheckoutAliasState?: "linked_to_catalog";
   inventoryImportProvisionalSkuId?: string;
 }) {
   if (item.inventoryImportProvisionalSkuId) {
     return `provisional_import:${item.inventoryImportProvisionalSkuId}`;
   }
-  if (item.pendingCheckoutItemId) {
+  if (
+    item.pendingCheckoutItemId &&
+    item.pendingCheckoutAliasState !== "linked_to_catalog"
+  ) {
     return `pending_checkout:${item.pendingCheckoutItemId}`;
   }
   return "trusted_inventory";

@@ -87,4 +87,53 @@ describe("registerCheckoutProjection", () => {
     expect(payload.customerEmail).toBeUndefined();
     expect(completedCustomerInfo(EMPTY_REGISTER_CUSTOMER_INFO)).toBeUndefined();
   });
+
+  it("preserves linked pending checkout alias state in completed sale payloads", () => {
+    const payload = buildCompletedSalePayload({
+      cartItems: [
+        {
+          id: "linked-item-1",
+          name: "Trusted linked wig",
+          pendingCheckoutAliasState: "linked_to_catalog",
+          pendingCheckoutItemId: "pending-item-1",
+          price: 100,
+          productId: "product-1",
+          quantity: 1,
+          skuId: "sku-1",
+        } as unknown as CartItem,
+        {
+          id: "pending-item-2",
+          name: "Pending review wig",
+          pendingCheckoutItemId: "pending-item-2",
+          price: 50,
+          productId: "product-2",
+          quantity: 1,
+          skuId: "sku-2",
+        } as unknown as CartItem,
+      ],
+      customerInfo: EMPTY_REGISTER_CUSTOMER_INFO,
+      localPosSessionId: "local-sale-1",
+      localReceiptNumber: "LOCAL-1",
+      localTransactionId: "local-transaction-1",
+      payments: [{ amount: 150, id: "payment-1", method: "cash", timestamp: 1 }],
+      receiptNumber: "R-1",
+      serviceItems: [],
+      totals: { subtotal: 150, tax: 0, total: 150 },
+    });
+
+    expect(payload.items).toEqual([
+      expect.objectContaining({
+        localItemId: "linked-item-1",
+        pendingCheckoutAliasState: "linked_to_catalog",
+        pendingCheckoutItemId: "pending-item-1",
+        productSkuId: "sku-1",
+      }),
+      expect.objectContaining({
+        localItemId: "pending-item-2",
+        pendingCheckoutAliasState: null,
+        pendingCheckoutItemId: "pending-item-2",
+        productSkuId: "sku-2",
+      }),
+    ]);
+  });
 });

@@ -200,6 +200,7 @@ import type * as pos_application_commands_transactionAdjustmentPlanner from "../
 import type * as pos_application_corrections_correctionEvents from "../pos/application/corrections/correctionEvents.js";
 import type * as pos_application_corrections_correctionPolicy from "../pos/application/corrections/correctionPolicy.js";
 import type * as pos_application_dto from "../pos/application/dto.js";
+import type * as pos_application_pendingCheckoutSkuResolution from "../pos/application/pendingCheckoutSkuResolution.js";
 import type * as pos_application_queries_getRegisterState from "../pos/application/queries/getRegisterState.js";
 import type * as pos_application_queries_getTransactions from "../pos/application/queries/getTransactions.js";
 import type * as pos_application_queries_listRegisterCatalog from "../pos/application/queries/listRegisterCatalog.js";
@@ -322,6 +323,7 @@ import type * as schemas_pos_posLocalSyncCursor from "../schemas/pos/posLocalSyn
 import type * as schemas_pos_posLocalSyncEvent from "../schemas/pos/posLocalSyncEvent.js";
 import type * as schemas_pos_posLocalSyncMapping from "../schemas/pos/posLocalSyncMapping.js";
 import type * as schemas_pos_posPendingCheckoutItem from "../schemas/pos/posPendingCheckoutItem.js";
+import type * as schemas_pos_posPendingCheckoutLookupAlias from "../schemas/pos/posPendingCheckoutLookupAlias.js";
 import type * as schemas_pos_posRecoveryCredential from "../schemas/pos/posRecoveryCredential.js";
 import type * as schemas_pos_posSession from "../schemas/pos/posSession.js";
 import type * as schemas_pos_posSessionItem from "../schemas/pos/posSessionItem.js";
@@ -627,6 +629,7 @@ declare const fullApi: ApiFromModules<{
   "pos/application/corrections/correctionEvents": typeof pos_application_corrections_correctionEvents;
   "pos/application/corrections/correctionPolicy": typeof pos_application_corrections_correctionPolicy;
   "pos/application/dto": typeof pos_application_dto;
+  "pos/application/pendingCheckoutSkuResolution": typeof pos_application_pendingCheckoutSkuResolution;
   "pos/application/queries/getRegisterState": typeof pos_application_queries_getRegisterState;
   "pos/application/queries/getTransactions": typeof pos_application_queries_getTransactions;
   "pos/application/queries/listRegisterCatalog": typeof pos_application_queries_listRegisterCatalog;
@@ -749,6 +752,7 @@ declare const fullApi: ApiFromModules<{
   "schemas/pos/posLocalSyncEvent": typeof schemas_pos_posLocalSyncEvent;
   "schemas/pos/posLocalSyncMapping": typeof schemas_pos_posLocalSyncMapping;
   "schemas/pos/posPendingCheckoutItem": typeof schemas_pos_posPendingCheckoutItem;
+  "schemas/pos/posPendingCheckoutLookupAlias": typeof schemas_pos_posPendingCheckoutLookupAlias;
   "schemas/pos/posRecoveryCredential": typeof schemas_pos_posRecoveryCredential;
   "schemas/pos/posSession": typeof schemas_pos_posSession;
   "schemas/pos/posSessionItem": typeof schemas_pos_posSessionItem;
