@@ -38,6 +38,60 @@ export function buildVariantSkuMoneyPayload(
   return buildTrustedInventoryMoneyPayload(variant, areProcessingFeesAbsorbed);
 }
 
+export function getArchivedProductRedirect(args: {
+  categorySlug?: string | null;
+  origin?: string | null;
+  productId?: string | null;
+}):
+  | { kind: "origin"; to: string }
+  | { categorySlug?: string; kind: "category" } {
+  const origin = decodeOriginValue(args.origin);
+  if (origin) {
+    const nestedOrigin = archivedProductNestedOrigin({
+      origin,
+      productId: args.productId,
+    });
+    return { kind: "origin", to: nestedOrigin ?? origin };
+  }
+
+  return { categorySlug: args.categorySlug ?? undefined, kind: "category" };
+}
+
+function decodeOriginValue(origin?: string | null) {
+  let decoded = origin?.trim() ?? "";
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const nextDecoded = decodeURIComponent(decoded);
+      if (nextDecoded === decoded) break;
+      decoded = nextDecoded;
+    } catch {
+      break;
+    }
+  }
+  return decoded;
+}
+
+function archivedProductNestedOrigin(args: {
+  origin: string;
+  productId?: string | null;
+}) {
+  if (!args.productId) return null;
+
+  try {
+    const originUrl = new URL(args.origin, "http://athena.local");
+    const productPathPattern = new RegExp(
+      `/products/${args.productId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:/edit)?/?$`,
+    );
+    if (!productPathPattern.test(originUrl.pathname)) {
+      return null;
+    }
+
+    return decodeOriginValue(originUrl.searchParams.get("o"));
+  } catch {
+    return null;
+  }
+}
+
 function ProductViewContent() {
   const { productData, revertChanges, productVariants, updateProductVariants } =
     useProduct();
@@ -86,7 +140,15 @@ function ProductViewContent() {
         icon: <CheckCircledIcon className="w-4 h-4" />,
       });
 
-      if (o) {
+      const redirect = getArchivedProductRedirect({
+        categorySlug: activeProduct.categorySlug,
+        origin: o,
+        productId: activeProduct._id,
+      });
+
+      if (redirect.kind === "origin") {
+        navigate({ to: redirect.to });
+      } else {
         navigate({
           to: "/$orgUrlSlug/store/$storeUrlSlug/products",
           params: (prev) => ({
@@ -94,7 +156,7 @@ function ProductViewContent() {
             orgUrlSlug: prev.orgUrlSlug!,
             storeUrlSlug: prev.storeUrlSlug!,
           }),
-          search: { categorySlug: activeProduct.categorySlug },
+          search: { categorySlug: redirect.categorySlug },
         });
       }
     } catch {

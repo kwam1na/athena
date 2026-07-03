@@ -103,7 +103,8 @@ export function resolveTrustedInventoryCommandError(
     message.includes("fingerprint")
   ) {
     return {
-      message: "Provisional sales changed. Refresh and review the counts again.",
+      message:
+        "Provisional sales changed. Refresh and review the counts again.",
       requiresReviewRefresh: true,
     };
   }
@@ -169,13 +170,22 @@ export type ProductPageProvisionalSkuBinding =
       state: "unique";
       activeRowCount: 1;
       row: {
-        _id: Id<"inventoryImportProvisionalSku">;
+        _id: Id<"inventoryImportProvisionalSku"> | Id<"posPendingCheckoutItem">;
         importKey: string;
         importedQuantity: number;
         lastSoldAt?: number;
+        linkedTarget?: {
+          price?: number;
+          productId: Id<"product">;
+          productName: string;
+          quantityAvailable?: number;
+          sku?: string;
+          skuId: Id<"productSku">;
+        };
         provisionalSoldQuantity: number;
         rowNumber: number;
         saleCount: number;
+        status?: "pending_review" | "flagged" | "linked_to_catalog";
       };
       saleEvidenceFingerprint: string;
       trustedSkuFingerprint: string;
@@ -218,7 +228,9 @@ export type TrustedInventoryFinalizationPayload = {
   storeId: Id<"store">;
   productId: Id<"product">;
   productSkuId: Id<"productSku">;
-  provisionalSkuId: Id<"inventoryImportProvisionalSku">;
+  provisionalSkuId:
+    | Id<"inventoryImportProvisionalSku">
+    | Id<"posPendingCheckoutItem">;
   conversionRequestId: string;
   saleEvidenceFingerprint: string;
   trustedSkuFingerprint: string;
@@ -303,6 +315,19 @@ export function resolveTrustedInventoryReviewState({
       disabled: true,
       message: "Refreshing product inventory state.",
       status: "blocked",
+    };
+  }
+
+  if (
+    binding?.state === "unique" &&
+    binding.row.status === "linked_to_catalog"
+  ) {
+    return {
+      action: "none",
+      ctaLabel: "Linked to trusted SKU",
+      disabled: true,
+      message: "Pending checkout item is linked to an existing trusted SKU.",
+      status: "success",
     };
   }
 

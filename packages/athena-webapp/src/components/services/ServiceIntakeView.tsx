@@ -195,6 +195,7 @@ export function ServiceIntakeViewContent({
       <FadeIn className="container mx-auto py-layout-xl">
         <PageWorkspace>
           <PageLevelHeader
+            showBackButton
             eyebrow="Service Ops"
             title="Service Intake"
             description="Capture walk-in or booked service work with the customer, staff owner, priority, and deposit details ready for operations."

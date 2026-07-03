@@ -367,9 +367,9 @@ describe("POSTerminalDetailViewContent", () => {
     expect(
       screen.getByText("Local runtime review / next upload #14"),
     ).toBeInTheDocument();
-    expect(
-      screen.getAllByText("Cloud sync evidence").length,
-    ).toBeGreaterThan(0);
+    expect(screen.getAllByText("Cloud sync evidence").length).toBeGreaterThan(
+      0,
+    );
     expect(
       screen.getByText("Staff authority changed before sync."),
     ).toBeInTheDocument();
@@ -897,7 +897,9 @@ describe("POSTerminalDetailViewContent", () => {
     ).toBeGreaterThan(0);
     expect(screen.getByText("Review evidence")).toBeInTheDocument();
     expect(screen.getByText("17")).toBeInTheDocument();
-    expect(screen.getByText("Synced Sale Inventory Review")).toBeInTheDocument();
+    expect(
+      screen.getByText("Synced Sale Inventory Review"),
+    ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", {
         name: /resolve safe cloud repair/i,
@@ -1110,13 +1112,15 @@ describe("POSTerminalDetailViewContent", () => {
               {
                 commandContext: {
                   expectedBlockerType: "local_review",
-                  reason: "Local review items need terminal-local evidence collection.",
+                  reason:
+                    "Local review items need terminal-local evidence collection.",
                 },
                 commandType: "collect_local_review",
                 expectedEvidence: {
                   localReviewDetailsCollected: true,
                 },
-                reason: "Local review items need terminal-local evidence collection.",
+                reason:
+                  "Local review items need terminal-local evidence collection.",
               },
             ],
           },
@@ -1258,6 +1262,128 @@ describe("POSTerminalDetailViewContent", () => {
       });
     });
     expect(mocks.toastSuccess).toHaveBeenCalledWith("Terminal command queued.");
+  });
+
+  it("surfaces dangerous clear-all from the current recovery preview when legacy recovery is present", () => {
+    render(
+      <POSTerminalDetailViewContent
+        detail={{
+          ...detail,
+          operationalExplanation: {
+            blockingDomain: "sync_review",
+            detail:
+              "Manual review must finish before support repairs this terminal.",
+            evidenceReferences: [
+              {
+                count: 2,
+                source: "local_runtime",
+                summary: "2 local review items are still on this terminal.",
+                type: "local_review",
+              },
+            ],
+            headline: "Manager review needed",
+            lane: "needs_manual_review",
+            nextStep:
+              "Use the linked review workspace before running support repair.",
+            primaryOwner: "manager",
+            saleImpact: "not_ready",
+            secondaryActions: [],
+            severity: "critical",
+            summaryMeta: {
+              hasSecondarySafeRepair: false,
+              reviewBacklogCount: 2,
+              targetResolutionIncomplete: false,
+            },
+            supportAction: "manual_review",
+          },
+          recovery: {
+            readiness: "needs_terminal_action",
+            terminalActions: [
+              {
+                commandContext: {
+                  expectedBlockerType: "local_review",
+                  reason:
+                    "Local review items need terminal-local evidence collection.",
+                },
+                commandType: "collect_local_review",
+                expectedEvidence: {
+                  localReviewDetailsCollected: true,
+                },
+                reason:
+                  "Local review items need terminal-local evidence collection.",
+              },
+            ],
+          },
+          recoveryPreview: {
+            readiness: "needs_manual_review",
+            terminalActions: [
+              {
+                commandContext: {
+                  expectedBlockerType: "local_review_clear_all",
+                  localReviewClearAll: true,
+                  localReviewClearLimit: 2,
+                  localReviewEventIds: ["local-review-1", "local-review-2"],
+                  reason: "Dangerous cleanup for local review items.",
+                },
+                commandType: "clear_local_review_items",
+                expectedEvidence: {
+                  localReviewClearedEventIds: [
+                    "local-review-1",
+                    "local-review-2",
+                  ],
+                  localReviewEventCount: 0,
+                },
+                reason:
+                  "Dangerous cleanup can clear all local review items from this terminal.",
+              },
+            ],
+          },
+          runtimeStatus: {
+            ...detail.runtimeStatus!,
+            sync: {
+              ...detail.runtimeStatus!.sync,
+              reviewEventCount: 2,
+              reviewEvents: [
+                {
+                  createdAt: Date.now() - 6 * 60_000,
+                  localEventId: "local-review-1",
+                  localRegisterSessionId: "local-session-2",
+                  sequence: 4535,
+                  status: "needs_review",
+                  type: "transaction.completed",
+                  uploaded: true,
+                  uploadSequence: 1,
+                },
+                {
+                  createdAt: Date.now() - 5 * 60_000,
+                  localEventId: "local-review-2",
+                  localRegisterSessionId: "local-session-2",
+                  sequence: 4484,
+                  status: "needs_review",
+                  type: "transaction.completed",
+                  uploaded: true,
+                  uploadSequence: 2,
+                },
+              ],
+              status: "needs_review",
+            },
+          },
+        }}
+        isLoading={false}
+        onIssueTerminalRecoveryCommand={vi.fn()}
+        orgUrlSlug="wigclub"
+        storeUrlSlug="osu"
+      />,
+    );
+
+    expect(screen.getAllByText("Manager review needed").length).toBeGreaterThan(
+      0,
+    );
+    expect(screen.getByText("#4535")).toBeInTheDocument();
+    expect(screen.getByText("Dangerous action")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /clear all review items/i }),
+    ).toBeInTheDocument();
   });
 
   it("hides dangerous clear-all when the action lacks evidenced review ids", () => {
@@ -1507,13 +1633,15 @@ describe("POSTerminalDetailViewContent", () => {
               {
                 commandContext: {
                   expectedBlockerType: "local_review",
-                  reason: "Local review items need terminal-local evidence collection.",
+                  reason:
+                    "Local review items need terminal-local evidence collection.",
                 },
                 commandType: "collect_local_review",
                 expectedEvidence: {
                   localReviewDetailsCollected: true,
                 },
-                reason: "Local review items need terminal-local evidence collection.",
+                reason:
+                  "Local review items need terminal-local evidence collection.",
               },
             ],
           },
@@ -2129,13 +2257,15 @@ describe("POSTerminalDetailViewContent", () => {
               {
                 commandContext: {
                   expectedBlockerType: "local_review",
-                  reason: "Local review items need terminal-local evidence collection.",
+                  reason:
+                    "Local review items need terminal-local evidence collection.",
                 },
                 commandType: "collect_local_review",
                 expectedEvidence: {
                   localReviewDetailsCollected: true,
                 },
-                reason: "Local review items need terminal-local evidence collection.",
+                reason:
+                  "Local review items need terminal-local evidence collection.",
               },
             ],
           },
@@ -2217,13 +2347,15 @@ describe("POSTerminalDetailViewContent", () => {
               {
                 commandContext: {
                   expectedBlockerType: "local_review",
-                  reason: "Local review items need terminal-local evidence collection.",
+                  reason:
+                    "Local review items need terminal-local evidence collection.",
                 },
                 commandType: "collect_local_review",
                 expectedEvidence: {
                   localReviewDetailsCollected: true,
                 },
-                reason: "Local review items need terminal-local evidence collection.",
+                reason:
+                  "Local review items need terminal-local evidence collection.",
               },
             ],
           },
@@ -2370,6 +2502,63 @@ describe("POSTerminalDetailViewContent", () => {
         terminalId: "terminal-1",
       });
     });
+  });
+
+  it("does not show stale collected local review evidence after the latest check-in is clear", () => {
+    render(
+      <POSTerminalDetailViewContent
+        detail={{
+          ...detail,
+          attentionReasons: [],
+          health: "online",
+          runtimeStatus: {
+            ...detail.runtimeStatus!,
+            sync: {
+              ...detail.runtimeStatus!.sync,
+              failedEventCount: 0,
+              pendingEventCount: 0,
+              reviewEventCount: 0,
+              reviewEvents: [],
+              status: "idle",
+              uploadableEventCount: 0,
+            },
+          },
+          recovery: {
+            commandStatus: {
+              commandType: "collect_local_review",
+              label: "Collect local review items",
+              localReviewEvents: [
+                {
+                  createdAt: Date.now() - 1_000,
+                  localEventId: "event-review-1",
+                  sequence: 4535,
+                  status: "needs_review",
+                  type: "transaction.completed",
+                  uploaded: true,
+                  uploadSequence: 3,
+                },
+              ],
+              status: "completed",
+              verificationStatus: "verified",
+            },
+            readiness: "needs_manual_review",
+            terminalActions: [],
+          },
+          syncEvidence: {
+            ...detail.syncEvidence,
+            unresolvedConflicts: [],
+            unresolvedConflictCount: 0,
+          },
+        }}
+        isLoading={false}
+      />,
+    );
+
+    expect(screen.queryByText("#4535")).not.toBeInTheDocument();
+    expect(screen.queryByText("transaction.completed")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Local review item"),
+    ).not.toBeInTheDocument();
   });
 
   it("renders no-data and query unavailable states", () => {

@@ -9,9 +9,10 @@ describe("ProductsListView category query", () => {
     });
   });
 
-  it("requests live products for the reserved POS pending-checkout category", () => {
+  it("requests hidden draft products for the reserved POS pending-checkout category", () => {
     expect(getCategoryProductQueryOptions("pos-pending-checkout")).toEqual({
-      availability: "live",
+      availability: "draft",
+      isVisible: false,
     });
   });
 

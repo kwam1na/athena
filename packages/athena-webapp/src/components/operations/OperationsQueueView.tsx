@@ -86,6 +86,21 @@ const UNCATEGORIZED_COUNT_SCOPE_KEY = "__uncategorized";
 const openWorkActionLinkClassName =
   "inline-flex items-center gap-1.5 text-sm font-medium text-foreground underline-offset-4 transition-colors hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
 
+function buildProductEditHref(args: {
+  orgUrlSlug: string;
+  productId: string;
+  productSkuId: string;
+  storeUrlSlug: string;
+}) {
+  const search = new URLSearchParams({
+    o: getOrigin(),
+    variant: args.productSkuId,
+  });
+  return `/${encodeURIComponent(args.orgUrlSlug)}/store/${encodeURIComponent(
+    args.storeUrlSlug,
+  )}/products/${encodeURIComponent(args.productId)}/edit?${search.toString()}`;
+}
+
 type ProductSkuSearchResponse = {
   results: Array<{
     productSkuId: Id<"productSku">;
@@ -111,6 +126,8 @@ type QueueWorkItem = {
     lookupCode?: string | null;
     price?: number | null;
     primaryProductSkuId?: string | null;
+    provisionalProductId?: string | null;
+    provisionalProductSkuId?: string | null;
     purchaseOrderNumber?: string | null;
     quantitySold?: number | null;
     reasonLabel?: string | null;
@@ -250,10 +267,7 @@ function preserveOperationalAcronyms(value: string) {
 }
 
 function formatWorkItemTitle(title: string) {
-  const prefixes = [
-    "Review inventory for ",
-    "Review pending checkout item: ",
-  ];
+  const prefixes = ["Review inventory for ", "Review pending checkout item: "];
 
   for (const prefix of prefixes) {
     if (title.startsWith(prefix)) {
@@ -273,9 +287,7 @@ function getWorkItemTitleSubject(title: string, prefix: string) {
 
   const subject = title.slice(prefix.length).trim();
 
-  return subject
-    ? preserveOperationalAcronyms(capitalizeWords(subject))
-    : null;
+  return subject ? preserveOperationalAcronyms(capitalizeWords(subject)) : null;
 }
 
 function getQueueWorkItemTypeLabel(type: string) {
@@ -376,13 +388,7 @@ function CappedQueueNotice({
 }
 
 function hasSyncedSaleInventoryResolverDetails(item: QueueWorkItem) {
-  return Boolean(
-    getQueueWorkItemStringDetail(item, "terminalId") &&
-      getQueueWorkItemStringDetail(item, "localRegisterSessionId") &&
-      getQueueWorkItemStringDetail(item, "localTransactionId") &&
-      getQueueWorkItemStringDetail(item, "registerSessionId") &&
-      getQueueWorkItemStringDetail(item, "sourceId"),
-  );
+  return Boolean(getQueueWorkItemStringDetail(item, "primaryProductSkuId"));
 }
 
 function getQueueWorkItemContextPresentation(type: string) {
@@ -479,22 +485,20 @@ function getQueueWorkItemNumberDetail(
   key: keyof NonNullable<QueueWorkItem["details"]>,
 ): number | undefined {
   const value = item.details?.[key];
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
 }
 
 function getQueueWorkItemInventoryReviewLineCount(item: QueueWorkItem) {
-  return getQueueWorkItemNumberDetail(
-    item,
-    "inventoryReviewLineCount",
-  );
+  return getQueueWorkItemNumberDetail(item, "inventoryReviewLineCount");
 }
 
 function getQueueWorkItemStockAdjustmentSkuId(item: QueueWorkItem) {
   if (item.type === "synced_sale_inventory_review") {
-    return getQueueWorkItemStringDetail(
-      item,
-      "primaryProductSkuId",
-    ) as Id<"productSku"> | undefined;
+    return getQueueWorkItemStringDetail(item, "primaryProductSkuId") as
+      | Id<"productSku">
+      | undefined;
   }
 
   return undefined;
@@ -621,18 +625,12 @@ function StockAdjustmentReferenceLink({
 }
 
 function QueueWorkItemActionSlot({
-  isSyncedSaleInventoryReviewResolutionDisabled,
-  isResolvingSyncedSaleInventoryReview,
   item,
-  onResolveSyncedSaleInventoryReview,
   orgUrlSlug,
   stockAdjustmentSkuId,
   storeUrlSlug,
 }: {
-  isSyncedSaleInventoryReviewResolutionDisabled?: boolean;
-  isResolvingSyncedSaleInventoryReview?: boolean;
   item: QueueWorkItem;
-  onResolveSyncedSaleInventoryReview?: (item: QueueWorkItem) => void;
   orgUrlSlug?: string;
   stockAdjustmentSkuId?: Id<"productSku">;
   storeUrlSlug?: string;
@@ -640,14 +638,34 @@ function QueueWorkItemActionSlot({
   if (!orgUrlSlug || !storeUrlSlug) return null;
 
   if (item.type === "pos_pending_checkout_item_review") {
+    if (
+      item.details?.provisionalProductId &&
+      item.details.provisionalProductSkuId
+    ) {
+      return (
+        <a
+          className={openWorkActionLinkClassName}
+          href={buildProductEditHref({
+            orgUrlSlug,
+            productId: item.details.provisionalProductId,
+            productSkuId: item.details.provisionalProductSkuId,
+            storeUrlSlug,
+          })}
+        >
+          Review POS pending checkout
+          <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
+        </a>
+      );
+    }
+
     return (
       <Link
         className={openWorkActionLinkClassName}
         params={{ orgUrlSlug, storeUrlSlug }}
-        search={{ o: getOrigin() }}
-        to="/$orgUrlSlug/store/$storeUrlSlug/products/unresolved"
+        search={{ categorySlug: "pos-pending-checkout", o: getOrigin() }}
+        to="/$orgUrlSlug/store/$storeUrlSlug/products"
       >
-        Review unresolved catalog
+        Review POS pending checkout
         <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
       </Link>
     );
@@ -670,22 +688,6 @@ function QueueWorkItemActionSlot({
             Open stock adjustments
             <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
           </Link>
-        ) : null}
-        {onResolveSyncedSaleInventoryReview &&
-        hasSyncedSaleInventoryResolverDetails(item) ? (
-          <LoadingButton
-            className="h-8 px-3 text-xs"
-            disabled={Boolean(
-              isSyncedSaleInventoryReviewResolutionDisabled,
-            )}
-            isLoading={Boolean(isResolvingSyncedSaleInventoryReview)}
-            onClick={() => onResolveSyncedSaleInventoryReview(item)}
-            size="sm"
-            type="button"
-            variant="secondary"
-          >
-            Mark reviewed
-          </LoadingButton>
         ) : null}
       </div>
     );
@@ -884,29 +886,30 @@ function QueueWorkItemCard({
             value: item.dueAt ? getRelativeTime(item.dueAt) : "Not scheduled",
           },
         ];
-  const purchaseOrderCollapsedMetadataEntries: OperationReviewMetadataEntry[] = [
-    {
-      label: "Purchase order",
-      value:
-        getQueueWorkItemStringDetail(item, "purchaseOrderNumber") ??
-        getQueueWorkItemStringDetail(item, "displayNumber") ??
-        "Not recorded",
-    },
-    {
-      label: "Vendor",
-      value: getQueueWorkItemStringDetail(item, "vendorName") ?? "No vendor",
-    },
-    {
-      label: "Items",
-      value: formatOptionalItemCount(
-        getQueueWorkItemNumberDetail(item, "itemCount"),
-      ),
-    },
-    {
-      label: "Next action",
-      value: "Continue procurement",
-    },
-  ];
+  const purchaseOrderCollapsedMetadataEntries: OperationReviewMetadataEntry[] =
+    [
+      {
+        label: "Purchase order",
+        value:
+          getQueueWorkItemStringDetail(item, "purchaseOrderNumber") ??
+          getQueueWorkItemStringDetail(item, "displayNumber") ??
+          "Not recorded",
+      },
+      {
+        label: "Vendor",
+        value: getQueueWorkItemStringDetail(item, "vendorName") ?? "No vendor",
+      },
+      {
+        label: "Items",
+        value: formatOptionalItemCount(
+          getQueueWorkItemNumberDetail(item, "itemCount"),
+        ),
+      },
+      {
+        label: "Next action",
+        value: "Continue procurement",
+      },
+    ];
   const stockAdjustmentReviewCollapsedMetadataEntries: OperationReviewMetadataEntry[] =
     [
       {
@@ -923,8 +926,7 @@ function QueueWorkItemCard({
       {
         label: "Reason",
         value:
-          getQueueWorkItemStringDetail(item, "reasonLabel") ??
-          "Stock review",
+          getQueueWorkItemStringDetail(item, "reasonLabel") ?? "Stock review",
       },
       {
         label: "Created",
@@ -1064,16 +1066,7 @@ function QueueWorkItemCard({
     <OperationReviewItemCard
       actionSlot={
         <QueueWorkItemActionSlot
-          isSyncedSaleInventoryReviewResolutionDisabled={
-            isSyncedSaleInventoryReviewResolutionDisabled
-          }
-          isResolvingSyncedSaleInventoryReview={
-            isResolvingSyncedSaleInventoryReview
-          }
           item={item}
-          onResolveSyncedSaleInventoryReview={
-            onResolveSyncedSaleInventoryReview
-          }
           orgUrlSlug={orgUrlSlug}
           stockAdjustmentSkuId={stockAdjustmentSkuId}
           storeUrlSlug={storeUrlSlug}
@@ -1106,13 +1099,28 @@ function QueueWorkItemCard({
       contextLabel={getQueueWorkItemTypeLabel(item.type)}
       contextLabelClassName={contextPresentation.contextLabelClassName}
       description={null}
+      headerActionSlot={
+        item.type === "synced_sale_inventory_review" &&
+        onResolveSyncedSaleInventoryReview &&
+        hasSyncedSaleInventoryResolverDetails(item) ? (
+          <LoadingButton
+            className="h-8 px-3 text-xs"
+            disabled={Boolean(isSyncedSaleInventoryReviewResolutionDisabled)}
+            isLoading={Boolean(isResolvingSyncedSaleInventoryReview)}
+            onClick={() => onResolveSyncedSaleInventoryReview(item)}
+            size="sm"
+            type="button"
+            variant="ghost"
+          >
+            Mark reviewed
+          </LoadingButton>
+        ) : null
+      }
       itemId={item._id}
       metadataEntries={metadataEntries}
       title={
         pendingCheckoutTitleSubject ? (
-          <>
-            Review pending checkout item: {pendingCheckoutTitleSubject}
-          </>
+          <>Review pending checkout item: {pendingCheckoutTitleSubject}</>
         ) : syncedSaleTitleSubject ? (
           <>
             Review inventory for{" "}
@@ -1254,6 +1262,33 @@ function formatQuantityDelta(quantityDelta: number) {
   return String(quantityDelta);
 }
 
+function formatInventoryApprovalQuantityReview(
+  lineItem: QueueApprovalLineItem,
+) {
+  const countedQuantity =
+    typeof lineItem.countedQuantity === "number"
+      ? lineItem.countedQuantity
+      : null;
+  const systemQuantity =
+    typeof lineItem.systemQuantity === "number"
+      ? lineItem.systemQuantity
+      : null;
+
+  if (countedQuantity !== null && systemQuantity !== null) {
+    return `Counted ${countedQuantity} of ${systemQuantity} on hand`;
+  }
+
+  if (systemQuantity !== null) {
+    return `${systemQuantity} on hand before adjustment`;
+  }
+
+  if (countedQuantity !== null) {
+    return `Counted ${countedQuantity}`;
+  }
+
+  return "Stock quantity not captured";
+}
+
 function formatSkuProductName(productName?: string) {
   const normalizedName = productName?.trim();
 
@@ -1375,7 +1410,8 @@ function getItemAdjustmentSummary(request: QueueApprovalRequest) {
 
   return {
     adjustedTotal: request.metadata?.adjustedTotal,
-    lineItems: request.metadata?.lineItems?.filter(hasItemAdjustmentChange) ?? [],
+    lineItems:
+      request.metadata?.lineItems?.filter(hasItemAdjustmentChange) ?? [],
     originalTotal: request.metadata?.originalTotal,
     registerSession: request.registerSessionSummary ?? null,
     settlementAmount: request.metadata?.settlementAmount,
@@ -1776,9 +1812,9 @@ export function OperationsQueueViewContent({
                     <div className="space-y-layout-2xl">
                       {visibleWorkItems.map((item) => (
                         <QueueWorkItemCard
-                          isSyncedSaleInventoryReviewResolutionDisabled={
-                            Boolean(isResolvingSyncedSaleInventoryReviewId)
-                          }
+                          isSyncedSaleInventoryReviewResolutionDisabled={Boolean(
+                            isResolvingSyncedSaleInventoryReviewId,
+                          )}
                           isResolvingSyncedSaleInventoryReview={
                             isResolvingSyncedSaleInventoryReviewId === item._id
                           }
@@ -1918,9 +1954,7 @@ export function OperationsQueueViewContent({
                           request.requestType,
                         );
                         const retireOnlyApprovalCopy =
-                          getRetireOnlyApprovalRequestCopy(
-                            request.requestType,
-                          );
+                          getRetireOnlyApprovalRequestCopy(request.requestType);
                         const requestLabel = request.workItemTitle
                           ? formatWorkItemTitle(request.workItemTitle)
                           : formatApprovalRequestType(request.requestType);
@@ -2031,14 +2065,9 @@ export function OperationsQueueViewContent({
                                       </div>
                                       <div className="flex shrink-0 flex-col items-start gap-2 text-sm md:items-end">
                                         <p className="text-muted-foreground">
-                                          <span className="font-numeric font-medium tabular-nums text-foreground">
-                                            {lineItem.countedQuantity ?? "-"}
-                                          </span>{" "}
-                                          counted against{" "}
-                                          <span className="font-numeric font-medium tabular-nums text-foreground">
-                                            {lineItem.systemQuantity ?? "-"}
-                                          </span>{" "}
-                                          on hand
+                                          {formatInventoryApprovalQuantityReview(
+                                            lineItem,
+                                          )}
                                         </p>
                                         <Badge
                                           className={getQuantityDeltaBadgeClass(
@@ -2334,7 +2363,11 @@ export function OperationsQueueViewContent({
                                     {itemAdjustmentSummary.registerSession &&
                                     orgUrlSlug &&
                                     storeUrlSlug ? (
-                                      <Button asChild size="sm" variant="utility">
+                                      <Button
+                                        asChild
+                                        size="sm"
+                                        variant="utility"
+                                      >
                                         <Link
                                           params={{
                                             orgUrlSlug,
@@ -2355,7 +2388,11 @@ export function OperationsQueueViewContent({
                                     {itemAdjustmentSummary.transaction &&
                                     orgUrlSlug &&
                                     storeUrlSlug ? (
-                                      <Button asChild size="sm" variant="utility">
+                                      <Button
+                                        asChild
+                                        size="sm"
+                                        variant="utility"
+                                      >
                                         <Link
                                           params={{
                                             orgUrlSlug,
@@ -2415,7 +2452,7 @@ export function OperationsQueueViewContent({
                                             ghsCurrencyFormatter,
                                             itemAdjustmentSummary.adjustedTotal,
                                           )
-                                      : "Unknown"}
+                                        : "Unknown"}
                                     </dd>
                                   </div>
                                   <div>
@@ -2797,7 +2834,8 @@ export function OperationsQueueViewContent({
                                                 registerSessionId:
                                                   request.registerSessionSummary
                                                     ?.registerSessionId,
-                                                requestType: request.requestType,
+                                                requestType:
+                                                  request.requestType,
                                               }
                                             : {}),
                                         })
@@ -2825,7 +2863,8 @@ export function OperationsQueueViewContent({
                                                 registerSessionId:
                                                   request.registerSessionSummary
                                                     ?.registerSessionId,
-                                                requestType: request.requestType,
+                                                requestType:
+                                                  request.requestType,
                                               }
                                             : {}),
                                         })
@@ -2850,8 +2889,8 @@ export function OperationsQueueViewContent({
                                     <Button
                                       disabled={Boolean(
                                         isDecidingApprovalRequestId ||
-                                          (approvalDecisionUnlockRequired &&
-                                            !approvalDecisionUnlocked),
+                                        (approvalDecisionUnlockRequired &&
+                                          !approvalDecisionUnlocked),
                                       )}
                                       onClick={() =>
                                         onDecideApprovalRequest({
@@ -2949,9 +2988,7 @@ export function OperationsQueueView({
     activeWorkflow !== "approvals";
   const inventorySnapshotPage = usePaginatedQuery(
     stockOpsApi.adjustments.listInventorySnapshotPage,
-    shouldLoadStockWorkspace
-      ? { storeId: activeStore!._id }
-      : "skip",
+    shouldLoadStockWorkspace ? { storeId: activeStore!._id } : "skip",
     { initialNumItems: 100 },
   );
   const inventoryItems =
@@ -3365,7 +3402,8 @@ export function OperationsQueueView({
       let result: NormalizedApprovalCommandResult<unknown>;
 
       if (args.requestType === "register_sync_review") {
-        const registerSessionId = args.registerSessionId as Id<"registerSession">;
+        const registerSessionId =
+          args.registerSessionId as Id<"registerSession">;
         result = await runCommand(() =>
           resolveRegisterSessionSyncReview({
             approvalProofId: approvalProofResult.data.approvalProofId,
@@ -3375,7 +3413,8 @@ export function OperationsQueueView({
           }),
         );
       } else if (args.requestType === "variance_review") {
-        const registerSessionId = args.registerSessionId as Id<"registerSession">;
+        const registerSessionId =
+          args.registerSessionId as Id<"registerSession">;
         result = await runCommand(() =>
           reviewRegisterSessionCloseout({
             approvalProofId: approvalProofResult.data.approvalProofId,
@@ -3410,15 +3449,17 @@ export function OperationsQueueView({
         args.decision === "approved"
           ? (approvalCopy?.approvedToast ?? "Approval request approved")
           : (approvalCopy?.rejectedToast ??
-            retireOnlyApprovalCopy?.rejectedToast ??
-            "Approval request rejected"),
+              retireOnlyApprovalCopy?.rejectedToast ??
+              "Approval request rejected"),
       );
     } finally {
       setDecisioningApprovalRequestId(null);
     }
   };
 
-  const handleResolveSyncedSaleInventoryReview = async (item: QueueWorkItem) => {
+  const handleResolveSyncedSaleInventoryReview = async (
+    item: QueueWorkItem,
+  ) => {
     if (resolvingSyncedSaleInventoryReviewId) return;
 
     if (!activeStore?._id) {
@@ -3550,7 +3591,9 @@ export function OperationsQueueView({
         isDecidingApprovalRequestId={decisioningApprovalRequestId}
         isLoadingMoreInventoryItems={isInventorySnapshotLoadingMore}
         isLoadingPermissions={false}
-        isLoadingQueue={queue === undefined || isInventorySnapshotLoadingFirstPage}
+        isLoadingQueue={
+          queue === undefined || isInventorySnapshotLoadingFirstPage
+        }
         isLoadingStock={isInventorySnapshotLoadingFirstPage}
         isResolvingSyncedSaleInventoryReviewId={
           resolvingSyncedSaleInventoryReviewId

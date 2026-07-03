@@ -257,6 +257,83 @@ describe("createLocalSyncIngestionService", () => {
     expect(repository.createdPaymentAllocations).toHaveLength(2);
   });
 
+  it("returns inventory review work item mappings when a conflicted sale is retried", async () => {
+    const repository = createFakeSyncRepository();
+    const service = createLocalSyncIngestionService({
+      repository,
+      projectionRepository: repository,
+      now: () => 100,
+    });
+    const sale = buildSaleCompletedEvent({
+      sequence: 1,
+      payload: {
+        ...buildSaleCompletedEvent({ sequence: 1 }).payload,
+        totals: {
+          subtotal: 275,
+          tax: 0,
+          total: 275,
+        },
+        items: [
+          {
+            localTransactionItemId: "local-txn-item-1",
+            productId: "product-1" as never,
+            productSkuId: "sku-1" as never,
+            productName: "Wig Cap",
+            productSku: "CAP-1",
+            quantity: 11,
+            unitPrice: 25,
+          },
+        ],
+        payments: [
+          {
+            localPaymentId: "local-payment-1",
+            method: "cash",
+            amount: 275,
+            timestamp: 21,
+          },
+        ],
+      },
+    });
+    const batch = buildBatch({ events: [sale] });
+
+    const first = await service.ingestBatch(batch);
+    const second = await service.ingestBatch(batch);
+
+    expect(first.kind).toBe("ok");
+    expect(second.kind).toBe("ok");
+    if (first.kind !== "ok" || second.kind !== "ok") {
+      throw new Error("Expected ok result");
+    }
+    for (const result of [first, second]) {
+      expect(result.data.accepted).toEqual([
+        expect.objectContaining({
+          localEventId: "event-sale-completed-1",
+          status: "conflicted",
+        }),
+      ]);
+      expect(result.data.mappings).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            localId: "local-txn-1",
+            localIdKind: "transaction",
+          }),
+          expect.objectContaining({
+            cloudTable: "operationalWorkItem",
+            localId: "local-txn-1:inventory-review",
+            localIdKind: "inventoryReviewWorkItem",
+          }),
+        ]),
+      );
+      expect(result.data.conflicts).toEqual([
+        expect.objectContaining({
+          conflictType: "inventory",
+          status: "needs_review",
+        }),
+      ]);
+    }
+    expect(repository.createdTransactions).toHaveLength(1);
+  });
+
   it("rejects and preserves a projected event when a duplicate local event id has changed data", async () => {
     const repository = createFakeSyncRepository();
     const service = createLocalSyncIngestionService({
@@ -825,7 +902,8 @@ describe("createLocalSyncIngestionService", () => {
         eventType: "expense_recorded",
         status: "rejected",
         rejectionCode: "validation_failed",
-        rejectionMessage: "Expense sync event is missing required local identifiers.",
+        rejectionMessage:
+          "Expense sync event is missing required local identifiers.",
       }),
     ]);
     expect(repository.createdTransactions).toHaveLength(0);
@@ -988,9 +1066,9 @@ describe("createLocalSyncIngestionService", () => {
       acceptedThroughSequence: 2,
     });
     expect(repository.createdTransactions).toHaveLength(2);
-    expect(repository.events.find((event) => event.sequence === 2)?.status).toBe(
-      "projected",
-    );
+    expect(
+      repository.events.find((event) => event.sequence === 2)?.status,
+    ).toBe("projected");
   });
 
   it("rejects a terminal/store mismatch before recording events", async () => {
@@ -2692,7 +2770,9 @@ describe("createLocalSyncIngestionService", () => {
         totals: { subtotal: 75, tax: 0, total: 75 },
         items: [],
         serviceLines: [
-          buildServiceLine({ serviceCatalogId: "not-a-service-catalog-id" as never }),
+          buildServiceLine({
+            serviceCatalogId: "not-a-service-catalog-id" as never,
+          }),
         ],
         payments: [
           {
@@ -3913,7 +3993,9 @@ function buildPendingCheckoutItemDefinedEvent(
 }
 
 function buildServiceLine(
-  overrides: Partial<NonNullable<PosLocalSalePayload["serviceLines"]>[number]> = {},
+  overrides: Partial<
+    NonNullable<PosLocalSalePayload["serviceLines"]>[number]
+  > = {},
 ): NonNullable<PosLocalSalePayload["serviceLines"]>[number] {
   return {
     localServiceLineId: "local-service-line-1",
@@ -4043,12 +4125,12 @@ function createFakeSyncRepository(
   createdExpenseSessionItems: unknown[];
   createdExpenseTransactions: unknown[];
   createdExpenseTransactionItems: unknown[];
-	  createdRegisterSessions: unknown[];
-	  createdTransactions: unknown[];
-	  events: LocalSyncEventRecord[];
-	  mappings: LocalSyncMappingRecord[];
-	  registerSessionPatches: Array<{ registerSessionId: string; patch: unknown }>;
-	  roleChecks: Array<{
+  createdRegisterSessions: unknown[];
+  createdTransactions: unknown[];
+  events: LocalSyncEventRecord[];
+  mappings: LocalSyncMappingRecord[];
+  registerSessionPatches: Array<{ registerSessionId: string; patch: unknown }>;
+  roleChecks: Array<{
     allowedRoles: string[];
     staffProfileId: string;
     storeId: string;
@@ -4064,17 +4146,17 @@ function createFakeSyncRepository(
     staffProfileId: string;
     storeId: string;
   }> = [];
-	  const createdRegisterSessions: unknown[] = [];
-	  const createdTransactions: unknown[] = [];
-	  const createdPaymentAllocations: unknown[] = [];
+  const createdRegisterSessions: unknown[] = [];
+  const createdTransactions: unknown[] = [];
+  const createdPaymentAllocations: unknown[] = [];
   const createdExpenseSessions: unknown[] = [];
   const createdExpenseSessionItems: unknown[] = [];
   const createdExpenseTransactions: unknown[] = [];
   const createdExpenseTransactionItems: unknown[] = [];
-	  const registerSessionPatches: Array<{
-	    registerSessionId: string;
-	    patch: unknown;
-	  }> = [];
+  const registerSessionPatches: Array<{
+    registerSessionId: string;
+    patch: unknown;
+  }> = [];
   const acceptedThroughSequenceByCursor = new Map<string, number>();
   const terminal = overrides.terminal ?? {
     _id: "terminal-1",
@@ -4109,10 +4191,10 @@ function createFakeSyncRepository(
     createdExpenseTransactionItems,
     createdRegisterSessions,
     createdTransactions,
-	    events,
-	    mappings,
-	    registerSessionPatches,
-	    roleChecks,
+    events,
+    mappings,
+    registerSessionPatches,
+    roleChecks,
     async getTerminal(terminalId) {
       return terminal && terminal._id === terminalId
         ? (terminal as never)
@@ -4190,7 +4272,7 @@ function createFakeSyncRepository(
           } as never)
         : null;
     },
-	    async getPendingCheckoutItem(pendingCheckoutItemId) {
+    async getPendingCheckoutItem(pendingCheckoutItemId) {
       const created = createdPendingCheckoutItems.find(
         (item): item is { _id: string } & Record<string, unknown> =>
           typeof item === "object" &&
@@ -4207,7 +4289,7 @@ function createFakeSyncRepository(
           provisionalProductSkuId: "sku-1",
         } as never;
       }
-	      return pendingCheckoutItemId === "pending-checkout-item-1"
+      return pendingCheckoutItemId === "pending-checkout-item-1"
         ? ({
             _id: "pending-checkout-item-1",
             storeId: "store-1",
@@ -4215,15 +4297,15 @@ function createFakeSyncRepository(
             provisionalProductId: "product-1",
             provisionalProductSkuId: "sku-1",
           } as never)
-	        : null;
-	    },
+        : null;
+    },
     async getInventoryImportProvisionalSku() {
       return null;
     },
     async recordInventoryImportProvisionalSkuSaleEvidence() {
       // No-op for ingestion tests that do not seed provisional import rows.
     },
-	    async getServiceCatalog(serviceCatalogId) {
+    async getServiceCatalog(serviceCatalogId) {
       return serviceCatalogId === "service-catalog-1"
         ? ({
             _id: "service-catalog-1",
@@ -4280,14 +4362,12 @@ function createFakeSyncRepository(
       return 0;
     },
     async readActiveInventoryHoldQuantitiesForSession() {
-      return (
-        overrides.consumedHoldQuantities ?? new Map([["sku-1", 1]])
-      ) as never;
+      return (overrides.consumedHoldQuantities ??
+        new Map([["sku-1", 1]])) as never;
     },
     async consumeInventoryHoldsForSession() {
-      return (
-        overrides.consumedHoldQuantities ?? new Map([["sku-1", 1]])
-      ) as never;
+      return (overrides.consumedHoldQuantities ??
+        new Map([["sku-1", 1]])) as never;
     },
     async releaseActiveInventoryHoldsForSession() {
       return {
@@ -4427,33 +4507,34 @@ function createFakeSyncRepository(
       return null;
     },
     async listOpenRegisterReviewConflictFacts(args) {
-      return [...(overrides.registerSessionsWithCloseoutReview ?? new Set())]
-        .map((registerSessionId, index) => ({
-          conflict: {
-            _id: `review-conflict-${registerSessionId}`,
-            conflictType: "permission" as const,
-            createdAt: 1_700_000_000_000 + index,
-            details: {
-              countedCash: 100,
-              expectedCash: 90,
-              variance: 10,
-            },
-            localEventId: `review-event-${registerSessionId}`,
-            localRegisterSessionId: registerSessionId,
-            sequence: 0,
-            status: "needs_review" as const,
-            storeId: args.storeId,
-            summary:
-              "Register closeout variance requires manager review before synced closeout can be applied.",
-            terminalId: args.terminalId,
+      return [
+        ...(overrides.registerSessionsWithCloseoutReview ?? new Set()),
+      ].map((registerSessionId, index) => ({
+        conflict: {
+          _id: `review-conflict-${registerSessionId}`,
+          conflictType: "permission" as const,
+          createdAt: 1_700_000_000_000 + index,
+          details: {
+            countedCash: 100,
+            expectedCash: 90,
+            variance: 10,
           },
-          directRegisterSession: {
-            _id: registerSessionId as Id<"registerSession">,
-            storeId: args.storeId,
-            terminalId: args.terminalId,
-          },
-          registerSessionMapping: null,
-        }));
+          localEventId: `review-event-${registerSessionId}`,
+          localRegisterSessionId: registerSessionId,
+          sequence: 0,
+          status: "needs_review" as const,
+          storeId: args.storeId,
+          summary:
+            "Register closeout variance requires manager review before synced closeout can be applied.",
+          terminalId: args.terminalId,
+        },
+        directRegisterSession: {
+          _id: registerSessionId as Id<"registerSession">,
+          storeId: args.storeId,
+          terminalId: args.terminalId,
+        },
+        registerSessionMapping: null,
+      }));
     },
     async getRegisterSessionByLocalId(args) {
       const mapping = mappings.find(
@@ -4512,9 +4593,9 @@ function createFakeSyncRepository(
         ? (existing as never)
         : null;
     },
-	    async patchRegisterSession(registerSessionId, patch) {
-	      registerSessionPatches.push({ registerSessionId, patch });
-	      const session = createdRegisterSessions.find(
+    async patchRegisterSession(registerSessionId, patch) {
+      registerSessionPatches.push({ registerSessionId, patch });
+      const session = createdRegisterSessions.find(
         (candidate) =>
           typeof candidate === "object" &&
           candidate !== null &&
@@ -4611,11 +4692,11 @@ function createFakeSyncRepository(
     async createTransactionServiceLine() {
       return `transaction-service-line-${nextId++}` as never;
     },
-	    async patchProductSku() {},
-	    async recordSaleInventoryMovement() {
-	      return "inserted";
-	    },
-	    async createPaymentAllocation(input) {
+    async patchProductSku() {},
+    async recordSaleInventoryMovement() {
+      return "inserted";
+    },
+    async createPaymentAllocation(input) {
       const id = `payment-allocation-${createdPaymentAllocations.length + 1}`;
       createdPaymentAllocations.push({ _id: id, ...input });
       return id as never;

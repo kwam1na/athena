@@ -2,6 +2,7 @@ import {
   internalMutation,
   internalQuery,
   MutationCtx,
+  QueryCtx,
   query,
 } from "../_generated/server";
 import { Doc, Id } from "../_generated/dataModel";
@@ -39,9 +40,7 @@ const QUEUE_WORK_ITEM_TYPES = [
   "stock_adjustment_review",
   "synced_sale_inventory_review",
 ] as const;
-const APPROVAL_BLOCKED_WORK_ITEM_TYPES = new Set([
-  "stock_adjustment_review",
-]);
+const APPROVAL_BLOCKED_WORK_ITEM_TYPES = new Set(["stock_adjustment_review"]);
 const SOURCE_RESOLVER_WORK_ITEM_TYPES = new Set([
   "daily_close_carry_forward",
   "pos_pending_checkout_item_review",
@@ -225,12 +224,7 @@ function resolverCompletenessBucket(item: Doc<"operationalWorkItem">) {
 
   const metadata = item.metadata;
   const hasRequiredResolverContext = Boolean(
-    metadataString(metadata, "terminalId") &&
-      metadataString(metadata, "localRegisterSessionId") &&
-      metadataString(metadata, "localTransactionId") &&
-      metadataString(metadata, "registerSessionId") &&
-      metadataString(metadata, "sourceId") &&
-      metadataString(metadata, "sourceType") === "posTransaction",
+    metadataString(metadata, "primaryProductSkuId"),
   );
 
   return hasRequiredResolverContext ? 0 : 1;
@@ -257,7 +251,9 @@ function compareOperationalWorkItems(
   );
 }
 
-function sortAndDedupeCurrentWorkItems(items: Array<Doc<"operationalWorkItem">>) {
+function sortAndDedupeCurrentWorkItems(
+  items: Array<Doc<"operationalWorkItem">>,
+) {
   const seenSourceIdentities = new Set<string>();
 
   return [...items].sort(compareOperationalWorkItems).filter((item) => {
@@ -268,6 +264,45 @@ function sortAndDedupeCurrentWorkItems(items: Array<Doc<"operationalWorkItem">>)
     seenSourceIdentities.add(sourceIdentity);
     return true;
   });
+}
+
+async function filterArchivedPendingCheckoutWorkItems(
+  ctx: QueryCtx,
+  items: Array<Doc<"operationalWorkItem">>,
+) {
+  const productCache = new Map<Id<"product">, Doc<"product"> | null>();
+  const filteredItems = [];
+
+  for (const item of items) {
+    if (item.type !== "pos_pending_checkout_item_review") {
+      filteredItems.push(item);
+      continue;
+    }
+
+    const provisionalProductId = metadataString(
+      item.metadata,
+      "provisionalProductId",
+    ) as Id<"product"> | null;
+    if (!provisionalProductId) {
+      filteredItems.push(item);
+      continue;
+    }
+
+    if (!productCache.has(provisionalProductId)) {
+      productCache.set(
+        provisionalProductId,
+        await ctx.db.get("product", provisionalProductId),
+      );
+    }
+
+    if (productCache.get(provisionalProductId)?.availability === "archived") {
+      continue;
+    }
+
+    filteredItems.push(item);
+  }
+
+  return filteredItems;
 }
 
 function metadataNumber(
@@ -286,9 +321,7 @@ function metadataArrayCount(
   return Array.isArray(value) ? value.length : null;
 }
 
-function sanitizeOperationalWorkItemDetails(
-  item: Doc<"operationalWorkItem">,
-) {
+function sanitizeOperationalWorkItemDetails(item: Doc<"operationalWorkItem">) {
   const metadata = item.metadata;
 
   switch (item.type) {
@@ -301,6 +334,11 @@ function sanitizeOperationalWorkItemDetails(
       return {
         lookupCode: metadataString(metadata, "lookupCode"),
         price: metadataNumber(metadata, "price"),
+        provisionalProductId: metadataString(metadata, "provisionalProductId"),
+        provisionalProductSkuId: metadataString(
+          metadata,
+          "provisionalProductSkuId",
+        ),
         quantitySold: metadataNumber(metadata, "quantitySold"),
         totalQuantitySold: metadataNumber(metadata, "totalQuantitySold"),
       };
@@ -600,7 +638,11 @@ export const getQueueSnapshot = query({
       userId: athenaUser._id,
     });
 
-    const [workItemLanes, approvalRequestLanes, syncConflictsBySessionId] =
+    const [
+      rawWorkItemLanes,
+      approvalRequestLanes,
+      syncConflictsBySessionId,
+    ] =
       await Promise.all([
         Promise.all(
           OPEN_WORK_ITEM_STATUSES.flatMap((status) =>
@@ -645,6 +687,20 @@ export const getQueueSnapshot = query({
         ),
         listOpenLocalSyncConflictsByRegisterSession(ctx, args.storeId),
       ]);
+    const workItemLanes = await Promise.all(
+      rawWorkItemLanes.map(async (lane) => {
+        const items = await filterArchivedPendingCheckoutWorkItems(
+          ctx,
+          lane.items,
+        );
+
+        return {
+          ...lane,
+          items,
+          overflow: items.length > MAX_QUEUE_ITEMS,
+        };
+      }),
+    );
 
     const sortedWorkItems = sortAndDedupeCurrentWorkItems(
       workItemLanes.flatMap((lane) => lane.items),
@@ -725,54 +781,54 @@ export const getQueueSnapshot = query({
       posTransactions,
       registerSessions,
     ] = await Promise.all([
-        Promise.all(
-          Array.from(customerIds).map(async (customerId) => {
-            const customer = await ctx.db.get(
-              "customerProfile",
-              customerId as Id<"customerProfile">,
-            );
-            return customer ? [customer._id, customer] : null;
-          }),
-        ),
-        Promise.all(
-          Array.from(staffIds).map(async (staffId) => {
-            const staffProfile = await ctx.db.get(
-              "staffProfile",
-              staffId as Id<"staffProfile">,
-            );
-            return staffProfile ? [staffProfile._id, staffProfile] : null;
-          }),
-        ),
-        Promise.all(
-          Array.from(workItemIds).map(async (workItemId) => {
-            const workItem = await ctx.db.get(
-              "operationalWorkItem",
-              workItemId as Id<"operationalWorkItem">,
-            );
-            return workItem ? [workItem._id, workItem] : null;
-          }),
-        ),
-        Promise.all(
-          Array.from(posTransactionIds).map(async (transactionId) => {
-            const transaction = await ctx.db.get(
-              "posTransaction",
-              transactionId as Id<"posTransaction">,
-            );
-            return transaction ? [transaction._id, transaction] : null;
-          }),
-        ),
-        Promise.all(
-          Array.from(registerSessionIds).map(async (registerSessionId) => {
-            const registerSession = await ctx.db.get(
-              "registerSession",
-              registerSessionId as Id<"registerSession">,
-            );
-            return registerSession
-              ? [registerSession._id, registerSession]
-              : null;
-          }),
-        ),
-      ]);
+      Promise.all(
+        Array.from(customerIds).map(async (customerId) => {
+          const customer = await ctx.db.get(
+            "customerProfile",
+            customerId as Id<"customerProfile">,
+          );
+          return customer ? [customer._id, customer] : null;
+        }),
+      ),
+      Promise.all(
+        Array.from(staffIds).map(async (staffId) => {
+          const staffProfile = await ctx.db.get(
+            "staffProfile",
+            staffId as Id<"staffProfile">,
+          );
+          return staffProfile ? [staffProfile._id, staffProfile] : null;
+        }),
+      ),
+      Promise.all(
+        Array.from(workItemIds).map(async (workItemId) => {
+          const workItem = await ctx.db.get(
+            "operationalWorkItem",
+            workItemId as Id<"operationalWorkItem">,
+          );
+          return workItem ? [workItem._id, workItem] : null;
+        }),
+      ),
+      Promise.all(
+        Array.from(posTransactionIds).map(async (transactionId) => {
+          const transaction = await ctx.db.get(
+            "posTransaction",
+            transactionId as Id<"posTransaction">,
+          );
+          return transaction ? [transaction._id, transaction] : null;
+        }),
+      ),
+      Promise.all(
+        Array.from(registerSessionIds).map(async (registerSessionId) => {
+          const registerSession = await ctx.db.get(
+            "registerSession",
+            registerSessionId as Id<"registerSession">,
+          );
+          return registerSession
+            ? [registerSession._id, registerSession]
+            : null;
+        }),
+      ),
+    ]);
 
     const customerMap = new Map<Id<"customerProfile">, Doc<"customerProfile">>(
       customers.filter(Boolean) as Array<
@@ -814,13 +870,17 @@ export const getQueueSnapshot = query({
       }
     }
     const transactionRegisterSessions = await Promise.all(
-      Array.from(transactionRegisterSessionIds).map(async (registerSessionId) => {
-        const registerSession = await ctx.db.get(
-          "registerSession",
-          registerSessionId,
-        );
-        return registerSession ? [registerSession._id, registerSession] : null;
-      }),
+      Array.from(transactionRegisterSessionIds).map(
+        async (registerSessionId) => {
+          const registerSession = await ctx.db.get(
+            "registerSession",
+            registerSessionId,
+          );
+          return registerSession
+            ? [registerSession._id, registerSession]
+            : null;
+        },
+      ),
     );
     const registerSessionMap = new Map<
       Id<"registerSession">,
@@ -828,9 +888,7 @@ export const getQueueSnapshot = query({
     >(
       [...registerSessions, ...transactionRegisterSessions].filter(
         Boolean,
-      ) as Array<
-        [Id<"registerSession">, Doc<"registerSession">]
-      >,
+      ) as Array<[Id<"registerSession">, Doc<"registerSession">]>,
     );
     for (const registerSession of registerSessionMap.values()) {
       if (registerSession.terminalId) {
@@ -854,73 +912,73 @@ export const getQueueSnapshot = query({
     );
 
     const mappedApprovalRequests = approvalRequests.map((request) => {
-        const linkedTransactionId = approvalRequestTransactionId(request);
-        const linkedTransaction = linkedTransactionId
-          ? posTransactionMap.get(linkedTransactionId)
-          : null;
-        let linkedRegisterSession: Doc<"registerSession"> | null | undefined =
-          null;
-        if (request.registerSessionId) {
-          linkedRegisterSession = registerSessionMap.get(
-            request.registerSessionId,
-          );
-        } else if (linkedTransaction?.registerSessionId) {
-          linkedRegisterSession = registerSessionMap.get(
-            linkedTransaction.registerSessionId,
-          );
-        } else if (
-          request.requestType === "variance_review" &&
-          request.subjectType === "register_session"
-        ) {
-          linkedRegisterSession = registerSessionMap.get(
-            request.subjectId as Id<"registerSession">,
-          );
-        }
+      const linkedTransactionId = approvalRequestTransactionId(request);
+      const linkedTransaction = linkedTransactionId
+        ? posTransactionMap.get(linkedTransactionId)
+        : null;
+      let linkedRegisterSession: Doc<"registerSession"> | null | undefined =
+        null;
+      if (request.registerSessionId) {
+        linkedRegisterSession = registerSessionMap.get(
+          request.registerSessionId,
+        );
+      } else if (linkedTransaction?.registerSessionId) {
+        linkedRegisterSession = registerSessionMap.get(
+          linkedTransaction.registerSessionId,
+        );
+      } else if (
+        request.requestType === "variance_review" &&
+        request.subjectType === "register_session"
+      ) {
+        linkedRegisterSession = registerSessionMap.get(
+          request.subjectId as Id<"registerSession">,
+        );
+      }
 
-        return {
-          _id: request._id,
-          createdAt: request.createdAt,
-          metadata: sanitizeApprovalRequestMetadata(request.metadata),
-          notes: request.notes,
-          reason: request.reason,
-          requestType: request.requestType,
-          status: request.status,
-          storeId: request.storeId,
-          subjectId: request.subjectId,
-          subjectType: request.subjectType,
-          requestedByStaffName: request.requestedByStaffProfileId
-            ? staffMap.get(request.requestedByStaffProfileId)?.fullName
-            : null,
-          transactionSummary: linkedTransaction
-            ? {
-                completedAt: linkedTransaction.completedAt,
-                paymentMethod: linkedTransaction.paymentMethod ?? null,
-                total: linkedTransaction.total,
-                totalPaid: linkedTransaction.totalPaid,
-                transactionId: linkedTransaction._id,
-                transactionNumber: linkedTransaction.transactionNumber,
-              }
-            : null,
-          registerSessionSummary: linkedRegisterSession
-            ? {
-                countedCash: linkedRegisterSession.countedCash ?? null,
-                expectedCash: linkedRegisterSession.expectedCash,
-                registerNumber: linkedRegisterSession.registerNumber ?? null,
-                registerSessionId: linkedRegisterSession._id,
-                status: linkedRegisterSession.status,
-                terminalName: linkedRegisterSession.terminalId
-                  ? (terminalMap
-                      .get(linkedRegisterSession.terminalId)
-                      ?.displayName?.trim() ?? null)
-                  : null,
-                variance: linkedRegisterSession.variance ?? null,
-              }
-            : null,
-          workItemTitle: request.workItemId
-            ? workItemMap.get(request.workItemId)?.title
-            : null,
-        };
-      });
+      return {
+        _id: request._id,
+        createdAt: request.createdAt,
+        metadata: sanitizeApprovalRequestMetadata(request.metadata),
+        notes: request.notes,
+        reason: request.reason,
+        requestType: request.requestType,
+        status: request.status,
+        storeId: request.storeId,
+        subjectId: request.subjectId,
+        subjectType: request.subjectType,
+        requestedByStaffName: request.requestedByStaffProfileId
+          ? staffMap.get(request.requestedByStaffProfileId)?.fullName
+          : null,
+        transactionSummary: linkedTransaction
+          ? {
+              completedAt: linkedTransaction.completedAt,
+              paymentMethod: linkedTransaction.paymentMethod ?? null,
+              total: linkedTransaction.total,
+              totalPaid: linkedTransaction.totalPaid,
+              transactionId: linkedTransaction._id,
+              transactionNumber: linkedTransaction.transactionNumber,
+            }
+          : null,
+        registerSessionSummary: linkedRegisterSession
+          ? {
+              countedCash: linkedRegisterSession.countedCash ?? null,
+              expectedCash: linkedRegisterSession.expectedCash,
+              registerNumber: linkedRegisterSession.registerNumber ?? null,
+              registerSessionId: linkedRegisterSession._id,
+              status: linkedRegisterSession.status,
+              terminalName: linkedRegisterSession.terminalId
+                ? (terminalMap
+                    .get(linkedRegisterSession.terminalId)
+                    ?.displayName?.trim() ?? null)
+                : null,
+              variance: linkedRegisterSession.variance ?? null,
+            }
+          : null,
+        workItemTitle: request.workItemId
+          ? workItemMap.get(request.workItemId)?.title
+          : null,
+      };
+    });
     const mappedSyncReviewRequests = Array.from(
       syncConflictsBySessionId.entries(),
     ).map(([registerSessionId, conflicts]) => {

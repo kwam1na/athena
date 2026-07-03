@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { buildVariantSkuMoneyPayload } from "./ProductView";
+import {
+  buildVariantSkuMoneyPayload,
+  getArchivedProductRedirect,
+} from "./ProductView";
 
 describe("ProductView SKU money payloads", () => {
   it("persists decimal net price and unit cost as minor units when fees are absorbed", () => {
@@ -32,6 +35,46 @@ describe("ProductView SKU money payloads", () => {
       netPrice: 10000,
       price: 10200,
       unitCost: 999,
+    });
+  });
+});
+
+describe("ProductView archived product redirects", () => {
+  it("prefers the origin search param after archiving", () => {
+    expect(
+      getArchivedProductRedirect({
+        categorySlug: "makeup",
+        origin: "/wigclub/store/wigclub/products/ks753/edit?o=%2Freturn",
+      }),
+    ).toEqual({
+      kind: "origin",
+      to: "/wigclub/store/wigclub/products/ks753/edit?o=/return",
+    });
+  });
+
+  it("unwraps same-product origins to avoid returning to an archived product page", () => {
+    expect(
+      getArchivedProductRedirect({
+        categorySlug: "makeup",
+        origin:
+          "%2Fwigclub%2Fstore%2Fwigclub%2Fproducts%2Fks753%3Fo%3D%25252Fwigclub%25252Fstore%25252Fwigclub%25252Fproducts%25253FcategorySlug%25253Dmakeup",
+        productId: "ks753",
+      }),
+    ).toEqual({
+      kind: "origin",
+      to: "/wigclub/store/wigclub/products?categorySlug=makeup",
+    });
+  });
+
+  it("falls back to the product category when no origin is present", () => {
+    expect(
+      getArchivedProductRedirect({
+        categorySlug: "makeup",
+        origin: "",
+      }),
+    ).toEqual({
+      categorySlug: "makeup",
+      kind: "category",
     });
   });
 });

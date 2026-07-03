@@ -5,8 +5,10 @@ import type { Id } from "../../_generated/dataModel";
 const mocks = vi.hoisted(() => ({
   createOrReusePendingCheckoutItem: vi.fn(),
   findStoreSkuByBarcode: vi.fn(),
+  refreshCatalogSummaryWithCtx: vi.fn(),
   listRegisterCatalogAvailabilitySnapshot: vi.fn(),
   quickAddCatalogItem: vi.fn(),
+  recordInventoryMovementWithCtx: vi.fn(),
   recordOperationalEventWithCtx: vi.fn(),
   requireAuthenticatedAthenaUserWithCtx: vi.fn(),
   requireOrganizationMemberRoleWithCtx: vi.fn(),
@@ -25,14 +27,22 @@ vi.mock("../../inventory/skuSearch", () => ({
   upsertProductSkuSearchProjection: mocks.upsertProductSkuSearchProjection,
 }));
 
+vi.mock("../../inventory/catalogSummary", () => ({
+  refreshCatalogSummaryWithCtx: mocks.refreshCatalogSummaryWithCtx,
+}));
+
+vi.mock("../../operations/inventoryMovements", () => ({
+  recordInventoryMovementWithCtx: mocks.recordInventoryMovementWithCtx,
+}));
+
 vi.mock("../application/queries/listRegisterCatalog", () => ({
   REGISTER_CATALOG_AVAILABILITY_LIMIT: 50,
   isTrustedRegisterCatalogSku: vi.fn(
-    ({ product, sku }) =>
+    ({ category, product, sku }) =>
       product.availability !== "archived" &&
       product.availability !== "draft" &&
-      product.isVisible !== false &&
-      sku.isVisible !== false,
+      (product.isVisible !== false || category?.slug === "pos-quick-add") &&
+      (sku.isVisible !== false || category?.slug === "pos-quick-add"),
   ),
   listRegisterCatalog: vi.fn(),
   listRegisterCatalogAvailability: vi.fn(),
@@ -69,7 +79,9 @@ vi.mock("../infrastructure/repositories/catalogRepository", () => ({
 import {
   barcodeLookup,
   createOrReusePendingCheckoutItemForSale,
+  finalizePendingCheckoutTrustedInventoryFromProductPage,
   listPendingCheckoutItemsForReview,
+  listPendingCheckoutProductPageBinding,
   listRegisterCatalogSnapshot,
   listRegisterCatalogAvailability,
   listRegisterCatalogAvailabilitySnapshot,
@@ -112,6 +124,10 @@ describe("POS public catalog queries", () => {
       status: "pending_review",
     });
     mocks.findStoreSkuByBarcode.mockResolvedValue(null);
+    mocks.recordInventoryMovementWithCtx.mockResolvedValue({
+      _id: "movement-1",
+    });
+    mocks.refreshCatalogSummaryWithCtx.mockResolvedValue("summary-1");
     mocks.quickAddCatalogItem.mockResolvedValue({
       areProcessingFeesAbsorbed: false,
       barcode: "123456789012",
@@ -203,6 +219,40 @@ describe("POS public catalog queries", () => {
       resolvePendingCheckoutItemReview,
       pendingReviewItem,
     );
+    assertConformsToExportedReturns(listPendingCheckoutProductPageBinding, {
+      activeRowCount: 1,
+      row: {
+        _id: "pending-1",
+        importKey: "pending-checkout",
+        importedQuantity: 1,
+        provisionalSoldQuantity: 1,
+        rowNumber: 1,
+        saleCount: 1,
+      },
+      saleEvidenceFingerprint: "sale-fingerprint",
+      state: "unique",
+      trustedSkuFingerprint: "sku-fingerprint",
+    });
+    assertConformsToExportedReturns(
+      finalizePendingCheckoutTrustedInventoryFromProductPage,
+      {
+        data: {
+          finalTrustedQuantity: 2,
+          product: {
+            availability: "live",
+            inventoryCount: 2,
+            isVisible: true,
+            quantityAvailable: 2,
+          },
+          productId: "product-1",
+          productSkuId: "sku-1",
+          provisionalSkuId: "pending-1",
+          provisionalSoldQuantity: 1,
+          quantityAvailable: 2,
+        },
+        kind: "ok",
+      },
+    );
   });
 
   it("maps pending checkout review decisions to source-owned work item states", () => {
@@ -240,14 +290,19 @@ describe("POS public catalog queries", () => {
         quantityAvailable: 3,
       }),
     ]);
-    expect(mocks.requireAuthenticatedAthenaUserWithCtx).toHaveBeenCalledWith(ctx);
-    expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(ctx, {
-      allowedRoles: ["full_admin", "pos_only"],
-      failureMessage:
-        "You cannot view register catalog availability for this store.",
-      organizationId: "org-1",
-      userId: "athena-user-1",
-    });
+    expect(mocks.requireAuthenticatedAthenaUserWithCtx).toHaveBeenCalledWith(
+      ctx,
+    );
+    expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
+      ctx,
+      {
+        allowedRoles: ["full_admin", "pos_only"],
+        failureMessage:
+          "You cannot view register catalog availability for this store.",
+        organizationId: "org-1",
+        userId: "athena-user-1",
+      },
+    );
     expect(mocks.listRegisterCatalogAvailabilitySnapshot).toHaveBeenCalledWith(
       ctx,
       { storeId: "store-1" },
@@ -255,9 +310,8 @@ describe("POS public catalog queries", () => {
   });
 
   it("requires same-organization POS access before returning the full register catalog snapshot", async () => {
-    const readRegisterCatalog = await import(
-      "../application/queries/listRegisterCatalog"
-    );
+    const readRegisterCatalog =
+      await import("../application/queries/listRegisterCatalog");
     vi.mocked(readRegisterCatalog.listRegisterCatalog).mockResolvedValue([
       {
         areProcessingFeesAbsorbed: false,
@@ -293,23 +347,27 @@ describe("POS public catalog queries", () => {
       }),
     ]);
     assertConformsToExportedReturns(listRegisterCatalogSnapshot, rows);
-    expect(mocks.requireAuthenticatedAthenaUserWithCtx).toHaveBeenCalledWith(ctx);
-    expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(ctx, {
-      allowedRoles: ["full_admin", "pos_only"],
-      failureMessage:
-        "You cannot view register catalog availability for this store.",
-      organizationId: "org-1",
-      userId: "athena-user-1",
-    });
+    expect(mocks.requireAuthenticatedAthenaUserWithCtx).toHaveBeenCalledWith(
+      ctx,
+    );
+    expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
+      ctx,
+      {
+        allowedRoles: ["full_admin", "pos_only"],
+        failureMessage:
+          "You cannot view register catalog availability for this store.",
+        organizationId: "org-1",
+        userId: "athena-user-1",
+      },
+    );
     expect(readRegisterCatalog.listRegisterCatalog).toHaveBeenCalledWith(ctx, {
       storeId: "store-1",
     });
   });
 
   it("does not return the register catalog snapshot when the caller is unauthenticated", async () => {
-    const readRegisterCatalog = await import(
-      "../application/queries/listRegisterCatalog"
-    );
+    const readRegisterCatalog =
+      await import("../application/queries/listRegisterCatalog");
     mocks.requireAuthenticatedAthenaUserWithCtx.mockRejectedValue(
       new Error("Sign in again to continue."),
     );
@@ -326,9 +384,8 @@ describe("POS public catalog queries", () => {
 
   it("requires same-organization POS access before returning bounded availability", async () => {
     mocks.listRegisterCatalogAvailabilitySnapshot.mockResolvedValue([]);
-    const readRegisterCatalogAvailability = await import(
-      "../application/queries/listRegisterCatalog"
-    );
+    const readRegisterCatalogAvailability =
+      await import("../application/queries/listRegisterCatalog");
     vi.mocked(
       readRegisterCatalogAvailability.listRegisterCatalogAvailability,
     ).mockResolvedValue([
@@ -342,10 +399,13 @@ describe("POS public catalog queries", () => {
     ]);
     const ctx = buildCtx();
 
-    const rows = await getHandler(listRegisterCatalogAvailability)(ctx as never, {
-      storeId: "store-1",
-      productSkuIds: ["sku-1"],
-    });
+    const rows = await getHandler(listRegisterCatalogAvailability)(
+      ctx as never,
+      {
+        storeId: "store-1",
+        productSkuIds: ["sku-1"],
+      },
+    );
 
     expect(rows).toEqual([
       expect.objectContaining({
@@ -353,13 +413,16 @@ describe("POS public catalog queries", () => {
         quantityAvailable: 3,
       }),
     ]);
-    expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(ctx, {
-      allowedRoles: ["full_admin", "pos_only"],
-      failureMessage:
-        "You cannot view register catalog availability for this store.",
-      organizationId: "org-1",
-      userId: "athena-user-1",
-    });
+    expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
+      ctx,
+      {
+        allowedRoles: ["full_admin", "pos_only"],
+        failureMessage:
+          "You cannot view register catalog availability for this store.",
+        organizationId: "org-1",
+        userId: "athena-user-1",
+      },
+    );
     expect(
       readRegisterCatalogAvailability.listRegisterCatalogAvailability,
     ).toHaveBeenCalledWith(ctx, {
@@ -380,13 +443,14 @@ describe("POS public catalog queries", () => {
       }),
     ).rejects.toThrow("Sign in again to continue.");
 
-    expect(mocks.listRegisterCatalogAvailabilitySnapshot).not.toHaveBeenCalled();
+    expect(
+      mocks.listRegisterCatalogAvailabilitySnapshot,
+    ).not.toHaveBeenCalled();
   });
 
   it("does not return bounded availability when the caller is unauthenticated", async () => {
-    const readRegisterCatalogAvailability = await import(
-      "../application/queries/listRegisterCatalog"
-    );
+    const readRegisterCatalogAvailability =
+      await import("../application/queries/listRegisterCatalog");
     mocks.requireAuthenticatedAthenaUserWithCtx.mockRejectedValue(
       new Error("Sign in again to continue."),
     );
@@ -416,13 +480,18 @@ describe("POS public catalog queries", () => {
       storeId: "store-1",
     });
 
-    expect(mocks.requireAuthenticatedAthenaUserWithCtx).toHaveBeenCalledWith(ctx);
-    expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(ctx, {
-      allowedRoles: ["full_admin", "pos_only"],
-      failureMessage: "You cannot quick add products for this store.",
-      organizationId: "org-1",
-      userId: "athena-user-1",
-    });
+    expect(mocks.requireAuthenticatedAthenaUserWithCtx).toHaveBeenCalledWith(
+      ctx,
+    );
+    expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
+      ctx,
+      {
+        allowedRoles: ["full_admin", "pos_only"],
+        failureMessage: "You cannot quick add products for this store.",
+        organizationId: "org-1",
+        userId: "athena-user-1",
+      },
+    );
     expect(mocks.quickAddCatalogItem).toHaveBeenCalledWith(
       ctx,
       expect.objectContaining({
@@ -471,14 +540,18 @@ describe("POS public catalog queries", () => {
       pendingCheckoutItemId: "pending-1",
       status: "pending_review",
     });
-    expect(mocks.requireAuthenticatedAthenaUserWithCtx).toHaveBeenCalledWith(ctx);
-    expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(ctx, {
-      allowedRoles: ["full_admin", "pos_only"],
-      failureMessage:
-        "You cannot add pending checkout items for this store.",
-      organizationId: "org-1",
-      userId: "athena-user-1",
-    });
+    expect(mocks.requireAuthenticatedAthenaUserWithCtx).toHaveBeenCalledWith(
+      ctx,
+    );
+    expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
+      ctx,
+      {
+        allowedRoles: ["full_admin", "pos_only"],
+        failureMessage: "You cannot add pending checkout items for this store.",
+        organizationId: "org-1",
+        userId: "athena-user-1",
+      },
+    );
     expect(mocks.createOrReusePendingCheckoutItem).toHaveBeenCalledWith(ctx, {
       createdByStaffProfileId: "staff-1",
       createdByUserId: "athena-user-1",
@@ -596,9 +669,411 @@ describe("POS public catalog queries", () => {
       getHandler(listPendingCheckoutItemsForReview)(ctx as never, {
         storeId: "store-1",
       }),
-    ).rejects.toThrow("You cannot review pending checkout items for this store.");
+    ).rejects.toThrow(
+      "You cannot review pending checkout items for this store.",
+    );
 
     expect(ctx.db.query).not.toHaveBeenCalled();
+  });
+
+  it("lists pending checkout review items using the public review shape", async () => {
+    const ctx = buildCtx({
+      pendingCheckoutItems: [
+        {
+          _creationTime: 1,
+          _id: "pending-1",
+          createdAt: 10,
+          createdByStaffProfileId: "staff-1",
+          createdByUserId: "athena-user-1",
+          createdFrom: "offline_sync",
+          currency: "ghs",
+          evidence: {
+            firstSeenAt: 10,
+            lastSeenAt: 20,
+            observedLookupCodes: [],
+            observedPrices: [350000],
+            offlineSaleCount: 16,
+            totalQuantitySold: 20,
+            transactionCount: 16,
+          },
+          name: "Missing item",
+          normalizedName: "missing item",
+          operationalWorkItemId: "work-item-1",
+          organizationId: "org-1",
+          provisionalPrice: 350000,
+          provisionalProductId: "product-provisional-1",
+          provisionalProductSkuId: "sku-provisional-1",
+          reviewPriority: "high",
+          status: "pending_review",
+          storeId: "store-1",
+          updatedAt: 20,
+        },
+      ],
+    });
+
+    const rows = await getHandler(listPendingCheckoutItemsForReview)(
+      ctx as never,
+      {
+        storeId: "store-1",
+      },
+    );
+
+    expect(rows).toEqual([
+      {
+        _id: "pending-1",
+        createdAt: 10,
+        createdFrom: "offline_sync",
+        evidence: expect.objectContaining({
+          totalQuantitySold: 20,
+          transactionCount: 16,
+        }),
+        name: "Missing item",
+        provisionalPrice: 350000,
+        reviewPriority: "high",
+        status: "pending_review",
+        updatedAt: 20,
+      },
+    ]);
+    expect(rows[0]).not.toHaveProperty("_creationTime");
+    expect(rows[0]).not.toHaveProperty("organizationId");
+    expect(rows[0]).not.toHaveProperty("provisionalProductId");
+    assertConformsToExportedReturns(listPendingCheckoutItemsForReview, rows);
+  });
+
+  it("returns the pending checkout product-page binding for the provisional SKU", async () => {
+    const ctx = buildCtx({
+      pendingCheckoutItems: [
+        {
+          _id: "pending-1",
+          createdAt: 10,
+          createdFrom: "offline_sync",
+          currency: "ghs",
+          evidence: {
+            firstSeenAt: 10,
+            lastPosTransactionId: "transaction-1",
+            lastRegisterSessionId: "register-1",
+            lastSeenAt: 20,
+            observedLookupCodes: [],
+            observedPrices: [350000],
+            totalQuantitySold: 20,
+            transactionCount: 16,
+          },
+          name: "Missing item",
+          normalizedName: "missing item",
+          organizationId: "org-1",
+          provisionalPrice: 350000,
+          provisionalProductId: "product-provisional-1",
+          provisionalProductSkuId: "sku-provisional-1",
+          reviewPriority: "high",
+          status: "pending_review",
+          storeId: "store-1",
+          updatedAt: 20,
+        },
+      ],
+      product: {
+        _id: "product-provisional-1",
+        availability: "draft",
+        inventoryCount: 0,
+        isVisible: false,
+        quantityAvailable: 0,
+        storeId: "store-1",
+      },
+      productSku: {
+        _id: "sku-provisional-1",
+        inventoryCount: 0,
+        isVisible: false,
+        price: 350000,
+        productId: "product-provisional-1",
+        quantityAvailable: 0,
+        storeId: "store-1",
+      },
+    });
+
+    const binding = await getHandler(listPendingCheckoutProductPageBinding)(
+      ctx as never,
+      {
+        productSkuId: "sku-provisional-1",
+        storeId: "store-1",
+      },
+    );
+
+    expect(binding).toMatchObject({
+      activeRowCount: 1,
+      row: {
+        _id: "pending-1",
+        importKey: "pending-checkout",
+        importedQuantity: 20,
+        lastPosTransactionId: "transaction-1",
+        lastRegisterSessionId: "register-1",
+        lastSoldAt: 20,
+        provisionalSoldQuantity: 20,
+        rowNumber: 1,
+        saleCount: 16,
+        updatedAt: 20,
+      },
+      state: "unique",
+    });
+    expect(binding.saleEvidenceFingerprint).toEqual(expect.any(String));
+    expect(binding.trustedSkuFingerprint).toEqual(expect.any(String));
+    assertConformsToExportedReturns(
+      listPendingCheckoutProductPageBinding,
+      binding,
+    );
+  });
+
+  it("returns linked checkout product-page binding target details", async () => {
+    const ctx = buildCtx({
+      pendingCheckoutItems: [
+        {
+          _id: "pending-1",
+          approvedProductId: "product-linked-1",
+          approvedProductSkuId: "sku-linked-1",
+          createdAt: 10,
+          createdFrom: "offline_sync",
+          currency: "ghs",
+          evidence: {
+            firstSeenAt: 10,
+            lastPosTransactionId: "transaction-1",
+            lastRegisterSessionId: "register-1",
+            lastSeenAt: 20,
+            observedLookupCodes: [],
+            observedPrices: [350000],
+            totalQuantitySold: 20,
+            transactionCount: 16,
+          },
+          name: "Missing item",
+          normalizedName: "missing item",
+          organizationId: "org-1",
+          provisionalPrice: 350000,
+          provisionalProductId: "product-provisional-1",
+          provisionalProductSkuId: "sku-provisional-1",
+          reviewPriority: "high",
+          status: "linked_to_catalog",
+          storeId: "store-1",
+          updatedAt: 20,
+        },
+      ],
+      products: [
+        {
+          _id: "product-provisional-1",
+          availability: "draft",
+          inventoryCount: 0,
+          isVisible: false,
+          name: "Missing item",
+          quantityAvailable: 0,
+          storeId: "store-1",
+        },
+        {
+          _id: "product-linked-1",
+          availability: "live",
+          inventoryCount: 5,
+          isVisible: true,
+          name: "Trusted item",
+          quantityAvailable: 5,
+          storeId: "store-1",
+        },
+      ],
+      productSkus: [
+        {
+          _id: "sku-provisional-1",
+          inventoryCount: 0,
+          isVisible: false,
+          price: 350000,
+          productId: "product-provisional-1",
+          quantityAvailable: 0,
+          sku: "PENDING-1",
+          storeId: "store-1",
+        },
+        {
+          _id: "sku-linked-1",
+          inventoryCount: 5,
+          isVisible: true,
+          price: 60000,
+          productId: "product-linked-1",
+          quantityAvailable: 4,
+          sku: "TRUSTED-1",
+          storeId: "store-1",
+        },
+      ],
+    });
+
+    const binding = await getHandler(listPendingCheckoutProductPageBinding)(
+      ctx as never,
+      {
+        productSkuId: "sku-provisional-1",
+        storeId: "store-1",
+      },
+    );
+
+    expect(binding).toMatchObject({
+      activeRowCount: 1,
+      row: {
+        _id: "pending-1",
+        linkedTarget: {
+          price: 60000,
+          productId: "product-linked-1",
+          productName: "Trusted item",
+          quantityAvailable: 4,
+          sku: "TRUSTED-1",
+          skuId: "sku-linked-1",
+        },
+        status: "linked_to_catalog",
+      },
+      state: "unique",
+    });
+    assertConformsToExportedReturns(
+      listPendingCheckoutProductPageBinding,
+      binding,
+    );
+  });
+
+  it("finalizes a POS pending checkout draft SKU as trusted inventory", async () => {
+    const pendingCheckoutItem = {
+      _id: "pending-1",
+      createdAt: 10,
+      createdFrom: "offline_sync",
+      currency: "ghs",
+      evidence: {
+        firstSeenAt: 10,
+        lastPosTransactionId: "transaction-1",
+        lastRegisterSessionId: "register-1",
+        lastSeenAt: 20,
+        observedLookupCodes: [],
+        observedPrices: [350000],
+        totalQuantitySold: 20,
+        transactionCount: 16,
+      },
+      name: "Missing item",
+      normalizedName: "missing item",
+      operationalWorkItemId: "work-item-1",
+      organizationId: "org-1",
+      provisionalPrice: 350000,
+      provisionalProductId: "product-provisional-1",
+      provisionalProductSkuId: "sku-provisional-1",
+      reviewPriority: "high",
+      status: "pending_review",
+      storeId: "store-1",
+      updatedAt: 20,
+    };
+    const product = {
+      _id: "product-provisional-1",
+      availability: "draft",
+      inventoryCount: 0,
+      isVisible: false,
+      quantityAvailable: 0,
+      storeId: "store-1",
+    };
+    const productSku = {
+      _id: "sku-provisional-1",
+      inventoryCount: 0,
+      isVisible: true,
+      price: 350000,
+      productId: "product-provisional-1",
+      quantityAvailable: 0,
+      storeId: "store-1",
+    };
+    const ctx = buildCtx({
+      pendingCheckoutItem,
+      pendingCheckoutItems: [pendingCheckoutItem],
+      product,
+      productSku,
+    });
+    const binding = await getHandler(listPendingCheckoutProductPageBinding)(
+      ctx as never,
+      {
+        productSkuId: "sku-provisional-1",
+        storeId: "store-1",
+      },
+    );
+
+    const result = await getHandler(
+      finalizePendingCheckoutTrustedInventoryFromProductPage,
+    )(ctx as never, {
+      conversionRequestId: "conversion-1",
+      productId: "product-provisional-1",
+      productSkuId: "sku-provisional-1",
+      provisionalSkuId: "pending-1",
+      reviewedInventoryCount: 20,
+      reviewedIsVisible: true,
+      reviewedNetPrice: 350000,
+      reviewedPrice: 350000,
+      reviewedQuantityAvailable: 20,
+      reviewedUnitCost: 0,
+      saleEvidenceFingerprint: binding.saleEvidenceFingerprint,
+      sourceSurface: "product_edit",
+      storeId: "store-1",
+      trustedSkuFingerprint: binding.trustedSkuFingerprint,
+    });
+
+    expect(result).toMatchObject({
+      data: {
+        finalTrustedQuantity: 20,
+        product: {
+          availability: "live",
+          inventoryCount: 20,
+          isVisible: true,
+          quantityAvailable: 20,
+        },
+        productId: "product-provisional-1",
+        productSkuId: "sku-provisional-1",
+        provisionalSkuId: "pending-1",
+        provisionalSoldQuantity: 20,
+        quantityAvailable: 20,
+      },
+      kind: "ok",
+    });
+    expect(ctx.db.patch).toHaveBeenCalledWith(
+      "productSku",
+      "sku-provisional-1",
+      {
+        inventoryCount: 20,
+        isVisible: true,
+        netPrice: 350000,
+        price: 350000,
+        quantityAvailable: 20,
+        unitCost: 0,
+      },
+    );
+    expect(ctx.db.patch).toHaveBeenCalledWith(
+      "product",
+      "product-provisional-1",
+      {
+        availability: "live",
+        inventoryCount: 20,
+        isVisible: true,
+        quantityAvailable: 20,
+      },
+    );
+    expect(ctx.db.patch).toHaveBeenCalledWith(
+      "posPendingCheckoutItem",
+      "pending-1",
+      expect.objectContaining({
+        approvedProductId: "product-provisional-1",
+        approvedProductSkuId: "sku-provisional-1",
+        status: "approved",
+      }),
+    );
+    expect(mocks.recordInventoryMovementWithCtx).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        movementType: "pending_checkout_trusted_finalization",
+        quantityDelta: 20,
+        sourceId: "pending-1",
+        sourceType: "pos_pending_checkout_item",
+      }),
+    );
+    expect(mocks.updateOperationalWorkItemStatusWithCtx).toHaveBeenCalledWith(
+      ctx,
+      {
+        approvalState: "approved",
+        status: "completed",
+        workItemId: "work-item-1",
+      },
+    );
+    assertConformsToExportedReturns(
+      finalizePendingCheckoutTrustedInventoryFromProductPage,
+      result,
+    );
   });
 
   it("does not resolve pending checkout review items when manager authorization fails", async () => {
@@ -629,7 +1104,9 @@ describe("POS public catalog queries", () => {
         status: "flagged",
         storeId: "store-1",
       }),
-    ).rejects.toThrow("You cannot resolve pending checkout items for this store.");
+    ).rejects.toThrow(
+      "You cannot resolve pending checkout items for this store.",
+    );
 
     expect(ctx.db.patch).not.toHaveBeenCalled();
     expect(ctx.db.query).not.toHaveBeenCalled();
@@ -663,7 +1140,9 @@ describe("POS public catalog queries", () => {
         status: "approved",
         storeId: "store-1",
       }),
-    ).rejects.toThrow("Choose a valid catalog product and SKU from this store.");
+    ).rejects.toThrow(
+      "Choose a valid catalog product and SKU from this store.",
+    );
   });
 
   it("rejects provisional hidden anchors as pending checkout review links", async () => {
@@ -707,7 +1186,67 @@ describe("POS public catalog queries", () => {
         status: "linked_to_catalog",
         storeId: "store-1",
       }),
-    ).rejects.toThrow("Choose a valid catalog product and SKU from this store.");
+    ).rejects.toThrow(
+      "Choose a valid catalog product and SKU from this store.",
+    );
+  });
+
+  it("allows pending checkout review links to POS quick add trusted SKUs", async () => {
+    const ctx = buildCtx({
+      category: {
+        _id: "category-pos-quick-add",
+        slug: "pos-quick-add",
+        storeId: "store-1",
+      },
+      pendingCheckoutItem: {
+        _id: "pending-1",
+        evidence: {
+          observedLookupCodes: [],
+          observedPrices: [12000],
+          totalQuantitySold: 1,
+          transactionCount: 1,
+        },
+        name: "Missing item",
+        provisionalPrice: 12000,
+        provisionalProductId: "product-provisional-1",
+        provisionalProductSkuId: "sku-provisional-1",
+        reviewPriority: "normal",
+        status: "pending_review",
+        storeId: "store-1",
+        updatedAt: 1,
+      },
+      product: {
+        _id: "product-quick-add-1",
+        availability: "live",
+        categoryId: "category-pos-quick-add",
+        isVisible: false,
+        storeId: "store-1",
+      },
+      productSku: {
+        _id: "sku-quick-add-1",
+        isVisible: false,
+        productId: "product-quick-add-1",
+        storeId: "store-1",
+      },
+    });
+
+    await getHandler(resolvePendingCheckoutItemReview)(ctx as never, {
+      approvedProductId: "product-quick-add-1",
+      approvedProductSkuId: "sku-quick-add-1",
+      pendingCheckoutItemId: "pending-1",
+      status: "linked_to_catalog",
+      storeId: "store-1",
+    });
+
+    expect(ctx.db.patch).toHaveBeenCalledWith(
+      "posPendingCheckoutItem",
+      "pending-1",
+      expect.objectContaining({
+        approvedProductId: "product-quick-add-1",
+        approvedProductSkuId: "sku-quick-add-1",
+        status: "linked_to_catalog",
+      }),
+    );
   });
 
   it("attaches the observed lookup code to a linked trusted SKU when barcode is empty", async () => {
@@ -821,7 +1360,9 @@ describe("POS public catalog queries", () => {
         status: "linked_to_catalog",
         storeId: "store-1",
       }),
-    ).rejects.toThrow("This lookup code already belongs to another catalog SKU.");
+    ).rejects.toThrow(
+      "This lookup code already belongs to another catalog SKU.",
+    );
 
     expect(ctx.db.patch).not.toHaveBeenCalledWith(
       "productSku",
@@ -854,8 +1395,12 @@ describe("POS public catalog queries", () => {
 
 function buildCtx(seed?: {
   pendingCheckoutItem?: Record<string, unknown>;
+  pendingCheckoutItems?: Array<Record<string, unknown>>;
+  category?: Record<string, unknown>;
   product?: Record<string, unknown>;
+  products?: Array<Record<string, unknown>>;
   productSku?: Record<string, unknown>;
+  productSkus?: Array<Record<string, unknown>>;
   registerSession?: Record<string, unknown>;
   staffProfile?: Record<string, unknown>;
   terminal?: Record<string, unknown>;
@@ -877,6 +1422,9 @@ function buildCtx(seed?: {
     storeId: "store-1",
     terminalId: "terminal-1",
   };
+  type QueryIndexBuilder = {
+    eq: (field: string, value: unknown) => QueryIndexBuilder;
+  };
 
   return {
     db: {
@@ -893,10 +1441,7 @@ function buildCtx(seed?: {
         if (tableName === "posTerminal" && terminal?._id === id) {
           return terminal;
         }
-        if (
-          tableName === "registerSession" &&
-          registerSession?._id === id
-        ) {
+        if (tableName === "registerSession" && registerSession?._id === id) {
           return registerSession;
         }
         if (
@@ -905,22 +1450,74 @@ function buildCtx(seed?: {
         ) {
           return seed.pendingCheckoutItem;
         }
+        const products = [
+          ...(seed?.product ? [seed.product] : []),
+          ...(seed?.products ?? []),
+        ];
+        const productSkus = [
+          ...(seed?.productSku ? [seed.productSku] : []),
+          ...(seed?.productSkus ?? []),
+        ];
+        if (
+          tableName === "product" &&
+          products.some((product) => product._id === id)
+        ) {
+          return products.find((product) => product._id === id);
+        }
         if (tableName === "product" && seed?.product?._id === id) {
           return seed.product;
         }
-        if (tableName === "productSku" && seed?.productSku?._id === id) {
-          return seed.productSku;
+        if (
+          tableName === "productSku" &&
+          productSkus.some((sku) => sku._id === id)
+        ) {
+          return productSkus.find((sku) => sku._id === id);
+        }
+        if (tableName === "category" && seed?.category?._id === id) {
+          return seed.category;
         }
 
         return null;
       }),
-      query: vi.fn(() => ({
-        withIndex: vi.fn(() => ({
-          order: vi.fn(() => ({
-            take: vi.fn(async () => []),
-          })),
-        })),
-      })),
+      query: vi.fn((tableName: string) => {
+        const filters: Record<string, unknown> = {};
+
+        return {
+          withIndex: vi.fn(
+            (
+              _indexName: string,
+              applyIndex: (builder: QueryIndexBuilder) => unknown,
+            ) => {
+              const builder: QueryIndexBuilder = {
+                eq(field: string, value: unknown) {
+                  filters[field] = value;
+                  return builder;
+                },
+              };
+              applyIndex(builder);
+
+              const take = vi.fn(async (limit: number) => {
+                if (tableName !== "posPendingCheckoutItem") return [];
+
+                return (seed?.pendingCheckoutItems ?? [])
+                  .filter((item) =>
+                    Object.entries(filters).every(
+                      ([field, value]) => item[field] === value,
+                    ),
+                  )
+                  .slice(0, limit);
+              });
+
+              return {
+                take,
+                order: vi.fn(() => ({
+                  take,
+                })),
+              };
+            },
+          ),
+        };
+      }),
       patch: vi.fn(),
     },
   };

@@ -115,15 +115,28 @@ vi.mock("recharts", () => ({
   }: {
     children?: React.ReactNode;
     className?: string;
-    data?: Array<{ displayDate?: string; displayLabel?: string }>;
+    data?: Array<{
+      displayDate?: string;
+      displayLabel?: string;
+      hasKnownItemCount?: boolean;
+      totalItemsSold?: number;
+    }>;
     margin?: { bottom?: number; left?: number; right?: number; top?: number };
   }) => (
     <svg
       className={className}
       data-display-dates={data.map((day) => day.displayDate).join("|")}
       data-display-labels={data.map((day) => day.displayLabel).join("|")}
+      data-known-item-counts={data
+        .map((day) =>
+          day.hasKnownItemCount === false ? "unknown" : "known",
+        )
+        .join("|")}
       data-margin-right={margin?.right ?? ""}
       data-testid="store-pulse-chart"
+      data-total-items-sold={data
+        .map((day) => String(day.totalItemsSold ?? 0))
+        .join("|")}
     >
       {children}
     </svg>
@@ -2615,6 +2628,11 @@ describe("DailyOperationsView", () => {
       "data-display-labels",
       "Sun, May 3|Mon, May 4|Tue, May 5|Wed, May 6|Thu, May 7|Fri, May 8",
     );
+    expect(chart).toHaveAttribute("data-total-items-sold", "0|0|0|0|0|0");
+    expect(chart).toHaveAttribute(
+      "data-known-item-counts",
+      "unknown|unknown|unknown|unknown|unknown|unknown",
+    );
 
     shouldReturnPulseDetail = true;
     view.rerender(<DailyOperationsView />);
@@ -2626,6 +2644,14 @@ describe("DailyOperationsView", () => {
     expect(screen.getByTestId("store-pulse-chart")).toHaveAttribute(
       "data-display-labels",
       "Sun, May 3|Mon, May 4|Tue, May 5|Wed, May 6|Thu, May 7|Fri, May 8",
+    );
+    expect(screen.getByTestId("store-pulse-chart")).toHaveAttribute(
+      "data-total-items-sold",
+      "0|0|0|0|0|0",
+    );
+    expect(screen.getByTestId("store-pulse-chart")).toHaveAttribute(
+      "data-known-item-counts",
+      "unknown|unknown|unknown|unknown|unknown|unknown",
     );
     expect(screen.getByTestId("store-pulse-area")).toHaveAttribute(
       "data-replay-key",

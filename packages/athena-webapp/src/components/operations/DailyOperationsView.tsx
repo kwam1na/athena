@@ -1806,21 +1806,10 @@ function buildWeekToDateStorePulseSummary(
   const weekToDateTrend = snapshot.weekMetrics
     .filter((metric) => metric.operatingDate <= snapshot.operatingDate)
     .map((metric): StorePulseTrendDay => {
-      const knownTrendDay = knownTrendByDate.get(metric.operatingDate);
-
-      return {
-        averageTransaction:
-          metric.transactionCount > 0
-            ? metric.salesTotal / metric.transactionCount
-            : 0,
-        date: metric.operatingDate,
-        hasKnownItemCount: knownTrendDay ? true : false,
-        label:
-          knownTrendDay?.label ?? formatOperatingDate(metric.operatingDate),
-        totalItemsSold: knownTrendDay?.totalItemsSold ?? 0,
-        totalSales: metric.salesTotal,
-        transactionCount: metric.transactionCount,
-      };
+      return buildStorePulseTrendDayFromMetric(
+        metric,
+        knownTrendByDate.get(metric.operatingDate),
+      );
     });
 
   if (weekToDateTrend.length === 0) return summary;
@@ -1847,7 +1836,6 @@ function buildCachedWeekStorePulseSummary(
 ): StorePulseSummary | null | undefined {
   const summary = snapshot.storePulse;
   const operatorSnapshot = summary?.operatorSnapshot;
-
   if (!summary || !operatorSnapshot) {
     return buildWeekMetricStorePulseSummary(snapshot);
   }
@@ -1856,20 +1844,10 @@ function buildCachedWeekStorePulseSummary(
     operatorSnapshot.trend.map((day) => [day.date, day]),
   );
   const weekTrend = snapshot.weekMetrics.map((metric): StorePulseTrendDay => {
-    const knownTrendDay = knownTrendByDate.get(metric.operatingDate);
-
-    return {
-      averageTransaction:
-        metric.transactionCount > 0
-          ? metric.salesTotal / metric.transactionCount
-          : 0,
-      date: metric.operatingDate,
-      hasKnownItemCount: knownTrendDay ? true : false,
-      label: knownTrendDay?.label ?? formatOperatingDate(metric.operatingDate),
-      totalItemsSold: knownTrendDay?.totalItemsSold ?? 0,
-      totalSales: metric.salesTotal,
-      transactionCount: metric.transactionCount,
-    };
+    return buildStorePulseTrendDayFromMetric(
+      metric,
+      knownTrendByDate.get(metric.operatingDate),
+    );
   });
 
   if (weekTrend.length === 0) return summary;
@@ -1892,19 +1870,7 @@ function buildWeekMetricStorePulseSummary(
   snapshot: DailyOperationsSnapshot,
 ): StorePulseSummary | null {
   const trend = snapshot.weekMetrics.map((metric): StorePulseTrendDay => {
-    const averageTransaction =
-      metric.transactionCount > 0
-        ? metric.salesTotal / metric.transactionCount
-        : 0;
-
-    return {
-      averageTransaction,
-      date: metric.operatingDate,
-      label: formatOperatingDate(metric.operatingDate),
-      totalItemsSold: 0,
-      totalSales: metric.salesTotal,
-      transactionCount: metric.transactionCount,
-    };
+    return buildStorePulseTrendDayFromMetric(metric);
   });
   const selectedMetric =
     snapshot.weekMetrics.find(
@@ -1950,6 +1916,24 @@ function buildWeekMetricStorePulseSummary(
   };
 }
 
+function buildStorePulseTrendDayFromMetric(
+  metric: DailyOperationsSnapshot["weekMetrics"][number],
+  knownTrendDay?: StorePulseTrendDay,
+): StorePulseTrendDay {
+  return {
+    averageTransaction:
+      metric.transactionCount > 0
+        ? metric.salesTotal / metric.transactionCount
+        : 0,
+    date: metric.operatingDate,
+    hasKnownItemCount: false,
+    label: knownTrendDay?.label ?? formatOperatingDate(metric.operatingDate),
+    totalItemsSold: 0,
+    totalSales: metric.salesTotal,
+    transactionCount: metric.transactionCount,
+  };
+}
+
 function buildCachedStorePulseForOperatingDate({
   operatingDate,
   selectedDayStorePulse,
@@ -1972,7 +1956,10 @@ function buildCachedStorePulseForOperatingDate({
           operatorSnapshot: {
             ...selectedDayOperatorSnapshot,
             historyDays: weekOperatorSnapshot.historyDays,
-            trend: weekOperatorSnapshot.trend,
+            trend: mergeSelectedStorePulseTrend(
+              weekOperatorSnapshot.trend,
+              selectedDayOperatorSnapshot.trend,
+            ),
             usableHistoryDays: weekOperatorSnapshot.usableHistoryDays,
           },
         }
@@ -1982,6 +1969,26 @@ function buildCachedStorePulseForOperatingDate({
     combinedSummary,
     operatingDate,
   );
+}
+
+function mergeSelectedStorePulseTrend(
+  weekTrend: StorePulseTrendDay[],
+  selectedDayTrend: StorePulseTrendDay[],
+) {
+  const selectedTrendByDate = new Map(
+    selectedDayTrend.map((day) => [day.date, day]),
+  );
+
+  return weekTrend.map((weekDay) => {
+    const selectedDay = selectedTrendByDate.get(weekDay.date);
+    if (!selectedDay) return weekDay;
+
+    return {
+      ...weekDay,
+      hasKnownItemCount: false,
+      totalItemsSold: 0,
+    };
+  });
 }
 
 function selectStorePulseTrendThroughOperatingDate(
