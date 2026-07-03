@@ -80,6 +80,8 @@ import {
   barcodeLookup,
   createOrReusePendingCheckoutItemForSale,
   finalizePendingCheckoutTrustedInventoryFromProductPage,
+  listLinkedPendingCheckoutAliasesBySku,
+  listLinkedPendingCheckoutProvisionalBindingsBySku,
   listPendingCheckoutItemsForReview,
   listPendingCheckoutProductPageBinding,
   listRegisterCatalogSnapshot,
@@ -215,6 +217,41 @@ describe("POS public catalog queries", () => {
     assertConformsToExportedReturns(listPendingCheckoutItemsForReview, [
       pendingReviewItem,
     ]);
+    assertConformsToExportedReturns(listLinkedPendingCheckoutAliasesBySku, [
+      {
+        aliases: [
+          {
+            lookupCode: "123456789012",
+            name: "Missing item",
+            pendingCheckoutItemId: "pending-1",
+            provisionalProductId: "product-1",
+            provisionalProductSkuId: "sku-1",
+            provisionalSku: "PENDING-1",
+            quantitySold: 1,
+          },
+        ],
+        count: 1,
+        productSkuId: "sku-1",
+      },
+    ]);
+    assertConformsToExportedReturns(
+      listLinkedPendingCheckoutProvisionalBindingsBySku,
+      [
+        {
+          linkedTarget: {
+            isArchived: false,
+            price: 12000,
+            productId: "product-2",
+            productName: "Trusted item",
+            quantityAvailable: 3,
+            sku: "TRUSTED-1",
+            skuId: "sku-2",
+          },
+          pendingCheckoutItemId: "pending-1",
+          productSkuId: "sku-1",
+        },
+      ],
+    );
     assertConformsToExportedReturns(
       resolvePendingCheckoutItemReview,
       pendingReviewItem,
@@ -363,6 +400,178 @@ describe("POS public catalog queries", () => {
     expect(readRegisterCatalog.listRegisterCatalog).toHaveBeenCalledWith(ctx, {
       storeId: "store-1",
     });
+  });
+
+  it("lists linked pending checkout aliases for trusted SKU rows", async () => {
+    const ctx = buildCtx({
+      products: [
+        { _id: "product-pending-1", availability: "draft", storeId: "store-1" },
+        { _id: "product-pending-2", availability: "draft", storeId: "store-1" },
+        {
+          _id: "product-pending-other",
+          availability: "draft",
+          storeId: "store-1",
+        },
+        {
+          _id: "product-pending-archived",
+          availability: "archived",
+          storeId: "store-1",
+        },
+      ],
+      productSkus: [
+        {
+          _id: "sku-pending-1",
+          productId: "product-pending-1",
+          sku: "PENDING-1",
+          storeId: "store-1",
+        },
+        {
+          _id: "sku-pending-2",
+          productId: "product-pending-2",
+          sku: "PENDING-2",
+          storeId: "store-1",
+        },
+        {
+          _id: "sku-pending-other",
+          productId: "product-pending-other",
+          sku: "PENDING-OTHER",
+          storeId: "store-1",
+        },
+        {
+          _id: "sku-pending-archived",
+          productId: "product-pending-archived",
+          sku: "PENDING-ARCHIVED",
+          storeId: "store-1",
+        },
+      ],
+      pendingCheckoutItems: [
+        {
+          _id: "pending-linked-1",
+          approvedProductSkuId: "sku-live-1",
+          evidence: {
+            totalQuantitySold: 3,
+          },
+          lookupCode: "ALIAS-1",
+          name: "Alias one",
+          provisionalProductId: "product-pending-1",
+          provisionalProductSkuId: "sku-pending-1",
+          status: "linked_to_catalog",
+          storeId: "store-1",
+        },
+        {
+          _id: "pending-linked-2",
+          approvedProductSkuId: "sku-live-1",
+          evidence: {
+            totalQuantitySold: 1,
+          },
+          name: "Alias two",
+          provisionalProductId: "product-pending-2",
+          provisionalProductSkuId: "sku-pending-2",
+          status: "linked_to_catalog",
+          storeId: "store-1",
+        },
+        {
+          _id: "pending-other",
+          approvedProductSkuId: "sku-live-2",
+          evidence: {
+            totalQuantitySold: 5,
+          },
+          lookupCode: "OTHER",
+          name: "Other alias",
+          provisionalProductId: "product-pending-other",
+          provisionalProductSkuId: "sku-pending-other",
+          status: "linked_to_catalog",
+          storeId: "store-1",
+        },
+        {
+          _id: "pending-archived",
+          approvedProductSkuId: "sku-live-1",
+          evidence: {
+            totalQuantitySold: 2,
+          },
+          lookupCode: "ARCHIVED",
+          name: "Archived alias",
+          provisionalProductId: "product-pending-archived",
+          provisionalProductSkuId: "sku-pending-archived",
+          status: "linked_to_catalog",
+          storeId: "store-1",
+        },
+        {
+          _id: "pending-review",
+          approvedProductSkuId: "sku-live-1",
+          evidence: {
+            totalQuantitySold: 7,
+          },
+          lookupCode: "REVIEW",
+          name: "Unlinked review",
+          status: "pending_review",
+          storeId: "store-1",
+        },
+      ],
+    });
+
+    const summaries = await getHandler(listLinkedPendingCheckoutAliasesBySku)(
+      ctx as never,
+      {
+        productSkuIds: [
+          "sku-live-1" as Id<"productSku">,
+          "sku-live-2" as Id<"productSku">,
+          "sku-empty" as Id<"productSku">,
+        ],
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(summaries).toEqual([
+      {
+        aliases: [
+          {
+            lookupCode: "ALIAS-1",
+            name: "Alias one",
+            pendingCheckoutItemId: "pending-linked-1",
+            provisionalProductId: "product-pending-1",
+            provisionalProductSkuId: "sku-pending-1",
+            provisionalSku: "PENDING-1",
+            quantitySold: 3,
+          },
+          {
+            name: "Alias two",
+            pendingCheckoutItemId: "pending-linked-2",
+            provisionalProductId: "product-pending-2",
+            provisionalProductSkuId: "sku-pending-2",
+            provisionalSku: "PENDING-2",
+            quantitySold: 1,
+          },
+        ],
+        count: 2,
+        productSkuId: "sku-live-1",
+      },
+      {
+        aliases: [
+          {
+            lookupCode: "OTHER",
+            name: "Other alias",
+            pendingCheckoutItemId: "pending-other",
+            provisionalProductId: "product-pending-other",
+            provisionalProductSkuId: "sku-pending-other",
+            provisionalSku: "PENDING-OTHER",
+            quantitySold: 5,
+          },
+        ],
+        count: 1,
+        productSkuId: "sku-live-2",
+      },
+    ]);
+    expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
+      ctx,
+      {
+        allowedRoles: ["full_admin"],
+        failureMessage:
+          "You cannot review pending checkout items for this store.",
+        organizationId: "org-1",
+        userId: "athena-user-1",
+      },
+    );
   });
 
   it("does not return the register catalog snapshot when the caller is unauthenticated", async () => {
@@ -856,7 +1065,7 @@ describe("POS public catalog queries", () => {
       products: [
         {
           _id: "product-provisional-1",
-          availability: "draft",
+          availability: "live",
           inventoryCount: 0,
           isVisible: false,
           name: "Missing item",
@@ -910,6 +1119,7 @@ describe("POS public catalog queries", () => {
       row: {
         _id: "pending-1",
         linkedTarget: {
+          isArchived: false,
           price: 60000,
           productId: "product-linked-1",
           productName: "Trusted item",
@@ -924,6 +1134,206 @@ describe("POS public catalog queries", () => {
     assertConformsToExportedReturns(
       listPendingCheckoutProductPageBinding,
       binding,
+    );
+  });
+
+  it("lists linked pending checkout provisional bindings for locked rows", async () => {
+    const ctx = buildCtx({
+      pendingCheckoutItems: [
+        {
+          _id: "pending-1",
+          approvedProductId: "product-linked-1",
+          approvedProductSkuId: "sku-linked-1",
+          createdAt: 10,
+          createdFrom: "offline_sync",
+          currency: "ghs",
+          evidence: {
+            firstSeenAt: 10,
+            lastSeenAt: 20,
+            observedLookupCodes: [],
+            observedPrices: [350000],
+            totalQuantitySold: 20,
+            transactionCount: 16,
+          },
+          name: "Missing item",
+          normalizedName: "missing item",
+          organizationId: "org-1",
+          provisionalPrice: 350000,
+          provisionalProductId: "product-provisional-1",
+          provisionalProductSkuId: "sku-provisional-1",
+          reviewPriority: "high",
+          status: "linked_to_catalog",
+          storeId: "store-1",
+          updatedAt: 20,
+        },
+      ],
+      products: [
+        {
+          _id: "product-provisional-1",
+          availability: "live",
+          inventoryCount: 0,
+          isVisible: false,
+          name: "Missing item",
+          quantityAvailable: 0,
+          storeId: "store-1",
+        },
+        {
+          _id: "product-linked-1",
+          availability: "live",
+          inventoryCount: 5,
+          isVisible: true,
+          name: "Trusted item",
+          quantityAvailable: 5,
+          storeId: "store-1",
+        },
+      ],
+      productSkus: [
+        {
+          _id: "sku-provisional-1",
+          inventoryCount: 0,
+          isVisible: false,
+          price: 350000,
+          productId: "product-provisional-1",
+          quantityAvailable: 0,
+          sku: "PENDING-1",
+          storeId: "store-1",
+        },
+        {
+          _id: "sku-linked-1",
+          inventoryCount: 5,
+          isVisible: true,
+          price: 60000,
+          productId: "product-linked-1",
+          quantityAvailable: 4,
+          sku: "TRUSTED-1",
+          storeId: "store-1",
+        },
+      ],
+    });
+
+    const bindings = await getHandler(
+      listLinkedPendingCheckoutProvisionalBindingsBySku,
+    )(ctx as never, {
+      productSkuIds: ["sku-provisional-1", "sku-other"],
+      storeId: "store-1",
+    });
+
+    expect(bindings).toEqual([
+      {
+        linkedTarget: {
+          isArchived: false,
+          price: 60000,
+          productId: "product-linked-1",
+          productName: "Trusted item",
+          quantityAvailable: 4,
+          sku: "TRUSTED-1",
+          skuId: "sku-linked-1",
+        },
+        pendingCheckoutItemId: "pending-1",
+        productSkuId: "sku-provisional-1",
+      },
+    ]);
+  });
+
+  it("marks linked pending checkout provisional bindings when the trusted target is archived", async () => {
+    const ctx = buildCtx({
+      pendingCheckoutItems: [
+        {
+          _id: "pending-1",
+          approvedProductId: "product-linked-1",
+          approvedProductSkuId: "sku-linked-1",
+          createdAt: 10,
+          createdFrom: "offline_sync",
+          currency: "ghs",
+          evidence: {
+            firstSeenAt: 10,
+            lastSeenAt: 20,
+            observedLookupCodes: [],
+            observedPrices: [350000],
+            totalQuantitySold: 20,
+            transactionCount: 16,
+          },
+          name: "Missing item",
+          normalizedName: "missing item",
+          organizationId: "org-1",
+          provisionalPrice: 350000,
+          provisionalProductId: "product-provisional-1",
+          provisionalProductSkuId: "sku-provisional-1",
+          reviewPriority: "high",
+          status: "linked_to_catalog",
+          storeId: "store-1",
+          updatedAt: 20,
+        },
+      ],
+      products: [
+        {
+          _id: "product-provisional-1",
+          availability: "live",
+          inventoryCount: 0,
+          isVisible: true,
+          name: "Missing item",
+          quantityAvailable: 0,
+          storeId: "store-1",
+        },
+        {
+          _id: "product-linked-1",
+          availability: "archived",
+          inventoryCount: 5,
+          isVisible: true,
+          name: "Trusted item",
+          quantityAvailable: 5,
+          storeId: "store-1",
+        },
+      ],
+      productSkus: [
+        {
+          _id: "sku-provisional-1",
+          inventoryCount: 0,
+          isVisible: true,
+          price: 350000,
+          productId: "product-provisional-1",
+          quantityAvailable: 0,
+          sku: "PENDING-1",
+          storeId: "store-1",
+        },
+        {
+          _id: "sku-linked-1",
+          inventoryCount: 5,
+          isVisible: true,
+          price: 60000,
+          productId: "product-linked-1",
+          quantityAvailable: 4,
+          sku: "TRUSTED-1",
+          storeId: "store-1",
+        },
+      ],
+    });
+
+    const bindings = await getHandler(
+      listLinkedPendingCheckoutProvisionalBindingsBySku,
+    )(ctx as never, {
+      productSkuIds: ["sku-provisional-1"],
+      storeId: "store-1",
+    });
+
+    expect(bindings).toEqual([
+      {
+        linkedTarget: {
+          isArchived: true,
+          price: 60000,
+          productId: "product-linked-1",
+          productName: "Trusted item",
+          quantityAvailable: 4,
+          sku: "TRUSTED-1",
+          skuId: "sku-linked-1",
+        },
+        pendingCheckoutItemId: "pending-1",
+        productSkuId: "sku-provisional-1",
+      },
+    ]);
+    assertConformsToExportedReturns(
+      listLinkedPendingCheckoutProvisionalBindingsBySku,
+      bindings,
     );
   });
 
@@ -1225,6 +1635,7 @@ describe("POS public catalog queries", () => {
       productSku: {
         _id: "sku-quick-add-1",
         isVisible: false,
+        price: 12000,
         productId: "product-quick-add-1",
         storeId: "store-1",
       },
@@ -1247,6 +1658,55 @@ describe("POS public catalog queries", () => {
         status: "linked_to_catalog",
       }),
     );
+  });
+
+  it("rejects pending checkout review links when the trusted SKU price differs", async () => {
+    const ctx = buildCtx({
+      pendingCheckoutItem: {
+        _id: "pending-1",
+        evidence: {
+          observedLookupCodes: [],
+          observedPrices: [42000],
+          totalQuantitySold: 1,
+          transactionCount: 1,
+        },
+        name: "Missing item",
+        provisionalPrice: 42000,
+        provisionalProductId: "product-provisional-1",
+        provisionalProductSkuId: "sku-provisional-1",
+        reviewPriority: "normal",
+        status: "pending_review",
+        storeId: "store-1",
+        updatedAt: 1,
+      },
+      product: {
+        _id: "product-live-1",
+        availability: "live",
+        isVisible: true,
+        storeId: "store-1",
+      },
+      productSku: {
+        _id: "sku-live-1",
+        isVisible: true,
+        price: 40000,
+        productId: "product-live-1",
+        storeId: "store-1",
+      },
+    });
+
+    await expect(
+      getHandler(resolvePendingCheckoutItemReview)(ctx as never, {
+        approvedProductId: "product-live-1",
+        approvedProductSkuId: "sku-live-1",
+        pendingCheckoutItemId: "pending-1",
+        status: "linked_to_catalog",
+        storeId: "store-1",
+      }),
+    ).rejects.toThrow(
+      "Link to a SKU with the same price as the pending checkout item.",
+    );
+
+    expect(ctx.db.patch).not.toHaveBeenCalled();
   });
 
   it("attaches the observed lookup code to a linked trusted SKU when barcode is empty", async () => {
@@ -1277,6 +1737,7 @@ describe("POS public catalog queries", () => {
         _id: "sku-live-1",
         barcode: "",
         isVisible: true,
+        price: 12000,
         productId: "product-live-1",
         storeId: "store-1",
       },
@@ -1341,6 +1802,7 @@ describe("POS public catalog queries", () => {
         _id: "sku-live-1",
         barcode: "TRUSTED-BARCODE",
         isVisible: true,
+        price: 12000,
         productId: "product-live-1",
         storeId: "store-1",
       },
@@ -1419,6 +1881,7 @@ describe("POS public catalog queries", () => {
         _id: "sku-live-1",
         barcode: "TRUSTED-BARCODE",
         isVisible: true,
+        price: 12000,
         productId: "product-live-1",
         storeId: "store-1",
       },
@@ -1485,6 +1948,7 @@ describe("POS public catalog queries", () => {
         _id: "sku-live-1",
         barcode: "TRUSTED-BARCODE",
         isVisible: true,
+        price: 12000,
         productId: "product-live-1",
         storeId: "store-1",
       },
@@ -1612,6 +2076,7 @@ describe("POS public catalog queries", () => {
         _id: "sku-live-2",
         barcode: "",
         isVisible: true,
+        price: 12000,
         productId: "product-live-2",
         storeId: "store-1",
       },
@@ -1666,6 +2131,7 @@ describe("POS public catalog queries", () => {
         _id: "sku-live-1",
         barcode: "",
         isVisible: true,
+        price: 12000,
         productId: "product-live-1",
         storeId: "store-1",
       },
@@ -1837,8 +2303,7 @@ function buildCtx(seed?: {
                   ),
                 );
               const take = vi.fn(async (limit: number) => {
-                return matchingRows()
-                  .slice(0, limit);
+                return matchingRows().slice(0, limit);
               });
 
               return {

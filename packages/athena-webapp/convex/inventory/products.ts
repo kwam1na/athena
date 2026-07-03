@@ -126,7 +126,12 @@ export const getAll = query({
     subcategory: v.optional(v.array(v.string())),
     isVisible: v.optional(v.boolean()),
     availability: v.optional(
-      v.union(v.literal("draft"), v.literal("live"), v.literal("archived")),
+      v.union(
+        v.literal("draft"),
+        v.literal("live"),
+        v.literal("archived"),
+        v.literal("unarchived"),
+      ),
     ),
     excludeStorefrontHidden: v.optional(v.boolean()),
     filters: v.optional(
@@ -219,12 +224,18 @@ export const getAll = query({
 
     const requestedAvailability = args.availability;
     const includeHiddenSkus =
-      args.isVisible === false || requestedAvailability === "archived";
+      args.isVisible === false ||
+      requestedAvailability === "archived" ||
+      requestedAvailability === "unarchived";
 
     // Filter by category/subcategory in memory
     const products = allProducts.filter((product) => {
       if (requestedAvailability) {
-        if (product.availability !== requestedAvailability) {
+        if (requestedAvailability === "unarchived") {
+          if (product.availability === "archived") {
+            return false;
+          }
+        } else if (product.availability !== requestedAvailability) {
           return false;
         }
       } else {

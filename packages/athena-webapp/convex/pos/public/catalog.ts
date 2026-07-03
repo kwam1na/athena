@@ -72,6 +72,7 @@ const catalogResultValidator = v.object({
 
 const registerCatalogRowValidator = v.object({
   id: v.union(v.id("productSku"), v.id("inventoryImportProvisionalSku")),
+  catalogRowKey: v.optional(v.string()),
   productSkuId: v.id("productSku"),
   skuId: v.id("productSku"),
   productId: v.id("product"),
@@ -80,10 +81,22 @@ const registerCatalogRowValidator = v.object({
   ),
   pendingCheckoutItemId: v.optional(v.id("posPendingCheckoutItem")),
   pendingCheckoutAliasState: v.optional(v.literal("linked_to_catalog")),
+  pendingCheckoutAliasLookupCode: v.optional(v.string()),
+  pendingCheckoutAliasName: v.optional(v.string()),
+  pendingCheckoutAliasPrice: v.optional(v.number()),
+  pendingCheckoutAliasTrustedName: v.optional(v.string()),
+  pendingCheckoutAliasTrustedSku: v.optional(v.string()),
+  pendingCheckoutAliasTrustedCategory: v.optional(v.string()),
+  pendingCheckoutAliasTrustedDescription: v.optional(v.string()),
   linkedPendingCheckoutItemIds: v.optional(
     v.array(v.id("posPendingCheckoutItem")),
   ),
   linkedPendingCheckoutLocalEventIds: v.optional(v.array(v.string())),
+  suppressedPendingCheckoutItemIds: v.optional(
+    v.array(v.id("posPendingCheckoutItem")),
+  ),
+  suppressedPendingCheckoutLocalEventIds: v.optional(v.array(v.string())),
+  suppressFromRegisterSearch: v.optional(v.literal(true)),
   name: v.string(),
   sku: v.string(),
   barcode: v.string(),
@@ -163,6 +176,71 @@ const pendingCheckoutReviewItemValidator = v.object({
   updatedAt: v.number(),
   createdFrom: v.union(v.literal("online"), v.literal("offline_sync")),
 });
+
+const linkedPendingCheckoutAliasSummaryValidator = v.object({
+  aliases: v.array(
+    v.object({
+      lookupCode: v.optional(v.string()),
+      name: v.string(),
+      pendingCheckoutItemId: v.id("posPendingCheckoutItem"),
+      provisionalProductId: v.optional(v.id("product")),
+      provisionalSku: v.optional(v.string()),
+      provisionalProductSkuId: v.optional(v.id("productSku")),
+      quantitySold: v.number(),
+    }),
+  ),
+  count: v.number(),
+  productSkuId: v.id("productSku"),
+});
+
+const linkedPendingCheckoutProvisionalBindingValidator = v.object({
+  linkedTarget: v.object({
+    isArchived: v.boolean(),
+    price: v.optional(v.number()),
+    productId: v.id("product"),
+    productName: v.string(),
+    quantityAvailable: v.optional(v.number()),
+    sku: v.optional(v.string()),
+    skuId: v.id("productSku"),
+  }),
+  pendingCheckoutItemId: v.id("posPendingCheckoutItem"),
+  productSkuId: v.id("productSku"),
+});
+
+async function isLinkedPendingCheckoutAliasVisible(
+  ctx: Pick<QueryCtx | MutationCtx, "db">,
+  args: {
+    item: Pick<
+      Doc<"posPendingCheckoutItem">,
+      "provisionalProductId" | "provisionalProductSkuId"
+    >;
+    storeId: Id<"store">;
+  },
+) {
+  let productId = args.item.provisionalProductId;
+
+  if (args.item.provisionalProductSkuId) {
+    const sku = await ctx.db.get(
+      "productSku",
+      args.item.provisionalProductSkuId,
+    );
+    if (!sku || sku.storeId !== args.storeId) {
+      return false;
+    }
+    productId = sku.productId;
+  }
+
+  if (!productId) {
+    return true;
+  }
+
+  const product = await ctx.db.get("product", productId);
+  return (
+    product !== null &&
+    product.storeId === args.storeId &&
+    product.availability !== "archived"
+  );
+}
 
 type PendingCheckoutReviewStatus =
   | "approved"
@@ -500,7 +578,8 @@ async function listPendingCheckoutProductPageBindingWithCtx(
   if (
     !product ||
     product.storeId !== args.storeId ||
-    product.availability !== "draft" ||
+    product.availability === "archived" ||
+    (row.status !== "linked_to_catalog" && product.availability !== "draft") ||
     productSku?._id !== args.productSkuId ||
     productSku.storeId !== args.storeId ||
     productSku.productId !== product._id
@@ -525,6 +604,7 @@ async function listPendingCheckoutProductPageBindingWithCtx(
       linkedSku.productId === linkedProduct._id
         ? {
             linkedTarget: {
+              isArchived: linkedProduct.availability === "archived",
               ...(typeof linkedSku.price === "number"
                 ? { price: linkedSku.price }
                 : {}),
@@ -743,6 +823,114 @@ export const listPendingCheckoutProductPageBinding = query({
   handler: async (ctx, args) => {
     await requirePendingCheckoutReviewAccess(ctx, args);
     return listPendingCheckoutProductPageBindingWithCtx(ctx, args);
+  },
+});
+
+export const listLinkedPendingCheckoutAliasesBySku = query({
+  args: {
+    productSkuIds: v.array(v.id("productSku")),
+    storeId: v.id("store"),
+  },
+  returns: v.array(linkedPendingCheckoutAliasSummaryValidator),
+  handler: async (ctx, args) => {
+    await requirePendingCheckoutReviewAccess(ctx, args);
+
+    const summaries = await Promise.all(
+      Array.from(new Set(args.productSkuIds)).map(async (productSkuId) => {
+        const aliases = await ctx.db
+          .query("posPendingCheckoutItem")
+          .withIndex("by_storeId_status_approvedProductSkuId", (q) =>
+            q
+              .eq("storeId", args.storeId)
+              .eq("status", "linked_to_catalog")
+              .eq("approvedProductSkuId", productSkuId),
+          )
+          .take(20);
+
+        const visibleAliases = [];
+        for (const alias of aliases) {
+          if (
+            await isLinkedPendingCheckoutAliasVisible(ctx, {
+              item: alias,
+              storeId: args.storeId,
+            })
+          ) {
+            visibleAliases.push(alias);
+          }
+        }
+
+        const aliasSummaries = await Promise.all(
+          visibleAliases.map(async (alias) => {
+            const provisionalSku = alias.provisionalProductSkuId
+              ? await ctx.db.get("productSku", alias.provisionalProductSkuId)
+              : null;
+
+            return {
+              ...(alias.lookupCode ? { lookupCode: alias.lookupCode } : {}),
+              name: alias.name,
+              pendingCheckoutItemId: alias._id,
+              ...(alias.provisionalProductId
+                ? { provisionalProductId: alias.provisionalProductId }
+                : {}),
+              ...(provisionalSku?.sku
+                ? { provisionalSku: provisionalSku.sku }
+                : {}),
+              ...(alias.provisionalProductSkuId
+                ? { provisionalProductSkuId: alias.provisionalProductSkuId }
+                : {}),
+              quantitySold: alias.evidence.totalQuantitySold,
+            };
+          }),
+        );
+
+        return {
+          aliases: aliasSummaries,
+          count: aliasSummaries.length,
+          productSkuId,
+        };
+      }),
+    );
+
+    return summaries.filter((summary) => summary.count > 0);
+  },
+});
+
+export const listLinkedPendingCheckoutProvisionalBindingsBySku = query({
+  args: {
+    productSkuIds: v.array(v.id("productSku")),
+    storeId: v.id("store"),
+  },
+  returns: v.array(linkedPendingCheckoutProvisionalBindingValidator),
+  handler: async (ctx, args) => {
+    await requirePendingCheckoutReviewAccess(ctx, args);
+
+    const bindings = await Promise.all(
+      Array.from(new Set(args.productSkuIds)).map(async (productSkuId) => {
+        const binding = await listPendingCheckoutProductPageBindingWithCtx(ctx, {
+          productSkuId,
+          storeId: args.storeId,
+        });
+
+        if (
+          binding.state !== "unique" ||
+          binding.row.status !== "linked_to_catalog" ||
+          !binding.row.linkedTarget
+        ) {
+          return null;
+        }
+
+        return {
+          linkedTarget: binding.row.linkedTarget,
+          pendingCheckoutItemId: binding.row._id,
+          productSkuId,
+        };
+      }),
+    );
+
+    return bindings.filter(
+      (binding): binding is NonNullable<(typeof bindings)[number]> =>
+        binding !== null,
+    );
   },
 });
 
@@ -1035,6 +1223,17 @@ export const resolvePendingCheckoutItemReview = mutation({
       ) {
         throw new Error(
           "Choose a valid catalog product and SKU from this store.",
+        );
+      }
+
+      if (
+        args.status === "linked_to_catalog" &&
+        (typeof item.provisionalPrice !== "number" ||
+          typeof approvedSku.price !== "number" ||
+          item.provisionalPrice !== approvedSku.price)
+      ) {
+        throw new Error(
+          "Link to a SKU with the same price as the pending checkout item.",
         );
       }
     }

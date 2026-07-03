@@ -1,4 +1,5 @@
 import View from "../View";
+import { Link } from "@tanstack/react-router";
 import {
   Table,
   TableBody,
@@ -27,6 +28,7 @@ import {
   EyeOff,
   Image,
   Info,
+  Link2,
   RefreshCw,
   RotateCcw,
   Search,
@@ -76,6 +78,7 @@ import {
   usePOSProductSearch,
   usePOSResolvePendingCheckoutItemReview,
 } from "~/src/hooks/usePOSProducts";
+import { getOrigin } from "~/src/lib/navigationUtils";
 import { useDebounce } from "~/src/hooks/useDebounce";
 import {
   Dialog,
@@ -88,6 +91,7 @@ import { Skeleton } from "../ui/skeleton";
 import {
   buildTrustedInventoryFinalizationPayload,
   parseVariantInputValue,
+  resolvePendingCheckoutSkuLinkPriceState,
   resolveTrustedInventoryCommandError,
   resolveTrustedInventoryFinalizationPricingPolicy,
   resolveTrustedInventoryRefreshReviewState,
@@ -139,6 +143,34 @@ type ProductPageTrustedInventoryFinalizationResult = {
   quantityAvailable: number;
 };
 
+type ProductPageLinkedPendingCheckoutAliasSummary = {
+  aliases: Array<{
+    lookupCode?: string;
+    name: string;
+    pendingCheckoutItemId: Id<"posPendingCheckoutItem">;
+    provisionalProductId?: Id<"product">;
+    provisionalSku?: string;
+    provisionalProductSkuId?: Id<"productSku">;
+    quantitySold: number;
+  }>;
+  count: number;
+  productSkuId: Id<"productSku">;
+};
+
+type ProductPageLinkedPendingCheckoutProvisionalBinding = {
+  linkedTarget: {
+    isArchived: boolean;
+    price?: number;
+    productId: Id<"product">;
+    productName: string;
+    quantityAvailable?: number;
+    sku?: string;
+    skuId: Id<"productSku">;
+  };
+  pendingCheckoutItemId: Id<"posPendingCheckoutItem">;
+  productSkuId: Id<"productSku">;
+};
+
 type ProductPageProvisionalSkuBindingQuery = FunctionReference<
   "query",
   "public",
@@ -167,6 +199,11 @@ const pendingCheckoutTrustedInventoryApi = api.pos.public
   finalizePendingCheckoutTrustedInventoryFromProductPage: ProductPageTrustedInventoryFinalizationMutation;
   listPendingCheckoutProductPageBinding: ProductPageProvisionalSkuBindingQuery;
 };
+
+const listLinkedPendingCheckoutAliasesBySku =
+  api.pos.public.catalog.listLinkedPendingCheckoutAliasesBySku;
+const listLinkedPendingCheckoutProvisionalBindingsBySku =
+  api.pos.public.catalog.listLinkedPendingCheckoutProvisionalBindingsBySku;
 
 const StockHeader = ({
   isSkuReserved,
@@ -293,6 +330,10 @@ function isPendingCheckoutDraftProduct(activeProduct?: Product | null) {
   );
 }
 
+function isPendingCheckoutProduct(activeProduct?: Product | null) {
+  return activeProduct?.categorySlug === "pos-pending-checkout";
+}
+
 function LegacyImportTrustPreview({
   activeProduct,
   areProcessingFeesAbsorbed,
@@ -307,6 +348,7 @@ function LegacyImportTrustPreview({
   sourceLabel,
   storeId,
   variant,
+  hideWhenLinkedToCatalog,
 }: {
   activeProduct?: Product | null;
   areProcessingFeesAbsorbed?: boolean;
@@ -337,6 +379,7 @@ function LegacyImportTrustPreview({
   sourceLabel: string;
   storeId?: Id<"store">;
   variant: ProductVariant;
+  hideWhenLinkedToCatalog?: boolean;
 }) {
   const rowRef = useRef<HTMLTableRowElement | null>(null);
   const [conversionRequestIds, setConversionRequestIds] = useState<
@@ -506,12 +549,16 @@ function LegacyImportTrustPreview({
   const isLinkedToCatalogState = isLinkedToCatalog || Boolean(linkedTarget);
   const canOpenLinkDialog = Boolean(
     canLinkPendingCheckoutItem &&
-      activeProduct &&
-      storeId &&
-      binding?.state === "unique" &&
-      !isFinalized &&
-      !isLinkedToCatalogState,
+    activeProduct &&
+    storeId &&
+    binding?.state === "unique" &&
+    !isFinalized &&
+    !isLinkedToCatalogState,
   );
+
+  if (hideWhenLinkedToCatalog && isLinkedToCatalogState) {
+    return null;
+  }
 
   return (
     <TableRow
@@ -537,7 +584,7 @@ function LegacyImportTrustPreview({
                 variant="outline"
                 className="border-border bg-muted/40 text-muted-foreground"
               >
-                Provisional SKU
+                Pending item
               </Badge>
               {isFinalized ? (
                 <Badge
@@ -563,7 +610,9 @@ function LegacyImportTrustPreview({
                 </span>
                 <span>{linkedTarget.sku || "No SKU"}</span>
                 {typeof linkedTarget.price === "number" ? (
-                  <span>{formatStoredAmount(linkedSkuFormatter, linkedTarget.price)}</span>
+                  <span>
+                    {formatStoredAmount(linkedSkuFormatter, linkedTarget.price)}
+                  </span>
                 ) : null}
                 {typeof linkedTarget.quantityAvailable === "number" ? (
                   <span>{linkedTarget.quantityAvailable} available</span>
@@ -633,9 +682,7 @@ function LegacyImportTrustPreview({
             onLinked={() => {
               setLinkDialogOpen(false);
               setIsLinkedToCatalog(true);
-              setCommandMessage(
-                "Pending checkout item linked to an existing trusted SKU.",
-              );
+              setCommandMessage("Pending checkout item linked to a SKU.");
             }}
             open={linkDialogOpen}
             onOpenChange={setLinkDialogOpen}
@@ -645,6 +692,79 @@ function LegacyImportTrustPreview({
         ) : null}
       </TableCell>
     </TableRow>
+  );
+}
+
+function PendingCheckoutLinkedSkuAffordance({
+  activeProduct,
+  binding,
+}: {
+  activeProduct?: Product | null;
+  binding?: ProductPageLinkedPendingCheckoutProvisionalBinding;
+}) {
+  const formatter = useMemo(
+    () => currencyFormatter(activeProduct?.currency ?? "GHS"),
+    [activeProduct?.currency],
+  );
+  const linkedTarget = binding?.linkedTarget;
+  const isLinkedTargetArchived = linkedTarget?.isArchived === true;
+
+  if (!linkedTarget) {
+    return null;
+  }
+
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Link
+            to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug"
+            params={(prev) => ({
+              ...prev,
+              orgUrlSlug: prev.orgUrlSlug!,
+              productSlug: linkedTarget.productId,
+              storeUrlSlug: prev.storeUrlSlug!,
+            })}
+            search={{
+              o: getOrigin(),
+              ...(linkedTarget.sku ? { variant: linkedTarget.sku } : {}),
+            }}
+            aria-label="Open linked SKU"
+            className={`inline-flex h-5 w-5 cursor-pointer items-center justify-center rounded-md transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+              isLinkedTargetArchived
+                ? "text-amber-500 hover:text-amber-400"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <Link2 className="h-3 w-3" />
+          </Link>
+        </TooltipTrigger>
+        <TooltipContent className="max-w-xs">
+          <p>
+            This pending checkout item is linked to{" "}
+            {capitalizeWords(linkedTarget.productName)}.
+          </p>
+          {isLinkedTargetArchived ? (
+            <p className="mt-1 text-amber-500">
+              Linked SKU archived. This SKU will not show in POS until the
+              linked SKU is active again.
+            </p>
+          ) : null}
+          <p className="mt-1 text-muted-foreground">
+            Sales from this alias are attributed to{" "}
+            {linkedTarget.sku || "the linked SKU"}
+            {typeof linkedTarget.price === "number"
+              ? ` at ${formatStoredAmount(formatter, linkedTarget.price)}`
+              : ""}
+            {typeof linkedTarget.quantityAvailable === "number"
+              ? ` with ${linkedTarget.quantityAvailable} available`
+              : ""}
+            .
+          </p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 
@@ -712,7 +832,16 @@ function PendingCheckoutLinkDialog({
       !selectedProduct?.productId ||
       !selectedProduct.skuId
     ) {
-      setErrorMessage("Choose a trusted SKU before linking.");
+      setErrorMessage("Choose a SKU before linking.");
+      return;
+    }
+
+    const selectedPriceState = resolvePendingCheckoutSkuLinkPriceState({
+      pendingDisplayPrice: pendingItemPrice,
+      trustedSkuStoredPrice: selectedProduct.price,
+    });
+    if (!selectedPriceState.canLink) {
+      setErrorMessage("Choose a SKU with the same price before linking.");
       return;
     }
 
@@ -767,7 +896,7 @@ function PendingCheckoutLinkDialog({
               </p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Provisional SKU</p>
+              <p className="text-xs text-muted-foreground">Pending item SKU</p>
               <p className="font-medium text-foreground">{variant.sku}</p>
             </div>
             <div>
@@ -790,6 +919,11 @@ function PendingCheckoutLinkDialog({
             <Label htmlFor="pending-checkout-sku-search">
               Product SKU search
             </Label>
+            <p className="text-xs text-muted-foreground">
+              {pendingItemPrice === null
+                ? "Only SKUs with the same price can be linked."
+                : `Only SKUs priced at ${formatter.format(pendingItemPrice)} can be linked.`}
+            </p>
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -813,19 +947,26 @@ function PendingCheckoutLinkDialog({
                 <PendingCheckoutSkuSearchLoadingRows />
               ) : trustedSearchResults.length === 0 ? (
                 <div className="px-4 py-8 text-center text-sm text-muted-foreground">
-                  No trusted SKU matches this search.
+                  No SKU matches this search.
                 </div>
               ) : (
                 <div className="divide-y">
                   {trustedSearchResults.map((product) => {
                     const selected = selectedProduct?.skuId === product.skuId;
+                    const priceState = resolvePendingCheckoutSkuLinkPriceState({
+                      pendingDisplayPrice: pendingItemPrice,
+                      trustedSkuStoredPrice: product.price,
+                    });
                     return (
                       <button
                         key={`${product.productId}:${product.skuId}`}
                         type="button"
-                        className={`flex w-full items-center justify-between gap-6 px-4 py-4 text-left transition-colors hover:bg-muted/50 focus:bg-muted/50 focus:outline-none ${
-                          selected ? "bg-action-workflow/10" : ""
-                        }`}
+                        className={`flex w-full items-center justify-between gap-6 px-4 py-4 text-left transition-colors focus:outline-none ${
+                          priceState.canLink
+                            ? "hover:bg-muted/50 focus:bg-muted/50"
+                            : "cursor-not-allowed opacity-60"
+                        } ${selected ? "bg-action-workflow/10" : ""}`}
+                        disabled={!priceState.canLink}
                         onClick={() => {
                           setSelectedProduct(product);
                           setErrorMessage(null);
@@ -847,6 +988,15 @@ function PendingCheckoutLinkDialog({
                           </span>
                           <span className="mt-1 block text-xs text-muted-foreground">
                             {product.quantityAvailable ?? 0} available
+                          </span>
+                          <span
+                            className={`mt-1 block text-xs ${
+                              priceState.canLink
+                                ? "text-muted-foreground"
+                                : "text-destructive"
+                            }`}
+                          >
+                            {priceState.message}
                           </span>
                         </span>
                       </button>
@@ -907,6 +1057,23 @@ function PendingCheckoutSkuSearchLoadingRows() {
       ))}
     </div>
   );
+}
+
+function formatLinkedPendingCheckoutAliasNames(
+  summary?: ProductPageLinkedPendingCheckoutAliasSummary,
+) {
+  if (!summary || summary.aliases.length === 0) {
+    return "";
+  }
+
+  const names = summary.aliases
+    .slice(0, 3)
+    .map((alias) => capitalizeWords(alias.name));
+  const remaining = summary.count - names.length;
+
+  return remaining > 0
+    ? `${names.join(", ")} +${remaining} more`
+    : names.join(", ");
 }
 
 function Stock({
@@ -1196,6 +1363,9 @@ function Stock({
       isSkuReserved(variant.sku)
     );
   };
+  const shouldDisableBarcode = (variant: ProductVariant) => {
+    return variant.markedForDeletion || isSkuReserved(variant.sku);
+  };
 
   const hasQuantityError = (variant: ProductVariant) => {
     return (
@@ -1206,6 +1376,7 @@ function Stock({
   };
 
   const isPendingCheckoutDraft = isPendingCheckoutDraftProduct(activeProduct);
+  const isPendingCheckoutSku = isPendingCheckoutProduct(activeProduct);
   const shouldShowTrustPreview =
     isLegacyImportDraftProduct(activeProduct) || isPendingCheckoutDraft;
   const trustedInventoryApi = isPendingCheckoutDraft
@@ -1254,6 +1425,55 @@ function Stock({
       (variant.price === 0 || variant.price === undefined) && variant.existsInDB
     );
   };
+  const productSkuIdsForLinkedAliases = useMemo(
+    () =>
+      productVariants
+        .filter((variant) => variant.existsInDB)
+        .map((variant) => variant.id as Id<"productSku">),
+    [productVariants],
+  );
+  const linkedAliasSummaries = useQuery(
+    listLinkedPendingCheckoutAliasesBySku,
+    activeStore && productSkuIdsForLinkedAliases.length > 0
+      ? {
+          productSkuIds: productSkuIdsForLinkedAliases,
+          storeId: activeStore._id,
+        }
+      : "skip",
+  );
+  const linkedAliasSummariesBySkuId = useMemo(() => {
+    const summaries = new Map<
+      string,
+      ProductPageLinkedPendingCheckoutAliasSummary
+    >();
+
+    for (const summary of linkedAliasSummaries ?? []) {
+      summaries.set(summary.productSkuId, summary);
+    }
+
+    return summaries;
+  }, [linkedAliasSummaries]);
+  const linkedProvisionalBindings = useQuery(
+    listLinkedPendingCheckoutProvisionalBindingsBySku,
+    activeStore && isPendingCheckoutSku && productSkuIdsForLinkedAliases.length > 0
+      ? {
+          productSkuIds: productSkuIdsForLinkedAliases,
+          storeId: activeStore._id,
+        }
+      : "skip",
+  );
+  const linkedProvisionalBindingsBySkuId = useMemo(() => {
+    const bindings = new Map<
+      string,
+      ProductPageLinkedPendingCheckoutProvisionalBinding
+    >();
+
+    for (const binding of linkedProvisionalBindings ?? []) {
+      bindings.set(binding.productSkuId, binding);
+    }
+
+    return bindings;
+  }, [linkedProvisionalBindings]);
 
   return (
     <>
@@ -1262,7 +1482,7 @@ function Stock({
           <TableHeader>
             <TableRow>
               <TableHead>Variant</TableHead>
-              <TableHead>
+              <TableHead className="w-40 min-w-40">
                 <div className="flex items-center gap-1">
                   <p>SKU</p>
                   {!activeProduct && (
@@ -1292,114 +1512,180 @@ function Stock({
           </TableHeader>
 
           <TableBody>
-            {productVariants.map((variant, index) => (
-              <Fragment key={variant.id}>
-                <TableRow
-                  onClick={() => setActiveProductVariant(variant)}
-                  className={variant.markedForDeletion ? "opacity-50" : ""}
-                >
-                  <TableCell>
-                    <p>{index + 1}</p>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1">
-                        {showLoaderForProduct ? null : !activeProduct ? (
-                          <Input
-                            id={`sku-${index}`}
-                            type="text"
-                            placeholder="SKU"
-                            onChange={(e) => handleChange(e, variant.id, "sku")}
-                            value={variant.sku || ""}
-                            readOnly
-                            disabled={shouldDisable(variant)}
-                          />
-                        ) : (
-                          <p
-                            className={`${variant.id == activeProductVariant.id ? "font-bold" : "text-muted-foreground"}`}
-                          >
-                            {variant.sku}
-                          </p>
+            {productVariants.map((variant, index) => {
+              const linkedAliasSummary = linkedAliasSummariesBySkuId.get(
+                variant.id,
+              );
+              const linkedAliasNames =
+                formatLinkedPendingCheckoutAliasNames(linkedAliasSummary);
+              const linkedAliasDestination = linkedAliasSummary?.aliases.find(
+                (alias) => alias.provisionalProductId,
+              );
+              const linkedAliasAriaLabel =
+                linkedAliasSummary?.count === 1
+                  ? "Open linked pending SKU"
+                  : "Open linked pending SKUs";
+              const linkedProvisionalBinding =
+                linkedProvisionalBindingsBySkuId.get(variant.id);
+              const isLinkedPendingCheckoutSku = Boolean(
+                linkedProvisionalBinding,
+              );
+              const shouldDisableNonBarcodeFields =
+                shouldDisable(variant) || isLinkedPendingCheckoutSku;
+
+              return (
+                <Fragment key={variant.id}>
+                  <TableRow
+                    onClick={() => setActiveProductVariant(variant)}
+                    className={variant.markedForDeletion ? "opacity-50" : ""}
+                  >
+                    <TableCell>
+                      <p>{index + 1}</p>
+                    </TableCell>
+                    <TableCell className="w-40 min-w-40">
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1">
+                          {showLoaderForProduct ? null : !activeProduct ? (
+                            <Input
+                              id={`sku-${index}`}
+                              type="text"
+                              placeholder="SKU"
+                              onChange={(e) =>
+                                handleChange(e, variant.id, "sku")
+                              }
+                              value={variant.sku || ""}
+                              readOnly
+                              disabled={shouldDisable(variant)}
+                            />
+                          ) : (
+                            <div className="flex min-w-0 items-center gap-1.5">
+                              <p
+                                className={`whitespace-nowrap ${variant.id == activeProductVariant.id ? "font-bold" : "text-muted-foreground"}`}
+                              >
+                                {variant.sku}
+                              </p>
+                              {linkedAliasSummary && linkedAliasNames ? (
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      {linkedAliasDestination ? (
+                                        <Link
+                                          to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug"
+                                          params={(prev) => ({
+                                            ...prev,
+                                            orgUrlSlug: prev.orgUrlSlug!,
+                                            productSlug:
+                                              linkedAliasDestination.provisionalProductId!,
+                                            storeUrlSlug: prev.storeUrlSlug!,
+                                          })}
+                                          search={{
+                                            o: getOrigin(),
+                                            ...(linkedAliasDestination.provisionalSku
+                                              ? {
+                                                  variant:
+                                                    linkedAliasDestination.provisionalSku,
+                                                }
+                                              : {}),
+                                          }}
+                                          aria-label={linkedAliasAriaLabel}
+                                          className="inline-flex h-5 w-5 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                          onClick={(event) =>
+                                            event.stopPropagation()
+                                          }
+                                        >
+                                          <Link2 className="h-3 w-3" />
+                                        </Link>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          aria-label={linkedAliasAriaLabel}
+                                          className="inline-flex h-5 w-5 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                          onClick={(event) =>
+                                            event.stopPropagation()
+                                          }
+                                        >
+                                          <Link2 className="h-3 w-3" />
+                                        </button>
+                                      )}
+                                    </TooltipTrigger>
+                                    <TooltipContent className="max-w-xs">
+                                      <p>
+                                        {linkedAliasSummary.count === 1
+                                          ? "1 pending checkout item is linked to this SKU:"
+                                          : `${linkedAliasSummary.count} pending checkout items are linked to this SKU:`}{" "}
+                                        {linkedAliasNames}.
+                                      </p>
+                                      <p className="mt-1 text-muted-foreground">
+                                        Sales from these aliases are attributed
+                                        to this SKU.
+                                      </p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              ) : null}
+                              {isPendingCheckoutSku ? (
+                                <PendingCheckoutLinkedSkuAffordance
+                                  activeProduct={activeProduct}
+                                  binding={linkedProvisionalBinding}
+                                />
+                              ) : null}
+                            </div>
+                          )}
+                        </div>
+                        {isSkuReserved(variant.sku) && (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger>
+                                {getReservationType(variant.sku) ===
+                                "checkout" ? (
+                                  <ShoppingCart className="w-4 h-4 text-green-500" />
+                                ) : (
+                                  <ScanBarcode className="w-4 h-4 text-blue-500" />
+                                )}
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>
+                                  {getReservationType(variant.sku) ===
+                                  "checkout"
+                                    ? "SKU is reserved in an active checkout session"
+                                    : "SKU is reserved in an active POS session"}
+                                </p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
                         )}
                       </div>
-                      {isSkuReserved(variant.sku) && (
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger>
-                              {getReservationType(variant.sku) ===
-                              "checkout" ? (
-                                <ShoppingCart className="w-4 h-4 text-green-500" />
-                              ) : (
-                                <ScanBarcode className="w-4 h-4 text-blue-500" />
-                              )}
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>
-                                {getReservationType(variant.sku) === "checkout"
-                                  ? "SKU is reserved in an active checkout session"
-                                  : "SKU is reserved in an active POS session"}
-                              </p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
+                      {error && getErrorForField(error, "sku") && (
+                        <p className="text-red-500 text-sm font-medium">
+                          {getErrorForField(error, "sku")?.message}
+                        </p>
                       )}
-                    </div>
-                    {error && getErrorForField(error, "sku") && (
-                      <p className="text-red-500 text-sm font-medium">
-                        {getErrorForField(error, "sku")?.message}
-                      </p>
-                    )}
-                  </TableCell>
+                    </TableCell>
 
-                  <TableCell>
-                    <Label htmlFor={`barcode-${index}`} className="sr-only">
-                      Barcode
-                    </Label>
-                    <div className="flex items-center gap-2">
-                      {showLoaderForProduct ? null : (
-                        <>
-                          <Input
-                            id={`barcode-${index}`}
-                            type="text"
-                            placeholder="Barcode"
-                            onChange={(e) =>
-                              handleChange(e, variant.id, "barcode")
-                            }
-                            value={variant.barcode || ""}
-                            readOnly={variant.barcodePersistedInDb === true}
-                            disabled={shouldDisable(variant)}
-                            className={
-                              variant.barcodePersistedInDb === true
-                                ? "bg-muted"
-                                : ""
-                            }
-                          />
-                          {!variant.barcode && variant.existsInDB && (
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() =>
-                                      handleGenerateBarcode(variant.id)
-                                    }
-                                    disabled={
-                                      isGeneratingBarcode ||
-                                      shouldDisable(variant)
-                                    }
-                                  >
-                                    <Barcode className="w-4 h-4" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p>Generate barcode</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          )}
-                          {variant.barcode &&
-                            variant.barcodePersistedInDb === false && (
+                    <TableCell>
+                      <Label htmlFor={`barcode-${index}`} className="sr-only">
+                        Barcode
+                      </Label>
+                      <div className="flex items-center gap-2">
+                        {showLoaderForProduct ? null : (
+                          <>
+                            <Input
+                              id={`barcode-${index}`}
+                              type="text"
+                              placeholder="Barcode"
+                              onChange={(e) =>
+                                handleChange(e, variant.id, "barcode")
+                              }
+                              value={variant.barcode || ""}
+                              readOnly={variant.barcodePersistedInDb === true}
+                              disabled={shouldDisableBarcode(variant)}
+                              className={
+                                variant.barcodePersistedInDb === true
+                                  ? "bg-muted"
+                                  : ""
+                              }
+                            />
+                            {!variant.barcode && variant.existsInDB && (
                               <TooltipProvider>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
@@ -1407,288 +1693,324 @@ function Stock({
                                       size="sm"
                                       variant="outline"
                                       onClick={() =>
-                                        handleSaveBarcode(variant.id)
+                                        handleGenerateBarcode(variant.id)
                                       }
                                       disabled={
                                         isGeneratingBarcode ||
-                                        shouldDisable(variant)
-                                      }
-                                    >
-                                      <Check className="w-4 h-4" />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p>Save barcode</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            )}
-                          {variant.barcode && variant.barcodePersistedInDb && (
-                            <>
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() =>
-                                        handleClearBarcodeClick(variant.id)
-                                      }
-                                      disabled={isSkuReserved(variant.sku)}
-                                    >
-                                      <X className="w-4 h-4" />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p>Clear barcode</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() =>
-                                        handleViewBarcode(variant.id)
+                                        shouldDisableBarcode(variant)
                                       }
                                     >
                                       <Barcode className="w-4 h-4" />
                                     </Button>
                                   </TooltipTrigger>
                                   <TooltipContent>
-                                    <p>View barcode QR</p>
+                                    <p>Generate barcode</p>
                                   </TooltipContent>
                                 </Tooltip>
                               </TooltipProvider>
-                            </>
-                          )}
-                        </>
+                            )}
+                            {variant.barcode &&
+                              variant.barcodePersistedInDb === false && (
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() =>
+                                          handleSaveBarcode(variant.id)
+                                        }
+                                      disabled={
+                                        isGeneratingBarcode ||
+                                        shouldDisableBarcode(variant)
+                                      }
+                                      >
+                                        <Check className="w-4 h-4" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p>Save barcode</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              )}
+                            {variant.barcode &&
+                              variant.barcodePersistedInDb && (
+                                <>
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() =>
+                                            handleClearBarcodeClick(variant.id)
+                                          }
+                                          disabled={isSkuReserved(variant.sku)}
+                                        >
+                                          <X className="w-4 h-4" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p>Clear barcode</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() =>
+                                            handleViewBarcode(variant.id)
+                                          }
+                                        >
+                                          <Barcode className="w-4 h-4" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p>View barcode QR</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                </>
+                              )}
+                          </>
+                        )}
+                      </div>
+                      {error && getErrorForField(error, "barcode") && (
+                        <p className="text-red-500 text-sm font-medium">
+                          {getErrorForField(error, "barcode")?.message}
+                        </p>
                       )}
-                    </div>
-                    {error && getErrorForField(error, "barcode") && (
-                      <p className="text-red-500 text-sm font-medium">
-                        {getErrorForField(error, "barcode")?.message}
-                      </p>
-                    )}
-                  </TableCell>
+                    </TableCell>
 
-                  <TableCell>
-                    <Label htmlFor={`stock-${index}`} className="sr-only">
-                      Stock
-                    </Label>
-                    {showLoaderForProduct ? null : (
-                      <Input
-                        id={`stock-${index}`}
-                        type="number"
-                        placeholder="0"
-                        onChange={(e) => handleChange(e, variant.id, "stock")}
-                        value={variant.stock || ""}
-                        disabled={shouldDisable(variant)}
-                      />
-                    )}
-                    {error && getErrorForField(error, "inventoryCount") && (
-                      <p className="text-red-500 text-sm font-medium">
-                        {getErrorForField(error, "inventoryCount")?.message}
-                      </p>
-                    )}
-                  </TableCell>
+                    <TableCell>
+                      <Label htmlFor={`stock-${index}`} className="sr-only">
+                        Stock
+                      </Label>
+                      {showLoaderForProduct ? null : (
+                        <Input
+                          id={`stock-${index}`}
+                          type="number"
+                          placeholder="0"
+                          onChange={(e) => handleChange(e, variant.id, "stock")}
+                          value={variant.stock || ""}
+                          disabled={shouldDisableNonBarcodeFields}
+                        />
+                      )}
+                      {error && getErrorForField(error, "inventoryCount") && (
+                        <p className="text-red-500 text-sm font-medium">
+                          {getErrorForField(error, "inventoryCount")?.message}
+                        </p>
+                      )}
+                    </TableCell>
 
-                  <TableCell>
-                    <Label htmlFor={`stock-${index}`} className="sr-only">
-                      Quantity available
-                    </Label>
-                    {showLoaderForProduct ? null : (
-                      <Input
-                        id={`quantity-available-${index}`}
-                        type="number"
-                        placeholder="0"
-                        onChange={(e) =>
-                          handleChange(e, variant.id, "quantityAvailable")
-                        }
-                        value={variant.quantityAvailable || ""}
-                        disabled={shouldDisable(variant)}
-                        className={
-                          hasQuantityError(variant) ? "border-red-500" : ""
-                        }
-                      />
-                    )}
-                    {error && getErrorForField(error, "quantityAvailable") && (
-                      <p className="text-red-500 text-sm font-medium">
-                        {getErrorForField(error, "quantityAvailable")?.message}
-                      </p>
-                    )}
-                  </TableCell>
+                    <TableCell>
+                      <Label htmlFor={`stock-${index}`} className="sr-only">
+                        Quantity available
+                      </Label>
+                      {showLoaderForProduct ? null : (
+                        <Input
+                          id={`quantity-available-${index}`}
+                          type="number"
+                          placeholder="0"
+                          onChange={(e) =>
+                            handleChange(e, variant.id, "quantityAvailable")
+                          }
+                          value={variant.quantityAvailable || ""}
+                          disabled={shouldDisableNonBarcodeFields}
+                          className={
+                            hasQuantityError(variant) ? "border-red-500" : ""
+                          }
+                        />
+                      )}
+                      {error &&
+                        getErrorForField(error, "quantityAvailable") && (
+                          <p className="text-red-500 text-sm font-medium">
+                            {
+                              getErrorForField(error, "quantityAvailable")
+                                ?.message
+                            }
+                          </p>
+                        )}
+                    </TableCell>
 
-                  <TableCell>
-                    <Label htmlFor={`price-${index}`} className="sr-only">
-                      Price{" "}
-                      {currencyDisplaySymbol(activeStore?.currency ?? "GHS")}
-                    </Label>
-                    {showLoaderForProduct ? null : (
-                      <Input
-                        id={`price-${index}`}
-                        type="number"
-                        placeholder="999"
-                        onChange={(e) =>
-                          handleChange(e, variant.id, "netPrice")
-                        }
-                        value={variant.netPrice || ""}
-                        disabled={shouldDisable(variant)}
-                        className={
-                          hasPriceError(variant) ? "border-red-500" : ""
-                        }
-                      />
-                    )}
-                    {error && getErrorForField(error, "price") && (
-                      <p className="text-red-500 text-sm font-medium">
-                        {getErrorForField(error, "price")?.message}
-                      </p>
-                    )}
-                  </TableCell>
+                    <TableCell>
+                      <Label htmlFor={`price-${index}`} className="sr-only">
+                        Price{" "}
+                        {currencyDisplaySymbol(activeStore?.currency ?? "GHS")}
+                      </Label>
+                      {showLoaderForProduct ? null : (
+                        <Input
+                          id={`price-${index}`}
+                          type="number"
+                          placeholder="999"
+                          onChange={(e) =>
+                            handleChange(e, variant.id, "netPrice")
+                          }
+                          value={variant.netPrice || ""}
+                          disabled={shouldDisableNonBarcodeFields}
+                          className={
+                            hasPriceError(variant) ? "border-red-500" : ""
+                          }
+                        />
+                      )}
+                      {error && getErrorForField(error, "price") && (
+                        <p className="text-red-500 text-sm font-medium">
+                          {getErrorForField(error, "price")?.message}
+                        </p>
+                      )}
+                    </TableCell>
 
-                  <TableCell>
-                    <Label htmlFor={`cost-${index}`} className="sr-only">
-                      Cost
-                    </Label>
-                    {showLoaderForProduct ? null : (
-                      <Input
-                        id={`cost-${index}`}
-                        type="number"
-                        placeholder="999"
-                        onChange={(e) => handleChange(e, variant.id, "cost")}
-                        value={variant.cost || ""}
-                        disabled={shouldDisable(variant)}
-                      />
-                    )}
-                  </TableCell>
+                    <TableCell>
+                      <Label htmlFor={`cost-${index}`} className="sr-only">
+                        Cost
+                      </Label>
+                      {showLoaderForProduct ? null : (
+                        <Input
+                          id={`cost-${index}`}
+                          type="number"
+                          placeholder="999"
+                          onChange={(e) => handleChange(e, variant.id, "cost")}
+                          value={variant.cost || ""}
+                          disabled={shouldDisableNonBarcodeFields}
+                        />
+                      )}
+                    </TableCell>
 
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => setVisibility(variant.id)}
-                              disabled={
-                                (productVariants.length > 1 &&
-                                  (isLastActiveVariant(index) ||
-                                    isLastVisibleVariant(index))) ||
-                                isSkuReserved(variant.sku)
-                              }
-                            >
-                              {(variant.isVisible == undefined ||
-                                variant.isVisible) && (
-                                <EyeOff className="w-4 h-4" />
-                              )}
-
-                              {variant.isVisible == false && (
-                                <Eye className="w-4 h-4 text-muted-foreground" />
-                              )}
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            {(variant.isVisible == undefined ||
-                              variant.isVisible) && <p>Hide</p>}
-
-                            {variant.isVisible == false && <p>Make visible</p>}
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => setOutOfStock(variant.id)}
-                              disabled={
-                                (variant.quantityAvailable == 0 &&
-                                  variant.stock == 0) ||
-                                shouldDisable(variant)
-                              }
-                            >
-                              <TriangleAlert className="w-4 h-4 text-yellow-500" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>Set to out of stock</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-
-                      {productVariants.length > 1 && (
+                    <TableCell>
+                      <div className="flex items-center gap-2">
                         <TooltipProvider>
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                onClick={() =>
-                                  handleDeleteAction(
-                                    variant.id,
-                                    variant.markedForDeletion,
-                                  )
-                                }
+                                onClick={() => setVisibility(variant.id)}
                                 disabled={
-                                  isLastActiveVariant(index) ||
-                                  isSkuReserved(variant.sku)
+                                  (productVariants.length > 1 &&
+                                    (isLastActiveVariant(index) ||
+                                      isLastVisibleVariant(index))) ||
+                                  isSkuReserved(variant.sku) ||
+                                  isLinkedPendingCheckoutSku
                                 }
                               >
-                                {variant.markedForDeletion ? (
-                                  <RotateCcw className="w-4 h-4" />
-                                ) : (
-                                  <TrashIcon className="h-4 w-4 text-red-500" />
+                                {(variant.isVisible == undefined ||
+                                  variant.isVisible) && (
+                                  <EyeOff className="w-4 h-4" />
+                                )}
+
+                                {variant.isVisible == false && (
+                                  <Eye className="w-4 h-4 text-muted-foreground" />
                                 )}
                               </Button>
                             </TooltipTrigger>
-                            {!variant.markedForDeletion && (
-                              <TooltipContent>
-                                <p>Delete</p>
-                              </TooltipContent>
-                            )}
+                            <TooltipContent>
+                              {(variant.isVisible == undefined ||
+                                variant.isVisible) && <p>Hide</p>}
+
+                              {variant.isVisible == false && (
+                                <p>Make visible</p>
+                              )}
+                            </TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
-                      )}
-                    </div>
-                  </TableCell>
-                </TableRow>
-                {shouldShowTrustPreview &&
-                  activeProduct &&
-                  variant.existsInDB && (
-                    <LegacyImportTrustPreview
-                      activeProduct={activeProduct}
-                      areProcessingFeesAbsorbed={resolveTrustedInventoryFinalizationPricingPolicy(
-                        {
-                          persistedAreProcessingFeesAbsorbed:
-                            activeProduct.areProcessingFeesAbsorbed,
-                        },
-                      )}
-                      canLinkPendingCheckoutItem={isPendingCheckoutDraft}
-                      finalizeTrustedInventoryMutation={
-                        trustedInventoryApi.finalizeTrustedInventoryMutation
-                      }
-                      finalized={finalizedTrustedInventorySkuIds.has(
-                        variant.id,
-                      )}
-                      isContextRefreshing={isLoading || showLoaderForProduct}
-                      listProvisionalSkuBindingQuery={
-                        trustedInventoryApi.listProvisionalSkuBindingQuery
-                      }
-                      onFinalized={handleTrustedInventoryFinalized}
-                      onMakeVisible={setVisibility}
-                      reservationType={getReservationType(variant.sku)}
-                      sourceLabel={trustedInventoryApi.sourceLabel}
-                      storeId={activeStore?._id}
-                      variant={variant}
-                    />
-                  )}
-              </Fragment>
-            ))}
+
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => setOutOfStock(variant.id)}
+                                disabled={
+                                  (variant.quantityAvailable == 0 &&
+                                    variant.stock == 0) ||
+                                  shouldDisableNonBarcodeFields
+                                }
+                              >
+                                <TriangleAlert className="w-4 h-4 text-yellow-500" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Set to out of stock</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+
+                        {productVariants.length > 1 && (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() =>
+                                    handleDeleteAction(
+                                      variant.id,
+                                      variant.markedForDeletion,
+                                    )
+                                  }
+                                  disabled={
+                                    isLastActiveVariant(index) ||
+                                    isSkuReserved(variant.sku) ||
+                                    isLinkedPendingCheckoutSku
+                                  }
+                                >
+                                  {variant.markedForDeletion ? (
+                                    <RotateCcw className="w-4 h-4" />
+                                  ) : (
+                                    <TrashIcon className="h-4 w-4 text-red-500" />
+                                  )}
+                                </Button>
+                              </TooltipTrigger>
+                              {!variant.markedForDeletion && (
+                                <TooltipContent>
+                                  <p>Delete</p>
+                                </TooltipContent>
+                              )}
+                            </Tooltip>
+                          </TooltipProvider>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                  {shouldShowTrustPreview &&
+                    activeProduct &&
+                    variant.existsInDB && (
+                      <LegacyImportTrustPreview
+                        activeProduct={activeProduct}
+                        areProcessingFeesAbsorbed={resolveTrustedInventoryFinalizationPricingPolicy(
+                          {
+                            persistedAreProcessingFeesAbsorbed:
+                              activeProduct.areProcessingFeesAbsorbed,
+                          },
+                        )}
+                        canLinkPendingCheckoutItem={isPendingCheckoutDraft}
+                        finalizeTrustedInventoryMutation={
+                          trustedInventoryApi.finalizeTrustedInventoryMutation
+                        }
+                        finalized={finalizedTrustedInventorySkuIds.has(
+                          variant.id,
+                        )}
+                        isContextRefreshing={isLoading || showLoaderForProduct}
+                        listProvisionalSkuBindingQuery={
+                          trustedInventoryApi.listProvisionalSkuBindingQuery
+                        }
+                        onFinalized={handleTrustedInventoryFinalized}
+                        onMakeVisible={setVisibility}
+                        reservationType={getReservationType(variant.sku)}
+                        sourceLabel={trustedInventoryApi.sourceLabel}
+                        storeId={activeStore?._id}
+                        variant={variant}
+                        hideWhenLinkedToCatalog={isPendingCheckoutDraft}
+                      />
+                    )}
+                </Fragment>
+              );
+            })}
           </TableBody>
         </Table>
       )}

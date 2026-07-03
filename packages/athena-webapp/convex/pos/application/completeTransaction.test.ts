@@ -3600,6 +3600,18 @@ describe("completeTransaction trace ordering", () => {
         provisionalProductSkuId: "sku-other",
       },
     ],
+    [
+      "stale linked pending checkout alias",
+      {
+        _id: "pending-item-1",
+        approvedProductId: "product-1",
+        approvedProductSkuId: "sku-1",
+        storeId: "store-1",
+        status: "linked_to_catalog",
+        provisionalProductId: "product-other",
+        provisionalProductSkuId: "sku-other",
+      },
+    ],
   ])("rejects session checkout with %s before durable sale writes", async (_label, pendingCheckoutItem) => {
     const ctx = {
       db: {

@@ -562,7 +562,7 @@ describe("listRegisterCatalog", () => {
     expect(rows[0]).not.toHaveProperty("quantityAvailable");
   });
 
-  it("marks trusted SKU rows that represent linked pending checkout aliases", async () => {
+  it("returns linked pending checkout aliases as trusted SKU-backed rows", async () => {
     const { ctx } = createRegisterCatalogCtx({
       category: [
         {
@@ -571,6 +571,12 @@ describe("listRegisterCatalog", () => {
           name: "Wigs",
           slug: "wigs",
         },
+        {
+          _id: "category-pending-checkout",
+          storeId: "store-a",
+          name: "POS pending checkout",
+          slug: "pos-pending-checkout",
+        },
       ],
       product: [
         {
@@ -578,6 +584,14 @@ describe("listRegisterCatalog", () => {
           storeId: "store-a",
           categoryId: "category-store-a",
           description: "Trusted catalog product",
+          name: "Trusted catalog name",
+        },
+        {
+          _id: "product-pending-old",
+          storeId: "store-a",
+          categoryId: "category-pending-checkout",
+          availability: "draft",
+          description: "Old pending checkout anchor",
           name: "Yeeeee",
         },
       ],
@@ -592,6 +606,26 @@ describe("listRegisterCatalog", () => {
           price: 400,
           quantityAvailable: 2,
         },
+        {
+          _id: "sku-pending-old-1",
+          storeId: "store-a",
+          productId: "product-pending-old",
+          sku: "49D8-9D2-B4D",
+          barcode: "pending-111",
+          images: [],
+          price: 400,
+          quantityAvailable: 0,
+        },
+        {
+          _id: "sku-pending-old-2",
+          storeId: "store-a",
+          productId: "product-pending-old",
+          sku: "49D8-9D2-B4E",
+          barcode: "pending-112",
+          images: [],
+          price: 400,
+          quantityAvailable: 0,
+        },
       ],
       posPendingCheckoutItem: [
         {
@@ -599,6 +633,8 @@ describe("listRegisterCatalog", () => {
           storeId: "store-a",
           status: "linked_to_catalog",
           evidence: { localEventIds: ["local-event-1"] },
+          lookupCode: "49D8-9D2-B4D",
+          name: "Yeeeee",
           provisionalProductSkuId: "sku-pending-old-1",
           approvedProductSkuId: "sku-live",
           provisionalPrice: 400,
@@ -608,6 +644,8 @@ describe("listRegisterCatalog", () => {
           storeId: "store-a",
           status: "linked_to_catalog",
           evidence: { localEventIds: ["local-event-2"] },
+          lookupCode: "49D8-9D2-B4E",
+          name: "Yeeeee backup",
           provisionalProductSkuId: "sku-pending-old-2",
           approvedProductSkuId: "sku-live",
           provisionalPrice: 400,
@@ -619,21 +657,366 @@ describe("listRegisterCatalog", () => {
       storeId: "store-a" as Id<"store">,
     });
 
-    expect(rows).toHaveLength(1);
+    expect(rows).toHaveLength(3);
     expect(rows[0]).toMatchObject({
       id: "sku-live",
       productSkuId: "sku-live",
       skuId: "sku-live",
       productId: "product-live",
-      name: "Yeeeee",
+      name: "Trusted catalog name",
       sku: "6N2Y-C0K-1T4",
       price: 400,
+      category: "Wigs",
       availabilityPolicy: "trusted_inventory",
-      pendingCheckoutAliasState: "linked_to_catalog",
-      pendingCheckoutItemId: "pending-linked-1",
       linkedPendingCheckoutItemIds: ["pending-linked-1", "pending-linked-2"],
       linkedPendingCheckoutLocalEventIds: ["local-event-1", "local-event-2"],
     });
+    expect(rows[0]).not.toHaveProperty("catalogRowKey");
+    expect(rows[0]).not.toHaveProperty("pendingCheckoutItemId");
+    expect(rows[0]).not.toHaveProperty("pendingCheckoutAliasState");
+    expect(rows[1]).toMatchObject({
+      id: "sku-live",
+      catalogRowKey: "pending-checkout-alias:pending-linked-1",
+      productSkuId: "sku-live",
+      skuId: "sku-live",
+      productId: "product-live",
+      name: "Yeeeee",
+      sku: "49D8-9D2-B4D",
+      price: 400,
+      category: "Pending checkout",
+      availabilityPolicy: "trusted_inventory",
+      pendingCheckoutAliasState: "linked_to_catalog",
+      pendingCheckoutItemId: "pending-linked-1",
+      pendingCheckoutAliasLookupCode: "49D8-9D2-B4D",
+      pendingCheckoutAliasName: "Yeeeee",
+      pendingCheckoutAliasPrice: 400,
+      pendingCheckoutAliasTrustedName: "Trusted catalog name",
+      pendingCheckoutAliasTrustedSku: "6N2Y-C0K-1T4",
+      pendingCheckoutAliasTrustedCategory: "Wigs",
+      pendingCheckoutAliasTrustedDescription: "Trusted catalog product",
+      linkedPendingCheckoutItemIds: ["pending-linked-1"],
+      linkedPendingCheckoutLocalEventIds: ["local-event-1"],
+    });
+    expect(rows[2]).toMatchObject({
+      catalogRowKey: "pending-checkout-alias:pending-linked-2",
+      productSkuId: "sku-live",
+      skuId: "sku-live",
+      name: "Yeeeee backup",
+      sku: "49D8-9D2-B4E",
+      pendingCheckoutItemId: "pending-linked-2",
+      pendingCheckoutAliasState: "linked_to_catalog",
+      pendingCheckoutAliasLookupCode: "49D8-9D2-B4E",
+      pendingCheckoutAliasName: "Yeeeee backup",
+      pendingCheckoutAliasPrice: 400,
+      pendingCheckoutAliasTrustedName: "Trusted catalog name",
+      pendingCheckoutAliasTrustedSku: "6N2Y-C0K-1T4",
+      pendingCheckoutAliasTrustedCategory: "Wigs",
+      pendingCheckoutAliasTrustedDescription: "Trusted catalog product",
+      availabilityPolicy: "trusted_inventory",
+    });
+    expect(rows.map((row) => row.sku)).toEqual([
+      "6N2Y-C0K-1T4",
+      "49D8-9D2-B4D",
+      "49D8-9D2-B4E",
+    ]);
+    expect(
+      rows
+        .filter((row) => row.pendingCheckoutItemId)
+        .map((row) => row.pendingCheckoutAliasTrustedSku),
+    ).toEqual([
+      "6N2Y-C0K-1T4",
+      "6N2Y-C0K-1T4",
+    ]);
+    expect(rows.map((row) => row.productSkuId)).not.toContain(
+      "sku-pending-old-1",
+    );
+  });
+
+  it("does not expose a linked pending checkout alias after its pending product is archived", async () => {
+    const { ctx } = createRegisterCatalogCtx({
+      category: [
+        {
+          _id: "category-store-a",
+          storeId: "store-a",
+          name: "Wigs",
+          slug: "wigs",
+        },
+        {
+          _id: "category-pending-checkout",
+          storeId: "store-a",
+          name: "POS pending checkout",
+          slug: "pos-pending-checkout",
+        },
+      ],
+      product: [
+        {
+          _id: "product-live",
+          storeId: "store-a",
+          categoryId: "category-store-a",
+          description: "Trusted catalog product",
+          name: "Trusted catalog name",
+        },
+        {
+          _id: "product-pending-archived",
+          storeId: "store-a",
+          categoryId: "category-pending-checkout",
+          availability: "archived",
+          description: "Archived pending checkout anchor",
+          name: "Archived alias name",
+        },
+      ],
+      productSku: [
+        {
+          _id: "sku-live",
+          storeId: "store-a",
+          productId: "product-live",
+          sku: "6N2Y-C0K-1T4",
+          barcode: "111",
+          images: [],
+          price: 400,
+          quantityAvailable: 2,
+        },
+        {
+          _id: "sku-pending-archived",
+          storeId: "store-a",
+          productId: "product-pending-archived",
+          sku: "49D8-9D2-B4D",
+          barcode: "pending-111",
+          images: [],
+          price: 400,
+          quantityAvailable: 0,
+        },
+      ],
+      posPendingCheckoutItem: [
+        {
+          _id: "pending-review-archived",
+          storeId: "store-a",
+          status: "pending_review",
+          evidence: { localEventIds: ["local-event-review-archived"] },
+          lookupCode: "7101-C06-4BE",
+          name: "Saa",
+          provisionalProductSkuId: "sku-pending-archived",
+          provisionalPrice: 900,
+        },
+        {
+          _id: "pending-linked-archived",
+          storeId: "store-a",
+          status: "linked_to_catalog",
+          evidence: { localEventIds: ["local-event-archived"] },
+          lookupCode: "49D8-9D2-B4D",
+          name: "Archived alias name",
+          provisionalProductSkuId: "sku-pending-archived",
+          approvedProductSkuId: "sku-live",
+          provisionalPrice: 400,
+        },
+      ],
+      productSkuSearch: [
+        {
+          _id: "search-sku-live",
+          storeId: "store-a",
+          productId: "product-live",
+          productSkuId: "sku-live",
+          sku: "6N2Y-C0K-1T4",
+          barcode: "111",
+          images: [],
+          price: 400,
+          quantityAvailable: 2,
+          productName: "Trusted catalog name",
+          productDescription: "Trusted catalog product",
+          productAvailability: "live",
+          productCategoryId: "category-store-a",
+          categoryId: "category-store-a",
+          categoryName: "Wigs",
+          categorySlug: "wigs",
+          productSkuCreationTime: 1,
+          updatedAt: 1,
+          sourceUpdatedAt: 1,
+        },
+        {
+          _id: "search-sku-pending-archived-stale",
+          storeId: "store-a",
+          productId: "product-pending-archived",
+          productSkuId: "sku-pending-archived",
+          sku: "7101-C06-4BE",
+          barcode: "pending-111",
+          images: [],
+          price: 900,
+          quantityAvailable: 0,
+          productName: "Saa",
+          productDescription: "Stale pending checkout projection",
+          productAvailability: "draft",
+          productCategoryId: "category-pending-checkout",
+          categoryId: "category-pending-checkout",
+          categoryName: "POS pending checkout",
+          categorySlug: "pos-pending-checkout",
+          productIsVisible: false,
+          isVisible: false,
+          productSkuCreationTime: 2,
+          updatedAt: 1,
+          sourceUpdatedAt: 1,
+        },
+      ],
+    });
+
+    const rows = await listRegisterCatalog(ctx, {
+      storeId: "store-a" as Id<"store">,
+    });
+
+    expect(rows).toHaveLength(3);
+    expect(rows[0]).toMatchObject({
+      id: "sku-live",
+      productSkuId: "sku-live",
+      productId: "product-live",
+      name: "Trusted catalog name",
+      sku: "6N2Y-C0K-1T4",
+    });
+    expect(rows[0]).not.toHaveProperty("catalogRowKey");
+    expect(rows[0]).not.toHaveProperty("pendingCheckoutAliasState");
+    expect(rows[1]).toMatchObject({
+      catalogRowKey: "suppressed-pending-checkout:pending-review-archived",
+      productSkuId: "sku-pending-archived",
+      pendingCheckoutItemId: "pending-review-archived",
+      suppressedPendingCheckoutItemIds: ["pending-review-archived"],
+      suppressedPendingCheckoutLocalEventIds: ["local-event-review-archived"],
+      suppressFromRegisterSearch: true,
+      name: "Saa",
+    });
+    expect(rows[2]).toMatchObject({
+      catalogRowKey: "suppressed-pending-checkout:pending-linked-archived",
+      productSkuId: "sku-pending-archived",
+      pendingCheckoutItemId: "pending-linked-archived",
+      suppressedPendingCheckoutItemIds: ["pending-linked-archived"],
+      suppressedPendingCheckoutLocalEventIds: ["local-event-archived"],
+      suppressFromRegisterSearch: true,
+      name: "Archived alias name",
+    });
+    expect(
+      rows
+        .filter((row) => row.suppressFromRegisterSearch !== true)
+        .map((row) => row.name),
+    ).not.toContain("Saa");
+    expect(
+      rows
+        .filter((row) => row.suppressFromRegisterSearch !== true)
+        .map((row) => row.name),
+    ).not.toContain("Archived alias name");
+  });
+
+  it("suppresses linked pending checkout local events after the trusted SKU is archived", async () => {
+    const { ctx } = createRegisterCatalogCtx({
+      category: [
+        {
+          _id: "category-store-a",
+          storeId: "store-a",
+          name: "Wigs",
+          slug: "wigs",
+        },
+        {
+          _id: "category-pending-checkout",
+          storeId: "store-a",
+          name: "POS pending checkout",
+          slug: "pos-pending-checkout",
+        },
+      ],
+      product: [
+        {
+          _id: "product-trusted-archived",
+          storeId: "store-a",
+          categoryId: "category-store-a",
+          availability: "archived",
+          description: "Archived trusted product",
+          name: "Archived trusted name",
+        },
+        {
+          _id: "product-pending-live",
+          storeId: "store-a",
+          categoryId: "category-pending-checkout",
+          availability: "live",
+          description: "Pending checkout anchor",
+          name: "Waaa",
+        },
+      ],
+      productSku: [
+        {
+          _id: "sku-trusted-archived",
+          storeId: "store-a",
+          productId: "product-trusted-archived",
+          sku: "TRUSTED-ARCHIVED",
+          barcode: "trusted-archived",
+          images: [],
+          price: 420,
+          quantityAvailable: 4,
+        },
+        {
+          _id: "sku-pending-live",
+          storeId: "store-a",
+          productId: "product-pending-live",
+          sku: "57BF-059-37B",
+          barcode: "pending-420",
+          images: [],
+          price: 420,
+          quantityAvailable: 0,
+        },
+      ],
+      posPendingCheckoutItem: [
+        {
+          _id: "pending-linked-trusted-archived",
+          storeId: "store-a",
+          status: "linked_to_catalog",
+          evidence: { localEventIds: ["event-waaa-defined"] },
+          lookupCode: "57BF-059-37B",
+          name: "Waaa",
+          provisionalProductId: "product-pending-live",
+          provisionalProductSkuId: "sku-pending-live",
+          approvedProductSkuId: "sku-trusted-archived",
+          provisionalPrice: 420,
+        },
+      ],
+      productSkuSearch: [
+        {
+          _id: "search-sku-pending-live-stale",
+          storeId: "store-a",
+          productId: "product-pending-live",
+          productSkuId: "sku-pending-live",
+          sku: "57BF-059-37B",
+          barcode: "pending-420",
+          images: [],
+          price: 420,
+          quantityAvailable: 0,
+          productName: "Waaa",
+          productDescription: "Stale pending checkout projection",
+          productAvailability: "live",
+          productCategoryId: "category-pending-checkout",
+          categoryId: "category-pending-checkout",
+          categoryName: "POS pending checkout",
+          categorySlug: "pos-pending-checkout",
+          productIsVisible: false,
+          isVisible: false,
+          productSkuCreationTime: 2,
+          updatedAt: 1,
+          sourceUpdatedAt: 1,
+        },
+      ],
+    });
+
+    const rows = await listRegisterCatalog(ctx, {
+      storeId: "store-a" as Id<"store">,
+    });
+
+    expect(rows).toEqual([
+      expect.objectContaining({
+        catalogRowKey:
+          "suppressed-pending-checkout:pending-linked-trusted-archived",
+        productSkuId: "sku-pending-live",
+        pendingCheckoutItemId: "pending-linked-trusted-archived",
+        suppressedPendingCheckoutItemIds: [
+          "pending-linked-trusted-archived",
+        ],
+        suppressedPendingCheckoutLocalEventIds: ["event-waaa-defined"],
+        suppressFromRegisterSearch: true,
+        name: "Waaa",
+      }),
+    ]);
   });
 
   it("surfaces active provisional import SKUs without shadowing trusted inventory", async () => {

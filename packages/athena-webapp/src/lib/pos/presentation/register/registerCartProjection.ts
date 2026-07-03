@@ -82,6 +82,9 @@ export function buildCatalogRepresentedPendingCheckoutItemIds(
     linkedPendingCheckoutItemIds?:
       | readonly (string | null | undefined)[]
       | null;
+    suppressedPendingCheckoutItemIds?:
+      | readonly (string | null | undefined)[]
+      | null;
   }[],
 ) {
   const ids = new Set<string>();
@@ -95,6 +98,11 @@ export function buildCatalogRepresentedPendingCheckoutItemIds(
         ids.add(linkedId);
       }
     }
+    for (const suppressedId of row.suppressedPendingCheckoutItemIds ?? []) {
+      if (suppressedId) {
+        ids.add(suppressedId);
+      }
+    }
   }
 
   return ids;
@@ -105,12 +113,21 @@ export function buildCatalogRepresentedPendingCheckoutLocalEventIds(
     linkedPendingCheckoutLocalEventIds?:
       | readonly (string | null | undefined)[]
       | null;
+    suppressedPendingCheckoutLocalEventIds?:
+      | readonly (string | null | undefined)[]
+      | null;
   }[],
 ) {
   const ids = new Set<string>();
 
   for (const row of rows) {
     for (const localEventId of row.linkedPendingCheckoutLocalEventIds ?? []) {
+      if (localEventId) {
+        ids.add(localEventId);
+      }
+    }
+    for (const localEventId of row.suppressedPendingCheckoutLocalEventIds ??
+      []) {
       if (localEventId) {
         ids.add(localEventId);
       }
@@ -140,6 +157,47 @@ export function buildLocalPendingCheckoutDefinitionEventIdsByItemId(
   }
 
   return ids;
+}
+
+export function pendingCheckoutAliasProductSignature(input: {
+  name?: string | null;
+  pendingCheckoutAliasName?: string | null;
+  pendingCheckoutAliasPrice?: number | null;
+  price?: number | null;
+}) {
+  const normalizedName = normalizePendingCheckoutSearchText(
+    input.pendingCheckoutAliasName ?? input.name,
+  );
+  const price = input.pendingCheckoutAliasPrice ?? input.price;
+  if (!normalizedName || typeof price !== "number") {
+    return null;
+  }
+
+  return `${normalizedName}:${price}`;
+}
+
+export function buildCatalogRepresentedPendingCheckoutProductSignatures(
+  rows: readonly {
+    name?: string | null;
+    pendingCheckoutAliasName?: string | null;
+    pendingCheckoutAliasPrice?: number | null;
+    pendingCheckoutAliasState?: "linked_to_catalog" | null;
+    price?: number | null;
+  }[],
+) {
+  const signatures = new Set<string>();
+
+  for (const row of rows) {
+    if (row.pendingCheckoutAliasState !== "linked_to_catalog") {
+      continue;
+    }
+    const signature = pendingCheckoutAliasProductSignature(row);
+    if (signature) {
+      signatures.add(signature);
+    }
+  }
+
+  return signatures;
 }
 
 export function cartLineSourceKey(item: {
@@ -464,7 +522,9 @@ export function stringFromPayload(
   return typeof value === "string" ? value : "";
 }
 
-export function cartItemSkuEntry(item: CartItem): readonly [string, CartItem][] {
+export function cartItemSkuEntry(
+  item: CartItem,
+): readonly [string, CartItem][] {
   const skuId = item.skuId;
   return skuId ? [[skuId.toString(), item]] : [];
 }
@@ -678,7 +738,10 @@ export function cartItemsFromLocalRegisterModel(
         payload,
         "inventoryImportProvisionalSkuId",
       ),
-      pendingCheckoutItemId: stringFromPayload(payload, "pendingCheckoutItemId"),
+      pendingCheckoutItemId: stringFromPayload(
+        payload,
+        "pendingCheckoutItemId",
+      ),
       pendingCheckoutAliasState:
         stringFromPayload(payload, "pendingCheckoutAliasState") ===
         "linked_to_catalog"

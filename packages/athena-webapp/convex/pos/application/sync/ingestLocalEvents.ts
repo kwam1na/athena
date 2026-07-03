@@ -790,6 +790,7 @@ function validateExpenseRecordedItems(payload: Record<string, unknown>) {
       !isOptionalString(item.productSku) ||
       !isOptionalNonEmptyString(item.localTransactionItemId) ||
       !isOptionalNonEmptyString(item.pendingCheckoutItemId) ||
+      !isOptionalPendingCheckoutAliasState(item.pendingCheckoutAliasState) ||
       !isOptionalNonEmptyString(item.inventoryImportProvisionalSkuId) ||
       !isPositiveInteger(item.quantity) ||
       !isNonNegativeFiniteNumber(item.unitPrice)
@@ -837,6 +838,10 @@ function toSaleItemInput(value: unknown): PosLocalSaleItemInput {
     productId: String(item.productId ?? ""),
     productSkuId: String(item.productSkuId ?? ""),
     pendingCheckoutItemId: optionalString(item.pendingCheckoutItemId),
+    pendingCheckoutAliasState:
+      item.pendingCheckoutAliasState === "linked_to_catalog"
+        ? "linked_to_catalog"
+        : undefined,
     inventoryImportProvisionalSkuId: optionalString(
       item.inventoryImportProvisionalSkuId,
     ),
@@ -880,7 +885,7 @@ function validateLocalSyncEventReferences(
     }
 
     if (
-      !isNonEmptyString(item.pendingCheckoutItemId) &&
+      !isPendingCheckoutLineWithoutTrustedAlias(item) &&
       !isNonEmptyString(item.inventoryImportProvisionalSkuId) &&
       isNonEmptyString(item.productId) &&
       !repository.normalizeCloudId("product", item.productId)
@@ -889,7 +894,7 @@ function validateLocalSyncEventReferences(
     }
 
     if (
-      !isNonEmptyString(item.pendingCheckoutItemId) &&
+      !isPendingCheckoutLineWithoutTrustedAlias(item) &&
       !isNonEmptyString(item.inventoryImportProvisionalSkuId) &&
       isNonEmptyString(item.productSkuId) &&
       !repository.normalizeCloudId("productSku", item.productSkuId)
@@ -1065,6 +1070,7 @@ function validateSaleCompletedPayload(payload: Record<string, unknown>) {
       !isNonEmptyString(item.productId) ||
       !isNonEmptyString(item.productSkuId) ||
       !isOptionalNonEmptyString(item.pendingCheckoutItemId) ||
+      !isOptionalPendingCheckoutAliasState(item.pendingCheckoutAliasState) ||
       !isOptionalString(item.productSku) ||
       !isOptionalNonEmptyString(item.localTransactionItemId) ||
       !isPositiveInteger(item.quantity) ||
@@ -1237,20 +1243,30 @@ function parseSaleCompletedPayload(
     },
     items: (payload.items as Record<string, unknown>[]).map((item) => {
       const pendingCheckoutItemId = optionalString(item.pendingCheckoutItemId);
+      const pendingCheckoutAliasState =
+        item.pendingCheckoutAliasState === "linked_to_catalog"
+          ? "linked_to_catalog" as const
+          : undefined;
       const inventoryImportProvisionalSkuId = optionalString(
         item.inventoryImportProvisionalSkuId,
       );
+      const isLinkedPendingCheckoutAlias =
+        pendingCheckoutAliasState === "linked_to_catalog";
 
       return {
         localTransactionItemId: optionalString(item.localTransactionItemId),
-        productId: pendingCheckoutItemId || inventoryImportProvisionalSkuId
+        productId:
+          (pendingCheckoutItemId && !isLinkedPendingCheckoutAlias) ||
+          inventoryImportProvisionalSkuId
           ? (item.productId as string)
           : requireNormalizedCloudId(
               repository,
               "product",
               item.productId as string,
             ),
-        productSkuId: pendingCheckoutItemId || inventoryImportProvisionalSkuId
+        productSkuId:
+          (pendingCheckoutItemId && !isLinkedPendingCheckoutAlias) ||
+          inventoryImportProvisionalSkuId
           ? (item.productSkuId as string)
           : requireNormalizedCloudId(
               repository,
@@ -1260,6 +1276,7 @@ function parseSaleCompletedPayload(
         pendingCheckoutItemId: pendingCheckoutItemId as
           | Id<"posPendingCheckoutItem">
           | undefined,
+        pendingCheckoutAliasState,
         inventoryImportProvisionalSkuId,
         productName: item.productName as string,
         productSku: optionalDisplayString(item.productSku),
@@ -1396,6 +1413,21 @@ function isNonEmptyString(value: unknown): value is string {
 
 function isOptionalNonEmptyString(value: unknown): value is string | undefined {
   return value === undefined || isNonEmptyString(value);
+}
+
+function isOptionalPendingCheckoutAliasState(
+  value: unknown,
+): value is "linked_to_catalog" | undefined {
+  return value === undefined || value === "linked_to_catalog";
+}
+
+function isPendingCheckoutLineWithoutTrustedAlias(
+  item: Record<string, unknown>,
+) {
+  return (
+    isNonEmptyString(item.pendingCheckoutItemId) &&
+    item.pendingCheckoutAliasState !== "linked_to_catalog"
+  );
 }
 
 function isOptionalString(value: unknown): value is string | undefined {

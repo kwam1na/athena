@@ -10,7 +10,15 @@ import { getOrigin } from "~/src/lib/navigationUtils";
 import { slugToWords } from "~/src/lib/utils";
 import { usePermissions } from "~/src/hooks/usePermissions";
 
-export default function StoreProducts({ products }: { products: Product[] }) {
+export default function StoreProducts({
+  onPageIndexChange,
+  pageIndex,
+  products,
+}: {
+  onPageIndexChange?: (pageIndex: number) => void;
+  pageIndex?: number;
+  products: Product[];
+}) {
   const { categorySlug } = useSearch({ strict: false });
   const { hasFullAdminAccess } = usePermissions();
 
@@ -18,7 +26,12 @@ export default function StoreProducts({ products }: { products: Product[] }) {
     <div className="container mx-auto">
       {products && products.length > 0 && (
         <div className="py-8">
-          <DataTable data={products} columns={productColumns} />
+          <DataTable
+            data={products}
+            columns={productColumns}
+            onPageIndexChange={onPageIndexChange}
+            pageIndex={pageIndex}
+          />
         </div>
       )}
       {products && products.length == 0 && (

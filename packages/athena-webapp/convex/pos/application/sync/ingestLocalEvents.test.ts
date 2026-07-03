@@ -1682,6 +1682,53 @@ describe("createLocalSyncIngestionService", () => {
     expect(repository.createdTransactions).toHaveLength(1);
   });
 
+  it("rejects malformed pending checkout alias state before projection side effects", async () => {
+    const repository = createFakeSyncRepository();
+    const service = createLocalSyncIngestionService({
+      repository,
+      projectionRepository: repository,
+      now: () => 100,
+    });
+
+    const result = await service.ingestBatch(
+      buildBatch({
+        events: [
+          buildSaleCompletedEvent({ sequence: 1 }),
+          buildSaleCompletedEvent({
+            sequence: 2,
+            payload: {
+              ...buildSaleCompletedEvent({ sequence: 2 }).payload,
+              items: [
+                {
+                  localTransactionItemId: "local-txn-item-1",
+                  productId: "product-1",
+                  productSkuId: "sku-1",
+                  pendingCheckoutItemId: "pending-checkout-item-1",
+                  pendingCheckoutAliasState: "linked" as never,
+                  productName: "Wig Cap",
+                  productSku: "CAP-1",
+                  quantity: 1,
+                  unitPrice: 25,
+                },
+              ],
+            },
+          }),
+        ],
+      }),
+    );
+
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") throw new Error("Expected ok result");
+
+    expect(result.data.accepted.at(-1)).toEqual(
+      expect.objectContaining({
+        localEventId: "event-sale-completed-2",
+        status: "rejected",
+      }),
+    );
+    expect(repository.createdTransactions).toHaveLength(1);
+  });
+
   it("rejects non-cash overpayments before projection side effects", async () => {
     const repository = createFakeSyncRepository();
     const service = createLocalSyncIngestionService({
@@ -2753,6 +2800,46 @@ describe("createLocalSyncIngestionService", () => {
             localTransactionItemId: "local-txn-item-1",
             productId: "product-1" as never,
             productSkuId: "not-a-sku-id" as never,
+            productName: "Wig Cap",
+            productSku: "CAP-1",
+            quantity: 1,
+            unitPrice: 25,
+          },
+        ],
+      },
+      rejectionMessage: "POS sale product SKU reference is invalid.",
+    },
+    {
+      invalidId: "not-a-product-id",
+      payload: {
+        ...buildSaleCompletedEvent({ sequence: 2 }).payload,
+        items: [
+          {
+            localTransactionItemId: "local-txn-item-1",
+            productId: "not-a-product-id" as never,
+            productSkuId: "sku-1" as never,
+            pendingCheckoutItemId: "pending-checkout-item-1" as never,
+            pendingCheckoutAliasState: "linked_to_catalog" as const,
+            productName: "Wig Cap",
+            productSku: "CAP-1",
+            quantity: 1,
+            unitPrice: 25,
+          },
+        ],
+      },
+      rejectionMessage: "POS sale product reference is invalid.",
+    },
+    {
+      invalidId: "not-a-sku-id",
+      payload: {
+        ...buildSaleCompletedEvent({ sequence: 2 }).payload,
+        items: [
+          {
+            localTransactionItemId: "local-txn-item-1",
+            productId: "product-1" as never,
+            productSkuId: "not-a-sku-id" as never,
+            pendingCheckoutItemId: "pending-checkout-item-1" as never,
+            pendingCheckoutAliasState: "linked_to_catalog" as const,
             productName: "Wig Cap",
             productSku: "CAP-1",
             quantity: 1,

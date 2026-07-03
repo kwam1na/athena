@@ -40,7 +40,7 @@ export function mapCatalogRowToProduct(
           : "out_of_stock";
 
   return {
-    id: row.id ?? row.productSkuId,
+    id: row.catalogRowKey ?? row.id ?? row.productSkuId,
     name: row.name,
     sku: row.sku ?? "",
     barcode: row.barcode ?? "",

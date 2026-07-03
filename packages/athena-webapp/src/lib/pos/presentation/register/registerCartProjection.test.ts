@@ -7,6 +7,7 @@ import type { PosLocalRegisterReadModel } from "@/lib/pos/infrastructure/local/r
 import {
   buildCatalogRepresentedPendingCheckoutItemIds,
   buildCatalogRepresentedPendingCheckoutLocalEventIds,
+  buildCatalogRepresentedPendingCheckoutProductSignatures,
   buildLocalPendingCheckoutDefinitionEventIdsByItemId,
   cartItemsFromLocalRegisterModel,
   mapLocalPendingCheckoutEventsToProducts,
@@ -135,6 +136,22 @@ describe("registerCartProjection", () => {
       "local-event-1",
       "local-event-2",
     ]);
+
+    const representedProductSignatures =
+      buildCatalogRepresentedPendingCheckoutProductSignatures([
+        {
+          name: "Yeeeee",
+          pendingCheckoutAliasState: "linked_to_catalog",
+          price: 400,
+        },
+        {
+          name: "Other pending item",
+          pendingCheckoutAliasState: null,
+          price: 400,
+        },
+      ]);
+
+    expect([...representedProductSignatures]).toEqual(["yeeeee:400"]);
   });
 
   it("maps local pending checkout definitions to their local event ids", () => {

@@ -195,6 +195,7 @@ let mockCashier: { firstName: string; lastName: string } | null;
 let mockUser: { _id: Id<"athenaUser"> } | null;
 let mockRegisterCatalogRows: Array<{
   id: Id<"productSku">;
+  catalogRowKey?: string;
   productSkuId: Id<"productSku">;
   skuId: Id<"productSku">;
   productId: Id<"product">;
@@ -210,6 +211,10 @@ let mockRegisterCatalogRows: Array<{
   color: string;
   areProcessingFeesAbsorbed: boolean;
   inventoryImportProvisionalSkuId?: Id<"inventoryImportProvisionalSku">;
+  pendingCheckoutItemId?: Id<"posPendingCheckoutItem">;
+  suppressedPendingCheckoutItemIds?: Array<Id<"posPendingCheckoutItem">>;
+  suppressedPendingCheckoutLocalEventIds?: string[];
+  suppressFromRegisterSearch?: true;
   availabilityPolicy?:
     | "trusted_inventory"
     | "active_provisional_import"
@@ -9369,6 +9374,175 @@ describe("useRegisterViewModel", () => {
     );
   });
 
+  it("hides locally saved pending checkout items when their projected pending item is archived", async () => {
+    mockListLocalEvents.mockResolvedValue({
+      ok: true,
+      value: [
+        buildLocalEvent({
+          sequence: 1,
+          type: "register.opened",
+          payload: {
+            localRegisterSessionId: "drawer-1",
+            openingFloat: 5_000,
+            expectedCash: 5_000,
+          },
+        }),
+        buildLocalEvent({
+          sequence: 2,
+          type: "session.started",
+          localPosSessionId: "session-1",
+          payload: {
+            localPosSessionId: "session-1",
+            registerSessionId: "drawer-1",
+          },
+        }),
+        buildLocalEvent({
+          sequence: 3,
+          type: "pending_checkout_item.defined",
+          localPosSessionId: "session-1",
+          payload: {
+            localPendingCheckoutItemId: "local-pending-1",
+            name: "Saa",
+            price: 900,
+            quantitySold: 1,
+            localMetadata: {
+              schema: "pos_pending_checkout_item_local_metadata_v1",
+              cloudValidation: "uncertain",
+              createdOffline: true,
+            },
+          },
+        }),
+        buildLocalEvent({
+          sequence: 4,
+          type: "cart.item_added",
+          localPosSessionId: "session-1",
+          payload: {
+            localItemId: "local-item-1",
+            productId: "local-pending-product-1",
+            productSkuId: "local-pending-sku-1",
+            pendingCheckoutItemId: "local-pending-1",
+            productName: "Saa",
+            productSku: "7101-C06-4BE",
+            quantity: 1,
+            price: 900,
+          },
+        }),
+        buildLocalEvent({
+          sequence: 5,
+          type: "transaction.completed",
+          localPosSessionId: "session-1",
+          localTransactionId: "transaction-1",
+          payload: {
+            localTransactionId: "transaction-1",
+            receiptNumber: "LOCAL-1",
+            items: [
+              {
+                localItemId: "local-item-1",
+                productId: "local-pending-product-1",
+                productSkuId: "local-pending-sku-1",
+                pendingCheckoutItemId: "local-pending-1",
+                productName: "Saa",
+                productSku: "7101-C06-4BE",
+                quantity: 1,
+                price: 900,
+              },
+            ],
+            payments: [{ id: "payment-1", method: "cash", amount: 900 }],
+            subtotal: 900,
+            tax: 0,
+            total: 900,
+          },
+        }),
+        buildLocalEvent({
+          sequence: 6,
+          type: "session.started",
+          localPosSessionId: "session-2",
+          payload: {
+            localPosSessionId: "session-2",
+            registerSessionId: "drawer-1",
+          },
+        }),
+      ],
+    });
+    mockRegisterCatalogRows = [
+      {
+        id: "local-pending-sku-1" as Id<"productSku">,
+        catalogRowKey: "suppressed-pending-checkout:pending-archived",
+        productId: "local-pending-product-1" as Id<"product">,
+        productSkuId: "local-pending-sku-1" as Id<"productSku">,
+        skuId: "local-pending-sku-1" as Id<"productSku">,
+        pendingCheckoutItemId:
+          "pending-archived" as Id<"posPendingCheckoutItem">,
+        suppressedPendingCheckoutItemIds: [
+          "pending-archived" as Id<"posPendingCheckoutItem">,
+        ],
+        suppressedPendingCheckoutLocalEventIds: ["event-3"],
+        suppressFromRegisterSearch: true,
+        name: "Saa",
+        sku: "7101-C06-4BE",
+        barcode: "",
+        price: 900,
+        category: "Pending checkout",
+        description: "Archived pending checkout item",
+        image: null,
+        size: "",
+        length: null,
+        color: "",
+        areProcessingFeesAbsorbed: false,
+        availabilityPolicy: "pending_checkout",
+      },
+    ];
+    mockRegisterState = {
+      phase: "active",
+      terminal: { _id: "terminal-1", displayName: "Front Counter" },
+      cashier: { _id: "staff-1", firstName: "Ama", lastName: "Kusi" },
+      activeRegisterSession: {
+        _id: "drawer-1",
+        status: "open",
+        terminalId: "terminal-1",
+        registerNumber: "1",
+        openingFloat: 5_000,
+        expectedCash: 5_000,
+        openedAt: Date.now(),
+      },
+      activeSession: { _id: "session-2", sessionNumber: "POS-0002" },
+      activeSessionConflict: null,
+      resumableSession: null,
+    };
+    mockActiveSession = {
+      ...mockActiveSession!,
+      _id: "session-2" as Id<"posSession">,
+      cartItems: [],
+      registerSessionId: "drawer-1" as Id<"registerSession">,
+    };
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated({
+        activeRoles: ["cashier"],
+        staffProfileId: "staff-1" as Id<"staffProfile">,
+        staffProfile: {
+          firstName: "Ama",
+          lastName: "Kusi",
+        },
+        posLocalStaffProof: {
+          expiresAt: Date.now() + 60_000,
+          token: "staff-proof-token",
+        },
+      });
+    });
+
+    act(() => {
+      result.current.productEntry.setProductSearchQuery("saa");
+    });
+
+    await waitFor(() =>
+      expect(result.current.productEntry.searchResults).toEqual([]),
+    );
+  });
+
   it("completes cloud-backed local cart changes with existing cloud cart lines", async () => {
     const localEvents: Array<Record<string, unknown>> = [];
     mockAppendLocalEvent.mockImplementation(
@@ -10190,7 +10364,9 @@ describe("useRegisterViewModel", () => {
     expect(
       result.current.drawerGate?.closeoutSubmittedVariance,
     ).toBeUndefined();
-    expect(result.current.drawerGate?.closeoutSecondaryActionLabel).toBeUndefined();
+    expect(
+      result.current.drawerGate?.closeoutSecondaryActionLabel,
+    ).toBeUndefined();
     expect(result.current.drawerGate?.onSubmit).toEqual(expect.any(Function));
     expect(result.current.drawerGate?.onSubmitCloseout).toBeUndefined();
     expect(result.current.productEntry.disabled).toBe(true);

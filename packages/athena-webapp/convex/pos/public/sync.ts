@@ -97,6 +97,7 @@ const posLocalSyncProductLineValidator = v.object({
   productId: v.string(),
   productSkuId: v.string(),
   pendingCheckoutItemId: v.optional(v.string()),
+  pendingCheckoutAliasState: v.optional(v.literal("linked_to_catalog")),
   inventoryImportProvisionalSkuId: v.optional(v.string()),
   productName: v.string(),
   productSku: v.string(),

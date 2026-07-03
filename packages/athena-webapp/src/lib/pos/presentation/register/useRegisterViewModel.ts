@@ -120,6 +120,7 @@ import {
 import {
   buildCatalogRepresentedPendingCheckoutItemIds,
   buildCatalogRepresentedPendingCheckoutLocalEventIds,
+  buildCatalogRepresentedPendingCheckoutProductSignatures,
   buildLocalCartItemPayload,
   buildLocalCartItemPayloadFromCartItem,
   buildLocalPendingCheckoutDefinitionEventIdsByItemId,
@@ -133,6 +134,7 @@ import {
   mapProductToOptimisticCartItem,
   mergeCartItemsBySku,
   optimisticCartProductKeyFromCartItem,
+  pendingCheckoutAliasProductSignature,
   pendingCheckoutFieldsMatchSearch,
   pendingCheckoutCartItemMatchesSearch,
   productCartSourceKey,
@@ -398,7 +400,9 @@ function selectPassiveCloseoutBlockedRegisterSession(
         _id?: Id<"registerSession"> | string;
         countedCash?: number;
         expectedCash?: number;
-        localSyncStatus?: CloseoutBlockedRegisterSession["localSyncStatus"] | null;
+        localSyncStatus?:
+          | CloseoutBlockedRegisterSession["localSyncStatus"]
+          | null;
         managerApprovalRequestId?: Id<"approvalRequest">;
         openedAt?: number;
         openingFloat?: number;
@@ -559,10 +563,8 @@ export function useRegisterViewModel(): RegisterViewModel {
     hasCashierPresenceRestoreGraceElapsed,
     setHasCashierPresenceRestoreGraceElapsed,
   ] = useState(false);
-  const [
-    visibleReadinessGuardReason,
-    setVisibleReadinessGuardReason,
-  ] = useState<RegisterReadinessGuardState["reason"] | null>(null);
+  const [visibleReadinessGuardReason, setVisibleReadinessGuardReason] =
+    useState<RegisterReadinessGuardState["reason"] | null>(null);
   const terminalRegisterNumber = terminal?.registerNumber
     ? trimOptional(terminal.registerNumber)
     : undefined;
@@ -1543,13 +1545,19 @@ export function useRegisterViewModel(): RegisterViewModel {
         product.skuId ? [product.skuId.toString()] : [],
       ),
     );
+    const catalogRowsRepresentingPendingCheckoutAliases =
+      registerCatalogRows ?? [];
     const catalogRepresentedPendingCheckoutItemIds =
       buildCatalogRepresentedPendingCheckoutItemIds(
-        registerSearchState.results,
+        catalogRowsRepresentingPendingCheckoutAliases,
       );
     const catalogRepresentedPendingCheckoutLocalEventIds =
       buildCatalogRepresentedPendingCheckoutLocalEventIds(
-        registerSearchState.results,
+        catalogRowsRepresentingPendingCheckoutAliases,
+      );
+    const catalogRepresentedPendingCheckoutProductSignatures =
+      buildCatalogRepresentedPendingCheckoutProductSignatures(
+        catalogRowsRepresentingPendingCheckoutAliases,
       );
     const localPendingCheckoutDefinitionEventIdsByItemId =
       buildLocalPendingCheckoutDefinitionEventIdsByItemId(
@@ -1576,6 +1584,7 @@ export function useRegisterViewModel(): RegisterViewModel {
           localPendingCheckoutDefinitionEventIdsByItemId.get(
             pendingCheckoutItemId,
           );
+        const productSignature = pendingCheckoutAliasProductSignature(item);
 
         return (
           !catalogRepresentedPendingCheckoutItemIds.has(
@@ -1585,6 +1594,12 @@ export function useRegisterViewModel(): RegisterViewModel {
             localDefinitionEventId &&
             catalogRepresentedPendingCheckoutLocalEventIds.has(
               localDefinitionEventId,
+            )
+          ) &&
+          !(
+            productSignature &&
+            catalogRepresentedPendingCheckoutProductSignatures.has(
+              productSignature,
             )
           ) &&
           !catalogProductSkuIds.has(item.skuId.toString()) &&
@@ -1608,10 +1623,13 @@ export function useRegisterViewModel(): RegisterViewModel {
       mapLocalPendingCheckoutEventsToProducts(
         localRegisterReadModel?.sourceEvents ?? [],
         { pendingCheckoutCloudItemIdByLocalId },
-      ).filter(
-        (product) =>
-          product.skuId &&
-          product.pendingCheckoutItemId &&
+      ).filter((product) => {
+        if (!product.skuId || !product.pendingCheckoutItemId) {
+          return false;
+        }
+        const productSignature = pendingCheckoutAliasProductSignature(product);
+
+        return (
           !catalogRepresentedPendingCheckoutItemIds.has(
             product.pendingCheckoutItemId.toString(),
           ) &&
@@ -1619,6 +1637,12 @@ export function useRegisterViewModel(): RegisterViewModel {
             product.pendingCheckoutDefinitionLocalEventId &&
             catalogRepresentedPendingCheckoutLocalEventIds.has(
               product.pendingCheckoutDefinitionLocalEventId,
+            )
+          ) &&
+          !(
+            productSignature &&
+            catalogRepresentedPendingCheckoutProductSignatures.has(
+              productSignature,
             )
           ) &&
           !catalogProductSkuIds.has(product.skuId.toString()) &&
@@ -1635,8 +1659,9 @@ export function useRegisterViewModel(): RegisterViewModel {
               skuId: product.skuId?.toString(),
             },
             productSearchQuery,
-          ),
-      );
+          )
+        );
+      });
 
     return [
       ...activePendingCheckoutProducts,
@@ -1649,6 +1674,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     localRegisterReadModel?.mappings,
     localRegisterReadModel?.sourceEvents,
     productSearchQuery,
+    registerCatalogRows,
     registerSearchState.results,
   ]);
   const exactSearchProduct = registerSearchState.exactMatch
