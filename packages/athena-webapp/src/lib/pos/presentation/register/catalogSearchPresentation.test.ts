@@ -62,4 +62,65 @@ describe("mapCatalogRowToProduct", () => {
       quantityAvailable: 0,
     });
   });
+
+  it("preserves linked pending alias provenance on trusted catalog rows", () => {
+    const product = mapCatalogRowToProduct(
+      {
+        id: "sku-1",
+        productId: "product-1",
+        productSkuId: "sku-1",
+        pendingCheckoutAliasState: "linked_to_catalog",
+        pendingCheckoutItemId: "pending-checkout-1",
+        availabilityPolicy: "trusted_inventory",
+        name: "Trusted item",
+        sku: "TRUSTED-1",
+        barcode: "123",
+        price: 20,
+      },
+      {
+        availabilityPolicy: "trusted_inventory",
+        inStock: true,
+        quantityAvailable: 4,
+      },
+    );
+
+    expect(product).toMatchObject({
+      id: "sku-1",
+      availabilityPolicy: "trusted_inventory",
+      availabilityMessage: undefined,
+      pendingCheckoutAliasState: "linked_to_catalog",
+      pendingCheckoutItemId: "pending-checkout-1",
+      quantityAvailable: 4,
+    });
+  });
+
+  it("uses catalog row keys for linked alias display identity", () => {
+    const product = mapCatalogRowToProduct(
+      {
+        id: "sku-1",
+        catalogRowKey: "pending-checkout-alias:pending-checkout-1",
+        productId: "product-1",
+        productSkuId: "sku-1",
+        pendingCheckoutAliasState: "linked_to_catalog",
+        pendingCheckoutItemId: "pending-checkout-1",
+        availabilityPolicy: "trusted_inventory",
+        name: "Yeeeee",
+        sku: "49D8-9D2-B4D",
+        barcode: "123",
+        price: 20,
+      },
+      {
+        availabilityPolicy: "trusted_inventory",
+        inStock: true,
+        quantityAvailable: 4,
+      },
+    );
+
+    expect(product).toMatchObject({
+      id: "pending-checkout-alias:pending-checkout-1",
+      skuId: "sku-1",
+      pendingCheckoutAliasState: "linked_to_catalog",
+      pendingCheckoutItemId: "pending-checkout-1",
+    });
+  });
 });

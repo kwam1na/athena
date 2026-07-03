@@ -862,15 +862,27 @@ async function mapOperationalTimelineEvent(
   const pendingCheckoutItem = pendingCheckoutItemId
     ? await ctx.db.get("posPendingCheckoutItem", pendingCheckoutItemId)
     : null;
+  const linkedPendingCheckoutProductId =
+    pendingCheckoutItem?.status === "linked_to_catalog"
+      ? pendingCheckoutItem.approvedProductId
+      : undefined;
+  const linkedPendingCheckoutProductSkuId =
+    pendingCheckoutItem?.status === "linked_to_catalog"
+      ? pendingCheckoutItem.approvedProductSkuId
+      : undefined;
   const productId =
     typeof metadata.productId === "string"
       ? metadata.productId
+      : linkedPendingCheckoutProductId
+        ? linkedPendingCheckoutProductId
       : typeof metadata.provisionalProductId === "string"
         ? metadata.provisionalProductId
         : pendingCheckoutItem?.provisionalProductId;
   const productSkuId =
     typeof metadata.productSkuId === "string"
       ? (metadata.productSkuId as Id<"productSku">)
+      : linkedPendingCheckoutProductSkuId
+        ? linkedPendingCheckoutProductSkuId
       : typeof metadata.provisionalProductSkuId === "string"
         ? (metadata.provisionalProductSkuId as Id<"productSku">)
         : pendingCheckoutItem?.provisionalProductSkuId;

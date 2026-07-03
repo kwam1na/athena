@@ -76,6 +76,55 @@ describe("projectLocalRegisterReadModel", () => {
     ]);
   });
 
+  it("projects local pending checkout cart items through their cloud mapping", () => {
+    const model = projectLocalRegisterReadModel({
+      events: [
+        event({
+          sequence: 1,
+          type: "register.opened",
+          localRegisterSessionId: "local-register-1",
+          payload: { openingFloat: 100 },
+        }),
+        event({
+          sequence: 2,
+          type: "session.started",
+          localRegisterSessionId: "local-register-1",
+          localPosSessionId: "local-sale-1",
+          payload: { localPosSessionId: "local-sale-1", status: "active" },
+        }),
+        event({
+          sequence: 3,
+          type: "cart.item_added",
+          localRegisterSessionId: "local-register-1",
+          localPosSessionId: "local-sale-1",
+          payload: {
+            localItemId: "local-item-1",
+            pendingCheckoutItemId: "local-pending-1",
+            productId: "local-pending-product-1",
+            productSkuId: "local-pending-sku-1",
+            productSku: "PENDING-1",
+            productName: "Pending checkout item",
+            price: 75,
+            quantity: 1,
+          },
+        }),
+      ],
+      mappings: [
+        {
+          entity: "pendingCheckoutItem",
+          localId: "local-pending-1",
+          cloudId: "cloud-pending-1",
+          mappedAt: 2_000,
+        },
+      ],
+      isOnline: true,
+    });
+
+    expect(model.activeSale?.items[0]?.pendingCheckoutItemId).toBe(
+      "cloud-pending-1",
+    );
+  });
+
   it("replays a local drawer, sale, cart, payment, and receipt history", () => {
     const model = projectLocalRegisterReadModel({
       events: [
@@ -1421,7 +1470,10 @@ describe("projectLocalRegisterReadModel", () => {
           type: "register.opened",
           localEventId: "duplicate-open",
           localRegisterSessionId: "local-register-2",
-          payload: { localRegisterSessionId: "local-register-2", openingFloat: 500 },
+          payload: {
+            localRegisterSessionId: "local-register-2",
+            openingFloat: 500,
+          },
           sync: { status: "needs_review", uploaded: true },
         }),
       ],

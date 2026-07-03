@@ -153,6 +153,10 @@ export function buildCompletedSalePayload(input: {
         "pendingCheckoutItemId" in item
           ? (item.pendingCheckoutItemId ?? null)
           : null,
+      pendingCheckoutAliasState:
+        "pendingCheckoutAliasState" in item
+          ? (item.pendingCheckoutAliasState ?? null)
+          : null,
       inventoryImportProvisionalSkuId:
         "inventoryImportProvisionalSkuId" in item
           ? (item.inventoryImportProvisionalSkuId ?? null)

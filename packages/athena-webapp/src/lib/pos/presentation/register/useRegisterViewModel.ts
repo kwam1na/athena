@@ -118,8 +118,12 @@ import {
   type StaffProfileRosterRow,
 } from "./registerCashierPresence";
 import {
+  buildCatalogRepresentedPendingCheckoutItemIds,
+  buildCatalogRepresentedPendingCheckoutLocalEventIds,
+  buildCatalogRepresentedPendingCheckoutProductSignatures,
   buildLocalCartItemPayload,
   buildLocalCartItemPayloadFromCartItem,
+  buildLocalPendingCheckoutDefinitionEventIdsByItemId,
   cartItemsFromLocalRegisterModel,
   cartLineSourceKey,
   getProductAvailabilityStatus,
@@ -130,6 +134,7 @@ import {
   mapProductToOptimisticCartItem,
   mergeCartItemsBySku,
   optimisticCartProductKeyFromCartItem,
+  pendingCheckoutAliasProductSignature,
   pendingCheckoutFieldsMatchSearch,
   pendingCheckoutCartItemMatchesSearch,
   productCartSourceKey,
@@ -395,7 +400,9 @@ function selectPassiveCloseoutBlockedRegisterSession(
         _id?: Id<"registerSession"> | string;
         countedCash?: number;
         expectedCash?: number;
-        localSyncStatus?: CloseoutBlockedRegisterSession["localSyncStatus"] | null;
+        localSyncStatus?:
+          | CloseoutBlockedRegisterSession["localSyncStatus"]
+          | null;
         managerApprovalRequestId?: Id<"approvalRequest">;
         openedAt?: number;
         openingFloat?: number;
@@ -556,10 +563,8 @@ export function useRegisterViewModel(): RegisterViewModel {
     hasCashierPresenceRestoreGraceElapsed,
     setHasCashierPresenceRestoreGraceElapsed,
   ] = useState(false);
-  const [
-    visibleReadinessGuardReason,
-    setVisibleReadinessGuardReason,
-  ] = useState<RegisterReadinessGuardState["reason"] | null>(null);
+  const [visibleReadinessGuardReason, setVisibleReadinessGuardReason] =
+    useState<RegisterReadinessGuardState["reason"] | null>(null);
   const terminalRegisterNumber = terminal?.registerNumber
     ? trimOptional(terminal.registerNumber)
     : undefined;
@@ -1540,15 +1545,67 @@ export function useRegisterViewModel(): RegisterViewModel {
         product.skuId ? [product.skuId.toString()] : [],
       ),
     );
+    const catalogRowsRepresentingPendingCheckoutAliases =
+      registerCatalogRows ?? [];
+    const catalogRepresentedPendingCheckoutItemIds =
+      buildCatalogRepresentedPendingCheckoutItemIds(
+        catalogRowsRepresentingPendingCheckoutAliases,
+      );
+    const catalogRepresentedPendingCheckoutLocalEventIds =
+      buildCatalogRepresentedPendingCheckoutLocalEventIds(
+        catalogRowsRepresentingPendingCheckoutAliases,
+      );
+    const catalogRepresentedPendingCheckoutProductSignatures =
+      buildCatalogRepresentedPendingCheckoutProductSignatures(
+        catalogRowsRepresentingPendingCheckoutAliases,
+      );
+    const localPendingCheckoutDefinitionEventIdsByItemId =
+      buildLocalPendingCheckoutDefinitionEventIdsByItemId(
+        localRegisterReadModel?.sourceEvents ?? [],
+      );
+    const pendingCheckoutCloudItemIdByLocalId = new Map(
+      (localRegisterReadModel?.mappings ?? []).flatMap((mapping) =>
+        mapping.entity === "pendingCheckoutItem"
+          ? [[mapping.localId, mapping.cloudId] as const]
+          : [],
+      ),
+    );
     const activePendingCheckoutProducts = activeCartItems
-      .filter(
-        (item) =>
-          "pendingCheckoutItemId" in item &&
-          Boolean(item.pendingCheckoutItemId) &&
-          item.skuId &&
+      .filter((item) => {
+        if (
+          !("pendingCheckoutItemId" in item) ||
+          !item.pendingCheckoutItemId ||
+          !item.skuId
+        ) {
+          return false;
+        }
+        const pendingCheckoutItemId = item.pendingCheckoutItemId.toString();
+        const localDefinitionEventId =
+          localPendingCheckoutDefinitionEventIdsByItemId.get(
+            pendingCheckoutItemId,
+          );
+        const productSignature = pendingCheckoutAliasProductSignature(item);
+
+        return (
+          !catalogRepresentedPendingCheckoutItemIds.has(
+            pendingCheckoutItemId,
+          ) &&
+          !(
+            localDefinitionEventId &&
+            catalogRepresentedPendingCheckoutLocalEventIds.has(
+              localDefinitionEventId,
+            )
+          ) &&
+          !(
+            productSignature &&
+            catalogRepresentedPendingCheckoutProductSignatures.has(
+              productSignature,
+            )
+          ) &&
           !catalogProductSkuIds.has(item.skuId.toString()) &&
-          pendingCheckoutCartItemMatchesSearch(item, productSearchQuery),
-      )
+          pendingCheckoutCartItemMatchesSearch(item, productSearchQuery)
+        );
+      })
       .map(mapPendingCheckoutCartItemToProduct);
     const activePendingCheckoutSkuIds = new Set(
       activePendingCheckoutProducts.flatMap((product) =>
@@ -1565,10 +1622,29 @@ export function useRegisterViewModel(): RegisterViewModel {
     const savedPendingCheckoutProducts =
       mapLocalPendingCheckoutEventsToProducts(
         localRegisterReadModel?.sourceEvents ?? [],
-      ).filter(
-        (product) =>
-          product.skuId &&
-          product.pendingCheckoutItemId &&
+        { pendingCheckoutCloudItemIdByLocalId },
+      ).filter((product) => {
+        if (!product.skuId || !product.pendingCheckoutItemId) {
+          return false;
+        }
+        const productSignature = pendingCheckoutAliasProductSignature(product);
+
+        return (
+          !catalogRepresentedPendingCheckoutItemIds.has(
+            product.pendingCheckoutItemId.toString(),
+          ) &&
+          !(
+            product.pendingCheckoutDefinitionLocalEventId &&
+            catalogRepresentedPendingCheckoutLocalEventIds.has(
+              product.pendingCheckoutDefinitionLocalEventId,
+            )
+          ) &&
+          !(
+            productSignature &&
+            catalogRepresentedPendingCheckoutProductSignatures.has(
+              productSignature,
+            )
+          ) &&
           !catalogProductSkuIds.has(product.skuId.toString()) &&
           !activePendingCheckoutSkuIds.has(product.skuId.toString()) &&
           !activePendingCheckoutItemIds.has(
@@ -1583,8 +1659,9 @@ export function useRegisterViewModel(): RegisterViewModel {
               skuId: product.skuId?.toString(),
             },
             productSearchQuery,
-          ),
-      );
+          )
+        );
+      });
 
     return [
       ...activePendingCheckoutProducts,
@@ -1594,8 +1671,10 @@ export function useRegisterViewModel(): RegisterViewModel {
   }, [
     activeCartItems,
     localRegisterCatalogAvailabilityBySkuId,
+    localRegisterReadModel?.mappings,
     localRegisterReadModel?.sourceEvents,
     productSearchQuery,
+    registerCatalogRows,
     registerSearchState.results,
   ]);
   const exactSearchProduct = registerSearchState.exactMatch
@@ -1721,8 +1800,8 @@ export function useRegisterViewModel(): RegisterViewModel {
   );
   const activeSessionNeedsRegisterBinding = Boolean(
     isCloudOperableSession(operableActiveSession) &&
-      !operableActiveSession.registerSessionId &&
-      !locallyOperableRegisterSession,
+    !operableActiveSession.registerSessionId &&
+    !locallyOperableRegisterSession,
   );
   const activeSessionHasMismatchedRegisterBinding = Boolean(
     isCloudOperableSession(operableActiveSession) &&
@@ -1818,8 +1897,9 @@ export function useRegisterViewModel(): RegisterViewModel {
     : null;
   const pendingLocalCloseoutRegisterSession =
     getPendingLocalCloseoutRegisterSession(localRegisterReadModel);
-  const pendingLocalCashVoidApprovals =
-    getPendingLocalCashVoidApprovals(localRegisterReadModel);
+  const pendingLocalCashVoidApprovals = getPendingLocalCashVoidApprovals(
+    localRegisterReadModel,
+  );
   const activeCloseoutRegisterSession =
     closeoutBlockedRegisterSession ??
     pendingLocalCloseoutRegisterSession ??
@@ -1872,14 +1952,14 @@ export function useRegisterViewModel(): RegisterViewModel {
           ? "drawerAuthorityRepair"
           : activeCloseoutCanOpenReplacementDrawer && canSignedInStaffOpenDrawer
             ? "initialSetup"
-          : hasCloseoutBlockedDrawerState || activeCloseoutRegisterSession
-            ? "closeoutBlocked"
-            : hasMissingDrawerRecoveryState ||
-                hasCloudBlockedRecoverableLocalSale ||
-                hasDraftDrawerRecoveryState ||
-                activeSessionHasBlockedRegisterBinding
-              ? "recovery"
-              : "initialSetup";
+            : hasCloseoutBlockedDrawerState || activeCloseoutRegisterSession
+              ? "closeoutBlocked"
+              : hasMissingDrawerRecoveryState ||
+                  hasCloudBlockedRecoverableLocalSale ||
+                  hasDraftDrawerRecoveryState ||
+                  activeSessionHasBlockedRegisterBinding
+                ? "recovery"
+                : "initialSetup";
   const handleRepairTerminalSetup = useCallback(async () => {
     if (!activeStoreId || !terminal?._id || typeof indexedDB === "undefined") {
       setDrawerErrorMessage(
@@ -3911,8 +3991,9 @@ export function useRegisterViewModel(): RegisterViewModel {
           createLocalFallbackId("local-item");
         const optimisticProductKey = product.id.toString();
         const removedLineKey = removedCartLineKeyFromProduct(product);
-        const hadRemovedLine =
-          Boolean(optimisticallyRemovedCartLineKeys[removedLineKey]);
+        const hadRemovedLine = Boolean(
+          optimisticallyRemovedCartLineKeys[removedLineKey],
+        );
         const previousOptimisticProduct =
           optimisticCartProducts[optimisticProductKey];
         const isExistingOptimisticProduct = existingItem?.id
@@ -5229,9 +5310,8 @@ export function useRegisterViewModel(): RegisterViewModel {
       : null;
   const parsedCloseoutCountedCash =
     parseDisplayAmountInput(closeoutCountedCash);
-  const activeCloseoutCloudRegisterSessionId = getCloseoutCloudRegisterSessionId(
-    activeCloseoutRegisterSession,
-  );
+  const activeCloseoutCloudRegisterSessionId =
+    getCloseoutCloudRegisterSessionId(activeCloseoutRegisterSession);
   const activeCloseoutCloudRegisterSessionCode =
     getCloseoutCloudRegisterSessionCode(
       activeCloseoutRegisterSession,
@@ -5248,14 +5328,12 @@ export function useRegisterViewModel(): RegisterViewModel {
         localRegisterReadModel,
       ),
     );
-  const activeCloseoutRegisterSessionCodeScope:
-    | "cloud"
-    | "local"
-    | undefined = activeCloseoutRegisterSessionCode
-    ? activeCloseoutCloudRegisterSessionCode
-      ? "cloud"
-      : "local"
-    : undefined;
+  const activeCloseoutRegisterSessionCodeScope: "cloud" | "local" | undefined =
+    activeCloseoutRegisterSessionCode
+      ? activeCloseoutCloudRegisterSessionCode
+        ? "cloud"
+        : "local"
+      : undefined;
   const shouldShowDrawerGate = Boolean(
     requiresDrawerGate ||
     activeCloseoutRegisterSession ||
@@ -5271,7 +5349,8 @@ export function useRegisterViewModel(): RegisterViewModel {
     "pendingVoidApprovals" in saleUsableActiveRegisterSession
       ? saleUsableActiveRegisterSession.pendingVoidApprovals
       : null);
-  const activeCloseoutExpectedCash = activeCloseoutRegisterSession?.expectedCash;
+  const activeCloseoutExpectedCash =
+    activeCloseoutRegisterSession?.expectedCash;
   const activeCloseoutPendingCashVoidContext =
     activeCloseoutPendingVoidApprovals
       ? getPendingCashVoidContext({
@@ -5352,9 +5431,10 @@ export function useRegisterViewModel(): RegisterViewModel {
                 activeCloseoutRegisterSession?.variance,
               closeoutNotes,
               closeoutSubmittedReason: activeCloseoutSubmittedReason,
-              closeoutSecondaryActionLabel: activeCloseoutCanOpenReplacementDrawer
-                ? "Open replacement drawer"
-                : "Return to sale",
+              closeoutSecondaryActionLabel:
+                activeCloseoutCanOpenReplacementDrawer
+                  ? "Open replacement drawer"
+                  : "Return to sale",
               registerSessionCode: activeCloseoutRegisterSessionCode,
               registerSessionCodeScope: activeCloseoutRegisterSessionCodeScope,
               onCloseoutSecondaryAction: activeCloseoutCanOpenReplacementDrawer
@@ -5397,7 +5477,8 @@ export function useRegisterViewModel(): RegisterViewModel {
                 : handleSubmitRegisterCloseout,
               onReopenRegister: activeCloseoutCanOpenReplacementDrawer
                 ? undefined
-                : isCashierManager && !activeCloseoutRegisterSessionHasSyncReview
+                : isCashierManager &&
+                    !activeCloseoutRegisterSessionHasSyncReview
                   ? handleReopenRegisterCloseout
                   : undefined,
               onSignOut: handleCashierSignOut,
@@ -5609,7 +5690,9 @@ export function useRegisterViewModel(): RegisterViewModel {
         }
       : null;
 
-  const readinessGuardCandidateReason: RegisterReadinessGuardState["reason"] | null =
+  const readinessGuardCandidateReason:
+    | RegisterReadinessGuardState["reason"]
+    | null =
     !isTransactionCompleted &&
     cashierPresenceRestore.status === "pending" &&
     !staffProfileId &&
@@ -5770,8 +5853,7 @@ export function useRegisterViewModel(): RegisterViewModel {
           : {}),
         ...(localRuntimeSyncSource?.debug?.activeRegisterSessionRepair
           ? {
-              repair:
-                localRuntimeSyncSource.debug.activeRegisterSessionRepair,
+              repair: localRuntimeSyncSource.debug.activeRegisterSessionRepair,
             }
           : {}),
       },
@@ -5872,7 +5954,8 @@ export function useRegisterViewModel(): RegisterViewModel {
       isSearchLoading: isRegisterSearchLoading,
       isSearchReady: isRegisterCatalogReady,
       canQuickAddProduct: terminalCanTransactProducts && isCashierManager,
-      canAddPendingCheckoutItem: terminalCanTransactProducts && isCashierManager,
+      canAddPendingCheckoutItem:
+        terminalCanTransactProducts && isCashierManager,
       pendingCheckoutContext:
         staffProfileId && terminal?._id && activeRegisterSessionId
           ? {

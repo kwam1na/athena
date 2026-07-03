@@ -31,11 +31,15 @@ function normalizeRegisterNumber(value?: string): string | undefined {
 function expenseSessionItemSourceKey(item: {
   pendingCheckoutItemId?: Id<"posPendingCheckoutItem">;
   inventoryImportProvisionalSkuId?: InventoryImportProvisionalSkuId;
+  linkedPendingTrustedItemIds?: Set<Id<"posPendingCheckoutItem">>;
 }) {
   if (item.inventoryImportProvisionalSkuId) {
     return `provisional_import:${item.inventoryImportProvisionalSkuId}`;
   }
-  if (item.pendingCheckoutItemId) {
+  if (
+    item.pendingCheckoutItemId &&
+    !item.linkedPendingTrustedItemIds?.has(item.pendingCheckoutItemId)
+  ) {
     return `pending_checkout:${item.pendingCheckoutItemId}`;
   }
   return "trusted_inventory";
@@ -174,6 +178,22 @@ function pendingCheckoutItemMatchesExpenseLine(
   );
 }
 
+function linkedPendingCheckoutItemMatchesTrustedExpenseLine(
+  pendingItem: Doc<"posPendingCheckoutItem"> | null,
+  args: {
+    productId: Id<"product">;
+    productSkuId: Id<"productSku">;
+    storeId: Id<"store">;
+  },
+) {
+  return (
+    pendingItem?.storeId === args.storeId &&
+    pendingItem.status === "linked_to_catalog" &&
+    pendingItem.approvedProductId === args.productId &&
+    pendingItem.approvedProductSkuId === args.productSkuId
+  );
+}
+
 async function validateExpensePendingCheckoutLine(
   dependencies: ExpenseSessionCommandDependencies,
   args: {
@@ -192,6 +212,10 @@ async function validateExpensePendingCheckoutLine(
   const pendingItem = await dependencies.repository.getPendingCheckoutItem(
     args.pendingCheckoutItemId,
   );
+  if (linkedPendingCheckoutItemMatchesTrustedExpenseLine(pendingItem, args)) {
+    return success({ isPendingCheckoutLine: false });
+  }
+
   if (!pendingCheckoutItemMatchesExpenseLine(pendingItem, args)) {
     return failure(
       "validationFailed",
@@ -502,6 +526,7 @@ export function createExpenseSessionCommandService(
       }
       const isPendingCheckoutLine =
         pendingValidation.data.isPendingCheckoutLine;
+      const pendingCheckoutItemIdForSession = args.pendingCheckoutItemId;
 
       const provisionalImportValidation =
         await validateExpenseProvisionalImportLine(dependencies, {
@@ -515,19 +540,49 @@ export function createExpenseSessionCommandService(
       }
       const isProvisionalImportLine =
         provisionalImportValidation.data.isProvisionalImportLine;
-      const nextLineSourceKey = expenseSessionItemSourceKey({
-        inventoryImportProvisionalSkuId:
-          provisionalImportValidation.data.inventoryImportProvisionalSkuId,
-        pendingCheckoutItemId: args.pendingCheckoutItemId,
-      });
       const sameSkuItems = (await dependencies.repository.listSessionItems(
         args.sessionId,
       )).filter((item) => item.productSkuId === args.productSkuId);
+      const linkedPendingTrustedItemIds = new Set<Id<"posPendingCheckoutItem">>();
+      if (!isPendingCheckoutLine && args.pendingCheckoutItemId) {
+        linkedPendingTrustedItemIds.add(args.pendingCheckoutItemId);
+      }
+      await Promise.all(
+        sameSkuItems.map(async (item) => {
+          if (!item.pendingCheckoutItemId) return;
+          const pendingItem =
+            await dependencies.repository.getPendingCheckoutItem(
+              item.pendingCheckoutItemId,
+            );
+          if (
+            linkedPendingCheckoutItemMatchesTrustedExpenseLine(pendingItem, {
+              productId: args.productId,
+              productSkuId: args.productSkuId,
+              storeId: validation.data.storeId,
+            })
+          ) {
+            linkedPendingTrustedItemIds.add(item.pendingCheckoutItemId);
+          }
+        }),
+      );
+      const nextLineSourceKey = expenseSessionItemSourceKey({
+        inventoryImportProvisionalSkuId:
+          provisionalImportValidation.data.inventoryImportProvisionalSkuId,
+        pendingCheckoutItemId: pendingCheckoutItemIdForSession,
+        linkedPendingTrustedItemIds,
+      });
       const existingItem = sameSkuItems.find(
-        (item) => expenseSessionItemSourceKey(item) === nextLineSourceKey,
+        (item) =>
+          expenseSessionItemSourceKey({
+            ...item,
+            linkedPendingTrustedItemIds,
+          }) === nextLineSourceKey,
       );
       const conflictingSourceItem = sameSkuItems.find((item) => {
-        const existingSourceKey = expenseSessionItemSourceKey(item);
+        const existingSourceKey = expenseSessionItemSourceKey({
+          ...item,
+          linkedPendingTrustedItemIds,
+        });
         if (existingSourceKey === nextLineSourceKey) return false;
         return !(
           existingSourceKey.startsWith("provisional_import:") &&
@@ -576,7 +631,7 @@ export function createExpenseSessionCommandService(
           price: args.price,
           barcode: args.barcode,
           color: args.color,
-          pendingCheckoutItemId: args.pendingCheckoutItemId,
+          pendingCheckoutItemId: pendingCheckoutItemIdForSession,
           inventoryImportProvisionalSkuId:
             provisionalImportValidation.data.inventoryImportProvisionalSkuId,
           inventoryHoldApplied:
@@ -621,7 +676,7 @@ export function createExpenseSessionCommandService(
           storeId: validation.data.storeId,
           productId: args.productId,
           productSkuId: args.productSkuId,
-          pendingCheckoutItemId: args.pendingCheckoutItemId,
+          pendingCheckoutItemId: pendingCheckoutItemIdForSession,
           inventoryImportProvisionalSkuId:
             provisionalImportValidation.data.inventoryImportProvisionalSkuId,
           inventoryHoldApplied,

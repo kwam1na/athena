@@ -723,6 +723,127 @@ describe("product catalog visibility", () => {
     ]);
   });
 
+  it("returns unarchived POS pending checkout products for catalog operations", async () => {
+    const { ctx } = createProductsQueryCtx({
+      category: [
+        {
+          _id: "category-pending",
+          name: "POS pending checkout",
+          slug: "pos-pending-checkout",
+          storeId: "storezzzz",
+        },
+        {
+          _id: "category-hair",
+          name: "Hair",
+          slug: "hair",
+          storeId: "storezzzz",
+        },
+      ],
+      product: [
+        {
+          _id: "product-pending-draft",
+          availability: "draft",
+          categoryId: "category-pending",
+          isVisible: false,
+          name: "Pending draft",
+          storeId: "storezzzz",
+          subcategoryId: "subcategory-1",
+        },
+        {
+          _id: "product-pending-live",
+          availability: "live",
+          categoryId: "category-pending",
+          isVisible: true,
+          name: "Pending live",
+          storeId: "storezzzz",
+          subcategoryId: "subcategory-1",
+        },
+        {
+          _id: "product-pending-archived",
+          availability: "archived",
+          categoryId: "category-pending",
+          isVisible: false,
+          name: "Pending archived",
+          storeId: "storezzzz",
+          subcategoryId: "subcategory-1",
+        },
+        {
+          _id: "product-other-category",
+          availability: "draft",
+          categoryId: "category-hair",
+          isVisible: false,
+          name: "Other category draft",
+          storeId: "storezzzz",
+          subcategoryId: "subcategory-1",
+        },
+      ],
+      productSku: [
+        {
+          _id: "sku-pending-draft",
+          images: [],
+          inventoryCount: 0,
+          isVisible: false,
+          price: 900,
+          productId: "product-pending-draft",
+          quantityAvailable: 0,
+          storeId: "storezzzz",
+        },
+        {
+          _id: "sku-pending-live",
+          images: [],
+          inventoryCount: 0,
+          isVisible: true,
+          price: 900,
+          productId: "product-pending-live",
+          quantityAvailable: 0,
+          storeId: "storezzzz",
+        },
+        {
+          _id: "sku-pending-archived",
+          images: [],
+          inventoryCount: 0,
+          isVisible: false,
+          price: 900,
+          productId: "product-pending-archived",
+          quantityAvailable: 0,
+          storeId: "storezzzz",
+        },
+        {
+          _id: "sku-other-category",
+          images: [],
+          inventoryCount: 0,
+          isVisible: false,
+          price: 900,
+          productId: "product-other-category",
+          quantityAvailable: 0,
+          storeId: "storezzzz",
+        },
+      ],
+    });
+
+    const products = await getHandler(getAll)(ctx, {
+      storeId: "storezzzz" as Id<"store">,
+      category: ["pos-pending-checkout"],
+      availability: "unarchived",
+      filters: {
+        isPriceZero: true,
+      },
+    });
+
+    expect(products.map((product: Row) => product._id)).toEqual([
+      "product-pending-draft",
+      "product-pending-live",
+    ]);
+    expect(products.flatMap((product: Row) => product.skus)).toEqual([
+      expect.objectContaining({
+        _id: "sku-pending-draft",
+      }),
+      expect.objectContaining({
+        _id: "sku-pending-live",
+      }),
+    ]);
+  });
+
   it("returns store catalog summary counts without returning product payloads", async () => {
     const { ctx } = createProductsQueryCtx({
       category: [

@@ -7,10 +7,10 @@ Graphify is the navigation layer for the repo graph. Use the entry docs below fo
 - [packages/AGENTS.md](../../packages/AGENTS.md) - package router plus the operational guides for each harnessed package
 
 ## Repo Summary
-- Code files discovered: 2161
-- Graph nodes: 8506
-- Graph edges: 10260
-- Communities: 2088
+- Code files discovered: 2163
+- Graph nodes: 8535
+- Graph edges: 10326
+- Communities: 2090
 
 ## Graph Hotspots
 - `dailyClose.ts` (102 edges, Community 0) - [`packages/athena-webapp/convex/operations/dailyClose.ts`](../../packages/athena-webapp/convex/operations/dailyClose.ts)
@@ -19,8 +19,8 @@ Graphify is the navigation layer for the repo graph. Use the entry docs below fo
 - `dailyOperations.ts` (71 edges, Community 3) - [`packages/athena-webapp/convex/operations/dailyOperations.ts`](../../packages/athena-webapp/convex/operations/dailyOperations.ts)
 - `DailyCloseView.tsx` (66 edges, Community 4) - [`packages/athena-webapp/src/components/operations/DailyCloseView.tsx`](../../packages/athena-webapp/src/components/operations/DailyCloseView.tsx)
 - `projectLocalEvents.ts` (65 edges, Community 5) - [`packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.ts`](../../packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.ts)
+- `ingestLocalEvents.ts` (56 edges, Community 7) - [`packages/athena-webapp/convex/pos/application/sync/ingestLocalEvents.ts`](../../packages/athena-webapp/convex/pos/application/sync/ingestLocalEvents.ts)
 - `posLocalStore.ts` (56 edges, Community 6) - [`packages/athena-webapp/src/lib/pos/infrastructure/local/posLocalStore.ts`](../../packages/athena-webapp/src/lib/pos/infrastructure/local/posLocalStore.ts)
-- `ingestLocalEvents.ts` (54 edges, Community 7) - [`packages/athena-webapp/convex/pos/application/sync/ingestLocalEvents.ts`](../../packages/athena-webapp/convex/pos/application/sync/ingestLocalEvents.ts)
 
 ## Registered Packages
 - [Athena Webapp](packages/athena-webapp.md)

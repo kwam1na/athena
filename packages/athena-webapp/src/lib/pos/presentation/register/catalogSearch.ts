@@ -12,6 +12,7 @@ import type { PosServiceMode } from "@/lib/pos/domain";
 
 export interface RegisterCatalogSearchRow {
   id?: string;
+  catalogRowKey?: string | null;
   productId: string;
   productSkuId: string;
   name: string;
@@ -31,6 +32,19 @@ export interface RegisterCatalogSearchRow {
     | "pending_checkout";
   inventoryImportProvisionalSkuId?: string | null;
   pendingCheckoutItemId?: string | null;
+  pendingCheckoutAliasState?: "linked_to_catalog" | null;
+  pendingCheckoutAliasLookupCode?: string | null;
+  pendingCheckoutAliasName?: string | null;
+  pendingCheckoutAliasPrice?: number | null;
+  pendingCheckoutAliasTrustedName?: string | null;
+  pendingCheckoutAliasTrustedSku?: string | null;
+  pendingCheckoutAliasTrustedCategory?: string | null;
+  pendingCheckoutAliasTrustedDescription?: string | null;
+  linkedPendingCheckoutItemIds?: string[] | null;
+  linkedPendingCheckoutLocalEventIds?: string[] | null;
+  suppressedPendingCheckoutItemIds?: string[] | null;
+  suppressedPendingCheckoutLocalEventIds?: string[] | null;
+  suppressFromRegisterSearch?: true | null;
 }
 
 export type RegisterCatalogSearchResult =
@@ -115,20 +129,47 @@ type ParsedCatalogSearchInput =
 export function buildRegisterCatalogIndex(
   rows: readonly RegisterCatalogSearchRow[],
 ): RegisterCatalogIndex {
+  const searchableCatalogRows = rows.filter(
+    (row) => row.suppressFromRegisterSearch !== true,
+  );
   const byBarcode = new Map<string, RegisterCatalogSearchRow[]>();
   const bySku = new Map<string, RegisterCatalogSearchRow[]>();
   const byProductSkuId = new Map<string, RegisterCatalogSearchRow[]>();
   const byProductId = new Map<string, RegisterCatalogSearchRow[]>();
 
-  const indexedRows = rows.map((row) => {
+  const indexedRows = searchableCatalogRows.map((row) => {
     addKey(byBarcode, normalizeIdentifier(row.barcode), row);
     addKey(bySku, normalizeIdentifier(row.sku), row);
+    const aliasLookupCode = normalizeIdentifier(
+      row.pendingCheckoutAliasLookupCode,
+    );
+    if (
+      aliasLookupCode &&
+      aliasLookupCode !== normalizeIdentifier(row.barcode)
+    ) {
+      addKey(byBarcode, aliasLookupCode, row);
+    }
+    if (aliasLookupCode && aliasLookupCode !== normalizeIdentifier(row.sku)) {
+      addKey(bySku, aliasLookupCode, row);
+    }
+    const aliasTrustedSku = normalizeIdentifier(
+      row.pendingCheckoutAliasTrustedSku,
+    );
+    if (aliasTrustedSku && aliasTrustedSku !== normalizeIdentifier(row.sku)) {
+      addKey(bySku, aliasTrustedSku, row);
+    }
     addKey(byProductSkuId, normalizeIdentifier(row.productSkuId), row);
     addKey(byProductId, normalizeIdentifier(row.productId), row);
 
     return createFuzzySearchEntry(row, {
       name: row.name,
       sku: row.sku,
+      aliasName: row.pendingCheckoutAliasName,
+      aliasLookupCode: row.pendingCheckoutAliasLookupCode,
+      aliasTrustedName: row.pendingCheckoutAliasTrustedName,
+      aliasTrustedSku: row.pendingCheckoutAliasTrustedSku,
+      aliasTrustedCategory: row.pendingCheckoutAliasTrustedCategory,
+      aliasTrustedDescription: row.pendingCheckoutAliasTrustedDescription,
       category: row.category,
       description: row.description,
       attributes: normalizeSearchText([
@@ -140,7 +181,7 @@ export function buildRegisterCatalogIndex(
   });
 
   return {
-    rows: [...rows],
+    rows: searchableCatalogRows,
     byBarcode,
     bySku,
     byProductSkuId,
@@ -170,12 +211,13 @@ export function searchRegisterCatalog(
   const exactResults = findExactMatches(index, parsed.value);
 
   if (exactResults.length > 0) {
-    const exactMatch = exactResults.length === 1 ? exactResults[0] : null;
+    const results = applyLinkedPendingAliasDisplay(exactResults, parsed.value);
+    const exactMatch = results.length === 1 ? results[0] : null;
 
     return {
       intent: "exact",
       query,
-      results: exactResults,
+      results,
       exactMatch,
       canAutoAdd: false,
     };
@@ -347,16 +389,176 @@ function searchByText(
   input: string,
   limit = 20,
 ): RegisterCatalogSearchRow[] {
-  return searchFuzzyEntries(index.searchableRows, input, {
+  const linkedPendingAliasMatches = searchLinkedPendingAliasesByText(
+    index.rows,
+    input,
+    limit,
+  );
+  const fuzzyMatches = searchFuzzyEntries(index.searchableRows, input, {
     fieldWeights: {
       name: 8,
       sku: 6,
+      aliasName: 5,
+      aliasLookupCode: 5,
+      aliasTrustedName: 8,
+      aliasTrustedSku: 6,
+      aliasTrustedCategory: 4,
+      aliasTrustedDescription: 2,
       category: 4,
       attributes: 3,
       description: 2,
     },
     limit,
   });
+
+  return applyLinkedPendingAliasDisplay(
+    dedupeRegisterCatalogRows([
+      ...linkedPendingAliasMatches,
+      ...fuzzyMatches,
+    ]).slice(0, limit),
+    input,
+  );
+}
+
+function applyLinkedPendingAliasDisplay(
+  rows: RegisterCatalogSearchRow[],
+  input: string,
+): RegisterCatalogSearchRow[] {
+  return rows.map((row) => {
+    const trustedName = row.pendingCheckoutAliasTrustedName?.trim();
+
+    if (row.pendingCheckoutAliasState !== "linked_to_catalog" || !trustedName) {
+      return row;
+    }
+
+    const trustedIdentityMatches = searchTextIncludesQuery(
+      [
+        row.pendingCheckoutAliasTrustedName,
+        row.pendingCheckoutAliasTrustedSku,
+        row.pendingCheckoutAliasTrustedCategory,
+        row.pendingCheckoutAliasTrustedDescription,
+      ],
+      input,
+    );
+    const aliasIdentityMatches = searchTextIncludesQuery(
+      [
+        row.pendingCheckoutAliasName,
+        row.pendingCheckoutAliasLookupCode,
+        row.name,
+        row.sku,
+        row.barcode,
+      ],
+      input,
+    );
+
+    if (!trustedIdentityMatches || aliasIdentityMatches) {
+      return row;
+    }
+
+    return {
+      ...row,
+      name: trustedName,
+    };
+  });
+}
+
+function searchTextIncludesQuery(
+  values: Array<string | null | undefined>,
+  input: string,
+): boolean {
+  const normalizedQuery = normalizeSearchText(input);
+  const compactQuery = compactSearchText(normalizedQuery);
+
+  if (!normalizedQuery || compactQuery.length < 2) {
+    return false;
+  }
+
+  return values
+    .map((value) => normalizeSearchText(value))
+    .some((value) => {
+      if (!value) {
+        return false;
+      }
+      return (
+        value.includes(normalizedQuery) ||
+        compactSearchText(value).includes(compactQuery)
+      );
+    });
+}
+
+function dedupeRegisterCatalogRows(
+  rows: RegisterCatalogSearchRow[],
+): RegisterCatalogSearchRow[] {
+  const seenKeys = new Set<string>();
+  const deduped: RegisterCatalogSearchRow[] = [];
+
+  for (const row of rows) {
+    const key = registerCatalogRowSearchKey(row);
+    if (seenKeys.has(key)) {
+      continue;
+    }
+    seenKeys.add(key);
+    deduped.push(row);
+  }
+
+  return deduped;
+}
+
+function searchLinkedPendingAliasesByText(
+  rows: readonly RegisterCatalogSearchRow[],
+  input: string,
+  limit: number,
+): RegisterCatalogSearchRow[] {
+  const normalizedQuery = normalizeSearchText(input);
+  const compactQuery = compactSearchText(normalizedQuery);
+
+  if (compactQuery.length < 2) {
+    return [];
+  }
+
+  return rows
+    .filter((row) => {
+      if (row.pendingCheckoutAliasState !== "linked_to_catalog") {
+        return false;
+      }
+
+      return [
+        row.pendingCheckoutAliasName,
+        row.pendingCheckoutAliasLookupCode,
+        row.pendingCheckoutAliasTrustedName,
+        row.pendingCheckoutAliasTrustedSku,
+        row.pendingCheckoutAliasTrustedCategory,
+        row.pendingCheckoutAliasTrustedDescription,
+        row.name,
+        row.sku,
+        row.barcode,
+      ]
+        .map((value) => normalizeSearchText(value))
+        .some((value) => {
+          if (!value) {
+            return false;
+          }
+          return (
+            value.includes(normalizedQuery) ||
+            compactSearchText(value).includes(compactQuery)
+          );
+        });
+    })
+    .slice(0, limit);
+}
+
+function registerCatalogRowSearchKey(row: RegisterCatalogSearchRow) {
+  return (
+    [
+      row.catalogRowKey,
+      row.inventoryImportProvisionalSkuId,
+      row.pendingCheckoutItemId,
+      row.id,
+      row.productSkuId,
+    ]
+      .find((value) => value)
+      ?.toString() ?? row.productSkuId
+  );
 }
 
 function searchRegisterServiceCatalogByText(
@@ -389,6 +591,10 @@ function normalizeSearchText(value: unknown): string {
     .replace(/[^a-z0-9]+/g, " ")
     .trim()
     .replace(/\s+/g, " ");
+}
+
+function compactSearchText(value: string) {
+  return normalizeSearchText(value).replace(/\s+/g, "");
 }
 
 function addKey<T>(map: Map<string, T[]>, key: string, row: T): void {

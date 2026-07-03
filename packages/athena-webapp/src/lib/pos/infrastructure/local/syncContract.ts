@@ -8,6 +8,7 @@ import type {
   PosLocalSyncPendingCheckoutItemDefinedPayload,
   PosLocalSyncPendingCheckoutItemLocalMetadata,
   PosLocalSyncPendingCheckoutItemSearchContext,
+  PosLocalSyncSaleItemPayload,
   PosLocalSyncServiceLinePayload,
   PosLocalSyncUploadEvent,
 } from "../../../../../shared/posLocalSyncContract";
@@ -322,7 +323,7 @@ function getCompletedSaleItems(
     .map((candidate) => toSaleItemPayload(candidate.payload));
 }
 
-function toSaleItemPayload(value: unknown) {
+function toSaleItemPayload(value: unknown): PosLocalSyncSaleItemPayload {
   const payload = asRecord(value);
   return {
     localTransactionItemId: stringOrEmpty(payload.localItemId),
@@ -331,6 +332,10 @@ function toSaleItemPayload(value: unknown) {
     pendingCheckoutItemId: nullableStringToOptional(
       payload.pendingCheckoutItemId,
     ),
+    pendingCheckoutAliasState:
+      payload.pendingCheckoutAliasState === "linked_to_catalog"
+        ? "linked_to_catalog"
+        : undefined,
     inventoryImportProvisionalSkuId: nullableStringToOptional(
       payload.inventoryImportProvisionalSkuId,
     ),

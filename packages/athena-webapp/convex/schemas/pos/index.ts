@@ -19,3 +19,4 @@ export * from "./posLocalSyncEvent";
 export * from "./posLocalSyncMapping";
 export * from "./posLocalStaffProof";
 export * from "./posPendingCheckoutItem";
+export * from "./posPendingCheckoutLookupAlias";

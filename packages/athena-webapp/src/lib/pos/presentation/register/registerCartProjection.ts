@@ -25,6 +25,7 @@ export function mapProductToOptimisticCartItem(
     productId: product.productId,
     skuId: product.skuId,
     pendingCheckoutItemId: product.pendingCheckoutItemId,
+    pendingCheckoutAliasState: product.pendingCheckoutAliasState,
     inventoryImportProvisionalSkuId: product.inventoryImportProvisionalSkuId,
     areProcessingFeesAbsorbed: product.areProcessingFeesAbsorbed,
   };
@@ -41,6 +42,7 @@ export function buildLocalCartItemPayload(input: {
     productId: product.productId,
     productSkuId: product.skuId,
     pendingCheckoutItemId: product.pendingCheckoutItemId ?? null,
+    pendingCheckoutAliasState: product.pendingCheckoutAliasState ?? null,
     inventoryImportProvisionalSkuId:
       product.inventoryImportProvisionalSkuId ?? null,
     productSku: product.sku || "",
@@ -59,19 +61,148 @@ export function buildLocalCartItemPayload(input: {
 
 export function productCartSourceKey(product: {
   pendingCheckoutItemId?: string | null;
+  pendingCheckoutAliasState?: "linked_to_catalog" | null;
   inventoryImportProvisionalSkuId?: string | null;
 }) {
   if (product.inventoryImportProvisionalSkuId) {
     return `provisional_import:${product.inventoryImportProvisionalSkuId}`;
   }
-  if (product.pendingCheckoutItemId) {
+  if (
+    product.pendingCheckoutItemId &&
+    product.pendingCheckoutAliasState !== "linked_to_catalog"
+  ) {
     return `pending_checkout:${product.pendingCheckoutItemId}`;
   }
   return "trusted_inventory";
 }
 
+export function buildCatalogRepresentedPendingCheckoutItemIds(
+  rows: readonly {
+    pendingCheckoutItemId?: string | null;
+    linkedPendingCheckoutItemIds?:
+      | readonly (string | null | undefined)[]
+      | null;
+    suppressedPendingCheckoutItemIds?:
+      | readonly (string | null | undefined)[]
+      | null;
+  }[],
+) {
+  const ids = new Set<string>();
+
+  for (const row of rows) {
+    if (row.pendingCheckoutItemId) {
+      ids.add(row.pendingCheckoutItemId);
+    }
+    for (const linkedId of row.linkedPendingCheckoutItemIds ?? []) {
+      if (linkedId) {
+        ids.add(linkedId);
+      }
+    }
+    for (const suppressedId of row.suppressedPendingCheckoutItemIds ?? []) {
+      if (suppressedId) {
+        ids.add(suppressedId);
+      }
+    }
+  }
+
+  return ids;
+}
+
+export function buildCatalogRepresentedPendingCheckoutLocalEventIds(
+  rows: readonly {
+    linkedPendingCheckoutLocalEventIds?:
+      | readonly (string | null | undefined)[]
+      | null;
+    suppressedPendingCheckoutLocalEventIds?:
+      | readonly (string | null | undefined)[]
+      | null;
+  }[],
+) {
+  const ids = new Set<string>();
+
+  for (const row of rows) {
+    for (const localEventId of row.linkedPendingCheckoutLocalEventIds ?? []) {
+      if (localEventId) {
+        ids.add(localEventId);
+      }
+    }
+    for (const localEventId of row.suppressedPendingCheckoutLocalEventIds ??
+      []) {
+      if (localEventId) {
+        ids.add(localEventId);
+      }
+    }
+  }
+
+  return ids;
+}
+
+export function buildLocalPendingCheckoutDefinitionEventIdsByItemId(
+  events: readonly PosLocalEventRecord[],
+) {
+  const ids = new Map<string, string>();
+
+  for (const event of events) {
+    if (event.type !== "pending_checkout_item.defined") {
+      continue;
+    }
+    const payload = recordOrNull(event.payload);
+    const pendingCheckoutItemId = stringFromRecord(
+      payload,
+      "localPendingCheckoutItemId",
+    );
+    if (pendingCheckoutItemId) {
+      ids.set(pendingCheckoutItemId, event.localEventId);
+    }
+  }
+
+  return ids;
+}
+
+export function pendingCheckoutAliasProductSignature(input: {
+  name?: string | null;
+  pendingCheckoutAliasName?: string | null;
+  pendingCheckoutAliasPrice?: number | null;
+  price?: number | null;
+}) {
+  const normalizedName = normalizePendingCheckoutSearchText(
+    input.pendingCheckoutAliasName ?? input.name,
+  );
+  const price = input.pendingCheckoutAliasPrice ?? input.price;
+  if (!normalizedName || typeof price !== "number") {
+    return null;
+  }
+
+  return `${normalizedName}:${price}`;
+}
+
+export function buildCatalogRepresentedPendingCheckoutProductSignatures(
+  rows: readonly {
+    name?: string | null;
+    pendingCheckoutAliasName?: string | null;
+    pendingCheckoutAliasPrice?: number | null;
+    pendingCheckoutAliasState?: "linked_to_catalog" | null;
+    price?: number | null;
+  }[],
+) {
+  const signatures = new Set<string>();
+
+  for (const row of rows) {
+    if (row.pendingCheckoutAliasState !== "linked_to_catalog") {
+      continue;
+    }
+    const signature = pendingCheckoutAliasProductSignature(row);
+    if (signature) {
+      signatures.add(signature);
+    }
+  }
+
+  return signatures;
+}
+
 export function cartLineSourceKey(item: {
   pendingCheckoutItemId?: string | null;
+  pendingCheckoutAliasState?: "linked_to_catalog" | null;
   inventoryImportProvisionalSkuId?: string | null;
 }) {
   return productCartSourceKey(item);
@@ -86,6 +217,10 @@ export function renderedCartLineSourceKey(item: CartItem) {
     pendingCheckoutItemId:
       "pendingCheckoutItemId" in item
         ? (item.pendingCheckoutItemId ?? null)
+        : null,
+    pendingCheckoutAliasState:
+      "pendingCheckoutAliasState" in item
+        ? (item.pendingCheckoutAliasState ?? null)
         : null,
   });
 }
@@ -110,6 +245,10 @@ export function buildLocalCartItemPayloadFromCartItem(input: {
     pendingCheckoutItemId:
       "pendingCheckoutItemId" in item
         ? (item.pendingCheckoutItemId ?? null)
+        : null,
+    pendingCheckoutAliasState:
+      "pendingCheckoutAliasState" in item
+        ? (item.pendingCheckoutAliasState ?? null)
         : null,
     inventoryImportProvisionalSkuId:
       "inventoryImportProvisionalSkuId" in item
@@ -161,6 +300,7 @@ export function mapLocalCartItemToCartItem(
     pendingCheckoutItemId: item.pendingCheckoutItemId as
       | Id<"posPendingCheckoutItem">
       | undefined,
+    pendingCheckoutAliasState: item.pendingCheckoutAliasState,
     inventoryImportProvisionalSkuId: item.inventoryImportProvisionalSkuId as
       | Id<"inventoryImportProvisionalSku">
       | undefined,
@@ -242,12 +382,19 @@ export function mapPendingCheckoutCartItemToProduct(item: CartItem): Product {
             | Id<"posPendingCheckoutItem">
             | undefined)
         : undefined,
+    pendingCheckoutAliasState:
+      "pendingCheckoutAliasState" in item
+        ? item.pendingCheckoutAliasState
+        : undefined,
     areProcessingFeesAbsorbed: item.areProcessingFeesAbsorbed,
   };
 }
 
 export function mapLocalPendingCheckoutEventsToProducts(
   events: PosLocalEventRecord[],
+  options?: {
+    pendingCheckoutCloudItemIdByLocalId?: Map<string, string>;
+  },
 ): Product[] {
   const cartPayloadsByPendingCheckoutItemId = new Map<
     string,
@@ -312,8 +459,10 @@ export function mapLocalPendingCheckoutEventsToProducts(
       availabilityStatus: "available",
       productId: productId as Id<"product">,
       skuId: productSkuId as Id<"productSku">,
-      pendingCheckoutItemId:
-        pendingCheckoutItemId as Id<"posPendingCheckoutItem">,
+      pendingCheckoutItemId: (options?.pendingCheckoutCloudItemIdByLocalId?.get(
+        pendingCheckoutItemId,
+      ) ?? pendingCheckoutItemId) as Id<"posPendingCheckoutItem">,
+      pendingCheckoutDefinitionLocalEventId: event.localEventId,
       quantityAvailable: undefined,
     });
   }
@@ -373,7 +522,9 @@ export function stringFromPayload(
   return typeof value === "string" ? value : "";
 }
 
-export function cartItemSkuEntry(item: CartItem): readonly [string, CartItem][] {
+export function cartItemSkuEntry(
+  item: CartItem,
+): readonly [string, CartItem][] {
   const skuId = item.skuId;
   return skuId ? [[skuId.toString(), item]] : [];
 }
@@ -381,6 +532,7 @@ export function cartItemSkuEntry(item: CartItem): readonly [string, CartItem][] 
 function cartItemLineEventKey(input: {
   productSkuId?: string | null;
   pendingCheckoutItemId?: string | null;
+  pendingCheckoutAliasState?: "linked_to_catalog" | null;
   inventoryImportProvisionalSkuId?: string | null;
 }) {
   if (!input.productSkuId) return null;
@@ -391,6 +543,7 @@ function cartItemLineEventKey(input: {
       inventoryImportProvisionalSkuId:
         input.inventoryImportProvisionalSkuId ?? null,
       pendingCheckoutItemId: input.pendingCheckoutItemId ?? null,
+      pendingCheckoutAliasState: input.pendingCheckoutAliasState ?? null,
     }),
   ].join(":");
 }
@@ -405,6 +558,10 @@ function cartItemLineKey(item: CartItem) {
     pendingCheckoutItemId:
       "pendingCheckoutItemId" in item
         ? (item.pendingCheckoutItemId?.toString() ?? null)
+        : null,
+    pendingCheckoutAliasState:
+      "pendingCheckoutAliasState" in item
+        ? (item.pendingCheckoutAliasState ?? null)
         : null,
   });
 }
@@ -581,7 +738,15 @@ export function cartItemsFromLocalRegisterModel(
         payload,
         "inventoryImportProvisionalSkuId",
       ),
-      pendingCheckoutItemId: stringFromPayload(payload, "pendingCheckoutItemId"),
+      pendingCheckoutItemId: stringFromPayload(
+        payload,
+        "pendingCheckoutItemId",
+      ),
+      pendingCheckoutAliasState:
+        stringFromPayload(payload, "pendingCheckoutAliasState") ===
+        "linked_to_catalog"
+          ? "linked_to_catalog"
+          : null,
     });
     const quantity = payload.quantity;
     if ((!productSkuId && !localItemId) || typeof quantity !== "number") {

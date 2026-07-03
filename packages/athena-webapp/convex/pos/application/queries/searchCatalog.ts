@@ -3,6 +3,7 @@ import type { QueryCtx } from "../../../_generated/server";
 
 import {
   findActiveProvisionalImportSkuForStoreSku,
+  findActivePendingCheckoutLookupAliasByCode,
   findStoreSkuByBarcode,
   findStoreSkuBySku,
   getCategoryById,
@@ -30,6 +31,8 @@ type CatalogResult = {
   productId: Id<"product">;
   skuId: Id<"productSku">;
   areProcessingFeesAbsorbed: boolean;
+  pendingCheckoutItemId?: Id<"posPendingCheckoutItem">;
+  pendingCheckoutAliasState?: "linked_to_catalog";
 };
 
 const POS_OPERATIONAL_CATEGORY_SLUGS = new Set([
@@ -89,6 +92,47 @@ async function isSuppressedByActiveLegacyImportProvisionalRow(
   );
 }
 
+async function isPendingCheckoutLookupAliasVisible(
+  ctx: QueryCtx,
+  args: {
+    alias: NonNullable<
+      Awaited<ReturnType<typeof findActivePendingCheckoutLookupAliasByCode>>
+    >;
+    storeId: Id<"store">;
+  },
+) {
+  const pendingItem = await ctx.db.get(
+    "posPendingCheckoutItem",
+    args.alias.pendingCheckoutItemId,
+  );
+  if (!pendingItem || pendingItem.storeId !== args.storeId) {
+    return false;
+  }
+
+  let productId = pendingItem.provisionalProductId;
+  if (pendingItem.provisionalProductSkuId) {
+    const provisionalSku = await ctx.db.get(
+      "productSku",
+      pendingItem.provisionalProductSkuId,
+    );
+    if (!provisionalSku || provisionalSku.storeId !== args.storeId) {
+      return false;
+    }
+    productId = provisionalSku.productId;
+  }
+
+  if (!productId) {
+    return true;
+  }
+
+  const product = await ctx.db.get("product", productId);
+  return (
+    product !== null &&
+    product.storeId === args.storeId &&
+    product.availability !== "archived"
+  );
+}
+
 async function mapSkuToCatalogResult(
   ctx: QueryCtx,
   args: {
@@ -96,6 +140,8 @@ async function mapSkuToCatalogResult(
     sku: Doc<"productSku">;
     category?: Awaited<ReturnType<typeof getCategoryById>>;
     categoryName?: string;
+    pendingCheckoutItemId?: Id<"posPendingCheckoutItem">;
+    pendingCheckoutAliasState?: "linked_to_catalog";
   },
 ): Promise<CatalogResult | null> {
   const category =
@@ -134,6 +180,8 @@ async function mapSkuToCatalogResult(
     productId: args.product._id,
     skuId: args.sku._id,
     areProcessingFeesAbsorbed: args.product.areProcessingFeesAbsorbed || false,
+    pendingCheckoutItemId: args.pendingCheckoutItemId,
+    pendingCheckoutAliasState: args.pendingCheckoutAliasState,
   };
 }
 
@@ -195,6 +243,46 @@ export async function searchProducts(
     storeId: args.storeId,
     searchQuery: query,
   });
+  const aliasMatchesBySkuId = new Map<
+    Id<"productSku">,
+    {
+      pendingCheckoutItemId: Id<"posPendingCheckoutItem">;
+      pendingCheckoutAliasState: "linked_to_catalog";
+    }
+  >();
+  const aliasMatch = await findActivePendingCheckoutLookupAliasByCode(ctx, {
+    storeId: args.storeId,
+    lookupCode: query,
+  });
+  const visibleAliasMatch =
+    aliasMatch &&
+    (await isPendingCheckoutLookupAliasVisible(ctx, {
+      alias: aliasMatch,
+      storeId: args.storeId,
+    }))
+      ? aliasMatch
+      : null;
+  if (visibleAliasMatch) {
+    aliasMatchesBySkuId.set(visibleAliasMatch.productSkuId, {
+      pendingCheckoutItemId: visibleAliasMatch.pendingCheckoutItemId,
+      pendingCheckoutAliasState: "linked_to_catalog",
+    });
+    const aliasSku = await ctx.db.get(
+      "productSku",
+      visibleAliasMatch.productSkuId,
+    );
+    const aliasProduct = aliasSku
+      ? await getProductById(ctx, aliasSku.productId)
+      : null;
+    if (
+      aliasSku &&
+      aliasProduct &&
+      aliasProduct.storeId === args.storeId &&
+      !matchingSkus.some(({ sku }) => sku._id === aliasSku._id)
+    ) {
+      matchingSkus.unshift({ product: aliasProduct, sku: aliasSku });
+    }
+  }
   const results = await Promise.all(
     matchingSkus.map(async ({ product, sku }) => {
       const category =
@@ -217,6 +305,7 @@ export async function searchProducts(
         product,
         sku,
         category,
+        ...aliasMatchesBySkuId.get(sku._id),
       });
     }),
   );
@@ -242,6 +331,27 @@ export async function lookupByBarcode(
       storeId: args.storeId,
       sku: args.barcode,
     });
+  }
+
+  let aliasMatch: Awaited<
+    ReturnType<typeof findActivePendingCheckoutLookupAliasByCode>
+  > | null = null;
+  if (!sku) {
+    const matchedAlias = await findActivePendingCheckoutLookupAliasByCode(ctx, {
+      storeId: args.storeId,
+      lookupCode: args.barcode,
+    });
+    aliasMatch =
+      matchedAlias &&
+      (await isPendingCheckoutLookupAliasVisible(ctx, {
+        alias: matchedAlias,
+        storeId: args.storeId,
+      }))
+        ? matchedAlias
+        : null;
+    sku = aliasMatch
+      ? await ctx.db.get("productSku", aliasMatch.productSkuId)
+      : null;
   }
 
   if (!sku) {
@@ -322,5 +432,7 @@ export async function lookupByBarcode(
     product,
     sku,
     category,
+    pendingCheckoutItemId: aliasMatch?.pendingCheckoutItemId,
+    pendingCheckoutAliasState: aliasMatch ? "linked_to_catalog" : undefined,
   });
 }

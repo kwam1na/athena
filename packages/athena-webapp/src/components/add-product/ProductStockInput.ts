@@ -1,4 +1,4 @@
-import { toDisplayAmount } from "~/convex/lib/currency";
+import { toDisplayAmount, toPesewas } from "~/convex/lib/currency";
 import { parseDisplayAmountInput } from "~/src/lib/pos/displayAmounts";
 import { PAYSTACK_PROCESSING_FEE } from "~/src/lib/constants";
 import type { Id } from "~/convex/_generated/dataModel";
@@ -152,6 +152,53 @@ export function resolveTrustedInventoryFinalizationPricingPolicy({
   return persistedAreProcessingFeesAbsorbed;
 }
 
+export type PendingCheckoutSkuLinkPriceState =
+  | {
+      canLink: true;
+      status: "match";
+      message: string;
+    }
+  | {
+      canLink: false;
+      status: "mismatch" | "unknown";
+      message: string;
+    };
+
+export function resolvePendingCheckoutSkuLinkPriceState({
+  pendingDisplayPrice,
+  trustedSkuStoredPrice,
+}: {
+  pendingDisplayPrice: number | null | undefined;
+  trustedSkuStoredPrice: number | null | undefined;
+}): PendingCheckoutSkuLinkPriceState {
+  if (
+    typeof pendingDisplayPrice !== "number" ||
+    !Number.isFinite(pendingDisplayPrice) ||
+    typeof trustedSkuStoredPrice !== "number" ||
+    !Number.isFinite(trustedSkuStoredPrice)
+  ) {
+    return {
+      canLink: false,
+      status: "unknown",
+      message: "Price unavailable",
+    };
+  }
+
+  if (toPesewas(pendingDisplayPrice) !== trustedSkuStoredPrice) {
+    return {
+      canLink: false,
+      status: "mismatch",
+      message: "Price differs from pending item",
+    };
+  }
+
+  return {
+    canLink: true,
+    status: "match",
+    message: "Price matches",
+  };
+}
+
 export type ProductPageProvisionalSkuBinding =
   | {
       state: "none";
@@ -175,6 +222,7 @@ export type ProductPageProvisionalSkuBinding =
         importedQuantity: number;
         lastSoldAt?: number;
         linkedTarget?: {
+          isArchived?: boolean;
           price?: number;
           productId: Id<"product">;
           productName: string;
@@ -324,9 +372,9 @@ export function resolveTrustedInventoryReviewState({
   ) {
     return {
       action: "none",
-      ctaLabel: "Linked to trusted SKU",
+      ctaLabel: "Linked to SKU",
       disabled: true,
-      message: "Pending checkout item is linked to an existing trusted SKU.",
+      message: "Pending checkout item is linked to a SKU.",
       status: "success",
     };
   }

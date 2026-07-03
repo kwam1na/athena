@@ -9,6 +9,7 @@ import {
   resolveTrustedInventoryRefreshReviewState,
   resolveTrustedInventoryReviewClickAction,
   resolveTrustedInventoryReviewState,
+  resolvePendingCheckoutSkuLinkPriceState,
   resolveStockInputUpdate,
 } from "./ProductStockInput";
 import type { Product } from "~/types";
@@ -87,6 +88,7 @@ describe("ProductStock money inputs", () => {
           importKey: "pending-checkout",
           importedQuantity: 1,
           linkedTarget: {
+            isArchived: false,
             productId: "product-linked-1" as never,
             productName: "Trusted item",
             sku: "TRUSTED-1",
@@ -113,10 +115,42 @@ describe("ProductStock money inputs", () => {
 
     expect(state).toMatchObject({
       action: "none",
-      ctaLabel: "Linked to trusted SKU",
+      ctaLabel: "Linked to SKU",
       disabled: true,
-      message: "Pending checkout item is linked to an existing trusted SKU.",
+      message: "Pending checkout item is linked to a SKU.",
       status: "success",
+    });
+  });
+
+  it("requires linked pending checkout SKU prices to match", () => {
+    expect(
+      resolvePendingCheckoutSkuLinkPriceState({
+        pendingDisplayPrice: 420,
+        trustedSkuStoredPrice: 42000,
+      }),
+    ).toMatchObject({
+      canLink: true,
+      status: "match",
+    });
+
+    expect(
+      resolvePendingCheckoutSkuLinkPriceState({
+        pendingDisplayPrice: 420,
+        trustedSkuStoredPrice: 40000,
+      }),
+    ).toMatchObject({
+      canLink: false,
+      status: "mismatch",
+    });
+
+    expect(
+      resolvePendingCheckoutSkuLinkPriceState({
+        pendingDisplayPrice: null,
+        trustedSkuStoredPrice: 42000,
+      }),
+    ).toMatchObject({
+      canLink: false,
+      status: "unknown",
     });
   });
 

@@ -599,6 +599,63 @@ describe("POS local sync public mutation", () => {
     );
   });
 
+  it("accepts linked pending checkout alias sale items at the public sync boundary", async () => {
+    const ctx = buildCtx();
+    const event = buildSaleCompletedEvent({
+      items: [
+        {
+          localTransactionItemId: "local-linked-alias-sale-item-1",
+          productId: "product-1",
+          productSkuId: "sku-1",
+          pendingCheckoutItemId: "pending-linked-1",
+          pendingCheckoutAliasState: "linked_to_catalog",
+          productName: "Yeeeee",
+          productSku: "6N2Y-ZJQ-AD8",
+          barcode: "111222333559",
+          quantity: 3,
+          unitPrice: 40000,
+        },
+      ],
+      totals: { subtotal: 120000, tax: 0, total: 120000 },
+      payments: [
+        {
+          localPaymentId: "local-payment-1",
+          method: "cash",
+          amount: 120000,
+          timestamp: 124,
+        },
+      ],
+    });
+
+    await getHandler(ingestLocalEvents)(ctx as never, {
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      syncSecretHash: "sync-secret-1",
+      events: [event],
+    });
+
+    expect(mocks.ingestLocalEventsWithCtx).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        events: [
+          expect.objectContaining({
+            eventType: "sale_completed",
+            payload: expect.objectContaining({
+              items: [
+                expect.objectContaining({
+                  productId: "product-1",
+                  productSkuId: "sku-1",
+                  pendingCheckoutItemId: "pending-linked-1",
+                  pendingCheckoutAliasState: "linked_to_catalog",
+                }),
+              ],
+            }),
+          }),
+        ],
+      }),
+    );
+  });
+
   it("exposes drawerless expense upload fields in the public args validator", () => {
     const argsValidator = JSON.stringify((ingestLocalEvents as any).exportArgs());
 

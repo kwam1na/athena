@@ -467,6 +467,13 @@ async function projectExpenseRecorded(
         normalizedPendingCheckoutItemId,
       );
       if (
+        pendingCheckoutItem?.storeId === args.storeId &&
+        pendingCheckoutItem.status === "linked_to_catalog" &&
+        pendingCheckoutItem.approvedProductId === productId &&
+        pendingCheckoutItem.approvedProductSkuId === productSkuId
+      ) {
+        pendingCheckoutItemId = normalizedPendingCheckoutItemId;
+      } else if (
         !pendingCheckoutItem ||
         pendingCheckoutItem.storeId !== args.storeId ||
         pendingCheckoutItem.provisionalProductId !== productId ||
@@ -484,8 +491,9 @@ async function projectExpenseRecorded(
           },
         });
         return { status: "conflicted", mappings: [], conflicts: [conflict] };
+      } else {
+        pendingCheckoutItemId = normalizedPendingCheckoutItemId;
       }
-      pendingCheckoutItemId = normalizedPendingCheckoutItemId;
     }
 
     let inventoryImportProvisionalSkuId:
@@ -3089,7 +3097,9 @@ function collectSaleSkuQuantities(payload: PosLocalSalePayload) {
 function trustedInventorySaleItems(payload: PosLocalSalePayload) {
   return payload.items.filter(
     (item) =>
-      !item.pendingCheckoutItemId && !item.inventoryImportProvisionalSkuId,
+      (!item.pendingCheckoutItemId ||
+        item.pendingCheckoutAliasState === "linked_to_catalog") &&
+      !item.inventoryImportProvisionalSkuId,
   );
 }
 
@@ -3198,25 +3208,6 @@ async function validateSaleCatalogReferences(
     };
   }
 
-  const mixedInventorySourceSkuId =
-    findMixedTrustedAndProvisionalSkuId(payload);
-  if (mixedInventorySourceSkuId) {
-    return {
-      conflict: await createConflict(repository, args, {
-        conflictType: "inventory",
-        summary:
-          "Synced sale mixes provisional import and trusted inventory lines for the same SKU.",
-        details: {
-          localTransactionId: payload.localTransactionId,
-          productSkuId: mixedInventorySourceSkuId,
-          blocksProjection: true,
-        },
-      }),
-      itemsByLocalId,
-      serviceLinesByLocalId,
-    };
-  }
-
   for (const item of payload.items) {
     if (item.pendingCheckoutItemId) {
       const cloudPendingId =
@@ -3252,6 +3243,17 @@ async function validateSaleCatalogReferences(
       const pendingItem = await repository.getPendingCheckoutItem(
         item.pendingCheckoutItemId as Id<"posPendingCheckoutItem">,
       );
+      if (
+        pendingItem?.storeId === args.storeId &&
+        pendingItem.status === "linked_to_catalog" &&
+        pendingItem.approvedProductId &&
+        pendingItem.approvedProductSkuId
+      ) {
+        item.productId = pendingItem.approvedProductId;
+        item.productSkuId = pendingItem.approvedProductSkuId;
+        item.pendingCheckoutAliasState = "linked_to_catalog";
+        continue;
+      }
       if (
         !pendingItem ||
         pendingItem.storeId !== args.storeId ||
@@ -3301,7 +3303,28 @@ async function validateSaleCatalogReferences(
         };
       }
     }
+  }
 
+  const mixedInventorySourceSkuId =
+    findMixedTrustedAndProvisionalSkuId(payload);
+  if (mixedInventorySourceSkuId) {
+    return {
+      conflict: await createConflict(repository, args, {
+        conflictType: "inventory",
+        summary:
+          "Synced sale mixes provisional import and trusted inventory lines for the same SKU.",
+        details: {
+          localTransactionId: payload.localTransactionId,
+          productSkuId: mixedInventorySourceSkuId,
+          blocksProjection: true,
+        },
+      }),
+      itemsByLocalId,
+      serviceLinesByLocalId,
+    };
+  }
+
+  for (const item of payload.items) {
     if (item.inventoryImportProvisionalSkuId) {
       const provisionalImportSku =
         await repository.getInventoryImportProvisionalSku(
@@ -3546,7 +3569,10 @@ function findMixedTrustedAndProvisionalSkuId(payload: PosLocalSalePayload) {
     };
     if (item.inventoryImportProvisionalSkuId) {
       source.hasProvisionalImport = true;
-    } else if (!item.pendingCheckoutItemId) {
+    } else if (
+      !item.pendingCheckoutItemId ||
+      item.pendingCheckoutAliasState === "linked_to_catalog"
+    ) {
       source.hasTrustedInventory = true;
     }
     sourcesBySkuId.set(productSkuId, source);

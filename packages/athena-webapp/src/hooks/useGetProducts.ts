@@ -3,7 +3,11 @@ import useGetActiveStore from "./useGetActiveStore";
 import { api } from "~/convex/_generated/api";
 import type { Product } from "~/types";
 
-export type ProductAvailability = "archived" | "draft" | "live";
+export type ProductAvailability =
+  | "archived"
+  | "draft"
+  | "live"
+  | "unarchived";
 
 export const useGetProducts = ({
   subcategorySlug,

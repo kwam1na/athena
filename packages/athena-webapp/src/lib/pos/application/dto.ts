@@ -160,6 +160,7 @@ export interface PosCatalogItemDto {
   availabilityPolicy?: PosRegisterCatalogAvailabilityPolicy;
   inventoryImportProvisionalSkuId?: Id<"inventoryImportProvisionalSku">;
   pendingCheckoutItemId?: Id<"posPendingCheckoutItem">;
+  pendingCheckoutAliasState?: "linked_to_catalog";
 }
 
 export type PosRegisterCatalogAvailabilityPolicy =
@@ -169,6 +170,7 @@ export type PosRegisterCatalogAvailabilityPolicy =
 
 export interface PosRegisterCatalogRowDto {
   id: Id<"productSku"> | Id<"inventoryImportProvisionalSku">;
+  catalogRowKey?: string;
   productSkuId: Id<"productSku">;
   skuId: Id<"productSku">;
   productId: Id<"product">;
@@ -186,6 +188,19 @@ export interface PosRegisterCatalogRowDto {
   areProcessingFeesAbsorbed: boolean;
   availabilityPolicy?: PosRegisterCatalogAvailabilityPolicy;
   pendingCheckoutItemId?: Id<"posPendingCheckoutItem">;
+  pendingCheckoutAliasState?: "linked_to_catalog";
+  pendingCheckoutAliasLookupCode?: string;
+  pendingCheckoutAliasName?: string;
+  pendingCheckoutAliasPrice?: number;
+  pendingCheckoutAliasTrustedName?: string;
+  pendingCheckoutAliasTrustedSku?: string;
+  pendingCheckoutAliasTrustedCategory?: string;
+  pendingCheckoutAliasTrustedDescription?: string;
+  linkedPendingCheckoutItemIds?: Array<Id<"posPendingCheckoutItem">>;
+  linkedPendingCheckoutLocalEventIds?: string[];
+  suppressedPendingCheckoutItemIds?: Array<Id<"posPendingCheckoutItem">>;
+  suppressedPendingCheckoutLocalEventIds?: string[];
+  suppressFromRegisterSearch?: true;
 }
 
 export interface PosRegisterCatalogInput {

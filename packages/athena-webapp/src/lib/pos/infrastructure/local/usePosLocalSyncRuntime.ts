@@ -2258,6 +2258,7 @@ function toLocalCloudMappingEntity(
   if (kind === "transaction") return "posTransaction";
   if (kind === "expenseSession") return "expenseSession";
   if (kind === "expenseTransaction") return "expenseTransaction";
+  if (kind === "pendingCheckoutItem") return "pendingCheckoutItem";
   return null;
 }
 

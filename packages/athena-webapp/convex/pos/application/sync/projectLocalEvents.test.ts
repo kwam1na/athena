@@ -185,6 +185,8 @@ describe("projectLocalSyncEvent", () => {
 
   it("resolves offline pending sale lines through the pending item mapping before validating provisional anchors", async () => {
     const repository = createProjectionRepository({
+      activeHeldQuantity: 1,
+      consumedHoldQuantities: new Map([["sku-1", 1]]),
       existingPosSession: {
         _id: "local-session-1",
         registerSessionId: "register-session-1",
@@ -241,6 +243,8 @@ describe("projectLocalSyncEvent", () => {
 
   it("conflicts offline pending sale lines before the pending item definition has synced", async () => {
     const repository = createProjectionRepository({
+      activeHeldQuantity: 1,
+      consumedHoldQuantities: new Map([["sku-1", 1]]),
       existingPosSession: {
         _id: "local-session-1",
         registerSessionId: "register-session-1",
@@ -421,6 +425,145 @@ describe("projectLocalSyncEvent", () => {
         quantity: 1,
       }),
     ]);
+  });
+
+  it("projects linked pending checkout sale lines as trusted aliases with pending provenance", async () => {
+    const repository = createProjectionRepository({
+      activeHeldQuantity: 1,
+      consumedHoldQuantities: new Map([["sku-1", 1]]),
+      existingPosSession: {
+        _id: "local-session-1",
+        registerSessionId: "register-session-1",
+        staffProfileId: "staff-1",
+        status: "active",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      },
+      pendingCheckoutItem: {
+        _id: "pending-checkout-item-1",
+        approvedProductId: "product-1",
+        approvedProductSkuId: "sku-1",
+        storeId: "store-1",
+        status: "linked_to_catalog",
+      },
+      validCloudIds: new Set(["pending-checkout-item-1", "product-1", "sku-1"]),
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildSaleCompletedEvent({
+        payload: {
+          ...buildSaleCompletedEvent().payload,
+          items: [
+            {
+              localTransactionItemId: "local-linked-sale-line-1",
+              productId: "product-1" as never,
+              productSkuId: "sku-1" as never,
+              pendingCheckoutItemId: "pending-checkout-item-1" as never,
+              productName: "Trusted linked bundle",
+              productSku: "SKU-1",
+              quantity: 1,
+              unitPrice: 25,
+            },
+          ],
+        },
+      }),
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("projected");
+    expect(repository.consumedHoldRequests).toEqual([
+      {
+        sessionId: "local-session-1",
+        items: [{ productSkuId: "sku-1", quantity: 1 }],
+        now: 20,
+      },
+    ]);
+    expect(repository.productPatches).toEqual([
+      {
+        productSkuId: "sku-1",
+        patch: {
+          inventoryCount: 9,
+          quantityAvailable: 9,
+        },
+      },
+    ]);
+    expect(repository.createdTransactionItems).toEqual([
+      expect.objectContaining({
+        pendingCheckoutItemId: "pending-checkout-item-1",
+        productId: "product-1",
+        productSkuId: "sku-1",
+        quantity: 1,
+      }),
+    ]);
+  });
+
+  it("blocks linked pending checkout aliases mixed with provisional import lines for the same SKU", async () => {
+    const repository = createProjectionRepository({
+      pendingCheckoutItem: {
+        _id: "pending-checkout-item-1",
+        approvedProductId: "product-1",
+        approvedProductSkuId: "sku-1",
+        storeId: "store-1",
+        status: "linked_to_catalog",
+      },
+      inventoryImportProvisionalSku: {
+        _id: "provisional-import-sku-1",
+        storeId: "store-1",
+        status: "active",
+        productId: "product-1",
+        productSkuId: "sku-1",
+        importedPrice: 25,
+      },
+      validCloudIds: new Set(["pending-checkout-item-1", "product-1", "sku-1"]),
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildSaleCompletedEvent({
+        payload: {
+          ...buildSaleCompletedEvent().payload,
+          items: [
+            {
+              localTransactionItemId: "local-linked-sale-line-1",
+              productId: "product-1" as never,
+              productSkuId: "sku-1" as never,
+              pendingCheckoutItemId: "pending-checkout-item-1" as never,
+              productName: "Trusted linked bundle",
+              productSku: "SKU-1",
+              quantity: 1,
+              unitPrice: 25,
+            },
+            {
+              localTransactionItemId: "local-provisional-import-line-1",
+              productId: "product-1" as never,
+              productSkuId: "sku-1" as never,
+              inventoryImportProvisionalSkuId: "provisional-import-sku-1",
+              productName: "Imported bundle",
+              productSku: "SKU-1",
+              quantity: 1,
+              unitPrice: 25,
+            },
+          ],
+        },
+      }),
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("conflicted");
+    expect(result.conflicts).toEqual([
+      expect.objectContaining({
+        conflictType: "inventory",
+        summary:
+          "Synced sale mixes provisional import and trusted inventory lines for the same SKU.",
+      }),
+    ]);
+    expect(repository.createdTransactionItems).toEqual([]);
+    expect(repository.productPatches).toEqual([]);
   });
 
   it("preserves provisional import sale evidence without trusted stock movement", async () => {
@@ -6707,18 +6850,20 @@ function createProjectionRepository(
       customerProfileId: string;
       status: string;
     } | null;
-    pendingCheckoutItem: {
-      _id: string;
-      storeId: string;
+	    pendingCheckoutItem: {
+	      _id: string;
+	      storeId: string;
       status:
         | "pending_review"
         | "flagged"
         | "approved"
-        | "rejected"
-        | "linked_to_catalog";
-      provisionalProductId?: string;
-      provisionalProductSkuId?: string;
-    } | null;
+	        | "rejected"
+	        | "linked_to_catalog";
+	      approvedProductId?: string;
+	      approvedProductSkuId?: string;
+	      provisionalProductId?: string;
+	      provisionalProductSkuId?: string;
+	    } | null;
     inventoryImportProvisionalSku: {
       _id: string;
       storeId: string;

@@ -2887,6 +2887,161 @@ describe("completeTransaction trace ordering", () => {
     expect(recordInventoryMovementWithCtx).not.toHaveBeenCalled();
   });
 
+  it("completes linked pending checkout aliases as trusted SKU sales", async () => {
+    const runMutation = vi.fn().mockResolvedValue(undefined);
+    const linkedPendingCheckoutItem = {
+      _id: "pending-item-1",
+      approvedProductId: "product-1",
+      approvedProductSkuId: "sku-1",
+      evidence: {
+        firstSeenAt: 1,
+        lastSeenAt: 1,
+        observedLookupCodes: ["ALIAS-1"],
+        observedPrices: [15],
+        offlineSaleCount: 0,
+        totalQuantitySold: 4,
+        transactionCount: 2,
+      },
+      storeId: "store-1",
+      status: "linked_to_catalog",
+      provisionalProductId: "product-pending-1",
+      provisionalProductSkuId: "sku-pending-1",
+    };
+    const ctx = {
+      db: {
+        get: vi.fn(async (tableName: string, id: string) => {
+          if (tableName === "posPendingCheckoutItem" && id === "pending-item-1") {
+            return linkedPendingCheckoutItem;
+          }
+
+          return null;
+        }),
+        patch: vi.fn(),
+      },
+      runMutation,
+    } as never;
+
+    vi.mocked(getStoreById).mockResolvedValue({
+      _id: "store-1",
+      organizationId: "org-1",
+    } as never);
+    vi.mocked(getPosSessionById).mockResolvedValue({
+      _id: "session-1",
+      storeId: "store-1",
+      customerId: undefined,
+      customerProfileId: "profile-1",
+      staffProfileId: "staff-1",
+      registerNumber: "1",
+      registerSessionId: "register-1",
+      subtotal: 30,
+      tax: 0,
+      total: 30,
+      terminalId: "terminal-1",
+      customerInfo: undefined,
+    } as never);
+    vi.mocked(getRegisterSessionById).mockResolvedValue({
+      _id: "register-1",
+      storeId: "store-1",
+      status: "open",
+      terminalId: "terminal-1",
+      registerNumber: "1",
+    } as never);
+    vi.mocked(listSessionItems).mockResolvedValue([
+      {
+        _id: "session-item-1",
+        sessionId: "session-1",
+        storeId: "store-1",
+        productId: "product-1",
+        productSkuId: "sku-1",
+        pendingCheckoutItemId: "pending-item-1",
+        productSku: "SKU-1",
+        productName: "Trusted bundle",
+        price: 15,
+        quantity: 2,
+        image: undefined,
+      },
+    ] as never);
+    vi.mocked(getProductSkuById).mockResolvedValue({
+      _id: "sku-1",
+      images: [],
+      inventoryCount: 10,
+      productId: "product-1",
+      quantityAvailable: 10,
+      sku: "SKU-1",
+    } as never);
+    vi.mocked(createPosTransaction).mockResolvedValue("txn-1" as never);
+    vi.mocked(recordRetailSalePaymentAllocations).mockResolvedValue(true);
+    vi.mocked(createPosTransactionItem).mockResolvedValue(
+      "txn-item-1" as never,
+    );
+    vi.mocked(patchProductSku).mockResolvedValue(undefined as never);
+    vi.mocked(patchPosSession).mockResolvedValue(undefined as never);
+    vi.mocked(consumeInventoryHoldsForSession).mockResolvedValue(
+      new Map([["sku-1" as Id<"productSku">, 2]]),
+    );
+
+    await expect(
+      createTransactionFromSessionHandler(ctx, {
+        sessionId: "session-1" as Id<"posSession">,
+        staffProfileId: "staff-1" as Id<"staffProfile">,
+        payments: [{ method: "cash", amount: 30, timestamp: 1 }],
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        kind: "ok",
+        data: expect.objectContaining({
+          transactionId: "txn-1",
+        }),
+      }),
+    );
+
+    expect(validateInventoryAvailability).toHaveBeenCalledWith(
+      expect.anything(),
+      "sku-1",
+      2,
+      expect.objectContaining({
+        sessionId: "session-1",
+        storeId: "store-1",
+      }),
+    );
+    expect(consumeInventoryHoldsForSession).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        sessionId: "session-1",
+        items: [{ skuId: "sku-1", quantity: 2 }],
+      }),
+    );
+    expect(createPosTransactionItem).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        pendingCheckoutItemId: "pending-item-1",
+        productId: "product-1",
+        productSkuId: "sku-1",
+        quantity: 2,
+        totalPrice: 30,
+      }),
+    );
+    expect(patchProductSku).toHaveBeenCalledWith(expect.anything(), "sku-1", {
+      inventoryCount: 8,
+      quantityAvailable: 8,
+    });
+    expect(recordInventoryMovementWithCtx).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        movementType: "sale",
+        productSkuId: "sku-1",
+        quantityDelta: -2,
+        sourceId: "txn-1",
+      }),
+    );
+    expect(recordOperationalEventWithCtx).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        eventType: "pos_pending_checkout_item_reused",
+      }),
+    );
+  });
+
   it("completes session checkout with active provisional import items without trusted stock mutation", async () => {
     const runMutation = vi.fn().mockResolvedValue(undefined);
     const provisionalImportSku = {
@@ -3442,6 +3597,18 @@ describe("completeTransaction trace ordering", () => {
         storeId: "store-1",
         status: "pending_review",
         provisionalProductId: "product-pending-1",
+        provisionalProductSkuId: "sku-other",
+      },
+    ],
+    [
+      "stale linked pending checkout alias",
+      {
+        _id: "pending-item-1",
+        approvedProductId: "product-1",
+        approvedProductSkuId: "sku-1",
+        storeId: "store-1",
+        status: "linked_to_catalog",
+        provisionalProductId: "product-other",
         provisionalProductSkuId: "sku-other",
       },
     ],

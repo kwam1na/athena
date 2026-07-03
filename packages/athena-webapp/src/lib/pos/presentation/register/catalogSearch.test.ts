@@ -329,6 +329,203 @@ describe("catalogSearch", () => {
     expect(result.results[0]?.productSkuId).toBe("sku-durable-lace");
   });
 
+  it("searches linked pending aliases by short prefix while keeping trusted SKU identity", () => {
+    const result = searchRegisterCatalog(
+      buildRegisterCatalogIndex([
+        {
+          id: "sku-trusted",
+          catalogRowKey: "pending-checkout-alias:pending-linked-1",
+          productId: "product-trusted",
+          productSkuId: "sku-trusted",
+          pendingCheckoutAliasState: "linked_to_catalog",
+          pendingCheckoutItemId: "pending-linked-1",
+          pendingCheckoutAliasLookupCode: "49D8-9D2-B4D",
+          pendingCheckoutAliasName: "Yeeeee",
+          pendingCheckoutAliasPrice: 400,
+          pendingCheckoutAliasTrustedName: "Trusted Wig",
+          pendingCheckoutAliasTrustedSku: "TRUSTED-1",
+          pendingCheckoutAliasTrustedCategory: "Wigs",
+          pendingCheckoutAliasTrustedDescription: "Trusted SKU-backed alias",
+          name: "Yeeeee",
+          sku: "49D8-9D2-B4D",
+          barcode: "111222333559",
+          category: "Pending checkout",
+          description: "Trusted SKU-backed alias",
+          price: 400,
+          size: null,
+          color: null,
+          length: null,
+        },
+      ]),
+      "ye",
+    );
+
+    expect(result.intent).toBe("text");
+    expect(result.results).toHaveLength(1);
+    expect(result.results[0]).toMatchObject({
+      catalogRowKey: "pending-checkout-alias:pending-linked-1",
+      productSkuId: "sku-trusted",
+      name: "Yeeeee",
+      pendingCheckoutAliasName: "Yeeeee",
+      pendingCheckoutAliasTrustedName: "Trusted Wig",
+      pendingCheckoutAliasTrustedSku: "TRUSTED-1",
+      sku: "49D8-9D2-B4D",
+    });
+  });
+
+  it("does not search suppression-only pending checkout rows", () => {
+    const index = buildRegisterCatalogIndex([
+      {
+        id: "sku-pending-archived",
+        catalogRowKey: "suppressed-pending-checkout:pending-archived",
+        productId: "product-pending-archived",
+        productSkuId: "sku-pending-archived",
+        pendingCheckoutItemId: "pending-archived",
+        suppressedPendingCheckoutItemIds: ["pending-archived"],
+        suppressedPendingCheckoutLocalEventIds: ["local-event-archived"],
+        suppressFromRegisterSearch: true,
+        name: "Saa",
+        sku: "7101-C06-4BE",
+        barcode: "",
+        category: "Pending checkout",
+        description: "Archived pending checkout item",
+        price: 900,
+        size: null,
+        color: null,
+        length: null,
+      },
+    ]);
+
+    expect(searchRegisterCatalog(index, "saa").results).toEqual([]);
+    expect(searchRegisterCatalog(index, "7101-C06-4BE").results).toEqual([]);
+  });
+
+  it("searches linked pending aliases by trusted SKU name", () => {
+    const result = searchRegisterCatalog(
+      buildRegisterCatalogIndex([
+        {
+          id: "sku-trusted",
+          catalogRowKey: "pending-checkout-alias:pending-linked-1",
+          productId: "product-trusted",
+          productSkuId: "sku-trusted",
+          pendingCheckoutAliasState: "linked_to_catalog",
+          pendingCheckoutItemId: "pending-linked-1",
+          pendingCheckoutAliasLookupCode: "49D8-9D2-B4D",
+          pendingCheckoutAliasName: "Yeeeee",
+          pendingCheckoutAliasPrice: 400,
+          pendingCheckoutAliasTrustedName: "Trusted Wig",
+          pendingCheckoutAliasTrustedSku: "TRUSTED-1",
+          pendingCheckoutAliasTrustedCategory: "Wigs",
+          pendingCheckoutAliasTrustedDescription: "Trusted SKU-backed alias",
+          name: "Yeeeee",
+          sku: "49D8-9D2-B4D",
+          barcode: "111222333559",
+          category: "Pending checkout",
+          description: "Trusted SKU-backed alias",
+          price: 400,
+          size: null,
+          color: null,
+          length: null,
+        },
+      ]),
+      "trusted",
+    );
+
+    expect(result.intent).toBe("text");
+    expect(result.results).toHaveLength(1);
+    expect(result.results[0]).toMatchObject({
+      catalogRowKey: "pending-checkout-alias:pending-linked-1",
+      name: "Trusted Wig",
+      pendingCheckoutAliasTrustedName: "Trusted Wig",
+      productSkuId: "sku-trusted",
+    });
+  });
+
+  it("does not apply short-prefix matching to regular catalog rows", () => {
+    const result = searchRegisterCatalog(buildRegisterCatalogIndex(rows), "re");
+
+    expect(result.intent).toBe("text");
+    expect(result.results).toEqual([]);
+  });
+
+  it("exact matches linked pending alias lookup codes", () => {
+    const result = searchRegisterCatalog(
+      buildRegisterCatalogIndex([
+        {
+          id: "sku-trusted",
+          catalogRowKey: "pending-checkout-alias:pending-linked-1",
+          productId: "product-trusted",
+          productSkuId: "sku-trusted",
+          pendingCheckoutAliasState: "linked_to_catalog",
+          pendingCheckoutItemId: "pending-linked-1",
+          pendingCheckoutAliasLookupCode: "49D8-9D2-B4D",
+          pendingCheckoutAliasName: "Yeeeee",
+          pendingCheckoutAliasPrice: 400,
+          pendingCheckoutAliasTrustedName: "Trusted Wig",
+          pendingCheckoutAliasTrustedSku: "TRUSTED-1",
+          pendingCheckoutAliasTrustedCategory: "Wigs",
+          pendingCheckoutAliasTrustedDescription: "Trusted SKU-backed alias",
+          name: "Yeeeee",
+          sku: "49D8-9D2-B4D",
+          barcode: "111222333559",
+          category: "Pending checkout",
+          description: "Trusted SKU-backed alias",
+          price: 400,
+          size: null,
+          color: null,
+          length: null,
+        },
+      ]),
+      "49d8-9d2-b4d",
+    );
+
+    expect(result.intent).toBe("exact");
+    expect(result.exactMatch).toMatchObject({
+      catalogRowKey: "pending-checkout-alias:pending-linked-1",
+      productSkuId: "sku-trusted",
+    });
+  });
+
+  it("exact matches trusted SKU codes for linked pending aliases", () => {
+    const result = searchRegisterCatalog(
+      buildRegisterCatalogIndex([
+        {
+          id: "sku-trusted",
+          catalogRowKey: "pending-checkout-alias:pending-linked-1",
+          productId: "product-trusted",
+          productSkuId: "sku-trusted",
+          pendingCheckoutAliasState: "linked_to_catalog",
+          pendingCheckoutItemId: "pending-linked-1",
+          pendingCheckoutAliasLookupCode: "49D8-9D2-B4D",
+          pendingCheckoutAliasName: "Yeeeee",
+          pendingCheckoutAliasPrice: 400,
+          pendingCheckoutAliasTrustedName: "Trusted Wig",
+          pendingCheckoutAliasTrustedSku: "TRUSTED-1",
+          pendingCheckoutAliasTrustedCategory: "Wigs",
+          pendingCheckoutAliasTrustedDescription: "Trusted SKU-backed alias",
+          name: "Yeeeee",
+          sku: "49D8-9D2-B4D",
+          barcode: "111222333559",
+          category: "Pending checkout",
+          description: "Trusted SKU-backed alias",
+          price: 400,
+          size: null,
+          color: null,
+          length: null,
+        },
+      ]),
+      "trusted-1",
+    );
+
+    expect(result.intent).toBe("exact");
+    expect(result.exactMatch).toMatchObject({
+      catalogRowKey: "pending-checkout-alias:pending-linked-1",
+      productSkuId: "sku-trusted",
+      name: "Trusted Wig",
+      pendingCheckoutAliasTrustedSku: "TRUSTED-1",
+    });
+  });
+
   it("returns typo-tolerant fuzzy matches from the local text index", () => {
     const result = searchRegisterCatalog(
       buildRegisterCatalogIndex(rows),
@@ -371,7 +568,8 @@ describe("catalogSearch", () => {
       "service-revamp",
     ]);
     expect(
-      searchRegisterCatalog(buildRegisterCatalogIndex(rows), "wig revamp").results,
+      searchRegisterCatalog(buildRegisterCatalogIndex(rows), "wig revamp")
+        .results,
     ).toEqual([]);
   });
 

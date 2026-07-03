@@ -3935,7 +3935,7 @@ describe("daily operations overview read model", () => {
     });
   });
 
-  it("links pending checkout evidence corrections to the provisional product", async () => {
+  it("links pending checkout evidence corrections to the approved product after linking", async () => {
     const snapshot = await buildDailyOperationsSnapshotWithCtx(
       buildCtx({
         dailyClose: [priorClose],
@@ -3974,8 +3974,10 @@ describe("daily operations overview read model", () => {
             provisionalPrice: 260,
             provisionalProductId: "product-hodor",
             provisionalProductSkuId: "sku-hodor",
+            approvedProductId: "product-hodor-trusted",
+            approvedProductSkuId: "sku-hodor-trusted",
             reviewPriority: "normal",
-            status: "pending_review",
+            status: "linked_to_catalog",
             storeId: "store-1",
           },
         ],
@@ -3985,6 +3987,13 @@ describe("daily operations overview read model", () => {
             productId: "product-hodor",
             productName: "hodor evidence",
             sku: "HODOR",
+            storeId: "store-1",
+          },
+          {
+            _id: "sku-hodor-trusted",
+            productId: "product-hodor-trusted",
+            productName: "Hodor Trusted",
+            sku: "HODOR-TRUSTED",
             storeId: "store-1",
           },
         ],
@@ -3999,10 +4008,10 @@ describe("daily operations overview read model", () => {
       productLink: {
         label: "hodor evidence",
         params: {
-          productSlug: "product-hodor",
+          productSlug: "product-hodor-trusted",
         },
         search: {
-          variant: "HODOR",
+          variant: "HODOR-TRUSTED",
         },
         to: "/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug",
       },

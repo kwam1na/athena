@@ -1,10 +1,10 @@
-import { useSearch } from "@tanstack/react-router";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import {
   ProductsTableProvider,
   useProductsTableState,
 } from "./ProductsTableContext";
 import { useGetProducts } from "~/src/hooks/useGetProducts";
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useGetCategories } from "~/src/hooks/useGetCategories";
 import View from "../View";
 import { FadeIn } from "../common/FadeIn";
@@ -22,7 +22,12 @@ import {
   PageWorkspace,
   PageWorkspaceMain,
 } from "../common/PageLevelHeader";
-import { getCategoryProductQueryOptions } from "./ProductsListView.logic";
+import {
+  CATEGORY_PRODUCT_PAGE_SIZE,
+  getCategoryProductPageIndex,
+  getCategoryProductQueryOptions,
+  writeCategoryProductPageSearch,
+} from "./ProductsListView.logic";
 
 const ProductActionsToggleGroup = ({
   outOfStockProductsCount,
@@ -152,7 +157,12 @@ const CategoryWorkspaceActions = ({
 };
 
 function Body() {
-  const { categorySlug, o } = useSearch({ strict: false });
+  const navigate = useNavigate();
+  const { categorySlug, o, page } = useSearch({ strict: false }) as {
+    categorySlug?: string;
+    o?: string;
+    page?: number | string;
+  };
   const { productsTableState } = useProductsTableState();
   const { subcategorySlug } = productsTableState;
   const categoryProductQueryOptions = getCategoryProductQueryOptions(
@@ -181,6 +191,33 @@ function Body() {
   }, [selectedProductActions, products, outOfStockProducts]);
 
   const isLoadingProducts = filteredProducts === undefined;
+  const requestedPageIndex = getCategoryProductPageIndex(page);
+  const pageCount = Math.max(
+    1,
+    Math.ceil((filteredProducts?.length ?? 0) / CATEGORY_PRODUCT_PAGE_SIZE),
+  );
+  const categoryPageIndex = Math.min(requestedPageIndex, pageCount - 1);
+
+  useEffect(() => {
+    if (isLoadingProducts || requestedPageIndex === categoryPageIndex) return;
+
+    void navigate({
+      replace: true,
+      search: ((current: Record<string, unknown>) =>
+        writeCategoryProductPageSearch(
+          current,
+          categoryPageIndex,
+        )) as never,
+    });
+  }, [categoryPageIndex, isLoadingProducts, navigate, requestedPageIndex]);
+
+  const handleCategoryPageIndexChange = (nextPageIndex: number) => {
+    void navigate({
+      replace: true,
+      search: ((current: Record<string, unknown>) =>
+        writeCategoryProductPageSearch(current, nextPageIndex)) as never,
+    });
+  };
 
   return (
     <View hideBorder hideHeaderBottomBorder scrollMode="page">
@@ -203,7 +240,11 @@ function Body() {
               />
             ) : null}
             {isLoadingProducts ? null : (
-              <StoreProducts products={filteredProducts} />
+              <StoreProducts
+                products={filteredProducts}
+                onPageIndexChange={handleCategoryPageIndexChange}
+                pageIndex={categoryPageIndex}
+              />
             )}
           </PageWorkspaceMain>
         </PageWorkspace>

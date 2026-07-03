@@ -42,6 +42,7 @@ export type PosLocalSaleItemInput = {
   productId: Id<"product"> | string;
   productSkuId: Id<"productSku"> | string;
   pendingCheckoutItemId?: Id<"posPendingCheckoutItem"> | string;
+  pendingCheckoutAliasState?: "linked_to_catalog";
   inventoryImportProvisionalSkuId?: string;
   productName: string;
   productSku: string;

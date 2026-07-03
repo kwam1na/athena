@@ -52,7 +52,8 @@ export function ProductCard({
     product.availabilityPolicy === "active_provisional_import";
   const isPendingCheckoutItem =
     product.availabilityPolicy === "pending_checkout" ||
-    Boolean(product.pendingCheckoutItemId);
+    (Boolean(product.pendingCheckoutItemId) &&
+      product.pendingCheckoutAliasState !== "linked_to_catalog");
   const usesPendingCount = isProvisionalImport || isPendingCheckoutItem;
   const maxQuantity = undefined;
   const selectedQuantity = normalizeQuantity(quantityInput, maxQuantity);

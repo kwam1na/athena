@@ -1,6 +1,8 @@
 import {
   ColumnDef,
   ColumnFiltersState,
+  OnChangeFn,
+  PaginationState,
   SortingState,
   VisibilityState,
   flexRender,
@@ -25,44 +27,84 @@ import {
 import { DataTablePagination } from "./data-table-pagination";
 import { DataTableToolbar } from "./data-table-toolbar";
 import { AddProductCommand } from "./add-product-command";
-import ProductSubcategoryToggleGroup from "../../ProductSubcategoryToggleGroup";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
+  onPageIndexChange?: (pageIndex: number) => void;
+  pageIndex?: number;
   showToolbar?: boolean;
 }
+
+const PRODUCT_TABLE_PAGE_SIZE = 10;
 
 export function DataTable<TData, TValue>({
   columns,
   data,
+  onPageIndexChange,
+  pageIndex,
   showToolbar = true,
 }: DataTableProps<TData, TValue>) {
   const [rowSelection, setRowSelection] = useState({});
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [sorting, setSorting] = useState<SortingState>([]);
+  const [pagination, setPagination] = useState<PaginationState>({
+    pageIndex: pageIndex ?? 0,
+    pageSize: PRODUCT_TABLE_PAGE_SIZE,
+  });
+
+  useEffect(() => {
+    if (pageIndex === undefined) return;
+
+    setPagination((current) => {
+      if (
+        current.pageIndex === pageIndex &&
+        current.pageSize === PRODUCT_TABLE_PAGE_SIZE
+      ) {
+        return current;
+      }
+
+      return {
+        pageIndex,
+        pageSize: PRODUCT_TABLE_PAGE_SIZE,
+      };
+    });
+  }, [pageIndex]);
+
+  const handlePaginationChange: OnChangeFn<PaginationState> = (updater) => {
+    setPagination((current) => {
+      const next = typeof updater === "function" ? updater(current) : updater;
+      const normalized = {
+        pageIndex: next.pageIndex,
+        pageSize: PRODUCT_TABLE_PAGE_SIZE,
+      };
+
+      if (normalized.pageIndex !== current.pageIndex) {
+        onPageIndexChange?.(normalized.pageIndex);
+      }
+
+      return normalized;
+    });
+  };
 
   const table = useReactTable({
     data,
     columns,
-    initialState: {
-      pagination: {
-        pageSize: 10,
-      },
-    },
     state: {
       sorting,
       columnVisibility,
       rowSelection,
       columnFilters,
+      pagination,
     },
     enableRowSelection: true,
     onRowSelectionChange: setRowSelection,
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     onColumnVisibilityChange: setColumnVisibility,
+    onPaginationChange: handlePaginationChange,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
