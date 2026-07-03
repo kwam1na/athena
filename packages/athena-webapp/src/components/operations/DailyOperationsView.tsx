@@ -74,6 +74,7 @@ import {
 } from "../store-pulse/StorePulseSummaryView";
 
 type DailyOperationsApi = {
+  getDailyOperationsAutomationSnapshot?: unknown;
   getDailyOperationsDetailSnapshot?: unknown;
   getDailyOperationsSnapshot?: unknown;
   getDailyOperationsStorePulseSnapshot?: unknown;
@@ -261,6 +262,12 @@ export type DailyOperationsSnapshot = {
   storePulse?: StorePulseSummary | null;
   storeId: Id<"store">;
   timeline: Array<{
+    approvedProductLink?: {
+      label?: string;
+      params?: Record<string, string>;
+      search?: Record<string, string>;
+      to?: string;
+    };
     createdAt: number;
     id: string;
     message: string;
@@ -408,6 +415,11 @@ type DailyOperationsTodayRefreshSnapshot = Pick<
   refreshRequestedAt?: number | null;
   storePulse?: StorePulseSummary | null;
   weekMetric?: DailyOperationsSnapshot["weekMetrics"][number] | null;
+};
+
+type DailyOperationsAutomationSnapshot = {
+  automationStatuses?: DailyOperationsAutomationStatus[];
+  operatingDate: string;
 };
 
 type StorePulseDetailHydrationMode = "manual" | "auto";
@@ -696,6 +708,21 @@ function applyTodayRefreshSnapshot(
   };
 }
 
+function applyAutomationSnapshot(
+  snapshot: DailyOperationsSnapshot | undefined,
+  automationSnapshot: DailyOperationsAutomationSnapshot | undefined,
+) {
+  if (!snapshot || !automationSnapshot) return snapshot;
+  if (snapshot.operatingDate !== automationSnapshot.operatingDate) {
+    return snapshot;
+  }
+
+  return {
+    ...snapshot,
+    automationStatuses: automationSnapshot.automationStatuses ?? [],
+  };
+}
+
 function shouldShowPrimaryAction(snapshot: DailyOperationsSnapshot) {
   return !isHistoricalOperatingDate(snapshot.operatingDate);
 }
@@ -848,6 +875,11 @@ function TimelineMessage({
   orgUrlSlug: string;
   storeUrlSlug: string;
 }) {
+  const approvedProductLink = event.approvedProductLink;
+  const approvedProductLabel = approvedProductLink?.label?.trim();
+  const canRenderApprovedProductLink = Boolean(
+    approvedProductLink?.to && approvedProductLink.params && approvedProductLabel,
+  );
   const inlineLink =
     event.transactionLink ??
     event.registerLink ??
@@ -860,12 +892,54 @@ function TimelineMessage({
   const displayMessage = formatTimelineMessage(event.message);
   const linkMatch = findTimelineLinkMatch(displayMessage, linkLabel, matchLabel);
 
+  const renderApprovedProductLink = () => {
+    if (
+      !canRenderApprovedProductLink ||
+      !approvedProductLink?.to ||
+      !approvedProductLink.params ||
+      !approvedProductLabel
+    ) {
+      return null;
+    }
+
+    return (
+      <>
+        {" "}
+        product{" "}
+        <Link
+          className="inline-flex items-center gap-0.5 font-medium text-link underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          params={{
+            ...approvedProductLink.params,
+            orgUrlSlug,
+            storeUrlSlug,
+          }}
+          search={{ o: getOrigin(), ...(approvedProductLink.search ?? {}) }}
+          to={approvedProductLink.to}
+        >
+          <span>{approvedProductLabel}</span>
+          <ArrowUpRight aria-hidden="true" className="h-3 w-3" />
+        </Link>
+        .
+      </>
+    );
+  };
+
   if (!inlineLink?.to || !inlineLink.params || !linkLabel || !linkMatch) {
-    return <>{displayMessage}</>;
+    if (!canRenderApprovedProductLink) return <>{displayMessage}</>;
+
+    return (
+      <>
+        {displayMessage.replace(/\.\s*$/, "")}
+        {renderApprovedProductLink()}
+      </>
+    );
   }
 
   const before = displayMessage.slice(0, linkMatch.index);
   const after = displayMessage.slice(linkMatch.index + linkMatch.length);
+  const renderedAfter = canRenderApprovedProductLink
+    ? after.replace(/\.\s*$/, "")
+    : after;
 
   return (
     <>
@@ -883,7 +957,8 @@ function TimelineMessage({
         <span>{linkLabel}</span>
         <ArrowUpRight aria-hidden="true" className="h-3 w-3" />
       </Link>
-      {after}
+      {renderedAfter}
+      {renderApprovedProductLink()}
     </>
   );
 }
@@ -3553,6 +3628,7 @@ function DailyOperationsApiPendingView() {
 }
 
 function DailyOperationsConnectedView({
+  getDailyOperationsAutomationSnapshot,
   getDailyOperationsDetailSnapshot,
   getDailyOperationsSnapshot,
   getDailyOperationsStorePulseSnapshot,
@@ -3561,6 +3637,7 @@ function DailyOperationsConnectedView({
   getDailyOperationsTimelinePreviewSnapshot,
   getDailyOperationsTimelineSnapshot,
 }: {
+  getDailyOperationsAutomationSnapshot?: unknown;
   getDailyOperationsDetailSnapshot?: unknown;
   getDailyOperationsSnapshot: unknown;
   getDailyOperationsStorePulseSnapshot?: unknown;
@@ -3716,6 +3793,12 @@ function DailyOperationsConnectedView({
       ? snapshotArgs
       : "skip",
   ) as DailyOperationsStoreRequestsSnapshot | undefined;
+  const automationSnapshot = useExpectedDailyOperationsQuery(
+    getDailyOperationsAutomationSnapshot ?? getDailyOperationsSnapshot,
+    getDailyOperationsAutomationSnapshot && canQueryProtectedData
+      ? snapshotArgs
+      : "skip",
+  ) as DailyOperationsAutomationSnapshot | undefined;
   const queriedTodayRefreshSnapshot = useExpectedDailyOperationsQuery(
     getDailyOperationsTodayRefreshSnapshot ?? getDailyOperationsSnapshot,
     todayRefreshArgs,
@@ -3755,9 +3838,9 @@ function DailyOperationsConnectedView({
     snapshotRequestKey === "skip"
       ? undefined
       : todayRefreshCache[snapshotRequestKey];
-  const snapshot = applyTodayRefreshSnapshot(
-    mergedSnapshot,
-    cachedTodayRefreshSnapshot,
+  const snapshot = applyAutomationSnapshot(
+    applyTodayRefreshSnapshot(mergedSnapshot, cachedTodayRefreshSnapshot),
+    automationSnapshot,
   );
   const cachedTimelinePreviewSnapshot =
     snapshotRequestKey === "skip"
@@ -4044,6 +4127,9 @@ export function DailyOperationsView() {
 
   return (
     <DailyOperationsConnectedView
+      getDailyOperationsAutomationSnapshot={
+        dailyOperationsApi.getDailyOperationsAutomationSnapshot
+      }
       getDailyOperationsDetailSnapshot={
         dailyOperationsApi.getDailyOperationsDetailSnapshot
       }

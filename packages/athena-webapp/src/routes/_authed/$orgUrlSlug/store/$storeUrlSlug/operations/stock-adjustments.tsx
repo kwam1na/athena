@@ -13,6 +13,7 @@ const stockAdjustmentSearchSchema = z.object({
   o: z.string().optional(),
   page: z.coerce.number().int().positive().optional(),
   query: z.string().optional(),
+  selectedSku: z.string().optional(),
   sku: z.string().optional(),
 });
 
@@ -41,6 +42,7 @@ function StockAdjustmentsRoute() {
           "mode",
           "page",
           "query",
+          "selectedSku",
           "sku",
         ] as const) {
           if (next[key] === undefined || next[key] === "") {

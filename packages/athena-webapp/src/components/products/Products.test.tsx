@@ -618,6 +618,22 @@ describe("Products", () => {
     expect(routerMocks.navigate).not.toHaveBeenCalled();
   });
 
+  it("keeps product search pending while URL-restored results are loading", () => {
+    routerMocks.search = { query: "kii" };
+    mockedProducts.skuSearchResults = undefined;
+
+    render(<Products />);
+
+    expect(screen.getByText("Searching product catalog")).toBeInTheDocument();
+    expect(
+      screen.getByText("Checking matching products before showing final results."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("No products match your search"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("...")).toBeInTheDocument();
+  });
+
   it("keeps product search pagination changes in the URL", async () => {
     const user = userEvent.setup();
     routerMocks.search = { query: "mizani" };

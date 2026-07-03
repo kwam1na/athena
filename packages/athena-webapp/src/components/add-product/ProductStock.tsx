@@ -80,6 +80,7 @@ import {
 } from "~/src/hooks/usePOSProducts";
 import { getOrigin } from "~/src/lib/navigationUtils";
 import { useDebounce } from "~/src/hooks/useDebounce";
+import { toOperatorMessage } from "~/src/lib/errors/operatorMessages";
 import {
   Dialog,
   DialogContent,
@@ -837,7 +838,7 @@ function PendingCheckoutLinkDialog({
     }
 
     const selectedPriceState = resolvePendingCheckoutSkuLinkPriceState({
-      pendingDisplayPrice: pendingItemPrice,
+      pendingStoredPrice: pendingItemPrice,
       trustedSkuStoredPrice: selectedProduct.price,
     });
     if (!selectedPriceState.canLink) {
@@ -849,21 +850,24 @@ function PendingCheckoutLinkDialog({
     setErrorMessage(null);
 
     try {
-      await resolvePendingCheckoutItemReview({
+      const result = await resolvePendingCheckoutItemReview({
         approvedProductId: selectedProduct.productId,
         approvedProductSkuId: selectedProduct.skuId as Id<"productSku">,
         pendingCheckoutItemId: binding.row._id as Id<"posPendingCheckoutItem">,
         status: "linked_to_catalog",
         storeId,
       });
+      if (result.kind === "user_error") {
+        setErrorMessage(toOperatorMessage(result.error.message));
+        return;
+      }
+
       toast.success("Pending checkout item linked");
       onLinked();
     } catch (error) {
       console.error(error);
       setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : "Pending checkout item was not linked.",
+        "Pending checkout item was not linked. Check the SKU and try again.",
       );
       presentUnexpectedErrorToast("Pending checkout item was not linked");
     } finally {
@@ -874,11 +878,7 @@ function PendingCheckoutLinkDialog({
   const provisionalSoldQuantity =
     binding?.state === "unique" ? binding.row.provisionalSoldQuantity : null;
   const pendingItemPrice =
-    typeof variant.netPrice === "number"
-      ? variant.netPrice
-      : typeof variant.price === "number"
-        ? variant.price
-        : null;
+    activeProduct.skus.find((sku) => sku._id === variant.id)?.price ?? null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -904,7 +904,7 @@ function PendingCheckoutLinkDialog({
               <p className="font-medium text-foreground">
                 {pendingItemPrice === null
                   ? "-"
-                  : formatter.format(pendingItemPrice)}
+                  : formatStoredAmount(formatter, pendingItemPrice)}
               </p>
             </div>
             <div>
@@ -922,7 +922,7 @@ function PendingCheckoutLinkDialog({
             <p className="text-xs text-muted-foreground">
               {pendingItemPrice === null
                 ? "Only SKUs with the same price can be linked."
-                : `Only SKUs priced at ${formatter.format(pendingItemPrice)} can be linked.`}
+                : `Only SKUs priced at ${formatStoredAmount(formatter, pendingItemPrice)} can be linked.`}
             </p>
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -954,7 +954,7 @@ function PendingCheckoutLinkDialog({
                   {trustedSearchResults.map((product) => {
                     const selected = selectedProduct?.skuId === product.skuId;
                     const priceState = resolvePendingCheckoutSkuLinkPriceState({
-                      pendingDisplayPrice: pendingItemPrice,
+                      pendingStoredPrice: pendingItemPrice,
                       trustedSkuStoredPrice: product.price,
                     });
                     return (

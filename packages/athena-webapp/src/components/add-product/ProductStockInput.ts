@@ -1,4 +1,4 @@
-import { toDisplayAmount, toPesewas } from "~/convex/lib/currency";
+import { toDisplayAmount } from "~/convex/lib/currency";
 import { parseDisplayAmountInput } from "~/src/lib/pos/displayAmounts";
 import { PAYSTACK_PROCESSING_FEE } from "~/src/lib/constants";
 import type { Id } from "~/convex/_generated/dataModel";
@@ -165,15 +165,15 @@ export type PendingCheckoutSkuLinkPriceState =
     };
 
 export function resolvePendingCheckoutSkuLinkPriceState({
-  pendingDisplayPrice,
+  pendingStoredPrice,
   trustedSkuStoredPrice,
 }: {
-  pendingDisplayPrice: number | null | undefined;
+  pendingStoredPrice: number | null | undefined;
   trustedSkuStoredPrice: number | null | undefined;
 }): PendingCheckoutSkuLinkPriceState {
   if (
-    typeof pendingDisplayPrice !== "number" ||
-    !Number.isFinite(pendingDisplayPrice) ||
+    typeof pendingStoredPrice !== "number" ||
+    !Number.isFinite(pendingStoredPrice) ||
     typeof trustedSkuStoredPrice !== "number" ||
     !Number.isFinite(trustedSkuStoredPrice)
   ) {
@@ -184,7 +184,7 @@ export function resolvePendingCheckoutSkuLinkPriceState({
     };
   }
 
-  if (toPesewas(pendingDisplayPrice) !== trustedSkuStoredPrice) {
+  if (pendingStoredPrice !== trustedSkuStoredPrice) {
     return {
       canLink: false,
       status: "mismatch",

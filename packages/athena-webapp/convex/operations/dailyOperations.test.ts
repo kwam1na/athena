@@ -4,6 +4,7 @@ import type { QueryCtx } from "../_generated/server";
 import * as athenaUserAuth from "../lib/athenaUserAuth";
 import {
   buildDailyOperationsSnapshotWithCtx,
+  getDailyOperationsAutomationSnapshot,
   getDailyOperationsDetailSnapshot,
   getDailyOperationsSnapshot,
   getDailyOperationsStorePulseSnapshot,
@@ -465,6 +466,76 @@ describe("daily operations overview read model", () => {
         },
       },
     ]);
+  });
+
+  it("exposes Daily Operations automation as a narrow subscribed snapshot", async () => {
+    vi.mocked(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).mockResolvedValue({
+      _creationTime: 0,
+      _id: "user-1" as Id<"athenaUser">,
+      email: "admin@wigclub.store",
+    });
+    vi.mocked(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).mockResolvedValue({
+      _creationTime: 0,
+      _id: "member-admin" as Id<"organizationMember">,
+      organizationId: "org-1" as Id<"organization">,
+      role: "full_admin",
+      userId: "user-1" as Id<"athenaUser">,
+    });
+
+    const snapshot = await getHandler(getDailyOperationsAutomationSnapshot)(
+      buildCtx({
+        automationRun: [
+          {
+            _id: "automation-opening",
+            action: "opening.auto_start",
+            appliedAt: Date.UTC(2026, 4, 8, 8),
+            createdAt: Date.UTC(2026, 4, 8, 8),
+            domain: "daily_operations",
+            eventIds: [],
+            idempotencyKey:
+              "daily_operations:opening.auto_start:store-1:2026-05-08",
+            mutationBoundary: "daily_opening",
+            operatingDate: "2026-05-08",
+            outcome: "applied",
+            policyMode: "enabled",
+            policyVersion: "daily-operations-automation-v1",
+            snapshotCounts: {},
+            sourceSubjects: [],
+            storeId: "store-1",
+            triggerType: "scheduled",
+            updatedAt: Date.UTC(2026, 4, 8, 8),
+          },
+        ],
+        dailyOpening: [startedOpening],
+        store: [store],
+      }) as never,
+      {
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(snapshot).toEqual({
+      automationStatuses: [
+        {
+          bucket: "action_taken",
+          id: "automation-opening",
+          lane: "opening",
+          occurredAt: Date.UTC(2026, 4, 8, 8),
+          outcome: "applied",
+          policyMode: "enabled",
+          policyVersion: "daily-operations-automation-v1",
+          sourceLink: {
+            to: "/$orgUrlSlug/store/$storeUrlSlug/operations/opening",
+          },
+        },
+      ],
+      operatingDate: "2026-05-08",
+    });
   });
 
   it("keeps EOD preparation visible over pre-window auto-complete checks", async () => {
@@ -4016,6 +4087,97 @@ describe("daily operations overview read model", () => {
         to: "/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug",
       },
       type: "pos_pending_checkout_item_evidence_corrected",
+    });
+  });
+
+  it("links pending checkout review events to the provisional product after linking", async () => {
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx({
+        dailyClose: [priorClose],
+        dailyOpening: [startedOpening],
+        operationalEvent: [
+          {
+            _id: "event-pending-checkout-reviewed",
+            createdAt: Date.UTC(2026, 4, 8, 15, 9),
+            eventType: "pos_pending_checkout_item_reviewed",
+            message: "Pending checkout item got 2b gel was marked linked to catalog.",
+            metadata: {
+              pendingCheckoutItemId: "pending-got2b",
+            },
+            storeId: "store-1",
+            subjectId: "pending-got2b",
+            subjectLabel: "got 2b gel",
+            subjectType: "pos_pending_checkout_item",
+          },
+        ],
+        posPendingCheckoutItem: [
+          {
+            _id: "pending-got2b",
+            evidence: {
+              firstSeenAt: 1,
+              lastSeenAt: 1,
+              observedLookupCodes: ["GOT2B"],
+              observedPrices: [12000],
+              totalQuantitySold: 1,
+              transactionCount: 1,
+            },
+            lookupCode: "GOT2B",
+            name: "got 2b gel",
+            organizationId: "org-1",
+            provisionalPrice: 12000,
+            provisionalProductId: "product-got2b-pending",
+            provisionalProductSkuId: "sku-got2b-pending",
+            approvedProductId: "product-got2b-trusted",
+            approvedProductSkuId: "sku-got2b-trusted",
+            reviewPriority: "normal",
+            status: "linked_to_catalog",
+            storeId: "store-1",
+          },
+        ],
+        productSku: [
+          {
+            _id: "sku-got2b-pending",
+            productId: "product-got2b-pending",
+            productName: "got 2b gel",
+            sku: "GOT2B-PENDING",
+            storeId: "store-1",
+          },
+          {
+            _id: "sku-got2b-trusted",
+            productId: "product-got2b-trusted",
+            productName: "Got2b Gel Trusted",
+            sku: "GOT2B-TRUSTED",
+            storeId: "store-1",
+          },
+        ],
+        store: [store],
+      }),
+      { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.timeline[0]).toMatchObject({
+      approvedProductLink: {
+        label: "Got2b Gel Trusted",
+        params: {
+          productSlug: "product-got2b-trusted",
+        },
+        search: {
+          variant: "GOT2B-TRUSTED",
+        },
+        to: "/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug",
+      },
+      id: "event-pending-checkout-reviewed",
+      productLink: {
+        label: "got 2b gel",
+        params: {
+          productSlug: "product-got2b-pending",
+        },
+        search: {
+          variant: "GOT2B-PENDING",
+        },
+        to: "/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug",
+      },
+      type: "pos_pending_checkout_item_reviewed",
     });
   });
 

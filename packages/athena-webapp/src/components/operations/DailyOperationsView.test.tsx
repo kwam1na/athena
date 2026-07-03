@@ -18,6 +18,7 @@ const mockedHooks = vi.hoisted(() => ({
 }));
 
 const mockedApi = vi.hoisted(() => ({
+  getDailyOperationsAutomationSnapshot: "getDailyOperationsAutomationSnapshot",
   getDailyOperationsDetailSnapshot: "getDailyOperationsDetailSnapshot",
   getDailyOperationsSnapshot: "getDailyOperationsSnapshot",
   getDailyOperationsStorePulseSnapshot: "getDailyOperationsStorePulseSnapshot",
@@ -2170,6 +2171,75 @@ describe("DailyOperationsViewContent", () => {
     ).toBeInTheDocument();
   });
 
+  it("links pending checkout review events to both pending and approved products inline", () => {
+    renderContent({
+      ...operatingSnapshot,
+      timeline: [
+        {
+          approvedProductLink: {
+            label: "Got2b Gel Black",
+            params: {
+              productSlug: "product-approved",
+            },
+            search: {
+              variant: "GOT2B-APPROVED",
+            },
+            to: "/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug",
+          },
+          createdAt: Date.UTC(2026, 4, 8, 12),
+          id: "event-pending-checkout-reviewed",
+          message:
+            "Pending checkout item got 2b gel was marked linked to catalog.",
+          productLink: {
+            label: "got 2b gel",
+            params: {
+              productSlug: "product-pending",
+            },
+            search: {
+              variant: "GOT2B-PENDING",
+            },
+            to: "/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug",
+          },
+          subject: {
+            id: "pending-got2b",
+            label: "got 2b gel",
+            type: "pos_pending_checkout_item",
+          },
+          type: "pos_pending_checkout_item_reviewed",
+        },
+      ],
+    });
+
+    expect(
+      screen.getByText((_, node) => {
+        return (
+          node?.textContent ===
+          "Pending checkout item got 2b gel was marked linked to catalog product Got2b Gel Black."
+        );
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "got 2b gel" })).toHaveAttribute(
+      "href",
+      expect.stringContaining("/wigclub/store/osu/products/product-pending?o="),
+    );
+    expect(screen.getByRole("link", { name: "got 2b gel" })).toHaveAttribute(
+      "href",
+      expect.stringContaining("variant=GOT2B-PENDING"),
+    );
+    expect(
+      screen.getByRole("link", { name: "Got2b Gel Black" }),
+    ).toHaveAttribute(
+      "href",
+      expect.stringContaining("/wigclub/store/osu/products/product-approved?o="),
+    );
+    expect(
+      screen.getByRole("link", { name: "Got2b Gel Black" }),
+    ).toHaveAttribute(
+      "href",
+      expect.stringContaining("variant=GOT2B-APPROVED"),
+    );
+  });
+
   it("links register closeout timeline events to the register session", () => {
     renderContent(registerCloseoutTimelineSnapshot);
 
@@ -2362,6 +2432,10 @@ describe("DailyOperationsViewContent", () => {
 describe("DailyOperationsView", () => {
   beforeEach(() => {
     (
+      mockedApi as { getDailyOperationsAutomationSnapshot?: unknown }
+    ).getDailyOperationsAutomationSnapshot =
+      "getDailyOperationsAutomationSnapshot";
+    (
       mockedApi as { getDailyOperationsDetailSnapshot?: unknown }
     ).getDailyOperationsDetailSnapshot = "getDailyOperationsDetailSnapshot";
     (
@@ -2416,6 +2490,49 @@ describe("DailyOperationsView", () => {
     );
     expect(
       screen.getByRole("heading", { name: "Historical store-day view" }),
+    ).toBeInTheDocument();
+  });
+
+  it("subscribes to automation statuses separately from the main snapshot", () => {
+    const currentOperatingDate = getCurrentLocalOperatingDate();
+    mockedHooks.useQuery.mockImplementation((query, args) => {
+      if (args === "skip") return undefined;
+      if (query === mockedApi.getDailyOperationsAutomationSnapshot) {
+        return {
+          automationStatuses: [
+            {
+              bucket: "action_taken",
+              id: "automation-opening-live",
+              lane: "opening",
+              occurredAt: Date.UTC(2026, 4, 10, 8),
+              outcome: "applied",
+              sourceLink: {
+                to: "/$orgUrlSlug/store/$storeUrlSlug/operations/opening",
+              },
+            },
+          ],
+          operatingDate: currentOperatingDate,
+        };
+      }
+
+      return {
+        ...operatingSnapshot,
+        automationStatuses: [],
+        operatingDate: currentOperatingDate,
+      };
+    });
+
+    render(<DailyOperationsView />);
+
+    expect(mockedHooks.useQuery).toHaveBeenCalledWith(
+      mockedApi.getDailyOperationsAutomationSnapshot,
+      expect.objectContaining({
+        operatingDate: expect.any(String),
+        storeId: "store-1",
+      }),
+    );
+    expect(
+      screen.getByText("Athena started Opening Handoff."),
     ).toBeInTheDocument();
   });
 

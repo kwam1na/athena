@@ -103,6 +103,9 @@ export default function Products() {
   const filteredProducts = hasSearchInput ? searchProducts : null;
   const hasActiveFilters = hasSearchInput;
   const showSearchResults = hasActiveFilters;
+  const searchResultCountLabel = isSearchLoading
+    ? "..."
+    : String(filteredProducts?.length ?? 0);
   const requestedSearchPageIndex = getProductSearchPageIndex(page);
   const searchResultPageCount = Math.max(
     1,
@@ -331,10 +334,28 @@ export default function Products() {
                     Search results
                   </p>
                   <Badge variant="outline" size="sm">
-                    {filteredProducts?.length ?? 0}
+                    {searchResultCountLabel}
                   </Badge>
                 </div>
-                {filteredProducts && filteredProducts.length > 0 ? (
+                {isSearchLoading ? (
+                  <div
+                    aria-live="polite"
+                    className="flex min-h-[18rem] items-center justify-center p-layout-md"
+                    role="status"
+                  >
+                    <EmptyState
+                      icon={
+                        <PackageXIcon className="h-12 w-12 text-muted-foreground" />
+                      }
+                      title={
+                        <p className="text-sm text-muted-foreground">
+                          Searching product catalog
+                        </p>
+                      }
+                      description="Checking matching products before showing final results."
+                    />
+                  </div>
+                ) : filteredProducts && filteredProducts.length > 0 ? (
                   <GenericDataTable
                     data={filteredProducts}
                     columns={productColumns}

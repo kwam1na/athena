@@ -22,11 +22,13 @@ import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import { api } from "~/convex/_generated/api";
 import { presentUnexpectedErrorToast } from "~/src/lib/errors/presentUnexpectedErrorToast";
 import { ProductOperationalTimeline } from "./ProductOperationalTimeline";
+import { usePermissions } from "~/src/hooks/usePermissions";
 
-const ProductDetailViewHeader = () => {
+export const ProductDetailViewHeader = () => {
   const [isUnarchiving, setIsUnarchiving] = useState(false);
   const { activeProduct } = useGetActiveProduct({ includeArchived: true });
   const { activeStore } = useGetActiveStore();
+  const { hasFullAdminAccess } = usePermissions();
   const unarchiveProduct = useMutation(api.inventory.products.unarchive);
 
   if (activeProduct === undefined) return null;
@@ -67,7 +69,7 @@ const ProductDetailViewHeader = () => {
         </div>
       }
       trailingContent={
-        isArchived ? (
+        isArchived && hasFullAdminAccess ? (
           <LoadingButton
             isLoading={isUnarchiving}
             variant="outline"

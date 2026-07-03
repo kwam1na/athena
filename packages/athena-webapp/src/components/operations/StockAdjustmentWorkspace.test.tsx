@@ -1,6 +1,6 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { AnchorHTMLAttributes, ComponentProps } from "react";
+import { useState, type AnchorHTMLAttributes, type ComponentProps } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Id } from "~/convex/_generated/dataModel";
 import { ok, userError } from "~/shared/commandResult";
@@ -16,6 +16,7 @@ class ResizeObserverStub {
 globalThis.ResizeObserver = ResizeObserverStub;
 
 const mockedHandlers = vi.hoisted(() => ({
+  hasFullAdminAccess: true,
   onSubmitBatch: vi.fn(),
   quickAddProductSku: vi.fn(),
 }));
@@ -47,6 +48,12 @@ vi.mock("@zxing/browser", () => ({
 vi.mock("~/src/hooks/useAuth", () => ({
   useAuth: () => ({
     user: { _id: "user-1" },
+  }),
+}));
+
+vi.mock("~/src/hooks/usePermissions", () => ({
+  usePermissions: () => ({
+    hasFullAdminAccess: mockedHandlers.hasFullAdminAccess,
   }),
 }));
 
@@ -133,7 +140,7 @@ const baseProps = {
 function renderStockAdjustmentWorkspace(
   props: Partial<ComponentProps<typeof StockAdjustmentWorkspaceContent>> = {},
 ) {
-  render(<StockAdjustmentWorkspaceContent {...baseProps} {...props} />);
+  return render(<StockAdjustmentWorkspaceContent {...baseProps} {...props} />);
 }
 
 describe("StockAdjustmentWorkspaceContent", () => {
@@ -163,6 +170,7 @@ describe("StockAdjustmentWorkspaceContent", () => {
   });
 
   beforeEach(() => {
+    mockedHandlers.hasFullAdminAccess = true;
     mockedScanner.BrowserMultiFormatReader.mockImplementation(() => ({
       decode: mockedScanner.decode,
       decodeFromCanvas: mockedScanner.decodeFromCanvas,
@@ -355,6 +363,18 @@ describe("StockAdjustmentWorkspaceContent", () => {
       query: "skillz",
       sku: "sku-quick",
     });
+  });
+
+  it("hides quick add from non-admin users", () => {
+    mockedHandlers.hasFullAdminAccess = false;
+
+    renderStockAdjustmentWorkspace({
+      searchState: { query: "skillz" },
+    });
+
+    expect(
+      screen.queryByRole("button", { name: /quick add/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("attaches a searched barcode to an existing SKU from stock quick add", async () => {
@@ -893,12 +913,12 @@ describe("StockAdjustmentWorkspaceContent", () => {
 
     await user.click(screen.getByRole("button", { name: /hair, 1 sku/i }));
 
-    expect(onSearchStateChange).toHaveBeenLastCalledWith({
+    expect(onSearchStateChange).toHaveBeenCalledWith({
       availability: undefined,
       category: "Hair",
       page: 1,
       query: undefined,
-      sku: "sku-1",
+      sku: undefined,
     });
     expect(
       screen.getByRole("button", { name: /hair, 1 sku/i }),
@@ -1164,7 +1184,7 @@ describe("StockAdjustmentWorkspaceContent", () => {
       category: undefined,
       page: 1,
       query: "vibes",
-      sku: "sku-hair-vibes",
+      sku: undefined,
     });
     expect(screen.getByText("Showing 2 of 3 SKUs.")).toBeInTheDocument();
     expect(within(table).getByText("Vibes Closure")).toBeInTheDocument();
@@ -1172,6 +1192,51 @@ describe("StockAdjustmentWorkspaceContent", () => {
     expect(
       within(table).queryByText("Sparkling Water"),
     ).not.toBeInTheDocument();
+  });
+
+  it("keeps search pending while more inventory rows can still match", async () => {
+    const onLoadMoreInventoryItems = vi.fn();
+
+    renderStockAdjustmentWorkspace({
+      canLoadMoreInventoryItems: true,
+      inventoryItems: [
+        {
+          _id: "sku-alpha" as Id<"productSku">,
+          inventoryCount: 2,
+          productCategory: "Hair",
+          productName: "alpha comb",
+          quantityAvailable: 2,
+          sku: "ALPHA-1",
+        },
+        {
+          _id: "sku-beta" as Id<"productSku">,
+          inventoryCount: 3,
+          productCategory: "Books",
+          productName: "beta book",
+          quantityAvailable: 3,
+          sku: "BETA-1",
+        },
+      ],
+      onLoadMoreInventoryItems,
+      searchState: {
+        query: "zebra",
+      },
+    });
+
+    const table = screen.getByRole("table");
+
+    expect(screen.getByText("Checking remaining inventory")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Loading more SKUs before showing final search results.",
+      ),
+    ).toBeInTheDocument();
+    expect(within(table).getByText("Searching more SKUs")).toBeInTheDocument();
+    expect(within(table).queryByText("No results.")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/Showing 0-0 of 0 SKUs/i),
+    ).not.toBeInTheDocument();
+    await waitFor(() => expect(onLoadMoreInventoryItems).toHaveBeenCalled());
   });
 
   it("ranks direct product-name phrase matches before broader fuzzy hits", async () => {
@@ -1230,6 +1295,7 @@ describe("StockAdjustmentWorkspaceContent", () => {
           _id: "sku-hair" as Id<"productSku">,
           inventoryCount: 4,
           productCategory: "Hair",
+          productId: "product-hair" as Id<"product">,
           productName: "closure wig",
           quantityAvailable: 4,
           sku: "CW-18",
@@ -1269,7 +1335,7 @@ describe("StockAdjustmentWorkspaceContent", () => {
       category: "Makeup",
       page: 1,
       query: "za",
-      sku: "sku-makeup",
+      sku: undefined,
     });
   });
 
@@ -1307,6 +1373,7 @@ describe("StockAdjustmentWorkspaceContent", () => {
           _id: "sku-hair" as Id<"productSku">,
           inventoryCount: 4,
           productCategory: "Hair",
+          productId: "product-hair" as Id<"product">,
           productName: "closure wig",
           quantityAvailable: 4,
           sku: "CW-18",
@@ -1337,6 +1404,14 @@ describe("StockAdjustmentWorkspaceContent", () => {
       }),
     ).toHaveValue("");
     expect(screen.getAllByText("CW-18").length).toBeGreaterThan(0);
+    expect(
+      screen.getByRole("link", {
+        name: /view product detail for closure wig/i,
+      }),
+    ).toHaveAttribute(
+      "href",
+      "/wigclub/store/wigclub/products/product-hair?o=%2Fwigclub%2Fstore%2Fwigclub%2Foperations%2Fstock-adjustments",
+    );
   });
 
   it("moves the category filter when selecting an outside-category match", async () => {
@@ -1377,7 +1452,8 @@ describe("StockAdjustmentWorkspaceContent", () => {
     expect(onSearchStateChange).toHaveBeenLastCalledWith({
       category: "Makeup",
       page: 1,
-      sku: "sku-makeup",
+      selectedSku: "sku-makeup",
+      sku: undefined,
     });
   });
 
@@ -1427,10 +1503,9 @@ describe("StockAdjustmentWorkspaceContent", () => {
       category: undefined,
       page: 1,
       query: undefined,
+      selectedSku: undefined,
       sku: undefined,
     });
-    expect(screen.getByText("Showing 2 of 2 SKUs.")).toBeInTheDocument();
-    expect(within(table).getByText("Sparkling Water")).toBeInTheDocument();
     expect(within(table).getByText("Vibes Closure")).toBeInTheDocument();
   });
 
@@ -1477,6 +1552,7 @@ describe("StockAdjustmentWorkspaceContent", () => {
       category: undefined,
       page: 1,
       query: undefined,
+      selectedSku: undefined,
       sku: undefined,
     });
   });
@@ -1843,7 +1919,9 @@ describe("StockAdjustmentWorkspaceContent", () => {
     ).toBeInTheDocument();
   });
 
-  it("shows available SKU identifiers in the table and detail rail", () => {
+  it("shows available SKU identifiers in the table and selected detail rail", async () => {
+    const user = userEvent.setup();
+
     renderStockAdjustmentWorkspace();
 
     const table = screen.getByRole("table");
@@ -1858,6 +1936,9 @@ describe("StockAdjustmentWorkspaceContent", () => {
     expect(within(row!).getByText("Large")).toBeInTheDocument();
     expect(within(row!).getByText('18"')).toBeInTheDocument();
     expect(within(row!).getByText("natural black")).toBeInTheDocument();
+
+    await user.click(row!);
+
     expect(screen.getAllByText("SKU").length).toBeGreaterThan(1);
     expect(screen.getByText("Barcode")).toBeInTheDocument();
     expect(screen.getByText("Price")).toBeInTheDocument();
@@ -1869,7 +1950,7 @@ describe("StockAdjustmentWorkspaceContent", () => {
     expect(screen.getByText("Color")).toBeInTheDocument();
   });
 
-  it("renders the fallback image slot when the active SKU has no image", () => {
+  it("does not auto-select the first SKU in the right rail on mount", () => {
     renderStockAdjustmentWorkspace({
       inventoryItems: [
         {
@@ -1887,8 +1968,108 @@ describe("StockAdjustmentWorkspaceContent", () => {
     });
 
     expect(screen.getByLabelText("SKU image unavailable")).toBeInTheDocument();
-    expect(screen.getAllByText("NO-IMG").length).toBeGreaterThan(1);
-    expect(screen.getAllByText("black").length).toBeGreaterThan(1);
+    expect(
+      screen.queryByRole("link", {
+        name: /view product detail for closure/i,
+      }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("NO-IMG")).toBeInTheDocument();
+  });
+
+  it("does not auto-select a SKU when switching adjustment modes", async () => {
+    const user = userEvent.setup();
+    const onSearchStateChange = vi.fn();
+
+    renderStockAdjustmentWorkspace({ onSearchStateChange });
+
+    await user.click(screen.getByRole("tab", { name: /manual adjustment/i }));
+
+    expect(onSearchStateChange).toHaveBeenCalledWith({
+      category: undefined,
+      mode: "manual",
+      page: 1,
+      sku: undefined,
+    });
+    expect(
+      screen.queryByRole("link", {
+        name: /view product detail for .*closure wig/i,
+      }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps a route-selected SKU stable when switching adjustment modes", async () => {
+    const user = userEvent.setup();
+    const onSearchStateChange = vi.fn();
+
+    const ControlledStockAdjustmentWorkspace = () => {
+      const [searchState, setSearchState] = useState<
+        NonNullable<
+          ComponentProps<typeof StockAdjustmentWorkspaceContent>["searchState"]
+        >
+      >({
+        mode: "manual",
+        sku: "sku-1",
+      });
+
+      return (
+        <StockAdjustmentWorkspaceContent
+          {...baseProps}
+          onSearchStateChange={(nextSearchState) => {
+            onSearchStateChange(nextSearchState);
+            setSearchState((current) => ({
+              ...current,
+              ...nextSearchState,
+            }));
+          }}
+          searchState={searchState}
+        />
+      );
+    };
+
+    render(<ControlledStockAdjustmentWorkspace />);
+
+    const table = screen.getByRole("table");
+    const selectedRow = within(table)
+      .getByText('18" Natural Black Closure Wig')
+      .closest("tr");
+
+    expect(selectedRow).toHaveClass("bg-muted/60");
+    expect(
+      within(table).queryByText("Body Wave Bundle"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("Showing 1 of 2 SKUs.")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", {
+        name: /view product detail for .*closure wig/i,
+      }),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: /cycle count/i }));
+
+    expect(onSearchStateChange).toHaveBeenCalledWith({
+      category: undefined,
+      mode: "cycle_count",
+      page: 1,
+      sku: "sku-1",
+    });
+    expect(
+      within(table).getByText('18" Natural Black Closure Wig').closest("tr"),
+    ).toHaveClass("bg-muted/60");
+    expect(
+      within(table).queryByText("Body Wave Bundle"),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: /manual adjustment/i }));
+
+    expect(onSearchStateChange).toHaveBeenCalledWith({
+      category: undefined,
+      mode: "manual",
+      page: 1,
+      sku: "sku-1",
+    });
+    expect(
+      within(table).getByText('18" Natural Black Closure Wig').closest("tr"),
+    ).toHaveClass("bg-muted/60");
   });
 
   it("filters to reserved SKUs from the inventory state metric", async () => {
@@ -1944,7 +2125,7 @@ describe("StockAdjustmentWorkspaceContent", () => {
       availability: "unavailable",
       category: undefined,
       page: 1,
-      sku: "sku-unavailable-hair",
+      sku: undefined,
     });
     expect(screen.getByRole("button", { name: /reserved 4/i })).toHaveAttribute(
       "aria-pressed",
@@ -1964,7 +2145,7 @@ describe("StockAdjustmentWorkspaceContent", () => {
       availability: undefined,
       category: undefined,
       page: 1,
-      sku: "sku-unavailable-hair",
+      sku: undefined,
     });
     expect(screen.getByRole("button", { name: /reserved 4/i })).toHaveAttribute(
       "aria-pressed",
@@ -1992,7 +2173,7 @@ describe("StockAdjustmentWorkspaceContent", () => {
       category: undefined,
       page: 1,
       query: "CW",
-      sku: "sku-1",
+      sku: undefined,
     });
 
     await user.click(
@@ -2005,7 +2186,7 @@ describe("StockAdjustmentWorkspaceContent", () => {
       category: undefined,
       page: 1,
       query: "CW",
-      sku: "sku-1",
+      sku: undefined,
     });
   });
 
@@ -2115,6 +2296,18 @@ describe("StockAdjustmentWorkspaceContent", () => {
     expect(onLoadMoreInventoryItems).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps the stock pagination load-more control stable while rows load", () => {
+    renderStockAdjustmentWorkspace({
+      canLoadMoreInventoryItems: true,
+      isLoadingMoreInventoryItems: true,
+      onLoadMoreInventoryItems: vi.fn(),
+    });
+
+    expect(
+      screen.getByRole("button", { name: /loading more/i }),
+    ).toBeDisabled();
+  });
+
   it("keeps the current stock row page when a counted quantity changes", async () => {
     const user = userEvent.setup();
     const inventoryItems = Array.from({ length: 11 }, (_, index) => ({
@@ -2150,7 +2343,46 @@ describe("StockAdjustmentWorkspaceContent", () => {
     expect(screen.getByText("Showing 11-11 of 11 SKUs")).toBeInTheDocument();
   });
 
-  it("restores stock selection state from route search", () => {
+  it("filters and selects stock rows from route SKU search", () => {
+    const inventoryItems = Array.from({ length: 11 }, (_, index) => ({
+      _id: `sku-${index + 1}` as Id<"productSku">,
+      inventoryCount: index + 1,
+      productCategory: "Inventory",
+      productId: `product-${index + 1}` as Id<"product">,
+      productName: `Inventory item ${index + 1}`,
+      quantityAvailable: index + 1,
+      sku: `SKU-${index + 1}`,
+    }));
+
+    renderStockAdjustmentWorkspace({
+      inventoryItems,
+      searchState: {
+        mode: "cycle_count",
+        page: 8,
+        sku: "sku-11",
+      },
+    });
+
+    const table = screen.getByRole("table");
+    const selectedRow = within(table).getByText("Inventory Item 11").closest("tr");
+
+    expect(
+      within(table).queryByText("Inventory Item 1"),
+    ).not.toBeInTheDocument();
+    expect(selectedRow).toHaveClass("bg-muted/60");
+    expect(screen.getByText("Showing 1 of 11 SKUs.")).toBeInTheDocument();
+    expect(screen.getByText("Page 1 of 1")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", {
+        name: /view product detail for inventory item 11/i,
+      }),
+    ).toHaveAttribute(
+      "href",
+      "/wigclub/store/wigclub/products/product-11?o=%2Fwigclub%2Fstore%2Fwigclub%2Foperations%2Fstock-adjustments",
+    );
+  });
+
+  it("restores a selected stock row and table page without filtering the table", () => {
     const inventoryItems = Array.from({ length: 11 }, (_, index) => ({
       _id: `sku-${index + 1}` as Id<"productSku">,
       inventoryCount: index + 1,
@@ -2166,16 +2398,19 @@ describe("StockAdjustmentWorkspaceContent", () => {
       searchState: {
         mode: "cycle_count",
         page: 2,
-        sku: "sku-11",
+        selectedSku: "sku-11",
       },
     });
 
     const table = screen.getByRole("table");
+    const selectedRow = within(table)
+      .getByText("Inventory Item 11")
+      .closest("tr");
 
     expect(
       within(table).queryByText("Inventory Item 1"),
     ).not.toBeInTheDocument();
-    expect(within(table).getByText("Inventory Item 11")).toBeInTheDocument();
+    expect(selectedRow).toHaveClass("bg-muted/60");
     expect(screen.getByText("Showing 11-11 of 11 SKUs")).toBeInTheDocument();
     expect(screen.getByText("Page 2 of 2")).toBeInTheDocument();
     expect(
@@ -2188,10 +2423,141 @@ describe("StockAdjustmentWorkspaceContent", () => {
     );
   });
 
-  it("does not snap controlled stock pagination back while the route update is pending", async () => {
+  it("loads more inventory rows to restore a selected stock row on a later route page", async () => {
+    const onLoadMoreInventoryItems = vi.fn();
+    const inventoryItems = Array.from({ length: 120 }, (_, index) => ({
+      _id: `sku-${index + 1}` as Id<"productSku">,
+      inventoryCount: index + 1,
+      productCategory: "Inventory",
+      productId: `product-${index + 1}` as Id<"product">,
+      productName: `Inventory item ${index + 1}`,
+      quantityAvailable: index + 1,
+      sku: `SKU-${index + 1}`,
+    }));
+
+    const ControlledStockAdjustmentWorkspace = () => {
+      const [loadedItemCount, setLoadedItemCount] = useState(97);
+
+      return (
+        <StockAdjustmentWorkspaceContent
+          {...baseProps}
+          canLoadMoreInventoryItems={loadedItemCount < inventoryItems.length}
+          inventoryItems={inventoryItems.slice(0, loadedItemCount)}
+          onLoadMoreInventoryItems={() => {
+            onLoadMoreInventoryItems();
+            setLoadedItemCount(inventoryItems.length);
+          }}
+          searchState={{
+            mode: "manual",
+            page: 12,
+            selectedSku: "sku-115",
+          }}
+        />
+      );
+    };
+
+    render(<ControlledStockAdjustmentWorkspace />);
+
+    await waitFor(() => expect(onLoadMoreInventoryItems).toHaveBeenCalled());
+
+    const table = screen.getByRole("table");
+    const selectedRow = within(table)
+      .getByText("Inventory Item 115")
+      .closest("tr");
+
+    expect(selectedRow).toHaveClass("bg-muted/60");
+    expect(screen.getByText("Showing 111-120 of 120 SKUs")).toBeInTheDocument();
+    expect(screen.getByText("Page 12 of 12")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", {
+        name: /view product detail for inventory item 115/i,
+      }),
+    ).toHaveAttribute(
+      "href",
+      "/wigclub/store/wigclub/products/product-115?o=%2Fwigclub%2Fstore%2Fwigclub%2Foperations%2Fstock-adjustments",
+    );
+  });
+
+  it("communicates while restoring route-selected stock rows from unloaded inventory", () => {
+    const inventoryItems = Array.from({ length: 10 }, (_, index) => ({
+      _id: `sku-${index + 1}` as Id<"productSku">,
+      inventoryCount: index + 1,
+      productCategory: "Inventory",
+      productId: `product-${index + 1}` as Id<"product">,
+      productName: `Inventory item ${index + 1}`,
+      quantityAvailable: index + 1,
+      sku: `SKU-${index + 1}`,
+    }));
+
+    renderStockAdjustmentWorkspace({
+      canLoadMoreInventoryItems: true,
+      inventoryItems,
+      isLoadingMoreInventoryItems: true,
+      onLoadMoreInventoryItems: vi.fn(),
+      searchState: {
+        mode: "manual",
+        page: 12,
+        selectedSku: "sku-115",
+      },
+    });
+
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Restoring saved stock view",
+    );
+    expect(
+      screen.getByText("Loading more SKUs to recover the selected row and page."),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps stock pagination stable while route restoration loads more matching rows", async () => {
+    const onLoadMoreInventoryItems = vi.fn();
+    const inventoryItems = Array.from({ length: 5 }, (_, index) => ({
+      _id: `sku-${index + 1}` as Id<"productSku">,
+      inventoryCount: index + 1,
+      productCategory: "Inventory",
+      productId: `product-${index + 1}` as Id<"product">,
+      productName: `Zaz item ${index + 1}`,
+      quantityAvailable: index + 1,
+      sku: `ZAZ-${index + 1}`,
+    }));
+
+    const ControlledStockAdjustmentWorkspace = () => {
+      const [loadedItemCount, setLoadedItemCount] = useState(3);
+      const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+      return (
+        <StockAdjustmentWorkspaceContent
+          {...baseProps}
+          canLoadMoreInventoryItems
+          inventoryItems={inventoryItems.slice(0, loadedItemCount)}
+          isLoadingMoreInventoryItems={isLoadingMore}
+          onLoadMoreInventoryItems={() => {
+            onLoadMoreInventoryItems();
+            setLoadedItemCount(4);
+            setIsLoadingMore(true);
+          }}
+          searchState={{
+            mode: "manual",
+            page: 1,
+            query: "zaz",
+            selectedSku: "sku-5",
+          }}
+        />
+      );
+    };
+
+    render(<ControlledStockAdjustmentWorkspace />);
+
+    await waitFor(() => expect(onLoadMoreInventoryItems).toHaveBeenCalled());
+
+    expect(screen.getByText("Showing 1-3 of 3 SKUs")).toBeInTheDocument();
+    expect(screen.queryByText("Showing 1-4 of 4 SKUs")).not.toBeInTheDocument();
+  });
+
+  it("keeps restored stock row selection and page when switching adjustment modes", async () => {
     const user = userEvent.setup();
     const onSearchStateChange = vi.fn();
-    const inventoryItems = Array.from({ length: 31 }, (_, index) => ({
+    const inventoryItems = Array.from({ length: 11 }, (_, index) => ({
       _id: `sku-${index + 1}` as Id<"productSku">,
       inventoryCount: index + 1,
       productCategory: "Inventory",
@@ -2205,30 +2571,24 @@ describe("StockAdjustmentWorkspaceContent", () => {
       inventoryItems,
       onSearchStateChange,
       searchState: {
-        mode: "cycle_count",
-        page: 3,
-        sku: "sku-21",
+        mode: "manual",
+        page: 2,
+        selectedSku: "sku-11",
       },
     });
 
-    const table = screen.getByRole("table");
+    await user.click(screen.getByRole("tab", { name: /cycle count/i }));
 
-    expect(within(table).getByText("Inventory Item 21")).toBeInTheDocument();
-    expect(screen.getByText("Showing 21-30 of 31 SKUs")).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: /next page/i }));
-
-    await waitFor(() =>
-      expect(onSearchStateChange).toHaveBeenCalledWith({ page: 4 }),
-    );
-    expect(
-      within(table).queryByText("Inventory Item 21"),
-    ).not.toBeInTheDocument();
-    expect(within(table).getByText("Inventory Item 31")).toBeInTheDocument();
-    expect(screen.getByText("Showing 31-31 of 31 SKUs")).toBeInTheDocument();
+    expect(onSearchStateChange).toHaveBeenCalledWith({
+      category: undefined,
+      mode: "cycle_count",
+      page: 2,
+      selectedSku: "sku-11",
+      sku: undefined,
+    });
   });
 
-  it("reports stock selection changes for route search", async () => {
+  it("stores stock row selection as route state when switching adjustment modes", async () => {
     const user = userEvent.setup();
     const onSearchStateChange = vi.fn();
     const inventoryItems = [
@@ -2257,15 +2617,20 @@ describe("StockAdjustmentWorkspaceContent", () => {
       onSearchStateChange,
       searchState: {
         mode: "cycle_count",
-        sku: "sku-inventory-1",
       },
     });
 
     await user.click(screen.getByText("Closure Wig"));
 
     expect(onSearchStateChange).toHaveBeenCalledWith({
-      sku: "sku-1",
+      selectedSku: "sku-1",
+      sku: undefined,
     });
+    expect(
+      screen.getByRole("link", {
+        name: /view product detail for closure wig/i,
+      }),
+    ).toBeInTheDocument();
 
     await user.click(screen.getByRole("tab", { name: /manual adjustment/i }));
 
@@ -2273,7 +2638,8 @@ describe("StockAdjustmentWorkspaceContent", () => {
       category: undefined,
       mode: "manual",
       page: 1,
-      sku: "sku-1",
+      selectedSku: "sku-1",
+      sku: undefined,
     });
   });
 
@@ -2283,8 +2649,8 @@ describe("StockAdjustmentWorkspaceContent", () => {
     renderStockAdjustmentWorkspace();
 
     expect(
-      screen.getByAltText('18" Natural Black Closure Wig'),
-    ).toHaveAttribute("src", "https://cdn.example.com/closure-wig.jpg");
+      screen.queryByAltText('18" Natural Black Closure Wig'),
+    ).not.toBeInTheDocument();
 
     await user.click(
       screen.getByLabelText(/counted quantity for body wave bundle/i),
@@ -2302,13 +2668,10 @@ describe("StockAdjustmentWorkspaceContent", () => {
     renderStockAdjustmentWorkspace();
 
     expect(
-      screen.getByRole("link", {
+      screen.queryByRole("link", {
         name: /view product detail for .*closure wig/i,
       }),
-    ).toHaveAttribute(
-      "href",
-      "/wigclub/store/wigclub/products/product-1?o=%2Fwigclub%2Fstore%2Fwigclub%2Foperations%2Fstock-adjustments",
-    );
+    ).not.toBeInTheDocument();
 
     const bodyWaveRow = screen.getByText("Body Wave Bundle").closest("tr");
     expect(bodyWaveRow).not.toBeNull();
