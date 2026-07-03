@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>fix: Stabilize login OTP auth-sync handoff</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f8f5;
+      --panel: #ffffff;
+      --ink: #1d2525;
+      --muted: #61706c;
+      --line: #d9dfd8;
+      --accent: #27736b;
+      --soft: #e8f1ed;
+      --warn: #8a5a13;
+    }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 15px/1.55 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main {
+      max-width: 1040px;
+      margin: 0 auto;
+      padding: 40px 24px 64px;
+    }
+    header {
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 28px;
+      padding-bottom: 20px;
+    }
+    h1 {
+      font-size: 32px;
+      line-height: 1.15;
+      margin: 0 0 12px;
+      letter-spacing: 0;
+    }
+    h2 {
+      font-size: 20px;
+      margin: 32px 0 12px;
+    }
+    h3 {
+      font-size: 16px;
+      margin: 20px 0 8px;
+    }
+    p {
+      margin: 0 0 12px;
+    }
+    a {
+      color: var(--accent);
+    }
+    code {
+      background: var(--soft);
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      padding: 1px 4px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.92em;
+    }
+    nav {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px 18px;
+      margin: 22px 0;
+    }
+    nav ul, section ul {
+      margin: 8px 0 0 20px;
+      padding: 0;
+    }
+    li {
+      margin: 6px 0;
+    }
+    .meta {
+      color: var(--muted);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 16px;
+    }
+    .callout {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-left: 4px solid var(--accent);
+      border-radius: 8px;
+      padding: 16px 18px;
+      margin: 16px 0;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 12px;
+    }
+    article {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    th, td {
+      border-bottom: 1px solid var(--line);
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: var(--soft);
+    }
+    tr:last-child td {
+      border-bottom: 0;
+    }
+    .tag {
+      display: inline-block;
+      background: var(--soft);
+      color: var(--accent);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .warning {
+      color: var(--warn);
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>fix: Stabilize login OTP auth-sync handoff</h1>
+      <div class="meta">
+        <span>Type: fix</span>
+        <span>Status: active</span>
+        <span>Date: 2026-07-03</span>
+        <span>Deepened: 2026-07-03</span>
+        <span>Source: <a href="./2026-07-03-002-fix-login-otp-auth-sync-plan.md">markdown plan</a></span>
+      </div>
+    </header>
+
+    <nav aria-label="Plan sections">
+      <strong>Review Map</strong>
+      <ul>
+        <li><a href="#summary">Summary</a></li>
+        <li><a href="#decisions">Key Decisions</a></li>
+        <li><a href="#units">Implementation Units</a></li>
+        <li><a href="#verification">Verification Strategy</a></li>
+        <li><a href="#risks">Risks</a></li>
+      </ul>
+    </nav>
+
+    <section id="summary">
+      <h2>Summary</h2>
+      <div class="callout">
+        <p>After a valid OTP, Athena can briefly route through guards before Convex Auth and the Athena-user sync have settled. The plan keeps the handoff on <code>/login</code> until sync writes the local account ids, then sends the user into the authenticated app.</p>
+      </div>
+      <p>The scope preserves the existing Convex Auth OTP provider, POS recovery-code handoff, and server-owned Athena user sync. Pending handoff state is bounded metadata only; it does not change staff, terminal, drawer, POS, remote-assist, or manager authority.</p>
+    </section>
+
+    <section id="decisions">
+      <h2>Key Decisions</h2>
+      <ul>
+        <li><strong>Keep sync ownership in <code>LoginLayout</code>.</strong> The login route already owns retries, local id storage, and safe sync failures.</li>
+        <li><strong>Stop premature root navigation.</strong> The OTP form should start pending auth sync, then let the login layout navigate only after sync succeeds.</li>
+        <li><strong>Apply the same rule to POS recovery.</strong> POS recovery should store a safe redirect target in handoff metadata and let <code>LoginLayout</code> navigate after sync.</li>
+        <li><strong>Use pending auth sync as a recovery signal.</strong> Guards should not treat an explicit login handoff as final sign-out.</li>
+        <li><strong>Fail closed.</strong> Pending state must carry bounded metadata, expire or clear on no-session settlement, and never act as auth proof.</li>
+        <li><strong>Keep server authority.</strong> <code>syncAuthenticatedAthenaUser</code> remains the only sync/create boundary for Athena users.</li>
+      </ul>
+    </section>
+
+    <section id="units">
+      <h2>Implementation Units</h2>
+      <div class="grid">
+        <article>
+          <span class="tag">U1</span>
+          <h3>Characterize The Race</h3>
+          <p>Add failing tests for OTP success with delayed Convex Auth/Athena sync, bounded stale pending metadata, and route guards that must not bounce users back to login.</p>
+          <p><strong>Files:</strong> <code>InputOTP.test.tsx</code>, <code>login/_layout.test.tsx</code>, <code>useAuth.test.tsx</code>, route guard tests if practical.</p>
+        </article>
+        <article>
+          <span class="tag">U2</span>
+          <h3>Stabilize Login Handoff</h3>
+          <p>Remove or defer OTP and POS recovery submit navigation so <code>LoginLayout</code> finishes sync, writes account ids, clears pending state, and navigates once to <code>/</code> or the stored POS redirect.</p>
+          <p><strong>Files:</strong> <code>InputOTP.tsx</code>, <code>PosRecoveryCodeForm.tsx</code>, <code>authSyncHandoff.ts</code>, <code>login/-login-layout.tsx</code>.</p>
+        </article>
+        <article>
+          <span class="tag">U3</span>
+          <h3>Guard Pending Sync</h3>
+          <p>Teach auth loading/guard logic that pending auth sync is a bounded recovery window, not intentional sign-out or POS/staff/manager authority.</p>
+          <p><strong>Files:</strong> <code>useAuth.ts</code>, root/auth shell routes only if needed.</p>
+        </article>
+        <article>
+          <span class="tag">U4</span>
+          <h3>Browser Proof And Delivery</h3>
+          <p>Use the in-app browser and Gmail OTPs for <code>knownothing955@gmail.com</code> to prove repeated no-reload login, then merge and deploy the touched Athena surface.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="verification">
+      <h2>Verification Strategy</h2>
+      <ul>
+        <li>Focused Vitest slice for <code>InputOTP</code>, <code>LoginLayout</code>, <code>useAuth</code>, and route guards.</li>
+        <li>POS recovery tests proving the shared handoff waits for sync and keeps existing POS recovery gates authoritative.</li>
+        <li>Security tests for stale/tampered pending metadata, no-session settlement, and no rendering of sale-capable POS or elevated authority from pending state alone.</li>
+        <li>TypeScript/build checks plus frontend/architecture lint where touched.</li>
+        <li><code>bun run graphify:rebuild</code> after code edits.</li>
+        <li>Repeated live login attempts at <code>http://localhost:5173/login</code> using real Gmail OTP messages.</li>
+        <li>Post-merge local production deploy: <code>scripts/deploy-vps.sh athena-local</code> unless the merged diff also touches Convex runtime code.</li>
+      </ul>
+    </section>
+
+    <section id="risks">
+      <h2>Risks</h2>
+      <table>
+        <thead>
+          <tr><th>Risk</th><th>Mitigation</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Stale pending flag suppresses real sign-out</td><td>Store bounded metadata, expire or clear stale entries, dispatch auth-sync failure on no-session settlement, and do not write user ids until server sync succeeds.</td></tr>
+          <tr><td>User gets stuck on disabled OTP form</td><td>Preserve auth-sync-failed event and inline login-layout errors.</td></tr>
+          <tr><td>POS recovery login regresses</td><td>Store POS redirect target in handoff metadata and let <code>LoginLayout</code> navigate only after sync.</td></tr>
+          <tr><td>Pending sync mistaken for POS authority</td><td>Negative route tests must prove pending sync alone does not render POS terminal shell, remote assist runtime, staff-authenticated state, manager-elevated state, or sale-capable POS surfaces.</td></tr>
+          <tr><td>Unit tests miss real timing</td><td>Require repeated in-app browser proof with real server-generated OTP codes.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Primary References</h2>
+      <ul>
+        <li><code>packages/athena-webapp/src/components/auth/Login/InputOTP.tsx</code></li>
+        <li><code>packages/athena-webapp/src/components/auth/Login/PosRecoveryCodeForm.tsx</code></li>
+        <li><code>packages/athena-webapp/src/routes/login/-login-layout.tsx</code></li>
+        <li><code>packages/athena-webapp/src/hooks/useAuth.ts</code></li>
+        <li><code>docs/solutions/architecture/athena-pos-recovery-code-login-2026-06-03.md</code></li>
+        <li><code>docs/solutions/architecture/athena-pos-hub-app-session-continuity-2026-06-02.md</code></li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>

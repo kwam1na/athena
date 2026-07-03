@@ -4,6 +4,21 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ATHENA_POS_RECOVERY_CODE_PROVIDER_ID } from "../../../../shared/auth";
 import { Login } from "./index";
+import { PENDING_ATHENA_AUTH_SYNC_KEY } from "~/src/lib/constants";
+
+function expectPendingAuthSyncRedirect(redirectTo: string) {
+  const handoffCall = vi
+    .mocked(window.sessionStorage.setItem)
+    .mock.calls.find(([key]) => key === PENDING_ATHENA_AUTH_SYNC_KEY);
+  expect(handoffCall).toBeDefined();
+  const handoff = JSON.parse(String(handoffCall?.[1])) as {
+    redirectTo?: string;
+    startedAt?: unknown;
+  };
+
+  expect(handoff.redirectTo).toBe(redirectTo);
+  expect(typeof handoff.startedAt).toBe("number");
+}
 
 const mocked = vi.hoisted(() => ({
   navigate: vi.fn(),
@@ -37,6 +52,7 @@ describe("Login", () => {
     mocked.useSearch.mockReset();
     vi.stubGlobal("indexedDB", {});
     window.sessionStorage.clear();
+    vi.mocked(window.sessionStorage.setItem).mockReset();
   });
 
   it("passes POS route scope from redirectTo into recovery-code sign-in", async () => {
@@ -65,9 +81,8 @@ describe("Login", () => {
         },
       ),
     );
-    expect(mocked.navigate).toHaveBeenCalledWith({
-      to: "/wigclub/store/wigclub/pos/register",
-    });
+    expectPendingAuthSyncRedirect("/wigclub/store/wigclub/pos/register");
+    expect(mocked.navigate).not.toHaveBeenCalled();
   });
 
   it("uses the provisioned local terminal seed for generic login recovery", async () => {
@@ -114,9 +129,8 @@ describe("Login", () => {
         },
       ),
     );
-    expect(mocked.navigate).toHaveBeenCalledWith({
-      to: "/wigclub/store/wigclub/pos",
-    });
+    expectPendingAuthSyncRedirect("/wigclub/store/wigclub/pos");
+    expect(mocked.navigate).not.toHaveBeenCalled();
   });
 
   it("defaults POS-only provisioned terminals to POS recovery while keeping email secondary", async () => {
@@ -186,7 +200,8 @@ describe("Login", () => {
         },
       ),
     );
-    expect(mocked.navigate).toHaveBeenCalledWith({ to: "/" });
+    expectPendingAuthSyncRedirect("/");
+    expect(mocked.navigate).not.toHaveBeenCalled();
   });
 
   it("disables recovery-code submission when neither url nor local browser state identifies a store", async () => {

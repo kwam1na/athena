@@ -395,6 +395,40 @@ describe("Authed layout", () => {
     expect(mocked.navigate).not.toHaveBeenCalled();
   });
 
+  it("does not treat pending auth-sync loading as POS terminal authority", () => {
+    vi.mocked(window.localStorage.getItem).mockImplementation((key) =>
+      key === LOGGED_IN_USER_ID_KEY || key === POS_APP_ACCOUNT_ID_KEY
+        ? "stale-user-1"
+        : null,
+    );
+    mocked.useAuth.mockReturnValue({
+      user: undefined,
+      isLoading: true,
+    });
+    mocked.useLocalPosEntryContext.mockReturnValue(readyLocalPosEntryContext());
+    mocked.readStoredPosAppAccountId.mockReturnValue("stale-user-1");
+    mocked.useRouterState.mockImplementation(({ select }) =>
+      select({ location: { pathname: "/wigclub/store/wigclub/pos/register" } }),
+    );
+
+    const { container } = render(<Layout />);
+
+    expect(container).toBeEmptyDOMElement();
+    expect(screen.queryByTestId("authed-outlet")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("pos-remote-assist-host")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("app-sidebar")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: /pos terminal/i }),
+    ).not.toBeInTheDocument();
+    expect(mocked.usePosTerminalAppSessionRecovery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        isAppUserMissing: false,
+        storedAppAccountId: "stale-user-1",
+      }),
+    );
+    expect(mocked.navigate).not.toHaveBeenCalled();
+  });
+
   it("keeps non-POS routes blocked while offline auth is still loading", () => {
     Object.defineProperty(window.navigator, "onLine", {
       configurable: true,

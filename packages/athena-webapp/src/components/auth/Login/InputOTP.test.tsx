@@ -74,9 +74,9 @@ describe("InputOTPForm", () => {
     );
     expect(window.sessionStorage.setItem).toHaveBeenCalledWith(
       PENDING_ATHENA_AUTH_SYNC_KEY,
-      "1"
+      expect.stringMatching(/"startedAt":\d+/),
     );
-    expect(mocked.navigate).toHaveBeenCalledWith({ to: "/" });
+    expect(mocked.navigate).not.toHaveBeenCalled();
   });
 
   it("surfaces invalid verification codes to the operator", async () => {
@@ -144,7 +144,7 @@ describe("InputOTPForm", () => {
     await waitFor(() =>
       expect(window.sessionStorage.setItem).toHaveBeenCalledWith(
         PENDING_ATHENA_AUTH_SYNC_KEY,
-        "1"
+        expect.stringMatching(/"startedAt":\d+/),
       )
     );
   });
@@ -163,7 +163,7 @@ describe("InputOTPForm", () => {
     await waitFor(() =>
       expect(window.sessionStorage.setItem).toHaveBeenCalledWith(
         PENDING_ATHENA_AUTH_SYNC_KEY,
-        "1"
+        expect.stringMatching(/"startedAt":\d+/),
       )
     );
 

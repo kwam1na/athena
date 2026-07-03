@@ -1,7 +1,10 @@
 import { renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { LOGGED_IN_USER_ID_KEY } from "../lib/constants";
+import {
+  LOGGED_IN_USER_ID_KEY,
+  PENDING_ATHENA_AUTH_SYNC_KEY,
+} from "../lib/constants";
 import { useAuth } from "./useAuth";
 
 const mocked = vi.hoisted(() => ({
@@ -29,6 +32,9 @@ describe("useAuth", () => {
     vi.mocked(window.localStorage.getItem).mockReset();
     vi.mocked(window.localStorage.setItem).mockReset();
     vi.mocked(window.localStorage.removeItem).mockReset();
+    window.sessionStorage.clear();
+    vi.mocked(window.sessionStorage.getItem).mockReset();
+    vi.mocked(window.sessionStorage.removeItem).mockReset();
   });
 
   it("stays loading until the authenticated Convex user settles", () => {
@@ -223,5 +229,47 @@ describe("useAuth", () => {
       email: "manager@example.com",
     });
     expect(mocked.useQuery.mock.calls.at(-1)?.[1]).toEqual({});
+  });
+
+  it("treats fresh pending auth sync as loading while the Convex session is settling", () => {
+    vi.mocked(window.sessionStorage.getItem).mockImplementation((key) =>
+      key === PENDING_ATHENA_AUTH_SYNC_KEY
+        ? JSON.stringify({ startedAt: Date.now(), redirectTo: "/" })
+        : null,
+    );
+    mocked.useAuthToken.mockReturnValue(null);
+    mocked.useConvexAuth.mockReturnValue({
+      isAuthenticated: false,
+      isLoading: false,
+    });
+    mocked.useQuery.mockReturnValue(null);
+
+    const { result } = renderHook(() => useAuth());
+
+    expect(result.current.isLoading).toBe(true);
+    expect(result.current.user).toBeUndefined();
+    expect(window.sessionStorage.removeItem).not.toHaveBeenCalled();
+  });
+
+  it("fails closed for stale pending auth sync metadata", async () => {
+    vi.mocked(window.sessionStorage.getItem).mockImplementation((key) =>
+      key === PENDING_ATHENA_AUTH_SYNC_KEY
+        ? JSON.stringify({ startedAt: 1, redirectTo: "/" })
+        : null,
+    );
+    mocked.useAuthToken.mockReturnValue(null);
+    mocked.useConvexAuth.mockReturnValue({
+      isAuthenticated: false,
+      isLoading: false,
+    });
+    mocked.useQuery.mockReturnValue(null);
+
+    const { result } = renderHook(() => useAuth());
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.user).toBeNull();
+    expect(window.sessionStorage.removeItem).toHaveBeenCalledWith(
+      PENDING_ATHENA_AUTH_SYNC_KEY,
+    );
   });
 });
