@@ -970,6 +970,32 @@ export function AppSidebar({
             </SidebarGroupContent>
           </SidebarGroup>
         </PermissionGate>
+
+        <PermissionGate requires="full_admin">
+          <SidebarGroup>
+            <SidebarGroupLabel>App</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild>
+                    <Link
+                      to="/$orgUrlSlug/store/$storeUrlSlug/app-settings"
+                      params={(p) => ({
+                        ...p,
+                        orgUrlSlug: activeOrganization?.slug,
+                        storeUrlSlug: activeStore?.slug,
+                      })}
+                      className="flex items-center"
+                    >
+                      <CogIcon className="w-4 h-4" />
+                      <p className="font-medium">Settings</p>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </PermissionGate>
       </SidebarContent>
       {isContainedShell ? <ContainedSidebarToggle /> : <SidebarRail />}
     </Sidebar>

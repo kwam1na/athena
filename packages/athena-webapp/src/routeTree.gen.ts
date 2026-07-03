@@ -21,6 +21,7 @@ import { Route as AuthedOrgUrlSlugSettingsIndexRouteImport } from './routes/_aut
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/index'
 import { Route as AuthedOrgUrlSlugSettingsOrganizationIndexRouteImport } from './routes/_authed/$orgUrlSlug/settings/organization/index'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugHomeRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/home'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugAppSettingsRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/app-settings'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugAnalyticsRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/analytics'
 import { Route as AuthedOrgUrlSlugSettingsStoresStoreUrlSlugRouteImport } from './routes/_authed/$orgUrlSlug/settings/stores/$storeUrlSlug'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugServicesIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/services/index'
@@ -151,6 +152,12 @@ const AuthedOrgUrlSlugStoreStoreUrlSlugHomeRoute =
   AuthedOrgUrlSlugStoreStoreUrlSlugHomeRouteImport.update({
     id: '/$orgUrlSlug/store/$storeUrlSlug/home',
     path: '/$orgUrlSlug/store/$storeUrlSlug/home',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+const AuthedOrgUrlSlugStoreStoreUrlSlugAppSettingsRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugAppSettingsRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/app-settings',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/app-settings',
     getParentRoute: () => AuthedRoute,
   } as any)
 const AuthedOrgUrlSlugStoreStoreUrlSlugAnalyticsRoute =
@@ -584,6 +591,7 @@ export interface FileRoutesByFullPath {
   '/$orgUrlSlug/store/': typeof AuthedOrgUrlSlugStoreIndexRoute
   '/$orgUrlSlug/settings/stores/$storeUrlSlug': typeof AuthedOrgUrlSlugSettingsStoresStoreUrlSlugRoute
   '/$orgUrlSlug/store/$storeUrlSlug/analytics': typeof AuthedOrgUrlSlugStoreStoreUrlSlugAnalyticsRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/app-settings': typeof AuthedOrgUrlSlugStoreStoreUrlSlugAppSettingsRoute
   '/$orgUrlSlug/store/$storeUrlSlug/home': typeof AuthedOrgUrlSlugStoreStoreUrlSlugHomeRoute
   '/$orgUrlSlug/settings/organization/': typeof AuthedOrgUrlSlugSettingsOrganizationIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugIndexRoute
@@ -663,6 +671,7 @@ export interface FileRoutesByTo {
   '/$orgUrlSlug/store': typeof AuthedOrgUrlSlugStoreIndexRoute
   '/$orgUrlSlug/settings/stores/$storeUrlSlug': typeof AuthedOrgUrlSlugSettingsStoresStoreUrlSlugRoute
   '/$orgUrlSlug/store/$storeUrlSlug/analytics': typeof AuthedOrgUrlSlugStoreStoreUrlSlugAnalyticsRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/app-settings': typeof AuthedOrgUrlSlugStoreStoreUrlSlugAppSettingsRoute
   '/$orgUrlSlug/store/$storeUrlSlug/home': typeof AuthedOrgUrlSlugStoreStoreUrlSlugHomeRoute
   '/$orgUrlSlug/settings/organization': typeof AuthedOrgUrlSlugSettingsOrganizationIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug': typeof AuthedOrgUrlSlugStoreStoreUrlSlugIndexRoute
@@ -745,6 +754,7 @@ export interface FileRoutesById {
   '/_authed/$orgUrlSlug/store/': typeof AuthedOrgUrlSlugStoreIndexRoute
   '/_authed/$orgUrlSlug/settings/stores/$storeUrlSlug': typeof AuthedOrgUrlSlugSettingsStoresStoreUrlSlugRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/analytics': typeof AuthedOrgUrlSlugStoreStoreUrlSlugAnalyticsRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/app-settings': typeof AuthedOrgUrlSlugStoreStoreUrlSlugAppSettingsRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/home': typeof AuthedOrgUrlSlugStoreStoreUrlSlugHomeRoute
   '/_authed/$orgUrlSlug/settings/organization/': typeof AuthedOrgUrlSlugSettingsOrganizationIndexRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugIndexRoute
@@ -827,6 +837,7 @@ export interface FileRouteTypes {
     | '/$orgUrlSlug/store/'
     | '/$orgUrlSlug/settings/stores/$storeUrlSlug'
     | '/$orgUrlSlug/store/$storeUrlSlug/analytics'
+    | '/$orgUrlSlug/store/$storeUrlSlug/app-settings'
     | '/$orgUrlSlug/store/$storeUrlSlug/home'
     | '/$orgUrlSlug/settings/organization/'
     | '/$orgUrlSlug/store/$storeUrlSlug/'
@@ -906,6 +917,7 @@ export interface FileRouteTypes {
     | '/$orgUrlSlug/store'
     | '/$orgUrlSlug/settings/stores/$storeUrlSlug'
     | '/$orgUrlSlug/store/$storeUrlSlug/analytics'
+    | '/$orgUrlSlug/store/$storeUrlSlug/app-settings'
     | '/$orgUrlSlug/store/$storeUrlSlug/home'
     | '/$orgUrlSlug/settings/organization'
     | '/$orgUrlSlug/store/$storeUrlSlug'
@@ -987,6 +999,7 @@ export interface FileRouteTypes {
     | '/_authed/$orgUrlSlug/store/'
     | '/_authed/$orgUrlSlug/settings/stores/$storeUrlSlug'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/analytics'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/app-settings'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/home'
     | '/_authed/$orgUrlSlug/settings/organization/'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/'
@@ -1149,6 +1162,13 @@ declare module '@tanstack/react-router' {
       path: '/$orgUrlSlug/store/$storeUrlSlug/home'
       fullPath: '/$orgUrlSlug/store/$storeUrlSlug/home'
       preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugHomeRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/app-settings': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/app-settings'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/app-settings'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/app-settings'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugAppSettingsRouteImport
       parentRoute: typeof AuthedRoute
     }
     '/_authed/$orgUrlSlug/store/$storeUrlSlug/analytics': {
@@ -1644,6 +1664,7 @@ interface AuthedRouteChildren {
   AuthedOrgUrlSlugStoreIndexRoute: typeof AuthedOrgUrlSlugStoreIndexRoute
   AuthedOrgUrlSlugSettingsStoresStoreUrlSlugRoute: typeof AuthedOrgUrlSlugSettingsStoresStoreUrlSlugRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugAnalyticsRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugAnalyticsRoute
+  AuthedOrgUrlSlugStoreStoreUrlSlugAppSettingsRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugAppSettingsRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugHomeRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugHomeRoute
   AuthedOrgUrlSlugSettingsOrganizationIndexRoute: typeof AuthedOrgUrlSlugSettingsOrganizationIndexRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugIndexRoute
@@ -1721,6 +1742,8 @@ const AuthedRouteChildren: AuthedRouteChildren = {
     AuthedOrgUrlSlugSettingsStoresStoreUrlSlugRoute,
   AuthedOrgUrlSlugStoreStoreUrlSlugAnalyticsRoute:
     AuthedOrgUrlSlugStoreStoreUrlSlugAnalyticsRoute,
+  AuthedOrgUrlSlugStoreStoreUrlSlugAppSettingsRoute:
+    AuthedOrgUrlSlugStoreStoreUrlSlugAppSettingsRoute,
   AuthedOrgUrlSlugStoreStoreUrlSlugHomeRoute:
     AuthedOrgUrlSlugStoreStoreUrlSlugHomeRoute,
   AuthedOrgUrlSlugSettingsOrganizationIndexRoute:

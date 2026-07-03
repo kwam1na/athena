@@ -66,6 +66,11 @@ describe("RemoteAssistLiveViewer", () => {
 
     expect(screen.getByText("Action accepted by runtime.")).toBeTruthy();
     expect(screen.getByText("accepted")).toBeTruthy();
+    const acceptedControl = screen.getByRole("button", { name: /Open drawer/ });
+    expect(acceptedControl).toHaveClass("border-success/25");
+    expect(acceptedControl).toHaveClass("bg-surface-raised");
+    expect(acceptedControl).not.toHaveClass("bg-emerald-50");
+    expect(acceptedControl).not.toHaveClass("text-emerald-950");
   });
 
   it("marks pending actions when the runtime does not respond", async () => {

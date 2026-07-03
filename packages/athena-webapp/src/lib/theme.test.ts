@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  ATHENA_DARK_THEME_VARIANT_STORAGE_KEY,
   ATHENA_THEME_STORAGE_KEY,
   initializeAthenaTheme,
+  setAthenaDarkThemeVariant,
   setAthenaThemeMode,
   setAthenaThemeModeWithTransition,
 } from "./theme";
@@ -62,6 +64,7 @@ describe("Athena theme runtime", () => {
     document.documentElement.className = "";
     document.documentElement.removeAttribute("data-theme");
     document.documentElement.removeAttribute("data-theme-mode");
+    document.documentElement.removeAttribute("data-theme-variant");
     document.documentElement.style.colorScheme = "";
     Object.defineProperty(document, "startViewTransition", {
       configurable: true,
@@ -77,6 +80,7 @@ describe("Athena theme runtime", () => {
     expect(document.documentElement).toHaveClass("dark");
     expect(document.documentElement.dataset.theme).toBe("dark");
     expect(document.documentElement.dataset.themeMode).toBe("system");
+    expect(document.documentElement.dataset.themeVariant).toBe("charcoal");
     expect(window.localStorage.setItem).not.toHaveBeenCalled();
     expect(window.localStorage.removeItem).not.toHaveBeenCalled();
   });
@@ -90,10 +94,44 @@ describe("Athena theme runtime", () => {
     expect(document.documentElement).not.toHaveClass("dark");
     expect(document.documentElement.dataset.theme).toBe("light");
     expect(document.documentElement.dataset.themeMode).toBe("light");
+    expect(document.documentElement.dataset.themeVariant).toBeUndefined();
     expect(window.localStorage.setItem).toHaveBeenCalledWith(
       ATHENA_THEME_STORAGE_KEY,
       "light",
     );
+  });
+
+  it("persists the selected dark palette while the resolved theme is dark", () => {
+    installMatchMedia(true);
+
+    initializeAthenaTheme();
+    setAthenaDarkThemeVariant("classic");
+
+    expect(document.documentElement).toHaveClass("dark");
+    expect(document.documentElement.dataset.themeVariant).toBe("classic");
+    expect(window.localStorage.setItem).toHaveBeenCalledWith(
+      ATHENA_DARK_THEME_VARIANT_STORAGE_KEY,
+      "classic",
+    );
+  });
+
+  it("keeps the selected dark palette ready while light mode is active", () => {
+    installMatchMedia(false);
+
+    initializeAthenaTheme();
+    setAthenaThemeMode("light");
+    setAthenaDarkThemeVariant("classic");
+
+    expect(document.documentElement).not.toHaveClass("dark");
+    expect(document.documentElement.dataset.themeVariant).toBeUndefined();
+
+    vi.spyOn(window.localStorage, "getItem").mockImplementation((key) =>
+      key === ATHENA_DARK_THEME_VARIANT_STORAGE_KEY ? "classic" : null,
+    );
+
+    setAthenaThemeMode("dark");
+    expect(document.documentElement).toHaveClass("dark");
+    expect(document.documentElement.dataset.themeVariant).toBe("classic");
   });
 
   it("returns to system tracking when the override is cleared", () => {

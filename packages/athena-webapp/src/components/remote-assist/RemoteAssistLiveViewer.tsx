@@ -432,7 +432,7 @@ function ControlTargetButton({
       className={cn(
         "h-auto w-full justify-start gap-2 px-2 py-2 text-left transition-colors",
         actionState === "accepted" &&
-          "border-emerald-300 bg-emerald-50 text-emerald-950",
+          "border-success/25 bg-surface-raised text-foreground",
         (actionState === "blocked" ||
           actionState === "no_response" ||
           actionState === "send_failed") &&
@@ -471,7 +471,7 @@ function ControlTargetIcon({
     return (
       <CheckCircle2
         aria-hidden="true"
-        className="h-4 w-4 shrink-0 text-emerald-700"
+        className="h-4 w-4 shrink-0 text-success"
       />
     );
   }
@@ -520,7 +520,7 @@ function getActionFeedbackCopy(action: RemoteAssistActionFeedback) {
   }
   if (action.status === "accepted") {
     return {
-      className: "text-emerald-700",
+      className: "text-success",
       label: "Action accepted by runtime.",
     };
   }
