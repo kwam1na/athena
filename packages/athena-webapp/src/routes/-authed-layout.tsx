@@ -22,8 +22,10 @@ import { usePermissions } from "../hooks/usePermissions";
 import { PermissionsProvider } from "../contexts/PermissionsContext";
 import {
   ArrowUpRight,
+  Monitor,
   Moon,
   ShieldCheck,
+  Smartphone,
   Sun,
   UserCircle,
 } from "lucide-react";
@@ -50,6 +52,7 @@ import {
   type PosLocalEntryContext,
   useLocalPosEntryContext,
 } from "@/lib/pos/infrastructure/local/localPosEntryContext";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
   type PosTerminalAppSessionRecoveryBlockReason,
   readStoredPosAppAccountId,
@@ -60,7 +63,11 @@ import {
   toPosTerminalAppSessionRecoveryRuntimeInput,
 } from "@/lib/pos/infrastructure/terminal/posTerminalAppSessionRecoveryContext";
 import type { PosTerminalRuntimeAppSessionRecoveryInput } from "@/lib/pos/infrastructure/local/terminalRuntimeStatus";
-import { setAthenaThemeModeWithTransition, useAthenaTheme } from "@/lib/theme";
+import {
+  type AthenaThemeMode,
+  setAthenaThemeModeWithTransition,
+  useAthenaTheme,
+} from "@/lib/theme";
 
 const POS_TERMINAL_FULLSCREEN_PATH_PATTERN =
   /^\/(?<orgUrlSlug>[^/]+)\/store\/(?<storeUrlSlug>[^/]+)\/pos\/(?:register|expense)\/?$/;
@@ -381,7 +388,8 @@ function UserMenu({
   const navigate = useNavigate();
   const { signOut } = useAuthActions();
   const { hasFullAdminAccess } = usePermissions();
-  const { resolvedTheme } = useAthenaTheme();
+  const { mode, resolvedTheme, systemTheme } = useAthenaTheme();
+  const isMobile = useIsMobile();
   const {
     activeElevation,
     endManagerElevation,
@@ -396,8 +404,24 @@ function UserMenu({
     navigate({ to: "/login" });
   };
 
-  const nextTheme = resolvedTheme === "dark" ? "light" : "dark";
-  const ThemeIcon = resolvedTheme === "dark" ? Sun : Moon;
+  const nextTheme: AthenaThemeMode =
+    mode === "system"
+      ? systemTheme === "dark"
+        ? "light"
+        : "dark"
+      : mode === "light"
+        ? systemTheme === "dark"
+          ? "dark"
+          : "system"
+        : systemTheme === "dark"
+          ? "system"
+          : "light";
+  const ThemeIcon =
+    mode === "system" ? (isMobile ? Smartphone : Monitor) : mode === "dark" ? Moon : Sun;
+  const themeToggleLabel =
+    mode === "system"
+      ? `Using system ${resolvedTheme} theme, switch to ${nextTheme} theme`
+      : `Switch to ${nextTheme} theme`;
   const isContainedShell = shellVariant === "contained";
   const containedControlSurface =
     "border border-border/70 bg-background/90 shadow-surface backdrop-blur supports-[backdrop-filter]:bg-background/75";
@@ -461,8 +485,8 @@ function UserMenu({
       </DropdownMenu>
       <button
         type="button"
-        aria-label={`Switch to ${nextTheme} theme`}
-        title={`Switch to ${nextTheme} theme`}
+        aria-label={themeToggleLabel}
+        title={themeToggleLabel}
         className={cn(
           "group flex h-10 w-10 shrink-0 items-center justify-center text-muted-foreground transition-[background-color,color,transform] duration-fast ease-standard hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.96] sm:h-9 sm:w-9",
           isContainedShell ? `rounded-lg ${containedControlSurface}` : "rounded-md",

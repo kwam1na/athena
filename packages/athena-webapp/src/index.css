@@ -135,6 +135,93 @@
 
   .dark {
     color-scheme: dark;
+    --app-canvas: 22 22 22;
+    --workspace-panel: 30 30 30;
+    --background: 0 0% 9%;
+    --foreground: 36 24% 94%;
+    --card: 0 0% 12%;
+    --card-foreground: 36 24% 94%;
+    --popover: 0 0% 12%;
+    --popover-foreground: 36 24% 94%;
+    --primary: 336 68% 67%;
+    --primary-foreground: 0 0% 10%;
+    --secondary: 0 0% 16%;
+    --secondary-foreground: 36 24% 94%;
+    --muted: 0 0% 15%;
+    --muted-foreground: 36 12% 74%;
+    --accent: 0 0% 18%;
+    --accent-foreground: 36 24% 94%;
+    --destructive: 6 79% 64%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 24%;
+    --input: 0 0% 24%;
+    --ring: 0 0% 0% / 0;
+
+    --surface: 0 0% 12%;
+    --surface-muted: 0 0% 16%;
+    --surface-raised: 0 0% 14%;
+    --legacy-neutral-50: 0 0% 14%;
+    --legacy-neutral-100: 0 0% 16%;
+    --legacy-neutral-200: 0 0% 24%;
+    --legacy-neutral-400: 36 12% 74%;
+    --legacy-neutral-500: 36 12% 74%;
+    --legacy-neutral-900: 36 24% 94%;
+    --shell: 0 0% 7%;
+    --shell-foreground: 36 24% 94%;
+    --signal: 336 68% 67%;
+    --signal-foreground: 0 0% 10%;
+    --transaction-signal: 31 88% 66%;
+    --transaction-signal-foreground: 0 0% 10%;
+    --comparison-primary: 38 90% 63%;
+    --comparison-primary-foreground: 0 0% 10%;
+    --comparison-primary-soft: 34 24% 18%;
+    --comparison-primary-border: 35 42% 34%;
+    --comparison-secondary: 199 68% 69%;
+    --comparison-secondary-foreground: 0 0% 10%;
+    --comparison-secondary-soft: 202 20% 18%;
+    --comparison-secondary-border: 201 34% 34%;
+    --action-commit: 336 68% 67%;
+    --action-commit-foreground: 0 0% 10%;
+    --action-commit-soft: 336 20% 21%;
+    --action-commit-border: 336 34% 42%;
+    --action-workflow: 235 58% 72%;
+    --action-workflow-foreground: 0 0% 10%;
+    --action-workflow-soft: 232 18% 21%;
+    --action-workflow-border: 233 32% 42%;
+    --action-neutral: 0 0% 76%;
+    --action-neutral-soft: 0 0% 20%;
+    --action-neutral-strong: var(--shell);
+    --action-neutral-strong-foreground: var(--shell-foreground);
+    --action-neutral-strong-border: 0 0% 28%;
+    --success: 145 36% 58%;
+    --success-foreground: 145 60% 8%;
+    --warning: 40 90% 65%;
+    --warning-foreground: 30 60% 12%;
+    --warning-soft: 39 28% 17%;
+    --warning-border: 39 48% 33%;
+    --danger: 6 79% 64%;
+    --danger-foreground: 0 0% 10%;
+
+    --chart-1: 336 68% 67%;
+    --chart-2: 235 58% 72%;
+    --chart-3: 157 43% 46%;
+    --chart-4: 40 92% 65%;
+    --chart-5: 281 54% 70%;
+
+    --shadow-surface: 0 18px 48px -36px hsl(0 0% 0% / 0.72);
+    --shadow-overlay: 0 34px 110px -48px hsl(0 0% 0% / 0.9);
+
+    --sidebar-background: var(--shell);
+    --sidebar-foreground: var(--shell-foreground);
+    --sidebar-primary: var(--signal);
+    --sidebar-primary-foreground: var(--signal-foreground);
+    --sidebar-accent: 0 0% 17%;
+    --sidebar-accent-foreground: 36 24% 94%;
+    --sidebar-border: 0 0% 20%;
+    --sidebar-ring: var(--ring);
+  }
+
+  .dark[data-theme-variant="classic"] {
     --app-canvas: 17 19 28;
     --workspace-panel: 31 34 44;
     --background: 224 24% 9%;
@@ -155,7 +242,7 @@
     --destructive-foreground: 0 0% 98%;
     --border: 222 12% 23%;
     --input: 222 12% 23%;
-    --ring: 31 91% 67%;
+    --ring: 0 0% 0% / 0;
 
     --surface: 223 18% 13%;
     --surface-muted: 223 13% 17%;
@@ -193,8 +280,8 @@
     --action-neutral-strong: var(--shell);
     --action-neutral-strong-foreground: var(--shell-foreground);
     --action-neutral-strong-border: 222 12% 28%;
-    --success: 151 44% 34%;
-    --success-foreground: 145 56% 94%;
+    --success: 145 36% 58%;
+    --success-foreground: 145 60% 8%;
     --warning: 40 92% 66%;
     --warning-foreground: 30 60% 12%;
     --warning-soft: 39 36% 17%;
@@ -218,8 +305,16 @@
     --sidebar-accent: 223 20% 18%;
     --sidebar-accent-foreground: 36 30% 94%;
     --sidebar-border: 223 15% 20%;
-    --sidebar-ring: var(--signal);
+    --sidebar-ring: var(--ring);
   }
+}
+
+.dark :focus-visible,
+.dark:focus-visible {
+  --tw-ring-color: transparent !important;
+  --tw-ring-offset-width: 0px !important;
+  --tw-ring-offset-shadow: 0 0 #0000 !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
 }
 
 @layer base {

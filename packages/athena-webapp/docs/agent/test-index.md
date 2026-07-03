@@ -232,6 +232,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/components/analytics/StoreInsights.test.tsx`](../../src/components/analytics/StoreInsights.test.tsx)
 - [`src/components/analytics/analyticsWorkspaceEfficiency.test.ts`](../../src/components/analytics/analyticsWorkspaceEfficiency.test.ts)
 - [`src/components/app-messages/AppMessageHost.test.tsx`](../../src/components/app-messages/AppMessageHost.test.tsx)
+- [`src/components/app-settings/AppSettingsView.test.tsx`](../../src/components/app-settings/AppSettingsView.test.tsx)
 - [`src/components/app-sidebar.test.tsx`](../../src/components/app-sidebar.test.tsx)
 - [`src/components/app-update/UpdateReadyBanner.test.tsx`](../../src/components/app-update/UpdateReadyBanner.test.tsx)
 - [`src/components/auth/DefaultCatchBoundary.test.tsx`](../../src/components/auth/DefaultCatchBoundary.test.tsx)

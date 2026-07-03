@@ -43,6 +43,26 @@ describe("design system build config", () => {
     expect(indexCss).toContain("color: hsl(var(--warning));");
   });
 
+  it("keeps the charcoal dark theme active while preserving the classic dark palette", () => {
+    const indexCss = fs.readFileSync(path.join(packageDir, "src/index.css"), "utf8");
+
+    expect(indexCss).toContain("--app-canvas: 22 22 22;");
+    expect(indexCss).toContain("--ring: 0 0% 0% / 0;");
+    expect(indexCss).toContain("--sidebar-ring: var(--ring);");
+    expect(indexCss).toContain(".dark :focus-visible");
+    expect(indexCss).toContain("--tw-ring-shadow: 0 0 #0000 !important;");
+    expect(indexCss).toContain('.dark[data-theme-variant="classic"]');
+    expect(indexCss).toContain("--app-canvas: 17 19 28;");
+    expect(indexCss).not.toContain("--ring: 31 91% 67%;");
+  });
+
+  it("keeps dark success labels legible on soft success surfaces", () => {
+    const indexCss = fs.readFileSync(path.join(packageDir, "src/index.css"), "utf8");
+
+    expect(indexCss.match(/--success: 145 36% 58%;/g)).toHaveLength(2);
+    expect(indexCss.match(/--success-foreground: 145 60% 8%;/g)).toHaveLength(2);
+  });
+
   it("routes deployment helpers through the active checkout", () => {
     const repoRoot = path.resolve(packageDir, "../..");
     const interactiveDeployScript = fs.readFileSync(

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -230,6 +230,29 @@ function recoveryState(status: string) {
   return { assertion: null, reason: null, status };
 }
 
+function installMatchMedia(matches: boolean) {
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    value: vi.fn(() => ({
+      matches,
+      media: "(prefers-color-scheme: dark)",
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
+}
+
+function setViewportWidth(width: number) {
+  Object.defineProperty(window, "innerWidth", {
+    configurable: true,
+    value: width,
+  });
+}
+
 describe("Authed layout", () => {
   beforeEach(() => {
     mocked.OutletComponent = null;
@@ -238,6 +261,8 @@ describe("Authed layout", () => {
       configurable: true,
       value: true,
     });
+    setViewportWidth(1024);
+    installMatchMedia(false);
     vi.mocked(window.localStorage.getItem).mockReset();
     vi.mocked(window.localStorage.getItem).mockReturnValue(null);
     mocked.navigate.mockReset();
@@ -1169,6 +1194,9 @@ describe("Authed layout", () => {
   it("places an icon-only theme toggle after the account menu", async () => {
     const user = userEvent.setup();
 
+    vi.mocked(window.localStorage.getItem).mockImplementation((key) =>
+      key === ATHENA_THEME_STORAGE_KEY ? "light" : null,
+    );
     mocked.useAuth.mockReturnValue({
       user: { _id: "user-1", email: "operator@example.com" },
       isLoading: false,
@@ -1187,7 +1215,7 @@ describe("Authed layout", () => {
       name: "Open account menu for operator@example.com",
     });
     const themeToggleButton = screen.getByRole("button", {
-      name: "Switch to dark theme",
+      name: "Switch to system theme",
     });
 
     expect(accountMenuButton).toHaveClass(
@@ -1214,11 +1242,94 @@ describe("Authed layout", () => {
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
 
+    expect(themeToggleButton.querySelector(".lucide-sun")).not.toBeNull();
+
+    await user.click(themeToggleButton);
+    expect(window.localStorage.removeItem).toHaveBeenCalledWith(
+      ATHENA_THEME_STORAGE_KEY,
+    );
+  });
+
+  it("cycles theme modes through system, light, and dark based on the device theme", async () => {
+    const user = userEvent.setup();
+
+    installMatchMedia(true);
+    mocked.useAuth.mockReturnValue({
+      user: { _id: "user-1", email: "operator@example.com" },
+      isLoading: false,
+    });
+
+    render(<Layout />);
+
+    const themeToggleButton = screen.getByRole("button", {
+      name: "Using system dark theme, switch to light theme",
+    });
+
+    await waitFor(() =>
+      expect(themeToggleButton.querySelector(".lucide-monitor")).not.toBeNull(),
+    );
+
     await user.click(themeToggleButton);
 
     expect(window.localStorage.setItem).toHaveBeenCalledWith(
       ATHENA_THEME_STORAGE_KEY,
+      "light",
+    );
+
+    vi.mocked(window.localStorage.getItem).mockImplementation((key) =>
+      key === ATHENA_THEME_STORAGE_KEY ? "light" : null,
+    );
+    await act(async () => {
+      window.dispatchEvent(new Event("athena-theme-change"));
+    });
+
+    const lightToggleButton = await screen.findByRole("button", {
+      name: "Switch to dark theme",
+    });
+    expect(lightToggleButton.querySelector(".lucide-sun")).not.toBeNull();
+
+    await user.click(lightToggleButton);
+
+    expect(window.localStorage.setItem).toHaveBeenCalledWith(
+      ATHENA_THEME_STORAGE_KEY,
       "dark",
+    );
+
+    vi.mocked(window.localStorage.getItem).mockImplementation((key) =>
+      key === ATHENA_THEME_STORAGE_KEY ? "dark" : null,
+    );
+    await act(async () => {
+      window.dispatchEvent(new Event("athena-theme-change"));
+    });
+
+    const darkToggleButton = await screen.findByRole("button", {
+      name: "Switch to system theme",
+    });
+    expect(darkToggleButton.querySelector(".lucide-moon")).not.toBeNull();
+
+    await user.click(darkToggleButton);
+
+    expect(window.localStorage.removeItem).toHaveBeenCalledWith(
+      ATHENA_THEME_STORAGE_KEY,
+    );
+  });
+
+  it("shows the phone icon for system theme on mobile viewports", async () => {
+    setViewportWidth(390);
+    installMatchMedia(false);
+    mocked.useAuth.mockReturnValue({
+      user: { _id: "user-1", email: "operator@example.com" },
+      isLoading: false,
+    });
+
+    render(<Layout />);
+
+    const themeToggleButton = screen.getByRole("button", {
+      name: "Using system light theme, switch to dark theme",
+    });
+
+    await waitFor(() =>
+      expect(themeToggleButton.querySelector(".lucide-smartphone")).not.toBeNull(),
     );
   });
 

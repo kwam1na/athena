@@ -23,6 +23,7 @@ This route index enumerates the current files under `src/routes` so agents can o
 - [`src/routes/_authed/$orgUrlSlug/settings/organization/index.tsx`](../../src/routes/_authed/$orgUrlSlug/settings/organization/index.tsx)
 - [`src/routes/_authed/$orgUrlSlug/settings/stores/$storeUrlSlug.tsx`](../../src/routes/_authed/$orgUrlSlug/settings/stores/$storeUrlSlug.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/analytics.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/analytics.tsx)
+- [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/app-settings.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/app-settings.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/assets.index.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/assets.index.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/bags.$bagId.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/bags.$bagId.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/bags.index.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/bags.index.tsx)
