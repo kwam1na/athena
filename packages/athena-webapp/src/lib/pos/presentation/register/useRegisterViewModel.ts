@@ -119,8 +119,10 @@ import {
 } from "./registerCashierPresence";
 import {
   buildCatalogRepresentedPendingCheckoutItemIds,
+  buildCatalogRepresentedPendingCheckoutLocalEventIds,
   buildLocalCartItemPayload,
   buildLocalCartItemPayloadFromCartItem,
+  buildLocalPendingCheckoutDefinitionEventIdsByItemId,
   cartItemsFromLocalRegisterModel,
   cartLineSourceKey,
   getProductAvailabilityStatus,
@@ -1545,18 +1547,50 @@ export function useRegisterViewModel(): RegisterViewModel {
       buildCatalogRepresentedPendingCheckoutItemIds(
         registerSearchState.results,
       );
+    const catalogRepresentedPendingCheckoutLocalEventIds =
+      buildCatalogRepresentedPendingCheckoutLocalEventIds(
+        registerSearchState.results,
+      );
+    const localPendingCheckoutDefinitionEventIdsByItemId =
+      buildLocalPendingCheckoutDefinitionEventIdsByItemId(
+        localRegisterReadModel?.sourceEvents ?? [],
+      );
+    const pendingCheckoutCloudItemIdByLocalId = new Map(
+      (localRegisterReadModel?.mappings ?? []).flatMap((mapping) =>
+        mapping.entity === "pendingCheckoutItem"
+          ? [[mapping.localId, mapping.cloudId] as const]
+          : [],
+      ),
+    );
     const activePendingCheckoutProducts = activeCartItems
-      .filter(
-        (item) =>
-          "pendingCheckoutItemId" in item &&
-          Boolean(item.pendingCheckoutItemId) &&
-          item.skuId &&
+      .filter((item) => {
+        if (
+          !("pendingCheckoutItemId" in item) ||
+          !item.pendingCheckoutItemId ||
+          !item.skuId
+        ) {
+          return false;
+        }
+        const pendingCheckoutItemId = item.pendingCheckoutItemId.toString();
+        const localDefinitionEventId =
+          localPendingCheckoutDefinitionEventIdsByItemId.get(
+            pendingCheckoutItemId,
+          );
+
+        return (
           !catalogRepresentedPendingCheckoutItemIds.has(
-            item.pendingCheckoutItemId?.toString() ?? "",
+            pendingCheckoutItemId,
+          ) &&
+          !(
+            localDefinitionEventId &&
+            catalogRepresentedPendingCheckoutLocalEventIds.has(
+              localDefinitionEventId,
+            )
           ) &&
           !catalogProductSkuIds.has(item.skuId.toString()) &&
-          pendingCheckoutCartItemMatchesSearch(item, productSearchQuery),
-      )
+          pendingCheckoutCartItemMatchesSearch(item, productSearchQuery)
+        );
+      })
       .map(mapPendingCheckoutCartItemToProduct);
     const activePendingCheckoutSkuIds = new Set(
       activePendingCheckoutProducts.flatMap((product) =>
@@ -1573,12 +1607,19 @@ export function useRegisterViewModel(): RegisterViewModel {
     const savedPendingCheckoutProducts =
       mapLocalPendingCheckoutEventsToProducts(
         localRegisterReadModel?.sourceEvents ?? [],
+        { pendingCheckoutCloudItemIdByLocalId },
       ).filter(
         (product) =>
           product.skuId &&
           product.pendingCheckoutItemId &&
           !catalogRepresentedPendingCheckoutItemIds.has(
             product.pendingCheckoutItemId.toString(),
+          ) &&
+          !(
+            product.pendingCheckoutDefinitionLocalEventId &&
+            catalogRepresentedPendingCheckoutLocalEventIds.has(
+              product.pendingCheckoutDefinitionLocalEventId,
+            )
           ) &&
           !catalogProductSkuIds.has(product.skuId.toString()) &&
           !activePendingCheckoutSkuIds.has(product.skuId.toString()) &&
@@ -1605,6 +1646,7 @@ export function useRegisterViewModel(): RegisterViewModel {
   }, [
     activeCartItems,
     localRegisterCatalogAvailabilityBySkuId,
+    localRegisterReadModel?.mappings,
     localRegisterReadModel?.sourceEvents,
     productSearchQuery,
     registerSearchState.results,

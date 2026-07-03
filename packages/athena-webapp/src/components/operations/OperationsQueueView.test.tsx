@@ -41,15 +41,22 @@ vi.mock("@tanstack/react-router", () => ({
     ...props
   }: AnchorHTMLAttributes<HTMLAnchorElement> & {
     children: ReactNode;
-    params?: unknown;
+    params?: Record<string, string>;
     search?: Record<string, string>;
     to?: string;
   }) => {
-    void params;
+    const path =
+      params && to
+        ? Object.entries(params).reduce(
+            (nextPath, [key, value]) =>
+              nextPath.replace(`$${key}`, encodeURIComponent(value)),
+            to,
+          )
+        : to;
     const searchParams = search ? `?${new URLSearchParams(search)}` : "";
 
     return (
-      <a href={`${to ?? "#"}${searchParams}`} {...props}>
+      <a href={`${path ?? "#"}${searchParams}`} {...props}>
         {children}
       </a>
     );
@@ -928,7 +935,7 @@ describe("OperationsQueueViewContent", () => {
       screen.getByRole("link", { name: "Open service case" }),
     ).toHaveAttribute(
       "href",
-      "/$orgUrlSlug/store/$storeUrlSlug/services/active-cases?o=%252F",
+      "/wigclub/store/wigclub/services/active-cases?o=%252F",
     );
     expect(screen.getAllByText("Service appointment").length).toBeGreaterThan(
       0,
@@ -937,14 +944,14 @@ describe("OperationsQueueViewContent", () => {
       screen.getByRole("link", { name: "Open appointment" }),
     ).toHaveAttribute(
       "href",
-      "/$orgUrlSlug/store/$storeUrlSlug/services/appointments?o=%252F",
+      "/wigclub/store/wigclub/services/appointments?o=%252F",
     );
     expect(screen.getAllByText("Purchase order").length).toBeGreaterThan(0);
     expect(
       screen.getByRole("link", { name: "Open purchase order" }),
     ).toHaveAttribute(
       "href",
-      "/$orgUrlSlug/store/$storeUrlSlug/procurement?o=%252F",
+      "/wigclub/store/wigclub/procurement?o=%252F",
     );
     expect(screen.getByText("PO-103")).toBeInTheDocument();
     expect(screen.getByText("Salon Supply Co.")).toBeInTheDocument();
@@ -958,7 +965,7 @@ describe("OperationsQueueViewContent", () => {
       screen.getByRole("link", { name: "Review approval" }),
     ).toHaveAttribute(
       "href",
-      "/$orgUrlSlug/store/$storeUrlSlug/operations/approvals?o=%252F",
+      "/wigclub/store/wigclub/operations/approvals?o=%252F",
     );
     expect(screen.getAllByText("Daily close follow-up").length).toBeGreaterThan(
       0,
@@ -971,7 +978,7 @@ describe("OperationsQueueViewContent", () => {
       "http://localhost",
     );
     expect(dailyCloseHref.pathname).toBe(
-      "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
+      "/wigclub/store/wigclub/operations/daily-close",
     );
     expect(dailyCloseHref.searchParams.get("o")).toBe("%2F");
     expect(dailyCloseHref.searchParams.get("operatingDate")).toBe("2026-07-01");
@@ -1109,7 +1116,7 @@ describe("OperationsQueueViewContent", () => {
       "http://localhost",
     );
     expect(titleHref.pathname).toBe(
-      "/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments",
+      "/wigclub/store/wigclub/operations/stock-adjustments",
     );
     expect(titleHref.searchParams.get("mode")).toBe("manual");
     expect(titleHref.searchParams.get("sku")).toBe("product-sku-1");
@@ -1120,7 +1127,7 @@ describe("OperationsQueueViewContent", () => {
     expect(receiptLink).toBeInTheDocument();
     expect(receiptLink).toHaveAttribute(
       "href",
-      "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId?o=%252F",
+      "/wigclub/store/wigclub/pos/transactions/transaction-1?o=%252F",
     );
     expect(screen.queryByText("Primary SKU")).not.toBeInTheDocument();
     expect(screen.queryByText("product-sku-1")).not.toBeInTheDocument();
@@ -1149,7 +1156,7 @@ describe("OperationsQueueViewContent", () => {
       "http://localhost",
     );
     expect(stockAdjustmentsHref.pathname).toBe(
-      "/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments",
+      "/wigclub/store/wigclub/operations/stock-adjustments",
     );
     expect(stockAdjustmentsHref.searchParams.get("mode")).toBe("manual");
     expect(stockAdjustmentsHref.searchParams.get("sku")).toBe("product-sku-1");
@@ -1616,7 +1623,7 @@ describe("OperationsQueueViewContent", () => {
       screen.getByRole("link", { name: /view transaction/i }),
     ).toHaveAttribute(
       "href",
-      "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId?o=%252F",
+      "/wigclub/store/wigclub/pos/transactions/txn-1?o=%252F",
     );
   });
 
@@ -1677,13 +1684,13 @@ describe("OperationsQueueViewContent", () => {
       screen.getByRole("link", { name: /view register session/i }),
     ).toHaveAttribute(
       "href",
-      "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId?o=%252F",
+      "/wigclub/store/wigclub/cash-controls/registers/register-session-8?o=%252F",
     );
     expect(
       screen.getByRole("link", { name: /view transaction/i }),
     ).toHaveAttribute(
       "href",
-      "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId?o=%252F",
+      "/wigclub/store/wigclub/pos/transactions/txn-void-1?o=%252F",
     );
 
     await user.click(screen.getByRole("button", { name: /approve void/i }));
@@ -1766,19 +1773,19 @@ describe("OperationsQueueViewContent", () => {
     expect(screen.getByText("#434898")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "#434898" })).toHaveAttribute(
       "href",
-      "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId?o=%252F",
+      "/wigclub/store/wigclub/pos/transactions/txn-1?o=%252F",
     );
     expect(
       screen.getByRole("link", { name: /view register session/i }),
     ).toHaveAttribute(
       "href",
-      "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId?o=%252F",
+      "/wigclub/store/wigclub/cash-controls/registers/register-3?o=%252F",
     );
     expect(
       screen.getByRole("link", { name: /front counter \/ register 3/i }),
     ).toHaveAttribute(
       "href",
-      "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId?o=%252F",
+      "/wigclub/store/wigclub/cash-controls/registers/register-3?o=%252F",
     );
     expect(screen.getByText("Original total")).toBeInTheDocument();
     expect(screen.getByText("Adjusted total")).toBeInTheDocument();
@@ -1926,7 +1933,7 @@ describe("OperationsQueueViewContent", () => {
       screen.getByRole("link", { name: /safari qa \/ register 6/i }),
     ).toHaveAttribute(
       "href",
-      "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId?o=%252F",
+      "/wigclub/store/wigclub/cash-controls/registers/register-6?o=%252F",
     );
     expect(screen.getByText("GH₵400")).toBeInTheDocument();
     expect(screen.getByText("GH₵200")).toBeInTheDocument();
@@ -2039,7 +2046,7 @@ describe("OperationsQueueViewContent", () => {
       screen.getByRole("link", { name: /wigshop \/ register 2/i }),
     ).toHaveAttribute(
       "href",
-      "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId?o=%252F",
+      "/wigclub/store/wigclub/cash-controls/registers/register-2?o=%252F",
     );
     expect(
       screen.getByText("Register was not open before this sale synced."),

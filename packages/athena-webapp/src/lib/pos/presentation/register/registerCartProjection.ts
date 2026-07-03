@@ -100,6 +100,48 @@ export function buildCatalogRepresentedPendingCheckoutItemIds(
   return ids;
 }
 
+export function buildCatalogRepresentedPendingCheckoutLocalEventIds(
+  rows: readonly {
+    linkedPendingCheckoutLocalEventIds?:
+      | readonly (string | null | undefined)[]
+      | null;
+  }[],
+) {
+  const ids = new Set<string>();
+
+  for (const row of rows) {
+    for (const localEventId of row.linkedPendingCheckoutLocalEventIds ?? []) {
+      if (localEventId) {
+        ids.add(localEventId);
+      }
+    }
+  }
+
+  return ids;
+}
+
+export function buildLocalPendingCheckoutDefinitionEventIdsByItemId(
+  events: readonly PosLocalEventRecord[],
+) {
+  const ids = new Map<string, string>();
+
+  for (const event of events) {
+    if (event.type !== "pending_checkout_item.defined") {
+      continue;
+    }
+    const payload = recordOrNull(event.payload);
+    const pendingCheckoutItemId = stringFromRecord(
+      payload,
+      "localPendingCheckoutItemId",
+    );
+    if (pendingCheckoutItemId) {
+      ids.set(pendingCheckoutItemId, event.localEventId);
+    }
+  }
+
+  return ids;
+}
+
 export function cartLineSourceKey(item: {
   pendingCheckoutItemId?: string | null;
   pendingCheckoutAliasState?: "linked_to_catalog" | null;
@@ -292,6 +334,9 @@ export function mapPendingCheckoutCartItemToProduct(item: CartItem): Product {
 
 export function mapLocalPendingCheckoutEventsToProducts(
   events: PosLocalEventRecord[],
+  options?: {
+    pendingCheckoutCloudItemIdByLocalId?: Map<string, string>;
+  },
 ): Product[] {
   const cartPayloadsByPendingCheckoutItemId = new Map<
     string,
@@ -356,8 +401,10 @@ export function mapLocalPendingCheckoutEventsToProducts(
       availabilityStatus: "available",
       productId: productId as Id<"product">,
       skuId: productSkuId as Id<"productSku">,
-      pendingCheckoutItemId:
-        pendingCheckoutItemId as Id<"posPendingCheckoutItem">,
+      pendingCheckoutItemId: (options?.pendingCheckoutCloudItemIdByLocalId?.get(
+        pendingCheckoutItemId,
+      ) ?? pendingCheckoutItemId) as Id<"posPendingCheckoutItem">,
+      pendingCheckoutDefinitionLocalEventId: event.localEventId,
       quantityAvailable: undefined,
     });
   }

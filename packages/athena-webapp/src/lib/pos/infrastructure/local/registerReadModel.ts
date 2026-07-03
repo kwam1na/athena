@@ -150,6 +150,7 @@ export interface PosLocalRegisterReadModel {
   errors: PosLocalRegisterReadModelError[];
   registerState: PosRegisterStateDto;
   sourceEvents: PosLocalEventRecord[];
+  mappings?: PosLocalCloudMapping[];
   syncStatus: ReturnType<typeof derivePosLocalSyncStatus>;
 }
 
@@ -320,7 +321,7 @@ export function projectLocalRegisterReadModel(input: {
     }
 
     if (event.type === "cart.item_added") {
-      const item = parseCartItem(event);
+      const item = parseCartItem(event, mappings);
       if (!item) {
         errors.push(errorFor(event, "malformed_payload"));
         continue;
@@ -468,6 +469,7 @@ export function projectLocalRegisterReadModel(input: {
       resumableSession: null,
     },
     sourceEvents: orderedEvents,
+    mappings: input.mappings ?? [],
     syncStatus: derivePosLocalSyncStatus({
       events: orderedEvents,
       isOnline: input.isOnline ?? false,
@@ -527,6 +529,7 @@ function createMappingIndex(mappings: PosLocalCloudMapping[]) {
   const registerSession = new Map<string, string>();
   const posSession = new Map<string, string>();
   const posTransaction = new Map<string, string>();
+  const pendingCheckoutItem = new Map<string, string>();
 
   for (const mapping of mappings) {
     if (mapping.entity === "registerSession") {
@@ -535,10 +538,12 @@ function createMappingIndex(mappings: PosLocalCloudMapping[]) {
       posSession.set(mapping.localId, mapping.cloudId);
     } else if (mapping.entity === "posTransaction") {
       posTransaction.set(mapping.localId, mapping.cloudId);
+    } else if (mapping.entity === "pendingCheckoutItem") {
+      pendingCheckoutItem.set(mapping.localId, mapping.cloudId);
     }
   }
 
-  return { posSession, posTransaction, registerSession };
+  return { pendingCheckoutItem, posSession, posTransaction, registerSession };
 }
 
 function registerLifecycleEventMatchesActiveSession(
@@ -695,7 +700,9 @@ function getCompletedSale(input: {
   const activeSale = input.sales.get(localPosSessionId);
   const payloadItems = Array.isArray(payload.items)
     ? payload.items.map((item, index) =>
-        parseCartItemPayload(item, `${localTransactionId}-item-${index}`),
+        parseCartItemPayload(item, `${localTransactionId}-item-${index}`, {
+          mappings: input.mappings,
+        }),
       )
     : [];
   if (payloadItems.some((item) => !item)) return null;
@@ -731,13 +738,21 @@ function getCompletedSale(input: {
   };
 }
 
-function parseCartItem(event: PosLocalEventRecord) {
-  return parseCartItemPayload(event.payload, `local-item-${event.sequence}`);
+function parseCartItem(
+  event: PosLocalEventRecord,
+  mappings: ReturnType<typeof createMappingIndex>,
+) {
+  return parseCartItemPayload(event.payload, `local-item-${event.sequence}`, {
+    mappings,
+  });
 }
 
 function parseCartItemPayload(
   value: unknown,
   fallbackLocalItemId: string,
+  options?: {
+    mappings?: ReturnType<typeof createMappingIndex>;
+  },
 ): PosLocalCartItemReadModel | null {
   const payload = asRecord(value);
   const productSkuId = stringField(payload, "productSkuId");
@@ -746,12 +761,16 @@ function parseCartItemPayload(
   if (!productSkuId || quantity === undefined || price === undefined) {
     return null;
   }
+  const pendingCheckoutItemId = optionalString(payload.pendingCheckoutItemId);
 
   return {
     localItemId: stringField(payload, "localItemId") ?? fallbackLocalItemId,
     productId: stringField(payload, "productId") ?? "",
     productSkuId,
-    pendingCheckoutItemId: optionalString(payload.pendingCheckoutItemId),
+    pendingCheckoutItemId: pendingCheckoutItemId
+      ? (options?.mappings?.pendingCheckoutItem.get(pendingCheckoutItemId) ??
+        pendingCheckoutItemId)
+      : undefined,
     pendingCheckoutAliasState:
       stringField(payload, "pendingCheckoutAliasState") === "linked_to_catalog"
         ? "linked_to_catalog"

@@ -22,7 +22,8 @@ export type PosLocalEntityKind =
   | "posSession"
   | "posTransaction"
   | "expenseSession"
-  | "expenseTransaction";
+  | "expenseTransaction"
+  | "pendingCheckoutItem";
 
 export type PosLocalEventType =
   | "terminal.seeded"
@@ -69,8 +70,7 @@ export type PosLocalEventValidationFlag =
   | "app-session-unverified"
   | "cloud-validation-uncertain";
 
-export type PosLocalEventUploadDeferral =
-  | "app-session-validated";
+export type PosLocalEventUploadDeferral = "app-session-validated";
 
 export interface PosLocalEventValidationMetadata {
   flags: PosLocalEventValidationFlag[];
@@ -217,10 +217,7 @@ export type PosLocalStaffAuthorityRecord = {
   wrappedPosLocalStaffProof?: WrappedLocalStaffProof;
 };
 
-export type PosLocalStaffAuthorityReadiness =
-  | "missing"
-  | "expired"
-  | "ready";
+export type PosLocalStaffAuthorityReadiness = "missing" | "expired" | "ready";
 
 export type PosLocalActiveCashierPresenceRecord = {
   activeRoles: Array<"cashier" | "manager">;
@@ -491,7 +488,9 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
       ...(validationMetadata ? { validationMetadata } : {}),
       payload: normalizeLocalEventPayload(input),
       createdAt: clock(),
-      sync: { status: input.initialSyncStatus ?? getInitialSyncStatus(input.type) },
+      sync: {
+        status: input.initialSyncStatus ?? getInitialSyncStatus(input.type),
+      },
     };
 
     await transaction.put("events", String(nextSequence), event);
@@ -520,20 +519,26 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
     return nextUploadSequence;
   }
 
-  function shouldAllocateUploadSequence(input: PosLocalAppendEventInput): boolean {
+  function shouldAllocateUploadSequence(
+    input: PosLocalAppendEventInput,
+  ): boolean {
     return Boolean(
       getUploadSequenceScopeId(input) &&
-        input.initialSyncStatus !== "synced" &&
-        canUploadPosLocalEventType(input.type),
+      input.initialSyncStatus !== "synced" &&
+      canUploadPosLocalEventType(input.type),
     );
   }
 
-  function getInitialSyncStatus(type: PosLocalEventType): PosLocalSyncEventStatus {
+  function getInitialSyncStatus(
+    type: PosLocalEventType,
+  ): PosLocalSyncEventStatus {
     return canUploadPosLocalEventType(type) ? "pending" : "synced";
   }
 
   function shouldPersistStaffProofToken(input: PosLocalAppendEventInput) {
-    return Boolean(input.staffProofToken && shouldAllocateUploadSequence(input));
+    return Boolean(
+      input.staffProofToken && shouldAllocateUploadSequence(input),
+    );
   }
 
   return {
@@ -581,7 +586,11 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
                 );
               }
             }
-            await transaction.put("terminalSeed", TERMINAL_SEED_KEY, input.seed);
+            await transaction.put(
+              "terminalSeed",
+              TERMINAL_SEED_KEY,
+              input.seed,
+            );
             return input.seed;
           },
         );
@@ -747,8 +756,8 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
             return (
               states
                 .filter(isDrawerAuthorityState)
-                .filter(
-                  (state) => drawerAuthorityMatchesReadInput(state, input),
+                .filter((state) =>
+                  drawerAuthorityMatchesReadInput(state, input),
                 )
                 .sort((left, right) => right.observedAt - left.observedAt)
                 .at(0) ?? null
@@ -780,7 +789,10 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
                 isDrawerAuthorityState(state) &&
                 drawerAuthorityMatchesExactLocalInput(state, input)
               ) {
-                await transaction.delete("authority", drawerAuthorityKey(state));
+                await transaction.delete(
+                  "authority",
+                  drawerAuthorityKey(state),
+                );
               }
             }
           },
@@ -868,7 +880,9 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
 
     async readCashierPresence(
       input: PosLocalCashierPresenceScope & { now?: number },
-    ): Promise<PosLocalStoreResult<PosLocalActiveCashierPresenceRecord | null>> {
+    ): Promise<
+      PosLocalStoreResult<PosLocalActiveCashierPresenceRecord | null>
+    > {
       try {
         const value = await options.adapter.transaction(
           "readwrite",
@@ -907,7 +921,9 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
       organizationId?: string;
       storeId: string;
       terminalId: string;
-    }): Promise<PosLocalStoreResult<PosLocalActiveCashierPresenceRecord | null>> {
+    }): Promise<
+      PosLocalStoreResult<PosLocalActiveCashierPresenceRecord | null>
+    > {
       try {
         const value = await options.adapter.transaction(
           "readwrite",
@@ -915,7 +931,8 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
           async (transaction) => {
             await ensureSupportedSchema(transaction, "readwrite");
             const now = input.now ?? clock();
-            const records = await transaction.getAll<unknown>("cashierPresence");
+            const records =
+              await transaction.getAll<unknown>("cashierPresence");
             const candidates: PosLocalActiveCashierPresenceRecord[] = [];
 
             for (const record of records) {
@@ -936,9 +953,11 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
               }
             }
 
-            return candidates.sort(
-              (left, right) => right.signedInAt - left.signedInAt,
-            )[0] ?? null;
+            return (
+              candidates.sort(
+                (left, right) => right.signedInAt - left.signedInAt,
+              )[0] ?? null
+            );
           },
         );
 
@@ -1167,8 +1186,7 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
           ["meta", "staffAuthority"],
           async (transaction) => {
             await ensureSupportedSchema(transaction, "readonly");
-            const records =
-              await transaction.getAll<unknown>("staffAuthority");
+            const records = await transaction.getAll<unknown>("staffAuthority");
             const scopedRecords = records.filter(
               (record): record is PosLocalStaffAuthorityRecord =>
                 isStaffAuthorityRecord(record) &&
@@ -1398,7 +1416,9 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
       }
     },
 
-    async listEventsForUpload(): Promise<PosLocalStoreResult<PosLocalEventRecord[]>> {
+    async listEventsForUpload(): Promise<
+      PosLocalStoreResult<PosLocalEventRecord[]>
+    > {
       return this.listEvents();
     },
 
@@ -1612,8 +1632,7 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
                   ...event.sync,
                   error: undefined,
                   localResolution: {
-                    reason:
-                      clearOptions?.reason ?? "terminal_recovery_command",
+                    reason: clearOptions?.reason ?? "terminal_recovery_command",
                     resolvedAt,
                     status: "local_review_cleared" as const,
                   },
@@ -1871,7 +1890,9 @@ function normalizePendingCheckoutItemLocalMetadata(
     metadata.appSessionValidation,
   );
   const cloudValidation =
-    metadata.cloudValidation === "uncertain" ? metadata.cloudValidation : undefined;
+    metadata.cloudValidation === "uncertain"
+      ? metadata.cloudValidation
+      : undefined;
   const reusedExistingPendingItem =
     typeof metadata.reusedExistingPendingItem === "boolean"
       ? metadata.reusedExistingPendingItem
@@ -2051,7 +2072,10 @@ function normalizeDrawerAuthorityState(
     ...(state.message
       ? { message: toSafeAuthorityMessage(state.message) }
       : state.reason === "cloud_closed"
-        ? { message: "Drawer setup changed. Open a current drawer before selling." }
+        ? {
+            message:
+              "Drawer setup changed. Open a current drawer before selling.",
+          }
         : state.reason === "lifecycle_rejected"
           ? { message: "Drawer sync needs review before selling can continue." }
           : {}),
@@ -2123,7 +2147,9 @@ function isStaffAuthorityRecord(
 
   return (
     Array.isArray(record.activeRoles) &&
-    record.activeRoles.every((role) => role === "cashier" || role === "manager") &&
+    record.activeRoles.every(
+      (role) => role === "cashier" || role === "manager",
+    ) &&
     typeof record.credentialId === "string" &&
     typeof record.credentialVersion === "number" &&
     Number.isSafeInteger(record.credentialVersion) &&
@@ -2206,7 +2232,10 @@ export function createIndexedDbPosLocalStorageAdapter(options?: {
 
   async function openDatabase(): Promise<IDBDatabase> {
     return new Promise((resolve, reject) => {
-      const request = indexedDB.open(databaseName, POS_LOCAL_STORE_SCHEMA_VERSION);
+      const request = indexedDB.open(
+        databaseName,
+        POS_LOCAL_STORE_SCHEMA_VERSION,
+      );
 
       request.onupgradeneeded = () => {
         const database = request.result;
@@ -2383,7 +2412,10 @@ function inspectIndexedDbStoresForClear(databaseName: string): Promise<{
   events: unknown[];
 }> {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(databaseName, POS_LOCAL_STORE_SCHEMA_VERSION);
+    const request = indexedDB.open(
+      databaseName,
+      POS_LOCAL_STORE_SCHEMA_VERSION,
+    );
 
     request.onupgradeneeded = () => {
       const database = request.result;
@@ -2396,14 +2428,10 @@ function inspectIndexedDbStoresForClear(databaseName: string): Promise<{
     request.onerror = () => reject(request.error);
     request.onsuccess = () => {
       const database = request.result;
-      const storeNames = [
-        "events",
-        "authority",
-        "cashierPresence",
-      ].filter((storeName): storeName is
-        | "events"
-        | "authority"
-        | "cashierPresence" => database.objectStoreNames.contains(storeName));
+      const storeNames = ["events", "authority", "cashierPresence"].filter(
+        (storeName): storeName is "events" | "authority" | "cashierPresence" =>
+          database.objectStoreNames.contains(storeName),
+      );
 
       if (storeNames.length === 0) {
         database.close();

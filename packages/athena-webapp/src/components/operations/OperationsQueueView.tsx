@@ -86,21 +86,6 @@ const UNCATEGORIZED_COUNT_SCOPE_KEY = "__uncategorized";
 const openWorkActionLinkClassName =
   "inline-flex items-center gap-1.5 text-sm font-medium text-foreground underline-offset-4 transition-colors hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
 
-function buildProductEditHref(args: {
-  orgUrlSlug: string;
-  productId: string;
-  productSkuId: string;
-  storeUrlSlug: string;
-}) {
-  const search = new URLSearchParams({
-    o: getOrigin(),
-    variant: args.productSkuId,
-  });
-  return `/${encodeURIComponent(args.orgUrlSlug)}/store/${encodeURIComponent(
-    args.storeUrlSlug,
-  )}/products/${encodeURIComponent(args.productId)}/edit?${search.toString()}`;
-}
-
 type ProductSkuSearchResponse = {
   results: Array<{
     productSkuId: Id<"productSku">;
@@ -643,18 +628,23 @@ function QueueWorkItemActionSlot({
       item.details.provisionalProductSkuId
     ) {
       return (
-        <a
+        <Link
           className={openWorkActionLinkClassName}
-          href={buildProductEditHref({
+          from="/$orgUrlSlug/store/$storeUrlSlug/operations/open-work"
+          params={{
             orgUrlSlug,
-            productId: item.details.provisionalProductId,
-            productSkuId: item.details.provisionalProductSkuId,
             storeUrlSlug,
-          })}
+            productSlug: item.details!.provisionalProductId!,
+          }}
+          search={{
+            o: getOrigin(),
+            variant: item.details.provisionalProductSkuId,
+          }}
+          to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit"
         >
           Review POS pending checkout
           <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
-        </a>
+        </Link>
       );
     }
 

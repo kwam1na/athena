@@ -598,6 +598,7 @@ describe("listRegisterCatalog", () => {
           _id: "pending-linked-1",
           storeId: "store-a",
           status: "linked_to_catalog",
+          evidence: { localEventIds: ["local-event-1"] },
           provisionalProductSkuId: "sku-pending-old-1",
           approvedProductSkuId: "sku-live",
           provisionalPrice: 400,
@@ -606,6 +607,7 @@ describe("listRegisterCatalog", () => {
           _id: "pending-linked-2",
           storeId: "store-a",
           status: "linked_to_catalog",
+          evidence: { localEventIds: ["local-event-2"] },
           provisionalProductSkuId: "sku-pending-old-2",
           approvedProductSkuId: "sku-live",
           provisionalPrice: 400,
@@ -630,6 +632,7 @@ describe("listRegisterCatalog", () => {
       pendingCheckoutAliasState: "linked_to_catalog",
       pendingCheckoutItemId: "pending-linked-1",
       linkedPendingCheckoutItemIds: ["pending-linked-1", "pending-linked-2"],
+      linkedPendingCheckoutLocalEventIds: ["local-event-1", "local-event-2"],
     });
   });
 

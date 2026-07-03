@@ -16,6 +16,7 @@ type RegisterCatalogRow = {
   pendingCheckoutItemId?: Id<"posPendingCheckoutItem">;
   pendingCheckoutAliasState?: "linked_to_catalog";
   linkedPendingCheckoutItemIds?: Array<Id<"posPendingCheckoutItem">>;
+  linkedPendingCheckoutLocalEventIds?: string[];
   name: string;
   sku: string;
   barcode: string;
@@ -68,6 +69,7 @@ type PosPendingCheckoutItem = Pick<
   Doc<"posPendingCheckoutItem">,
   | "_id"
   | "approvedProductSkuId"
+  | "evidence"
   | "provisionalProductSkuId"
   | "provisionalPrice"
   | "status"
@@ -105,12 +107,15 @@ async function readCategoryDoc(
 }
 
 function mapProjectionToRegisterCatalogRow(args: {
+  linkedPendingCheckoutLocalEventIds?: string[];
   linkedPendingCheckoutItemIds?: Array<Id<"posPendingCheckoutItem">>;
   pendingCheckoutItem?: PosPendingCheckoutItem;
   projection: Doc<"productSkuSearch">;
 }): RegisterCatalogRow {
   const linkedPendingCheckoutItemIds =
     args.linkedPendingCheckoutItemIds?.filter(Boolean) ?? [];
+  const linkedPendingCheckoutLocalEventIds =
+    args.linkedPendingCheckoutLocalEventIds?.filter(Boolean) ?? [];
   const pendingCheckoutItemId =
     args.pendingCheckoutItem?._id ?? linkedPendingCheckoutItemIds[0];
 
@@ -124,9 +129,17 @@ function mapProjectionToRegisterCatalogRow(args: {
       ? {
           pendingCheckoutAliasState: "linked_to_catalog" as const,
           linkedPendingCheckoutItemIds,
+          ...(linkedPendingCheckoutLocalEventIds.length > 0
+            ? { linkedPendingCheckoutLocalEventIds }
+            : {}),
         }
       : linkedPendingCheckoutItemIds.length > 0
-        ? { linkedPendingCheckoutItemIds }
+        ? {
+            linkedPendingCheckoutItemIds,
+            ...(linkedPendingCheckoutLocalEventIds.length > 0
+              ? { linkedPendingCheckoutLocalEventIds }
+              : {}),
+          }
         : {}),
     name: args.projection.productName,
     sku: args.projection.sku ?? "",
@@ -551,6 +564,10 @@ export async function listRegisterCatalog(
     Id<"productSku">,
     Array<Id<"posPendingCheckoutItem">>
   >();
+  const linkedPendingCheckoutLocalEventIdsBySkuId = new Map<
+    Id<"productSku">,
+    string[]
+  >();
   for (const item of await queryLinkedPendingCheckoutItemsForStore(ctx, args)) {
     if (!item.approvedProductSkuId) {
       continue;
@@ -561,6 +578,15 @@ export async function listRegisterCatalog(
     linkedPendingCheckoutItemIdsBySkuId.set(
       item.approvedProductSkuId,
       linkedIds,
+    );
+    const linkedLocalEventIds =
+      linkedPendingCheckoutLocalEventIdsBySkuId.get(
+        item.approvedProductSkuId,
+      ) ?? [];
+    linkedLocalEventIds.push(...(item.evidence.localEventIds ?? []));
+    linkedPendingCheckoutLocalEventIdsBySkuId.set(
+      item.approvedProductSkuId,
+      linkedLocalEventIds,
     );
   }
   const trustedAvailableSkuIds = new Set<Id<"productSku">>();
@@ -583,6 +609,10 @@ export async function listRegisterCatalog(
         linkedPendingCheckoutItemIds: linkedPendingCheckoutItemIdsBySkuId.get(
           projection.productSkuId,
         ),
+        linkedPendingCheckoutLocalEventIds:
+          linkedPendingCheckoutLocalEventIdsBySkuId.get(
+            projection.productSkuId,
+          ),
         pendingCheckoutItem: pendingCheckoutItemsBySkuId.get(
           projection.productSkuId,
         ),

@@ -243,7 +243,7 @@ describe("AppSidebar capability gates", () => {
       hasFullAdminAccess: true,
       hasStoreDaySurfaceAccess: true,
       isLoading: false,
-      role: "admin",
+      role: "full_admin",
     });
 
     render(<AppSidebar shellVariant="contained" />);
@@ -271,6 +271,27 @@ describe("AppSidebar capability gates", () => {
     );
   });
 
+  it("links full-admin users to settings from the app section", () => {
+    mocks.usePermissions.mockReturnValue({
+      canAccessAdmin: () => true,
+      canAccessFullAdminSurfaces: () => true,
+      canAccessPOS: () => true,
+      canAccessOperations: () => true,
+      canAccessStoreDaySurfaces: () => true,
+      hasFullAdminAccess: true,
+      hasStoreDaySurfaceAccess: true,
+      isLoading: false,
+      role: "full_admin",
+    });
+
+    render(<AppSidebar />);
+
+    expect(screen.getByRole("link", { name: /^settings$/i })).toHaveAttribute(
+      "href",
+      "/$orgUrlSlug/store/$storeUrlSlug/app-settings",
+    );
+  });
+
   it("places a collapse toggle under the contained desktop sidebar", () => {
     mocks.usePermissions.mockReturnValue({
       canAccessAdmin: () => true,
@@ -281,7 +302,7 @@ describe("AppSidebar capability gates", () => {
       hasFullAdminAccess: true,
       hasStoreDaySurfaceAccess: true,
       isLoading: false,
-      role: "admin",
+      role: "full_admin",
     });
 
     render(<AppSidebar shellVariant="contained" />);

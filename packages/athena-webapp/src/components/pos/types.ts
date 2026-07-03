@@ -49,6 +49,7 @@ export interface Product {
   skuId?: Id<"productSku">;
   pendingCheckoutItemId?: Id<"posPendingCheckoutItem">;
   pendingCheckoutAliasState?: "linked_to_catalog";
+  pendingCheckoutDefinitionLocalEventId?: string;
   inventoryImportProvisionalSkuId?: Id<"inventoryImportProvisionalSku">;
   availabilityPolicy?:
     | "trusted_inventory"

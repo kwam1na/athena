@@ -83,6 +83,7 @@ const registerCatalogRowValidator = v.object({
   linkedPendingCheckoutItemIds: v.optional(
     v.array(v.id("posPendingCheckoutItem")),
   ),
+  linkedPendingCheckoutLocalEventIds: v.optional(v.array(v.string())),
   name: v.string(),
   sku: v.string(),
   barcode: v.string(),

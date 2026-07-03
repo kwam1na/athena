@@ -6,6 +6,8 @@ import type { PosLocalRegisterReadModel } from "@/lib/pos/infrastructure/local/r
 
 import {
   buildCatalogRepresentedPendingCheckoutItemIds,
+  buildCatalogRepresentedPendingCheckoutLocalEventIds,
+  buildLocalPendingCheckoutDefinitionEventIdsByItemId,
   cartItemsFromLocalRegisterModel,
   mapLocalPendingCheckoutEventsToProducts,
   productCartSourceKey,
@@ -116,6 +118,42 @@ describe("registerCartProjection", () => {
       "pending-linked-2",
       "pending-primary",
     ]);
+
+    const representedLocalEventIds =
+      buildCatalogRepresentedPendingCheckoutLocalEventIds([
+        {
+          linkedPendingCheckoutLocalEventIds: [
+            "local-event-1",
+            null,
+            undefined,
+            "local-event-2",
+          ],
+        },
+      ]);
+
+    expect([...representedLocalEventIds].sort()).toEqual([
+      "local-event-1",
+      "local-event-2",
+    ]);
+  });
+
+  it("maps local pending checkout definitions to their local event ids", () => {
+    const definitionEventIds =
+      buildLocalPendingCheckoutDefinitionEventIdsByItemId([
+        localEvent({
+          localEventId: "event-pending-defined",
+          payload: {
+            localPendingCheckoutItemId: "local-pending-1",
+            name: "Uncataloged Item",
+            price: 25,
+          },
+          type: "pending_checkout_item.defined",
+        }),
+      ]);
+
+    expect(definitionEventIds.get("local-pending-1")).toBe(
+      "event-pending-defined",
+    );
   });
 
   it("preserves explicit local removals when merging current cart items", () => {
@@ -231,35 +269,43 @@ describe("registerCartProjection", () => {
   });
 
   it("rebuilds pending checkout products from local definition and cart events", () => {
-    const products = mapLocalPendingCheckoutEventsToProducts([
-      localEvent({
-        payload: {
-          barcode: "LOCAL-1",
-          pendingCheckoutItemId: "pending-1",
-          productId: "product-local-1",
-          productSku: "LOCAL-SKU",
-          productSkuId: "sku-local-1",
-        },
-      }),
-      localEvent({
-        localEventId: "event-2",
-        payload: {
-          localPendingCheckoutItemId: "pending-1",
-          lookupCode: "LOOKUP-1",
-          name: "Uncataloged Item",
-          price: 25,
-        },
-        sequence: 2,
-        type: "pending_checkout_item.defined",
-      }),
-    ]);
+    const products = mapLocalPendingCheckoutEventsToProducts(
+      [
+        localEvent({
+          payload: {
+            barcode: "LOCAL-1",
+            pendingCheckoutItemId: "pending-1",
+            productId: "product-local-1",
+            productSku: "LOCAL-SKU",
+            productSkuId: "sku-local-1",
+          },
+        }),
+        localEvent({
+          localEventId: "event-2",
+          payload: {
+            localPendingCheckoutItemId: "pending-1",
+            lookupCode: "LOOKUP-1",
+            name: "Uncataloged Item",
+            price: 25,
+          },
+          sequence: 2,
+          type: "pending_checkout_item.defined",
+        }),
+      ],
+      {
+        pendingCheckoutCloudItemIdByLocalId: new Map([
+          ["pending-1", "cloud-pending-1"],
+        ]),
+      },
+    );
 
     expect(products).toMatchObject([
       {
         barcode: "LOOKUP-1",
         id: "sku-local-1",
         name: "Uncataloged Item",
-        pendingCheckoutItemId: "pending-1",
+        pendingCheckoutDefinitionLocalEventId: "event-2",
+        pendingCheckoutItemId: "cloud-pending-1",
         price: 25,
         sku: "LOCAL-SKU",
       },

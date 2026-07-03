@@ -33,6 +33,7 @@ export interface RegisterCatalogSearchRow {
   pendingCheckoutItemId?: string | null;
   pendingCheckoutAliasState?: "linked_to_catalog" | null;
   linkedPendingCheckoutItemIds?: string[] | null;
+  linkedPendingCheckoutLocalEventIds?: string[] | null;
 }
 
 export type RegisterCatalogSearchResult =

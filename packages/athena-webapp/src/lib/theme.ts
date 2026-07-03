@@ -1,9 +1,12 @@
 import { useEffect, useSyncExternalStore } from "react";
 
 export const ATHENA_THEME_STORAGE_KEY = "athena-theme-mode";
+export const ATHENA_DARK_THEME_VARIANT_STORAGE_KEY =
+  "athena-dark-theme-variant";
 
 export type AthenaThemeMode = "system" | "light" | "dark";
 export type AthenaResolvedTheme = "light" | "dark";
+export type AthenaDarkThemeVariant = "charcoal" | "classic";
 
 type ThemeViewTransition = {
   finished?: Promise<void>;
@@ -14,12 +17,25 @@ type ThemeTransitionDocument = Document & {
 };
 
 const THEME_MODES = new Set<AthenaThemeMode>(["system", "light", "dark"]);
+const DARK_THEME_VARIANTS = new Set<AthenaDarkThemeVariant>([
+  "charcoal",
+  "classic",
+]);
 const THEME_CHANGE_EVENT = "athena-theme-change";
 const DARK_MEDIA_QUERY = "(prefers-color-scheme: dark)";
 const REDUCED_MOTION_MEDIA_QUERY = "(prefers-reduced-motion: reduce)";
+const DEFAULT_DARK_THEME_VARIANT: AthenaDarkThemeVariant = "charcoal";
 
 function isThemeMode(value: string | null): value is AthenaThemeMode {
   return Boolean(value && THEME_MODES.has(value as AthenaThemeMode));
+}
+
+function isDarkThemeVariant(
+  value: string | null,
+): value is AthenaDarkThemeVariant {
+  return Boolean(
+    value && DARK_THEME_VARIANTS.has(value as AthenaDarkThemeVariant),
+  );
 }
 
 function getStorage() {
@@ -39,6 +55,16 @@ function getStoredThemeMode(): AthenaThemeMode {
   const storedValue = storage?.getItem(ATHENA_THEME_STORAGE_KEY) ?? null;
 
   return isThemeMode(storedValue) ? storedValue : "system";
+}
+
+function getStoredDarkThemeVariant(): AthenaDarkThemeVariant {
+  const storage = getStorage();
+  const storedValue =
+    storage?.getItem(ATHENA_DARK_THEME_VARIANT_STORAGE_KEY) ?? null;
+
+  return isDarkThemeVariant(storedValue)
+    ? storedValue
+    : DEFAULT_DARK_THEME_VARIANT;
 }
 
 function getSystemTheme(): AthenaResolvedTheme {
@@ -63,7 +89,10 @@ function resolveTheme(mode: AthenaThemeMode): AthenaResolvedTheme {
   return mode === "system" ? getSystemTheme() : mode;
 }
 
-function applyTheme(mode: AthenaThemeMode) {
+function applyTheme(
+  mode: AthenaThemeMode,
+  darkThemeVariant = getStoredDarkThemeVariant(),
+) {
   if (typeof document === "undefined") {
     return;
   }
@@ -74,6 +103,11 @@ function applyTheme(mode: AthenaThemeMode) {
   root.classList.toggle("dark", resolvedTheme === "dark");
   root.dataset.theme = resolvedTheme;
   root.dataset.themeMode = mode;
+  if (resolvedTheme === "dark") {
+    root.dataset.themeVariant = darkThemeVariant;
+  } else {
+    delete root.dataset.themeVariant;
+  }
   root.style.colorScheme = resolvedTheme;
 }
 
@@ -118,6 +152,14 @@ export function setAthenaThemeMode(mode: AthenaThemeMode) {
   }
 
   applyTheme(mode);
+  emitThemeChange();
+}
+
+export function setAthenaDarkThemeVariant(variant: AthenaDarkThemeVariant) {
+  const storage = getStorage();
+
+  storage?.setItem(ATHENA_DARK_THEME_VARIANT_STORAGE_KEY, variant);
+  applyTheme(getStoredThemeMode(), variant);
   emitThemeChange();
 }
 
@@ -170,8 +212,10 @@ function subscribeToThemeStore(onStoreChange: () => void) {
 function getThemeSnapshot() {
   const mode = getStoredThemeMode();
   const resolvedTheme = resolveTheme(mode);
+  const darkThemeVariant = getStoredDarkThemeVariant();
+  const systemTheme = getSystemTheme();
 
-  return `${mode}:${resolvedTheme}`;
+  return `${mode}:${resolvedTheme}:${darkThemeVariant}:${systemTheme}`;
 }
 
 export function useAthenaTheme() {
@@ -180,18 +224,25 @@ export function useAthenaTheme() {
     getThemeSnapshot,
     getThemeSnapshot,
   );
-  const [mode, resolvedTheme] = snapshot.split(":") as [
+  const [mode, resolvedTheme, darkThemeVariant, systemTheme] = snapshot.split(
+    ":",
+  ) as [
     AthenaThemeMode,
+    AthenaResolvedTheme,
+    AthenaDarkThemeVariant,
     AthenaResolvedTheme,
   ];
 
   useEffect(() => {
     applyTheme(mode);
-  }, [mode]);
+  }, [mode, darkThemeVariant]);
 
   return {
     mode,
     resolvedTheme,
+    darkThemeVariant,
+    systemTheme,
     setThemeMode: setAthenaThemeMode,
+    setDarkThemeVariant: setAthenaDarkThemeVariant,
   };
 }
