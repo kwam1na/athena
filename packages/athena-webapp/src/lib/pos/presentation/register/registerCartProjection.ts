@@ -76,6 +76,30 @@ export function productCartSourceKey(product: {
   return "trusted_inventory";
 }
 
+export function buildCatalogRepresentedPendingCheckoutItemIds(
+  rows: readonly {
+    pendingCheckoutItemId?: string | null;
+    linkedPendingCheckoutItemIds?:
+      | readonly (string | null | undefined)[]
+      | null;
+  }[],
+) {
+  const ids = new Set<string>();
+
+  for (const row of rows) {
+    if (row.pendingCheckoutItemId) {
+      ids.add(row.pendingCheckoutItemId);
+    }
+    for (const linkedId of row.linkedPendingCheckoutItemIds ?? []) {
+      if (linkedId) {
+        ids.add(linkedId);
+      }
+    }
+  }
+
+  return ids;
+}
+
 export function cartLineSourceKey(item: {
   pendingCheckoutItemId?: string | null;
   pendingCheckoutAliasState?: "linked_to_catalog" | null;

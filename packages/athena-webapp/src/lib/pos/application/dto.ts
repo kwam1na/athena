@@ -188,6 +188,7 @@ export interface PosRegisterCatalogRowDto {
   availabilityPolicy?: PosRegisterCatalogAvailabilityPolicy;
   pendingCheckoutItemId?: Id<"posPendingCheckoutItem">;
   pendingCheckoutAliasState?: "linked_to_catalog";
+  linkedPendingCheckoutItemIds?: Array<Id<"posPendingCheckoutItem">>;
 }
 
 export interface PosRegisterCatalogInput {

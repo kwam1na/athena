@@ -32,6 +32,7 @@ export interface RegisterCatalogSearchRow {
   inventoryImportProvisionalSkuId?: string | null;
   pendingCheckoutItemId?: string | null;
   pendingCheckoutAliasState?: "linked_to_catalog" | null;
+  linkedPendingCheckoutItemIds?: string[] | null;
 }
 
 export type RegisterCatalogSearchResult =

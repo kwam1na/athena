@@ -118,6 +118,7 @@ import {
   type StaffProfileRosterRow,
 } from "./registerCashierPresence";
 import {
+  buildCatalogRepresentedPendingCheckoutItemIds,
   buildLocalCartItemPayload,
   buildLocalCartItemPayloadFromCartItem,
   cartItemsFromLocalRegisterModel,
@@ -1540,12 +1541,19 @@ export function useRegisterViewModel(): RegisterViewModel {
         product.skuId ? [product.skuId.toString()] : [],
       ),
     );
+    const catalogRepresentedPendingCheckoutItemIds =
+      buildCatalogRepresentedPendingCheckoutItemIds(
+        registerSearchState.results,
+      );
     const activePendingCheckoutProducts = activeCartItems
       .filter(
         (item) =>
           "pendingCheckoutItemId" in item &&
           Boolean(item.pendingCheckoutItemId) &&
           item.skuId &&
+          !catalogRepresentedPendingCheckoutItemIds.has(
+            item.pendingCheckoutItemId?.toString() ?? "",
+          ) &&
           !catalogProductSkuIds.has(item.skuId.toString()) &&
           pendingCheckoutCartItemMatchesSearch(item, productSearchQuery),
       )
@@ -1569,6 +1577,9 @@ export function useRegisterViewModel(): RegisterViewModel {
         (product) =>
           product.skuId &&
           product.pendingCheckoutItemId &&
+          !catalogRepresentedPendingCheckoutItemIds.has(
+            product.pendingCheckoutItemId.toString(),
+          ) &&
           !catalogProductSkuIds.has(product.skuId.toString()) &&
           !activePendingCheckoutSkuIds.has(product.skuId.toString()) &&
           !activePendingCheckoutItemIds.has(
@@ -1721,8 +1732,8 @@ export function useRegisterViewModel(): RegisterViewModel {
   );
   const activeSessionNeedsRegisterBinding = Boolean(
     isCloudOperableSession(operableActiveSession) &&
-      !operableActiveSession.registerSessionId &&
-      !locallyOperableRegisterSession,
+    !operableActiveSession.registerSessionId &&
+    !locallyOperableRegisterSession,
   );
   const activeSessionHasMismatchedRegisterBinding = Boolean(
     isCloudOperableSession(operableActiveSession) &&
@@ -1818,8 +1829,9 @@ export function useRegisterViewModel(): RegisterViewModel {
     : null;
   const pendingLocalCloseoutRegisterSession =
     getPendingLocalCloseoutRegisterSession(localRegisterReadModel);
-  const pendingLocalCashVoidApprovals =
-    getPendingLocalCashVoidApprovals(localRegisterReadModel);
+  const pendingLocalCashVoidApprovals = getPendingLocalCashVoidApprovals(
+    localRegisterReadModel,
+  );
   const activeCloseoutRegisterSession =
     closeoutBlockedRegisterSession ??
     pendingLocalCloseoutRegisterSession ??
@@ -1872,14 +1884,14 @@ export function useRegisterViewModel(): RegisterViewModel {
           ? "drawerAuthorityRepair"
           : activeCloseoutCanOpenReplacementDrawer && canSignedInStaffOpenDrawer
             ? "initialSetup"
-          : hasCloseoutBlockedDrawerState || activeCloseoutRegisterSession
-            ? "closeoutBlocked"
-            : hasMissingDrawerRecoveryState ||
-                hasCloudBlockedRecoverableLocalSale ||
-                hasDraftDrawerRecoveryState ||
-                activeSessionHasBlockedRegisterBinding
-              ? "recovery"
-              : "initialSetup";
+            : hasCloseoutBlockedDrawerState || activeCloseoutRegisterSession
+              ? "closeoutBlocked"
+              : hasMissingDrawerRecoveryState ||
+                  hasCloudBlockedRecoverableLocalSale ||
+                  hasDraftDrawerRecoveryState ||
+                  activeSessionHasBlockedRegisterBinding
+                ? "recovery"
+                : "initialSetup";
   const handleRepairTerminalSetup = useCallback(async () => {
     if (!activeStoreId || !terminal?._id || typeof indexedDB === "undefined") {
       setDrawerErrorMessage(
@@ -3911,8 +3923,9 @@ export function useRegisterViewModel(): RegisterViewModel {
           createLocalFallbackId("local-item");
         const optimisticProductKey = product.id.toString();
         const removedLineKey = removedCartLineKeyFromProduct(product);
-        const hadRemovedLine =
-          Boolean(optimisticallyRemovedCartLineKeys[removedLineKey]);
+        const hadRemovedLine = Boolean(
+          optimisticallyRemovedCartLineKeys[removedLineKey],
+        );
         const previousOptimisticProduct =
           optimisticCartProducts[optimisticProductKey];
         const isExistingOptimisticProduct = existingItem?.id
@@ -5229,9 +5242,8 @@ export function useRegisterViewModel(): RegisterViewModel {
       : null;
   const parsedCloseoutCountedCash =
     parseDisplayAmountInput(closeoutCountedCash);
-  const activeCloseoutCloudRegisterSessionId = getCloseoutCloudRegisterSessionId(
-    activeCloseoutRegisterSession,
-  );
+  const activeCloseoutCloudRegisterSessionId =
+    getCloseoutCloudRegisterSessionId(activeCloseoutRegisterSession);
   const activeCloseoutCloudRegisterSessionCode =
     getCloseoutCloudRegisterSessionCode(
       activeCloseoutRegisterSession,
@@ -5248,14 +5260,12 @@ export function useRegisterViewModel(): RegisterViewModel {
         localRegisterReadModel,
       ),
     );
-  const activeCloseoutRegisterSessionCodeScope:
-    | "cloud"
-    | "local"
-    | undefined = activeCloseoutRegisterSessionCode
-    ? activeCloseoutCloudRegisterSessionCode
-      ? "cloud"
-      : "local"
-    : undefined;
+  const activeCloseoutRegisterSessionCodeScope: "cloud" | "local" | undefined =
+    activeCloseoutRegisterSessionCode
+      ? activeCloseoutCloudRegisterSessionCode
+        ? "cloud"
+        : "local"
+      : undefined;
   const shouldShowDrawerGate = Boolean(
     requiresDrawerGate ||
     activeCloseoutRegisterSession ||
@@ -5271,7 +5281,8 @@ export function useRegisterViewModel(): RegisterViewModel {
     "pendingVoidApprovals" in saleUsableActiveRegisterSession
       ? saleUsableActiveRegisterSession.pendingVoidApprovals
       : null);
-  const activeCloseoutExpectedCash = activeCloseoutRegisterSession?.expectedCash;
+  const activeCloseoutExpectedCash =
+    activeCloseoutRegisterSession?.expectedCash;
   const activeCloseoutPendingCashVoidContext =
     activeCloseoutPendingVoidApprovals
       ? getPendingCashVoidContext({
@@ -5352,9 +5363,10 @@ export function useRegisterViewModel(): RegisterViewModel {
                 activeCloseoutRegisterSession?.variance,
               closeoutNotes,
               closeoutSubmittedReason: activeCloseoutSubmittedReason,
-              closeoutSecondaryActionLabel: activeCloseoutCanOpenReplacementDrawer
-                ? "Open replacement drawer"
-                : "Return to sale",
+              closeoutSecondaryActionLabel:
+                activeCloseoutCanOpenReplacementDrawer
+                  ? "Open replacement drawer"
+                  : "Return to sale",
               registerSessionCode: activeCloseoutRegisterSessionCode,
               registerSessionCodeScope: activeCloseoutRegisterSessionCodeScope,
               onCloseoutSecondaryAction: activeCloseoutCanOpenReplacementDrawer
@@ -5397,7 +5409,8 @@ export function useRegisterViewModel(): RegisterViewModel {
                 : handleSubmitRegisterCloseout,
               onReopenRegister: activeCloseoutCanOpenReplacementDrawer
                 ? undefined
-                : isCashierManager && !activeCloseoutRegisterSessionHasSyncReview
+                : isCashierManager &&
+                    !activeCloseoutRegisterSessionHasSyncReview
                   ? handleReopenRegisterCloseout
                   : undefined,
               onSignOut: handleCashierSignOut,
@@ -5609,7 +5622,9 @@ export function useRegisterViewModel(): RegisterViewModel {
         }
       : null;
 
-  const readinessGuardCandidateReason: RegisterReadinessGuardState["reason"] | null =
+  const readinessGuardCandidateReason:
+    | RegisterReadinessGuardState["reason"]
+    | null =
     !isTransactionCompleted &&
     cashierPresenceRestore.status === "pending" &&
     !staffProfileId &&
@@ -5770,8 +5785,7 @@ export function useRegisterViewModel(): RegisterViewModel {
           : {}),
         ...(localRuntimeSyncSource?.debug?.activeRegisterSessionRepair
           ? {
-              repair:
-                localRuntimeSyncSource.debug.activeRegisterSessionRepair,
+              repair: localRuntimeSyncSource.debug.activeRegisterSessionRepair,
             }
           : {}),
       },
@@ -5872,7 +5886,8 @@ export function useRegisterViewModel(): RegisterViewModel {
       isSearchLoading: isRegisterSearchLoading,
       isSearchReady: isRegisterCatalogReady,
       canQuickAddProduct: terminalCanTransactProducts && isCashierManager,
-      canAddPendingCheckoutItem: terminalCanTransactProducts && isCashierManager,
+      canAddPendingCheckoutItem:
+        terminalCanTransactProducts && isCashierManager,
       pendingCheckoutContext:
         staffProfileId && terminal?._id && activeRegisterSessionId
           ? {

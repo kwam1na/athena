@@ -14,6 +14,8 @@ type RegisterCatalogRow = {
   productId: Id<"product">;
   inventoryImportProvisionalSkuId?: InventoryImportProvisionalSkuId;
   pendingCheckoutItemId?: Id<"posPendingCheckoutItem">;
+  pendingCheckoutAliasState?: "linked_to_catalog";
+  linkedPendingCheckoutItemIds?: Array<Id<"posPendingCheckoutItem">>;
   name: string;
   sku: string;
   barcode: string;
@@ -64,7 +66,12 @@ type InventoryImportProvisionalSku = {
 
 type PosPendingCheckoutItem = Pick<
   Doc<"posPendingCheckoutItem">,
-  "_id" | "provisionalProductSkuId" | "provisionalPrice" | "status" | "storeId"
+  | "_id"
+  | "approvedProductSkuId"
+  | "provisionalProductSkuId"
+  | "provisionalPrice"
+  | "status"
+  | "storeId"
 >;
 
 export const REGISTER_CATALOG_AVAILABILITY_LIMIT = 50;
@@ -98,17 +105,29 @@ async function readCategoryDoc(
 }
 
 function mapProjectionToRegisterCatalogRow(args: {
+  linkedPendingCheckoutItemIds?: Array<Id<"posPendingCheckoutItem">>;
   pendingCheckoutItem?: PosPendingCheckoutItem;
   projection: Doc<"productSkuSearch">;
 }): RegisterCatalogRow {
+  const linkedPendingCheckoutItemIds =
+    args.linkedPendingCheckoutItemIds?.filter(Boolean) ?? [];
+  const pendingCheckoutItemId =
+    args.pendingCheckoutItem?._id ?? linkedPendingCheckoutItemIds[0];
+
   return {
     id: args.projection.productSkuId,
     productSkuId: args.projection.productSkuId,
     skuId: args.projection.productSkuId,
     productId: args.projection.productId,
-    ...(args.pendingCheckoutItem
-      ? { pendingCheckoutItemId: args.pendingCheckoutItem._id }
-      : {}),
+    ...(pendingCheckoutItemId ? { pendingCheckoutItemId } : {}),
+    ...(!args.pendingCheckoutItem && linkedPendingCheckoutItemIds.length > 0
+      ? {
+          pendingCheckoutAliasState: "linked_to_catalog" as const,
+          linkedPendingCheckoutItemIds,
+        }
+      : linkedPendingCheckoutItemIds.length > 0
+        ? { linkedPendingCheckoutItemIds }
+        : {}),
     name: args.projection.productName,
     sku: args.projection.sku ?? "",
     barcode: args.projection.barcode ?? "",
@@ -434,6 +453,20 @@ async function queryActivePendingCheckoutItemsForStore(
   return rows.flat();
 }
 
+async function queryLinkedPendingCheckoutItemsForStore(
+  ctx: QueryCtx,
+  args: {
+    storeId: Id<"store">;
+  },
+) {
+  return ctx.db
+    .query("posPendingCheckoutItem")
+    .withIndex("by_storeId_status_approvedProductSkuId", (q) =>
+      q.eq("storeId", args.storeId).eq("status", "linked_to_catalog"),
+    )
+    .take(5_000);
+}
+
 async function readActivePendingCheckoutItemForStoreSku(
   ctx: QueryCtx,
   args: {
@@ -514,6 +547,22 @@ export async function listRegisterCatalog(
           : [],
     ),
   );
+  const linkedPendingCheckoutItemIdsBySkuId = new Map<
+    Id<"productSku">,
+    Array<Id<"posPendingCheckoutItem">>
+  >();
+  for (const item of await queryLinkedPendingCheckoutItemsForStore(ctx, args)) {
+    if (!item.approvedProductSkuId) {
+      continue;
+    }
+    const linkedIds =
+      linkedPendingCheckoutItemIdsBySkuId.get(item.approvedProductSkuId) ?? [];
+    linkedIds.push(item._id);
+    linkedPendingCheckoutItemIdsBySkuId.set(
+      item.approvedProductSkuId,
+      linkedIds,
+    );
+  }
   const trustedAvailableSkuIds = new Set<Id<"productSku">>();
 
   const catalogProjectionSnapshot = await listScopedRegisterCatalogProjections(
@@ -531,6 +580,9 @@ export async function listRegisterCatalog(
     rows.push(
       mapProjectionToRegisterCatalogRow({
         projection,
+        linkedPendingCheckoutItemIds: linkedPendingCheckoutItemIdsBySkuId.get(
+          projection.productSkuId,
+        ),
         pendingCheckoutItem: pendingCheckoutItemsBySkuId.get(
           projection.productSkuId,
         ),

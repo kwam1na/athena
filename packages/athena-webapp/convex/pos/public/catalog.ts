@@ -79,6 +79,10 @@ const registerCatalogRowValidator = v.object({
     v.id("inventoryImportProvisionalSku"),
   ),
   pendingCheckoutItemId: v.optional(v.id("posPendingCheckoutItem")),
+  pendingCheckoutAliasState: v.optional(v.literal("linked_to_catalog")),
+  linkedPendingCheckoutItemIds: v.optional(
+    v.array(v.id("posPendingCheckoutItem")),
+  ),
   name: v.string(),
   sku: v.string(),
   barcode: v.string(),
@@ -1042,12 +1046,15 @@ export const resolvePendingCheckoutItemReview = mutation({
         args.approvedProductSkuId !== item.approvedProductSkuId);
     let retiredLookupAliasId: Id<"posPendingCheckoutLookupAlias"> | null = null;
     if (shouldRetirePriorLinkedLookup) {
-      retiredLookupAliasId = await retirePendingCheckoutLookupAliasForItem(ctx, {
-        lookupCode: item.lookupCode,
-        now: reviewedAt,
-        pendingCheckoutItemId: item._id,
-        storeId: args.storeId,
-      });
+      retiredLookupAliasId = await retirePendingCheckoutLookupAliasForItem(
+        ctx,
+        {
+          lookupCode: item.lookupCode,
+          now: reviewedAt,
+          pendingCheckoutItemId: item._id,
+          storeId: args.storeId,
+        },
+      );
 
       if (item.lookupCode && item.approvedProductSkuId) {
         const priorApprovedSku = await ctx.db.get(

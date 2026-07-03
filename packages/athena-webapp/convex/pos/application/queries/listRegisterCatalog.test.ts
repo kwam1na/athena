@@ -110,9 +110,7 @@ function createRegisterCatalogCtx(
         productSkuId: sku._id,
         productSubcategoryId: product.subcategoryId ?? "subcategory-missing",
         quantityAvailable:
-          typeof sku.quantityAvailable === "number"
-            ? sku.quantityAvailable
-            : 0,
+          typeof sku.quantityAvailable === "number" ? sku.quantityAvailable : 0,
         searchText: "",
         size: sku.size,
         sku: sku.sku,
@@ -562,6 +560,77 @@ describe("listRegisterCatalog", () => {
 
     expect(rows[0]).not.toHaveProperty("inStock");
     expect(rows[0]).not.toHaveProperty("quantityAvailable");
+  });
+
+  it("marks trusted SKU rows that represent linked pending checkout aliases", async () => {
+    const { ctx } = createRegisterCatalogCtx({
+      category: [
+        {
+          _id: "category-store-a",
+          storeId: "store-a",
+          name: "Wigs",
+          slug: "wigs",
+        },
+      ],
+      product: [
+        {
+          _id: "product-live",
+          storeId: "store-a",
+          categoryId: "category-store-a",
+          description: "Trusted catalog product",
+          name: "Yeeeee",
+        },
+      ],
+      productSku: [
+        {
+          _id: "sku-live",
+          storeId: "store-a",
+          productId: "product-live",
+          sku: "6N2Y-C0K-1T4",
+          barcode: "111",
+          images: [],
+          price: 400,
+          quantityAvailable: 2,
+        },
+      ],
+      posPendingCheckoutItem: [
+        {
+          _id: "pending-linked-1",
+          storeId: "store-a",
+          status: "linked_to_catalog",
+          provisionalProductSkuId: "sku-pending-old-1",
+          approvedProductSkuId: "sku-live",
+          provisionalPrice: 400,
+        },
+        {
+          _id: "pending-linked-2",
+          storeId: "store-a",
+          status: "linked_to_catalog",
+          provisionalProductSkuId: "sku-pending-old-2",
+          approvedProductSkuId: "sku-live",
+          provisionalPrice: 400,
+        },
+      ],
+    });
+
+    const rows = await listRegisterCatalog(ctx, {
+      storeId: "store-a" as Id<"store">,
+    });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      id: "sku-live",
+      productSkuId: "sku-live",
+      skuId: "sku-live",
+      productId: "product-live",
+      name: "Yeeeee",
+      sku: "6N2Y-C0K-1T4",
+      price: 400,
+      availabilityPolicy: "trusted_inventory",
+      pendingCheckoutAliasState: "linked_to_catalog",
+      pendingCheckoutItemId: "pending-linked-1",
+      linkedPendingCheckoutItemIds: ["pending-linked-1", "pending-linked-2"],
+    });
   });
 
   it("surfaces active provisional import SKUs without shadowing trusted inventory", async () => {

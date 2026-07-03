@@ -5,6 +5,7 @@ import type { PosLocalEventRecord } from "@/lib/pos/infrastructure/local/posLoca
 import type { PosLocalRegisterReadModel } from "@/lib/pos/infrastructure/local/registerReadModel";
 
 import {
+  buildCatalogRepresentedPendingCheckoutItemIds,
   cartItemsFromLocalRegisterModel,
   mapLocalPendingCheckoutEventsToProducts,
   productCartSourceKey,
@@ -41,11 +42,11 @@ function readModel(
     errors: [],
     registerState: {} as PosLocalRegisterReadModel["registerState"],
     sourceEvents: [],
-    syncStatus: ({
+    syncStatus: {
       lastSyncedSequence: 0,
       pendingEventCount: 0,
       status: "idle",
-    } as unknown) as PosLocalRegisterReadModel["syncStatus"],
+    } as unknown as PosLocalRegisterReadModel["syncStatus"],
     ...overrides,
   };
 }
@@ -65,7 +66,9 @@ describe("registerCartProjection", () => {
   it("separates trusted, provisional import, and pending checkout sources", () => {
     expect(productCartSourceKey({})).toBe("trusted_inventory");
     expect(
-      productCartSourceKey({ inventoryImportProvisionalSkuId: "provisional-1" }),
+      productCartSourceKey({
+        inventoryImportProvisionalSkuId: "provisional-1",
+      }),
     ).toBe("provisional_import:provisional-1");
     expect(productCartSourceKey({ pendingCheckoutItemId: "pending-1" })).toBe(
       "pending_checkout:pending-1",
@@ -91,13 +94,37 @@ describe("registerCartProjection", () => {
     ).toBe("trusted_inventory");
   });
 
+  it("tracks pending checkout items already represented by catalog rows", () => {
+    const representedIds = buildCatalogRepresentedPendingCheckoutItemIds([
+      {
+        pendingCheckoutItemId: "pending-primary",
+        linkedPendingCheckoutItemIds: [
+          "pending-linked-1",
+          null,
+          undefined,
+          "pending-linked-2",
+        ],
+      },
+      {
+        pendingCheckoutItemId: null,
+        linkedPendingCheckoutItemIds: null,
+      },
+    ]);
+
+    expect([...representedIds].sort()).toEqual([
+      "pending-linked-1",
+      "pending-linked-2",
+      "pending-primary",
+    ]);
+  });
+
   it("preserves explicit local removals when merging current cart items", () => {
     const result = cartItemsFromLocalRegisterModel(
       readModel({
-        activeSale: ({
+        activeSale: {
           items: [],
           localPosSessionId: "local-sale-1",
-        } as unknown) as PosLocalRegisterReadModel["activeSale"],
+        } as unknown as PosLocalRegisterReadModel["activeSale"],
         sourceEvents: [
           localEvent({
             localPosSessionId: "local-sale-1",
@@ -120,7 +147,7 @@ describe("registerCartProjection", () => {
   it("keeps linked pending alias local cart items on the trusted source lane", () => {
     const result = cartItemsFromLocalRegisterModel(
       readModel({
-        activeSale: ({
+        activeSale: {
           items: [
             {
               barcode: "111",
@@ -136,16 +163,16 @@ describe("registerCartProjection", () => {
             },
           ],
           localPosSessionId: "local-sale-1",
-        } as unknown) as PosLocalRegisterReadModel["activeSale"],
+        } as unknown as PosLocalRegisterReadModel["activeSale"],
       }),
       "local-sale-1",
       [],
     );
 
     expect(result).toHaveLength(1);
-    expect(
-      result?.[0] ? renderedCartLineSourceKey(result[0]) : null,
-    ).toBe("trusted_inventory");
+    expect(result?.[0] ? renderedCartLineSourceKey(result[0]) : null).toBe(
+      "trusted_inventory",
+    );
     expect(result?.[0]).toMatchObject({
       pendingCheckoutAliasState: "linked_to_catalog",
       pendingCheckoutItemId: "pending-1",
@@ -156,7 +183,7 @@ describe("registerCartProjection", () => {
   it("lets the latest zero-quantity cart event suppress a stale projected local item", () => {
     const result = cartItemsFromLocalRegisterModel(
       readModel({
-        activeSale: ({
+        activeSale: {
           items: [
             {
               barcode: "111",
@@ -170,7 +197,7 @@ describe("registerCartProjection", () => {
             },
           ],
           localPosSessionId: "local-sale-1",
-        } as unknown) as PosLocalRegisterReadModel["activeSale"],
+        } as unknown as PosLocalRegisterReadModel["activeSale"],
         sourceEvents: [
           localEvent({
             localEventId: "event-add",
