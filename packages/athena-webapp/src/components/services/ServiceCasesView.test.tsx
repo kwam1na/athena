@@ -1,8 +1,25 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { ReactNode } from "react";
 import { GENERIC_UNEXPECTED_ERROR_MESSAGE, userError } from "~/shared/commandResult";
 import { ServiceCasesViewContent } from "./ServiceCasesView";
+
+vi.mock("../common/PageLevelHeader", () => ({
+  PageLevelHeader: ({ title }: { title: string }) => <h1>{title}</h1>,
+  PageWorkspaceGrid: ({ children }: { children: ReactNode }) => (
+    <div>{children}</div>
+  ),
+  PageWorkspaceMain: ({ children }: { children: ReactNode }) => (
+    <section>{children}</section>
+  ),
+  PageWorkspaceRail: ({ children }: { children: ReactNode }) => (
+    <aside>{children}</aside>
+  ),
+  PageWorkspace: ({ children }: { children: ReactNode }) => (
+    <div>{children}</div>
+  ),
+}));
 
 const baseProps = {
   catalogItems: [

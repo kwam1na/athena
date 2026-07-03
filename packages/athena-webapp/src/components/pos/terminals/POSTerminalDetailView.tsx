@@ -1076,18 +1076,19 @@ function ConflictSection({
   const [isLocalReviewListExpanded, setIsLocalReviewListExpanded] =
     useState(false);
   const runtimeLocalReviewEvents = runtimeStatus?.sync.reviewEvents ?? [];
-  const recoveryPreview = detail?.recovery ?? detail?.recoveryPreview;
+  const recoveryPreview = detail?.recoveryPreview ?? detail?.recovery;
   const collectedLocalReviewEvents =
-    recoveryPreview?.commandStatus?.commandType ===
-      "collect_local_review" &&
+    recoveryPreview?.commandStatus?.commandType === "collect_local_review" &&
     recoveryPreview.commandStatus.verificationStatus === "verified"
       ? (recoveryPreview.commandStatus.localReviewEvents ?? [])
       : [];
+  const runtimeReviewCount = runtimeStatus?.sync.reviewEventCount ?? 0;
   const localReviewEvents =
     runtimeLocalReviewEvents.length > 0
       ? runtimeLocalReviewEvents
-      : collectedLocalReviewEvents;
-  const runtimeReviewCount = runtimeStatus?.sync.reviewEventCount ?? 0;
+      : runtimeStatus == null || runtimeReviewCount > 0
+        ? collectedLocalReviewEvents
+        : [];
   const missingRuntimeReviewDetails =
     runtimeReviewCount > 0 && localReviewEvents.length === 0;
   const unresolvedConflicts = syncEvidence.unresolvedConflicts ?? [];
@@ -1228,7 +1229,9 @@ function ConflictSection({
               <div className="flex justify-end">
                 <AttentionReasonAction
                   detail={detail}
-                  onIssueTerminalRecoveryCommand={onIssueTerminalRecoveryCommand}
+                  onIssueTerminalRecoveryCommand={
+                    onIssueTerminalRecoveryCommand
+                  }
                   reason={localReviewActionReason}
                 />
               </div>
@@ -1383,7 +1386,8 @@ function isValidLocalReviewClearAllAction(
     return false;
   }
   const eventIds = action.commandContext.localReviewEventIds ?? [];
-  const clearedEventIds = action.expectedEvidence.localReviewClearedEventIds ?? [];
+  const clearedEventIds =
+    action.expectedEvidence.localReviewClearedEventIds ?? [];
   return (
     eventIds.length > 0 &&
     action.commandContext.localReviewClearLimit === eventIds.length &&
@@ -1728,7 +1732,9 @@ function AttentionReasonAction({
       return (
         <div className="grid justify-items-start gap-layout-xs">
           <Button
-            disabled={!canIssue || !onIssueTerminalRecoveryCommand || isIssuingCommand}
+            disabled={
+              !canIssue || !onIssueTerminalRecoveryCommand || isIssuingCommand
+            }
             onClick={() => {
               void issueRecoveryCommand();
             }}
@@ -1864,10 +1870,7 @@ function getAttentionReasonCommandType(reason: TerminalHealthAttentionReason) {
   ) {
     return "repair_terminal_seed";
   }
-  if (
-    reason.type === "sync_failed" ||
-    reason.type === "sync_unavailable"
-  ) {
+  if (reason.type === "sync_failed" || reason.type === "sync_unavailable") {
     return "retry_sync";
   }
   return null;

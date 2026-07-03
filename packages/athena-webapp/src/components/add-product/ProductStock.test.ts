@@ -77,6 +77,49 @@ describe("ProductStock money inputs", () => {
     });
   });
 
+  it("treats linked pending checkout provisional SKUs as reviewed", () => {
+    const state = resolveTrustedInventoryReviewState({
+      binding: {
+        state: "unique",
+        activeRowCount: 1,
+        row: {
+          _id: "pending-1" as never,
+          importKey: "pending-checkout",
+          importedQuantity: 1,
+          linkedTarget: {
+            productId: "product-linked-1" as never,
+            productName: "Trusted item",
+            sku: "TRUSTED-1",
+            skuId: "sku-linked-1" as never,
+          },
+          provisionalSoldQuantity: 1,
+          rowNumber: 1,
+          saleCount: 1,
+          status: "linked_to_catalog",
+        },
+        saleEvidenceFingerprint: "sale-fingerprint",
+        trustedSkuFingerprint: "sku-fingerprint",
+      },
+      variant: {
+        id: "sku-1",
+        existsInDB: true,
+        isVisible: false,
+        stock: 0,
+        quantityAvailable: 0,
+        netPrice: 25,
+        cost: 10,
+      },
+    });
+
+    expect(state).toMatchObject({
+      action: "none",
+      ctaLabel: "Linked to trusted SKU",
+      disabled: true,
+      message: "Pending checkout item is linked to an existing trusted SKU.",
+      status: "success",
+    });
+  });
+
   it("routes the trusted inventory CTA through make-visible, refresh, and finalize actions", () => {
     const makeVisibleState = resolveTrustedInventoryReviewState({
       binding: undefined,

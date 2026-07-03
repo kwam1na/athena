@@ -290,6 +290,7 @@ export function ServiceCasesViewContent({
       <FadeIn className="container mx-auto py-layout-xl">
         <PageWorkspace>
           <PageLevelHeader
+            showBackButton
             eyebrow="Service Ops"
             title="Active Cases"
             description="Open service cases, review payment and approval pressure, and run the actions needed to move work forward."
@@ -395,7 +396,9 @@ export function ServiceCasesViewContent({
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="case-service-catalog">Service catalog</Label>
+                    <Label htmlFor="case-service-catalog">
+                      Service catalog
+                    </Label>
                     <Select
                       onValueChange={(value) =>
                         setCreateForm((current) => ({
@@ -525,9 +528,7 @@ export function ServiceCasesViewContent({
                           <>
                             {" "}
                             ·{" "}
-                            <span
-                              onClick={(event) => event.stopPropagation()}
-                            >
+                            <span onClick={(event) => event.stopPropagation()}>
                               <WorkflowTraceRouteLink
                                 className="font-medium text-primary"
                                 traceId={serviceCase.workflowTraceId}
@@ -578,8 +579,8 @@ export function ServiceCasesViewContent({
                                 .join(" · ")}
                             </p>
                           </div>
-                          {selectedCaseDetails?.workflowTraceId ??
-                          selectedCaseSummary.workflowTraceId ? (
+                          {(selectedCaseDetails?.workflowTraceId ??
+                          selectedCaseSummary.workflowTraceId) ? (
                             <WorkflowTraceRouteLink
                               className="shrink-0 text-xs font-medium text-primary"
                               traceId={

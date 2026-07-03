@@ -183,6 +183,7 @@ export function ServiceCatalogViewContent({
       <FadeIn className="container mx-auto py-layout-xl">
         <PageWorkspace>
           <PageLevelHeader
+            showBackButton
             eyebrow="Service Ops"
             title="Catalog Management"
             description="Maintain the services staff can book or run, including duration, pricing, deposits, and approval rules."
@@ -493,11 +494,7 @@ export function ServiceCatalogViewContent({
                         <p className="text-sm text-muted-foreground">
                           {`Showing ${visibleServiceCatalogItems.length} of ${items.length} services.`}
                         </p>
-                        <Button
-                          asChild
-                          size="sm"
-                          variant="utility"
-                        >
+                        <Button asChild size="sm" variant="utility">
                           <Link
                             aria-label="Open all services workspace"
                             search={{ o: getOrigin() } as never}

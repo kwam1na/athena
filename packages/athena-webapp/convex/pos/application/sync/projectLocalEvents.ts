@@ -326,15 +326,23 @@ async function projectExpenseRecorded(
   repository: SyncProjectionRepository,
   args: ExpenseRecordedArgs,
 ): Promise<ProjectionResult> {
-  const existingTransactionMapping = await findMappingForTerminal(repository, args, {
-    localIdKind: "expenseTransaction",
-    localId: args.event.payload.localExpenseEventId,
-  });
+  const existingTransactionMapping = await findMappingForTerminal(
+    repository,
+    args,
+    {
+      localIdKind: "expenseTransaction",
+      localId: args.event.payload.localExpenseEventId,
+    },
+  );
   if (existingTransactionMapping) {
-    const existingSessionMapping = await findMappingForTerminal(repository, args, {
-      localIdKind: "expenseSession",
-      localId: args.event.payload.localExpenseSessionId,
-    });
+    const existingSessionMapping = await findMappingForTerminal(
+      repository,
+      args,
+      {
+        localIdKind: "expenseSession",
+        localId: args.event.payload.localExpenseSessionId,
+      },
+    );
     return {
       status: "projected",
       mappings: [
@@ -385,8 +393,7 @@ async function projectExpenseRecorded(
           localExpenseEventId: args.event.payload.localExpenseEventId,
           localTransactionItemId: item.localTransactionItemId,
           pendingCheckoutItemId: item.pendingCheckoutItemId,
-          inventoryImportProvisionalSkuId:
-            item.inventoryImportProvisionalSkuId,
+          inventoryImportProvisionalSkuId: item.inventoryImportProvisionalSkuId,
           productId: item.productId,
           productSkuId: item.productSkuId,
         },
@@ -425,7 +432,8 @@ async function projectExpenseRecorded(
     ) {
       const conflict = await createConflict(repository, args, {
         conflictType: "inventory",
-        summary: "Expense line item catalog reference does not belong to this store.",
+        summary:
+          "Expense line item catalog reference does not belong to this store.",
         details: {
           blocksProjection: true,
           productId,
@@ -444,7 +452,8 @@ async function projectExpenseRecorded(
       if (!normalizedPendingCheckoutItemId) {
         const conflict = await createConflict(repository, args, {
           conflictType: "inventory",
-          summary: "Expense pending checkout reference does not match this line.",
+          summary:
+            "Expense pending checkout reference does not match this line.",
           details: {
             blocksProjection: true,
             pendingCheckoutItemId: item.pendingCheckoutItemId,
@@ -465,7 +474,8 @@ async function projectExpenseRecorded(
       ) {
         const conflict = await createConflict(repository, args, {
           conflictType: "inventory",
-          summary: "Expense pending checkout reference does not match this line.",
+          summary:
+            "Expense pending checkout reference does not match this line.",
           details: {
             blocksProjection: true,
             pendingCheckoutItemId: item.pendingCheckoutItemId,
@@ -490,10 +500,12 @@ async function projectExpenseRecorded(
       if (!normalizedInventoryImportProvisionalSkuId) {
         const conflict = await createConflict(repository, args, {
           conflictType: "inventory",
-          summary: "Expense provisional import reference does not match this line.",
+          summary:
+            "Expense provisional import reference does not match this line.",
           details: {
             blocksProjection: true,
-            inventoryImportProvisionalSkuId: item.inventoryImportProvisionalSkuId,
+            inventoryImportProvisionalSkuId:
+              item.inventoryImportProvisionalSkuId,
             productId,
             productSkuId,
           },
@@ -513,10 +525,12 @@ async function projectExpenseRecorded(
       ) {
         const conflict = await createConflict(repository, args, {
           conflictType: "inventory",
-          summary: "Expense provisional import reference does not match this line.",
+          summary:
+            "Expense provisional import reference does not match this line.",
           details: {
             blocksProjection: true,
-            inventoryImportProvisionalSkuId: item.inventoryImportProvisionalSkuId,
+            inventoryImportProvisionalSkuId:
+              item.inventoryImportProvisionalSkuId,
             productId,
             productSkuId,
           },
@@ -553,7 +567,10 @@ async function projectExpenseRecorded(
     const inventoryAvailable =
       aggregate.inventoryCount >= aggregate.requestedQuantity &&
       aggregate.quantityAvailable >= aggregate.requestedQuantity;
-    trustedExpenseSkuAvailability.set(aggregate.productSkuId, inventoryAvailable);
+    trustedExpenseSkuAvailability.set(
+      aggregate.productSkuId,
+      inventoryAvailable,
+    );
 
     if (!inventoryAvailable) {
       reviewConflicts.push(
@@ -573,10 +590,14 @@ async function projectExpenseRecorded(
     }
   }
 
-  const existingSessionMapping = await findMappingForTerminal(repository, args, {
-    localIdKind: "expenseSession",
-    localId: args.event.payload.localExpenseSessionId,
-  });
+  const existingSessionMapping = await findMappingForTerminal(
+    repository,
+    args,
+    {
+      localIdKind: "expenseSession",
+      localId: args.event.payload.localExpenseSessionId,
+    },
+  );
   const existingSession = await repository.getExpenseSessionByLocalId({
     storeId: args.storeId,
     terminalId: args.terminalId,
@@ -933,7 +954,9 @@ async function getOpenRegisterCloseoutReviewState(
   };
 }
 
-function getConflictCloseoutReviewBoundaryAt(conflict: LocalSyncConflictRecord) {
+function getConflictCloseoutReviewBoundaryAt(
+  conflict: LocalSyncConflictRecord,
+) {
   return typeof conflict.details.closeoutOccurredAt === "number"
     ? conflict.details.closeoutOccurredAt
     : conflict.createdAt;
@@ -1001,7 +1024,8 @@ async function projectRegisterOpened(
     ) {
       const conflict = await createConflict(repository, args, {
         conflictType: "duplicate_local_id",
-        summary: "Local register session id was reused by a different synced register open.",
+        summary:
+          "Local register session id was reused by a different synced register open.",
         details: {
           existingLocalEventId: existing.localEventId,
           localIdKind: "registerSession",
@@ -1026,11 +1050,11 @@ async function projectRegisterOpened(
     );
     if (
       registerSession &&
-      await canReuseCloudRegisterSessionForLocalOpen(
+      (await canReuseCloudRegisterSessionForLocalOpen(
         repository,
         args,
         registerSession,
-      )
+      ))
     ) {
       const mapping = await createMapping(repository, args, {
         localIdKind: "registerSession",
@@ -1311,15 +1335,15 @@ async function projectSaleCompleted(
     saleSession,
     session: sessionResolution,
   });
-	  const itemMappings = await persistSaleItemsAndInventory(repository, args, {
-	    catalogItemsByLocalId: validation.catalogValidation.itemsByLocalId,
-	    inventoryValidation,
-	    payload: validation.payload,
-	    sale,
-	    saleSession,
-	    session: sessionResolution,
-	    store: validation.store,
-	  });
+  const itemMappings = await persistSaleItemsAndInventory(repository, args, {
+    catalogItemsByLocalId: validation.catalogValidation.itemsByLocalId,
+    inventoryValidation,
+    payload: validation.payload,
+    sale,
+    saleSession,
+    session: sessionResolution,
+    store: validation.store,
+  });
   const serviceProjection = await persistSaleServiceLines(repository, args, {
     payload: validation.payload,
     payments,
@@ -1354,7 +1378,7 @@ async function projectSaleCompleted(
     ...(validation.catalogValidation.conflict
       ? [validation.catalogValidation.conflict]
       : []),
-	    ...(inventoryValidation.conflict ? [inventoryValidation.conflict] : []),
+    ...(inventoryValidation.conflict ? [inventoryValidation.conflict] : []),
     ...(payments.paymentConflict ? [payments.paymentConflict] : []),
   ];
 
@@ -1555,7 +1579,8 @@ async function resolveSaleRegisterAndSession(
     return conflictResult(conflict);
   }
 
-  const registerSessionSaleUsable = isRegisterSessionSaleUsable(registerSession);
+  const registerSessionSaleUsable =
+    isRegisterSessionSaleUsable(registerSession);
   const reviewedClosingRegisterSaleAllowed =
     args.options?.allowReviewedClosingRegisterSaleProjection === true &&
     registerSession.status === "closing";
@@ -1673,7 +1698,8 @@ async function resolveSaleRegisterAndSession(
   if (existingPosSession?.status === "void") {
     const conflict = await createConflict(repository, args, {
       conflictType: "permission",
-      summary: "Cleared POS sessions cannot be completed from synced local history.",
+      summary:
+        "Cleared POS sessions cannot be completed from synced local history.",
       details: {
         localPosSessionId: payload.localPosSessionId,
         localTransactionId: payload.localTransactionId,
@@ -1800,7 +1826,8 @@ async function projectSaleCleared(
   ) {
     const conflict = await createConflict(repository, args, {
       conflictType: "permission",
-      summary: "Completed POS sessions cannot be cleared from synced local history.",
+      summary:
+        "Completed POS sessions cannot be cleared from synced local history.",
       details: {
         localPosSessionId: args.event.payload.localPosSessionId,
         posSessionId: existingPosSession._id,
@@ -1980,7 +2007,10 @@ function planSalePaymentAllocations(args: {
       serviceTargets.reduce((sum, target) => sum + target.remaining, 0),
   );
   const retailAllocations: PlannedPaymentAllocation[] = [];
-  const serviceAllocationsByLineKey = new Map<string, PlannedPaymentAllocation[]>();
+  const serviceAllocationsByLineKey = new Map<
+    string,
+    PlannedPaymentAllocation[]
+  >();
 
   for (const payment of normalizedPayments) {
     let remainingPayment = roundMoney(payment.amount);
@@ -2067,7 +2097,9 @@ async function persistSaleRecord(
   const transactionId = await repository.createTransaction({
     transactionNumber: payload.receiptNumber,
     storeId: args.storeId,
-    ...(saleSession.posSessionId ? { sessionId: saleSession.posSessionId } : {}),
+    ...(saleSession.posSessionId
+      ? { sessionId: saleSession.posSessionId }
+      : {}),
     registerSessionId: session.registerSession._id,
     staffProfileId: args.event.staffProfileId,
     registerNumber: session.resolvedRegisterNumber,
@@ -2122,32 +2154,37 @@ async function persistSaleRecord(
 async function persistSaleItemsAndInventory(
   repository: SyncProjectionRepository,
   args: SaleCompletedArgs,
-	  input: {
-	    catalogItemsByLocalId: Map<string, CanonicalSaleItem>;
-	    inventoryValidation: SaleInventoryValidation;
-	    payload: PosLocalSalePayload;
-	    sale: PersistedSale;
-	    saleSession: PersistedSaleSession;
-	    session: SaleSessionResolution;
-	    store: StoreRecord;
-	  },
-	): Promise<LocalSyncMappingRecord[]> {
-	  const { catalogItemsByLocalId, inventoryValidation, payload, sale, saleSession } =
-	    input;
-	  const itemMappings: LocalSyncMappingRecord[] = [];
-	  const consumedHoldQuantities =
+  input: {
+    catalogItemsByLocalId: Map<string, CanonicalSaleItem>;
+    inventoryValidation: SaleInventoryValidation;
+    payload: PosLocalSalePayload;
+    sale: PersistedSale;
+    saleSession: PersistedSaleSession;
+    session: SaleSessionResolution;
+    store: StoreRecord;
+  },
+): Promise<LocalSyncMappingRecord[]> {
+  const {
+    catalogItemsByLocalId,
+    inventoryValidation,
+    payload,
+    sale,
+    saleSession,
+  } = input;
+  const itemMappings: LocalSyncMappingRecord[] = [];
+  const consumedHoldQuantities =
     inventoryValidation.stockMutationAllowed &&
     saleSession.reusedExistingSession &&
     saleSession.posSessionId
       ? await repository.consumeInventoryHoldsForSession({
           sessionId: saleSession.posSessionId,
-        items: trustedInventorySaleItems(payload).map((item) => ({
-          productSkuId: item.productSkuId as Id<"productSku">,
-          quantity: item.quantity,
-        })),
-        now: args.event.occurredAt,
-      })
-    : new Map<Id<"productSku">, number>();
+          items: trustedInventorySaleItems(payload).map((item) => ({
+            productSkuId: item.productSkuId as Id<"productSku">,
+            quantity: item.quantity,
+          })),
+          now: args.event.occurredAt,
+        })
+      : new Map<Id<"productSku">, number>();
   const pendingEvidenceByItemId = new Map<
     Id<"posPendingCheckoutItem">,
     {
@@ -2270,13 +2307,20 @@ async function persistSaleItemsAndInventory(
   }
 
   if (!inventoryValidation.stockMutationAllowed) {
-    await createSkippedInventoryReviewWorkItem(repository, args, {
-      inventoryValidation,
-      payload,
-      sale,
-      session: input.session,
-      store: input.store,
-    });
+    const reviewWorkItemMapping = await createSkippedInventoryReviewWorkItem(
+      repository,
+      args,
+      {
+        inventoryValidation,
+        payload,
+        sale,
+        session: input.session,
+        store: input.store,
+      },
+    );
+    if (reviewWorkItemMapping) {
+      itemMappings.push(reviewWorkItemMapping);
+    }
     return itemMappings;
   }
 
@@ -2323,9 +2367,9 @@ async function createSkippedInventoryReviewWorkItem(
     session: SaleSessionResolution;
     store: StoreRecord;
   },
-) {
+): Promise<LocalSyncMappingRecord | null> {
   if (!input.store?.organizationId) {
-    return;
+    return null;
   }
 
   const trustedLines = trustedInventorySaleItems(input.payload).map((item) => ({
@@ -2338,32 +2382,32 @@ async function createSkippedInventoryReviewWorkItem(
     unitPrice: item.unitPrice,
   }));
   if (trustedLines.length === 0) {
-    return;
+    return null;
   }
 
   const primarySkippedItem = input.inventoryValidation.skippedMutationItems[0];
   const primaryProductName =
     primarySkippedItem?.productName ?? trustedLines[0]?.productName;
-	  const title = primaryProductName
-	    ? `Review inventory for ${primaryProductName}`
-	    : `Review inventory for sale #${input.payload.receiptNumber}`;
-	  const sourceType = "posTransaction";
-	  const localInventoryReviewWorkItemId = [
-	    input.payload.localTransactionId,
-	    "inventory-review",
-	  ].join(":");
-	  const existingWorkItemMapping = await repository.findMapping({
-	    localId: localInventoryReviewWorkItemId,
-	    localIdKind: "inventoryReviewWorkItem",
-	    localRegisterSessionId: args.event.localRegisterSessionId,
-	    storeId: args.storeId,
-	    terminalId: args.terminalId,
-	  });
-	  if (existingWorkItemMapping) {
-	    return;
-	  }
+  const title = primaryProductName
+    ? `Review inventory for ${primaryProductName}`
+    : `Review inventory for sale #${input.payload.receiptNumber}`;
+  const sourceType = "posTransaction";
+  const localInventoryReviewWorkItemId = [
+    input.payload.localTransactionId,
+    "inventory-review",
+  ].join(":");
+  const existingWorkItemMapping = await repository.findMapping({
+    localId: localInventoryReviewWorkItemId,
+    localIdKind: "inventoryReviewWorkItem",
+    localRegisterSessionId: args.event.localRegisterSessionId,
+    storeId: args.storeId,
+    terminalId: args.terminalId,
+  });
+  if (existingWorkItemMapping) {
+    return existingWorkItemMapping;
+  }
 
-	  const workItemId = await repository.createServiceWorkItem({
+  const workItemId = await repository.createServiceWorkItem({
     approvalState: "not_required",
     createdByStaffProfileId:
       args.options?.reviewActorStaffProfileId ?? args.event.staffProfileId,
@@ -2388,16 +2432,16 @@ async function createSkippedInventoryReviewWorkItem(
     priority: "high",
     status: "open",
     storeId: args.storeId,
-	    title,
-	    type: "synced_sale_inventory_review",
-	  });
-	  await createMapping(repository, args, {
-	    cloudId: workItemId,
-	    cloudTable: "operationalWorkItem",
-	    localId: localInventoryReviewWorkItemId,
-	    localIdKind: "inventoryReviewWorkItem",
-	  });
-	}
+    title,
+    type: "synced_sale_inventory_review",
+  });
+  return createMapping(repository, args, {
+    cloudId: workItemId,
+    cloudTable: "operationalWorkItem",
+    localId: localInventoryReviewWorkItemId,
+    localIdKind: "inventoryReviewWorkItem",
+  });
+}
 
 async function persistSaleServiceLines(
   repository: SyncProjectionRepository,
@@ -2444,7 +2488,8 @@ async function persistSaleServiceLines(
           canonicalLine?.serviceCatalogName ?? line.serviceCatalogName,
         store: input.store,
       }));
-    const serviceCase = existingServiceCase ?? (await repository.getServiceCase(serviceCaseId));
+    const serviceCase =
+      existingServiceCase ?? (await repository.getServiceCase(serviceCaseId));
     const workItemId = serviceCase?.operationalWorkItemId;
     const serviceCaseLineItemId = await repository.createServiceCaseLineItem({
       serviceCaseId,
@@ -2461,7 +2506,8 @@ async function persistSaleServiceLines(
         transactionId: input.sale.transactionId,
         serviceCaseId,
         serviceCatalogId: line.serviceCatalogId,
-        serviceName: canonicalLine?.serviceCatalogName ?? line.serviceCatalogName,
+        serviceName:
+          canonicalLine?.serviceCatalogName ?? line.serviceCatalogName,
         serviceMode: canonicalLine?.serviceMode ?? line.serviceMode,
         pricingSource:
           line.pricingModel === "fixed"
@@ -2496,8 +2542,9 @@ async function persistSaleServiceLines(
       );
     }
 
-    for (const payment of input.payments.serviceAllocationsByLineKey.get(lineKey) ??
-      []) {
+    for (const payment of input.payments.serviceAllocationsByLineKey.get(
+      lineKey,
+    ) ?? []) {
       const allocationId = await repository.createPaymentAllocation({
         storeId: args.storeId,
         organizationId: input.store?.organizationId,
@@ -2715,11 +2762,13 @@ function buildSaleProjectedMessage(args: {
   const lineCount = getSaleLineCount(args.payload);
   const paymentLabel = getPaymentSummaryLabel(args.payments.validPayments);
 
-  return [
-    `Sale${transactionLabel} synced: ${formatSaleLineCount(lineCount)}`,
-    formatSaleTotal(args.currency, args.payload.totals.total),
-    paymentLabel,
-  ].join(", ") + ".";
+  return (
+    [
+      `Sale${transactionLabel} synced: ${formatSaleLineCount(lineCount)}`,
+      formatSaleTotal(args.currency, args.payload.totals.total),
+      paymentLabel,
+    ].join(", ") + "."
+  );
 }
 
 function getSaleLineCount(payload: PosLocalSalePayload) {
@@ -3066,7 +3115,8 @@ async function validateSaleCustomerReference(
   }
 
   for (const line of payload.serviceLines ?? []) {
-    const lineCustomerProfileId = line.customerProfileId ?? payload.customerProfileId;
+    const lineCustomerProfileId =
+      line.customerProfileId ?? payload.customerProfileId;
     if (!lineCustomerProfileId) {
       if (line.existingServiceCaseId) continue;
       return createConflict(repository, args, {
@@ -3079,7 +3129,9 @@ async function validateSaleCustomerReference(
         },
       });
     }
-    const lineCustomer = await repository.getCustomerProfile(lineCustomerProfileId);
+    const lineCustomer = await repository.getCustomerProfile(
+      lineCustomerProfileId,
+    );
     if (!lineCustomer || lineCustomer.storeId !== args.storeId) {
       return createConflict(repository, args, {
         conflictType: "permission",
@@ -3115,12 +3167,15 @@ async function validateSaleCatalogReferences(
   const provisionalImportSkusByLocalId = new Map<
     string,
     NonNullable<
-      Awaited<ReturnType<SyncProjectionRepository["getInventoryImportProvisionalSku"]>>
+      Awaited<
+        ReturnType<SyncProjectionRepository["getInventoryImportProvisionalSku"]>
+      >
     >
   >();
   let priceConflict: LocalSyncConflictRecord | null = null;
   const dualSourceItem = payload.items.find(
-    (item) => item.pendingCheckoutItemId && item.inventoryImportProvisionalSkuId,
+    (item) =>
+      item.pendingCheckoutItemId && item.inventoryImportProvisionalSkuId,
   );
   if (dualSourceItem) {
     return {
@@ -3143,7 +3198,8 @@ async function validateSaleCatalogReferences(
     };
   }
 
-  const mixedInventorySourceSkuId = findMixedTrustedAndProvisionalSkuId(payload);
+  const mixedInventorySourceSkuId =
+    findMixedTrustedAndProvisionalSkuId(payload);
   if (mixedInventorySourceSkuId) {
     return {
       conflict: await createConflict(repository, args, {
@@ -3191,7 +3247,8 @@ async function validateSaleCatalogReferences(
         };
       }
 
-      item.pendingCheckoutItemId = cloudPendingId as Id<"posPendingCheckoutItem">;
+      item.pendingCheckoutItemId =
+        cloudPendingId as Id<"posPendingCheckoutItem">;
       const pendingItem = await repository.getPendingCheckoutItem(
         item.pendingCheckoutItemId as Id<"posPendingCheckoutItem">,
       );
@@ -3204,7 +3261,8 @@ async function validateSaleCatalogReferences(
         return {
           conflict: await createConflict(repository, args, {
             conflictType: "inventory",
-            summary: "Pending checkout item reference does not match this sale line.",
+            summary:
+              "Pending checkout item reference does not match this sale line.",
             details: {
               localTransactionId: payload.localTransactionId,
               pendingCheckoutItemId: item.pendingCheckoutItemId,
@@ -3228,7 +3286,8 @@ async function validateSaleCatalogReferences(
         return {
           conflict: await createConflict(repository, args, {
             conflictType: "inventory",
-            summary: "Pending checkout item reference does not match this sale line.",
+            summary:
+              "Pending checkout item reference does not match this sale line.",
             details: {
               localTransactionId: payload.localTransactionId,
               pendingCheckoutItemId: item.pendingCheckoutItemId,
@@ -3413,7 +3472,9 @@ async function validateSaleCatalogReferences(
     }
 
     if (line.existingServiceCaseId) {
-      const serviceCase = await repository.getServiceCase(line.existingServiceCaseId);
+      const serviceCase = await repository.getServiceCase(
+        line.existingServiceCaseId,
+      );
       if (
         !serviceCase ||
         serviceCase.storeId !== args.storeId ||
@@ -3423,7 +3484,8 @@ async function validateSaleCatalogReferences(
         return {
           conflict: await createConflict(repository, args, {
             conflictType: "permission",
-            summary: "Service case is not available for synced POS service sale.",
+            summary:
+              "Service case is not available for synced POS service sale.",
             details: {
               localTransactionId: payload.localTransactionId,
               existingServiceCaseId: line.existingServiceCaseId,
@@ -3711,9 +3773,7 @@ async function projectRegisterClosed(
       storeId: args.storeId,
     })) ?? [];
 
-  if (
-    closeoutHolds.some((hold) => hold.cashAffecting && hold.count > 0)
-  ) {
+  if (closeoutHolds.some((hold) => hold.cashAffecting && hold.count > 0)) {
     const [store, terminal] = await Promise.all([
       repository.getStore(args.storeId),
       repository.getTerminal(args.terminalId),
@@ -3989,6 +4049,10 @@ async function collectExistingSaleMappings(
   }> = [
     { localIdKind: "posSession", localId: payload.localPosSessionId },
     { localIdKind: "transaction", localId: payload.localTransactionId },
+    {
+      localIdKind: "inventoryReviewWorkItem",
+      localId: `${payload.localTransactionId}:inventory-review`,
+    },
     { localIdKind: "receipt", localId: payload.localReceiptNumber },
     ...payload.items
       .filter((item) => item.localTransactionItemId)

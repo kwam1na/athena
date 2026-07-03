@@ -45,14 +45,16 @@ function approvalRequest(overrides: Partial<QueueTestRow> = {}) {
   } as QueueTestRow;
 }
 
-function createQueueContext(args: {
-  approvalRequests?: QueueTestRow[];
-  stores?: QueueTestRow[];
-  workItems?: QueueTestRow[];
-} = {}) {
-  const stores = args.stores ?? [
-    { _id: "store-1", organizationId: "org-1" },
-  ];
+function createQueueContext(
+  args: {
+    approvalRequests?: QueueTestRow[];
+    products?: QueueTestRow[];
+    stores?: QueueTestRow[];
+    workItems?: QueueTestRow[];
+  } = {},
+) {
+  const stores = args.stores ?? [{ _id: "store-1", organizationId: "org-1" }];
+  const products = args.products ?? [];
   const workItems = args.workItems ?? [];
   const approvalRequests = args.approvalRequests ?? [];
 
@@ -64,6 +66,9 @@ function createQueueContext(args: {
         }
         if (tableName === "operationalWorkItem") {
           return workItems.find((item) => item._id === id) ?? null;
+        }
+        if (tableName === "product") {
+          return products.find((product) => product._id === id) ?? null;
         }
         return null;
       }),
@@ -111,7 +116,9 @@ function createQueueContext(args: {
 
 beforeEach(() => {
   vi.resetAllMocks();
-  vi.mocked(athenaUserAuth.requireAuthenticatedAthenaUserWithCtx).mockResolvedValue({
+  vi.mocked(
+    athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+  ).mockResolvedValue({
     _id: "user-1",
   } as never);
 });
@@ -215,6 +222,19 @@ describe("getQueueSnapshot", () => {
           },
           type: "synced_sale_inventory_review",
         }),
+        workItem({
+          _id: "work-pending-checkout" as Id<"operationalWorkItem">,
+          metadata: {
+            lookupCode: "hodor",
+            pendingCheckoutItemId: "pending-checkout-1",
+            price: 55000,
+            provisionalProductId: "product-pending-1",
+            provisionalProductSkuId: "sku-pending-1",
+            rawPendingCheckoutPayload: { shouldNotLeak: true },
+            totalQuantitySold: 6,
+          },
+          type: "pos_pending_checkout_item_review",
+        }),
       ],
     });
 
@@ -226,6 +246,17 @@ describe("getQueueSnapshot", () => {
       expect.objectContaining({
         _id: "work-carry-forward",
         details: { businessDate: "2026-07-01", followUpReason: null },
+      }),
+      expect.objectContaining({
+        _id: "work-pending-checkout",
+        details: {
+          lookupCode: "hodor",
+          price: 55000,
+          provisionalProductId: "product-pending-1",
+          provisionalProductSkuId: "sku-pending-1",
+          quantitySold: null,
+          totalQuantitySold: 6,
+        },
       }),
       expect.objectContaining({
         _id: "work-inventory-review",
@@ -247,6 +278,9 @@ describe("getQueueSnapshot", () => {
     );
     expect(JSON.stringify(result.workItems)).not.toContain(
       "card-token-should-not-leave-server",
+    );
+    expect(JSON.stringify(result.workItems)).not.toContain(
+      "rawPendingCheckoutPayload",
     );
   });
 
@@ -285,6 +319,57 @@ describe("getQueueSnapshot", () => {
       result.approvalRequests.map((request: QueueTestRow) => request._id),
     ).toEqual(["approval-service-deposit", "approval-variance"]);
     expect(result.overflow.approvalRequests).toBe(false);
+  });
+
+  it("omits POS pending checkout review items when their provisional product is archived", async () => {
+    const ctx = createQueueContext({
+      products: [
+        {
+          _id: "product-live" as Id<"product">,
+          availability: "live",
+          storeId: "store-1" as Id<"store">,
+        },
+        {
+          _id: "product-archived" as Id<"product">,
+          availability: "archived",
+          storeId: "store-1" as Id<"store">,
+        },
+      ],
+      workItems: [
+        workItem({
+          _id: "work-live-pending-checkout" as Id<"operationalWorkItem">,
+          metadata: {
+            pendingCheckoutItemId: "pending-checkout-live",
+            provisionalProductId: "product-live",
+          },
+          title: "Review pending checkout item: Live item",
+          type: "pos_pending_checkout_item_review",
+        }),
+        workItem({
+          _id: "work-archived-pending-checkout" as Id<"operationalWorkItem">,
+          metadata: {
+            pendingCheckoutItemId: "pending-checkout-archived",
+            provisionalProductId: "product-archived",
+          },
+          title: "Review pending checkout item: Archived item",
+          type: "pos_pending_checkout_item_review",
+        }),
+        workItem({
+          _id: "work-service-case" as Id<"operationalWorkItem">,
+          title: "Service case",
+          type: "service_case",
+        }),
+      ],
+    });
+
+    const result = await getHandler(getQueueSnapshot)(ctx, {
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(result.workItems.map((item: QueueTestRow) => item._id)).toEqual([
+      "work-live-pending-checkout",
+      "work-service-case",
+    ]);
   });
 
   it("surfaces supported return and legacy item adjustment approvals", async () => {
@@ -503,13 +588,15 @@ describe("getQueueSnapshot", () => {
   });
 
   it("marks overflow when exact status-cap lanes combine beyond the display cap", async () => {
-    const openItems = Array.from({ length: TEST_MAX_QUEUE_ITEMS }, (_value, index) =>
-      workItem({
-        _id: `work-open-exact-${String(index).padStart(3, "0")}` as Id<"operationalWorkItem">,
-        createdAt: index,
-        metadata: { sourceId: `open-exact-${index}` },
-        status: "open",
-      }),
+    const openItems = Array.from(
+      { length: TEST_MAX_QUEUE_ITEMS },
+      (_value, index) =>
+        workItem({
+          _id: `work-open-exact-${String(index).padStart(3, "0")}` as Id<"operationalWorkItem">,
+          createdAt: index,
+          metadata: { sourceId: `open-exact-${index}` },
+          status: "open",
+        }),
     );
     const inProgressItems = Array.from(
       { length: TEST_MAX_QUEUE_ITEMS },
@@ -712,7 +799,7 @@ describe("getQueueSnapshot", () => {
     ]);
   });
 
-  it("prefers the complete synced sale resolver row when duplicate current rows exist", async () => {
+  it("prefers the synced sale resolver row with an affected SKU when duplicate current rows exist", async () => {
     const ctx = createQueueContext({
       workItems: [
         workItem({
@@ -731,6 +818,7 @@ describe("getQueueSnapshot", () => {
           metadata: {
             localRegisterSessionId: "local-session-1",
             localTransactionId: "txn-1",
+            primaryProductSkuId: "sku-1",
             registerSessionId: "register-session-1",
             sourceId: "transaction-1",
             sourceType: "posTransaction",
@@ -749,25 +837,26 @@ describe("getQueueSnapshot", () => {
       expect.objectContaining({
         _id: "work-synced-complete",
         details: expect.objectContaining({
-          registerSessionId: "register-session-1",
-          sourceId: "transaction-1",
+          primaryProductSkuId: "sku-1",
         }),
       }),
     ]);
   });
 
-  it("dedupes current lane probes before the queue cap hides complete resolver rows", async () => {
-    const incompleteDuplicates = Array.from({ length: TEST_MAX_QUEUE_ITEMS + 1 }, (_, index) =>
-      workItem({
-        _id: `work-synced-incomplete-${index}` as Id<"operationalWorkItem">,
-        createdAt: index + 1,
-        metadata: {
-          localRegisterSessionId: "local-session-1",
-          localTransactionId: "txn-1",
-          terminalId: "terminal-1",
-        },
-        type: "synced_sale_inventory_review",
-      }),
+  it("dedupes current lane probes before the queue cap hides rows with affected SKUs", async () => {
+    const incompleteDuplicates = Array.from(
+      { length: TEST_MAX_QUEUE_ITEMS + 1 },
+      (_, index) =>
+        workItem({
+          _id: `work-synced-incomplete-${index}` as Id<"operationalWorkItem">,
+          createdAt: index + 1,
+          metadata: {
+            localRegisterSessionId: "local-session-1",
+            localTransactionId: "txn-1",
+            terminalId: "terminal-1",
+          },
+          type: "synced_sale_inventory_review",
+        }),
     );
     const ctx = createQueueContext({
       workItems: [
@@ -778,6 +867,7 @@ describe("getQueueSnapshot", () => {
           metadata: {
             localRegisterSessionId: "local-session-1",
             localTransactionId: "txn-1",
+            primaryProductSkuId: "sku-1",
             registerSessionId: "register-session-1",
             sourceId: "transaction-1",
             sourceType: "posTransaction",
@@ -796,8 +886,7 @@ describe("getQueueSnapshot", () => {
       expect.objectContaining({
         _id: "work-synced-complete",
         details: expect.objectContaining({
-          registerSessionId: "register-session-1",
-          sourceId: "transaction-1",
+          primaryProductSkuId: "sku-1",
         }),
       }),
     ]);
@@ -875,13 +964,13 @@ describe("getQueueSnapshot", () => {
                 : [];
 
             return {
-            collect: vi.fn(async () => {
-              return rows;
-            }),
-            take: vi.fn(async () => {
-              return rows;
-            }),
-          };
+              collect: vi.fn(async () => {
+                return rows;
+              }),
+              take: vi.fn(async () => {
+                return rows;
+              }),
+            };
           }),
         })),
       },
@@ -990,13 +1079,13 @@ describe("getQueueSnapshot", () => {
                 : [];
 
             return {
-            collect: vi.fn(async () => {
-              return rows;
-            }),
-            take: vi.fn(async () => {
-              return rows;
-            }),
-          };
+              collect: vi.fn(async () => {
+                return rows;
+              }),
+              take: vi.fn(async () => {
+                return rows;
+              }),
+            };
           }),
         })),
       },
@@ -1069,8 +1158,7 @@ describe("getQueueSnapshot", () => {
                     sequence: 2,
                     status: "needs_review",
                     storeId: "store-1",
-                    summary:
-                      "Register was not open before this sale synced.",
+                    summary: "Register was not open before this sale synced.",
                     terminalId: "terminal-1",
                   },
                 ];

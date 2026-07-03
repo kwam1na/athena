@@ -202,6 +202,7 @@ export function ServiceAppointmentsViewContent({
       <FadeIn className="container mx-auto py-layout-xl">
         <PageWorkspace>
           <PageLevelHeader
+            showBackButton
             eyebrow="Service Ops"
             title="Appointments"
             description="Schedule service bookings, adjust appointment times, and convert confirmed work into service cases."

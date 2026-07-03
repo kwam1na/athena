@@ -18,6 +18,7 @@ type OperationReviewItemCardProps = {
   contextLabel: string;
   contextLabelClassName?: string;
   description?: string | null;
+  headerActionSlot?: ReactNode;
   itemId: string;
   metadataEntries?: OperationReviewMetadataEntry[];
   selectionSlot?: ReactNode;
@@ -34,6 +35,7 @@ export function OperationReviewItemCard({
   contextLabel,
   contextLabelClassName,
   description,
+  headerActionSlot,
   itemId,
   metadataEntries = [],
   selectionSlot,
@@ -105,6 +107,7 @@ export function OperationReviewItemCard({
 
         <div className="flex shrink-0 flex-wrap items-center gap-2 md:justify-end">
           {badgeSlot}
+          {headerActionSlot}
           {detailsToggle}
         </div>
       </div>

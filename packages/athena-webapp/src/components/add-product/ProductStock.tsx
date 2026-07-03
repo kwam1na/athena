@@ -16,7 +16,7 @@ import {
   PlusCircledIcon,
   TrashIcon,
 } from "@radix-ui/react-icons";
-import { getErrorForField } from "@/lib/utils";
+import { capitalizeWords, getErrorForField } from "@/lib/utils";
 import { CardFooter } from "../ui/card";
 import { useProduct } from "@/contexts/ProductContext";
 import { ImageFile } from "../ui/image-uploader";
@@ -29,6 +29,7 @@ import {
   Info,
   RefreshCw,
   RotateCcw,
+  Search,
   ShieldCheck,
   ShoppingCart,
   TriangleAlert,
@@ -56,16 +57,34 @@ import {
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
 import { useSheet } from "./SheetProvider";
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { CopyImagesView } from "./copy-images/CopyImagesView";
 import { useSkusReservedInCheckout } from "@/hooks/useSkusReservedInCheckout";
 import { useSkusReservedInPosSession } from "@/hooks/useSkusReservedInPosSession";
 import { AlertModal } from "../ui/modals/alert-modal";
 import { presentUnexpectedErrorToast } from "~/src/lib/errors/presentUnexpectedErrorToast";
-import { currencyDisplaySymbol } from "~/shared/currencyFormatter";
+import {
+  currencyDisplaySymbol,
+  currencyFormatter,
+} from "~/shared/currencyFormatter";
 import type { Product } from "~/types";
+import type { Product as PosProduct } from "@/components/pos/types";
 import type { FunctionReference } from "convex/server";
 import type { CommandResult } from "~/shared/commandResult";
+import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
+import {
+  usePOSProductSearch,
+  usePOSResolvePendingCheckoutItemReview,
+} from "~/src/hooks/usePOSProducts";
+import { useDebounce } from "~/src/hooks/useDebounce";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../ui/dialog";
+import { Skeleton } from "../ui/skeleton";
 import {
   buildTrustedInventoryFinalizationPayload,
   parseVariantInputValue,
@@ -105,9 +124,17 @@ export type ProductVariant = {
 
 type ProductPageTrustedInventoryFinalizationResult = {
   finalTrustedQuantity: number;
+  product?: {
+    availability?: Product["availability"];
+    inventoryCount?: number;
+    isVisible?: boolean;
+    quantityAvailable?: number;
+  };
   productId: Id<"product">;
   productSkuId: Id<"productSku">;
-  provisionalSkuId: Id<"inventoryImportProvisionalSku">;
+  provisionalSkuId:
+    | Id<"inventoryImportProvisionalSku">
+    | Id<"posPendingCheckoutItem">;
   provisionalSoldQuantity: number;
   quantityAvailable: number;
 };
@@ -135,6 +162,12 @@ const catalogImportApi = api.inventory.catalogImport as unknown as {
   listProductPageProvisionalSkuBinding: ProductPageProvisionalSkuBindingQuery;
 };
 
+const pendingCheckoutTrustedInventoryApi = api.pos.public
+  .catalog as unknown as {
+  finalizePendingCheckoutTrustedInventoryFromProductPage: ProductPageTrustedInventoryFinalizationMutation;
+  listPendingCheckoutProductPageBinding: ProductPageProvisionalSkuBindingQuery;
+};
+
 const StockHeader = ({
   isSkuReserved,
 }: {
@@ -150,7 +183,7 @@ const StockHeader = ({
         <CopyImagesView />
       </div>,
     );
-  }, []);
+  }, [setSheetContent]);
 
   const restock = () => {
     updateProductVariants((prevVariants) =>
@@ -253,22 +286,42 @@ function isLegacyImportDraftProduct(activeProduct?: Product | null) {
   );
 }
 
+function isPendingCheckoutDraftProduct(activeProduct?: Product | null) {
+  return (
+    activeProduct?.availability === "draft" &&
+    activeProduct?.categorySlug === "pos-pending-checkout"
+  );
+}
+
 function LegacyImportTrustPreview({
   activeProduct,
   areProcessingFeesAbsorbed,
+  canLinkPendingCheckoutItem,
+  finalizeTrustedInventoryMutation,
   finalized,
   isContextRefreshing,
+  listProvisionalSkuBindingQuery,
   onFinalized,
   onMakeVisible,
   reservationType,
+  sourceLabel,
   storeId,
   variant,
 }: {
   activeProduct?: Product | null;
   areProcessingFeesAbsorbed?: boolean;
+  canLinkPendingCheckoutItem?: boolean;
+  finalizeTrustedInventoryMutation: ProductPageTrustedInventoryFinalizationMutation;
   finalized?: boolean;
   isContextRefreshing?: boolean;
+  listProvisionalSkuBindingQuery: ProductPageProvisionalSkuBindingQuery;
   onFinalized: (result: {
+    product?: {
+      availability?: Product["availability"];
+      inventoryCount?: number;
+      isVisible?: boolean;
+      quantityAvailable?: number;
+    };
     sku: {
       id: string;
       stock: number;
@@ -281,6 +334,7 @@ function LegacyImportTrustPreview({
   }) => void;
   onMakeVisible: (id: string) => void;
   reservationType: "checkout" | "pos" | null;
+  sourceLabel: string;
   storeId?: Id<"store">;
   variant: ProductVariant;
 }) {
@@ -289,12 +343,14 @@ function LegacyImportTrustPreview({
     Record<string, string>
   >({});
   const [isFinalizing, setIsFinalizing] = useState(false);
+  const [linkDialogOpen, setLinkDialogOpen] = useState(false);
+  const [isLinkedToCatalog, setIsLinkedToCatalog] = useState(false);
   const [commandMessage, setCommandMessage] = useState<string | null>(null);
   const [requiresReviewRefresh, setRequiresReviewRefresh] = useState(false);
   const [bindingRefreshNonce, setBindingRefreshNonce] = useState(0);
 
   const binding = useQuery(
-    catalogImportApi.listProductPageProvisionalSkuBinding,
+    listProvisionalSkuBindingQuery,
     activeProduct && storeId && variant.existsInDB
       ? {
           productSkuId: variant.id as Id<"productSku">,
@@ -305,7 +361,7 @@ function LegacyImportTrustPreview({
   );
 
   const finalizeTrustedInventory = useMutation(
-    catalogImportApi.finalizeTrustedInventoryFromProductPage,
+    finalizeTrustedInventoryMutation,
   );
 
   const reviewState = resolveTrustedInventoryReviewState({
@@ -316,13 +372,26 @@ function LegacyImportTrustPreview({
     reservationType,
     variant,
   });
+  const bindingSaleEvidenceFingerprint =
+    binding?.state === "unique" ? binding.saleEvidenceFingerprint : undefined;
+  const bindingTrustedSkuFingerprint =
+    binding?.state === "unique" ? binding.trustedSkuFingerprint : undefined;
+  const bindingState = binding?.state;
+  const linkedTarget =
+    binding?.state === "unique" ? binding.row.linkedTarget : undefined;
+  const linkedSkuFormatter = useMemo(
+    () => currencyFormatter(activeProduct?.currency ?? "GHS"),
+    [activeProduct?.currency],
+  );
 
   useEffect(() => {
     setRequiresReviewRefresh(false);
     setCommandMessage(null);
+    setIsLinkedToCatalog(false);
   }, [
-    binding?.state === "unique" ? binding.saleEvidenceFingerprint : binding?.state,
-    binding?.state === "unique" ? binding.trustedSkuFingerprint : undefined,
+    bindingSaleEvidenceFingerprint,
+    bindingState,
+    bindingTrustedSkuFingerprint,
   ]);
 
   const getConversionRequestId = () => {
@@ -375,6 +444,7 @@ function LegacyImportTrustPreview({
       }
 
       onFinalized({
+        product: result.data.product,
         sku: {
           id: result.data.productSkuId,
           stock: result.data.finalTrustedQuantity,
@@ -433,6 +503,15 @@ function LegacyImportTrustPreview({
     : reviewState.ctaLabel;
   const isCtaDisabled = requiresReviewRefresh ? false : reviewState.disabled;
   const isFinalized = reviewState.status === "success";
+  const isLinkedToCatalogState = isLinkedToCatalog || Boolean(linkedTarget);
+  const canOpenLinkDialog = Boolean(
+    canLinkPendingCheckoutItem &&
+      activeProduct &&
+      storeId &&
+      binding?.state === "unique" &&
+      !isFinalized &&
+      !isLinkedToCatalogState,
+  );
 
   return (
     <TableRow
@@ -466,7 +545,7 @@ function LegacyImportTrustPreview({
                   className="gap-1.5 border-action-workflow-border bg-background text-action-workflow"
                 >
                   <Check className="h-3.5 w-3.5" />
-                  Finalized
+                  {linkedTarget ? "Linked SKU" : "Finalized"}
                 </Badge>
               ) : null}
             </div>
@@ -477,18 +556,53 @@ function LegacyImportTrustPreview({
             >
               {statusMessage}
             </p>
-            {binding?.state === "unique" && (
+            {linkedTarget ? (
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] leading-4 text-muted-foreground">
+                <span className="font-medium text-foreground">
+                  Linked to {capitalizeWords(linkedTarget.productName)}
+                </span>
+                <span>{linkedTarget.sku || "No SKU"}</span>
+                {typeof linkedTarget.price === "number" ? (
+                  <span>{formatStoredAmount(linkedSkuFormatter, linkedTarget.price)}</span>
+                ) : null}
+                {typeof linkedTarget.quantityAvailable === "number" ? (
+                  <span>{linkedTarget.quantityAvailable} available</span>
+                ) : null}
+              </div>
+            ) : binding?.state === "unique" ? (
               <p className="text-[11px] leading-4 text-muted-foreground">
-                Linked import row {binding.row.rowNumber}
+                {sourceLabel === "Linked import row"
+                  ? `${sourceLabel} ${binding.row.rowNumber}`
+                  : sourceLabel}
                 {binding.row.provisionalSoldQuantity !== undefined
                   ? ` · provisional sales ${binding.row.provisionalSoldQuantity}`
                   : ""}
               </p>
-            )}
+            ) : null}
           </div>
 
           <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-            {isFinalized ? (
+            {canOpenLinkDialog ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="min-h-10"
+                onClick={() => setLinkDialogOpen(true)}
+              >
+                Link existing SKU
+              </Button>
+            ) : null}
+            {isLinkedToCatalogState ? (
+              <div
+                className="inline-flex min-h-10 items-center gap-2 rounded-md px-3 text-xs font-medium text-muted-foreground"
+                role="status"
+                aria-live="polite"
+              >
+                <Check className="h-3.5 w-3.5 text-action-workflow" />
+                Linked to catalog
+              </div>
+            ) : isFinalized ? (
               <div
                 className="inline-flex min-h-10 items-center gap-2 rounded-md px-3 text-xs font-medium text-muted-foreground"
                 role="status"
@@ -511,8 +625,287 @@ function LegacyImportTrustPreview({
             )}
           </div>
         </div>
+        {canLinkPendingCheckoutItem && activeProduct && storeId ? (
+          <PendingCheckoutLinkDialog
+            activeProduct={activeProduct}
+            binding={binding}
+            currency={activeProduct.currency ?? "GHS"}
+            onLinked={() => {
+              setLinkDialogOpen(false);
+              setIsLinkedToCatalog(true);
+              setCommandMessage(
+                "Pending checkout item linked to an existing trusted SKU.",
+              );
+            }}
+            open={linkDialogOpen}
+            onOpenChange={setLinkDialogOpen}
+            storeId={storeId}
+            variant={variant}
+          />
+        ) : null}
       </TableCell>
     </TableRow>
+  );
+}
+
+function PendingCheckoutLinkDialog({
+  activeProduct,
+  binding,
+  currency,
+  onLinked,
+  onOpenChange,
+  open,
+  storeId,
+  variant,
+}: {
+  activeProduct: Product;
+  binding?: ProductPageProvisionalSkuBinding;
+  currency: string;
+  onLinked: () => void;
+  onOpenChange: (open: boolean) => void;
+  open: boolean;
+  storeId: Id<"store">;
+  variant: ProductVariant;
+}) {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedProduct, setSelectedProduct] = useState<PosProduct | null>(
+    null,
+  );
+  const [isLinking, setIsLinking] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const debouncedSearchQuery = useDebounce(open ? searchQuery : "", 200);
+  const searchResults = usePOSProductSearch(storeId, debouncedSearchQuery);
+  const resolvePendingCheckoutItemReview =
+    usePOSResolvePendingCheckoutItemReview();
+  const formatter = useMemo(() => currencyFormatter(currency), [currency]);
+  const trimmedSearchQuery = searchQuery.trim();
+  const trimmedDebouncedSearchQuery = debouncedSearchQuery.trim();
+  const trustedSearchResults = useMemo(
+    () =>
+      (searchResults ?? []).filter(
+        (product) =>
+          product.productId &&
+          product.skuId &&
+          product.availabilityPolicy !== "pending_checkout" &&
+          product.productId !== activeProduct._id &&
+          product.skuId !== variant.id,
+      ),
+    [activeProduct._id, searchResults, variant.id],
+  );
+  const showSearchResults = trimmedSearchQuery.length > 0;
+  const isSearching =
+    showSearchResults &&
+    (trimmedSearchQuery !== trimmedDebouncedSearchQuery ||
+      (trimmedDebouncedSearchQuery.length > 0 && searchResults === undefined));
+
+  useEffect(() => {
+    if (!open) {
+      setSearchQuery("");
+      setSelectedProduct(null);
+      setErrorMessage(null);
+    }
+  }, [open]);
+
+  const handleLink = async () => {
+    if (
+      binding?.state !== "unique" ||
+      !selectedProduct?.productId ||
+      !selectedProduct.skuId
+    ) {
+      setErrorMessage("Choose a trusted SKU before linking.");
+      return;
+    }
+
+    setIsLinking(true);
+    setErrorMessage(null);
+
+    try {
+      await resolvePendingCheckoutItemReview({
+        approvedProductId: selectedProduct.productId,
+        approvedProductSkuId: selectedProduct.skuId as Id<"productSku">,
+        pendingCheckoutItemId: binding.row._id as Id<"posPendingCheckoutItem">,
+        status: "linked_to_catalog",
+        storeId,
+      });
+      toast.success("Pending checkout item linked");
+      onLinked();
+    } catch (error) {
+      console.error(error);
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Pending checkout item was not linked.",
+      );
+      presentUnexpectedErrorToast("Pending checkout item was not linked");
+    } finally {
+      setIsLinking(false);
+    }
+  };
+
+  const provisionalSoldQuantity =
+    binding?.state === "unique" ? binding.row.provisionalSoldQuantity : null;
+  const pendingItemPrice =
+    typeof variant.netPrice === "number"
+      ? variant.netPrice
+      : typeof variant.price === "number"
+        ? variant.price
+        : null;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="flex h-[680px] max-h-[calc(100vh-2rem)] max-w-3xl flex-col gap-0 overflow-hidden p-0">
+        <DialogHeader className="border-b px-5 py-4">
+          <DialogTitle>Link pending checkout item</DialogTitle>
+        </DialogHeader>
+
+        <div className="flex min-h-0 flex-1 flex-col gap-4 px-5 py-4">
+          <div className="grid gap-3 rounded-md border bg-muted/20 p-3 text-sm sm:grid-cols-4">
+            <div>
+              <p className="text-xs text-muted-foreground">Pending item</p>
+              <p className="font-medium text-foreground">
+                {capitalizeWords(activeProduct.name)}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Provisional SKU</p>
+              <p className="font-medium text-foreground">{variant.sku}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Price</p>
+              <p className="font-medium text-foreground">
+                {pendingItemPrice === null
+                  ? "-"
+                  : formatter.format(pendingItemPrice)}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Sold</p>
+              <p className="font-medium text-foreground">
+                {provisionalSoldQuantity ?? "-"}
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-2 pt-2">
+            <Label htmlFor="pending-checkout-sku-search">
+              Product SKU search
+            </Label>
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                id="pending-checkout-sku-search"
+                autoFocus
+                className="pl-9"
+                value={searchQuery}
+                onChange={(event) => {
+                  setSearchQuery(event.target.value);
+                  setSelectedProduct(null);
+                  setErrorMessage(null);
+                }}
+                placeholder="Search by product, SKU, or barcode"
+              />
+            </div>
+          </div>
+
+          {showSearchResults ? (
+            <div className="max-h-80 overflow-y-auto rounded-md border">
+              {isSearching ? (
+                <PendingCheckoutSkuSearchLoadingRows />
+              ) : trustedSearchResults.length === 0 ? (
+                <div className="px-4 py-8 text-center text-sm text-muted-foreground">
+                  No trusted SKU matches this search.
+                </div>
+              ) : (
+                <div className="divide-y">
+                  {trustedSearchResults.map((product) => {
+                    const selected = selectedProduct?.skuId === product.skuId;
+                    return (
+                      <button
+                        key={`${product.productId}:${product.skuId}`}
+                        type="button"
+                        className={`flex w-full items-center justify-between gap-6 px-4 py-4 text-left transition-colors hover:bg-muted/50 focus:bg-muted/50 focus:outline-none ${
+                          selected ? "bg-action-workflow/10" : ""
+                        }`}
+                        onClick={() => {
+                          setSelectedProduct(product);
+                          setErrorMessage(null);
+                        }}
+                      >
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-medium text-foreground">
+                            {capitalizeWords(product.name)}
+                          </span>
+                          <span className="mt-1.5 block truncate text-xs text-muted-foreground">
+                            {product.sku || "No SKU"}
+                            {product.barcode ? ` · ${product.barcode}` : ""}
+                            {product.category ? ` · ${product.category}` : ""}
+                          </span>
+                        </span>
+                        <span className="shrink-0 text-right">
+                          <span className="block text-sm font-semibold text-foreground">
+                            {formatStoredAmount(formatter, product.price)}
+                          </span>
+                          <span className="mt-1 block text-xs text-muted-foreground">
+                            {product.quantityAvailable ?? 0} available
+                          </span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ) : null}
+
+          {errorMessage ? (
+            <p className="text-sm font-medium text-destructive" role="alert">
+              {errorMessage}
+            </p>
+          ) : null}
+        </div>
+
+        <DialogFooter className="border-t px-5 py-4">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={isLinking}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            variant="workflow"
+            onClick={handleLink}
+            disabled={!selectedProduct || isLinking}
+          >
+            {isLinking ? "Linking..." : "Link SKU"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function PendingCheckoutSkuSearchLoadingRows() {
+  return (
+    <div aria-label="Searching SKUs" className="divide-y" role="status">
+      {Array.from({ length: 3 }).map((_, index) => (
+        <div
+          className="flex items-center justify-between gap-6 px-4 py-4"
+          key={index}
+        >
+          <div className="min-w-0 flex-1 space-y-2">
+            <Skeleton className="h-4 w-28 rounded-sm" />
+            <Skeleton className="h-3 w-48 max-w-full rounded-sm" />
+          </div>
+          <div className="shrink-0 space-y-2 text-right">
+            <Skeleton className="ml-auto h-4 w-16 rounded-sm" />
+            <Skeleton className="ml-auto h-3 w-20 rounded-sm" />
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -812,9 +1205,32 @@ function Stock({
     );
   };
 
-  const shouldShowTrustPreview = isLegacyImportDraftProduct(activeProduct);
+  const isPendingCheckoutDraft = isPendingCheckoutDraftProduct(activeProduct);
+  const shouldShowTrustPreview =
+    isLegacyImportDraftProduct(activeProduct) || isPendingCheckoutDraft;
+  const trustedInventoryApi = isPendingCheckoutDraft
+    ? {
+        finalizeTrustedInventoryMutation:
+          pendingCheckoutTrustedInventoryApi.finalizePendingCheckoutTrustedInventoryFromProductPage,
+        listProvisionalSkuBindingQuery:
+          pendingCheckoutTrustedInventoryApi.listPendingCheckoutProductPageBinding,
+        sourceLabel: "Pending checkout sales",
+      }
+    : {
+        finalizeTrustedInventoryMutation:
+          catalogImportApi.finalizeTrustedInventoryFromProductPage,
+        listProvisionalSkuBindingQuery:
+          catalogImportApi.listProductPageProvisionalSkuBinding,
+        sourceLabel: "Linked import row",
+      };
 
   const handleTrustedInventoryFinalized = (result: {
+    product?: {
+      availability?: Product["availability"];
+      inventoryCount?: number;
+      isVisible?: boolean;
+      quantityAvailable?: number;
+    };
     sku: {
       id: string;
       stock: number;
@@ -1241,24 +1657,36 @@ function Stock({
                     </div>
                   </TableCell>
                 </TableRow>
-                {shouldShowTrustPreview && activeProduct && variant.existsInDB && (
-                  <LegacyImportTrustPreview
-                    activeProduct={activeProduct}
-                    areProcessingFeesAbsorbed={
-                      resolveTrustedInventoryFinalizationPricingPolicy({
-                        persistedAreProcessingFeesAbsorbed:
-                          activeProduct.areProcessingFeesAbsorbed,
-                      })
-                    }
-                    finalized={finalizedTrustedInventorySkuIds.has(variant.id)}
-                    isContextRefreshing={isLoading || showLoaderForProduct}
-                    onFinalized={handleTrustedInventoryFinalized}
-                    onMakeVisible={setVisibility}
-                    reservationType={getReservationType(variant.sku)}
-                    storeId={activeStore?._id}
-                    variant={variant}
-                  />
-                )}
+                {shouldShowTrustPreview &&
+                  activeProduct &&
+                  variant.existsInDB && (
+                    <LegacyImportTrustPreview
+                      activeProduct={activeProduct}
+                      areProcessingFeesAbsorbed={resolveTrustedInventoryFinalizationPricingPolicy(
+                        {
+                          persistedAreProcessingFeesAbsorbed:
+                            activeProduct.areProcessingFeesAbsorbed,
+                        },
+                      )}
+                      canLinkPendingCheckoutItem={isPendingCheckoutDraft}
+                      finalizeTrustedInventoryMutation={
+                        trustedInventoryApi.finalizeTrustedInventoryMutation
+                      }
+                      finalized={finalizedTrustedInventorySkuIds.has(
+                        variant.id,
+                      )}
+                      isContextRefreshing={isLoading || showLoaderForProduct}
+                      listProvisionalSkuBindingQuery={
+                        trustedInventoryApi.listProvisionalSkuBindingQuery
+                      }
+                      onFinalized={handleTrustedInventoryFinalized}
+                      onMakeVisible={setVisibility}
+                      reservationType={getReservationType(variant.sku)}
+                      sourceLabel={trustedInventoryApi.sourceLabel}
+                      storeId={activeStore?._id}
+                      variant={variant}
+                    />
+                  )}
               </Fragment>
             ))}
           </TableBody>

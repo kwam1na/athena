@@ -12,6 +12,10 @@ const mockedProducts = vi.hoisted(() => ({
     slug: string;
   }>,
   products: undefined as Product[] | undefined,
+  routeSearch: {
+    categorySlug: "beverages",
+    o: "/wigclub/store/wigclub/products",
+  },
 }));
 
 vi.mock("@tanstack/react-router", () => ({
@@ -19,10 +23,7 @@ vi.mock("@tanstack/react-router", () => ({
     <a href="#products">{children}</a>
   ),
   useNavigate: () => vi.fn(),
-  useSearch: () => ({
-    categorySlug: "beverages",
-    o: "/wigclub/store/wigclub/products",
-  }),
+  useSearch: () => mockedProducts.routeSearch,
 }));
 
 vi.mock("~/src/hooks/useGetProducts", () => ({
@@ -65,6 +66,10 @@ describe("ProductsListView", () => {
   beforeEach(() => {
     mockedProducts.categories = [];
     mockedProducts.products = undefined;
+    mockedProducts.routeSearch = {
+      categorySlug: "beverages",
+      o: "/wigclub/store/wigclub/products",
+    };
     window.scrollTo = vi.fn();
   });
 
@@ -79,5 +84,37 @@ describe("ProductsListView", () => {
       screen.queryByRole("region", { name: "Category controls" }),
     ).not.toBeInTheDocument();
     expect(screen.queryByText("No beverages")).not.toBeInTheDocument();
+  });
+
+  it("renders POS pending checkout as a standard product category page", () => {
+    mockedProducts.routeSearch = {
+      categorySlug: "pos-pending-checkout",
+      o: "/wigclub/store/wigclub/products",
+    };
+    mockedProducts.products = [];
+
+    render(<ProductsListView />);
+
+    expect(
+      screen.getByRole("heading", { name: "Pos Pending Checkout" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("region", { name: "Pending checkout review" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Choose SKU")).not.toBeInTheDocument();
+    expect(screen.getByText("No pos pending checkout")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Add product" }),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps pending checkout review off other product category pages", () => {
+    mockedProducts.products = [];
+
+    render(<ProductsListView />);
+
+    expect(
+      screen.queryByRole("region", { name: "Pending checkout review" }),
+    ).not.toBeInTheDocument();
   });
 });

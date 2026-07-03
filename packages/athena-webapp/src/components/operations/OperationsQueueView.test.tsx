@@ -371,7 +371,9 @@ describe("OperationsQueueViewContent", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Work type")).toBeInTheDocument();
     expect(screen.getByText("2 work types")).toBeInTheDocument();
-    expect(screen.getAllByText("POS pending checkout").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("POS pending checkout").length).toBeGreaterThan(
+      0,
+    );
     expect(screen.getAllByText("Service case").length).toBeGreaterThan(0);
     expect(screen.getAllByText("1 item")).toHaveLength(2);
     expect(
@@ -420,7 +422,9 @@ describe("OperationsQueueViewContent", () => {
         /Showing the first 1 open work items\. Resolve visible work/i,
       ),
     ).toBeInTheDocument();
-    expect(screen.queryByText(/change the sort order/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/change the sort order/i),
+    ).not.toBeInTheDocument();
   });
 
   it("shows when pending approvals are capped by the server", () => {
@@ -445,7 +449,9 @@ describe("OperationsQueueViewContent", () => {
       />,
     );
 
-    expect(screen.getByText("More approvals are available")).toBeInTheDocument();
+    expect(
+      screen.getByText("More approvals are available"),
+    ).toBeInTheDocument();
     expect(
       screen.getByText(
         /Showing the first 1 pending approvals\. Resolve visible approvals/i,
@@ -562,7 +568,9 @@ describe("OperationsQueueViewContent", () => {
     expect(screen.getAllByText("No pending approvals")).toHaveLength(1);
     expect(screen.queryByText("0 pending approvals")).not.toBeInTheDocument();
     expect(
-      screen.getByText("High-variance deposits and stock reviews will surface here."),
+      screen.getByText(
+        "High-variance deposits and stock reviews will surface here.",
+      ),
     ).toBeInTheDocument();
   });
 
@@ -683,7 +691,9 @@ describe("OperationsQueueViewContent", () => {
     );
     expect(screen.getByText("Created")).toBeInTheDocument();
     expect(screen.getByText("Due")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /show details/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /show details/i }),
+    ).toBeInTheDocument();
   });
 
   it("paginates open work items five per page with the shared list controls", async () => {
@@ -749,7 +759,7 @@ describe("OperationsQueueViewContent", () => {
     expect(screen.getByText("Page 1 of 2")).toBeInTheDocument();
   });
 
-  it("routes pending checkout work items to unresolved catalog review first", () => {
+  it("routes pending checkout work items to the provisional product edit page", () => {
     render(
       <OperationsQueueViewContent
         {...baseProps}
@@ -761,7 +771,10 @@ describe("OperationsQueueViewContent", () => {
             _id: "work-item-1" as Id<"operationalWorkItem">,
             approvalState: "not_required",
             createdAt: Date.now() - 5 * 60 * 1000,
-            details: {},
+            details: {
+              provisionalProductId: "product-pending-1",
+              provisionalProductSkuId: "sku-pending-1",
+            },
             priority: "normal",
             status: "open",
             title: "Review pending checkout item: BRUDDAH",
@@ -772,27 +785,31 @@ describe("OperationsQueueViewContent", () => {
     );
 
     expect(
-      screen.getByText((_content, element) =>
-        element?.tagName.toLowerCase() === "p" &&
-        element.textContent === "Review pending checkout item: Bruddah",
+      screen.getByText(
+        (_content, element) =>
+          element?.tagName.toLowerCase() === "p" &&
+          element.textContent === "Review pending checkout item: Bruddah",
       ),
     ).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Bruddah" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Bruddah" }),
+    ).not.toBeInTheDocument();
 
     const actionHref = new URL(
       screen
-        .getByRole("link", { name: "Review unresolved catalog" })
+        .getByRole("link", { name: "Review POS pending checkout" })
         .getAttribute("href") ?? "",
       "http://localhost",
     );
     expect(actionHref.pathname).toBe(
-      "/$orgUrlSlug/store/$storeUrlSlug/products/unresolved",
+      "/wigclub/store/wigclub/products/product-pending-1/edit",
     );
+    expect(actionHref.searchParams.get("variant")).toBe("sku-pending-1");
     expect(actionHref.searchParams.get("o")).toBeTruthy();
     expect(
       screen.queryByRole("link", { name: "Open stock adjustments" }),
     ).not.toBeInTheDocument();
-    expect(actionHref.searchParams.get("sku")).toBeNull();
+    expect(actionHref.searchParams.get("categorySlug")).toBeNull();
   });
 
   it("keeps pending checkout work item titles plain without provisional SKU metadata", () => {
@@ -907,31 +924,45 @@ describe("OperationsQueueViewContent", () => {
     );
 
     expect(screen.getAllByText("Service case").length).toBeGreaterThan(0);
-    expect(screen.getByRole("link", { name: "Open service case" })).toHaveAttribute(
+    expect(
+      screen.getByRole("link", { name: "Open service case" }),
+    ).toHaveAttribute(
       "href",
       "/$orgUrlSlug/store/$storeUrlSlug/services/active-cases?o=%252F",
     );
-    expect(screen.getAllByText("Service appointment").length).toBeGreaterThan(0);
-    expect(screen.getByRole("link", { name: "Open appointment" })).toHaveAttribute(
+    expect(screen.getAllByText("Service appointment").length).toBeGreaterThan(
+      0,
+    );
+    expect(
+      screen.getByRole("link", { name: "Open appointment" }),
+    ).toHaveAttribute(
       "href",
       "/$orgUrlSlug/store/$storeUrlSlug/services/appointments?o=%252F",
     );
     expect(screen.getAllByText("Purchase order").length).toBeGreaterThan(0);
-    expect(screen.getByRole("link", { name: "Open purchase order" })).toHaveAttribute(
+    expect(
+      screen.getByRole("link", { name: "Open purchase order" }),
+    ).toHaveAttribute(
       "href",
       "/$orgUrlSlug/store/$storeUrlSlug/procurement?o=%252F",
     );
     expect(screen.getByText("PO-103")).toBeInTheDocument();
     expect(screen.getByText("Salon Supply Co.")).toBeInTheDocument();
     expect(screen.getByText("4 items")).toBeInTheDocument();
-    expect(screen.getAllByText("Stock adjustment approval").length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText("Stock adjustment approval").length,
+    ).toBeGreaterThan(0);
     expect(screen.getByText("Approval requests")).toBeInTheDocument();
     expect(screen.getByText("Cycle count variance")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Review approval" })).toHaveAttribute(
+    expect(
+      screen.getByRole("link", { name: "Review approval" }),
+    ).toHaveAttribute(
       "href",
       "/$orgUrlSlug/store/$storeUrlSlug/operations/approvals?o=%252F",
     );
-    expect(screen.getAllByText("Daily close follow-up").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Daily close follow-up").length).toBeGreaterThan(
+      0,
+    );
     expect(screen.getByText("July 1, 2026")).toBeInTheDocument();
     const dailyCloseHref = new URL(
       screen
@@ -970,7 +1001,9 @@ describe("OperationsQueueViewContent", () => {
       />,
     );
 
-    expect(screen.getAllByText("Unsupported work type").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Unsupported work type").length).toBeGreaterThan(
+      0,
+    );
     expect(
       screen.getByText("Service deposit review is not available in Open Work."),
     ).toBeInTheDocument();
@@ -1004,8 +1037,12 @@ describe("OperationsQueueViewContent", () => {
       />,
     );
 
-    expect(screen.getAllByText("Daily close follow-up").length).toBeGreaterThan(0);
-    expect(screen.queryByText("proof-visible-if-leaked")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Daily close follow-up").length).toBeGreaterThan(
+      0,
+    );
+    expect(
+      screen.queryByText("proof-visible-if-leaked"),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByText("card-token-should-stay-server-side"),
     ).not.toBeInTheDocument();
@@ -1057,16 +1094,18 @@ describe("OperationsQueueViewContent", () => {
     );
 
     expect(
-      screen.getByText((_content, element) =>
-        element?.tagName.toLowerCase() === "p" &&
-        element.textContent === "Review inventory for Adore Dye",
+      screen.getByText(
+        (_content, element) =>
+          element?.tagName.toLowerCase() === "p" &&
+          element.textContent === "Review inventory for Adore Dye",
       ),
     ).toBeInTheDocument();
-    expect(screen.getAllByText("Synced sale inventory").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Synced sale inventory").length).toBeGreaterThan(
+      0,
+    );
     const titleHref = new URL(
-      screen
-        .getByRole("link", { name: "Adore Dye" })
-        .getAttribute("href") ?? "",
+      screen.getByRole("link", { name: "Adore Dye" }).getAttribute("href") ??
+        "",
       "http://localhost",
     );
     expect(titleHref.pathname).toBe(
@@ -1133,7 +1172,7 @@ describe("OperationsQueueViewContent", () => {
     );
   });
 
-  it("does not render synced sale resolution when resolver details are incomplete", () => {
+  it("renders synced sale resolution when the affected SKU is available", () => {
     const onResolveSyncedSaleInventoryReview = vi.fn();
 
     render(
@@ -1163,10 +1202,49 @@ describe("OperationsQueueViewContent", () => {
       />,
     );
 
-    expect(screen.queryByRole("button", { name: "Mark reviewed" })).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Mark reviewed" }),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "Open stock adjustments" }),
     ).toBeInTheDocument();
+  });
+
+  it("does not render synced sale resolution without an affected SKU", () => {
+    const onResolveSyncedSaleInventoryReview = vi.fn();
+
+    render(
+      <OperationsQueueViewContent
+        {...baseProps}
+        activeWorkflow="queue"
+        orgUrlSlug="wigclub"
+        onResolveSyncedSaleInventoryReview={onResolveSyncedSaleInventoryReview}
+        storeUrlSlug="wigclub"
+        workItems={[
+          {
+            _id: "work-item-1" as Id<"operationalWorkItem">,
+            approvalState: "not_required",
+            createdAt: Date.now() - 5 * 60 * 1000,
+            details: {
+              inventoryReviewLineCount: 1,
+              receiptNumber: "939540",
+              sourceId: "transaction-1",
+            },
+            priority: "high",
+            status: "open",
+            title: "Review inventory for ADORE DYE",
+            type: "synced_sale_inventory_review",
+          },
+        ]}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: "Mark reviewed" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Open stock adjustments" }),
+    ).not.toBeInTheDocument();
   });
 
   it("disables peer synced sale review buttons while one review is resolving", () => {
@@ -1402,14 +1480,14 @@ describe("OperationsQueueViewContent", () => {
       screen.getByText(
         (_, element) =>
           element?.textContent?.replace(/\s+/g, " ").trim() ===
-          "2 counted against 6 on hand",
+          "Counted 2 of 6 on hand",
       ),
     ).toBeInTheDocument();
     expect(
       screen.getByText(
         (_, element) =>
           element?.textContent?.replace(/\s+/g, " ").trim() ===
-          "9 counted against 6 on hand",
+          "Counted 9 of 6 on hand",
       ),
     ).toBeInTheDocument();
     expect(screen.getByText("-4")).toBeInTheDocument();
@@ -1421,6 +1499,38 @@ describe("OperationsQueueViewContent", () => {
       approvalRequestId: "approval-1",
       decision: "approved",
     });
+  });
+
+  it("renders manual stock approval quantity context without counted placeholders", () => {
+    render(
+      <OperationsQueueViewContent
+        {...baseProps}
+        approvalRequests={[
+          {
+            _id: "approval-manual-1" as Id<"approvalRequest">,
+            metadata: {
+              lineItems: [
+                {
+                  productName: "yuhh",
+                  productSkuId: "sku-1" as Id<"productSku">,
+                  quantityDelta: 100,
+                  sku: "6N2Y-9J7-NR0",
+                  systemQuantity: 1,
+                },
+              ],
+              netQuantityDelta: 100,
+            },
+            requestType: "inventory_adjustment_review",
+            status: "pending",
+            workItemTitle: "Stock Adjustment Review · 1 SKU",
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("Yuhh")).toBeInTheDocument();
+    expect(screen.getByText("1 on hand before adjustment")).toBeInTheDocument();
+    expect(screen.queryByText("- counted against 1 on hand")).not.toBeInTheDocument();
   });
 
   it("renders unsupported approval rows as retire-only actions", async () => {
@@ -1650,7 +1760,9 @@ describe("OperationsQueueViewContent", () => {
       />,
     );
 
-    expect(screen.getAllByText("Review item adjustment").length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText("Review item adjustment").length,
+    ).toBeGreaterThan(0);
     expect(screen.getByText("#434898")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "#434898" })).toHaveAttribute(
       "href",
@@ -1919,7 +2031,9 @@ describe("OperationsQueueViewContent", () => {
 
     expect(screen.getByText("Synced register activity")).toBeInTheDocument();
     expect(
-      screen.getByText("Review local register activity before it is applied to cash controls."),
+      screen.getByText(
+        "Review local register activity before it is applied to cash controls.",
+      ),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: /wigshop \/ register 2/i }),
@@ -2019,46 +2133,44 @@ describe("OperationsQueueViewContent", () => {
     };
 
     mockedHooks.useQuery.mockReset();
-    mockedHooks.useQuery.mockImplementation((_query: unknown, args: unknown) => {
-      if (args === "skip") return undefined;
-      if (
-        args &&
-        typeof args === "object" &&
-        "productSkuIds" in args
-      ) {
-        return [linkedInventoryItem];
-      }
-      if (
-        args &&
-        typeof args === "object" &&
-        "query" in args &&
-        "limit" in args
-      ) {
-        return {
-          candidateOverflow: false,
-          results: [],
-          truncated: false,
-        };
-      }
-      if (args && typeof args === "object" && "storeId" in args) {
-        return {
-          approvalRequests: [],
-          availableUnits: 7,
-          checkoutReservedUnits: 0,
-          fallbackReservedUnits: 0,
-          hasMoreSkus: false,
-          onHandUnits: 7,
-          posReservedUnits: 0,
-          reservedUnits: 0,
-          skuCount: 1,
-          unavailableSkuCount: 0,
-          unavailableUnits: 0,
-          workItems: [],
-        };
-      }
+    mockedHooks.useQuery.mockImplementation(
+      (_query: unknown, args: unknown) => {
+        if (args === "skip") return undefined;
+        if (args && typeof args === "object" && "productSkuIds" in args) {
+          return [linkedInventoryItem];
+        }
+        if (
+          args &&
+          typeof args === "object" &&
+          "query" in args &&
+          "limit" in args
+        ) {
+          return {
+            candidateOverflow: false,
+            results: [],
+            truncated: false,
+          };
+        }
+        if (args && typeof args === "object" && "storeId" in args) {
+          return {
+            approvalRequests: [],
+            availableUnits: 7,
+            checkoutReservedUnits: 0,
+            fallbackReservedUnits: 0,
+            hasMoreSkus: false,
+            onHandUnits: 7,
+            posReservedUnits: 0,
+            reservedUnits: 0,
+            skuCount: 1,
+            unavailableSkuCount: 0,
+            unavailableUnits: 0,
+            workItems: [],
+          };
+        }
 
-      return undefined;
-    });
+        return undefined;
+      },
+    );
     mockedHooks.usePaginatedQuery.mockReturnValue({
       isLoading: false,
       loadMore: vi.fn(),
@@ -2562,7 +2674,9 @@ describe("OperationsQueueViewContent", () => {
     mockedHooks.useMutation.mockImplementation((functionReference) => {
       const functionName = getFunctionName(functionReference as never);
 
-      if (functionName === "operations/approvalRequests:decideApprovalRequest") {
+      if (
+        functionName === "operations/approvalRequests:decideApprovalRequest"
+      ) {
         return decideApprovalRequest;
       }
 
@@ -2581,8 +2695,7 @@ describe("OperationsQueueViewContent", () => {
       }
 
       if (
-        functionName ===
-        "cashControls/closeouts:reviewRegisterSessionCloseout"
+        functionName === "cashControls/closeouts:reviewRegisterSessionCloseout"
       ) {
         return reviewRegisterSessionCloseout;
       }
@@ -2680,12 +2793,15 @@ describe("OperationsQueueViewContent", () => {
     mockedHooks.useMutation.mockImplementation((functionReference) => {
       const functionName = getFunctionName(functionReference as never);
 
-      if (functionName === "operations/approvalRequests:decideApprovalRequest") {
+      if (
+        functionName === "operations/approvalRequests:decideApprovalRequest"
+      ) {
         return decideApprovalRequest;
       }
 
       if (
-        functionName === "cashControls/deposits:resolveRegisterSessionSyncReview"
+        functionName ===
+        "cashControls/deposits:resolveRegisterSessionSyncReview"
       ) {
         return resolveRegisterSessionSyncReview;
       }

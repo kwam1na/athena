@@ -33,7 +33,7 @@ beforeEach(() => {
 });
 
 describe("resolveSyncedSaleInventoryReviewWithCtx", () => {
-  it("resolves current synced sale inventory review work through the canonical local mapping", async () => {
+  it("resolves current synced sale inventory review work after the affected SKU has a stock update", async () => {
     const ctx = buildCtx();
 
     const result = await resolveSyncedSaleInventoryReviewWithCtx(
@@ -75,14 +75,14 @@ describe("resolveSyncedSaleInventoryReviewWithCtx", () => {
             domainTrace: {
               boundary:
                 "operations.openWorkInventoryReviews.resolveSyncedSaleInventoryReview",
-              mappingId: "mapping-inventory-review",
+              inventoryMovementId: "movement-1",
+              proofKind: "stock_update_movement",
             },
             nextState: { status: "completed" },
             outcome: "completed",
             priorState: { status: "open" },
             reason: "Inventory was corrected from the sale review.",
             source: expect.objectContaining({
-              localId: "local-txn-1:inventory-review",
               localIdKind: "inventoryReviewWorkItem",
               localRegisterSessionId: "local-register-1",
               localTransactionId: "local-txn-1",
@@ -95,6 +95,17 @@ describe("resolveSyncedSaleInventoryReviewWithCtx", () => {
               displayName: "Front register",
               registerNumber: "1",
               terminalId: "terminal-1",
+            },
+            stockState: null,
+            stockUpdate: {
+              createdAt: 1_772_549_999_000,
+              inventoryMovementId: "movement-1",
+              movementType: "cycle_count",
+              productSkuId: "sku-1",
+              quantityDelta: 4,
+              reasonCode: "cycle_count_reconciliation",
+              sourceId: "stock_adjustment_batch:batch-1",
+              sourceType: "stock_adjustment_batch",
             },
           }),
         }),
@@ -112,7 +123,7 @@ describe("resolveSyncedSaleInventoryReviewWithCtx", () => {
         subjectType: "synced_sale_inventory_review",
         workItemId: "work-item-1",
         metadata: expect.objectContaining({
-          mappingId: "mapping-inventory-review",
+          inventoryMovementId: "movement-1",
           nextState: { status: "completed" },
           outcome: "completed",
           priorState: { status: "open" },
@@ -207,7 +218,7 @@ describe("resolveSyncedSaleInventoryReviewWithCtx", () => {
     expect(ctx.db.patch).not.toHaveBeenCalled();
   });
 
-  it("rejects wrong terminal, session, sale, and store context", async () => {
+  it("rejects wrong terminal, session, sale, and store context when that context is supplied", async () => {
     await expectRejectedContext(
       { terminalId: "terminal-other" as Id<"posTerminal"> },
       "Terminal does not match the inventory review store.",
@@ -245,7 +256,7 @@ describe("resolveSyncedSaleInventoryReviewWithCtx", () => {
     );
   });
 
-  it("rejects cloud-id-only, receipt-only, and SKU-only idempotency attempts", async () => {
+  it("allows work-item-only resolution when stock was updated for the affected SKU", async () => {
     const cloudIdOnly = await resolveSyncedSaleInventoryReviewWithCtx(
       buildCtx() as never,
       {
@@ -255,51 +266,125 @@ describe("resolveSyncedSaleInventoryReviewWithCtx", () => {
         workItemId: "work-item-1" as Id<"operationalWorkItem">,
       },
     );
-    expect(cloudIdOnly).toEqual({
-      kind: "user_error",
-      error: {
-        code: "validation_failed",
-        message:
-          "Inventory review resolution requires terminal, local register session, and local transaction context.",
+    expect(cloudIdOnly).toMatchObject({
+      kind: "ok",
+      data: {
+        action: "resolved",
+        outcome: "completed",
+        status: "completed",
+        workItemId: "work-item-1",
       },
     });
     assertConformsToExportedReturns(
       resolveSyncedSaleInventoryReview,
       cloudIdOnly,
     );
+  });
 
-    const receiptOnly = await resolveSyncedSaleInventoryReviewWithCtx(
-      buildCtx() as never,
-      defaultArgs({
-        localTransactionId: undefined,
-        receiptNumber: "LR-001",
+  it("allows completion without a stock movement when current affected SKU stock is positive", async () => {
+    const ctx = buildCtx({
+      inventoryMovement: null,
+      productSku: buildProductSku({
+        inventoryCount: 2,
+        quantityAvailable: 2,
       }),
-    );
-    expect(receiptOnly).toMatchObject({
-      error: {
-        message:
-          "Inventory review resolution requires terminal, local register session, and local transaction context.",
-      },
-      kind: "user_error",
     });
 
-    const skuOnly = await resolveSyncedSaleInventoryReviewWithCtx(
-      buildCtx() as never,
+    const result = await resolveSyncedSaleInventoryReviewWithCtx(
+      ctx as never,
       defaultArgs({
-        localTransactionId: "sku-1",
+        localRegisterSessionId: undefined,
+        localTransactionId: undefined,
+        registerSessionId: undefined,
+        sourceId: undefined,
+        terminalId: undefined,
       }),
     );
-    expect(skuOnly).toEqual({
-      kind: "user_error",
-      error: {
-        code: "validation_failed",
-        message:
-          "Work item metadata does not match the sale context.",
+
+    expect(result).toMatchObject({
+      data: {
+        action: "resolved",
+        outcome: "completed",
+        status: "completed",
+        workItemId: "work-item-1",
       },
+      kind: "ok",
+    });
+    expect(ctx.db.patch).toHaveBeenCalledWith(
+      "operationalWorkItem",
+      "work-item-1",
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          resolution: expect.objectContaining({
+            domainTrace: expect.objectContaining({
+              proofKind: "current_inventory_state",
+            }),
+            stockUpdate: null,
+            stockState: {
+              inventoryCount: 2,
+              productSkuId: "sku-1",
+              proofKind: "current_inventory_state",
+              quantityAvailable: 2,
+              reviewedAt: 1_772_550_000_000,
+            },
+          }),
+        }),
+        status: "completed",
+      }),
+    );
+  });
+
+  it("rejects completion before the affected SKU has a stock update", async () => {
+    const result = await resolveSyncedSaleInventoryReviewWithCtx(
+      buildCtx({
+        inventoryMovement: null,
+        productSku: buildProductSku({
+          inventoryCount: 0,
+          quantityAvailable: 0,
+        }),
+      }) as never,
+      defaultArgs({
+        localRegisterSessionId: undefined,
+        localTransactionId: undefined,
+        registerSessionId: undefined,
+        sourceId: undefined,
+        terminalId: undefined,
+      }),
+    );
+    expect(result).toMatchObject({
+      error: {
+        message:
+          "Update the affected SKU's stock count before marking this inventory review complete.",
+      },
+      kind: "user_error",
     });
   });
 
-  it("rejects transaction and receipt mappings that do not use the canonical inventory-review key", async () => {
+  it("rejects stock updates that predate the synced sale inventory review", async () => {
+    const result = await resolveSyncedSaleInventoryReviewWithCtx(
+      buildCtx({
+        inventoryMovement: buildInventoryMovement({
+          createdAt: 0,
+        }),
+      }) as never,
+      defaultArgs({
+        localRegisterSessionId: undefined,
+        localTransactionId: undefined,
+        registerSessionId: undefined,
+        sourceId: undefined,
+        terminalId: undefined,
+      }),
+    );
+    expect(result).toMatchObject({
+      error: {
+        message:
+          "Update the affected SKU's stock count before marking this inventory review complete.",
+      },
+      kind: "user_error",
+    });
+  });
+
+  it("does not require the canonical local mapping when stock update proof exists", async () => {
     const ctx = buildCtx({
       posLocalSyncMapping: buildMapping({
         cloudId: "transaction-1",
@@ -314,15 +399,16 @@ describe("resolveSyncedSaleInventoryReviewWithCtx", () => {
       defaultArgs(),
     );
 
-    expect(result).toEqual({
-      kind: "user_error",
-      error: {
-        code: "validation_failed",
-        message:
-          "Inventory review resolution requires the canonical local work-item mapping.",
+    expect(result).toMatchObject({
+      data: {
+        action: "resolved",
+        outcome: "completed",
+        status: "completed",
+        workItemId: "work-item-1",
       },
+      kind: "ok",
     });
-    expect(ctx.db.patch).not.toHaveBeenCalled();
+    expect(ctx.db.patch).toHaveBeenCalled();
   });
 });
 
@@ -376,8 +462,10 @@ function defaultArgs(
 }
 
 type BuildCtxSeed = Partial<{
+  inventoryMovement: Doc<"inventoryMovement"> | null;
   operationalWorkItem: Doc<"operationalWorkItem">;
   posLocalSyncMapping: Doc<"posLocalSyncMapping">;
+  productSku: Doc<"productSku"> | null;
   posTerminal: Doc<"posTerminal">;
   posTransaction: Doc<"posTransaction">;
   registerSession: Doc<"registerSession">;
@@ -387,8 +475,14 @@ type BuildCtxSeed = Partial<{
 
 function buildCtx(seed: BuildCtxSeed = {}) {
   const rows = {
+    inventoryMovement:
+      seed.inventoryMovement === undefined
+        ? buildInventoryMovement()
+        : seed.inventoryMovement,
     operationalWorkItem: seed.operationalWorkItem ?? buildWorkItem(),
     posLocalSyncMapping: seed.posLocalSyncMapping ?? buildMapping(),
+    productSku:
+      seed.productSku === undefined ? buildProductSku() : seed.productSku,
     posTerminal: seed.posTerminal ?? buildTerminal(),
     posTransaction: seed.posTransaction ?? buildTransaction(),
     registerSession: seed.registerSession ?? buildRegisterSession(),
@@ -499,6 +593,7 @@ function buildWorkItem(
       registerSessionId: "register-session-1",
       sourceId: "transaction-1",
       sourceType: "posTransaction",
+      terminalId: "terminal-1",
     },
     organizationId: "org-1" as Id<"organization">,
     priority: "high",
@@ -508,6 +603,46 @@ function buildWorkItem(
     type: "synced_sale_inventory_review",
     ...overrides,
   } as Doc<"operationalWorkItem">;
+}
+
+function buildInventoryMovement(
+  overrides: Partial<Doc<"inventoryMovement">> = {},
+): Doc<"inventoryMovement"> {
+  return {
+    _creationTime: 1,
+    _id: "movement-1" as Id<"inventoryMovement">,
+    actorUserId: "user-1" as Id<"athenaUser">,
+    createdAt: 1_772_549_999_000,
+    movementType: "cycle_count",
+    organizationId: "org-1" as Id<"organization">,
+    productId: "product-1" as Id<"product">,
+    productSkuId: "sku-1" as Id<"productSku">,
+    quantityDelta: 4,
+    reasonCode: "cycle_count_reconciliation",
+    sourceId: "stock_adjustment_batch:batch-1",
+    sourceType: "stock_adjustment_batch",
+    storeId: "store-1" as Id<"store">,
+    ...overrides,
+  } as Doc<"inventoryMovement">;
+}
+
+function buildProductSku(
+  overrides: Partial<Doc<"productSku">> = {},
+): Doc<"productSku"> {
+  return {
+    _creationTime: 1,
+    _id: "sku-1" as Id<"productSku">,
+    barcode: "SKU-1",
+    cost: 0,
+    inventoryCount: 0,
+    price: 2500,
+    productId: "product-1" as Id<"product">,
+    quantityAvailable: 0,
+    sku: "SKU-1",
+    storeId: "store-1" as Id<"store">,
+    updatedAt: 1,
+    ...overrides,
+  } as Doc<"productSku">;
 }
 
 function buildTerminal(
