@@ -24,7 +24,6 @@ import { useForm } from "react-hook-form";
 import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { ArrowLeft, ArrowRight } from "lucide-react";
-import { useNavigate } from "@tanstack/react-router";
 
 const REQUEST_NEW_CODE_DELAY_SECONDS = 59;
 const OTP_SLOT_INDEXES = [0, 1, 2, 3, 4, 5];
@@ -79,7 +78,6 @@ export function InputOTPForm({
   );
   const signInInFlightRef = useRef(false);
   const { signIn } = useAuthActions();
-  const navigate = useNavigate();
 
   useEffect(() => {
     const handleAuthSyncFailed = () => {
@@ -151,7 +149,6 @@ export function InputOTPForm({
       startAthenaAuthSyncHandoff();
       setIsAuthHandoffPending(true);
       setIsSigningIn(false);
-      navigate({ to: "/" });
       return;
     } catch (e) {
       const message = e instanceof Error ? e.message : "Could not verify code";

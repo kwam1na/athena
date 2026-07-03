@@ -59,11 +59,11 @@ describe("PosRecoveryCodeForm", () => {
     );
     expect(window.sessionStorage.setItem).toHaveBeenCalledWith(
       PENDING_ATHENA_AUTH_SYNC_KEY,
-      "1",
+      expect.stringMatching(
+        /"redirectTo":"\/wigclub\/store\/wigclub\/pos\/register"/,
+      ),
     );
-    expect(mocked.navigate).toHaveBeenCalledWith({
-      to: "/wigclub/store/wigclub/pos/register",
-    });
+    expect(mocked.navigate).not.toHaveBeenCalled();
     expect(window.localStorage.setItem).not.toHaveBeenCalledWith(
       expect.any(String),
       "abc-123",
@@ -137,7 +137,13 @@ describe("PosRecoveryCodeForm", () => {
     await user.type(screen.getByLabelText(/recovery code/i), "abc-123");
     await user.click(screen.getByRole("button", { name: /continue/i }));
 
-    await waitFor(() => expect(mocked.navigate).toHaveBeenCalledWith({ to: "/" }));
+    await waitFor(() =>
+      expect(window.sessionStorage.setItem).toHaveBeenCalledWith(
+        PENDING_ATHENA_AUTH_SYNC_KEY,
+        expect.stringMatching(/"redirectTo":"\/"/),
+      ),
+    );
+    expect(mocked.navigate).not.toHaveBeenCalled();
   });
 
   it("navigates query-bearing recovery redirects with separate search params", async () => {
@@ -157,10 +163,13 @@ describe("PosRecoveryCodeForm", () => {
     await user.click(screen.getByRole("button", { name: /continue/i }));
 
     await waitFor(() =>
-      expect(mocked.navigate).toHaveBeenCalledWith({
-        to: "/wigclub/store/wigclub/pos/register",
-        search: { drawer: "front" },
-      }),
+      expect(window.sessionStorage.setItem).toHaveBeenCalledWith(
+        PENDING_ATHENA_AUTH_SYNC_KEY,
+        expect.stringMatching(
+          /"redirectTo":"\/wigclub\/store\/wigclub\/pos\/register\?drawer=front"/,
+        ),
+      ),
     );
+    expect(mocked.navigate).not.toHaveBeenCalled();
   });
 });

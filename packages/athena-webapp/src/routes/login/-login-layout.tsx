@@ -7,14 +7,17 @@ import { useConvexAuth, useMutation } from "convex/react";
 import { useEffect, useRef, useState } from "react";
 import { useAuthToken } from "@convex-dev/auth/react";
 import {
-  ATHENA_AUTH_SYNC_FAILED_EVENT,
   ATHENA_PENDING_AUTH_SYNC_EVENT,
   LOGGED_IN_USER_ID_KEY,
   POS_APP_ACCOUNT_ID_KEY,
-  PENDING_ATHENA_AUTH_SYNC_KEY,
 } from "~/src/lib/constants";
 import { api } from "~/convex/_generated/api";
 import { runCommand } from "~/src/lib/errors/runCommand";
+import {
+  clearAthenaAuthSyncHandoff,
+  failAthenaAuthSyncHandoff,
+  getAthenaAuthSyncHandoffStatus,
+} from "~/src/components/auth/Login/authSyncHandoff";
 
 const HOME_PATH = "/";
 
@@ -23,6 +26,18 @@ const AUTH_SYNC_MAX_ATTEMPTS = 60;
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function navigationTargetForRedirect(redirectTo: string) {
+  const url = new URL(redirectTo, window.location.origin);
+  const pathname = url.pathname || "/";
+  const search = Object.fromEntries(url.searchParams.entries());
+
+  if (Object.keys(search).length === 0) {
+    return { to: pathname };
+  }
+
+  return { to: pathname, search };
 }
 
 function useDocumentScrollLock() {
@@ -90,8 +105,8 @@ export function LoginLayout() {
   }, []);
 
   useEffect(() => {
-    const pendingAuthSync =
-      sessionStorage.getItem(PENDING_ATHENA_AUTH_SYNC_KEY) === "1";
+    const handoffStatus = getAthenaAuthSyncHandoffStatus();
+    const pendingAuthSync = handoffStatus.kind === "active";
     const hasLoggedInUserId = Boolean(
       localStorage.getItem(LOGGED_IN_USER_ID_KEY)
     );
@@ -100,11 +115,28 @@ export function LoginLayout() {
     const shouldCompletePendingAuthSync =
       pendingAuthSync || shouldRecoverAuthenticatedSession;
 
+    if (handoffStatus.kind === "expired" || handoffStatus.kind === "invalid") {
+      failAthenaAuthSyncHandoff();
+      return;
+    }
+
     if (isSyncingRef.current || !shouldCompletePendingAuthSync) {
       return;
     }
 
     if (isLoading || !isAuthenticated || !authToken) {
+      if (pendingAuthSync) {
+        const timeoutId = window.setTimeout(() => {
+          const latestStatus = getAthenaAuthSyncHandoffStatus();
+          if (latestStatus.kind === "active") {
+            failAthenaAuthSyncHandoff();
+            setPendingAuthSyncTick((tick) => tick + 1);
+          }
+        }, Math.max(handoffStatus.expiresAt - Date.now(), 0));
+
+        return () => window.clearTimeout(timeoutId);
+      }
+
       return;
     }
 
@@ -156,10 +188,12 @@ export function LoginLayout() {
           return;
         }
 
-        sessionStorage.removeItem(PENDING_ATHENA_AUTH_SYNC_KEY);
+        const redirectTo =
+          handoffStatus.kind === "active" ? handoffStatus.handoff.redirectTo : "/";
+        clearAthenaAuthSyncHandoff();
         localStorage.setItem(LOGGED_IN_USER_ID_KEY, userId);
         localStorage.setItem(POS_APP_ACCOUNT_ID_KEY, userId);
-        navigate({ to: "/" });
+        navigate(navigationTargetForRedirect(redirectTo) as never);
       } catch (error) {
         if (!isMountedRef.current) {
           return;
@@ -171,7 +205,7 @@ export function LoginLayout() {
             : "Could not finish loading your Athena profile";
 
         setAuthSyncError(message);
-        window.dispatchEvent(new Event(ATHENA_AUTH_SYNC_FAILED_EVENT));
+        failAthenaAuthSyncHandoff();
         isSyncingRef.current = false;
       }
     };

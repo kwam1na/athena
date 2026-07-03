@@ -1,5 +1,4 @@
 import { useAuthActions } from "@convex-dev/auth/react";
-import { useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -12,18 +11,6 @@ import { startAthenaAuthSyncHandoff } from "./authSyncHandoff";
 const POS_RECOVERY_ACCOUNT_EMAIL = "pos@wigclub.store";
 const RECOVERY_FAILURE_COPY =
   "POS sign-in failed. Check the recovery code or ask an admin to confirm POS-only access.";
-
-function navigationTargetForRedirect(redirectTo: string) {
-  const [pathname, queryString] = redirectTo.split("?", 2);
-  if (!queryString) {
-    return { to: pathname };
-  }
-
-  return {
-    to: pathname,
-    search: Object.fromEntries(new URLSearchParams(queryString)),
-  };
-}
 
 export function PosRecoveryCodeForm({
   onBack,
@@ -44,7 +31,6 @@ export function PosRecoveryCodeForm({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const signInInFlightRef = useRef(false);
   const { signIn } = useAuthActions();
-  const navigate = useNavigate();
 
   useEffect(() => {
     const handleAuthSyncFailed = () => {
@@ -104,10 +90,9 @@ export function PosRecoveryCodeForm({
         return;
       }
 
-      const targetPath = startAthenaAuthSyncHandoff(redirectTo);
+      startAthenaAuthSyncHandoff(redirectTo);
       setIsAuthHandoffPending(true);
       setIsSigningIn(false);
-      navigate(navigationTargetForRedirect(targetPath) as never);
     } catch {
       setErrorMessage(RECOVERY_FAILURE_COPY);
       signInInFlightRef.current = false;
