@@ -125,7 +125,7 @@ describe("ProductStock money inputs", () => {
   it("requires linked pending checkout SKU prices to match", () => {
     expect(
       resolvePendingCheckoutSkuLinkPriceState({
-        pendingDisplayPrice: 420,
+        pendingStoredPrice: 42000,
         trustedSkuStoredPrice: 42000,
       }),
     ).toMatchObject({
@@ -135,7 +135,7 @@ describe("ProductStock money inputs", () => {
 
     expect(
       resolvePendingCheckoutSkuLinkPriceState({
-        pendingDisplayPrice: 420,
+        pendingStoredPrice: 420,
         trustedSkuStoredPrice: 40000,
       }),
     ).toMatchObject({
@@ -145,7 +145,7 @@ describe("ProductStock money inputs", () => {
 
     expect(
       resolvePendingCheckoutSkuLinkPriceState({
-        pendingDisplayPrice: null,
+        pendingStoredPrice: null,
         trustedSkuStoredPrice: 42000,
       }),
     ).toMatchObject({

@@ -114,6 +114,7 @@ type DailyOperationsLane = {
 };
 
 type DailyOperationsTimelineEvent = {
+  approvedProductLink?: LinkTarget;
   createdAt: number;
   id: string;
   message: string;
@@ -862,33 +863,59 @@ async function mapOperationalTimelineEvent(
   const pendingCheckoutItem = pendingCheckoutItemId
     ? await ctx.db.get("posPendingCheckoutItem", pendingCheckoutItemId)
     : null;
+  const isPendingCheckoutLinkReviewEvent =
+    event.subjectType === "pos_pending_checkout_item" &&
+    event.eventType === "pos_pending_checkout_item_reviewed";
   const linkedPendingCheckoutProductId =
-    pendingCheckoutItem?.status === "linked_to_catalog"
+    pendingCheckoutItem?.status === "linked_to_catalog" &&
+    !isPendingCheckoutLinkReviewEvent
       ? pendingCheckoutItem.approvedProductId
       : undefined;
   const linkedPendingCheckoutProductSkuId =
-    pendingCheckoutItem?.status === "linked_to_catalog"
+    pendingCheckoutItem?.status === "linked_to_catalog" &&
+    !isPendingCheckoutLinkReviewEvent
       ? pendingCheckoutItem.approvedProductSkuId
       : undefined;
+  const pendingCheckoutReviewProductId =
+    isPendingCheckoutLinkReviewEvent &&
+    typeof metadata.provisionalProductId === "string"
+      ? metadata.provisionalProductId
+      : isPendingCheckoutLinkReviewEvent
+        ? pendingCheckoutItem?.provisionalProductId
+        : undefined;
+  const pendingCheckoutReviewProductSkuId =
+    isPendingCheckoutLinkReviewEvent &&
+    typeof metadata.provisionalProductSkuId === "string"
+      ? (metadata.provisionalProductSkuId as Id<"productSku">)
+      : isPendingCheckoutLinkReviewEvent
+        ? pendingCheckoutItem?.provisionalProductSkuId
+        : undefined;
   const productId =
-    typeof metadata.productId === "string"
+    pendingCheckoutReviewProductId ??
+    (typeof metadata.productId === "string"
       ? metadata.productId
       : linkedPendingCheckoutProductId
         ? linkedPendingCheckoutProductId
       : typeof metadata.provisionalProductId === "string"
         ? metadata.provisionalProductId
-        : pendingCheckoutItem?.provisionalProductId;
+        : pendingCheckoutItem?.provisionalProductId);
   const productSkuId =
-    typeof metadata.productSkuId === "string"
+    pendingCheckoutReviewProductSkuId ??
+    (typeof metadata.productSkuId === "string"
       ? (metadata.productSkuId as Id<"productSku">)
       : linkedPendingCheckoutProductSkuId
         ? linkedPendingCheckoutProductSkuId
       : typeof metadata.provisionalProductSkuId === "string"
         ? (metadata.provisionalProductSkuId as Id<"productSku">)
-        : pendingCheckoutItem?.provisionalProductSkuId;
+        : pendingCheckoutItem?.provisionalProductSkuId);
   const productSku = productSkuId
     ? await ctx.db.get("productSku", productSkuId)
     : null;
+  const approvedProductSku =
+    isPendingCheckoutLinkReviewEvent &&
+    pendingCheckoutItem?.approvedProductSkuId
+      ? await ctx.db.get("productSku", pendingCheckoutItem.approvedProductSkuId)
+      : null;
   const isRegisterSessionEvent = isRegisterSessionSubjectType(
     event.subjectType,
   );
@@ -988,6 +1015,26 @@ async function mapOperationalTimelineEvent(
           to: "/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug",
         }
       : undefined;
+  const approvedProductLink =
+    isPendingCheckoutLinkReviewEvent &&
+    pendingCheckoutItem?.approvedProductId &&
+    pendingCheckoutItem.approvedProductSkuId
+      ? {
+          label:
+            approvedProductSku?.productName ??
+            approvedProductSku?.sku ??
+            "Approved product",
+          params: {
+            productSlug: pendingCheckoutItem.approvedProductId,
+          },
+          search: {
+            ...(approvedProductSku?.sku
+              ? { variant: approvedProductSku.sku }
+              : {}),
+          },
+          to: "/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug",
+        }
+      : undefined;
   const registerNumber =
     typeof metadata.registerNumber === "string"
       ? metadata.registerNumber
@@ -1024,6 +1071,7 @@ async function mapOperationalTimelineEvent(
       : undefined;
 
   return {
+    ...(approvedProductLink ? { approvedProductLink } : {}),
     createdAt: event.createdAt,
     id: event._id,
     message: normalizeTimelineEventMessage(event.message, {
@@ -2628,6 +2676,29 @@ export const getDailyOperationsStoreRequestsSnapshot = query({
       approvalsLane: buildApprovalsLane({
         approvalCount: approvals.approvalRequests.length,
         approvalCountLabel: approvals.approvalRequestsCountLabel,
+      }),
+      operatingDate: args.operatingDate,
+    };
+  },
+});
+
+export const getDailyOperationsAutomationSnapshot = query({
+  args: dailyOperationsSnapshotArgsValidator,
+  handler: async (ctx, args) => {
+    const { includeManagerReviewEvidence } =
+      await authorizeDailyOperationsSnapshot(ctx, args);
+    const dailyCloseRecord = await getDailyCloseRecordForDate(ctx, args);
+
+    return {
+      automationStatuses: await listDailyOperationsAutomationStatuses(ctx, {
+        ...args,
+        closeCompletion: dailyCloseRecord
+          ? {
+              actorType: dailyCloseRecord.actorType,
+              automationRunId: dailyCloseRecord.automationRunId,
+            }
+          : null,
+        includeManagerReviewEvidence,
       }),
       operatingDate: args.operatingDate,
     };

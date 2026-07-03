@@ -20,7 +20,7 @@ export function DefaultCatchBoundary({ error }: ErrorComponentProps) {
     select: (state) => state.id === rootRouteId,
   });
   const actionClassName =
-    "transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-[0.98]";
+    "transition-transform duration-150 ease-emphasized active:scale-[0.98]";
 
   console.error(error);
 

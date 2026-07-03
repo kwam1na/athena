@@ -321,6 +321,13 @@ function buildTrustedSkuFingerprint(productSku: Doc<"productSku">) {
   });
 }
 
+function pendingCheckoutLinkPricesMatch(args: {
+  pendingStoredPrice: number;
+  trustedSkuStoredPrice: number;
+}) {
+  return args.pendingStoredPrice === args.trustedSkuStoredPrice;
+}
+
 function validateReviewedTrustedInventoryFields(
   args: PendingCheckoutTrustedInventoryFinalizationArgs,
 ) {
@@ -1157,11 +1164,14 @@ export const resolvePendingCheckoutItemReview = mutation({
     approvedProductId: v.optional(v.id("product")),
     approvedProductSkuId: v.optional(v.id("productSku")),
   },
-  returns: pendingCheckoutReviewItemValidator,
+  returns: commandResultValidator(pendingCheckoutReviewItemValidator),
   handler: async (ctx, args) => {
     const store = await ctx.db.get("store", args.storeId);
     if (!store) {
-      throw new Error("Store not found.");
+      return userError({
+        code: "not_found",
+        message: "Store not found.",
+      });
     }
 
     const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
@@ -1178,7 +1188,10 @@ export const resolvePendingCheckoutItemReview = mutation({
       args.pendingCheckoutItemId,
     );
     if (!item || item.storeId !== args.storeId) {
-      throw new Error("Pending checkout item not found.");
+      return userError({
+        code: "not_found",
+        message: "Pending checkout item not found.",
+      });
     }
     if (
       item.status === "linked_to_catalog" &&
@@ -1187,9 +1200,11 @@ export const resolvePendingCheckoutItemReview = mutation({
         args.approvedProductId !== item.approvedProductId ||
         args.approvedProductSkuId !== item.approvedProductSkuId)
     ) {
-      throw new Error(
-        "This pending checkout item is already linked to a trusted SKU. Create a correction to change linked sale history.",
-      );
+      return userError({
+        code: "conflict",
+        message:
+          "This pending checkout item is already linked to a trusted SKU. Create a correction to change linked sale history.",
+      });
     }
 
     const approvedProduct = args.approvedProductId
@@ -1198,9 +1213,19 @@ export const resolvePendingCheckoutItemReview = mutation({
     const approvedSku = args.approvedProductSkuId
       ? await ctx.db.get("productSku", args.approvedProductSkuId)
       : null;
+    const provisionalSku = item.provisionalProductSkuId
+      ? await ctx.db.get("productSku", item.provisionalProductSkuId)
+      : null;
     const approvedProductCategory = approvedProduct?.categoryId
       ? await ctx.db.get("category", approvedProduct.categoryId)
       : null;
+    const pendingStoredPrice =
+      provisionalSku &&
+      provisionalSku.storeId === args.storeId &&
+      provisionalSku._id === item.provisionalProductSkuId
+        ? provisionalSku.price
+        : item.provisionalPrice;
+    const trustedSkuLinkPrice = approvedSku?.netPrice ?? approvedSku?.price;
     if (
       args.status === "approved" ||
       args.status === "linked_to_catalog" ||
@@ -1221,20 +1246,26 @@ export const resolvePendingCheckoutItemReview = mutation({
           sku: approvedSku,
         })
       ) {
-        throw new Error(
-          "Choose a valid catalog product and SKU from this store.",
-        );
+        return userError({
+          code: "validation_failed",
+          message: "Choose a valid catalog product and SKU from this store.",
+        });
       }
 
       if (
         args.status === "linked_to_catalog" &&
-        (typeof item.provisionalPrice !== "number" ||
-          typeof approvedSku.price !== "number" ||
-          item.provisionalPrice !== approvedSku.price)
+        (typeof pendingStoredPrice !== "number" ||
+          typeof trustedSkuLinkPrice !== "number" ||
+          !pendingCheckoutLinkPricesMatch({
+            pendingStoredPrice,
+            trustedSkuStoredPrice: trustedSkuLinkPrice,
+          }))
       ) {
-        throw new Error(
-          "Link to a SKU with the same price as the pending checkout item.",
-        );
+        return userError({
+          code: "validation_failed",
+          message:
+            "Link to a SKU with the same price as the pending checkout item.",
+        });
       }
     }
 
@@ -1277,9 +1308,10 @@ export const resolvePendingCheckoutItemReview = mutation({
         storeId: args.storeId,
       });
       if (existingBarcodeSku && existingBarcodeSku._id !== approvedSku._id) {
-        throw new Error(
-          "This lookup code already belongs to another catalog SKU.",
-        );
+        return userError({
+          code: "conflict",
+          message: "This lookup code already belongs to another catalog SKU.",
+        });
       }
 
       if (!approvedSku.barcode?.trim()) {
@@ -1290,15 +1322,28 @@ export const resolvePendingCheckoutItemReview = mutation({
         await upsertProductSkuSearchProjection(ctx, approvedSku._id);
         attachedLookupCode = item.lookupCode;
       } else {
-        lookupAliasId = await upsertPendingCheckoutLookupAlias(ctx, {
-          lookupCode: item.lookupCode,
-          now: reviewedAt,
-          organizationId: store.organizationId,
-          pendingCheckoutItemId: item._id,
-          productId: approvedProduct!._id,
-          productSkuId: approvedSku._id,
-          storeId: args.storeId,
-        });
+        try {
+          lookupAliasId = await upsertPendingCheckoutLookupAlias(ctx, {
+            lookupCode: item.lookupCode,
+            now: reviewedAt,
+            organizationId: store.organizationId,
+            pendingCheckoutItemId: item._id,
+            productId: approvedProduct!._id,
+            productSkuId: approvedSku._id,
+            storeId: args.storeId,
+          });
+        } catch (error) {
+          if (
+            error instanceof Error &&
+            error.message === "This lookup code is already linked to another SKU."
+          ) {
+            return userError({
+              code: "conflict",
+              message: error.message,
+            });
+          }
+          throw error;
+        }
       }
     }
 
@@ -1351,6 +1396,6 @@ export const resolvePendingCheckoutItemReview = mutation({
       subjectType: "pos_pending_checkout_item",
     });
 
-    return toPendingCheckoutReviewItem(reviewedItem);
+    return ok(toPendingCheckoutReviewItem(reviewedItem));
   },
 });

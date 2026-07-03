@@ -32,7 +32,9 @@ interface DataTableProps<TData, TValue> {
   autoResetPageIndex?: boolean;
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
+  emptyState?: React.ReactNode;
   getRowClassName?: (row: Row<TData>) => string | undefined;
+  isLoadingMore?: boolean;
   renderMobileCard?: (row: TData, tableRow: Row<TData>) => React.ReactNode;
   pageIndex?: number;
   onLoadMore?: () => void;
@@ -40,6 +42,7 @@ interface DataTableProps<TData, TValue> {
   onRowClick?: (row: Row<TData>) => void;
   paginationRangeItemLabel?: string;
   paginationRangeItemPluralLabel?: string;
+  showPagination?: boolean;
   tableId: string; // Unique identifier for localStorage keys
 }
 
@@ -47,7 +50,9 @@ export function GenericDataTable<TData, TValue>({
   autoResetPageIndex,
   columns,
   data,
+  emptyState,
   getRowClassName,
+  isLoadingMore,
   renderMobileCard,
   pageIndex,
   onLoadMore,
@@ -55,6 +60,7 @@ export function GenericDataTable<TData, TValue>({
   onRowClick,
   paginationRangeItemLabel,
   paginationRangeItemPluralLabel,
+  showPagination = true,
   tableId,
 }: DataTableProps<TData, TValue>) {
   const [rowSelection, setRowSelection] = React.useState({});
@@ -114,7 +120,7 @@ export function GenericDataTable<TData, TValue>({
             ))
           ) : (
             <div className="rounded-md border border-border p-layout-md text-center text-sm text-muted-foreground">
-              No results.
+              {emptyState ?? "No results."}
             </div>
           )}
         </div>
@@ -172,19 +178,22 @@ export function GenericDataTable<TData, TValue>({
                   colSpan={columns.length}
                   className="h-24 text-center"
                 >
-                  No results.
+                  {emptyState ?? "No results."}
                 </TableCell>
               </TableRow>
             )}
           </TableBody>
         </Table>
       </div>
-      <DataTablePagination
-        onLoadMore={onLoadMore}
-        rangeItemLabel={paginationRangeItemLabel}
-        rangeItemPluralLabel={paginationRangeItemPluralLabel}
-        table={table}
-      />
+      {showPagination ? (
+        <DataTablePagination
+          isLoadingMore={isLoadingMore}
+          onLoadMore={onLoadMore}
+          rangeItemLabel={paginationRangeItemLabel}
+          rangeItemPluralLabel={paginationRangeItemPluralLabel}
+          table={table}
+        />
+      ) : null}
     </div>
   );
 }

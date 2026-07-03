@@ -15,7 +15,7 @@ import {
 } from "@zxing/browser";
 import {
   Camera,
-  ExternalLink,
+  ArrowUpRight,
   Info,
   Package,
   PackagePlus,
@@ -38,6 +38,7 @@ import { useAuth } from "~/src/hooks/useAuth";
 import { usePOSQuickAddProductSku } from "~/src/hooks/usePOSProducts";
 import { getProductName } from "~/src/lib/productUtils";
 import { getOrigin } from "~/src/lib/navigationUtils";
+import { usePermissions } from "~/src/hooks/usePermissions";
 import { formatStoredCurrencyAmount } from "@/lib/pos/displayAmounts";
 import {
   normalizeSkuSearchQuery,
@@ -160,6 +161,7 @@ export type StockAdjustmentSearchState = {
   o?: string;
   page?: number;
   query?: string;
+  selectedSku?: string;
   sku?: string;
 };
 
@@ -266,6 +268,7 @@ const MANUAL_REASON_LABELS: Record<
 
 const ALL_CATEGORY_FILTER_KEY = "__all_categories";
 const UNCATEGORIZED_SCOPE_KEY = "__uncategorized";
+const STOCK_ADJUSTMENT_TABLE_PAGE_SIZE = 10;
 const INVENTORY_NUMBER_FORMATTER = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 1,
   notation: "compact",
@@ -575,7 +578,7 @@ export function SkuDetailPanel({
               to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug"
             >
               View
-              <ExternalLink className="h-3 w-3" />
+              <ArrowUpRight className="h-3 w-3" />
             </Link>
           ) : null}
         </div>
@@ -1731,6 +1734,7 @@ export function StockAdjustmentWorkspaceContent({
   storeId,
 }: StockAdjustmentWorkspaceContentProps) {
   const { user } = useAuth();
+  const { hasFullAdminAccess } = usePermissions();
   const quickAddProductSku = usePOSQuickAddProductSku();
   const [adjustmentType, setAdjustmentType] = useState<StockAdjustmentType>(
     searchState?.mode ?? "cycle_count",
@@ -1752,9 +1756,9 @@ export function StockAdjustmentWorkspaceContent({
   );
   const [activeInventoryItemId, setActiveInventoryItemId] =
     useState<Id<"productSku"> | null>(
-      (searchState?.sku as Id<"productSku"> | undefined) ??
-        inventoryItems[0]?._id ??
-        null,
+      searchState?.sku || searchState?.selectedSku
+        ? ((searchState.sku ?? searchState.selectedSku) as Id<"productSku">)
+        : null,
     );
   const [filters, setFilters] = useState<StockAdjustmentFilterState>({
     availability: searchState?.availability ?? "all",
@@ -1786,16 +1790,6 @@ export function StockAdjustmentWorkspaceContent({
       setCycleCountSubmissionOutcome(null);
     }
   }, [adjustmentType, searchState?.mode]);
-
-  useEffect(() => {
-    if (searchState?.sku === undefined) return;
-
-    setActiveInventoryItemId(
-      searchState.sku
-        ? (searchState.sku as Id<"productSku">)
-        : (inventoryItems[0]?._id ?? null),
-    );
-  }, [inventoryItems, searchState?.sku]);
 
   useEffect(() => {
     setFilters((current) => ({
@@ -1830,14 +1824,26 @@ export function StockAdjustmentWorkspaceContent({
         onSearchStateChange?.({
           category: selectedCategory,
           page: 1,
-          sku: itemId ?? undefined,
+          selectedSku: itemId ?? undefined,
+          sku: undefined,
         });
         return;
       }
 
-      onSearchStateChange?.({ sku: itemId ?? undefined });
+      if (itemId || searchState?.selectedSku || searchState?.sku) {
+        onSearchStateChange?.({
+          selectedSku: itemId ?? undefined,
+          sku: undefined,
+        });
+      }
     },
-    [filters.category, inventoryItems, onSearchStateChange],
+    [
+      filters.category,
+      inventoryItems,
+      onSearchStateChange,
+      searchState?.selectedSku,
+      searchState?.sku,
+    ],
   );
 
   useEffect(() => {
@@ -1860,6 +1866,7 @@ export function StockAdjustmentWorkspaceContent({
   }, [cycleCountDraft?.lines, inventoryItems]);
 
   useEffect(() => {
+    if (searchState?.sku) return;
     if (
       activeInventoryItemId &&
       inventoryItems.some((item) => item._id === activeInventoryItemId)
@@ -1867,8 +1874,8 @@ export function StockAdjustmentWorkspaceContent({
       return;
     }
 
-    setActiveInventoryItemId(inventoryItems[0]?._id ?? null);
-  }, [activeInventoryItemId, inventoryItems]);
+    setActiveInventoryItemId(null);
+  }, [activeInventoryItemId, inventoryItems, searchState?.sku]);
 
   const cycleCountDraftLineMap = useMemo(
     () =>
@@ -2011,9 +2018,19 @@ export function StockAdjustmentWorkspaceContent({
         a.label.localeCompare(b.label),
       );
     }, [rows]);
+  const routeFilteredInventoryItemId = searchState?.sku
+    ? (searchState.sku as Id<"productSku">)
+    : null;
+  const routeSelectedInventoryItemId = searchState?.selectedSku
+    ? (searchState.selectedSku as Id<"productSku">)
+    : null;
+  const selectedInventoryItemId =
+    routeFilteredInventoryItemId ??
+    routeSelectedInventoryItemId ??
+    activeInventoryItemId;
   const routeSkuFilterQuery =
-    adjustmentType === "manual" && !filters.query.trim() && searchState?.sku
-      ? searchState.sku
+    !filters.query.trim() && routeFilteredInventoryItemId
+      ? routeFilteredInventoryItemId
       : "";
   const normalizedFilterQuery = normalizeSkuSearchQuery(
     filters.query || routeSkuFilterQuery,
@@ -2143,9 +2160,90 @@ export function StockAdjustmentWorkspaceContent({
   const displayedReasonCode =
     adjustmentType === "manual" ? reasonCode : CYCLE_COUNT_REASON_CODE;
   const activeInventoryItem =
-    inventoryItems.find((item) => item._id === activeInventoryItemId) ??
-    inventoryItems[0] ??
-    null;
+    inventoryItems.find((item) => item._id === selectedInventoryItemId) ?? null;
+  const requestedTablePageIndex =
+    searchState?.page === undefined
+      ? undefined
+      : Math.max(searchState.page - 1, 0);
+  const stockAdjustmentTablePageIndex = routeSkuFilterQuery
+    ? 0
+    : requestedTablePageIndex;
+  const handleStockTablePageIndexChange = useCallback(
+    (nextPageIndex: number) => {
+      onSearchStateChange?.({ page: nextPageIndex + 1 });
+    },
+    [onSearchStateChange],
+  );
+  const restoredInventoryItemId =
+    routeFilteredInventoryItemId ?? routeSelectedInventoryItemId;
+  const isRestoredItemMissing =
+    Boolean(restoredInventoryItemId) &&
+    !inventoryItems.some((item) => item._id === restoredInventoryItemId);
+  const isRequestedPageMissing =
+    !routeSkuFilterQuery &&
+    requestedTablePageIndex !== undefined &&
+    tableRows.length <=
+      requestedTablePageIndex * STOCK_ADJUSTMENT_TABLE_PAGE_SIZE;
+  const isSearchMissingLoadedRows =
+    Boolean(normalizedFilterQuery) && tableRows.length === 0;
+  const isTableAwaitingMoreInventoryRows =
+    Boolean(onLoadMoreInventoryItems) &&
+    (canLoadMoreInventoryItems || isLoadingMoreInventoryItems) &&
+    (isRestoredItemMissing ||
+      isRequestedPageMissing ||
+      isSearchMissingLoadedRows);
+  const stockAdjustmentAutoLoadStatus = isTableAwaitingMoreInventoryRows
+    ? isRestoredItemMissing || isRequestedPageMissing
+      ? {
+          description: "Loading more SKUs to recover the selected row and page.",
+          label: "Restoring saved stock view",
+        }
+      : {
+          description:
+            "Loading more SKUs before showing final search results.",
+          label: "Checking remaining inventory",
+        }
+    : null;
+  const stockAdjustmentTableEmptyState = isTableAwaitingMoreInventoryRows ? (
+    <div className="mx-auto flex max-w-sm flex-col items-center gap-1 py-layout-xs">
+      <p className="text-sm font-medium text-foreground">
+        Searching more SKUs
+      </p>
+      <p className="text-xs leading-5 text-muted-foreground">
+        Checking the remaining inventory before showing final results.
+      </p>
+    </div>
+  ) : (
+    <div className="mx-auto flex max-w-sm flex-col items-center gap-1 py-layout-xs">
+      <p className="text-sm font-medium text-foreground">
+        {normalizedFilterQuery
+          ? "No SKUs match this search"
+          : "No SKUs match these filters"}
+      </p>
+      <p className="text-xs leading-5 text-muted-foreground">
+        {normalizedFilterQuery
+          ? "Try a product name, SKU, or barcode."
+          : "Adjust the filters to see inventory."}
+      </p>
+    </div>
+  );
+  const stableTableRowsDuringAutoLoadRef = useRef<StockAdjustmentRow[] | null>(
+    null,
+  );
+  const wasTableAwaitingMoreInventoryRowsRef = useRef(false);
+
+  if (isTableAwaitingMoreInventoryRows) {
+    if (!wasTableAwaitingMoreInventoryRowsRef.current) {
+      stableTableRowsDuringAutoLoadRef.current = tableRows;
+    }
+    wasTableAwaitingMoreInventoryRowsRef.current = true;
+  } else {
+    stableTableRowsDuringAutoLoadRef.current = null;
+    wasTableAwaitingMoreInventoryRowsRef.current = false;
+  }
+
+  const displayedTableRows =
+    stableTableRowsDuringAutoLoadRef.current ?? tableRows;
   const inventoryState = useMemo(() => {
     const loadedTotals = inventoryItems.reduce(
       (current, item) => {
@@ -2295,14 +2393,40 @@ export function StockAdjustmentWorkspaceContent({
 
   useEffect(() => {
     if (
+      !canLoadMoreInventoryItems ||
+      isLoadingMoreInventoryItems ||
+      !onLoadMoreInventoryItems
+    ) {
+      return;
+    }
+
+    if (
+      isRestoredItemMissing ||
+      isRequestedPageMissing ||
+      isSearchMissingLoadedRows
+    ) {
+      onLoadMoreInventoryItems();
+    }
+  }, [
+    canLoadMoreInventoryItems,
+    isRestoredItemMissing,
+    isRequestedPageMissing,
+    isSearchMissingLoadedRows,
+    isLoadingMoreInventoryItems,
+    onLoadMoreInventoryItems,
+  ]);
+
+  useEffect(() => {
+    if (searchState?.sku) return;
+    if (
       activeInventoryItemId &&
       tableRows.some((row) => row.inventoryItem._id === activeInventoryItemId)
     ) {
       return;
     }
 
-    setActiveInventoryItemId(tableRows[0]?.inventoryItem._id ?? null);
-  }, [activeInventoryItemId, tableRows]);
+    setActiveInventoryItemId(null);
+  }, [activeInventoryItemId, searchState?.sku, tableRows]);
   const columns = useMemo<ColumnDef<StockAdjustmentRow>[]>(
     () => [
       {
@@ -2552,34 +2676,36 @@ export function StockAdjustmentWorkspaceContent({
     ],
   );
 
-  const getFirstFilteredItem = (nextFilters: StockAdjustmentFilterState) => {
+  const getActiveItemForFilters = (nextFilters: StockAdjustmentFilterState) => {
+    if (!selectedInventoryItemId) return null;
+
     const nextNormalizedQuery = normalizeSkuSearchQuery(nextFilters.query);
-    const nextRows = rows
-      .map((row, position) => ({
-        position,
-        row,
-        score: scoreStockAdjustmentSearchRow(row, nextNormalizedQuery),
-      }))
-      .filter(
-        ({ row, score }) =>
-          score > 0 &&
-          rowMatchesAvailabilityFilter(row, nextFilters.availability),
-      )
-      .sort((left, right) => {
-        if (!nextNormalizedQuery) return left.position - right.position;
-        if (right.score !== left.score) return right.score - left.score;
-        return left.position - right.position;
-      })
-      .map(({ row }) => row);
-    const firstExactItem = nextRows.find((row) =>
-      rowMatchesCategoryFilter(row, nextFilters.category),
-    )?.inventoryItem;
+    const activeRow = rows.find(
+      (row) => row.inventoryItem._id === selectedInventoryItemId,
+    );
 
-    if (firstExactItem) return firstExactItem;
-    if (!nextNormalizedQuery) return undefined;
-    if (nextFilters.category === ALL_CATEGORY_FILTER_KEY) return undefined;
+    if (!activeRow) return null;
+    if (scoreStockAdjustmentSearchRow(activeRow, nextNormalizedQuery) <= 0) {
+      return null;
+    }
+    if (!rowMatchesAvailabilityFilter(activeRow, nextFilters.availability)) {
+      return null;
+    }
+    if (!rowMatchesCategoryFilter(activeRow, nextFilters.category)) {
+      return null;
+    }
 
-    return nextRows[0]?.inventoryItem;
+    return activeRow.inventoryItem;
+  };
+
+  const getSelectedSkuPatch = (
+    nextSelectedInventoryItemId: Id<"productSku"> | undefined,
+  ): Pick<StockAdjustmentSearchPatch, "selectedSku"> => {
+    if (nextSelectedInventoryItemId || searchState?.selectedSku) {
+      return { selectedSku: nextSelectedInventoryItemId };
+    }
+
+    return {};
   };
 
   const handleModeChange = (nextType: StockAdjustmentType) => {
@@ -2589,20 +2715,19 @@ export function StockAdjustmentWorkspaceContent({
       setCycleCountSubmissionOutcome(null);
     }
 
-    const nextActiveItem =
-      getFirstFilteredItem(filters) ?? rows[0]?.inventoryItem;
-
-    if (nextActiveItem) {
-      setActiveInventoryItemId(nextActiveItem._id);
-    }
     onSearchStateChange?.({
       category:
         filters.category === ALL_CATEGORY_FILTER_KEY
           ? undefined
           : filters.category,
       mode: nextType,
-      page: 1,
-      sku: nextActiveItem?._id,
+      page: routeFilteredInventoryItemId ? 1 : (searchState?.page ?? 1),
+      ...getSelectedSkuPatch(
+        routeFilteredInventoryItemId
+          ? undefined
+          : (selectedInventoryItemId ?? undefined),
+      ),
+      sku: routeFilteredInventoryItemId ?? undefined,
     });
   };
 
@@ -2611,7 +2736,15 @@ export function StockAdjustmentWorkspaceContent({
       ...filters,
       ...patch,
     };
-    const nextActiveItem = getFirstFilteredItem(nextFilters);
+    const nextActiveItem = getActiveItemForFilters(nextFilters);
+    const nextRouteFilteredInventoryItemId =
+      routeFilteredInventoryItemId &&
+      nextActiveItem?._id === routeFilteredInventoryItemId
+        ? routeFilteredInventoryItemId
+        : undefined;
+    const nextSelectedInventoryItemId = nextRouteFilteredInventoryItemId
+      ? undefined
+      : nextActiveItem?._id;
 
     setFilters(nextFilters);
     setActiveInventoryItemId(nextActiveItem?._id ?? null);
@@ -2626,24 +2759,24 @@ export function StockAdjustmentWorkspaceContent({
           : nextFilters.category,
       page: 1,
       query: trimOptional(nextFilters.query),
-      sku: nextActiveItem?._id,
+      ...getSelectedSkuPatch(nextSelectedInventoryItemId),
+      sku: nextRouteFilteredInventoryItemId,
     });
   };
 
   const handleClearFilters = () => {
-    const nextActiveItem = rows[0]?.inventoryItem;
-
     setFilters({
       availability: "all",
       category: ALL_CATEGORY_FILTER_KEY,
       query: "",
     });
-    setActiveInventoryItemId(nextActiveItem?._id ?? null);
+    setActiveInventoryItemId(null);
     onSearchStateChange?.({
       availability: undefined,
       category: undefined,
       page: 1,
       query: undefined,
+      selectedSku: undefined,
       sku: undefined,
     });
   };
@@ -2752,7 +2885,15 @@ export function StockAdjustmentWorkspaceContent({
         ...filters,
         availability: "all" as StockAdjustmentAvailabilityFilter,
       };
-      const nextActiveItem = getFirstFilteredItem(nextFilters);
+      const nextActiveItem = getActiveItemForFilters(nextFilters);
+      const nextRouteFilteredInventoryItemId =
+        routeFilteredInventoryItemId &&
+        nextActiveItem?._id === routeFilteredInventoryItemId
+          ? routeFilteredInventoryItemId
+          : undefined;
+      const nextSelectedInventoryItemId = nextRouteFilteredInventoryItemId
+        ? undefined
+        : nextActiveItem?._id;
 
       setFilters((current) => ({
         ...current,
@@ -2766,7 +2907,8 @@ export function StockAdjustmentWorkspaceContent({
             ? undefined
             : nextFilters.category,
         page: 1,
-        sku: nextActiveItem?._id,
+        ...getSelectedSkuPatch(nextSelectedInventoryItemId),
+        sku: nextRouteFilteredInventoryItemId,
       });
       return;
     }
@@ -2775,7 +2917,15 @@ export function StockAdjustmentWorkspaceContent({
       ...filters,
       availability: "unavailable" as StockAdjustmentAvailabilityFilter,
     };
-    const nextActiveItem = getFirstFilteredItem(nextFilters);
+    const nextActiveItem = getActiveItemForFilters(nextFilters);
+    const nextRouteFilteredInventoryItemId =
+      routeFilteredInventoryItemId &&
+      nextActiveItem?._id === routeFilteredInventoryItemId
+        ? routeFilteredInventoryItemId
+        : undefined;
+    const nextSelectedInventoryItemId = nextRouteFilteredInventoryItemId
+      ? undefined
+      : nextActiveItem?._id;
 
     setFilters((current) => ({
       ...current,
@@ -2789,7 +2939,8 @@ export function StockAdjustmentWorkspaceContent({
           ? undefined
           : nextFilters.category,
       page: 1,
-      sku: nextActiveItem?._id,
+      ...getSelectedSkuPatch(nextSelectedInventoryItemId),
+      sku: nextRouteFilteredInventoryItemId,
     });
   };
 
@@ -2996,15 +3147,17 @@ export function StockAdjustmentWorkspaceContent({
 
               <SkuSearchFilterBar
                 action={
-                  <Button
-                    disabled={!storeId || !user?._id}
-                    onClick={() => setIsQuickAddOpen(true)}
-                    type="button"
-                    variant="workflow"
-                  >
-                    <PackagePlus className="h-4 w-4" />
-                    Quick add
-                  </Button>
+                  hasFullAdminAccess ? (
+                    <Button
+                      disabled={!storeId || !user?._id}
+                      onClick={() => setIsQuickAddOpen(true)}
+                      type="button"
+                      variant="workflow"
+                    >
+                      <PackagePlus className="h-4 w-4" />
+                      Quick add
+                    </Button>
+                  ) : null
                 }
                 ariaLabel="SKU search and filters"
                 filterId="stock-adjustment-availability-filter"
@@ -3088,7 +3241,22 @@ export function StockAdjustmentWorkspaceContent({
                   </div>
                 }
                 summary={
-                  isShowingCategoryMismatchRows ? (
+                  stockAdjustmentAutoLoadStatus ? (
+                    <span
+                      aria-live="polite"
+                      className="inline-flex min-h-5 items-center gap-2"
+                      role="status"
+                    >
+                      <span
+                        aria-hidden="true"
+                        className="h-1.5 w-1.5 rounded-full bg-action-workflow"
+                      />
+                      <span className="font-medium text-foreground">
+                        {stockAdjustmentAutoLoadStatus.label}
+                      </span>
+                      <span>{stockAdjustmentAutoLoadStatus.description}</span>
+                    </span>
+                  ) : isShowingCategoryMismatchRows ? (
                     <>
                       No {activeCategoryFilterLabel} matches. Showing{" "}
                       {formatInventoryNumber(tableRows.length)}{" "}
@@ -3135,30 +3303,27 @@ export function StockAdjustmentWorkspaceContent({
                 <GenericDataTable
                   autoResetPageIndex={false}
                   columns={columns}
-                  data={tableRows}
+                  data={displayedTableRows}
+                  emptyState={stockAdjustmentTableEmptyState}
                   getRowClassName={(row) =>
-                    row.original.inventoryItem._id === activeInventoryItemId
+                    row.original.inventoryItem._id === selectedInventoryItemId
                       ? "bg-muted/60 hover:bg-muted/70"
                       : undefined
                   }
-                  onPageIndexChange={(nextPageIndex) =>
-                    onSearchStateChange?.({ page: nextPageIndex + 1 })
-                  }
+                  onPageIndexChange={handleStockTablePageIndexChange}
                   onRowClick={(row) =>
                     handleSelectInventoryItem(row.original.inventoryItem._id)
                   }
+                  isLoadingMore={isLoadingMoreInventoryItems}
                   onLoadMore={
-                    canLoadMoreInventoryItems && !isLoadingMoreInventoryItems
+                    canLoadMoreInventoryItems
                       ? onLoadMoreInventoryItems
                       : undefined
                   }
-                  pageIndex={
-                    searchState?.page === undefined
-                      ? undefined
-                      : Math.max(searchState.page - 1, 0)
-                  }
+                  pageIndex={stockAdjustmentTablePageIndex}
                   paginationRangeItemLabel="SKU"
                   paginationRangeItemPluralLabel="SKUs"
+                  showPagination={displayedTableRows.length > 0}
                   tableId={`stock-adjustments-${adjustmentType}-${filters.category}-${filters.availability}-${isShowingCategoryMismatchRows ? "category-mismatch" : "exact"}-${normalizedFilterQuery || "all"}`}
                 />
               </div>

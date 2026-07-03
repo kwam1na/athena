@@ -15,6 +15,7 @@ interface DataTablePaginationProps<TData> {
   itemLabel?: string;
   rangeItemLabel?: string;
   rangeItemPluralLabel?: string;
+  isLoadingMore?: boolean;
   onLoadMore?: () => void;
 }
 
@@ -23,6 +24,7 @@ export function DataTablePagination<TData>({
   itemLabel,
   rangeItemLabel,
   rangeItemPluralLabel,
+  isLoadingMore = false,
   onLoadMore,
 }: DataTablePaginationProps<TData>) {
   useTableKeyboardPagination(table);
@@ -46,11 +48,11 @@ export function DataTablePagination<TData>({
       )}
       <div className="flex items-center ml-auto space-x-6 lg:space-x-8">
         {rangeItemLabel ? (
-          <div className="flex flex-wrap items-center justify-center gap-2 text-sm">
+          <div className="flex min-w-[13rem] flex-wrap items-center justify-end gap-2 text-sm">
             <span className="font-medium">
               Showing {visibleStart}-{visibleEnd} of {rowCount} {rangeLabel}
             </span>
-            {Boolean(pageCount) ? (
+            {pageCount ? (
               <span className="text-muted-foreground">
                 Page {pageIndex + 1} of {pageCount}
               </span>
@@ -105,8 +107,11 @@ export function DataTablePagination<TData>({
               variant="outline"
               className="hidden h-8 w-8 p-0 lg:flex"
               onClick={onLoadMore}
+              disabled={isLoadingMore}
             >
-              <span className="sr-only">Load more</span>
+              <span className="sr-only">
+                {isLoadingMore ? "Loading more" : "Load more"}
+              </span>
               <RefreshCw />
             </Button>
           )}

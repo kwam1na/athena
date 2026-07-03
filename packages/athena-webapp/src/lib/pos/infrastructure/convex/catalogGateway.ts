@@ -28,6 +28,7 @@ import {
 } from "@/lib/pos/barcodeUtils";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
+import type { CommandResult } from "~/shared/commandResult";
 
 const REGISTER_CATALOG_AVAILABILITY_LIMIT = 50;
 const REGISTER_AVAILABILITY_SNAPSHOT_WRITE_RETRY_DELAY_MS = 250;
@@ -862,7 +863,7 @@ export function useConvexResolvePendingCheckoutItemReview() {
             approvedProductId?: Id<"product">;
             approvedProductSkuId?: Id<"productSku">;
           },
-          PendingCheckoutReviewItem
+          CommandResult<PendingCheckoutReviewItem>
         >;
       }
     ).resolvePendingCheckoutItemReview,

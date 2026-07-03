@@ -254,7 +254,10 @@ describe("POS public catalog queries", () => {
     );
     assertConformsToExportedReturns(
       resolvePendingCheckoutItemReview,
-      pendingReviewItem,
+      {
+        data: pendingReviewItem,
+        kind: "ok",
+      },
     );
     assertConformsToExportedReturns(listPendingCheckoutProductPageBinding, {
       activeRowCount: 1,
@@ -1544,15 +1547,22 @@ describe("POS public catalog queries", () => {
       },
     });
 
-    await expect(
-      getHandler(resolvePendingCheckoutItemReview)(ctx as never, {
+    const result = await getHandler(resolvePendingCheckoutItemReview)(
+      ctx as never,
+      {
         pendingCheckoutItemId: "pending-1",
         status: "approved",
         storeId: "store-1",
-      }),
-    ).rejects.toThrow(
-      "Choose a valid catalog product and SKU from this store.",
+      },
     );
+
+    expect(result).toMatchObject({
+      error: {
+        code: "validation_failed",
+        message: "Choose a valid catalog product and SKU from this store.",
+      },
+      kind: "user_error",
+    });
   });
 
   it("rejects provisional hidden anchors as pending checkout review links", async () => {
@@ -1588,17 +1598,24 @@ describe("POS public catalog queries", () => {
       },
     });
 
-    await expect(
-      getHandler(resolvePendingCheckoutItemReview)(ctx as never, {
+    const result = await getHandler(resolvePendingCheckoutItemReview)(
+      ctx as never,
+      {
         approvedProductId: "product-provisional-1",
         approvedProductSkuId: "sku-provisional-1",
         pendingCheckoutItemId: "pending-1",
         status: "linked_to_catalog",
         storeId: "store-1",
-      }),
-    ).rejects.toThrow(
-      "Choose a valid catalog product and SKU from this store.",
+      },
     );
+
+    expect(result).toMatchObject({
+      error: {
+        code: "validation_failed",
+        message: "Choose a valid catalog product and SKU from this store.",
+      },
+      kind: "user_error",
+    });
   });
 
   it("allows pending checkout review links to POS quick add trusted SKUs", async () => {
@@ -1660,6 +1677,69 @@ describe("POS public catalog queries", () => {
     );
   });
 
+  it("allows pending checkout review links using the trusted SKU net price", async () => {
+    const ctx = buildCtx({
+      pendingCheckoutItem: {
+        _id: "pending-1",
+        evidence: {
+          observedLookupCodes: [],
+          observedPrices: [12000],
+          totalQuantitySold: 1,
+          transactionCount: 1,
+        },
+        name: "Missing item",
+        provisionalPrice: 12000,
+        provisionalProductId: "product-provisional-1",
+        provisionalProductSkuId: "sku-provisional-1",
+        reviewPriority: "normal",
+        status: "pending_review",
+        storeId: "store-1",
+        updatedAt: 1,
+      },
+      product: {
+        _id: "product-live-1",
+        availability: "live",
+        isVisible: true,
+        storeId: "store-1",
+      },
+      productSku: {
+        _id: "sku-live-1",
+        isVisible: true,
+        netPrice: 12000,
+        price: 12200,
+        productId: "product-live-1",
+        storeId: "store-1",
+      },
+      productSkus: [
+        {
+          _id: "sku-provisional-1",
+          isVisible: false,
+          price: 12000,
+          productId: "product-provisional-1",
+          storeId: "store-1",
+        },
+      ],
+    });
+
+    await getHandler(resolvePendingCheckoutItemReview)(ctx as never, {
+      approvedProductId: "product-live-1",
+      approvedProductSkuId: "sku-live-1",
+      pendingCheckoutItemId: "pending-1",
+      status: "linked_to_catalog",
+      storeId: "store-1",
+    });
+
+    expect(ctx.db.patch).toHaveBeenCalledWith(
+      "posPendingCheckoutItem",
+      "pending-1",
+      expect.objectContaining({
+        approvedProductId: "product-live-1",
+        approvedProductSkuId: "sku-live-1",
+        status: "linked_to_catalog",
+      }),
+    );
+  });
+
   it("rejects pending checkout review links when the trusted SKU price differs", async () => {
     const ctx = buildCtx({
       pendingCheckoutItem: {
@@ -1694,17 +1774,25 @@ describe("POS public catalog queries", () => {
       },
     });
 
-    await expect(
-      getHandler(resolvePendingCheckoutItemReview)(ctx as never, {
+    const result = await getHandler(resolvePendingCheckoutItemReview)(
+      ctx as never,
+      {
         approvedProductId: "product-live-1",
         approvedProductSkuId: "sku-live-1",
         pendingCheckoutItemId: "pending-1",
         status: "linked_to_catalog",
         storeId: "store-1",
-      }),
-    ).rejects.toThrow(
-      "Link to a SKU with the same price as the pending checkout item.",
+      },
     );
+
+    expect(result).toMatchObject({
+      error: {
+        code: "validation_failed",
+        message:
+          "Link to a SKU with the same price as the pending checkout item.",
+      },
+      kind: "user_error",
+    });
 
     expect(ctx.db.patch).not.toHaveBeenCalled();
   });
@@ -1954,15 +2042,24 @@ describe("POS public catalog queries", () => {
       },
     });
 
-    await expect(
-      getHandler(resolvePendingCheckoutItemReview)(ctx as never, {
+    const result = await getHandler(resolvePendingCheckoutItemReview)(
+      ctx as never,
+      {
         approvedProductId: "product-live-1",
         approvedProductSkuId: "sku-live-1",
         pendingCheckoutItemId: "pending-1",
         status: "linked_to_catalog",
         storeId: "store-1",
-      }),
-    ).rejects.toThrow("This lookup code is already linked to another SKU.");
+      },
+    );
+
+    expect(result).toMatchObject({
+      error: {
+        code: "conflict",
+        message: "This lookup code is already linked to another SKU.",
+      },
+      kind: "user_error",
+    });
   });
 
   it("retires active lookup aliases when a linked item changes before attribution", async () => {
@@ -2082,17 +2179,25 @@ describe("POS public catalog queries", () => {
       },
     });
 
-    await expect(
-      getHandler(resolvePendingCheckoutItemReview)(ctx as never, {
+    const result = await getHandler(resolvePendingCheckoutItemReview)(
+      ctx as never,
+      {
         approvedProductId: "product-live-2",
         approvedProductSkuId: "sku-live-2",
         pendingCheckoutItemId: "pending-1",
         status: "linked_to_catalog",
         storeId: "store-1",
-      }),
-    ).rejects.toThrow(
-      "This pending checkout item is already linked to a trusted SKU.",
+      },
     );
+
+    expect(result).toMatchObject({
+      error: {
+        code: "conflict",
+        message:
+          "This pending checkout item is already linked to a trusted SKU. Create a correction to change linked sale history.",
+      },
+      kind: "user_error",
+    });
 
     expect(ctx.db.patch).not.toHaveBeenCalled();
   });
@@ -2137,17 +2242,24 @@ describe("POS public catalog queries", () => {
       },
     });
 
-    await expect(
-      getHandler(resolvePendingCheckoutItemReview)(ctx as never, {
+    const result = await getHandler(resolvePendingCheckoutItemReview)(
+      ctx as never,
+      {
         approvedProductId: "product-live-1",
         approvedProductSkuId: "sku-live-1",
         pendingCheckoutItemId: "pending-1",
         status: "linked_to_catalog",
         storeId: "store-1",
-      }),
-    ).rejects.toThrow(
-      "This lookup code already belongs to another catalog SKU.",
+      },
     );
+
+    expect(result).toMatchObject({
+      error: {
+        code: "conflict",
+        message: "This lookup code already belongs to another catalog SKU.",
+      },
+      kind: "user_error",
+    });
 
     expect(ctx.db.patch).not.toHaveBeenCalledWith(
       "productSku",

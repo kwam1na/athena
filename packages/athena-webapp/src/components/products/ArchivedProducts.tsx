@@ -1,43 +1,41 @@
 import { useMemo, useState } from "react";
-import { Link, useSearch } from "@tanstack/react-router";
-import { Archive, ArrowLeftIcon, CircleHelp, PackageOpen } from "lucide-react";
+import { Archive, CircleHelp, PackageOpen } from "lucide-react";
 import { useGetArchivedProducts } from "~/src/hooks/useGetProducts";
-import { useNavigateBack } from "~/src/hooks/use-navigate-back";
-import { getOrigin } from "~/src/lib/navigationUtils";
 import View from "../View";
 import { FadeIn } from "../common/FadeIn";
 import { GenericDataTable } from "../base/table/data-table";
 import { productColumns } from "./products-table/components/productColumns";
 import { EmptyState } from "../states/empty/empty-state";
-import { Button } from "../ui/button";
 import { Input } from "../ui/input";
+import {
+  PageLevelHeader,
+  PageWorkspace,
+  PageWorkspaceMain,
+} from "../common/PageLevelHeader";
 
-const Navigation = () => {
-  const navigateBack = useNavigateBack();
-  const { o } = useSearch({ strict: false });
-
+const ArchivedProductsToolbar = ({
+  searchValue,
+  onSearchValueChange,
+}: {
+  searchValue: string;
+  onSearchValueChange: (value: string) => void;
+}) => {
   return (
-    <div className="container mx-auto flex gap-2">
-      <div className="flex items-center gap-2">
-        {o && (
-          <Button variant="ghost" onClick={navigateBack}>
-            <ArrowLeftIcon className="w-4 h-4" />
-          </Button>
-        )}
-        <p className="font-medium">Archived Products</p>
-        <Link
-          to={"/$orgUrlSlug/store/$storeUrlSlug/products"}
-          params={(prev) => ({
-            ...prev,
-            orgUrlSlug: prev.orgUrlSlug!,
-            storeUrlSlug: prev.storeUrlSlug!,
-          })}
-          search={{ o: getOrigin() }}
-        >
-          <Button variant="outline">Active products</Button>
-        </Link>
+    <section
+      aria-label="Archived product controls"
+      className="flex flex-col gap-3 sm:flex-row sm:items-center"
+    >
+      <div className="flex min-w-0 items-center gap-3">
+        <Archive className="h-4 w-4 shrink-0 text-muted-foreground" />
+        <Input
+          aria-label="Filter archived products"
+          placeholder="Filter by name or SKU..."
+          value={searchValue}
+          onChange={(event) => onSearchValueChange(event.target.value)}
+          className="w-full sm:w-[320px]"
+        />
       </div>
-    </div>
+    </section>
   );
 };
 
@@ -73,45 +71,46 @@ export const ArchivedProducts = () => {
   );
 
   return (
-    <View
-      hideBorder
-      hideHeaderBottomBorder
-      className="bg-background"
-      header={<Navigation />}
-    >
-      <FadeIn className="py-8 space-y-4">
-        <div className="flex items-center gap-3">
-          <Archive className="h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Filter by name or SKU..."
-            value={searchValue}
-            onChange={(event) => setSearchValue(event.target.value)}
-            className="w-[320px]"
+    <View hideBorder hideHeaderBottomBorder scrollMode="page">
+      <FadeIn className="container mx-auto py-layout-xl">
+        <PageWorkspace>
+          <PageLevelHeader
+            eyebrow="Catalog Ops"
+            title="Archived Products"
+            showBackButton
           />
-        </div>
-        {filteredProducts && filteredProducts.length > 0 && (
-          <GenericDataTable
-            data={filteredProducts}
-            columns={productColumns}
-            tableId="archived-products"
-          />
-        )}
-        {filteredProducts && filteredProducts.length == 0 && (
-          <div className="flex items-center justify-center min-h-[60vh] w-full">
-            <EmptyState
-              icon={EmptyStateIcon}
-              title={
-                <div className="flex gap-1 text-sm">
-                  <p className="text-muted-foreground">
-                    {hasSearchInput
-                      ? "No archived products match your search"
-                      : "No archived products"}
-                  </p>
-                </div>
-              }
+
+          <PageWorkspaceMain>
+            <ArchivedProductsToolbar
+              searchValue={searchValue}
+              onSearchValueChange={setSearchValue}
             />
-          </div>
-        )}
+
+            {filteredProducts && filteredProducts.length > 0 && (
+              <GenericDataTable
+                data={filteredProducts}
+                columns={productColumns}
+                tableId="archived-products"
+              />
+            )}
+            {filteredProducts && filteredProducts.length == 0 && (
+              <div className="flex min-h-[60vh] w-full items-center justify-center">
+                <EmptyState
+                  icon={EmptyStateIcon}
+                  title={
+                    <div className="flex gap-1 text-sm">
+                      <p className="text-muted-foreground">
+                        {hasSearchInput
+                          ? "No archived products match your search"
+                          : "No archived products"}
+                      </p>
+                    </div>
+                  }
+                />
+              </div>
+            )}
+          </PageWorkspaceMain>
+        </PageWorkspace>
       </FadeIn>
     </View>
   );

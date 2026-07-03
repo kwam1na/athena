@@ -56,6 +56,10 @@ vi.mock("@/hooks/useAuth", () => ({
   useAuth: mockedHooks.useAuth,
 }));
 
+vi.mock("~/src/hooks/usePermissions", () => ({
+  usePermissions: mockedHooks.usePermissions,
+}));
+
 const readyProtectedState = {
   activeStore: { _id: "store-1" as Id<"store"> },
   canQueryProtectedData: true,
@@ -73,6 +77,9 @@ describe("OperationsQueueView auth readiness", () => {
       user: { _id: "user-1" as Id<"athenaUser"> },
     });
     mockedHooks.useProtectedAdminPageState.mockReturnValue(readyProtectedState);
+    mockedHooks.usePermissions.mockReturnValue({
+      hasFullAdminAccess: true,
+    });
     mockedHooks.useMutation.mockReturnValue(vi.fn());
     mockedHooks.usePaginatedQuery.mockReturnValue({
       isLoading: false,
