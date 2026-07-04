@@ -20,6 +20,7 @@ import {
   update,
   updateSku,
 } from "./products";
+import { repairArchivedPendingCheckoutReviewWork } from "../pos/application/commands/pendingCheckoutReviewWorkLifecycle";
 
 const mocks = vi.hoisted(() => ({
   refreshProductSkuSearchForProduct: vi.fn(),
@@ -44,6 +45,9 @@ type TableName =
   | "catalogSummary"
   | "category"
   | "inventoryHold"
+  | "operationalEvent"
+  | "operationalWorkItem"
+  | "posPendingCheckoutItem"
   | "product"
   | "productSku"
   | "subcategory";
@@ -63,6 +67,66 @@ function getTestScheduler(ctx: QueryCtx | MutationCtx) {
     .scheduler;
 }
 
+function pendingCheckoutEvidence() {
+  return {
+    firstSeenAt: 1,
+    lastSeenAt: 1,
+    observedLookupCodes: ["123456789012"],
+    observedPrices: [125000],
+    offlineSaleCount: 0,
+    totalQuantitySold: 1,
+    transactionCount: 1,
+  };
+}
+
+function pendingCheckoutItem(overrides: Partial<Row> = {}) {
+  const { _id = "pending001", ...rest } = overrides;
+
+  return {
+    _id,
+    createdAt: 1,
+    createdFrom: "offline_sync",
+    currency: "GHS",
+    evidence: pendingCheckoutEvidence(),
+    lookupCode: "123456789012",
+    name: "Protein Brazilian Hair Repair Mask",
+    normalizedLookupCode: "123456789012",
+    normalizedName: "protein brazilian hair repair mask",
+    operationalWorkItemId: "work001",
+    organizationId: "org0001",
+    provisionalPrice: 125000,
+    provisionalProductId: "product001",
+    provisionalProductSkuId: "sku001",
+    reviewPriority: "normal",
+    status: "pending_review",
+    storeId: "storezzzz",
+    updatedAt: 1,
+    ...rest,
+  };
+}
+
+function pendingCheckoutReviewWorkItem(overrides: Partial<Row> = {}) {
+  const { _id = "work001", ...rest } = overrides;
+
+  return {
+    _id,
+    approvalState: "not_required",
+    createdAt: 1,
+    metadata: {
+      pendingCheckoutItemId: "pending001",
+      provisionalProductId: "product001",
+      provisionalProductSkuId: "sku001",
+    },
+    organizationId: "org0001",
+    priority: "normal",
+    status: "open",
+    storeId: "storezzzz",
+    title: "Review pending checkout item: Protein Brazilian Hair Repair Mask",
+    type: "pos_pending_checkout_item_review",
+    ...rest,
+  };
+}
+
 function createSkuMutationCtx(seed: Partial<Record<TableName, Row[]>>) {
   const tables: Record<TableName, Map<string, Row>> = {
     catalogSummary: new Map(
@@ -72,6 +136,15 @@ function createSkuMutationCtx(seed: Partial<Record<TableName, Row[]>>) {
     inventoryHold: new Map(
       (seed.inventoryHold ?? []).map((row) => [row._id, row]),
     ),
+    operationalEvent: new Map(
+      (seed.operationalEvent ?? []).map((row) => [row._id, row]),
+    ),
+    operationalWorkItem: new Map(
+      (seed.operationalWorkItem ?? []).map((row) => [row._id, row]),
+    ),
+    posPendingCheckoutItem: new Map(
+      (seed.posPendingCheckoutItem ?? []).map((row) => [row._id, row]),
+    ),
     product: new Map((seed.product ?? []).map((row) => [row._id, row])),
     productSku: new Map((seed.productSku ?? []).map((row) => [row._id, row])),
     subcategory: new Map((seed.subcategory ?? []).map((row) => [row._id, row])),
@@ -80,6 +153,9 @@ function createSkuMutationCtx(seed: Partial<Record<TableName, Row[]>>) {
     catalogSummary: seed.catalogSummary?.length ?? 0,
     category: 0,
     inventoryHold: seed.inventoryHold?.length ?? 0,
+    operationalEvent: seed.operationalEvent?.length ?? 0,
+    operationalWorkItem: seed.operationalWorkItem?.length ?? 0,
+    posPendingCheckoutItem: seed.posPendingCheckoutItem?.length ?? 0,
     product: 0,
     productSku: seed.productSku?.length ?? 0,
     subcategory: 0,
@@ -100,6 +176,17 @@ function createSkuMutationCtx(seed: Partial<Record<TableName, Row[]>>) {
       first: async () => matches[0] ?? null,
       collect: async () => matches,
       take: async (count: number) => matches.slice(0, count),
+      paginate: async (paginationOpts: { cursor: string | null; numItems: number }) => {
+        const start = paginationOpts.cursor ? Number(paginationOpts.cursor) : 0;
+        const page = matches.slice(start, start + paginationOpts.numItems);
+        const next = start + paginationOpts.numItems;
+
+        return {
+          continueCursor: String(next),
+          isDone: next >= matches.length,
+          page,
+        };
+      },
     };
   }
 
@@ -107,6 +194,9 @@ function createSkuMutationCtx(seed: Partial<Record<TableName, Row[]>>) {
     db: {
       async get(table: TableName, id: string) {
         return tables[table].get(id) ?? null;
+      },
+      normalizeId(_table: TableName, id: string) {
+        return id.includes("invalid") ? null : id;
       },
       async insert(table: TableName, value: Record<string, unknown>) {
         counters[table] += 1;
@@ -474,6 +564,102 @@ describe("product archiving", () => {
     });
   });
 
+  it("cancels pending checkout review work when archiving its provisional product", async () => {
+    mocks.requireStoreFullAdminAccess.mockResolvedValue({});
+
+    const { ctx, tables } = createSkuMutationCtx({
+      operationalWorkItem: [
+        pendingCheckoutReviewWorkItem({
+          metadata: { pendingCheckoutItemId: "pending001" },
+          priority: "high",
+          title: "Stale title",
+        }),
+      ],
+      posPendingCheckoutItem: [pendingCheckoutItem()],
+      product: [
+        {
+          _id: "product001",
+          availability: "live",
+          storeId: "storezzzz",
+        },
+      ],
+      productSku: [
+        {
+          _id: "sku001",
+          productId: "product001",
+          storeId: "storezzzz",
+        },
+      ],
+    });
+
+    await getHandler(archive)(ctx, {
+      id: "product001" as Id<"product">,
+      storeId: "storezzzz" as Id<"store">,
+    });
+
+    expect(tables.operationalWorkItem.get("work001")).toMatchObject({
+      completedAt: expect.any(Number),
+      metadata: expect.objectContaining({
+        pendingCheckoutItemId: "pending001",
+        retiredReason: "provisional_product_archived",
+      }),
+      status: "cancelled",
+    });
+    expect(tables.posPendingCheckoutItem.get("pending001")).toMatchObject({
+      operationalWorkItemId: undefined,
+    });
+    expect(Array.from(tables.operationalEvent.values())).toEqual([
+      expect.objectContaining({
+        eventType: "pos_pending_checkout_item_review_work_cancelled",
+        subjectId: "pending001",
+        workItemId: "work001",
+      }),
+    ]);
+  });
+
+  it("cancels in-progress pending checkout review work through the product anchor when the SKU anchor is missing", async () => {
+    mocks.requireStoreFullAdminAccess.mockResolvedValue({});
+
+    const { ctx, tables } = createSkuMutationCtx({
+      operationalWorkItem: [
+        pendingCheckoutReviewWorkItem({
+          metadata: {},
+          status: "in_progress",
+        }),
+      ],
+      posPendingCheckoutItem: [
+        pendingCheckoutItem({
+          provisionalProductSkuId: undefined,
+        }),
+      ],
+      product: [
+        {
+          _id: "product001",
+          availability: "live",
+          storeId: "storezzzz",
+        },
+      ],
+    });
+
+    await getHandler(archive)(ctx, {
+      id: "product001" as Id<"product">,
+      storeId: "storezzzz" as Id<"store">,
+    });
+
+    expect(tables.operationalWorkItem.get("work001")).toMatchObject({
+      completedAt: expect.any(Number),
+      metadata: expect.objectContaining({
+        pendingCheckoutItemId: "pending001",
+        provisionalProductId: "product001",
+        retiredReason: "provisional_product_archived",
+      }),
+      status: "cancelled",
+    });
+    expect(tables.posPendingCheckoutItem.get("pending001")).toMatchObject({
+      operationalWorkItemId: undefined,
+    });
+  });
+
   it("unarchives a product with store admin access", async () => {
     mocks.requireStoreFullAdminAccess.mockResolvedValue({});
 
@@ -511,6 +697,498 @@ describe("product archiving", () => {
       needsRefresh: false,
       productCount: 1,
       storeId: "storezzzz",
+    });
+  });
+
+  it("creates fresh pending checkout review work when unarchiving its provisional product", async () => {
+    mocks.requireStoreFullAdminAccess.mockResolvedValue({});
+
+    const { ctx, tables } = createSkuMutationCtx({
+      posPendingCheckoutItem: [
+        pendingCheckoutItem({
+          operationalWorkItemId: undefined,
+          reviewPriority: "elevated",
+        }),
+      ],
+      product: [
+        {
+          _id: "product001",
+          availability: "archived",
+          storeId: "storezzzz",
+        },
+      ],
+      productSku: [
+        {
+          _id: "sku001",
+          productId: "product001",
+          storeId: "storezzzz",
+        },
+      ],
+    });
+
+    await getHandler(unarchive)(ctx, {
+      id: "product001" as Id<"product">,
+      storeId: "storezzzz" as Id<"store">,
+    });
+
+    const workItem = Array.from(tables.operationalWorkItem.values())[0];
+    expect(workItem).toMatchObject({
+      priority: "medium",
+      status: "open",
+      title: "Review pending checkout item: Protein Brazilian Hair Repair Mask",
+      type: "pos_pending_checkout_item_review",
+    });
+    expect(tables.posPendingCheckoutItem.get("pending001")).toMatchObject({
+      operationalWorkItemId: workItem._id,
+    });
+  });
+
+  it("reattaches existing pending checkout review work when unarchiving without duplicating it", async () => {
+    mocks.requireStoreFullAdminAccess.mockResolvedValue({});
+
+    const { ctx, tables } = createSkuMutationCtx({
+      operationalWorkItem: [pendingCheckoutReviewWorkItem()],
+      posPendingCheckoutItem: [
+        pendingCheckoutItem({
+          operationalWorkItemId: undefined,
+        }),
+      ],
+      product: [
+        {
+          _id: "product001",
+          availability: "archived",
+          storeId: "storezzzz",
+        },
+      ],
+      productSku: [
+        {
+          _id: "sku001",
+          productId: "product001",
+          storeId: "storezzzz",
+        },
+      ],
+    });
+
+    await getHandler(unarchive)(ctx, {
+      id: "product001" as Id<"product">,
+      storeId: "storezzzz" as Id<"store">,
+    });
+
+    expect(Array.from(tables.operationalWorkItem.values())).toHaveLength(1);
+    expect(tables.operationalWorkItem.get("work001")).toMatchObject({
+      metadata: expect.objectContaining({
+        pendingCheckoutItemId: "pending001",
+        provisionalProductId: "product001",
+        provisionalProductSkuId: "sku001",
+        restoredReason: "provisional_product_unarchived",
+      }),
+      priority: "normal",
+      title: "Review pending checkout item: Protein Brazilian Hair Repair Mask",
+    });
+    expect(tables.posPendingCheckoutItem.get("pending001")).toMatchObject({
+      operationalWorkItemId: "work001",
+    });
+  });
+
+  it("repairs stale pending checkout review work for archived provisional products after a dry run", async () => {
+    const { ctx, tables } = createSkuMutationCtx({
+      operationalWorkItem: [pendingCheckoutReviewWorkItem()],
+      posPendingCheckoutItem: [pendingCheckoutItem()],
+      product: [
+        {
+          _id: "product001",
+          availability: "archived",
+          storeId: "storezzzz",
+        },
+      ],
+    });
+
+    const dryRun = await getHandler(repairArchivedPendingCheckoutReviewWork)(
+      ctx,
+      {
+        dryRun: true,
+        paginationOpts: { cursor: null, numItems: 10 },
+        status: "open",
+        storeId: "storezzzz" as Id<"store">,
+      },
+    );
+
+    expect(dryRun).toMatchObject({
+      candidates: ["work001"],
+      repaired: [],
+    });
+    expect(tables.operationalWorkItem.get("work001")).toMatchObject({
+      status: "open",
+    });
+
+    const repaired = await getHandler(repairArchivedPendingCheckoutReviewWork)(
+      ctx,
+      {
+        dryRun: false,
+        repairRunId: "repair-2026-07-04",
+        status: "open",
+        storeId: "storezzzz" as Id<"store">,
+        workItemIds: dryRun.candidates,
+      },
+    );
+
+    expect(repaired).toMatchObject({
+      candidates: ["work001"],
+      repaired: ["work001"],
+    });
+    expect(tables.operationalWorkItem.get("work001")).toMatchObject({
+      completedAt: expect.any(Number),
+      metadata: expect.objectContaining({
+        repairRunId: "repair-2026-07-04",
+        retiredReason: "archived_provisional_product_repair",
+      }),
+      status: "cancelled",
+    });
+    expect(tables.posPendingCheckoutItem.get("pending001")).toMatchObject({
+      operationalWorkItemId: undefined,
+    });
+  });
+
+  it("repairs stale in-progress pending checkout review work for archived provisional products", async () => {
+    const { ctx, tables } = createSkuMutationCtx({
+      operationalWorkItem: [
+        pendingCheckoutReviewWorkItem({
+          status: "in_progress",
+        }),
+      ],
+      posPendingCheckoutItem: [pendingCheckoutItem()],
+      product: [
+        {
+          _id: "product001",
+          availability: "archived",
+          storeId: "storezzzz",
+        },
+      ],
+    });
+
+    const dryRun = await getHandler(repairArchivedPendingCheckoutReviewWork)(
+      ctx,
+      {
+        dryRun: true,
+        paginationOpts: { cursor: null, numItems: 10 },
+        status: "in_progress",
+        storeId: "storezzzz" as Id<"store">,
+      },
+    );
+
+    expect(dryRun).toMatchObject({
+      candidates: ["work001"],
+      repaired: [],
+    });
+
+    const repaired = await getHandler(repairArchivedPendingCheckoutReviewWork)(
+      ctx,
+      {
+        dryRun: false,
+        repairRunId: "repair-2026-07-04",
+        status: "in_progress",
+        storeId: "storezzzz" as Id<"store">,
+        workItemIds: dryRun.candidates,
+      },
+    );
+
+    expect(repaired).toMatchObject({
+      candidates: ["work001"],
+      repaired: ["work001"],
+    });
+    expect(tables.operationalWorkItem.get("work001")).toMatchObject({
+      completedAt: expect.any(Number),
+      metadata: expect.objectContaining({
+        repairRunId: "repair-2026-07-04",
+        retiredReason: "archived_provisional_product_repair",
+      }),
+      status: "cancelled",
+    });
+    expect(tables.posPendingCheckoutItem.get("pending001")).toMatchObject({
+      operationalWorkItemId: undefined,
+    });
+  });
+
+  it("skips unsafe repair rows without mutating unrelated work", async () => {
+    const { ctx, tables } = createSkuMutationCtx({
+      operationalWorkItem: [
+        pendingCheckoutReviewWorkItem({
+          _id: "work-missing-metadata",
+          metadata: {},
+        }),
+        pendingCheckoutReviewWorkItem({
+          _id: "work-invalid-pending",
+          metadata: { pendingCheckoutItemId: "invalid-pending" },
+        }),
+        pendingCheckoutReviewWorkItem({
+          _id: "work-approved",
+          metadata: { pendingCheckoutItemId: "pending-approved" },
+        }),
+        pendingCheckoutReviewWorkItem({
+          _id: "work-missing-product",
+          metadata: { pendingCheckoutItemId: "pending-missing-product" },
+        }),
+        pendingCheckoutReviewWorkItem({
+          _id: "work-live-product",
+          metadata: { pendingCheckoutItemId: "pending-live-product" },
+        }),
+      ],
+      posPendingCheckoutItem: [
+        pendingCheckoutItem({
+          _id: "pending-approved",
+          operationalWorkItemId: "work-approved",
+          status: "approved",
+        }),
+        pendingCheckoutItem({
+          _id: "pending-missing-product",
+          operationalWorkItemId: "work-missing-product",
+          provisionalProductId: undefined,
+          provisionalProductSkuId: undefined,
+        }),
+        pendingCheckoutItem({
+          _id: "pending-live-product",
+          operationalWorkItemId: "work-live-product",
+          provisionalProductId: "product-live",
+          provisionalProductSkuId: undefined,
+        }),
+      ],
+      product: [
+        {
+          _id: "product-live",
+          availability: "live",
+          storeId: "storezzzz",
+        },
+      ],
+    });
+
+    const result = await getHandler(repairArchivedPendingCheckoutReviewWork)(
+      ctx,
+      {
+        dryRun: true,
+        paginationOpts: { cursor: null, numItems: 10 },
+        status: "open",
+        storeId: "storezzzz" as Id<"store">,
+      },
+    );
+
+    expect(result).toMatchObject({
+      candidates: [],
+      repaired: [],
+      skipped: [
+        { reason: "missing_pending_checkout_item_id", workItemId: "work-missing-metadata" },
+        { reason: "invalid_pending_checkout_item_id", workItemId: "work-invalid-pending" },
+        { reason: "pending_checkout_item_not_actionable", workItemId: "work-approved" },
+        { reason: "missing_provisional_product", workItemId: "work-missing-product" },
+        { reason: "provisional_product_not_archived", workItemId: "work-live-product" },
+      ],
+    });
+    expect(
+      Array.from(tables.operationalWorkItem.values()).map((workItem) => workItem.status),
+    ).toEqual(["open", "open", "open", "open", "open"]);
+  });
+
+  it("requires explicit dry-run candidate ids before mutating repair rows", async () => {
+    const { ctx } = createSkuMutationCtx({
+      operationalWorkItem: [pendingCheckoutReviewWorkItem()],
+      posPendingCheckoutItem: [pendingCheckoutItem()],
+      product: [
+        {
+          _id: "product001",
+          availability: "archived",
+          storeId: "storezzzz",
+        },
+      ],
+    });
+
+    await expect(
+      getHandler(repairArchivedPendingCheckoutReviewWork)(ctx, {
+        dryRun: false,
+        paginationOpts: { cursor: null, numItems: 10 },
+        status: "open",
+        storeId: "storezzzz" as Id<"store">,
+      }),
+    ).rejects.toThrow(
+      "Provide a repair run id and explicit dry-run candidate work item ids to repair.",
+    );
+  });
+
+  it("revalidates explicit repair candidate ids before mutating stale rows", async () => {
+    const { ctx, tables } = createSkuMutationCtx({
+      operationalWorkItem: [
+        pendingCheckoutReviewWorkItem({
+          _id: "work-wrong-status",
+          status: "in_progress",
+        }),
+        pendingCheckoutReviewWorkItem({
+          _id: "work-wrong-store",
+          storeId: "other-store",
+        }),
+        pendingCheckoutReviewWorkItem({
+          _id: "work-wrong-type",
+          type: "service_case",
+        }),
+        pendingCheckoutReviewWorkItem({
+          _id: "work-pending-wrong-store",
+          metadata: { pendingCheckoutItemId: "pending-wrong-store" },
+        }),
+        pendingCheckoutReviewWorkItem({
+          _id: "work-invalid-product",
+          metadata: {
+            pendingCheckoutItemId: "pending-bad-product",
+            provisionalProductId: "invalid-product",
+          },
+        }),
+      ],
+      posPendingCheckoutItem: [
+        pendingCheckoutItem({
+          _id: "pending-wrong-store",
+          operationalWorkItemId: "work-pending-wrong-store",
+          storeId: "other-store",
+        }),
+        pendingCheckoutItem({
+          _id: "pending-bad-product",
+          operationalWorkItemId: "work-invalid-product",
+          provisionalProductId: undefined,
+          provisionalProductSkuId: undefined,
+        }),
+      ],
+    });
+
+    const result = await getHandler(repairArchivedPendingCheckoutReviewWork)(
+      ctx,
+      {
+        dryRun: false,
+        repairRunId: "repair-2026-07-04",
+        status: "open",
+        storeId: "storezzzz" as Id<"store">,
+        workItemIds: [
+          "work-wrong-status",
+          "work-wrong-store",
+          "work-wrong-type",
+          "work-pending-wrong-store",
+          "work-invalid-product",
+        ],
+      },
+    );
+
+    expect(result).toMatchObject({
+      candidates: [],
+      repaired: [],
+      skipped: [
+        {
+          reason: "work_item_no_longer_matches_repair_scope",
+          workItemId: "work-wrong-status",
+        },
+        {
+          reason: "work_item_no_longer_matches_repair_scope",
+          workItemId: "work-wrong-store",
+        },
+        {
+          reason: "work_item_no_longer_matches_repair_scope",
+          workItemId: "work-wrong-type",
+        },
+        {
+          reason: "pending_checkout_item_wrong_store",
+          workItemId: "work-pending-wrong-store",
+        },
+        {
+          reason: "invalid_provisional_product",
+          workItemId: "work-invalid-product",
+        },
+      ],
+    });
+    expect(
+      Array.from(tables.operationalWorkItem.values()).map((workItem) => workItem.status),
+    ).toEqual(["in_progress", "open", "open", "open", "open"]);
+  });
+
+  it("reconciles pending checkout review work when a generic product update archives the provisional product", async () => {
+    const { ctx, tables } = createSkuMutationCtx({
+      operationalWorkItem: [pendingCheckoutReviewWorkItem()],
+      posPendingCheckoutItem: [pendingCheckoutItem()],
+      product: [
+        {
+          _id: "product001",
+          availability: "live",
+          storeId: "storezzzz",
+        },
+      ],
+      productSku: [
+        {
+          _id: "sku001",
+          productId: "product001",
+          storeId: "storezzzz",
+        },
+      ],
+    });
+
+    await getHandler(update)(ctx, {
+      availability: "archived",
+      id: "product001" as Id<"product">,
+    });
+
+    expect(tables.operationalWorkItem.get("work001")).toMatchObject({
+      completedAt: expect.any(Number),
+      metadata: expect.objectContaining({
+        pendingCheckoutItemId: "pending001",
+        retiredReason: "provisional_product_archived",
+      }),
+      status: "cancelled",
+    });
+    expect(tables.posPendingCheckoutItem.get("pending001")).toMatchObject({
+      operationalWorkItemId: undefined,
+    });
+    expect(Array.from(tables.operationalEvent.values())).toEqual([
+      expect.objectContaining({
+        eventType: "pos_pending_checkout_item_review_work_cancelled",
+        subjectId: "pending001",
+        workItemId: "work001",
+      }),
+    ]);
+  });
+
+  it("reconciles pending checkout review work when a generic product update unarchives the provisional product", async () => {
+    const { ctx, tables } = createSkuMutationCtx({
+      posPendingCheckoutItem: [
+        pendingCheckoutItem({
+          operationalWorkItemId: undefined,
+          reviewPriority: "elevated",
+        }),
+      ],
+      product: [
+        {
+          _id: "product001",
+          availability: "archived",
+          storeId: "storezzzz",
+        },
+      ],
+      productSku: [
+        {
+          _id: "sku001",
+          productId: "product001",
+          storeId: "storezzzz",
+        },
+      ],
+    });
+
+    await getHandler(update)(ctx, {
+      availability: "live",
+      id: "product001" as Id<"product">,
+    });
+
+    const workItem = Array.from(tables.operationalWorkItem.values())[0];
+    expect(workItem).toMatchObject({
+      metadata: expect.objectContaining({
+        pendingCheckoutItemId: "pending001",
+        restoredReason: "provisional_product_unarchived",
+      }),
+      priority: "medium",
+      status: "open",
+      title: "Review pending checkout item: Protein Brazilian Hair Repair Mask",
+      type: "pos_pending_checkout_item_review",
+    });
+    expect(tables.posPendingCheckoutItem.get("pending001")).toMatchObject({
+      operationalWorkItemId: workItem._id,
     });
   });
 

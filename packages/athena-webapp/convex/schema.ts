@@ -671,6 +671,10 @@ const schema = defineSchema({
       "storeId",
       "provisionalProductSkuId",
     ])
+    .index("by_storeId_provisionalProductId", [
+      "storeId",
+      "provisionalProductId",
+    ])
     .index("by_operationalWorkItemId", ["operationalWorkItemId"]),
   posPendingCheckoutLookupAlias: defineTable(posPendingCheckoutLookupAliasSchema)
     .index("by_storeId_normalizedLookupCode_status", [
