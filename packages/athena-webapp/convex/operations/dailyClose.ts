@@ -134,6 +134,7 @@ type DailyCloseSummary = {
   carriedOverRegisterCount: number;
   cashDepositTotal: number;
   closedRegisterSessionCount: number;
+  countedCashTotal: number;
   currentDayCashTotal: number;
   currentDayCashTransactionCount: number;
   expectedCashTotal: number;
@@ -387,10 +388,18 @@ function normalizeDailyCloseSummary(
     typeof summary.currentDayCashTotal === "number"
       ? summary.currentDayCashTotal
       : 0;
+  const expectedCashTotal =
+    typeof summary.expectedCashTotal === "number" ? summary.expectedCashTotal : 0;
+  const netCashVariance =
+    typeof summary.netCashVariance === "number" ? summary.netCashVariance : 0;
 
   return {
     ...emptySummary(),
     ...summary,
+    countedCashTotal:
+      typeof summary.countedCashTotal === "number"
+        ? summary.countedCashTotal
+        : expectedCashTotal + netCashVariance,
     adjustedSalesTotal:
       typeof summary.adjustedSalesTotal === "number"
         ? summary.adjustedSalesTotal
@@ -1176,6 +1185,15 @@ async function listRegisterSessionsForDailyClose(
         .eq("closeoutOperatingDate", args.operatingDate),
     )
     .take(REGISTER_SESSION_DAILY_CLOSE_SOURCE_LIMIT);
+  const openedDateClosedSessions = await ctx.db
+    .query("registerSession")
+    .withIndex("by_storeId_status_openedOperatingDate", (q) =>
+      q
+        .eq("storeId", args.storeId)
+        .eq("status", "closed")
+        .eq("openedOperatingDate", args.operatingDate),
+    )
+    .take(REGISTER_SESSION_DAILY_CLOSE_SOURCE_LIMIT);
   const legacyClosedSessionCandidates = await ctx.db
     .query("registerSession")
     .withIndex("by_storeId_status_closeoutOperatingDate", (q) =>
@@ -1188,6 +1206,9 @@ async function listRegisterSessionsForDailyClose(
   const closedSessionsById = new Map<Id<"registerSession">, Doc<"registerSession">>();
 
   indexedClosedSessions.forEach((session) =>
+    closedSessionsById.set(session._id, session),
+  );
+  openedDateClosedSessions.forEach((session) =>
     closedSessionsById.set(session._id, session),
   );
   legacyClosedSessionCandidates
@@ -1276,6 +1297,15 @@ async function listRegisterSessionsForDailyClose(
         limit: REGISTER_SESSION_DAILY_CLOSE_SOURCE_LIMIT,
         range,
         reason: "register_session_closed_date_cap_reached",
+        statuses: ["closed"],
+      }),
+      sourceCompletenessEntry({
+        source: "register_session",
+        readMode: "by_storeId_status_openedOperatingDate",
+        recordCount: openedDateClosedSessions.length,
+        limit: REGISTER_SESSION_DAILY_CLOSE_SOURCE_LIMIT,
+        range,
+        reason: "register_session_closed_opened_date_cap_reached",
         statuses: ["closed"],
       }),
       sourceCompletenessEntry({
@@ -2503,6 +2533,7 @@ function emptySummary(): DailyCloseSummary {
     carriedOverRegisterCount: 0,
     cashDepositTotal: 0,
     closedRegisterSessionCount: 0,
+    countedCashTotal: 0,
     currentDayCashTotal: 0,
     currentDayCashTransactionCount: 0,
     expectedCashTotal: 0,
@@ -3429,6 +3460,14 @@ export async function buildDailyCloseSnapshotWithCtx(
       0,
     ),
     closedRegisterSessionCount: closedRegisterSessions.length,
+    countedCashTotal: relevantRegisterSessions.reduce(
+      (sum, session) =>
+        sum +
+        (typeof session.countedCash === "number"
+          ? session.countedCash
+          : session.expectedCash + (session.variance ?? 0)),
+      0,
+    ),
     currentDayCashTotal,
     currentDayCashTransactionCount: completedTransactions.filter(
       (transaction) => transactionCashDelta(transaction) > 0,

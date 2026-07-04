@@ -14,6 +14,7 @@ import {
   runConfiguredDailyOperationsAutomationWithCtx,
   runDailyOpeningAutomationWithCtx,
   runScheduledDailyOperationsAutomationWithCtx,
+  sendDailyManagerReportsForAppliedEodAutomationWithCtx,
   updateEodAutoCompletePolicy,
   updateOpeningAutoStartPolicy,
 } from "./dailyOperationsAutomation";
@@ -928,6 +929,75 @@ describe("daily operations automation adapter", () => {
         policyReviewedItemKeys: [],
       },
     });
+  });
+
+  it("sends manager reports only for freshly applied EOD automation completions", async () => {
+    const runAction = vi.fn(async (_functionRef: unknown, _args: unknown) => [
+      {
+        dailyCloseId: "daily-close-1",
+        operatingDate: "2026-06-08",
+        recipientEmail: "manager@example.com",
+        status: 202,
+        storeName: "Accra",
+      },
+    ]);
+
+    const result = await sendDailyManagerReportsForAppliedEodAutomationWithCtx(
+      { runAction } as never,
+      {
+        results: [
+          {
+            action: "applied",
+            run: {
+              _id: "automation-run-applied",
+              operatingDate: "2026-06-08",
+              outcome: "applied",
+              storeId: "store-1",
+            },
+          },
+          {
+            action: "already_recorded",
+            run: {
+              _id: "automation-run-existing",
+              operatingDate: "2026-06-07",
+              outcome: "applied",
+              storeId: "store-1",
+            },
+          },
+          {
+            action: "recorded",
+            run: {
+              _id: "automation-run-skipped",
+              operatingDate: "2026-06-06",
+              outcome: "skipped",
+              storeId: "store-1",
+            },
+          },
+        ] as never,
+      },
+    );
+
+    expect(runAction).toHaveBeenCalledTimes(1);
+    expect(runAction.mock.calls[0]?.[1]).toEqual({
+      operatingDate: "2026-06-08",
+      storeId: "store-1",
+    });
+    expect(result).toEqual([
+      {
+        operatingDate: "2026-06-08",
+        reports: [
+          {
+            dailyCloseId: "daily-close-1",
+            operatingDate: "2026-06-08",
+            recipientEmail: "manager@example.com",
+            status: 202,
+            storeName: "Accra",
+          },
+        ],
+        runId: "automation-run-applied",
+        storeId: "store-1",
+      },
+    ]);
   });
 
   it("persists canonical store schedule context in EOD auto-complete evidence", async () => {

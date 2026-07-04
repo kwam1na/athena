@@ -692,6 +692,64 @@ describe("end-of-day review backend foundation", () => {
     );
   });
 
+  it("includes closed register sessions opened on the operating date even when closeout is assigned to the next day", async () => {
+    const { db } = createDb({
+      registerSession: [
+        {
+          _id: "same-day-closeout-register",
+          closedAt: Date.UTC(2026, 5, 30, 18),
+          closeoutOperatingDate: "2026-06-30",
+          countedCash: 10500,
+          expectedCash: 10000,
+          openedAt: Date.UTC(2026, 5, 30, 10),
+          openedOperatingDate: "2026-06-30",
+          openingFloat: 10000,
+          status: "closed",
+          storeId: "store-1",
+          variance: 500,
+        },
+        {
+          _id: "late-closeout-register",
+          closedAt: Date.UTC(2026, 6, 1, 1),
+          closeoutOperatingDate: "2026-07-01",
+          countedCash: 24000,
+          expectedCash: 22000,
+          openedAt: Date.UTC(2026, 5, 30, 11),
+          openedOperatingDate: "2026-06-30",
+          openingFloat: 10000,
+          status: "closed",
+          storeId: "store-1",
+          variance: 2000,
+        },
+      ],
+      store: [store],
+    });
+
+    const snapshot = await buildDailyCloseSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      { operatingDate: "2026-06-30", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.readyItems).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: "register_session:same-day-closeout-register:closed",
+        }),
+        expect.objectContaining({
+          key: "register_session:late-closeout-register:closed",
+        }),
+      ]),
+    );
+    expect(snapshot.summary).toMatchObject({
+      closedRegisterSessionCount: 2,
+      countedCashTotal: 34500,
+      expectedCashTotal: 32000,
+      netCashVariance: 2500,
+      registerCount: 2,
+      registerVarianceCount: 2,
+    });
+  });
+
   it("finds active register blockers after more than 1000 indexed historic register sessions", async () => {
     const historicSessions = Array.from({ length: 1000 }, (_, index) => ({
       _id: `historic-register-${index + 1}`,
