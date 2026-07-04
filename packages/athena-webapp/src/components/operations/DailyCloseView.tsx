@@ -25,7 +25,7 @@ import {
 
 import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
 import { formatReviewReason } from "@/components/cash-controls/formatReviewReason";
-import { cn } from "@/lib/utils";
+import { capitalizeFirstLetter, capitalizeWords, cn } from "@/lib/utils";
 import { toOperatorMessage } from "@/lib/errors/operatorMessages";
 import {
   runCommand,
@@ -59,6 +59,7 @@ import { ProtectedAdminSignInView } from "../states/signed-out/ProtectedAdminSig
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Calendar } from "../ui/calendar";
+import { Checkbox } from "../ui/checkbox";
 import { LoadingButton } from "../ui/loading-button";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
@@ -937,6 +938,31 @@ function normalizeDailyCloseItemCopy(value?: string | null) {
   return value?.replace(/\bEnd-of-Day Review\b/g, "end of day review");
 }
 
+function formatDailyCloseItemTitle(title: string) {
+  const trimmedTitle = title.trim();
+
+  if (!trimmedTitle) return title;
+
+  const inventoryReviewMatch = trimmedTitle.match(
+    /^(Review inventory for )(.+)$/i,
+  );
+  const pendingCheckoutReviewMatch = trimmedTitle.match(
+    /^(Review pending checkout item: )(.+)$/i,
+  );
+
+  if (inventoryReviewMatch) {
+    return `${inventoryReviewMatch[1]}${capitalizeWords(inventoryReviewMatch[2])}`;
+  }
+
+  if (pendingCheckoutReviewMatch) {
+    return `${pendingCheckoutReviewMatch[1]}${capitalizeWords(pendingCheckoutReviewMatch[2])}`;
+  }
+
+  return trimmedTitle === trimmedTitle.toLowerCase()
+    ? capitalizeFirstLetter(trimmedTitle)
+    : title;
+}
+
 function shouldShowCollapsedDescription(description?: string | null) {
   if (!description) return false;
 
@@ -953,11 +979,43 @@ function getItemContextLabel(item: DailyCloseItem) {
       : "Close item";
 }
 
+function isOperationalWorkItem(item: DailyCloseItem) {
+  return (
+    normalizeMetadataLabel(item.category ?? "") === "operationalworkitem" ||
+    normalizeMetadataLabel(item.subject?.type ?? "") === "operationalworkitem"
+  );
+}
+
 function humanizeMetadataLabel(label: string) {
   return label
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
     .replace(/[_-]+/g, " ")
     .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function formatOperationalWorkTypeLabel(type: string) {
+  switch (type) {
+    case "pos_pending_checkout_item_review":
+      return "POS pending checkout";
+    case "synced_sale_inventory_review":
+      return "Synced sale inventory";
+    case "service_case":
+      return "Service case";
+    case "service_appointment":
+      return "Service appointment";
+    case "service_intake":
+      return "Service intake";
+    case "purchase_order":
+      return "Purchase order";
+    case "stock_adjustment_review":
+      return "Stock adjustment approval";
+    case "daily_close_carry_forward":
+      return "Daily close follow-up";
+    case "service_deposit_review":
+      return "Unsupported work type";
+    default:
+      return humanizeMetadataLabel(type);
+  }
 }
 
 const moneyMetadataLabels = new Set([
@@ -1319,6 +1377,14 @@ function formatMetadataValue(label: string, value: unknown, currency: string) {
 
     if (normalizedLabel === "status") {
       return humanizeMetadataLabel(value);
+    }
+
+    if (normalizedLabel === "priority") {
+      return capitalizeFirstLetter(value);
+    }
+
+    if (normalizedLabel === "type") {
+      return formatOperationalWorkTypeLabel(value);
     }
 
     if (normalizedLabel === "reason") {
@@ -2243,6 +2309,7 @@ function DailyCloseItemCard({
   const itemId = getItemId(item);
   const contextLabel = getItemContextLabel(item);
   const description = getItemDescription(item);
+  const title = formatDailyCloseItemTitle(item.title);
   const showCollapsedDescription = shouldShowCollapsedDescription(description);
   const metadataEntries = getMetadataEntries(
     canViewFinancialDetails,
@@ -2251,7 +2318,10 @@ function DailyCloseItemCard({
     orgUrlSlug,
     storeUrlSlug,
   );
-  const collapsedMetadataEntries = getCollapsedMetadataEntries(metadataEntries);
+  const showMetadataDetails = !isOperationalWorkItem(item);
+  const collapsedMetadataEntries = showMetadataDetails
+    ? getCollapsedMetadataEntries(metadataEntries)
+    : metadataEntries;
   const hasSourceLink = Boolean(item.link);
   const sourceAction = hasSourceLink ? (
     <ItemLink
@@ -2269,32 +2339,31 @@ function DailyCloseItemCard({
   return (
     <OperationReviewItemCard
       actionSlot={
-        actionSlot || sourceAction ? (
+        actionSlot ? (
           <div className="flex flex-wrap items-center gap-2">
             {actionSlot}
-            {sourceAction}
           </div>
         ) : null
       }
       collapsedMetadataEntries={collapsedMetadataEntries}
       contextLabel={contextLabel}
       description={description}
+      headerActionSlot={sourceAction}
       itemId={itemId}
-      metadataEntries={metadataEntries}
+      metadataEntries={showMetadataDetails ? metadataEntries : []}
       selectionSlot={
         selectable ? (
-          <input
-            aria-label={`Carry forward ${item.title}`}
+          <Checkbox
+            aria-label={`Carry forward ${title}`}
             checked={Boolean(selected)}
-            className="mt-1 h-4 w-4 rounded border-border text-signal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            onChange={(event) => onSelectedChange?.(event.target.checked)}
-            type="checkbox"
+            className="mt-1"
+            onCheckedChange={(checked) => onSelectedChange?.(checked === true)}
           />
         ) : null
       }
       badgeSlot={badgeSlot}
       showCollapsedDescription={showCollapsedDescription}
-      title={item.title}
+      title={title}
     />
   );
 }

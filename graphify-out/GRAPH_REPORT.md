@@ -5,7 +5,7 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 8578 nodes · 10384 edges · 2096 communities detected
+- 8585 nodes · 10397 edges · 2096 communities detected
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
@@ -2151,7 +2151,7 @@ Nodes (66): attentionSeverity(), automationRunClassification(), automationStatus
 
 ### Community 4 - "Community 4"
 Cohesion: 0.04
-Nodes (32): buildDailyCloseExpenseSearch(), buildDailyCloseTransactionSearch(), canReopenDailyClose(), cn(), getBucketCountClassName(), getDailyCloseSalesMetricLabels(), getDailyCloseStatus(), getDisplayMetadataLabel() (+24 more)
+Nodes (34): buildDailyCloseExpenseSearch(), buildDailyCloseTransactionSearch(), canReopenDailyClose(), cn(), formatOperationalWorkTypeLabel(), getBucketCountClassName(), getDailyCloseSalesMetricLabels(), getDailyCloseStatus() (+26 more)
 
 ### Community 5 - "Community 5"
 Cohesion: 0.09
@@ -2178,16 +2178,16 @@ Cohesion: 0.08
 Nodes (42): addDaysToOperatingDate(), automationErrorMessage(), automationIdempotencyKey(), configuredEodAutoCompleteStoreDayContext(), configuredOpeningOperatingDate(), eodAutoCompleteDecision(), eodAutoCompletePolicyCronWindow(), eodAutoCompleteTiming() (+34 more)
 
 ### Community 11 - "Community 11"
+Cohesion: 0.06
+Nodes (27): cn(), formatMetadataDisplayValue(), formatMetadataValue(), formatOperatingDate(), formatOperationalWorkTypeLabel(), formatTimestamp(), getAcknowledgementKey(), getArrayMetadataStringValue() (+19 more)
+
+### Community 12 - "Community 12"
 Cohesion: 0.11
 Nodes (42): completed(), executeCallbackCommand(), executeClearLocalReviewItems(), executeClearStaleDrawerAuthority(), executeCollectLocalReview(), executeRepairTerminalSeed(), executeRetrySync(), executeTerminalRecoveryCommand() (+34 more)
 
-### Community 12 - "Community 12"
+### Community 13 - "Community 13"
 Cohesion: 0.09
 Nodes (45): compactContext(), createAuthEntryViewedEvent(), createAuthRequestStartedEvent(), createAuthVerificationSucceededEvent(), createAuthVerificationViewedEvent(), createBagAddSucceededEvent(), createBagMoveToSavedEvent(), createBagRemoveSucceededEvent() (+37 more)
-
-### Community 13 - "Community 13"
-Cohesion: 0.06
-Nodes (24): cn(), formatMetadataDisplayValue(), formatMetadataValue(), formatOperatingDate(), formatTimestamp(), getAcknowledgementKey(), getArrayMetadataStringValue(), getBucketConfigs() (+16 more)
 
 ### Community 14 - "Community 14"
 Cohesion: 0.07
