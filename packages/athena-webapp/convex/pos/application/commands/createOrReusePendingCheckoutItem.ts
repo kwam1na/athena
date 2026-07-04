@@ -5,6 +5,10 @@ import { upsertProductSkuSearchProjection } from "../../../inventory/skuSearch";
 import { recordOperationalEventWithCtx } from "../../../operations/operationalEvents";
 import { createOperationalWorkItemWithCtx } from "../../../operations/operationalWorkItems";
 import { toSlug } from "../../../utils";
+import {
+  buildPendingCheckoutReviewWorkItemPriority,
+  buildPendingCheckoutReviewWorkItemTitle,
+} from "./pendingCheckoutReviewWorkLifecycle";
 
 export type PendingCheckoutResult = {
   id: Id<"posPendingCheckoutItem">;
@@ -442,14 +446,6 @@ function buildEventMessage(args: {
   return `${args.actorLabel} ${action} pending checkout item ${args.itemName}. Quantity entered: ${args.quantitySold}.`;
 }
 
-function buildWorkItemPriority(
-  reviewPriority: Doc<"posPendingCheckoutItem">["reviewPriority"],
-) {
-  if (reviewPriority === "high") return "high";
-  if (reviewPriority === "elevated") return "medium";
-  return "normal";
-}
-
 async function syncPendingCheckoutWorkItem(
   ctx: MutationCtx,
   item: Doc<"posPendingCheckoutItem">,
@@ -478,7 +474,8 @@ async function syncPendingCheckoutWorkItem(
       totalQuantitySold: item.evidence.totalQuantitySold,
       transactionCount: item.evidence.transactionCount,
     },
-    priority: buildWorkItemPriority(item.reviewPriority),
+    priority: buildPendingCheckoutReviewWorkItemPriority(item.reviewPriority),
+    title: buildPendingCheckoutReviewWorkItemTitle(item),
   });
 }
 
@@ -896,10 +893,12 @@ export async function createOrReusePendingCheckoutItem(
       totalQuantitySold: itemWithAnchors.evidence.totalQuantitySold,
     },
     organizationId: itemWithAnchors.organizationId,
-    priority: buildWorkItemPriority(itemWithAnchors.reviewPriority),
+    priority: buildPendingCheckoutReviewWorkItemPriority(
+      itemWithAnchors.reviewPriority,
+    ),
     status: "open",
     storeId: itemWithAnchors.storeId,
-    title: `Review pending checkout item: ${itemWithAnchors.name}`,
+    title: buildPendingCheckoutReviewWorkItemTitle(itemWithAnchors),
     type: "pos_pending_checkout_item_review",
   });
 

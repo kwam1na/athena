@@ -25,6 +25,10 @@ import {
   EMPTY_CATALOG_SUMMARY,
   refreshCatalogSummaryWithCtx,
 } from "./catalogSummary";
+import {
+  ensurePendingCheckoutReviewWorkForUnarchivedProduct,
+  retirePendingCheckoutReviewWorkForArchivedProduct,
+} from "../pos/application/commands/pendingCheckoutReviewWorkLifecycle";
 
 const entity = "product";
 
@@ -988,6 +992,7 @@ export const update = mutation({
   },
   handler: async (ctx, args) => {
     const { id, ...rest } = args;
+    const productBefore = await ctx.db.get("product", args.id);
 
     if (args.name) {
       const allSkus = await ctx.db
@@ -1008,6 +1013,25 @@ export const update = mutation({
     const product = await ctx.db.get("product", args.id);
 
     if (product) {
+      if (
+        args.availability === "archived" &&
+        productBefore?.availability !== "archived"
+      ) {
+        await retirePendingCheckoutReviewWorkForArchivedProduct(ctx, {
+          productId: product._id,
+          storeId: product.storeId,
+        });
+      } else if (
+        args.availability !== undefined &&
+        args.availability !== "archived" &&
+        productBefore?.availability === "archived"
+      ) {
+        await ensurePendingCheckoutReviewWorkForUnarchivedProduct(ctx, {
+          productId: product._id,
+          storeId: product.storeId,
+        });
+      }
+
       await ctx.scheduler.runAfter(
         0,
         internal.inventory.productUtil.invalidateProductCache,
@@ -1037,6 +1061,10 @@ export const archive = mutation({
     }
 
     await ctx.db.patch("product", args.id, { availability: "archived" });
+    await retirePendingCheckoutReviewWorkForArchivedProduct(ctx, {
+      productId: product._id,
+      storeId: product.storeId,
+    });
     await refreshProductSkuSearchForProduct(ctx, args.id);
     await refreshCatalogSummaryWithCtx(ctx, product.storeId);
 
@@ -1067,6 +1095,10 @@ export const unarchive = mutation({
     }
 
     await ctx.db.patch("product", args.id, { availability: "live" });
+    await ensurePendingCheckoutReviewWorkForUnarchivedProduct(ctx, {
+      productId: product._id,
+      storeId: product.storeId,
+    });
     await refreshProductSkuSearchForProduct(ctx, args.id);
     await refreshCatalogSummaryWithCtx(ctx, product.storeId);
 

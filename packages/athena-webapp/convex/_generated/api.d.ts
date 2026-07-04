@@ -193,6 +193,7 @@ import type * as pos_application_commands_correctTransaction from "../pos/applic
 import type * as pos_application_commands_createOrReusePendingCheckoutItem from "../pos/application/commands/createOrReusePendingCheckoutItem.js";
 import type * as pos_application_commands_expenseSessionCommands from "../pos/application/commands/expenseSessionCommands.js";
 import type * as pos_application_commands_expenseSessionTracing from "../pos/application/commands/expenseSessionTracing.js";
+import type * as pos_application_commands_pendingCheckoutReviewWorkLifecycle from "../pos/application/commands/pendingCheckoutReviewWorkLifecycle.js";
 import type * as pos_application_commands_posSessionTracing from "../pos/application/commands/posSessionTracing.js";
 import type * as pos_application_commands_quickAddCatalogItem from "../pos/application/commands/quickAddCatalogItem.js";
 import type * as pos_application_commands_register from "../pos/application/commands/register.js";
@@ -624,6 +625,7 @@ declare const fullApi: ApiFromModules<{
   "pos/application/commands/createOrReusePendingCheckoutItem": typeof pos_application_commands_createOrReusePendingCheckoutItem;
   "pos/application/commands/expenseSessionCommands": typeof pos_application_commands_expenseSessionCommands;
   "pos/application/commands/expenseSessionTracing": typeof pos_application_commands_expenseSessionTracing;
+  "pos/application/commands/pendingCheckoutReviewWorkLifecycle": typeof pos_application_commands_pendingCheckoutReviewWorkLifecycle;
   "pos/application/commands/posSessionTracing": typeof pos_application_commands_posSessionTracing;
   "pos/application/commands/quickAddCatalogItem": typeof pos_application_commands_quickAddCatalogItem;
   "pos/application/commands/register": typeof pos_application_commands_register;
