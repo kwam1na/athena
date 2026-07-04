@@ -267,6 +267,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/components/operations/SkuActivityTimeline.test.tsx`](../../src/components/operations/SkuActivityTimeline.test.tsx)
 - [`src/components/operations/StockAdjustmentWorkspace.test.tsx`](../../src/components/operations/StockAdjustmentWorkspace.test.tsx)
 - [`src/components/operations/skuActivityTimelineAdapter.test.ts`](../../src/components/operations/skuActivityTimelineAdapter.test.ts)
+- [`src/components/operations/skuActivityUntrustedSalesAdapter.test.ts`](../../src/components/operations/skuActivityUntrustedSalesAdapter.test.ts)
 - [`src/components/operations/useApprovedCommand.test.tsx`](../../src/components/operations/useApprovedCommand.test.tsx)
 - [`src/components/orders/OrderStatus.test.tsx`](../../src/components/orders/OrderStatus.test.tsx)
 - [`src/components/orders/RefundsView.test.tsx`](../../src/components/orders/RefundsView.test.tsx)

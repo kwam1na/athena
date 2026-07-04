@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>feat: Add SKU Activity untrusted sales history</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f4f6f7;
+      --panel: #ffffff;
+      --panel-subtle: #fafbfc;
+      --ink: #111827;
+      --muted: #5f6f7d;
+      --quiet: #7a8793;
+      --line: #d8e0e6;
+      --line-soft: #e8edf1;
+      --accent: #176a82;
+      --accent-ink: #0b4659;
+      --accent-soft: #e5f4f7;
+      --warn: #8a4b12;
+      --warn-soft: #fff4e8;
+      --ok: #23623a;
+      --ok-soft: #e8f5ed;
+      --danger: #8f2f2f;
+      --danger-soft: #fff0f0;
+      --shadow: 0 1px 2px rgba(17, 24, 39, 0.05), 0 16px 44px rgba(17, 24, 39, 0.06);
+      --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 15px/1.58 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
+    }
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 28px 24px 64px;
+    }
+    header, section {
+      background: var(--panel);
+      border: 1px solid var(--line-soft);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      padding: 24px;
+      margin-bottom: 16px;
+    }
+    header {
+      position: relative;
+      overflow: hidden;
+      padding: 30px 32px;
+      border-color: #cbdde5;
+    }
+    header::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 4px;
+      background: var(--accent);
+    }
+    h1, h2, h3 { line-height: 1.18; margin: 0 0 12px; }
+    h1 {
+      max-width: 820px;
+      font-size: clamp(27px, 4vw, 42px);
+      font-weight: 720;
+      letter-spacing: 0;
+    }
+    h2 {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 19px;
+      font-weight: 680;
+    }
+    h2::before {
+      content: "";
+      width: 7px;
+      height: 24px;
+      border-radius: 999px;
+      background: var(--accent);
+      flex: 0 0 auto;
+    }
+    h3 {
+      font-size: 14px;
+      color: var(--accent-ink);
+      letter-spacing: 0.01em;
+      text-transform: uppercase;
+    }
+    p { margin: 0 0 12px; }
+    a {
+      color: var(--accent);
+      font-weight: 650;
+      text-decoration-thickness: 1px;
+      text-underline-offset: 3px;
+      transition: color 160ms var(--ease-out), text-decoration-color 160ms var(--ease-out), transform 160ms var(--ease-out);
+    }
+    a:focus-visible {
+      outline: 3px solid rgba(23, 106, 130, 0.25);
+      outline-offset: 3px;
+      border-radius: 4px;
+    }
+    a:active { transform: scale(0.98); }
+    code {
+      background: #eef2f5;
+      border-radius: 4px;
+      padding: 1px 4px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.92em;
+      overflow-wrap: anywhere;
+    }
+    ul, ol { margin: 10px 0 0 0; padding: 0; list-style: none; }
+    li {
+      position: relative;
+      margin: 7px 0;
+      padding-left: 18px;
+    }
+    li::before {
+      content: "";
+      position: absolute;
+      left: 2px;
+      top: 0.78em;
+      width: 5px;
+      height: 5px;
+      border-radius: 999px;
+      background: var(--accent);
+      opacity: 0.75;
+    }
+    table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      margin-top: 12px;
+      overflow: hidden;
+      border: 1px solid var(--line-soft);
+      border-radius: 8px;
+    }
+    th, td {
+      border: 0;
+      border-bottom: 1px solid var(--line-soft);
+      padding: 11px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+    tr:last-child td { border-bottom: 0; }
+    th {
+      background: #f0f5f7;
+      color: var(--accent-ink);
+      font-size: 12px;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+    tbody tr:nth-child(even) td { background: var(--panel-subtle); }
+    .meta {
+      color: var(--muted);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 20px;
+    }
+    .meta span {
+      display: inline-flex;
+      align-items: center;
+      min-height: 30px;
+      border: 1px solid var(--line-soft);
+      border-radius: 999px;
+      background: var(--panel-subtle);
+      padding: 5px 10px;
+      font-size: 13px;
+    }
+    .meta code {
+      max-width: 100%;
+      line-height: 1.45;
+    }
+    header > p {
+      max-width: 820px;
+      color: var(--muted);
+      font-size: 16px;
+    }
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+      color: var(--accent-ink);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .eyebrow::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--ok);
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(245px, 1fr));
+      gap: 12px;
+    }
+    .callout {
+      border: 1px solid #cfe5eb;
+      border-left: 4px solid var(--accent);
+      background: var(--accent-soft);
+      padding: 15px 16px;
+      border-radius: 8px;
+    }
+    .callout p { color: #334a55; }
+    .callout.ok {
+      border-color: #cbe8d5;
+      border-left-color: var(--ok);
+      background: var(--ok-soft);
+    }
+    .callout.warn {
+      border-color: #f1d7b9;
+      border-left-color: var(--warn);
+      background: var(--warn-soft);
+    }
+    .unit {
+      border: 1px solid var(--line-soft);
+      border-radius: 8px;
+      background: var(--panel-subtle);
+      padding: 15px 16px;
+      margin-top: 12px;
+    }
+    .unit strong { color: var(--accent); }
+    .num { font-variant-numeric: tabular-nums; }
+    .section-note {
+      max-width: 780px;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }
+    @media (hover: hover) and (pointer: fine) {
+      a:hover {
+        color: var(--accent-ink);
+        text-decoration-color: transparent;
+      }
+      .unit {
+        transition: border-color 160ms var(--ease-out), background-color 160ms var(--ease-out);
+      }
+      .unit:hover {
+        border-color: #bfd6de;
+        background: #ffffff;
+      }
+    }
+    @media (max-width: 720px) {
+      main { padding: 16px 12px 40px; }
+      header, section { padding: 18px; }
+      header { padding-top: 24px; }
+      .meta span {
+        width: 100%;
+        justify-content: flex-start;
+        align-items: flex-start;
+        border-radius: 16px;
+        white-space: normal;
+      }
+      .meta code {
+        background: transparent;
+        padding: 0;
+      }
+      table {
+        display: block;
+        overflow-x: auto;
+        white-space: nowrap;
+      }
+      td { white-space: normal; min-width: 190px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      a, .unit { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div class="eyebrow">Planning artifact</div>
+      <h1>feat: Add SKU Activity untrusted sales history</h1>
+      <p>SKU Activity becomes a read-only evidence workspace for untrusted SKU sales, covering legacy import provisional SKUs and POS pending checkout items with completed transaction history and source-owned review handoffs.</p>
+      <div class="meta">
+        <span>Type: feat</span>
+        <span>Status: active</span>
+        <span>Date: <span class="num">2026-07-04</span></span>
+        <span>Source: <a href="2026-07-04-002-feat-sku-activity-untrusted-sales-history-plan.md">Markdown plan</a></span>
+        <span>Origin: <code>docs/brainstorms/2026-07-04-sku-activity-untrusted-sales-history-requirements.md</code></span>
+      </div>
+    </header>
+
+    <section>
+      <h2>Direction</h2>
+      <p class="section-note">The first pass keeps the page operational: what stays stable, what becomes visible, and which boundaries must remain protected.</p>
+      <div class="grid">
+        <div class="callout ok">
+          <h3>Preserve</h3>
+          <p>The existing SKU lookup and timeline path remains available for arbitrary SKU inspection.</p>
+        </div>
+        <div class="callout">
+          <h3>Surface</h3>
+          <p>The default workspace lists actionable untrusted sources with completed sales and source filters.</p>
+        </div>
+        <div class="callout warn">
+          <h3>Protect</h3>
+          <p>SKU Activity routes to owning review workflows but never mutates trusted stock or trust state directly.</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Source Matrix</h2>
+      <p class="section-note">Each source keeps its own ownership model while sharing one evidence workspace.</p>
+      <table>
+        <thead>
+          <tr><th>Source</th><th>Default included</th><th>Reviewed/history filter</th><th>Review handoff</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Legacy import provisional</td>
+            <td>Active rows with sale evidence</td>
+            <td>Finalized, rejected, or closed rows only when explicitly included</td>
+            <td>Product edit trusted inventory finalization for the linked product/SKU</td>
+          </tr>
+          <tr>
+            <td>POS pending checkout</td>
+            <td>Pending review or flagged rows with sale evidence</td>
+            <td>Linked, approved, rejected, or terminal rows only when explicitly included</td>
+            <td>Product edit pending checkout review/link/finalization workflow</td>
+          </tr>
+          <tr>
+            <td>Trusted SKU lookup</td>
+            <td>Existing selected SKU path</td>
+            <td>Not applicable</td>
+            <td>Existing SKU Activity timeline and transaction links</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>V1 Contract</h2>
+      <p class="section-note">These are the implementation-shaping constraints that reviewers aligned on after the planning loop.</p>
+      <ul>
+        <li>The workspace uses a master-detail pattern: source summaries stay visible while selected-source transaction history opens in detail.</li>
+        <li>Source summaries are cursor-paginated independently from selected-source transaction history using indexed source-of-truth evidence.</li>
+        <li>Selected-source history supports load more until <code>hasMore</code> is false; long history is not replaced by a truncation warning.</li>
+        <li>Source-list reads use evidence indexes on both source tables; if nested evidence cannot be indexed directly, add only minimal source-row mirror fields.</li>
+        <li>Source-list pagination uses per-source/status cursors, reads <code>pageSize + 1</code> per bucket, merges deterministically, and returns participating cursor payloads.</li>
+        <li>No materialized projection or scheduled rebuild is part of v1; freshness is favored over derived-state optimization.</li>
+        <li>The Convex query derives auth server-side, validates organization/store access, and returns safe not-found states for missing or other-store source ids.</li>
+        <li>Missing source ids, zero matched transactions, and cross-store parent mismatches return safe empty or diagnostic states.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Deferred Optimization</h2>
+      <p class="section-note">The heavier projection path stays out of v1 unless production data proves the indexed read path is too expensive.</p>
+      <ul>
+        <li>Do not build a materialized SKU Activity projection or scheduled rebuild job in this slice.</li>
+        <li>Revisit projection only with query-cost metrics from realistic store data.</li>
+        <li>A later projection plan must define freshness guarantees, drift diagnostics, repair behavior, and scheduled-run evidence before implementation.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Transaction Evidence</h2>
+      <p class="section-note">The history view separates historical facts from current effective circulation, so operators can trust what the page is saying.</p>
+      <ul>
+        <li>Source rows show aggregate sale evidence for triage.</li>
+        <li>Detail rows are transaction-backed whenever matching transaction items exist.</li>
+        <li>History includes sale identity, time, historical gross quantity, effective/net quantity, transaction status, refunds, adjustments, and register/session context when available.</li>
+        <li>Voided or adjusted completed transactions remain visible with status labels.</li>
+        <li>Fully voided, fully refunded, or net-zero corrected quantities do not inflate active circulation totals.</li>
+        <li>Summary/history mismatches render calm diagnostics instead of fabricated rows.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>DTO Allowlist</h2>
+      <p class="section-note">The evidence query is intentionally narrow: enough for operator review, not a raw transaction or audit export.</p>
+      <ul>
+        <li>Source rows expose source type, store-scoped source id, operator display label, status label, review bucket, aggregate quantities, sale count, last sold time, route availability, and non-sensitive diagnostics.</li>
+        <li>Transaction rows expose transaction id, display reference, completed time, status label, gross/effective quantities, operator-visible totals, refund quantity, adjustment summary, safe register/session label, and route targets.</li>
+        <li>The untrusted evidence query excludes raw customer/staff ids, contact details, notes, local event ids, payload fingerprints, approval ids, register session ids, terminal ids, provenance internals, and backend enum strings.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Implementation Units</h2>
+      <p class="section-note">The work is sequenced from backend evidence to route wiring, UI, links, and validation.</p>
+      <div class="unit">
+        <p><strong>U1. Backend evidence model</strong></p>
+        <p>Add a cursor-paginated Convex read model for untrusted source rows and selected-source transaction history, using source evidence indexes and a legacy import transaction-item lookup path.</p>
+      </div>
+      <div class="unit">
+        <p><strong>U2. Route state</strong></p>
+        <p>Choose between existing selected-SKU timeline mode and default untrusted-sales mode with explicit URL-backed filters.</p>
+      </div>
+      <div class="unit">
+        <p><strong>U3. Evidence UI</strong></p>
+        <p>Add prop-driven master-detail components and adapters for source rows, load-more transaction history, empty states, and diagnostics.</p>
+        <p>Use the repo-local <code>emil-design-eng</code> skill for the UI implementation pass: scanability, pressable feedback, restrained motion, reduced-motion behavior, and mobile detail/table layout.</p>
+      </div>
+      <div class="unit">
+        <p><strong>U4. Links and provenance</strong></p>
+        <p>Wire transaction detail and source-specific review handoff links while preserving read-only SKU Activity boundaries.</p>
+      </div>
+      <div class="unit">
+        <p><strong>U5. Validation and docs</strong></p>
+        <p>Refresh generated artifacts or agent docs only when implementation changes public query or route surfaces.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>Risks</h2>
+      <p class="section-note">The plan treats performance, trust boundaries, and metadata exposure as first-order implementation risks.</p>
+      <table>
+        <thead>
+          <tr><th>Risk</th><th>Mitigation</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Slow or unbounded source/history reads</td><td>Add narrow evidence and transaction lookup paths, then paginate source summaries and selected-source history independently.</td></tr>
+          <tr><td>Sold rows hidden behind unsold candidate rows</td><td>Use evidence indexes or minimal source-row mirror fields rather than scanning candidate rows.</td></tr>
+          <tr><td>Projection work adds stale evidence and drift</td><td>Defer projection or scheduled rebuilds until metrics show indexed source-of-truth reads are too expensive.</td></tr>
+          <tr><td>Source summaries disagree with transaction rows</td><td>Return both signals and show mismatch diagnostics.</td></tr>
+          <tr><td>Refunded or corrected-away units inflate circulation</td><td>Keep historical gross quantity separate from effective/net quantity and adjustment/refund context.</td></tr>
+          <tr><td>Terminal work reappears as actionable</td><td>Default to actionable statuses and place terminal sources behind reviewed/history mode.</td></tr>
+          <tr><td>Trust boundary erosion</td><td>Keep SKU Activity actions as navigation only and cover with tests.</td></tr>
+          <tr><td>Browser route treated as the only security gate</td><td>Enforce organization/store authorization inside the Convex query and test direct query calls.</td></tr>
+          <tr><td>Sensitive metadata leaks through evidence DTOs</td><td>Use an explicit allowlist and adapter redaction tests.</td></tr>
+          <tr><td>Existing SKU lookup regression</td><td>Keep selected-SKU mode separate and retain existing route/component tests.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Validation Strategy</h2>
+      <p class="section-note">Validation starts focused around SKU Activity and expands only when transaction DTOs or public routes change.</p>
+      <ul>
+        <li>Focused Convex tests in <code>packages/athena-webapp/convex/operations/skuActivity.test.ts</code>.</li>
+        <li>Route tests in <code>packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/sku-activity.test.tsx</code>.</li>
+        <li>Component and adapter tests for the new evidence UI.</li>
+        <li>Transaction query tests when DTO/provenance changes.</li>
+        <li>Convex audit/lint, TypeScript, build, and graphify rebuild after implementation code edits.</li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>

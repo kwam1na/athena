@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import { Search } from "lucide-react";
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { z } from "zod";
 
 import { useAuth } from "@/hooks/useAuth";
@@ -14,10 +14,18 @@ import {
   PageWorkspace,
 } from "~/src/components/common/PageLevelHeader";
 import { SkuActivityTimeline } from "~/src/components/operations/SkuActivityTimeline";
+import { SkuActivityUntrustedSales } from "~/src/components/operations/SkuActivityUntrustedSales";
 import {
   buildSkuActivityTimelineViewModel,
   type SkuActivityQueryResult,
 } from "~/src/components/operations/skuActivityTimelineAdapter";
+import {
+  buildSkuActivityUntrustedSalesViewModel,
+  type SkuActivityUntrustedSalesQueryResult,
+  type SkuActivityUntrustedSalesReviewStatus,
+  type SkuActivityUntrustedSalesSourceFilter,
+  type SkuActivityUntrustedSalesSourceType,
+} from "~/src/components/operations/skuActivityUntrustedSalesAdapter";
 import { NoPermissionView } from "~/src/components/states/no-permission/NoPermissionView";
 import { NotFoundView } from "~/src/components/states/not-found/NotFoundView";
 import { Button } from "~/src/components/ui/button";
@@ -25,22 +33,179 @@ import { Input } from "~/src/components/ui/input";
 import { Label } from "~/src/components/ui/label";
 import View from "~/src/components/View";
 
+const UNTRUSTED_SOURCE_PAGE_SIZE = 50;
+const UNTRUSTED_TRANSACTION_PAGE_SIZE = 100;
+const UNTRUSTED_MAX_LIMIT = 500;
+
 const skuActivitySearchSchema = z.object({
   o: z.string().optional(),
   productSkuId: z.string().optional(),
+  reviewStatus: z.enum(["open", "reviewed", "all"]).optional(),
+  selectedSourceId: z.string().optional(),
+  selectedSourceType: z
+    .enum(["inventoryImportProvisionalSku", "posPendingCheckoutItem"])
+    .optional(),
   sku: z.string().optional(),
+  source: z.enum(["all", "legacy_import", "pending_checkout"]).optional(),
 });
 
+function SkuActivityUntrustedSalesQuery({
+  orgUrlSlug,
+  reviewStatus,
+  selectedSourceId,
+  selectedSourceType,
+  sourceFilter,
+  storeId,
+  storeUrlSlug,
+}: {
+  orgUrlSlug: string;
+  reviewStatus: SkuActivityUntrustedSalesReviewStatus;
+  selectedSourceId?: string;
+  selectedSourceType?: SkuActivityUntrustedSalesSourceType;
+  sourceFilter: SkuActivityUntrustedSalesSourceFilter;
+  storeId: Id<"store">;
+  storeUrlSlug: string;
+}) {
+  const navigate = Route.useNavigate();
+  const [sourceLimit, setSourceLimit] = useState(UNTRUSTED_SOURCE_PAGE_SIZE);
+  const [transactionLimit, setTransactionLimit] = useState(
+    UNTRUSTED_TRANSACTION_PAGE_SIZE,
+  );
+  const selectedSource =
+    selectedSourceId && selectedSourceType
+      ? { sourceId: selectedSourceId, sourceType: selectedSourceType }
+      : undefined;
+
+  useEffect(() => {
+    setSourceLimit(UNTRUSTED_SOURCE_PAGE_SIZE);
+  }, [reviewStatus, sourceFilter]);
+
+  useEffect(() => {
+    setTransactionLimit(UNTRUSTED_TRANSACTION_PAGE_SIZE);
+  }, [selectedSourceId, selectedSourceType]);
+
+  const untrustedSkuSales = useQuery(
+    api.operations.skuActivity.getUntrustedSkuSaleEvidence,
+    {
+      limit: sourceLimit,
+      reviewStatus,
+      selectedSource,
+      sourceFilter,
+      storeId,
+      transactionLimit,
+    },
+  ) as SkuActivityUntrustedSalesQueryResult | undefined;
+  const viewModel = useMemo(
+    () =>
+      untrustedSkuSales === undefined
+        ? undefined
+        : buildSkuActivityUntrustedSalesViewModel(untrustedSkuSales, {
+            selectedSourceId,
+            sourceFilter,
+          }),
+    [selectedSourceId, sourceFilter, untrustedSkuSales],
+  );
+
+  function handleChangeReviewStatus(
+    nextReviewStatus: SkuActivityUntrustedSalesReviewStatus,
+  ) {
+    void navigate({
+      search: (current) => ({
+        ...current,
+        reviewStatus: nextReviewStatus === "open" ? undefined : nextReviewStatus,
+        selectedSourceId: undefined,
+        selectedSourceType: undefined,
+      }),
+    });
+  }
+
+  function handleChangeSourceFilter(
+    nextSourceFilter: SkuActivityUntrustedSalesSourceFilter,
+  ) {
+    void navigate({
+      search: (current) => ({
+        ...current,
+        selectedSourceId: undefined,
+        selectedSourceType: undefined,
+        source: nextSourceFilter === "all" ? undefined : nextSourceFilter,
+      }),
+    });
+  }
+
+  function handleSelectSource(source: {
+    id: string;
+    sourceType: SkuActivityUntrustedSalesSourceType;
+  }) {
+    void navigate({
+      search: (current) => ({
+        ...current,
+        selectedSourceId: source.id,
+        selectedSourceType: source.sourceType,
+      }),
+    });
+  }
+
+  function handleLoadMoreSources() {
+    setSourceLimit((current) =>
+      Math.min(current + UNTRUSTED_SOURCE_PAGE_SIZE, UNTRUSTED_MAX_LIMIT),
+    );
+  }
+
+  function handleLoadMoreTransactions() {
+    setTransactionLimit((current) =>
+      Math.min(
+        current + UNTRUSTED_TRANSACTION_PAGE_SIZE,
+        UNTRUSTED_MAX_LIMIT,
+      ),
+    );
+  }
+
+  return (
+    <SkuActivityUntrustedSales
+      isLoading={untrustedSkuSales === undefined}
+      onChangeReviewStatus={handleChangeReviewStatus}
+      onChangeSourceFilter={handleChangeSourceFilter}
+      onLoadMoreSources={
+        viewModel?.hasMoreSources && sourceLimit < UNTRUSTED_MAX_LIMIT
+          ? handleLoadMoreSources
+          : undefined
+      }
+      onLoadMoreTransactions={
+        viewModel?.selected?.transactionsAreTruncated &&
+        transactionLimit < UNTRUSTED_MAX_LIMIT
+          ? handleLoadMoreTransactions
+          : undefined
+      }
+      onSelectSource={handleSelectSource}
+      orgUrlSlug={orgUrlSlug}
+      storeUrlSlug={storeUrlSlug}
+      viewModel={viewModel}
+    />
+  );
+}
+
 function SkuActivityRouteContent({
+  orgUrlSlug,
   productSkuId,
+  reviewStatus = "open",
+  selectedSourceId,
+  selectedSourceType,
   showBackButton,
   sku,
+  sourceFilter = "all",
   storeId,
+  storeUrlSlug,
 }: {
+  orgUrlSlug: string;
   productSkuId?: string;
+  reviewStatus?: SkuActivityUntrustedSalesReviewStatus;
+  selectedSourceId?: string;
+  selectedSourceType?: SkuActivityUntrustedSalesSourceType;
   showBackButton: boolean;
   sku?: string;
+  sourceFilter?: SkuActivityUntrustedSalesSourceFilter;
   storeId: Id<"store">;
+  storeUrlSlug: string;
 }) {
   const navigate = Route.useNavigate();
   const [skuInput, setSkuInput] = useState(sku ?? "");
@@ -98,7 +263,11 @@ function SkuActivityRouteContent({
         const next = {
           ...current,
           productSkuId: undefined,
+          reviewStatus: undefined,
+          selectedSourceId: undefined,
+          selectedSourceType: undefined,
           sku: nextSku || undefined,
+          source: undefined,
         };
 
         return next;
@@ -113,7 +282,7 @@ function SkuActivityRouteContent({
           <PageLevelHeader
             eyebrow="Store Ops"
             title="SKU activity"
-            description="Inspect current stock, active reservations, and source-linked activity for a SKU."
+            description="Inspect current stock, active reservations, and untrusted SKU sale evidence."
             showBackButton={showBackButton}
           />
 
@@ -140,14 +309,26 @@ function SkuActivityRouteContent({
             </Button>
           </form>
 
-          <SkuActivityTimeline
-            isLoading={
-              hasSelection &&
-              ((!selectedProductSkuId && skuSearch === undefined) ||
-                skuActivity === undefined)
-            }
-            viewModel={viewModel}
-          />
+          {hasSelection ? (
+            <SkuActivityTimeline
+              isLoading={
+                hasSelection &&
+                ((!selectedProductSkuId && skuSearch === undefined) ||
+                  skuActivity === undefined)
+              }
+              viewModel={viewModel}
+            />
+          ) : (
+            <SkuActivityUntrustedSalesQuery
+              orgUrlSlug={orgUrlSlug}
+              reviewStatus={reviewStatus}
+              selectedSourceId={selectedSourceId}
+              selectedSourceType={selectedSourceType}
+              sourceFilter={sourceFilter}
+              storeId={storeId}
+              storeUrlSlug={storeUrlSlug}
+            />
+          )}
         </PageWorkspace>
       </FadeIn>
     </View>
@@ -157,14 +338,22 @@ function SkuActivityRouteContent({
 export function SkuActivityRouteShell({
   orgUrlSlug,
   productSkuId,
+  reviewStatus,
+  selectedSourceId,
+  selectedSourceType,
   showBackButton = false,
   sku,
+  source,
   storeUrlSlug,
 }: {
   orgUrlSlug: string;
   productSkuId?: string;
+  reviewStatus?: SkuActivityUntrustedSalesReviewStatus;
+  selectedSourceId?: string;
+  selectedSourceType?: SkuActivityUntrustedSalesSourceType;
   showBackButton?: boolean;
   sku?: string;
+  source?: SkuActivityUntrustedSalesSourceFilter;
   storeUrlSlug: string;
 }) {
   const { user, isLoading: isLoadingAuth } = useAuth();
@@ -215,30 +404,51 @@ export function SkuActivityRouteShell({
 
   return (
     <SkuActivityRouteContent
+      orgUrlSlug={orgUrlSlug}
       productSkuId={productSkuId}
+      reviewStatus={reviewStatus}
+      selectedSourceId={selectedSourceId}
+      selectedSourceType={selectedSourceType}
       showBackButton={showBackButton}
       sku={sku}
+      sourceFilter={source}
       storeId={store._id}
+      storeUrlSlug={storeUrlSlug}
     />
   );
 }
 
 function SkuActivityRoute() {
   const { orgUrlSlug, storeUrlSlug } = Route.useParams();
-  const { o, productSkuId, sku } = Route.useSearch();
+  const {
+    o,
+    productSkuId,
+    reviewStatus,
+    selectedSourceId,
+    selectedSourceType,
+    sku,
+    source,
+  } = Route.useSearch();
 
   return (
     <SkuActivityRouteShell
       orgUrlSlug={orgUrlSlug}
       productSkuId={productSkuId}
+      reviewStatus={reviewStatus}
+      selectedSourceId={selectedSourceId}
+      selectedSourceType={selectedSourceType}
       showBackButton={typeof o === "string" && o.length > 0}
       sku={sku}
+      source={source}
       storeUrlSlug={storeUrlSlug}
     />
   );
 }
 
 function SkuActivityRouteErrorView() {
+  const { productSkuId, sku } = Route.useSearch();
+  const hasSelection = Boolean(sku?.trim() || productSkuId?.trim());
+
   return (
     <View hideBorder hideHeaderBottomBorder scrollMode="page">
       <FadeIn className="container mx-auto py-layout-xl">
@@ -246,9 +456,21 @@ function SkuActivityRouteErrorView() {
           <PageLevelHeader
             eyebrow="Store Ops"
             title="SKU activity"
-            description="Inspect current stock, active reservations, and source-linked activity for a SKU."
+            description="Inspect current stock, active reservations, and untrusted SKU sale evidence."
           />
-          <SkuActivityTimeline error={true} viewModel={null} />
+          {hasSelection ? (
+            <SkuActivityTimeline error={true} viewModel={null} />
+          ) : (
+            <SkuActivityUntrustedSales
+              error={true}
+              onChangeReviewStatus={() => undefined}
+              onChangeSourceFilter={() => undefined}
+              onSelectSource={() => undefined}
+              orgUrlSlug=""
+              storeUrlSlug=""
+              viewModel={null}
+            />
+          )}
         </PageWorkspace>
       </FadeIn>
     </View>

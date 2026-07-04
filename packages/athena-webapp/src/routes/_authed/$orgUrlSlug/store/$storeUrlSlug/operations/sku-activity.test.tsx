@@ -19,6 +19,7 @@ const mockedRouter = vi.hoisted(() => ({
 
 const mockedApi = vi.hoisted(() => ({
   getSkuActivityForProductSku: "getSkuActivityForProductSku",
+  getUntrustedSkuSaleEvidence: "getUntrustedSkuSaleEvidence",
   getOrganizations: "getOrganizations",
   getStores: "getStores",
   searchProductSkus: "searchProductSkus",
@@ -69,6 +70,7 @@ vi.mock("~/convex/_generated/api", () => ({
     operations: {
       skuActivity: {
         getSkuActivityForProductSku: mockedApi.getSkuActivityForProductSku,
+        getUntrustedSkuSaleEvidence: mockedApi.getUntrustedSkuSaleEvidence,
       },
     },
   },
@@ -121,6 +123,18 @@ describe("SkuActivityRouteShell", () => {
         return null;
       }
 
+      if (query === mockedApi.getUntrustedSkuSaleEvidence) {
+        return {
+          hasMoreSources: false,
+          reviewStatus: "open",
+          selected: null,
+          sourceFilter: "all",
+          sourceLimit: 50,
+          sources: [],
+          totalSourceCount: 0,
+        };
+      }
+
       return undefined;
     });
   });
@@ -161,6 +175,29 @@ describe("SkuActivityRouteShell", () => {
       { limit: 5, query: "KK38-X3C-MQE", storeId: "store-1" },
       { productSkuId: "sku-id-1", sku: undefined, storeId: "store-1" },
     ]);
+  });
+
+  it("shows the untrusted sales workspace when no SKU is selected", () => {
+    render(
+      <SkuActivityRouteShell orgUrlSlug="wigclub" storeUrlSlug="osu" />,
+    );
+
+    expect(mockedHooks.useQuery.mock.calls.map(([, args]) => args)).toEqual([
+      { userId: "user-1" },
+      { organizationId: "org-1" },
+      "skip",
+      "skip",
+      {
+        limit: 50,
+        reviewStatus: "open",
+        selectedSource: undefined,
+        sourceFilter: "all",
+        storeId: "store-1",
+        transactionLimit: 100,
+      },
+    ]);
+    expect(screen.getByText("Untrusted SKU sales")).toBeInTheDocument();
+    expect(screen.getByText("No sale evidence found.")).toBeInTheDocument();
   });
 
   it("falls back to the direct SKU activity lookup when catalog search has no match", () => {
@@ -223,9 +260,26 @@ describe("SkuActivityRouteShell", () => {
 });
 
 describe("SkuActivityRouteErrorView", () => {
-  it("renders the safe inline failure state", () => {
+  it("renders the untrusted workspace failure state when no SKU is selected", () => {
     const ErrorView = (Route as unknown as { errorComponent: ComponentType })
       .errorComponent;
+
+    render(<ErrorView />);
+
+    expect(
+      screen.getByText("Untrusted SKU sales unavailable."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Refresh the workspace or try again from Store Ops."),
+    ).toBeInTheDocument();
+  });
+
+  it("renders the SKU lookup failure state when a SKU is selected", () => {
+    const ErrorView = (Route as unknown as { errorComponent: ComponentType })
+      .errorComponent;
+    mockedRouter.search = {
+      sku: "KK38-X3C-MQE",
+    };
 
     render(<ErrorView />);
 
