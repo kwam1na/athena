@@ -44,6 +44,7 @@ import type * as customerMessaging_webhookSecurity from "../customerMessaging/we
 import type * as customerMessaging_whatsappClient from "../customerMessaging/whatsappClient.js";
 import type * as customerMessaging_whatsappConfig from "../customerMessaging/whatsappConfig.js";
 import type * as devPatchBadTransaction from "../devPatchBadTransaction.js";
+import type * as emails_DailyManagerReport from "../emails/DailyManagerReport.js";
 import type * as emails_DiscountCode from "../emails/DiscountCode.js";
 import type * as emails_DiscountReminder from "../emails/DiscountReminder.js";
 import type * as emails_ExpenseReceiptEmail from "../emails/ExpenseReceiptEmail.js";
@@ -162,6 +163,7 @@ import type * as operations_approvalRequesterChallenges from "../operations/appr
 import type * as operations_approvalRequests from "../operations/approvalRequests.js";
 import type * as operations_customerProfiles from "../operations/customerProfiles.js";
 import type * as operations_dailyClose from "../operations/dailyClose.js";
+import type * as operations_dailyManagerReportEmail from "../operations/dailyManagerReportEmail.js";
 import type * as operations_dailyOpening from "../operations/dailyOpening.js";
 import type * as operations_dailyOperations from "../operations/dailyOperations.js";
 import type * as operations_dailyOperationsAutomation from "../operations/dailyOperationsAutomation.js";
@@ -473,6 +475,7 @@ declare const fullApi: ApiFromModules<{
   "customerMessaging/whatsappClient": typeof customerMessaging_whatsappClient;
   "customerMessaging/whatsappConfig": typeof customerMessaging_whatsappConfig;
   devPatchBadTransaction: typeof devPatchBadTransaction;
+  "emails/DailyManagerReport": typeof emails_DailyManagerReport;
   "emails/DiscountCode": typeof emails_DiscountCode;
   "emails/DiscountReminder": typeof emails_DiscountReminder;
   "emails/ExpenseReceiptEmail": typeof emails_ExpenseReceiptEmail;
@@ -591,6 +594,7 @@ declare const fullApi: ApiFromModules<{
   "operations/approvalRequests": typeof operations_approvalRequests;
   "operations/customerProfiles": typeof operations_customerProfiles;
   "operations/dailyClose": typeof operations_dailyClose;
+  "operations/dailyManagerReportEmail": typeof operations_dailyManagerReportEmail;
   "operations/dailyOpening": typeof operations_dailyOpening;
   "operations/dailyOperations": typeof operations_dailyOperations;
   "operations/dailyOperationsAutomation": typeof operations_dailyOperationsAutomation;

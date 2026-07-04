@@ -6,6 +6,9 @@ import NewOrderAdmin from "../emails/NewOrderAdmin";
 import FeedbackRequest from "../emails/FeedbackRequest";
 import DiscountCode from "../emails/DiscountCode";
 import DiscountReminder from "../emails/DiscountReminder";
+import DailyManagerReport, {
+  type DailyManagerReportProps,
+} from "../emails/DailyManagerReport";
 import { ADMIN_EMAILS } from "../constants/email";
 
 const MAILERSEND_API_URL = "https://api.mailersend.com/v1/email";
@@ -354,6 +357,42 @@ export const sendDiscountReminderEmail = async (params: {
       },
     ],
     subject: `⏰ Last Chance! Your ${params.discountText} Discount Expires Soon`,
+    html,
+  };
+
+  return await fetch(MAILERSEND_API_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${process.env.MAILERSEND_API_KEY}`,
+    },
+    body: JSON.stringify(message),
+  });
+};
+
+export const sendDailyManagerReportEmail = async (
+  params: DailyManagerReportProps & {
+    recipientEmail: string;
+    recipientName?: string;
+    subject?: string;
+  },
+) => {
+  const html = await render(<DailyManagerReport {...params} />);
+
+  const message = {
+    from: {
+      email: "noreply@wigclub.store",
+      name: "Athena",
+    },
+    to: [
+      {
+        email: params.recipientEmail,
+        name: params.recipientName ?? "",
+      },
+    ],
+    subject:
+      params.subject ??
+      `${params.storeName} daily report - ${params.operatingDate}`,
     html,
   };
 

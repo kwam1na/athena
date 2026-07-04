@@ -2049,6 +2049,59 @@ export async function runConfiguredDailyOperationsAutomationWithCtx(
   };
 }
 
+type DailyOperationsAutomationResult = Awaited<
+  ReturnType<typeof runConfiguredDailyOperationsAutomationWithCtx>
+>;
+
+type DailyManagerReportAutomationSendResult = {
+  operatingDate: string;
+  reports: Array<{
+    dailyCloseId: Id<"dailyClose">;
+    operatingDate: string;
+    recipientEmail: string;
+    status: number;
+    storeName: string;
+  }>;
+  runId: Id<"automationRun">;
+  storeId: Id<"store">;
+};
+
+function isAppliedEodAutoCompleteResult(
+  result: DailyOperationsAutomationResult["eodAutoCompleteResults"][number],
+) {
+  return result?.action === "applied" && result.run.outcome === "applied";
+}
+
+export async function sendDailyManagerReportsForAppliedEodAutomationWithCtx(
+  ctx: Pick<ActionCtx, "runAction">,
+  args: {
+    results: DailyOperationsAutomationResult["eodAutoCompleteResults"];
+  },
+): Promise<DailyManagerReportAutomationSendResult[]> {
+  const appliedResults = args.results.filter(isAppliedEodAutoCompleteResult);
+  const sentReports: DailyManagerReportAutomationSendResult[] = [];
+
+  for (const result of appliedResults) {
+    const reports = await ctx.runAction(
+      internal.operations.dailyManagerReportEmail
+        .sendDailyManagerReportToAdminsForDate,
+      {
+        operatingDate: result.run.operatingDate,
+        storeId: result.run.storeId,
+      },
+    );
+
+    sentReports.push({
+      operatingDate: result.run.operatingDate,
+      reports: reports as DailyManagerReportAutomationSendResult["reports"],
+      runId: result.run._id,
+      storeId: result.run.storeId,
+    });
+  }
+
+  return sentReports;
+}
+
 export const runScheduledDailyOperationsAutomation = internalMutation({
   args: {
     operatingDate: v.string(),
@@ -2057,9 +2110,29 @@ export const runScheduledDailyOperationsAutomation = internalMutation({
     runScheduledDailyOperationsAutomationWithCtx(ctx, args),
 });
 
-export const runConfiguredDailyOperationsAutomation = internalMutation({
+export const runConfiguredDailyOperationsAutomationMutation = internalMutation({
   args: {},
   handler: (ctx) => runConfiguredDailyOperationsAutomationWithCtx(ctx),
+});
+
+export const runConfiguredDailyOperationsAutomation = internalAction({
+  args: {},
+  handler: async (ctx) => {
+    const result: DailyOperationsAutomationResult = await ctx.runMutation(
+      internal.operations.dailyOperationsAutomation
+        .runConfiguredDailyOperationsAutomationMutation,
+      {},
+    );
+    const dailyManagerReportResults =
+      await sendDailyManagerReportsForAppliedEodAutomationWithCtx(ctx, {
+        results: result.eodAutoCompleteResults,
+      });
+
+    return {
+      ...result,
+      dailyManagerReportResults,
+    };
+  },
 });
 
 export const runHistoricEodAutoCloseForDate = internalMutation({
