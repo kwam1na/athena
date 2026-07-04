@@ -385,6 +385,21 @@ describe("DailyCloseViewContent", () => {
 
     renderContent(blockedSnapshot);
 
+    const blockerCard = screen
+      .getByText("Register session is still open")
+      .closest("article");
+    expect(blockerCard).not.toBeNull();
+
+    const viewSessionLink = within(blockerCard as HTMLElement).getByRole(
+      "link",
+      { name: /view session/i },
+    );
+    const showDetailsButton = within(blockerCard as HTMLElement).getByRole(
+      "button",
+      { name: /show details/i },
+    );
+    expect(viewSessionLink.parentElement).toBe(showDetailsButton.parentElement);
+
     for (const detailsButton of screen.getAllByRole("button", {
       name: /show details/i,
     })) {
@@ -1559,6 +1574,107 @@ describe("DailyCloseViewContent", () => {
         startAt: readySnapshot.startAt,
       });
     });
+  });
+
+  it("formats carry-forward work item copy and shows all work details", () => {
+    const snapshot: DailyCloseSnapshot = {
+      ...readySnapshot,
+      carryForwardItems: [
+        {
+          description:
+            "Open operational work will carry forward after the end of day review.",
+          id: "carry-service-case-1",
+          metadata: {
+            priority: "normal",
+            status: "open",
+            type: "service_case",
+          },
+          statusLabel: "Carry forward",
+          subject: {
+            id: "carry-service-case-1",
+            label: "fuccin it up some more",
+            type: "operational_work_item",
+          },
+          title: "fuccin it up some more",
+        },
+        {
+          description:
+            "Open operational work will carry forward after the end of day review.",
+          id: "carry-inventory-review-1",
+          metadata: {
+            priority: "normal",
+            status: "open",
+            type: "synced_sale_inventory_review",
+          },
+          statusLabel: "Carry forward",
+          subject: {
+            id: "carry-inventory-review-1",
+            label: "Review inventory for clogs",
+            type: "operational_work_item",
+          },
+          title: "Review inventory for clogs",
+        },
+        {
+          description:
+            "Open operational work will carry forward after the end of day review.",
+          id: "carry-pending-checkout-1",
+          metadata: {
+            priority: "normal",
+            status: "open",
+            type: "pos_pending_checkout_item_review",
+          },
+          statusLabel: "Carry forward",
+          subject: {
+            id: "carry-pending-checkout-1",
+            label:
+              "Review pending checkout item: protein Brazilian hair repair mask",
+            type: "operational_work_item",
+          },
+          title:
+            "Review pending checkout item: protein Brazilian hair repair mask",
+        },
+      ],
+      status: "carry_forward",
+      summary: {
+        ...baseSummary,
+        carryForwardCount: 3,
+      },
+    };
+
+    renderContent(snapshot);
+
+    expect(screen.getByText("Fuccin it up some more")).toBeInTheDocument();
+    expect(screen.getByText("Review inventory for Clogs")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Review pending checkout item: Protein Brazilian Hair Repair Mask",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("fuccin it up some more"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Review inventory for clogs"),
+    ).not.toBeInTheDocument();
+
+    const firstCard = screen
+      .getByText("Fuccin it up some more")
+      .closest("article");
+    expect(firstCard).not.toBeNull();
+    expect(within(firstCard as HTMLElement).getByText("Type")).toBeInTheDocument();
+    expect(
+      within(firstCard as HTMLElement).getByText("Service case"),
+    ).toBeInTheDocument();
+    expect(
+      within(firstCard as HTMLElement).queryByText("service_case"),
+    ).not.toBeInTheDocument();
+    expect(within(firstCard as HTMLElement).getByText("Priority")).toBeInTheDocument();
+    expect(within(firstCard as HTMLElement).getByText("Normal")).toBeInTheDocument();
+    expect(
+      within(firstCard as HTMLElement).queryByRole("button", {
+        name: /show details/i,
+      }),
+    ).not.toBeInTheDocument();
   });
 
   it("routes carry-forward item completion through the resolver action", async () => {

@@ -968,6 +968,102 @@ describe("DailyOpeningViewContent", () => {
     ).toBeInTheDocument();
   });
 
+  it("formats carry-forward work item copy and groups source action with details", () => {
+    const snapshot: DailyOpeningSnapshot = {
+      ...readySnapshot,
+      carryForwardItems: [
+        {
+          category: "operational_work_item",
+          description:
+            "Open operational work will carry forward after the opening handoff.",
+          id: "carry-service-case-1",
+          key: "carry-service-case-1",
+          link: {
+            label: "View open work",
+            to: "/$orgUrlSlug/store/$storeUrlSlug/operations/open-work",
+          },
+          metadata: {
+            priority: "normal",
+            status: "open",
+            type: "service_case",
+          },
+          title: "tokin",
+        },
+        {
+          category: "operational_work_item",
+          description:
+            "Open operational work will carry forward after the opening handoff.",
+          id: "carry-inventory-review-1",
+          key: "carry-inventory-review-1",
+          link: {
+            label: "View open work",
+            to: "/$orgUrlSlug/store/$storeUrlSlug/operations/open-work",
+          },
+          metadata: {
+            priority: "high",
+            status: "open",
+            type: "synced_sale_inventory_review",
+          },
+          title: "Review inventory for slides",
+        },
+        {
+          category: "operational_work_item",
+          description:
+            "Open operational work will carry forward after the opening handoff.",
+          id: "carry-pending-checkout-1",
+          key: "carry-pending-checkout-1",
+          link: {
+            label: "View open work",
+            to: "/$orgUrlSlug/store/$storeUrlSlug/operations/open-work",
+          },
+          metadata: {
+            priority: "normal",
+            status: "open",
+            type: "pos_pending_checkout_item_review",
+          },
+          title:
+            "Review pending checkout item: protein Brazilian hair repair mask",
+        },
+      ],
+      status: "needs_attention",
+      summary: {
+        blockerCount: 0,
+        carryForwardCount: 3,
+        readyCount: 1,
+        reviewCount: 0,
+      },
+    };
+
+    renderContent(snapshot);
+
+    expect(screen.getByText("Tokin")).toBeInTheDocument();
+    expect(screen.getByText("Review inventory for Slides")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Review pending checkout item: Protein Brazilian Hair Repair Mask",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Service case")).toBeInTheDocument();
+    expect(screen.getAllByText("Normal")).toHaveLength(2);
+    expect(screen.getAllByText("Open")).toHaveLength(3);
+    expect(screen.queryByText("service_case")).not.toBeInTheDocument();
+    expect(screen.queryByText("normal")).not.toBeInTheDocument();
+    expect(screen.queryByText("open")).not.toBeInTheDocument();
+
+    const firstCard = screen.getByText("Tokin").closest("article");
+    expect(firstCard).not.toBeNull();
+
+    const viewOpenWorkLink = within(firstCard as HTMLElement).getByRole("link", {
+      name: /view open work/i,
+    });
+    expect(viewOpenWorkLink).toBeInTheDocument();
+    expect(
+      within(firstCard as HTMLElement).queryByRole("button", {
+        name: /show details/i,
+      }),
+    ).not.toBeInTheDocument();
+  });
+
   it("keeps started Opening Handoff primary over stale skipped automation decisions", () => {
     renderContent({
       ...readySnapshot,

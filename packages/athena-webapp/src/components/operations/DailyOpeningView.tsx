@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 
 import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
-import { cn } from "@/lib/utils";
+import { capitalizeFirstLetter, capitalizeWords, cn } from "@/lib/utils";
 import { toOperatorMessage } from "@/lib/errors/operatorMessages";
 import {
   runCommand,
@@ -361,6 +361,60 @@ function humanizeMetadataLabel(label: string) {
     .replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
+function normalizeMetadataLabel(label: string) {
+  return label.replace(/[_\s-]+/g, "").toLowerCase();
+}
+
+function formatOpeningItemTitle(title: string) {
+  const trimmedTitle = title.trim();
+
+  if (!trimmedTitle) return title;
+
+  const inventoryReviewMatch = trimmedTitle.match(
+    /^(Review inventory for )(.+)$/i,
+  );
+  const pendingCheckoutReviewMatch = trimmedTitle.match(
+    /^(Review pending checkout item: )(.+)$/i,
+  );
+
+  if (inventoryReviewMatch) {
+    return `${inventoryReviewMatch[1]}${capitalizeWords(inventoryReviewMatch[2])}`;
+  }
+
+  if (pendingCheckoutReviewMatch) {
+    return `${pendingCheckoutReviewMatch[1]}${capitalizeWords(pendingCheckoutReviewMatch[2])}`;
+  }
+
+  return trimmedTitle === trimmedTitle.toLowerCase()
+    ? capitalizeFirstLetter(trimmedTitle)
+    : title;
+}
+
+function formatOperationalWorkTypeLabel(type: string) {
+  switch (type) {
+    case "pos_pending_checkout_item_review":
+      return "POS pending checkout";
+    case "synced_sale_inventory_review":
+      return "Synced sale inventory";
+    case "service_case":
+      return "Service case";
+    case "service_appointment":
+      return "Service appointment";
+    case "service_intake":
+      return "Service intake";
+    case "purchase_order":
+      return "Purchase order";
+    case "stock_adjustment_review":
+      return "Stock adjustment approval";
+    case "daily_close_carry_forward":
+      return "Daily close follow-up";
+    case "service_deposit_review":
+      return "Unsupported work type";
+    default:
+      return humanizeMetadataLabel(type);
+  }
+}
+
 function getOpeningStatus(snapshot: DailyOpeningSnapshot): DailyOpeningStatus {
   if (snapshot.startedOpening) return "started";
   if (snapshot.status) return snapshot.status;
@@ -406,6 +460,13 @@ function getItemContextLabel(item: DailyOpeningItem) {
       : "Opening item";
 }
 
+function isOperationalWorkItem(item: DailyOpeningItem) {
+  return (
+    normalizeMetadataLabel(item.category ?? "") === "operationalworkitem" ||
+    normalizeMetadataLabel(item.subject?.type ?? "") === "operationalworkitem"
+  );
+}
+
 function formatMetadataValue(value: ReactNode, currency: string) {
   if (typeof value === "number") {
     return new Intl.NumberFormat([], {
@@ -432,8 +493,21 @@ function getMetadataLabel(item: DailyOpeningItem, label: string) {
 }
 
 function getMetadataValue(label: string, value: ReactNode, currency: string) {
+  const normalizedLabel = normalizeMetadataLabel(label);
+
   if (label === "operatingDate" && typeof value === "string") {
     return formatOperatingDate(value);
+  }
+
+  if (normalizedLabel === "type" && typeof value === "string") {
+    return formatOperationalWorkTypeLabel(value);
+  }
+
+  if (
+    (normalizedLabel === "status" || normalizedLabel === "priority") &&
+    typeof value === "string"
+  ) {
+    return capitalizeFirstLetter(value);
   }
 
   if (label.endsWith("At") && typeof value === "number") {
@@ -1020,16 +1094,18 @@ function OpeningItemCard({
   const itemId = getItemId(item);
   const contextLabel = getItemContextLabel(item);
   const description = getItemDescription(item);
+  const title = formatOpeningItemTitle(item.title);
   const metadataEntries = getMetadataEntries(
     item,
     currency,
     orgUrlSlug,
     storeUrlSlug,
   );
+  const showMetadataDetails = !isOperationalWorkItem(item);
 
   return (
     <OperationReviewItemCard
-      actionSlot={
+      headerActionSlot={
         <ItemLink
           link={item.link}
           orgUrlSlug={orgUrlSlug}
@@ -1044,13 +1120,16 @@ function OpeningItemCard({
         ) : null
       }
       contextLabel={contextLabel}
+      collapsedMetadataEntries={
+        showMetadataDetails ? undefined : metadataEntries
+      }
       description={description}
       itemId={itemId}
-      metadataEntries={metadataEntries}
+      metadataEntries={showMetadataDetails ? metadataEntries : []}
       selectionSlot={
         requiresAcknowledgement ? (
           <input
-            aria-label={`Acknowledge ${item.title}`}
+            aria-label={`Acknowledge ${title}`}
             checked={Boolean(selected)}
             className="mt-1 h-4 w-4 rounded border-border text-signal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             onChange={(event) => onSelectedChange?.(event.target.checked)}
@@ -1059,7 +1138,7 @@ function OpeningItemCard({
         ) : null
       }
       showCollapsedDescription={showCollapsedDescription}
-      title={item.title}
+      title={title}
     />
   );
 }
