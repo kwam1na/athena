@@ -112,7 +112,8 @@ function SkuActivityUntrustedSalesQuery({
     void navigate({
       search: (current) => ({
         ...current,
-        reviewStatus: nextReviewStatus === "open" ? undefined : nextReviewStatus,
+        reviewStatus:
+          nextReviewStatus === "open" ? undefined : nextReviewStatus,
         selectedSourceId: undefined,
         selectedSourceType: undefined,
       }),
@@ -153,10 +154,7 @@ function SkuActivityUntrustedSalesQuery({
 
   function handleLoadMoreTransactions() {
     setTransactionLimit((current) =>
-      Math.min(
-        current + UNTRUSTED_TRANSACTION_PAGE_SIZE,
-        UNTRUSTED_MAX_LIMIT,
-      ),
+      Math.min(current + UNTRUSTED_TRANSACTION_PAGE_SIZE, UNTRUSTED_MAX_LIMIT),
     );
   }
 
@@ -282,31 +280,38 @@ function SkuActivityRouteContent({
           <PageLevelHeader
             eyebrow="Store Ops"
             title="SKU activity"
-            description="Inspect current stock, active reservations, and untrusted SKU sale evidence."
+            description="Look up a known SKU or review untrusted products with sale activity."
             showBackButton={showBackButton}
           />
 
           <form
-            className="flex w-full flex-col gap-layout-sm md:w-fit md:flex-row md:items-end"
+            className="flex w-full flex-col gap-layout-sm rounded-lg border border-border bg-surface-raised px-layout-md py-layout-md shadow-surface md:flex-row md:items-end md:justify-between"
             onSubmit={handleSubmit}
           >
-            <div className="min-w-0 space-y-layout-xs md:w-56 md:flex-none">
-              <Label htmlFor="sku-activity-search">SKU</Label>
-              <Input
-                id="sku-activity-search"
-                onChange={(event) => setSkuInput(event.target.value)}
-                placeholder="Enter SKU"
-                value={skuInput}
-              />
+            <div className="min-w-0 space-y-layout-xs md:max-w-xl md:flex-1">
+              <Label htmlFor="sku-activity-search">SKU lookup</Label>
+              <div className="flex flex-col gap-layout-sm sm:flex-row">
+                <Input
+                  className="sm:max-w-xs"
+                  id="sku-activity-search"
+                  onChange={(event) => setSkuInput(event.target.value)}
+                  placeholder="Enter SKU"
+                  value={skuInput}
+                />
+                <Button
+                  className="gap-layout-xs sm:w-auto"
+                  type="submit"
+                  variant="workflow"
+                >
+                  <Search className="h-4 w-4" />
+                  Inspect
+                </Button>
+              </div>
             </div>
-            <Button
-              className="gap-layout-xs md:w-auto"
-              type="submit"
-              variant="workflow"
-            >
-              <Search className="h-4 w-4" />
-              Inspect
-            </Button>
+            <p className="max-w-md text-sm leading-6 text-muted-foreground">
+              Use this for a specific SKU. The evidence queue below surfaces
+              untrusted items that already completed sales.
+            </p>
           </form>
 
           {hasSelection ? (
@@ -456,7 +461,7 @@ function SkuActivityRouteErrorView() {
           <PageLevelHeader
             eyebrow="Store Ops"
             title="SKU activity"
-            description="Inspect current stock, active reservations, and untrusted SKU sale evidence."
+            description="Look up a known SKU or review untrusted products with sale activity."
           />
           {hasSelection ? (
             <SkuActivityTimeline error={true} viewModel={null} />

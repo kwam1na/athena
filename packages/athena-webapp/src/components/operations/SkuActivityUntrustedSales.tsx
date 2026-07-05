@@ -54,6 +54,14 @@ const REVIEW_STATUS_OPTIONS: Array<{
   { label: "All", value: "all" },
 ];
 
+function formatCountLabel(
+  count: number,
+  singular: string,
+  plural = `${singular}s`,
+) {
+  return `${count.toLocaleString()} ${count === 1 ? singular : plural}`;
+}
+
 function InlineState({
   description,
   title,
@@ -106,7 +114,11 @@ function FilterButton<TValue extends string>({
   );
 }
 
-function SourceToneBadge({ source }: { source: SkuActivityUntrustedSalesSourceRow }) {
+function SourceToneBadge({
+  source,
+}: {
+  source: SkuActivityUntrustedSalesSourceRow;
+}) {
   return (
     <Badge
       className={
@@ -121,7 +133,11 @@ function SourceToneBadge({ source }: { source: SkuActivityUntrustedSalesSourceRo
   );
 }
 
-function ReviewStateBadge({ source }: { source: SkuActivityUntrustedSalesSourceRow }) {
+function ReviewStateBadge({
+  source,
+}: {
+  source: SkuActivityUntrustedSalesSourceRow;
+}) {
   return (
     <Badge
       className={
@@ -202,42 +218,68 @@ function SourceList({
   sources: SkuActivityUntrustedSalesSourceRow[];
 }) {
   return (
-    <ul aria-label="Untrusted SKU sale evidence" className="space-y-layout-sm">
+    <ul
+      aria-label="Untrusted SKU sale evidence"
+      className="overflow-hidden rounded-lg border border-border bg-surface-raised shadow-surface"
+    >
       {sources.map((source) => (
-        <li key={`${source.sourceType}:${source.id}`}>
+        <li
+          className="border-b border-border last:border-b-0"
+          key={`${source.sourceType}:${source.id}`}
+        >
           <button
             aria-pressed={source.isSelected}
             className={cn(
-              "w-full rounded-md border bg-background px-layout-md py-layout-sm text-left transition-[background-color,border-color,transform] duration-150 ease-out active:scale-[0.995] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+              "group w-full bg-background px-layout-md py-layout-md text-left transition-[background-color,box-shadow,transform] duration-150 ease-out active:scale-[0.998] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
               source.isSelected
-                ? "border-primary/40 bg-primary/5"
-                : "border-border hover:border-primary/30",
+                ? "bg-primary/5 shadow-[inset_3px_0_0_hsl(var(--primary))]"
+                : "hover:bg-muted/40",
             )}
             onClick={() =>
               onSelectSource({ id: source.id, sourceType: source.sourceType })
             }
             type="button"
           >
-            <div className="flex flex-col gap-layout-sm sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex flex-col gap-layout-md lg:flex-row lg:items-start lg:justify-between">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-layout-xs">
                   <SourceToneBadge source={source} />
                   <ReviewStateBadge source={source} />
-                  <Badge variant="outline">{source.statusLabel}</Badge>
+                  <Badge
+                    className="border-border bg-transparent text-muted-foreground"
+                    variant="outline"
+                  >
+                    {source.statusLabel}
+                  </Badge>
                 </div>
                 <p className="mt-2 line-clamp-2 text-sm font-medium text-foreground">
                   {source.title}
                 </p>
-                <p className="mt-1 break-all text-sm leading-6 text-muted-foreground">
-                  {source.lookupLabel ?? "No lookup code recorded"}
+                <div className="mt-2 flex flex-wrap items-center gap-x-layout-md gap-y-layout-xs text-xs leading-5 text-muted-foreground">
+                  <span className="tabular-nums">
+                    <span className="font-medium text-foreground">
+                      {formatCountLabel(source.totalQuantitySold, "unit")}
+                    </span>{" "}
+                    sold
+                  </span>
+                  <span className="tabular-nums">
+                    <span className="font-medium text-foreground">
+                      {formatCountLabel(source.saleCount, "sale")}
+                    </span>{" "}
+                    completed
+                  </span>
+                  <span>{getRelativeTime(source.lastActivityAt)}</span>
+                </div>
+                <p className="mt-2 break-all text-xs leading-5 text-muted-foreground">
+                  Lookup: {source.lookupLabel ?? "not recorded"}
                 </p>
               </div>
-              <div className="shrink-0 text-left sm:text-right">
-                <p className="text-sm font-medium tabular-nums text-foreground">
-                  {source.evidenceLabel}
+              <div className="shrink-0 text-left lg:text-right">
+                <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                  Evidence
                 </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {getRelativeTime(source.lastActivityAt)}
+                <p className="mt-1 text-sm font-medium tabular-nums text-foreground">
+                  {source.evidenceLabel}
                 </p>
               </div>
             </div>
@@ -248,15 +290,26 @@ function SourceList({
   );
 }
 
-function SummaryMetric({ label, value }: { label: string; value: string }) {
+function SummaryMetric({
+  helper,
+  label,
+  value,
+}: {
+  helper?: string;
+  label: string;
+  value: string;
+}) {
   return (
-    <div className="rounded-md border border-border bg-muted/30 px-3 py-2">
-      <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+    <div className="rounded-md border border-border bg-background/70 px-3 py-2">
+      <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
         {label}
       </p>
       <p className="mt-1 text-sm font-medium tabular-nums text-foreground">
         {value}
       </p>
+      {helper ? (
+        <p className="mt-1 text-xs leading-5 text-muted-foreground">{helper}</p>
+      ) : null}
     </div>
   );
 }
@@ -274,15 +327,15 @@ function SelectedSourceDetail({
 }) {
   if (!selected) {
     return (
-      <aside className="rounded-lg border border-border bg-surface-raised px-layout-md py-layout-md shadow-surface">
+      <aside className="flex min-h-[220px] items-center rounded-lg border border-dashed border-border bg-surface-raised px-layout-md py-layout-md shadow-surface">
         <div className="flex items-start gap-layout-sm">
           <CircleDot className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
           <div>
             <p className="text-sm font-medium text-foreground">
-              Select a source to inspect transactions.
+              Select an evidence source.
             </p>
             <p className="mt-1 text-sm leading-6 text-muted-foreground">
-              Completed sale lines will load after a source is selected.
+              Full transaction history loads here after selection.
             </p>
           </div>
         </div>
@@ -295,45 +348,68 @@ function SelectedSourceDetail({
     selected.transactionRows.length === 0;
 
   return (
-    <aside className="space-y-layout-md rounded-lg border border-border bg-surface-raised px-layout-md py-layout-md shadow-surface">
-      <div className="flex flex-col gap-layout-sm border-b border-border pb-layout-md">
-        <div className="flex flex-wrap items-center gap-layout-xs">
-          <SourceToneBadge source={selected.source} />
-          <ReviewStateBadge source={selected.source} />
+    <aside className="overflow-hidden rounded-lg border border-border bg-surface-raised shadow-surface xl:sticky xl:top-layout-md">
+      <div className="space-y-layout-md border-b border-border bg-muted/20 px-layout-md py-layout-md">
+        <div className="flex flex-col gap-layout-sm sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-layout-xs">
+              <SourceToneBadge source={selected.source} />
+              <ReviewStateBadge source={selected.source} />
+            </div>
+            <p className="mt-layout-sm text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+              Selected source
+            </p>
+            <h2 className="mt-1 line-clamp-2 text-base font-medium text-foreground">
+              {selected.source.title}
+            </h2>
+            <p className="mt-1 break-all text-xs leading-5 text-muted-foreground">
+              Lookup: {selected.source.lookupLabel ?? "not recorded"}
+            </p>
+          </div>
+          <SourceReviewLink
+            orgUrlSlug={orgUrlSlug}
+            source={selected.source}
+            storeUrlSlug={storeUrlSlug}
+          />
         </div>
-        <div className="min-w-0">
-          <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-            Source detail
-          </p>
-          <h2 className="mt-1 line-clamp-2 text-base font-medium text-foreground">
-            {selected.source.title}
-          </h2>
-          <p className="mt-1 text-sm leading-6 text-muted-foreground">
-            {selected.source.evidenceLabel}
-          </p>
+
+        <div className="grid gap-layout-xs sm:grid-cols-2">
+          <SummaryMetric
+            helper={formatCountLabel(
+              selected.source.saleCount,
+              "completed sale",
+            )}
+            label="Units sold"
+            value={selected.source.totalQuantitySold.toLocaleString()}
+          />
+          <SummaryMetric
+            helper={getRelativeTime(selected.source.lastActivityAt)}
+            label="Last activity"
+            value={selected.source.reviewLabel}
+          />
         </div>
-        <SourceReviewLink
-          orgUrlSlug={orgUrlSlug}
-          source={selected.source}
-          storeUrlSlug={storeUrlSlug}
-        />
       </div>
 
-      <div className="space-y-layout-sm">
-        <div className="flex items-center justify-between gap-layout-sm">
-          <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-            Transactions
-          </p>
+      <div className="space-y-layout-md px-layout-md py-layout-md">
+        <div className="flex items-start justify-between gap-layout-sm">
+          <div>
+            <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+              Full transaction history
+            </p>
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">
+              Completed sale lines tied to this source.
+            </p>
+          </div>
           {selected.transactionsAreTruncated ? (
             <Badge variant="outline">Showing latest records</Badge>
           ) : null}
         </div>
 
         {selected.transactionRows.length > 0 ? (
-          <ol className="space-y-layout-sm">
+          <ol className="overflow-hidden rounded-md border border-border bg-background">
             {selected.transactionRows.map((row) => (
               <li
-                className="rounded-md border border-border bg-background px-layout-md py-layout-sm"
+                className="border-b border-border px-layout-md py-layout-sm last:border-b-0"
                 key={row.id}
               >
                 <div className="flex flex-col gap-layout-sm sm:flex-row sm:items-start sm:justify-between">
@@ -348,10 +424,7 @@ function SelectedSourceDetail({
                       search={{ o: getOrigin() }}
                       to="/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId"
                     >
-                      <ReceiptText
-                        aria-hidden="true"
-                        className="h-3.5 w-3.5"
-                      />
+                      <ReceiptText aria-hidden="true" className="h-3.5 w-3.5" />
                       <span className="min-w-0 break-all">
                         {row.receiptLabel}
                       </span>
@@ -363,30 +436,28 @@ function SelectedSourceDetail({
                       {getRelativeTime(row.completedAt)}
                     </p>
                   </div>
-                  <div className="flex shrink-0 flex-wrap items-center gap-layout-xs sm:justify-end">
-                    <Badge variant="outline">{row.statusLabel}</Badge>
-                    {row.refundedQuantity > 0 ? (
-                      <Badge
-                        className="border-warning/30 bg-warning/10 text-foreground"
-                        variant="outline"
-                      >
-                        Refunded {row.refundedQuantity}
-                      </Badge>
-                    ) : null}
-                    {row.adjustmentLabel ? (
-                      <Badge variant="outline">{row.adjustmentLabel}</Badge>
-                    ) : null}
+                  <div className="shrink-0 text-left sm:text-right">
+                    <p className="text-sm font-medium tabular-nums text-foreground">
+                      {formatCountLabel(row.netQuantity, "net unit")}
+                    </p>
+                    <p className="mt-1 text-xs tabular-nums text-muted-foreground">
+                      {formatCountLabel(row.grossQuantity, "gross unit")}
+                    </p>
                   </div>
                 </div>
-                <div className="mt-layout-sm grid gap-layout-xs sm:grid-cols-2">
-                  <SummaryMetric
-                    label="Gross quantity"
-                    value={row.grossQuantity.toLocaleString()}
-                  />
-                  <SummaryMetric
-                    label="Net quantity"
-                    value={row.netQuantity.toLocaleString()}
-                  />
+                <div className="mt-layout-sm flex flex-wrap items-center gap-layout-xs">
+                  <Badge variant="outline">{row.statusLabel}</Badge>
+                  {row.refundedQuantity > 0 ? (
+                    <Badge
+                      className="border-warning/30 bg-warning/10 text-foreground"
+                      variant="outline"
+                    >
+                      Refunded {row.refundedQuantity}
+                    </Badge>
+                  ) : null}
+                  {row.adjustmentLabel ? (
+                    <Badge variant="outline">{row.adjustmentLabel}</Badge>
+                  ) : null}
                 </div>
               </li>
             ))}
@@ -469,9 +540,9 @@ export function SkuActivityUntrustedSales({
 
   return (
     <section className="space-y-layout-md">
-      <div className="rounded-lg border border-border bg-surface-raised px-layout-md py-layout-md shadow-surface">
+      <div className="rounded-lg border border-border bg-surface-raised shadow-surface">
         <div className="flex flex-col gap-layout-md lg:flex-row lg:items-start lg:justify-between">
-          <div className="min-w-0">
+          <div className="min-w-0 px-layout-md pt-layout-md lg:max-w-3xl">
             <div className="flex items-center gap-layout-xs">
               <History className="h-4 w-4 text-muted-foreground" />
               <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
@@ -479,16 +550,17 @@ export function SkuActivityUntrustedSales({
               </p>
             </div>
             <h2 className="mt-2 text-base font-medium text-foreground">
-              Products with completed sales before trust review
+              Products moving before trust review
             </h2>
             <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">
               Review provisional catalog and pending checkout items that already
               have completed sales in circulation.
             </p>
           </div>
-          <div className="grid gap-layout-xs sm:grid-cols-3 lg:min-w-[360px]">
+          <div className="grid gap-layout-xs px-layout-md pb-layout-md sm:grid-cols-2 lg:min-w-[460px] lg:grid-cols-4 lg:pt-layout-md">
             <SummaryMetric
-              label="Sources"
+              helper={`${viewModel.summary.totalSourceCount.toLocaleString()} total`}
+              label="Visible"
               value={viewModel.summary.visibleSourceCount.toLocaleString()}
             />
             <SummaryMetric
@@ -499,31 +571,45 @@ export function SkuActivityUntrustedSales({
               label="Open"
               value={viewModel.summary.openCount.toLocaleString()}
             />
+            <SummaryMetric
+              label="Reviewed"
+              value={viewModel.summary.reviewedCount.toLocaleString()}
+            />
           </div>
         </div>
 
-        <div className="mt-layout-md flex flex-col gap-layout-sm border-t border-border pt-layout-md">
-          <div className="flex flex-wrap gap-layout-xs">
-            {SOURCE_FILTER_OPTIONS.map((option) => (
-              <FilterButton
-                isSelected={viewModel.sourceFilter === option.value}
-                key={option.value}
-                label={option.label}
-                onSelect={onChangeSourceFilter}
-                value={option.value}
-              />
-            ))}
+        <div className="grid gap-layout-md border-t border-border px-layout-md py-layout-md lg:grid-cols-2">
+          <div className="space-y-layout-xs">
+            <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+              Source
+            </p>
+            <div className="flex flex-wrap gap-layout-xs">
+              {SOURCE_FILTER_OPTIONS.map((option) => (
+                <FilterButton
+                  isSelected={viewModel.sourceFilter === option.value}
+                  key={option.value}
+                  label={option.label}
+                  onSelect={onChangeSourceFilter}
+                  value={option.value}
+                />
+              ))}
+            </div>
           </div>
-          <div className="flex flex-wrap gap-layout-xs">
-            {REVIEW_STATUS_OPTIONS.map((option) => (
-              <FilterButton
-                isSelected={viewModel.reviewStatus === option.value}
-                key={option.value}
-                label={option.label}
-                onSelect={onChangeReviewStatus}
-                value={option.value}
-              />
-            ))}
+          <div className="space-y-layout-xs">
+            <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+              Review state
+            </p>
+            <div className="flex flex-wrap gap-layout-xs">
+              {REVIEW_STATUS_OPTIONS.map((option) => (
+                <FilterButton
+                  isSelected={viewModel.reviewStatus === option.value}
+                  key={option.value}
+                  label={option.label}
+                  onSelect={onChangeReviewStatus}
+                  value={option.value}
+                />
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -541,6 +627,25 @@ export function SkuActivityUntrustedSales({
         ) : null}
 
         <div className="space-y-layout-sm">
+          <div className="flex flex-col gap-layout-xs sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                Evidence sources
+              </p>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                Select an item to inspect the completed sales behind it.
+              </p>
+            </div>
+            {viewModel.sourceRows.length > 0 ? (
+              <Badge
+                className="w-fit border-border bg-transparent text-muted-foreground"
+                variant="outline"
+              >
+                {formatCountLabel(viewModel.sourceRows.length, "source")}
+              </Badge>
+            ) : null}
+          </div>
+
           {viewModel.sourceRows.length > 0 ? (
             <SourceList
               onSelectSource={onSelectSource}

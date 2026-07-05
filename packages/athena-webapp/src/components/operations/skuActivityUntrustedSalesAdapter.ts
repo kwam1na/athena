@@ -1,7 +1,4 @@
-export type SkuActivityUntrustedSalesReviewStatus =
-  | "open"
-  | "reviewed"
-  | "all";
+export type SkuActivityUntrustedSalesReviewStatus = "open" | "reviewed" | "all";
 
 export type SkuActivityUntrustedSalesSourceFilter =
   | "all"
@@ -94,6 +91,7 @@ export type SkuActivityUntrustedSalesSourceRow = {
   productSkuId?: string | null;
   reviewLabel: string;
   reviewState: "open" | "reviewed";
+  saleCount: number;
   sourceType: SkuActivityUntrustedSalesSourceType;
   sourceTypeLabel: string;
   statusLabel: string;
@@ -118,13 +116,11 @@ export type SkuActivityUntrustedSalesViewModel = {
   emptyMessage: string;
   hasMoreSources: boolean;
   reviewStatus: SkuActivityUntrustedSalesReviewStatus;
-  selected:
-    | {
-        source: SkuActivityUntrustedSalesSourceRow;
-        transactionsAreTruncated: boolean;
-        transactionRows: SkuActivityUntrustedSalesTransactionRow[];
-      }
-    | null;
+  selected: {
+    source: SkuActivityUntrustedSalesSourceRow;
+    transactionsAreTruncated: boolean;
+    transactionRows: SkuActivityUntrustedSalesTransactionRow[];
+  } | null;
   sourceFilter: SkuActivityUntrustedSalesSourceFilter;
   sourceLimit: number;
   sourceRows: SkuActivityUntrustedSalesSourceRow[];
@@ -206,6 +202,7 @@ function buildSourceRow(
     productSkuId: source.productSkuId,
     reviewLabel: source.reviewState === "open" ? "Needs review" : "Reviewed",
     reviewState: source.reviewState,
+    saleCount: source.evidence.saleCount,
     sourceType: source.sourceType,
     sourceTypeLabel: getUntrustedSourceTypeLabel(source.sourceType),
     statusLabel: capitalizeWords(source.status),
@@ -265,7 +262,8 @@ export function buildSkuActivityUntrustedSalesViewModel(
   }
 
   const sourceFilter = options.sourceFilter ?? result.sourceFilter ?? "all";
-  const selectedSourceId = options.selectedSourceId ?? result.selected?.source.id;
+  const selectedSourceId =
+    options.selectedSourceId ?? result.selected?.source.id;
   const visibleSources = result.sources.filter((source) =>
     sourceMatchesFilter(source, sourceFilter),
   );
@@ -273,8 +271,7 @@ export function buildSkuActivityUntrustedSalesViewModel(
     buildSourceRow(source, selectedSourceId),
   );
   const selectedSource =
-    result.selected &&
-    sourceMatchesFilter(result.selected.source, sourceFilter)
+    result.selected && sourceMatchesFilter(result.selected.source, sourceFilter)
       ? result.selected
       : null;
 
@@ -284,20 +281,23 @@ export function buildSkuActivityUntrustedSalesViewModel(
     reviewStatus: result.reviewStatus,
     selected: selectedSource
       ? {
-          source: buildSourceRow(selectedSource.source, selectedSource.source.id),
+          source: buildSourceRow(
+            selectedSource.source,
+            selectedSource.source.id,
+          ),
           transactionsAreTruncated:
             selectedSource.transactionHistory.isTruncated,
-          transactionRows: selectedSource.transactionHistory.rows.map(
-            buildTransactionRow,
-          ),
+          transactionRows:
+            selectedSource.transactionHistory.rows.map(buildTransactionRow),
         }
       : null,
     sourceFilter,
     sourceLimit: result.sourceLimit,
     sourceRows,
     summary: {
-      openCount: visibleSources.filter((source) => source.reviewState === "open")
-        .length,
+      openCount: visibleSources.filter(
+        (source) => source.reviewState === "open",
+      ).length,
       reviewedCount: visibleSources.filter(
         (source) => source.reviewState === "reviewed",
       ).length,
