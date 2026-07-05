@@ -31,6 +31,7 @@ const QUEUE_APPROVAL_REQUEST_TYPES = [
   "variance_review",
 ] as const;
 const QUEUE_WORK_ITEM_TYPES = [
+  "catalog_taxonomy_setup",
   "daily_close_carry_forward",
   "pos_pending_checkout_item_review",
   "purchase_order",
@@ -70,6 +71,13 @@ function stableOperationalWorkItemSourceIdentity(
   const metadata = item.metadata;
 
   switch (item.type) {
+    case "catalog_taxonomy_setup": {
+      const productId = metadataString(metadata, "productId");
+      if (productId) {
+        return joinSourceIdentity([item.type, productId]);
+      }
+      break;
+    }
     case "daily_close_carry_forward": {
       const businessDate = metadataString(metadata, "businessDate");
       const sourceId =
@@ -183,6 +191,7 @@ function stableOperationalWorkItemSourceIdentity(
 
 function workItemPriorityBucket(item: Doc<"operationalWorkItem">) {
   if (
+    item.type === "catalog_taxonomy_setup" ||
     item.approvalRequestId ||
     item.approvalState === "pending" ||
     APPROVAL_BLOCKED_WORK_ITEM_TYPES.has(item.type)
@@ -325,6 +334,15 @@ function sanitizeOperationalWorkItemDetails(item: Doc<"operationalWorkItem">) {
   const metadata = item.metadata;
 
   switch (item.type) {
+    case "catalog_taxonomy_setup":
+      return {
+        categorySlug: metadataString(metadata, "categorySlug"),
+        productId: metadataString(metadata, "productId"),
+        productName: metadataString(metadata, "productName"),
+        productSkuId: metadataString(metadata, "productSkuId"),
+        sku: metadataString(metadata, "sku"),
+        subcategorySlug: metadataString(metadata, "subcategorySlug"),
+      };
     case "daily_close_carry_forward":
       return {
         businessDate: metadataString(metadata, "businessDate"),
@@ -520,6 +538,8 @@ export function buildOperationalWorkItem(args: {
   createdByStaffProfileId?: Id<"staffProfile">;
   assignedToStaffProfileId?: Id<"staffProfile">;
   customerProfileId?: Id<"customerProfile">;
+  productId?: Id<"product">;
+  productSkuId?: Id<"productSku">;
   approvalRequestId?: Id<"approvalRequest">;
   appointmentId?: Id<"serviceAppointment">;
 }) {
@@ -557,6 +577,8 @@ export const createOperationalWorkItem = internalMutation({
     createdByStaffProfileId: v.optional(v.id("staffProfile")),
     assignedToStaffProfileId: v.optional(v.id("staffProfile")),
     customerProfileId: v.optional(v.id("customerProfile")),
+    productId: v.optional(v.id("product")),
+    productSkuId: v.optional(v.id("productSku")),
     approvalRequestId: v.optional(v.id("approvalRequest")),
     appointmentId: v.optional(v.id("serviceAppointment")),
   },

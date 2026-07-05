@@ -137,6 +137,18 @@ function createInventorySnapshotQueryCtx() {
       ["store-1", { _id: "store-1", organizationId: "org-1" }],
       ["store-2", { _id: "store-2", organizationId: "org-2" }],
     ]),
+    subcategory: new Map<string, Record<string, unknown>>([
+      [
+        "subcategory-1",
+        {
+          _id: "subcategory-1",
+          categoryId: "category-1",
+          name: "Hair Pins",
+          slug: "hair-pins",
+          storeId: "store-1",
+        },
+      ],
+    ]),
     users: new Map<string, Record<string, unknown>>([
       ["auth-user-1", { _id: "auth-user-1", email: "operator@example.com" }],
     ]),
@@ -528,6 +540,18 @@ function createSubmissionMutationCtx(args: {
         },
       ],
     ]),
+    subcategory: new Map<string, Record<string, unknown>>([
+      [
+        "subcategory-1",
+        {
+          _id: "subcategory-1",
+          categoryId: "category-1",
+          name: "Closures",
+          slug: "closures",
+          storeId: "store-1",
+        },
+      ],
+    ]),
     users: new Map<string, Record<string, unknown>>([
       [
         "auth-user-1",
@@ -566,11 +590,13 @@ function createSubmissionMutationCtx(args: {
       | "inventoryMovement"
       | "inventoryImportProvisionalSku"
       | "operationalEvent"
+      | "operationalWorkItem"
       | "posPendingCheckoutItem"
       | "product"
       | "productSku"
       | "skuActivityEvent"
-      | "stockAdjustmentBatch",
+      | "stockAdjustmentBatch"
+      | "subcategory",
   ) => ({
     withIndex(
       _index: string,
@@ -693,13 +719,15 @@ function createSubmissionMutationCtx(args: {
           table === "inventoryMovement" ||
           table === "inventoryImportProvisionalSku" ||
           table === "operationalEvent" ||
+          table === "operationalWorkItem" ||
           table === "posPendingCheckoutItem" ||
           table === "catalogSummary" ||
           table === "category" ||
           table === "product" ||
           table === "productSku" ||
           table === "skuActivityEvent" ||
-          table === "stockAdjustmentBatch"
+          table === "stockAdjustmentBatch" ||
+          table === "subcategory"
         ) {
           return indexedQuery(table);
         }
@@ -973,6 +1001,45 @@ describe("stock ops adjustments", () => {
     ]);
   });
 
+  it("does not block zero-sale provisional rows linked to onboarded trusted SKUs", async () => {
+    const { ctx, tables } = createInventorySnapshotQueryCtx();
+
+    tables.category.set("category-1", {
+      _id: "category-1",
+      name: "Hair Accessories",
+      slug: "hair-accessories",
+      storeId: "store-1",
+    });
+    tables.product.set("product-1", {
+      _id: "product-1",
+      availability: "live",
+      categoryId: "category-1",
+      name: "Tweezers",
+      storeId: "store-1",
+      subcategoryId: "subcategory-1",
+    });
+    tables.inventoryImportProvisionalSku.set("provisional-1", {
+      _id: "provisional-1",
+      productId: "product-1",
+      productSkuId: "sku-1",
+      saleEvidence: {
+        saleCount: 0,
+        totalQuantitySold: 0,
+      },
+      status: "active",
+      storeId: "store-1",
+    });
+
+    const rows = await listInventorySnapshotWithCtx(ctx, {
+      now: 1_000,
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).not.toHaveProperty("stockAdjustmentBlockedMessage");
+    expect(rows[0]).not.toHaveProperty("stockAdjustmentBlockedReason");
+  });
+
   it("does not block stock adjustments after a legacy import SKU is finalized", async () => {
     const { ctx, tables } = createInventorySnapshotQueryCtx();
 
@@ -984,6 +1051,30 @@ describe("stock ops adjustments", () => {
       productSkuId: "sku-1",
       provisionalSoldQuantityAtFinalization: 2,
       status: "finalized",
+      storeId: "store-1",
+    });
+
+    const rows = await listInventorySnapshotWithCtx(ctx, {
+      now: 1_000,
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).not.toHaveProperty("stockAdjustmentBlockedMessage");
+    expect(rows[0]).not.toHaveProperty("stockAdjustmentBlockedReason");
+  });
+
+  it("does not block trusted legacy import SKUs that remain active for catalog setup", async () => {
+    const { ctx, tables } = createInventorySnapshotQueryCtx();
+
+    tables.inventoryImportProvisionalSku.set("provisional-1", {
+      _id: "provisional-1",
+      finalTrustedQuantity: 10,
+      finalizedAt: 1_000,
+      posExposureStatus: "hidden",
+      productSkuId: "sku-1",
+      provisionalSoldQuantityAtFinalization: 2,
+      status: "active",
       storeId: "store-1",
     });
 
@@ -1460,6 +1551,369 @@ describe("stock ops adjustments", () => {
     );
   });
 
+  it("completes synced sale inventory review work when the affected SKU is adjusted", async () => {
+    const { ctx, tables } = createSubmissionMutationCtx({
+      authUserId: "auth-user-1",
+      membershipRole: "pos_only",
+    });
+
+    tables.operationalWorkItem.set("inventory-review-1", {
+      _id: "inventory-review-1",
+      createdAt: 1,
+      metadata: {
+        localTransactionId: "local-sale-1",
+        primaryProductSkuId: "sku-1",
+        receiptNumber: "#001",
+      },
+      organizationId: "org-1",
+      productSkuId: "sku-1",
+      status: "open",
+      storeId: "store-1",
+      title: "Review inventory for Closure wig",
+      type: "synced_sale_inventory_review",
+    });
+
+    await submitStockAdjustmentBatchWithCtx(ctx, {
+      adjustmentType: "manual",
+      lineItems: [
+        {
+          productSkuId: "sku-1" as Id<"productSku">,
+          quantityDelta: 1,
+        },
+      ],
+      reasonCode: "correction",
+      storeId: "store-1" as Id<"store">,
+      submissionKey: "auto-resolve-inventory-review",
+    });
+
+    const stockMovement = Array.from(tables.inventoryMovement.values())[0];
+
+    expect(tables.operationalWorkItem.get("inventory-review-1")).toMatchObject({
+      completedAt: expect.any(Number),
+      metadata: {
+        resolution: {
+          actorUserId: "operator-1",
+          authority: {
+            kind: "system",
+            reason: "stock_adjustment_applied",
+          },
+          domainTrace: {
+            inventoryMovementId: stockMovement._id,
+            proofKind: "stock_update_movement",
+            stockAdjustmentBatchId: "stockAdjustmentBatch-1",
+          },
+          outcome: "completed",
+          reason: "Resolved by applied stock adjustment.",
+          stockUpdate: {
+            inventoryMovementId: stockMovement._id,
+            productSkuId: "sku-1",
+            quantityDelta: 1,
+          },
+        },
+      },
+      status: "completed",
+    });
+    expect(Array.from(tables.operationalEvent.values())).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          eventType: "synced_sale_inventory_review_completed",
+          message:
+            "Synced sale inventory review completed by stock adjustment.",
+          subjectId: "inventory-review-1",
+        }),
+      ]),
+    );
+  });
+
+  it("keeps unrelated synced sale inventory review work open", async () => {
+    const { ctx, tables } = createSubmissionMutationCtx({
+      authUserId: "auth-user-1",
+      membershipRole: "pos_only",
+    });
+
+    tables.operationalWorkItem.set("inventory-review-1", {
+      _id: "inventory-review-1",
+      createdAt: 1,
+      metadata: {
+        primaryProductSkuId: "other-sku",
+      },
+      organizationId: "org-1",
+      productSkuId: "other-sku",
+      status: "open",
+      storeId: "store-1",
+      title: "Review inventory for another SKU",
+      type: "synced_sale_inventory_review",
+    });
+
+    await submitStockAdjustmentBatchWithCtx(ctx, {
+      adjustmentType: "manual",
+      lineItems: [
+        {
+          productSkuId: "sku-1" as Id<"productSku">,
+          quantityDelta: 1,
+        },
+      ],
+      reasonCode: "correction",
+      storeId: "store-1" as Id<"store">,
+      submissionKey: "unrelated-inventory-review",
+    });
+
+    expect(tables.operationalWorkItem.get("inventory-review-1")).toMatchObject({
+      status: "open",
+    });
+    expect(
+      tables.operationalWorkItem.get("inventory-review-1"),
+    ).not.toHaveProperty("completedAt");
+  });
+
+  it("allows stock adjustments for trusted legacy import SKUs that still need catalog setup", async () => {
+    const { ctx, tables } = createSubmissionMutationCtx({
+      authUserId: "auth-user-1",
+      membershipRole: "full_admin",
+    });
+
+    tables.inventoryImportProvisionalSku.set("provisional-1", {
+      _id: "provisional-1",
+      finalTrustedQuantity: 8,
+      finalizedAt: 1_000,
+      posExposureStatus: "hidden",
+      productSkuId: "sku-1",
+      provisionalSoldQuantityAtFinalization: 2,
+      status: "active",
+      storeId: "store-1",
+    });
+
+    await submitStockAdjustmentBatchWithCtx(ctx, {
+      adjustmentType: "manual",
+      lineItems: [
+        {
+          productSkuId: "sku-1" as Id<"productSku">,
+          quantityDelta: 1,
+        },
+      ],
+      reasonCode: "correction",
+      storeId: "store-1" as Id<"store">,
+      submissionKey: "trusted-legacy-import-catalog-setup-adjustment",
+    });
+
+    expect(tables.productSku.get("sku-1")).toMatchObject({
+      inventoryCount: 9,
+      quantityAvailable: 7,
+    });
+    expect(Array.from(tables.stockAdjustmentBatch.values())).toEqual([
+      expect.objectContaining({
+        status: "applied",
+        submissionKey: "trusted-legacy-import-catalog-setup-adjustment",
+      }),
+    ]);
+  });
+
+  it("blocks stock adjustments when any active provisional row for the SKU still needs review", async () => {
+    const { ctx, tables } = createSubmissionMutationCtx({
+      authUserId: "auth-user-1",
+      membershipRole: "full_admin",
+    });
+
+    tables.inventoryImportProvisionalSku.set("provisional-trusted", {
+      _id: "provisional-trusted",
+      finalTrustedQuantity: 8,
+      finalizedAt: 1_000,
+      posExposureStatus: "hidden",
+      productSkuId: "sku-1",
+      provisionalSoldQuantityAtFinalization: 2,
+      status: "active",
+      storeId: "store-1",
+    });
+    tables.inventoryImportProvisionalSku.set("provisional-unresolved", {
+      _id: "provisional-unresolved",
+      productSkuId: "sku-1",
+      saleEvidence: {
+        totalQuantitySold: 1,
+      },
+      status: "active",
+      storeId: "store-1",
+    });
+
+    await expect(
+      submitStockAdjustmentBatchWithCtx(ctx, {
+        adjustmentType: "manual",
+        lineItems: [
+          {
+            productSkuId: "sku-1" as Id<"productSku">,
+            quantityDelta: 1,
+          },
+        ],
+        reasonCode: "correction",
+        storeId: "store-1" as Id<"store">,
+        submissionKey: "mixed-provisional-rows-block",
+      }),
+    ).rejects.toThrow(
+      "Legacy import SKUs must be finalized before stock adjustments can update them.",
+    );
+
+    expect(tables.inventoryMovement.size).toBe(0);
+    expect(tables.stockAdjustmentBatch.size).toBe(0);
+  });
+
+  it("fails closed when active provisional rows exceed the per-SKU blocker cap", async () => {
+    const { ctx, tables } = createSubmissionMutationCtx({
+      authUserId: "auth-user-1",
+      membershipRole: "full_admin",
+    });
+
+    for (let index = 0; index < 26; index += 1) {
+      tables.inventoryImportProvisionalSku.set(`provisional-${index}`, {
+        _id: `provisional-${index}`,
+        finalTrustedQuantity: 8,
+        finalizedAt: 1_000 + index,
+        posExposureStatus: "hidden",
+        productSkuId: "sku-1",
+        provisionalSoldQuantityAtFinalization: 0,
+        status: "active",
+        storeId: "store-1",
+      });
+    }
+
+    await expect(
+      submitStockAdjustmentBatchWithCtx(ctx, {
+        adjustmentType: "manual",
+        lineItems: [
+          {
+            productSkuId: "sku-1" as Id<"productSku">,
+            quantityDelta: 1,
+          },
+        ],
+        reasonCode: "correction",
+        storeId: "store-1" as Id<"store">,
+        submissionKey: "provisional-row-cap-block",
+      }),
+    ).rejects.toThrow(
+      "Legacy import SKUs must be finalized before stock adjustments can update them.",
+    );
+
+    expect(tables.inventoryMovement.size).toBe(0);
+    expect(tables.stockAdjustmentBatch.size).toBe(0);
+  });
+
+  it("allows stock adjustments for zero-sale provisional rows linked to onboarded trusted SKUs", async () => {
+    const { ctx, tables } = createSubmissionMutationCtx({
+      authUserId: "auth-user-1",
+      membershipRole: "full_admin",
+    });
+
+    tables.inventoryImportProvisionalSku.set("provisional-1", {
+      _id: "provisional-1",
+      productId: "product-1",
+      productSkuId: "sku-1",
+      saleEvidence: {
+        saleCount: 0,
+        totalQuantitySold: 0,
+      },
+      status: "active",
+      storeId: "store-1",
+    });
+
+    await submitStockAdjustmentBatchWithCtx(ctx, {
+      adjustmentType: "manual",
+      lineItems: [
+        {
+          productSkuId: "sku-1" as Id<"productSku">,
+          quantityDelta: 1,
+        },
+      ],
+      reasonCode: "correction",
+      storeId: "store-1" as Id<"store">,
+      submissionKey: "trusted-zero-sale-provisional-adjustment",
+    });
+
+    expect(tables.productSku.get("sku-1")).toMatchObject({
+      inventoryCount: 9,
+      quantityAvailable: 7,
+    });
+    expect(Array.from(tables.stockAdjustmentBatch.values())).toEqual([
+      expect.objectContaining({
+        status: "applied",
+        submissionKey: "trusted-zero-sale-provisional-adjustment",
+      }),
+    ]);
+  });
+
+  it.each([
+    [
+      "missing category",
+      (tables: ReturnType<typeof createSubmissionMutationCtx>["tables"]) => {
+        tables.category.delete("category-1");
+      },
+    ],
+    [
+      "cross-store category",
+      (tables: ReturnType<typeof createSubmissionMutationCtx>["tables"]) => {
+        tables.category.set("category-1", {
+          _id: "category-1",
+          name: "Hair",
+          slug: "hair",
+          storeId: "store-2",
+        });
+      },
+    ],
+    [
+      "missing subcategory",
+      (tables: ReturnType<typeof createSubmissionMutationCtx>["tables"]) => {
+        tables.subcategory.delete("subcategory-1");
+      },
+    ],
+    [
+      "mismatched subcategory",
+      (tables: ReturnType<typeof createSubmissionMutationCtx>["tables"]) => {
+        tables.subcategory.set("subcategory-1", {
+          _id: "subcategory-1",
+          categoryId: "category-other",
+          name: "Closures",
+          slug: "closures",
+          storeId: "store-1",
+        });
+      },
+    ],
+  ])("blocks zero-sale provisional rows with %s", async (caseName, mutateTables) => {
+    const { ctx, tables } = createSubmissionMutationCtx({
+      authUserId: "auth-user-1",
+      membershipRole: "full_admin",
+    });
+
+    mutateTables(tables);
+    tables.inventoryImportProvisionalSku.set("provisional-1", {
+      _id: "provisional-1",
+      productId: "product-1",
+      productSkuId: "sku-1",
+      saleEvidence: {
+        saleCount: 0,
+        totalQuantitySold: 0,
+      },
+      status: "active",
+      storeId: "store-1",
+    });
+
+    await expect(
+      submitStockAdjustmentBatchWithCtx(ctx, {
+        adjustmentType: "manual",
+        lineItems: [
+          {
+            productSkuId: "sku-1" as Id<"productSku">,
+            quantityDelta: 1,
+          },
+        ],
+        reasonCode: "correction",
+        storeId: "store-1" as Id<"store">,
+        submissionKey: `invalid-taxonomy-${caseName.replaceAll(" ", "-")}`,
+      }),
+    ).rejects.toThrow(
+      "Legacy import SKUs must be finalized before stock adjustments can update them.",
+    );
+
+    expect(tables.inventoryMovement.size).toBe(0);
+    expect(tables.stockAdjustmentBatch.size).toBe(0);
+  });
+
   it("rejects stock adjustments for unresolved POS pending checkout SKUs", async () => {
     const { ctx, tables } = createSubmissionMutationCtx({
       authUserId: "auth-user-1",
@@ -1652,6 +2106,49 @@ describe("stock ops adjustments", () => {
       internal.inventory.catalogSummary.markCatalogSummaryNeedsRefreshInternal,
       { storeId: "store-1" },
     );
+  });
+
+  it("completes synced sale inventory review work only after approval-gated stock adjustments are applied", async () => {
+    const { ctx, tables } = createApprovalDecisionMutationCtx();
+
+    tables.operationalWorkItem.set("inventory-review-1", {
+      _id: "inventory-review-1",
+      createdAt: 1,
+      metadata: {
+        primaryProductSkuId: "sku-1",
+      },
+      organizationId: "org-1",
+      productSkuId: "sku-1",
+      status: "open",
+      storeId: "store-1",
+      title: "Review inventory for Closure wig",
+      type: "synced_sale_inventory_review",
+    });
+
+    await resolveStockAdjustmentApprovalDecisionWithCtx(ctx, {
+      approvalRequestId: "approval-1" as Id<"approvalRequest">,
+      decision: "approved",
+      reviewedByUserId: "manager-1" as Id<"athenaUser">,
+    });
+
+    const stockMovement = Array.from(tables.inventoryMovement.values())[0];
+
+    expect(tables.operationalWorkItem.get("inventory-review-1")).toMatchObject({
+      completedAt: expect.any(Number),
+      metadata: {
+        resolution: {
+          actorUserId: "manager-1",
+          domainTrace: {
+            inventoryMovementId: stockMovement._id,
+            proofKind: "stock_update_movement",
+            stockAdjustmentBatchId: "batch-1",
+          },
+          outcome: "completed",
+          reason: "Resolved by applied stock adjustment.",
+        },
+      },
+      status: "completed",
+    });
   });
 
   it("rejects approval-gated stock adjustments without mutating inventory", async () => {

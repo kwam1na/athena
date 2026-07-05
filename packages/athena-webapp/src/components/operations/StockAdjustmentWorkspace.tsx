@@ -2028,6 +2028,8 @@ export function StockAdjustmentWorkspaceContent({
     routeFilteredInventoryItemId ??
     routeSelectedInventoryItemId ??
     activeInventoryItemId;
+  const selectedInventoryItemIdRef = useRef(selectedInventoryItemId);
+  selectedInventoryItemIdRef.current = selectedInventoryItemId;
   const routeSkuFilterQuery =
     !filters.query.trim() && routeFilteredInventoryItemId
       ? routeFilteredInventoryItemId
@@ -2608,7 +2610,11 @@ export function StockAdjustmentWorkspaceContent({
                 disabled={isBlocked}
                 inputMode="numeric"
                 min={adjustmentType === "manual" ? undefined : 0}
-                onFocus={() => handleSelectInventoryItem(item._id)}
+                onFocus={() => {
+                  if (item._id === selectedInventoryItemIdRef.current) return;
+
+                  handleSelectInventoryItem(item._id);
+                }}
                 onBlur={(event) =>
                   saveCycleCountDraftValue(item._id, event.currentTarget.value)
                 }
@@ -3311,9 +3317,12 @@ export function StockAdjustmentWorkspaceContent({
                       : undefined
                   }
                   onPageIndexChange={handleStockTablePageIndexChange}
-                  onRowClick={(row) =>
-                    handleSelectInventoryItem(row.original.inventoryItem._id)
-                  }
+                  onRowClick={(row) => {
+                    const rowInventoryItemId = row.original.inventoryItem._id;
+                    if (rowInventoryItemId === selectedInventoryItemId) return;
+
+                    handleSelectInventoryItem(rowInventoryItemId);
+                  }}
                   isLoadingMore={isLoadingMoreInventoryItems}
                   onLoadMore={
                     canLoadMoreInventoryItems

@@ -17,6 +17,7 @@ import type { ProductVariant } from "./ProductStock";
 import {
   mergeProductDataWithActiveProductRefresh,
   mergeProductVariantsWithActiveProductRefresh,
+  mergeTrustedInventoryFinalizationIntoProduct,
   mergeTrustedInventoryFinalizationIntoVariants,
 } from "@/contexts/ProductContext";
 
@@ -533,6 +534,33 @@ describe("ProductStock money inputs", () => {
       images: [{ preview: "dirty-image.webp" }],
     });
     expect(merged[1]).toBe(variants[1]);
+  });
+
+  it("applies trusted inventory product status updates to the active product snapshot", () => {
+    const product = {
+      _id: "product-1",
+      availability: "draft",
+      inventoryCount: 0,
+      isVisible: false,
+      name: "Apron Stylist",
+      quantityAvailable: 0,
+      skus: [],
+    } as unknown as Product;
+
+    const merged = mergeTrustedInventoryFinalizationIntoProduct(product, {
+      availability: "live",
+      inventoryCount: 1,
+      quantityAvailable: 1,
+    });
+
+    expect(merged).toMatchObject({
+      _id: "product-1",
+      availability: "live",
+      inventoryCount: 1,
+      isVisible: false,
+      name: "Apron Stylist",
+      quantityAvailable: 1,
+    });
   });
 
   it("preserves dirty product and SKU edits across a post-finalization product refresh", () => {

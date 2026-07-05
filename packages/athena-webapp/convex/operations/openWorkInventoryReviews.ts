@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 
-import type { Id, TableNames } from "../_generated/dataModel";
+import type { Doc, Id, TableNames } from "../_generated/dataModel";
 import { mutation, type MutationCtx } from "../_generated/server";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import {
@@ -15,6 +15,10 @@ const INVENTORY_REVIEW_LOCAL_ID_KIND = "inventoryReviewWorkItem";
 const TERMINAL_STATUSES = new Set(["completed", "cancelled"]);
 const STOCK_UPDATE_SOURCE_TYPE = "stock_adjustment_batch";
 const STOCK_UPDATE_MOVEMENT_TYPES = new Set(["adjustment", "cycle_count"]);
+const AUTO_RESOLVE_STOCK_REVIEW_SCAN_LIMIT = 500;
+const AUTO_RESOLVE_STOCK_REVIEW_SKU_PROBE_LIMIT = 100;
+const AUTO_RESOLVE_STOCK_REVIEW_REASON =
+  "Resolved by applied stock adjustment.";
 
 const syncedSaleInventoryReviewOutcomeValidator = v.union(
   v.literal("completed"),
@@ -48,6 +52,14 @@ type ResolveSyncedSaleInventoryReviewData = {
   outcome: SyncedSaleInventoryReviewOutcome;
   status: "completed" | "cancelled";
   workItemId: Id<"operationalWorkItem">;
+};
+
+type AutoResolveSyncedSaleInventoryReviewsArgs = {
+  actorUserId?: Id<"athenaUser">;
+  inventoryMovements: Doc<"inventoryMovement">[];
+  organizationId?: Id<"organization">;
+  stockAdjustmentBatchId: Id<"stockAdjustmentBatch">;
+  storeId: Id<"store">;
 };
 
 function inventoryReviewLocalId(localTransactionId: string) {
@@ -149,6 +161,235 @@ function terminalStatusForOutcome(
   outcome: SyncedSaleInventoryReviewOutcome,
 ): "completed" | "cancelled" {
   return outcome === "completed" ? "completed" : "cancelled";
+}
+
+function sourceMetadataFromWorkItem(metadata: Record<string, unknown>) {
+  const localTransactionId = stringMetadataValue(metadata, "localTransactionId");
+
+  return {
+    localId: localTransactionId
+      ? inventoryReviewLocalId(localTransactionId)
+      : null,
+    localIdKind: INVENTORY_REVIEW_LOCAL_ID_KIND,
+    localRegisterSessionId: stringMetadataValue(
+      metadata,
+      "localRegisterSessionId",
+    ),
+    localTransactionId,
+    receiptNumber: stringMetadataValue(metadata, "receiptNumber"),
+    registerSessionId: idMetadataValue<"registerSession">(
+      metadata,
+      "registerSessionId",
+    ),
+    sourceId: idMetadataValue<"posTransaction">(metadata, "sourceId"),
+    terminalId: idMetadataValue<"posTerminal">(metadata, "terminalId"),
+  };
+}
+
+async function readOpenSyncedSaleInventoryReviewWorkItemsWithCtx(
+  ctx: MutationCtx,
+  args: {
+    productSkuId: Id<"productSku">;
+    status: "open" | "in_progress";
+    storeId: Id<"store">;
+  },
+) {
+  return ctx.db
+    .query("operationalWorkItem")
+    .withIndex("by_storeId_type_status_productSkuId", (q) =>
+      q
+        .eq("storeId", args.storeId)
+        .eq("type", SYNCED_SALE_INVENTORY_REVIEW_TYPE)
+        .eq("status", args.status)
+        .eq("productSkuId", args.productSkuId),
+    )
+    .take(AUTO_RESOLVE_STOCK_REVIEW_SCAN_LIMIT);
+}
+
+async function readLegacyOpenSyncedSaleInventoryReviewWorkItemsWithCtx(
+  ctx: MutationCtx,
+  args: {
+    productSkuIds: Set<Id<"productSku">>;
+    status: "open" | "in_progress";
+    storeId: Id<"store">;
+  },
+) {
+  const rows = await ctx.db
+    .query("operationalWorkItem")
+    .withIndex("by_storeId_type_status", (q) =>
+      q
+        .eq("storeId", args.storeId)
+        .eq("type", SYNCED_SALE_INVENTORY_REVIEW_TYPE)
+        .eq("status", args.status),
+    )
+    .take(AUTO_RESOLVE_STOCK_REVIEW_SCAN_LIMIT + 1);
+
+  if (rows.length > AUTO_RESOLVE_STOCK_REVIEW_SCAN_LIMIT) {
+    throw new Error(
+      "Too many synced sale inventory review work items to scan for legacy auto-resolution. Resolve older inventory review work and retry.",
+    );
+  }
+
+  return rows.filter((workItem) => {
+    if (workItem.productSkuId) return false;
+    const primaryProductSkuId = idMetadataValue<"productSku">(
+      workItem.metadata ?? {},
+      "primaryProductSkuId",
+    );
+    return Boolean(
+      primaryProductSkuId && args.productSkuIds.has(primaryProductSkuId),
+    );
+  });
+}
+
+export async function autoResolveSyncedSaleInventoryReviewsForStockAdjustmentWithCtx(
+  ctx: MutationCtx,
+  args: AutoResolveSyncedSaleInventoryReviewsArgs,
+) {
+  const movementsBySkuId = new Map<
+    Id<"productSku">,
+    Doc<"inventoryMovement">
+  >();
+
+  for (const movement of args.inventoryMovements) {
+    if (
+      movement.storeId !== args.storeId ||
+      movement.sourceType !== STOCK_UPDATE_SOURCE_TYPE ||
+      !STOCK_UPDATE_MOVEMENT_TYPES.has(movement.movementType) ||
+      !movement.productSkuId
+    ) {
+      continue;
+    }
+
+    const existingMovement = movementsBySkuId.get(movement.productSkuId);
+    if (!existingMovement || movement.createdAt > existingMovement.createdAt) {
+      movementsBySkuId.set(movement.productSkuId, movement);
+    }
+  }
+
+  if (movementsBySkuId.size === 0) {
+    return { resolvedCount: 0 };
+  }
+  if (movementsBySkuId.size > AUTO_RESOLVE_STOCK_REVIEW_SKU_PROBE_LIMIT) {
+    return { resolvedCount: 0 };
+  }
+
+  const workItemGroups = [];
+  const productSkuIds = Array.from(movementsBySkuId.keys());
+  for (const status of ["open", "in_progress"] as const) {
+    for (const productSkuId of productSkuIds) {
+      workItemGroups.push(
+        await readOpenSyncedSaleInventoryReviewWorkItemsWithCtx(ctx, {
+          productSkuId,
+          status,
+          storeId: args.storeId,
+        }),
+      );
+    }
+    workItemGroups.push(
+      await readLegacyOpenSyncedSaleInventoryReviewWorkItemsWithCtx(ctx, {
+        productSkuIds: new Set(productSkuIds),
+        status,
+        storeId: args.storeId,
+      }),
+    );
+  }
+  const resolvedAt = Date.now();
+  let resolvedCount = 0;
+
+  for (const workItem of workItemGroups.flat()) {
+    const metadata = workItem.metadata ?? {};
+    const primaryProductSkuId = idMetadataValue<"productSku">(
+      metadata,
+      "primaryProductSkuId",
+    );
+    const stockUpdate = primaryProductSkuId
+      ? movementsBySkuId.get(primaryProductSkuId)
+      : null;
+
+    if (!primaryProductSkuId || !stockUpdate) {
+      continue;
+    }
+    if (stockUpdate.createdAt < workItem.createdAt) {
+      continue;
+    }
+
+    const domainTrace = {
+      boundary:
+        "operations.openWorkInventoryReviews.autoResolveSyncedSaleInventoryReviewsForStockAdjustment",
+      inventoryMovementId: stockUpdate._id,
+      proofKind: "stock_update_movement",
+      stockAdjustmentBatchId: args.stockAdjustmentBatchId,
+    };
+    const resolution = {
+      ...(args.actorUserId ? { actorUserId: args.actorUserId } : {}),
+      authority: {
+        kind: "system",
+        reason: "stock_adjustment_applied",
+      },
+      domainTrace,
+      outcome: "completed" as const,
+      priorState: {
+        status: workItem.status,
+      },
+      reason: AUTO_RESOLVE_STOCK_REVIEW_REASON,
+      resolvedAt,
+      source: sourceMetadataFromWorkItem(metadata),
+      stockState: null,
+      stockUpdate: {
+        createdAt: stockUpdate.createdAt,
+        inventoryMovementId: stockUpdate._id,
+        movementType: stockUpdate.movementType,
+        productSkuId: primaryProductSkuId,
+        quantityDelta: stockUpdate.quantityDelta,
+        reasonCode: stockUpdate.reasonCode ?? null,
+        sourceId: stockUpdate.sourceId,
+        sourceType: stockUpdate.sourceType,
+      },
+      nextState: {
+        status: "completed" as const,
+      },
+    };
+
+    await ctx.db.patch("operationalWorkItem", workItem._id, {
+      completedAt: resolvedAt,
+      metadata: {
+        ...metadata,
+        resolution,
+      },
+      status: "completed",
+    });
+
+    await recordOperationalEventWithCtx(ctx, {
+      actorUserId: args.actorUserId,
+      eventType: "synced_sale_inventory_review_completed",
+      message: "Synced sale inventory review completed by stock adjustment.",
+      organizationId: workItem.organizationId ?? args.organizationId,
+      reason: AUTO_RESOLVE_STOCK_REVIEW_REASON,
+      storeId: args.storeId,
+      subjectId: workItem._id,
+      subjectLabel: workItem.title,
+      subjectType: SYNCED_SALE_INVENTORY_REVIEW_TYPE,
+      workItemId: workItem._id,
+      metadata: {
+        authority: resolution.authority,
+        domainTrace,
+        inventoryMovementId: stockUpdate._id,
+        nextState: resolution.nextState,
+        outcome: resolution.outcome,
+        priorState: resolution.priorState,
+        reason: resolution.reason,
+        source: resolution.source,
+        stockState: null,
+        stockUpdate: resolution.stockUpdate,
+        terminalAudit: null,
+      },
+    });
+
+    resolvedCount += 1;
+  }
+
+  return { resolvedCount };
 }
 
 export async function resolveSyncedSaleInventoryReviewWithCtx(

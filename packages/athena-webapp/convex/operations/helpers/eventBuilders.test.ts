@@ -49,4 +49,24 @@ describe("buildOperationalEventMessage", () => {
       ).toBe(expectedMessage);
     }
   });
+
+  it("uses operator-friendly copy for stock adjustment decision events", () => {
+    const expectedMessages: Record<string, string> = {
+      stock_adjustment_approved: "Stock adjustment approved for 1 SKU.",
+      stock_adjustment_cancelled: "Stock adjustment cancelled for 1 SKU.",
+      stock_adjustment_rejected: "Stock adjustment rejected for 1 SKU.",
+    };
+
+    for (const [eventType, expectedMessage] of Object.entries(
+      expectedMessages,
+    )) {
+      expect(
+        buildOperationalEventMessage({
+          eventType,
+          subjectLabel: "Stock adjustment review · 1 SKU",
+          subjectType: "stock_adjustment_batch",
+        }),
+      ).toBe(expectedMessage);
+    }
+  });
 });

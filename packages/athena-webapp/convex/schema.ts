@@ -478,6 +478,7 @@ const schema = defineSchema({
       "productSkuId",
       "status",
     ])
+    .index("by_storeId_productId_status", ["storeId", "productId", "status"])
     .index("by_storeId_importKey_rowKey", ["storeId", "importKey", "rowKey"])
     .index("by_storeId_reviewVersionId", ["storeId", "reviewVersionId"])
     .index("by_storeId_finalizationConversionRequestId", [
@@ -934,6 +935,18 @@ const schema = defineSchema({
     .index("by_storeId_status", ["storeId", "status"])
     .index("by_storeId_type", ["storeId", "type"])
     .index("by_storeId_type_status", ["storeId", "type", "status"])
+    .index("by_storeId_type_status_productId", [
+      "storeId",
+      "type",
+      "status",
+      "productId",
+    ])
+    .index("by_storeId_type_status_productSkuId", [
+      "storeId",
+      "type",
+      "status",
+      "productSkuId",
+    ])
     .index("by_storeId_type_status_appointmentId", [
       "storeId",
       "type",

@@ -18,6 +18,8 @@ export const operationalWorkItemSchema = v.object({
   createdByStaffProfileId: v.optional(v.id("staffProfile")),
   assignedToStaffProfileId: v.optional(v.id("staffProfile")),
   customerProfileId: v.optional(v.id("customerProfile")),
+  productId: v.optional(v.id("product")),
+  productSkuId: v.optional(v.id("productSku")),
   approvalRequestId: v.optional(v.id("approvalRequest")),
   appointmentId: v.optional(v.id("serviceAppointment")),
 });

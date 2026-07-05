@@ -11,6 +11,7 @@ vi.mock("./skuSearch", () => ({
 }));
 
 import {
+  completeFinalizedLegacyImportRowsForProductTaxonomyWithCtx,
   finalizeTrustedInventoryFromProductPage,
   finalizeTrustedInventoryFromProductPageWithCtx,
   getLatestInventoryImportReviewVersion,
@@ -39,6 +40,7 @@ type TableName =
   | "inventoryImportProvisionalSku"
   | "inventoryImportReviewVersion"
   | "operationalEvent"
+  | "operationalWorkItem"
   | "product"
   | "productSku"
   | "skuActivityEvent"
@@ -63,6 +65,7 @@ function createMutationCtx(seed: Partial<Record<TableName, Row[]>> = {}) {
     inventoryImportProvisionalSku: new Map(),
     inventoryImportReviewVersion: new Map(),
     operationalEvent: new Map(),
+    operationalWorkItem: new Map(),
     product: new Map(),
     productSku: new Map(),
     skuActivityEvent: new Map(),
@@ -183,8 +186,8 @@ function seedTrustedConversionData(overrides: Partial<Record<TableName, Row[]>> 
     category: [
       {
         _id: "category-1",
-        name: "Hair",
-        slug: "hair",
+        name: "Legacy import",
+        slug: "legacy-import",
         storeId: "store-1",
       },
     ],
@@ -1025,7 +1028,7 @@ describe("catalog import", () => {
     expect(binding).toMatchObject({ activeRowCount: 2, state: "ambiguous" });
   });
 
-  it("finalizes one product-page provisional row with trusted SKU evidence and a real stock movement", async () => {
+  it("keeps one product-page provisional row active after trusted SKU evidence is finalized", async () => {
     const { ctx, tables } = seedTrustedConversionData();
     const binding = await readTrustedConversionBinding(ctx);
 
@@ -1055,6 +1058,9 @@ describe("catalog import", () => {
       inventoryMovementId: "inventoryMovement-1",
       productId: "product-1",
       productSkuId: "sku-1",
+      product: {
+        availability: "live",
+      },
       provisionalSoldQuantity: 2,
       provisionalSkuId: "provisional-1",
       quantityAvailable: 8,
@@ -1070,6 +1076,7 @@ describe("catalog import", () => {
       mockedSkuSearch.upsertProductSkuSearchProjection,
     ).toHaveBeenCalledWith(expect.anything(), "sku-1");
     expect(tables.product.get("product-1")).toMatchObject({
+      availability: "live",
       inventoryCount: 10,
       quantityAvailable: 8,
     });
@@ -1079,8 +1086,28 @@ describe("catalog import", () => {
       finalizationSourceSurface: "product_edit",
       posExposureStatus: "hidden",
       provisionalSoldQuantityAtFinalization: 2,
-      status: "finalized",
+      status: "active",
     });
+    expect(Array.from(tables.operationalWorkItem.values())).toEqual([
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          categorySlug: "legacy-import",
+          productId: "product-1",
+          productName: "Body Wave",
+          productSkuId: "sku-1",
+          provisionalSkuId: "provisional-1",
+          sku: "BW-18",
+          sourceId: "provisional-1",
+          sourceType: "inventoryImportProvisionalSku",
+        }),
+        notes:
+          "Assign an Athena category and subcategory before saving this product.",
+        priority: "medium",
+        status: "open",
+        title: "Assign catalog category: Body Wave",
+        type: "catalog_taxonomy_setup",
+      }),
+    ]);
     expect(Array.from(tables.inventoryMovement.values())).toHaveLength(1);
     expect(Array.from(tables.skuActivityEvent.values())).toEqual(
       expect.arrayContaining([
@@ -1145,6 +1172,7 @@ describe("catalog import", () => {
 
     expect(first).toEqual(second);
     expect(Array.from(tables.inventoryMovement.values())).toHaveLength(1);
+    expect(Array.from(tables.operationalWorkItem.values())).toHaveLength(1);
     expect(Array.from(tables.skuActivityEvent.values())).toHaveLength(2);
   });
 
@@ -1181,7 +1209,7 @@ describe("catalog import", () => {
     });
     expect(tables.inventoryImportProvisionalSku.get("provisional-1")).toMatchObject({
       finalTrustedQuantity: 10,
-      status: "finalized",
+      status: "active",
     });
     expect(Array.from(tables.inventoryMovement.values())).toHaveLength(1);
     expect(Array.from(tables.skuActivityEvent.values())).toHaveLength(2);
@@ -1403,7 +1431,7 @@ describe("catalog import", () => {
       quantityAvailable: 8,
     });
     expect(tables.inventoryImportProvisionalSku.get("provisional-1")).toMatchObject({
-      status: "finalized",
+      status: "active",
     });
   });
 
@@ -1632,6 +1660,77 @@ describe("catalog import", () => {
       quantityAvailable: 2,
     });
     expect(tables.operationalEvent.size).toBe(0);
+  });
+
+  it("rejects taxonomy cleanup when active product rows exceed the finalization cap", async () => {
+    const provisionalRows = Array.from({ length: 26 }, (_, index) => ({
+      _id: `provisional-${index}`,
+      finalTrustedQuantity: 2,
+      finalizedAt: 1_000 + index,
+      productId: "product-1",
+      productSkuId: "sku-1",
+      status: "active",
+      storeId: "store-1",
+    }));
+    const { ctx } = createMutationCtx({
+      category: [
+        {
+          _id: "category-1",
+          name: "Hair",
+          slug: "hair",
+          storeId: "store-1",
+        },
+      ],
+      product: [
+        {
+          _id: "product-1",
+          availability: "live",
+          categoryId: "category-1",
+          createdByUserId: "user-1",
+          currency: "GHS",
+          inventoryCount: 2,
+          name: "Body Wave",
+          organizationId: "org-1",
+          quantityAvailable: 2,
+          slug: "body-wave",
+          storeId: "store-1",
+          subcategoryId: "subcategory-1",
+        },
+      ],
+      inventoryImportProvisionalSku: provisionalRows,
+      productSku: [
+        {
+          _id: "sku-1",
+          barcode: "123456789012",
+          images: [],
+          inventoryCount: 2,
+          price: 30000,
+          productId: "product-1",
+          productName: "Body Wave",
+          quantityAvailable: 2,
+          sku: "BW-18",
+          storeId: "store-1",
+        },
+      ],
+      subcategory: [
+        {
+          _id: "subcategory-1",
+          categoryId: "category-1",
+          name: "Wigs",
+          slug: "wigs",
+          storeId: "store-1",
+        },
+      ],
+    });
+
+    await expect(
+      completeFinalizedLegacyImportRowsForProductTaxonomyWithCtx(ctx, {
+        productId: "product-1" as Id<"product">,
+        storeId: "store-1" as Id<"store">,
+      }),
+    ).rejects.toThrow(
+      "Cannot complete catalog setup because this product has too many active legacy import rows to finalize safely.",
+    );
   });
 
   it("creates hidden catalog identity for new staged rows while keeping imported counts provisional", async () => {

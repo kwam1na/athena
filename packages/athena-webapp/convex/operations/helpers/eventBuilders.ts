@@ -13,6 +13,15 @@ export function buildOperationalEventMessage(args: {
     return onlineOrderMessage;
   }
 
+  const stockAdjustmentMessage = buildStockAdjustmentOperationalEventMessage({
+    eventType: args.eventType,
+    subject,
+  });
+
+  if (stockAdjustmentMessage) {
+    return stockAdjustmentMessage;
+  }
+
   return `${args.eventType} on ${subject}`;
 }
 
@@ -67,6 +76,37 @@ export function buildOnlineOrderOperationalEventMessage(args: {
   }
 
   return template(formatOnlineOrderLabel(args.subject));
+}
+
+const STOCK_ADJUSTMENT_EVENT_MESSAGE_TEMPLATES: Record<
+  string,
+  (subjectDetail: string) => string
+> = {
+  stock_adjustment_approved: (subjectDetail) =>
+    `Stock adjustment approved${subjectDetail}.`,
+  stock_adjustment_cancelled: (subjectDetail) =>
+    `Stock adjustment cancelled${subjectDetail}.`,
+  stock_adjustment_rejected: (subjectDetail) =>
+    `Stock adjustment rejected${subjectDetail}.`,
+};
+
+export function buildStockAdjustmentOperationalEventMessage(args: {
+  eventType: string;
+  subject: string;
+}) {
+  const template = STOCK_ADJUSTMENT_EVENT_MESSAGE_TEMPLATES[args.eventType];
+
+  if (!template) {
+    return null;
+  }
+
+  return template(formatStockAdjustmentSubjectDetail(args.subject));
+}
+
+function formatStockAdjustmentSubjectDetail(subject: string) {
+  const [, detail] = subject.split("·").map((part) => part.trim());
+
+  return detail ? ` for ${detail}` : "";
 }
 
 function formatOnlineOrderLabel(subject: string) {

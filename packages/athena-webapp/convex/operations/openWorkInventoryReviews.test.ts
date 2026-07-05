@@ -4,6 +4,7 @@ import type { Doc, Id } from "../_generated/dataModel";
 import * as athenaUserAuth from "../lib/athenaUserAuth";
 import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
 import {
+  autoResolveSyncedSaleInventoryReviewsForStockAdjustmentWithCtx,
   resolveSyncedSaleInventoryReview,
   resolveSyncedSaleInventoryReviewWithCtx,
 } from "./openWorkInventoryReviews";
@@ -33,6 +34,171 @@ beforeEach(() => {
 });
 
 describe("resolveSyncedSaleInventoryReviewWithCtx", () => {
+  it("auto-resolves matching synced sale inventory review work from applied stock movements", async () => {
+    const ctx = buildCtx();
+
+    const result =
+      await autoResolveSyncedSaleInventoryReviewsForStockAdjustmentWithCtx(
+        ctx as never,
+        {
+          actorUserId: "user-1" as Id<"athenaUser">,
+          inventoryMovements: [buildInventoryMovement()],
+          organizationId: "org-1" as Id<"organization">,
+          stockAdjustmentBatchId: "batch-1" as Id<"stockAdjustmentBatch">,
+          storeId: "store-1" as Id<"store">,
+        },
+      );
+
+    expect(result).toEqual({ resolvedCount: 1 });
+    expect(ctx.db.patch).toHaveBeenCalledWith(
+      "operationalWorkItem",
+      "work-item-1",
+      expect.objectContaining({
+        completedAt: 1_772_550_000_000,
+        metadata: expect.objectContaining({
+          resolution: expect.objectContaining({
+            actorUserId: "user-1",
+            authority: {
+              kind: "system",
+              reason: "stock_adjustment_applied",
+            },
+            domainTrace: {
+              boundary:
+                "operations.openWorkInventoryReviews.autoResolveSyncedSaleInventoryReviewsForStockAdjustment",
+              inventoryMovementId: "movement-1",
+              proofKind: "stock_update_movement",
+              stockAdjustmentBatchId: "batch-1",
+            },
+            outcome: "completed",
+            reason: "Resolved by applied stock adjustment.",
+            stockUpdate: expect.objectContaining({
+              inventoryMovementId: "movement-1",
+              productSkuId: "sku-1",
+            }),
+          }),
+        }),
+        status: "completed",
+      }),
+    );
+    expect(ctx.db.insert).toHaveBeenCalledWith(
+      "operationalEvent",
+      expect.objectContaining({
+        eventType: "synced_sale_inventory_review_completed",
+        message: "Synced sale inventory review completed by stock adjustment.",
+        subjectId: "work-item-1",
+      }),
+    );
+  });
+
+  it("auto-resolves in-progress synced sale inventory review work", async () => {
+    const ctx = buildCtx({
+      operationalWorkItem: buildWorkItem({ status: "in_progress" }),
+    });
+
+    const result =
+      await autoResolveSyncedSaleInventoryReviewsForStockAdjustmentWithCtx(
+        ctx as never,
+        {
+          inventoryMovements: [buildInventoryMovement()],
+          stockAdjustmentBatchId: "batch-1" as Id<"stockAdjustmentBatch">,
+          storeId: "store-1" as Id<"store">,
+        },
+      );
+
+    expect(result).toEqual({ resolvedCount: 1 });
+    expect(ctx.db.patch).toHaveBeenCalledWith(
+      "operationalWorkItem",
+      "work-item-1",
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          resolution: expect.objectContaining({
+            priorState: { status: "in_progress" },
+          }),
+        }),
+        status: "completed",
+      }),
+    );
+  });
+
+  it("auto-resolves legacy synced sale inventory review work keyed only by metadata", async () => {
+    const ctx = buildCtx({
+      operationalWorkItem: buildWorkItem({ productSkuId: undefined }),
+    });
+
+    const result =
+      await autoResolveSyncedSaleInventoryReviewsForStockAdjustmentWithCtx(
+        ctx as never,
+        {
+          inventoryMovements: [buildInventoryMovement()],
+          stockAdjustmentBatchId: "batch-1" as Id<"stockAdjustmentBatch">,
+          storeId: "store-1" as Id<"store">,
+        },
+      );
+
+    expect(result).toEqual({ resolvedCount: 1 });
+    expect(ctx.db.patch).toHaveBeenCalledWith(
+      "operationalWorkItem",
+      "work-item-1",
+      expect.objectContaining({
+        status: "completed",
+      }),
+    );
+  });
+
+  it.each([
+    ["older than the work item", buildInventoryMovement({ createdAt: 0 })],
+    [
+      "not from a stock adjustment batch",
+      buildInventoryMovement({ sourceType: "manual_review" }),
+    ],
+    ["not an adjustment movement", buildInventoryMovement({ movementType: "sale" })],
+    ["missing a product SKU", buildInventoryMovement({ productSkuId: undefined })],
+  ] as Array<[string, Doc<"inventoryMovement">]>)(
+    "does not auto-resolve when the stock movement is %s",
+    async (_caseName, movement) => {
+      const ctx = buildCtx();
+
+      const result =
+        await autoResolveSyncedSaleInventoryReviewsForStockAdjustmentWithCtx(
+          ctx as never,
+          {
+            inventoryMovements: [movement],
+            stockAdjustmentBatchId: "batch-1" as Id<"stockAdjustmentBatch">,
+            storeId: "store-1" as Id<"store">,
+          },
+        );
+
+      expect(result).toEqual({ resolvedCount: 0 });
+      expect(ctx.db.patch).not.toHaveBeenCalled();
+      expect(ctx.db.insert).not.toHaveBeenCalled();
+    },
+  );
+
+  it("skips auto-resolution probing when too many SKUs are adjusted at once", async () => {
+    const ctx = buildCtx();
+    const inventoryMovements = Array.from({ length: 101 }, (_, index) =>
+      buildInventoryMovement({
+        _id: `movement-${index}` as Id<"inventoryMovement">,
+        productSkuId: `sku-${index}` as Id<"productSku">,
+      }),
+    );
+
+    const result =
+      await autoResolveSyncedSaleInventoryReviewsForStockAdjustmentWithCtx(
+        ctx as never,
+        {
+          inventoryMovements,
+          stockAdjustmentBatchId: "batch-1" as Id<"stockAdjustmentBatch">,
+          storeId: "store-1" as Id<"store">,
+        },
+      );
+
+    expect(result).toEqual({ resolvedCount: 0 });
+    expect(ctx.db.query).not.toHaveBeenCalled();
+    expect(ctx.db.patch).not.toHaveBeenCalled();
+    expect(ctx.db.insert).not.toHaveBeenCalled();
+  });
+
   it("resolves current synced sale inventory review work after the affected SKU has a stock update", async () => {
     const ctx = buildCtx();
 
@@ -522,6 +688,15 @@ function buildCtx(seed: BuildCtxSeed = {}) {
             ? row
             : null;
         }),
+        take: vi.fn(async () => {
+          const row = rows[tableName as keyof typeof rows];
+          if (!row) return [];
+          return Object.entries(constraints).every(
+            ([field, value]) => row[field as keyof typeof row] === value,
+          )
+            ? [row]
+            : [];
+        }),
         unique: vi.fn(async () => {
           const row = rows[tableName as keyof typeof rows];
           if (!row) return null;
@@ -597,6 +772,7 @@ function buildWorkItem(
     },
     organizationId: "org-1" as Id<"organization">,
     priority: "high",
+    productSkuId: "sku-1" as Id<"productSku">,
     status: "open",
     storeId: "store-1" as Id<"store">,
     title: "Review inventory for Wig Cap",

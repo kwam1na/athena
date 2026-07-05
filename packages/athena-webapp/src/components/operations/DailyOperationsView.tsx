@@ -1174,7 +1174,7 @@ function getPrimaryActionEmphasis(status: PrimaryActionEmphasisStatus) {
   switch (status) {
     case "not_opened":
       return {
-        Icon: Clock3,
+        Icon: null,
         className: cn(
           "border-border bg-background text-muted-foreground hover:bg-surface hover:text-foreground",
           sharedClassName,

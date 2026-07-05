@@ -11,7 +11,6 @@ import {
 import { Label } from "../ui/label";
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
-import { Badge } from "../ui/badge";
 import {
   DotsHorizontalIcon,
   PlusCircledIcon,
@@ -38,7 +37,6 @@ import {
   X,
   ScanBarcode,
 } from "lucide-react";
-import useGetActiveProduct from "@/hooks/useGetActiveProduct";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import { BarcodeQRViewer } from "./BarcodeQRViewer";
 import { useMutation, useQuery } from "convex/react";
@@ -317,11 +315,8 @@ export function ProductStockView() {
   );
 }
 
-function isLegacyImportDraftProduct(activeProduct?: Product | null) {
-  return (
-    activeProduct?.availability === "draft" &&
-    activeProduct?.categorySlug === "legacy-import"
-  );
+function isLegacyImportProduct(activeProduct?: Product | null) {
+  return activeProduct?.categorySlug === "legacy-import";
 }
 
 function isPendingCheckoutDraftProduct(activeProduct?: Product | null) {
@@ -392,6 +387,7 @@ function LegacyImportTrustPreview({
   const [commandMessage, setCommandMessage] = useState<string | null>(null);
   const [requiresReviewRefresh, setRequiresReviewRefresh] = useState(false);
   const [bindingRefreshNonce, setBindingRefreshNonce] = useState(0);
+  const { markTrustedInventoryFinalized } = useProduct();
 
   const binding = useQuery(
     listProvisionalSkuBindingQuery,
@@ -407,10 +403,13 @@ function LegacyImportTrustPreview({
   const finalizeTrustedInventory = useMutation(
     finalizeTrustedInventoryMutation,
   );
+  const isServerFinalized =
+    binding?.state === "unique" && binding.row.finalizedAt !== undefined;
+  const isTrustedInventoryFinalized = Boolean(finalized || isServerFinalized);
 
   const reviewState = resolveTrustedInventoryReviewState({
     binding,
-    finalized,
+    finalized: isTrustedInventoryFinalized,
     isFinalizing,
     isRefreshing: isContextRefreshing,
     reservationType,
@@ -437,6 +436,12 @@ function LegacyImportTrustPreview({
     bindingState,
     bindingTrustedSkuFingerprint,
   ]);
+
+  useEffect(() => {
+    if (isServerFinalized) {
+      markTrustedInventoryFinalized(variant.id);
+    }
+  }, [isServerFinalized, markTrustedInventoryFinalized, variant.id]);
 
   const getConversionRequestId = () => {
     const existing = conversionRequestIds[variant.id];
@@ -499,9 +504,7 @@ function LegacyImportTrustPreview({
           isVisible: variant.isVisible,
         },
       });
-      setCommandMessage(
-        "Inventory finalized. Save remaining product changes separately.",
-      );
+      setCommandMessage(null);
     } catch (error) {
       console.error(error);
       setCommandMessage("Trusted inventory was not finalized. Try again.");
@@ -548,6 +551,12 @@ function LegacyImportTrustPreview({
   const isCtaDisabled = requiresReviewRefresh ? false : reviewState.disabled;
   const isFinalized = reviewState.status === "success";
   const isLinkedToCatalogState = isLinkedToCatalog || Boolean(linkedTarget);
+  const reviewTitle = isFinalized
+    ? linkedTarget
+      ? "SKU linked to catalog"
+      : "Trusted inventory finalized"
+    : "Trusted inventory review";
+  const shouldShowStatusMessage = !isFinalized || Boolean(commandMessage);
   const canOpenLinkDialog = Boolean(
     canLinkPendingCheckoutItem &&
     activeProduct &&
@@ -556,6 +565,16 @@ function LegacyImportTrustPreview({
     !isFinalized &&
     !isLinkedToCatalogState,
   );
+  const shouldRenderTrustPreview =
+    (binding !== undefined && binding.state !== "none") ||
+    finalized ||
+    isFinalizing ||
+    requiresReviewRefresh ||
+    Boolean(commandMessage);
+
+  if (!shouldRenderTrustPreview) {
+    return null;
+  }
 
   if (hideWhenLinkedToCatalog && isLinkedToCatalogState) {
     return null;
@@ -569,66 +588,75 @@ function LegacyImportTrustPreview({
     >
       <TableCell colSpan={8} className="px-4 py-3">
         <div
-          className={`flex flex-col gap-3 rounded-md border bg-background px-3 py-3 transition-[border-color,box-shadow] duration-150 ease-out sm:flex-row sm:items-center sm:justify-between ${
+          className={`flex flex-col gap-3 rounded-md border bg-muted/15 px-3 py-3 transition-[border-color,box-shadow] duration-150 ease-out sm:flex-row sm:items-center sm:justify-between ${
             isFinalized
               ? "border-action-workflow-border shadow-sm"
               : "border-border"
           }`}
         >
-          <div className="min-w-0 space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="outline" className="gap-1.5 text-foreground">
-                <ShieldCheck className="h-3.5 w-3.5" />
-                Trusted inventory review
-              </Badge>
-              <Badge
-                variant="outline"
-                className="border-border bg-muted/40 text-muted-foreground"
-              >
-                Pending item
-              </Badge>
-              {isFinalized ? (
-                <Badge
-                  variant="outline"
-                  className="gap-1.5 border-action-workflow-border bg-background text-action-workflow"
-                >
-                  <Check className="h-3.5 w-3.5" />
-                  {linkedTarget ? "Linked SKU" : "Finalized"}
-                </Badge>
-              ) : null}
+          <div className="flex min-w-0 gap-3">
+            <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-background text-muted-foreground">
+              <ShieldCheck className="h-3.5 w-3.5" />
             </div>
-            <p
-              className="max-w-3xl text-pretty text-xs leading-5 text-muted-foreground"
-              role="status"
-              aria-live="polite"
-            >
-              {statusMessage}
-            </p>
-            {linkedTarget ? (
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] leading-4 text-muted-foreground">
-                <span className="font-medium text-foreground">
-                  Linked to {capitalizeWords(linkedTarget.productName)}
-                </span>
-                <span>{linkedTarget.sku || "No SKU"}</span>
-                {typeof linkedTarget.price === "number" ? (
-                  <span>
-                    {formatStoredAmount(linkedSkuFormatter, linkedTarget.price)}
+            <div className="min-w-0 space-y-1.5">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <p className="text-xs font-medium leading-5 text-foreground">
+                  {reviewTitle}
+                </p>
+                {!isFinalized ? (
+                  <span className="text-[11px] leading-4 text-muted-foreground">
+                    Pending item
                   </span>
                 ) : null}
-                {typeof linkedTarget.quantityAvailable === "number" ? (
-                  <span>{linkedTarget.quantityAvailable} available</span>
+                {isFinalized && linkedTarget ? (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-medium leading-4 text-action-workflow">
+                    <Check className="h-3.5 w-3.5" />
+                    Linked SKU
+                  </span>
                 ) : null}
               </div>
-            ) : binding?.state === "unique" ? (
-              <p className="text-[11px] leading-4 text-muted-foreground">
-                {sourceLabel === "Linked import row"
-                  ? `${sourceLabel} ${binding.row.rowNumber}`
-                  : sourceLabel}
-                {binding.row.provisionalSoldQuantity !== undefined
-                  ? ` · provisional sales ${binding.row.provisionalSoldQuantity}`
-                  : ""}
-              </p>
-            ) : null}
+              {shouldShowStatusMessage ? (
+                <p
+                  className="max-w-3xl text-pretty text-xs leading-5 text-muted-foreground"
+                  role="status"
+                  aria-live="polite"
+                >
+                  {statusMessage}
+                </p>
+              ) : null}
+              {linkedTarget ? (
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] leading-4 text-muted-foreground">
+                  <span className="font-medium text-foreground">
+                    Linked to {capitalizeWords(linkedTarget.productName)}
+                  </span>
+                  <span>{linkedTarget.sku || "No SKU"}</span>
+                  {typeof linkedTarget.price === "number" ? (
+                    <span>
+                      {formatStoredAmount(
+                        linkedSkuFormatter,
+                        linkedTarget.price,
+                      )}
+                    </span>
+                  ) : null}
+                  {typeof linkedTarget.quantityAvailable === "number" ? (
+                    <span>{linkedTarget.quantityAvailable} available</span>
+                  ) : null}
+                </div>
+              ) : binding?.state === "unique" ? (
+                <p className="text-[11px] leading-4 text-muted-foreground">
+                  <span>
+                    {sourceLabel === "Linked import row"
+                      ? `${sourceLabel} ${binding.row.rowNumber}`
+                      : sourceLabel}
+                  </span>
+                  {binding.row.provisionalSoldQuantity !== undefined ? (
+                    <span className="ml-2">
+                      Provisional sales {binding.row.provisionalSoldQuantity}
+                    </span>
+                  ) : null}
+                </p>
+              ) : null}
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 sm:justify-end">
@@ -654,12 +682,12 @@ function LegacyImportTrustPreview({
               </div>
             ) : isFinalized ? (
               <div
-                className="inline-flex min-h-10 items-center gap-2 rounded-md px-3 text-xs font-medium text-muted-foreground"
+                aria-label="Trusted inventory finalized"
+                className="inline-flex min-h-10 items-center rounded-md px-3 text-action-workflow"
                 role="status"
                 aria-live="polite"
               >
-                <Check className="h-3.5 w-3.5 text-action-workflow" />
-                Trusted SKU ready
+                <Check className="h-3.5 w-3.5" />
               </div>
             ) : (
               <Button
@@ -1092,10 +1120,9 @@ function Stock({
     updateProductVariants,
     activeProductVariant,
     setActiveProductVariant,
+    activeProduct,
     showLoaderForProduct,
   } = useProduct();
-
-  const { activeProduct } = useGetActiveProduct();
 
   const { activeStore } = useGetActiveStore();
 
@@ -1378,7 +1405,7 @@ function Stock({
   const isPendingCheckoutDraft = isPendingCheckoutDraftProduct(activeProduct);
   const isPendingCheckoutSku = isPendingCheckoutProduct(activeProduct);
   const shouldShowTrustPreview =
-    isLegacyImportDraftProduct(activeProduct) || isPendingCheckoutDraft;
+    isLegacyImportProduct(activeProduct) || isPendingCheckoutDraft;
   const trustedInventoryApi = isPendingCheckoutDraft
     ? {
         finalizeTrustedInventoryMutation:

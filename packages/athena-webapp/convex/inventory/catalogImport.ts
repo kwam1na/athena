@@ -18,6 +18,7 @@ import {
 } from "../operations/managerElevations";
 import { recordInventoryMovementWithCtx } from "../operations/inventoryMovements";
 import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
+import { createOperationalWorkItemWithCtx } from "../operations/operationalWorkItems";
 import { recordSkuActivityEventWithCtx } from "../operations/skuActivity";
 import { toSlug } from "../utils";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
@@ -31,8 +32,15 @@ const REVIEW_VERSION_EVENT_TYPE = "inventory_import_review_version_saved";
 const PROVISIONAL_STAGE_EVENT_TYPE = "inventory_import_provisional_pos_staged";
 const PROVISIONAL_TRUST_FINALIZATION_EVENT_TYPE =
   "inventory_import_provisional_trusted_finalized";
+export const CATALOG_TAXONOMY_SETUP_WORK_ITEM_TYPE = "catalog_taxonomy_setup";
+const CATALOG_TAXONOMY_SETUP_WORK_ITEM_STATUSES = [
+  "open",
+  "in_progress",
+] as const;
 const PROVISIONAL_IMPORT_FINALIZATION_LIMIT = 5000;
+const CATALOG_TAXONOMY_FINALIZATION_ROW_LIMIT = 25;
 const TRUSTED_FINALIZATION_ACTIVE_CHECKOUT_SESSION_LIMIT = 200;
+const DEFAULT_CATEGORY_SLUG = toSlug(DEFAULT_CATEGORY_NAME);
 const TRUSTED_FINALIZATION_CHECKOUT_SESSION_ITEM_LIMIT = 200;
 
 type ProvisionalImportIdentity = {
@@ -184,6 +192,7 @@ export type ProductPageProvisionalSkuBinding =
       activeRowCount: 1;
       row: {
         _id: Id<"inventoryImportProvisionalSku">;
+        finalizedAt?: number;
         importKey: string;
         importedQuantity: number;
         lastPosTransactionId?: Id<"posTransaction">;
@@ -223,6 +232,9 @@ export type ProductPageTrustedInventoryFinalizationArgs = {
 export type ProductPageTrustedInventoryFinalizationResult = {
   finalTrustedQuantity: number;
   inventoryMovementId?: Id<"inventoryMovement">;
+  product?: {
+    availability?: Doc<"product">["availability"];
+  };
   productId: Id<"product">;
   productSkuId: Id<"productSku">;
   provisionalSkuId: Id<"inventoryImportProvisionalSku">;
@@ -1056,6 +1068,7 @@ export async function listProductPageProvisionalSkuBindingWithCtx(
       provisionalSoldQuantity: row.saleEvidence.totalQuantitySold,
       reviewVersionId: row.reviewVersionId,
       reviewVersionNumber: row.reviewVersionNumber,
+      finalizedAt: row.finalizedAt,
       rowKey: row.rowKey,
       rowNumber: row.rowNumber,
       saleCount: row.saleEvidence.saleCount,
@@ -1126,6 +1139,16 @@ export async function finalizeTrustedInventoryFromProductPageWithCtx(
   } = validation.data;
 
   await ctx.db.patch("productSku", normalizedArgs.productSkuId, productSkuPatch);
+  await ctx.db.patch("product", normalizedArgs.productId, {
+    availability: "live",
+  });
+  await ensureCatalogTaxonomySetupWorkForProductWithCtx(ctx, {
+    actorUserId: access.athenaUser._id,
+    productId: normalizedArgs.productId,
+    productSkuId: normalizedArgs.productSkuId,
+    provisionalSkuId: activeRow._id,
+    storeId: normalizedArgs.storeId,
+  });
   await upsertProductSkuSearchProjection(ctx, normalizedArgs.productSkuId);
 
   let inventoryMovementId: Id<"inventoryMovement"> | undefined;
@@ -1166,7 +1189,6 @@ export async function finalizeTrustedInventoryFromProductPageWithCtx(
     hiddenAt: now,
     posExposureStatus: "hidden",
     provisionalSoldQuantityAtFinalization: activeRow.saleEvidence.totalQuantitySold,
-    status: "finalized",
     updatedAt: now,
   });
   await refreshCatalogSummaryWithCtx(ctx, normalizedArgs.storeId);
@@ -1203,6 +1225,235 @@ export async function finalizeTrustedInventoryFromProductPageWithCtx(
   });
 
   return ok(finalizationResult);
+}
+
+async function readProductTaxonomyStateWithCtx(
+  ctx: Pick<QueryCtx | MutationCtx, "db">,
+  args: {
+    productId: Id<"product">;
+    storeId: Id<"store">;
+  },
+) {
+  const product = await ctx.db.get("product", args.productId);
+  if (!product || product.storeId !== args.storeId) return null;
+
+  const [category, subcategory] = await Promise.all([
+    ctx.db.get("category", product.categoryId),
+    ctx.db.get("subcategory", product.subcategoryId),
+  ]);
+
+  const hasAthenaTaxonomy = Boolean(
+    category &&
+      subcategory &&
+      category.storeId === args.storeId &&
+      subcategory.storeId === args.storeId &&
+      subcategory.categoryId === category._id &&
+      category.slug !== DEFAULT_CATEGORY_SLUG,
+  );
+
+  return {
+    category,
+    hasAthenaTaxonomy,
+    product,
+    subcategory,
+  };
+}
+
+async function findCurrentCatalogTaxonomySetupWorkItemsWithCtx(
+  ctx: Pick<QueryCtx | MutationCtx, "db">,
+  args: {
+    productId: Id<"product">;
+    storeId: Id<"store">;
+  },
+) {
+  const lanes = await Promise.all(
+    CATALOG_TAXONOMY_SETUP_WORK_ITEM_STATUSES.map((status) =>
+      ctx.db
+        .query("operationalWorkItem")
+        .withIndex("by_storeId_type_status_productId", (q) =>
+          q
+            .eq("storeId", args.storeId)
+            .eq("type", CATALOG_TAXONOMY_SETUP_WORK_ITEM_TYPE)
+            .eq("status", status)
+            .eq("productId", args.productId),
+        )
+        .take(CATALOG_TAXONOMY_SETUP_WORK_ITEM_STATUSES.length + 1),
+    ),
+  );
+
+  return lanes.flat();
+}
+
+export async function ensureCatalogTaxonomySetupWorkForProductWithCtx(
+  ctx: MutationCtx,
+  args: {
+    actorUserId?: Id<"athenaUser">;
+    productId: Id<"product">;
+    productSkuId?: Id<"productSku">;
+    provisionalSkuId?: Id<"inventoryImportProvisionalSku">;
+    storeId: Id<"store">;
+  },
+) {
+  const taxonomyState = await readProductTaxonomyStateWithCtx(ctx, args);
+  if (!taxonomyState || taxonomyState.hasAthenaTaxonomy) return null;
+
+  const { category, product, subcategory } = taxonomyState;
+  const productSku = args.productSkuId
+    ? await ctx.db.get("productSku", args.productSkuId)
+    : null;
+  const now = Date.now();
+  const title = `Assign catalog category: ${product.name}`;
+  const metadata = {
+    categorySlug: category?.slug,
+    productId: product._id,
+    productName: product.name,
+    productSkuId: args.productSkuId,
+    provisionalSkuId: args.provisionalSkuId,
+    sku: productSku?.sku,
+    sourceId: args.provisionalSkuId,
+    sourceType: "inventoryImportProvisionalSku",
+    subcategorySlug: subcategory?.slug,
+  };
+
+  const existingWorkItems =
+    await findCurrentCatalogTaxonomySetupWorkItemsWithCtx(ctx, args);
+  const existingWorkItem = existingWorkItems[0];
+  if (existingWorkItem) {
+    await ctx.db.patch("operationalWorkItem", existingWorkItem._id, {
+      metadata: {
+        ...(existingWorkItem.metadata ?? {}),
+        ...metadata,
+        refreshedAt: now,
+      },
+      priority: "medium",
+      title,
+    });
+
+    return ctx.db.get("operationalWorkItem", existingWorkItem._id);
+  }
+
+  const workItem = await createOperationalWorkItemWithCtx(ctx, {
+    createdByUserId: args.actorUserId,
+    metadata,
+    notes: "Assign an Athena category and subcategory before saving this product.",
+    organizationId: product.organizationId,
+    priority: "medium",
+    productId: product._id,
+    productSkuId: args.productSkuId,
+    status: "open",
+    storeId: args.storeId,
+    title,
+    type: CATALOG_TAXONOMY_SETUP_WORK_ITEM_TYPE,
+  });
+
+  if (workItem) {
+    await recordOperationalEventWithCtx(ctx, {
+      actorUserId: args.actorUserId,
+      eventType: "catalog_taxonomy_setup_work_created",
+      message: "Catalog setup work opened.",
+      metadata: {
+        productId: product._id,
+        productSkuId: args.productSkuId,
+        provisionalSkuId: args.provisionalSkuId,
+      },
+      organizationId: product.organizationId,
+      storeId: args.storeId,
+      subjectId: product._id,
+      subjectLabel: product.name,
+      subjectType: "product",
+      workItemId: workItem._id,
+    });
+  }
+
+  return workItem;
+}
+
+export async function completeCatalogTaxonomySetupWorkForProductWithCtx(
+  ctx: MutationCtx,
+  args: {
+    productId: Id<"product">;
+    storeId: Id<"store">;
+  },
+) {
+  const taxonomyState = await readProductTaxonomyStateWithCtx(ctx, args);
+  if (!taxonomyState || !taxonomyState.hasAthenaTaxonomy) return 0;
+
+  const workItems = await findCurrentCatalogTaxonomySetupWorkItemsWithCtx(
+    ctx,
+    args,
+  );
+  const now = Date.now();
+
+  for (const workItem of workItems) {
+    await ctx.db.patch("operationalWorkItem", workItem._id, {
+      completedAt: now,
+      metadata: {
+        ...(workItem.metadata ?? {}),
+        completedReason: "athena_taxonomy_applied",
+      },
+      status: "completed",
+    });
+
+    await recordOperationalEventWithCtx(ctx, {
+      actorType: "automation",
+      eventType: "catalog_taxonomy_setup_work_completed",
+      message: "Catalog setup work completed.",
+      metadata: {
+        productId: taxonomyState.product._id,
+        workItemId: workItem._id,
+      },
+      organizationId: taxonomyState.product.organizationId,
+      storeId: args.storeId,
+      subjectId: taxonomyState.product._id,
+      subjectLabel: taxonomyState.product.name,
+      subjectType: "product",
+      workItemId: workItem._id,
+    });
+  }
+
+  return workItems.length;
+}
+
+export async function completeFinalizedLegacyImportRowsForProductTaxonomyWithCtx(
+  ctx: MutationCtx,
+  args: {
+    productId: Id<"product">;
+    storeId: Id<"store">;
+  },
+) {
+  const taxonomyState = await readProductTaxonomyStateWithCtx(ctx, args);
+  if (!taxonomyState || !taxonomyState.hasAthenaTaxonomy) return 0;
+
+  const rows = await ctx.db
+    .query("inventoryImportProvisionalSku")
+    .withIndex("by_storeId_productId_status", (q) =>
+      q
+        .eq("storeId", args.storeId)
+        .eq("productId", args.productId)
+        .eq("status", "active"),
+    )
+    .take(CATALOG_TAXONOMY_FINALIZATION_ROW_LIMIT + 1);
+
+  if (rows.length > CATALOG_TAXONOMY_FINALIZATION_ROW_LIMIT) {
+    throw new Error(
+      "Cannot complete catalog setup because this product has too many active legacy import rows to finalize safely.",
+    );
+  }
+
+  const now = Date.now();
+  let completedCount = 0;
+
+  for (const row of rows) {
+    if (row.finalizedAt === undefined) continue;
+
+    await ctx.db.patch("inventoryImportProvisionalSku", row._id, {
+      status: "finalized",
+      updatedAt: now,
+    });
+    completedCount += 1;
+  }
+
+  return completedCount;
 }
 
 async function validateProductPageTrustedInventoryFinalization(
@@ -1338,6 +1589,9 @@ async function validateProductPageTrustedInventoryFinalization(
   });
   const finalizationResultBase = {
     finalTrustedQuantity: args.reviewedInventoryCount,
+    product: {
+      availability: "live" as const,
+    },
     productId: args.productId,
     productSkuId: args.productSkuId,
     provisionalSkuId: args.provisionalSkuId,

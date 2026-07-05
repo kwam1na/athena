@@ -29,8 +29,66 @@ import {
   ensurePendingCheckoutReviewWorkForUnarchivedProduct,
   retirePendingCheckoutReviewWorkForArchivedProduct,
 } from "../pos/application/commands/pendingCheckoutReviewWorkLifecycle";
+import {
+  completeCatalogTaxonomySetupWorkForProductWithCtx,
+  completeFinalizedLegacyImportRowsForProductTaxonomyWithCtx,
+} from "./catalogImport";
 
 const entity = "product";
+const LEGACY_IMPORT_CATEGORY_SLUG = "legacy-import";
+const PRODUCT_UPDATE_LEGACY_FINALIZED_ROW_SCAN_LIMIT = 25;
+
+async function hasAthenaTaxonomyWithCtx(
+  ctx: Pick<QueryCtx | MutationCtx, "db">,
+  args: {
+    categoryId?: Id<"category">;
+    storeId: Id<"store">;
+    subcategoryId?: Id<"subcategory">;
+  },
+) {
+  if (!args.categoryId || !args.subcategoryId) return false;
+
+  const [category, subcategory] = await Promise.all([
+    ctx.db.get("category", args.categoryId),
+    ctx.db.get("subcategory", args.subcategoryId),
+  ]);
+
+  return Boolean(
+    category &&
+      subcategory &&
+      category.storeId === args.storeId &&
+      subcategory.storeId === args.storeId &&
+      subcategory.categoryId === category._id &&
+      category.slug !== LEGACY_IMPORT_CATEGORY_SLUG,
+  );
+}
+
+async function hasActiveFinalizedLegacyImportRowsForProductWithCtx(
+  ctx: Pick<QueryCtx | MutationCtx, "db">,
+  args: {
+    productId: Id<"product">;
+    storeId: Id<"store">;
+  },
+) {
+  const rows = await ctx.db
+    .query("inventoryImportProvisionalSku")
+    .withIndex("by_storeId_productId_status", (q) =>
+      q
+        .eq("storeId", args.storeId)
+        .eq("productId", args.productId)
+        .eq("status", "active"),
+    )
+    .take(PRODUCT_UPDATE_LEGACY_FINALIZED_ROW_SCAN_LIMIT + 1);
+
+  if (
+    rows.some((row) => row.finalizedAt !== undefined) ||
+    rows.length > PRODUCT_UPDATE_LEGACY_FINALIZED_ROW_SCAN_LIMIT
+  ) {
+    return true;
+  }
+
+  return false;
+}
 
 function generateSKU({
   storeId,
@@ -993,6 +1051,33 @@ export const update = mutation({
   handler: async (ctx, args) => {
     const { id, ...rest } = args;
     const productBefore = await ctx.db.get("product", args.id);
+    const taxonomyChanged =
+      productBefore &&
+      ((args.categoryId !== undefined &&
+        args.categoryId !== productBefore.categoryId) ||
+        (args.subcategoryId !== undefined &&
+          args.subcategoryId !== productBefore.subcategoryId));
+    if (productBefore) {
+      const nextCategoryId = args.categoryId ?? productBefore.categoryId;
+      const nextSubcategoryId =
+        args.subcategoryId ?? productBefore.subcategoryId;
+      const hasAthenaTaxonomy = await hasAthenaTaxonomyWithCtx(ctx, {
+        categoryId: nextCategoryId,
+        storeId: productBefore.storeId,
+        subcategoryId: nextSubcategoryId,
+      });
+      if (
+        !hasAthenaTaxonomy &&
+        (await hasActiveFinalizedLegacyImportRowsForProductWithCtx(ctx, {
+          productId: productBefore._id,
+          storeId: productBefore.storeId,
+        }))
+      ) {
+        throw new Error(
+          "Catalog setup required. Assign an Athena category and subcategory before saving.",
+        );
+      }
+    }
 
     if (args.name) {
       const allSkus = await ctx.db
@@ -1008,6 +1093,19 @@ export const update = mutation({
     }
 
     await ctx.db.patch("product", args.id, { ...rest });
+    if (taxonomyChanged) {
+      const productAfterPatch = await ctx.db.get("product", args.id);
+      if (productAfterPatch) {
+        await completeFinalizedLegacyImportRowsForProductTaxonomyWithCtx(ctx, {
+          productId: productAfterPatch._id,
+          storeId: productAfterPatch.storeId,
+        });
+        await completeCatalogTaxonomySetupWorkForProductWithCtx(ctx, {
+          productId: productAfterPatch._id,
+          storeId: productAfterPatch.storeId,
+        });
+      }
+    }
     await refreshProductSkuSearchForProduct(ctx, args.id);
 
     const product = await ctx.db.get("product", args.id);

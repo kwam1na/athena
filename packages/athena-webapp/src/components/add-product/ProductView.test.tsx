@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildVariantSkuMoneyPayload,
+  resolveLegacyTaxonomySaveGate,
   getArchivedProductRedirect,
 } from "./ProductView";
 
@@ -76,5 +77,59 @@ describe("ProductView archived product redirects", () => {
       categorySlug: "makeup",
       kind: "category",
     });
+  });
+});
+
+describe("ProductView legacy taxonomy save gate", () => {
+  it("blocks save after trusted inventory finalization while legacy taxonomy remains selected", () => {
+    expect(
+      resolveLegacyTaxonomySaveGate({
+        activeProduct: {
+          categorySlug: "legacy-import",
+          subcategorySlug: "872",
+        },
+        hasTrustedInventoryFinalized: true,
+        productData: {
+          categorySlug: "legacy-import",
+          subcategorySlug: "872",
+        },
+      }),
+    ).toEqual({
+      blocked: true,
+      message:
+        "Catalog setup required. Assign an Athena category and subcategory before saving.",
+    });
+  });
+
+  it("allows save after trusted inventory finalization once Athena taxonomy is selected", () => {
+    expect(
+      resolveLegacyTaxonomySaveGate({
+        activeProduct: {
+          categorySlug: "legacy-import",
+          subcategorySlug: "872",
+        },
+        hasTrustedInventoryFinalized: true,
+        productData: {
+          categorySlug: "hair-care",
+          subcategorySlug: "heat-protectant",
+        },
+      }),
+    ).toEqual({ blocked: false });
+  });
+
+  it("does not block non-finalized legacy products", () => {
+    expect(
+      resolveLegacyTaxonomySaveGate({
+        activeProduct: {
+          categorySlug: "legacy-import",
+          subcategorySlug: "872",
+        },
+        hasTrustedInventoryFinalized: false,
+        productData: {
+          categorySlug: "legacy-import",
+          subcategorySlug: "872",
+        },
+      }),
+    ).toEqual({ blocked: false });
   });
 });

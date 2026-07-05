@@ -369,9 +369,9 @@ function SourceList({
           <button
             aria-pressed={source.isSelected}
             className={cn(
-              "group w-full bg-background px-layout-md py-layout-lg text-left transition-[background-color,box-shadow,transform] duration-150 ease-out active:scale-[0.998] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+              "group w-full bg-background px-layout-md py-layout-lg text-left transition-[background-color,transform] duration-150 ease-out active:scale-[0.998] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
               source.isSelected
-                ? "bg-action-workflow-soft/55 shadow-[inset_3px_0_0_hsl(var(--action-workflow))] hover:bg-action-workflow-soft/70"
+                ? "bg-action-workflow-soft/55 hover:bg-action-workflow-soft/70"
                 : "hover:bg-muted/40",
             )}
             onClick={() =>
@@ -509,9 +509,6 @@ function SelectedSourceDetail({
         <div className="space-y-layout-md border-b border-border bg-muted/20 px-layout-md py-layout-md">
           <div className="flex flex-col gap-layout-md sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0 space-y-layout-xs">
-              <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                Selected source
-              </p>
               <h2 className="line-clamp-2 text-base font-medium text-foreground">
                 {loadingSource.title}
               </h2>
@@ -621,9 +618,6 @@ function SelectedSourceDetail({
       <div className="space-y-layout-md border-b border-border bg-muted/20 px-layout-md py-layout-md">
         <div className="flex flex-col gap-layout-md sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0 space-y-layout-xs">
-            <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-              Selected source
-            </p>
             <h2 className="line-clamp-2 text-base font-medium text-foreground">
               {selected.source.title}
             </h2>

@@ -36,7 +36,13 @@ function ProductCategorization({
 }: {
   setInitialSelectedOption: (option: CategoryManageOption) => void;
 }) {
-  const { showLoaderForProduct, productData, updateProductData } = useProduct();
+  const {
+    activeProduct,
+    showLoaderForProduct,
+    productData,
+    trustedInventoryFinalizedSkuIds,
+    updateProductData,
+  } = useProduct();
 
   const { activeStore } = useGetActiveStore();
 
@@ -59,15 +65,17 @@ function ProductCategorization({
       updateProductData({
         categoryId: categoryInSearch._id,
         categoryName: categoryInSearch.name,
+        categorySlug: categoryInSearch.slug,
       });
     }
-  }, [categoryInSearch]);
+  }, [categoryInSearch, updateProductData]);
 
   const categories =
     categoriesData
       ?.map((category) => ({
         name: category.name,
         id: category._id,
+        slug: category.slug,
       }))
       .sort((a, b) => a.name.localeCompare(b.name)) || [];
 
@@ -76,12 +84,20 @@ function ProductCategorization({
       ?.map((subcategory) => ({
         name: subcategory.name,
         id: subcategory._id,
+        slug: subcategory.slug,
         categoryId: subcategory.categoryId,
       }))
       .filter(
         (subcategory) => subcategory.categoryId === productData.categoryId,
       )
       .sort((a, b) => a.name.localeCompare(b.name)) || [];
+
+  const shouldShowCatalogSetupRequirement =
+    trustedInventoryFinalizedSkuIds.size > 0 &&
+    activeProduct?.categorySlug === "legacy-import" &&
+    (productData.categorySlug === "legacy-import" ||
+      !productData.categorySlug ||
+      !productData.subcategorySlug);
 
   return (
     <>
@@ -103,11 +119,16 @@ function ProductCategorization({
           {showLoaderForProduct ? null : (
             <Select
               onValueChange={(value: string) => {
+                const selectedCategory = categories.find(
+                  (category) => category.id === value,
+                );
                 updateProductData({
                   categoryId: value as Id<"category">,
-                  categoryName: categories.find(
-                    (category) => category.id === value,
-                  )?.name,
+                  categoryName: selectedCategory?.name,
+                  categorySlug: selectedCategory?.slug,
+                  subcategoryId: undefined,
+                  subcategoryName: undefined,
+                  subcategorySlug: undefined,
                 });
               }}
               value={productData.categoryId?.toString()}
@@ -152,8 +173,13 @@ function ProductCategorization({
           {showLoaderForProduct ? null : (
             <Select
               onValueChange={(value: string) => {
+                const selectedSubcategory = subcategories.find(
+                  (subcategory) => subcategory.id === value,
+                );
                 updateProductData({
                   subcategoryId: value as Id<"subcategory">,
+                  subcategoryName: selectedSubcategory?.name,
+                  subcategorySlug: selectedSubcategory?.slug,
                 });
               }}
               value={productData.subcategoryId?.toString()}
@@ -183,6 +209,12 @@ function ProductCategorization({
           )} */}
         </div>
       </div>
+      {shouldShowCatalogSetupRequirement ? (
+        <p className="px-4 pb-4 text-xs leading-5 text-amber-500">
+          Catalog setup required. Assign an Athena category and subcategory
+          before saving.
+        </p>
+      ) : null}
     </>
   );
 }

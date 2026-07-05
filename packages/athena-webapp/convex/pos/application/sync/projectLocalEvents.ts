@@ -2394,6 +2394,8 @@ async function createSkippedInventoryReviewWorkItem(
   }
 
   const primarySkippedItem = input.inventoryValidation.skippedMutationItems[0];
+  const primaryProductSkuId =
+    primarySkippedItem?.productSkuId ?? trustedLines[0]?.productSkuId;
   const primaryProductName =
     primarySkippedItem?.productName ?? trustedLines[0]?.productName;
   const title = primaryProductName
@@ -2424,8 +2426,7 @@ async function createSkippedInventoryReviewWorkItem(
       localEventId: args.event.localEventId,
       localRegisterSessionId: args.event.localRegisterSessionId,
       localTransactionId: input.payload.localTransactionId,
-      primaryProductSkuId:
-        primarySkippedItem?.productSkuId ?? trustedLines[0]?.productSkuId,
+      primaryProductSkuId,
       receiptNumber: input.payload.receiptNumber,
       registerSessionId: input.session.registerSession._id,
       skippedMutationItems: input.inventoryValidation.skippedMutationItems,
@@ -2438,6 +2439,7 @@ async function createSkippedInventoryReviewWorkItem(
       "Synced sale activity was retained from cash controls. Inventory was not decremented because stock availability still needs correction.",
     organizationId: input.store.organizationId,
     priority: "high",
+    productSkuId: primaryProductSkuId,
     status: "open",
     storeId: args.storeId,
     title,
