@@ -75,13 +75,7 @@ export const dailyOperationsOpeningAutoStartAction = defineAutomationAction({
 
 export const dailyOperationsEodPrepareAction = defineAutomationAction({
   action: EOD_PREPARE_ACTION,
-  allowedOutcomes: [
-    "disabled",
-    "dry_run",
-    "skipped",
-    "prepared",
-    "failed",
-  ],
+  allowedOutcomes: ["disabled", "dry_run", "skipped", "prepared", "failed"],
   domain: DAILY_OPERATIONS_AUTOMATION_DOMAIN,
   mutationBoundary: "EOD Review preparation ledger only",
   requiresSourceSubjects: true,
@@ -220,7 +214,8 @@ async function getOpeningAutoStartPolicyForApi(
     operatingTimezoneOffsetMinutes:
       config.policy?.operatingTimezoneOffsetMinutes ?? null,
     paused: config.paused,
-    policyVersion: config.policy?.policyVersion ?? DAILY_OPERATIONS_POLICY_VERSION,
+    policyVersion:
+      config.policy?.policyVersion ?? DAILY_OPERATIONS_POLICY_VERSION,
   };
 }
 
@@ -242,7 +237,8 @@ async function getEodAutoCompletePolicyForApi(
     operatingTimezoneOffsetMinutes:
       config.policy?.operatingTimezoneOffsetMinutes ?? null,
     paused: config.paused,
-    policyVersion: config.policy?.policyVersion ?? DAILY_OPERATIONS_POLICY_VERSION,
+    policyVersion:
+      config.policy?.policyVersion ?? DAILY_OPERATIONS_POLICY_VERSION,
   };
 }
 
@@ -551,7 +547,10 @@ function eodAutoCompleteDecision(
     });
   }
 
-  if (snapshot.readiness.blockerCount > 0 || disqualifyingCategories.length > 0) {
+  if (
+    snapshot.readiness.blockerCount > 0 ||
+    disqualifyingCategories.length > 0
+  ) {
     return decision({
       classification: "blocked",
       decisionReason:
@@ -741,7 +740,8 @@ export async function runDailyCloseAutoCompleteEligibilityWithCtx(
     args.completionWindowSatisfied
       ? {
           insideCompletionWindow: true,
-          localCompletionWindowMinutes: policyConfig.localCompletionWindowMinutes,
+          localCompletionWindowMinutes:
+            policyConfig.localCompletionWindowMinutes,
           localMinuteOfDay: policyConfig.localCompletionWindowMinutes,
           scheduleEvidence: scheduleEvidenceForStoreDayContext(
             args.storeDayContext,
@@ -749,12 +749,12 @@ export async function runDailyCloseAutoCompleteEligibilityWithCtx(
           ),
         }
       : args.now
-      ? eodAutoCompleteTiming({
-          now: args.now,
-          policyConfig,
-          storeDayContext: args.storeDayContext,
-        })
-      : null,
+        ? eodAutoCompleteTiming({
+            now: args.now,
+            policyConfig,
+            storeDayContext: args.storeDayContext,
+          })
+        : null,
   );
   const policyReviewedItemKeys =
     adapterDecision.decisionEvidence.classification === "low_risk_review"
@@ -771,8 +771,7 @@ export async function runDailyCloseAutoCompleteEligibilityWithCtx(
         automationPolicyVersion: run.policyVersion,
         automationRunId: run._id,
         eodAutoCompletePolicy: {
-          cleanDayAutoCompleteEnabled:
-            policyConfig.cleanDayAutoCompleteEnabled,
+          cleanDayAutoCompleteEnabled: policyConfig.cleanDayAutoCompleteEnabled,
           maxAbsoluteCashVariance: policyConfig.maxAbsoluteCashVariance,
           maxVoidedSaleCount: policyConfig.maxVoidedSaleCount,
           maxVoidedSaleTotal: policyConfig.maxVoidedSaleTotal,
@@ -857,7 +856,9 @@ function historicEodAutoCloseIdempotencyKey(args: {
   return `${DAILY_OPERATIONS_AUTOMATION_DOMAIN}:${EOD_AUTO_COMPLETE_ACTION}:historic:${args.storeId}:${args.operatingDate}`;
 }
 
-function policyEvidenceForHistoricRun(policyConfig: EodAutoCompletePolicyConfig) {
+function policyEvidenceForHistoricRun(
+  policyConfig: EodAutoCompletePolicyConfig,
+) {
   return {
     cleanDayAutoCompleteEnabled: policyConfig.cleanDayAutoCompleteEnabled,
     localCompletionWindowMinutes: policyConfig.localCompletionWindowMinutes,
@@ -936,11 +937,10 @@ async function recordHistoricEodQuarantineWithCtx(
     operatingDate: args.operatingDate,
     organizationId: args.policyConfig.policy?.organizationId,
     outcome: "skipped",
-    policyMode: args.policyConfig.paused
-      ? "disabled"
-      : args.policyConfig.mode,
+    policyMode: args.policyConfig.paused ? "disabled" : args.policyConfig.mode,
     policyVersion:
-      args.policyConfig.policy?.policyVersion ?? DAILY_OPERATIONS_POLICY_VERSION,
+      args.policyConfig.policy?.policyVersion ??
+      DAILY_OPERATIONS_POLICY_VERSION,
     snapshotCounts: {},
     sourceSubjects: [
       {
@@ -1232,7 +1232,10 @@ export async function runHistoricEodAutoCloseForDateWithCtx(
     };
   }
 
-  if (supportPolicyMode !== "enabled" || adapterDecision.outcome !== "eligible") {
+  if (
+    supportPolicyMode !== "enabled" ||
+    adapterDecision.outcome !== "eligible"
+  ) {
     return {
       action:
         adapterDecision.decisionEvidence.classification === "completed"
@@ -1246,7 +1249,8 @@ export async function runHistoricEodAutoCloseForDateWithCtx(
 
   const result = await completeDailyCloseForAutomationWithCtx(ctx, {
     automationDecisionReason:
-      run.decisionReason ?? "Historic EOD Review completed by automation policy.",
+      run.decisionReason ??
+      "Historic EOD Review completed by automation policy.",
     automationPolicyVersion: run.policyVersion,
     automationRunId: run._id,
     automationScheduleEvidence:
@@ -1327,7 +1331,9 @@ export async function runHistoricEodAutoCloseBatchWithCtx(
     !isValidOperatingDate(args.startOperatingDate) ||
     !isValidOperatingDate(args.endOperatingDate)
   ) {
-    throw new Error("Historic EOD auto-close requires valid date range bounds.");
+    throw new Error(
+      "Historic EOD auto-close requires valid date range bounds.",
+    );
   }
 
   if (
@@ -1347,7 +1353,10 @@ export async function runHistoricEodAutoCloseBatchWithCtx(
   const results: HistoricEodDateResult[] = [];
   let operatingDate = args.startOperatingDate;
 
-  while (operatingDate <= args.endOperatingDate && results.length < args.maxDays) {
+  while (
+    operatingDate <= args.endOperatingDate &&
+    results.length < args.maxDays
+  ) {
     const result = await runHistoricEodAutoCloseForDateWithCtx(ctx, {
       asOfOperatingDate,
       mode: args.mode,
@@ -1445,11 +1454,10 @@ function openingPolicyCronWindow(args: {
   if (localMinuteOfDay < openingLocalStartMinutes) {
     const previousLocalDate = localDateForPolicy({
       now: args.now - CONFIGURED_AUTOMATION_LOOKBACK_MS,
-      operatingTimezoneOffsetMinutes: args.policy.operatingTimezoneOffsetMinutes,
+      operatingTimezoneOffsetMinutes:
+        args.policy.operatingTimezoneOffsetMinutes,
     });
-    const previousOperatingDate = previousLocalDate
-      ?.toISOString()
-      .slice(0, 10);
+    const previousOperatingDate = previousLocalDate?.toISOString().slice(0, 10);
     const currentOperatingDate = localDate.toISOString().slice(0, 10);
     const previousMinuteOfDay = previousLocalDate
       ? previousLocalDate.getUTCHours() * 60 + previousLocalDate.getUTCMinutes()
@@ -1534,7 +1542,9 @@ function eodPolicyCompletionAtForStoreDay(args: {
   }
 
   const offsetMinutes = normalizedPolicyOffsetFromScheduleStart({
-    policyLocalStartMinutes: eodLocalCompletionWindowMinutesForPolicy(args.policy),
+    policyLocalStartMinutes: eodLocalCompletionWindowMinutesForPolicy(
+      args.policy,
+    ),
     scheduleStartMinutes: args.storeDayContext.eodWindowEndMinutes,
   });
 
@@ -1881,10 +1891,14 @@ export async function runScheduledDailyOperationsAutomationWithCtx(
   const now = args.now ?? Date.now();
   const [openingPolicies, eodPolicies, eodAutoCompletePolicies] =
     await Promise.all([
-    listConfiguredAutomationPolicies(ctx, { action: OPENING_AUTO_START_ACTION }),
-    listConfiguredAutomationPolicies(ctx, { action: EOD_PREPARE_ACTION }),
-    listConfiguredAutomationPolicies(ctx, { action: EOD_AUTO_COMPLETE_ACTION }),
-  ]);
+      listConfiguredAutomationPolicies(ctx, {
+        action: OPENING_AUTO_START_ACTION,
+      }),
+      listConfiguredAutomationPolicies(ctx, { action: EOD_PREPARE_ACTION }),
+      listConfiguredAutomationPolicies(ctx, {
+        action: EOD_AUTO_COMPLETE_ACTION,
+      }),
+    ]);
   const openingResults = await Promise.all(
     openingPolicies.map((policy) =>
       runConfiguredPolicySafely(ctx, {
@@ -1945,10 +1959,14 @@ export async function runConfiguredDailyOperationsAutomationWithCtx(
   const now = args.now ?? Date.now();
   const [openingPolicies, eodPolicies, eodAutoCompletePolicies] =
     await Promise.all([
-    listConfiguredAutomationPolicies(ctx, { action: OPENING_AUTO_START_ACTION }),
-    listConfiguredAutomationPolicies(ctx, { action: EOD_PREPARE_ACTION }),
-    listConfiguredAutomationPolicies(ctx, { action: EOD_AUTO_COMPLETE_ACTION }),
-  ]);
+      listConfiguredAutomationPolicies(ctx, {
+        action: OPENING_AUTO_START_ACTION,
+      }),
+      listConfiguredAutomationPolicies(ctx, { action: EOD_PREPARE_ACTION }),
+      listConfiguredAutomationPolicies(ctx, {
+        action: EOD_AUTO_COMPLETE_ACTION,
+      }),
+    ]);
   const openingResults = await Promise.all(
     openingPolicies.map(async (policy) => {
       const scheduleContext = await resolveConfiguredStoreScheduleContext(ctx, {
@@ -2056,7 +2074,7 @@ type DailyOperationsAutomationResult = Awaited<
 type DailyManagerReportAutomationSendResult = {
   operatingDate: string;
   reports: Array<{
-    dailyCloseId: Id<"dailyClose">;
+    dailyCloseId?: Id<"dailyClose">;
     operatingDate: string;
     recipientEmail: string;
     status: number;
@@ -2066,10 +2084,13 @@ type DailyManagerReportAutomationSendResult = {
   storeId: Id<"store">;
 };
 
-function isAppliedEodAutoCompleteResult(
+function isReportableEodAutoCompleteResult(
   result: DailyOperationsAutomationResult["eodAutoCompleteResults"][number],
 ) {
-  return result?.action === "applied" && result.run.outcome === "applied";
+  return (
+    (result?.action === "applied" && result.run.outcome === "applied") ||
+    (result?.action === "recorded" && result.run.outcome === "prepared")
+  );
 }
 
 export async function sendDailyManagerReportsForAppliedEodAutomationWithCtx(
@@ -2078,15 +2099,18 @@ export async function sendDailyManagerReportsForAppliedEodAutomationWithCtx(
     results: DailyOperationsAutomationResult["eodAutoCompleteResults"];
   },
 ): Promise<DailyManagerReportAutomationSendResult[]> {
-  const appliedResults = args.results.filter(isAppliedEodAutoCompleteResult);
+  const reportableResults = args.results.filter(
+    isReportableEodAutoCompleteResult,
+  );
   const sentReports: DailyManagerReportAutomationSendResult[] = [];
 
-  for (const result of appliedResults) {
+  for (const result of reportableResults) {
     const reports = await ctx.runAction(
       internal.operations.dailyManagerReportEmail
         .sendDailyManagerReportToAdminsForDate,
       {
         operatingDate: result.run.operatingDate,
+        status: result.run.outcome === "prepared" ? "prepared" : "applied",
         storeId: result.run.storeId,
       },
     );
@@ -2160,7 +2184,9 @@ async function runHistoricEodAutoCloseBatchActionWithCtx(
     !isValidOperatingDate(args.startOperatingDate) ||
     !isValidOperatingDate(args.endOperatingDate)
   ) {
-    throw new Error("Historic EOD auto-close requires valid date range bounds.");
+    throw new Error(
+      "Historic EOD auto-close requires valid date range bounds.",
+    );
   }
 
   if (
@@ -2180,9 +2206,13 @@ async function runHistoricEodAutoCloseBatchActionWithCtx(
   const results: HistoricEodDateResult[] = [];
   let operatingDate = args.startOperatingDate;
 
-  while (operatingDate <= args.endOperatingDate && results.length < args.maxDays) {
+  while (
+    operatingDate <= args.endOperatingDate &&
+    results.length < args.maxDays
+  ) {
     const result = await ctx.runMutation(
-      internal.operations.dailyOperationsAutomation.runHistoricEodAutoCloseForDate,
+      internal.operations.dailyOperationsAutomation
+        .runHistoricEodAutoCloseForDate,
       {
         asOfOperatingDate,
         mode: args.mode,

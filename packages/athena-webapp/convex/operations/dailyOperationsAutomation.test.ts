@@ -327,9 +327,7 @@ function completedDailyClose(overrides: Partial<Row> = {}): Row {
       reviewCount: 0,
       status: "ready",
     },
-    sourceSubjects: [
-      { type: "pos_transaction", id: "txn-1", label: "TXN-1" },
-    ],
+    sourceSubjects: [{ type: "pos_transaction", id: "txn-1", label: "TXN-1" }],
     status: "completed",
     storeId: "store-1",
     summary: { salesTotal: 12000 },
@@ -364,13 +362,16 @@ describe("daily operations automation adapter", () => {
     );
 
     await expect(
-      getHandler(updateOpeningAutoStartPolicy)({ db } as unknown as MutationCtx, {
-        localStartMinutes: 480,
-        mode: "enabled",
-        openingBlockerHandling: "start_with_manager_review",
-        operatingTimezoneOffsetMinutes: 0,
-        storeId: "store-1" as Id<"store">,
-      }),
+      getHandler(updateOpeningAutoStartPolicy)(
+        { db } as unknown as MutationCtx,
+        {
+          localStartMinutes: 480,
+          mode: "enabled",
+          openingBlockerHandling: "start_with_manager_review",
+          operatingTimezoneOffsetMinutes: 0,
+          storeId: "store-1" as Id<"store">,
+        },
+      ),
     ).rejects.toThrow("Only full admins can access stock operations.");
   });
 
@@ -394,16 +395,19 @@ describe("daily operations automation adapter", () => {
     );
 
     await expect(
-      getHandler(updateEodAutoCompletePolicy)({ db } as unknown as MutationCtx, {
-        cleanDayAutoCompleteEnabled: true,
-        localCompletionWindowMinutes: 1260,
-        maxAbsoluteCashVariance: 5000,
-        maxVoidedSaleCount: 2,
-        maxVoidedSaleTotal: 50000,
-        mode: "enabled",
-        operatingTimezoneOffsetMinutes: 0,
-        storeId: "store-1" as Id<"store">,
-      }),
+      getHandler(updateEodAutoCompletePolicy)(
+        { db } as unknown as MutationCtx,
+        {
+          cleanDayAutoCompleteEnabled: true,
+          localCompletionWindowMinutes: 1260,
+          maxAbsoluteCashVariance: 5000,
+          maxVoidedSaleCount: 2,
+          maxVoidedSaleTotal: 50000,
+          mode: "enabled",
+          operatingTimezoneOffsetMinutes: 0,
+          storeId: "store-1" as Id<"store">,
+        },
+      ),
     ).rejects.toThrow("Only full admins can access stock operations.");
     expect(inserts).toEqual([]);
     expect(patches).toEqual([]);
@@ -484,14 +488,19 @@ describe("daily operations automation adapter", () => {
     });
 
     await expect(
-      getHandler(updateOpeningAutoStartPolicy)({ db } as unknown as MutationCtx, {
-        localStartMinutes: 480,
-        mode: "enabled",
-        openingBlockerHandling: "start_with_manager_review",
-        operatingTimezoneOffsetMinutes: 15 * 60,
-        storeId: "store-1" as Id<"store">,
-      }),
-    ).rejects.toThrow("Operating timezone offset must be within UTC-14 to UTC+14.");
+      getHandler(updateOpeningAutoStartPolicy)(
+        { db } as unknown as MutationCtx,
+        {
+          localStartMinutes: 480,
+          mode: "enabled",
+          openingBlockerHandling: "start_with_manager_review",
+          operatingTimezoneOffsetMinutes: 15 * 60,
+          storeId: "store-1" as Id<"store">,
+        },
+      ),
+    ).rejects.toThrow(
+      "Operating timezone offset must be within UTC-14 to UTC+14.",
+    );
   });
 
   it("auto-starts only clean Opening Handoff snapshots under enabled policy", async () => {
@@ -784,12 +793,9 @@ describe("daily operations automation adapter", () => {
     const { db } = createDb({ store: [store] });
 
     await expect(
-      getEodAutoCompletePolicyConfigWithCtx(
-        { db } as unknown as MutationCtx,
-        {
-          storeId: "store-1" as Id<"store">,
-        },
-      ),
+      getEodAutoCompletePolicyConfigWithCtx({ db } as unknown as MutationCtx, {
+        storeId: "store-1" as Id<"store">,
+      }),
     ).resolves.toMatchObject({
       cleanDayAutoCompleteEnabled: false,
       configured: false,
@@ -820,7 +826,9 @@ describe("daily operations automation adapter", () => {
           storeId: "store-1" as Id<"store">,
         },
       ),
-    ).rejects.toThrow("EOD local completion window must be within one local day.");
+    ).rejects.toThrow(
+      "EOD local completion window must be within one local day.",
+    );
 
     await expect(
       upsertEodAutoCompletePolicyConfigWithCtx(
@@ -931,16 +939,22 @@ describe("daily operations automation adapter", () => {
     });
   });
 
-  it("sends manager reports only for freshly applied EOD automation completions", async () => {
-    const runAction = vi.fn(async (_functionRef: unknown, _args: unknown) => [
-      {
-        dailyCloseId: "daily-close-1",
-        operatingDate: "2026-06-08",
-        recipientEmail: "manager@example.com",
-        status: 202,
-        storeName: "Accra",
-      },
-    ]);
+  it("sends manager reports for freshly applied or prepared EOD automation outcomes", async () => {
+    const runAction = vi.fn(async (_functionRef: unknown, args: unknown) => {
+      const operatingDate = (args as { operatingDate: string }).operatingDate;
+
+      return [
+        {
+          ...(operatingDate === "2026-06-08"
+            ? { dailyCloseId: "daily-close-1" }
+            : {}),
+          operatingDate,
+          recipientEmail: "manager@example.com",
+          status: 202,
+          storeName: "Accra",
+        },
+      ];
+    });
 
     const result = await sendDailyManagerReportsForAppliedEodAutomationWithCtx(
       { runAction } as never,
@@ -973,13 +987,28 @@ describe("daily operations automation adapter", () => {
               storeId: "store-1",
             },
           },
+          {
+            action: "recorded",
+            run: {
+              _id: "automation-run-prepared",
+              operatingDate: "2026-06-05",
+              outcome: "prepared",
+              storeId: "store-1",
+            },
+          },
         ] as never,
       },
     );
 
-    expect(runAction).toHaveBeenCalledTimes(1);
+    expect(runAction).toHaveBeenCalledTimes(2);
     expect(runAction.mock.calls[0]?.[1]).toEqual({
       operatingDate: "2026-06-08",
+      status: "applied",
+      storeId: "store-1",
+    });
+    expect(runAction.mock.calls[1]?.[1]).toEqual({
+      operatingDate: "2026-06-05",
+      status: "prepared",
       storeId: "store-1",
     });
     expect(result).toEqual([
@@ -995,6 +1024,19 @@ describe("daily operations automation adapter", () => {
           },
         ],
         runId: "automation-run-applied",
+        storeId: "store-1",
+      },
+      {
+        operatingDate: "2026-06-05",
+        reports: [
+          {
+            operatingDate: "2026-06-05",
+            recipientEmail: "manager@example.com",
+            status: 202,
+            storeName: "Accra",
+          },
+        ],
+        runId: "automation-run-prepared",
         storeId: "store-1",
       },
     ]);
@@ -1436,9 +1478,9 @@ describe("daily operations automation adapter", () => {
     );
 
     expect(result.eodAutoCompleteResults).toHaveLength(0);
-    expect(inserts.filter((insert) => insert.table === "automationRun")).toEqual(
-      [],
-    );
+    expect(
+      inserts.filter((insert) => insert.table === "automationRun"),
+    ).toEqual([]);
   });
 
   it("derives configured EOD auto-complete operating dates from policy local timezone", async () => {
@@ -1564,9 +1606,7 @@ describe("daily operations automation adapter", () => {
         eligible: true,
         observed: {
           carryForwardCount: 1,
-          carryForwardItemKeys: [
-            "operational_work_item:work-1:carry_forward",
-          ],
+          carryForwardItemKeys: ["operational_work_item:work-1:carry_forward"],
           carryForwardPreserved: true,
         },
       },
@@ -1695,28 +1735,28 @@ describe("daily operations automation adapter", () => {
       "automationRun",
     ]);
     expect(inserts.map((insert) => insert.value)).toEqual([
-        expect.objectContaining({
-          outcome: "dry_run",
-          policyMode: "dry_run",
-          decisionEvidence: expect.objectContaining({
-            classification: "clean_day",
-            observed: expect.objectContaining({
-              scheduleEvidenceSource: "canonical_schedule",
-              storeScheduleId: "storeSchedule-1",
-            }),
+      expect.objectContaining({
+        outcome: "dry_run",
+        policyMode: "dry_run",
+        decisionEvidence: expect.objectContaining({
+          classification: "clean_day",
+          observed: expect.objectContaining({
+            scheduleEvidenceSource: "canonical_schedule",
+            storeScheduleId: "storeSchedule-1",
           }),
         }),
-        expect.objectContaining({
-          outcome: "dry_run",
-          policyMode: "dry_run",
-          decisionEvidence: expect.objectContaining({
-            classification: "clean_day",
-            observed: expect.objectContaining({
-              scheduleEvidenceSource: "canonical_schedule",
-              storeScheduleId: "storeSchedule-1",
-            }),
+      }),
+      expect.objectContaining({
+        outcome: "dry_run",
+        policyMode: "dry_run",
+        decisionEvidence: expect.objectContaining({
+          classification: "clean_day",
+          observed: expect.objectContaining({
+            scheduleEvidenceSource: "canonical_schedule",
+            storeScheduleId: "storeSchedule-1",
           }),
         }),
+      }),
     ]);
     expect(
       inserts.map((insert) => insert.value).map((run) => run.idempotencyKey),
@@ -2406,7 +2446,8 @@ describe("daily operations automation adapter", () => {
 
     const runPatch = patches.find(
       (patch) =>
-        patch.table === "automationRun" && patch.id === "automation-run-applied",
+        patch.table === "automationRun" &&
+        patch.id === "automation-run-applied",
     )?.value;
 
     expect(runPatch).toMatchObject({
@@ -2597,9 +2638,9 @@ describe("daily operations automation adapter", () => {
       store: [store, store2],
     });
 
-    const result = await runConfiguredDailyOperationsAutomationWithCtx(
-      { db } as unknown as MutationCtx,
-    );
+    const result = await runConfiguredDailyOperationsAutomationWithCtx({
+      db,
+    } as unknown as MutationCtx);
 
     expect(result.openingResults).toHaveLength(2);
     expect(result.eodResults).toHaveLength(1);
@@ -2659,9 +2700,9 @@ describe("daily operations automation adapter", () => {
     );
 
     expect(result.openingResults).toEqual([]);
-    expect(inserts.filter((insert) => insert.table === "automationRun")).toEqual(
-      [],
-    );
+    expect(
+      inserts.filter((insert) => insert.table === "automationRun"),
+    ).toEqual([]);
   });
 
   it("skips configured automation policies with invalid persisted timezone offsets", async () => {
@@ -2683,9 +2724,9 @@ describe("daily operations automation adapter", () => {
     );
 
     expect(result.openingResults).toEqual([]);
-    expect(inserts.filter((insert) => insert.table === "automationRun")).toEqual(
-      [],
-    );
+    expect(
+      inserts.filter((insert) => insert.table === "automationRun"),
+    ).toEqual([]);
   });
 
   it("catches up a late-day Opening start when the next hourly tick crosses midnight", async () => {
@@ -2862,9 +2903,9 @@ describe("daily operations automation adapter", () => {
     );
 
     expect(result.openingResults).toEqual([]);
-    expect(inserts.filter((insert) => insert.table === "automationRun")).toEqual(
-      [],
-    );
+    expect(
+      inserts.filter((insert) => insert.table === "automationRun"),
+    ).toEqual([]);
   });
 
   it("continues configured automation when one policy throws", async () => {

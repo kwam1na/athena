@@ -135,4 +135,62 @@ describe("daily manager report email URLs", () => {
       })),
     );
   });
+
+  it("sends prepared EOD reports with an EOD Review CTA", async () => {
+    const fetchMock = vi.fn(
+      async (_input: string | URL | Request, _init?: RequestInit) =>
+        new Response(null, { status: 202 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const report = {
+      blockers: [],
+      carryForwardItems: [],
+      cashMetrics: [],
+      completedAt: "8:42 PM",
+      completedBy: "Athena",
+      operatingDate: "Monday, June 8",
+      operatingDateValue: "2026-06-08",
+      paymentTotals: [],
+      reportUrl:
+        "https://athena.wigclub.store/accra/store/accra/operations/daily-close?operatingDate=2026-06-08",
+      reviewedItems: [
+        {
+          message: "Manager should review the close before completion.",
+          title: "Manager review",
+          tone: "warning" as const,
+        },
+      ],
+      status: "prepared",
+      storeCurrency: "GHS",
+      storeName: "Accra",
+      summaryMetrics: [],
+    };
+    const runQuery = vi.fn(async () => report);
+
+    const result = await sendDailyManagerReportToAdminsForDateWithCtx(
+      { runQuery } as never,
+      {
+        operatingDate: "2026-06-08",
+        status: "prepared",
+        storeId: "store-1" as never,
+      },
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(ADMIN_EMAILS.length);
+    const body = JSON.parse(
+      String((fetchMock.mock.calls[0]?.[1] as RequestInit).body),
+    );
+    expect(body.html).toContain("Ready for manager review");
+    expect(body.html).toContain("Prepared");
+    expect(body.html).toContain("8:42 PM");
+    expect(body.html).toContain(
+      "https://athena.wigclub.store/accra/store/accra/operations/daily-close?operatingDate=2026-06-08",
+    );
+    expect(result[0]).toEqual({
+      operatingDate: "2026-06-08",
+      recipientEmail: ADMIN_EMAILS[0].email,
+      status: 202,
+      storeName: "Accra",
+    });
+  });
 });

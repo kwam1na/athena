@@ -57,10 +57,7 @@ export function LoginForm({
           <form.Field
             name="email"
             validators={{
-              onSubmit: z
-                .string()
-                .max(256)
-                .email("Email address is not valid"),
+              onSubmit: z.string().max(256).email("Email address is not valid"),
             }}
             children={(field) => (
               <Input
@@ -71,9 +68,10 @@ export function LoginForm({
                 value={field.state.value}
                 onBlur={field.handleBlur}
                 onChange={(e) => field.handleChange(e.target.value)}
-                className={`h-control-standard border-border/80 bg-background shadow-[inset_0_1px_0_hsl(var(--background)/0.85)] ${field.state.meta?.errors.length > 0 &&
+                className={`h-control-standard border-border/80 bg-background shadow-[inset_0_1px_0_hsl(var(--background)/0.85)] ${
+                  field.state.meta?.errors.length > 0 &&
                   "border-destructive focus-visible:ring-destructive"
-                  }`}
+                }`}
               />
             )}
           />
@@ -90,6 +88,7 @@ export function LoginForm({
         <LoadingButton
           isLoading={isSubmitting}
           type="submit"
+          variant="workflow"
           className="group relative z-10 h-control-standard w-fit shadow-[0_16px_34px_-22px_hsl(var(--signal)/0.72)]"
         >
           Continue

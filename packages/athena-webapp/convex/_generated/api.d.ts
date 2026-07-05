@@ -45,6 +45,8 @@ import type * as customerMessaging_whatsappClient from "../customerMessaging/wha
 import type * as customerMessaging_whatsappConfig from "../customerMessaging/whatsappConfig.js";
 import type * as devPatchBadTransaction from "../devPatchBadTransaction.js";
 import type * as emails_DailyManagerReport from "../emails/DailyManagerReport.js";
+import type * as emails_DailyManagerReportBordered from "../emails/DailyManagerReportBordered.js";
+import type * as emails_DailyManagerReportUnbordered from "../emails/DailyManagerReportUnbordered.js";
 import type * as emails_DiscountCode from "../emails/DiscountCode.js";
 import type * as emails_DiscountReminder from "../emails/DiscountReminder.js";
 import type * as emails_ExpenseReceiptEmail from "../emails/ExpenseReceiptEmail.js";
@@ -477,6 +479,8 @@ declare const fullApi: ApiFromModules<{
   "customerMessaging/whatsappConfig": typeof customerMessaging_whatsappConfig;
   devPatchBadTransaction: typeof devPatchBadTransaction;
   "emails/DailyManagerReport": typeof emails_DailyManagerReport;
+  "emails/DailyManagerReportBordered": typeof emails_DailyManagerReportBordered;
+  "emails/DailyManagerReportUnbordered": typeof emails_DailyManagerReportUnbordered;
   "emails/DiscountCode": typeof emails_DiscountCode;
   "emails/DiscountReminder": typeof emails_DiscountReminder;
   "emails/ExpenseReceiptEmail": typeof emails_ExpenseReceiptEmail;

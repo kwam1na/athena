@@ -11,9 +11,7 @@ import {
   Section,
   Text,
 } from "@react-email/components";
-import {
-  ArrowUpRight,
-} from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 import { currencyFormatter } from "../utils";
 
 type DailyReportStatus =
@@ -52,6 +50,7 @@ export interface DailyManagerReportProps {
   operatingDate: string;
   completedAt: string;
   completedBy: string;
+  frameVariant?: "bordered" | "unbordered";
   storeCurrency?: string;
   status: DailyReportStatus;
   statusLabel?: string;
@@ -66,12 +65,22 @@ export interface DailyManagerReportProps {
   notes?: string;
 }
 
-const sampleCarryForwardItems: DailyManagerReportItem[] = [
+export const dailyManagerReportPreviewProps = {
+  completedAt: "8:42 PM",
+  completedBy: "Athena",
+  operatingDate: "Friday, July 3",
+  reportUrl:
+    "https://athena.wigclub.store/wigclub/store/wigclub/operations/daily-close",
+  status: "prepared",
+  storeName: "Wigclub",
+} satisfies DailyManagerReportProps;
+
+const sampleBlockers: DailyManagerReportItem[] = [
   {
-    title: "Opening handoff",
-    message: "Opening team should review the register cash handoff.",
-    meta: "Visible in the next operating day's opening workflow",
-    tone: "warning",
+    title: "Register session is still open",
+    message: "Front Counter is still open.",
+    meta: "Resolve before completing EOD Review.",
+    tone: "danger",
   },
 ];
 
@@ -86,9 +95,9 @@ const statusCopy: Record<
     tone: "success",
   },
   prepared: {
-    label: "Prepared for review",
+    label: "Ready for manager review",
     preview: "EOD Review is ready for manager review.",
-    summary: "Athena prepared EOD Review for manager review.",
+    summary: "",
     tone: "warning",
   },
   skipped: {
@@ -107,7 +116,8 @@ const statusCopy: Record<
   dry_run: {
     label: "Dry run",
     preview: "EOD automation checked the workflow in dry run.",
-    summary: "Athena checked EOD Review in dry run. No workflow changes were made.",
+    summary:
+      "Athena checked EOD Review in dry run. No workflow changes were made.",
     tone: "neutral",
   },
   disabled: {
@@ -119,7 +129,8 @@ const statusCopy: Record<
   eligible: {
     label: "Eligible",
     preview: "EOD Review is ready for automation.",
-    summary: "Athena found EOD Review ready for automation. No workflow changes were made.",
+    summary:
+      "Athena found EOD Review ready for automation. No workflow changes were made.",
     tone: "neutral",
   },
 };
@@ -129,34 +140,41 @@ export default function DailyManagerReport({
   operatingDate = "Friday, July 3",
   completedAt = "8:42 PM",
   completedBy = "Athena",
+  frameVariant = "unbordered",
   storeCurrency = "GHS",
   status = "prepared",
   statusLabel,
   statusSummary,
   reportUrl = "https://athena.wigclub.store/wigclub/store/wigclub/operations/daily-close",
   reviewedItems,
-  carryForwardItems = sampleCarryForwardItems,
-  blockers = [],
+  carryForwardItems = [],
+  blockers = sampleBlockers,
   summaryMetrics,
   cashMetrics,
   paymentTotals,
   notes = "No additional manager notes were added.",
 }: DailyManagerReportProps) {
   const money = formatReportAmount(storeCurrency);
-  const resolvedReviewedItems =
-    reviewedItems ?? sampleReviewedItemsFor(money);
+  const resolvedReviewedItems = reviewedItems ?? sampleReviewedItemsFor(money);
   const resolvedSummaryMetrics =
     summaryMetrics ?? sampleSummaryMetricsFor(money);
   const resolvedCashMetrics = cashMetrics ?? sampleCashMetricsFor(money);
-  const resolvedPaymentTotals =
-    paymentTotals ?? samplePaymentTotalsFor(money);
+  const resolvedPaymentTotals = paymentTotals ?? samplePaymentTotalsFor(money);
   const copy = statusCopy[status];
   const resolvedStatusLabel = statusLabel ?? copy.label;
   const resolvedStatusSummary = statusSummary ?? copy.summary;
   const previewText = `${storeName} EOD: ${resolvedStatusLabel}. ${copy.preview}`;
+  const timestampLabel = status === "applied" ? "Closed" : "Prepared";
   const attentionItems = buildAttentionItems({
+    blockers,
     carryForwardItems,
   });
+  const hasRegisterSessionBlocker = blockers.some(isRegisterSessionBlocker);
+  const expectedCashMetrics = resolvedCashMetrics.filter((metric) =>
+    /expected cash/i.test(metric.label),
+  );
+  const handoffSectionTitle =
+    blockers.length > 0 ? "Before close" : "Next opening";
   const attentionSummary = buildAttentionSummary({
     blockers: blockers.length,
     carryForward: carryForwardItems.length,
@@ -170,12 +188,19 @@ export default function DailyManagerReport({
       <Head />
       <Preview>{previewText}</Preview>
       <Body style={styles.body}>
-        <Container style={styles.shell}>
+        <Container
+          style={
+            frameVariant === "unbordered"
+              ? styles.unborderedShell
+              : styles.shell
+          }
+        >
           <Section style={styles.header}>
             <Text style={styles.eyebrow}>Athena daily report</Text>
             <Text style={styles.title}>{storeName}</Text>
             <Text style={styles.subtitle}>
-              {operatingDate} | Closed at {completedAt} by {completedBy}
+              {operatingDate} | {timestampLabel} at {completedAt} by{" "}
+              {completedBy}
             </Text>
           </Section>
 
@@ -184,32 +209,26 @@ export default function DailyManagerReport({
               <Column style={styles.statusColumn}>
                 <Text style={styles.statusLabel}>Status</Text>
                 <Text style={styles.statusTitle}>{resolvedStatusLabel}</Text>
-                <Text style={styles.statusSummary}>
-                  {resolvedStatusSummary}
-                </Text>
+                {resolvedStatusSummary ? (
+                  <Text style={styles.statusSummary}>
+                    {resolvedStatusSummary}
+                  </Text>
+                ) : null}
               </Column>
               {showStatusBadge && (
                 <Column style={styles.badgeColumn}>
-                  <StatusBadge tone={copy.tone}>{attentionSummary}</StatusBadge>
+                  <StatusBadge>{attentionSummary}</StatusBadge>
                 </Column>
               )}
             </Row>
           </Section>
 
           <Section style={styles.section}>
-            <SectionHeading
-              title="Attention"
-              quietTitle
-              detail={
-                attentionItems.length === 0
-                  ? "No reviewed, blocked, or carry-forward items."
-                  : `${attentionItems.length} item${
-                      attentionItems.length === 1 ? "" : "s"
-                    } surfaced`
-              }
-            />
+            <SectionHeading title={handoffSectionTitle} quietTitle />
             {attentionItems.length === 0 ? (
-              <EmptyState>No follow-up needed for this operating day.</EmptyState>
+              <EmptyState>
+                No follow-up needed for this operating day.
+              </EmptyState>
             ) : (
               <Section style={styles.attentionList}>
                 {attentionItems.slice(0, 4).map((item) => (
@@ -223,22 +242,32 @@ export default function DailyManagerReport({
             {attentionItems.length > 4 && (
               <Text style={styles.mutedLine}>
                 {attentionItems.length - 4} more item
-                {attentionItems.length - 4 === 1 ? "" : "s"} available in Athena.
+                {attentionItems.length - 4 === 1 ? "" : "s"} available in
+                Athena.
               </Text>
             )}
           </Section>
 
           <Section style={styles.separatedSection}>
-            <SectionHeading
-              title="Operating summary"
-              quietTitle
-            />
+            <SectionHeading title="Operating summary" quietTitle />
             <OperatingSummaryGrid metrics={resolvedSummaryMetrics} />
           </Section>
 
           <Section style={styles.separatedSection}>
             <SectionHeading title="Cash position" quietTitle />
-            <SummaryMetricGrid metrics={resolvedCashMetrics} />
+            {hasRegisterSessionBlocker ? (
+              <>
+                {expectedCashMetrics.length > 0 ? (
+                  <SummaryMetricGrid metrics={expectedCashMetrics} />
+                ) : null}
+                <EmptyState>
+                  Final cash count and variance will be available after the
+                  register is closed.
+                </EmptyState>
+              </>
+            ) : (
+              <SummaryMetricGrid metrics={resolvedCashMetrics} />
+            )}
           </Section>
 
           {resolvedPaymentTotals.length > 0 && (
@@ -293,30 +322,40 @@ function buildAttentionSummary(args: {
 }
 
 function buildAttentionItems({
+  blockers,
   carryForwardItems,
 }: {
+  blockers: DailyManagerReportItem[];
   carryForwardItems: DailyManagerReportItem[];
 }) {
+  const visibleBlockers = blockers.map((item) => ({
+    ...item,
+    meta: item.meta ?? "Resolve before completing EOD Review.",
+  }));
   const carryForwardMessage = carryForwardItems.length
-    ? `${carryForwardItems.length} carry-forward item${
+    ? `${carryForwardItems.length} item${
         carryForwardItems.length === 1 ? "" : "s"
-      }`
+      } for the next opening`
     : undefined;
   const carryForwardMeta = carryForwardItems.length
-    ? "Visible in the next operating day's opening workflow"
+    ? "Review before the next store day starts."
     : undefined;
   const visibleCarryForwardItems = carryForwardItems.length
     ? [
         {
           title: "Opening handoff",
-          message: carryForwardMessage ?? "Carry-forward items available.",
+          message: carryForwardMessage ?? "Items for the next opening.",
           meta: carryForwardMeta,
           tone: "warning" as AttentionTone,
         },
       ]
     : [];
 
-  return visibleCarryForwardItems;
+  return [...visibleBlockers, ...visibleCarryForwardItems];
+}
+
+function isRegisterSessionBlocker(item: DailyManagerReportItem) {
+  return /register/i.test(`${item.title} ${item.message}`);
 }
 
 function formatReportAmount(currency: string) {
@@ -405,18 +444,8 @@ function SectionHeading({
   );
 }
 
-function StatusBadge({
-  children,
-  tone,
-}: {
-  children: ReactNode;
-  tone: AttentionTone;
-}) {
-  return (
-    <Text style={{ ...styles.statusBadge, ...toneStyles[tone] }}>
-      {children}
-    </Text>
-  );
+function StatusBadge({ children }: { children: ReactNode }) {
+  return <Text style={styles.statusIndicator}>{children}</Text>;
 }
 
 function EmptyState({ children }: { children: ReactNode }) {
@@ -430,12 +459,8 @@ function AttentionItem({ item }: { item: DailyManagerReportItem }) {
     <Section style={styles.attentionItem}>
       <Row>
         <Column>
-          <Text style={styles.itemTitle}>
-            {item.title}
-            {item.meta ? (
-              <span style={styles.itemTitleMeta}> {item.meta}</span>
-            ) : null}
-          </Text>
+          <Text style={styles.itemTitle}>{item.title}</Text>
+          {item.meta ? <Text style={styles.itemMeta}>{item.meta}</Text> : null}
           {hasMetrics ? (
             <AttentionMetricGrid metrics={item.metrics ?? []} />
           ) : (
@@ -486,7 +511,11 @@ function OperatingSummaryGrid({
   );
 }
 
-function SummaryMetricGrid({ metrics }: { metrics: DailyManagerReportMetric[] }) {
+function SummaryMetricGrid({
+  metrics,
+}: {
+  metrics: DailyManagerReportMetric[];
+}) {
   const rows: DailyManagerReportMetric[][] = [];
 
   for (let index = 0; index < metrics.length; index += 2) {
@@ -577,11 +606,7 @@ function PaymentMeta({ payment }: { payment: DailyManagerReportPaymentTotal }) {
         }`
       : `${payment.method} transactions`;
 
-  return (
-    <Text style={styles.paymentDetail}>
-      {count}
-    </Text>
-  );
+  return <Text style={styles.paymentDetail}>{count}</Text>;
 }
 
 const fontSans =
@@ -712,13 +737,12 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: "20px",
     margin: 0,
   },
-  itemTitleMeta: {
+  itemMeta: {
     color: colors.muted,
-    display: "inline-block",
     fontSize: "12px",
     fontWeight: 400,
     lineHeight: "18px",
-    margin: "0 0 0 8px",
+    margin: "6px 0 0",
   },
   mutedLine: {
     color: colors.muted,
@@ -840,15 +864,19 @@ const styles: Record<string, CSSProperties> = {
     maxWidth: "620px",
     overflow: "hidden",
   },
-  statusBadge: {
-    borderRadius: "999px",
-    display: "inline-block",
+  unborderedShell: {
+    backgroundColor: colors.raised,
+    margin: "0 auto",
+    maxWidth: "620px",
+    overflow: "hidden",
+  },
+  statusIndicator: {
+    color: colors.foreground,
     fontSize: "12px",
     fontWeight: 500,
     lineHeight: "18px",
     margin: "1px 0 0",
-    padding: "5px 10px",
-    textAlign: "center",
+    textAlign: "right",
   },
   statusColumn: {
     verticalAlign: "top",

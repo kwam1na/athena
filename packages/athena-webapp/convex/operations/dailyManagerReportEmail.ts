@@ -12,6 +12,7 @@ import { toDisplayAmount } from "../lib/currency";
 import { currencyFormatter } from "../utils";
 import { sendDailyManagerReportEmail } from "../mailersend";
 import { ADMIN_EMAILS } from "../constants/email";
+import { buildDailyCloseSnapshotWithCtx } from "./dailyClose";
 import type {
   DailyManagerReportItem,
   DailyManagerReportMetric,
@@ -50,12 +51,12 @@ type DailyCloseReportSnapshot = {
 };
 
 type DailyManagerReportPayload = DailyManagerReportProps & {
-  dailyCloseId: Id<"dailyClose">;
+  dailyCloseId?: Id<"dailyClose">;
   operatingDateValue: string;
 };
 
 type SentDailyManagerReport = {
-  dailyCloseId: Id<"dailyClose">;
+  dailyCloseId?: Id<"dailyClose">;
   operatingDate: string;
   recipientEmail: string;
   status: number;
@@ -70,6 +71,11 @@ type RegisterCashPositionSummary = {
   registerCount: number;
   registerVarianceCount: number;
 };
+
+type DailyManagerReportSendStatus = "applied" | "prepared";
+type PreparedDailyCloseSnapshot = Awaited<
+  ReturnType<typeof buildDailyCloseSnapshotWithCtx>
+>;
 
 const REGISTER_SESSION_EMAIL_SOURCE_LIMIT = 1000;
 
@@ -148,8 +154,7 @@ export const getDailyManagerReportPayloadsForDateRange = internalQuery({
     );
     const cashPositionSummaries = await Promise.all(
       dailyClosesWithSnapshots.map((dailyClose) => {
-        const snapshot =
-          dailyClose.reportSnapshot as DailyCloseReportSnapshot;
+        const snapshot = dailyClose.reportSnapshot as DailyCloseReportSnapshot;
 
         return buildRegisterCashPositionSummary(ctx, {
           endAt: snapshot.closeMetadata.endAt,
@@ -171,6 +176,34 @@ export const getDailyManagerReportPayloadsForDateRange = internalQuery({
   },
 });
 
+export const getPreparedDailyManagerReportPayloadForDate = internalQuery({
+  args: {
+    operatingDate: v.string(),
+    preparedAt: v.optional(v.number()),
+    storeId: v.id("store"),
+  },
+  handler: async (ctx, args): Promise<DailyManagerReportPayload> => {
+    const store = await resolveStore(ctx, { storeId: args.storeId });
+    const snapshot = await buildDailyCloseSnapshotWithCtx(ctx, {
+      operatingDate: args.operatingDate,
+      storeId: args.storeId,
+    });
+    const cashPositionSummary = await buildRegisterCashPositionSummary(ctx, {
+      endAt: snapshot.endAt,
+      operatingDate: snapshot.operatingDate,
+      startAt: snapshot.startAt,
+      storeId: store._id,
+    });
+
+    return buildPreparedDailyManagerReportPayload({
+      cashPositionSummary,
+      preparedAt: args.preparedAt,
+      snapshot,
+      store,
+    });
+  },
+});
+
 export const sendMostRecentDailyManagerReport = action({
   args: {
     recipientEmail: v.string(),
@@ -178,10 +211,7 @@ export const sendMostRecentDailyManagerReport = action({
     storeId: v.optional(v.id("store")),
     storeSlug: v.optional(v.string()),
   },
-  handler: async (
-    ctx,
-    args,
-  ): Promise<SentDailyManagerReport> => {
+  handler: async (ctx, args): Promise<SentDailyManagerReport> => {
     const report: DailyManagerReportPayload = await ctx.runQuery(
       internal.operations.dailyManagerReportEmail
         .getMostRecentDailyManagerReportPayload,
@@ -262,19 +292,34 @@ export async function sendDailyManagerReportToAdminsForDateWithCtx(
   ctx: Pick<ActionCtx, "runQuery">,
   args: {
     operatingDate: string;
+    preparedAt?: number;
+    status?: DailyManagerReportSendStatus;
     storeId: Id<"store">;
   },
 ): Promise<SentDailyManagerReport[]> {
-  const reports: DailyManagerReportPayload[] = await ctx.runQuery(
-    internal.operations.dailyManagerReportEmail
-      .getDailyManagerReportPayloadsForDateRange,
-    {
-      endOperatingDate: args.operatingDate,
-      startOperatingDate: args.operatingDate,
-      storeId: args.storeId,
-    },
-  );
-  const report = reports[0];
+  const status = args.status ?? "applied";
+  const report =
+    status === "prepared"
+      ? await ctx.runQuery(
+          internal.operations.dailyManagerReportEmail
+            .getPreparedDailyManagerReportPayloadForDate,
+          {
+            operatingDate: args.operatingDate,
+            preparedAt: args.preparedAt,
+            storeId: args.storeId,
+          },
+        )
+      : (
+          await ctx.runQuery(
+            internal.operations.dailyManagerReportEmail
+              .getDailyManagerReportPayloadsForDateRange,
+            {
+              endOperatingDate: args.operatingDate,
+              startOperatingDate: args.operatingDate,
+              storeId: args.storeId,
+            },
+          )
+        )[0];
 
   if (!report) return [];
 
@@ -307,6 +352,8 @@ export async function sendDailyManagerReportToAdminsForDateWithCtx(
 export const sendDailyManagerReportToAdminsForDate = internalAction({
   args: {
     operatingDate: v.string(),
+    preparedAt: v.optional(v.number()),
+    status: v.optional(v.union(v.literal("applied"), v.literal("prepared"))),
     storeId: v.id("store"),
   },
   handler: (ctx, args) =>
@@ -405,6 +452,59 @@ function buildDailyManagerReportPayload(args: {
   };
 }
 
+function buildPreparedDailyManagerReportPayload(args: {
+  cashPositionSummary?: RegisterCashPositionSummary;
+  preparedAt?: number;
+  snapshot: PreparedDailyCloseSnapshot;
+  store: Doc<"store">;
+}): DailyManagerReportPayload {
+  const storeCurrency = normalizeCurrency(args.store.currency);
+  const money = moneyFormatter(storeCurrency);
+  const summary = {
+    ...args.snapshot.summary,
+    ...(args.cashPositionSummary ?? {}),
+  };
+  const expectedCash = numberFromSummaryWithFallback(
+    summary,
+    "currentDayCashTotal",
+    numberFromSummary(summary, "expectedCashTotal"),
+  );
+  const netCashVariance = numberFromSummary(summary, "netCashVariance");
+  const countedCash = expectedCash + netCashVariance;
+  const reportUrl = `${resolveAppUrl()}/${args.store.slug}/store/${args.store.slug}/operations/daily-close?operatingDate=${encodeURIComponent(args.snapshot.operatingDate)}`;
+
+  return {
+    operatingDateValue: args.snapshot.operatingDate,
+    storeName: args.store.name,
+    operatingDate: formatOperatingDate(args.snapshot.operatingDate),
+    completedAt: formatCompletedAt(args.preparedAt ?? Date.now()),
+    completedBy: "Athena",
+    storeCurrency,
+    status: "prepared",
+    reportUrl,
+    reviewedItems: buildPreparedReviewItems(args.snapshot),
+    carryForwardItems: buildPreparedCarryForwardItems(args.snapshot),
+    blockers: buildPreparedBlockers(args.snapshot),
+    summaryMetrics: buildSummaryMetrics(summary, money),
+    cashMetrics: [
+      {
+        label: "Expected cash",
+        value: money(expectedCash),
+      },
+      {
+        label: "Counted cash",
+        value: money(countedCash),
+      },
+      {
+        label: "Net variance",
+        value: money(netCashVariance),
+      },
+    ],
+    paymentTotals: buildPaymentTotals(summary, money),
+    notes: "EOD Review is waiting for manager review.",
+  };
+}
+
 async function buildRegisterCashPositionSummary(
   ctx: QueryCtx,
   args: {
@@ -414,36 +514,39 @@ async function buildRegisterCashPositionSummary(
     storeId: Id<"store">;
   },
 ): Promise<RegisterCashPositionSummary> {
-  const [openedDateSessions, closeoutDateSessions, missingCloseoutDateSessions] =
-    await Promise.all([
-      ctx.db
-        .query("registerSession")
-        .withIndex("by_storeId_status_openedOperatingDate", (q) =>
-          q
-            .eq("storeId", args.storeId)
-            .eq("status", "closed")
-            .eq("openedOperatingDate", args.operatingDate),
-        )
-        .take(REGISTER_SESSION_EMAIL_SOURCE_LIMIT),
-      ctx.db
-        .query("registerSession")
-        .withIndex("by_storeId_status_closeoutOperatingDate", (q) =>
-          q
-            .eq("storeId", args.storeId)
-            .eq("status", "closed")
-            .eq("closeoutOperatingDate", args.operatingDate),
-        )
-        .take(REGISTER_SESSION_EMAIL_SOURCE_LIMIT),
-      ctx.db
-        .query("registerSession")
-        .withIndex("by_storeId_status_closeoutOperatingDate", (q) =>
-          q
-            .eq("storeId", args.storeId)
-            .eq("status", "closed")
-            .eq("closeoutOperatingDate", undefined),
-        )
-        .take(REGISTER_SESSION_EMAIL_SOURCE_LIMIT),
-    ]);
+  const [
+    openedDateSessions,
+    closeoutDateSessions,
+    missingCloseoutDateSessions,
+  ] = await Promise.all([
+    ctx.db
+      .query("registerSession")
+      .withIndex("by_storeId_status_openedOperatingDate", (q) =>
+        q
+          .eq("storeId", args.storeId)
+          .eq("status", "closed")
+          .eq("openedOperatingDate", args.operatingDate),
+      )
+      .take(REGISTER_SESSION_EMAIL_SOURCE_LIMIT),
+    ctx.db
+      .query("registerSession")
+      .withIndex("by_storeId_status_closeoutOperatingDate", (q) =>
+        q
+          .eq("storeId", args.storeId)
+          .eq("status", "closed")
+          .eq("closeoutOperatingDate", args.operatingDate),
+      )
+      .take(REGISTER_SESSION_EMAIL_SOURCE_LIMIT),
+    ctx.db
+      .query("registerSession")
+      .withIndex("by_storeId_status_closeoutOperatingDate", (q) =>
+        q
+          .eq("storeId", args.storeId)
+          .eq("status", "closed")
+          .eq("closeoutOperatingDate", undefined),
+      )
+      .take(REGISTER_SESSION_EMAIL_SOURCE_LIMIT),
+  ]);
   const sessionsById = new Map<Id<"registerSession">, Doc<"registerSession">>();
 
   [...openedDateSessions, ...closeoutDateSessions].forEach((session) =>
@@ -539,6 +642,17 @@ function buildReviewedItems(
   ];
 }
 
+function buildPreparedReviewItems(
+  snapshot: PreparedDailyCloseSnapshot,
+): DailyManagerReportItem[] {
+  return snapshot.reviewItems.map((item) => ({
+    title: item.title,
+    message: item.message,
+    meta: "Needs manager review",
+    tone: "warning" as const,
+  }));
+}
+
 function buildCarryForwardItems(
   snapshot: DailyCloseReportSnapshot,
 ): DailyManagerReportItem[] {
@@ -548,6 +662,17 @@ function buildCarryForwardItems(
   return Array.from({ length: count }, (_, index) => ({
     title: index === 0 ? "Opening handoff" : `Carry-forward ${index + 1}`,
     message: `${count} carry-forward item${count === 1 ? "" : "s"}`,
+    tone: "warning" as const,
+  }));
+}
+
+function buildPreparedCarryForwardItems(
+  snapshot: PreparedDailyCloseSnapshot,
+): DailyManagerReportItem[] {
+  return snapshot.carryForwardItems.map((item) => ({
+    title: item.title,
+    message: item.message,
+    meta: "Carries forward after review",
     tone: "warning" as const,
   }));
 }
@@ -566,6 +691,16 @@ function buildBlockers(
     }));
 }
 
+function buildPreparedBlockers(
+  snapshot: PreparedDailyCloseSnapshot,
+): DailyManagerReportItem[] {
+  return snapshot.blockers.map((item) => ({
+    title: item.title,
+    message: item.message,
+    tone: "danger" as const,
+  }));
+}
+
 function buildPaymentTotals(
   summary: Record<string, unknown>,
   money: (amount: number) => string,
@@ -574,13 +709,11 @@ function buildPaymentTotals(
 
   if (!Array.isArray(paymentTotals)) return [];
 
-  return paymentTotals
-    .filter(isPaymentTotal)
-    .map((paymentTotal) => ({
-      method: formatPaymentMethod(paymentTotal.method),
-      amount: money(paymentTotal.amount),
-      transactionCount: paymentTotal.transactionCount,
-    }));
+  return paymentTotals.filter(isPaymentTotal).map((paymentTotal) => ({
+    method: formatPaymentMethod(paymentTotal.method),
+    amount: money(paymentTotal.amount),
+    transactionCount: paymentTotal.transactionCount,
+  }));
 }
 
 export function buildSummaryMetrics(

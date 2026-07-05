@@ -129,9 +129,7 @@ vi.mock("recharts", () => ({
       data-display-dates={data.map((day) => day.displayDate).join("|")}
       data-display-labels={data.map((day) => day.displayLabel).join("|")}
       data-known-item-counts={data
-        .map((day) =>
-          day.hasKnownItemCount === false ? "unknown" : "known",
-        )
+        .map((day) => (day.hasKnownItemCount === false ? "unknown" : "known"))
         .join("|")}
       data-margin-right={margin?.right ?? ""}
       data-testid="store-pulse-chart"
@@ -1136,13 +1134,18 @@ describe("DailyOperationsViewContent", () => {
     expect(
       screen.getByRole("heading", { name: "Historical store-day view" }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("link", {
-        name: "Review EOD Review for Friday, May 8, 2026",
-      }),
-    ).toHaveAttribute(
+    const historicalEodReviewLink = screen.getByRole("link", {
+      name: "Review EOD Review for Friday, May 8, 2026",
+    });
+    expect(historicalEodReviewLink).toHaveAttribute(
       "href",
       "/wigclub/store/osu/operations/daily-close?o=%252Fwigclub%252Fstore%252Fosu%252Foperations&operatingDate=2026-05-08",
+    );
+    expect(historicalEodReviewLink).toHaveClass(
+      "border-success/35",
+      "bg-success/10",
+      "text-success",
+      "hover:text-success",
     );
     expect(screen.queryByText("Workflow status")).not.toBeInTheDocument();
     expect(screen.queryByText("Current day only")).not.toBeInTheDocument();
@@ -1156,6 +1159,29 @@ describe("DailyOperationsViewContent", () => {
     expect(
       screen.queryByRole("link", { name: "Open Open work" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("opens the operating date picker to the selected operating date month", () => {
+    vi.setSystemTime(new Date(2026, 6, 4, 12));
+
+    renderContent(
+      {
+        ...operatingSnapshot,
+        operatingDate: "2026-06-21",
+      },
+      {
+        onOperatingDateChange: vi.fn(),
+      },
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Change operating date, currently Sunday, June 21, 2026",
+      }),
+    );
+
+    expect(screen.getByText("June 2026")).toBeInTheDocument();
+    expect(screen.queryByText("July 2026")).not.toBeInTheDocument();
   });
 
   it("redacts financial metrics when a POS-only user has no manager elevation", () => {
@@ -1209,11 +1235,19 @@ describe("DailyOperationsViewContent", () => {
       "href",
       "/wigclub/store/osu/pos/expense-reports?o=%252Fwigclub%252Fstore%252Fosu%252Foperations",
     );
-    expect(
-      screen.getByRole("link", { name: "Start EOD Review" }),
-    ).toHaveAttribute(
+    const startEodReviewLink = screen.getByRole("link", {
+      name: "Start EOD Review",
+    });
+    expect(startEodReviewLink).toHaveAttribute(
       "href",
       "/wigclub/store/osu/operations/daily-close?o=%252Fwigclub%252Fstore%252Fosu%252Foperations",
+    );
+    expect(startEodReviewLink).toHaveClass(
+      "border-success/35",
+      "bg-success/10",
+      "text-success",
+      "hover:text-success",
+      "active:scale-[0.98]",
     );
     expect(screen.queryByText("Current day only")).not.toBeInTheDocument();
     expect(screen.getByText("No active workflow blockers")).toBeInTheDocument();
@@ -1884,13 +1918,18 @@ describe("DailyOperationsViewContent", () => {
     expect(
       screen.getByRole("heading", { name: "Historical store-day view" }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("link", {
-        name: "Review EOD Review for Friday, May 8, 2026",
-      }),
-    ).toHaveAttribute(
+    const historicalEodReviewLink = screen.getByRole("link", {
+      name: "Review EOD Review for Friday, May 8, 2026",
+    });
+    expect(historicalEodReviewLink).toHaveAttribute(
       "href",
       "/wigclub/store/osu/operations/daily-close?o=%252Fwigclub%252Fstore%252Fosu%252Foperations&operatingDate=2026-05-08",
+    );
+    expect(historicalEodReviewLink).toHaveClass(
+      "border-success/35",
+      "bg-success/10",
+      "text-success",
+      "hover:text-success",
     );
     expect(
       screen.queryByRole("link", { name: "Review EOD Review" }),
@@ -1913,6 +1952,134 @@ describe("DailyOperationsViewContent", () => {
     ).toHaveAttribute(
       "href",
       "/wigclub/store/osu/operations/opening?o=%252Fwigclub%252Fstore%252Fosu%252Foperations",
+    );
+  });
+
+  it("tones current-day primary actions across daily operations lifecycle states", () => {
+    const operatingDate = getCurrentLocalOperatingDate();
+    const renderCurrentState = (snapshot: DailyOperationsSnapshot) =>
+      renderContent({
+        ...snapshot,
+        operatingDate,
+      });
+
+    let view = renderCurrentState(notOpenedSnapshot);
+    expect(
+      screen.getByRole("link", { name: "Start Opening Handoff" }),
+    ).toHaveClass(
+      "border-border",
+      "text-muted-foreground",
+      "hover:text-foreground",
+      "active:scale-[0.98]",
+    );
+    view.unmount();
+
+    view = renderCurrentState({
+      ...operatingSnapshot,
+      lifecycle: {
+        description: "The store day is open and operating.",
+        label: "Operating",
+        status: "operating",
+      },
+    });
+    expect(screen.getByRole("link", { name: "Start EOD Review" })).toHaveClass(
+      "border-action-workflow-border",
+      "bg-action-workflow-soft",
+      "text-action-workflow",
+      "hover:text-action-workflow",
+      "active:scale-[0.98]",
+    );
+    view.unmount();
+
+    view = renderCurrentState(blockedSnapshot);
+    expect(
+      screen.getByRole("link", { name: "Review close blockers" }),
+    ).toHaveClass(
+      "border-danger/30",
+      "bg-danger/10",
+      "text-danger",
+      "hover:text-danger",
+      "active:scale-[0.98]",
+    );
+    view.unmount();
+
+    view = renderCurrentState(operatingSnapshot);
+    expect(screen.getByRole("link", { name: "Start EOD Review" })).toHaveClass(
+      "border-success/35",
+      "bg-success/10",
+      "text-success",
+      "hover:text-success",
+      "active:scale-[0.98]",
+    );
+    view.unmount();
+
+    renderCurrentState(closedSnapshot);
+    expect(screen.getByRole("link", { name: "Review EOD Review" })).toHaveClass(
+      "border-success/25",
+      "bg-success/10",
+      "text-success",
+      "hover:text-success",
+      "active:scale-[0.98]",
+    );
+  });
+
+  it("tones historical EOD Review links across reviewable lifecycle states", () => {
+    let view = renderContent({
+      ...operatingSnapshot,
+      lifecycle: {
+        description: "The store day is open and operating.",
+        label: "Operating",
+        status: "operating",
+      },
+    });
+    expect(
+      screen.getByRole("link", {
+        name: "Review EOD Review for Friday, May 8, 2026",
+      }),
+    ).toHaveClass(
+      "border-warning/30",
+      "bg-warning/10",
+      "text-warning-foreground",
+      "hover:text-warning-foreground",
+    );
+    expect(
+      screen.getByRole("heading", { name: "Incomplete store-day close" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "This historical store day does not have a completed close.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Review EOD before treating this date as a closed store-day record.",
+      ),
+    ).toBeInTheDocument();
+    view.unmount();
+
+    view = renderContent(blockedSnapshot);
+    expect(
+      screen.getByRole("link", {
+        name: "Review EOD Review for Friday, May 8, 2026",
+      }),
+    ).toHaveClass(
+      "border-danger/30",
+      "bg-danger/10",
+      "text-danger",
+      "hover:text-danger",
+    );
+    view.unmount();
+
+    renderContent(closedSnapshot);
+    expect(
+      screen.getByRole("link", {
+        name: "Review EOD Review for Friday, May 8, 2026",
+      }),
+    ).toHaveClass(
+      "border-success/25",
+      "bg-success/10",
+      "text-success",
+      "hover:text-success",
     );
   });
 
@@ -1968,9 +2135,7 @@ describe("DailyOperationsViewContent", () => {
     renderContent(
       {
         ...blockedSnapshot,
-        lanes: blockedSnapshot.lanes.filter(
-          (lane) => lane.key !== "approvals",
-        ),
+        lanes: blockedSnapshot.lanes.filter((lane) => lane.key !== "approvals"),
         operatingDate,
       },
       {
@@ -1995,10 +2160,7 @@ describe("DailyOperationsViewContent", () => {
       "href",
       "/wigclub/store/osu/operations/approvals?o=%252Fwigclub%252Fstore%252Fosu%252Foperations",
     );
-    expect(screen.getByText("3")).toHaveClass(
-      "font-semibold",
-      "tabular-nums",
-    );
+    expect(screen.getByText("3")).toHaveClass("font-semibold", "tabular-nums");
   });
 
   it("passes origin context to current-day blocker review actions", () => {
@@ -2007,11 +2169,19 @@ describe("DailyOperationsViewContent", () => {
       operatingDate: getCurrentLocalOperatingDate(),
     });
 
-    expect(
-      screen.getByRole("link", { name: "Review close blockers" }),
-    ).toHaveAttribute(
+    const blockerReviewLink = screen.getByRole("link", {
+      name: "Review close blockers",
+    });
+    expect(blockerReviewLink).toHaveAttribute(
       "href",
       "/wigclub/store/osu/operations/daily-close?o=%252Fwigclub%252Fstore%252Fosu%252Foperations",
+    );
+    expect(blockerReviewLink).toHaveClass(
+      "border-danger/30",
+      "bg-danger/10",
+      "text-danger",
+      "hover:text-danger",
+      "active:scale-[0.98]",
     );
     expect(
       screen.getByRole("link", { name: "Open Registers" }),
@@ -2230,7 +2400,9 @@ describe("DailyOperationsViewContent", () => {
       screen.getByRole("link", { name: "Got2b Gel Black" }),
     ).toHaveAttribute(
       "href",
-      expect.stringContaining("/wigclub/store/osu/products/product-approved?o="),
+      expect.stringContaining(
+        "/wigclub/store/osu/products/product-approved?o=",
+      ),
     );
     expect(
       screen.getByRole("link", { name: "Got2b Gel Black" }),
