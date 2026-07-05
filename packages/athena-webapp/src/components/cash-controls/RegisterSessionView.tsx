@@ -1,5 +1,6 @@
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import * as AccordionPrimitive from "@radix-ui/react-accordion";
+import type { FunctionReference } from "convex/server";
 import { useMutation, useQuery } from "convex/react";
 import { motion } from "framer-motion";
 import {
@@ -220,6 +221,119 @@ export type RegisterSessionSnapshot = {
   transactions?: RegisterSessionTransaction[];
 };
 
+type RegisterSessionActivityCategory =
+  | "register"
+  | "session"
+  | "cart"
+  | "payment"
+  | "service"
+  | "cash"
+  | "expense"
+  | "sale"
+  | "closeout"
+  | "reopen"
+  | "sync"
+  | "review";
+
+type RegisterSessionActivity = {
+  continueCursor: string;
+  integration: {
+    activityReadModelAvailable: boolean;
+    source: "activity_read_model" | "pos_sync_evidence";
+  };
+  isDone: boolean;
+  page: Array<{
+    _id: string;
+    actorStaffName: string | null;
+    category: RegisterSessionActivityCategory;
+    evidenceLinks: Array<{
+      id: string;
+      label: string;
+      type: "closeout" | "expense" | "review" | "sync" | "transaction";
+    }>;
+    label: string;
+    localEventId: string | null;
+    localRegisterSessionId: string | null;
+    occurredAt: number;
+    reportedAt: number | null;
+    sequence: number | null;
+    source: "activity_read_model" | "pos_sync_evidence";
+    status: {
+      kind:
+        | "activity_patch_failed"
+        | "accepted"
+        | "projected"
+        | "conflicted"
+        | "held"
+        | "manager_applied"
+        | "manager_rejected"
+        | "mapping_pending"
+        | "repaired"
+        | "rejected"
+        | "terminal_reported";
+      label: string;
+      tone: "default" | "success" | "warning" | "destructive";
+    };
+    summary: string | null;
+    terminalName: string | null;
+  }>;
+  summary: {
+    attentionCounts: Record<
+      | "activity_patch_failed"
+      | "conflicted"
+      | "held"
+      | "manager_applied"
+      | "manager_rejected"
+      | "mapping_pending"
+      | "rejected",
+      number
+    >;
+    categoryCounts: Record<RegisterSessionActivityCategory, number>;
+    coverageState:
+      | "reported"
+      | "partially_reported"
+      | "unreported"
+      | "unknown_terminal_state";
+    latestCloudStatusAt: number | null;
+    lastActivityReportedAt: number | null;
+    reportedThroughSequence: number | null;
+    rowCount: number;
+  };
+};
+type RegisterSessionActivityFilter =
+  | "all"
+  | "attention"
+  | "register"
+  | "sale"
+  | "cart"
+  | "payment"
+  | "service"
+  | "cash"
+  | "expense"
+  | "closeout"
+  | "sync_review";
+
+type RegisterSessionActivityQueryReference = FunctionReference<
+  "query",
+  "public",
+  {
+    paginationOpts: { cursor: string | null; numItems: number };
+    registerSessionId: Id<"registerSession">;
+    storeId: Id<"store">;
+  },
+  RegisterSessionActivity
+>;
+
+const registerSessionActivityQuery = (
+  api as unknown as {
+    cashControls: {
+      registerSessionActivity: {
+        listRegisterSessionActivity: RegisterSessionActivityQueryReference;
+      };
+    };
+  }
+).cashControls.registerSessionActivity.listRegisterSessionActivity;
+
 type RecordRegisterSessionDepositArgs = {
   actorStaffProfileId?: string;
   actorUserId?: string;
@@ -364,6 +478,7 @@ type RegisterSessionViewContentProps = {
     args: RegisterCloseoutFinalizeArgs,
   ) => Promise<RegisterCloseoutCommandResult>;
   orgUrlSlug?: string;
+  registerSessionActivity?: RegisterSessionActivity | null;
   registerSessionSnapshot: RegisterSessionSnapshot | null;
   storeId?: string;
   storeUrlSlug?: string;
@@ -447,6 +562,304 @@ function formatTimestamp(timestamp: number) {
 
 function formatStatusLabel(status: string) {
   return capitalizeWords(status.replaceAll("_", " "));
+}
+
+const ACTIVITY_FILTERS: Array<{
+  id: RegisterSessionActivityFilter;
+  label: string;
+}> = [
+  { id: "all", label: "All" },
+  { id: "register", label: "Register" },
+  { id: "sale", label: "Sale" },
+  { id: "cart", label: "Cart" },
+  { id: "payment", label: "Payment" },
+  { id: "service", label: "Service" },
+  { id: "cash", label: "Cash" },
+  { id: "expense", label: "Expense" },
+  { id: "closeout", label: "Closeout" },
+  { id: "sync_review", label: "Sync/review" },
+  { id: "attention", label: "Needs attention" },
+];
+
+function activityFilterMatches(
+  filter: RegisterSessionActivityFilter,
+  row: RegisterSessionActivity["page"][number],
+) {
+  if (filter === "all") return true;
+  if (filter === "attention") {
+    return [
+      "activity_patch_failed",
+      "conflicted",
+      "held",
+      "manager_rejected",
+      "mapping_pending",
+      "rejected",
+    ].includes(row.status.kind);
+  }
+  if (filter === "sync_review") {
+    return row.category === "sync" || row.category === "review";
+  }
+  return row.category === filter;
+}
+
+function formatActivityCoverageState(
+  state: RegisterSessionActivity["summary"]["coverageState"],
+) {
+  switch (state) {
+    case "reported":
+      return "Reported";
+    case "partially_reported":
+      return "Partially reported";
+    case "unreported":
+      return "No cloud activity yet";
+    case "unknown_terminal_state":
+      return "Terminal reporting uncertain";
+  }
+}
+
+function getActivityCoverageCopy(activity: RegisterSessionActivity | null) {
+  if (!activity) {
+    return "POS activity is loading from cloud evidence.";
+  }
+
+  if (activity.summary.coverageState === "unreported") {
+    return "No cloud-reported POS activity for this session. Later local activity from the terminal may still arrive after it reports.";
+  }
+
+  if (activity.summary.coverageState === "unknown_terminal_state") {
+    return "This terminal has not reported later local activity to the cloud. The log shows only evidence the cloud has received.";
+  }
+
+  return "The cloud has POS sync evidence for this register session. Activity that has not uploaded from the terminal is not visible here yet.";
+}
+
+function getActivityBadgeClass(
+  tone: RegisterSessionActivity["page"][number]["status"]["tone"],
+) {
+  switch (tone) {
+    case "success":
+      return "border-success/20 bg-success/10 text-success";
+    case "warning":
+      return "border-warning/20 bg-warning/10 text-warning";
+    case "destructive":
+      return "border-destructive/20 bg-destructive/10 text-destructive";
+    case "default":
+      return "border-border bg-muted text-muted-foreground";
+  }
+}
+
+function getActivityAttentionCount(activity: RegisterSessionActivity | null) {
+  if (!activity) return 0;
+  const counts = activity.summary.attentionCounts;
+  return counts.mapping_pending + counts.held + counts.conflicted + counts.rejected;
+}
+
+function getActivityCategoryCount(
+  activity: RegisterSessionActivity | null,
+  category: RegisterSessionActivityCategory,
+) {
+  return activity?.summary.categoryCounts[category] ?? 0;
+}
+
+function RegisterSessionActivitySection({
+  activity,
+}: {
+  activity?: RegisterSessionActivity | null;
+}) {
+  const [filter, setFilter] =
+    useState<RegisterSessionActivityFilter>("all");
+  const rows = activity?.page ?? [];
+  const filteredRows = rows.filter((row) => activityFilterMatches(filter, row));
+  const attentionCount = getActivityAttentionCount(activity ?? null);
+  const reportedThroughSequence =
+    activity?.summary.reportedThroughSequence ?? null;
+  const lastReportedAt = activity?.summary.lastActivityReportedAt ?? null;
+  const latestCloudStatusAt = activity?.summary.latestCloudStatusAt ?? null;
+
+  return (
+    <section className="order-2 space-y-layout-md rounded-lg border border-border bg-surface-raised p-layout-md">
+      <div className="flex flex-col gap-layout-md lg:flex-row lg:items-start lg:justify-between">
+        <div className="space-y-1">
+          <h2 className="font-display text-2xl font-semibold text-foreground">
+            POS activity
+          </h2>
+          <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
+            {getActivityCoverageCopy(activity ?? null)}
+          </p>
+        </div>
+        <Badge
+          className={cn(
+            "w-fit",
+            attentionCount > 0
+              ? "border-warning/20 bg-warning/10 text-warning"
+              : "border-border bg-muted text-muted-foreground",
+          )}
+          variant="outline"
+        >
+          {attentionCount > 0
+            ? `${attentionCount} need attention`
+            : "No attention flags"}
+        </Badge>
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="rounded-md border border-border/70 bg-muted/20 px-3 py-2">
+          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+            Coverage
+          </p>
+          <p className="mt-1 text-sm font-medium text-foreground">
+            {activity
+              ? formatActivityCoverageState(activity.summary.coverageState)
+              : "Loading"}
+          </p>
+        </div>
+        <div className="rounded-md border border-border/70 bg-muted/20 px-3 py-2">
+          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+            Reported through
+          </p>
+          <p className="mt-1 font-numeric text-sm tabular-nums text-foreground">
+            {reportedThroughSequence === null
+              ? "Not reported"
+              : `Sequence ${reportedThroughSequence}`}
+          </p>
+        </div>
+        <div className="rounded-md border border-border/70 bg-muted/20 px-3 py-2">
+          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+            Last report
+          </p>
+          <p className="mt-1 text-sm text-foreground">
+            {lastReportedAt === null ? "Not available" : formatTimestamp(lastReportedAt)}
+          </p>
+        </div>
+        <div className="rounded-md border border-border/70 bg-muted/20 px-3 py-2">
+          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+            Latest cloud status
+          </p>
+          <p className="mt-1 text-sm text-foreground">
+            {latestCloudStatusAt === null
+              ? "Not available"
+              : formatTimestamp(latestCloudStatusAt)}
+          </p>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {ACTIVITY_FILTERS.map((option) => {
+          const isActive = filter === option.id;
+          return (
+            <button
+              className={cn(
+                "inline-flex h-8 items-center rounded-md border px-3 text-xs font-medium transition-colors",
+                isActive
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-border bg-surface text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+              )}
+              key={option.id}
+              onClick={() => setFilter(option.id)}
+              type="button"
+            >
+              {option.label}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+        <span>{getActivityCategoryCount(activity ?? null, "sale")} sale</span>
+        <span>{getActivityCategoryCount(activity ?? null, "cart")} cart</span>
+        <span>{getActivityCategoryCount(activity ?? null, "payment")} payment</span>
+        <span>{getActivityCategoryCount(activity ?? null, "cash")} cash</span>
+        <span>{getActivityCategoryCount(activity ?? null, "expense")} expense</span>
+        <span>{getActivityCategoryCount(activity ?? null, "closeout")} closeout</span>
+      </div>
+
+      {filteredRows.length === 0 ? (
+        <div className="flex min-h-[180px] items-center justify-center rounded-md border border-dashed border-border bg-muted/20">
+          <EmptyState
+            description={
+              rows.length === 0
+                ? "This view will update when POS activity reaches the cloud"
+                : "No activity matches the selected filter"
+            }
+            title={
+              rows.length === 0
+                ? "No cloud-reported POS activity for this session"
+                : "No matching activity"
+            }
+          />
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded-md border border-border">
+          <Table>
+            <TableHeader>
+              <TableRow className="border-b border-border hover:bg-transparent">
+                <TableHead className="w-[92px] text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                  Sequence
+                </TableHead>
+                <TableHead className="min-w-[160px] text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                  Activity
+                </TableHead>
+                <TableHead className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                  Status
+                </TableHead>
+                <TableHead className="hidden text-[11px] uppercase tracking-[0.16em] text-muted-foreground lg:table-cell">
+                  Actor
+                </TableHead>
+                <TableHead className="hidden text-[11px] uppercase tracking-[0.16em] text-muted-foreground xl:table-cell">
+                  Time
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredRows.map((row) => (
+                <TableRow className="border-b border-border/70" key={row._id}>
+                  <TableCell className="font-numeric text-sm tabular-nums text-muted-foreground">
+                    {row.sequence === null ? "N/A" : row.sequence}
+                  </TableCell>
+                  <TableCell>
+                    <div className="space-y-1">
+                      <p className="font-medium text-foreground">{row.label}</p>
+                      {row.summary ? (
+                        <p className="text-xs leading-5 text-muted-foreground">
+                          {row.summary}
+                        </p>
+                      ) : null}
+                      {row.evidenceLinks.length > 0 ? (
+                        <div className="flex flex-wrap gap-1.5">
+                          {row.evidenceLinks.map((link) => (
+                            <span
+                              className="rounded-sm border border-border bg-muted/40 px-1.5 py-0.5 text-[11px] text-muted-foreground"
+                              key={`${row._id}:${link.type}:${link.id}`}
+                            >
+                              {link.label}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge
+                      className={getActivityBadgeClass(row.status.tone)}
+                      variant="outline"
+                    >
+                      {row.status.label}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="hidden text-sm text-muted-foreground lg:table-cell">
+                    {row.actorStaffName ?? "N/A"}
+                  </TableCell>
+                  <TableCell className="hidden text-sm text-muted-foreground xl:table-cell">
+                    {formatTimestamp(row.occurredAt)}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+    </section>
+  );
 }
 
 function isCloseoutRejectionEvent(event: RegisterSessionTimelineEvent) {
@@ -2503,6 +2916,7 @@ export function RegisterSessionViewContent({
   onResolveSyncReview,
   onSubmitCloseout,
   orgUrlSlug,
+  registerSessionActivity,
   registerSessionSnapshot,
   storeId,
   storeUrlSlug,
@@ -4396,6 +4810,12 @@ export function RegisterSessionViewContent({
                     </section>
                   ) : null}
 
+                  {registerSessionActivity !== undefined ? (
+                    <RegisterSessionActivitySection
+                      activity={registerSessionActivity}
+                    />
+                  ) : null}
+
                   <div
                     className={`order-2 flex flex-col items-start gap-layout-sm sm:flex-row sm:justify-between ${hasPendingCloseoutApproval ? "pt-4" : ""}`}
                   >
@@ -5215,6 +5635,16 @@ export function RegisterSessionView() {
     api.cashControls.deposits.getRegisterSessionSnapshot,
     registerSessionSnapshotArgs,
   );
+  const registerSessionActivity = useQuery(
+    registerSessionActivityQuery,
+    canQueryProtectedData && hasFullAdminAccess && activeStore && params?.sessionId
+      ? {
+          paginationOpts: { cursor: null, numItems: 25 },
+          registerSessionId: params.sessionId as Id<"registerSession">,
+          storeId: activeStore._id,
+        }
+      : "skip",
+  );
   const activeStaffProfiles = useQuery(
     api.operations.staffProfiles.listStaffProfiles,
     canQueryProtectedData && activeStore && user?._id
@@ -5679,6 +6109,7 @@ export function RegisterSessionView() {
       currency={activeStore.currency || "USD"}
       isLoading={
         registerSessionSnapshot === undefined ||
+        (hasFullAdminAccess && registerSessionActivity === undefined) ||
         (user?._id !== undefined && activeStaffProfiles === undefined)
       }
       onAuthenticateForApproval={onAuthenticateForApproval}
@@ -5694,6 +6125,7 @@ export function RegisterSessionView() {
       onResolveSyncReview={onResolveSyncReview}
       onSubmitCloseout={onSubmitCloseout}
       orgUrlSlug={params?.orgUrlSlug}
+      registerSessionActivity={registerSessionActivity ?? null}
       registerSessionSnapshot={registerSessionSnapshot ?? null}
       storeId={activeStore._id}
       storeUrlSlug={params?.storeUrlSlug}

@@ -927,6 +927,116 @@ describe("posLocalStore", () => {
         (event) => (event as { uploadSequence?: number }).uploadSequence,
       ),
     ).toEqual([1, undefined, undefined, 2, 3, 4, undefined]);
+    expect(events.value.map((event) => event.activity?.status)).toEqual([
+      "pending",
+      "pending",
+      "pending",
+      "pending",
+      "pending",
+      "pending",
+      "pending",
+    ]);
+  });
+
+  it("tracks register-session activity state separately from core sync state", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+      clock: () => 2_000,
+      createLocalId: (kind) => `${kind}-1`,
+    });
+
+    await expect(
+      store.appendEvent({
+        type: "session.payments_updated",
+        terminalId: "terminal-1",
+        storeId: "store-1",
+        localRegisterSessionId: "register-session-1",
+        localPosSessionId: "sale-1",
+        staffProfileId: "staff-1",
+        payload: { payments: [{ method: "cash", amount: 100 }] },
+      }),
+    ).resolves.toEqual({
+      ok: true,
+      value: expect.objectContaining({
+        activity: { status: "pending" },
+        sync: { status: "synced" },
+      }),
+    });
+
+    await expect(
+      store.markEventsActivityReported(["event-1"], {
+        reportedAt: 2_500,
+        status: "mapping_pending",
+        reasonCode: "mapping_missing",
+      }),
+    ).resolves.toEqual({
+      ok: true,
+      value: [
+        expect.objectContaining({
+          activity: {
+            reportedAt: 2_500,
+            reasonCode: "mapping_missing",
+            status: "mapping_pending",
+          },
+          sync: { status: "synced" },
+        }),
+      ],
+    });
+
+    await expect(store.listEvents()).resolves.toEqual({
+      ok: true,
+      value: [
+        expect.objectContaining({
+          activity: {
+            reportedAt: 2_500,
+            reasonCode: "mapping_missing",
+            status: "mapping_pending",
+          },
+          sync: { status: "synced" },
+        }),
+      ],
+    });
+  });
+
+  it("records sanitized local activity failure reasons without overwriting sync failure state", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+      clock: () => 3_000,
+      createLocalId: (kind) => `${kind}-1`,
+    });
+
+    await store.appendEvent({
+      type: "transaction.completed",
+      terminalId: "terminal-1",
+      storeId: "store-1",
+      localRegisterSessionId: "register-session-1",
+      localPosSessionId: "sale-1",
+      localTransactionId: "transaction-1",
+      staffProfileId: "staff-1",
+      initialSyncStatus: "failed",
+      payload: { total: 40 },
+    });
+
+    await expect(
+      store.markEventsActivityFailed(["event-1"], {
+        attemptedAt: 3_500,
+        reasonCode: "server_rejected",
+      }),
+    ).resolves.toEqual({
+      ok: true,
+      value: [
+        expect.objectContaining({
+          activity: {
+            attemptedAt: 3_500,
+            reasonCode: "server_rejected",
+            status: "failed",
+          },
+          sync: expect.objectContaining({
+            status: "failed",
+          }),
+        }),
+      ],
+    });
   });
 
   it("treats pending checkout item definitions as uploadable without storing unsafe local metadata", async () => {

@@ -424,6 +424,129 @@ describe("RegisterSessionViewContent", () => {
     );
   });
 
+  it("renders POS activity coverage, attention, filters, and uncertainty copy", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <RegisterSessionViewContent
+        actorStaffProfileId="staff-1"
+        actorUserId="user-1"
+        currency="USD"
+        isLoading={false}
+        onRecordDeposit={vi.fn()}
+        {...closeoutHandlers}
+        registerSessionActivity={{
+          continueCursor: "",
+          integration: {
+            activityReadModelAvailable: false,
+            source: "pos_sync_evidence",
+          },
+          isDone: true,
+          page: [
+            {
+              _id: "activity-1",
+              actorStaffName: "Ama Mensah",
+              category: "sale",
+              evidenceLinks: [
+                {
+                  id: "transaction-1",
+                  label: "Transaction",
+                  type: "transaction",
+                },
+              ],
+              label: "Sale completed",
+              localEventId: "local-event-1",
+              localRegisterSessionId: "local-session-1",
+              occurredAt: new Date("2026-04-21T17:30:00.000Z").getTime(),
+              reportedAt: new Date("2026-04-21T17:31:00.000Z").getTime(),
+              sequence: 12,
+              source: "pos_sync_evidence",
+              status: {
+                kind: "projected",
+                label: "Projected",
+                tone: "success",
+              },
+              summary: "Receipt R-12",
+              terminalName: "Front counter",
+            },
+            {
+              _id: "activity-2",
+              actorStaffName: "Kojo Mensimah",
+              category: "closeout",
+              evidenceLinks: [],
+              label: "Closeout started",
+              localEventId: "local-event-2",
+              localRegisterSessionId: "local-session-1",
+              occurredAt: new Date("2026-04-21T18:00:00.000Z").getTime(),
+              reportedAt: new Date("2026-04-21T18:01:00.000Z").getTime(),
+              sequence: 13,
+              source: "pos_sync_evidence",
+              status: {
+                kind: "held",
+                label: "Waiting for earlier POS history",
+                tone: "warning",
+              },
+              summary: "Counted cash submitted",
+              terminalName: "Front counter",
+            },
+          ],
+          summary: {
+            attentionCounts: {
+              activity_patch_failed: 0,
+              conflicted: 0,
+              held: 1,
+              manager_applied: 0,
+              manager_rejected: 0,
+              mapping_pending: 0,
+              rejected: 0,
+            },
+            categoryCounts: {
+              cart: 0,
+              cash: 0,
+              closeout: 1,
+              expense: 0,
+              payment: 0,
+              register: 0,
+              reopen: 0,
+              review: 0,
+              sale: 1,
+              service: 0,
+              session: 0,
+              sync: 0,
+            },
+            coverageState: "unknown_terminal_state",
+            latestCloudStatusAt: new Date("2026-04-21T18:01:00.000Z").getTime(),
+            lastActivityReportedAt: new Date(
+              "2026-04-21T17:31:00.000Z",
+            ).getTime(),
+            reportedThroughSequence: 12,
+            rowCount: 2,
+          },
+        }}
+        registerSessionSnapshot={baseSnapshot}
+        orgUrlSlug="wigclub"
+        storeUrlSlug="wigclub"
+      />,
+    );
+
+    expect(screen.getByText("POS activity")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "This terminal has not reported later local activity to the cloud. The log shows only evidence the cloud has received.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Terminal reporting uncertain")).toBeInTheDocument();
+    expect(screen.getByText("Sequence 12")).toBeInTheDocument();
+    expect(screen.getByText("1 need attention")).toBeInTheDocument();
+    expect(screen.getByText("Sale completed")).toBeInTheDocument();
+    expect(screen.getByText("Closeout started")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Needs attention" }));
+
+    expect(screen.queryByText("Sale completed")).not.toBeInTheDocument();
+    expect(screen.getByText("Closeout started")).toBeInTheDocument();
+  });
+
   it("shows locally closed pending-sync sessions as pending reconciliation", () => {
     render(
       <RegisterSessionViewContent

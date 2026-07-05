@@ -14,8 +14,12 @@ import type {
   PosLocalSyncPendingCheckoutItemLocalMetadata,
   PosLocalSyncPendingCheckoutItemSearchContext,
 } from "../../../../../shared/posLocalSyncContract";
+import {
+  canReportPosRegisterSessionLocalActivityType,
+  type PosRegisterSessionActivitySkipReasonCode,
+} from "../../../../../shared/posRegisterSessionActivityContract";
 
-export const POS_LOCAL_STORE_SCHEMA_VERSION = 8;
+export const POS_LOCAL_STORE_SCHEMA_VERSION = 9;
 
 export type PosLocalEntityKind =
   | "registerSession"
@@ -57,6 +61,26 @@ export type PosLocalSyncEventStatus =
   | "locally_resolved"
   | "needs_review"
   | "failed";
+
+export type PosLocalActivityReportStatus =
+  | "pending"
+  | "reported"
+  | "mapping_pending"
+  | "failed";
+
+export type PosLocalActivityReportReasonCode =
+  | PosRegisterSessionActivitySkipReasonCode
+  | "mapping_missing"
+  | "network_error"
+  | "server_rejected"
+  | "unknown";
+
+export interface PosLocalActivityReportState {
+  attemptedAt?: number;
+  reasonCode?: PosLocalActivityReportReasonCode;
+  reportedAt?: number;
+  status: PosLocalActivityReportStatus;
+}
 
 export type PosLocalReviewResolutionReason = "terminal_recovery_command";
 
@@ -122,6 +146,7 @@ export interface PosLocalEventRecord {
   validationMetadata?: PosLocalEventValidationMetadata;
   payload: unknown;
   createdAt: number;
+  activity?: PosLocalActivityReportState;
   sync: {
     status: PosLocalSyncEventStatus;
     cloudEventId?: string;
@@ -460,6 +485,7 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
     const validationMetadata = normalizeEventValidationMetadata(
       input.validationMetadata,
     );
+    const activity = getInitialActivityState(input.type);
     const event: PosLocalEventRecord = {
       localEventId: createLocalId("event"),
       schemaVersion: POS_LOCAL_STORE_SCHEMA_VERSION,
@@ -488,6 +514,7 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
       ...(validationMetadata ? { validationMetadata } : {}),
       payload: normalizeLocalEventPayload(input),
       createdAt: clock(),
+      ...(activity ? { activity } : {}),
       sync: {
         status: input.initialSyncStatus ?? getInitialSyncStatus(input.type),
       },
@@ -533,6 +560,14 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
     type: PosLocalEventType,
   ): PosLocalSyncEventStatus {
     return canUploadPosLocalEventType(type) ? "pending" : "synced";
+  }
+
+  function getInitialActivityState(
+    type: PosLocalEventType,
+  ): PosLocalActivityReportState | undefined {
+    return canReportPosRegisterSessionLocalActivityType(type)
+      ? { status: "pending" }
+      : undefined;
   }
 
   function shouldPersistStaffProofToken(input: PosLocalAppendEventInput) {
@@ -1533,6 +1568,108 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
       }
     },
 
+    async markEventsActivityReported(
+      eventIds: string[],
+      reportOptions?: {
+        reasonCode?: PosLocalActivityReportReasonCode;
+        reportedAt?: number;
+        status?: Extract<
+          PosLocalActivityReportStatus,
+          "reported" | "mapping_pending"
+        >;
+      },
+    ): Promise<PosLocalStoreResult<PosLocalEventRecord[]>> {
+      try {
+        const value = await options.adapter.transaction(
+          "readwrite",
+          ["meta", "events"],
+          async (transaction) => {
+            await ensureSupportedSchema(transaction, "readwrite");
+            const eventIdSet = new Set(eventIds);
+            const events =
+              await transaction.getAll<PosLocalEventRecord>("events");
+            const updated: PosLocalEventRecord[] = [];
+            const reportedAt = reportOptions?.reportedAt ?? clock();
+
+            for (const event of events) {
+              if (!eventIdSet.has(event.localEventId)) continue;
+              const nextEvent = {
+                ...event,
+                activity: normalizeActivityReportState({
+                  reasonCode: reportOptions?.reasonCode,
+                  reportedAt,
+                  status: reportOptions?.status ?? "reported",
+                }),
+              };
+              await transaction.put(
+                "events",
+                String(event.sequence),
+                nextEvent,
+              );
+              updated.push(nextEvent);
+            }
+
+            return updated.sort(
+              (left, right) => left.sequence - right.sequence,
+            );
+          },
+        );
+
+        return { ok: true, value };
+      } catch (error) {
+        return toFailure(error);
+      }
+    },
+
+    async markEventsActivityFailed(
+      eventIds: string[],
+      failOptions: {
+        attemptedAt?: number;
+        reasonCode: PosLocalActivityReportReasonCode;
+      },
+    ): Promise<PosLocalStoreResult<PosLocalEventRecord[]>> {
+      try {
+        const value = await options.adapter.transaction(
+          "readwrite",
+          ["meta", "events"],
+          async (transaction) => {
+            await ensureSupportedSchema(transaction, "readwrite");
+            const eventIdSet = new Set(eventIds);
+            const events =
+              await transaction.getAll<PosLocalEventRecord>("events");
+            const updated: PosLocalEventRecord[] = [];
+            const attemptedAt = failOptions.attemptedAt ?? clock();
+
+            for (const event of events) {
+              if (!eventIdSet.has(event.localEventId)) continue;
+              const nextEvent = {
+                ...event,
+                activity: normalizeActivityReportState({
+                  attemptedAt,
+                  reasonCode: failOptions.reasonCode,
+                  status: "failed",
+                }),
+              };
+              await transaction.put(
+                "events",
+                String(event.sequence),
+                nextEvent,
+              );
+              updated.push(nextEvent);
+            }
+
+            return updated.sort(
+              (left, right) => left.sequence - right.sequence,
+            );
+          },
+        );
+
+        return { ok: true, value };
+      } catch (error) {
+        return toFailure(error);
+      }
+    },
+
     async readLocalCloudMapping(input: {
       entity: PosLocalEntityKind;
       localId: string;
@@ -1684,6 +1821,52 @@ function omitStaffProofToken(event: PosLocalEventRecord) {
   const next = { ...event };
   delete next.staffProofToken;
   return next;
+}
+
+function normalizeActivityReportState(
+  state: PosLocalActivityReportState,
+): PosLocalActivityReportState {
+  return {
+    ...(typeof state.attemptedAt === "number" &&
+    Number.isFinite(state.attemptedAt)
+      ? { attemptedAt: state.attemptedAt }
+      : {}),
+    ...(isLocalActivityReasonCode(state.reasonCode)
+      ? { reasonCode: state.reasonCode }
+      : {}),
+    ...(typeof state.reportedAt === "number" && Number.isFinite(state.reportedAt)
+      ? { reportedAt: state.reportedAt }
+      : {}),
+    status: isLocalActivityReportStatus(state.status)
+      ? state.status
+      : "pending",
+  };
+}
+
+function isLocalActivityReportStatus(
+  status: unknown,
+): status is PosLocalActivityReportStatus {
+  return (
+    status === "pending" ||
+    status === "reported" ||
+    status === "mapping_pending" ||
+    status === "failed"
+  );
+}
+
+function isLocalActivityReasonCode(
+  reasonCode: unknown,
+): reasonCode is PosLocalActivityReportReasonCode {
+  return (
+    reasonCode === "unsupported_event_type" ||
+    reasonCode === "missing_register_session" ||
+    reasonCode === "missing_expense_session" ||
+    reasonCode === "metadata_rejected" ||
+    reasonCode === "mapping_missing" ||
+    reasonCode === "network_error" ||
+    reasonCode === "server_rejected" ||
+    reasonCode === "unknown"
+  );
 }
 
 function mappingKey(entity: PosLocalEntityKind, localId: string) {

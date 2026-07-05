@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   requireAuthenticatedAthenaUserWithCtx: vi.fn(),
   requireOrganizationMemberRoleWithCtx: vi.fn(),
   ingestLocalEventsWithCtx: vi.fn(),
+  ingestRegisterSessionActivityWithCtx: vi.fn(),
 }));
 
 vi.mock("../../lib/athenaUserAuth", () => ({
@@ -18,7 +19,12 @@ vi.mock("../application/sync/ingestLocalEvents", () => ({
   ingestLocalEventsWithCtx: mocks.ingestLocalEventsWithCtx,
 }));
 
-import { ingestLocalEvents } from "./sync";
+vi.mock("../application/sync/posRegisterSessionActivity", () => ({
+  ingestRegisterSessionActivityWithCtx:
+    mocks.ingestRegisterSessionActivityWithCtx,
+}));
+
+import { ingestLocalEvents, ingestRegisterSessionActivity } from "./sync";
 
 const SYNC_SECRET_HASH =
   "e3aaef72556405db4093f59a9aa8ee6539f8e6542e60d92f08e782faa0d246fa";
@@ -44,6 +50,18 @@ describe("POS local sync public mutation", () => {
         syncCursor: {
           localRegisterSessionId: null,
           acceptedThroughSequence: 0,
+        },
+      },
+    });
+    mocks.ingestRegisterSessionActivityWithCtx.mockResolvedValue({
+      kind: "ok",
+      data: {
+        accepted: [],
+        skipped: [],
+        checkpoint: {
+          localRegisterSessionId: "local-register-1",
+          reportedThroughSequence: 0,
+          skippedCounts: {},
         },
       },
     });
@@ -707,6 +725,148 @@ describe("POS local sync public mutation", () => {
         ],
       }),
     );
+  });
+
+  it("passes authorized register-session activity reports to ingestion", async () => {
+    const ctx = buildCtx();
+
+    mocks.ingestRegisterSessionActivityWithCtx.mockResolvedValue({
+      kind: "ok",
+      data: {
+        accepted: [
+          {
+            localEventId: "event-activity-1",
+            sequence: 2,
+            status: "terminal_reported",
+          },
+        ],
+        skipped: [],
+        checkpoint: {
+          localRegisterSessionId: "local-register-1",
+          reportedThroughSequence: 2,
+          lastActivityReportedAt: 123,
+          skippedCounts: {},
+        },
+      },
+    });
+
+    const result = await getHandler(ingestRegisterSessionActivity)(ctx as never, {
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      syncSecretHash: "sync-secret-1",
+      localRegisterSessionId: "local-register-1",
+      registerNumber: "R1",
+      reportedThroughSequence: 2,
+      submittedAt: 123,
+      activities: [
+        {
+          localEventId: "event-activity-1",
+          sequence: 2,
+          occurredAt: 122,
+          staffProfileId: "staff-1",
+          eventType: "sale_completed",
+          category: "sale",
+          metadata: {
+            itemCount: 2,
+            receiptNumber: "R-100",
+            totalAmount: 5000,
+          },
+        },
+      ],
+    });
+
+    assertConformsToExportedReturns(ingestRegisterSessionActivity, result);
+    expect(result).toMatchObject({
+      kind: "ok",
+      data: {
+        accepted: [
+          {
+            localEventId: "event-activity-1",
+            sequence: 2,
+            status: "terminal_reported",
+          },
+        ],
+      },
+    });
+    expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        allowedRoles: ["full_admin", "pos_only"],
+        organizationId: "org-1",
+        userId: "athena-user-1",
+      }),
+    );
+    expect(mocks.ingestRegisterSessionActivityWithCtx).toHaveBeenCalledWith(
+      ctx,
+      {
+        storeId: "store-1",
+        terminalId: "terminal-1",
+        localRegisterSessionId: "local-register-1",
+        registerNumber: "R1",
+        reportedThroughSequence: 2,
+        reportedThroughOccurredAt: undefined,
+        submittedAt: 123,
+        activities: [
+          expect.objectContaining({
+            localEventId: "event-activity-1",
+            category: "sale",
+          }),
+        ],
+      },
+    );
+  });
+
+  it("rejects register-session activity without the provisioned terminal secret", async () => {
+    const ctx = buildCtx();
+
+    const result = await getHandler(ingestRegisterSessionActivity)(ctx as never, {
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      syncSecretHash: "wrong-secret",
+      localRegisterSessionId: "local-register-1",
+      reportedThroughSequence: 0,
+      activities: [],
+    });
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "authorization_failed",
+        message: "You do not have access to sync this POS terminal.",
+        metadata: { terminalAuthorizationFailure: true },
+      },
+    });
+    expect(mocks.ingestRegisterSessionActivityWithCtx).not.toHaveBeenCalled();
+  });
+
+  it("rejects overlarge register-session activity reports before ingestion", async () => {
+    const ctx = buildCtx();
+    const activities = Array.from({ length: 251 }, (_unused, index) => ({
+      localEventId: `event-activity-${index + 1}`,
+      sequence: index + 1,
+      occurredAt: 123 + index,
+      eventType: "cart_item_added",
+      category: "cart",
+      metadata: { itemCount: 1 },
+    }));
+
+    const result = await getHandler(ingestRegisterSessionActivity)(ctx as never, {
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      syncSecretHash: "sync-secret-1",
+      localRegisterSessionId: "local-register-1",
+      reportedThroughSequence: 251,
+      activities,
+    });
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "validation_failed",
+        message: "Activity reports can include at most 250 events.",
+      },
+    });
+    expect(mocks.ingestRegisterSessionActivityWithCtx).not.toHaveBeenCalled();
   });
 });
 

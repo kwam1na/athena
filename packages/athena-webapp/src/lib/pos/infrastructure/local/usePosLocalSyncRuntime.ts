@@ -36,6 +36,11 @@ import {
   type PosLocalSyncUploadSupport,
 } from "./syncContract";
 import {
+  canReportPosRegisterSessionLocalActivityType,
+  sanitizePosRegisterSessionLocalActivity,
+  type PosRegisterSessionLocalActivitySummary,
+} from "../../../../../shared/posRegisterSessionActivityContract";
+import {
   createPosLocalSyncScheduler,
   type PosLocalSyncTrigger,
 } from "./syncScheduler";
@@ -209,6 +214,9 @@ export type RuntimeActiveRegisterSessionDirective = {
 type IngestLocalEventsArgs = FunctionArgs<
   typeof api.pos.public.sync.ingestLocalEvents
 >;
+type IngestRegisterSessionActivityArgs = FunctionArgs<
+  typeof api.pos.public.sync.ingestRegisterSessionActivity
+>;
 type ListTerminalRecoveryCommandsArgs = FunctionArgs<
   typeof api.pos.public.terminals.listTerminalRecoveryCommands
 >;
@@ -233,6 +241,9 @@ export function usePosLocalSyncRuntimeStatus(input: {
   storeFactory?: (() => PosLocalRuntimeStore) | null;
 }): PosLocalRuntimeSyncStatusSource | null {
   const ingestLocalEvents = useMutation(api.pos.public.sync.ingestLocalEvents);
+  const ingestRegisterSessionActivity = useMutation(
+    api.pos.public.sync.ingestRegisterSessionActivity,
+  );
   const reportTerminalRuntimeStatus = useMutation(
     api.pos.public.terminals.reportTerminalRuntimeStatus,
   );
@@ -478,7 +489,8 @@ export function usePosLocalSyncRuntimeStatus(input: {
               throw new Error(pending.error.message);
             }
             const uploadableEvents = pending.value.events.filter((event) =>
-              isPosLocalRuntimeDrainCandidate(event, options, uploadSupport),
+              isPosLocalRuntimeDrainCandidate(event, options, uploadSupport) ||
+              isPosLocalRuntimeActivityReportCandidate(event),
             );
             if (!shouldStop()) {
               setDebug((current) => ({
@@ -568,8 +580,23 @@ export function usePosLocalSyncRuntimeStatus(input: {
               lastBatchEventCount: uploadedEvents.length,
             }));
             if (uploadedEvents.length === 0) {
+              await reportRegisterSessionActivityForEvents({
+                cloudTerminalId,
+                events: eventsToUpload,
+                ingestRegisterSessionActivity,
+                store,
+                syncSeed,
+              });
               return { syncedEventIds: locallySettledEventIds };
             }
+
+            void reportRegisterSessionActivityForEvents({
+              cloudTerminalId,
+              events: eventsToUpload,
+              ingestRegisterSessionActivity,
+              store,
+              syncSeed,
+            }).catch(() => undefined);
 
             const result = await ingestLocalEvents(
               toIngestLocalEventsArgs({
@@ -849,6 +876,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
   }, [
     drainOnAppend,
     ingestLocalEvents,
+    ingestRegisterSessionActivity,
     eventAppendToken,
     manualRetryToken,
     mode,
@@ -2095,6 +2123,245 @@ export function isPosLocalRuntimeDrainCandidate(
       event.sync.status === "failed" ||
       isIncludedReviewEvent) &&
     isSyncablePosLocalEvent(event, uploadSupport)
+  );
+}
+
+export function isPosLocalRuntimeActivityReportCandidate(
+  event: PosLocalEventRecord,
+) {
+  if (!canReportPosRegisterSessionLocalActivityType(event.type)) {
+    return false;
+  }
+
+  if (event.activity?.status === "pending") {
+    return true;
+  }
+
+  return (
+    event.activity?.status === "failed" &&
+    (event.activity.reasonCode === "network_error" ||
+      event.activity.reasonCode === "unknown")
+  );
+}
+
+async function reportRegisterSessionActivityForEvents(input: {
+  cloudTerminalId: string;
+  events: PosLocalEventRecord[];
+  ingestRegisterSessionActivity: (
+    args: IngestRegisterSessionActivityArgs,
+  ) => Promise<unknown>;
+  store: PosLocalRuntimeStore;
+  syncSeed: PosProvisionedTerminalSeed;
+}) {
+  const candidates = input.events.filter(isPosLocalRuntimeActivityReportCandidate);
+  if (candidates.length === 0) return;
+
+  const groups = groupRegisterSessionActivityCandidates(candidates);
+  for (const events of groups.values()) {
+    const reportableEvents: Array<{
+      event: PosLocalEventRecord;
+      activity: PosRegisterSessionLocalActivitySummary;
+    }> = [];
+    const failedEventIds: string[] = [];
+    const failedReasonCodes = new Map<string, Parameters<
+      PosLocalRuntimeStore["markEventsActivityFailed"]
+    >[1]["reasonCode"]>();
+
+    for (const event of events) {
+      const sanitized = sanitizePosRegisterSessionLocalActivity({
+        createdAt: event.createdAt,
+        localEventId: event.localEventId,
+        localExpenseSessionId: event.localExpenseSessionId,
+        localPosSessionId: event.localPosSessionId,
+        localRegisterSessionId: event.localRegisterSessionId,
+        localTransactionId: event.localTransactionId,
+        payload: event.payload,
+        registerNumber: event.registerNumber,
+        sequence: event.sequence,
+        staffProfileId: event.staffProfileId,
+        storeId: input.syncSeed.storeId,
+        terminalId: input.cloudTerminalId,
+        type: event.type,
+        uploadSequence: event.uploadSequence,
+      });
+
+      if (!sanitized.ok) {
+        failedEventIds.push(event.localEventId);
+        failedReasonCodes.set(event.localEventId, sanitized.reasonCode);
+        continue;
+      }
+
+      reportableEvents.push({ event, activity: sanitized.value });
+    }
+
+    for (const failedEventId of failedEventIds) {
+      const failed = await input.store.markEventsActivityFailed(
+        [failedEventId],
+        {
+          reasonCode: failedReasonCodes.get(failedEventId) ?? "unknown",
+        },
+      );
+      assertPosLocalStoreOk(failed);
+    }
+
+    if (reportableEvents.length === 0) continue;
+
+    const localRegisterSessionId =
+      reportableEvents[0]?.activity.localRegisterSessionId;
+    if (!localRegisterSessionId) continue;
+
+    try {
+      const result = await input.ingestRegisterSessionActivity({
+        activities: reportableEvents.map(({ activity }) => ({
+          category: activity.category,
+          eventType: activity.localEventType,
+          localEventId: activity.localEventId,
+          localExpenseSessionId: activity.localExpenseSessionId,
+          metadata: activity.metadata,
+          occurredAt: activity.createdAt,
+          registerNumber: activity.registerNumber,
+          sequence: activity.sequence,
+          staffProfileId: activity.staffProfileId as Id<"staffProfile"> | undefined,
+          uploadSequence: activity.uploadSequence,
+        })),
+        localRegisterSessionId,
+        registerNumber: reportableEvents[0]?.activity.registerNumber,
+        reportedThroughOccurredAt: Math.max(
+          ...reportableEvents.map(({ activity }) => activity.createdAt),
+        ),
+        reportedThroughSequence: Math.max(
+          ...reportableEvents.map(({ activity }) => activity.sequence),
+        ),
+        storeId: input.syncSeed.storeId as Id<"store">,
+        submittedAt: Date.now(),
+        syncSecretHash: input.syncSeed.syncSecretHash,
+        terminalId: input.cloudTerminalId as Id<"posTerminal">,
+      } satisfies IngestRegisterSessionActivityArgs);
+
+      if (!isCommandOk(result)) {
+        await markActivityReportFailed(input.store, reportableEvents, "server_rejected");
+        continue;
+      }
+
+      const acceptedIds = new Set(
+        result.data.accepted.map((activity) => activity.localEventId),
+      );
+      const mappingPendingAcceptedIds = new Set(
+        result.data.accepted
+          .filter((accepted) => accepted.status === "mapping_pending")
+          .map((accepted) => accepted.localEventId),
+      );
+      const skippedIds = new Set(
+        result.data.skipped
+          .map((activity) => activity.localEventId)
+          .filter((localEventId): localEventId is string => Boolean(localEventId)),
+      );
+      const reportedIds = reportableEvents
+        .filter(
+          ({ activity }) =>
+            acceptedIds.has(activity.localEventId) &&
+            !mappingPendingAcceptedIds.has(activity.localEventId),
+        )
+        .map(({ activity }) => activity.localEventId);
+      const mappingPendingIds = reportableEvents
+        .filter(({ activity }) =>
+          mappingPendingAcceptedIds.has(activity.localEventId),
+        )
+        .map(({ activity }) => activity.localEventId);
+      const skippedReportable = reportableEvents.filter(({ activity }) =>
+        skippedIds.has(activity.localEventId),
+      );
+
+      if (reportedIds.length > 0) {
+        const reported = await input.store.markEventsActivityReported(
+          reportedIds,
+          {
+            reportedAt: Date.now(),
+            status: "reported",
+          },
+        );
+        assertPosLocalStoreOk(reported);
+      }
+      if (mappingPendingIds.length > 0) {
+        const mappingPending = await input.store.markEventsActivityReported(
+          mappingPendingIds,
+          {
+            reportedAt: Date.now(),
+            status: "mapping_pending",
+          },
+        );
+        assertPosLocalStoreOk(mappingPending);
+      }
+      if (skippedReportable.length > 0) {
+        await markActivityReportFailed(
+          input.store,
+          skippedReportable,
+          "server_rejected",
+        );
+      }
+    } catch {
+      await markActivityReportFailed(input.store, reportableEvents, "network_error");
+    }
+  }
+}
+
+function groupRegisterSessionActivityCandidates(events: PosLocalEventRecord[]) {
+  const groups = new Map<string, PosLocalEventRecord[]>();
+  for (const event of [...events].sort(
+    (left, right) => left.sequence - right.sequence,
+  )) {
+    const key = event.localRegisterSessionId;
+    if (!key) {
+      const missingKey = `missing:${event.localEventId}`;
+      groups.set(missingKey, [event]);
+      continue;
+    }
+    groups.set(key, [...(groups.get(key) ?? []), event]);
+  }
+  return groups;
+}
+
+async function markActivityReportFailed(
+  store: PosLocalRuntimeStore,
+  reportableEvents: Array<{ activity: { localEventId: string } }>,
+  reasonCode: Parameters<
+    PosLocalRuntimeStore["markEventsActivityFailed"]
+  >[1]["reasonCode"],
+) {
+  const failed = await store.markEventsActivityFailed(
+    reportableEvents.map(({ activity }) => activity.localEventId),
+    { reasonCode },
+  );
+  assertPosLocalStoreOk(failed);
+}
+
+function isCommandOk(
+  result: unknown,
+): result is {
+  kind: "ok";
+  data: {
+    accepted: Array<{
+      localEventId: string;
+      sequence: number;
+      status: "terminal_reported" | "mapping_pending";
+    }>;
+    skipped: Array<{
+      localEventId?: string;
+      sequence?: number;
+      code: string;
+    }>;
+  };
+} {
+  return (
+    typeof result === "object" &&
+    result !== null &&
+    (result as { kind?: unknown }).kind === "ok" &&
+    typeof (result as { data?: unknown }).data === "object" &&
+    (result as { data?: unknown }).data !== null &&
+    Array.isArray(
+      (result as { data: { accepted?: unknown } }).data.accepted,
+    ) &&
+    Array.isArray((result as { data: { skipped?: unknown } }).data.skipped)
   );
 }
 

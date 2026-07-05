@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   acknowledgeTerminalRecoveryCommand: vi.fn(),
   claimTerminalRecoveryCommand: vi.fn(),
   ingestLocalEvents: vi.fn(),
+  ingestRegisterSessionActivity: vi.fn(),
   listTerminalRecoveryCommands: vi.fn(),
   reportTerminalRuntimeStatus: vi.fn(),
   refreshTerminalStaffAuthority: vi.fn(),
@@ -24,6 +25,9 @@ vi.mock("convex/react", () => ({
     if (mutation === "refreshTerminalStaffAuthority") {
       return mocks.refreshTerminalStaffAuthority;
     }
+    if (mutation === "ingestRegisterSessionActivity") {
+      return mocks.ingestRegisterSessionActivity;
+    }
     return mocks.ingestLocalEvents;
   },
   useQuery: (query: string, args: unknown) =>
@@ -36,7 +40,10 @@ vi.mock("~/convex/_generated/api", () => ({
   api: {
     pos: {
       public: {
-        sync: { ingestLocalEvents: "ingestLocalEvents" },
+        sync: {
+          ingestLocalEvents: "ingestLocalEvents",
+          ingestRegisterSessionActivity: "ingestRegisterSessionActivity",
+        },
         terminals: {
           acknowledgeTerminalRecoveryCommand:
             "acknowledgeTerminalRecoveryCommand",
@@ -99,6 +106,18 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     mocks.reportTerminalRuntimeStatus.mockResolvedValue({
       kind: "ok",
       data: {},
+    });
+    mocks.ingestRegisterSessionActivity.mockResolvedValue({
+      kind: "ok",
+      data: {
+        accepted: [],
+        skipped: [],
+        checkpoint: {
+          localRegisterSessionId: "register-1",
+          reportedThroughSequence: 0,
+          skippedCounts: {},
+        },
+      },
     });
     mocks.listTerminalRecoveryCommands.mockReturnValue(undefined);
     mocks.claimTerminalRecoveryCommand.mockResolvedValue({
@@ -4971,6 +4990,214 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     expect(store.markEventsSynced).toHaveBeenCalledWith(["event-expense"], {
       uploaded: true,
     });
+  });
+
+  it("reports pending register-session activity independently from core sync upload", async () => {
+    const cartEvent = buildLocalEvent({
+      activity: { status: "pending" },
+      localEventId: "event-cart",
+      localPosSessionId: "local-session-1",
+      payload: {
+        productName: "Wig Cap",
+        productSku: "CAP-1",
+        quantity: 1,
+        price: 25,
+      },
+      sequence: 2,
+      sync: { status: "synced" },
+      type: "cart.item_added",
+      uploadSequence: undefined,
+    });
+    const store = {
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [cartEvent],
+      })),
+      listEventsForUpload: vi.fn(async () => ({
+        ok: true,
+        value: [cartEvent],
+      })),
+      markEventsActivityFailed: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      markEventsActivityReported: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      markEventsSynced: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-1",
+          displayName: "Front",
+          provisionedAt: 1,
+          schemaVersion: 1,
+          syncSecretHash: "sync-secret-1",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+    };
+    mocks.ingestRegisterSessionActivity.mockResolvedValue({
+      kind: "ok",
+      data: {
+        accepted: [
+          {
+            localEventId: "event-cart",
+            sequence: 2,
+            status: "terminal_reported",
+          },
+        ],
+        skipped: [],
+        checkpoint: {
+          localRegisterSessionId: "register-1",
+          reportedThroughSequence: 2,
+          skippedCounts: {},
+        },
+      },
+    });
+
+    renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        mode: "drain-enabled",
+        storeFactory: () => store as never,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(mocks.ingestRegisterSessionActivity).toHaveBeenCalledWith(
+        expect.objectContaining({
+          activities: [
+            expect.objectContaining({
+              category: "cart",
+              eventType: "cart.item_added",
+              localEventId: "event-cart",
+              metadata: expect.objectContaining({
+                itemLabel: "Wig Cap",
+                productSku: "CAP-1",
+              }),
+              sequence: 2,
+            }),
+          ],
+          localRegisterSessionId: "register-1",
+          reportedThroughSequence: 2,
+          storeId: "store-1",
+          syncSecretHash: "sync-secret-1",
+          terminalId: "terminal-cloud-1",
+        }),
+      ),
+    );
+    expect(mocks.ingestLocalEvents).not.toHaveBeenCalled();
+    expect(store.markEventsActivityReported).toHaveBeenCalledWith(
+      ["event-cart"],
+      expect.objectContaining({ status: "reported" }),
+    );
+    expect(store.markEventsSynced).not.toHaveBeenCalled();
+  });
+
+  it("does not block core sync when activity reporting fails for the same event", async () => {
+    const saleEvent = buildLocalEvent({
+      activity: { status: "pending" },
+      localEventId: "event-sale",
+      localPosSessionId: "local-session-1",
+      localTransactionId: "local-txn-1",
+      payload: {
+        localPosSessionId: "local-session-1",
+        localTransactionId: "local-txn-1",
+        receiptNumber: "LOCAL-1-000001",
+        subtotal: 25,
+        tax: 0,
+        total: 25,
+        payments: [{ method: "cash", amount: 25, timestamp: 2 }],
+      },
+      sequence: 3,
+      sync: { status: "pending" },
+      type: "transaction.completed",
+      uploadSequence: 1,
+    });
+    const store = {
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [saleEvent],
+      })),
+      listEventsForUpload: vi.fn(async () => ({
+        ok: true,
+        value: [saleEvent],
+      })),
+      markEventsActivityFailed: vi.fn(async () => ({
+        ok: false,
+        error: { code: "write_failed", message: "activity write failed" },
+      })),
+      markEventsNeedsReview: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      markEventsSynced: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-1",
+          displayName: "Front",
+          provisionedAt: 1,
+          schemaVersion: 1,
+          syncSecretHash: "sync-secret-1",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+      writeLocalCloudMapping: vi.fn(async () => ({
+        ok: true,
+        value: {},
+      })),
+    };
+    mocks.ingestRegisterSessionActivity.mockRejectedValue(
+      new Error("activity unavailable"),
+    );
+    mocks.ingestLocalEvents.mockResolvedValue({
+      kind: "ok",
+      data: {
+        accepted: [
+          {
+            localEventId: "event-sale",
+            sequence: 1,
+            status: "projected",
+          },
+        ],
+        held: [],
+        mappings: [],
+        conflicts: [],
+        syncCursor: {
+          localRegisterSessionId: "register-1",
+          acceptedThroughSequence: 1,
+        },
+      },
+    });
+
+    renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        mode: "drain-enabled",
+        storeFactory: () => store as never,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(() => expect(mocks.ingestLocalEvents).toHaveBeenCalled());
+    expect(mocks.ingestRegisterSessionActivity).toHaveBeenCalled();
+    await waitFor(() =>
+      expect(store.markEventsSynced).toHaveBeenCalledWith(["event-sale"], {
+        uploaded: true,
+      }),
+    );
   });
 
   it("uploads completed expense events with different local sessions in separate ingest calls", async () => {
