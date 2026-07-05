@@ -4,6 +4,7 @@ import type { MutationCtx, QueryCtx } from "../_generated/server";
 import {
   buildSkuActivityEvent,
   getSkuActivityForProductSkuWithCtx,
+  getUntrustedSkuSaleEvidenceWithCtx,
   recordSkuActivityEventWithCtx,
 } from "./skuActivity";
 
@@ -11,7 +12,13 @@ type TableName =
   | "checkoutSession"
   | "checkoutSessionItem"
   | "inventoryHold"
+  | "inventoryImportProvisionalSku"
   | "productSku"
+  | "posPendingCheckoutItem"
+  | "posTransaction"
+  | "posTransactionAdjustment"
+  | "posTransactionAdjustmentLine"
+  | "posTransactionItem"
   | "skuActivityEvent";
 
 type Tables = Record<TableName, Map<string, Record<string, unknown>>>;
@@ -21,7 +28,13 @@ function createIndexedDb(seed: Partial<Tables>) {
     checkoutSession: new Map(),
     checkoutSessionItem: new Map(),
     inventoryHold: new Map(),
+    inventoryImportProvisionalSku: new Map(),
     productSku: new Map(),
+    posPendingCheckoutItem: new Map(),
+    posTransaction: new Map(),
+    posTransactionAdjustment: new Map(),
+    posTransactionAdjustmentLine: new Map(),
+    posTransactionItem: new Map(),
     skuActivityEvent: new Map(),
     ...seed,
   };
@@ -29,9 +42,29 @@ function createIndexedDb(seed: Partial<Tables>) {
     skuActivityEvent: tables.skuActivityEvent.size,
   };
 
-  function filteredRecords(table: TableName, filters: Record<string, unknown>) {
+  function fieldValue(record: Record<string, unknown>, fieldPath: string) {
+    return fieldPath.split(".").reduce<unknown>((value, key) => {
+      if (!value || typeof value !== "object") {
+        return undefined;
+      }
+
+      return (value as Record<string, unknown>)[key];
+    }, record);
+  }
+
+  function filteredRecords(
+    table: TableName,
+    filters: Record<string, unknown>,
+    ranges: Array<{ field: string; op: "gt"; value: number }>
+  ) {
     return Array.from(tables[table].values()).filter((record) =>
-      Object.entries(filters).every(([field, value]) => record[field] === value)
+      Object.entries(filters).every(
+        ([field, value]) => fieldValue(record, field) === value
+      ) &&
+      ranges.every((range) => {
+        const value = fieldValue(record, range.field);
+        return typeof value === "number" && value > range.value;
+      })
     );
   }
 
@@ -58,26 +91,38 @@ function createIndexedDb(seed: Partial<Tables>) {
       tables.skuActivityEvent.set(id, { _id: id, ...input });
       return id;
     },
+    normalizeId: (_tableName: TableName, id: string) => id,
     query: (tableName: TableName) => ({
       withIndex(
         _indexName: string,
-        apply: (builder: { eq: (field: string, value: unknown) => unknown }) => void
+        apply: (builder: {
+          eq: (field: string, value: unknown) => unknown;
+          gt: (field: string, value: number) => unknown;
+        }) => void
       ) {
         const filters: Record<string, unknown> = {};
+        const ranges: Array<{ field: string; op: "gt"; value: number }> = [];
         const builder = {
           eq(field: string, value: unknown) {
             filters[field] = value;
             return builder;
           },
+          gt(field: string, value: number) {
+            ranges.push({ field, op: "gt", value });
+            return builder;
+          },
         };
         apply(builder);
-        const page = filteredRecords(tableName, filters);
+        const page = filteredRecords(tableName, filters, ranges);
 
-        return {
+        const chain = {
           collect: async () => page,
           first: async () => page[0] ?? null,
+          order: () => chain,
           take: async (limit: number) => page.slice(0, limit),
         };
+
+        return chain;
       },
     }),
   };
@@ -496,5 +541,590 @@ describe("SKU activity read model", () => {
         storeId: "store-1" as Id<"store">,
       })
     ).resolves.toBeNull();
+  });
+});
+
+describe("untrusted SKU sale evidence read model", () => {
+  it("lists open untrusted sources and returns selected-source transaction history", async () => {
+    const { ctx } = createIndexedDb({
+      inventoryImportProvisionalSku: new Map([
+        [
+          "provisional-1",
+          {
+            _id: "provisional-1",
+            createdAt: 900,
+            createdByUserId: "user-1",
+            importKey: "legacy-import-1",
+            importedBarcode: "BAR-18",
+            importedPrice: 120,
+            importedProductName: "Legacy closure wig",
+            importedQuantity: 5,
+            importedSku: "LEG-18",
+            normalizedImportedBarcode: "bar-18",
+            normalizedImportedProductName: "legacy closure wig",
+            normalizedImportedSku: "leg-18",
+            organizationId: "org-1",
+            posExposureStatus: "available",
+            productId: "product-1",
+            productSkuId: "sku-1",
+            reviewVersionId: "review-version-1",
+            reviewVersionNumber: 1,
+            rowKey: "row-1",
+            rowNumber: 12,
+            saleEvidence: {
+              lastPosTransactionId: "transaction-1",
+              lastRegisterSessionId: "register-session-1",
+              lastSoldAt: 2_000,
+              saleCount: 1,
+              totalQuantitySold: 2,
+            },
+            sourceFormat: "csv",
+            status: "active",
+            storeId: "store-1",
+            updatedAt: 2_100,
+          },
+        ],
+        [
+          "provisional-unsold",
+          {
+            _id: "provisional-unsold",
+            importKey: "legacy-import-1",
+            importedPrice: 100,
+            importedProductName: "Unsold row",
+            importedQuantity: 3,
+            normalizedImportedProductName: "unsold row",
+            organizationId: "org-1",
+            posExposureStatus: "available",
+            reviewVersionId: "review-version-1",
+            reviewVersionNumber: 1,
+            rowKey: "row-2",
+            rowNumber: 13,
+            saleEvidence: { saleCount: 0, totalQuantitySold: 0 },
+            sourceFormat: "csv",
+            status: "active",
+            storeId: "store-1",
+            updatedAt: 2_200,
+          },
+        ],
+        [
+          "provisional-other-store",
+          {
+            _id: "provisional-other-store",
+            importKey: "legacy-import-1",
+            importedPrice: 100,
+            importedProductName: "Wrong store row",
+            importedQuantity: 3,
+            normalizedImportedProductName: "wrong store row",
+            organizationId: "org-2",
+            posExposureStatus: "available",
+            reviewVersionId: "review-version-2",
+            reviewVersionNumber: 1,
+            rowKey: "row-3",
+            rowNumber: 14,
+            saleEvidence: {
+              lastSoldAt: 3_000,
+              saleCount: 1,
+              totalQuantitySold: 1,
+            },
+            sourceFormat: "csv",
+            status: "active",
+            storeId: "store-2",
+            updatedAt: 3_100,
+          },
+        ],
+      ]),
+      posPendingCheckoutItem: new Map([
+        [
+          "pending-1",
+          {
+            _id: "pending-1",
+            createdAt: 800,
+            createdFrom: "offline_sync",
+            currency: "GHS",
+            evidence: {
+              firstSeenAt: 1_000,
+              lastPosTransactionId: "transaction-3",
+              lastRegisterSessionId: "register-session-3",
+              lastSeenAt: 2_500,
+              observedLookupCodes: ["PEND-22"],
+              observedPrices: [45],
+              offlineSaleCount: 1,
+              totalQuantitySold: 1,
+              transactionCount: 1,
+            },
+            lookupCode: "PEND-22",
+            name: "Pending checkout wig",
+            normalizedLookupCode: "pend-22",
+            normalizedName: "pending checkout wig",
+            organizationId: "org-1",
+            provisionalPrice: 45,
+            reviewPriority: "elevated",
+            status: "pending_review",
+            storeId: "store-1",
+            updatedAt: 2_550,
+          },
+        ],
+      ]),
+      posTransaction: new Map([
+        [
+          "transaction-1",
+          {
+            _id: "transaction-1",
+            completedAt: 2_000,
+            payments: [],
+            status: "completed",
+            storeId: "store-1",
+            subtotal: 240,
+            tax: 0,
+            total: 240,
+            totalPaid: 240,
+            transactionNumber: "POS-1001",
+          },
+        ],
+        [
+          "transaction-other-store",
+          {
+            _id: "transaction-other-store",
+            completedAt: 2_100,
+            payments: [],
+            status: "completed",
+            storeId: "store-2",
+            subtotal: 120,
+            tax: 0,
+            total: 120,
+            totalPaid: 120,
+            transactionNumber: "POS-2001",
+          },
+        ],
+      ]),
+      posTransactionAdjustment: new Map([
+        [
+          "adjustment-1",
+          {
+            _id: "adjustment-1",
+            appliedAt: 2_200,
+            correctedSubtotal: 120,
+            correctedTax: 0,
+            correctedTotal: 120,
+            createdAt: 2_150,
+            deltaTotal: -120,
+            originalSubtotal: 240,
+            originalTax: 0,
+            originalTotal: 240,
+            payloadFingerprint: "adjustment:fingerprint",
+            payloadSubject: "transaction-1",
+            settlementAmount: 120,
+            settlementDirection: "refund",
+            status: "applied",
+            storeId: "store-1",
+            transactionId: "transaction-1",
+            updatedAt: 2_200,
+          },
+        ],
+      ]),
+      posTransactionAdjustmentLine: new Map([
+        [
+          "adjustment-line-1",
+          {
+            _id: "adjustment-line-1",
+            adjustmentId: "adjustment-1",
+            correctedQuantity: 1,
+            correctedTotal: 120,
+            createdAt: 2_150,
+            inventoryDelta: -1,
+            lineType: "existing",
+            originalQuantity: 2,
+            originalTotal: 240,
+            originalTransactionItemId: "transaction-item-1",
+            productId: "product-1",
+            productName: "Legacy closure wig",
+            productSku: "LEG-18",
+            productSkuId: "sku-1",
+            quantityDelta: -1,
+            storeId: "store-1",
+            transactionId: "transaction-1",
+            unitPrice: 120,
+          },
+        ],
+      ]),
+      posTransactionItem: new Map([
+        [
+          "transaction-item-1",
+          {
+            _id: "transaction-item-1",
+            inventoryImportProvisionalSkuId: "provisional-1",
+            productId: "product-1",
+            productName: "Legacy closure wig",
+            productSku: "LEG-18",
+            productSkuId: "sku-1",
+            quantity: 2,
+            totalPrice: 240,
+            transactionId: "transaction-1",
+            unitPrice: 120,
+          },
+        ],
+        [
+          "transaction-item-other-store",
+          {
+            _id: "transaction-item-other-store",
+            inventoryImportProvisionalSkuId: "provisional-1",
+            productId: "product-1",
+            productName: "Legacy closure wig",
+            productSku: "LEG-18",
+            productSkuId: "sku-1",
+            quantity: 1,
+            totalPrice: 120,
+            transactionId: "transaction-other-store",
+            unitPrice: 120,
+          },
+        ],
+      ]),
+    });
+
+    const result = await getUntrustedSkuSaleEvidenceWithCtx(ctx, {
+      selectedSource: {
+        sourceId: "provisional-1",
+        sourceType: "inventoryImportProvisionalSku",
+      },
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(result.sources.map((source) => source.id)).toEqual([
+      "pending-1",
+      "provisional-1",
+    ]);
+    expect(result.sources[0]).toMatchObject({
+      evidence: {
+        offlineSaleCount: 1,
+        totalQuantitySold: 1,
+      },
+      reviewState: "open",
+      sourceType: "posPendingCheckoutItem",
+      status: "pending_review",
+    });
+    expect(result.selected?.source).toMatchObject({
+      id: "provisional-1",
+      evidence: {
+        saleCount: 1,
+        totalQuantitySold: 2,
+      },
+      reviewState: "open",
+      sourceType: "inventoryImportProvisionalSku",
+    });
+    expect(result.selected?.transactionHistory).toMatchObject({
+      isTruncated: false,
+      rows: [
+        {
+          id: "transaction-item-1",
+          transactionId: "transaction-1",
+          transactionNumber: "POS-1001",
+          quantity: 2,
+          refundedQuantity: 0,
+          netQuantity: 1,
+          adjustments: expect.objectContaining({
+            appliedQuantityDelta: -1,
+            count: 1,
+            latestStatus: "applied",
+          }),
+        },
+      ],
+    });
+  });
+
+  it("applies the source filter before limiting source rows", async () => {
+    const { ctx } = createIndexedDb({
+      inventoryImportProvisionalSku: new Map([
+        [
+          "provisional-1",
+          {
+            _id: "provisional-1",
+            importKey: "legacy-import-1",
+            importedPrice: 120,
+            importedProductName: "Legacy closure wig",
+            importedQuantity: 5,
+            normalizedImportedProductName: "legacy closure wig",
+            organizationId: "org-1",
+            posExposureStatus: "available",
+            reviewVersionId: "review-version-1",
+            reviewVersionNumber: 1,
+            rowKey: "row-1",
+            rowNumber: 12,
+            saleEvidence: {
+              lastSoldAt: 2_000,
+              saleCount: 1,
+              totalQuantitySold: 2,
+            },
+            sourceFormat: "csv",
+            status: "active",
+            storeId: "store-1",
+            updatedAt: 2_100,
+          },
+        ],
+      ]),
+      posPendingCheckoutItem: new Map([
+        [
+          "pending-1",
+          {
+            _id: "pending-1",
+            createdAt: 800,
+            createdFrom: "offline_sync",
+            currency: "GHS",
+            evidence: {
+              firstSeenAt: 1_000,
+              lastSeenAt: 2_500,
+              observedLookupCodes: ["PEND-22"],
+              observedPrices: [45],
+              totalQuantitySold: 1,
+              transactionCount: 1,
+            },
+            lookupCode: "PEND-22",
+            name: "Pending checkout wig",
+            normalizedLookupCode: "pend-22",
+            normalizedName: "pending checkout wig",
+            organizationId: "org-1",
+            provisionalPrice: 45,
+            reviewPriority: "elevated",
+            status: "pending_review",
+            storeId: "store-1",
+            updatedAt: 2_550,
+          },
+        ],
+      ]),
+    });
+
+    const result = await getUntrustedSkuSaleEvidenceWithCtx(ctx, {
+      limit: 1,
+      sourceFilter: "pending_checkout",
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(result.sourceFilter).toBe("pending_checkout");
+    expect(result.sources.map((source) => source.id)).toEqual(["pending-1"]);
+    expect(result.totalSourceCount).toBe(1);
+    expect(result.hasMoreSources).toBe(false);
+  });
+
+  it("sorts selected-source transactions before applying the history limit", async () => {
+    const { ctx } = createIndexedDb({
+      inventoryImportProvisionalSku: new Map([
+        [
+          "provisional-1",
+          {
+            _id: "provisional-1",
+            importKey: "legacy-import-1",
+            importedPrice: 120,
+            importedProductName: "Legacy closure wig",
+            importedQuantity: 5,
+            normalizedImportedProductName: "legacy closure wig",
+            organizationId: "org-1",
+            posExposureStatus: "available",
+            reviewVersionId: "review-version-1",
+            reviewVersionNumber: 1,
+            rowKey: "row-1",
+            rowNumber: 12,
+            saleEvidence: {
+              lastPosTransactionId: "transaction-new",
+              lastSoldAt: 3_000,
+              saleCount: 2,
+              totalQuantitySold: 2,
+            },
+            sourceFormat: "csv",
+            status: "active",
+            storeId: "store-1",
+            updatedAt: 3_100,
+          },
+        ],
+      ]),
+      posTransaction: new Map([
+        [
+          "transaction-old",
+          {
+            _id: "transaction-old",
+            completedAt: 1_000,
+            payments: [],
+            status: "completed",
+            storeId: "store-1",
+            subtotal: 120,
+            tax: 0,
+            total: 120,
+            totalPaid: 120,
+            transactionNumber: "POS-OLD",
+          },
+        ],
+        [
+          "transaction-new",
+          {
+            _id: "transaction-new",
+            completedAt: 3_000,
+            payments: [],
+            status: "completed",
+            storeId: "store-1",
+            subtotal: 120,
+            tax: 0,
+            total: 120,
+            totalPaid: 120,
+            transactionNumber: "POS-NEW",
+          },
+        ],
+      ]),
+      posTransactionItem: new Map([
+        [
+          "transaction-item-old",
+          {
+            _id: "transaction-item-old",
+            inventoryImportProvisionalSkuId: "provisional-1",
+            productId: "product-1",
+            productName: "Legacy closure wig",
+            productSku: "LEG-18",
+            productSkuId: "sku-1",
+            quantity: 1,
+            totalPrice: 120,
+            transactionId: "transaction-old",
+            unitPrice: 120,
+          },
+        ],
+        [
+          "transaction-item-new",
+          {
+            _id: "transaction-item-new",
+            inventoryImportProvisionalSkuId: "provisional-1",
+            productId: "product-1",
+            productName: "Legacy closure wig",
+            productSku: "LEG-18",
+            productSkuId: "sku-1",
+            quantity: 1,
+            totalPrice: 120,
+            transactionId: "transaction-new",
+            unitPrice: 120,
+          },
+        ],
+      ]),
+    });
+
+    const result = await getUntrustedSkuSaleEvidenceWithCtx(ctx, {
+      selectedSource: {
+        sourceId: "provisional-1",
+        sourceType: "inventoryImportProvisionalSku",
+      },
+      storeId: "store-1" as Id<"store">,
+      transactionLimit: 1,
+    });
+
+    expect(result.selected?.transactionHistory).toMatchObject({
+      isTruncated: true,
+      rows: [
+        {
+          id: "transaction-item-new",
+          completedAt: 3_000,
+          transactionNumber: "POS-NEW",
+        },
+      ],
+    });
+  });
+
+  it("supports a reviewed-history filter without mixing open sources", async () => {
+    const { ctx } = createIndexedDb({
+      inventoryImportProvisionalSku: new Map([
+        [
+          "provisional-open",
+          {
+            _id: "provisional-open",
+            importKey: "legacy-import-1",
+            importedPrice: 100,
+            importedProductName: "Open row",
+            importedQuantity: 3,
+            normalizedImportedProductName: "open row",
+            organizationId: "org-1",
+            posExposureStatus: "available",
+            reviewVersionId: "review-version-1",
+            reviewVersionNumber: 1,
+            rowKey: "row-1",
+            rowNumber: 1,
+            saleEvidence: {
+              lastSoldAt: 1_000,
+              saleCount: 1,
+              totalQuantitySold: 1,
+            },
+            sourceFormat: "csv",
+            status: "active",
+            storeId: "store-1",
+            updatedAt: 1_100,
+          },
+        ],
+        [
+          "provisional-finalized",
+          {
+            _id: "provisional-finalized",
+            importKey: "legacy-import-1",
+            importedPrice: 100,
+            importedProductName: "Finalized row",
+            importedQuantity: 3,
+            normalizedImportedProductName: "finalized row",
+            organizationId: "org-1",
+            posExposureStatus: "available",
+            reviewVersionId: "review-version-1",
+            reviewVersionNumber: 1,
+            rowKey: "row-2",
+            rowNumber: 2,
+            saleEvidence: {
+              lastSoldAt: 2_000,
+              saleCount: 1,
+              totalQuantitySold: 1,
+            },
+            sourceFormat: "csv",
+            status: "finalized",
+            storeId: "store-1",
+            updatedAt: 2_100,
+          },
+        ],
+      ]),
+      posPendingCheckoutItem: new Map([
+        [
+          "pending-approved",
+          {
+            _id: "pending-approved",
+            createdAt: 1_000,
+            createdFrom: "online",
+            currency: "GHS",
+            evidence: {
+              firstSeenAt: 1_000,
+              lastSeenAt: 3_000,
+              observedLookupCodes: ["APP-1"],
+              observedPrices: [75],
+              totalQuantitySold: 2,
+              transactionCount: 1,
+            },
+            lookupCode: "APP-1",
+            name: "Approved pending row",
+            normalizedLookupCode: "app-1",
+            normalizedName: "approved pending row",
+            organizationId: "org-1",
+            provisionalPrice: 75,
+            reviewPriority: "normal",
+            status: "approved",
+            storeId: "store-1",
+            updatedAt: 3_100,
+          },
+        ],
+      ]),
+    });
+
+    const result = await getUntrustedSkuSaleEvidenceWithCtx(ctx, {
+      reviewStatus: "reviewed",
+      selectedSource: {
+        sourceId: "provisional-open",
+        sourceType: "inventoryImportProvisionalSku",
+      },
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(result.sources.map((source) => source.id)).toEqual([
+      "pending-approved",
+      "provisional-finalized",
+    ]);
+    expect(result.sources.every((source) => source.reviewState === "reviewed")).toBe(
+      true
+    );
+    expect(result.selected).toBeNull();
   });
 });

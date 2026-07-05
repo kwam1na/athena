@@ -170,6 +170,26 @@ describe("operations query indexing", () => {
         fields: ["storeId", "idempotencyKey"],
       },
       {
+        table: "inventoryImportProvisionalSku",
+        descriptor: "by_storeId_status_saleEvidenceQuantity",
+        fields: ["storeId", "status", "saleEvidence.totalQuantitySold"],
+      },
+      {
+        table: "posPendingCheckoutItem",
+        descriptor: "by_storeId_status_evidenceQuantity",
+        fields: ["storeId", "status", "evidence.totalQuantitySold"],
+      },
+      {
+        table: "posTransactionItem",
+        descriptor: "by_inventoryImportProvisionalSkuId",
+        fields: ["inventoryImportProvisionalSkuId"],
+      },
+      {
+        table: "posTransactionAdjustmentLine",
+        descriptor: "by_originalTransactionItemId",
+        fields: ["originalTransactionItemId"],
+      },
+      {
         table: "cycleCountDraft",
         descriptor: "by_storeId_status_scope_owner",
         fields: ["storeId", "status", "scopeKey", "ownerUserId"],
@@ -303,6 +323,18 @@ describe("operations query indexing", () => {
     expect(skuActivitySource).toContain('.withIndex("by_storeId_source"');
     expect(skuActivitySource).toContain(
       '.withIndex("by_storeId_idempotencyKey"',
+    );
+    expect(skuActivitySource).toContain(
+      '.withIndex("by_storeId_status_saleEvidenceQuantity"',
+    );
+    expect(skuActivitySource).toContain(
+      '.withIndex("by_storeId_status_evidenceQuantity"',
+    );
+    expect(skuActivitySource).toContain(
+      '.withIndex("by_inventoryImportProvisionalSkuId"',
+    );
+    expect(skuActivitySource).toContain(
+      '.withIndex("by_originalTransactionItemId"',
     );
     expect(paymentAllocationsSource).toContain(
       '.withIndex("by_storeId_target"',

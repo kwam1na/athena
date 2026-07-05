@@ -197,6 +197,7 @@ export function InputOTPForm({
         </p>
         <button
           type="button"
+          data-testid="athena-login-change-email"
           className="group inline-flex items-center gap-layout-xs text-sm text-muted-foreground underline-offset-4 transition-colors duration-standard ease-standard hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           onClick={onBack}
         >
@@ -221,6 +222,11 @@ export function InputOTPForm({
                 <FormControl>
                   <InputOTP
                     maxLength={OTP_SLOT_INDEXES.length}
+                    aria-label="One-time code"
+                    autoComplete="one-time-code"
+                    data-testid="athena-login-otp-input"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     pasteTransformer={normalizeOtpCode}
                     {...field}
                     onChange={handlePinChange}
@@ -251,6 +257,7 @@ export function InputOTPForm({
             disabled={isSigningIn || isAuthHandoffPending}
             type="submit"
             variant="workflow"
+            data-testid="athena-login-otp-submit"
             className="group relative z-10 h-control-standard w-fit px-layout-lg shadow-[0_16px_34px_-22px_hsl(var(--signal)/0.72)]"
           >
             Continue
@@ -265,6 +272,7 @@ export function InputOTPForm({
             ) : (
               <button
                 type="button"
+                data-testid="athena-login-request-code"
                 className="text-signal underline-offset-4 transition-colors duration-standard ease-standard hover:text-signal/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 disabled={isRequestingNewCode}
                 onClick={handleRequestNewCode}

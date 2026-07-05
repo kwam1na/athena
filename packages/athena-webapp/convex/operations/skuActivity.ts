@@ -1,6 +1,10 @@
 import { internalMutation, query, type MutationCtx, type QueryCtx } from "../_generated/server";
-import type { Id } from "../_generated/dataModel";
+import type { Doc, Id } from "../_generated/dataModel";
 import { v } from "convex/values";
+import {
+  requireAuthenticatedAthenaUserWithCtx,
+  requireOrganizationMemberRoleWithCtx,
+} from "../lib/athenaUserAuth";
 
 export type SkuActivityStatus =
   | "active"
@@ -67,6 +71,35 @@ const CHECKOUT_SOURCE_TYPES = new Set([
 const POS_SOURCE_TYPES = new Set(["posSession", "pos_session", "pos"]);
 const SKU_ACTIVITY_SOURCE_LOOKUP_LIMIT = 500;
 const SKU_ACTIVITY_TIMELINE_LIMIT = 1000;
+const UNTRUSTED_SKU_EVIDENCE_DEFAULT_LIMIT = 20;
+const UNTRUSTED_SKU_EVIDENCE_MAX_LIMIT = 500;
+const UNTRUSTED_SKU_EVIDENCE_SOURCE_CANDIDATE_LIMIT = 500;
+const UNTRUSTED_SKU_TRANSACTION_HISTORY_DEFAULT_LIMIT = 100;
+const UNTRUSTED_SKU_TRANSACTION_HISTORY_MAX_LIMIT = 500;
+const UNTRUSTED_SKU_TRANSACTION_HISTORY_SCAN_LIMIT = 1000;
+const UNTRUSTED_SKU_TRANSACTION_ADJUSTMENT_LIMIT = 20;
+
+type UntrustedSkuSaleEvidenceReviewStatus = "open" | "reviewed" | "all";
+type UntrustedSkuSaleEvidenceSourceType =
+  | "inventoryImportProvisionalSku"
+  | "posPendingCheckoutItem";
+type UntrustedSkuSaleEvidenceSourceFilter =
+  | "all"
+  | "legacy_import"
+  | "pending_checkout";
+
+const OPEN_IMPORT_PROVISIONAL_STATUSES: Array<
+  Doc<"inventoryImportProvisionalSku">["status"]
+> = ["active"];
+const REVIEWED_IMPORT_PROVISIONAL_STATUSES: Array<
+  Doc<"inventoryImportProvisionalSku">["status"]
+> = ["finalized", "rejected", "closed"];
+const OPEN_PENDING_CHECKOUT_STATUSES: Array<
+  Doc<"posPendingCheckoutItem">["status"]
+> = ["pending_review", "flagged"];
+const REVIEWED_PENDING_CHECKOUT_STATUSES: Array<
+  Doc<"posPendingCheckoutItem">["status"]
+> = ["approved", "linked_to_catalog", "rejected"];
 
 function trimRequired(value: string | undefined, message: string) {
   if (!value?.trim()) {
@@ -499,6 +532,510 @@ function buildTimeline(events: SkuActivityEventRecord[]) {
     }));
 }
 
+async function requireSkuActivityStoreAccess(
+  ctx: QueryCtx,
+  storeId: Id<"store">
+) {
+  const store = await ctx.db.get("store", storeId);
+  if (!store) {
+    throw new Error("Store not found.");
+  }
+
+  const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+  await requireOrganizationMemberRoleWithCtx(ctx, {
+    allowedRoles: ["full_admin", "pos_only"],
+    failureMessage: "You do not have access to SKU activity.",
+    organizationId: store.organizationId,
+    userId: athenaUser._id,
+  });
+
+  return { athenaUser, store };
+}
+
+function boundedNumber(
+  value: number | undefined,
+  fallback: number,
+  max: number
+) {
+  if (value === undefined || !Number.isFinite(value)) {
+    return fallback;
+  }
+
+  return Math.max(1, Math.min(max, Math.floor(value)));
+}
+
+function getImportStatusesForReviewStatus(
+  reviewStatus: UntrustedSkuSaleEvidenceReviewStatus
+) {
+  if (reviewStatus === "open") {
+    return OPEN_IMPORT_PROVISIONAL_STATUSES;
+  }
+
+  if (reviewStatus === "reviewed") {
+    return REVIEWED_IMPORT_PROVISIONAL_STATUSES;
+  }
+
+  return [
+    ...OPEN_IMPORT_PROVISIONAL_STATUSES,
+    ...REVIEWED_IMPORT_PROVISIONAL_STATUSES,
+  ];
+}
+
+function getPendingCheckoutStatusesForReviewStatus(
+  reviewStatus: UntrustedSkuSaleEvidenceReviewStatus
+) {
+  if (reviewStatus === "open") {
+    return OPEN_PENDING_CHECKOUT_STATUSES;
+  }
+
+  if (reviewStatus === "reviewed") {
+    return REVIEWED_PENDING_CHECKOUT_STATUSES;
+  }
+
+  return [
+    ...OPEN_PENDING_CHECKOUT_STATUSES,
+    ...REVIEWED_PENDING_CHECKOUT_STATUSES,
+  ];
+}
+
+function getSourceReviewState(
+  status: string,
+  openStatuses: readonly string[]
+): "open" | "reviewed" {
+  return openStatuses.includes(status) ? "open" : "reviewed";
+}
+
+function buildInventoryImportEvidenceSource(
+  row: Doc<"inventoryImportProvisionalSku">
+) {
+  return {
+    id: row._id,
+    sourceType: "inventoryImportProvisionalSku" as const,
+    reviewState: getSourceReviewState(
+      row.status,
+      OPEN_IMPORT_PROVISIONAL_STATUSES
+    ),
+    status: row.status,
+    title: row.importedProductName,
+    sku: row.importedSku ?? null,
+    lookupCode: row.importedBarcode ?? row.importedSku ?? null,
+    unitPrice: row.importedPrice,
+    importKey: row.importKey,
+    reviewVersionNumber: row.reviewVersionNumber,
+    rowNumber: row.rowNumber,
+    productId: row.productId ?? null,
+    productSkuId: row.productSkuId ?? null,
+    evidence: {
+      saleCount: row.saleEvidence.saleCount,
+      totalQuantitySold: row.saleEvidence.totalQuantitySold,
+      lastSoldAt: row.saleEvidence.lastSoldAt ?? null,
+      lastPosTransactionId: row.saleEvidence.lastPosTransactionId ?? null,
+    },
+    lastActivityAt: row.saleEvidence.lastSoldAt ?? row.updatedAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
+function buildPendingCheckoutEvidenceSource(
+  row: Doc<"posPendingCheckoutItem">
+) {
+  return {
+    id: row._id,
+    sourceType: "posPendingCheckoutItem" as const,
+    reviewState: getSourceReviewState(
+      row.status,
+      OPEN_PENDING_CHECKOUT_STATUSES
+    ),
+    status: row.status,
+    reviewPriority: row.reviewPriority,
+    title: row.name,
+    sku: row.lookupCode ?? null,
+    lookupCode: row.lookupCode ?? null,
+    unitPrice: row.provisionalPrice,
+    productId: row.provisionalProductId ?? row.approvedProductId ?? null,
+    productSkuId:
+      row.provisionalProductSkuId ?? row.approvedProductSkuId ?? null,
+    operationalWorkItemId: row.operationalWorkItemId ?? null,
+    evidence: {
+      saleCount: row.evidence.transactionCount,
+      totalQuantitySold: row.evidence.totalQuantitySold,
+      lastSoldAt: row.evidence.lastSeenAt,
+      lastPosTransactionId: row.evidence.lastPosTransactionId ?? null,
+      offlineSaleCount: row.evidence.offlineSaleCount ?? 0,
+      observedLookupCodes: row.evidence.observedLookupCodes,
+      observedPrices: row.evidence.observedPrices,
+    },
+    lastActivityAt: row.evidence.lastSeenAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
+async function listInventoryImportEvidenceSources(
+  ctx: QueryCtx,
+  args: {
+    reviewStatus: UntrustedSkuSaleEvidenceReviewStatus;
+    storeId: Id<"store">;
+  }
+) {
+  const rows: Doc<"inventoryImportProvisionalSku">[] = [];
+  for (const status of getImportStatusesForReviewStatus(args.reviewStatus)) {
+    const matches = await ctx.db
+      .query("inventoryImportProvisionalSku")
+      .withIndex("by_storeId_status_saleEvidenceQuantity", (q) =>
+        q
+          .eq("storeId", args.storeId)
+          .eq("status", status)
+          .gt("saleEvidence.totalQuantitySold", 0)
+      )
+      .order("desc")
+      .take(UNTRUSTED_SKU_EVIDENCE_SOURCE_CANDIDATE_LIMIT);
+
+    rows.push(...matches);
+  }
+
+  return rows.map(buildInventoryImportEvidenceSource);
+}
+
+async function listPendingCheckoutEvidenceSources(
+  ctx: QueryCtx,
+  args: {
+    reviewStatus: UntrustedSkuSaleEvidenceReviewStatus;
+    storeId: Id<"store">;
+  }
+) {
+  const rows: Doc<"posPendingCheckoutItem">[] = [];
+  for (const status of getPendingCheckoutStatusesForReviewStatus(
+    args.reviewStatus
+  )) {
+    const matches = await ctx.db
+      .query("posPendingCheckoutItem")
+      .withIndex("by_storeId_status_evidenceQuantity", (q) =>
+        q
+          .eq("storeId", args.storeId)
+          .eq("status", status)
+          .gt("evidence.totalQuantitySold", 0)
+      )
+      .order("desc")
+      .take(UNTRUSTED_SKU_EVIDENCE_SOURCE_CANDIDATE_LIMIT);
+
+    rows.push(...matches);
+  }
+
+  return rows.map(buildPendingCheckoutEvidenceSource);
+}
+
+async function listTransactionItemsForUntrustedSource(
+  ctx: QueryCtx,
+  args: {
+    sourceId: string;
+    sourceType: UntrustedSkuSaleEvidenceSourceType;
+  }
+) {
+  const readLimit = UNTRUSTED_SKU_TRANSACTION_HISTORY_SCAN_LIMIT + 1;
+
+  if (args.sourceType === "inventoryImportProvisionalSku") {
+    return ctx.db
+      .query("posTransactionItem")
+      .withIndex("by_inventoryImportProvisionalSkuId", (q) =>
+        q.eq(
+          "inventoryImportProvisionalSkuId",
+          args.sourceId as Id<"inventoryImportProvisionalSku">
+        )
+      )
+      .take(readLimit);
+  }
+
+  return ctx.db
+    .query("posTransactionItem")
+    .withIndex("by_pendingCheckoutItemId", (q) =>
+      q.eq("pendingCheckoutItemId", args.sourceId as Id<"posPendingCheckoutItem">)
+    )
+    .take(readLimit);
+}
+
+async function summarizeTransactionItemAdjustments(
+  ctx: QueryCtx,
+  item: Doc<"posTransactionItem">
+) {
+  const lines = await ctx.db
+    .query("posTransactionAdjustmentLine")
+    .withIndex("by_originalTransactionItemId", (q) =>
+      q.eq("originalTransactionItemId", item._id)
+    )
+    .take(UNTRUSTED_SKU_TRANSACTION_ADJUSTMENT_LIMIT + 1);
+
+  const adjustments = [];
+  for (const line of lines.slice(0, UNTRUSTED_SKU_TRANSACTION_ADJUSTMENT_LIMIT)) {
+    const adjustment = await ctx.db.get("posTransactionAdjustment", line.adjustmentId);
+    if (!adjustment || adjustment.transactionId !== item.transactionId) {
+      continue;
+    }
+
+    adjustments.push({
+      adjustmentId: adjustment._id,
+      status: adjustment.status,
+      createdAt: adjustment.createdAt,
+      appliedAt: adjustment.appliedAt ?? null,
+      quantityDelta: line.quantityDelta,
+      originalQuantity: line.originalQuantity,
+      correctedQuantity: line.correctedQuantity,
+    });
+  }
+
+  adjustments.sort((left, right) => {
+    const leftTime = left.appliedAt ?? left.createdAt;
+    const rightTime = right.appliedAt ?? right.createdAt;
+    return rightTime - leftTime;
+  });
+
+  const latestApplied = adjustments.find(
+    (adjustment) => adjustment.status === "applied"
+  );
+
+  return {
+    appliedQuantityDelta:
+      adjustments
+        .filter((adjustment) => adjustment.status === "applied")
+        .reduce((total, adjustment) => total + adjustment.quantityDelta, 0),
+    count: adjustments.length,
+    isTruncated: lines.length > UNTRUSTED_SKU_TRANSACTION_ADJUSTMENT_LIMIT,
+    latestAppliedAt: latestApplied?.appliedAt ?? null,
+    latestStatus: adjustments[0]?.status ?? null,
+  };
+}
+
+async function buildUntrustedSourceTransactionHistory(
+  ctx: QueryCtx,
+  args: {
+    sourceId: string;
+    sourceType: UntrustedSkuSaleEvidenceSourceType;
+    storeId: Id<"store">;
+    transactionLimit: number;
+  }
+) {
+  const items = await listTransactionItemsForUntrustedSource(ctx, args);
+  const candidates: Array<{
+    item: Doc<"posTransactionItem">;
+    transaction: Doc<"posTransaction">;
+  }> = [];
+
+  for (const item of items) {
+    const transaction = await ctx.db.get("posTransaction", item.transactionId);
+    if (
+      !transaction ||
+      transaction.storeId !== args.storeId ||
+      typeof transaction.completedAt !== "number"
+    ) {
+      continue;
+    }
+
+    candidates.push({ item, transaction });
+  }
+
+  candidates.sort((left, right) => {
+    if (right.transaction.completedAt !== left.transaction.completedAt) {
+      return right.transaction.completedAt - left.transaction.completedAt;
+    }
+
+    return String(left.item._id).localeCompare(String(right.item._id));
+  });
+
+  const rows = [];
+  for (const { item, transaction } of candidates.slice(
+    0,
+    args.transactionLimit
+  )) {
+    const adjustments = await summarizeTransactionItemAdjustments(ctx, item);
+    const refundedQuantity = item.refundedQuantity ?? 0;
+    const netQuantity = Math.max(
+      0,
+      item.quantity - refundedQuantity + adjustments.appliedQuantityDelta
+    );
+
+    rows.push({
+      id: item._id,
+      transactionId: transaction._id,
+      transactionNumber: transaction.transactionNumber,
+      transactionStatus: transaction.status,
+      completedAt: transaction.completedAt,
+      registerNumber: transaction.registerNumber ?? null,
+      productId: item.productId,
+      productSkuId: item.productSkuId,
+      productName: item.productName,
+      productSku: item.productSku,
+      quantity: item.quantity,
+      refundedQuantity,
+      netQuantity,
+      unitPrice: item.unitPrice,
+      totalPrice: item.totalPrice,
+      isRefunded: item.isRefunded ?? false,
+      refundedAt: item.refundedAt ?? null,
+      adjustments,
+    });
+  }
+
+  return {
+    isTruncated:
+      candidates.length > args.transactionLimit ||
+      items.length > UNTRUSTED_SKU_TRANSACTION_HISTORY_SCAN_LIMIT,
+    rows,
+  };
+}
+
+async function loadSelectedUntrustedEvidenceSource(
+  ctx: QueryCtx,
+  args: {
+    reviewStatus: UntrustedSkuSaleEvidenceReviewStatus;
+    selectedSource?: {
+      sourceId: string;
+      sourceType: UntrustedSkuSaleEvidenceSourceType;
+    };
+    storeId: Id<"store">;
+    transactionLimit: number;
+  }
+) {
+  if (!args.selectedSource) {
+    return null;
+  }
+
+  const statusMatchesReviewFilter = (reviewState: "open" | "reviewed") =>
+    args.reviewStatus === "all" || args.reviewStatus === reviewState;
+
+  if (args.selectedSource.sourceType === "inventoryImportProvisionalSku") {
+    const sourceId = ctx.db.normalizeId(
+      "inventoryImportProvisionalSku",
+      args.selectedSource.sourceId
+    );
+    if (!sourceId) {
+      return null;
+    }
+
+    const row = await ctx.db.get(
+      "inventoryImportProvisionalSku",
+      sourceId
+    );
+    if (
+      !row ||
+      row.storeId !== args.storeId ||
+      row.saleEvidence.totalQuantitySold <= 0
+    ) {
+      return null;
+    }
+
+    const source = buildInventoryImportEvidenceSource(row);
+    if (!statusMatchesReviewFilter(source.reviewState)) {
+      return null;
+    }
+
+    return {
+      source,
+      transactionHistory: await buildUntrustedSourceTransactionHistory(ctx, {
+        sourceId: String(row._id),
+        sourceType: "inventoryImportProvisionalSku",
+        storeId: args.storeId,
+        transactionLimit: args.transactionLimit,
+      }),
+    };
+  }
+
+  const sourceId = ctx.db.normalizeId(
+    "posPendingCheckoutItem",
+    args.selectedSource.sourceId
+  );
+  if (!sourceId) {
+    return null;
+  }
+
+  const row = await ctx.db.get("posPendingCheckoutItem", sourceId);
+  if (!row || row.storeId !== args.storeId || row.evidence.totalQuantitySold <= 0) {
+    return null;
+  }
+
+  const source = buildPendingCheckoutEvidenceSource(row);
+  if (!statusMatchesReviewFilter(source.reviewState)) {
+    return null;
+  }
+
+  return {
+    source,
+    transactionHistory: await buildUntrustedSourceTransactionHistory(ctx, {
+      sourceId: String(row._id),
+      sourceType: "posPendingCheckoutItem",
+      storeId: args.storeId,
+      transactionLimit: args.transactionLimit,
+    }),
+  };
+}
+
+export async function getUntrustedSkuSaleEvidenceWithCtx(
+  ctx: QueryCtx,
+  args: {
+    limit?: number;
+    reviewStatus?: UntrustedSkuSaleEvidenceReviewStatus;
+    selectedSource?: {
+      sourceId: string;
+      sourceType: UntrustedSkuSaleEvidenceSourceType;
+    };
+    sourceFilter?: UntrustedSkuSaleEvidenceSourceFilter;
+    storeId: Id<"store">;
+    transactionLimit?: number;
+  }
+) {
+  const reviewStatus = args.reviewStatus ?? "open";
+  const sourceFilter = args.sourceFilter ?? "all";
+  const limit = boundedNumber(
+    args.limit,
+    UNTRUSTED_SKU_EVIDENCE_DEFAULT_LIMIT,
+    UNTRUSTED_SKU_EVIDENCE_MAX_LIMIT
+  );
+  const transactionLimit = boundedNumber(
+    args.transactionLimit,
+    UNTRUSTED_SKU_TRANSACTION_HISTORY_DEFAULT_LIMIT,
+    UNTRUSTED_SKU_TRANSACTION_HISTORY_MAX_LIMIT
+  );
+
+  const [inventoryImportSources, pendingCheckoutSources] = await Promise.all([
+    sourceFilter === "pending_checkout"
+      ? Promise.resolve([])
+      : listInventoryImportEvidenceSources(ctx, {
+          reviewStatus,
+          storeId: args.storeId,
+        }),
+    sourceFilter === "legacy_import"
+      ? Promise.resolve([])
+      : listPendingCheckoutEvidenceSources(ctx, {
+          reviewStatus,
+          storeId: args.storeId,
+        }),
+  ]);
+
+  const orderedSources = [
+    ...inventoryImportSources,
+    ...pendingCheckoutSources,
+  ].sort((left, right) => {
+    if (right.lastActivityAt !== left.lastActivityAt) {
+      return right.lastActivityAt - left.lastActivityAt;
+    }
+
+    return String(left.id).localeCompare(String(right.id));
+  });
+
+  return {
+    reviewStatus,
+    sourceFilter,
+    sources: orderedSources.slice(0, limit),
+    sourceLimit: limit,
+    totalSourceCount: orderedSources.length,
+    hasMoreSources: orderedSources.length > limit,
+    selected: await loadSelectedUntrustedEvidenceSource(ctx, {
+      reviewStatus,
+      selectedSource: args.selectedSource,
+      storeId: args.storeId,
+      transactionLimit,
+    }),
+  };
+}
+
 export async function getSkuActivityForProductSkuWithCtx(
   ctx: QueryCtx,
   args: {
@@ -559,5 +1096,45 @@ export const getSkuActivityForProductSku = query({
     productSkuId: v.optional(v.id("productSku")),
     sku: v.optional(v.string()),
   },
-  handler: (ctx, args) => getSkuActivityForProductSkuWithCtx(ctx, args),
+  handler: async (ctx, args) => {
+    await requireSkuActivityStoreAccess(ctx, args.storeId);
+    return getSkuActivityForProductSkuWithCtx(ctx, args);
+  },
+});
+
+const untrustedSkuSaleEvidenceReviewStatusValidator = v.union(
+  v.literal("open"),
+  v.literal("reviewed"),
+  v.literal("all")
+);
+
+const untrustedSkuSaleEvidenceSourceTypeValidator = v.union(
+  v.literal("inventoryImportProvisionalSku"),
+  v.literal("posPendingCheckoutItem")
+);
+
+const untrustedSkuSaleEvidenceSourceFilterValidator = v.union(
+  v.literal("all"),
+  v.literal("legacy_import"),
+  v.literal("pending_checkout")
+);
+
+export const getUntrustedSkuSaleEvidence = query({
+  args: {
+    storeId: v.id("store"),
+    reviewStatus: v.optional(untrustedSkuSaleEvidenceReviewStatusValidator),
+    sourceFilter: v.optional(untrustedSkuSaleEvidenceSourceFilterValidator),
+    limit: v.optional(v.number()),
+    transactionLimit: v.optional(v.number()),
+    selectedSource: v.optional(
+      v.object({
+        sourceType: untrustedSkuSaleEvidenceSourceTypeValidator,
+        sourceId: v.string(),
+      })
+    ),
+  },
+  handler: async (ctx, args) => {
+    await requireSkuActivityStoreAccess(ctx, args.storeId);
+    return getUntrustedSkuSaleEvidenceWithCtx(ctx, args);
+  },
 });

@@ -40,30 +40,41 @@ When spawning subagents, pass the relevant file contents into the task prompt so
 
 ## Execution Strategy
 
-Present the user with two options before proceeding, using the platform's blocking question tool: `AskUserQuestion` in Claude Code (call `ToolSearch` with `select:AskUserQuestion` first if its schema isn't loaded), `request_user_input` in Codex, `ask_user` in Gemini, `ask_user` in Pi (requires the `pi-ask-user` extension). Fall back to presenting options in chat only when no blocking tool exists in the harness or the call errors (e.g., Codex edit modes) — not because a schema load is required. Never silently skip the question.
+Choose the workflow mode autonomously using agent judgment. Do not stop to ask
+the user to choose Full or Lightweight unless the user explicitly asks to
+choose, the request has unusual token/time constraints, or the tradeoff is
+genuinely unclear from local context.
 
-```
-1. Full (recommended) — the complete compound workflow. Researches,
-   cross-references, and reviews your solution to produce documentation
-   that compounds your team's knowledge.
+Use **Full** by default when the solved problem is likely to compound beyond the
+current branch:
 
-2. Lightweight — same documentation, single pass. Faster and uses
-   fewer tokens, but won't detect duplicates or cross-reference
-   existing docs. Best for simple fixes or long sessions nearing
-   context limits.
-```
+- A bug or review finding exposed a reusable failure mode.
+- The implementation touched architecture, auth, data models, migrations,
+  generated artifacts, or multiple subsystems.
+- There may already be overlapping `docs/solutions/` guidance that should be
+  linked, updated, or avoided as a duplicate.
+- The solution depends on non-obvious repo sensors, commands, or workflow
+  decisions that future agents may repeat.
 
-Do NOT pre-select a mode. Do NOT skip this prompt. Wait for the user's choice before proceeding.
+Use **Lightweight** when the learning is narrow and the delivery path needs a
+fast, focused note:
 
-**If the user chooses Full**, ask one follow-up question before proceeding. Detect which harness is running (Claude Code, Codex, or Cursor) and ask:
+- A repo gate requires a solution note for an otherwise well-understood change.
+- The fix is local to one area and related docs are already known.
+- Full research would be disproportionate to the reusable value.
+- The session is near context/time limits and a complete single-pass note is
+  preferable to blocking delivery.
 
-```
-Would you also like to search your [harness name] session history
-for relevant knowledge to help the Compound process? This adds
-time and token usage.
-```
+When you choose a mode, state the choice and one-sentence rationale in your
+progress update, then proceed.
 
-If the user says yes, dispatch the Session Historian in Phase 1. If no, skip it. Do not ask this in lightweight mode.
+**If you choose Full**, decide whether to search session history using the same
+autonomy. Include session history when prior attempts or cross-session context
+are likely to affect the final learning. Skip it when the current branch,
+review findings, and local docs already contain enough evidence. Ask the user
+only when searching session history would materially change cost/privacy and
+the benefit is ambiguous. Do not ask or search session history in Lightweight
+mode.
 
 ---
 

@@ -466,6 +466,11 @@ const schema = defineSchema({
     .index("by_storeId_importKey", ["storeId", "importKey"]),
   inventoryImportProvisionalSku: defineTable(inventoryImportProvisionalSkuSchema)
     .index("by_storeId_status", ["storeId", "status"])
+    .index("by_storeId_status_saleEvidenceQuantity", [
+      "storeId",
+      "status",
+      "saleEvidence.totalQuantitySold",
+    ])
     .index("by_storeId_importKey", ["storeId", "importKey"])
     .index("by_storeId_importKey_status", ["storeId", "importKey", "status"])
     .index("by_storeId_productSkuId_status", [
@@ -622,7 +627,10 @@ const schema = defineSchema({
     ]),
   posTransactionItem: defineTable(posTransactionItemSchema)
     .index("by_transactionId", ["transactionId"])
-    .index("by_pendingCheckoutItemId", ["pendingCheckoutItemId"]),
+    .index("by_pendingCheckoutItemId", ["pendingCheckoutItemId"])
+    .index("by_inventoryImportProvisionalSkuId", [
+      "inventoryImportProvisionalSkuId",
+    ]),
   posTransactionServiceLine: defineTable(posTransactionServiceLineSchema)
     .index("by_transactionId", ["transactionId"])
     .index("by_serviceCaseId", ["serviceCaseId"])
@@ -648,9 +656,15 @@ const schema = defineSchema({
   )
     .index("by_adjustmentId", ["adjustmentId"])
     .index("by_transactionId", ["transactionId"])
+    .index("by_originalTransactionItemId", ["originalTransactionItemId"])
     .index("by_productSkuId", ["productSkuId"]),
   posPendingCheckoutItem: defineTable(posPendingCheckoutItemSchema)
     .index("by_storeId_status_updatedAt", ["storeId", "status", "updatedAt"])
+    .index("by_storeId_status_evidenceQuantity", [
+      "storeId",
+      "status",
+      "evidence.totalQuantitySold",
+    ])
     .index("by_storeId_status_approvedProductSkuId", [
       "storeId",
       "status",
