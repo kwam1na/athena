@@ -10,15 +10,22 @@ import { currencyFormatter } from "../lib/utils";
 
 export const AppHeader = () => {
   const organizations = useGetOrganizations();
+  const showDevIndicator = import.meta.env.DEV;
 
   return (
     <div className="flex min-w-0 flex-1 items-center gap-2">
-      <Link
-        to="/"
-        className="hidden shrink-0 items-center min-[430px]:flex"
-      >
+      <Link to="/" className="hidden shrink-0 items-center min-[430px]:flex">
         <p className="font-medium">athena</p>
       </Link>
+      {showDevIndicator ? (
+        <span
+          aria-label="Development environment"
+          className="hidden shrink-0 rounded-full border border-action-workflow-border bg-action-workflow-soft px-1.5 py-px text-[10px] font-medium uppercase leading-none text-action-workflow min-[430px]:inline-flex"
+          title="Development environment"
+        >
+          dev
+        </span>
+      ) : null}
       <p className="hidden text-muted-foreground sm:block">/</p>
       <OrganizationSwitcher
         className="max-w-[10.75rem] min-[430px]:max-w-[14rem]"
@@ -76,7 +83,7 @@ const Navbar = () => {
 
   const newOrder = useQuery(
     api.storeFront.onlineOrder.newOrder,
-    activeStore?._id ? { storeId: activeStore._id } : "skip"
+    activeStore?._id ? { storeId: activeStore._id } : "skip",
   );
 
   const formatter = currencyFormatter(activeStore?.currency || "USD");

@@ -38,6 +38,10 @@ describe("DailyManagerReport", () => {
     const html = await render(<DailyManagerReport {...baseProps} />);
 
     expect(html).toContain("Athena daily report");
+    expect(html).toContain("max-width:620px;background-color:#ffffff");
+    expect(html).not.toContain(
+      "max-width:620px;background-color:#ffffff;border:1px solid #dde0e5;border-radius:8px",
+    );
     expect(html).toContain("Completed under policy");
     expect(html).toContain("Athena completed EOD Review under store policy.");
     expect(html).toContain("No follow-up needed for this operating day.");
@@ -48,6 +52,17 @@ describe("DailyManagerReport", () => {
     expect(html).toContain("View EOD Review");
     expect(html).toContain("lucide-arrow-up-right");
     expect(html).not.toContain("Athena keeps the full close record");
+  });
+
+  it("supports a bordered report frame", async () => {
+    const html = await render(
+      <DailyManagerReport {...baseProps} frameVariant="bordered" />,
+    );
+
+    expect(html).toContain("Athena daily report");
+    expect(html).toContain(
+      "max-width:620px;background-color:#ffffff;border:1px solid #dde0e5;border-radius:8px",
+    );
   });
 
   it("uses the cedi display symbol for GHS preview defaults", async () => {
@@ -63,14 +78,21 @@ describe("DailyManagerReport", () => {
       />,
     );
 
-    expect(html).toContain("Opening handoff");
-    expect(html).toContain("1 carry-forward item");
+    expect(html).toContain("Ready for manager review");
+    expect(html).not.toContain("Review the close when you are ready.");
+    expect(html).toContain("Before close");
+    expect(html).toContain("Register session is still open");
+    expect(html).toContain("Front Counter is still open.");
+    expect(html).toContain(
+      "Final cash count and variance will be available after the register is closed.",
+    );
+    expect(html).not.toContain("opening team");
     expect(html).not.toContain("Cash variance");
     expect(html).toContain("GH₵1,201.82");
     expect(html).toContain("Expected cash");
-    expect(html).toContain("Counted cash");
+    expect(html).not.toContain("Counted cash");
     expect(html).not.toContain("Cash deposit");
-    expect(html).toContain("GH₵-42.18");
+    expect(html).not.toContain("Net variance");
     expect(html).not.toContain("TXN-1048 | GH₵220");
     expect(html).not.toContain("GHS 1,244");
   });
@@ -151,16 +173,18 @@ describe("DailyManagerReport", () => {
     expect(html).toContain("Completed under policy");
     expect(html).not.toContain("Cash variance");
     expect(html).toContain("Opening handoff");
-    expect(html).toContain("1 carry-forward item");
+    expect(html).toContain("1 item for the next opening");
+    expect(html).not.toContain("opening team");
+    expect(html).not.toContain("1 follow-up");
     expect(html).not.toContain("1 carry-forward</p>");
-    expect(html).toContain(
-      "Visible in the next operating day&#x27;s opening workflow",
-    );
+    expect(html).toContain("Review before the next store day starts.");
     expect(html).not.toContain(
       "1 carry-forward item | Visible in the next operating day&#x27;s opening workflow",
     );
     expect(html).not.toContain("Review register cash handoff before trading.");
-    expect(html.indexOf("Attention")).toBeLessThan(
+    expect(html).toContain("Next opening");
+    expect(html).not.toContain(">Attention<");
+    expect(html.indexOf("Next opening")).toBeLessThan(
       html.indexOf("Operating summary"),
     );
   });
@@ -180,8 +204,18 @@ describe("DailyManagerReport", () => {
     );
 
     expect(html).toContain("Automation failed");
-    expect(html).toContain("Athena could not finish the EOD Review automation check.");
-    expect(html).not.toContain("Register session open");
+    expect(html).toContain(
+      "Athena could not finish the EOD Review automation check.",
+    );
+    expect(html).toContain("Before close");
+    expect(html).toContain("Register session open");
+    expect(html).toContain("Front Counter is still open.");
+    expect(html).toContain(
+      "Final cash count and variance will be available after the register is closed.",
+    );
+    expect(html).toContain("Expected cash");
+    expect(html).not.toContain("Counted cash");
+    expect(html).not.toContain("Net variance");
     expect(html).toContain("1 blocker");
   });
 });

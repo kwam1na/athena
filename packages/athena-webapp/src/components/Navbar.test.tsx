@@ -45,6 +45,11 @@ describe("AppHeader", () => {
       "min-[430px]:flex",
       "shrink-0",
     );
+    expect(screen.getByLabelText("Development environment")).toHaveClass(
+      "border-action-workflow-border",
+      "bg-action-workflow-soft",
+      "text-action-workflow",
+    );
     expect(screen.getByTestId("organization-switcher")).toHaveClass(
       "max-w-[10.75rem]",
       "min-[430px]:max-w-[14rem]",

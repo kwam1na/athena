@@ -39,7 +39,10 @@ export function PosRecoveryCodeForm({
       setIsAuthHandoffPending(false);
     };
 
-    window.addEventListener(ATHENA_AUTH_SYNC_FAILED_EVENT, handleAuthSyncFailed);
+    window.addEventListener(
+      ATHENA_AUTH_SYNC_FAILED_EVENT,
+      handleAuthSyncFailed,
+    );
     return () =>
       window.removeEventListener(
         ATHENA_AUTH_SYNC_FAILED_EVENT,
@@ -80,7 +83,10 @@ export function PosRecoveryCodeForm({
         payload.storeUrlSlug = storeUrlSlug;
       }
 
-      const result = await signIn(ATHENA_POS_RECOVERY_CODE_PROVIDER_ID, payload);
+      const result = await signIn(
+        ATHENA_POS_RECOVERY_CODE_PROVIDER_ID,
+        payload,
+      );
 
       if (!result.signingIn) {
         setErrorMessage(RECOVERY_FAILURE_COPY);
@@ -125,7 +131,10 @@ export function PosRecoveryCodeForm({
         onSubmit={handleSubmit}
       >
         <div className="relative z-10 flex w-full flex-col gap-layout-sm">
-          <label className="text-sm font-medium text-foreground" htmlFor="pos-recovery-account">
+          <label
+            className="text-sm font-medium text-foreground"
+            htmlFor="pos-recovery-account"
+          >
             POS account
           </label>
           <Input
@@ -137,7 +146,10 @@ export function PosRecoveryCodeForm({
         </div>
 
         <div className="relative z-10 flex w-full flex-col gap-layout-sm">
-          <label className="text-sm font-medium text-foreground" htmlFor="pos-recovery-code">
+          <label
+            className="text-sm font-medium text-foreground"
+            htmlFor="pos-recovery-code"
+          >
             Recovery code
           </label>
           <Input
@@ -166,6 +178,7 @@ export function PosRecoveryCodeForm({
           isLoading={isSigningIn}
           disabled={!canSubmit}
           type="submit"
+          variant="workflow"
           className="group relative z-10 h-control-standard w-fit shadow-[0_16px_34px_-22px_hsl(var(--signal)/0.72)]"
         >
           Continue

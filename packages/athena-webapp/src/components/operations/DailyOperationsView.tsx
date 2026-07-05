@@ -131,6 +131,10 @@ export type DailyOperationsLaneStatus =
   | "closed"
   | "unknown";
 
+type PrimaryActionEmphasisStatus =
+  | DailyOperationsLifecycleStatus
+  | "historical_operating";
+
 type DailyOperationsAutomationOutcome =
   | "applied"
   | "prepared"
@@ -795,9 +799,11 @@ const ONLINE_ORDER_TIMELINE_MESSAGE_TEMPLATES: Record<
   string,
   (orderLabel: string) => string
 > = {
-  online_order_cancelled: (orderLabel) => `Online order ${orderLabel} cancelled.`,
+  online_order_cancelled: (orderLabel) =>
+    `Online order ${orderLabel} cancelled.`,
   online_order_created: (orderLabel) => `Online order ${orderLabel} created.`,
-  online_order_delivered: (orderLabel) => `Online order ${orderLabel} delivered.`,
+  online_order_delivered: (orderLabel) =>
+    `Online order ${orderLabel} delivered.`,
   online_order_exchange_balance_collection: (orderLabel) =>
     `Exchange balance collected for online order ${orderLabel}.`,
   online_order_exchange_processed: (orderLabel) =>
@@ -810,7 +816,8 @@ const ONLINE_ORDER_TIMELINE_MESSAGE_TEMPLATES: Record<
     `Payment collected for online order ${orderLabel}.`,
   online_order_payment_verified: (orderLabel) =>
     `Payment verified for online order ${orderLabel}.`,
-  online_order_picked_up: (orderLabel) => `Online order ${orderLabel} picked up.`,
+  online_order_picked_up: (orderLabel) =>
+    `Online order ${orderLabel} picked up.`,
   online_order_pickup_exception: (orderLabel) =>
     `Pickup exception recorded for online order ${orderLabel}.`,
   online_order_ready_for_delivery: (orderLabel) =>
@@ -878,7 +885,9 @@ function TimelineMessage({
   const approvedProductLink = event.approvedProductLink;
   const approvedProductLabel = approvedProductLink?.label?.trim();
   const canRenderApprovedProductLink = Boolean(
-    approvedProductLink?.to && approvedProductLink.params && approvedProductLabel,
+    approvedProductLink?.to &&
+    approvedProductLink.params &&
+    approvedProductLabel,
   );
   const inlineLink =
     event.transactionLink ??
@@ -888,9 +897,13 @@ function TimelineMessage({
   const linkLabel = inlineLink?.label?.trim();
   const matchLabel = event.transactionLink
     ? undefined
-    : event.registerLink?.matchLabel ?? event.onlineOrderLink?.matchLabel;
+    : (event.registerLink?.matchLabel ?? event.onlineOrderLink?.matchLabel);
   const displayMessage = formatTimelineMessage(event.message);
-  const linkMatch = findTimelineLinkMatch(displayMessage, linkLabel, matchLabel);
+  const linkMatch = findTimelineLinkMatch(
+    displayMessage,
+    linkLabel,
+    matchLabel,
+  );
 
   const renderApprovedProductLink = () => {
     if (
@@ -1152,6 +1165,85 @@ function statusClassName(status: DailyOperationsLaneStatus) {
   }
 
   return "border-border bg-background text-muted-foreground";
+}
+
+function getPrimaryActionEmphasis(status: PrimaryActionEmphasisStatus) {
+  const sharedClassName =
+    "transition-[background-color,border-color,box-shadow,transform] duration-150 ease-out active:scale-[0.98]";
+
+  switch (status) {
+    case "not_opened":
+      return {
+        Icon: Clock3,
+        className: cn(
+          "border-border bg-background text-muted-foreground hover:bg-surface hover:text-foreground",
+          sharedClassName,
+        ),
+        iconClassName: "text-muted-foreground",
+      };
+    case "operating":
+      return {
+        Icon: null,
+        className: cn(
+          "border-action-workflow-border bg-action-workflow-soft text-action-workflow shadow-[0_1px_0_hsl(var(--action-workflow)/0.10)] hover:border-action-workflow/45 hover:bg-action-workflow-soft/75 hover:text-action-workflow",
+          sharedClassName,
+        ),
+        iconClassName: "text-action-workflow",
+      };
+    case "historical_operating":
+      return {
+        Icon: Clock3,
+        className: cn(
+          "border-warning/30 bg-warning/10 text-warning-foreground shadow-[0_1px_0_hsl(var(--warning)/0.10)] hover:border-warning/45 hover:bg-warning/15 hover:text-warning-foreground",
+          sharedClassName,
+        ),
+        iconClassName: "text-warning",
+      };
+    case "close_blocked":
+      return {
+        Icon: CircleAlert,
+        className: cn(
+          "border-danger/30 bg-danger/10 text-danger shadow-[0_1px_0_hsl(var(--danger)/0.10)] hover:border-danger/45 hover:bg-danger/15 hover:text-danger",
+          sharedClassName,
+        ),
+        iconClassName: "text-danger",
+      };
+    case "ready_to_close":
+      return {
+        Icon: Check,
+        className: cn(
+          "border-success/35 bg-success/10 text-success shadow-[0_1px_0_hsl(var(--success)/0.10)] hover:border-success/50 hover:bg-success/15 hover:text-success",
+          sharedClassName,
+        ),
+        iconClassName: "text-success",
+      };
+    case "closed":
+      return {
+        Icon: null,
+        className: cn(
+          "border-success/25 bg-success/10 text-success shadow-[0_1px_0_hsl(var(--success)/0.08)] hover:border-success/40 hover:bg-success/15 hover:text-success",
+          sharedClassName,
+        ),
+        iconClassName: "text-success",
+      };
+  }
+
+  const exhaustiveStatus: never = status;
+  return exhaustiveStatus;
+}
+
+function getPrimaryActionEmphasisStatus({
+  isHistoricalDate,
+  status,
+}: {
+  isHistoricalDate: boolean;
+  status: DailyOperationsLifecycleStatus;
+}): PrimaryActionEmphasisStatus {
+  if (isHistoricalDate && status === "operating") {
+    return "historical_operating";
+  }
+
+  return status;
 }
 
 function SuccessCheckIcon({
@@ -1785,15 +1877,25 @@ function HistoricalWorkflowPanel({
   storeUrlSlug: string;
 }) {
   const isClosed = snapshot.lifecycle.status === "closed";
+  const isHistoricalOperating = snapshot.lifecycle.status === "operating";
 
   return (
     <section className="space-y-layout-md">
       <h3 className="text-base font-medium text-foreground">
-        {isClosed ? "Closed store-day record" : "Historical store-day view"}
+        {isClosed
+          ? "Closed store-day record"
+          : isHistoricalOperating
+            ? "Incomplete store-day close"
+            : "Historical store-day view"}
       </h3>
       <div className="rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface">
         {isClosed ? (
-          <Button asChild size="sm" variant="outline">
+          <Button
+            asChild
+            className={getPrimaryActionEmphasis("closed").className}
+            size="sm"
+            variant="outline"
+          >
             <Link
               params={buildParams(orgUrlSlug, storeUrlSlug)}
               search={
@@ -1808,6 +1910,15 @@ function HistoricalWorkflowPanel({
               <ArrowUpRight aria-hidden="true" className="h-4 w-4" />
             </Link>
           </Button>
+        ) : isHistoricalOperating ? (
+          <>
+            <p className="text-sm leading-6 text-foreground">
+              This historical store day does not have a completed close.
+            </p>
+            <p className="mt-layout-xs text-sm leading-6 text-muted-foreground">
+              Review EOD before treating this date as a closed store-day record.
+            </p>
+          </>
         ) : (
           <>
             <p className="text-sm leading-6 text-foreground">
@@ -2655,6 +2766,7 @@ function OperatingDatePicker({
       </PopoverTrigger>
       <PopoverContent align="end" className="w-auto p-0">
         <Calendar
+          defaultMonth={selectedDate ?? latestSelectableDate}
           disabled={{ after: latestSelectableDate }}
           mode="single"
           onSelect={(date) => {
@@ -2747,10 +2859,7 @@ function WeekMetricsStrip({
               Seven days ending {formatOperatingDate(weekEndOperatingDate)}
             </span>
             {refreshedAt ? (
-              <span
-                aria-hidden="true"
-                className="hidden sm:inline"
-              >
+              <span aria-hidden="true" className="hidden sm:inline">
                 ·
               </span>
             ) : null}
@@ -3040,6 +3149,16 @@ export function DailyOperationsViewContent({
   const isHistoricalDate = snapshot
     ? isHistoricalOperatingDate(snapshot.operatingDate)
     : false;
+  const primaryActionEmphasisStatus = snapshot
+    ? getPrimaryActionEmphasisStatus({
+        isHistoricalDate,
+        status: snapshot.lifecycle.status,
+      })
+    : undefined;
+  const primaryActionEmphasis = primaryActionEmphasisStatus
+    ? getPrimaryActionEmphasis(primaryActionEmphasisStatus)
+    : null;
+  const PrimaryActionIcon = primaryActionEmphasis?.Icon;
   const storeRequestsApprovalsLane =
     snapshot && storeRequestsSnapshot?.operatingDate === snapshot.operatingDate
       ? storeRequestsSnapshot.approvalsLane
@@ -3047,8 +3166,7 @@ export function DailyOperationsViewContent({
   const operationLanes = snapshot
     ? replaceApprovalsLane(snapshot.lanes, storeRequestsApprovalsLane)
     : [];
-  const pendingApprovalsLane =
-    getPendingApprovalsLaneFromLanes(operationLanes);
+  const pendingApprovalsLane = getPendingApprovalsLaneFromLanes(operationLanes);
   const actionableLanes = operationLanes.filter(isActionableLane);
   const weekMetricsForDisplay =
     snapshot && (hasDetailSnapshot || !cachedWeekMetrics)
@@ -3139,7 +3257,10 @@ export function DailyOperationsViewContent({
                     {showHistoricalEodReviewAction ? (
                       <Button
                         asChild
-                        className="w-full sm:w-auto"
+                        className={cn(
+                          "w-full sm:w-auto",
+                          primaryActionEmphasis?.className,
+                        )}
                         variant="outline"
                       >
                         <Link
@@ -3155,6 +3276,15 @@ export function DailyOperationsViewContent({
                           }
                           to="/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close"
                         >
+                          {PrimaryActionIcon ? (
+                            <PrimaryActionIcon
+                              aria-hidden="true"
+                              className={cn(
+                                "h-3.5 w-3.5",
+                                primaryActionEmphasis.iconClassName,
+                              )}
+                            />
+                          ) : null}
                           Review EOD Review
                           <ArrowUpRight
                             aria-hidden="true"
@@ -3166,7 +3296,10 @@ export function DailyOperationsViewContent({
                     {showPrimaryAction ? (
                       <Button
                         asChild
-                        className="w-full sm:w-auto"
+                        className={cn(
+                          "w-full sm:w-auto",
+                          primaryActionEmphasis?.className,
+                        )}
                         variant="outline"
                       >
                         <Link
@@ -3179,6 +3312,15 @@ export function DailyOperationsViewContent({
                           }
                           to={snapshot.primaryAction.to}
                         >
+                          {PrimaryActionIcon ? (
+                            <PrimaryActionIcon
+                              aria-hidden="true"
+                              className={cn(
+                                "h-3.5 w-3.5",
+                                primaryActionEmphasis.iconClassName,
+                              )}
+                            />
+                          ) : null}
                           {snapshot.primaryAction.label}
                           <ArrowUpRight
                             aria-hidden="true"

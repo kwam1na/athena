@@ -16,9 +16,7 @@ import {
 import { useAuthActions } from "@convex-dev/auth/react";
 import { ATHENA_EMAIL_OTP_PROVIDER_ID } from "../../../../shared/auth";
 import { LoadingButton } from "~/src/components/ui/loading-button";
-import {
-  ATHENA_AUTH_SYNC_FAILED_EVENT,
-} from "~/src/lib/constants";
+import { ATHENA_AUTH_SYNC_FAILED_EVENT } from "~/src/lib/constants";
 import { startAthenaAuthSyncHandoff } from "./authSyncHandoff";
 import { useForm } from "react-hook-form";
 import { useEffect, useRef, useState } from "react";
@@ -86,7 +84,10 @@ export function InputOTPForm({
       setIsAuthHandoffPending(false);
     };
 
-    window.addEventListener(ATHENA_AUTH_SYNC_FAILED_EVENT, handleAuthSyncFailed);
+    window.addEventListener(
+      ATHENA_AUTH_SYNC_FAILED_EVENT,
+      handleAuthSyncFailed,
+    );
 
     return () => {
       window.removeEventListener(
@@ -249,6 +250,7 @@ export function InputOTPForm({
             isLoading={isSigningIn}
             disabled={isSigningIn || isAuthHandoffPending}
             type="submit"
+            variant="workflow"
             className="group relative z-10 h-control-standard w-fit px-layout-lg shadow-[0_16px_34px_-22px_hsl(var(--signal)/0.72)]"
           >
             Continue

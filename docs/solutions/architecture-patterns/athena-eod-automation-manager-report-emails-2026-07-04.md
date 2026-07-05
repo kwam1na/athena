@@ -23,9 +23,11 @@ tags:
 ## Problem
 
 Athena needed to send a manager-facing daily report after the EOD automation
-successfully completed a store day. The report depends on the completed
-`dailyClose.reportSnapshot`, live register-session cash-position corrections,
-store currency formatting, and the admin-recipient list in `ADMIN_EMAILS`.
+successfully completed a store day or prepared the EOD Review for manager
+review. Completed reports depend on the completed `dailyClose.reportSnapshot`,
+while prepared reports are assembled from the live EOD Review snapshot. Both
+paths use live register-session cash-position corrections, store currency
+formatting, and the admin-recipient list in `ADMIN_EMAILS`.
 
 The tempting implementation is to send directly from the daily close mutation,
 but email delivery is network I/O. In Convex, that belongs in an action, while
@@ -39,7 +41,7 @@ scheduled automation entrypoint:
 - `runConfiguredDailyOperationsAutomationMutation` performs the existing
   automation mutations and returns EOD auto-complete results.
 - `runConfiguredDailyOperationsAutomation` is an internal action that calls the
-  mutation, filters for fresh `applied` EOD auto-complete results, then sends
+  mutation, filters for fresh reportable EOD auto-complete results, then sends
   manager reports.
 - `sendDailyManagerReportToAdminsForDate` is an internal action that assembles
   the report payload for one completed operating date and sends it to every
@@ -50,12 +52,16 @@ scheduled automation entrypoint:
 The important guard is filtering only fresh action results:
 
 ```ts
-function isAppliedEodAutoCompleteResult(result) {
-  return result?.action === "applied" && result.run.outcome === "applied";
+function isReportableEodAutoCompleteResult(result) {
+  return (
+    (result?.action === "applied" && result.run.outcome === "applied") ||
+    (result?.action === "recorded" && result.run.outcome === "prepared")
+  );
 }
 ```
 
-That excludes dry runs, disabled policies, skipped outcomes, and
+That includes fresh completed reports and fresh prepared-for-review reports,
+while excluding dry runs, disabled policies, skipped outcomes, and
 `already_recorded` idempotency returns so scheduled retries do not resend old
 reports.
 
@@ -66,17 +72,19 @@ letting the automation mutation remain deterministic and testable. It also
 makes the recipient source explicit: scheduled automation sends to
 `ADMIN_EMAILS`, while one-off testing actions can still target a single address.
 
-Report payload construction should happen after completion, not before. The
-completed snapshot is the source of truth for status, notes, readiness, and
-operating date, while live register-session reads can correct cash position for
-historical days with multiple sessions.
+Report payload construction should happen from the state that owns the message.
+Completed reports should use the completed snapshot as the source of truth for
+status, notes, readiness, and operating date. Prepared reports should use the
+live EOD Review snapshot and link managers back to EOD Review as the CTA. Live
+register-session reads can correct cash position for historical days with
+multiple sessions in both paths.
 
 ## Prevention
 
 - Keep network delivery out of Convex mutations. Use an internal action wrapper
   when an automation mutation needs to trigger email, webhooks, or other
   external side effects.
-- Filter notification sends by fresh `applied` automation results, not by the
+- Filter notification sends by fresh reportable automation results, not by the
   presence of any applied automation run.
 - Preserve explicit manual-send actions for development or support workflows so
   scheduled manager notifications do not reuse ad hoc recipient arguments.
