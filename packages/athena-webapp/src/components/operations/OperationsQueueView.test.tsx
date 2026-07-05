@@ -987,6 +987,56 @@ describe("OperationsQueueViewContent", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("routes catalog taxonomy setup work to the product edit page", () => {
+    render(
+      <OperationsQueueViewContent
+        {...baseProps}
+        activeWorkflow="queue"
+        orgUrlSlug="wigclub"
+        storeUrlSlug="wigclub"
+        workItems={[
+          {
+            _id: "work-catalog-taxonomy" as Id<"operationalWorkItem">,
+            approvalState: "not_required",
+            createdAt: Date.UTC(2026, 6, 1, 10, 0, 0),
+            details: {
+              productId: "product-1",
+              productName: "BLACK HAIR BAND SMALL",
+              productSkuId: "sku-1",
+              sku: "6N2Y-PKG-RBR",
+            },
+            priority: "medium",
+            status: "open",
+            title: "Assign catalog category: Packaging Rubber",
+            type: "catalog_taxonomy_setup",
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getAllByText("Catalog setup").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Black Hair Band Small").length).toBeGreaterThan(
+      0,
+    );
+    expect(screen.queryByText("BLACK HAIR BAND SMALL")).not.toBeInTheDocument();
+    expect(screen.getByText("6N2Y-PKG-RBR")).toBeInTheDocument();
+    expect(
+      screen.getByText("Assign category and subcategory"),
+    ).toBeInTheDocument();
+
+    const catalogSetupHref = new URL(
+      screen
+        .getByRole("link", { name: "Assign category" })
+        .getAttribute("href") ?? "",
+      "http://localhost",
+    );
+    expect(catalogSetupHref.pathname).toBe(
+      "/wigclub/store/wigclub/products/product-1/edit",
+    );
+    expect(catalogSetupHref.searchParams.get("o")).toBe("%2F");
+    expect(catalogSetupHref.searchParams.get("variant")).toBe("sku-1");
+  });
+
   it("does not render service deposit review as a supported open work row", () => {
     render(
       <OperationsQueueViewContent

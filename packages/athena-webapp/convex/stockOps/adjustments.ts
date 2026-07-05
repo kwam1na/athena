@@ -5,7 +5,7 @@ import {
   type QueryCtx,
 } from "../_generated/server";
 import { internal } from "../_generated/api";
-import type { Id } from "../_generated/dataModel";
+import type { Doc, Id } from "../_generated/dataModel";
 import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import {
@@ -19,6 +19,7 @@ import {
   createOperationalWorkItemWithCtx,
   updateOperationalWorkItemStatusWithCtx,
 } from "../operations/operationalWorkItems";
+import { autoResolveSyncedSaleInventoryReviewsForStockAdjustmentWithCtx } from "../operations/openWorkInventoryReviews";
 import {
   CYCLE_COUNT_REASON_CODE,
   MANUAL_STOCK_ADJUSTMENT_REASON_CODES,
@@ -74,6 +75,7 @@ const ACTIVE_CHECKOUT_SESSION_SUM_LIMIT = 1000;
 const ACTIVE_CHECKOUT_ITEM_SUM_LIMIT = 5000;
 const STOCK_ADJUSTMENT_BLOCKER_POINT_LOOKUP_LIMIT = 50;
 const ACTIVE_PROVISIONAL_IMPORT_BLOCKER_SCAN_LIMIT = 1500;
+const ACTIVE_PROVISIONAL_IMPORT_BLOCKER_ROWS_PER_SKU_LIMIT = 25;
 const ACTIVE_PENDING_CHECKOUT_BLOCKER_SCAN_LIMIT = 2000;
 const INVENTORY_SNAPSHOT_DEFAULT_LIMIT = 500;
 const INVENTORY_SNAPSHOT_MAX_LIMIT = 750;
@@ -109,6 +111,10 @@ type StockAdjustmentBlockedSkuStatus = {
   reason: StockAdjustmentBlockedSkuReason;
 };
 
+type ProductReadCache = Map<Id<"product">, Doc<"product"> | null>;
+type CategoryReadCache = Map<Id<"category">, Doc<"category"> | null>;
+type SubcategoryReadCache = Map<Id<"subcategory">, Doc<"subcategory"> | null>;
+
 function trimOptional(value?: string | null) {
   const nextValue = value?.trim();
   return nextValue ? nextValue : undefined;
@@ -116,6 +122,104 @@ function trimOptional(value?: string | null) {
 
 function getStockAdjustmentScopeKey(categoryName?: string | null) {
   return categoryName?.trim() || UNCATEGORIZED_SCOPE_KEY;
+}
+
+async function readProductWithCache(
+  ctx: Pick<QueryCtx | MutationCtx, "db">,
+  cache: ProductReadCache,
+  productId: Id<"product">,
+) {
+  if (!cache.has(productId)) {
+    cache.set(productId, await ctx.db.get("product", productId));
+  }
+
+  return cache.get(productId) ?? null;
+}
+
+async function readCategoryWithCache(
+  ctx: Pick<QueryCtx | MutationCtx, "db">,
+  cache: CategoryReadCache,
+  categoryId: Id<"category">,
+) {
+  if (!cache.has(categoryId)) {
+    cache.set(categoryId, await ctx.db.get("category", categoryId));
+  }
+
+  return cache.get(categoryId) ?? null;
+}
+
+async function readSubcategoryWithCache(
+  ctx: Pick<QueryCtx | MutationCtx, "db">,
+  cache: SubcategoryReadCache,
+  subcategoryId: Id<"subcategory">,
+) {
+  if (!cache.has(subcategoryId)) {
+    cache.set(subcategoryId, await ctx.db.get("subcategory", subcategoryId));
+  }
+
+  return cache.get(subcategoryId) ?? null;
+}
+
+async function isOnboardedTrustedProductForStockAdjustment(
+  ctx: Pick<QueryCtx | MutationCtx, "db">,
+  caches: {
+    categories: CategoryReadCache;
+    products: ProductReadCache;
+    subcategories: SubcategoryReadCache;
+  },
+  args: {
+    productId?: Id<"product">;
+    storeId: Id<"store">;
+  },
+) {
+  if (!args.productId) return false;
+
+  const product = await readProductWithCache(ctx, caches.products, args.productId);
+  if (!product || product.storeId !== args.storeId) return false;
+  if (product.availability === "draft" || product.availability === "archived") {
+    return false;
+  }
+  if (!product.categoryId || !product.subcategoryId) return false;
+
+  const [category, subcategory] = await Promise.all([
+    readCategoryWithCache(ctx, caches.categories, product.categoryId),
+    readSubcategoryWithCache(ctx, caches.subcategories, product.subcategoryId),
+  ]);
+
+  return Boolean(
+    category &&
+      subcategory &&
+      category.storeId === args.storeId &&
+      subcategory.storeId === args.storeId &&
+      subcategory.categoryId === category._id &&
+      category.slug !== "legacy-import",
+  );
+}
+
+async function shouldBlockStockAdjustmentForProvisionalImportRow(
+  ctx: Pick<QueryCtx | MutationCtx, "db">,
+  caches: {
+    categories: CategoryReadCache;
+    products: ProductReadCache;
+    subcategories: SubcategoryReadCache;
+  },
+  args: {
+    row: Doc<"inventoryImportProvisionalSku">;
+    storeId: Id<"store">;
+  },
+) {
+  if (args.row.finalizedAt !== undefined) return false;
+  if ((args.row.saleEvidence?.totalQuantitySold ?? 0) > 0) return true;
+
+  const isTrustedProduct = await isOnboardedTrustedProductForStockAdjustment(
+    ctx,
+    caches,
+    {
+      productId: args.row.productId,
+      storeId: args.storeId,
+    },
+  );
+  return !isTrustedProduct;
 }
 
 async function listProductSkusForStockAdjustmentScopeWithCtx(
@@ -311,6 +415,7 @@ async function applyStockAdjustmentBatchWithCtx(
   },
 ) {
   const sourceId = buildStockAdjustmentSourceId(String(args.batchId));
+  const inventoryMovements: Doc<"inventoryMovement">[] = [];
 
   for (const lineItem of args.lineItems) {
     const productSku = await ctx.db.get("productSku", lineItem.productSkuId);
@@ -327,7 +432,7 @@ async function applyStockAdjustmentBatchWithCtx(
       ),
     });
 
-    await recordInventoryMovementWithCtx(ctx, {
+    const inventoryMovement = await recordInventoryMovementWithCtx(ctx, {
       actorUserId: args.actorUserId,
       movementType:
         lineItem.countedQuantity === undefined ? "adjustment" : "cycle_count",
@@ -342,7 +447,19 @@ async function applyStockAdjustmentBatchWithCtx(
       storeId: args.storeId,
       workItemId: args.workItemId,
     });
+
+    if (inventoryMovement) {
+      inventoryMovements.push(inventoryMovement);
+    }
   }
+
+  await autoResolveSyncedSaleInventoryReviewsForStockAdjustmentWithCtx(ctx, {
+    actorUserId: args.actorUserId,
+    inventoryMovements,
+    organizationId: args.organizationId,
+    stockAdjustmentBatchId: args.batchId,
+    storeId: args.storeId,
+  });
 
   await scheduleCatalogSummaryDirtyMarker(ctx, args.storeId);
 }
@@ -361,6 +478,11 @@ async function readActiveProvisionalImportSkuIdsWithCtx(
   }
 
   const productSkuIdSet = new Set(productSkuIds);
+  const caches = {
+    categories: new Map<Id<"category">, Doc<"category"> | null>(),
+    products: new Map<Id<"product">, Doc<"product"> | null>(),
+    subcategories: new Map<Id<"subcategory">, Doc<"subcategory"> | null>(),
+  };
 
   if (productSkuIds.length > STOCK_ADJUSTMENT_BLOCKER_POINT_LOOKUP_LIMIT) {
     const rows = await ctx.db
@@ -376,18 +498,29 @@ async function readActiveProvisionalImportSkuIdsWithCtx(
       );
     }
 
-    return new Set(
-      rows.flatMap((row) =>
-        row.productSkuId && productSkuIdSet.has(row.productSkuId)
-          ? [row.productSkuId as Id<"productSku">]
-          : [],
-      ),
-    );
+    const blockedSkuIds = new Set<Id<"productSku">>();
+    for (const row of rows) {
+      if (!row.productSkuId || !productSkuIdSet.has(row.productSkuId)) {
+        continue;
+      }
+
+      if (
+        await shouldBlockStockAdjustmentForProvisionalImportRow(ctx, caches, {
+          row,
+          storeId: args.storeId,
+        })
+      ) {
+        blockedSkuIds.add(row.productSkuId as Id<"productSku">);
+      }
+    }
+
+    return blockedSkuIds;
   }
 
-  const rows = await Promise.all(
-    productSkuIds.map((productSkuId) =>
-      ctx.db
+  const rowGroups = await Promise.all(
+    productSkuIds.map(async (productSkuId) => ({
+      productSkuId,
+      rows: await ctx.db
         .query("inventoryImportProvisionalSku")
         .withIndex("by_storeId_productSkuId_status", (q) =>
           q
@@ -395,15 +528,33 @@ async function readActiveProvisionalImportSkuIdsWithCtx(
             .eq("productSkuId", productSkuId)
             .eq("status", "active"),
         )
-        .first(),
-    ),
+        .take(ACTIVE_PROVISIONAL_IMPORT_BLOCKER_ROWS_PER_SKU_LIMIT + 1),
+    })),
   );
 
-  return new Set(
-    rows.flatMap((row) =>
-      row?.productSkuId ? [row.productSkuId as Id<"productSku">] : [],
-    ),
-  );
+  const blockedSkuIds = new Set<Id<"productSku">>();
+  for (const { productSkuId, rows } of rowGroups) {
+    if (rows.length > ACTIVE_PROVISIONAL_IMPORT_BLOCKER_ROWS_PER_SKU_LIMIT) {
+      blockedSkuIds.add(productSkuId);
+      continue;
+    }
+
+    for (const row of rows) {
+      if (!row.productSkuId) continue;
+
+      if (
+        await shouldBlockStockAdjustmentForProvisionalImportRow(ctx, caches, {
+          row,
+          storeId: args.storeId,
+        })
+      ) {
+        blockedSkuIds.add(row.productSkuId as Id<"productSku">);
+        break;
+      }
+    }
+  }
+
+  return blockedSkuIds;
 }
 
 async function readActivePendingCheckoutSkuIdsWithCtx(

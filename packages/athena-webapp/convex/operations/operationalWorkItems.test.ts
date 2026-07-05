@@ -479,6 +479,20 @@ describe("getQueueSnapshot", () => {
     const ctx = createQueueContext({
       workItems: [
         workItem({
+          _id: "work-catalog-taxonomy" as Id<"operationalWorkItem">,
+          createdAt: 40,
+          metadata: {
+            categorySlug: "legacy-import",
+            productId: "product-1",
+            productName: "Packaging Rubber",
+            productSkuId: "sku-1",
+            sku: "6N2Y-PKG-RBR",
+            subcategorySlug: "472",
+          },
+          status: "open",
+          type: "catalog_taxonomy_setup",
+        }),
+        workItem({
           _id: "work-purchase-z" as Id<"operationalWorkItem">,
           createdAt: 5,
           metadata: { purchaseOrderId: "po-z" },
@@ -532,12 +546,25 @@ describe("getQueueSnapshot", () => {
     });
 
     expect(result.workItems.map((item: QueueTestRow) => item._id)).toEqual([
+      "work-catalog-taxonomy",
       "work-adjustment-approval",
       "work-synced-in-progress",
       "work-synced-open",
       "work-purchase-a",
       "work-purchase-z",
     ]);
+    expect(result.workItems[0]).toMatchObject({
+      details: {
+        categorySlug: "legacy-import",
+        productId: "product-1",
+        productName: "Packaging Rubber",
+        productSkuId: "sku-1",
+        sku: "6N2Y-PKG-RBR",
+        subcategorySlug: "472",
+      },
+      sourceIdentity: "catalog_taxonomy_setup:product-1",
+    });
+    expect(JSON.stringify(result.workItems[0])).not.toContain("metadata");
   });
 
   it("returns explicit overflow metadata when open, in-progress, or approval lanes exceed the queue cap", async () => {

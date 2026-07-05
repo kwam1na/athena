@@ -2673,7 +2673,9 @@ describe("StockAdjustmentWorkspaceContent", () => {
       }),
     ).not.toBeInTheDocument();
 
-    const bodyWaveRow = screen.getByText("Body Wave Bundle").closest("tr");
+    const bodyWaveRow = within(screen.getByRole("table"))
+      .getByText("Body Wave Bundle")
+      .closest("tr");
     expect(bodyWaveRow).not.toBeNull();
 
     await user.click(bodyWaveRow!);
@@ -2691,6 +2693,66 @@ describe("StockAdjustmentWorkspaceContent", () => {
       "/wigclub/store/wigclub/products/product-2?o=%2Fwigclub%2Fstore%2Fwigclub%2Foperations%2Fstock-adjustments",
     );
     expect(bodyWaveRow).toHaveClass("bg-muted/60");
+  });
+
+  it("keeps an already selected stock row selected when the row is clicked", async () => {
+    const user = userEvent.setup();
+    const onSearchStateChange = vi.fn();
+
+    renderStockAdjustmentWorkspace({
+      onSearchStateChange,
+      searchState: {
+        mode: "manual",
+        selectedSku: "sku-2",
+      },
+    });
+
+    const bodyWaveRow = within(screen.getByRole("table"))
+      .getByText("Body Wave Bundle")
+      .closest("tr");
+    expect(bodyWaveRow).not.toBeNull();
+    expect(bodyWaveRow).toHaveClass("bg-muted/60");
+
+    await user.click(bodyWaveRow!);
+
+    expect(bodyWaveRow).toHaveClass("bg-muted/60");
+    expect(onSearchStateChange).not.toHaveBeenCalledWith({
+      selectedSku: undefined,
+      sku: undefined,
+    });
+  });
+
+  it("keeps route-selected stock rows selected when their inputs are focused", async () => {
+    const user = userEvent.setup();
+    const onSearchStateChange = vi.fn();
+
+    renderStockAdjustmentWorkspace({
+      onSearchStateChange,
+      searchState: {
+        mode: "manual",
+        sku: "sku-2",
+      },
+    });
+
+    const bodyWaveRow = within(screen.getByRole("table"))
+      .getByText("Body Wave Bundle")
+      .closest("tr");
+    expect(bodyWaveRow).not.toBeNull();
+    expect(bodyWaveRow).toHaveClass("bg-muted/60");
+
+    await user.click(
+      screen.getByLabelText(/adjustment delta for body wave bundle/i),
+    );
+
+    expect(bodyWaveRow).toHaveClass("bg-muted/60");
+    expect(onSearchStateChange).not.toHaveBeenCalledWith({
+      selectedSku: "sku-2",
+      sku: undefined,
+    });
+    expect(onSearchStateChange).not.toHaveBeenCalledWith({
+      selectedSku: undefined,
+      sku: undefined,
+    });
   });
 
   it("presents safe command errors without raising a success toast", async () => {

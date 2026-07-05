@@ -15,6 +15,7 @@ import {
   Lock,
   LockOpen,
   PackageCheck,
+  PackageSearch,
   ReceiptText,
   Scissors,
   ShoppingCart,
@@ -111,6 +112,9 @@ type QueueWorkItem = {
     lookupCode?: string | null;
     price?: number | null;
     primaryProductSkuId?: string | null;
+    productId?: string | null;
+    productName?: string | null;
+    productSkuId?: string | null;
     provisionalProductId?: string | null;
     provisionalProductSkuId?: string | null;
     purchaseOrderNumber?: string | null;
@@ -118,6 +122,7 @@ type QueueWorkItem = {
     reasonLabel?: string | null;
     receiptNumber?: string | null;
     registerSessionId?: string | null;
+    sku?: string | null;
     sourceId?: string | null;
     terminalId?: string | null;
     totalQuantitySold?: number | null;
@@ -275,9 +280,22 @@ function getWorkItemTitleSubject(title: string, prefix: string) {
   return subject ? preserveOperationalAcronyms(capitalizeWords(subject)) : null;
 }
 
+function formatCatalogSetupProductName(item: QueueWorkItem) {
+  const productName = getQueueWorkItemStringDetail(item, "productName");
+  if (productName) {
+    return preserveOperationalAcronyms(capitalizeWords(productName));
+  }
+
+  return getQueueWorkItemStringDetail(item, "productId") ?? "Product not recorded";
+}
+
 function getQueueWorkItemTypeLabel(type: string) {
   if (type === "pos_pending_checkout_item_review") {
     return "POS pending checkout";
+  }
+
+  if (type === "catalog_taxonomy_setup") {
+    return "Catalog setup";
   }
 
   if (type === "synced_sale_inventory_review") {
@@ -381,6 +399,16 @@ function getQueueWorkItemContextPresentation(type: string) {
     return {
       cardClassName: "bg-surface-raised hover:border-border",
       Icon: ShoppingCart,
+      iconClassName:
+        "border-action-workflow-border bg-action-workflow-soft text-action-workflow",
+      contextLabelClassName: "text-action-workflow",
+    };
+  }
+
+  if (type === "catalog_taxonomy_setup") {
+    return {
+      cardClassName: "bg-surface-raised hover:border-border",
+      Icon: PackageSearch,
       iconClassName:
         "border-action-workflow-border bg-action-workflow-soft text-action-workflow",
       contextLabelClassName: "text-action-workflow",
@@ -659,6 +687,33 @@ function QueueWorkItemActionSlot({
         <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
       </Link>
     );
+  }
+
+  if (item.type === "catalog_taxonomy_setup") {
+    const productId = getQueueWorkItemStringDetail(item, "productId");
+    const productSkuId = getQueueWorkItemStringDetail(item, "productSkuId");
+
+    if (productId) {
+      return (
+        <Link
+          className={openWorkActionLinkClassName}
+          from="/$orgUrlSlug/store/$storeUrlSlug/operations/open-work"
+          params={{
+            orgUrlSlug,
+            productSlug: productId,
+            storeUrlSlug,
+          }}
+          search={{
+            o: getOrigin(),
+            ...(productSkuId ? { variant: productSkuId } : {}),
+          }}
+          to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit"
+        >
+          Assign category
+          <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
+        </Link>
+      );
+    }
   }
 
   if (item.type === "synced_sale_inventory_review") {
@@ -959,6 +1014,25 @@ function QueueWorkItemCard({
       value: getRelativeTime(item.createdAt),
     },
   ];
+  const catalogTaxonomyCollapsedMetadataEntries: OperationReviewMetadataEntry[] =
+    [
+      {
+        label: "Product",
+        value: formatCatalogSetupProductName(item),
+      },
+      {
+        label: "SKU",
+        value: getQueueWorkItemStringDetail(item, "sku") ?? "Not recorded",
+      },
+      {
+        label: "Next action",
+        value: "Assign category and subcategory",
+      },
+      {
+        label: "Created",
+        value: getRelativeTime(item.createdAt),
+      },
+    ];
   const pendingCheckoutCollapsedMetadataEntries: OperationReviewMetadataEntry[] =
     [
       {
@@ -1007,17 +1081,19 @@ function QueueWorkItemCard({
   const collapsedMetadataEntries =
     item.type === "pos_pending_checkout_item_review"
       ? pendingCheckoutCollapsedMetadataEntries
-      : item.type === "synced_sale_inventory_review"
-        ? syncedSaleCollapsedMetadataEntries
-        : item.type === "purchase_order"
-          ? purchaseOrderCollapsedMetadataEntries
-          : item.type === "stock_adjustment_review"
-            ? stockAdjustmentReviewCollapsedMetadataEntries
-            : item.type === "daily_close_carry_forward"
-              ? dailyCloseCollapsedMetadataEntries
-              : item.type === "service_deposit_review"
-                ? unsupportedCollapsedMetadataEntries
-                : serviceCollapsedMetadataEntries;
+      : item.type === "catalog_taxonomy_setup"
+        ? catalogTaxonomyCollapsedMetadataEntries
+        : item.type === "synced_sale_inventory_review"
+          ? syncedSaleCollapsedMetadataEntries
+          : item.type === "purchase_order"
+            ? purchaseOrderCollapsedMetadataEntries
+            : item.type === "stock_adjustment_review"
+              ? stockAdjustmentReviewCollapsedMetadataEntries
+              : item.type === "daily_close_carry_forward"
+                ? dailyCloseCollapsedMetadataEntries
+                : item.type === "service_deposit_review"
+                  ? unsupportedCollapsedMetadataEntries
+                  : serviceCollapsedMetadataEntries;
   const expandedOnlyMetadataEntries: OperationReviewMetadataEntry[] =
     item.type === "synced_sale_inventory_review"
       ? [

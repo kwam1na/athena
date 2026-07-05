@@ -5,6 +5,7 @@ import React, {
   ReactNode,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
 } from "react";
 import { ProductVariant } from "@/components/add-product/ProductStock";
@@ -40,6 +41,8 @@ interface ProductContextType {
   mergeTrustedInventoryFinalization: (
     result: TrustedInventoryFinalizationMerge,
   ) => void;
+  markTrustedInventoryFinalized: (skuId: string) => void;
+  trustedInventoryFinalizedSkuIds: Set<string>;
   isLoading: boolean;
   updateVariantImages: (variantId: string, newImages: ImageFile[]) => void;
   updateAppState: (newState: Partial<AppState>) => void;
@@ -56,6 +59,7 @@ export type TrustedInventoryFinalizationMerge = {
     availability?: Product["availability"];
     isVisible?: boolean;
   };
+  productId?: string;
   sku: {
     id: string;
     stock: number;
@@ -206,6 +210,17 @@ export function mergeTrustedInventoryFinalizationIntoVariants(
   );
 }
 
+export function mergeTrustedInventoryFinalizationIntoProduct(
+  product: Product | null | undefined,
+  productPatch: TrustedInventoryFinalizationMerge["product"],
+): Product | null | undefined {
+  if (!product || !productPatch) return product;
+  return {
+    ...product,
+    ...productPatch,
+  };
+}
+
 interface AppState {
   isInitialLoad: boolean;
   didRevertChanges: boolean;
@@ -246,6 +261,15 @@ export function ProductProvider({
 
   const [activeProductVariant, setActiveProductVariant] =
     useState<ProductVariant>(productVariants[0]);
+  const [
+    trustedInventoryFinalizedSkuIds,
+    setTrustedInventoryFinalizedSkuIds,
+  ] = useState<Set<string>>(() => new Set());
+  const [trustedInventoryProductPatch, setTrustedInventoryProductPatch] =
+    useState<{
+      productId?: string;
+      product?: TrustedInventoryFinalizationMerge["product"];
+    }>();
 
   const [images, updateImages] = useState<ImageFile[]>([]);
   const [error, setError] = useState<ZodError | null>(null);
@@ -254,6 +278,24 @@ export function ProductProvider({
   const { productSlug } = useParams({ strict: false });
 
   const { activeProduct } = useGetActiveProduct({ includeArchived });
+  const trustedInventoryPatchForActiveProduct = useMemo(() => {
+    if (!trustedInventoryProductPatch) return undefined;
+    if (
+      trustedInventoryProductPatch.productId !== undefined &&
+      trustedInventoryProductPatch.productId !== activeProduct?._id
+    ) {
+      return undefined;
+    }
+    return trustedInventoryProductPatch.product;
+  }, [activeProduct?._id, trustedInventoryProductPatch]);
+  const effectiveActiveProduct = useMemo(
+    () =>
+      mergeTrustedInventoryFinalizationIntoProduct(
+        activeProduct,
+        trustedInventoryPatchForActiveProduct,
+      ),
+    [activeProduct, trustedInventoryPatchForActiveProduct],
+  );
   const previousActiveProductRef = useRef<Product | null>(null);
 
   const updateAppState = (newState: Partial<AppState>) => {
@@ -332,9 +374,28 @@ export function ProductProvider({
     );
   };
 
+  const markTrustedInventoryFinalized = useCallback((skuId: string) => {
+    setTrustedInventoryFinalizedSkuIds((prev) => {
+      if (prev.has(skuId)) return prev;
+      const next = new Set(prev);
+      next.add(skuId);
+      return next;
+    });
+  }, []);
+
   const mergeTrustedInventoryFinalization = (
     result: TrustedInventoryFinalizationMerge,
   ) => {
+    markTrustedInventoryFinalized(result.sku.id);
+    if (result.product) {
+      setTrustedInventoryProductPatch((prevPatch) => ({
+        productId: result.productId ?? activeProduct?._id,
+        product: {
+          ...prevPatch?.product,
+          ...result.product,
+        },
+      }));
+    }
     setProductData((prevData) => ({
       ...prevData,
       ...(result.product?.inventoryCount !== undefined
@@ -368,9 +429,9 @@ export function ProductProvider({
     }
   };
 
-  const updateProductData = (newData: Partial<Product>) => {
+  const updateProductData = useCallback((newData: Partial<Product>) => {
     setProductData((prevData) => ({ ...prevData, ...newData }));
-  };
+  }, []);
 
   const revertChanges = () => {
     if (!activeProduct) return;
@@ -418,6 +479,13 @@ export function ProductProvider({
         return variants;
       });
 
+      if (
+        !previousActiveProduct ||
+        previousActiveProduct._id !== activeProduct._id
+      ) {
+        setTrustedInventoryFinalizedSkuIds(new Set());
+        setTrustedInventoryProductPatch(undefined);
+      }
       previousActiveProductRef.current = activeProduct;
 
       setIsLoading(false);
@@ -443,7 +511,7 @@ export function ProductProvider({
 
   const value = {
     appState,
-    activeProduct,
+    activeProduct: effectiveActiveProduct,
     productData,
     updateProductData,
     activeProductVariant,
@@ -460,6 +528,8 @@ export function ProductProvider({
     updateVariantImages,
     updateProductVariant,
     mergeTrustedInventoryFinalization,
+    markTrustedInventoryFinalized,
+    trustedInventoryFinalizedSkuIds,
     updateAppState,
     isLoading,
     showLoaderForProduct: Boolean(productSlug && activeProduct === undefined),

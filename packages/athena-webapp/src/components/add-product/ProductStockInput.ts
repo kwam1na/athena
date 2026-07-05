@@ -219,6 +219,7 @@ export type ProductPageProvisionalSkuBinding =
       row: {
         _id: Id<"inventoryImportProvisionalSku"> | Id<"posPendingCheckoutItem">;
         importKey: string;
+        finalizedAt?: number;
         importedQuantity: number;
         lastSoldAt?: number;
         linkedTarget?: {
@@ -233,7 +234,14 @@ export type ProductPageProvisionalSkuBinding =
         provisionalSoldQuantity: number;
         rowNumber: number;
         saleCount: number;
-        status?: "pending_review" | "flagged" | "linked_to_catalog";
+        status?:
+          | "active"
+          | "finalized"
+          | "rejected"
+          | "closed"
+          | "pending_review"
+          | "flagged"
+          | "linked_to_catalog";
       };
       saleEvidenceFingerprint: string;
       trustedSkuFingerprint: string;
@@ -340,8 +348,7 @@ export function resolveTrustedInventoryReviewState({
       action: "none",
       ctaLabel: "Trusted inventory finalized",
       disabled: true,
-      message:
-        "Inventory finalized. Save remaining product changes separately.",
+      message: "Trusted inventory finalized.",
       status: "success",
     };
   }

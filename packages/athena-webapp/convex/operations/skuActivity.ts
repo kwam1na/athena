@@ -572,7 +572,10 @@ function getImportStatusesForReviewStatus(
   }
 
   if (reviewStatus === "reviewed") {
-    return REVIEWED_IMPORT_PROVISIONAL_STATUSES;
+    return [
+      ...OPEN_IMPORT_PROVISIONAL_STATUSES,
+      ...REVIEWED_IMPORT_PROVISIONAL_STATUSES,
+    ];
   }
 
   return [
@@ -605,16 +608,23 @@ function getSourceReviewState(
   return openStatuses.includes(status) ? "open" : "reviewed";
 }
 
+function getInventoryImportEvidenceReviewState(
+  row: Doc<"inventoryImportProvisionalSku">
+) {
+  if (row.finalizedAt !== undefined) {
+    return "reviewed" as const;
+  }
+
+  return getSourceReviewState(row.status, OPEN_IMPORT_PROVISIONAL_STATUSES);
+}
+
 function buildInventoryImportEvidenceSource(
   row: Doc<"inventoryImportProvisionalSku">
 ) {
   return {
     id: row._id,
     sourceType: "inventoryImportProvisionalSku" as const,
-    reviewState: getSourceReviewState(
-      row.status,
-      OPEN_IMPORT_PROVISIONAL_STATUSES
-    ),
+    reviewState: getInventoryImportEvidenceReviewState(row),
     status: row.status,
     title: row.importedProductName,
     sku: row.importedSku ?? null,
@@ -634,6 +644,27 @@ function buildInventoryImportEvidenceSource(
     lastActivityAt: row.saleEvidence.lastSoldAt ?? row.updatedAt,
     updatedAt: row.updatedAt,
   };
+}
+
+async function hasArchivedLinkedProduct(
+  ctx: QueryCtx,
+  productCache: Map<Id<"product">, Doc<"product"> | null>,
+  row: Doc<"inventoryImportProvisionalSku">
+) {
+  if (!row.productId) {
+    return false;
+  }
+
+  if (!productCache.has(row.productId)) {
+    productCache.set(row.productId, await ctx.db.get("product", row.productId));
+  }
+
+  const product = productCache.get(row.productId);
+  return Boolean(
+    product &&
+      product.storeId === row.storeId &&
+      product.availability === "archived"
+  );
 }
 
 function buildPendingCheckoutEvidenceSource(
@@ -678,6 +709,7 @@ async function listInventoryImportEvidenceSources(
   }
 ) {
   const rows: Doc<"inventoryImportProvisionalSku">[] = [];
+  const productCache = new Map<Id<"product">, Doc<"product"> | null>();
   for (const status of getImportStatusesForReviewStatus(args.reviewStatus)) {
     const matches = await ctx.db
       .query("inventoryImportProvisionalSku")
@@ -693,7 +725,20 @@ async function listInventoryImportEvidenceSources(
     rows.push(...matches);
   }
 
-  return rows.map(buildInventoryImportEvidenceSource);
+  const sources = [];
+  for (const row of rows) {
+    const reviewState = getInventoryImportEvidenceReviewState(row);
+    if (args.reviewStatus !== "all" && reviewState !== args.reviewStatus) {
+      continue;
+    }
+
+    if (await hasArchivedLinkedProduct(ctx, productCache, row)) {
+      continue;
+    }
+    sources.push(buildInventoryImportEvidenceSource(row));
+  }
+
+  return sources;
 }
 
 async function listPendingCheckoutEvidenceSources(
@@ -917,7 +962,8 @@ async function loadSelectedUntrustedEvidenceSource(
     if (
       !row ||
       row.storeId !== args.storeId ||
-      row.saleEvidence.totalQuantitySold <= 0
+      row.saleEvidence.totalQuantitySold <= 0 ||
+      (await hasArchivedLinkedProduct(ctx, new Map(), row))
     ) {
       return null;
     }

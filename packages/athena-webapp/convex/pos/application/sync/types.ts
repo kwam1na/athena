@@ -516,6 +516,8 @@ export type SyncProjectionRepository = {
     createdByUserId?: Id<"athenaUser">;
     createdByStaffProfileId?: Id<"staffProfile">;
     customerProfileId?: Id<"customerProfile">;
+    productId?: Id<"product">;
+    productSkuId?: Id<"productSku">;
   }): Promise<Id<"operationalWorkItem">>;
   createServiceCase(input: {
     customerProfileId: Id<"customerProfile">;

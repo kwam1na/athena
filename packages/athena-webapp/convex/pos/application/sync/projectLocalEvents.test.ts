@@ -2857,6 +2857,7 @@ describe("projectLocalSyncEvent", () => {
           ],
         }),
         priority: "high",
+        productSkuId: "sku-1",
         status: "open",
         title: "Review inventory for Wig Cap",
         type: "synced_sale_inventory_review",

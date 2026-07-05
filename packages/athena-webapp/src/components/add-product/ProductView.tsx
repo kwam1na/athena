@@ -11,7 +11,6 @@ import { AlertModal } from "../ui/modals/alert-modal";
 import ProductPage from "./ProductPage";
 import { ProductProvider, useProduct } from "@/contexts/ProductContext";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
-import useGetActiveProduct from "@/hooks/useGetActiveProduct";
 import { useAction, useMutation } from "convex/react";
 import { api } from "~/convex/_generated/api";
 import { capitalizeWords, toSlug } from "../../lib/utils";
@@ -30,6 +29,40 @@ type VariantMoneyInput = {
   cost?: number;
   netPrice?: number;
 };
+
+const LEGACY_IMPORT_CATEGORY_SLUG = "legacy-import";
+
+type ProductTaxonomyLike = {
+  categorySlug?: string | null;
+  subcategorySlug?: string | null;
+};
+
+export function resolveLegacyTaxonomySaveGate(args: {
+  activeProduct?: ProductTaxonomyLike | null;
+  hasTrustedInventoryFinalized: boolean;
+  productData: ProductTaxonomyLike;
+}): { blocked: false } | { blocked: true; message: string } {
+  if (
+    !args.hasTrustedInventoryFinalized ||
+    args.activeProduct?.categorySlug !== LEGACY_IMPORT_CATEGORY_SLUG
+  ) {
+    return { blocked: false };
+  }
+
+  if (
+    args.productData.categorySlug === LEGACY_IMPORT_CATEGORY_SLUG ||
+    !args.productData.categorySlug ||
+    !args.productData.subcategorySlug
+  ) {
+    return {
+      blocked: true,
+      message:
+        "Catalog setup required. Assign an Athena category and subcategory before saving.",
+    };
+  }
+
+  return { blocked: false };
+}
 
 export function buildVariantSkuMoneyPayload(
   variant: VariantMoneyInput,
@@ -93,8 +126,14 @@ function archivedProductNestedOrigin(args: {
 }
 
 function ProductViewContent() {
-  const { productData, revertChanges, productVariants, updateProductVariants } =
-    useProduct();
+  const {
+    productData,
+    activeProduct,
+    revertChanges,
+    productVariants,
+    trustedInventoryFinalizedSkuIds,
+    updateProductVariants,
+  } = useProduct();
 
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [productId, setProductid] = useState<Id<"product"> | null>(null);
@@ -106,7 +145,6 @@ function ProductViewContent() {
   const navigate = useNavigate();
 
   const { activeStore } = useGetActiveStore();
-  const { activeProduct } = useGetActiveProduct();
   const { user } = useAuth();
 
   const createProduct = useMutation(api.inventory.products.create);
@@ -127,6 +165,11 @@ function ProductViewContent() {
   const updateProductSku = useMutation(api.inventory.productSku.update);
 
   const { o } = useSearch({ strict: false });
+  const legacyTaxonomySaveGate = resolveLegacyTaxonomySaveGate({
+    activeProduct,
+    hasTrustedInventoryFinalized: trustedInventoryFinalizedSkuIds.size > 0,
+    productData,
+  });
 
   const deleteActiveProduct = async () => {
     if (!activeProduct?._id || !activeStore)
@@ -417,6 +460,11 @@ function ProductViewContent() {
   };
 
   const onSubmit = async () => {
+    if (legacyTaxonomySaveGate.blocked) {
+      toast.error(legacyTaxonomySaveGate.message);
+      return;
+    }
+
     if (activeProduct?._id || productId) await modifyProduct();
     else await saveProduct();
   };
@@ -464,8 +512,6 @@ function ProductViewContent() {
   const Navigation = () => {
     const { productSlug } = useParams({ strict: false });
 
-    const { activeProduct } = useGetActiveProduct();
-
     const isValid = productSlug ? !!activeProduct : true;
 
     const header = productSlug
@@ -480,6 +526,7 @@ function ProductViewContent() {
 
     const isUpdatingProduct =
       isCreateMutationPending || isUpdateMutationPending;
+    const isSaveDisabled = !isValid;
 
     return (
       <ComposedPageHeader
@@ -555,7 +602,7 @@ function ProductViewContent() {
               </>
             )}
             <LoadingButton
-              disabled={!isValid}
+              disabled={isSaveDisabled}
               isLoading={isUpdatingProduct}
               onClick={onSubmit}
               variant={"outline"}

@@ -13,6 +13,7 @@ type TableName =
   | "checkoutSessionItem"
   | "inventoryHold"
   | "inventoryImportProvisionalSku"
+  | "product"
   | "productSku"
   | "posPendingCheckoutItem"
   | "posTransaction"
@@ -29,6 +30,7 @@ function createIndexedDb(seed: Partial<Tables>) {
     checkoutSessionItem: new Map(),
     inventoryHold: new Map(),
     inventoryImportProvisionalSku: new Map(),
+    product: new Map(),
     productSku: new Map(),
     posPendingCheckoutItem: new Map(),
     posTransaction: new Map(),
@@ -828,6 +830,203 @@ describe("untrusted SKU sale evidence read model", () => {
           }),
         },
       ],
+    });
+  });
+
+  it("filters linked archived legacy import products out of untrusted sale evidence", async () => {
+    const { ctx } = createIndexedDb({
+      inventoryImportProvisionalSku: new Map([
+        [
+          "provisional-archived",
+          {
+            _id: "provisional-archived",
+            importKey: "legacy-import-1",
+            importedPrice: 120,
+            importedProductName: "Archived zirconia earring",
+            importedQuantity: 5,
+            normalizedImportedProductName: "archived zirconia earring",
+            organizationId: "org-1",
+            posExposureStatus: "hidden",
+            productId: "product-archived",
+            productSkuId: "sku-archived",
+            reviewVersionId: "review-version-1",
+            reviewVersionNumber: 1,
+            rowKey: "row-archived",
+            rowNumber: 12,
+            saleEvidence: {
+              lastSoldAt: 3_000,
+              saleCount: 1,
+              totalQuantitySold: 4,
+            },
+            sourceFormat: "csv",
+            status: "active",
+            storeId: "store-1",
+            updatedAt: 3_100,
+          },
+        ],
+        [
+          "provisional-live",
+          {
+            _id: "provisional-live",
+            importKey: "legacy-import-1",
+            importedPrice: 90,
+            importedProductName: "Live wig bag",
+            importedQuantity: 3,
+            normalizedImportedProductName: "live wig bag",
+            organizationId: "org-1",
+            posExposureStatus: "available",
+            productId: "product-live",
+            productSkuId: "sku-live",
+            reviewVersionId: "review-version-1",
+            reviewVersionNumber: 1,
+            rowKey: "row-live",
+            rowNumber: 13,
+            saleEvidence: {
+              lastSoldAt: 2_000,
+              saleCount: 1,
+              totalQuantitySold: 1,
+            },
+            sourceFormat: "csv",
+            status: "active",
+            storeId: "store-1",
+            updatedAt: 2_100,
+          },
+        ],
+        [
+          "provisional-unlinked",
+          {
+            _id: "provisional-unlinked",
+            importKey: "legacy-import-1",
+            importedPrice: 75,
+            importedProductName: "Unlinked import row",
+            importedQuantity: 2,
+            normalizedImportedProductName: "unlinked import row",
+            organizationId: "org-1",
+            posExposureStatus: "available",
+            reviewVersionId: "review-version-1",
+            reviewVersionNumber: 1,
+            rowKey: "row-unlinked",
+            rowNumber: 14,
+            saleEvidence: {
+              lastSoldAt: 1_000,
+              saleCount: 1,
+              totalQuantitySold: 1,
+            },
+            sourceFormat: "csv",
+            status: "active",
+            storeId: "store-1",
+            updatedAt: 1_100,
+          },
+        ],
+      ]),
+      product: new Map([
+        [
+          "product-archived",
+          {
+            _id: "product-archived",
+            availability: "archived",
+            storeId: "store-1",
+          },
+        ],
+        [
+          "product-live",
+          {
+            _id: "product-live",
+            availability: "live",
+            storeId: "store-1",
+          },
+        ],
+      ]),
+    });
+
+    const result = await getUntrustedSkuSaleEvidenceWithCtx(ctx, {
+      selectedSource: {
+        sourceId: "provisional-archived",
+        sourceType: "inventoryImportProvisionalSku",
+      },
+      sourceFilter: "legacy_import",
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(result.sources.map((source) => source.id)).toEqual([
+      "provisional-live",
+      "provisional-unlinked",
+    ]);
+    expect(result.selected).toBeNull();
+  });
+
+  it("treats active finalized legacy import rows as reviewed sale evidence", async () => {
+    const { ctx } = createIndexedDb({
+      inventoryImportProvisionalSku: new Map([
+        [
+          "provisional-finalized",
+          {
+            _id: "provisional-finalized",
+            finalizedAt: 3_000,
+            importKey: "legacy-import-1",
+            importedPrice: 120,
+            importedProductName: "Finalized legacy wig",
+            importedQuantity: 5,
+            normalizedImportedProductName: "finalized legacy wig",
+            organizationId: "org-1",
+            posExposureStatus: "hidden",
+            productId: "product-live",
+            productSkuId: "sku-live",
+            reviewVersionId: "review-version-1",
+            reviewVersionNumber: 1,
+            rowKey: "row-finalized",
+            rowNumber: 12,
+            saleEvidence: {
+              lastSoldAt: 2_000,
+              saleCount: 1,
+              totalQuantitySold: 4,
+            },
+            sourceFormat: "csv",
+            status: "active",
+            storeId: "store-1",
+            updatedAt: 3_100,
+          },
+        ],
+      ]),
+      product: new Map([
+        [
+          "product-live",
+          {
+            _id: "product-live",
+            availability: "live",
+            storeId: "store-1",
+          },
+        ],
+      ]),
+    });
+
+    const openResult = await getUntrustedSkuSaleEvidenceWithCtx(ctx, {
+      reviewStatus: "open",
+      sourceFilter: "legacy_import",
+      storeId: "store-1" as Id<"store">,
+    });
+    expect(openResult.sources).toEqual([]);
+
+    const reviewedResult = await getUntrustedSkuSaleEvidenceWithCtx(ctx, {
+      reviewStatus: "reviewed",
+      selectedSource: {
+        sourceId: "provisional-finalized",
+        sourceType: "inventoryImportProvisionalSku",
+      },
+      sourceFilter: "legacy_import",
+      storeId: "store-1" as Id<"store">,
+    });
+    expect(reviewedResult.sources).toEqual([
+      expect.objectContaining({
+        id: "provisional-finalized",
+        reviewState: "reviewed",
+      }),
+    ]);
+    expect(reviewedResult.selected).toMatchObject({
+      source: {
+        id: "provisional-finalized",
+        reviewState: "reviewed",
+      },
     });
   });
 

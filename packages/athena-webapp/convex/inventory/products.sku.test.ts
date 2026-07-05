@@ -45,6 +45,7 @@ type TableName =
   | "catalogSummary"
   | "category"
   | "inventoryHold"
+  | "inventoryImportProvisionalSku"
   | "operationalEvent"
   | "operationalWorkItem"
   | "posPendingCheckoutItem"
@@ -136,6 +137,9 @@ function createSkuMutationCtx(seed: Partial<Record<TableName, Row[]>>) {
     inventoryHold: new Map(
       (seed.inventoryHold ?? []).map((row) => [row._id, row]),
     ),
+    inventoryImportProvisionalSku: new Map(
+      (seed.inventoryImportProvisionalSku ?? []).map((row) => [row._id, row]),
+    ),
     operationalEvent: new Map(
       (seed.operationalEvent ?? []).map((row) => [row._id, row]),
     ),
@@ -153,6 +157,7 @@ function createSkuMutationCtx(seed: Partial<Record<TableName, Row[]>>) {
     catalogSummary: seed.catalogSummary?.length ?? 0,
     category: 0,
     inventoryHold: seed.inventoryHold?.length ?? 0,
+    inventoryImportProvisionalSku: seed.inventoryImportProvisionalSku?.length ?? 0,
     operationalEvent: seed.operationalEvent?.length ?? 0,
     operationalWorkItem: seed.operationalWorkItem?.length ?? 0,
     posPendingCheckoutItem: seed.posPendingCheckoutItem?.length ?? 0,
@@ -1217,6 +1222,469 @@ describe("product archiving", () => {
       needsRefresh: false,
       productCount: 1,
       storeId: "storezzzz",
+    });
+  });
+
+  it("completes finalized legacy import review rows when product taxonomy leaves legacy import", async () => {
+    const { ctx, tables } = createSkuMutationCtx({
+      category: [
+        {
+          _id: "category-hair",
+          name: "Hair Care",
+          slug: "hair-care",
+          storeId: "storezzzz",
+        },
+      ],
+      inventoryImportProvisionalSku: [
+        {
+          _id: "provisional001",
+          finalTrustedQuantity: 5,
+          finalizedAt: 1_000,
+          productId: "product001",
+          productSkuId: "sku001",
+          status: "active",
+          storeId: "storezzzz",
+        },
+      ],
+      operationalWorkItem: [
+        {
+          _id: "taxonomy-work-001",
+          approvalState: "not_required",
+          createdAt: 1_000,
+          metadata: {
+            categorySlug: "legacy-import",
+            productId: "product001",
+            productSkuId: "sku001",
+            provisionalSkuId: "provisional001",
+          },
+          organizationId: "org0001",
+          priority: "medium",
+          productId: "product001",
+          productSkuId: "sku001",
+          status: "open",
+          storeId: "storezzzz",
+          title: "Assign catalog category: Quick And Go Bonding Glue",
+          type: "catalog_taxonomy_setup",
+        },
+      ],
+      product: [
+        {
+          _id: "product001",
+          availability: "draft",
+          categoryId: "category-legacy",
+          name: "Quick And Go Bonding Glue",
+          organizationId: "org0001",
+          storeId: "storezzzz",
+          subcategoryId: "subcategory-legacy",
+        },
+      ],
+      productSku: [
+        {
+          _id: "sku001",
+          productId: "product001",
+          storeId: "storezzzz",
+        },
+      ],
+      subcategory: [
+        {
+          _id: "subcategory-protectant",
+          categoryId: "category-hair",
+          name: "Heat Protectant",
+          slug: "heat-protectant",
+          storeId: "storezzzz",
+        },
+      ],
+    });
+
+    await getHandler(update)(ctx, {
+      categoryId: "category-hair" as Id<"category">,
+      id: "product001" as Id<"product">,
+      subcategoryId: "subcategory-protectant" as Id<"subcategory">,
+    });
+
+    expect(tables.inventoryImportProvisionalSku.get("provisional001")).toMatchObject({
+      status: "finalized",
+      updatedAt: expect.any(Number),
+    });
+    expect(tables.operationalWorkItem.get("taxonomy-work-001")).toMatchObject({
+      completedAt: expect.any(Number),
+      metadata: expect.objectContaining({
+        completedReason: "athena_taxonomy_applied",
+        productId: "product001",
+      }),
+      status: "completed",
+    });
+  });
+
+  it("rejects finalized legacy import review row saves when taxonomy remains legacy import", async () => {
+    const { ctx, tables } = createSkuMutationCtx({
+      category: [
+        {
+          _id: "category-legacy",
+          name: "Legacy import",
+          slug: "legacy-import",
+          storeId: "storezzzz",
+        },
+      ],
+      inventoryImportProvisionalSku: [
+        {
+          _id: "provisional001",
+          finalTrustedQuantity: 5,
+          finalizedAt: 1_000,
+          productId: "product001",
+          productSkuId: "sku001",
+          status: "active",
+          storeId: "storezzzz",
+        },
+      ],
+      operationalWorkItem: [
+        {
+          _id: "taxonomy-work-001",
+          approvalState: "not_required",
+          createdAt: 1_000,
+          metadata: {
+            categorySlug: "legacy-import",
+            productId: "product001",
+            productSkuId: "sku001",
+            provisionalSkuId: "provisional001",
+          },
+          organizationId: "org0001",
+          priority: "medium",
+          productId: "product001",
+          productSkuId: "sku001",
+          status: "open",
+          storeId: "storezzzz",
+          title: "Assign catalog category: Quick And Go Bonding Glue",
+          type: "catalog_taxonomy_setup",
+        },
+      ],
+      product: [
+        {
+          _id: "product001",
+          availability: "draft",
+          categoryId: "category-legacy",
+          name: "Quick And Go Bonding Glue",
+          organizationId: "org0001",
+          storeId: "storezzzz",
+          subcategoryId: "subcategory-legacy",
+        },
+      ],
+      productSku: [
+        {
+          _id: "sku001",
+          productId: "product001",
+          storeId: "storezzzz",
+        },
+      ],
+      subcategory: [
+        {
+          _id: "subcategory-legacy",
+          categoryId: "category-legacy",
+          name: "872",
+          slug: "872",
+          storeId: "storezzzz",
+        },
+      ],
+    });
+
+    await expect(
+      getHandler(update)(ctx, {
+        categoryId: "category-legacy" as Id<"category">,
+        id: "product001" as Id<"product">,
+        subcategoryId: "subcategory-legacy" as Id<"subcategory">,
+      }),
+    ).rejects.toThrow(
+      "Catalog setup required. Assign an Athena category and subcategory before saving.",
+    );
+
+    expect(tables.inventoryImportProvisionalSku.get("provisional001")).toMatchObject({
+      status: "active",
+    });
+    expect(tables.operationalWorkItem.get("taxonomy-work-001")).toMatchObject({
+      status: "open",
+    });
+  });
+
+  it("skips legacy import taxonomy cleanup when non-taxonomy product fields change", async () => {
+    const { ctx, tables } = createSkuMutationCtx({
+      category: [
+        {
+          _id: "category-hair",
+          name: "Hair Care",
+          slug: "hair-care",
+          storeId: "storezzzz",
+        },
+      ],
+      inventoryImportProvisionalSku: [
+        {
+          _id: "provisional001",
+          finalTrustedQuantity: 5,
+          finalizedAt: 1_000,
+          productId: "product001",
+          productSkuId: "sku001",
+          status: "active",
+          storeId: "storezzzz",
+        },
+      ],
+      operationalWorkItem: [
+        {
+          _id: "taxonomy-work-001",
+          approvalState: "not_required",
+          createdAt: 1_000,
+          metadata: {
+            productId: "product001",
+            productSkuId: "sku001",
+          },
+          organizationId: "org0001",
+          priority: "medium",
+          productId: "product001",
+          productSkuId: "sku001",
+          status: "open",
+          storeId: "storezzzz",
+          title: "Assign catalog category: Quick And Go Bonding Glue",
+          type: "catalog_taxonomy_setup",
+        },
+      ],
+      product: [
+        {
+          _id: "product001",
+          availability: "live",
+          categoryId: "category-hair",
+          name: "Quick And Go Bonding Glue",
+          organizationId: "org0001",
+          storeId: "storezzzz",
+          subcategoryId: "subcategory-protectant",
+        },
+      ],
+      productSku: [
+        {
+          _id: "sku001",
+          productId: "product001",
+          productName: "Quick And Go Bonding Glue",
+          storeId: "storezzzz",
+        },
+      ],
+      subcategory: [
+        {
+          _id: "subcategory-protectant",
+          categoryId: "category-hair",
+          name: "Heat Protectant",
+          slug: "heat-protectant",
+          storeId: "storezzzz",
+        },
+      ],
+    });
+
+    await getHandler(update)(ctx, {
+      id: "product001" as Id<"product">,
+      name: "Quick & Go Bonding Glue",
+    });
+
+    expect(tables.inventoryImportProvisionalSku.get("provisional001")).toMatchObject({
+      status: "active",
+    });
+    expect(tables.operationalWorkItem.get("taxonomy-work-001")).toMatchObject({
+      status: "open",
+    });
+  });
+
+  it("blocks non-taxonomy saves after trusted inventory is finalized for legacy import rows", async () => {
+    const { ctx, tables } = createSkuMutationCtx({
+      category: [
+        {
+          _id: "category-legacy",
+          name: "Legacy import",
+          slug: "legacy-import",
+          storeId: "storezzzz",
+        },
+      ],
+      inventoryImportProvisionalSku: [
+        {
+          _id: "provisional001",
+          finalTrustedQuantity: 5,
+          finalizedAt: 1_000,
+          productId: "product001",
+          productSkuId: "sku001",
+          status: "active",
+          storeId: "storezzzz",
+        },
+      ],
+      product: [
+        {
+          _id: "product001",
+          availability: "live",
+          categoryId: "category-legacy",
+          name: "Quick And Go Bonding Glue",
+          organizationId: "org0001",
+          storeId: "storezzzz",
+          subcategoryId: "subcategory-legacy",
+        },
+      ],
+      productSku: [
+        {
+          _id: "sku001",
+          productId: "product001",
+          productName: "Quick And Go Bonding Glue",
+          storeId: "storezzzz",
+        },
+      ],
+      subcategory: [
+        {
+          _id: "subcategory-legacy",
+          categoryId: "category-legacy",
+          name: "872",
+          slug: "872",
+          storeId: "storezzzz",
+        },
+      ],
+    });
+
+    await expect(
+      getHandler(update)(ctx, {
+        id: "product001" as Id<"product">,
+        name: "Quick & Go Bonding Glue",
+      }),
+    ).rejects.toThrow(
+      "Catalog setup required. Assign an Athena category and subcategory before saving.",
+    );
+
+    expect(tables.product.get("product001")).toMatchObject({
+      name: "Quick And Go Bonding Glue",
+    });
+    expect(tables.productSku.get("sku001")).toMatchObject({
+      productName: "Quick And Go Bonding Glue",
+    });
+  });
+
+  it("fails closed when finalized legacy import row checks exceed the product SKU cap", async () => {
+    const productSkus = Array.from({ length: 5_001 }, (_, index) => ({
+      _id: `sku-${index}`,
+      productId: "product001",
+      productName: "Quick And Go Bonding Glue",
+      storeId: "storezzzz",
+    }));
+    const { ctx, tables } = createSkuMutationCtx({
+      category: [
+        {
+          _id: "category-legacy",
+          name: "Legacy import",
+          slug: "legacy-import",
+          storeId: "storezzzz",
+        },
+      ],
+      inventoryImportProvisionalSku: [
+        {
+          _id: "provisional-overflow",
+          finalTrustedQuantity: 5,
+          finalizedAt: 1_000,
+          productId: "product001",
+          productSkuId: "sku-5000",
+          status: "active",
+          storeId: "storezzzz",
+        },
+      ],
+      product: [
+        {
+          _id: "product001",
+          availability: "live",
+          categoryId: "category-legacy",
+          name: "Quick And Go Bonding Glue",
+          organizationId: "org0001",
+          storeId: "storezzzz",
+          subcategoryId: "subcategory-legacy",
+        },
+      ],
+      productSku: productSkus,
+      subcategory: [
+        {
+          _id: "subcategory-legacy",
+          categoryId: "category-legacy",
+          name: "872",
+          slug: "872",
+          storeId: "storezzzz",
+        },
+      ],
+    });
+
+    await expect(
+      getHandler(update)(ctx, {
+        id: "product001" as Id<"product">,
+        name: "Quick & Go Bonding Glue",
+      }),
+    ).rejects.toThrow(
+      "Catalog setup required. Assign an Athena category and subcategory before saving.",
+    );
+
+    expect(tables.product.get("product001")).toMatchObject({
+      name: "Quick And Go Bonding Glue",
+    });
+    expect(tables.productSku.get("sku-5000")).toMatchObject({
+      productName: "Quick And Go Bonding Glue",
+    });
+  });
+
+  it("fails closed when active legacy import rows exceed the per-SKU product update cap", async () => {
+    const provisionalRows = Array.from({ length: 26 }, (_, index) => ({
+      _id: `provisional-${index}`,
+      productId: "product001",
+      productSkuId: "sku001",
+      status: "active",
+      storeId: "storezzzz",
+    }));
+    const { ctx, tables } = createSkuMutationCtx({
+      category: [
+        {
+          _id: "category-legacy",
+          name: "Legacy import",
+          slug: "legacy-import",
+          storeId: "storezzzz",
+        },
+      ],
+      inventoryImportProvisionalSku: provisionalRows,
+      product: [
+        {
+          _id: "product001",
+          availability: "live",
+          categoryId: "category-legacy",
+          name: "Quick And Go Bonding Glue",
+          organizationId: "org0001",
+          storeId: "storezzzz",
+          subcategoryId: "subcategory-legacy",
+        },
+      ],
+      productSku: [
+        {
+          _id: "sku001",
+          productId: "product001",
+          productName: "Quick And Go Bonding Glue",
+          storeId: "storezzzz",
+        },
+      ],
+      subcategory: [
+        {
+          _id: "subcategory-legacy",
+          categoryId: "category-legacy",
+          name: "872",
+          slug: "872",
+          storeId: "storezzzz",
+        },
+      ],
+    });
+
+    await expect(
+      getHandler(update)(ctx, {
+        id: "product001" as Id<"product">,
+        name: "Quick & Go Bonding Glue",
+      }),
+    ).rejects.toThrow(
+      "Catalog setup required. Assign an Athena category and subcategory before saving.",
+    );
+
+    expect(tables.product.get("product001")).toMatchObject({
+      name: "Quick And Go Bonding Glue",
+    });
+    expect(tables.productSku.get("sku001")).toMatchObject({
+      productName: "Quick And Go Bonding Glue",
     });
   });
 

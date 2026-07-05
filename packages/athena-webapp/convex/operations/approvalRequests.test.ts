@@ -214,6 +214,7 @@ function createApprovalRequestMutationCtx(args: {
     if (
       table === "inventoryMovement" ||
       table === "operationalEvent" ||
+      table === "operationalWorkItem" ||
       table === "skuActivityEvent"
     ) {
       return {
@@ -242,6 +243,12 @@ function createApprovalRequestMutationCtx(args: {
               Array.from(tables[table].values()).find((record) =>
                 filters.every(([field, value]) => record[field] === value),
               ) ?? null,
+            take: async (limit: number) =>
+              Array.from(tables[table].values())
+                .filter((record) =>
+                  filters.every(([field, value]) => record[field] === value),
+                )
+                .slice(0, limit),
           };
         },
       };
