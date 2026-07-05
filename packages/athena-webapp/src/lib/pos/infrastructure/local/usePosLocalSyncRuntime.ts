@@ -1075,16 +1075,18 @@ export function usePosLocalSyncRuntimeStatus(input: {
     let isStale = false;
     const isCurrentPublishScope = () => !isStale;
 
-    void reportTerminalRuntimeStatus({
-      storeId: checkInStoreId as Id<"store">,
-      terminalId: checkInTerminalId as Id<"posTerminal">,
-      syncSecretHash: checkInSyncSecretHash,
-      status: toReportablePosTerminalRuntimeStatus(runtimeStatus),
-    })
+    void Promise.resolve(
+      reportTerminalRuntimeStatus({
+        storeId: checkInStoreId as Id<"store">,
+        terminalId: checkInTerminalId as Id<"posTerminal">,
+        syncSecretHash: checkInSyncSecretHash,
+        status: toReportablePosTerminalRuntimeStatus(runtimeStatus),
+      }),
+    )
       .then(async (result) => {
         if (!isCurrentPublishScope()) return;
 
-        if (result.kind === "ok") {
+        if (result?.kind === "ok") {
           if (appUpdateCommandCorrelation) {
             clearStoredAppUpdateCommandCorrelation();
             setAppUpdateCommandCorrelation(null);
