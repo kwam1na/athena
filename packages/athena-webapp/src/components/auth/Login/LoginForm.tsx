@@ -63,7 +63,9 @@ export function LoginForm({
               <Input
                 id="email"
                 type="email"
+                aria-label="Email"
                 autoComplete="email"
+                data-testid="athena-login-email-input"
                 placeholder="Email"
                 value={field.state.value}
                 onBlur={field.handleBlur}
@@ -89,6 +91,7 @@ export function LoginForm({
           isLoading={isSubmitting}
           type="submit"
           variant="workflow"
+          data-testid="athena-login-email-submit"
           className="group relative z-10 h-control-standard w-fit shadow-[0_16px_34px_-22px_hsl(var(--signal)/0.72)]"
         >
           Continue
@@ -99,6 +102,7 @@ export function LoginForm({
             <button
               type="button"
               aria-label="POS sign in"
+              data-testid="athena-login-pos-sign-in"
               className="group flex w-full items-center justify-between gap-layout-sm rounded-md border border-action-workflow-border bg-action-workflow-soft px-layout-md py-layout-sm text-left text-sm font-medium text-action-workflow transition-colors duration-standard ease-standard hover:bg-action-workflow-soft/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               onClick={onUsePosRecoveryCode}
             >

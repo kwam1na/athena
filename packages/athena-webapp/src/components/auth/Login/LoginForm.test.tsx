@@ -29,8 +29,15 @@ describe("LoginForm", () => {
 
     render(<LoginForm setStep={mocked.setStep} />);
 
-    await user.type(screen.getByPlaceholderText(/email/i), "Manager@Example.com");
-    await user.click(screen.getByRole("button", { name: /continue/i }));
+    const emailInput = screen.getByTestId("athena-login-email-input");
+    const continueButton = screen.getByTestId("athena-login-email-submit");
+
+    expect(emailInput).toHaveAccessibleName("Email");
+    expect(emailInput).toHaveAttribute("autocomplete", "email");
+    expect(continueButton).toHaveAccessibleName(/continue/i);
+
+    await user.type(emailInput, "Manager@Example.com");
+    await user.click(continueButton);
 
     await waitFor(() =>
       expect(mocked.signIn).toHaveBeenCalledWith(ATHENA_EMAIL_OTP_PROVIDER_ID, {
@@ -40,5 +47,18 @@ describe("LoginForm", () => {
     expect(mocked.setStep).toHaveBeenCalledWith({
       email: "manager@example.com",
     });
+  });
+
+  it("exposes stable headless controls for the POS recovery path", () => {
+    render(
+      <LoginForm
+        onUsePosRecoveryCode={vi.fn()}
+        setStep={mocked.setStep}
+      />,
+    );
+
+    expect(screen.getByTestId("athena-login-pos-sign-in")).toHaveAccessibleName(
+      "POS sign in",
+    );
   });
 });
