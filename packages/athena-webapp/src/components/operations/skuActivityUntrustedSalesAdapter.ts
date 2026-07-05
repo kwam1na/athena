@@ -1,3 +1,5 @@
+import { capitalizeWords as capitalizeDisplayWords } from "~/src/lib/utils";
+
 export type SkuActivityUntrustedSalesReviewStatus = "open" | "reviewed" | "all";
 
 export type SkuActivityUntrustedSalesSourceFilter =
@@ -188,6 +190,10 @@ function getLookupLabel(source: SkuActivityUntrustedSalesSourceResult) {
   return source.lookupCode ?? source.sku ?? null;
 }
 
+function formatProductName(value: string) {
+  return capitalizeDisplayWords(value);
+}
+
 function buildSourceRow(
   source: SkuActivityUntrustedSalesSourceResult,
   selectedSourceId?: string,
@@ -206,7 +212,7 @@ function buildSourceRow(
     sourceType: source.sourceType,
     sourceTypeLabel: getUntrustedSourceTypeLabel(source.sourceType),
     statusLabel: capitalizeWords(source.status),
-    title: source.title,
+    title: formatProductName(source.title),
     totalQuantitySold: source.evidence.totalQuantitySold,
   };
 }
@@ -215,7 +221,8 @@ function buildTransactionRow(
   transaction: SkuActivityUntrustedSalesTransactionResult,
 ): SkuActivityUntrustedSalesTransactionRow {
   const adjustmentLabel =
-    transaction.adjustments.count > 0
+    transaction.adjustments.count > 0 &&
+    transaction.adjustments.appliedQuantityDelta !== 0
       ? `${transaction.adjustments.appliedQuantityDelta >= 0 ? "+" : ""}${
           transaction.adjustments.appliedQuantityDelta
         } applied adjustment`
@@ -228,8 +235,8 @@ function buildTransactionRow(
     id: transaction.id,
     netQuantity: transaction.netQuantity,
     productLabel: transaction.productSku
-      ? `${transaction.productName} (${transaction.productSku})`
-      : transaction.productName,
+      ? `${formatProductName(transaction.productName)} (${transaction.productSku})`
+      : formatProductName(transaction.productName),
     receiptLabel: transaction.transactionNumber
       ? `#${transaction.transactionNumber}`
       : String(transaction.transactionId),
@@ -271,7 +278,10 @@ export function buildSkuActivityUntrustedSalesViewModel(
     buildSourceRow(source, selectedSourceId),
   );
   const selectedSource =
-    result.selected && sourceMatchesFilter(result.selected.source, sourceFilter)
+    result.selected &&
+    sourceMatchesFilter(result.selected.source, sourceFilter) &&
+    (!options.selectedSourceId ||
+      result.selected.source.id === options.selectedSourceId)
       ? result.selected
       : null;
 

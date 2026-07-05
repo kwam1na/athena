@@ -1,15 +1,21 @@
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import { Link } from "@tanstack/react-router";
 import {
   ArrowUpRight,
-  CircleDot,
-  History,
   ListPlus,
   PackageSearch,
-  ReceiptText,
 } from "lucide-react";
 
 import { getOrigin } from "~/src/lib/navigationUtils";
 import { cn, getRelativeTime } from "~/src/lib/utils";
+import { ListPagination } from "../common/ListPagination";
+import { OperationsSummaryMetric } from "./OperationsSummaryMetric";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import type {
@@ -22,10 +28,12 @@ import type {
 
 type SkuActivityUntrustedSalesProps = {
   error?: unknown;
+  onChangeTransactionPage?: (page: number) => void;
+  evidenceQuery?: string;
   isLoading?: boolean;
   onChangeReviewStatus: (status: SkuActivityUntrustedSalesReviewStatus) => void;
   onChangeSourceFilter: (filter: SkuActivityUntrustedSalesSourceFilter) => void;
-  onLoadMoreSources?: () => void;
+  onLoadMoreSources?: (minimumSourceCount?: number) => void;
   onLoadMoreTransactions?: () => void;
   onSelectSource: (source: {
     id: string;
@@ -33,6 +41,7 @@ type SkuActivityUntrustedSalesProps = {
   }) => void;
   orgUrlSlug: string;
   storeUrlSlug: string;
+  transactionPage?: number;
   viewModel: SkuActivityUntrustedSalesViewModel | null | undefined;
 };
 
@@ -49,10 +58,81 @@ const REVIEW_STATUS_OPTIONS: Array<{
   label: string;
   value: SkuActivityUntrustedSalesReviewStatus;
 }> = [
+  { label: "All", value: "all" },
   { label: "Open", value: "open" },
   { label: "Reviewed", value: "reviewed" },
-  { label: "All", value: "all" },
 ];
+
+const DETAIL_ENTRY_ANIMATION_CLASS =
+  "motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-95 motion-safe:slide-in-from-right-1 motion-safe:duration-200 motion-safe:ease-out";
+const DETAIL_STICKY_CLASS =
+  "xl:sticky xl:top-[var(--sku-activity-detail-sticky-top)]";
+const DETAIL_STICKY_VIEWPORT_PADDING_PX = 24;
+const SOURCE_LIST_PAGE_SIZE = 10;
+const TRANSACTION_LIST_PAGE_SIZE = 3;
+
+type DetailStickyStyle = CSSProperties & {
+  "--sku-activity-detail-sticky-top": string;
+};
+
+const useIsomorphicLayoutEffect =
+  typeof window === "undefined" ? useEffect : useLayoutEffect;
+
+function useDetailStickyPosition() {
+  const detailRef = useRef<HTMLElement | null>(null);
+  const [stickyTop, setStickyTop] = useState(
+    `${DETAIL_STICKY_VIEWPORT_PADDING_PX}px`,
+  );
+
+  useIsomorphicLayoutEffect(() => {
+    const detailElement = detailRef.current;
+
+    if (!detailElement || typeof window === "undefined") {
+      return;
+    }
+
+    let animationFrame = 0;
+
+    const updateStickyTop = () => {
+      window.cancelAnimationFrame(animationFrame);
+      animationFrame = window.requestAnimationFrame(() => {
+        const detailHeight = detailElement.getBoundingClientRect().height;
+        const centeredTop = (window.innerHeight - detailHeight) / 2;
+        const clampedTop = Math.max(
+          DETAIL_STICKY_VIEWPORT_PADDING_PX,
+          centeredTop,
+        );
+        const nextStickyTop = `${Math.round(clampedTop)}px`;
+
+        setStickyTop((currentStickyTop) =>
+          currentStickyTop === nextStickyTop ? currentStickyTop : nextStickyTop,
+        );
+      });
+    };
+
+    updateStickyTop();
+
+    const resizeObserver =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(updateStickyTop);
+
+    resizeObserver?.observe(detailElement);
+    window.addEventListener("resize", updateStickyTop);
+
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", updateStickyTop);
+    };
+  }, []);
+
+  const stickyStyle: DetailStickyStyle = {
+    "--sku-activity-detail-sticky-top": stickyTop,
+  };
+
+  return { detailRef, stickyStyle };
+}
 
 function formatCountLabel(
   count: number,
@@ -60,6 +140,28 @@ function formatCountLabel(
   plural = `${singular}s`,
 ) {
   return `${count.toLocaleString()} ${count === 1 ? singular : plural}`;
+}
+
+function sourceMatchesEvidenceQuery(
+  source: SkuActivityUntrustedSalesSourceRow,
+  query: string,
+) {
+  const normalizedQuery = query.trim().toLowerCase();
+
+  if (!normalizedQuery) {
+    return true;
+  }
+
+  return [
+    source.title,
+    source.lookupLabel,
+    source.sourceTypeLabel,
+    source.reviewLabel,
+    source.statusLabel,
+    source.evidenceLabel,
+  ]
+    .filter((value): value is string => Boolean(value))
+    .some((value) => value.toLowerCase().includes(normalizedQuery));
 }
 
 function InlineState({
@@ -101,10 +203,10 @@ function FilterButton<TValue extends string>({
     <button
       aria-pressed={isSelected}
       className={cn(
-        "inline-flex h-9 items-center justify-center rounded-md border px-3 text-sm font-medium transition-[background-color,border-color,color,transform] duration-150 ease-out active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+        "inline-flex h-8 items-center justify-center rounded-md border px-2.5 text-xs font-medium transition-[background-color,border-color,color,transform] duration-150 ease-out active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         isSelected
-          ? "border-primary/40 bg-primary/10 text-foreground"
-          : "border-border bg-background text-muted-foreground hover:border-primary/30 hover:text-foreground",
+          ? "border-border bg-muted/55 text-foreground"
+          : "border-border/80 bg-transparent text-muted-foreground hover:bg-muted/35 hover:text-foreground",
       )}
       onClick={() => onSelect(value)}
       type="button"
@@ -114,41 +216,28 @@ function FilterButton<TValue extends string>({
   );
 }
 
-function SourceToneBadge({
+function SourceMetadataLine({
+  includeStatus = false,
   source,
 }: {
+  includeStatus?: boolean;
   source: SkuActivityUntrustedSalesSourceRow;
 }) {
-  return (
-    <Badge
-      className={
-        source.sourceType === "inventoryImportProvisionalSku"
-          ? "border-primary/30 bg-primary/10 text-foreground"
-          : "border-warning/30 bg-warning/10 text-foreground"
-      }
-      variant="outline"
-    >
-      {source.sourceTypeLabel}
-    </Badge>
-  );
-}
+  const items = [
+    source.sourceTypeLabel,
+    source.reviewLabel,
+    ...(includeStatus ? [source.statusLabel] : []),
+  ];
 
-function ReviewStateBadge({
-  source,
-}: {
-  source: SkuActivityUntrustedSalesSourceRow;
-}) {
   return (
-    <Badge
-      className={
-        source.reviewState === "open"
-          ? "border-warning/30 bg-warning/10 text-foreground"
-          : "border-success/30 bg-success/10 text-foreground"
-      }
-      variant="outline"
-    >
-      {source.reviewLabel}
-    </Badge>
+    <p className="text-xs font-medium leading-5 text-muted-foreground">
+      {items.map((item, index) => (
+        <span key={`${item}:${index}`}>
+          {index > 0 ? <span className="mx-1.5 text-border">/</span> : null}
+          {item}
+        </span>
+      ))}
+    </p>
   );
 }
 
@@ -162,48 +251,93 @@ function SourceReviewLink({
   storeUrlSlug: string;
 }) {
   if (source.sourceType === "posPendingCheckoutItem") {
+    if (source.productId) {
+      return (
+        <Button
+          asChild
+          className="-mr-2 h-8 px-2 text-muted-foreground hover:text-foreground"
+          size="sm"
+          variant="ghost"
+        >
+          <Link
+            params={{
+              orgUrlSlug,
+              productSlug: source.productId,
+              storeUrlSlug,
+            }}
+            search={{
+              o: getOrigin(),
+              variant: source.productSkuId ?? undefined,
+            }}
+            to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug"
+          >
+            Review pending checkout
+            <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
+          </Link>
+        </Button>
+      );
+    }
+
     return (
-      <Link
-        className="inline-flex items-center gap-1 text-sm font-medium text-foreground underline-offset-4 transition-colors hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-        params={{ orgUrlSlug, storeUrlSlug }}
-        search={{ categorySlug: "pos-pending-checkout", o: getOrigin() }}
-        to="/$orgUrlSlug/store/$storeUrlSlug/products"
+      <Button
+        asChild
+        className="-mr-2 h-8 px-2 text-muted-foreground hover:text-foreground"
+        size="sm"
+        variant="ghost"
       >
-        Review pending checkout
-        <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
-      </Link>
+        <Link
+          params={{ orgUrlSlug, storeUrlSlug }}
+          search={{ categorySlug: "pos-pending-checkout", o: getOrigin() }}
+          to="/$orgUrlSlug/store/$storeUrlSlug/products"
+        >
+          Review pending checkout
+          <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
+        </Link>
+      </Button>
     );
   }
 
   if (source.productId && source.productSkuId) {
     return (
-      <Link
-        className="inline-flex items-center gap-1 text-sm font-medium text-foreground underline-offset-4 transition-colors hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-        params={{
-          orgUrlSlug,
-          productSlug: source.productId,
-          storeUrlSlug,
-        }}
-        search={{ o: getOrigin(), variant: source.productSkuId }}
-        to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit"
+      <Button
+        asChild
+        className="-mr-2 h-8 px-2 text-muted-foreground hover:text-foreground"
+        size="sm"
+        variant="ghost"
       >
-        Review SKU
-        <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
-      </Link>
+        <Link
+          params={{
+            orgUrlSlug,
+            productSlug: source.productId,
+            storeUrlSlug,
+          }}
+          search={{ o: getOrigin(), variant: source.productSkuId }}
+          to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit"
+        >
+          Review SKU
+          <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
+        </Link>
+      </Button>
     );
   }
 
   if (source.sourceType === "inventoryImportProvisionalSku") {
     return (
-      <Link
-        className="inline-flex items-center gap-1 text-sm font-medium text-foreground underline-offset-4 transition-colors hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-        params={{ orgUrlSlug, storeUrlSlug }}
-        search={{ filter: "review" }}
-        to="/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import/review"
+      <Button
+        asChild
+        className="-mr-2 h-8 px-2 text-muted-foreground hover:text-foreground"
+        size="sm"
+        variant="ghost"
       >
-        Review import
-        <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
-      </Link>
+        <Link
+          params={{ orgUrlSlug, storeUrlSlug }}
+          search={{ filter: "review" }}
+          to="/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import/review"
+        >
+          Review import
+          <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
+        </Link>
+      </Button>
     );
   }
 
@@ -211,16 +345,21 @@ function SourceReviewLink({
 }
 
 function SourceList({
+  className,
   onSelectSource,
   sources,
 }: {
+  className?: string;
   onSelectSource: SkuActivityUntrustedSalesProps["onSelectSource"];
   sources: SkuActivityUntrustedSalesSourceRow[];
 }) {
   return (
     <ul
       aria-label="Untrusted SKU sale evidence"
-      className="overflow-hidden rounded-lg border border-border bg-surface-raised shadow-surface"
+      className={cn(
+        "overflow-hidden rounded-lg border border-border bg-surface-raised shadow-surface",
+        className,
+      )}
     >
       {sources.map((source) => (
         <li
@@ -230,9 +369,9 @@ function SourceList({
           <button
             aria-pressed={source.isSelected}
             className={cn(
-              "group w-full bg-background px-layout-md py-layout-md text-left transition-[background-color,box-shadow,transform] duration-150 ease-out active:scale-[0.998] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+              "group w-full bg-background px-layout-md py-layout-lg text-left transition-[background-color,box-shadow,transform] duration-150 ease-out active:scale-[0.998] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
               source.isSelected
-                ? "bg-primary/5 shadow-[inset_3px_0_0_hsl(var(--primary))]"
+                ? "bg-action-workflow-soft/55 shadow-[inset_3px_0_0_hsl(var(--action-workflow))] hover:bg-action-workflow-soft/70"
                 : "hover:bg-muted/40",
             )}
             onClick={() =>
@@ -240,22 +379,15 @@ function SourceList({
             }
             type="button"
           >
-            <div className="flex flex-col gap-layout-md lg:flex-row lg:items-start lg:justify-between">
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-layout-xs">
-                  <SourceToneBadge source={source} />
-                  <ReviewStateBadge source={source} />
-                  <Badge
-                    className="border-border bg-transparent text-muted-foreground"
-                    variant="outline"
-                  >
-                    {source.statusLabel}
-                  </Badge>
-                </div>
-                <p className="mt-2 line-clamp-2 text-sm font-medium text-foreground">
+            <div className="flex flex-col gap-layout-lg lg:flex-row lg:items-start lg:justify-between">
+              <div className="min-w-0 space-y-layout-sm">
+                <p className="line-clamp-2 text-sm font-medium text-foreground">
                   {source.title}
                 </p>
-                <div className="mt-2 flex flex-wrap items-center gap-x-layout-md gap-y-layout-xs text-xs leading-5 text-muted-foreground">
+                <div>
+                  <SourceMetadataLine includeStatus source={source} />
+                </div>
+                <div className="flex flex-wrap items-center gap-x-layout-md gap-y-layout-xs text-xs leading-5 text-muted-foreground">
                   <span className="tabular-nums">
                     <span className="font-medium text-foreground">
                       {formatCountLabel(source.totalQuantitySold, "unit")}
@@ -268,10 +400,10 @@ function SourceList({
                     </span>{" "}
                     completed
                   </span>
-                  <span>{getRelativeTime(source.lastActivityAt)}</span>
+                  <span>Latest sale {getRelativeTime(source.lastActivityAt)}</span>
                 </div>
-                <p className="mt-2 break-all text-xs leading-5 text-muted-foreground">
-                  Lookup: {source.lookupLabel ?? "not recorded"}
+                <p className="break-all text-xs leading-5 text-muted-foreground">
+                  {source.lookupLabel ?? "No lookup recorded"}
                 </p>
               </div>
               <div className="shrink-0 text-left lg:text-right">
@@ -315,29 +447,158 @@ function SummaryMetric({
 }
 
 function SelectedSourceDetail({
+  isLoading = false,
+  loadingSource,
+  onChangeTransactionPage,
   onLoadMoreTransactions,
   orgUrlSlug,
   selected,
   storeUrlSlug,
+  transactionPage = 1,
 }: {
+  isLoading?: boolean;
+  loadingSource?: SkuActivityUntrustedSalesSourceRow | null;
+  onChangeTransactionPage?: (page: number) => void;
   onLoadMoreTransactions?: () => void;
   orgUrlSlug: string;
   selected: NonNullable<SkuActivityUntrustedSalesViewModel["selected"]> | null;
   storeUrlSlug: string;
+  transactionPage?: number;
 }) {
-  if (!selected) {
+  const { detailRef, stickyStyle } = useDetailStickyPosition();
+  const transactionRows = selected?.transactionRows ?? [];
+  const transactionPageCount = Math.max(
+    1,
+    Math.ceil(transactionRows.length / TRANSACTION_LIST_PAGE_SIZE),
+  );
+  const clampedTransactionPage = Math.min(
+    Math.max(1, transactionPage),
+    transactionPageCount,
+  );
+  const transactionPageStart =
+    (clampedTransactionPage - 1) * TRANSACTION_LIST_PAGE_SIZE;
+  const transactionPageEnd = transactionPageStart + TRANSACTION_LIST_PAGE_SIZE;
+  const pagedTransactionRows = transactionRows.slice(
+    transactionPageStart,
+    transactionPageEnd,
+  );
+
+  useEffect(() => {
+    if (selected && transactionPage !== clampedTransactionPage) {
+      onChangeTransactionPage?.(clampedTransactionPage);
+    }
+  }, [
+    clampedTransactionPage,
+    onChangeTransactionPage,
+    selected,
+    transactionPage,
+  ]);
+
+  if (!selected && loadingSource) {
     return (
-      <aside className="flex min-h-[220px] items-center rounded-lg border border-dashed border-border bg-surface-raised px-layout-md py-layout-md shadow-surface">
-        <div className="flex items-start gap-layout-sm">
-          <CircleDot className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+      <aside
+        aria-busy="true"
+        className={cn(
+          "overflow-hidden rounded-lg border border-border bg-surface-raised shadow-surface",
+          DETAIL_STICKY_CLASS,
+          DETAIL_ENTRY_ANIMATION_CLASS,
+        )}
+        ref={detailRef}
+        style={stickyStyle}
+      >
+        <div className="space-y-layout-md border-b border-border bg-muted/20 px-layout-md py-layout-md">
+          <div className="flex flex-col gap-layout-md sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0 space-y-layout-xs">
+              <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                Selected source
+              </p>
+              <h2 className="line-clamp-2 text-base font-medium text-foreground">
+                {loadingSource.title}
+              </h2>
+              <div>
+                <SourceMetadataLine source={loadingSource} />
+              </div>
+              <p className="break-all text-xs leading-5 text-muted-foreground">
+                {loadingSource.lookupLabel ?? "No lookup recorded"}
+              </p>
+            </div>
+            <SourceReviewLink
+              orgUrlSlug={orgUrlSlug}
+              source={loadingSource}
+              storeUrlSlug={storeUrlSlug}
+            />
+          </div>
+
+          <div className="grid gap-layout-xs sm:grid-cols-2">
+            <SummaryMetric
+              helper={formatCountLabel(loadingSource.saleCount, "completed sale")}
+              label="Units sold"
+              value={loadingSource.totalQuantitySold.toLocaleString()}
+            />
+            <SummaryMetric
+              helper="Completed sale evidence"
+              label="Latest sale"
+              value={getRelativeTime(loadingSource.lastActivityAt)}
+            />
+          </div>
+        </div>
+
+        <div className="space-y-layout-md px-layout-md py-layout-md">
           <div>
-            <p className="text-sm font-medium text-foreground">
-              Select an evidence source.
+            <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+              Full transaction history
             </p>
             <p className="mt-1 text-sm leading-6 text-muted-foreground">
-              Full transaction history loads here after selection.
+              Completed sale lines tied to this source.
             </p>
           </div>
+
+          <div
+            aria-label="Loading transaction history"
+            className="overflow-hidden rounded-md border border-border bg-background"
+          >
+            <div className="px-layout-md py-layout-sm">
+              <div className="flex flex-col gap-layout-sm sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0 flex-1 space-y-2">
+                  <div className="h-4 w-28 rounded bg-muted motion-safe:animate-pulse" />
+                  <div className="h-4 w-3/4 rounded bg-muted/80 motion-safe:animate-pulse" />
+                  <div className="h-3 w-20 rounded bg-muted/70 motion-safe:animate-pulse" />
+                </div>
+                <div className="shrink-0 space-y-2 sm:w-24">
+                  <div className="h-4 rounded bg-muted motion-safe:animate-pulse" />
+                  <div className="h-3 rounded bg-muted/70 motion-safe:animate-pulse" />
+                </div>
+              </div>
+              <div className="mt-layout-sm h-6 w-20 rounded-md bg-muted/70 motion-safe:animate-pulse" />
+            </div>
+          </div>
+        </div>
+      </aside>
+    );
+  }
+
+  if (!selected) {
+    return (
+      <aside
+        className={cn(
+          "flex min-h-[220px] items-center px-layout-md py-layout-md",
+          DETAIL_STICKY_CLASS,
+          DETAIL_ENTRY_ANIMATION_CLASS,
+        )}
+        ref={detailRef}
+        style={stickyStyle}
+      >
+        <div className="mx-auto max-w-sm text-center">
+          <p className="text-sm font-medium text-foreground">
+            {isLoading
+              ? "Loading transaction history."
+              : "Select an evidence source."}
+          </p>
+          <p className="mt-1 text-sm leading-6 text-muted-foreground">
+            {isLoading
+              ? "Completed sale lines are loading for the selected source."
+              : "Full transaction history loads here after selection."}
+          </p>
         </div>
       </aside>
     );
@@ -348,22 +609,29 @@ function SelectedSourceDetail({
     selected.transactionRows.length === 0;
 
   return (
-    <aside className="overflow-hidden rounded-lg border border-border bg-surface-raised shadow-surface xl:sticky xl:top-layout-md">
+    <aside
+      className={cn(
+        "overflow-hidden rounded-lg border border-border bg-surface-raised shadow-surface",
+        DETAIL_STICKY_CLASS,
+        DETAIL_ENTRY_ANIMATION_CLASS,
+      )}
+      ref={detailRef}
+      style={stickyStyle}
+    >
       <div className="space-y-layout-md border-b border-border bg-muted/20 px-layout-md py-layout-md">
-        <div className="flex flex-col gap-layout-sm sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-layout-xs">
-              <SourceToneBadge source={selected.source} />
-              <ReviewStateBadge source={selected.source} />
-            </div>
-            <p className="mt-layout-sm text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+        <div className="flex flex-col gap-layout-md sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0 space-y-layout-xs">
+            <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
               Selected source
             </p>
-            <h2 className="mt-1 line-clamp-2 text-base font-medium text-foreground">
+            <h2 className="line-clamp-2 text-base font-medium text-foreground">
               {selected.source.title}
             </h2>
-            <p className="mt-1 break-all text-xs leading-5 text-muted-foreground">
-              Lookup: {selected.source.lookupLabel ?? "not recorded"}
+            <div>
+              <SourceMetadataLine source={selected.source} />
+            </div>
+            <p className="break-all text-xs leading-5 text-muted-foreground">
+              {selected.source.lookupLabel ?? "No lookup recorded"}
             </p>
           </div>
           <SourceReviewLink
@@ -383,9 +651,9 @@ function SelectedSourceDetail({
             value={selected.source.totalQuantitySold.toLocaleString()}
           />
           <SummaryMetric
-            helper={getRelativeTime(selected.source.lastActivityAt)}
-            label="Last activity"
-            value={selected.source.reviewLabel}
+            helper="Completed sale evidence"
+            label="Latest sale"
+            value={getRelativeTime(selected.source.lastActivityAt)}
           />
         </div>
       </div>
@@ -406,62 +674,70 @@ function SelectedSourceDetail({
         </div>
 
         {selected.transactionRows.length > 0 ? (
-          <ol className="overflow-hidden rounded-md border border-border bg-background">
-            {selected.transactionRows.map((row) => (
-              <li
-                className="border-b border-border px-layout-md py-layout-sm last:border-b-0"
-                key={row.id}
-              >
-                <div className="flex flex-col gap-layout-sm sm:flex-row sm:items-start sm:justify-between">
-                  <div className="min-w-0">
-                    <Link
-                      className="inline-flex min-w-0 items-center gap-1 text-sm font-medium text-foreground underline-offset-4 transition-colors hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                      params={{
-                        orgUrlSlug,
-                        storeUrlSlug,
-                        transactionId: row.transactionId,
-                      }}
-                      search={{ o: getOrigin() }}
-                      to="/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId"
-                    >
-                      <ReceiptText aria-hidden="true" className="h-3.5 w-3.5" />
-                      <span className="min-w-0 break-all">
-                        {row.receiptLabel}
-                      </span>
-                    </Link>
-                    <p className="mt-1 line-clamp-2 text-sm leading-6 text-muted-foreground">
-                      {row.productLabel}
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {getRelativeTime(row.completedAt)}
-                    </p>
+          <div className="overflow-hidden rounded-md border border-border bg-background">
+            <ol>
+              {pagedTransactionRows.map((row) => (
+                <li
+                  className="border-b border-border px-layout-md py-layout-sm last:border-b-0"
+                  key={row.id}
+                >
+                  <div className="flex flex-col gap-layout-sm sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <Link
+                        className="inline-flex min-w-0 items-center gap-1 text-sm font-medium text-foreground underline-offset-4 transition-colors hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        params={{
+                          orgUrlSlug,
+                          storeUrlSlug,
+                          transactionId: row.transactionId,
+                        }}
+                        search={{ o: getOrigin() }}
+                        to="/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId"
+                      >
+                        <span className="min-w-0 break-all">
+                          {row.receiptLabel}
+                        </span>
+                      </Link>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {getRelativeTime(row.completedAt)}
+                      </p>
+                    </div>
+                    <div className="shrink-0 text-left sm:text-right">
+                      <p className="text-sm font-medium tabular-nums text-foreground">
+                        {formatCountLabel(row.netQuantity, "net unit")}
+                      </p>
+                      <p className="mt-1 text-xs tabular-nums text-muted-foreground">
+                        {formatCountLabel(row.grossQuantity, "gross unit")}
+                      </p>
+                    </div>
                   </div>
-                  <div className="shrink-0 text-left sm:text-right">
-                    <p className="text-sm font-medium tabular-nums text-foreground">
-                      {formatCountLabel(row.netQuantity, "net unit")}
-                    </p>
-                    <p className="mt-1 text-xs tabular-nums text-muted-foreground">
-                      {formatCountLabel(row.grossQuantity, "gross unit")}
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-layout-sm flex flex-wrap items-center gap-layout-xs">
-                  <Badge variant="outline">{row.statusLabel}</Badge>
-                  {row.refundedQuantity > 0 ? (
-                    <Badge
-                      className="border-warning/30 bg-warning/10 text-foreground"
-                      variant="outline"
-                    >
-                      Refunded {row.refundedQuantity}
-                    </Badge>
+                  {row.refundedQuantity > 0 || row.adjustmentLabel ? (
+                    <div className="mt-layout-sm flex flex-wrap items-center gap-layout-xs">
+                      {row.refundedQuantity > 0 ? (
+                        <Badge
+                          className="border-warning/30 bg-warning/10 text-foreground"
+                          variant="outline"
+                        >
+                          Refunded {row.refundedQuantity}
+                        </Badge>
+                      ) : null}
+                      {row.adjustmentLabel ? (
+                        <Badge variant="outline">{row.adjustmentLabel}</Badge>
+                      ) : null}
+                    </div>
                   ) : null}
-                  {row.adjustmentLabel ? (
-                    <Badge variant="outline">{row.adjustmentLabel}</Badge>
-                  ) : null}
-                </div>
-              </li>
-            ))}
-          </ol>
+                </li>
+              ))}
+            </ol>
+            {selected.transactionRows.length > TRANSACTION_LIST_PAGE_SIZE ? (
+              <ListPagination
+                onPageChange={(nextPage) => onChangeTransactionPage?.(nextPage)}
+                page={clampedTransactionPage}
+                pageCount={transactionPageCount}
+                pageSize={TRANSACTION_LIST_PAGE_SIZE}
+                totalItems={selected.transactionRows.length}
+              />
+            ) : null}
+          </div>
         ) : hasTransactionMismatch ? (
           <div className="rounded-md border border-warning/30 bg-warning/10 px-layout-md py-layout-sm">
             <p className="text-sm font-medium text-foreground">
@@ -500,8 +776,10 @@ function SelectedSourceDetail({
 }
 
 export function SkuActivityUntrustedSales({
+  evidenceQuery = "",
   error,
   isLoading = false,
+  onChangeTransactionPage,
   onChangeReviewStatus,
   onChangeSourceFilter,
   onLoadMoreSources,
@@ -509,9 +787,110 @@ export function SkuActivityUntrustedSales({
   onSelectSource,
   orgUrlSlug,
   storeUrlSlug,
+  transactionPage,
   viewModel,
 }: SkuActivityUntrustedSalesProps) {
-  if (isLoading || viewModel === undefined) {
+  const [sourcePage, setSourcePage] = useState(1);
+  const [pendingSourcePage, setPendingSourcePage] = useState<number | null>(
+    null,
+  );
+  const lastAppliedSelectedPageKeyRef = useRef<string | null>(null);
+  const lastRequestedSelectedSourceCountRef = useRef(0);
+  const selectedSourceIndex =
+    viewModel?.sourceRows.findIndex((source) => source.isSelected) ?? -1;
+  const trimmedEvidenceQuery = evidenceQuery.trim();
+  const hasEvidenceQuery = trimmedEvidenceQuery.length > 0;
+  const filteredSourceRows =
+    viewModel?.sourceRows.filter((source) =>
+      sourceMatchesEvidenceQuery(source, trimmedEvidenceQuery),
+    ) ?? [];
+  const selectedSourcePage =
+    selectedSourceIndex >= 0
+      ? Math.floor(selectedSourceIndex / SOURCE_LIST_PAGE_SIZE) + 1
+      : null;
+  const selectedSourcePageKey =
+    viewModel?.selected?.source.id && selectedSourcePage
+      ? `${viewModel.selected.source.id}:${selectedSourcePage}`
+      : null;
+  const totalSourceItems = hasEvidenceQuery
+    ? filteredSourceRows.length
+    : (viewModel?.summary.totalSourceCount ?? 0);
+  const sourcePageCount = Math.max(
+    1,
+    Math.ceil(totalSourceItems / SOURCE_LIST_PAGE_SIZE),
+  );
+  const clampedSourcePage = Math.min(sourcePage, sourcePageCount);
+  const sourcePageStart = (clampedSourcePage - 1) * SOURCE_LIST_PAGE_SIZE;
+  const sourcePageEnd = sourcePageStart + SOURCE_LIST_PAGE_SIZE;
+  const sourceRowsForList = hasEvidenceQuery
+    ? filteredSourceRows
+    : (viewModel?.sourceRows ?? []);
+  const pagedSourceRows = sourceRowsForList.slice(
+    sourcePageStart,
+    sourcePageEnd,
+  );
+
+  useEffect(() => {
+    setSourcePage(1);
+    setPendingSourcePage(null);
+    lastAppliedSelectedPageKeyRef.current = null;
+    lastRequestedSelectedSourceCountRef.current = 0;
+  }, [trimmedEvidenceQuery, viewModel?.reviewStatus, viewModel?.sourceFilter]);
+
+  useEffect(() => {
+    if (
+      selectedSourcePage &&
+      selectedSourcePageKey &&
+      selectedSourcePageKey !== lastAppliedSelectedPageKeyRef.current
+    ) {
+      lastAppliedSelectedPageKeyRef.current = selectedSourcePageKey;
+      setSourcePage(selectedSourcePage);
+      setPendingSourcePage(null);
+    }
+  }, [selectedSourcePage, selectedSourcePageKey]);
+
+  useEffect(() => {
+    if (
+      isLoading ||
+      !viewModel?.selected ||
+      selectedSourceIndex >= 0 ||
+      !viewModel.hasMoreSources
+    ) {
+      return;
+    }
+
+    const requestedSourceCount =
+      viewModel.sourceRows.length + SOURCE_LIST_PAGE_SIZE;
+
+    if (requestedSourceCount <= lastRequestedSelectedSourceCountRef.current) {
+      return;
+    }
+
+    lastRequestedSelectedSourceCountRef.current = requestedSourceCount;
+    onLoadMoreSources?.(requestedSourceCount);
+  }, [isLoading, onLoadMoreSources, selectedSourceIndex, viewModel]);
+
+  useEffect(() => {
+    if (!pendingSourcePage || !viewModel) {
+      return;
+    }
+
+    const pendingPageStart = (pendingSourcePage - 1) * SOURCE_LIST_PAGE_SIZE;
+    const hasPendingPageRows = viewModel.sourceRows.length > pendingPageStart;
+
+    if (hasPendingPageRows || !viewModel.hasMoreSources) {
+      setSourcePage(pendingSourcePage);
+      setPendingSourcePage(null);
+    }
+  }, [pendingSourcePage, viewModel]);
+
+  useEffect(() => {
+    if (sourcePage > sourcePageCount) {
+      setSourcePage(sourcePageCount);
+    }
+  }, [sourcePage, sourcePageCount]);
+
+  if (viewModel === undefined) {
     return (
       <InlineState
         title="Loading untrusted SKU sales."
@@ -538,18 +917,42 @@ export function SkuActivityUntrustedSales({
     );
   }
 
+  const loadedViewModel = viewModel;
+
+  const isLoadingSelectedSource =
+    isLoading &&
+    loadedViewModel.selected === null &&
+    loadedViewModel.sourceRows.some((source) => source.isSelected);
+  const loadingSelectedSource =
+    isLoadingSelectedSource
+      ? (loadedViewModel.sourceRows.find((source) => source.isSelected) ?? null)
+      : null;
+
+  function handleSourcePageChange(nextPage: number) {
+    const clampedNextPage = Math.min(Math.max(1, nextPage), sourcePageCount);
+    const requestedSourceCount = clampedNextPage * SOURCE_LIST_PAGE_SIZE;
+
+    if (
+      requestedSourceCount > loadedViewModel.sourceRows.length &&
+      loadedViewModel.hasMoreSources
+    ) {
+      setPendingSourcePage(clampedNextPage);
+      onLoadMoreSources?.(requestedSourceCount);
+      return;
+    }
+
+    setSourcePage(clampedNextPage);
+  }
+
   return (
-    <section className="space-y-layout-md">
+    <section
+      aria-busy={isLoading}
+      className="space-y-layout-2xl md:space-y-layout-3xl"
+    >
       <div className="rounded-lg border border-border bg-surface-raised shadow-surface">
         <div className="flex flex-col gap-layout-md lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0 px-layout-md pt-layout-md lg:max-w-3xl">
-            <div className="flex items-center gap-layout-xs">
-              <History className="h-4 w-4 text-muted-foreground" />
-              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                Untrusted SKU sales
-              </p>
-            </div>
-            <h2 className="mt-2 text-base font-medium text-foreground">
+            <h2 className="text-base font-medium text-foreground">
               Products moving before trust review
             </h2>
             <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">
@@ -557,28 +960,32 @@ export function SkuActivityUntrustedSales({
               have completed sales in circulation.
             </p>
           </div>
-          <div className="grid gap-layout-xs px-layout-md pb-layout-md sm:grid-cols-2 lg:min-w-[460px] lg:grid-cols-4 lg:pt-layout-md">
-            <SummaryMetric
+          <div className="grid gap-layout-xs px-layout-md pb-layout-md sm:grid-cols-2 lg:min-w-[520px] lg:grid-cols-4 lg:pt-layout-md">
+            <OperationsSummaryMetric
               helper={`${viewModel.summary.totalSourceCount.toLocaleString()} total`}
               label="Visible"
+              tone="quiet"
               value={viewModel.summary.visibleSourceCount.toLocaleString()}
             />
-            <SummaryMetric
+            <OperationsSummaryMetric
               label="Units sold"
+              tone="quiet"
               value={viewModel.summary.totalQuantitySold.toLocaleString()}
             />
-            <SummaryMetric
+            <OperationsSummaryMetric
               label="Open"
+              tone="quiet"
               value={viewModel.summary.openCount.toLocaleString()}
             />
-            <SummaryMetric
+            <OperationsSummaryMetric
               label="Reviewed"
+              tone="quiet"
               value={viewModel.summary.reviewedCount.toLocaleString()}
             />
           </div>
         </div>
 
-        <div className="grid gap-layout-md border-t border-border px-layout-md py-layout-md lg:grid-cols-2">
+        <div className="flex flex-col gap-layout-md border-t border-border px-layout-md py-layout-md md:flex-row md:items-start md:gap-layout-xl">
           <div className="space-y-layout-xs">
             <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
               Source
@@ -595,7 +1002,7 @@ export function SkuActivityUntrustedSales({
               ))}
             </div>
           </div>
-          <div className="space-y-layout-xs">
+          <div className="space-y-layout-xs md:border-l md:border-border md:pl-layout-xl">
             <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
               Review state
             </p>
@@ -614,75 +1021,85 @@ export function SkuActivityUntrustedSales({
         </div>
       </div>
 
-      <div className="grid gap-layout-md xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.8fr)]">
-        {viewModel.selected ? (
-          <div className="xl:hidden">
+      <div className="space-y-layout-lg">
+        <div className="flex flex-col gap-layout-xs sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+              Evidence sources
+            </p>
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">
+              Select an item to inspect the completed sales behind it.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid gap-layout-md xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.8fr)]">
+          {viewModel.selected ? (
+            <div className="xl:hidden">
+              <SelectedSourceDetail
+                isLoading={isLoadingSelectedSource}
+                loadingSource={loadingSelectedSource}
+                onChangeTransactionPage={onChangeTransactionPage}
+                onLoadMoreTransactions={onLoadMoreTransactions}
+                orgUrlSlug={orgUrlSlug}
+                selected={viewModel.selected}
+                storeUrlSlug={storeUrlSlug}
+                transactionPage={transactionPage}
+              />
+            </div>
+          ) : null}
+
+          <div className="space-y-layout-sm">
+            {sourceRowsForList.length > 0 ? (
+              totalSourceItems > SOURCE_LIST_PAGE_SIZE ? (
+                <div className="overflow-hidden rounded-lg border border-border bg-surface-raised shadow-surface">
+                  <SourceList
+                    className="rounded-none border-0 shadow-none"
+                    onSelectSource={onSelectSource}
+                    sources={pagedSourceRows}
+                  />
+                  <ListPagination
+                    onPageChange={handleSourcePageChange}
+                    page={clampedSourcePage}
+                    pageCount={sourcePageCount}
+                    pageSize={SOURCE_LIST_PAGE_SIZE}
+                    totalItems={totalSourceItems}
+                  />
+                </div>
+              ) : (
+                <SourceList
+                  onSelectSource={onSelectSource}
+                  sources={pagedSourceRows}
+                />
+              )
+            ) : (
+              <InlineState
+                title={
+                  hasEvidenceQuery
+                    ? "No evidence sources match."
+                    : "No sale evidence found."
+                }
+                description={
+                  hasEvidenceQuery
+                    ? "Adjust the evidence search or clear it to return to the full view."
+                    : viewModel.emptyMessage
+                }
+              />
+            )}
+          </div>
+
+          <div className={viewModel.selected ? "hidden xl:block" : ""}>
             <SelectedSourceDetail
+              isLoading={isLoadingSelectedSource}
+              loadingSource={loadingSelectedSource}
+              onChangeTransactionPage={onChangeTransactionPage}
               onLoadMoreTransactions={onLoadMoreTransactions}
               orgUrlSlug={orgUrlSlug}
               selected={viewModel.selected}
               storeUrlSlug={storeUrlSlug}
+              transactionPage={transactionPage}
             />
           </div>
-        ) : null}
-
-        <div className="space-y-layout-sm">
-          <div className="flex flex-col gap-layout-xs sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                Evidence sources
-              </p>
-              <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                Select an item to inspect the completed sales behind it.
-              </p>
-            </div>
-            {viewModel.sourceRows.length > 0 ? (
-              <Badge
-                className="w-fit border-border bg-transparent text-muted-foreground"
-                variant="outline"
-              >
-                {formatCountLabel(viewModel.sourceRows.length, "source")}
-              </Badge>
-            ) : null}
-          </div>
-
-          {viewModel.sourceRows.length > 0 ? (
-            <SourceList
-              onSelectSource={onSelectSource}
-              sources={viewModel.sourceRows}
-            />
-          ) : (
-            <InlineState
-              title="No sale evidence found."
-              description={viewModel.emptyMessage}
-            />
-          )}
-
-          {viewModel.hasMoreSources && onLoadMoreSources ? (
-            <Button
-              className="w-full"
-              onClick={onLoadMoreSources}
-              type="button"
-              variant="utility"
-            >
-              <ListPlus aria-hidden="true" className="h-4 w-4" />
-              Load more sources
-            </Button>
-          ) : viewModel.hasMoreSources ? (
-            <p className="rounded-md border border-border bg-muted/30 px-layout-md py-layout-sm text-sm leading-6 text-muted-foreground">
-              Showing the first {viewModel.sourceLimit.toLocaleString()} source
-              records. Narrow the filters to inspect a smaller set.
-            </p>
-          ) : null}
-        </div>
-
-        <div className={viewModel.selected ? "hidden xl:block" : ""}>
-          <SelectedSourceDetail
-            onLoadMoreTransactions={onLoadMoreTransactions}
-            orgUrlSlug={orgUrlSlug}
-            selected={viewModel.selected}
-            storeUrlSlug={storeUrlSlug}
-          />
         </div>
       </div>
     </section>
