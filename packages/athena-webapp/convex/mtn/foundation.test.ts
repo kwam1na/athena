@@ -14,10 +14,11 @@ describe("MTN collections foundation", () => {
     );
 
     expect(schemaSource).toContain(
-      'mtnCollectionsToken: defineTable(mtnCollectionsTokenSchema).index("by_storeId", ["storeId"])',
+      "mtnCollectionsToken: defineTable(mtnCollectionsTokenSchema)",
     );
+    expect(schemaSource).toContain('"by_storeId", ["storeId"]');
     expect(schemaSource).toContain(
-      'mtnCollectionTransaction: defineTable(mtnCollectionTransactionSchema)',
+      "mtnCollectionTransaction: defineTable(mtnCollectionTransactionSchema)",
     );
     expect(schemaSource).toContain(
       '.index("by_providerReference", ["providerReference"])',
@@ -30,6 +31,8 @@ describe("MTN collections foundation", () => {
   it("registers the MTN webhook route on the shared Hono router", () => {
     const httpRouter = readProjectFile("convex", "http.ts");
 
-    expect(httpRouter).toContain('app.route("/webhooks/mtn-momo", mtnMomoRoutes);');
+    expect(httpRouter).toContain(
+      'app.route("/webhooks/mtn-momo", mtnMomoRoutes);',
+    );
   });
 });

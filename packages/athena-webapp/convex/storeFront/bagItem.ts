@@ -19,12 +19,11 @@ export const addItemToBag = internalMutation({
 
     const existing = await ctx.db
       .query(entity)
-      .filter((q) =>
-        q.and(
-          q.eq(q.field("productSkuId"), args.productSkuId),
-          q.eq(q.field("bagId"), args.bagId),
-          q.eq(q.field("storeFrontUserId"), args.storeFrontUserId)
-        )
+      .withIndex("by_bagId_storeFrontUserId_productSkuId", (q) =>
+        q
+          .eq("bagId", args.bagId)
+          .eq("storeFrontUserId", args.storeFrontUserId)
+          .eq("productSkuId", args.productSkuId),
       )
       .first();
 
@@ -48,7 +47,9 @@ export const updateItemInBag = internalMutation({
     quantity: v.number(),
   },
   handler: async (ctx, args) => {
-    return await ctx.db.patch("bagItem", args.itemId, { quantity: args.quantity });
+    return await ctx.db.patch("bagItem", args.itemId, {
+      quantity: args.quantity,
+    });
   },
 });
 
@@ -77,7 +78,7 @@ export const getBagItemsForStore = query({
 
     // Get all the items for the bags
     const items: any[] = await Promise.all(
-      bags.map(async (bag) => await loadBagWithItems(ctx, bag))
+      bags.map(async (bag) => await loadBagWithItems(ctx, bag)),
     );
 
     return items.filter((item) => item.items.length > 0);

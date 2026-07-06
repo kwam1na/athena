@@ -46,6 +46,16 @@ describe("commerce query indexing", () => {
         fields: ["savedBagId"],
       },
       {
+        table: "bagItem",
+        descriptor: "by_bagId_storeFrontUserId_productSkuId",
+        fields: ["bagId", "storeFrontUserId", "productSkuId"],
+      },
+      {
+        table: "savedBagItem",
+        descriptor: "by_savedBagId_storeFrontUserId_productSkuId",
+        fields: ["savedBagId", "storeFrontUserId", "productSkuId"],
+      },
+      {
         table: "checkoutSession",
         descriptor: "by_storeFrontUserId",
         fields: ["storeFrontUserId"],
@@ -110,11 +120,21 @@ describe("commerce query indexing", () => {
 
   it("uses indexed lookups in the bag and saved-bag modules", () => {
     const bagSource = getSource("./bag.ts");
+    const bagItemSource = getSource("./bagItem.ts");
     const savedBagSource = getSource("./savedBag.ts");
+    const savedBagItemSource = getSource("./savedBagItem.ts");
 
     expect(bagSource).toContain('.withIndex("by_storeFrontUserId"');
+    expect(bagItemSource).toContain(
+      '.withIndex("by_bagId_storeFrontUserId_productSkuId"',
+    );
+    expect(bagItemSource).not.toContain(".filter((q)");
     expect(savedBagSource).toContain('.withIndex("by_storeFrontUserId"');
     expect(savedBagSource).toContain('.withIndex("by_savedBagId"');
+    expect(savedBagItemSource).toContain(
+      '.withIndex("by_savedBagId_storeFrontUserId_productSkuId"',
+    );
+    expect(savedBagItemSource).not.toContain(".filter((q)");
   });
 
   it("uses indexed lookups in the checkout-session and online-order modules", () => {

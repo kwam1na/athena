@@ -17,12 +17,11 @@ export const addItemToBag = internalMutation({
 
     const existing = await ctx.db
       .query(entity)
-      .filter((q) =>
-        q.and(
-          q.eq(q.field("productSkuId"), args.productSkuId),
-          q.eq(q.field("savedBagId"), args.savedBagId),
-          q.eq(q.field("storeFrontUserId"), args.storeFrontUserId)
-        )
+      .withIndex("by_savedBagId_storeFrontUserId_productSkuId", (q) =>
+        q
+          .eq("savedBagId", args.savedBagId)
+          .eq("storeFrontUserId", args.storeFrontUserId)
+          .eq("productSkuId", args.productSkuId),
       )
       .first();
 
@@ -42,7 +41,9 @@ export const updateItemInBag = internalMutation({
     quantity: v.number(),
   },
   handler: async (ctx, args) => {
-    return await ctx.db.patch("savedBagItem", args.itemId, { quantity: args.quantity });
+    return await ctx.db.patch("savedBagItem", args.itemId, {
+      quantity: args.quantity,
+    });
   },
 });
 
