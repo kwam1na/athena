@@ -29,6 +29,7 @@ export type ExpenseLocalCommandScope = {
   terminalId: string;
   storeId: string;
   registerNumber?: string;
+  localRegisterSessionId?: string;
   staffProfileId: string;
   validationMetadata?: PosLocalEventValidationMetadata;
 };
@@ -143,6 +144,7 @@ export function createExpenseLocalCommandGateway(
       terminalId: input.terminalId,
       storeId: input.storeId,
       registerNumber: input.registerNumber,
+      localRegisterSessionId: input.localRegisterSessionId,
       localExpenseSessionId: input.localExpenseSessionId,
       staffProfileId: input.staffProfileId,
       validationMetadata: input.validationMetadata,

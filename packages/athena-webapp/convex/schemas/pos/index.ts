@@ -20,3 +20,5 @@ export * from "./posLocalSyncMapping";
 export * from "./posLocalStaffProof";
 export * from "./posPendingCheckoutItem";
 export * from "./posPendingCheckoutLookupAlias";
+export * from "./posRegisterSessionActivity";
+export * from "./posRegisterSessionActivityCheckpoint";

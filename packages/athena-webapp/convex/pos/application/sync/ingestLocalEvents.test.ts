@@ -1,7 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const activityPatchMocks = vi.hoisted(() => ({
+  patchRegisterSessionActivityFromLocalSyncWithCtx: vi.fn(),
+}));
+
+vi.mock("./posRegisterSessionActivity", () => activityPatchMocks);
 
 import {
   createLocalSyncIngestionService,
+  ingestLocalEventsWithCtx,
   type PosLocalSyncBatchInput,
 } from "./ingestLocalEvents";
 import { createConvexLocalSyncRepository } from "../../infrastructure/repositories/localSyncRepository";
@@ -16,6 +23,13 @@ import type {
   PosLocalSyncEventInput,
   SyncProjectionRepository,
 } from "./types";
+
+beforeEach(() => {
+  activityPatchMocks.patchRegisterSessionActivityFromLocalSyncWithCtx.mockReset();
+  activityPatchMocks.patchRegisterSessionActivityFromLocalSyncWithCtx.mockResolvedValue(
+    undefined,
+  );
+});
 
 describe("createLocalSyncIngestionService", () => {
   it("accepts an ordered local register batch and returns durable mappings", async () => {
@@ -3799,6 +3813,47 @@ describe("createLocalSyncIngestionService", () => {
         id: "credential-1",
       });
     }
+  });
+});
+
+describe("ingestLocalEventsWithCtx", () => {
+  it("returns the core sync result when activity patching fails", async () => {
+    activityPatchMocks.patchRegisterSessionActivityFromLocalSyncWithCtx.mockRejectedValueOnce(
+      new Error("activity patch failed"),
+    );
+    const ctx = createFakeConvexCtx({
+      posTerminal: [
+        {
+          _id: "terminal-1",
+          status: "active",
+          storeId: "store-1",
+        },
+      ],
+    });
+
+    const result = await ingestLocalEventsWithCtx(ctx as never, {
+      events: [],
+      storeId: "store-1" as Id<"store">,
+      submittedAt: 100,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+    });
+
+    expect(result).toEqual({
+      kind: "ok",
+      data: {
+        accepted: [],
+        conflicts: [],
+        held: [],
+        mappings: [],
+        syncCursor: {
+          localRegisterSessionId: null,
+          acceptedThroughSequence: 0,
+        },
+      },
+    });
+    expect(
+      activityPatchMocks.patchRegisterSessionActivityFromLocalSyncWithCtx,
+    ).toHaveBeenCalled();
   });
 });
 

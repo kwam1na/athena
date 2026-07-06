@@ -86,10 +86,14 @@ describe("createExpenseLocalCommandGateway", () => {
       staffProofToken: "proof-token-1",
     });
 
-    await gateway.startSession(scope());
+    await gateway.startSession({
+      ...scope(),
+      localRegisterSessionId: "local-register-session-1",
+    });
     await expect(
       gateway.completeExpense({
         ...scope(),
+        localRegisterSessionId: "local-register-session-1",
         localExpenseSessionId: "local-expense-session-1",
         localExpenseEventId: "local-expense-event-1",
         subtotal: 50,
@@ -122,6 +126,7 @@ describe("createExpenseLocalCommandGateway", () => {
         expect.objectContaining({
           type: "expense.completed",
           localExpenseSessionId: "local-expense-session-1",
+          localRegisterSessionId: "local-register-session-1",
           staffProofToken: "proof-token-1",
           uploadSequence: 1,
           payload: expect.objectContaining({

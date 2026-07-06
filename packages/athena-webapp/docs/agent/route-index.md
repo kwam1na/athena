@@ -29,6 +29,7 @@ This route index enumerates the current files under `src/routes` so agents can o
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/bags.index.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/bags.index.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/bulk-operations/index.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/bulk-operations/index.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/index.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/index.tsx)
+- [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers.$sessionId.activity.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers.$sessionId.activity.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers.index.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers.index.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions.index.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions.index.tsx)

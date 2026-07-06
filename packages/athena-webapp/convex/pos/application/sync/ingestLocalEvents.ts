@@ -3,6 +3,7 @@ import type { MutationCtx } from "../../../_generated/server";
 import { ok, userError, type CommandResult } from "../../../../shared/commandResult";
 import { createConvexLocalSyncRepository } from "../../infrastructure/repositories/localSyncRepository";
 import { projectLocalSyncEvent } from "./projectLocalEvents";
+import { patchRegisterSessionActivityFromLocalSyncWithCtx } from "./posRegisterSessionActivity";
 import { hashPosLocalStaffProofToken } from "./staffProof";
 import type {
   LocalSyncConflictRecord,
@@ -1632,6 +1633,20 @@ export async function ingestLocalEventsWithCtx(
     projectionRepository: repository,
     now: () => Date.now(),
   }).ingestBatch(batch);
+  if (result.kind === "ok") {
+    try {
+      await patchRegisterSessionActivityFromLocalSyncWithCtx(ctx, {
+        accepted: result.data.accepted,
+        conflicts: result.data.conflicts,
+        held: result.data.held,
+        mappings: result.data.mappings,
+        storeId: batch.storeId,
+        terminalId: batch.terminalId,
+      });
+    } catch {
+      // Activity replay is auxiliary evidence; never fail authoritative POS sync after core ingest succeeds.
+    }
+  }
   await repository.flushCatalogSummaryRefreshes?.();
   return result;
 }

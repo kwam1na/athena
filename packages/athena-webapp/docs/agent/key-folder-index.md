@@ -6,7 +6,7 @@ This key-folder index highlights the main directories agents are likely to need 
 
 ## Core app surfaces
 
-- [`src/routes`](../../src/routes) — TanStack route entrypoints and authenticated shells. Currently 94 file(s); key children: -authed-layout.tsx, -index-route-view.tsx, __root.tsx, _authed, _authed.test.tsx.
+- [`src/routes`](../../src/routes) — TanStack route entrypoints and authenticated shells. Currently 95 file(s); key children: -authed-layout.tsx, -index-route-view.tsx, __root.tsx, _authed, _authed.test.tsx.
 - [`src/components`](../../src/components) — UI components, views, and package-local feature widgets. Currently 647 file(s); key children: GenericComboBox.tsx, Navbar.test.tsx, Navbar.tsx, OrganizationView.test.tsx, OrganizationView.tsx.
 - [`src/components/traces`](../../src/components/traces) — Shared workflow trace screens, ordered timelines, and trace detail primitives. Currently 3 file(s); key children: WorkflowTraceRouteLink.tsx, WorkflowTraceView.test.tsx, WorkflowTraceView.tsx.
 - [`src/components/operations`](../../src/components/operations) — Manager-queue and stock-adjustment workflows that share approval rails with other operational surfaces. Currently 33 file(s); key children: CommandApprovalDialog.test.tsx, CommandApprovalDialog.tsx, DailyCloseHistoryView.test.tsx, DailyCloseHistoryView.tsx, DailyCloseView.test.tsx.
@@ -14,7 +14,7 @@ This key-folder index highlights the main directories agents are likely to need 
 - [`src/hooks`](../../src/hooks) — React hooks that fan out auth, shell, and feature state. Currently 47 file(s); key children: use-image-upload.ts, use-mobile.tsx, use-navigate-back.ts, use-navigation-keyboard-shortcuts.ts, use-pagination-persistence.test.ts.
 - [`src/contexts`](../../src/contexts) — Context providers for app-wide state and wiring. Currently 8 file(s); key children: AppShellFullscreenContext.tsx, ManagerElevationContext.test.tsx, ManagerElevationContext.tsx, OnlineOrderContext.tsx, PermissionsContext.tsx.
 - [`src/lib`](../../src/lib) — Shared frontend helpers, schemas, and package utilities. Currently 208 file(s); key children: access, app-messages, app-update, aws.ts, behaviorUtils.ts.
-- [`shared`](../../shared) — Browser-safe helpers shared with Convex-backed workflows. Currently 32 file(s); key children: approvalPolicy.ts, auth.ts, commandResult.test.ts, commandResult.ts, currencyFormatter.test.ts.
+- [`shared`](../../shared) — Browser-safe helpers shared with Convex-backed workflows. Currently 34 file(s); key children: approvalPolicy.ts, auth.ts, commandResult.test.ts, commandResult.ts, currencyFormatter.test.ts.
 - [`src/utils`](../../src/utils) — Cross-cutting browser helpers and lower-level utilities. Currently 4 file(s); key children: formatNumber.ts, index.ts, versionChecker.test.ts, versionChecker.ts.
 
 ## Backend and test surfaces
@@ -22,7 +22,7 @@ This key-folder index highlights the main directories agents are likely to need 
 - [`convex/stockOps`](../../convex/stockOps) — Stock-adjustment, procurement, replenishment, receiving, and vendor flows layered over inventory state. Currently 16 file(s); key children: access.test.ts, access.ts, adjustments.test.ts, adjustments.ts, cycleCountDrafts.test.ts.
 - [`convex/serviceOps`](../../convex/serviceOps) — Service catalog, appointment, and service-case workflows layered on operational work items. Currently 8 file(s); key children: appointments.ts, catalog.ts, catalogAppointments.test.ts, moduleWiring.test.ts, serviceCaseTracing.test.ts.
 - [`convex/workflowTraces`](../../convex/workflowTraces) — Shared workflow trace creation, lookup, presentation, and adapter helpers. Currently 19 file(s); key children: adapters, core.ts, presentation.test.ts, presentation.ts, public.ts.
-- [`convex`](../../convex) — Convex functions, HTTP composition, schemas, and backend tests. Currently 629 file(s); key children: README.md, _generated, app.ts, auth, auth.config.js.
+- [`convex`](../../convex) — Convex functions, HTTP composition, schemas, and backend tests. Currently 635 file(s); key children: README.md, _generated, app.ts, auth, auth.config.js.
 - [`src/tests`](../../src/tests) — Focused browser-facing regression tests. Currently 9 file(s); key children: README.md, SUMMARY.md, pos, prod.
 - [`src/test`](../../src/test) — Package test harness helpers and setup. Currently 1 file(s); key children: setup.ts.
 

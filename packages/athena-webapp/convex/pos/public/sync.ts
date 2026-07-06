@@ -17,6 +17,12 @@ import {
 import {
   posLocalSyncEventStatusValidator,
 } from "../../schemas/pos/posLocalSyncEvent";
+import {
+  posRegisterSessionActivityCategoryValidator,
+  posRegisterSessionActivityMetadataValueValidator,
+  posRegisterSessionActivitySkipCodeValidator,
+} from "../../schemas/pos/posRegisterSessionActivity";
+import { ingestRegisterSessionActivityWithCtx } from "../application/sync/posRegisterSessionActivity";
 
 const localSyncMappingValidator = v.object({
   _id: v.string(),
@@ -81,6 +87,7 @@ const localSyncResultValidator = commandResultValidator(
 
 const MAX_LOCAL_SYNC_EVENTS_PER_REQUEST = 250;
 const MAX_PENDING_CHECKOUT_DEFINITIONS_PER_REQUEST = 50;
+const MAX_REGISTER_SESSION_ACTIVITY_PER_REQUEST = 250;
 
 const posLocalSyncEventBaseValidator = {
   syncScope: v.optional(v.literal("pos")),
@@ -276,6 +283,49 @@ const posLocalSyncUploadEventValidator = v.union(
   }),
 );
 
+const registerSessionActivityUploadValidator = v.object({
+  localEventId: v.string(),
+  sequence: v.number(),
+  uploadSequence: v.optional(v.number()),
+  occurredAt: v.number(),
+  staffProfileId: v.optional(v.id("staffProfile")),
+  eventType: v.string(),
+  category: posRegisterSessionActivityCategoryValidator,
+  localExpenseSessionId: v.optional(v.string()),
+  registerNumber: v.optional(v.string()),
+  metadata: v.optional(
+    v.record(v.string(), posRegisterSessionActivityMetadataValueValidator),
+  ),
+});
+
+const registerSessionActivityResultValidator = commandResultValidator(
+  v.object({
+    accepted: v.array(
+      v.object({
+        localEventId: v.string(),
+        sequence: v.number(),
+        status: v.union(
+          v.literal("terminal_reported"),
+          v.literal("mapping_pending"),
+        ),
+      }),
+    ),
+    skipped: v.array(
+      v.object({
+        localEventId: v.optional(v.string()),
+        sequence: v.optional(v.number()),
+        code: posRegisterSessionActivitySkipCodeValidator,
+      }),
+    ),
+    checkpoint: v.object({
+      localRegisterSessionId: v.string(),
+      reportedThroughSequence: v.number(),
+      lastActivityReportedAt: v.optional(v.number()),
+      skippedCounts: v.record(v.string(), v.number()),
+    }),
+  }),
+);
+
 export const ingestLocalEvents = mutation({
   args: {
     storeId: v.id("store"),
@@ -350,6 +400,82 @@ export const ingestLocalEvents = mutation({
       ...args,
       submittedByUserId: athenaUser._id,
       submittedAt: args.submittedAt ?? Date.now(),
+    });
+  },
+});
+
+export const ingestRegisterSessionActivity = mutation({
+  args: {
+    storeId: v.id("store"),
+    terminalId: v.id("posTerminal"),
+    syncSecretHash: v.string(),
+    localRegisterSessionId: v.string(),
+    registerNumber: v.optional(v.string()),
+    reportedThroughSequence: v.number(),
+    reportedThroughOccurredAt: v.optional(v.number()),
+    submittedAt: v.optional(v.number()),
+    activities: v.array(registerSessionActivityUploadValidator),
+  },
+  returns: registerSessionActivityResultValidator,
+  handler: async (ctx, args) => {
+    if (args.activities.length > MAX_REGISTER_SESSION_ACTIVITY_PER_REQUEST) {
+      return userError({
+        code: "validation_failed",
+        message: `Activity reports can include at most ${MAX_REGISTER_SESSION_ACTIVITY_PER_REQUEST} events.`,
+      });
+    }
+
+    const store = await ctx.db.get("store", args.storeId);
+    if (!store) {
+      return userError({
+        code: "not_found",
+        message: "Store not found.",
+      });
+    }
+
+    let athenaUser;
+    try {
+      athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+      await requireOrganizationMemberRoleWithCtx(ctx, {
+        allowedRoles: ["full_admin", "pos_only"],
+        failureMessage: "You do not have access to sync this POS terminal.",
+        organizationId: store.organizationId,
+        userId: athenaUser._id,
+      });
+    } catch {
+      return userError({
+        code: "authorization_failed",
+        message: "You do not have access to sync this POS terminal.",
+      });
+    }
+
+    const terminal = await ctx.db.get("posTerminal", args.terminalId);
+    const submittedSyncSecretHash = await hashPosTerminalSyncSecret(
+      args.syncSecretHash,
+    );
+    if (
+      !terminal ||
+      terminal.storeId !== args.storeId ||
+      terminal.status !== "active" ||
+      !terminal.syncSecretHash ||
+      terminal.syncSecretHash !== submittedSyncSecretHash
+    ) {
+      return userError({
+        code: "authorization_failed",
+        message: "You do not have access to sync this POS terminal.",
+        metadata: { terminalAuthorizationFailure: true },
+      });
+    }
+
+    return ingestRegisterSessionActivityWithCtx(ctx, {
+      storeId: args.storeId,
+      terminalId: args.terminalId,
+      localRegisterSessionId: args.localRegisterSessionId,
+      registerNumber: args.registerNumber,
+      reportedThroughSequence: args.reportedThroughSequence,
+      reportedThroughOccurredAt: args.reportedThroughOccurredAt,
+      submittedAt: args.submittedAt ?? Date.now(),
+      activities: args.activities,
     });
   },
 });

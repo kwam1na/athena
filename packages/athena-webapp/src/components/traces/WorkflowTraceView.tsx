@@ -7,6 +7,12 @@ import PageHeader, { NavigateBackButton } from "../common/PageHeader";
 import { FadeIn } from "../common/FadeIn";
 import { Badge } from "../ui/badge";
 import { NotFoundView } from "../states/not-found/NotFoundView";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "../ui/tooltip";
 import { api } from "~/convex/_generated/api";
 import { capitalizeWords, getRelativeTime } from "~/src/lib/utils";
 
@@ -60,6 +66,33 @@ function getStatusTone(status: string) {
     default:
       return "border-slate-300 bg-slate-50 text-slate-700";
   }
+}
+
+function formatTraceTimestamp(timestamp: number) {
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(timestamp));
+}
+
+function RelativeTraceTimestamp({ timestamp }: { timestamp: number }) {
+  const relativeTimestamp = getRelativeTime(timestamp);
+  const fullTimestamp = formatTraceTimestamp(timestamp);
+
+  return (
+    <TooltipProvider delayDuration={150}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="cursor-default">
+            {relativeTimestamp}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent className="px-2 py-1 text-xs">
+          {fullTimestamp}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
 }
 
 export function WorkflowTraceHeader({
@@ -134,7 +167,8 @@ export function WorkflowTraceTimeline({
                 </p>
               </div>
               <p className="text-xs ml-4 text-muted-foreground">
-                {`${getRelativeTime(event.occurredAt)} · ${formatTraceLabel(event.status)} · ${formatTraceLabel(event.kind)}`}
+                <RelativeTraceTimestamp timestamp={event.occurredAt} />
+                {` · ${formatTraceLabel(event.status)} · ${formatTraceLabel(event.kind)}`}
               </p>
             </div>
           </li>

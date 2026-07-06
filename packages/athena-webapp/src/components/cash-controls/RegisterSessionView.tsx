@@ -1,5 +1,6 @@
-import { Link, useNavigate, useParams } from "@tanstack/react-router";
+import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import * as AccordionPrimitive from "@radix-ui/react-accordion";
+import type { FunctionReference } from "convex/server";
 import { useMutation, useQuery } from "convex/react";
 import { motion } from "framer-motion";
 import {
@@ -12,7 +13,7 @@ import {
   Smartphone,
   WalletCards,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { useAuth } from "@/hooks/useAuth";
@@ -63,6 +64,7 @@ import { currencyDisplaySymbol } from "~/shared/currencyFormatter";
 import { formatStaffDisplayName } from "~/shared/staffDisplayName";
 import View from "../View";
 import { FadeIn } from "../common/FadeIn";
+import { ListPagination } from "../common/ListPagination";
 import { ComposedPageHeader } from "../common/PageHeader";
 import { EmptyState } from "../states/empty/empty-state";
 import { NoPermissionView } from "../states/no-permission/NoPermissionView";
@@ -94,6 +96,7 @@ import {
 } from "@/lib/pos/presentation/syncStatusPresentation";
 
 const LINKED_TRANSACTIONS_PREVIEW_LIMIT = 5;
+const REGISTER_SESSION_ACTIVITY_PAGE_SIZE = 10;
 const CLOSED_REGISTER_SYNCED_CLOSEOUT_SUMMARY =
   "register session is not open for synced pos closeout";
 const REGISTER_NOT_OPEN_SYNC_REVIEW_SUMMARY =
@@ -219,6 +222,119 @@ export type RegisterSessionSnapshot = {
   timeline?: RegisterSessionTimelineEvent[];
   transactions?: RegisterSessionTransaction[];
 };
+
+type RegisterSessionActivityCategory =
+  | "register"
+  | "session"
+  | "cart"
+  | "payment"
+  | "service"
+  | "cash"
+  | "expense"
+  | "sale"
+  | "closeout"
+  | "reopen"
+  | "sync"
+  | "review";
+
+type RegisterSessionActivity = {
+  continueCursor: string;
+  integration: {
+    activityReadModelAvailable: boolean;
+    source: "activity_read_model" | "pos_sync_evidence";
+  };
+  isDone: boolean;
+  page: Array<{
+    _id: string;
+    actorStaffName: string | null;
+    category: RegisterSessionActivityCategory;
+    evidenceLinks: Array<{
+      id: string;
+      label: string;
+      type: "closeout" | "expense" | "review" | "sync" | "transaction";
+    }>;
+    label: string;
+    localEventId: string | null;
+    localRegisterSessionId: string | null;
+    occurredAt: number;
+    reportedAt: number | null;
+    sequence: number | null;
+    source: "activity_read_model" | "pos_sync_evidence";
+    status: {
+      kind:
+        | "activity_patch_failed"
+        | "accepted"
+        | "projected"
+        | "conflicted"
+        | "held"
+        | "manager_applied"
+        | "manager_rejected"
+        | "mapping_pending"
+        | "repaired"
+        | "rejected"
+        | "terminal_reported";
+      label: string;
+      tone: "default" | "success" | "warning" | "destructive";
+    };
+    summary: string | null;
+    terminalName: string | null;
+  }>;
+  summary: {
+    attentionCounts: Record<
+      | "activity_patch_failed"
+      | "conflicted"
+      | "held"
+      | "manager_applied"
+      | "manager_rejected"
+      | "mapping_pending"
+      | "rejected",
+      number
+    >;
+    categoryCounts: Record<RegisterSessionActivityCategory, number>;
+    coverageState:
+      | "reported"
+      | "partially_reported"
+      | "unreported"
+      | "unknown_terminal_state";
+    latestCloudStatusAt: number | null;
+    lastActivityReportedAt: number | null;
+    reportedThroughSequence: number | null;
+    rowCount: number;
+  };
+};
+type RegisterSessionActivityFilter =
+  | "all"
+  | "attention"
+  | "register"
+  | "sale"
+  | "cart"
+  | "payment"
+  | "service"
+  | "cash"
+  | "expense"
+  | "closeout"
+  | "sync_review";
+
+type RegisterSessionActivityQueryReference = FunctionReference<
+  "query",
+  "public",
+  {
+    paginationOpts: { cursor: string | null; numItems: number };
+    registerSessionId: Id<"registerSession">;
+    storeId: Id<"store">;
+  },
+  RegisterSessionActivity
+>;
+
+const registerSessionActivityQuery = (
+  api as unknown as {
+    cashControls: {
+      registerSessionActivity: {
+        listRegisterSessionActivity: RegisterSessionActivityQueryReference;
+      };
+    };
+  }
+).cashControls.registerSessionActivity.listRegisterSessionActivity;
 
 type RecordRegisterSessionDepositArgs = {
   actorStaffProfileId?: string;
@@ -369,6 +485,18 @@ type RegisterSessionViewContentProps = {
   storeUrlSlug?: string;
 };
 
+type RegisterSessionActivityViewContentProps = {
+  activity?: RegisterSessionActivity | null;
+  filter?: RegisterSessionActivityFilter;
+  isLoading: boolean;
+  onFilterChange?: (filter: RegisterSessionActivityFilter) => void;
+  onPageChange?: (page: number) => void;
+  orgUrlSlug?: string;
+  page?: number;
+  sessionId?: string;
+  storeUrlSlug?: string;
+};
+
 type CloseoutStaffAuthIntent =
   | {
       kind: "submit";
@@ -447,6 +575,450 @@ function formatTimestamp(timestamp: number) {
 
 function formatStatusLabel(status: string) {
   return capitalizeWords(status.replaceAll("_", " "));
+}
+
+const ACTIVITY_FILTERS: Array<{
+  id: RegisterSessionActivityFilter;
+  label: string;
+}> = [
+  { id: "all", label: "All" },
+  { id: "register", label: "Register" },
+  { id: "sale", label: "Sale" },
+  { id: "cart", label: "Cart" },
+  { id: "payment", label: "Payment" },
+  { id: "service", label: "Service" },
+  { id: "cash", label: "Cash" },
+  { id: "expense", label: "Expense" },
+  { id: "closeout", label: "Closeout" },
+  { id: "sync_review", label: "Sync/review" },
+  { id: "attention", label: "Needs attention" },
+];
+
+function activityFilterMatches(
+  filter: RegisterSessionActivityFilter,
+  row: RegisterSessionActivity["page"][number],
+) {
+  if (filter === "all") return true;
+  if (filter === "attention") {
+    return [
+      "activity_patch_failed",
+      "conflicted",
+      "held",
+      "manager_rejected",
+      "mapping_pending",
+      "rejected",
+    ].includes(row.status.kind);
+  }
+  if (filter === "sync_review") {
+    return row.category === "sync" || row.category === "review";
+  }
+  return row.category === filter;
+}
+
+function formatActivityCoverageState(
+  state: RegisterSessionActivity["summary"]["coverageState"],
+) {
+  switch (state) {
+    case "reported":
+      return "Reported";
+    case "partially_reported":
+      return "Partially reported";
+    case "unreported":
+      return "No cloud activity yet";
+    case "unknown_terminal_state":
+      return "Terminal reporting uncertain";
+  }
+}
+
+function getActivityCoverageCopy(activity: RegisterSessionActivity | null) {
+  if (!activity) {
+    return "POS activity is loading from cloud evidence.";
+  }
+
+  if (activity.summary.coverageState === "unreported") {
+    return "No cloud-reported POS activity for this session. Later local activity from the terminal may still arrive after it reports.";
+  }
+
+  if (activity.summary.coverageState === "unknown_terminal_state") {
+    return "This terminal has not reported later local activity to the cloud. The log shows only evidence the cloud has received.";
+  }
+
+  return "The cloud has POS sync evidence for this register session. Activity that has not uploaded from the terminal is not visible here yet.";
+}
+
+function getActivityBadgeClass(
+  tone: RegisterSessionActivity["page"][number]["status"]["tone"],
+) {
+  switch (tone) {
+    case "success":
+      return "border-success/20 bg-success/10 text-success";
+    case "warning":
+      return "border-warning/20 bg-warning/10 text-warning";
+    case "destructive":
+      return "border-destructive/20 bg-destructive/10 text-destructive";
+    case "default":
+      return "border-border bg-muted text-muted-foreground";
+  }
+}
+
+function getActivityAttentionCount(activity: RegisterSessionActivity | null) {
+  if (!activity) return 0;
+  const counts = activity.summary.attentionCounts;
+  return counts.mapping_pending + counts.held + counts.conflicted + counts.rejected;
+}
+
+function getActivityRowKey(
+  row: RegisterSessionActivity["page"][number],
+  index: number,
+) {
+  return `${row._id}:${row.sequence ?? "no-sequence"}:${index}`;
+}
+
+function parseReceiptActivitySummary(summary: string | null) {
+  if (!summary) return null;
+  const match = summary.match(/^Receipt\s+(.+?)(\s+-\s+.*)?$/);
+  if (!match) return null;
+  return {
+    receiptNumber: match[1].trim(),
+    rest: match[2] ?? "",
+  };
+}
+
+function parseActivityPageSearchValue(value: unknown) {
+  const parsed =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Number(value)
+        : 1;
+
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 1;
+}
+
+function parseActivityFilterSearchValue(
+  value: unknown,
+): RegisterSessionActivityFilter {
+  return ACTIVITY_FILTERS.some((option) => option.id === value)
+    ? (value as RegisterSessionActivityFilter)
+    : "all";
+}
+
+function renderActivitySummary(
+  row: RegisterSessionActivity["page"][number],
+  orgUrlSlug?: string,
+  storeUrlSlug?: string,
+) {
+  const receiptSummary =
+    row.category === "sale" ? parseReceiptActivitySummary(row.summary) : null;
+  const transactionLink = row.evidenceLinks.find(
+    (link) => link.type === "transaction",
+  );
+
+  if (receiptSummary && transactionLink && orgUrlSlug && storeUrlSlug) {
+    return (
+      <p className="text-xs leading-5 text-muted-foreground">
+        Receipt{" "}
+        <Link
+          className="inline-flex items-center gap-0.5 font-medium text-foreground underline-offset-2 hover:underline"
+          params={{
+            orgUrlSlug,
+            storeUrlSlug,
+            transactionId: transactionLink.id as Id<"posTransaction">,
+          }}
+          search={{ o: getOrigin() }}
+          to="/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId"
+        >
+          #{receiptSummary.receiptNumber}
+          <ArrowUpRight className="h-3 w-3" />
+        </Link>
+        {receiptSummary.rest}
+      </p>
+    );
+  }
+
+  return row.summary ? (
+    <p className="text-xs leading-5 text-muted-foreground">{row.summary}</p>
+  ) : null;
+}
+
+export function RegisterSessionActivitySection({
+  activity,
+  filter: controlledFilter,
+  onFilterChange,
+  onPageChange,
+  orgUrlSlug,
+  page: controlledPage,
+  storeUrlSlug,
+}: {
+  activity?: RegisterSessionActivity | null;
+  filter?: RegisterSessionActivityFilter;
+  onFilterChange?: (filter: RegisterSessionActivityFilter) => void;
+  onPageChange?: (page: number) => void;
+  orgUrlSlug?: string;
+  page?: number;
+  storeUrlSlug?: string;
+}) {
+  const [localFilter, setLocalFilter] =
+    useState<RegisterSessionActivityFilter>("all");
+  const filter = controlledFilter ?? localFilter;
+  const handleFilterChange = onFilterChange ?? setLocalFilter;
+  const [localPage, setLocalPage] = useState(1);
+  const previousFilterRef = useRef(filter);
+  const page = controlledPage ?? localPage;
+  const handlePageChange = onPageChange ?? setLocalPage;
+  const rows = activity?.page ?? [];
+  const filteredRows = rows.filter((row) => activityFilterMatches(filter, row));
+  const pageCount = Math.max(
+    1,
+    Math.ceil(filteredRows.length / REGISTER_SESSION_ACTIVITY_PAGE_SIZE),
+  );
+  const currentPage = Math.min(page, pageCount);
+  const paginatedRows = filteredRows.slice(
+    (currentPage - 1) * REGISTER_SESSION_ACTIVITY_PAGE_SIZE,
+    currentPage * REGISTER_SESSION_ACTIVITY_PAGE_SIZE,
+  );
+  const attentionCount = getActivityAttentionCount(activity ?? null);
+  const reportedThroughSequence =
+    activity?.summary.reportedThroughSequence ?? null;
+  const lastReportedAt = activity?.summary.lastActivityReportedAt ?? null;
+  const latestCloudStatusAt = activity?.summary.latestCloudStatusAt ?? null;
+
+  useEffect(() => {
+    if (previousFilterRef.current === filter) {
+      return;
+    }
+    previousFilterRef.current = filter;
+    handlePageChange(1);
+  }, [filter, handlePageChange]);
+
+  useEffect(() => {
+    if (page !== currentPage) {
+      handlePageChange(currentPage);
+    }
+  }, [currentPage, handlePageChange, page]);
+
+  return (
+    <section className="order-2 space-y-layout-md rounded-lg border border-border bg-surface-raised p-layout-md">
+      <div className="flex flex-col gap-layout-md lg:flex-row lg:items-start lg:justify-between">
+        <div className="space-y-1">
+          <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
+            {getActivityCoverageCopy(activity ?? null)}
+          </p>
+        </div>
+        <Badge
+          className={cn(
+            "w-fit",
+            attentionCount > 0
+              ? "border-warning/20 bg-warning/10 text-warning"
+              : "border-border bg-muted text-muted-foreground",
+          )}
+          variant="outline"
+        >
+          {attentionCount > 0
+            ? `${attentionCount} need attention`
+            : "No attention flags"}
+        </Badge>
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="rounded-md border border-border/70 bg-muted/20 px-3 py-2">
+          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+            Coverage
+          </p>
+          <p className="mt-1 text-sm font-medium text-foreground">
+            {activity
+              ? formatActivityCoverageState(activity.summary.coverageState)
+              : "Loading"}
+          </p>
+        </div>
+        <div className="rounded-md border border-border/70 bg-muted/20 px-3 py-2">
+          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+            Reported through
+          </p>
+          <p className="mt-1 font-numeric text-sm tabular-nums text-foreground">
+            {reportedThroughSequence === null
+              ? "Not reported"
+              : `Sequence ${reportedThroughSequence}`}
+          </p>
+        </div>
+        <div className="rounded-md border border-border/70 bg-muted/20 px-3 py-2">
+          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+            Last report
+          </p>
+          <p className="mt-1 text-sm text-foreground">
+            {lastReportedAt === null ? "Not available" : formatTimestamp(lastReportedAt)}
+          </p>
+        </div>
+        <div className="rounded-md border border-border/70 bg-muted/20 px-3 py-2">
+          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+            Latest cloud status
+          </p>
+          <p className="mt-1 text-sm text-foreground">
+            {latestCloudStatusAt === null
+              ? "Not available"
+              : formatTimestamp(latestCloudStatusAt)}
+          </p>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {ACTIVITY_FILTERS.map((option) => {
+          const isActive = filter === option.id;
+          return (
+            <button
+              className={cn(
+                "inline-flex h-8 items-center rounded-md border px-3 text-xs font-medium transition-colors",
+                isActive
+                  ? "border-action-workflow-border bg-action-workflow-soft text-action-workflow hover:bg-action-workflow-soft/75"
+                  : "border-border bg-surface text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+              )}
+              key={option.id}
+              onClick={() => handleFilterChange(option.id)}
+              type="button"
+            >
+              {option.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {filteredRows.length === 0 ? (
+        <div className="flex min-h-[180px] items-center justify-center rounded-md border border-dashed border-border bg-muted/20">
+          <EmptyState
+            description={
+              rows.length === 0
+                ? "This view will update when POS activity reaches the cloud"
+                : "No activity matches the selected filter"
+            }
+            title={
+              rows.length === 0
+                ? "No cloud-reported POS activity for this session"
+                : "No matching activity"
+            }
+          />
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded-md border border-border">
+          <Table>
+            <TableHeader>
+              <TableRow className="border-b border-border hover:bg-transparent">
+                <TableHead className="w-[92px] text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                  Sequence
+                </TableHead>
+                <TableHead className="min-w-[160px] text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                  Activity
+                </TableHead>
+                <TableHead className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                  Status
+                </TableHead>
+                <TableHead className="hidden text-[11px] uppercase tracking-[0.16em] text-muted-foreground lg:table-cell">
+                  Actor
+                </TableHead>
+                <TableHead className="hidden text-[11px] uppercase tracking-[0.16em] text-muted-foreground xl:table-cell">
+                  Time
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {paginatedRows.map((row, index) => (
+                <TableRow
+                  className="border-b border-border/70"
+                  key={getActivityRowKey(row, index)}
+                >
+                  <TableCell className="font-numeric text-sm tabular-nums text-muted-foreground">
+                    {row.sequence === null ? "N/A" : row.sequence}
+                  </TableCell>
+                  <TableCell>
+                    <div className="space-y-1">
+                      <p className="font-medium text-foreground">{row.label}</p>
+                      {renderActivitySummary(row, orgUrlSlug, storeUrlSlug)}
+                      {row.evidenceLinks.length > 0 ? (
+                        <div className="flex flex-wrap gap-1.5">
+                          {row.evidenceLinks.map((link, index) => (
+                            <span
+                              className="rounded-sm border border-border bg-muted/40 px-1.5 py-0.5 text-[11px] text-muted-foreground"
+                              key={`${row._id}:${link.type}:${link.id}:${index}`}
+                            >
+                              {link.label}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge
+                      className={getActivityBadgeClass(row.status.tone)}
+                      variant="outline"
+                    >
+                      {row.status.label}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="hidden text-sm text-muted-foreground lg:table-cell">
+                    {row.actorStaffName ?? "N/A"}
+                  </TableCell>
+                  <TableCell className="hidden text-sm text-muted-foreground xl:table-cell">
+                    {formatTimestamp(row.occurredAt)}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+          {filteredRows.length > REGISTER_SESSION_ACTIVITY_PAGE_SIZE ? (
+            <ListPagination
+              onPageChange={handlePageChange}
+              page={currentPage}
+              pageCount={pageCount}
+              pageSize={REGISTER_SESSION_ACTIVITY_PAGE_SIZE}
+              totalItems={filteredRows.length}
+            />
+          ) : null}
+        </div>
+      )}
+    </section>
+  );
+}
+
+export function RegisterSessionActivityViewContent({
+  activity,
+  filter,
+  isLoading,
+  onFilterChange,
+  onPageChange,
+  orgUrlSlug,
+  page,
+  storeUrlSlug,
+}: RegisterSessionActivityViewContentProps) {
+  return (
+    <View
+      header={
+        <ComposedPageHeader
+          className="h-auto min-h-16 items-start gap-3 border-b border-border px-4 py-3 sm:items-center sm:border-0 sm:py-4"
+          leadingContent={
+            <h1 className="text-base font-semibold leading-5 text-foreground sm:text-sm">
+              POS activity
+            </h1>
+          }
+        />
+      }
+    >
+      <FadeIn>
+        <div className="container mx-auto p-layout-md md:p-6">
+          {isLoading ? null : (
+            <RegisterSessionActivitySection
+              activity={activity}
+              filter={filter}
+              onFilterChange={onFilterChange}
+              onPageChange={onPageChange}
+              orgUrlSlug={orgUrlSlug}
+              page={page}
+              storeUrlSlug={storeUrlSlug}
+            />
+          )}
+        </div>
+      </FadeIn>
+    </View>
+  );
 }
 
 function isCloseoutRejectionEvent(event: RegisterSessionTimelineEvent) {
@@ -3758,7 +4330,28 @@ export function RegisterSessionViewContent({
             </div>
           }
           trailingContent={
-            <div className="flex shrink-0 items-start justify-end">
+            <div className="flex shrink-0 flex-wrap items-start justify-end gap-2">
+              {registerSession && orgUrlSlug && storeUrlSlug ? (
+                <Button
+                  asChild
+                  className="h-8 border-border bg-surface px-2.5 text-xs text-muted-foreground hover:bg-muted sm:h-9 sm:px-3 sm:text-sm"
+                  size="sm"
+                  variant="outline"
+                >
+                  <Link
+                    params={{
+                      orgUrlSlug,
+                      sessionId: registerSession._id,
+                      storeUrlSlug,
+                    }}
+                    search={{ o: getOrigin() }}
+                    to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId/activity"
+                  >
+                    POS activity
+                    <ArrowUpRight className="h-3.5 w-3.5" />
+                  </Link>
+                </Button>
+              ) : null}
               {registerSession?.workflowTraceId ? (
                 <Button
                   asChild
@@ -3772,6 +4365,7 @@ export function RegisterSessionViewContent({
                   >
                     <span aria-hidden="true">Trace</span>
                     <span className="sr-only">View trace</span>
+                    <ArrowUpRight className="h-3.5 w-3.5" />
                   </WorkflowTraceRouteLink>
                 </Button>
               ) : null}
@@ -5696,6 +6290,110 @@ export function RegisterSessionView() {
       orgUrlSlug={params?.orgUrlSlug}
       registerSessionSnapshot={registerSessionSnapshot ?? null}
       storeId={activeStore._id}
+      storeUrlSlug={params?.storeUrlSlug}
+    />
+  );
+}
+
+export function RegisterSessionActivityView() {
+  const navigate = useNavigate();
+  const {
+    activeStore,
+    canAccessProtectedSurface,
+    canQueryProtectedData,
+    hasFullAdminAccess,
+    isAuthenticated,
+    isLoadingAccess,
+  } = useProtectedAdminPageState({ surface: "store_day" });
+  const canAccessSurface = canAccessProtectedSurface ?? hasFullAdminAccess;
+  const params = useParams({ strict: false }) as
+    | {
+        orgUrlSlug?: string;
+        sessionId?: string;
+        storeUrlSlug?: string;
+      }
+    | undefined;
+  const search = useSearch({ strict: false }) as {
+    filter?: unknown;
+    page?: unknown;
+  };
+  const filter = parseActivityFilterSearchValue(search.filter);
+  const page = parseActivityPageSearchValue(search.page);
+  const handlePageChange = useCallback(
+    (nextPage: number) => {
+      void navigate({
+        replace: true,
+        search: ((current: Record<string, unknown>) => {
+          const next = { ...current };
+          if (nextPage > 1) {
+            next.page = nextPage;
+          } else {
+            delete next.page;
+          }
+          return next;
+        }) as never,
+      });
+    },
+    [navigate],
+  );
+  const handleFilterChange = useCallback(
+    (nextFilter: RegisterSessionActivityFilter) => {
+      void navigate({
+        replace: true,
+        search: ((current: Record<string, unknown>) => {
+          const next = { ...current };
+          if (nextFilter === "all") {
+            delete next.filter;
+          } else {
+            next.filter = nextFilter;
+          }
+          delete next.page;
+          return next;
+        }) as never,
+      });
+    },
+    [navigate],
+  );
+
+  const registerSessionActivity = useQuery(
+    registerSessionActivityQuery,
+    canQueryProtectedData && hasFullAdminAccess && activeStore && params?.sessionId
+      ? {
+          paginationOpts: { cursor: null, numItems: 100 },
+          registerSessionId: params.sessionId as Id<"registerSession">,
+          storeId: activeStore._id,
+        }
+      : "skip",
+  );
+
+  if (isLoadingAccess) {
+    return null;
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <ProtectedAdminSignInView description="Your Athena session needs to reconnect before this register session activity can load protected cash-controls data" />
+    );
+  }
+
+  if (!canAccessSurface || !hasFullAdminAccess) {
+    return <NoPermissionView />;
+  }
+
+  if (!activeStore) {
+    return null;
+  }
+
+  return (
+    <RegisterSessionActivityViewContent
+      activity={registerSessionActivity ?? null}
+      filter={filter}
+      isLoading={registerSessionActivity === undefined}
+      onFilterChange={handleFilterChange}
+      onPageChange={handlePageChange}
+      orgUrlSlug={params?.orgUrlSlug}
+      page={page}
+      sessionId={params?.sessionId}
       storeUrlSlug={params?.storeUrlSlug}
     />
   );

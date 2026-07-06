@@ -20,6 +20,7 @@ import type * as cache_index from "../cache/index.js";
 import type * as cashControls_closeouts from "../cashControls/closeouts.js";
 import type * as cashControls_deposits from "../cashControls/deposits.js";
 import type * as cashControls_paymentAllocationAttribution from "../cashControls/paymentAllocationAttribution.js";
+import type * as cashControls_registerSessionActivity from "../cashControls/registerSessionActivity.js";
 import type * as cloudflare_r2 from "../cloudflare/r2.js";
 import type * as cloudflare_stream from "../cloudflare/stream.js";
 import type * as constants_countries from "../constants/countries.js";
@@ -214,6 +215,7 @@ import type * as pos_application_queries_searchCustomers from "../pos/applicatio
 import type * as pos_application_queries_storePulse from "../pos/application/queries/storePulse.js";
 import type * as pos_application_queries_terminals from "../pos/application/queries/terminals.js";
 import type * as pos_application_sync_ingestLocalEvents from "../pos/application/sync/ingestLocalEvents.js";
+import type * as pos_application_sync_posRegisterSessionActivity from "../pos/application/sync/posRegisterSessionActivity.js";
 import type * as pos_application_sync_projectLocalEvents from "../pos/application/sync/projectLocalEvents.js";
 import type * as pos_application_sync_registerSessionCloseoutHolds from "../pos/application/sync/registerSessionCloseoutHolds.js";
 import type * as pos_application_sync_registerSessionSyncReview from "../pos/application/sync/registerSessionSyncReview.js";
@@ -330,6 +332,8 @@ import type * as schemas_pos_posLocalSyncMapping from "../schemas/pos/posLocalSy
 import type * as schemas_pos_posPendingCheckoutItem from "../schemas/pos/posPendingCheckoutItem.js";
 import type * as schemas_pos_posPendingCheckoutLookupAlias from "../schemas/pos/posPendingCheckoutLookupAlias.js";
 import type * as schemas_pos_posRecoveryCredential from "../schemas/pos/posRecoveryCredential.js";
+import type * as schemas_pos_posRegisterSessionActivity from "../schemas/pos/posRegisterSessionActivity.js";
+import type * as schemas_pos_posRegisterSessionActivityCheckpoint from "../schemas/pos/posRegisterSessionActivityCheckpoint.js";
 import type * as schemas_pos_posSession from "../schemas/pos/posSession.js";
 import type * as schemas_pos_posSessionItem from "../schemas/pos/posSessionItem.js";
 import type * as schemas_pos_posTerminal from "../schemas/pos/posTerminal.js";
@@ -454,6 +458,7 @@ declare const fullApi: ApiFromModules<{
   "cashControls/closeouts": typeof cashControls_closeouts;
   "cashControls/deposits": typeof cashControls_deposits;
   "cashControls/paymentAllocationAttribution": typeof cashControls_paymentAllocationAttribution;
+  "cashControls/registerSessionActivity": typeof cashControls_registerSessionActivity;
   "cloudflare/r2": typeof cloudflare_r2;
   "cloudflare/stream": typeof cloudflare_stream;
   "constants/countries": typeof constants_countries;
@@ -648,6 +653,7 @@ declare const fullApi: ApiFromModules<{
   "pos/application/queries/storePulse": typeof pos_application_queries_storePulse;
   "pos/application/queries/terminals": typeof pos_application_queries_terminals;
   "pos/application/sync/ingestLocalEvents": typeof pos_application_sync_ingestLocalEvents;
+  "pos/application/sync/posRegisterSessionActivity": typeof pos_application_sync_posRegisterSessionActivity;
   "pos/application/sync/projectLocalEvents": typeof pos_application_sync_projectLocalEvents;
   "pos/application/sync/registerSessionCloseoutHolds": typeof pos_application_sync_registerSessionCloseoutHolds;
   "pos/application/sync/registerSessionSyncReview": typeof pos_application_sync_registerSessionSyncReview;
@@ -764,6 +770,8 @@ declare const fullApi: ApiFromModules<{
   "schemas/pos/posPendingCheckoutItem": typeof schemas_pos_posPendingCheckoutItem;
   "schemas/pos/posPendingCheckoutLookupAlias": typeof schemas_pos_posPendingCheckoutLookupAlias;
   "schemas/pos/posRecoveryCredential": typeof schemas_pos_posRecoveryCredential;
+  "schemas/pos/posRegisterSessionActivity": typeof schemas_pos_posRegisterSessionActivity;
+  "schemas/pos/posRegisterSessionActivityCheckpoint": typeof schemas_pos_posRegisterSessionActivityCheckpoint;
   "schemas/pos/posSession": typeof schemas_pos_posSession;
   "schemas/pos/posSessionItem": typeof schemas_pos_posSessionItem;
   "schemas/pos/posTerminal": typeof schemas_pos_posTerminal;

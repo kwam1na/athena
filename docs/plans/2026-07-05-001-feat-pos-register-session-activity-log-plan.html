@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>feat: Add POS register session activity log</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f7f9;
+      --paper: #ffffff;
+      --ink: #1d2733;
+      --muted: #5d6b7a;
+      --line: #d9e0e8;
+      --accent: #256f6f;
+      --accent-soft: #e5f3f1;
+      --warn: #8a5b00;
+      --warn-soft: #fff4d8;
+      --risk: #9b2c2c;
+      --risk-soft: #f9e2e2;
+      --code: #f2f5f7;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 32px 20px 56px;
+    }
+    article {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 32px;
+      box-shadow: 0 20px 50px rgba(29, 39, 51, 0.06);
+    }
+    h1, h2, h3 { line-height: 1.2; letter-spacing: 0; }
+    h1 { margin: 0 0 16px; font-size: 34px; }
+    h2 { margin: 34px 0 12px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 23px; }
+    h3 { margin: 22px 0 10px; font-size: 18px; }
+    p { margin: 0 0 12px; }
+    ul { padding-left: 22px; }
+    li { margin: 5px 0; }
+    code {
+      background: var(--code);
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      padding: 1px 4px;
+      font-size: 0.92em;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 14px 0 20px;
+      font-size: 14px;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 9px 10px;
+      vertical-align: top;
+      text-align: left;
+    }
+    th { background: #eef3f6; }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 22px;
+    }
+    .pill {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 5px 10px;
+      color: var(--muted);
+      background: #fbfcfd;
+      font-size: 13px;
+    }
+    .callout {
+      border: 1px solid var(--line);
+      border-left: 4px solid var(--accent);
+      background: var(--accent-soft);
+      padding: 14px 16px;
+      margin: 18px 0;
+      border-radius: 6px;
+    }
+    .warning {
+      border-left-color: var(--warn);
+      background: var(--warn-soft);
+    }
+    .risk {
+      border-left-color: var(--risk);
+      background: var(--risk-soft);
+    }
+    .diagram {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin: 16px 0 22px;
+    }
+    .box {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 12px;
+      background: #fbfcfd;
+      min-height: 82px;
+    }
+    .box strong { display: block; margin-bottom: 4px; }
+    .arrow {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      font-weight: 700;
+    }
+    .unit {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 14px 0;
+      background: #fbfcfd;
+    }
+    .unit h3 { margin-top: 0; }
+    @media (max-width: 800px) {
+      article { padding: 22px; }
+      h1 { font-size: 28px; }
+      .diagram { grid-template-columns: 1fr; }
+      .arrow { display: none; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <article>
+    <h1>feat: Add POS register session activity log</h1>
+    <div class="meta">
+      <span class="pill">type: feat</span>
+      <span class="pill">status: active</span>
+      <span class="pill">date: 2026-07-05</span>
+      <span class="pill">scope: register session</span>
+    </div>
+
+    <section class="callout">
+      <strong>Core decision:</strong> build a POS-owned session activity channel that uploads sanitized summaries of local POS events. Existing core sync remains authoritative for business projection; the activity log is investigation evidence.
+    </section>
+
+    <h2>Problem Frame</h2>
+    <p>A cashier reported closing out a register session, but the cloud session still appeared open. That incident is one use case for a broader gap: Athena has the evidence in pieces, including local events, sync rows, mappings, conflicts, workflow traces, operational events, closeout records, and Cash Controls review. The feature pulls those pieces into one foundational register-session timeline for full-admin Cash Controls investigators so they can answer what POS did, what the cloud received, and what projection or review did with it.</p>
+    <p>This is not a store-day daily log. Store-day and Daily Close status can appear as context, but the replay axis is one register session and its terminal evidence.</p>
+
+    <h2>Requirements</h2>
+    <ul>
+      <li>Show a register-session-scoped activity log independent of Daily Operations timeline ordering.</li>
+      <li>Represent all POS activities captured for the session, including local-only activity types that current core sync does not upload.</li>
+      <li>Preserve local event id, local sequence, terminal id, local/cloud register-session identity, upload/projection timestamps, and related cloud links where available.</li>
+      <li>Distinguish recorded, uploaded, accepted, projected, held, conflicted, rejected, reviewed, and repaired states.</li>
+      <li>State clearly when cloud cannot know about later local activity from an offline or unreported terminal.</li>
+      <li>Show activity coverage and attention summary above the rows: reported-through sequence/time, uncertainty, category counts, and held/conflicted/rejected/mapping-pending counts.</li>
+      <li>Keep activity upload auxiliary and non-blocking for cashier work.</li>
+      <li>Use bounded, indexed, session-scoped reads and field-aware redaction.</li>
+    </ul>
+
+    <h2>Design Shape</h2>
+    <div class="diagram" aria-label="Activity flow diagram">
+      <div class="box"><strong>POS command gateway</strong>Appends durable local event evidence.</div>
+      <div class="arrow">→</div>
+      <div class="box"><strong>Local event log</strong>Stores sequence, terminal, session, payload, and sync state.</div>
+      <div class="arrow">→</div>
+      <div class="box"><strong>Activity drain</strong>Uploads sanitized summaries separately from core sync.</div>
+      <div class="box"><strong>Core POS sync</strong>Projects sales, closeout, expenses, mappings, and conflicts.</div>
+      <div class="arrow">→</div>
+      <div class="box"><strong>Activity model</strong>Stores session rows, mapping-pending rows, and activity checkpoints.</div>
+      <div class="arrow">→</div>
+      <div class="box"><strong>Register view</strong>Renders coverage, POS activity, uncertainty, and links.</div>
+    </div>
+
+    <h2>Key Decisions</h2>
+    <table>
+      <thead><tr><th>Decision</th><th>Reason</th></tr></thead>
+      <tbody>
+        <tr><td>Build a POS-owned read model</td><td>The evidence is register-session and terminal scoped, not store-day scoped.</td></tr>
+        <tr><td>Add sanitized activity upload</td><td>Current core sync rows cannot reconstruct all cart, payment, service, session, and reopen actions.</td></tr>
+        <tr><td>Keep core sync authoritative</td><td>The log explains outcomes; it does not mutate sales, closeouts, payments, inventory, or drawer authority.</td></tr>
+        <tr><td>Persist mapping-pending rows</td><td>Activity may upload before cloud register-session mapping exists; server-side pending rows keep retries idempotent.</td></tr>
+        <tr><td>Add activity checkpoints</td><td>Core sync cursors do not cover all local POS events, so empty-vs-unreported states need their own high-watermark.</td></tr>
+        <tr><td>Order by local sequence</td><td>Offline upload, retry, and projection timestamps can disagree; local sequence is the replay spine.</td></tr>
+        <tr><td>Show uncertainty explicitly</td><td>The cloud can prove what it received, not what a disconnected terminal has not uploaded.</td></tr>
+        <tr><td>Redact by positive allowlist</td><td>Local event payloads can carry proof, customer, and payment internals that do not belong in operator UI.</td></tr>
+        <tr><td>Isolate activity patch failures</td><td>Activity visibility must not roll back authoritative sale, closeout, cursor, or manager-review outcomes.</td></tr>
+      </tbody>
+    </table>
+
+    <h2>Coverage Summary</h2>
+    <table>
+      <thead><tr><th>Summary field</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td>Reported through</td><td>Highest local register-session sequence/time reported through the activity channel.</td></tr>
+        <tr><td>Coverage state</td><td>Reported, partially reported, unreported, or unknown terminal state.</td></tr>
+        <tr><td>Attention counts</td><td>Counts for mapping-pending, held, conflicted, rejected, manager-applied, manager-rejected, and patch-failed rows.</td></tr>
+        <tr><td>Category counts</td><td>Counts for register, session, cart, payment, service, cash, expense, sale, closeout, sync, and review rows.</td></tr>
+        <tr><td>Latest cloud status</td><td>Latest accepted, projected, or reviewed timestamp seen in cloud evidence.</td></tr>
+      </tbody>
+    </table>
+
+    <h2>Access Model</h2>
+    <table>
+      <thead><tr><th>Reader</th><th>Access</th></tr></thead>
+      <tbody>
+        <tr><td>Full admin</td><td>Full operational activity DTOs for authorized organization/store/register-session scope, with safe staff, amount, tender, closeout, and review context.</td></tr>
+        <tr><td>POS-only / unauthorized / wrong-store user</td><td>No activity rows, no hidden link targets, and no existence hints beyond existing safe not-found behavior.</td></tr>
+        <tr><td>Future manager staff-proof reader</td><td>Out of scope for V1; this would need a separate manager-proof read authorization plan before shipping.</td></tr>
+        <tr><td>Future support read-only</td><td>Out of scope for V1; this would need a separate auth/schema plan before any redacted support DTO ships.</td></tr>
+      </tbody>
+    </table>
+
+    <h2>Implementation Units</h2>
+    <div class="unit">
+      <h3>U1. Activity contract and redaction</h3>
+      <p>Add shared activity categories, canonical statuses, labels, per-event positive metadata schemas, and a sanitizer for safe local event summaries.</p>
+      <p><strong>Primary files:</strong> <code>shared/posRegisterSessionActivityContract.ts</code> and tests.</p>
+    </div>
+    <div class="unit">
+      <h3>U2. Local activity upload state and drain</h3>
+      <p>Bump IndexedDB schema, track activity upload independently from core sync, add checkpoints, and drain sanitized batches without blocking POS.</p>
+      <p><strong>Primary files:</strong> <code>posLocalStore.ts</code>, <code>localCommandGateway.ts</code>, <code>expenseLocalCommandGateway.ts</code>, <code>syncScheduler.ts</code>, <code>usePosLocalSyncRuntime.ts</code>.</p>
+    </div>
+    <div class="unit">
+      <h3>U3. Convex persistence and ingestion</h3>
+      <p>Add activity and checkpoint tables plus an idempotent terminal-authenticated ingestion mutation with server-side mapping-pending behavior.</p>
+      <p><strong>Primary files:</strong> Convex POS schemas, <code>schema.ts</code>, and <code>convex/pos/public/sync.ts</code>.</p>
+    </div>
+    <div class="unit">
+      <h3>U4. Projection and review patching</h3>
+      <p>Patch activity rows with projected, held, conflicted, rejected, repaired, and manager-reviewed outcomes through best-effort isolated helpers.</p>
+      <p><strong>Primary files:</strong> POS sync projection/ingestion and Cash Controls closeout/review code.</p>
+    </div>
+    <div class="unit">
+      <h3>U5. Register-session activity query and coverage summary</h3>
+      <p>Expose a bounded, sanitized, paginated query for one register session with coverage summary, uncertainty, de-duped supplemental evidence, and role redaction.</p>
+      <p><strong>Primary files:</strong> <code>convex/cashControls/registerSessionActivity.ts</code> and tests.</p>
+    </div>
+    <div class="unit">
+      <h3>U6. Cash Controls UI</h3>
+      <p>Add a POS activity section to <code>RegisterSessionView</code> with coverage summary, filters, status badges, evidence links, empty state, and offline limitation copy.</p>
+    </div>
+    <div class="unit">
+      <h3>U7. Validation and graph upkeep</h3>
+      <p>Run focused shared/local/Convex/UI tests, Convex checks, and graph rebuild after code changes.</p>
+    </div>
+
+    <h2>Risks</h2>
+    <table>
+      <thead><tr><th>Risk</th><th>Mitigation</th></tr></thead>
+      <tbody>
+        <tr><td>Cloud cannot prove unuploaded offline work</td><td>Show last reported sequence/time and limitation copy.</td></tr>
+        <tr><td>Activity upload blocks cashier flows</td><td>Separate activity state from core sync state; make it retryable and non-blocking.</td></tr>
+        <tr><td>Activity volume grows quickly</td><td>Use compact metadata, indexes, pagination, and category filters.</td></tr>
+        <tr><td>Sensitive local payload leaks</td><td>Use client sanitizer, server positive allowlist validation, role-aware DTOs, sanitized logs, and redaction tests.</td></tr>
+        <tr><td>Retries duplicate rows</td><td>Upsert by local event keys and server-originated review/closeout decision keys.</td></tr>
+        <tr><td>Compromised terminal fabricates rows</td><td>Verify store/terminal/session binding and label terminal-reported rows until server projection proves outcomes.</td></tr>
+        <tr><td>Activity patch fails in projection path</td><td>Use best-effort helpers so projection/review still succeeds and sanitized patch failures are observable.</td></tr>
+      </tbody>
+    </table>
+
+    <h2>Acceptance</h2>
+    <ul>
+      <li>Online sessions replay open, cart/payment, cash/expense, sale, review, and optional closeout activity with applicable links.</li>
+      <li>Offline activity shows uncertain coverage before reconnect and session rows after upload.</li>
+      <li>Any mismatch between reported terminal activity and cloud-visible state can be investigated through normal activity categories.</li>
+      <li>Out-of-order and duplicate events are labeled without overstating business outcomes.</li>
+      <li>Resolved manager decisions stay visible after active review clears.</li>
+      <li>Full-admin readers with valid store/register-session scope receive activity rows; POS-only, wrong-store, and unauthorized users receive no data.</li>
+      <li>No role receives raw payloads, customer contact, proof tokens, PINs, secrets, local notes, or payment internals.</li>
+      <li>The activity section loads from register-session activity, not Daily Operations timeline data.</li>
+    </ul>
+
+    <section class="callout warning">
+      <strong>Important limitation:</strong> The log can be definitive about cloud-reported activity. It cannot definitively know about local-only activity on a terminal that has not uploaded yet.
+    </section>
+  </article>
+</main>
+</body>
+</html>

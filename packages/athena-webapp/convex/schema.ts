@@ -73,6 +73,8 @@ import {
   posRecoveryCredentialSchema,
   posTerminalRecoveryCommandSchema,
   posTerminalRuntimeStatusSchema,
+  posRegisterSessionActivitySchema,
+  posRegisterSessionActivityCheckpointSchema,
 } from "./schemas/pos";
 import { posSessionSchema } from "./schemas/pos/posSession";
 import {
@@ -833,6 +835,46 @@ const schema = defineSchema({
       "terminalId",
       "status",
     ]),
+  posRegisterSessionActivity: defineTable(posRegisterSessionActivitySchema)
+    .index("by_store_registerSession_sequence", [
+      "storeId",
+      "registerSessionId",
+      "localSequence",
+    ])
+    .index("by_store_registerSession_time", [
+      "storeId",
+      "registerSessionId",
+      "occurredAt",
+    ])
+    .index("by_store_terminal_localEvent", [
+      "storeId",
+      "terminalId",
+      "localEventId",
+    ])
+    .index("by_store_terminal_register_sequence", [
+      "storeId",
+      "terminalId",
+      "localRegisterSessionId",
+      "localSequence",
+    ])
+    .index("by_store_terminal_register_status", [
+      "storeId",
+      "terminalId",
+      "localRegisterSessionId",
+      "status",
+    ])
+    .index("by_store_activityKey", ["storeId", "activityKey"]),
+  posRegisterSessionActivityCheckpoint: defineTable(
+    posRegisterSessionActivityCheckpointSchema,
+  )
+    .index("by_store_terminal_register", [
+      "storeId",
+      "terminalId",
+      "localRegisterSessionId",
+    ])
+    .index("by_store_registerSession", ["storeId", "registerSessionId"])
+    .index("by_store_terminal", ["storeId", "terminalId"])
+    .index("by_updatedAt", ["updatedAt"]),
   expenseSession: defineTable(expenseSessionSchema)
     .index("by_storeId", ["storeId"])
     .index("by_status", ["status"])
