@@ -299,6 +299,13 @@ const schema = defineSchema({
       "status",
       "occurredAt",
     ])
+    .index("by_storeId_surface_status_abusePartitionKey_receivedAt", [
+      "storeId",
+      "surface",
+      "status",
+      "abusePartitionKey",
+      "receivedAt",
+    ])
     .index("by_storeId_historicalImportRunId_status", [
       "storeId",
       "historicalImportRunId",
@@ -358,7 +365,9 @@ const schema = defineSchema({
       "status",
     ])
     .index("by_snapshotHash", ["snapshotHash"]),
-  intelligenceProviderInvocation: defineTable(intelligenceProviderInvocationSchema)
+  intelligenceProviderInvocation: defineTable(
+    intelligenceProviderInvocationSchema,
+  )
     .index("by_runId", ["runId"])
     .index("by_contextSnapshotId", ["contextSnapshotId"])
     .index("by_providerKey_status", ["providerKey", "status"])
@@ -372,6 +381,11 @@ const schema = defineSchema({
     .index("by_storeFrontUserId", ["storeFrontUserId"]),
   bagItem: defineTable(bagItemSchema)
     .index("by_bagId", ["bagId"])
+    .index("by_bagId_storeFrontUserId_productSkuId", [
+      "bagId",
+      "storeFrontUserId",
+      "productSkuId",
+    ])
     .index("by_productSkuId", ["productSkuId"]),
   bannerMessage: defineTable(bannerMessageSchema).index("by_storeId", [
     "storeId",
@@ -396,16 +410,12 @@ const schema = defineSchema({
       "hasCompletedCheckoutSession",
       "expiresAt",
     ]),
-  checkoutSessionItem: defineTable(checkoutSessionItemSchema).index(
-    "by_sessionId",
-    ["sesionId"]
-  ).index(
-    "by_productSkuId",
-    ["productSkuId"]
-  ),
+  checkoutSessionItem: defineTable(checkoutSessionItemSchema)
+    .index("by_sessionId", ["sesionId"])
+    .index("by_productSkuId", ["productSkuId"]),
   color: defineTable(colorSchema),
   complimentaryProductsCollection: defineTable(
-    complimentaryProductsCollectionSchema
+    complimentaryProductsCollectionSchema,
   ).index("by_storeId", ["storeId"]),
   complimentaryProduct: defineTable(complimentaryProductSchema)
     .index("by_storeId", ["storeId"])
@@ -451,11 +461,7 @@ const schema = defineSchema({
       "status",
       "expiresAt",
     ])
-    .index("by_storeId_status_expiresAt", [
-      "storeId",
-      "status",
-      "expiresAt",
-    ])
+    .index("by_storeId_status_expiresAt", ["storeId", "status", "expiresAt"])
     .index("by_sourceSessionId_status_productSkuId", [
       "sourceSessionId",
       "status",
@@ -464,7 +470,9 @@ const schema = defineSchema({
   inventoryImportReviewVersion: defineTable(inventoryImportReviewVersionSchema)
     .index("by_storeId_createdAt", ["storeId", "createdAt"])
     .index("by_storeId_importKey", ["storeId", "importKey"]),
-  inventoryImportProvisionalSku: defineTable(inventoryImportProvisionalSkuSchema)
+  inventoryImportProvisionalSku: defineTable(
+    inventoryImportProvisionalSkuSchema,
+  )
     .index("by_storeId_status", ["storeId", "status"])
     .index("by_storeId_status_saleEvidenceQuantity", [
       "storeId",
@@ -546,7 +554,10 @@ const schema = defineSchema({
   onlineOrderItem: defineTable(onlineOrderItemSchema).index("by_orderId", [
     "orderId",
   ]),
-  mtnCollectionsToken: defineTable(mtnCollectionsTokenSchema).index("by_storeId", ["storeId"]),
+  mtnCollectionsToken: defineTable(mtnCollectionsTokenSchema).index(
+    "by_storeId",
+    ["storeId"],
+  ),
   mtnCollectionTransaction: defineTable(mtnCollectionTransactionSchema)
     .index("by_providerReference", ["providerReference"])
     .index("by_storeId_requestedAt", ["storeId", "requestedAt"]),
@@ -558,8 +569,10 @@ const schema = defineSchema({
     .index("by_storeId_subject", ["storeId", "subjectType", "subjectId"])
     .index("by_providerMessageId", ["providerMessageId"])
     .index("by_storeId_intent_status", ["storeId", "intent", "status"]),
-  organization: defineTable(organizationSchema),
-  organizationMember: defineTable(organizationMemberSchema),
+  organization: defineTable(organizationSchema).index("by_slug", ["slug"]),
+  organizationMember: defineTable(organizationMemberSchema)
+    .index("by_organizationId_userId", ["organizationId", "userId"])
+    .index("by_userId", ["userId"]),
   posCustomer: defineTable(posCustomerSchema)
     .index("by_storeId", ["storeId"])
     .index("by_storeId_and_email", ["storeId", "email"])
@@ -606,12 +619,20 @@ const schema = defineSchema({
   remoteAssistSession: defineTable(remoteAssistSessionSchema)
     .index("by_client_status", ["clientId", "status"])
     .index("by_client_status_expiresAt", ["clientId", "status", "expiresAt"])
-    .index("by_organization_status", ["organizationId", "status", "requestedAt"])
+    .index("by_organization_status", [
+      "organizationId",
+      "status",
+      "requestedAt",
+    ])
     .index("by_expiresAt", ["expiresAt"]),
   remoteAssistSessionEvent: defineTable(remoteAssistSessionEventSchema)
     .index("by_session", ["sessionId", "occurredAt"])
     .index("by_client", ["clientId", "occurredAt"])
-    .index("by_organization_event", ["organizationId", "eventType", "occurredAt"]),
+    .index("by_organization_event", [
+      "organizationId",
+      "eventType",
+      "occurredAt",
+    ]),
   posTransaction: defineTable(posTransactionSchema)
     .index("by_storeId", ["storeId"])
     .index("by_staffProfileId", ["staffProfileId"])
@@ -652,9 +673,7 @@ const schema = defineSchema({
     .index("by_storeId_status_appliedAt", ["storeId", "status", "appliedAt"])
     .index("by_approvalRequestId", ["approvalRequestId"])
     .index("by_payloadFingerprint", ["payloadFingerprint"]),
-  posTransactionAdjustmentLine: defineTable(
-    posTransactionAdjustmentLineSchema,
-  )
+  posTransactionAdjustmentLine: defineTable(posTransactionAdjustmentLineSchema)
     .index("by_adjustmentId", ["adjustmentId"])
     .index("by_transactionId", ["transactionId"])
     .index("by_originalTransactionItemId", ["originalTransactionItemId"])
@@ -691,7 +710,9 @@ const schema = defineSchema({
       "provisionalProductId",
     ])
     .index("by_operationalWorkItemId", ["operationalWorkItemId"]),
-  posPendingCheckoutLookupAlias: defineTable(posPendingCheckoutLookupAliasSchema)
+  posPendingCheckoutLookupAlias: defineTable(
+    posPendingCheckoutLookupAliasSchema,
+  )
     .index("by_storeId_normalizedLookupCode_status", [
       "storeId",
       "normalizedLookupCode",
@@ -830,7 +851,7 @@ const schema = defineSchema({
     ]),
   expenseSessionItem: defineTable(expenseSessionItemSchema).index(
     "by_sessionId",
-    ["sessionId"]
+    ["sessionId"],
   ),
   expenseTransaction: defineTable(expenseTransactionSchema)
     .index("by_storeId", ["storeId"])
@@ -844,7 +865,7 @@ const schema = defineSchema({
     ]),
   expenseTransactionItem: defineTable(expenseTransactionItemSchema).index(
     "by_transactionId",
-    ["transactionId"]
+    ["transactionId"],
   ),
   product: defineTable(productSchema)
     .index("by_categoryId", ["categoryId"])
@@ -892,7 +913,11 @@ const schema = defineSchema({
     ])
     .index("by_primarySubject", ["primarySubjectType", "primarySubjectId"]),
   workflowTraceEvent: defineTable(workflowTraceEventSchema)
-    .index("by_storeId_traceId_occurredAt", ["storeId", "traceId", "occurredAt"])
+    .index("by_storeId_traceId_occurredAt", [
+      "storeId",
+      "traceId",
+      "occurredAt",
+    ])
     .index("by_storeId_traceId_sequence", ["storeId", "traceId", "sequence"])
     .index("by_storeId_traceId_eventKey", ["storeId", "traceId", "eventKey"])
     .index("by_traceId_sequence", ["traceId", "sequence"]),
@@ -966,11 +991,12 @@ const schema = defineSchema({
     .index("by_workItemId", ["workItemId"]),
   redeemedPromoCode: defineTable(redeemedPromoCodeSchema).index(
     "by_promoCodeId_storeFrontUserId",
-    ["promoCodeId", "storeFrontUserId"]
+    ["promoCodeId", "storeFrontUserId"],
   ),
   registerSession: defineTable(registerSessionSchema)
     .index("by_storeId", ["storeId"])
     .index("by_storeId_status", ["storeId", "status"])
+    .index("by_storeId_status_terminalId", ["storeId", "status", "terminalId"])
     .index("by_storeId_status_openedOperatingDate", [
       "storeId",
       "status",
@@ -991,9 +1017,13 @@ const schema = defineSchema({
   savedBag: defineTable(savedBagSchema).index("by_storeFrontUserId", [
     "storeFrontUserId",
   ]),
-  savedBagItem: defineTable(savedBagItemSchema).index("by_savedBagId", [
-    "savedBagId",
-  ]),
+  savedBagItem: defineTable(savedBagItemSchema)
+    .index("by_savedBagId", ["savedBagId"])
+    .index("by_savedBagId_storeFrontUserId_productSkuId", [
+      "savedBagId",
+      "storeFrontUserId",
+      "productSkuId",
+    ]),
   serviceAppointment: defineTable(serviceAppointmentSchema)
     .index("by_storeId_startAt", ["storeId", "startAt"])
     .index("by_staffProfileId_startAt", ["assignedStaffProfileId", "startAt"])
@@ -1011,15 +1041,21 @@ const schema = defineSchema({
     .index("by_appointmentId", ["appointmentId"]),
   serviceCaseLineItem: defineTable(serviceCaseLineItemSchema).index(
     "by_serviceCaseId",
-    ["serviceCaseId"]
+    ["serviceCaseId"],
   ),
   serviceInventoryUsage: defineTable(serviceInventoryUsageSchema)
     .index("by_serviceCaseId", ["serviceCaseId"])
     .index("by_productSkuId", ["productSkuId"]),
-  store: defineTable(storeSchema),
+  store: defineTable(storeSchema)
+    .index("by_slug", ["slug"])
+    .index("by_organizationId_slug", ["organizationId", "slug"]),
   storeAsset: defineTable(storeAssetSchema),
   storeSchedule: defineTable(storeScheduleSchema)
-    .index("by_storeId_status_effectiveFrom", ["storeId", "status", "effectiveFrom"])
+    .index("by_storeId_status_effectiveFrom", [
+      "storeId",
+      "status",
+      "effectiveFrom",
+    ])
     .index("by_organizationId_storeId_status", [
       "organizationId",
       "storeId",

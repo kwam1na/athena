@@ -97,27 +97,26 @@ export const appendContextEvent = internalMutation({
       }
 
       return {
-          kind: "idempotency_conflict" as const,
+        kind: "idempotency_conflict" as const,
         contextEventId: existing._id,
         status: existing.status,
-        message: "Context event idempotency key already exists with different content.",
+        message:
+          "Context event idempotency key already exists with different content.",
       };
     }
 
     if (args.abusePartitionKey) {
       const recentEvents = await ctx.db
         .query("contextEvent")
-        .withIndex("by_storeId_surface_status_occurredAt", (q) =>
-          q
-            .eq("storeId", args.storeId)
-            .eq("surface", args.surface)
-            .eq("status", "recorded"),
-        )
-        .filter((q) =>
-          q.and(
-            q.eq(q.field("abusePartitionKey"), args.abusePartitionKey),
-            q.gte(q.field("receivedAt"), Date.now() - ABUSE_WINDOW_MS),
-          ),
+        .withIndex(
+          "by_storeId_surface_status_abusePartitionKey_receivedAt",
+          (q) =>
+            q
+              .eq("storeId", args.storeId)
+              .eq("surface", args.surface)
+              .eq("status", "recorded")
+              .eq("abusePartitionKey", args.abusePartitionKey)
+              .gte("receivedAt", Date.now() - ABUSE_WINDOW_MS),
         )
         .take(MAX_EVENTS_PER_ABUSE_WINDOW + 1);
 
@@ -180,6 +179,10 @@ export const appendContextEvent = internalMutation({
           : undefined,
     });
 
-    return { kind: "recorded" as const, contextEventId, status: "recorded" as const };
+    return {
+      kind: "recorded" as const,
+      contextEventId,
+      status: "recorded" as const,
+    };
   },
 });

@@ -381,7 +381,9 @@ describe("updateTerminal", () => {
         terminalId: "terminal-1" as Id<"posTerminal">,
         status: "active",
       }),
-    ).rejects.toThrow("Re-provision this terminal before returning it to service.");
+    ).rejects.toThrow(
+      "Re-provision this terminal before returning it to service.",
+    );
     expect(vi.mocked(patchTerminalRecord)).not.toHaveBeenCalled();
   });
 });
@@ -447,7 +449,9 @@ describe("submitTerminalRuntimeStatus", () => {
         acceptedForSideEffects: true,
       },
     });
-    expect(vi.mocked(upsertLatestRuntimeStatusWithOutcome)).toHaveBeenCalledWith(
+    expect(
+      vi.mocked(upsertLatestRuntimeStatusWithOutcome),
+    ).toHaveBeenCalledWith(
       expect.anything(),
       expect.not.objectContaining({
         staffProofToken: expect.anything(),
@@ -457,7 +461,9 @@ describe("submitTerminalRuntimeStatus", () => {
         customerInfo: expect.anything(),
       }),
     );
-    expect(vi.mocked(upsertLatestRuntimeStatusWithOutcome)).toHaveBeenCalledWith(
+    expect(
+      vi.mocked(upsertLatestRuntimeStatusWithOutcome),
+    ).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         storeId: "store-1",
@@ -495,24 +501,23 @@ describe("submitTerminalRuntimeStatus", () => {
       runtimeStatusId: "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
     });
 
-    await submitTerminalRuntimeStatus(
-      { db: null as never } as never,
-      {
-        storeId: "store-1" as Id<"store">,
-        terminalId: "terminal-1" as Id<"posTerminal">,
-        status: {
-          ...buildRuntimeStatus(),
-          activeRegisterSession: {
-            cloudRegisterSessionId: "cloud-register-1",
-            localRegisterSessionId: "local-register-1",
-            observedAt: 112,
-            status: "closeout_rejected",
-          },
-        } as never,
-      },
-    );
+    await submitTerminalRuntimeStatus({ db: null as never } as never, {
+      storeId: "store-1" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+      status: {
+        ...buildRuntimeStatus(),
+        activeRegisterSession: {
+          cloudRegisterSessionId: "cloud-register-1",
+          localRegisterSessionId: "local-register-1",
+          observedAt: 112,
+          status: "closeout_rejected",
+        },
+      } as never,
+    });
 
-    expect(vi.mocked(upsertLatestRuntimeStatusWithOutcome)).toHaveBeenCalledWith(
+    expect(
+      vi.mocked(upsertLatestRuntimeStatusWithOutcome),
+    ).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         activeRegisterSession: expect.objectContaining({
@@ -530,21 +535,20 @@ describe("submitTerminalRuntimeStatus", () => {
       runtimeStatusId: "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
     });
 
-    await submitTerminalRuntimeStatus(
-      { db: null as never } as never,
-      {
-        storeId: "store-1" as Id<"store">,
-        terminalId: "terminal-1" as Id<"posTerminal">,
-        status: {
-          ...buildRuntimeStatus(),
-          appSessionRecovery: {
-            status: "retry_exhausted",
-          },
+    await submitTerminalRuntimeStatus({ db: null as never } as never, {
+      storeId: "store-1" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+      status: {
+        ...buildRuntimeStatus(),
+        appSessionRecovery: {
+          status: "retry_exhausted",
         },
       },
-    );
+    });
 
-    expect(vi.mocked(upsertLatestRuntimeStatusWithOutcome)).toHaveBeenCalledWith(
+    expect(
+      vi.mocked(upsertLatestRuntimeStatusWithOutcome),
+    ).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         appSessionRecovery: {
@@ -570,29 +574,23 @@ describe("submitTerminalRuntimeStatus", () => {
       })),
     };
 
-    const result = await submitTerminalRuntimeStatus(
-      { db } as never,
-      {
-        storeId: "store-1" as Id<"store">,
-        terminalId: "terminal-1" as Id<"posTerminal">,
-        status: {
-          ...buildRuntimeStatus(),
-          activeRegisterSession: {
-            cloudRegisterSessionId: "cloud-register-1",
-            localRegisterSessionId: "local-register-1",
-            observedAt: 120,
-            openedAt: 100,
-            registerNumber: "8",
-            status: "active",
-          },
+    const result = await submitTerminalRuntimeStatus({ db } as never, {
+      storeId: "store-1" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+      status: {
+        ...buildRuntimeStatus(),
+        activeRegisterSession: {
+          cloudRegisterSessionId: "cloud-register-1",
+          localRegisterSessionId: "local-register-1",
+          observedAt: 120,
+          openedAt: 100,
+          registerNumber: "8",
+          status: "active",
         },
       },
-    );
+    });
 
-    expect(db.get).toHaveBeenCalledWith(
-      "registerSession",
-      "cloud-register-1",
-    );
+    expect(db.get).toHaveBeenCalledWith("registerSession", "cloud-register-1");
     expect(result).toEqual({
       kind: "ok",
       data: expect.objectContaining({
@@ -641,28 +639,32 @@ describe("submitTerminalRuntimeStatus", () => {
         terminalId: "terminal-1",
       },
     ];
+    const indexNames: string[] = [];
     const db = {
-      query: vi.fn(() => buildTerminalHealthQuery(registerSessions)),
+      query: vi.fn(() =>
+        buildTerminalHealthQuery(registerSessions, indexNames),
+      ),
     };
 
-    const result = await submitTerminalRuntimeStatus(
-      { db } as never,
-      {
-        storeId: "store-1" as Id<"store">,
-        terminalId: "terminal-1" as Id<"posTerminal">,
-        status: {
-          ...buildRuntimeStatus(),
-          activeRegisterSession: undefined,
-          localStore: {
-            available: true,
-            schemaVersion: 1,
-            terminalSeedReady: true,
-          },
+    const result = await submitTerminalRuntimeStatus({ db } as never, {
+      storeId: "store-1" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+      status: {
+        ...buildRuntimeStatus(),
+        activeRegisterSession: undefined,
+        localStore: {
+          available: true,
+          schemaVersion: 1,
+          terminalSeedReady: true,
         },
       },
-    );
+    });
 
     expect(db.query).toHaveBeenCalledWith("registerSession");
+    expect(indexNames).toEqual([
+      "by_storeId_status_terminalId",
+      "by_storeId_status_terminalId",
+    ]);
     expect(result).toEqual({
       kind: "ok",
       data: expect.objectContaining({
@@ -679,6 +681,192 @@ describe("submitTerminalRuntimeStatus", () => {
         },
       }),
     });
+  });
+
+  it("does not direct a terminal to a usable drawer for another register number", async () => {
+    vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
+    vi.mocked(upsertLatestRuntimeStatusWithOutcome).mockResolvedValue({
+      didWrite: true,
+      runtimeStatusId: "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
+    });
+    const registerSessions = [
+      {
+        _creationTime: 300,
+        _id: "cloud-register-renumbered",
+        expectedCash: 10_000,
+        openedAt: 180,
+        openingFloat: 10_000,
+        openedByStaffProfileId: "staff-2",
+        registerNumber: "B2",
+        status: "active",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      },
+    ];
+    const indexNames: string[] = [];
+    const db = {
+      query: vi.fn(() =>
+        buildTerminalHealthQuery(registerSessions, indexNames),
+      ),
+    };
+
+    const result = await submitTerminalRuntimeStatus({ db } as never, {
+      storeId: "store-1" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+      status: {
+        ...buildRuntimeStatus(),
+        activeRegisterSession: undefined,
+        localStore: {
+          available: true,
+          schemaVersion: 1,
+          terminalSeedReady: true,
+        },
+      },
+    });
+
+    expect(indexNames).toEqual([
+      "by_storeId_status_terminalId",
+      "by_storeId_status_terminalId",
+    ]);
+    expect(result).toEqual({
+      kind: "ok",
+      data: expect.not.objectContaining({
+        activeRegisterSessionDirective: expect.anything(),
+      }),
+    });
+  });
+
+  it("skips newer incompatible register sessions when an older compatible session exists", async () => {
+    vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
+    vi.mocked(upsertLatestRuntimeStatusWithOutcome).mockResolvedValue({
+      didWrite: true,
+      runtimeStatusId: "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
+    });
+    const registerSessions = [
+      {
+        _creationTime: 300,
+        _id: "cloud-register-renumbered",
+        expectedCash: 10_000,
+        openedAt: 180,
+        openingFloat: 10_000,
+        openedByStaffProfileId: "staff-2",
+        registerNumber: "B2",
+        status: "active",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      },
+      {
+        _creationTime: 200,
+        _id: "cloud-register-compatible",
+        expectedCash: 13_000,
+        openedAt: 100,
+        openingFloat: 13_000,
+        openedByStaffProfileId: "staff-1",
+        registerNumber: "A1",
+        status: "active",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      },
+    ];
+    const db = {
+      query: vi.fn(() => buildTerminalHealthQuery(registerSessions)),
+    };
+
+    const result = await submitTerminalRuntimeStatus({ db } as never, {
+      storeId: "store-1" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+      status: {
+        ...buildRuntimeStatus(),
+        activeRegisterSession: undefined,
+        localStore: {
+          available: true,
+          schemaVersion: 1,
+          terminalSeedReady: true,
+        },
+      },
+    });
+
+    expect(result).toEqual({
+      kind: "ok",
+      data: expect.objectContaining({
+        activeRegisterSessionDirective: expect.objectContaining({
+          cloudRegisterSessionId: "cloud-register-compatible",
+          expectedCash: 13_000,
+          registerNumber: "A1",
+          staffProfileId: "staff-1",
+        }),
+      }),
+    });
+  });
+
+  it("can direct a terminal to a compatible legacy drawer without a register number", async () => {
+    vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
+    vi.mocked(upsertLatestRuntimeStatusWithOutcome).mockResolvedValue({
+      didWrite: true,
+      runtimeStatusId: "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
+    });
+    const registerSessions = [
+      {
+        _creationTime: 300,
+        _id: "cloud-register-legacy",
+        expectedCash: 11_000,
+        openedAt: 180,
+        openingFloat: 11_000,
+        openedByStaffProfileId: "staff-3",
+        status: "active",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      },
+      {
+        _creationTime: 200,
+        _id: "cloud-register-other",
+        expectedCash: 10_000,
+        openedAt: 160,
+        openingFloat: 10_000,
+        openedByStaffProfileId: "staff-2",
+        registerNumber: "Z9",
+        status: "active",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      },
+    ];
+    const db = {
+      query: vi.fn(() => buildTerminalHealthQuery(registerSessions)),
+    };
+
+    const result = await submitTerminalRuntimeStatus({ db } as never, {
+      storeId: "store-1" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+      status: {
+        ...buildRuntimeStatus(),
+        activeRegisterSession: undefined,
+        localStore: {
+          available: true,
+          schemaVersion: 1,
+          terminalSeedReady: true,
+        },
+      },
+    });
+
+    expect(result).toEqual({
+      kind: "ok",
+      data: expect.objectContaining({
+        activeRegisterSessionDirective: expect.objectContaining({
+          cloudRegisterSessionId: "cloud-register-legacy",
+          expectedCash: 11_000,
+          staffProfileId: "staff-3",
+        }),
+      }),
+    });
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") return;
+    expect(result.data).toEqual(
+      expect.objectContaining({
+        activeRegisterSessionDirective: expect.not.objectContaining({
+          registerNumber: "Z9",
+        }),
+      }),
+    );
   });
 
   it("returns an active register session directive when runtime is stuck on a closed cloud drawer", async () => {
@@ -712,6 +900,7 @@ describe("submitTerminalRuntimeStatus", () => {
         terminalId: "terminal-1",
       },
     ];
+    const indexNames: string[] = [];
     const db = {
       get: vi.fn(async (tableName: string, id: string) =>
         tableName === "registerSession"
@@ -724,36 +913,39 @@ describe("submitTerminalRuntimeStatus", () => {
           ? value
           : null,
       ),
-      query: vi.fn(() => buildTerminalHealthQuery(registerSessions)),
+      query: vi.fn(() =>
+        buildTerminalHealthQuery(registerSessions, indexNames),
+      ),
     };
 
-    const result = await submitTerminalRuntimeStatus(
-      { db } as never,
-      {
-        storeId: "store-1" as Id<"store">,
-        terminalId: "terminal-1" as Id<"posTerminal">,
-        status: {
-          ...buildRuntimeStatus(),
-          activeRegisterSession: {
-            localRegisterSessionId: "cloud-register-closed",
-            observedAt: 190,
-            openedAt: 100,
-            registerNumber: "A1",
-            status: "active",
-          },
-          localStore: {
-            available: true,
-            schemaVersion: 1,
-            terminalSeedReady: true,
-          },
+    const result = await submitTerminalRuntimeStatus({ db } as never, {
+      storeId: "store-1" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+      status: {
+        ...buildRuntimeStatus(),
+        activeRegisterSession: {
+          localRegisterSessionId: "cloud-register-closed",
+          observedAt: 190,
+          openedAt: 100,
+          registerNumber: "A1",
+          status: "active",
+        },
+        localStore: {
+          available: true,
+          schemaVersion: 1,
+          terminalSeedReady: true,
         },
       },
-    );
+    });
 
     expect(db.get).toHaveBeenCalledWith(
       "registerSession",
       "cloud-register-closed",
     );
+    expect(indexNames).toEqual([
+      "by_storeId_status_terminalId",
+      "by_storeId_status_terminalId",
+    ]);
     expect(result).toEqual({
       kind: "ok",
       data: expect.objectContaining({
@@ -788,29 +980,23 @@ describe("submitTerminalRuntimeStatus", () => {
       })),
     };
 
-    const result = await submitTerminalRuntimeStatus(
-      { db } as never,
-      {
-        storeId: "store-1" as Id<"store">,
-        terminalId: "terminal-1" as Id<"posTerminal">,
-        status: {
-          ...buildRuntimeStatus(),
-          activeRegisterSession: {
-            cloudRegisterSessionId: "cloud-register-1",
-            localRegisterSessionId: "local-register-1",
-            observedAt: 120,
-            openedAt: 100,
-            registerNumber: "8",
-            status: "closing",
-          },
+    const result = await submitTerminalRuntimeStatus({ db } as never, {
+      storeId: "store-1" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+      status: {
+        ...buildRuntimeStatus(),
+        activeRegisterSession: {
+          cloudRegisterSessionId: "cloud-register-1",
+          localRegisterSessionId: "local-register-1",
+          observedAt: 120,
+          openedAt: 100,
+          registerNumber: "8",
+          status: "closing",
         },
       },
-    );
+    });
 
-    expect(db.get).toHaveBeenCalledWith(
-      "registerSession",
-      "cloud-register-1",
-    );
+    expect(db.get).toHaveBeenCalledWith("registerSession", "cloud-register-1");
     expect(result).toEqual({
       kind: "ok",
       data: expect.objectContaining({
@@ -835,24 +1021,21 @@ describe("submitTerminalRuntimeStatus", () => {
       get: vi.fn(),
     };
 
-    const result = await submitTerminalRuntimeStatus(
-      { db } as never,
-      {
-        storeId: "store-1" as Id<"store">,
-        terminalId: "terminal-1" as Id<"posTerminal">,
-        status: {
-          ...buildRuntimeStatus(),
-          activeRegisterSession: {
-            cloudRegisterSessionId: "not-a-register-id",
-            localRegisterSessionId: "local-register-1",
-            observedAt: 120,
-            openedAt: 100,
-            registerNumber: "8",
-            status: "active",
-          },
+    const result = await submitTerminalRuntimeStatus({ db } as never, {
+      storeId: "store-1" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+      status: {
+        ...buildRuntimeStatus(),
+        activeRegisterSession: {
+          cloudRegisterSessionId: "not-a-register-id",
+          localRegisterSessionId: "local-register-1",
+          observedAt: 120,
+          openedAt: 100,
+          registerNumber: "8",
+          status: "active",
         },
       },
-    );
+    });
 
     expect(result).toEqual({
       kind: "ok",
@@ -874,36 +1057,35 @@ describe("submitTerminalRuntimeStatus", () => {
       runtimeStatusId: "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
     });
 
-    await submitTerminalRuntimeStatus(
-      { db: null as never } as never,
-      {
-        storeId: "store-1" as Id<"store">,
-        terminalId: "terminal-1" as Id<"posTerminal">,
-        status: {
-          ...buildRuntimeStatus(),
-          appUpdate: {
-            blockerSummary: "active_sale",
-            canApply: false,
-            commandExecutionId: "exec-123",
-            commandIssuedAt: 90,
-            commandNonce: "nonce-abc",
-            currentBuildId: " build-current ",
-            detectorStatus: "ok",
-            observedAt: 100,
-            pendingBuildId: "build-next",
-            selectedBlockerCode: "active_sale",
-            stagingAssetCount: 12.8,
-            stagingFailedAssetCount: -2,
-            stagingReason: "service-worker-error",
-            stagingRejectedAssetCount: 3.2,
-            stagingStatus: "staged",
-            status: "blocked",
-          },
+    await submitTerminalRuntimeStatus({ db: null as never } as never, {
+      storeId: "store-1" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+      status: {
+        ...buildRuntimeStatus(),
+        appUpdate: {
+          blockerSummary: "active_sale",
+          canApply: false,
+          commandExecutionId: "exec-123",
+          commandIssuedAt: 90,
+          commandNonce: "nonce-abc",
+          currentBuildId: " build-current ",
+          detectorStatus: "ok",
+          observedAt: 100,
+          pendingBuildId: "build-next",
+          selectedBlockerCode: "active_sale",
+          stagingAssetCount: 12.8,
+          stagingFailedAssetCount: -2,
+          stagingReason: "service-worker-error",
+          stagingRejectedAssetCount: 3.2,
+          stagingStatus: "staged",
+          status: "blocked",
         },
       },
-    );
+    });
 
-    expect(vi.mocked(upsertLatestRuntimeStatusWithOutcome)).toHaveBeenCalledWith(
+    expect(
+      vi.mocked(upsertLatestRuntimeStatusWithOutcome),
+    ).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         appUpdate: {
@@ -934,16 +1116,15 @@ describe("submitTerminalRuntimeStatus", () => {
       runtimeStatusId: "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
     });
 
-    await submitTerminalRuntimeStatus(
-      { db: null as never } as never,
-      {
-        storeId: "store-1" as Id<"store">,
-        terminalId: "terminal-1" as Id<"posTerminal">,
-        status: buildRuntimeStatus(),
-      },
-    );
+    await submitTerminalRuntimeStatus({ db: null as never } as never, {
+      storeId: "store-1" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+      status: buildRuntimeStatus(),
+    });
 
-    expect(vi.mocked(upsertLatestRuntimeStatusWithOutcome)).toHaveBeenCalledWith(
+    expect(
+      vi.mocked(upsertLatestRuntimeStatusWithOutcome),
+    ).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         appUpdate: undefined,
@@ -958,16 +1139,15 @@ describe("submitTerminalRuntimeStatus", () => {
       runtimeStatusId: "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
     });
 
-    await submitTerminalRuntimeStatus(
-      { db: null as never } as never,
-      {
-        storeId: "store-1" as Id<"store">,
-        terminalId: "terminal-1" as Id<"posTerminal">,
-        status: buildRuntimeStatus(),
-      },
-    );
+    await submitTerminalRuntimeStatus({ db: null as never } as never, {
+      storeId: "store-1" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+      status: buildRuntimeStatus(),
+    });
 
-    expect(vi.mocked(upsertLatestRuntimeStatusWithOutcome)).toHaveBeenCalledWith(
+    expect(
+      vi.mocked(upsertLatestRuntimeStatusWithOutcome),
+    ).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         appSessionRecovery: undefined,
@@ -982,16 +1162,15 @@ describe("submitTerminalRuntimeStatus", () => {
       runtimeStatusId: "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
     });
 
-    await submitTerminalRuntimeStatus(
-      { db: null as never } as never,
-      {
-        storeId: "store-1" as Id<"store">,
-        terminalId: "terminal-1" as Id<"posTerminal">,
-        status: buildRuntimeStatus(),
-      },
-    );
+    await submitTerminalRuntimeStatus({ db: null as never } as never, {
+      storeId: "store-1" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+      status: buildRuntimeStatus(),
+    });
 
-    expect(vi.mocked(upsertLatestRuntimeStatusWithOutcome)).toHaveBeenCalledWith(
+    expect(
+      vi.mocked(upsertLatestRuntimeStatusWithOutcome),
+    ).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         drawerAuthority: undefined,
@@ -1030,7 +1209,9 @@ describe("submitTerminalRuntimeStatus", () => {
 describe("terminal health summaries", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    vi.mocked(resolveTerminalRegisterSessionActionTarget).mockResolvedValue(null);
+    vi.mocked(resolveTerminalRegisterSessionActionTarget).mockResolvedValue(
+      null,
+    );
     vi.mocked(getActiveRegisterSessionForTerminal).mockResolvedValue(null);
     vi.mocked(getDrawerAuthorityRegisterSession).mockResolvedValue(null);
     vi.mocked(getLatestRegisterSessionForTerminal).mockResolvedValue(null);
@@ -1067,8 +1248,12 @@ describe("terminal health summaries", () => {
       patchCommand: vi.fn(),
       listCommandsForTerminal: vi.fn().mockResolvedValue([]),
     } satisfies TerminalRecoveryCommandRepository;
-    vi.mocked(createTerminalRecoveryCommandReadRepository).mockReturnValue(readRepository);
-    vi.mocked(createTerminalRecoveryCommandRepository).mockReturnValue(writeRepository);
+    vi.mocked(createTerminalRecoveryCommandReadRepository).mockReturnValue(
+      readRepository,
+    );
+    vi.mocked(createTerminalRecoveryCommandRepository).mockReturnValue(
+      writeRepository,
+    );
   });
 
   afterEach(() => {
@@ -1148,13 +1333,12 @@ describe("terminal health summaries", () => {
       }),
     ]);
     expect(vi.mocked(getTerminalSyncEvidence)).not.toHaveBeenCalled();
-    expect(vi.mocked(getTerminalSyncReviewSummaryEvidence)).toHaveBeenCalledWith(
-      expect.anything(),
-      {
-        storeId: "store-1",
-        terminalId: "terminal-1",
-      },
-    );
+    expect(
+      vi.mocked(getTerminalSyncReviewSummaryEvidence),
+    ).toHaveBeenCalledWith(expect.anything(), {
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
   });
 
   it("carries support-safe app-session recovery status through terminal health", async () => {
@@ -1519,9 +1703,9 @@ describe("terminal health summaries", () => {
         type: "cloud_rejected",
       }),
     ]);
-    expect(
-      result?.attentionReasons.some((reason) => reason.actionTarget),
-    ).toBe(false);
+    expect(result?.attentionReasons.some((reason) => reason.actionTarget)).toBe(
+      false,
+    );
   });
 
   it("does not link manual-only cloud review counts to open work", async () => {
@@ -1645,7 +1829,8 @@ describe("terminal health summaries", () => {
           },
           {
             actionTarget: {
-              registerSessionId: "register-session-cash" as Id<"registerSession">,
+              registerSessionId:
+                "register-session-cash" as Id<"registerSession">,
               type: "register_session",
             },
             actionability: "cash_controls_review",
@@ -2629,11 +2814,16 @@ function buildTerminalHealthDb(
         ? value
         : null;
     }),
-    query: vi.fn((tableName: string) => buildTerminalHealthQuery(records[tableName] ?? [])),
+    query: vi.fn((tableName: string) =>
+      buildTerminalHealthQuery(records[tableName] ?? []),
+    ),
   };
 }
 
-function buildTerminalHealthQuery(records: Array<Record<string, unknown>>) {
+function buildTerminalHealthQuery(
+  records: Array<Record<string, unknown>>,
+  indexNames?: string[],
+) {
   let currentRecords = [...records];
   const chain = {
     first: vi.fn(async () => currentRecords[0] ?? null),
@@ -2641,23 +2831,33 @@ function buildTerminalHealthQuery(records: Array<Record<string, unknown>>) {
       currentRecords = [...currentRecords].sort((left, right) => {
         const leftTime = Number(left._creationTime ?? 0);
         const rightTime = Number(right._creationTime ?? 0);
-        return direction === "desc" ? rightTime - leftTime : leftTime - rightTime;
+        return direction === "desc"
+          ? rightTime - leftTime
+          : leftTime - rightTime;
       });
       return chain;
     }),
     take: vi.fn(async (count: number) => currentRecords.slice(0, count)),
-    withIndex: vi.fn((_indexName: string, build: (q: {
-      eq: (field: string, value: unknown) => unknown;
-    }) => unknown) => {
-      const q = {
-        eq: vi.fn((field: string, value: unknown) => {
-          currentRecords = currentRecords.filter((record) => record[field] === value);
-          return q;
-        }),
-      };
-      build(q);
-      return chain;
-    }),
+    withIndex: vi.fn(
+      (
+        indexName: string,
+        build: (q: {
+          eq: (field: string, value: unknown) => unknown;
+        }) => unknown,
+      ) => {
+        indexNames?.push(indexName);
+        const q = {
+          eq: vi.fn((field: string, value: unknown) => {
+            currentRecords = currentRecords.filter(
+              (record) => record[field] === value,
+            );
+            return q;
+          }),
+        };
+        build(q);
+        return chain;
+      },
+    ),
   };
   return chain;
 }

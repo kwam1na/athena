@@ -284,7 +284,9 @@ describe("store schedule validation", () => {
     expect(result.ok).toBe(false);
     expect(result.fields).toMatchObject({
       timezone: ["Choose a valid store timezone."],
-      weeklyWindows: ["These hours overlap. Adjust one time range before saving."],
+      weeklyWindows: [
+        "These hours overlap. Adjust one time range before saving.",
+      ],
     });
   });
 
@@ -348,9 +350,7 @@ describe("store schedule validation", () => {
     const ctx = {
       db: {
         get: vi.fn(async (table: string, id: string) =>
-          table === "store"
-            ? { _id: id, organizationId: "org-1" }
-            : null,
+          table === "store" ? { _id: id, organizationId: "org-1" } : null,
         ),
         query: vi.fn(() => ({
           withIndex: vi.fn(() => ({
@@ -372,7 +372,9 @@ describe("store schedule validation", () => {
       storeId: "store-1" as any,
       timezone: "America/New_York",
       weeklyClosedDays: [],
-      weeklyWindows: [{ dayOfWeek: 1, startMinute: 9 * 60, endMinute: 17 * 60 }],
+      weeklyWindows: [
+        { dayOfWeek: 1, startMinute: 9 * 60, endMinute: 17 * 60 },
+      ],
       dateExceptions: [],
       effectiveFrom: Date.parse("2026-06-01T00:00:00.000Z"),
       source: "admin",
@@ -383,7 +385,9 @@ describe("store schedule validation", () => {
       error: {
         code: "conflict",
         fields: {
-          effectiveFrom: ["Schedule effective dates overlap an active version."],
+          effectiveFrom: [
+            "Schedule effective dates overlap an active version.",
+          ],
         },
       },
     });
@@ -397,9 +401,8 @@ describe("store schedule schema indexes", () => {
     const schema = readProjectFile("convex", "schema.ts");
 
     expect(schema).toContain("storeSchedule: defineTable(storeScheduleSchema)");
-    expect(schema).toContain(
-      '.index("by_storeId_status_effectiveFrom", ["storeId", "status", "effectiveFrom"])',
-    );
+    expect(schema).toContain('.index("by_storeId_status_effectiveFrom", [');
+    expect(schema).toContain('"effectiveFrom",');
     expect(schema).toContain('.index("by_organizationId_storeId_status", [');
     expect(schema).toContain('"organizationId",');
     expect(schema).toContain('"storeId",');

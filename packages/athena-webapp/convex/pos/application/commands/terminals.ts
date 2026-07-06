@@ -17,6 +17,7 @@ import {
   canInspectRuntimeCloudDrawerAuthority,
   isRegisterSessionSaleUsable,
 } from "../../../../shared/registerSessionLifecyclePolicy";
+import { POS_USABLE_REGISTER_SESSION_STATUSES } from "../../../../shared/registerSessionStatus";
 
 import {
   getTerminalByFingerprint,
@@ -35,6 +36,7 @@ const REGISTER_NUMBER_UNIQUE_MESSAGE =
   "A terminal with this register number already exists in this store.";
 const TERMINAL_REACTIVATION_REPROVISION_MESSAGE =
   "Re-provision this terminal before returning it to service.";
+const TERMINAL_REGISTER_SESSION_LOOKUP_LIMIT = 25;
 
 const REGISTER_TERMINAL_VALIDATION_MESSAGES = new Set([
   REGISTER_NUMBER_REQUIRED_MESSAGE,
@@ -118,9 +120,7 @@ export async function registerTerminal(
         ? normalizePosTerminalTransactionCapability(
             existing.transactionCapability,
           )
-        : normalizePosTerminalTransactionCapability(
-            args.transactionCapability,
-          );
+        : normalizePosTerminalTransactionCapability(args.transactionCapability);
     const loginMode =
       args.loginMode === undefined && existing
         ? normalizePosTerminalLoginMode(existing.loginMode)
@@ -308,7 +308,9 @@ export type TerminalRuntimeStatusInput = {
   };
   saleAuthority?: {
     observedAt: number;
-    status: NonNullable<Doc<"posTerminalRuntimeStatus">["saleAuthority"]>["status"];
+    status: NonNullable<
+      Doc<"posTerminalRuntimeStatus">["saleAuthority"]
+    >["status"];
     localPosSessionId?: string;
     localRegisterSessionId?: string;
     staffProfileId?: Id<"staffProfile">;
@@ -506,9 +508,7 @@ export async function submitTerminalRuntimeStatus(
     }),
     sync: omitUndefined({
       status: args.status.sync.status,
-      pendingEventCount: nonNegativeInteger(
-        args.status.sync.pendingEventCount,
-      ),
+      pendingEventCount: nonNegativeInteger(args.status.sync.pendingEventCount),
       uploadableEventCount: nonNegativeInteger(
         args.status.sync.uploadableEventCount,
       ),
@@ -555,13 +555,15 @@ export async function submitTerminalRuntimeStatus(
     drawerAuthority,
   });
 
-  const drawerAuthorityDirective =
-    await buildRuntimeDrawerAuthorityDirective(ctx, {
+  const drawerAuthorityDirective = await buildRuntimeDrawerAuthorityDirective(
+    ctx,
+    {
       activeRegisterSession,
       drawerAuthority,
       receivedAt,
       storeId: args.storeId,
-    });
+    },
+  );
   const activeRegisterSessionDirective =
     await buildRuntimeActiveRegisterSessionDirective(ctx, {
       activeRegisterSession,
@@ -605,11 +607,14 @@ async function buildRuntimeActiveRegisterSessionDirective(
     return undefined;
   }
 
-  const cloudRegisterSession = await getSaleUsableRegisterSessionForTerminal(ctx, {
-    registerNumber: args.terminal.registerNumber,
-    storeId: args.storeId,
-    terminalId: args.terminal._id,
-  });
+  const cloudRegisterSession = await getSaleUsableRegisterSessionForTerminal(
+    ctx,
+    {
+      registerNumber: args.terminal.registerNumber,
+      storeId: args.storeId,
+      terminalId: args.terminal._id,
+    },
+  );
   if (!cloudRegisterSession) {
     return undefined;
   }
@@ -661,7 +666,10 @@ async function getRuntimeActiveCloudRegisterSession(
     return null;
   }
 
-  const registerSession = await ctx.db.get("registerSession", registerSessionId);
+  const registerSession = await ctx.db.get(
+    "registerSession",
+    registerSessionId,
+  );
   if (!registerSession || registerSession.storeId !== args.storeId) {
     return null;
   }
@@ -677,52 +685,54 @@ async function getSaleUsableRegisterSessionForTerminal(
     terminalId: Id<"posTerminal">;
   },
 ): Promise<Doc<"registerSession"> | null> {
-  const recentByTerminal = await ctx.db
-    .query("registerSession")
-    .withIndex("by_terminalId", (q) => q.eq("terminalId", args.terminalId))
-    .order("desc")
-    .take(25);
-  const directMatch = recentByTerminal.find((session) =>
-    isSaleUsableRegisterSessionForRuntimeTerminal(session, args),
+  const registerNumber = args.registerNumber?.trim();
+  const recentSessionsByUsableStatus = await Promise.all(
+    POS_USABLE_REGISTER_SESSION_STATUSES.map((status) =>
+      ctx.db
+        .query("registerSession")
+        .withIndex("by_storeId_status_terminalId", (q) =>
+          q
+            .eq("storeId", args.storeId)
+            .eq("status", status)
+            .eq("terminalId", args.terminalId),
+        )
+        .order("desc")
+        .take(TERMINAL_REGISTER_SESSION_LOOKUP_LIMIT),
+    ),
+  );
+  const directMatch = latestCompatibleRegisterSessionCandidate(
+    recentSessionsByUsableStatus.flat(),
+    { registerNumber },
   );
   if (directMatch) return directMatch;
 
-  const registerNumber = args.registerNumber?.trim();
-  if (!registerNumber) {
-    return null;
-  }
+  return null;
+}
 
-  const recentByRegisterNumber = await ctx.db
-    .query("registerSession")
-    .withIndex("by_storeId_registerNumber", (q) =>
-      q.eq("storeId", args.storeId).eq("registerNumber", registerNumber),
-    )
-    .order("desc")
-    .take(25);
-
+function latestCompatibleRegisterSessionCandidate(
+  sessions: Array<Doc<"registerSession">>,
+  args: {
+    registerNumber?: string;
+  },
+) {
   return (
-    recentByRegisterNumber.find((session) =>
-      isSaleUsableRegisterSessionForRuntimeTerminal(session, args),
-    ) ?? null
+    sessions
+      .filter((session) => isRegisterNumberCompatible(session, args))
+      .sort((left, right) => right._creationTime - left._creationTime)[0] ??
+    null
   );
 }
 
-function isSaleUsableRegisterSessionForRuntimeTerminal(
-  session: Doc<"registerSession">,
+function isRegisterNumberCompatible(
+  session: Pick<Doc<"registerSession">, "registerNumber">,
   args: {
-    registerNumber?: string | null;
-    storeId: Id<"store">;
-    terminalId: Id<"posTerminal">;
+    registerNumber?: string;
   },
 ) {
-  const registerNumber = args.registerNumber?.trim();
   return (
-    session.storeId === args.storeId &&
-    session.terminalId === args.terminalId &&
-    (!registerNumber ||
-      !session.registerNumber ||
-      session.registerNumber === registerNumber) &&
-    isRegisterSessionSaleUsable(session)
+    !args.registerNumber ||
+    !session.registerNumber ||
+    session.registerNumber === args.registerNumber
   );
 }
 
@@ -750,7 +760,8 @@ async function buildRuntimeDrawerAuthorityDirective(
     args.drawerAuthority.reason === "cloud_closed" &&
     args.drawerAuthority.localRegisterSessionId ===
       session.localRegisterSessionId &&
-    args.drawerAuthority.cloudRegisterSessionId === session.cloudRegisterSessionId
+    args.drawerAuthority.cloudRegisterSessionId ===
+      session.cloudRegisterSessionId
   ) {
     return undefined;
   }
@@ -797,7 +808,10 @@ function cleanSaleAuthority(
     status: saleAuthorityStatuses.has(saleAuthority.status)
       ? saleAuthority.status
       : "unknown",
-    localPosSessionId: cleanOptionalString(saleAuthority.localPosSessionId, 120),
+    localPosSessionId: cleanOptionalString(
+      saleAuthority.localPosSessionId,
+      120,
+    ),
     localRegisterSessionId: cleanOptionalString(
       saleAuthority.localRegisterSessionId,
       120,

@@ -2,29 +2,28 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 
-type AthenaAuthCtx = Pick<QueryCtx, "auth" | "db"> | Pick<MutationCtx, "auth" | "db">;
+type AthenaAuthCtx =
+  | Pick<QueryCtx, "auth" | "db">
+  | Pick<MutationCtx, "auth" | "db">;
 type OrganizationMemberRole = "full_admin" | "pos_only";
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
 }
 
-async function findAthenaUserByEmailWithCtx(
-  ctx: AthenaAuthCtx,
-  email: string
-) {
+async function findAthenaUserByEmailWithCtx(ctx: AthenaAuthCtx, email: string) {
   const normalizedEmail = normalizeEmail(email);
   // Case-insensitive duplicate detection requires scanning until the schema gains
   // a normalized-email index for athenaUser records.
   // eslint-disable-next-line @convex-dev/no-collect-in-query
   const athenaUsers = await ctx.db.query("athenaUser").collect();
   const matchingUsers = athenaUsers.filter(
-    (athenaUser) => normalizeEmail(athenaUser.email) === normalizedEmail
+    (athenaUser) => normalizeEmail(athenaUser.email) === normalizedEmail,
   );
 
   if (matchingUsers.length > 1) {
     throw new Error(
-      "Multiple Athena users match this email. Resolve duplicate accounts before continuing."
+      "Multiple Athena users match this email. Resolve duplicate accounts before continuing.",
     );
   }
 
@@ -61,7 +60,9 @@ export async function getAuthenticatedAthenaUserWithCtx(ctx: AthenaAuthCtx) {
   return findAthenaUserByEmailWithCtx(ctx, authUserRecord.normalizedEmail);
 }
 
-export async function requireAuthenticatedAthenaUserWithCtx(ctx: AthenaAuthCtx) {
+export async function requireAuthenticatedAthenaUserWithCtx(
+  ctx: AthenaAuthCtx,
+) {
   const athenaUser = await getAuthenticatedAthenaUserWithCtx(ctx);
 
   if (!athenaUser) {
@@ -78,15 +79,12 @@ export async function requireOrganizationMemberRoleWithCtx(
     failureMessage: string;
     organizationId: Id<"organization">;
     userId: Id<"athenaUser">;
-  }
+  },
 ) {
   const membership = await ctx.db
     .query("organizationMember")
-    .filter((q) =>
-      q.and(
-        q.eq(q.field("organizationId"), args.organizationId),
-        q.eq(q.field("userId"), args.userId)
-      )
+    .withIndex("by_organizationId_userId", (q) =>
+      q.eq("organizationId", args.organizationId).eq("userId", args.userId),
     )
     .first();
 
@@ -106,7 +104,7 @@ export async function syncAuthenticatedAthenaUserWithCtx(ctx: MutationCtx) {
 
   const existingUser = await findAthenaUserByEmailWithCtx(
     ctx,
-    authUserRecord.normalizedEmail
+    authUserRecord.normalizedEmail,
   );
 
   if (existingUser) {

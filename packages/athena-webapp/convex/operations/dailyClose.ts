@@ -1095,22 +1095,30 @@ async function getPriorCompletedDailyClose(
     storeId: Id<"store">;
   },
 ) {
-  const completedCloses = await ctx.db
+  let scannedCloseCount = 0;
+  const completedCloses = ctx.db
     .query("dailyClose")
     .withIndex("by_storeId_status_operatingDate", (q) =>
-      q.eq("storeId", args.storeId).eq("status", "completed"),
+      q
+        .eq("storeId", args.storeId)
+        .eq("status", "completed")
+        .lt("operatingDate", args.operatingDate),
     )
-    .order("desc")
-    .take(DAILY_CLOSE_QUERY_LIMIT);
+    .order("desc");
 
-  return (
-    completedCloses.find(
-      (dailyClose) =>
-        dailyClose.operatingDate < args.operatingDate &&
-        (dailyClose.lifecycleStatus === undefined ||
-          dailyClose.lifecycleStatus === "active"),
-    ) ?? null
-  );
+  for await (const dailyClose of completedCloses) {
+    if (scannedCloseCount >= DAILY_CLOSE_QUERY_LIMIT) break;
+    scannedCloseCount += 1;
+
+    if (
+      dailyClose.lifecycleStatus === undefined ||
+      dailyClose.lifecycleStatus === "active"
+    ) {
+      return dailyClose;
+    }
+  }
+
+  return null;
 }
 
 async function listRegisterSessionsForDailyClose(

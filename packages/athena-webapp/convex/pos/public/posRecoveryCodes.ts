@@ -157,8 +157,9 @@ function formatRecoveryCode(compactCode: string) {
 }
 
 function generateRecoveryCode() {
-  const words = Array.from({ length: 2 }, () =>
-    POS_RECOVERY_CODE_WORDS[randomIndex(POS_RECOVERY_CODE_WORDS.length)],
+  const words = Array.from(
+    { length: 2 },
+    () => POS_RECOVERY_CODE_WORDS[randomIndex(POS_RECOVERY_CODE_WORDS.length)],
   );
   const number = randomIndex(100).toString().padStart(2, "0");
 
@@ -166,7 +167,10 @@ function generateRecoveryCode() {
 }
 
 function normalizeRecoveryCode(code: string) {
-  const compactCode = code.trim().toUpperCase().replace(/[\s-]+/g, "");
+  const compactCode = code
+    .trim()
+    .toUpperCase()
+    .replace(/[\s-]+/g, "");
 
   if (
     compactCode.length === POS_RECOVERY_CODE_LENGTH &&
@@ -177,7 +181,10 @@ function normalizeRecoveryCode(code: string) {
     return formatRecoveryCode(compactCode);
   }
 
-  return code.trim().toLowerCase().replace(/[-\s]+/g, "");
+  return code
+    .trim()
+    .toLowerCase()
+    .replace(/[-\s]+/g, "");
 }
 
 function getFailureAuditBucket(now: number) {
@@ -190,16 +197,15 @@ export async function hashPosRecoveryCode(args: {
 }) {
   const digest = await crypto.subtle.digest(
     "SHA-256",
-    new TextEncoder().encode(`${args.salt}:${normalizeRecoveryCode(args.code)}`),
+    new TextEncoder().encode(
+      `${args.salt}:${normalizeRecoveryCode(args.code)}`,
+    ),
   );
 
   return bytesToHex(digest);
 }
 
-async function findAthenaUserByEmail(
-  ctx: PosRecoveryCtx,
-  email: string,
-) {
+async function findAthenaUserByEmail(ctx: PosRecoveryCtx, email: string) {
   const normalizedEmail = normalizeEmail(email);
   // Case-insensitive lookup mirrors the existing Athena auth-sync helper until
   // athenaUser gains a normalized-email index.
@@ -224,7 +230,10 @@ async function findAuthUserByEmail(ctx: PosRecoveryCtx, email: string) {
   const users = await ctx.db.query("users").collect();
   const matches = users.filter((user) => {
     const candidate = "email" in user ? user.email : undefined;
-    return typeof candidate === "string" && normalizeEmail(candidate) === normalizedEmail;
+    return (
+      typeof candidate === "string" &&
+      normalizeEmail(candidate) === normalizedEmail
+    );
   });
 
   if (matches.length > 1) {
@@ -269,7 +278,7 @@ async function resolveRecoveryStore(
 
   const organization = await ctx.db
     .query("organization")
-    .filter((q) => q.eq(q.field("slug"), orgSlug))
+    .withIndex("by_slug", (q) => q.eq("slug", orgSlug))
     .first();
   if (!organization) {
     return null;
@@ -277,11 +286,8 @@ async function resolveRecoveryStore(
 
   return ctx.db
     .query("store")
-    .filter((q) =>
-      q.and(
-        q.eq(q.field("organizationId"), organization._id),
-        q.eq(q.field("slug"), storeSlug),
-      ),
+    .withIndex("by_organizationId_slug", (q) =>
+      q.eq("organizationId", organization._id).eq("slug", storeSlug),
     )
     .first();
 }
@@ -358,11 +364,10 @@ async function requireUsablePosRecoveryAccount(
 ) {
   const membership = await ctx.db
     .query("organizationMember")
-    .filter((q) =>
-      q.and(
-        q.eq(q.field("organizationId"), args.organizationId),
-        q.eq(q.field("userId"), args.account._id),
-      ),
+    .withIndex("by_organizationId_userId", (q) =>
+      q
+        .eq("organizationId", args.organizationId)
+        .eq("userId", args.account._id),
     )
     .first();
 
@@ -444,7 +449,10 @@ async function rotateCredentialWithCtx(
       rotatedByUserId: args.actorUserId,
       status: "active",
     });
-    const credential = (await ctx.db.get("posRecoveryCredential", existing._id))!;
+    const credential = (await ctx.db.get(
+      "posRecoveryCredential",
+      existing._id,
+    ))!;
     await recordRecoveryCodeEvent(ctx, {
       actorUserId: args.actorUserId,
       credential,
@@ -500,11 +508,8 @@ async function verifyCredentialWithCtx(
 
   const membership = await ctx.db
     .query("organizationMember")
-    .filter((q) =>
-      q.and(
-        q.eq(q.field("organizationId"), store.organizationId),
-        q.eq(q.field("userId"), account._id),
-      ),
+    .withIndex("by_organizationId_userId", (q) =>
+      q.eq("organizationId", store.organizationId).eq("userId", account._id),
     )
     .first();
 
@@ -597,7 +602,10 @@ export const getRecoveryCodeStatus = query({
   },
   handler: async (ctx, args) => {
     await requireFullAdminRecoveryAccess(ctx, args.storeId);
-    const account = await findAthenaUserByEmail(ctx, POS_RECOVERY_ACCOUNT_EMAIL);
+    const account = await findAthenaUserByEmail(
+      ctx,
+      POS_RECOVERY_ACCOUNT_EMAIL,
+    );
     if (!account) {
       return null;
     }

@@ -44,7 +44,10 @@ function getHandler(definition: unknown) {
 function createInventorySnapshotQueryCtx() {
   const tables = {
     athenaUser: new Map<string, Record<string, unknown>>([
-      ["athena-user-1", { _id: "athena-user-1", email: "operator@example.com" }],
+      [
+        "athena-user-1",
+        { _id: "athena-user-1", email: "operator@example.com" },
+      ],
     ]),
     category: new Map<string, Record<string, unknown>>([
       ["category-1", { _id: "category-1", name: "Hair" }],
@@ -171,8 +174,13 @@ function createInventorySnapshotQueryCtx() {
       take: async (limit: number) => filteredRecords().slice(0, limit),
       filter(
         applyFilter?: (queryBuilder: {
-          and: (...predicates: Array<(row: Record<string, unknown>) => boolean>) => (row: Record<string, unknown>) => boolean;
-          eq: (field: string, value: unknown) => (row: Record<string, unknown>) => boolean;
+          and: (
+            ...predicates: Array<(row: Record<string, unknown>) => boolean>
+          ) => (row: Record<string, unknown>) => boolean;
+          eq: (
+            field: string,
+            value: unknown,
+          ) => (row: Record<string, unknown>) => boolean;
           field: (field: string) => string;
         }) => (row: Record<string, unknown>) => boolean,
       ) {
@@ -372,9 +380,7 @@ function createApprovalDecisionMutationCtx() {
     skuActivityEvent: 0,
   };
 
-  const queryTable = (
-    table: keyof typeof tables,
-  ) => ({
+  const queryTable = (table: keyof typeof tables) => ({
     withIndex(
       _index: string,
       applyIndex: (query: {
@@ -680,7 +686,32 @@ function createSubmissionMutationCtx(args: {
         }
 
         if (table === "organizationMember") {
+          const findMember = (filters: Array<[string, unknown]>) =>
+            Array.from(tables.organizationMember.values()).find((record) =>
+              filters.every(([field, value]) => record[field] === value),
+            ) ?? null;
+
           return {
+            withIndex(
+              _index: string,
+              applyIndex: (queryBuilder: {
+                eq: (field: string, value: unknown) => unknown;
+              }) => unknown,
+            ) {
+              const filters: Array<[string, unknown]> = [];
+              const queryBuilder = {
+                eq(field: string, value: unknown) {
+                  filters.push([field, value]);
+                  return queryBuilder;
+                },
+              };
+
+              applyIndex(queryBuilder);
+
+              return {
+                first: async () => findMember(filters),
+              };
+            },
             filter(
               applyFilter: (queryBuilder: {
                 and: (...conditions: unknown[]) => unknown;
@@ -703,13 +734,7 @@ function createSubmissionMutationCtx(args: {
               applyFilter(queryBuilder);
 
               return {
-                first: async () =>
-                  Array.from(tables.organizationMember.values()).find(
-                    (record) =>
-                      filters.every(
-                        ([field, value]) => record[field] === value,
-                      ),
-                  ) ?? null,
+                first: async () => findMember(filters),
               };
             },
           };
@@ -1874,45 +1899,48 @@ describe("stock ops adjustments", () => {
         });
       },
     ],
-  ])("blocks zero-sale provisional rows with %s", async (caseName, mutateTables) => {
-    const { ctx, tables } = createSubmissionMutationCtx({
-      authUserId: "auth-user-1",
-      membershipRole: "full_admin",
-    });
+  ])(
+    "blocks zero-sale provisional rows with %s",
+    async (caseName, mutateTables) => {
+      const { ctx, tables } = createSubmissionMutationCtx({
+        authUserId: "auth-user-1",
+        membershipRole: "full_admin",
+      });
 
-    mutateTables(tables);
-    tables.inventoryImportProvisionalSku.set("provisional-1", {
-      _id: "provisional-1",
-      productId: "product-1",
-      productSkuId: "sku-1",
-      saleEvidence: {
-        saleCount: 0,
-        totalQuantitySold: 0,
-      },
-      status: "active",
-      storeId: "store-1",
-    });
+      mutateTables(tables);
+      tables.inventoryImportProvisionalSku.set("provisional-1", {
+        _id: "provisional-1",
+        productId: "product-1",
+        productSkuId: "sku-1",
+        saleEvidence: {
+          saleCount: 0,
+          totalQuantitySold: 0,
+        },
+        status: "active",
+        storeId: "store-1",
+      });
 
-    await expect(
-      submitStockAdjustmentBatchWithCtx(ctx, {
-        adjustmentType: "manual",
-        lineItems: [
-          {
-            productSkuId: "sku-1" as Id<"productSku">,
-            quantityDelta: 1,
-          },
-        ],
-        reasonCode: "correction",
-        storeId: "store-1" as Id<"store">,
-        submissionKey: `invalid-taxonomy-${caseName.replaceAll(" ", "-")}`,
-      }),
-    ).rejects.toThrow(
-      "Legacy import SKUs must be finalized before stock adjustments can update them.",
-    );
+      await expect(
+        submitStockAdjustmentBatchWithCtx(ctx, {
+          adjustmentType: "manual",
+          lineItems: [
+            {
+              productSkuId: "sku-1" as Id<"productSku">,
+              quantityDelta: 1,
+            },
+          ],
+          reasonCode: "correction",
+          storeId: "store-1" as Id<"store">,
+          submissionKey: `invalid-taxonomy-${caseName.replaceAll(" ", "-")}`,
+        }),
+      ).rejects.toThrow(
+        "Legacy import SKUs must be finalized before stock adjustments can update them.",
+      );
 
-    expect(tables.inventoryMovement.size).toBe(0);
-    expect(tables.stockAdjustmentBatch.size).toBe(0);
-  });
+      expect(tables.inventoryMovement.size).toBe(0);
+      expect(tables.stockAdjustmentBatch.size).toBe(0);
+    },
+  );
 
   it("rejects stock adjustments for unresolved POS pending checkout SKUs", async () => {
     const { ctx, tables } = createSubmissionMutationCtx({

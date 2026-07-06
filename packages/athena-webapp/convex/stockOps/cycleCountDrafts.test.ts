@@ -140,7 +140,32 @@ function createCycleCountDraftCtx() {
         }
 
         if (table === "organizationMember") {
+          const findMember = (filters: Array<[string, unknown]>) =>
+            Array.from(tables.organizationMember.values()).find((record) =>
+              filters.every(([field, value]) => record[field] === value),
+            ) ?? null;
+
           return {
+            withIndex(
+              _index: string,
+              applyIndex: (queryBuilder: {
+                eq: (field: string, value: unknown) => unknown;
+              }) => unknown,
+            ) {
+              const filters: Array<[string, unknown]> = [];
+              const queryBuilder = {
+                eq(field: string, value: unknown) {
+                  filters.push([field, value]);
+                  return queryBuilder;
+                },
+              };
+
+              applyIndex(queryBuilder);
+
+              return {
+                first: async () => findMember(filters),
+              };
+            },
             filter(
               applyFilter: (queryBuilder: {
                 and: (...conditions: unknown[]) => unknown;
@@ -163,13 +188,7 @@ function createCycleCountDraftCtx() {
               applyFilter(queryBuilder);
 
               return {
-                first: async () =>
-                  Array.from(tables.organizationMember.values()).find(
-                    (record) =>
-                      filters.every(
-                        ([field, value]) => record[field] === value,
-                      ),
-                  ) ?? null,
+                first: async () => findMember(filters),
               };
             },
           };

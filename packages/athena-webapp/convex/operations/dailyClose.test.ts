@@ -68,6 +68,13 @@ function createDb(seed: Partial<Record<TableName, Row[]>> = {}) {
     table: TableName;
     value: Record<string, unknown>;
   }> = [];
+  const queryLog: Array<{
+    filters: Array<
+      [string, unknown | { gte?: unknown; lt?: unknown; lte?: unknown }]
+    >;
+    index: string;
+    table: TableName;
+  }> = [];
 
   const tableFor = (table: TableName) => {
     if (!tables.has(table)) {
@@ -143,8 +150,13 @@ function createDb(seed: Partial<Record<TableName, Row[]>> = {}) {
         return chain;
       },
       take: async (limit: number) => filteredRows().slice(0, limit),
+      async *[Symbol.asyncIterator]() {
+        for (const row of filteredRows()) {
+          yield row;
+        }
+      },
       withIndex(
-        _index: string,
+        index: string,
         applyIndex: (builder: {
           eq: (field: string, value: unknown) => typeof builder;
           gte: (field: string, value: unknown) => typeof builder;
@@ -152,26 +164,34 @@ function createDb(seed: Partial<Record<TableName, Row[]>> = {}) {
           lte: (field: string, value: unknown) => typeof builder;
         }) => unknown,
       ) {
+        const indexFilters: Array<
+          [string, unknown | { gte?: unknown; lt?: unknown; lte?: unknown }]
+        > = [];
         const builder = {
           eq(field: string, value: unknown) {
             filters.push([field, value]);
+            indexFilters.push([field, value]);
             return builder;
           },
           gte(field: string, value: unknown) {
             filters.push([field, { gte: value }]);
+            indexFilters.push([field, { gte: value }]);
             return builder;
           },
           lt(field: string, value: unknown) {
             filters.push([field, { lt: value }]);
+            indexFilters.push([field, { lt: value }]);
             return builder;
           },
           lte(field: string, value: unknown) {
             filters.push([field, { lte: value }]);
+            indexFilters.push([field, { lte: value }]);
             return builder;
           },
         };
 
         applyIndex(builder);
+        queryLog.push({ filters: indexFilters, index, table });
         return chain;
       },
     };
@@ -233,7 +253,7 @@ function createDb(seed: Partial<Record<TableName, Row[]>> = {}) {
     throw new Error(`Missing row ${id}`);
   }
 
-  return { db, inserts, patches, tables };
+  return { db, inserts, patches, queryLog, tables };
 }
 
 const store = {
@@ -5923,6 +5943,85 @@ describe("end-of-day review backend foundation", () => {
     ).not.toHaveProperty("totalPaid");
     expect(broadDetail?.reportSnapshot.sourceSubjects).toEqual([]);
     expect(patches).toEqual([]);
+  });
+
+  it("pushes the prior completed close date boundary into the daily close index", async () => {
+    const newerCompletedCloses = Array.from({ length: 250 }, (_, index) => {
+      const operatingDate = new Date(Date.UTC(2026, 6, 1 + index))
+        .toISOString()
+        .slice(0, 10);
+
+      return {
+        _id: `daily-close-newer-${index}`,
+        carryForwardWorkItemIds: [],
+        completedAt: Date.UTC(2026, 6, 1 + index, 22),
+        createdAt: Date.UTC(2026, 6, 1 + index, 22),
+        isCurrent: false,
+        lifecycleStatus: "active",
+        operatingDate,
+        organizationId: "org-1",
+        readiness: {
+          blockerCount: 0,
+          carryForwardCount: 0,
+          readyCount: 1,
+          reviewCount: 0,
+          status: "ready",
+        },
+        sourceSubjects: [],
+        status: "completed",
+        storeId: "store-1",
+        summary: dailyCloseSummary({ salesTotal: index + 1 }),
+        updatedAt: Date.UTC(2026, 6, 1 + index, 22),
+      };
+    });
+    const priorCompletedClose = {
+      _id: "daily-close-prior-indexed",
+      carryForwardWorkItemIds: [],
+      completedAt: Date.UTC(2026, 4, 7, 22),
+      createdAt: Date.UTC(2026, 4, 7, 22),
+      isCurrent: false,
+      lifecycleStatus: "active",
+      operatingDate: "2026-05-07",
+      organizationId: "org-1",
+      readiness: {
+        blockerCount: 0,
+        carryForwardCount: 0,
+        readyCount: 1,
+        reviewCount: 0,
+        status: "ready",
+      },
+      sourceSubjects: [],
+      status: "completed",
+      storeId: "store-1",
+      summary: dailyCloseSummary({ salesTotal: 45_000 }),
+      updatedAt: Date.UTC(2026, 4, 7, 22),
+    };
+    const { db, queryLog } = createDb({
+      dailyClose: [priorCompletedClose, ...newerCompletedCloses],
+      store: [store],
+    });
+
+    const snapshot = await buildDailyCloseSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      {
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(snapshot.priorClose?._id).toBe("daily-close-prior-indexed");
+    expect(snapshot.priorDaySummary).toMatchObject({
+      salesTotal: 45_000,
+    });
+    const priorCloseQuery = queryLog.find(
+      (entry) =>
+        entry.table === "dailyClose" &&
+        entry.index === "by_storeId_status_operatingDate",
+    );
+    expect(priorCloseQuery?.filters).toContainEqual([
+      "operatingDate",
+      { lt: "2026-05-08" },
+    ]);
   });
 
   it("keeps human completion attribution when stale automation runs exist", async () => {

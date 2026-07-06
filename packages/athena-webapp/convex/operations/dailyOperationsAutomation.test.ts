@@ -73,34 +73,26 @@ function createDb(seed: Partial<Record<TableName, Row[]>> = {}) {
 
   const query = (table: TableName) => {
     const filters: Array<
-      [string, unknown | { gte?: number; lt?: number; lte?: number }]
+      [string, unknown | { gte?: unknown; lt?: unknown; lte?: unknown }]
     > = [];
     let sortDirection: "asc" | "desc" = "asc";
+    const compareValues = (left: unknown, right: unknown) =>
+      typeof left === "number" && typeof right === "number"
+        ? left - right
+        : String(left ?? "").localeCompare(String(right ?? ""));
     const filteredRows = () => {
       const rows = Array.from(tableFor(table).values()).filter((row) =>
         filters.every(([field, value]) => {
           if (value && typeof value === "object" && !Array.isArray(value)) {
-            if (
-              "gte" in value &&
-              typeof value.gte === "number" &&
-              Number(row[field]) < value.gte
-            ) {
+            if ("gte" in value && compareValues(row[field], value.gte) < 0) {
               return false;
             }
 
-            if (
-              "lt" in value &&
-              typeof value.lt === "number" &&
-              Number(row[field]) >= value.lt
-            ) {
+            if ("lt" in value && compareValues(row[field], value.lt) >= 0) {
               return false;
             }
 
-            if (
-              "lte" in value &&
-              typeof value.lte === "number" &&
-              Number(row[field]) > value.lte
-            ) {
+            if ("lte" in value && compareValues(row[field], value.lte) > 0) {
               return false;
             }
 
@@ -127,6 +119,9 @@ function createDb(seed: Partial<Record<TableName, Row[]>> = {}) {
     const chain = {
       collect: async () => filteredRows(),
       first: async () => filteredRows()[0] ?? null,
+      async *[Symbol.asyncIterator]() {
+        yield* filteredRows();
+      },
       order(direction: "asc" | "desc") {
         sortDirection = direction;
         return chain;
@@ -136,9 +131,9 @@ function createDb(seed: Partial<Record<TableName, Row[]>> = {}) {
         _index: string,
         applyIndex: (builder: {
           eq: (field: string, value: unknown) => typeof builder;
-          gte: (field: string, value: number) => typeof builder;
-          lt: (field: string, value: number) => typeof builder;
-          lte: (field: string, value: number) => typeof builder;
+          gte: (field: string, value: unknown) => typeof builder;
+          lt: (field: string, value: unknown) => typeof builder;
+          lte: (field: string, value: unknown) => typeof builder;
         }) => unknown,
       ) {
         const builder = {
@@ -146,15 +141,15 @@ function createDb(seed: Partial<Record<TableName, Row[]>> = {}) {
             filters.push([field, value]);
             return builder;
           },
-          gte(field: string, value: number) {
+          gte(field: string, value: unknown) {
             filters.push([field, { gte: value }]);
             return builder;
           },
-          lt(field: string, value: number) {
+          lt(field: string, value: unknown) {
             filters.push([field, { lt: value }]);
             return builder;
           },
-          lte(field: string, value: number) {
+          lte(field: string, value: unknown) {
             filters.push([field, { lte: value }]);
             return builder;
           },

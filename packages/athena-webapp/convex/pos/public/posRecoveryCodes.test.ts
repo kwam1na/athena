@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import type { Id } from "../../_generated/dataModel";
 
@@ -61,6 +63,23 @@ describe("POS recovery codes", () => {
     });
   });
 
+  it("defines indexes for recovery store and membership lookups", () => {
+    const schemaSource = readFileSync(
+      join(process.cwd(), "convex", "schema.ts"),
+      "utf8",
+    );
+
+    expect(schemaSource).toContain(
+      'organization: defineTable(organizationSchema).index("by_slug", ["slug"])',
+    );
+    expect(schemaSource).toContain(
+      '.index("by_organizationId_slug", ["organizationId", "slug"])',
+    );
+    expect(schemaSource).toContain(
+      '.index("by_organizationId_userId", ["organizationId", "userId"])',
+    );
+  });
+
   it("creates a persisted credential and verifies the generated code", async () => {
     const ctx = buildCtx();
     const create = getHandler(createOrRotateRecoveryCodeForTest);
@@ -112,6 +131,13 @@ describe("POS recovery codes", () => {
         storeUrlSlug: "wigclub",
       }),
     ).resolves.toEqual({ authUserId: AUTH_USER_ID });
+    expect(ctx.queryLog).toEqual(
+      expect.arrayContaining([
+        "by_slug",
+        "by_organizationId_slug",
+        "by_organizationId_userId",
+      ]),
+    );
   });
 
   it("accepts recovery codes without exact casing or word separators", async () => {
@@ -210,7 +236,9 @@ describe("POS recovery codes", () => {
       }),
     );
     expect(ctx.tables.posRecoveryCredential[0]).not.toHaveProperty("lockedAt");
-    expect(ctx.tables.posRecoveryCredential[0]).not.toHaveProperty("lockedUntil");
+    expect(ctx.tables.posRecoveryCredential[0]).not.toHaveProperty(
+      "lockedUntil",
+    );
     const failedAttemptEvents = ctx.tables.operationalEvent.filter(
       (event) => event.eventType === "pos_recovery_code_login_failed",
     );
@@ -336,23 +364,26 @@ describe("POS recovery codes", () => {
       },
       reason: "POS recovery account auth user is not configured.",
     },
-  ])("does not generate recovery codes for $label", async ({ mutate, reason }) => {
-    const ctx = buildCtx();
-    const rotate = getHandler(rotateRecoveryCode);
-    mutate(ctx);
+  ])(
+    "does not generate recovery codes for $label",
+    async ({ mutate, reason }) => {
+      const ctx = buildCtx();
+      const rotate = getHandler(rotateRecoveryCode);
+      mutate(ctx);
 
-    authServerMocks.getAuthUserId.mockResolvedValue(FULL_ADMIN_AUTH_USER_ID);
-    await expect(rotate(ctx, { storeId: STORE_ID })).rejects.toThrow(reason);
+      authServerMocks.getAuthUserId.mockResolvedValue(FULL_ADMIN_AUTH_USER_ID);
+      await expect(rotate(ctx, { storeId: STORE_ID })).rejects.toThrow(reason);
 
-    expect(ctx.tables.posRecoveryCredential).toHaveLength(0);
-    expect(ctx.tables.operationalEvent).not.toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          eventType: expect.stringMatching(/^pos_recovery_code_/),
-        }),
-      ]),
-    );
-  });
+      expect(ctx.tables.posRecoveryCredential).toHaveLength(0);
+      expect(ctx.tables.operationalEvent).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            eventType: expect.stringMatching(/^pos_recovery_code_/),
+          }),
+        ]),
+      );
+    },
+  );
 
   it.each([
     {
@@ -562,7 +593,9 @@ function buildCtx() {
     ],
   };
 
+  const queryLog: string[] = [];
   const ctx = {
+    queryLog,
     tables,
     db: {
       get: vi.fn(async (tableOrId: string, maybeId?: string) => {
@@ -580,25 +613,33 @@ function buildCtx() {
         tables[table].push({ _id: id, _creationTime: Date.now(), ...value });
         return id;
       }),
-      patch: vi.fn(async (...args: [string, string, Record<string, unknown>] | [string, Record<string, unknown>]) => {
-        const id = args.length === 3 ? args[1] : args[0];
-        const patch = args.length === 3 ? args[2] : args[1];
-        const row = Object.values(tables)
-          .flat()
-          .find((candidate) => candidate._id === id);
-        if (!row) {
-          throw new Error(`Missing row ${id}`);
-        }
-        Object.assign(row, patch);
-      }),
-      query: vi.fn((table: string) => createQuery(tables[table] ?? [])),
+      patch: vi.fn(
+        async (
+          ...args:
+            | [string, string, Record<string, unknown>]
+            | [string, Record<string, unknown>]
+        ) => {
+          const id = args.length === 3 ? args[1] : args[0];
+          const patch = args.length === 3 ? args[2] : args[1];
+          const row = Object.values(tables)
+            .flat()
+            .find((candidate) => candidate._id === id);
+          if (!row) {
+            throw new Error(`Missing row ${id}`);
+          }
+          Object.assign(row, patch);
+        },
+      ),
+      query: vi.fn((table: string) =>
+        createQuery(tables[table] ?? [], queryLog),
+      ),
     },
   };
 
   return ctx;
 }
 
-function createQuery(rows: any[]) {
+function createQuery(rows: any[], queryLog: string[]) {
   let currentRows = rows;
   const query = {
     collect: vi.fn(async () => currentRows),
@@ -608,7 +649,8 @@ function createQuery(rows: any[]) {
     }),
     first: vi.fn(async () => currentRows[0] ?? null),
     take: vi.fn(async (limit: number) => currentRows.slice(0, limit)),
-    withIndex: vi.fn((_name: string, predicate?: Function) => {
+    withIndex: vi.fn((name: string, predicate?: Function) => {
+      queryLog.push(name);
       if (predicate) {
         const indexBuilder = {
           eq: (field: string, value: unknown) => {

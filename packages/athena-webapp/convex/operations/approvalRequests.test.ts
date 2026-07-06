@@ -179,7 +179,32 @@ function createApprovalRequestMutationCtx(args: {
     }
 
     if (table === "organizationMember") {
+      const findMember = (filters: Array<[string, unknown]>) =>
+        Array.from(tables.organizationMember.values()).find((record) =>
+          filters.every(([field, value]) => record[field] === value),
+        ) ?? null;
+
       return {
+        withIndex(
+          _index: string,
+          applyIndex: (queryBuilder: {
+            eq: (field: string, value: unknown) => unknown;
+          }) => unknown,
+        ) {
+          const filters: Array<[string, unknown]> = [];
+          const queryBuilder = {
+            eq(field: string, value: unknown) {
+              filters.push([field, value]);
+              return queryBuilder;
+            },
+          };
+
+          applyIndex(queryBuilder);
+
+          return {
+            first: async () => findMember(filters),
+          };
+        },
         filter(
           applyFilter: (queryBuilder: {
             and: (...conditions: unknown[]) => unknown;
@@ -202,10 +227,7 @@ function createApprovalRequestMutationCtx(args: {
           applyFilter(queryBuilder);
 
           return {
-            first: async () =>
-              Array.from(tables.organizationMember.values()).find((record) =>
-                filters.every(([field, value]) => record[field] === value),
-              ) ?? null,
+            first: async () => findMember(filters),
           };
         },
       };
@@ -600,16 +622,17 @@ describe("approval request helpers", () => {
     await expect(
       decideApprovalRequestAsAuthenticatedUserWithCtx(ctx, {
         approvalProofId: "proof-service-deposit" as Id<"approvalProof">,
-        approvalRequestId:
-          "approval-service-deposit" as Id<"approvalRequest">,
+        approvalRequestId: "approval-service-deposit" as Id<"approvalRequest">,
         decision: "approved",
       }),
     ).rejects.toThrow("Service deposit approval reviews can only be retired.");
 
-    expect(tables.approvalProof.get("proof-service-deposit")).not.toHaveProperty(
-      "consumedAt",
-    );
-    expect(tables.approvalRequest.get("approval-service-deposit")).toMatchObject({
+    expect(
+      tables.approvalProof.get("proof-service-deposit"),
+    ).not.toHaveProperty("consumedAt");
+    expect(
+      tables.approvalRequest.get("approval-service-deposit"),
+    ).toMatchObject({
       status: "pending",
     });
   });
@@ -684,10 +707,11 @@ describe("approval request helpers", () => {
       subjectId: "approval-item-1",
       subjectLabel: "pos_item_adjustment",
     });
-    vi.mocked(resolveTransactionItemAdjustmentApprovalDecisionWithCtx)
-      .mockRejectedValueOnce(
-        new Error("Register session expected cash cannot be negative."),
-      );
+    vi.mocked(
+      resolveTransactionItemAdjustmentApprovalDecisionWithCtx,
+    ).mockRejectedValueOnce(
+      new Error("Register session expected cash cannot be negative."),
+    );
 
     await expect(
       decideApprovalRequestAsCommandWithCtx(ctx, {
@@ -714,7 +738,9 @@ describe("approval request helpers", () => {
       reviewedByUserId: "manager-1",
       status: "cancelled",
     });
-    expect(tables.approvalRequest.get("approval-item-1")?.metadata).toMatchObject({
+    expect(
+      tables.approvalRequest.get("approval-item-1")?.metadata,
+    ).toMatchObject({
       applyFailureMessage: "Register session expected cash cannot be negative.",
     });
   });
@@ -738,12 +764,13 @@ describe("approval request helpers", () => {
       subjectId: "approval-item-1",
       subjectLabel: "pos_item_adjustment",
     });
-    vi.mocked(resolveTransactionItemAdjustmentApprovalDecisionWithCtx)
-      .mockRejectedValueOnce(
-        new Error(
-          "This transaction already has an item adjustment waiting for approval.",
-        ),
-      );
+    vi.mocked(
+      resolveTransactionItemAdjustmentApprovalDecisionWithCtx,
+    ).mockRejectedValueOnce(
+      new Error(
+        "This transaction already has an item adjustment waiting for approval.",
+      ),
+    );
 
     await expect(
       decideApprovalRequestAsCommandWithCtx(ctx, {
@@ -827,12 +854,12 @@ describe("approval request helpers", () => {
         status: "rejected",
       },
     });
-    expect(
-      tables.operationalWorkItem.get("work-item-service-1"),
-    ).toMatchObject({
-      approvalState: "rejected",
-      status: "cancelled",
-    });
+    expect(tables.operationalWorkItem.get("work-item-service-1")).toMatchObject(
+      {
+        approvalState: "rejected",
+        status: "cancelled",
+      },
+    );
   });
 
   it("does not retire unrelated work items from stale legacy approval links", async () => {
@@ -879,11 +906,13 @@ describe("approval request helpers", () => {
         status: "rejected",
       },
     });
-    expect(tables.operationalWorkItem.get("work-item-unrelated")).toMatchObject({
-      approvalRequestId: "approval-other",
-      approvalState: "pending",
-      status: "open",
-    });
+    expect(tables.operationalWorkItem.get("work-item-unrelated")).toMatchObject(
+      {
+        approvalRequestId: "approval-other",
+        approvalState: "pending",
+        status: "open",
+      },
+    );
   });
 
   it.each([
@@ -942,13 +971,13 @@ describe("approval request helpers", () => {
           status: "rejected",
         },
       });
-      expect(tables.operationalWorkItem.get("work-item-mismatch")).toMatchObject(
-        {
-          approvalState: "pending",
-          status: "open",
-          [field]: value,
-        },
-      );
+      expect(
+        tables.operationalWorkItem.get("work-item-mismatch"),
+      ).toMatchObject({
+        approvalState: "pending",
+        status: "open",
+        [field]: value,
+      });
     },
   );
 
@@ -1042,7 +1071,9 @@ describe("approval request helpers", () => {
       subjectId: "approval-void-1",
       subjectLabel: "pos_transaction_void",
     });
-    vi.mocked(resolveTransactionVoidApprovalDecisionWithCtx).mockRejectedValueOnce(
+    vi.mocked(
+      resolveTransactionVoidApprovalDecisionWithCtx,
+    ).mockRejectedValueOnce(
       new Error("Drawer closed. Open the drawer before voiding this sale."),
     );
 
