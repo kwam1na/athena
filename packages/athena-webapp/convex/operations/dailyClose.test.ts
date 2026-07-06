@@ -522,6 +522,25 @@ describe("end-of-day review backend foundation", () => {
         },
       }),
     ).not.toThrow();
+
+    expect(() =>
+      assertConformsToExportedReturns(resolveDailyCloseCarryForward, {
+        kind: "ok",
+        data: {
+          action: "completed",
+          operationalEventId: "event-1",
+          workItem: {
+            _creationTime: 1,
+            _id: "work-item-1",
+            organizationId: "org-1",
+            status: "completed",
+            storeId: "store-1",
+            title: "Follow up with customer",
+            type: "daily_close_carry_forward",
+          },
+        },
+      }),
+    ).not.toThrow();
   });
 
   it("derives public daily close completion requester user from auth instead of caller args", async () => {

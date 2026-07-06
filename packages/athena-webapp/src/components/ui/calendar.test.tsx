@@ -19,7 +19,7 @@ describe("Calendar", () => {
     const selectedDay = screen.getByRole("gridcell", { name: "15" });
 
     expect(selectedDay).toHaveAttribute("aria-selected", "true");
-    expect(selectedDay.querySelector("button")).toHaveClass(
+    expect(selectedDay).toHaveClass(
       "data-[selected-single=true]:bg-action-workflow",
       "data-[selected-single=true]:text-action-workflow-foreground"
     );
@@ -37,7 +37,7 @@ describe("Calendar", () => {
     );
 
     for (const dropdown of screen.getAllByRole("combobox")) {
-      expect(dropdown.closest(".rdp-dropdown_root")).toHaveClass(
+      expect(dropdown).toHaveClass(
         "border-input",
         "has-focus:ring-[3px]"
       );
