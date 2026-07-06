@@ -9,8 +9,9 @@ describe("finalized lineage remediation", () => {
       classifyFinalizedLineageRepairConflicts(
         [
           repairConflict("conflict-1"),
+          closedRegisterReplayConflict("conflict-2"),
           {
-            ...repairConflict("conflict-2"),
+            ...repairConflict("conflict-3"),
             status: "resolved",
           },
         ],
@@ -18,7 +19,7 @@ describe("finalized lineage remediation", () => {
       ),
     ).toEqual({
       kind: "repairable",
-      repairedConflictCount: 1,
+      repairedConflictCount: 2,
     });
   });
 
@@ -71,5 +72,16 @@ function repairConflict(id: string): LocalSyncConflictRecord {
     summary: "Provisional import row changed before this offline sale synced.",
     details: {},
     createdAt: 1_700_000_000_000,
+  };
+}
+
+function closedRegisterReplayConflict(id: string): LocalSyncConflictRecord {
+  return {
+    ...repairConflict(id),
+    conflictType: "permission",
+    summary: "Register was not open before this sale synced.",
+    details: {
+      status: "closed",
+    },
   };
 }

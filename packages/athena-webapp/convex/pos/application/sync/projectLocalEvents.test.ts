@@ -6450,6 +6450,77 @@ describe("projectLocalSyncEvent", () => {
     },
   );
 
+  it("allows finalized-lineage repair replay against a closed register when the sale happened before closeout", async () => {
+    const repository = createProjectionRepository({
+      registerSession: {
+        _id: "register-session-1",
+        expectedCash: 100,
+        closeoutRecords: [],
+        closedAt: 200,
+        countedCash: 100,
+        registerNumber: "1",
+        status: "closed",
+        variance: 0,
+      },
+      sku: {
+        _id: "sku-1",
+        storeId: "store-1",
+        productId: "product-1",
+        sku: "CAP-1",
+        price: 25,
+        quantityAvailable: 5,
+        inventoryCount: 5,
+        images: [],
+      },
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: {
+        ...buildSaleCompletedEvent({
+          occurredAt: 150,
+          payload: {
+            ...buildSaleCompletedEvent().payload,
+            payments: [
+              {
+                localPaymentId: "local-payment-1",
+                method: "mobile_money",
+                amount: 25,
+                timestamp: 151,
+              },
+            ],
+          },
+        }),
+        staffProofToken: undefined,
+      },
+      syncEventId: "sync-event-1",
+      now: 250,
+      options: {
+        allowClosedRegisterSaleProjection: true,
+        repairRunId: "repair-run-1",
+        trustStoredStaffProof: true,
+      },
+    });
+
+    expect(result.status).toBe("projected");
+    expect(result.conflicts).toEqual([]);
+    expect(repository.createdTransactions).toEqual([
+      expect.objectContaining({
+        registerSessionId: "register-session-1",
+        transactionNumber: "LR-001",
+      }),
+    ]);
+    expect(repository.registerSessionPatches).toEqual([
+      {
+        registerSessionId: "register-session-1",
+        patch: {
+          workflowTraceId: "register-trace-1",
+        },
+      },
+    ]);
+  });
+
   it("projects a synced closeout as idempotent when the register was already closed with the same count", async () => {
     const repository = createProjectionRepository({
       registerSession: {
