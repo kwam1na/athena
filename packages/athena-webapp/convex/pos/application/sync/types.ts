@@ -10,10 +10,7 @@ import type { RegisterSessionCloseoutHold } from "./registerSessionCloseoutHolds
 export type { PosLocalSyncEventStatus, PosLocalSyncEventType };
 
 export type PosLocalSyncConflictType =
-  | "duplicate_local_id"
-  | "inventory"
-  | "payment"
-  | "permission";
+  "duplicate_local_id" | "inventory" | "payment" | "permission";
 
 export type PosLocalSyncMappingKind =
   | "registerSession"
@@ -73,7 +70,8 @@ export type PosLocalPendingCheckoutItemDefinedPayload = {
   lookupCode?: string;
   searchContext?: {
     query?: string;
-    source?: "barcode" | "lookup_code" | "manual" | "catalog_search" | "unknown";
+    source?:
+      "barcode" | "lookup_code" | "manual" | "catalog_search" | "unknown";
     matched?: "existing_product" | "pending_checkout_item" | "none" | "unknown";
   };
   price: number;
@@ -183,15 +181,24 @@ type ParsedPosLocalSyncExpenseEventBase<
 };
 
 export type ParsedPosLocalSyncEventInput =
-  | ParsedPosLocalSyncPosEventBase<"register_opened", PosLocalRegisterOpenedPayload>
+  | ParsedPosLocalSyncPosEventBase<
+      "register_opened",
+      PosLocalRegisterOpenedPayload
+    >
   | ParsedPosLocalSyncPosEventBase<
       "pending_checkout_item_defined",
       PosLocalPendingCheckoutItemDefinedPayload
     >
   | ParsedPosLocalSyncPosEventBase<"sale_completed", PosLocalSalePayload>
   | ParsedPosLocalSyncPosEventBase<"sale_cleared", PosLocalSaleClearedPayload>
-  | ParsedPosLocalSyncPosEventBase<"register_closed", PosLocalRegisterClosedPayload>
-  | ParsedPosLocalSyncPosEventBase<"register_reopened", PosLocalRegisterReopenedPayload>
+  | ParsedPosLocalSyncPosEventBase<
+      "register_closed",
+      PosLocalRegisterClosedPayload
+    >
+  | ParsedPosLocalSyncPosEventBase<
+      "register_reopened",
+      PosLocalRegisterReopenedPayload
+    >
   | ParsedPosLocalSyncExpenseEventBase<
       "expense_recorded",
       PosLocalExpenseRecordedPayload
@@ -233,12 +240,11 @@ type LocalSyncMappingRecordBase = {
   createdAt: number;
 };
 
-export type LocalSyncMappingRecord =
-  LocalSyncMappingRecordBase & {
-    localIdKind: PosLocalSyncMappingKind;
-    cloudTable: string;
-    cloudId: string;
-  };
+export type LocalSyncMappingRecord = LocalSyncMappingRecordBase & {
+  localIdKind: PosLocalSyncMappingKind;
+  cloudTable: string;
+  cloudId: string;
+};
 
 export type LocalSyncMappingRecordInput = Omit<LocalSyncMappingRecord, "_id">;
 
@@ -305,7 +311,9 @@ export type PosSyncWorkflowTraceResult = {
 };
 
 export type SyncProjectionRepository = {
-  getTerminal(terminalId: Id<"posTerminal">): Promise<Doc<"posTerminal"> | null>;
+  getTerminal(
+    terminalId: Id<"posTerminal">,
+  ): Promise<Doc<"posTerminal"> | null>;
   getStaffProfile(
     staffProfileId: Id<"staffProfile">,
   ): Promise<Doc<"staffProfile"> | null>;
@@ -333,7 +341,9 @@ export type SyncProjectionRepository = {
     customerProfileId: Id<"customerProfile">,
   ): Promise<Doc<"customerProfile"> | null>;
   getProduct(productId: Id<"product">): Promise<Doc<"product"> | null>;
-  getProductSku(productSkuId: Id<"productSku">): Promise<Doc<"productSku"> | null>;
+  getProductSku(
+    productSkuId: Id<"productSku">,
+  ): Promise<Doc<"productSku"> | null>;
   getPendingCheckoutItem(
     pendingCheckoutItemId: Id<"posPendingCheckoutItem">,
   ): Promise<Doc<"posPendingCheckoutItem"> | null>;
@@ -348,6 +358,8 @@ export type SyncProjectionRepository = {
     productSkuId: Id<"productSku">;
     importedBarcode?: string;
     importedPrice: number;
+    finalizedAt?: number;
+    closedAt?: number;
   } | null>;
   getServiceCatalog(
     serviceCatalogId: Id<"serviceCatalog">,
@@ -398,7 +410,9 @@ export type SyncProjectionRepository = {
     localIdKind: PosLocalSyncMappingKind;
     localId: string;
   }): Promise<LocalSyncMappingRecord | null>;
-  createMapping(input: LocalSyncMappingRecordInput): Promise<LocalSyncMappingRecord>;
+  createMapping(
+    input: LocalSyncMappingRecordInput,
+  ): Promise<LocalSyncMappingRecord>;
   createConflict(
     input: Omit<LocalSyncConflictRecord, "_id">,
   ): Promise<LocalSyncConflictRecord>;
@@ -538,9 +552,7 @@ export type SyncProjectionRepository = {
     notes?: string;
     createdAt: number;
   }): Promise<Id<"serviceCaseLineItem">>;
-  syncServiceCaseFinancials(
-    serviceCaseId: Id<"serviceCase">,
-  ): Promise<void>;
+  syncServiceCaseFinancials(serviceCaseId: Id<"serviceCase">): Promise<void>;
   createTransaction(input: {
     transactionNumber: string;
     storeId: Id<"store">;
@@ -694,24 +706,24 @@ export type SyncProjectionRepository = {
     totalPrice: number;
     notes?: string;
   }): Promise<Id<"posTransactionServiceLine">>;
-		  patchProductSku(
-		    productSkuId: Id<"productSku">,
-		    patch: Partial<Omit<Doc<"productSku">, "_id" | "_creationTime">>,
-		  ): Promise<void>;
+  patchProductSku(
+    productSkuId: Id<"productSku">,
+    patch: Partial<Omit<Doc<"productSku">, "_id" | "_creationTime">>,
+  ): Promise<void>;
   flushCatalogSummaryRefreshes?(): Promise<void>;
-		  recordSaleInventoryMovement(input: {
-	    storeId: Id<"store">;
-	    organizationId?: Id<"organization">;
-	    productId: Id<"product">;
-	    productSkuId: Id<"productSku">;
-	    quantity: number;
-	    posTransactionId: Id<"posTransaction">;
-	    registerSessionId: Id<"registerSession">;
-	    staffProfileId: Id<"staffProfile">;
-	    customerProfileId?: Id<"customerProfile">;
-	    transactionNumber: string;
-	  }): Promise<"inserted" | "existing">;
-	  patchPosSession(
+  recordSaleInventoryMovement(input: {
+    storeId: Id<"store">;
+    organizationId?: Id<"organization">;
+    productId: Id<"product">;
+    productSkuId: Id<"productSku">;
+    quantity: number;
+    posTransactionId: Id<"posTransaction">;
+    registerSessionId: Id<"registerSession">;
+    staffProfileId: Id<"staffProfile">;
+    customerProfileId?: Id<"customerProfile">;
+    transactionNumber: string;
+  }): Promise<"inserted" | "existing">;
+  patchPosSession(
     posSessionId: Id<"posSession">,
     patch: Partial<Omit<Doc<"posSession">, "_id" | "_creationTime">>,
   ): Promise<void>;
@@ -784,7 +796,9 @@ export type SyncProjectionRepository = {
 };
 
 export type LocalSyncIngestionRepository = {
-  getTerminal(terminalId: Id<"posTerminal">): Promise<Doc<"posTerminal"> | null>;
+  getTerminal(
+    terminalId: Id<"posTerminal">,
+  ): Promise<Doc<"posTerminal"> | null>;
   getStaffProfile(
     staffProfileId: Id<"staffProfile">,
   ): Promise<Doc<"staffProfile"> | null>;

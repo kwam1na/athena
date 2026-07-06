@@ -217,9 +217,11 @@ import type * as pos_application_queries_searchCatalog from "../pos/application/
 import type * as pos_application_queries_searchCustomers from "../pos/application/queries/searchCustomers.js";
 import type * as pos_application_queries_storePulse from "../pos/application/queries/storePulse.js";
 import type * as pos_application_queries_terminals from "../pos/application/queries/terminals.js";
+import type * as pos_application_sync_finalizedLineageRemediation from "../pos/application/sync/finalizedLineageRemediation.js";
 import type * as pos_application_sync_ingestLocalEvents from "../pos/application/sync/ingestLocalEvents.js";
 import type * as pos_application_sync_posRegisterSessionActivity from "../pos/application/sync/posRegisterSessionActivity.js";
 import type * as pos_application_sync_projectLocalEvents from "../pos/application/sync/projectLocalEvents.js";
+import type * as pos_application_sync_projectionPolicies from "../pos/application/sync/projectionPolicies.js";
 import type * as pos_application_sync_registerSessionCloseoutHolds from "../pos/application/sync/registerSessionCloseoutHolds.js";
 import type * as pos_application_sync_registerSessionSyncReview from "../pos/application/sync/registerSessionSyncReview.js";
 import type * as pos_application_sync_staffProof from "../pos/application/sync/staffProof.js";
@@ -658,9 +660,11 @@ declare const fullApi: ApiFromModules<{
   "pos/application/queries/searchCustomers": typeof pos_application_queries_searchCustomers;
   "pos/application/queries/storePulse": typeof pos_application_queries_storePulse;
   "pos/application/queries/terminals": typeof pos_application_queries_terminals;
+  "pos/application/sync/finalizedLineageRemediation": typeof pos_application_sync_finalizedLineageRemediation;
   "pos/application/sync/ingestLocalEvents": typeof pos_application_sync_ingestLocalEvents;
   "pos/application/sync/posRegisterSessionActivity": typeof pos_application_sync_posRegisterSessionActivity;
   "pos/application/sync/projectLocalEvents": typeof pos_application_sync_projectLocalEvents;
+  "pos/application/sync/projectionPolicies": typeof pos_application_sync_projectionPolicies;
   "pos/application/sync/registerSessionCloseoutHolds": typeof pos_application_sync_registerSessionCloseoutHolds;
   "pos/application/sync/registerSessionSyncReview": typeof pos_application_sync_registerSessionSyncReview;
   "pos/application/sync/staffProof": typeof pos_application_sync_staffProof;

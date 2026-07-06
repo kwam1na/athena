@@ -217,6 +217,8 @@ export function createConvexLocalSyncRepository(
           productSkuId: Id<"productSku">;
           importedBarcode?: string;
           importedPrice: number;
+          finalizedAt?: number;
+          closedAt?: number;
         } | null>;
       };
       return db.get("inventoryImportProvisionalSku", normalized);
@@ -246,7 +248,10 @@ export function createConvexLocalSyncRepository(
         .take(501);
       if (holds.length > 500) return Number.POSITIVE_INFINITY;
       return holds.reduce(
-        (sum: number, hold: { quantity: number; sourceSessionId?: Id<"posSession"> }) =>
+        (
+          sum: number,
+          hold: { quantity: number; sourceSessionId?: Id<"posSession"> },
+        ) =>
           args.excludeSessionId !== undefined &&
           hold.sourceSessionId === args.excludeSessionId
             ? sum
@@ -290,15 +295,20 @@ export function createConvexLocalSyncRepository(
     async updateAcceptedThroughSequence(args) {
       const existing = await findLocalSyncCursor(args);
       if (existing) {
-        await ctx.db.patch("posLocalSyncCursor", existing._id as Id<"posLocalSyncCursor">, {
-          syncScope: args.cursor.syncScope,
-          localSyncCursorId: args.cursor.localSyncCursorId,
-          localRegisterSessionId:
-            args.cursor.localRegisterSessionId ?? args.cursor.localSyncCursorId,
-          localExpenseSessionId: args.cursor.localExpenseSessionId,
-          acceptedThroughSequence: args.acceptedThroughSequence,
-          updatedAt: args.updatedAt,
-        });
+        await ctx.db.patch(
+          "posLocalSyncCursor",
+          existing._id as Id<"posLocalSyncCursor">,
+          {
+            syncScope: args.cursor.syncScope,
+            localSyncCursorId: args.cursor.localSyncCursorId,
+            localRegisterSessionId:
+              args.cursor.localRegisterSessionId ??
+              args.cursor.localSyncCursorId,
+            localExpenseSessionId: args.cursor.localExpenseSessionId,
+            acceptedThroughSequence: args.acceptedThroughSequence,
+            updatedAt: args.updatedAt,
+          },
+        );
         return;
       }
 
@@ -322,7 +332,11 @@ export function createConvexLocalSyncRepository(
       return { _id: id, ...input };
     },
     async patchEvent(eventId, patch) {
-      await ctx.db.patch("posLocalSyncEvent", eventId as Id<"posLocalSyncEvent">, patch);
+      await ctx.db.patch(
+        "posLocalSyncEvent",
+        eventId as Id<"posLocalSyncEvent">,
+        patch,
+      );
     },
     async findMapping(args) {
       return ctx.db
@@ -371,7 +385,9 @@ export function createConvexLocalSyncRepository(
           return existing;
         }
 
-        throw new Error("POS local sync mapping already belongs to another projection.");
+        throw new Error(
+          "POS local sync mapping already belongs to another projection.",
+        );
       }
 
       const id = await ctx.db.insert("posLocalSyncMapping", input);
@@ -447,26 +463,32 @@ export function createConvexLocalSyncRepository(
         .take(100);
     },
     async createRegisterSession(input) {
-      const openedContext = await resolveRegisterSessionOperatingDateContext(ctx, {
-        at: input.openedAt,
-        storeId: input.storeId,
-      });
-      return ctx.db.insert("registerSession", omitUndefined({
-        storeId: input.storeId,
-        organizationId: input.organizationId,
-        terminalId: input.terminalId,
-        registerNumber: input.registerNumber,
-        status: "active",
-        openedByStaffProfileId: input.openedByStaffProfileId,
-        openedAt: input.openedAt,
-        ...buildRegisterSessionDateDerivationPatch({
+      const openedContext = await resolveRegisterSessionOperatingDateContext(
+        ctx,
+        {
+          at: input.openedAt,
+          storeId: input.storeId,
+        },
+      );
+      return ctx.db.insert(
+        "registerSession",
+        omitUndefined({
+          storeId: input.storeId,
+          organizationId: input.organizationId,
+          terminalId: input.terminalId,
+          registerNumber: input.registerNumber,
+          status: "active",
+          openedByStaffProfileId: input.openedByStaffProfileId,
           openedAt: input.openedAt,
-          openedContext,
+          ...buildRegisterSessionDateDerivationPatch({
+            openedAt: input.openedAt,
+            openedContext,
+          }),
+          openingFloat: input.openingFloat,
+          expectedCash: input.expectedCash,
+          notes: input.notes,
         }),
-        openingFloat: input.openingFloat,
-        expectedCash: input.expectedCash,
-        notes: input.notes,
-      }));
+      );
     },
     async findBlockingRegisterSession(args) {
       const latestByTerminal = await ctx.db
@@ -488,7 +510,9 @@ export function createConvexLocalSyncRepository(
       const latestByRegisterNumber = await ctx.db
         .query("registerSession")
         .withIndex("by_storeId_registerNumber", (q) =>
-          q.eq("storeId", args.storeId).eq("registerNumber", args.registerNumber),
+          q
+            .eq("storeId", args.storeId)
+            .eq("registerNumber", args.registerNumber),
         )
         .order("desc")
         .first();
@@ -601,7 +625,10 @@ export function createConvexLocalSyncRepository(
       if (!registerSessionId) {
         return null;
       }
-      const registerSession = await ctx.db.get("registerSession", registerSessionId);
+      const registerSession = await ctx.db.get(
+        "registerSession",
+        registerSessionId,
+      );
       return registerSession &&
         registerSession.storeId === args.storeId &&
         registerSession.terminalId === args.terminalId
@@ -668,14 +695,18 @@ export function createConvexLocalSyncRepository(
 
       if (closeoutOwnedAt !== undefined && closeoutOwnershipSource) {
         const storeId =
-          patch.storeId ?? (await ctx.db.get("registerSession", registerSessionId))?.storeId;
+          patch.storeId ??
+          (await ctx.db.get("registerSession", registerSessionId))?.storeId;
 
         if (storeId) {
           datePatch = buildRegisterSessionDateDerivationPatch({
-            closeoutContext: await resolveRegisterSessionOperatingDateContext(ctx, {
-              at: closeoutOwnedAt,
-              storeId,
-            }),
+            closeoutContext: await resolveRegisterSessionOperatingDateContext(
+              ctx,
+              {
+                at: closeoutOwnedAt,
+                storeId,
+              },
+            ),
             closeoutOwnedAt,
             closeoutOwnershipSource,
           });
@@ -715,16 +746,20 @@ export function createConvexLocalSyncRepository(
             "Register closeout already has multiple pending variance reviews.",
         };
       }
-      const matchingApprovalRequest = pendingVarianceReviews.find((approvalRequest) =>
-        areRegisterSessionCloseoutReviewFactsEquivalent(approvalRequest.metadata, {
-          countedCash: input.countedCash,
-          expectedCash: input.expectedCash,
-          localEventId: input.localEventId,
-          localRegisterSessionId: input.localRegisterSessionId,
-          notes,
-          terminalId: input.terminalId,
-          variance: input.variance,
-        }),
+      const matchingApprovalRequest = pendingVarianceReviews.find(
+        (approvalRequest) =>
+          areRegisterSessionCloseoutReviewFactsEquivalent(
+            approvalRequest.metadata,
+            {
+              countedCash: input.countedCash,
+              expectedCash: input.expectedCash,
+              localEventId: input.localEventId,
+              localRegisterSessionId: input.localRegisterSessionId,
+              notes,
+              terminalId: input.terminalId,
+              variance: input.variance,
+            },
+          ),
       );
 
       if (matchingApprovalRequest) {
@@ -777,7 +812,10 @@ export function createConvexLocalSyncRepository(
           subjectType: "register_session",
         }),
       );
-      const approvalRequest = await ctx.db.get("approvalRequest", approvalRequestId);
+      const approvalRequest = await ctx.db.get(
+        "approvalRequest",
+        approvalRequestId,
+      );
       if (!approvalRequest) {
         throw new Error("Created approval request could not be read.");
       }
@@ -830,7 +868,10 @@ export function createConvexLocalSyncRepository(
     },
     async recordInventoryImportProvisionalSkuSaleEvidence(input) {
       const db = ctx.db as unknown as {
-        get(tableName: string, id: string): Promise<{
+        get(
+          tableName: string,
+          id: string,
+        ): Promise<{
           saleEvidence?: {
             saleCount?: number;
             totalQuantitySold?: number;
@@ -967,7 +1008,10 @@ export function createConvexLocalSyncRepository(
         )
         .unique();
       if (!mapping) return null;
-      return ctx.db.get("expenseSession", mapping.cloudId as Id<"expenseSession">);
+      return ctx.db.get(
+        "expenseSession",
+        mapping.cloudId as Id<"expenseSession">,
+      );
     },
     async createExpenseSession(input) {
       return ctx.db.insert("expenseSession", {
