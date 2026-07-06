@@ -50,6 +50,26 @@ function baseEvent(
   };
 }
 
+function baseMapping(
+  overrides: Partial<Doc<"posLocalSyncMapping">> = {},
+): Doc<"posLocalSyncMapping"> {
+  return {
+    _creationTime: 1,
+    _id: "mapping-1" as Id<"posLocalSyncMapping">,
+    cloudId: "transaction-1",
+    cloudTable: "posTransaction",
+    createdAt: 110,
+    localEventId: "local-event-1",
+    localId: "local-transaction-1",
+    localIdKind: "transaction",
+    localRegisterSessionId: "local-session-1",
+    sourceEventType: "sale_completed",
+    storeId: "store-1" as Id<"store">,
+    terminalId: "terminal-1" as Id<"posTerminal">,
+    ...overrides,
+  };
+}
+
 describe("buildRegisterSessionActivityPage", () => {
   it("summarizes coverage, categories, attention, and normalized row labels", () => {
     const event = baseEvent({
@@ -91,6 +111,43 @@ describe("buildRegisterSessionActivityPage", () => {
       },
       terminalName: "Front counter",
     });
+  });
+
+  it("deduplicates evidence links that point to the same cloud record", () => {
+    const page = buildRegisterSessionActivityPage({
+      conflictsByLocalEventId: new Map(),
+      cursors: [],
+      events: [baseEvent()],
+      isDone: true,
+      mappingsByLocalEventId: new Map([
+        [
+          "local-event-1",
+          [
+            baseMapping({ _id: "mapping-1" as Id<"posLocalSyncMapping"> }),
+            baseMapping({
+              _id: "mapping-2" as Id<"posLocalSyncMapping">,
+              localId: "local-payment-1",
+              localIdKind: "payment",
+            }),
+            baseMapping({
+              _id: "mapping-3" as Id<"posLocalSyncMapping">,
+              localId: "local-receipt-1",
+              localIdKind: "receipt",
+            }),
+          ],
+        ],
+      ]),
+      staffNamesById: new Map(),
+      terminalName: null,
+    });
+
+    expect(page.page[0].evidenceLinks).toEqual([
+      {
+        id: "transaction-1",
+        label: "Transaction",
+        type: "transaction",
+      },
+    ]);
   });
 });
 
@@ -219,6 +276,7 @@ describe("listRegisterSessionActivity", () => {
       posRegisterSessionActivity: [activity],
       posRegisterSessionActivityCheckpoint: [checkpoint],
     };
+    const orderCalls: string[] = [];
     const ctx = {
       db: {
         get: vi.fn(async (table: string, id: string) => {
@@ -254,10 +312,13 @@ describe("listRegisterSessionActivity", () => {
             };
             callback(q as never);
             return {
-              order: () => ({
-                take: async (limit: number) =>
-                  (tableRows[table] ?? []).slice(0, limit),
-              }),
+              order: (direction: string) => {
+                orderCalls.push(direction);
+                return {
+                  take: async (limit: number) =>
+                    (tableRows[table] ?? []).slice(0, limit),
+                };
+              },
               take: async (limit: number) =>
                 (tableRows[table] ?? []).slice(0, limit),
             };
@@ -272,6 +333,7 @@ describe("listRegisterSessionActivity", () => {
       storeId: "store-1" as Id<"store">,
     })) as RegisterSessionActivityPage;
 
+    expect(orderCalls).toContain("desc");
     expect(page.integration).toEqual({
       activityReadModelAvailable: true,
       source: "activity_read_model",
@@ -290,6 +352,69 @@ describe("listRegisterSessionActivity", () => {
         label: "Waiting for session mapping",
       },
       terminalName: "Front counter",
+    });
+  });
+
+  it("uses the sequence cursor as a descending upper bound", async () => {
+    const handler = getHandler(listRegisterSessionActivity);
+    const cursorComparisons: Array<{ field: string; value: number }> = [];
+    const orderCalls: string[] = [];
+    const ctx = {
+      db: {
+        get: vi.fn(async (table: string, id: string) => {
+          if (table === "store") {
+            return { _id: "store-1", organizationId: "org-1" };
+          }
+          if (table === "registerSession") {
+            return {
+              _id: id,
+              storeId: "store-1",
+              terminalId: "terminal-1",
+            };
+          }
+          if (table === "posTerminal") {
+            return { _id: id, displayName: "Front counter" };
+          }
+          return null;
+        }),
+        query: vi.fn((table: string) => ({
+          withIndex: vi.fn((_index: string, callback: (q: never) => unknown) => {
+            const q = {
+              eq: () => q,
+              lt: (field: string, value: number) => {
+                cursorComparisons.push({ field, value });
+                return q;
+              },
+            };
+            callback(q as never);
+            return {
+              order: (direction: string) => {
+                orderCalls.push(direction);
+                return {
+                  take: async () => [],
+                };
+              },
+              take: async () => [],
+            };
+          }),
+        })),
+      },
+    };
+
+    await handler(ctx, {
+      paginationOpts: { cursor: "12", numItems: 10 },
+      registerSessionId: "session-1" as Id<"registerSession">,
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(orderCalls).toContain("desc");
+    expect(cursorComparisons).toContainEqual({
+      field: "localSequence",
+      value: 12,
+    });
+    expect(cursorComparisons).toContainEqual({
+      field: "sequence",
+      value: 12,
     });
   });
 });

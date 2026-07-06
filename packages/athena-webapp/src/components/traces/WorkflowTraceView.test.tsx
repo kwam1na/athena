@@ -87,6 +87,7 @@ describe("WorkflowTraceTimeline", () => {
     vi.spyOn(Date, "now").mockReturnValue(
       new Date("2026-04-21T09:25:00.000Z").getTime(),
     );
+    const workflowStartedAt = new Date("2026-04-21T09:15:00.000Z").getTime();
 
     render(
       <WorkflowTraceTimeline
@@ -94,7 +95,7 @@ describe("WorkflowTraceTimeline", () => {
           {
             kind: "milestone",
             message: "Workflow started",
-            occurredAt: new Date("2026-04-21T09:15:00.000Z").getTime(),
+            occurredAt: workflowStartedAt,
             sequence: 2,
             source: "workflow.shared",
             status: "started",
@@ -122,6 +123,7 @@ describe("WorkflowTraceTimeline", () => {
     expect(listItems[0]).toHaveTextContent("Workflow started");
     expect(listItems[0]).not.toHaveTextContent("Workflow Started");
     expect(listItems[0]).toHaveTextContent("10 minutes ago");
+    expect(screen.queryByTitle(/Apr 21, 2026/)).not.toBeInTheDocument();
     expect(listItems[0]).toHaveTextContent("Started");
     expect(listItems[0]).toHaveTextContent("Milestone");
     expect(listItems[1]).toHaveTextContent("Repair order persisted");

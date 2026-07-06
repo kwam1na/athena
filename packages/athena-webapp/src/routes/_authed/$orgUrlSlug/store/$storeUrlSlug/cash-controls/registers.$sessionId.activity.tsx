@@ -1,6 +1,6 @@
-import { Outlet, createFileRoute, useRouterState } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 
-import { RegisterSessionView } from "~/src/components/cash-controls/RegisterSessionView";
+import { RegisterSessionActivityView } from "~/src/components/cash-controls/RegisterSessionView";
 import { NotFoundView } from "~/src/components/states/not-found/NotFoundView";
 
 function hasOrgNotFoundPayload(data: unknown) {
@@ -18,20 +18,7 @@ function hasOrgNotFoundPayload(data: unknown) {
   );
 }
 
-function RegisterSessionRoute() {
-  const pathname = useRouterState({
-    select: (state) => state.location.pathname,
-  });
-  const { sessionId } = Route.useParams();
-
-  if (pathname.endsWith(`/cash-controls/registers/${sessionId}/activity`)) {
-    return <Outlet />;
-  }
-
-  return <RegisterSessionView />;
-}
-
-function RegisterSessionNotFoundComponent({ data }: { data?: unknown }) {
+function RegisterSessionActivityNotFoundComponent({ data }: { data?: unknown }) {
   const { orgUrlSlug, storeUrlSlug } = Route.useParams();
   const org = hasOrgNotFoundPayload(data);
 
@@ -42,8 +29,8 @@ function RegisterSessionNotFoundComponent({ data }: { data?: unknown }) {
 }
 
 export const Route = createFileRoute(
-  "/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId"
+  "/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId/activity"
 )({
-  component: RegisterSessionRoute,
-  notFoundComponent: RegisterSessionNotFoundComponent,
+  component: RegisterSessionActivityView,
+  notFoundComponent: RegisterSessionActivityNotFoundComponent,
 });

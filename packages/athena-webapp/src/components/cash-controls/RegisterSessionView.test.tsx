@@ -8,6 +8,7 @@ import {
 } from "~/shared/commandResult";
 
 import {
+  RegisterSessionActivityViewContent,
   RegisterSessionView,
   RegisterSessionViewContent,
 } from "./RegisterSessionView";
@@ -68,6 +69,7 @@ vi.mock("@tanstack/react-router", () => ({
     sessionId: "session-1",
     storeUrlSlug: "store",
   }),
+  useSearch: () => ({}),
 }));
 
 vi.mock("convex/react", () => convexMocks);
@@ -424,9 +426,7 @@ describe("RegisterSessionViewContent", () => {
     );
   });
 
-  it("renders POS activity coverage, attention, filters, and uncertainty copy", async () => {
-    const user = userEvent.setup();
-
+  it("links to POS activity without rendering the activity log inline", () => {
     render(
       <RegisterSessionViewContent
         actorStaffProfileId="staff-1"
@@ -435,7 +435,30 @@ describe("RegisterSessionViewContent", () => {
         isLoading={false}
         onRecordDeposit={vi.fn()}
         {...closeoutHandlers}
-        registerSessionActivity={{
+        registerSessionSnapshot={baseSnapshot}
+        orgUrlSlug="wigclub"
+        storeUrlSlug="wigclub"
+      />,
+    );
+
+    const activityLink = screen.getByRole("link", {
+      name: "POS activity",
+    });
+    expect(activityLink).toHaveAttribute(
+      "href",
+      "/wigclub/store/wigclub/cash-controls/registers/session-1/activity?o=%252F",
+    );
+    expect(screen.getByText("Linked transactions")).toBeInTheDocument();
+    expect(screen.queryByText("Reported through")).not.toBeInTheDocument();
+  });
+
+  it("renders POS activity coverage, attention, filters, and uncertainty copy on the activity route", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <RegisterSessionActivityViewContent
+        isLoading={false}
+        activity={{
           continueCursor: "",
           integration: {
             activityReadModelAvailable: false,
@@ -449,7 +472,7 @@ describe("RegisterSessionViewContent", () => {
               category: "sale",
               evidenceLinks: [
                 {
-                  id: "transaction-1",
+                  id: "txn-1",
                   label: "Transaction",
                   type: "transaction",
                 },
@@ -466,7 +489,7 @@ describe("RegisterSessionViewContent", () => {
                 label: "Projected",
                 tone: "success",
               },
-              summary: "Receipt R-12",
+              summary: "Receipt R-12 - 1 item(s) - 1 payment(s)",
               terminalName: "Front counter",
             },
             {
@@ -489,6 +512,26 @@ describe("RegisterSessionViewContent", () => {
               summary: "Counted cash submitted",
               terminalName: "Front counter",
             },
+            ...Array.from({ length: 9 }, (_, index) => ({
+              _id: `activity-extra-${index + 1}`,
+              actorStaffName: "Ama Mensah",
+              category: "cart" as const,
+              evidenceLinks: [],
+              label: index === 8 ? "Later cart activity" : "Cart item added",
+              localEventId: `local-extra-${index + 1}`,
+              localRegisterSessionId: "local-session-1",
+              occurredAt: new Date("2026-04-21T18:05:00.000Z").getTime() + index,
+              reportedAt: new Date("2026-04-21T18:06:00.000Z").getTime() + index,
+              sequence: 14 + index,
+              source: "pos_sync_evidence" as const,
+              status: {
+                kind: "terminal_reported" as const,
+                label: "Reported by terminal",
+                tone: "default" as const,
+              },
+              summary: null,
+              terminalName: "Front counter",
+            })),
           ],
           summary: {
             attentionCounts: {
@@ -523,27 +566,46 @@ describe("RegisterSessionViewContent", () => {
             rowCount: 2,
           },
         }}
-        registerSessionSnapshot={baseSnapshot}
         orgUrlSlug="wigclub"
+        sessionId="reg-3"
         storeUrlSlug="wigclub"
       />,
     );
 
-    expect(screen.getByText("POS activity")).toBeInTheDocument();
+    expect(screen.getAllByText("POS activity").length).toBeGreaterThan(0);
     expect(
       screen.getByText(
         "This terminal has not reported later local activity to the cloud. The log shows only evidence the cloud has received.",
       ),
     ).toBeInTheDocument();
+    expect(screen.queryByText("1 sale")).not.toBeInTheDocument();
+    expect(screen.queryByText("0 cart")).not.toBeInTheDocument();
     expect(screen.getByText("Terminal reporting uncertain")).toBeInTheDocument();
     expect(screen.getByText("Sequence 12")).toBeInTheDocument();
     expect(screen.getByText("1 need attention")).toBeInTheDocument();
     expect(screen.getByText("Sale completed")).toBeInTheDocument();
+    const receiptLink = screen.getByRole("link", { name: "#R-12" });
+    expect(receiptLink).toHaveAttribute(
+      "href",
+      expect.stringContaining("/wigclub/store/wigclub/pos/transactions/txn-1"),
+    );
+    expect(receiptLink).toHaveAttribute("href", expect.stringContaining("o="));
+    expect(receiptLink.closest("p")).toHaveTextContent(
+      "Receipt #R-12 - 1 item(s) - 1 payment(s)",
+    );
     expect(screen.getByText("Closeout started")).toBeInTheDocument();
+    expect(screen.getByText("Showing 1-10 of 11")).toBeInTheDocument();
+    expect(screen.queryByText("Later cart activity")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Go to next page" }));
+
+    expect(screen.getByText("Showing 11-11 of 11")).toBeInTheDocument();
+    expect(screen.getByText("Later cart activity")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Needs attention" }));
 
     expect(screen.queryByText("Sale completed")).not.toBeInTheDocument();
+    expect(screen.queryByText("Later cart activity")).not.toBeInTheDocument();
     expect(screen.getByText("Closeout started")).toBeInTheDocument();
   });
 

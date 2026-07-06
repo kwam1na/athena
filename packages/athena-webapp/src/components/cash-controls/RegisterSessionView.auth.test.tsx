@@ -103,7 +103,6 @@ describe("RegisterSessionView auth readiness", () => {
     expect(mockedHooks.useQuery.mock.calls.map(([, args]) => args)).toEqual([
       "skip",
       "skip",
-      "skip",
     ]);
   });
 
@@ -120,7 +119,6 @@ describe("RegisterSessionView auth readiness", () => {
     expect(mockedHooks.useQuery.mock.calls.map(([, args]) => args)).toEqual([
       "skip",
       "skip",
-      "skip",
     ]);
   });
 
@@ -131,14 +129,6 @@ describe("RegisterSessionView auth readiness", () => {
 
     expect(mockedHooks.useQuery.mock.calls.map(([, args]) => args)).toEqual([
       {
-        registerSessionId: "session-1",
-        storeId: "store-1",
-      },
-      {
-        paginationOpts: {
-          cursor: null,
-          numItems: 25,
-        },
         registerSessionId: "session-1",
         storeId: "store-1",
       },

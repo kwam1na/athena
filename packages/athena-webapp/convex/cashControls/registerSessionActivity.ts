@@ -457,8 +457,8 @@ function addConflictLink(
   links: RegisterSessionActivityRow["evidenceLinks"],
   conflict: SyncEvidenceConflict | null,
 ) {
-  if (!conflict) return links;
-  return [
+  if (!conflict) return dedupeEvidenceLinks(links);
+  return dedupeEvidenceLinks([
     ...links,
     {
       id: conflict._id,
@@ -468,7 +468,19 @@ function addConflictLink(
           : "Manager review",
       type: "review" as const,
     },
-  ];
+  ]);
+}
+
+function dedupeEvidenceLinks(
+  links: RegisterSessionActivityRow["evidenceLinks"],
+) {
+  const seen = new Set<string>();
+  return links.filter((link) => {
+    const key = `${link.type}:${link.id}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function addDirectActivityLinks(activity: ActivityReadModelRow) {
@@ -763,7 +775,7 @@ async function listLocalSessionMappings(ctx: QueryCtx, args: {
 }
 
 async function listReadModelActivity(ctx: QueryCtx, args: {
-  afterSequence: number | null;
+  cursorSequence: number | null;
   pageSize: number;
   registerSessionId: Id<"registerSession">;
   storeId: Id<"store">;
@@ -775,11 +787,11 @@ async function listReadModelActivity(ctx: QueryCtx, args: {
         .eq("storeId", args.storeId)
         .eq("registerSessionId", args.registerSessionId);
 
-      return args.afterSequence === null
+      return args.cursorSequence === null
         ? scoped
-        : scoped.gt("localSequence", args.afterSequence);
+        : scoped.lt("localSequence", args.cursorSequence);
     })
-    .order("asc");
+    .order("desc");
 
   return query.take(args.pageSize + 1);
 }
@@ -797,7 +809,7 @@ async function listReadModelCheckpoints(ctx: QueryCtx, args: {
 }
 
 async function listEventsForLocalSessions(ctx: QueryCtx, args: {
-  afterSequence: number | null;
+  cursorSequence: number | null;
   localRegisterSessionIds: string[];
   pageSize: number;
   storeId: Id<"store">;
@@ -814,11 +826,11 @@ async function listEventsForLocalSessions(ctx: QueryCtx, args: {
           .eq("terminalId", args.terminalId)
           .eq("localRegisterSessionId", localRegisterSessionId);
 
-        return args.afterSequence === null
+        return args.cursorSequence === null
           ? scoped
-          : scoped.gt("sequence", args.afterSequence);
+          : scoped.lt("sequence", args.cursorSequence);
       })
-      .order("asc");
+      .order("desc");
     const events = await query.take(args.pageSize + 1);
     for (const event of events) eventsById.set(event._id, event);
   }
@@ -826,8 +838,8 @@ async function listEventsForLocalSessions(ctx: QueryCtx, args: {
   return [...eventsById.values()]
     .sort(
       (left, right) =>
-        left.sequence - right.sequence ||
-        left.occurredAt - right.occurredAt ||
+        right.sequence - left.sequence ||
+        right.occurredAt - left.occurredAt ||
         left.localEventId.localeCompare(right.localEventId),
     )
     .slice(0, args.pageSize + 1);
@@ -1031,11 +1043,11 @@ export const listRegisterSessionActivity = query({
     }
 
     const pageSize = clampPageSize(args.paginationOpts.numItems);
-    const afterSequence = parseSequenceCursor(args.paginationOpts.cursor);
+    const cursorSequence = parseSequenceCursor(args.paginationOpts.cursor);
     const [activityRowsWithExtra, activityCheckpoints, terminalName] =
       await Promise.all([
         listReadModelActivity(ctx, {
-          afterSequence,
+          cursorSequence,
           pageSize,
           registerSessionId: args.registerSessionId,
           storeId: args.storeId,
@@ -1087,7 +1099,7 @@ export const listRegisterSessionActivity = query({
 
     const [eventsWithExtra, cursors] = await Promise.all([
       listEventsForLocalSessions(ctx, {
-        afterSequence,
+        cursorSequence,
         localRegisterSessionIds,
         pageSize,
         storeId: args.storeId,
