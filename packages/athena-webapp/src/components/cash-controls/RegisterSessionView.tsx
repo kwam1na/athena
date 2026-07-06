@@ -751,7 +751,7 @@ function RegisterSessionActivitySection({
               className={cn(
                 "inline-flex h-8 items-center rounded-md border px-3 text-xs font-medium transition-colors",
                 isActive
-                  ? "border-primary bg-primary text-primary-foreground"
+                  ? "border-action-workflow-border bg-action-workflow-soft text-action-workflow hover:bg-action-workflow-soft/75"
                   : "border-border bg-surface text-muted-foreground hover:bg-muted/50 hover:text-foreground",
               )}
               key={option.id}
