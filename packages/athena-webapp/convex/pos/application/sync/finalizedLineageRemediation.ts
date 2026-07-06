@@ -112,6 +112,7 @@ export const repairFinalizedLineageConflictedSales = internalMutation({
         syncEventId: event._id,
         now: event.acceptedAt ?? now,
         options: {
+          allowClosedRegisterSaleProjection: true,
           repairRunId: args.repairRunId,
           trustStoredStaffProof: true,
         },
@@ -256,9 +257,27 @@ export function classifyFinalizedLineageRepairConflicts(
 
 function isFinalizedLineageRepairConflict(conflict: LocalSyncConflictRecord) {
   return (
+    isProvisionalRowChangedConflict(conflict) ||
+    isClosedRegisterRepairReplayConflict(conflict)
+  );
+}
+
+function isProvisionalRowChangedConflict(conflict: LocalSyncConflictRecord) {
+  return (
     conflict.status === "needs_review" &&
     conflict.conflictType === "inventory" &&
     conflict.summary === PROVISIONAL_IMPORT_ROW_CHANGED_SUMMARY
+  );
+}
+
+function isClosedRegisterRepairReplayConflict(
+  conflict: LocalSyncConflictRecord,
+) {
+  return (
+    conflict.status === "needs_review" &&
+    conflict.conflictType === "permission" &&
+    conflict.summary === "Register was not open before this sale synced." &&
+    conflict.details.status === "closed"
   );
 }
 

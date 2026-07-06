@@ -1617,6 +1617,12 @@ async function resolveSaleRegisterAndSession(
   const reviewedClosingRegisterSaleAllowed =
     args.options?.allowReviewedClosingRegisterSaleProjection === true &&
     registerSession.status === "closing";
+  const closedRegisterRepairReplayAllowed =
+    args.options?.allowClosedRegisterSaleProjection === true &&
+    Boolean(args.options.repairRunId) &&
+    registerSession.status === "closed" &&
+    typeof registerSession.closedAt === "number" &&
+    args.event.occurredAt <= registerSession.closedAt;
 
   if (
     registerSessionSaleUsable &&
@@ -1638,7 +1644,11 @@ async function resolveSaleRegisterAndSession(
     return conflictResult(conflict);
   }
 
-  if (!registerSessionSaleUsable && !reviewedClosingRegisterSaleAllowed) {
+  if (
+    !registerSessionSaleUsable &&
+    !reviewedClosingRegisterSaleAllowed &&
+    !closedRegisterRepairReplayAllowed
+  ) {
     const conflict = await createConflict(repository, args, {
       conflictType: "permission",
       summary: "Register was not open before this sale synced.",
