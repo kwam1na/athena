@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>refactor: Extract POS sync projection policies</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #172033;
+      --muted: #5d6678;
+      --line: #d9dee8;
+      --panel: #f7f8fb;
+      --accent: #1f5f8b;
+      --danger: #8d2f2b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: #fff;
+      line-height: 1.55;
+    }
+    main {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 40px 24px 64px;
+    }
+    header {
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 24px;
+      margin-bottom: 28px;
+    }
+    h1 {
+      margin: 0 0 12px;
+      font-size: 34px;
+      line-height: 1.15;
+      letter-spacing: 0;
+    }
+    h2 {
+      margin: 34px 0 12px;
+      padding-top: 8px;
+      border-top: 1px solid var(--line);
+      font-size: 22px;
+      letter-spacing: 0;
+    }
+    h3 {
+      margin: 24px 0 10px;
+      font-size: 16px;
+      letter-spacing: 0;
+      color: var(--accent);
+    }
+    p { margin: 0 0 12px; }
+    ul, ol { padding-left: 22px; }
+    li { margin: 6px 0; }
+    a { color: var(--accent); text-decoration-thickness: 1px; }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.92em;
+      background: var(--panel);
+      padding: 1px 4px;
+      border-radius: 4px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 14px 0 20px;
+      font-size: 14px;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: var(--panel); }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .pill {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 4px 10px;
+      background: var(--panel);
+    }
+    .callout {
+      border-left: 4px solid var(--accent);
+      background: var(--panel);
+      padding: 14px 16px;
+      margin: 18px 0;
+    }
+    .risk { border-left-color: var(--danger); }
+    .toc {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 8px 16px;
+      margin: 18px 0 8px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+    }
+    .unit {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 14px 0;
+    }
+    .unit h3 { margin-top: 0; }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>refactor: Extract POS sync projection policies</h1>
+    <div class="meta">
+      <span class="pill">Type: refactor</span>
+      <span class="pill">Status: active</span>
+      <span class="pill">Date: 2026-07-06</span>
+      <span class="pill">Source: <a href="2026-07-06-001-refactor-pos-sync-projection-policies-plan.md">markdown plan</a></span>
+    </div>
+  </header>
+
+  <nav class="toc" aria-label="Plan sections">
+    <a href="#summary">Summary</a>
+    <a href="#requirements">Requirements</a>
+    <a href="#scope">Scope</a>
+    <a href="#decisions">Key Decisions</a>
+    <a href="#units">Implementation Units</a>
+    <a href="#risks">Risks</a>
+    <a href="#verification">Verification</a>
+  </nav>
+
+  <section id="summary">
+    <h2>Summary</h2>
+    <p>POS local-sync projection currently embeds catalog lineage, inventory-mutation, review, and blocking-conflict policy directly inside <code>projectLocalEvents.ts</code>. The plan extracts those decisions into <code>packages/athena-webapp/convex/pos/application/sync/projectionPolicies.ts</code>, then adds the finalized provisional import invariant.</p>
+    <div class="callout">
+      <strong>Invariant:</strong> when a queued offline sale references a finalized or finalization-closed provisional import row for the same store/product/SKU, projection treats that row as trusted sale lineage behind the scenes. Cash Controls manager approval is not required; Operations inventory review is created if trusted stock preconditions fail or if temporal finalization safety makes stock mutation unsafe.
+    </div>
+  </section>
+
+  <section id="problem">
+    <h2>Problem Frame</h2>
+    <p>The production receipt was uploaded after its provisional import row had already been finalized into trusted inventory. Current projection treats the finalized/hidden row as stale provisional inventory, blocks projection, and leaves Cash Controls showing a manager action that cannot settle the sale because replay hits the same blocking policy.</p>
+    <p>The correct boundary is server-side projection policy plus Operations inventory review. Cash Controls should remain a drawer/session command boundary, not a SKU workspace or generic sync cleanup queue.</p>
+  </section>
+
+  <section id="requirements">
+    <h2>Requirements Digest</h2>
+    <ul>
+      <li>Extract inline projection policies into a pure module and preserve current behavior before changing semantics.</li>
+      <li>Keep repository reads, writes, conflicts, transaction persistence, inventory movements, and work-item mutations outside the policy module.</li>
+      <li>Accept finalized or finalization-closed provisional lineage only when row, store, product, SKU, and trusted SKU validity match.</li>
+      <li>Project finalized matching lineage without Cash Controls manager approval.</li>
+      <li>Create or reuse <code>synced_sale_inventory_review</code> when trusted stock preconditions fail or stock mutation is unsafe because the sale occurred before finalization.</li>
+      <li>Keep active provisional behavior unchanged and keep invalid lineage blocking.</li>
+      <li>Preserve lineage on sale records without mutating finalized provisional sale evidence.</li>
+      <li>Use a source-aware trusted-demand view for validation, movement/review metadata, and quantity aggregation while preserving persisted provenance.</li>
+      <li>Constrain the first-sync inventory-review exception to accepted finalized lineage; plain trusted stock shortfalls keep existing reviewed-projection gates.</li>
+      <li>Correct affected production conflict rows after deploy through a scoped internal/system remediation runbook with before/after verification.</li>
+      <li>Keep V26-966 as a linked contract single-sourcing follow-up, not part of this batch.</li>
+    </ul>
+  </section>
+
+  <section id="scope">
+    <h2>Scope Boundaries</h2>
+    <ul>
+      <li>No broader V26-966 contract consolidation.</li>
+      <li>No Cash Controls UI redesign or SKU workspace ownership.</li>
+      <li>No conversion of active provisional rows into trusted inventory sales.</li>
+      <li>No auto-acceptance of rejected, non-finalization-closed, missing, wrong-store, invalid trusted SKU/store, or mismatched lineage.</li>
+      <li>No historical transaction rewrite or migration unless implementation proves retry cannot settle existing conflicts.</li>
+    </ul>
+  </section>
+
+  <section id="decisions">
+    <h2>Key Technical Decisions</h2>
+    <table>
+      <thead>
+        <tr><th>Decision</th><th>Rationale</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Pure local policy module</td><td>Future invariants need a stable home without adding more inline branches to the projector.</td></tr>
+        <tr><td>Normalize inventory source before validation</td><td>Trusted, active provisional, finalized lineage, pending alias, and invalid states must be distinguishable before quantity aggregation and side effects.</td></tr>
+        <tr><td>Finalized matching lineage is trusted sale projection</td><td>The product has already become trusted inventory; the old provisional id is provenance, not a manager-review blocker.</td></tr>
+        <tr><td>Temporal stock-mutation guard</td><td>Sales before finalization skip stock mutation unless finalization evidence proves the sale was excluded from the trusted count.</td></tr>
+        <tr><td>First sync creates inventory review only for accepted finalized lineage</td><td>The user-confirmed boundary is Operations inventory review only for this lineage case when stock preconditions fail or mutation is unsafe.</td></tr>
+        <tr><td>No finalized sale-evidence patch</td><td>Finalization snapshots should not be mutated by late offline uploads; sale records keep lineage instead.</td></tr>
+        <tr><td>Internal retry only</td><td>Any retry/reprojection helper must be internal or system-only, same-store/same-register scoped, and must not mint or simulate manager approval.</td></tr>
+        <tr><td>Production remediation is required</td><td>The batch is not complete at deploy; eligible conflicted rows must be preflighted, reprojected internally, and verified for duplicate-safe side effects.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="design">
+    <h2>Behavior Matrix</h2>
+    <table>
+      <thead>
+        <tr><th>Source outcome</th><th>Projection behavior</th><th>Review owner</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Plain trusted inventory</td><td>Validate and mutate trusted stock normally under existing reviewed-projection gates.</td><td>Existing review path only.</td></tr>
+        <tr><td>Active provisional evidence</td><td>Persist sale and provisional lineage; bypass trusted stock mutation.</td><td>None.</td></tr>
+        <tr><td>Finalized lineage trusted</td><td>Treat as source-aware trusted demand; preserve lineage; mutate stock only when temporal finalization safety allows.</td><td>Operations inventory review if stock preconditions fail or mutation is unsafe.</td></tr>
+        <tr><td>Invalid lineage conflict</td><td>Blocking projection conflict.</td><td>Existing sync conflict/review path.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="units">
+    <h2>Implementation Units</h2>
+    <article class="unit">
+      <h3>U1. Characterize Current Inline Projection Policy</h3>
+      <p>Strengthen tests for active provisional, hidden/inactive provisional, mixed same-SKU, reviewed inventory projection, and Cash Controls replay before moving code.</p>
+    </article>
+    <article class="unit">
+      <h3>U2. Extract Projection Policy Decisions Into a Pure Module</h3>
+      <p>Create <code>projectionPolicies.ts</code> and pure policy tests, then have <code>projectLocalEvents.ts</code> convert policy decisions into existing side effects.</p>
+    </article>
+    <article class="unit">
+      <h3>U3. Expose Finalized Provisional Lineage Facts to Projection</h3>
+      <p>Widen or add a narrow repository lookup so projection can distinguish finalized trusted lineage from invalid stale provisional rows.</p>
+    </article>
+    <article class="unit">
+      <h3>U4. Add the Finalized-Lineage Trusted Inventory Invariant</h3>
+      <p>Accept finalized matching lineage, aggregate it through a source-aware trusted-demand view, preserve persisted lineage, apply the temporal stock-mutation guard, skip finalized evidence mutation, and keep all hard failures blocking.</p>
+    </article>
+    <article class="unit">
+      <h3>U5. Settle Existing Conflicts Without Cash Controls Manager Approval</h3>
+      <p>Use or add a narrow internal/system-only idempotent retry/reprojection path for existing finalized-lineage conflicts and suppress the false manager-approval route without minting or consuming manager proof.</p>
+    </article>
+    <article class="unit">
+      <h3>U6. Correct Affected Production Conflicts</h3>
+      <p>Preflight the affected production conflict set, reproject only eligible finalized-lineage rows through the internal/system path, record skip reasons, and verify transaction, payment, movement, and inventory-review counts.</p>
+    </article>
+    <article class="unit">
+      <h3>U7. Document, Validate, and Link the Follow-Up Contract Work</h3>
+      <p>Add a durable solution note, link V26-966 as adjacent contract work, run focused validation, and regenerate Graphify after code edits.</p>
+    </article>
+  </section>
+
+  <section id="risks">
+    <h2>Risks</h2>
+    <div class="callout risk">
+      <p><strong>Main risks:</strong> behavior drift during extraction, accidentally trusting rejected or mismatched lineage, double stock mutation after finalization, broadening the first-sync review exception, duplicate retry side effects, mutating finalized audit evidence, leaving prod conflicts stranded, and leaving Cash Controls showing the wrong manager action.</p>
+      <p><strong>Mitigation:</strong> characterization-first sequencing, pure policy tests, explicit negative cases, temporal stock-mutation guard, accepted-lineage-only review exception, internal retry boundary, production remediation runbook, idempotent mapping reuse, no finalized evidence patch, and Cash Controls regression tests.</p>
+    </div>
+  </section>
+
+  <section id="verification">
+    <h2>Verification Strategy</h2>
+    <ul>
+      <li><code>packages/athena-webapp/convex/pos/application/sync/projectionPolicies.test.ts</code> for pure classification.</li>
+      <li><code>packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.test.ts</code> for projection, movement, and work-item behavior.</li>
+      <li><code>packages/athena-webapp/convex/pos/application/sync/ingestLocalEvents.test.ts</code> if retry behavior changes there.</li>
+      <li><code>packages/athena-webapp/convex/cashControls/deposits.test.ts</code> for manager-approval boundary regressions.</li>
+      <li><code>packages/athena-webapp/convex/pos/infrastructure/repositories/localSyncRepository.test.ts</code> if repository source-level coverage changes.</li>
+      <li>Temporal tests for sale-before-finalization versus sale-after-finalization stock mutation behavior.</li>
+      <li>Negative tests proving plain trusted stock shortfalls and expired-hold shortfalls still need existing reviewed projection flags.</li>
+      <li>Production remediation tests for eligible-row selection, ineligible skip reasons, idempotent re-run behavior, and post-run duplicate checks.</li>
+      <li>Repo PR validation plus <code>bun run graphify:rebuild</code> after code edits.</li>
+    </ul>
+  </section>
+</main>
+</body>
+</html>
