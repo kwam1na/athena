@@ -16,9 +16,7 @@ import {
   userError,
   type ApprovalCommandResult,
 } from "../../shared/commandResult";
-import type { ApprovalRequirement } from "../../shared/approvalPolicy";
 import {
-  APPROVAL_ACTIONS,
   consumeCommandApprovalProofWithCtx,
 } from "./approvalActions";
 import {
@@ -27,34 +25,49 @@ import {
   type DailyOperationsAutomationStatus,
 } from "./dailyOperationsAutomation";
 import {
+  DAILY_CLOSE_CARRY_FORWARD_RESOLUTION_ACTION,
+  DAILY_CLOSE_CARRY_FORWARD_TYPE,
+  DAILY_CLOSE_COMPLETION_ACTION,
+  DAILY_CLOSE_REOPEN_ACTION,
+  DAILY_CLOSE_SUBJECT_TYPE,
+  buildDailyCloseApprovalSubject,
+  buildDailyCloseCarryForwardApprovalRequirement,
+  buildDailyCloseCarryForwardApprovalSubject,
+  buildDailyCloseCompletionApprovalRequirement,
+  buildDailyCloseReopenApprovalRequirement,
+} from "./dailyClose/approval";
+import {
+  buildAdjustmentReportTotals,
+  listAppliedTransactionAdjustmentsForDay,
+  readAppliedTransactionAdjustmentsForDay,
+  type AppliedTransactionAdjustment,
+} from "./dailyClose/adjustmentReports";
+import {
+  buildEodAutomationDecisionEvidence,
+  validateEodAutomationPolicyForSnapshot,
+} from "./dailyClose/automationPolicy";
+import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
 import { buildPaymentTotals, transactionCashDelta } from "./paymentTotals";
 import type { AutomationDecisionEvidence } from "../automation/runLedger";
 
+export {
+  buildAdjustmentReportTotals,
+  listAppliedTransactionAdjustmentsForDay,
+};
+
 const DAILY_CLOSE_QUERY_LIMIT = 200;
 const DAILY_CLOSE_CARRY_FORWARD_SOURCE_PROBE_LIMIT = 1_000;
 const REGISTER_SESSION_DAILY_CLOSE_SOURCE_LIMIT = 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_OPERATING_DATE_RANGE_MS = 36 * 60 * 60 * 1000;
-const DAILY_CLOSE_SUBJECT_TYPE = "daily_close";
-const DAILY_CLOSE_CARRY_FORWARD_TYPE = "daily_close_carry_forward";
 const TERMINAL_WORK_ITEM_STATUSES = new Set(["completed", "cancelled"]);
 const OPEN_OPERATIONAL_WORK_ITEM_STATUSES = ["open", "in_progress"] as const;
-const EOD_AUTO_COMPLETE_LOW_RISK_REVIEW_CATEGORIES = new Set([
-  "cash_variance",
-  "voided_sale",
-]);
 const ACTIVE_REGISTER_STATUSES = ["open", "active", "closing"] as const;
 const REVIEW_ONLY_REGISTER_CLOSEOUT_STATUSES = ["closeout_rejected"] as const;
 const OPEN_POS_SESSION_STATUSES = ["active", "held"] as const;
-const DAILY_CLOSE_COMPLETION_ACTION = APPROVAL_ACTIONS.dailyCloseCompletion;
-const DAILY_CLOSE_REOPEN_ACTION = APPROVAL_ACTIONS.dailyCloseReopen;
-const DAILY_CLOSE_CARRY_FORWARD_RESOLUTION_ACTION = {
-  key: "operations.daily_close.resolve_carry_forward",
-  label: "Resolve carry-forward work",
-} as const;
 const DAILY_CLOSE_BLOCKER_CATEGORY_PRECEDENCE: Record<string, number> = {
   approval: 0,
   register_session: 10,
@@ -563,130 +576,6 @@ type ResolveDailyCloseCarryForwardResult = ApprovalCommandResult<{
   operationalEventId?: Id<"operationalEvent">;
   workItem: Doc<"operationalWorkItem">;
 }>;
-
-function buildDailyCloseApprovalSubject(args: {
-  operatingDate: string;
-  storeId: Id<"store">;
-}) {
-  return {
-    id: `${args.storeId}:${args.operatingDate}`,
-    label: `EOD Review ${args.operatingDate}`,
-    type: DAILY_CLOSE_SUBJECT_TYPE,
-  };
-}
-
-function buildDailyCloseCompletionApprovalRequirement(args: {
-  operatingDate: string;
-  storeId: Id<"store">;
-}): ApprovalRequirement {
-  return {
-    action: DAILY_CLOSE_COMPLETION_ACTION,
-    reason: "Manager approval is required to complete EOD Review.",
-    requiredRole: "manager",
-    selfApproval: "allowed",
-    subject: buildDailyCloseApprovalSubject(args),
-    copy: {
-      title: "Manager approval required",
-      message:
-        "A manager needs to approve this end of day review before the operating day is saved.",
-      primaryActionLabel: "Approve and complete",
-      secondaryActionLabel: "Cancel",
-    },
-    resolutionModes: [
-      {
-        kind: "inline_manager_proof",
-      },
-    ],
-    metadata: {
-      operatingDate: args.operatingDate,
-    },
-  };
-}
-
-function buildDailyCloseReopenApprovalRequirement(args: {
-  dailyCloseId: Id<"dailyClose">;
-  operatingDate: string;
-  storeId: Id<"store">;
-}): ApprovalRequirement {
-  return {
-    action: DAILY_CLOSE_REOPEN_ACTION,
-    reason: "Manager approval is required to reopen EOD Review.",
-    requiredRole: "manager",
-    selfApproval: "allowed",
-    subject: {
-      id: args.dailyCloseId,
-      label: `EOD Review ${args.operatingDate}`,
-      type: DAILY_CLOSE_SUBJECT_TYPE,
-    },
-    copy: {
-      title: "Manager approval required",
-      message:
-        "A manager needs to approve reopening this EOD Review before the operating day can be revised.",
-      primaryActionLabel: "Approve and reopen",
-      secondaryActionLabel: "Cancel",
-    },
-    resolutionModes: [
-      {
-        kind: "inline_manager_proof",
-      },
-    ],
-    metadata: {
-      dailyCloseId: args.dailyCloseId,
-      operatingDate: args.operatingDate,
-    },
-  };
-}
-
-function buildDailyCloseCarryForwardApprovalSubject(args: {
-  businessDate: string;
-  dailyCloseId: Id<"dailyClose">;
-  outcome: "completed" | "cancelled";
-  sourceId: string;
-}) {
-  return {
-    id: `${args.dailyCloseId}:${args.sourceId}:${args.outcome}`,
-    label: `Carry-forward follow-up for EOD Review ${args.businessDate}`,
-    type: DAILY_CLOSE_CARRY_FORWARD_TYPE,
-  };
-}
-
-function buildDailyCloseCarryForwardApprovalRequirement(args: {
-  businessDate: string;
-  dailyCloseId: Id<"dailyClose">;
-  outcome: "completed" | "cancelled";
-  sourceId: string;
-}): ApprovalRequirement {
-  return {
-    action: DAILY_CLOSE_CARRY_FORWARD_RESOLUTION_ACTION,
-    reason: "Manager approval is required to resolve carry-forward work.",
-    requiredRole: "manager",
-    selfApproval: "allowed",
-    subject: buildDailyCloseCarryForwardApprovalSubject(args),
-    copy: {
-      title: "Manager approval required",
-      message:
-        args.outcome === "completed"
-          ? "A manager needs to approve completing this carry-forward follow-up."
-          : "A manager needs to approve cancelling this carry-forward follow-up.",
-      primaryActionLabel:
-        args.outcome === "completed"
-          ? "Approve and complete"
-          : "Approve and cancel",
-      secondaryActionLabel: "Cancel",
-    },
-    resolutionModes: [
-      {
-        kind: "inline_manager_proof",
-      },
-    ],
-    metadata: {
-      businessDate: args.businessDate,
-      dailyCloseId: args.dailyCloseId,
-      outcome: args.outcome,
-      sourceId: args.sourceId,
-    },
-  };
-}
 
 function trimOptional(value?: string | null) {
   const nextValue = value?.trim();
@@ -1699,282 +1588,6 @@ async function listDepositsForDay(
   };
 }
 
-type PosTransactionAdjustmentReportRow = {
-  _id: string;
-  appliedAt?: number;
-  completedAt?: number;
-  correctedTotal?: number;
-  createdAt?: number;
-  deltaTotal?: number;
-  originalTotal?: number;
-  posTransactionId?: Id<"posTransaction"> | string;
-  registerSessionId?: Id<"registerSession"> | string;
-  settlementAmount?: number;
-  settlementDirection?: string;
-  settlementMethod?: string;
-  status?: string;
-  storeId?: Id<"store"> | string;
-  totalDelta?: number;
-  transactionId?: Id<"posTransaction"> | string;
-  transactionNumber?: string;
-};
-
-type AppliedTransactionAdjustment = PosTransactionAdjustmentReportRow & {
-  appliedAt: number;
-  signedSalesDelta: number;
-  signedSettlementAmount: number;
-  transactionId: string;
-};
-
-type AdjustmentReportTotals = {
-  adjustedSalesTotal: number;
-  adjustmentCashSettlementTotal: number;
-  adjustmentCollectionTotal: number;
-  adjustmentNetSettlementTotal: number;
-  adjustmentPaymentTotals: DailyCloseSummary["adjustmentPaymentTotals"];
-  adjustmentRefundTotal: number;
-  itemAdjustmentCount: number;
-  netCashMovementTotal: number;
-};
-
-const APPLIED_TRANSACTION_ADJUSTMENT_STATUSES = new Set([
-  "applied",
-  "completed",
-  "recorded",
-  "settled",
-]);
-
-function adjustmentAppliedAt(
-  adjustment: PosTransactionAdjustmentReportRow,
-): number | null {
-  const value =
-    adjustment.appliedAt ?? adjustment.completedAt ?? adjustment.createdAt;
-
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
-}
-
-function adjustmentTransactionId(
-  adjustment: PosTransactionAdjustmentReportRow,
-) {
-  return String(adjustment.posTransactionId ?? adjustment.transactionId ?? "");
-}
-
-function adjustmentSalesDelta(adjustment: PosTransactionAdjustmentReportRow) {
-  if (
-    typeof adjustment.deltaTotal === "number" &&
-    Number.isFinite(adjustment.deltaTotal)
-  ) {
-    return adjustment.deltaTotal;
-  }
-
-  if (
-    typeof adjustment.totalDelta === "number" &&
-    Number.isFinite(adjustment.totalDelta)
-  ) {
-    return adjustment.totalDelta;
-  }
-
-  if (
-    typeof adjustment.correctedTotal === "number" &&
-    Number.isFinite(adjustment.correctedTotal) &&
-    typeof adjustment.originalTotal === "number" &&
-    Number.isFinite(adjustment.originalTotal)
-  ) {
-    return adjustment.correctedTotal - adjustment.originalTotal;
-  }
-
-  return 0;
-}
-
-function adjustmentSettlementAmount(
-  adjustment: PosTransactionAdjustmentReportRow,
-) {
-  const rawAmount =
-    typeof adjustment.settlementAmount === "number" &&
-    Number.isFinite(adjustment.settlementAmount)
-      ? Math.abs(adjustment.settlementAmount)
-      : Math.abs(adjustmentSalesDelta(adjustment));
-  const direction = adjustment.settlementDirection;
-
-  if (
-    direction === "refund" ||
-    direction === "out" ||
-    direction === "refund_due"
-  ) {
-    return -rawAmount;
-  }
-
-  if (
-    direction === "collect" ||
-    direction === "collection" ||
-    direction === "in" ||
-    direction === "balance_due"
-  ) {
-    return rawAmount;
-  }
-
-  return adjustmentSalesDelta(adjustment);
-}
-
-async function readAppliedTransactionAdjustmentsForDay(
-  ctx: Pick<QueryCtx, "db">,
-  args: {
-    endAt: number;
-    startAt: number;
-    storeId: Id<"store">;
-  },
-): Promise<DailyCloseSourceRead<AppliedTransactionAdjustment>> {
-  const range = { startAt: args.startAt, endAt: args.endAt };
-  const adjustments = (await ctx.db
-    .query("posTransactionAdjustment")
-    .withIndex("by_storeId_status_appliedAt", (q) =>
-      q
-        .eq("storeId", args.storeId)
-        .eq("status", "applied")
-        .gte("appliedAt", args.startAt)
-        .lt("appliedAt", args.endAt),
-    )
-    .take(DAILY_CLOSE_QUERY_LIMIT)) as PosTransactionAdjustmentReportRow[];
-
-  return {
-    rows: adjustments.flatMap((adjustment) => {
-      const status = adjustment.status ?? "";
-      const appliedAt = adjustmentAppliedAt(adjustment);
-      const transactionId = adjustmentTransactionId(adjustment);
-
-      if (
-        !APPLIED_TRANSACTION_ADJUSTMENT_STATUSES.has(status) ||
-        appliedAt === null ||
-        !transactionId
-      ) {
-        return [];
-      }
-
-      return [
-        {
-          ...adjustment,
-          appliedAt,
-          signedSalesDelta: adjustmentSalesDelta(adjustment),
-          signedSettlementAmount: adjustmentSettlementAmount(adjustment),
-          transactionId,
-        },
-      ];
-    }),
-    completeness: sourceCompletenessEntry({
-      source: "pos_transaction_adjustment",
-      readMode: "by_storeId_status_appliedAt",
-      recordCount: adjustments.length,
-      limit: DAILY_CLOSE_QUERY_LIMIT,
-      range,
-      reason: "pos_transaction_adjustment_source_cap_reached",
-      statuses: ["applied"],
-    }),
-  };
-}
-
-export async function listAppliedTransactionAdjustmentsForDay(
-  ctx: Pick<QueryCtx, "db">,
-  args: {
-    endAt: number;
-    startAt: number;
-    storeId: Id<"store">;
-  },
-): Promise<AppliedTransactionAdjustment[]> {
-  const read = await readAppliedTransactionAdjustmentsForDay(ctx, args);
-
-  return read.rows;
-}
-
-function buildAdjustmentPaymentTotals(
-  adjustments: AppliedTransactionAdjustment[],
-) {
-  const totals = new Map<
-    string,
-    {
-      amount: number;
-      transactionCount: number;
-    }
-  >();
-
-  adjustments.forEach((adjustment) => {
-    if (!adjustment.settlementMethod || adjustment.signedSettlementAmount === 0) {
-      return;
-    }
-
-    const existing = totals.get(adjustment.settlementMethod) ?? {
-      amount: 0,
-      transactionCount: 0,
-    };
-
-    totals.set(adjustment.settlementMethod, {
-      amount: existing.amount + adjustment.signedSettlementAmount,
-      transactionCount: existing.transactionCount + 1,
-    });
-  });
-
-  return Array.from(totals.entries()).map(([method, total]) => ({
-    method,
-    ...total,
-  }));
-}
-
-export function buildAdjustmentReportTotals(args: {
-  appliedAdjustments: AppliedTransactionAdjustment[];
-  completedTransactions: Array<Doc<"posTransaction">>;
-  currentDayCashTotal: number;
-  salesTotal: number;
-}): AdjustmentReportTotals {
-  const completedTransactionIds = new Set(
-    args.completedTransactions.map((transaction) => String(transaction._id)),
-  );
-  const salesAdjustments = args.appliedAdjustments.filter((adjustment) =>
-    completedTransactionIds.has(adjustment.transactionId),
-  );
-  const adjustedSalesTotal =
-    args.salesTotal +
-    salesAdjustments.reduce(
-      (sum, adjustment) => sum + adjustment.signedSalesDelta,
-      0,
-    );
-  const adjustmentNetSettlementTotal = args.appliedAdjustments.reduce(
-    (sum, adjustment) => sum + adjustment.signedSettlementAmount,
-    0,
-  );
-  const adjustmentCashSettlementTotal = args.appliedAdjustments.reduce(
-    (sum, adjustment) =>
-      adjustment.settlementMethod === "cash"
-        ? sum + adjustment.signedSettlementAmount
-        : sum,
-    0,
-  );
-
-  return {
-    adjustedSalesTotal,
-    adjustmentCashSettlementTotal,
-    adjustmentCollectionTotal: args.appliedAdjustments.reduce(
-      (sum, adjustment) =>
-        adjustment.signedSettlementAmount > 0
-          ? sum + adjustment.signedSettlementAmount
-          : sum,
-      0,
-    ),
-    adjustmentNetSettlementTotal,
-    adjustmentPaymentTotals: buildAdjustmentPaymentTotals(
-      args.appliedAdjustments,
-    ),
-    adjustmentRefundTotal: args.appliedAdjustments.reduce(
-      (sum, adjustment) =>
-        adjustment.signedSettlementAmount < 0
-          ? sum + Math.abs(adjustment.signedSettlementAmount)
-          : sum,
-      0,
-    ),
-    itemAdjustmentCount: args.appliedAdjustments.length,
-    netCashMovementTotal:
-      args.currentDayCashTotal + adjustmentCashSettlementTotal,
-  };
-}
-
 function cashDeltasByRegisterSessionId(
   transactions: Array<Doc<"posTransaction">>,
 ) {
@@ -2097,186 +1710,6 @@ function buildDailyCloseReportSnapshot(args: {
     sourceCompleteness: args.snapshot.sourceCompleteness,
     sourceSubjects: args.snapshot.sourceSubjects,
   };
-}
-
-function numberFromMetadata(
-  record: Record<string, unknown> | undefined,
-  key: string,
-) {
-  const value = record?.[key];
-
-  return typeof value === "number" && Number.isFinite(value) ? value : 0;
-}
-
-function buildEodAutomationDecisionEvidence(args: {
-  automationScheduleEvidence?: CompleteDailyCloseForAutomationArgs[
-    "automationScheduleEvidence"
-  ];
-  classification: string;
-  eligible: boolean;
-  policy: CompleteDailyCloseForAutomationArgs["eodAutoCompletePolicy"];
-  snapshot: DailyCloseSnapshot;
-}): AutomationDecisionEvidence {
-  const voidedSaleTotal = args.snapshot.reviewItems
-    .filter((item) => item.category === "voided_sale")
-    .reduce((sum, item) => sum + numberFromMetadata(item.metadata, "total"), 0);
-  const disqualifyingCategories = Array.from(
-    new Set([
-      ...args.snapshot.blockers.map((item) => item.category),
-      ...args.snapshot.reviewItems
-        .map((item) => item.category)
-        .filter(
-          (category) =>
-            !EOD_AUTO_COMPLETE_LOW_RISK_REVIEW_CATEGORIES.has(category),
-        ),
-    ]),
-  ).sort();
-
-  return {
-    kind: "eod_auto_complete",
-    classification: args.classification,
-    eligible: args.eligible,
-    observed: {
-      absoluteCashVariance: Math.abs(args.snapshot.summary.netCashVariance),
-      blockerCount: args.snapshot.readiness.blockerCount,
-      carryForwardCount: args.snapshot.readiness.carryForwardCount,
-      carryForwardItemKeys: args.snapshot.carryForwardItems.map(
-        (item) => item.key,
-      ),
-      carryForwardPreserved:
-        args.snapshot.carryForwardItems.length > 0 ||
-        args.snapshot.readiness.carryForwardCount > 0,
-      disqualifyingCategories,
-      reviewCount: args.snapshot.readiness.reviewCount,
-      ...(args.automationScheduleEvidence
-        ? {
-            scheduleEvidenceSource: args.automationScheduleEvidence.source,
-            ...(args.automationScheduleEvidence.storeScheduleId
-              ? {
-                  storeScheduleId:
-                    args.automationScheduleEvidence.storeScheduleId,
-                }
-              : {}),
-            ...(args.automationScheduleEvidence.scheduleVersion
-              ? {
-                  scheduleVersion:
-                    args.automationScheduleEvidence.scheduleVersion,
-                }
-              : {}),
-            ...(typeof args.automationScheduleEvidence.openedAt === "number"
-              ? { scheduleOpenedAt: args.automationScheduleEvidence.openedAt }
-              : {}),
-            ...(typeof args.automationScheduleEvidence.closedAt === "number"
-              ? { scheduleClosedAt: args.automationScheduleEvidence.closedAt }
-              : {}),
-            ...(typeof args.automationScheduleEvidence.evaluationAt === "number"
-              ? {
-                  scheduleEvaluationAt:
-                    args.automationScheduleEvidence.evaluationAt,
-                }
-              : {}),
-          }
-        : {}),
-      voidedSaleCount: args.snapshot.summary.voidedTransactionCount,
-      voidedSaleTotal,
-    },
-    policy: {
-      cleanDayAutoCompleteEnabled: args.policy.cleanDayAutoCompleteEnabled,
-      maxAbsoluteCashVariance: args.policy.maxAbsoluteCashVariance,
-      maxVoidedSaleCount: args.policy.maxVoidedSaleCount,
-      maxVoidedSaleTotal: args.policy.maxVoidedSaleTotal,
-    },
-  };
-}
-
-function validateEodAutomationPolicyForSnapshot(args: {
-  policy: CompleteDailyCloseForAutomationArgs["eodAutoCompletePolicy"];
-  reviewedItemKeys: Set<string>;
-  snapshot: DailyCloseSnapshot;
-}) {
-  const unsupportedReviewCategories = Array.from(
-    new Set(
-      args.snapshot.reviewItems
-        .map((item) => item.category)
-        .filter(
-          (category) =>
-            !EOD_AUTO_COMPLETE_LOW_RISK_REVIEW_CATEGORIES.has(category),
-        ),
-    ),
-  );
-  const disqualifyingCategories = Array.from(
-    new Set([
-      ...args.snapshot.blockers.map((item) => item.category),
-      ...unsupportedReviewCategories,
-    ]),
-  ).sort();
-
-  if (disqualifyingCategories.length > 0) {
-    return {
-      classification: "blocked",
-      message:
-        "EOD Review automation cannot complete while blockers or unsupported review evidence remain.",
-      metadata: { disqualifyingCategories },
-    };
-  }
-
-  if (args.snapshot.reviewItems.length === 0) {
-    return args.policy.cleanDayAutoCompleteEnabled
-      ? null
-      : {
-          classification: "clean_day",
-          message:
-            "EOD Review automation cannot complete clean days while clean-day auto-complete is disabled.",
-          metadata: { cleanDayAutoCompleteEnabled: false },
-        };
-  }
-
-  const unreviewedItemKeys = args.snapshot.reviewItems
-    .map((item) => item.key)
-    .filter((key) => !args.reviewedItemKeys.has(key));
-
-  if (unreviewedItemKeys.length > 0) {
-    return {
-      classification: "review_unreviewed",
-      message:
-        "EOD Review automation cannot complete while review items are unreviewed by policy.",
-      metadata: {
-        reviewItemCount: args.snapshot.reviewItems.length,
-        unreviewedItemKeys,
-      },
-    };
-  }
-
-  const absoluteCashVariance = Math.abs(args.snapshot.summary.netCashVariance);
-  const voidedSaleTotal = args.snapshot.reviewItems
-    .filter((item) => item.category === "voided_sale")
-    .reduce((sum, item) => sum + numberFromMetadata(item.metadata, "total"), 0);
-  const thresholdFailures = [
-    absoluteCashVariance > args.policy.maxAbsoluteCashVariance
-      ? "absolute_cash_variance"
-      : null,
-    args.snapshot.summary.voidedTransactionCount >
-    args.policy.maxVoidedSaleCount
-      ? "voided_sale_count"
-      : null,
-    voidedSaleTotal > args.policy.maxVoidedSaleTotal
-      ? "voided_sale_total"
-      : null,
-  ].filter(Boolean);
-
-  return thresholdFailures.length === 0
-    ? null
-    : {
-        classification: "review_threshold_exceeded",
-        message:
-          "EOD Review automation cannot complete while review evidence exceeds policy thresholds.",
-        metadata: {
-          absoluteCashVariance,
-          thresholdFailures,
-          voidedSaleCount: args.snapshot.summary.voidedTransactionCount,
-          voidedSaleTotal,
-        },
-      };
 }
 
 function snapshotReviewedItems(

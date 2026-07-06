@@ -166,6 +166,9 @@ import type * as operations_approvalRequesterChallenges from "../operations/appr
 import type * as operations_approvalRequests from "../operations/approvalRequests.js";
 import type * as operations_customerProfiles from "../operations/customerProfiles.js";
 import type * as operations_dailyClose from "../operations/dailyClose.js";
+import type * as operations_dailyClose_adjustmentReports from "../operations/dailyClose/adjustmentReports.js";
+import type * as operations_dailyClose_approval from "../operations/dailyClose/approval.js";
+import type * as operations_dailyClose_automationPolicy from "../operations/dailyClose/automationPolicy.js";
 import type * as operations_dailyManagerReportEmail from "../operations/dailyManagerReportEmail.js";
 import type * as operations_dailyOpening from "../operations/dailyOpening.js";
 import type * as operations_dailyOperations from "../operations/dailyOperations.js";
@@ -604,6 +607,9 @@ declare const fullApi: ApiFromModules<{
   "operations/approvalRequests": typeof operations_approvalRequests;
   "operations/customerProfiles": typeof operations_customerProfiles;
   "operations/dailyClose": typeof operations_dailyClose;
+  "operations/dailyClose/adjustmentReports": typeof operations_dailyClose_adjustmentReports;
+  "operations/dailyClose/approval": typeof operations_dailyClose_approval;
+  "operations/dailyClose/automationPolicy": typeof operations_dailyClose_automationPolicy;
   "operations/dailyManagerReportEmail": typeof operations_dailyManagerReportEmail;
   "operations/dailyOpening": typeof operations_dailyOpening;
   "operations/dailyOperations": typeof operations_dailyOperations;
