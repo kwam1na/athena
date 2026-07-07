@@ -37,6 +37,7 @@ import {
   completeDailyCloseForAutomationWithCtx,
 } from "./dailyClose";
 import { requireStoreFullAdminAccess } from "../stockOps/access";
+import { getCashControlsConfig } from "./registerSessionCloseoutGate";
 import {
   getStoreScheduleContextForStoreAtWithCtx,
   resolveStoreOperatingRangeForDateWithCtx,
@@ -2093,12 +2094,20 @@ function isReportableEodAutoCompleteResult(
   );
 }
 
+function shouldSendScheduledDailyManagerReports() {
+  return process.env.STAGE === "prod";
+}
+
 export async function sendDailyManagerReportsForAppliedEodAutomationWithCtx(
   ctx: Pick<ActionCtx, "runAction">,
   args: {
     results: DailyOperationsAutomationResult["eodAutoCompleteResults"];
   },
 ): Promise<DailyManagerReportAutomationSendResult[]> {
+  if (!shouldSendScheduledDailyManagerReports()) {
+    return [];
+  }
+
   const reportableResults = args.results.filter(
     isReportableEodAutoCompleteResult,
   );
@@ -2358,6 +2367,84 @@ export const updateEodAutoCompletePolicy = mutation({
         policy.operatingTimezoneOffsetMinutes ?? null,
       paused: Boolean(policy.paused),
       policyVersion: policy.policyVersion,
+    };
+  },
+});
+
+function asRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return value as Record<string, unknown>;
+}
+
+export const getRegisterCloseoutApprovalPolicy = query({
+  args: {
+    storeId: v.id("store"),
+  },
+  handler: async (ctx, args) => {
+    const { store } = await requireStoreFullAdminAccess(ctx, args.storeId);
+    const config = getCashControlsConfig(store);
+
+    return {
+      requireManagerSignoffForAnyVariance:
+        config.requireManagerSignoffForAnyVariance,
+      requireManagerSignoffForOvers: config.requireManagerSignoffForOvers,
+      requireManagerSignoffForShorts: config.requireManagerSignoffForShorts,
+      varianceApprovalThreshold: config.varianceApprovalThreshold,
+    };
+  },
+});
+
+export const updateRegisterCloseoutApprovalPolicy = mutation({
+  args: {
+    storeId: v.id("store"),
+    varianceApprovalThreshold: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const { store } = await requireStoreFullAdminAccess(ctx, args.storeId);
+    if (
+      !Number.isFinite(args.varianceApprovalThreshold) ||
+      args.varianceApprovalThreshold < 0
+    ) {
+      throw new Error("Variance approval threshold must be non-negative.");
+    }
+
+    const threshold = Math.max(
+      0,
+      Math.round(args.varianceApprovalThreshold),
+    );
+    const currentConfig = asRecord(store.config);
+    const operations = asRecord(currentConfig.operations);
+    const cashControls = asRecord(operations.cashControls);
+    const nextConfig = {
+      ...currentConfig,
+      operations: {
+        ...operations,
+        cashControls: {
+          ...cashControls,
+          varianceApprovalThreshold: threshold,
+        },
+      },
+    };
+
+    await ctx.db.patch("store", args.storeId, { config: nextConfig });
+
+    return {
+      requireManagerSignoffForAnyVariance:
+        typeof cashControls.requireManagerSignoffForAnyVariance === "boolean"
+          ? cashControls.requireManagerSignoffForAnyVariance
+          : false,
+      requireManagerSignoffForOvers:
+        typeof cashControls.requireManagerSignoffForOvers === "boolean"
+          ? cashControls.requireManagerSignoffForOvers
+          : false,
+      requireManagerSignoffForShorts:
+        typeof cashControls.requireManagerSignoffForShorts === "boolean"
+          ? cashControls.requireManagerSignoffForShorts
+          : false,
+      varianceApprovalThreshold: threshold,
     };
   },
 });

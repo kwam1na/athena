@@ -41,6 +41,19 @@ vi.mock("convex/react", () => ({
   useQuery: (...args: unknown[]) => useQueryMock(...args),
 }));
 
+vi.mock("~/convex/_generated/api", () => ({
+  api: {
+    inventory: {
+      pos: {
+        getTodaySummary: "getTodaySummary",
+      },
+      storeSchedule: {
+        getStoreScheduleSummary: "getStoreScheduleSummary",
+      },
+    },
+  },
+}));
+
 vi.mock("recharts", () => ({
   Area: () => <path data-testid="store-pulse-area" />,
   AreaChart: ({ children }: { children?: React.ReactNode }) => (
@@ -143,79 +156,96 @@ describe("PointOfSaleView", () => {
       terminalSeed: null,
       source: "live",
     });
-    useQueryMock.mockReturnValue({
-      averageTransaction: 6_250,
-      date: "2026-06-20",
-      operatorSnapshot: {
-        busiestHour: {
-          hour: 14,
-          label: "2 PM",
-          totalSales: 12_500,
-          transactionCount: 2,
-        },
-        comparison: {
-          averageTransactionDeltaPercent: 25,
-          currentAverageTransaction: 6_250,
-          currentItemsSold: 3,
-          currentSales: 12_500,
-          currentTransactions: 2,
-          itemsSoldDeltaPercent: 50,
-          salesDeltaPercent: 25,
-          transactionDeltaPercent: 0,
-          yesterdayAverageTransaction: 5_000,
-          yesterdayItemsSold: 2,
-          yesterdaySales: 10_000,
-          yesterdayTransactions: 2,
-        },
-        historyDays: 14,
-        isLimited: false,
-        paymentMix: [
-          {
-            count: 1,
-            label: "Cash",
-            method: "cash",
-            share: 60,
-            total: 7_500,
+    useQueryMock.mockImplementation((query) => {
+      if (query === "getStoreScheduleSummary") {
+        return {
+          context: {
+            nextWindow: {
+              localDate: "2026-07-08",
+              localStartLabel: "09:00",
+            },
+            timezone: "Africa/Accra",
           },
-          {
-            count: 1,
-            label: "Card",
-            method: "card",
-            share: 40,
-            total: 5_000,
+          schedule: {
+            timezone: "Africa/Accra",
           },
-        ],
-        topItems: [
-          {
-            name: "Braiding hair",
-            productSku: "BRAID-1",
-            quantity: 2,
-            totalSales: 8_000,
-          },
-        ],
-        trend: [
-          {
-            averageTransaction: 0,
-            date: "2026-06-19",
-            label: "Jun 19",
-            totalItemsSold: 0,
-            totalSales: 0,
-            transactionCount: 0,
-          },
-          {
-            averageTransaction: 6_250,
-            date: "2026-06-20",
-            label: "Jun 20",
-            totalItemsSold: 3,
+        };
+      }
+
+      return {
+        averageTransaction: 6_250,
+        date: "2026-06-20",
+        operatorSnapshot: {
+          busiestHour: {
+            hour: 14,
+            label: "2 PM",
             totalSales: 12_500,
             transactionCount: 2,
           },
-        ],
-        usableHistoryDays: 1,
-      },
-      totalItemsSold: 3,
-      totalSales: 12_500,
-      totalTransactions: 2,
+          comparison: {
+            averageTransactionDeltaPercent: 25,
+            currentAverageTransaction: 6_250,
+            currentItemsSold: 3,
+            currentSales: 12_500,
+            currentTransactions: 2,
+            itemsSoldDeltaPercent: 50,
+            salesDeltaPercent: 25,
+            transactionDeltaPercent: 0,
+            yesterdayAverageTransaction: 5_000,
+            yesterdayItemsSold: 2,
+            yesterdaySales: 10_000,
+            yesterdayTransactions: 2,
+          },
+          historyDays: 14,
+          isLimited: false,
+          paymentMix: [
+            {
+              count: 1,
+              label: "Cash",
+              method: "cash",
+              share: 60,
+              total: 7_500,
+            },
+            {
+              count: 1,
+              label: "Card",
+              method: "card",
+              share: 40,
+              total: 5_000,
+            },
+          ],
+          topItems: [
+            {
+              name: "Braiding hair",
+              productSku: "BRAID-1",
+              quantity: 2,
+              totalSales: 8_000,
+            },
+          ],
+          trend: [
+            {
+              averageTransaction: 0,
+              date: "2026-06-19",
+              label: "Jun 19",
+              totalItemsSold: 0,
+              totalSales: 0,
+              transactionCount: 0,
+            },
+            {
+              averageTransaction: 6_250,
+              date: "2026-06-20",
+              label: "Jun 20",
+              totalItemsSold: 3,
+              totalSales: 12_500,
+              transactionCount: 2,
+            },
+          ],
+          usableHistoryDays: 1,
+        },
+        totalItemsSold: 3,
+        totalSales: 12_500,
+        totalTransactions: 2,
+      };
     });
   });
 
@@ -225,6 +255,12 @@ describe("PointOfSaleView", () => {
     expect(
       screen.getByRole("heading", { level: 1, name: "Point of Sale" }),
     ).toBeInTheDocument();
+    expect(screen.getByText("Store time")).toBeInTheDocument();
+    expect(screen.getByText("Next opening")).toBeInTheDocument();
+    expect(screen.getByText("Wed, Jul 8 9:00 AM")).toBeInTheDocument();
+    expect(useQueryMock).toHaveBeenCalledWith("getStoreScheduleSummary", {
+      storeId: "store-1",
+    });
   });
 
   it("prewarms register metadata without refreshing full availability from the POS landing page", () => {
@@ -287,7 +323,7 @@ describe("PointOfSaleView", () => {
     const { rerender } = render(<PointOfSaleView />);
 
     await user.click(screen.getByRole("tab", { name: "This month" }));
-    expect(useQueryMock).toHaveBeenLastCalledWith(expect.anything(), {
+    expect(useQueryMock).toHaveBeenCalledWith("getTodaySummary", {
       pulseWindow: "this_month",
       storeId: "store-1",
     });
@@ -301,7 +337,7 @@ describe("PointOfSaleView", () => {
 
     rerender(<PointOfSaleView />);
 
-    expect(useQueryMock).toHaveBeenCalledWith(expect.anything(), {
+    expect(useQueryMock).toHaveBeenCalledWith("getTodaySummary", {
       pulseWindow: "today",
       storeId: "store-1",
     });
@@ -328,7 +364,7 @@ describe("PointOfSaleView", () => {
     expect(screen.getAllByText("-").length).toBeGreaterThanOrEqual(4);
   });
 
-  it("links POS users to terminal health from the POS landing page", () => {
+  it("links manager-level users to terminal health from the POS landing page", () => {
     render(<PointOfSaleView />);
 
     const link = screen.getByRole("link", { name: /Terminal Health/i });
@@ -353,7 +389,7 @@ describe("PointOfSaleView", () => {
     ).toBeInTheDocument();
   });
 
-  it("links POS-only users to POS settings from the POS landing page", () => {
+  it("hides manager-only POS launchers for POS-only sessions", () => {
     usePermissionsMock.mockReturnValue({
       canAccessPOS: () => true,
       hasFinancialDetailsAccess: false,
@@ -362,8 +398,21 @@ describe("PointOfSaleView", () => {
 
     render(<PointOfSaleView />);
 
-    const link = screen.getByRole("link", { name: /POS Settings/i });
+    expect(
+      screen.queryByRole("link", { name: /Product Lookup/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: /Terminal Health/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: /POS Settings/i }),
+    ).not.toBeInTheDocument();
+  });
 
+  it("links manager-level users to POS settings from the POS landing page", () => {
+    render(<PointOfSaleView />);
+
+    const link = screen.getByRole("link", { name: /POS Settings/i });
     expect(link).toHaveAttribute("href", "/acme/store/downtown/pos/settings");
   });
 

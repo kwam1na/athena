@@ -260,6 +260,7 @@ export interface RegisterDrawerGateState {
     expectedCashAfterApproval?: number;
   } | null;
   canOpenCashControls?: boolean;
+  canViewCloseoutFinancials?: boolean;
   cashControlsRegisterSessionId?: Id<"registerSession">;
   canOpenDrawer?: boolean;
   hasSignedInStaff?: boolean;

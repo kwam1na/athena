@@ -5,11 +5,11 @@ import { NoPermissionView } from "./states/no-permission/NoPermissionView";
 
 interface ProtectedRouteProps {
   children: ReactNode;
-  requires: Role;
+  requires: Role | "manager";
 }
 
 export function ProtectedRoute({ children, requires }: ProtectedRouteProps) {
-  const { role, isLoading } = usePermissions();
+  const { hasFinancialDetailsAccess, role, isLoading } = usePermissions();
 
   if (isLoading) {
     return null;
@@ -24,6 +24,10 @@ export function ProtectedRoute({ children, requires }: ProtectedRouteProps) {
     requires === "pos_only" &&
     (role === "pos_only" || role === "full_admin")
   ) {
+    return <>{children}</>;
+  }
+
+  if (requires === "manager" && hasFinancialDetailsAccess) {
     return <>{children}</>;
   }
 

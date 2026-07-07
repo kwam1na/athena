@@ -1,11 +1,7 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  GENERIC_UNEXPECTED_ERROR_MESSAGE,
-  ok,
-  userError,
-} from "~/shared/commandResult";
+import { ok, userError } from "~/shared/commandResult";
 
 import {
   RegisterSessionActivityViewContent,
@@ -404,9 +400,9 @@ describe("RegisterSessionViewContent", () => {
     expect(screen.getByRole("button", { name: "Submit closeout" })).toHaveClass(
       "bg-action-workflow",
     );
-    expect(screen.getByText("Deposit history")).toBeInTheDocument();
-    expect(screen.getByText("Record cash deposit")).toBeInTheDocument();
-    expect(screen.getAllByText("BANK-339").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Deposit history")).not.toBeInTheDocument();
+    expect(screen.queryByText("Record cash deposit")).not.toBeInTheDocument();
+    expect(screen.queryByText("BANK-339")).not.toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "View trace" }),
     ).toBeInTheDocument();
@@ -424,6 +420,63 @@ describe("RegisterSessionViewContent", () => {
     expect(screen.getByRole("link", { name: "View trace" })).not.toHaveClass(
       "w-full",
     );
+  });
+
+  it("hides register cash details while keeping closeout input available to non-manager staff", () => {
+    render(
+      <RegisterSessionViewContent
+        actorStaffProfileId="staff-1"
+        actorUserId="user-1"
+        canViewFinancialDetails={false}
+        currency="GHS"
+        isLoading={false}
+        onRecordDeposit={vi.fn()}
+        {...closeoutHandlers}
+        orgUrlSlug="wigclub"
+        registerSessionSnapshot={{
+          ...baseSnapshot,
+          registerSession: {
+            ...baseSnapshot.registerSession,
+            countedCash: undefined,
+            expectedCash: 148500,
+            netExpectedCash: 148500,
+            openingFloat: 15000,
+            totalDeposited: 0,
+            variance: 0,
+            workflowTraceId: "register_session:reg-3",
+          },
+        }}
+        storeId="store-1"
+        storeUrlSlug="wigclub"
+      />,
+    );
+
+    expect(screen.getByText("Cash position")).toBeInTheDocument();
+    expect(screen.getAllByText("Manager only").length).toBeGreaterThan(0);
+    expect(screen.queryByText("GH₵1,485")).not.toBeInTheDocument();
+    expect(screen.getByText("GH₵150")).toBeInTheDocument();
+    expect(screen.getByText("Pending")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Correct opening float" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("Closeout workflow")).toBeInTheDocument();
+    expect(screen.getByText("Count and close drawer")).toBeInTheDocument();
+    expect(screen.getByLabelText("Closeout counted cash")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Draft variance"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Submit closeout" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "POS activity" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "View trace" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Deposit history")).not.toBeInTheDocument();
+    expect(screen.queryByText("Record cash deposit")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Deposit amount")).not.toBeInTheDocument();
   });
 
   it("links to POS activity without rendering the activity log inline", () => {
@@ -2550,6 +2603,54 @@ describe("RegisterSessionViewContent", () => {
     ).toBeInTheDocument();
   });
 
+  it("hides closed closeout metrics from non-manager staff", () => {
+    render(
+      <RegisterSessionViewContent
+        actorUserId="user-1"
+        canViewFinancialDetails={false}
+        currency="GHS"
+        isLoading={false}
+        onRecordDeposit={vi.fn()}
+        {...closeoutHandlers}
+        registerSessionSnapshot={{
+          ...baseSnapshot,
+          registerSession: {
+            ...baseSnapshot.registerSession,
+            closedAt: new Date("2026-07-06T01:54:00.000Z").getTime(),
+            closedByStaffName: "Kwamina Mensah",
+            countedCash: 100000,
+            expectedCash: 94200,
+            netExpectedCash: 94200,
+            status: "closed",
+            variance: 5800,
+          },
+        }}
+        storeId="store-1"
+      />,
+    );
+
+    const closedCloseoutPanel = screen
+      .getByText("Closeout complete")
+      .closest("div");
+
+    expect(closedCloseoutPanel).toBeInTheDocument();
+    expect(
+      within(closedCloseoutPanel as HTMLElement).queryByText("GH₵942"),
+    ).not.toBeInTheDocument();
+    expect(
+      within(closedCloseoutPanel as HTMLElement).queryByText("GH₵1,000"),
+    ).not.toBeInTheDocument();
+    expect(
+      within(closedCloseoutPanel as HTMLElement).queryByText("GH₵58"),
+    ).not.toBeInTheDocument();
+    expect(
+      within(closedCloseoutPanel as HTMLElement).queryByText("Variance"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Reopen closeout/i }),
+    ).toBeInTheDocument();
+  });
+
   it("reopens a closed closeout after manager approval", async () => {
     const user = userEvent.setup();
     const onAuthenticateStaff = vi.fn().mockResolvedValue(
@@ -2983,10 +3084,12 @@ describe("RegisterSessionViewContent", () => {
     expect(
       screen.queryByRole("button", { name: "Finalize closeout" }),
     ).not.toBeInTheDocument();
-    expect(screen.getByLabelText("Deposit amount")).toBeDisabled();
-    expect(screen.getByLabelText("Deposit reference")).toBeDisabled();
-    expect(screen.getByLabelText("Deposit notes")).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Record deposit" })).toBeDisabled();
+    expect(screen.queryByLabelText("Deposit amount")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Deposit reference")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Deposit notes")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Record deposit" }),
+    ).not.toBeInTheDocument();
   });
 
   it("holds cash item-adjustment closeouts without finalize or deposit actions", () => {
@@ -3031,8 +3134,10 @@ describe("RegisterSessionViewContent", () => {
     expect(
       screen.queryByRole("button", { name: "Finalize closeout" }),
     ).not.toBeInTheDocument();
-    expect(screen.getByLabelText("Deposit amount")).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Record deposit" })).toBeDisabled();
+    expect(screen.queryByLabelText("Deposit amount")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Record deposit" }),
+    ).not.toBeInTheDocument();
   });
 
   it("wraps submitted closeout metrics when after-adjustment context is shown", () => {
@@ -4103,60 +4208,7 @@ describe("RegisterSessionViewContent", () => {
     );
   });
 
-  it("submits a deposit with store, session, and actor context", async () => {
-    vi.spyOn(Date, "now").mockReturnValue(1000);
-
-    const user = userEvent.setup();
-    const onRecordDeposit = vi.fn().mockResolvedValue(
-      ok({
-        action: "recorded",
-      }),
-    );
-
-    render(
-      <RegisterSessionViewContent
-        actorStaffProfileId="staff-1"
-        actorUserId="user-1"
-        currency="USD"
-        isLoading={false}
-        onRecordDeposit={onRecordDeposit}
-        {...closeoutHandlers}
-        registerSessionSnapshot={activeSnapshot}
-        storeId="store-1"
-      />,
-    );
-
-    await user.type(screen.getByLabelText("Deposit amount"), "2500");
-    await user.type(screen.getByLabelText("Deposit reference"), "BANK-440");
-    await user.type(
-      screen.getByLabelText("Deposit notes"),
-      "Safe drop before final closeout.",
-    );
-    await user.click(screen.getByRole("button", { name: "Record deposit" }));
-
-    await waitFor(() =>
-      expect(onRecordDeposit).toHaveBeenCalledWith({
-        actorStaffProfileId: "staff-1",
-        actorUserId: "user-1",
-        amount: 2500,
-        notes: "Safe drop before final closeout.",
-        reference: "BANK-440",
-        registerSessionId: "session-1",
-        storeId: "store-1",
-        submissionKey: "register-session-deposit-session-1-rs",
-      }),
-    );
-  });
-
-  it("supplies the linked active staff profile from the production container when recording deposits", async () => {
-    vi.spyOn(Date, "now").mockReturnValue(1000);
-
-    const user = userEvent.setup();
-    const recordDepositMutation = vi.fn().mockResolvedValue(
-      ok({
-        action: "recorded",
-      }),
-    );
+  it("uses manager elevation financial access for register detail visibility", () => {
     protectedPageMocks.useProtectedAdminPageState.mockReturnValue({
       activeStore: {
         _id: "store-1",
@@ -4164,6 +4216,7 @@ describe("RegisterSessionViewContent", () => {
       },
       canAccessProtectedSurface: true,
       canQueryProtectedData: true,
+      hasFinancialDetailsAccess: true,
       hasFullAdminAccess: false,
       isAuthenticated: true,
       isLoadingAccess: false,
@@ -4171,7 +4224,7 @@ describe("RegisterSessionViewContent", () => {
     authMocks.useAuth.mockReturnValue({
       user: { _id: "user-1" },
     });
-    convexMocks.useMutation.mockReturnValue(recordDepositMutation);
+    convexMocks.useMutation.mockReturnValue(vi.fn());
     convexMocks.useQuery.mockImplementation((_query, args) => {
       if (args === "skip") {
         return undefined;
@@ -4185,6 +4238,7 @@ describe("RegisterSessionViewContent", () => {
         {
           _id: "staff-1",
           linkedUserId: "user-1",
+          roles: ["cashier"],
           status: "active",
           storeId: "store-1",
         },
@@ -4193,76 +4247,8 @@ describe("RegisterSessionViewContent", () => {
 
     render(<RegisterSessionView />);
 
-    await user.type(screen.getByLabelText("Deposit amount"), "2500");
-    await user.click(screen.getByRole("button", { name: "Record deposit" }));
-
-    await waitFor(() =>
-      expect(recordDepositMutation).toHaveBeenCalledWith(
-        expect.objectContaining({
-          actorStaffProfileId: "staff-1",
-          actorUserId: "user-1",
-        }),
-      ),
-    );
+    expect(screen.getAllByText("$176").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Manager only")).not.toBeInTheDocument();
   });
 
-  it("shows safe inline errors for deposit user_error results", async () => {
-    const user = userEvent.setup();
-    const onRecordDeposit = vi.fn().mockResolvedValue(
-      userError({
-        code: "precondition_failed",
-        message: "Register session is not accepting new deposits.",
-      }),
-    );
-
-    render(
-      <RegisterSessionViewContent
-        actorUserId="user-1"
-        currency="USD"
-        isLoading={false}
-        onRecordDeposit={onRecordDeposit}
-        {...closeoutHandlers}
-        registerSessionSnapshot={activeSnapshot}
-        storeId="store-1"
-      />,
-    );
-
-    await user.type(screen.getByLabelText("Deposit amount"), "2500");
-    await user.click(screen.getByRole("button", { name: "Record deposit" }));
-
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Register session is not accepting new deposits.",
-    );
-    expect(screen.getByLabelText("Deposit amount")).toHaveValue(2500);
-  });
-
-  it("shows generic inline errors for unexpected deposit failures", async () => {
-    const user = userEvent.setup();
-    const onRecordDeposit = vi.fn().mockResolvedValue({
-      kind: "unexpected_error",
-      error: {
-        title: "Something went wrong",
-        message: GENERIC_UNEXPECTED_ERROR_MESSAGE,
-      },
-    });
-
-    render(
-      <RegisterSessionViewContent
-        actorUserId="user-1"
-        currency="USD"
-        isLoading={false}
-        onRecordDeposit={onRecordDeposit}
-        {...closeoutHandlers}
-        registerSessionSnapshot={activeSnapshot}
-        storeId="store-1"
-      />,
-    );
-
-    await user.type(screen.getByLabelText("Deposit amount"), "2500");
-    await user.click(screen.getByRole("button", { name: "Record deposit" }));
-
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      GENERIC_UNEXPECTED_ERROR_MESSAGE,
-    );
-  });
 });

@@ -799,7 +799,7 @@ function StorePulseSkeleton({
 }) {
   const visibleLoadingMetrics = showFinancialSalesCards
     ? loadingMetrics
-    : loadingMetrics.slice(2);
+    : loadingMetrics.filter((metric) => metric.label === "Transactions");
 
   return (
     <div
@@ -995,21 +995,21 @@ export function StorePulseSummaryView({
                   label="Transactions"
                   value={totalTransactions}
                 />
-                <StorePulseMetric
-                  helper={
-                    canViewFinancialDetails
-                      ? copy.comparisonHelper
+                {canViewFinancialDetails ? (
+                  <StorePulseMetric
+                    helper={
+                      copy.comparisonHelper
                         ? formatComparisonHelper({
                             deltaPercent: comparison?.itemsSoldDeltaPercent,
                             priorValue: comparison?.yesterdayItemsSold,
                             priorWindowLabel: copy.comparisonHelper,
                           })
                         : "-"
-                      : undefined
-                  }
-                  label="Items sold"
-                  value={totalItemsSold}
-                />
+                    }
+                    label="Items sold"
+                    value={totalItemsSold}
+                  />
+                ) : null}
               </div>
             ) : null}
 

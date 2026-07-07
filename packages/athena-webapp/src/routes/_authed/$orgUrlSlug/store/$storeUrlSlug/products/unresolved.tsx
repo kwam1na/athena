@@ -6,7 +6,7 @@ export const Route = createFileRoute(
   "/_authed/$orgUrlSlug/store/$storeUrlSlug/products/unresolved"
 )({
   component: () => (
-    <ProtectedRoute requires="full_admin">
+    <ProtectedRoute requires="manager">
       <UnresolvedProducts />
     </ProtectedRoute>
   ),

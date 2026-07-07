@@ -29,7 +29,7 @@
     "pr:athena:delivery-run": "bun scripts/pr-athena-delivery-run.ts",
     "pr:athena:prepare": "bun run dependency:check && bun run pre-commit:generated-artifacts && bun scripts/pre-push-validation-proof.ts prepare-pr-athena",
     "pr:athena:validate": "bun run pr:athena:validate-provider && bun scripts/pr-athena-delivery-run.ts write-provider-evidence && bun run pr:athena:validate-review",
-    "pr:athena:validate-provider": "bun run compound:check && bun run workflow:check && bun run --filter '@athena/webapp' audit:convex && bun run --filter '@athena/webapp' lint:convex:changed && bun run --filter '@athena/webapp' lint:frontend:changed && bun run architecture:check && bun run test:coverage",
+    "pr:athena:validate-provider": "bun run compound:check && bun run workflow:check && bun run --filter '@athena/webapp' audit:convex && bun run --filter '@athena/webapp' lint:convex:changed && bun run --filter '@athena/webapp' lint:frontend:changed && bun run architecture:check && bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json && bun run test:coverage",
     "pr:athena:validate-review": "bun run harness:review --base origin/main --repo-validation-provided-by pr:athena --provider-evidence artifacts/harness-delivery-runs/provider-evidence.json && bun run harness:inferential-review && bun run harness:audit && bun run graphify:check",
     "pr:athena:record-proof": "bun scripts/pre-push-validation-proof.ts record-pr-athena",
     "pr:athena:scorecard": "bun run harness:scorecard",

@@ -1452,7 +1452,7 @@ export function CashControlsDashboard() {
     hasFullAdminAccess,
     isAuthenticated,
     isLoadingAccess,
-  } = useProtectedAdminPageState({ surface: "store_day" });
+  } = useProtectedAdminPageState({ surface: "cash_controls" });
   const canAccessSurface = canAccessProtectedSurface ?? hasFullAdminAccess;
   const params = useParams({ strict: false }) as
     | {

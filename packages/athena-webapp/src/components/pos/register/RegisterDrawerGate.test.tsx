@@ -64,6 +64,7 @@ describe("RegisterDrawerGate", () => {
 
   it("shows pesewa-level submitted closeout variances while whole cedi counts stay compact", () => {
     renderGate({
+      canViewCloseoutFinancials: true,
       closeoutSubmittedCountedCash: 10000,
       closeoutSubmittedVariance: 2,
       expectedCash: 10002,
@@ -78,6 +79,7 @@ describe("RegisterDrawerGate", () => {
 
   it("does not render a reopen action when no reopen handler is available", () => {
     renderGate({
+      canViewCloseoutFinancials: true,
       closeoutSubmittedCountedCash: 12500,
       closeoutSubmittedVariance: 2500,
       expectedCash: 10000,
@@ -95,6 +97,7 @@ describe("RegisterDrawerGate", () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn();
     renderGate({
+      canViewCloseoutFinancials: true,
       closeoutSecondaryActionLabel: "Open replacement drawer",
       closeoutSubmittedCountedCash: 12500,
       closeoutSubmittedVariance: 2500,
@@ -117,6 +120,7 @@ describe("RegisterDrawerGate", () => {
 
   it("hides submitted closeout sign-out when no staff is signed in", () => {
     renderGate({
+      canViewCloseoutFinancials: true,
       closeoutSubmittedCountedCash: 780_000,
       closeoutSubmittedVariance: 40_000,
       expectedCash: 740_000,
@@ -134,6 +138,7 @@ describe("RegisterDrawerGate", () => {
 
   it("shows synced zero-variance closeouts as submitted instead of rendering the closeout form", () => {
     renderGate({
+      canViewCloseoutFinancials: true,
       closeoutSubmittedCountedCash: 10000,
       closeoutSubmittedReason: "pending_sync",
       closeoutSubmittedVariance: 0,
@@ -158,6 +163,7 @@ describe("RegisterDrawerGate", () => {
 
   it("shows pesewa-level draft closeout variances while whole cedi expected cash stays compact", () => {
     renderGate({
+      canViewCloseoutFinancials: true,
       closeoutCountedCash: "100.00",
       closeoutDraftVariance: -2,
       expectedCash: 10002,
@@ -168,8 +174,29 @@ describe("RegisterDrawerGate", () => {
     expect(screen.getByText("GH₵-0.02")).toHaveClass("text-danger");
   });
 
+  it("hides draft closeout financials from non-manager cashiers", () => {
+    renderGate({
+      canViewCloseoutFinancials: false,
+      closeoutCountedCash: "100.00",
+      closeoutDraftVariance: -2,
+      expectedCash: 10002,
+      mode: "closeoutBlocked",
+    });
+
+    expect(screen.queryByText("Expected")).not.toBeInTheDocument();
+    expect(screen.queryByText("Draft variance")).not.toBeInTheDocument();
+    expect(screen.queryByText("Pending count")).not.toBeInTheDocument();
+    expect(screen.queryByText("GH₵100.02")).not.toBeInTheDocument();
+    expect(screen.queryByText("GH₵-0.02")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Counted cash (GH₵)")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Submit closeout" }),
+    ).toBeInTheDocument();
+  });
+
   it("calls out pending cash voids in the closeout expected cash context", () => {
     renderGate({
+      canViewCloseoutFinancials: true,
       closeoutCountedCash: "6100.00",
       closeoutDraftVariance: 0,
       expectedCash: 610000,

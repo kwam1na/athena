@@ -1,11 +1,19 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const authMock = vi.hoisted(() => ({
   getAuthUserId: vi.fn(),
 }));
+const managerElevationMock = vi.hoisted(() => ({
+  getActiveManagerElevationWithCtx: vi.fn(),
+}));
 
 vi.mock("@convex-dev/auth/server", () => ({
   getAuthUserId: authMock.getAuthUserId,
+}));
+
+vi.mock("../operations/managerElevations", () => ({
+  getActiveManagerElevationWithCtx:
+    managerElevationMock.getActiveManagerElevationWithCtx,
 }));
 
 import type { Id } from "../_generated/dataModel";
@@ -221,6 +229,12 @@ function createAdminTraceReadCtx(
     query(tableName: string) {
       if (tableName === "athenaUser") {
         return {
+          collect: async () => [
+            {
+              _id: "athena-user-1",
+              email: "manager@example.com",
+            },
+          ],
           filter: () => ({
             first: async () => ({
               _id: "athena-user-1",
@@ -251,6 +265,10 @@ function createAdminTraceReadCtx(
 }
 
 describe("workflow trace core and public helpers", () => {
+  beforeEach(() => {
+    managerElevationMock.getActiveManagerElevationWithCtx.mockReset();
+  });
+
   it("updates existing traces instead of duplicating the same store-scoped trace id", async () => {
     const storeId = "store-a" as Id<"store">;
     const ctx = createTestCtx();
@@ -664,6 +682,55 @@ describe("workflow trace core and public helpers", () => {
         lookupValue: "JOB-42",
       }),
     ).rejects.toThrow("Only full admins can access stock operations.");
+  });
+
+  it("allows default trace reads with active terminal manager elevation", async () => {
+    authMock.getAuthUserId.mockResolvedValue("auth-user-1");
+    managerElevationMock.getActiveManagerElevationWithCtx.mockResolvedValue({
+      accountId: "athena-user-1",
+      elevationId: "manager-elevation-1",
+      expiresAt: Date.now() + 60_000,
+      managerDisplayName: "Ato Kofi",
+      managerStaffProfileId: "staff-manager-1",
+      organizationId: "org-1",
+      startedAt: Date.now(),
+      storeId: "store-a",
+      terminalId: "terminal-1",
+    });
+    const storeId = "store-a" as Id<"store">;
+    const terminalId = "terminal-1" as Id<"posTerminal">;
+    const ctx = createAdminTraceReadCtx(undefined, "pos_only");
+
+    await createWorkflowTraceWithCtx(ctx as never, {
+      storeId,
+      traceId: "register_session:8a1zs5",
+      workflowType: "register_session",
+      title: "Register session 8A1ZS5",
+      status: "started",
+      health: "healthy",
+      startedAt: 100,
+      primaryLookupType: "register_session_id",
+      primaryLookupValue: "8A1ZS5",
+    });
+
+    await expect(
+      getWorkflowTraceViewByIdWithCtx(ctx as never, {
+        storeId,
+        terminalId,
+        traceId: "register_session:8a1zs5",
+      }),
+    ).resolves.toMatchObject({
+      header: {
+        traceId: "register_session:8a1zs5",
+      },
+    });
+    expect(
+      managerElevationMock.getActiveManagerElevationWithCtx,
+    ).toHaveBeenCalledWith(expect.anything(), {
+      accountId: "athena-user-1",
+      storeId,
+      terminalId,
+    });
   });
 
   it("routes lookup reads through the same workflow authorizer as direct trace reads", async () => {

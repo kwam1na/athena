@@ -5443,6 +5443,7 @@ export function useRegisterViewModel(): RegisterViewModel {
               expectedCash: activeCloseoutRegisterSession?.expectedCash,
               pendingCashVoidApprovals: activeCloseoutPendingCashVoidApprovals,
               canOpenCashControls: isCashierManager,
+              canViewCloseoutFinancials: isCashierManager,
               cashControlsRegisterSessionId:
                 activeCloseoutCloudRegisterSessionId ??
                 (activeCloseoutCloudRegisterSessionCode as

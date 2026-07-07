@@ -5867,6 +5867,7 @@ describe("end-of-day review backend foundation", () => {
     expect(broadSnapshot.completedClose).toMatchObject({
       actorType: "automation",
       automationRunId: "automation-run-1",
+      dailyCloseId: "daily-close-automation",
       restrictedDetailsRedacted: true,
     });
     expect(broadSnapshot.completedClose).not.toHaveProperty(

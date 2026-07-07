@@ -32,7 +32,6 @@ type SurfaceAccessContext = {
 };
 
 const STORE_DAY_SURFACES = new Set<SurfaceCapability>([
-  "cash_controls",
   "daily_operations",
   "open_work",
   "approvals",
@@ -49,24 +48,31 @@ export function canAccessStoreDaySurface({
   activeManagerElevation,
   role,
 }: SurfaceAccessContext): boolean {
-  return (
-    role === "pos_only" ||
-    canAccessFullAdminSurface({ role }) ||
-    Boolean(activeManagerElevation)
-  );
+  return canAccessFullAdminSurface({ role }) || Boolean(activeManagerElevation);
 }
 
-export function canViewFinancialDetails({
+export function canAccessCashControlsSurface({
   activeManagerElevation,
   role,
 }: SurfaceAccessContext): boolean {
   return canAccessFullAdminSurface({ role }) || Boolean(activeManagerElevation);
 }
 
+export function canViewFinancialDetails({
+  activeManagerElevation,
+  role,
+}: SurfaceAccessContext): boolean {
+  return canAccessCashControlsSurface({ activeManagerElevation, role });
+}
+
 export function getSurfaceAccess(
   surface: SurfaceCapability,
   context: SurfaceAccessContext,
 ): boolean {
+  if (surface === "cash_controls") {
+    return canAccessCashControlsSurface(context);
+  }
+
   if (STORE_DAY_SURFACES.has(surface)) {
     return canAccessStoreDaySurface(context);
   }

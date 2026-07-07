@@ -62,4 +62,35 @@ describe("useProtectedAdminPageState", () => {
     expect(result.current.canQueryProtectedData).toBe(true);
     expect(result.current.hasFullAdminAccess).toBe(false);
   });
+
+  it("requires manager-level access for cash controls", () => {
+    mocks.usePermissions.mockReturnValue({
+      hasFinancialDetailsAccess: false,
+      hasFullAdminAccess: false,
+      hasStoreDaySurfaceAccess: true,
+      isLoading: false,
+    });
+
+    const denied = renderHook(() =>
+      useProtectedAdminPageState({ surface: "cash_controls" }),
+    );
+
+    expect(denied.result.current.canAccessProtectedSurface).toBe(false);
+    expect(denied.result.current.canQueryProtectedData).toBe(false);
+
+    mocks.usePermissions.mockReturnValue({
+      hasFinancialDetailsAccess: true,
+      hasFullAdminAccess: false,
+      hasStoreDaySurfaceAccess: true,
+      isLoading: false,
+    });
+
+    const elevated = renderHook(() =>
+      useProtectedAdminPageState({ surface: "cash_controls" }),
+    );
+
+    expect(elevated.result.current.canAccessProtectedSurface).toBe(true);
+    expect(elevated.result.current.canQueryProtectedData).toBe(true);
+    expect(elevated.result.current.hasFullAdminAccess).toBe(false);
+  });
 });

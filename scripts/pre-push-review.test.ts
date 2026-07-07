@@ -966,7 +966,19 @@ describe("repo harness ergonomics", () => {
       "bun scripts/harness-test.ts",
     );
     expect(packageJson.scripts?.["pr:athena:validate-provider"]).toContain(
+      "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
+    );
+    expect(packageJson.scripts?.["pr:athena:validate-provider"]).toContain(
       "bun run test:coverage",
+    );
+    expect(
+      packageJson.scripts?.["pr:athena:validate-provider"]?.indexOf(
+        "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
+      ),
+    ).toBeLessThan(
+      packageJson.scripts?.["pr:athena:validate-provider"]?.indexOf(
+        "bun run test:coverage",
+      ) ?? 0,
     );
     expect(packageJson.scripts?.["pr:athena:validate-provider"]).not.toContain(
       "bun run harness:test",

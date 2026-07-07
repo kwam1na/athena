@@ -201,6 +201,7 @@ type DailyCloseSnapshot = {
   endAt: number;
   existingClose: Doc<"dailyClose"> | null;
   completedClose: {
+    dailyCloseId: Id<"dailyClose">;
     actorType?: "human" | "automation";
     automationDecisionReason?: string;
     automationPolicyVersion?: string;
@@ -308,6 +309,7 @@ function normalizeCompletedDailyCloseSnapshot(args: {
     endAt: reportSnapshot.closeMetadata.endAt,
     existingClose: args.dailyClose,
     completedClose: {
+      dailyCloseId: args.dailyClose._id,
       ...(attribution.actorType ? { actorType: attribution.actorType } : {}),
       ...(attribution.automationDecisionReason
         ? { automationDecisionReason: attribution.automationDecisionReason }
@@ -2962,6 +2964,7 @@ export async function buildDailyCloseSnapshotWithCtx(
           );
 
           return {
+            dailyCloseId: existingClose._id,
             ...(attribution.actorType ? { actorType: attribution.actorType } : {}),
             ...(attribution.automationDecisionReason
               ? {

@@ -826,6 +826,11 @@ describe("runHarnessReview", () => {
               command: "bun run --filter '@athena/webapp' test:coverage",
               coverage: { mode: "full" },
             },
+            {
+              capability: "athena-webapp-typecheck",
+              command:
+                "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
+            },
           ],
         },
         null,
@@ -863,7 +868,7 @@ describe("runHarnessReview", () => {
         capability: "athena-webapp-vitest",
         command: "@athena/webapp:test",
         providedBy: "local-pr-athena",
-        coveredCapabilities: ["athena-webapp-vitest"],
+        coveredCapabilities: ["athena-webapp-vitest", "athena-webapp-typecheck"],
         evidence: "artifacts/harness-delivery-runs/provider-evidence.json",
       })
     );
@@ -1420,6 +1425,92 @@ describe("runHarnessReview", () => {
       "@athena/webapp:test",
       "raw:bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
     ]);
+  });
+
+  it("skips athena webapp typecheck when local provider evidence covers it", async () => {
+    const rootDir = await createFixtureRepo();
+    const steps: string[] = [];
+    const logLines: string[] = [];
+
+    await write(
+      "packages/athena-webapp/docs/agent/validation-map.json",
+      JSON.stringify(
+        {
+          workspace: "@athena/webapp",
+          packageDir: "packages/athena-webapp",
+          surfaces: [
+            {
+              name: "shared-lib-or-utility-edits",
+              pathPrefixes: ["packages/athena-webapp/src/lib"],
+              commands: [
+                {
+                  kind: "raw",
+                  command:
+                    "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
+                },
+              ],
+            },
+          ],
+        },
+        null,
+        2
+      ),
+      rootDir
+    );
+    await write(
+      "artifacts/harness-delivery-runs/provider-evidence.json",
+      JSON.stringify(
+        {
+          schemaVersion: 1,
+          provider: "local-pr-athena",
+          capabilities: [
+            {
+              capability: "athena-webapp-typecheck",
+              command:
+                "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
+            },
+          ],
+        },
+        null,
+        2
+      ),
+      rootDir
+    );
+    await write(
+      "packages/athena-webapp/src/lib/session.ts",
+      "export const session = true;\n",
+      rootDir
+    );
+
+    await runHarnessReview(rootDir, {
+      getChangedFiles: async () => ["packages/athena-webapp/src/lib/session.ts"],
+      providerEvidencePath: "artifacts/harness-delivery-runs/provider-evidence.json",
+      runHarnessCheck: async () => {
+        steps.push("harness:check");
+      },
+      runRawCommand: async (command) => {
+        steps.push(`raw:${command}`);
+      },
+      logger: {
+        log(line) {
+          logLines.push(line);
+        },
+        error() {},
+      },
+    });
+
+    expect(steps).toEqual(["harness:check"]);
+    expect(logLines).toContain(
+      JSON.stringify({
+        type: "provider_skipped",
+        status: "covered_by_provider",
+        capability: "athena-webapp-typecheck",
+        command: "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
+        providedBy: "local-pr-athena",
+        coveredCapabilities: ["athena-webapp-typecheck"],
+        evidence: "artifacts/harness-delivery-runs/provider-evidence.json",
+      })
+    );
   });
 
   it("runs mapped storefront behavior scenarios for checkout-critical surfaces", async () => {

@@ -234,6 +234,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/auth/convexAuthUrl.test.ts`](../../src/auth/convexAuthUrl.test.ts)
 - [`src/components/Navbar.test.tsx`](../../src/components/Navbar.test.tsx)
 - [`src/components/OrganizationView.test.tsx`](../../src/components/OrganizationView.test.tsx)
+- [`src/components/ProtectedRoute.test.tsx`](../../src/components/ProtectedRoute.test.tsx)
 - [`src/components/StoreView.test.tsx`](../../src/components/StoreView.test.tsx)
 - [`src/components/View.test.tsx`](../../src/components/View.test.tsx)
 - [`src/components/add-product/AttributesTable.test.ts`](../../src/components/add-product/AttributesTable.test.ts)

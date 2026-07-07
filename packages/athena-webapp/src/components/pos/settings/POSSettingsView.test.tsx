@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   registerTerminalMutation: vi.fn(),
   rotateRecoveryCode: vi.fn(),
   revokeRecoveryCode: vi.fn(),
+  updateRegisterCloseoutApprovalPolicy: vi.fn(),
   updateEodAutoCompletePolicy: vi.fn(),
   updateOpeningAutoStartPolicy: vi.fn(),
   unlockRecoveryCode: vi.fn(),
@@ -86,6 +87,8 @@ vi.mock("~/convex/_generated/api", () => ({
       dailyOperationsAutomation: {
         getEodAutoCompletePolicy: "getEodAutoCompletePolicy",
         getOpeningAutoStartPolicy: "getOpeningAutoStartPolicy",
+        getRegisterCloseoutApprovalPolicy: "getRegisterCloseoutApprovalPolicy",
+        updateRegisterCloseoutApprovalPolicy: "updateRegisterCloseoutApprovalPolicy",
         updateEodAutoCompletePolicy: "updateEodAutoCompletePolicy",
         updateOpeningAutoStartPolicy: "updateOpeningAutoStartPolicy",
       },
@@ -290,12 +293,18 @@ describe("registerAndProvisionPosTerminal", () => {
       maxVoidedSaleTotal: 2500,
       mode: "enabled",
     });
+    mocks.updateRegisterCloseoutApprovalPolicy.mockResolvedValue({
+      varianceApprovalThreshold: 7500,
+    });
     mocks.useMutation.mockImplementation((ref) => {
       if (ref === "updateOpeningAutoStartPolicy") {
         return mocks.updateOpeningAutoStartPolicy;
       }
       if (ref === "updateEodAutoCompletePolicy") {
         return mocks.updateEodAutoCompletePolicy;
+      }
+      if (ref === "updateRegisterCloseoutApprovalPolicy") {
+        return mocks.updateRegisterCloseoutApprovalPolicy;
       }
       if (ref === "rotateRecoveryCode") return mocks.rotateRecoveryCode;
       if (ref === "revokeRecoveryCode") return mocks.revokeRecoveryCode;
@@ -336,6 +345,13 @@ describe("registerAndProvisionPosTerminal", () => {
               maxVoidedSaleTotal: 2500,
               mode: "dry_run",
               operatingTimezoneOffsetMinutes: -120,
+            }
+        : ref === "getRegisterCloseoutApprovalPolicy"
+          ? {
+              requireManagerSignoffForAnyVariance: false,
+              requireManagerSignoffForOvers: false,
+              requireManagerSignoffForShorts: false,
+              varianceApprovalThreshold: 5000,
             }
         : ref === "getStoreScheduleSummary"
           ? {
@@ -688,6 +704,47 @@ describe("registerAndProvisionPosTerminal", () => {
     expect(mocks.useQuery).toHaveBeenCalledWith("getEodAutoCompletePolicy", {
       storeId: "store-1",
     });
+  });
+
+  it("lets full admins set the register closeout approval threshold", async () => {
+    const user = userEvent.setup();
+
+    await renderPOSSettingsView();
+
+    expect(
+      await screen.findByText("Closeout approval policy"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Set when register cash variances require manager review before final closeout.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Closeout variance threshold (GH₵)"),
+    ).toHaveValue(50);
+    expect(mocks.useQuery).toHaveBeenCalledWith(
+      "getRegisterCloseoutApprovalPolicy",
+      {
+        storeId: "store-1",
+      },
+    );
+
+    fireEvent.change(
+      screen.getByLabelText("Closeout variance threshold (GH₵)"),
+      {
+        target: { value: "75" },
+      },
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Save closeout approval policy" }),
+    );
+
+    await waitFor(() =>
+      expect(mocks.updateRegisterCloseoutApprovalPolicy).toHaveBeenCalledWith({
+        storeId: "store-1",
+        varianceApprovalThreshold: 7500,
+      }),
+    );
   });
 
   it("saves the EOD completion automation policy with thresholds", async () => {

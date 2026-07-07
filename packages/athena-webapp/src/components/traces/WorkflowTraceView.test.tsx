@@ -5,11 +5,16 @@ import type { Id } from "~/convex/_generated/dataModel";
 import { WorkflowTraceTimeline, WorkflowTraceView } from "./WorkflowTraceView";
 
 const mockedHooks = vi.hoisted(() => ({
+  useGetTerminal: vi.fn(),
   useQuery: vi.fn(),
 }));
 
 vi.mock("convex/react", () => ({
   useQuery: mockedHooks.useQuery,
+}));
+
+vi.mock("@/hooks/useGetTerminal", () => ({
+  useGetTerminal: mockedHooks.useGetTerminal,
 }));
 
 vi.mock("../common/PageHeader", () => ({
@@ -22,6 +27,9 @@ vi.mock("../common/PageHeader", () => ({
 describe("WorkflowTraceView", () => {
   beforeEach(() => {
     window.scrollTo = vi.fn();
+    mockedHooks.useGetTerminal.mockReturnValue({
+      _id: "terminal-1",
+    });
   });
 
   afterEach(() => {
@@ -73,6 +81,11 @@ describe("WorkflowTraceView", () => {
       />,
     );
 
+    expect(mockedHooks.useQuery).toHaveBeenCalledWith(expect.anything(), {
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      traceId: "repair_order:job-42",
+    });
     expect(screen.getAllByText("Succeeded").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Partial").length).toBeGreaterThan(0);
     const listItems = screen.getAllByRole("listitem");

@@ -326,6 +326,8 @@ export function RegisterDrawerGate({
     const isSubmittedCloseout = Boolean(closeoutSubmittedReason);
     const isManagerReviewCloseout =
       closeoutSubmittedReason === "manager_review";
+    const canViewCloseoutFinancials =
+      drawerGate.canViewCloseoutFinancials === true;
     const closeoutRegisterLabel = formatRegisterGateLabel({
       registerLabel: drawerGate.registerLabel,
       registerNumber: drawerGate.registerNumber,
@@ -370,66 +372,68 @@ export function RegisterDrawerGate({
               </div>
             </div>
 
-            <div className="rounded-lg border border-warning/30 bg-warning/10 p-5">
-              <dl
-                className={`grid gap-4 text-sm ${
-                  pendingCashVoidApprovedExpectedCash !== undefined
-                    ? "sm:grid-cols-4"
-                    : "sm:grid-cols-3"
-                }`}
-              >
-                <div className="space-y-1">
-                  <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                    {pendingCashVoidText ? "Expected now" : "Expected"}
-                  </dt>
-                  <dd className="font-mono text-foreground">
-                    {formatCurrency(currency, drawerGate.expectedCash)}
-                  </dd>
-                </div>
-                {pendingCashVoidApprovedExpectedCash !== undefined ? (
+            {canViewCloseoutFinancials ? (
+              <div className="rounded-lg border border-warning/30 bg-warning/10 p-5">
+                <dl
+                  className={`grid gap-4 text-sm ${
+                    pendingCashVoidApprovedExpectedCash !== undefined
+                      ? "sm:grid-cols-4"
+                      : "sm:grid-cols-3"
+                  }`}
+                >
                   <div className="space-y-1">
                     <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                      After adjustments
+                      {pendingCashVoidText ? "Expected now" : "Expected"}
+                    </dt>
+                    <dd className="font-mono text-foreground">
+                      {formatCurrency(currency, drawerGate.expectedCash)}
+                    </dd>
+                  </div>
+                  {pendingCashVoidApprovedExpectedCash !== undefined ? (
+                    <div className="space-y-1">
+                      <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                        After adjustments
+                      </dt>
+                      <dd className="font-mono text-foreground">
+                        {formatCurrency(
+                          currency,
+                          pendingCashVoidApprovedExpectedCash,
+                        )}
+                      </dd>
+                    </div>
+                  ) : null}
+                  <div className="space-y-1">
+                    <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                      Counted
                     </dt>
                     <dd className="font-mono text-foreground">
                       {formatCurrency(
                         currency,
-                        pendingCashVoidApprovedExpectedCash,
+                        drawerGate.closeoutSubmittedCountedCash,
                       )}
                     </dd>
                   </div>
+                  <div className="space-y-1">
+                    <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                      Variance
+                    </dt>
+                    <dd
+                      className={`font-mono ${getVarianceTone(drawerGate.closeoutSubmittedVariance)}`}
+                    >
+                      {formatCurrency(
+                        currency,
+                        drawerGate.closeoutSubmittedVariance,
+                      )}
+                    </dd>
+                  </div>
+                </dl>
+                {pendingCashVoidText ? (
+                  <p className="mt-4 border-t border-warning/25 pt-3 text-xs leading-5 text-muted-foreground">
+                    {pendingCashVoidText}
+                  </p>
                 ) : null}
-                <div className="space-y-1">
-                  <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                    Counted
-                  </dt>
-                  <dd className="font-mono text-foreground">
-                    {formatCurrency(
-                      currency,
-                      drawerGate.closeoutSubmittedCountedCash,
-                    )}
-                  </dd>
-                </div>
-                <div className="space-y-1">
-                  <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                    Variance
-                  </dt>
-                  <dd
-                    className={`font-mono ${getVarianceTone(drawerGate.closeoutSubmittedVariance)}`}
-                  >
-                    {formatCurrency(
-                      currency,
-                      drawerGate.closeoutSubmittedVariance,
-                    )}
-                  </dd>
-                </div>
-              </dl>
-              {pendingCashVoidText ? (
-                <p className="mt-4 border-t border-warning/25 pt-3 text-xs leading-5 text-muted-foreground">
-                  {pendingCashVoidText}
-                </p>
-              ) : null}
-            </div>
+              </div>
+            ) : null}
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               {drawerGate.onSubmit ? (
@@ -506,57 +510,59 @@ export function RegisterDrawerGate({
             </div>
 
             <form className="mt-8 space-y-5" onSubmit={handleCloseoutSubmit}>
-              <div className="rounded-lg border border-border bg-surface p-4">
-                <dl
-                  className={`grid gap-3 text-sm ${
-                    pendingCashVoidApprovedExpectedCash !== undefined
-                      ? "grid-cols-3"
-                      : "grid-cols-2"
-                  }`}
-                >
-                  <div className="space-y-1">
-                    <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                      {pendingCashVoidText ? "Expected now" : "Expected"}
-                    </dt>
-                    <dd className="font-mono text-foreground">
-                      {formatCurrency(currency, drawerGate.expectedCash)}
-                    </dd>
-                  </div>
-                  {pendingCashVoidApprovedExpectedCash !== undefined ? (
+              {canViewCloseoutFinancials ? (
+                <div className="rounded-lg border border-border bg-surface p-4">
+                  <dl
+                    className={`grid gap-3 text-sm ${
+                      pendingCashVoidApprovedExpectedCash !== undefined
+                        ? "grid-cols-3"
+                        : "grid-cols-2"
+                    }`}
+                  >
                     <div className="space-y-1">
                       <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                        After adjustments
+                        {pendingCashVoidText ? "Expected now" : "Expected"}
                       </dt>
                       <dd className="font-mono text-foreground">
-                        {formatCurrency(
-                          currency,
-                          pendingCashVoidApprovedExpectedCash,
-                        )}
+                        {formatCurrency(currency, drawerGate.expectedCash)}
                       </dd>
                     </div>
+                    {pendingCashVoidApprovedExpectedCash !== undefined ? (
+                      <div className="space-y-1">
+                        <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                          After adjustments
+                        </dt>
+                        <dd className="font-mono text-foreground">
+                          {formatCurrency(
+                            currency,
+                            pendingCashVoidApprovedExpectedCash,
+                          )}
+                        </dd>
+                      </div>
+                    ) : null}
+                    <div className="space-y-1">
+                      <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                        Draft variance
+                      </dt>
+                      <dd
+                        className={`font-mono ${getVarianceTone(drawerGate.closeoutDraftVariance)}`}
+                      >
+                        {drawerGate.closeoutDraftVariance === undefined
+                          ? "Pending count"
+                          : formatCurrency(
+                            currency,
+                            drawerGate.closeoutDraftVariance,
+                          )}
+                      </dd>
+                    </div>
+                  </dl>
+                  {pendingCashVoidText ? (
+                    <p className="mt-4 border-t border-border pt-3 text-xs leading-5 text-muted-foreground">
+                      {pendingCashVoidText}
+                    </p>
                   ) : null}
-                  <div className="space-y-1">
-                    <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                      Draft variance
-                    </dt>
-                    <dd
-                      className={`font-mono ${getVarianceTone(drawerGate.closeoutDraftVariance)}`}
-                    >
-                      {drawerGate.closeoutDraftVariance === undefined
-                        ? "Pending count"
-                        : formatCurrency(
-                          currency,
-                          drawerGate.closeoutDraftVariance,
-                        )}
-                    </dd>
-                  </div>
-                </dl>
-                {pendingCashVoidText ? (
-                  <p className="mt-4 border-t border-border pt-3 text-xs leading-5 text-muted-foreground">
-                    {pendingCashVoidText}
-                  </p>
-                ) : null}
-              </div>
+                </div>
+              ) : null}
 
               <label className="block space-y-2">
                 <span className="text-sm font-medium text-foreground">

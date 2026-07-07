@@ -1,6 +1,7 @@
 import { useQuery } from "convex/react";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ComponentType, ReactNode } from "react";
+import { motion, useReducedMotion } from "framer-motion";
 import View from "../View";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { api } from "~/convex/_generated/api";
@@ -35,6 +36,21 @@ import {
   type POSStorePulseWindow,
 } from "./sales-pulse/POSSalesPulseView";
 
+type StoreScheduleWindowSummary = {
+  localDate: string;
+  localStartLabel: string;
+};
+
+type StoreScheduleSummaryResult = {
+  context?: {
+    nextWindow?: StoreScheduleWindowSummary | null;
+    timezone: string | null;
+  } | null;
+  schedule?: {
+    timezone: string;
+  } | null;
+} | null;
+
 type FeatureLinkProps = {
   children: ReactNode;
   className?: string;
@@ -53,6 +69,142 @@ type FeatureLinkProps = {
 };
 
 const FeatureLink = Link as unknown as ComponentType<FeatureLinkProps>;
+
+function formatStoreLocalDateTime(now: Date, timezone: string) {
+  try {
+    const dateLabel = new Intl.DateTimeFormat("en-US", {
+      day: "numeric",
+      month: "long",
+      timeZone: timezone,
+      weekday: "long",
+    }).format(now);
+    const timeLabel = new Intl.DateTimeFormat("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      timeZone: timezone,
+      timeZoneName: "short",
+    }).format(now);
+
+    return `${dateLabel} ${timeLabel}`;
+  } catch {
+    return null;
+  }
+}
+
+function formatStoreHoursTimeLabel(value: string) {
+  const raw = value.trim();
+  const twentyFourHourMatch = raw.match(/^([01]?\d|2[0-3]):([0-5]\d)$/);
+
+  if (!twentyFourHourMatch) {
+    return raw;
+  }
+
+  const hour = Number(twentyFourHourMatch[1]);
+  const minute = twentyFourHourMatch[2];
+  const period = hour >= 12 ? "PM" : "AM";
+  const displayHour = hour % 12 || 12;
+
+  return `${displayHour}:${minute} ${period}`;
+}
+
+function formatStoreLocalDateLabel(localDate: string) {
+  const date = new Date(`${localDate}T00:00:00.000Z`);
+
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    day: "numeric",
+    month: "short",
+    timeZone: "UTC",
+    weekday: "short",
+  }).format(date);
+}
+
+function formatNextOpeningLabel(nextWindow?: StoreScheduleWindowSummary | null) {
+  if (!nextWindow?.localStartLabel) {
+    return null;
+  }
+
+  const timeLabel = formatStoreHoursTimeLabel(nextWindow.localStartLabel);
+  const dateLabel = formatStoreLocalDateLabel(nextWindow.localDate);
+
+  return dateLabel ? `${dateLabel} ${timeLabel}` : timeLabel;
+}
+
+function useMinuteNow() {
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const scheduleNextTick = () => {
+      const delay = 60_000 - (Date.now() % 60_000);
+
+      return window.setTimeout(() => {
+        setNow(new Date());
+        timeoutId = scheduleNextTick();
+      }, delay);
+    };
+
+    let timeoutId = scheduleNextTick();
+
+    return () => window.clearTimeout(timeoutId);
+  }, []);
+
+  return now;
+}
+
+function StoreLocalTime({
+  scheduleSummary,
+}: {
+  scheduleSummary: StoreScheduleSummaryResult | undefined;
+}) {
+  const shouldReduceMotion = useReducedMotion();
+  const now = useMinuteNow();
+  const timezone =
+    scheduleSummary?.context?.timezone ?? scheduleSummary?.schedule?.timezone;
+  const formattedTime = useMemo(
+    () => (timezone ? formatStoreLocalDateTime(now, timezone) : null),
+    [now, timezone],
+  );
+  const nextOpeningLabel = useMemo(
+    () => formatNextOpeningLabel(scheduleSummary?.context?.nextWindow ?? null),
+    [scheduleSummary?.context?.nextWindow],
+  );
+
+  return (
+    <span className="inline-grid min-h-6 items-center align-top">
+      {timezone && formattedTime ? (
+        <motion.span
+          animate={{ opacity: 1, transform: "translateY(0px)" }}
+          className="inline-flex flex-wrap items-center gap-x-3 gap-y-1 text-sm leading-6 text-muted-foreground"
+          initial={
+            shouldReduceMotion
+              ? { opacity: 0, transform: "translateY(0px)" }
+              : { opacity: 0, transform: "translateY(6px)" }
+          }
+          transition={{ duration: 0.18, ease: [0.23, 1, 0.32, 1] }}
+        >
+          <span className="font-medium text-foreground/85">Store time</span>
+          <span className="font-numeric tabular-nums">{formattedTime}</span>
+          {nextOpeningLabel ? (
+            <>
+              <span className="text-border" aria-hidden="true">
+                /
+              </span>
+              <span className="font-medium text-foreground/85">
+                Next opening
+              </span>
+              <span className="font-numeric tabular-nums">
+                {nextOpeningLabel}
+              </span>
+            </>
+          ) : null}
+        </motion.span>
+      ) : null}
+    </span>
+  );
+}
 
 export default function PointOfSaleView() {
   const { activeStore } = useGetActiveStore();
@@ -79,7 +231,8 @@ export default function PointOfSaleView() {
     refreshAvailabilitySnapshot: false,
     storeId: snapshotStoreId,
   });
-  const { canAccessPOS, hasFullAdminAccess } = usePermissions();
+  const { canAccessPOS, hasFinancialDetailsAccess, hasFullAdminAccess } =
+    usePermissions();
   const visibleStorePulseWindow = hasFullAdminAccess
     ? storePulseWindow
     : "today";
@@ -89,6 +242,10 @@ export default function PointOfSaleView() {
       ? { pulseWindow: visibleStorePulseWindow, storeId: snapshotStoreId }
       : "skip",
   );
+  const storeScheduleSummary = useQuery(
+    api.inventory.storeSchedule.getStoreScheduleSummary,
+    snapshotStoreId ? { storeId: snapshotStoreId } : "skip",
+  ) as StoreScheduleSummaryResult | undefined;
 
   // Currency formatter
   const currencyFormatter = useGetCurrencyFormatter();
@@ -141,7 +298,7 @@ export default function PointOfSaleView() {
       href: "/$orgUrlSlug/store/$storeUrlSlug/products" as const,
       params: liveLinkParams,
       color: "bg-green-500",
-      available: Boolean(liveLinkParams),
+      available: hasFinancialDetailsAccess && Boolean(liveLinkParams),
     },
 
     {
@@ -170,7 +327,8 @@ export default function PointOfSaleView() {
       href: "/$orgUrlSlug/store/$storeUrlSlug/pos/terminals" as const,
       params: liveLinkParams,
       color: "bg-emerald-600",
-      available: canAccessPOS() && Boolean(liveLinkParams),
+      available:
+        canAccessPOS() && hasFinancialDetailsAccess && Boolean(liveLinkParams),
     },
     {
       title: "Customers",
@@ -188,7 +346,8 @@ export default function PointOfSaleView() {
       href: "/$orgUrlSlug/store/$storeUrlSlug/pos/settings" as const,
       params: liveLinkParams,
       color: "bg-gray-500",
-      available: canAccessPOS() && Boolean(liveLinkParams),
+      available:
+        canAccessPOS() && hasFinancialDetailsAccess && Boolean(liveLinkParams),
     },
   ];
 
@@ -196,7 +355,12 @@ export default function PointOfSaleView() {
     <View hideBorder hideHeaderBottomBorder>
       <FadeIn className="container mx-auto py-layout-xl">
         <PageWorkspace>
-          <PageLevelHeader title="Point of Sale" />
+          <PageLevelHeader
+            title="Point of Sale"
+            description={
+              <StoreLocalTime scheduleSummary={storeScheduleSummary} />
+            }
+          />
 
           {/* POS Features Grid */}
           <div>
