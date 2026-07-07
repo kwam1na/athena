@@ -1,7 +1,10 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { PosRemoteAssistRuntimeHost } from "./PosRemoteAssistRuntimeHost";
+import {
+  PosRemoteAssistRuntimeHost,
+  resetPosRemoteAssistRuntimeHostClaimsForTests,
+} from "./PosRemoteAssistRuntimeHost";
 
 const useMutationMock = vi.fn();
 const useQueryMock = vi.fn();
@@ -37,6 +40,7 @@ vi.mock("@/lib/remote-assist", async () => {
 describe("PosRemoteAssistRuntimeHost", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetPosRemoteAssistRuntimeHostClaimsForTests();
     useMutationMock.mockResolvedValue(null);
     useQueryMock.mockReturnValue(null);
     useOptionalUpdateCoordinatorMock.mockReturnValue(null);
@@ -89,6 +93,26 @@ describe("PosRemoteAssistRuntimeHost", () => {
         },
       }),
     );
+  });
+
+  it("only lets one mounted host own runtime reporting for a terminal", () => {
+    render(
+      <>
+        <PosRemoteAssistRuntimeHost entryContext={readyEntryContext()} />
+        <PosRemoteAssistRuntimeHost entryContext={readyEntryContext()} />
+      </>,
+    );
+
+    const activeRuntimeCalls =
+      usePosLocalSyncRuntimeStatusMock.mock.calls.filter(
+        ([input]) => input.storeId === "store-1" && input.terminalId === "terminal-cloud-1",
+      );
+    const skippedRemoteAssistQueries = useQueryMock.mock.calls.filter(
+      ([, args]) => args === "skip",
+    );
+
+    expect(activeRuntimeCalls).toHaveLength(1);
+    expect(skippedRemoteAssistQueries).toHaveLength(1);
   });
 
   it("shows a Remote Assist runtime banner and disconnects with terminal proof", () => {

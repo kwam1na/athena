@@ -69,7 +69,9 @@ import {
   getRuntimeBrowserInfo,
   getRuntimeCheckInNotReadyReason,
   getRuntimeStatusPublishSignature,
+  RUNTIME_STATUS_TRANSIENT_SYNCING_PUBLISH_DELAY_MS,
   shouldPublishRuntimeStatus,
+  shouldDelayTransientSyncingRuntimeStatusPublish,
   startRuntimeStatusFreshnessHeartbeat,
   withRuntimeCheckInPublishDebug as withCheckInPublishDebug,
 } from "./runtimeStatusPublisher";
@@ -96,7 +98,6 @@ export { getRuntimeStatusSignature } from "./runtimeStatusPublisher";
 
 const APP_UPDATE_COMMAND_CORRELATION_STORAGE_KEY =
   "athena-pos-app-update-command-correlation";
-
 type AppUpdateCommandCorrelation = {
   commandExecutionId: string;
   commandId?: string;
@@ -298,6 +299,16 @@ export function usePosLocalSyncRuntimeStatus(input: {
   const runtimeStatusPublishInFlightRef = useRef(false);
   const queuedRuntimeStatusSignatureRef = useRef<string | null>(null);
   const forceNextRuntimeStatusPublishRef = useRef(false);
+  const runtimeStatusPublisherIdRef = useRef(createRuntimeStatusPublisherId());
+  const runtimeStatusSyncingPublishReadyMaterialSignatureRef = useRef<
+    string | null
+  >(null);
+  const runtimeStatusSyncingPublishTimerRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
+  const runtimeStatusSyncingPublishTimerMaterialSignatureRef = useRef<
+    string | null
+  >(null);
   const isRuntimeStatusPublisherMountedRef = useRef(true);
   const observedRecoveryCommandIdsRef = useRef<Set<string>>(new Set());
   const requestRetry = useCallback(() => {
@@ -309,6 +320,13 @@ export function usePosLocalSyncRuntimeStatus(input: {
   useEffect(
     () => () => {
       isRuntimeStatusPublisherMountedRef.current = false;
+      clearRuntimeStatusSyncingPublishDelay({
+        readyMaterialSignatureRef:
+          runtimeStatusSyncingPublishReadyMaterialSignatureRef,
+        timerMaterialSignatureRef:
+          runtimeStatusSyncingPublishTimerMaterialSignatureRef,
+        timerRef: runtimeStatusSyncingPublishTimerRef,
+      });
     },
     [],
   );
@@ -1055,16 +1073,56 @@ export function usePosLocalSyncRuntimeStatus(input: {
       storeId: checkInStoreId,
       terminalId: checkInTerminalId,
     });
+    const publisherId = runtimeStatusPublisherIdRef.current;
+    const forcePublish =
+      forceNextRuntimeStatusPublishRef.current || publishState.forceNextPublish;
+    if (
+      shouldDelayTransientSyncingRuntimeStatusPublish({
+        forcePublish,
+        materialSignature,
+        readyMaterialSignature:
+          runtimeStatusSyncingPublishReadyMaterialSignatureRef.current,
+        syncStatus: runtimeStatus.sync.status,
+      })
+    ) {
+      scheduleRuntimeStatusSyncingPublishDelay({
+        materialSignature,
+        onReady: () => setRuntimeStatusObservationToken((current) => current + 1),
+        readyMaterialSignatureRef:
+          runtimeStatusSyncingPublishReadyMaterialSignatureRef,
+        timerMaterialSignatureRef:
+          runtimeStatusSyncingPublishTimerMaterialSignatureRef,
+        timerRef: runtimeStatusSyncingPublishTimerRef,
+      });
+      return;
+    }
+    if (runtimeStatus.sync.status !== "syncing") {
+      clearRuntimeStatusSyncingPublishDelay({
+        readyMaterialSignatureRef:
+          runtimeStatusSyncingPublishReadyMaterialSignatureRef,
+        timerMaterialSignatureRef:
+          runtimeStatusSyncingPublishTimerMaterialSignatureRef,
+        timerRef: runtimeStatusSyncingPublishTimerRef,
+      });
+    }
     if (
       runtimeStatusPublishInFlightRef.current ||
       publishState.inFlight === true
     ) {
+      if (
+        publishState.inFlight === true &&
+          publishState.inFlightPublisherId !== publisherId
+      ) {
+        return;
+      }
+      publishState.currentMaterialSignature = materialSignature;
       queuedRuntimeStatusSignatureRef.current = signature;
+      publishState.queuedPublisherId = publisherId;
+      publishState.queuedMaterialSignature = materialSignature;
       publishState.queuedSignature = signature;
       return;
     }
-    const forcePublish =
-      forceNextRuntimeStatusPublishRef.current || publishState.forceNextPublish;
+    publishState.currentMaterialSignature = materialSignature;
     if (
       !forcePublish &&
       !shouldPublishRuntimeStatus({
@@ -1078,6 +1136,27 @@ export function usePosLocalSyncRuntimeStatus(input: {
     ) {
       return;
     }
+    const attemptedAt = Date.now();
+    if (
+      !claimRuntimeStatusPublishForCycle({
+        allowRecentPublish: forcePublish,
+        materialSignature,
+        now: attemptedAt,
+        publisherId,
+        storeId: checkInStoreId,
+        terminalId: checkInTerminalId,
+      })
+    ) {
+      forceNextRuntimeStatusPublishRef.current = false;
+      publishState.forceNextPublish = false;
+      lastRuntimeStatusSignatureRef.current = signature;
+      lastRuntimeStatusMaterialSignatureRef.current = materialSignature;
+      lastRuntimeStatusPublishedAtRef.current = attemptedAt;
+      publishState.lastSignature = signature;
+      publishState.lastMaterialSignature = materialSignature;
+      publishState.lastPublishedAt = attemptedAt;
+      return;
+    }
     forceNextRuntimeStatusPublishRef.current = false;
     publishState.forceNextPublish = false;
     lastRuntimeStatusSignatureRef.current = signature;
@@ -1086,8 +1165,8 @@ export function usePosLocalSyncRuntimeStatus(input: {
     publishState.lastMaterialSignature = materialSignature;
     runtimeStatusPublishInFlightRef.current = true;
     publishState.inFlight = true;
+    publishState.inFlightPublisherId = publisherId;
 
-    const attemptedAt = Date.now();
     lastRuntimeStatusPublishedAtRef.current = attemptedAt;
     publishState.lastPublishedAt = attemptedAt;
     setDebug((current) =>
@@ -1100,8 +1179,9 @@ export function usePosLocalSyncRuntimeStatus(input: {
       }),
     );
 
-    let isStale = false;
-    const isCurrentPublishScope = () => !isStale;
+    const isCurrentPublishScope = () =>
+      isRuntimeStatusPublisherMountedRef.current &&
+      publishState.currentMaterialSignature === materialSignature;
 
     void Promise.resolve(
       reportTerminalRuntimeStatus({
@@ -1195,6 +1275,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
               }));
             }
           }
+          if (!isCurrentPublishScope()) return;
 
           setDebug((current) =>
             withCheckInPublishDebug(current, {
@@ -1298,15 +1379,21 @@ export function usePosLocalSyncRuntimeStatus(input: {
       .finally(() => {
         runtimeStatusPublishInFlightRef.current = false;
         publishState.inFlight = false;
+        publishState.inFlightPublisherId = null;
         const queuedSignature = queuedRuntimeStatusSignatureRef.current;
+        const queuedMaterialSignature = publishState.queuedMaterialSignature;
+        const queuedPublisherId = publishState.queuedPublisherId;
         const queuedScopeSignature = publishState.queuedSignature;
         queuedRuntimeStatusSignatureRef.current = null;
+        publishState.queuedMaterialSignature = null;
+        publishState.queuedPublisherId = null;
         publishState.queuedSignature = null;
         const nextQueuedSignature = queuedSignature ?? queuedScopeSignature;
         if (
-          ((nextQueuedSignature &&
-            nextQueuedSignature !== publishState.lastSignature) ||
-            isStale) &&
+          nextQueuedSignature &&
+          queuedMaterialSignature !== null &&
+          queuedPublisherId === publisherId &&
+          queuedMaterialSignature !== publishState.lastMaterialSignature &&
           isRuntimeStatusPublisherMountedRef.current
         ) {
           forceNextRuntimeStatusPublishRef.current = true;
@@ -1314,10 +1401,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
           setRuntimeStatusObservationToken((current) => current + 1);
         }
       });
-
-    return () => {
-      isStale = true;
-    };
+    return undefined;
   }, [
     reportTerminalRuntimeStatus,
     events.length,
@@ -1327,14 +1411,14 @@ export function usePosLocalSyncRuntimeStatus(input: {
     runtimeStatusObservationToken,
     runtimeReadiness.terminalIntegrity,
     runtimeReadiness.terminalSeed,
+    storeFactory,
+    staffProfileId,
+    staffProofToken,
+    onLocalEventsChanged,
     runtimeStatusInput,
     runtimeStatusSyncSecretHash,
     runtimeStatusTerminalId,
-    onLocalEventsChanged,
-    storeFactory,
     storeId,
-    staffProfileId,
-    staffProofToken,
   ]);
 
   useEffect(() => {
@@ -1648,18 +1732,60 @@ export function usePosLocalSyncRuntimeStatus(input: {
 }
 
 type RuntimeStatusPublishState = {
+  currentMaterialSignature: string | null;
   forceNextPublish: boolean;
   inFlight: boolean;
+  inFlightPublisherId: string | null;
   lastMaterialSignature: string | null;
   lastPublishedAt: number | null;
   lastSignature: string | null;
+  queuedMaterialSignature: string | null;
+  queuedPublisherId: string | null;
   queuedSignature: string | null;
 };
 
-const runtimeStatusPublishStates = new Map<string, RuntimeStatusPublishState>();
+type RuntimeStatusGlobalPublishState = {
+  crossContextClaims: Map<
+    string,
+    { claimedAt: number; materialSignature: string; publisherId: string }
+  >;
+  publishStates: Map<string, RuntimeStatusPublishState>;
+};
 
-export function resetRuntimeStatusPublishStateForTests() {
+const RUNTIME_STATUS_GLOBAL_PUBLISH_STATE_KEY =
+  "__athenaRuntimeStatusPublishState";
+
+const runtimeStatusGlobalPublishState = getRuntimeStatusGlobalPublishState();
+const runtimeStatusPublishStates =
+  runtimeStatusGlobalPublishState.publishStates;
+const runtimeStatusCrossContextClaims =
+  runtimeStatusGlobalPublishState.crossContextClaims;
+const RUNTIME_STATUS_CROSS_CONTEXT_CLAIM_WINDOW_MS = 5_000;
+
+export function resetRuntimeStatusPublishStateForTests(options?: {
+  preserveCrossContextClaims?: boolean;
+}) {
   runtimeStatusPublishStates.clear();
+  if (!options?.preserveCrossContextClaims) {
+    runtimeStatusCrossContextClaims.clear();
+  }
+}
+
+function getRuntimeStatusGlobalPublishState(): RuntimeStatusGlobalPublishState {
+  const host = globalThis as typeof globalThis & {
+    [RUNTIME_STATUS_GLOBAL_PUBLISH_STATE_KEY]?:
+      | RuntimeStatusGlobalPublishState
+      | undefined;
+  };
+  const existing = host[RUNTIME_STATUS_GLOBAL_PUBLISH_STATE_KEY];
+  if (existing) return existing;
+
+  const next: RuntimeStatusGlobalPublishState = {
+    crossContextClaims: new Map(),
+    publishStates: new Map(),
+  };
+  host[RUNTIME_STATUS_GLOBAL_PUBLISH_STATE_KEY] = next;
+  return next;
 }
 
 function getRuntimeStatusPublishState(input: {
@@ -1671,15 +1797,168 @@ function getRuntimeStatusPublishState(input: {
   if (existing) return existing;
 
   const state: RuntimeStatusPublishState = {
+    currentMaterialSignature: null,
     forceNextPublish: false,
     inFlight: false,
+    inFlightPublisherId: null,
     lastMaterialSignature: null,
     lastPublishedAt: null,
     lastSignature: null,
+    queuedMaterialSignature: null,
+    queuedPublisherId: null,
     queuedSignature: null,
   };
   runtimeStatusPublishStates.set(key, state);
   return state;
+}
+
+function createRuntimeStatusPublisherId() {
+  const cryptoHost = globalThis.crypto;
+  if (typeof cryptoHost?.randomUUID === "function") {
+    return cryptoHost.randomUUID();
+  }
+
+  return `${Date.now()}:${Math.random().toString(36).slice(2)}`;
+}
+
+type RuntimeStatusSyncingPublishDelayRefs = {
+  readyMaterialSignatureRef: {
+    current: string | null;
+  };
+  timerMaterialSignatureRef: {
+    current: string | null;
+  };
+  timerRef: {
+    current: ReturnType<typeof setTimeout> | null;
+  };
+};
+
+function scheduleRuntimeStatusSyncingPublishDelay(
+  input: RuntimeStatusSyncingPublishDelayRefs & {
+    materialSignature: string;
+    onReady: () => void;
+  },
+) {
+  if (
+    input.timerRef.current &&
+    input.timerMaterialSignatureRef.current === input.materialSignature
+  ) {
+    return;
+  }
+
+  clearRuntimeStatusSyncingPublishDelay(input);
+  input.timerMaterialSignatureRef.current = input.materialSignature;
+  input.timerRef.current = setTimeout(() => {
+    input.timerRef.current = null;
+    input.timerMaterialSignatureRef.current = null;
+    input.readyMaterialSignatureRef.current = input.materialSignature;
+    input.onReady();
+  }, RUNTIME_STATUS_TRANSIENT_SYNCING_PUBLISH_DELAY_MS);
+}
+
+function clearRuntimeStatusSyncingPublishDelay(
+  input: RuntimeStatusSyncingPublishDelayRefs,
+) {
+  if (input.timerRef.current) {
+    clearTimeout(input.timerRef.current);
+  }
+  input.timerRef.current = null;
+  input.timerMaterialSignatureRef.current = null;
+  input.readyMaterialSignatureRef.current = null;
+}
+
+function claimRuntimeStatusPublishForCycle(input: {
+  allowRecentPublish: boolean;
+  materialSignature: string;
+  now: number;
+  publisherId: string;
+  storeId: string;
+  terminalId: string;
+}) {
+  const key = [
+    "athena-pos-runtime-status-publish",
+    input.storeId,
+    input.terminalId,
+  ].join(":");
+
+  const existingClaim = runtimeStatusCrossContextClaims.get(key);
+  if (
+    existingClaim &&
+    !input.allowRecentPublish &&
+    existingClaim.publisherId !== input.publisherId &&
+    input.now - existingClaim.claimedAt <
+      RUNTIME_STATUS_CROSS_CONTEXT_CLAIM_WINDOW_MS
+  ) {
+    return false;
+  }
+
+  const storage = getRuntimeStatusPublishStorage();
+  try {
+    const existingRaw = storage?.getItem(key);
+    if (existingRaw) {
+      const existing = JSON.parse(existingRaw) as {
+        claimedAt?: unknown;
+        materialSignature?: unknown;
+        publisherId?: unknown;
+      };
+      if (
+        typeof existing.claimedAt === "number" &&
+        !input.allowRecentPublish &&
+        existing.publisherId !== input.publisherId &&
+        input.now - existing.claimedAt <
+          RUNTIME_STATUS_CROSS_CONTEXT_CLAIM_WINDOW_MS
+      ) {
+        runtimeStatusCrossContextClaims.set(key, {
+          claimedAt: existing.claimedAt,
+          materialSignature:
+            typeof existing.materialSignature === "string"
+              ? existing.materialSignature
+              : input.materialSignature,
+          publisherId:
+            typeof existing.publisherId === "string"
+              ? existing.publisherId
+              : "unknown",
+        });
+        return false;
+      }
+    }
+
+    const nextClaim = {
+      claimedAt: input.now,
+      materialSignature: input.materialSignature,
+      publisherId: input.publisherId,
+    };
+    runtimeStatusCrossContextClaims.set(key, nextClaim);
+    storage?.setItem(
+      key,
+      JSON.stringify(nextClaim),
+    );
+    return true;
+  } catch {
+    runtimeStatusCrossContextClaims.set(key, {
+      claimedAt: input.now,
+      materialSignature: input.materialSignature,
+      publisherId: input.publisherId,
+    });
+    return true;
+  }
+}
+
+function getRuntimeStatusPublishStorage(): Storage | null {
+  try {
+    if (
+      typeof window !== "undefined" &&
+      typeof window.localStorage !== "undefined"
+    ) {
+      return window.localStorage;
+    }
+    if (typeof globalThis.localStorage !== "undefined") {
+      return globalThis.localStorage;
+    }
+  } catch {
+    return null;
+  }
+  return null;
 }
 
 async function clearAcceptedTerminalIntegrityState(input: {

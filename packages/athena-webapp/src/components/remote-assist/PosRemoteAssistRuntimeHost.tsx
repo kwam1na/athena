@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from "convex/react";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 import { RemoteAssistRuntimeShell } from "./RemoteAssistRuntimeShell";
 import { api } from "~/convex/_generated/api";
@@ -20,6 +20,11 @@ type RemoteAssistSessionSummary = {
   status: string;
 };
 
+const activeRuntimeHostClaims = new Map<string, string>();
+const RUNTIME_HOST_CLAIM_STORAGE_PREFIX =
+  "athena-pos-remote-assist-runtime-host";
+const RUNTIME_HOST_CLAIM_TTL_MS = 45_000;
+
 export function PosRemoteAssistRuntimeHost({
   appSessionRecovery,
   entryContext,
@@ -31,6 +36,15 @@ export function PosRemoteAssistRuntimeHost({
     entryContext.status === "ready" ? entryContext.terminalSeed : null;
   const remoteAssistRuntimeIdentity =
     terminalSeed?.cloudTerminalId ?? terminalSeed?.terminalId;
+  const runtimeHostOwnerIdRef = useRef(createRuntimeHostOwnerId());
+  const runtimeHostClaimKey =
+    terminalSeed?.storeId && remoteAssistRuntimeIdentity
+      ? `${terminalSeed.storeId}:${remoteAssistRuntimeIdentity}`
+      : null;
+  const ownsRuntimeHostClaim = claimRuntimeHostForTerminal(
+    runtimeHostClaimKey,
+    runtimeHostOwnerIdRef.current,
+  );
   const updateCoordinator = useOptionalUpdateCoordinator();
   const appUpdateCoordinator = useMemo(
     () =>
@@ -44,16 +58,27 @@ export function PosRemoteAssistRuntimeHost({
   );
 
   usePosLocalSyncRuntimeStatus({
-    appUpdateCoordinator,
-    appSessionRecovery,
+    appUpdateCoordinator: ownsRuntimeHostClaim ? appUpdateCoordinator : null,
+    appSessionRecovery: ownsRuntimeHostClaim ? appSessionRecovery : null,
     mode: "drain-enabled",
-    storeId: terminalSeed?.storeId,
-    terminalId: remoteAssistRuntimeIdentity,
+    storeId: ownsRuntimeHostClaim ? terminalSeed?.storeId : undefined,
+    terminalId: ownsRuntimeHostClaim ? remoteAssistRuntimeIdentity : undefined,
   });
+
+  useEffect(
+    () => () => {
+      releaseRuntimeHostClaim(
+        runtimeHostClaimKey,
+        runtimeHostOwnerIdRef.current,
+      );
+    },
+    [runtimeHostClaimKey],
+  );
 
   const remoteAssistSession = useQuery(
     api.pos.public.terminals.getRuntimeRemoteAssistSession,
-    terminalSeed?.storeId &&
+    ownsRuntimeHostClaim &&
+      terminalSeed?.storeId &&
       terminalSeed?.syncSecretHash &&
       remoteAssistRuntimeIdentity
       ? {
@@ -102,6 +127,101 @@ export function PosRemoteAssistRuntimeHost({
       )}
     />
   );
+}
+
+export function resetPosRemoteAssistRuntimeHostClaimsForTests() {
+  activeRuntimeHostClaims.clear();
+  const storage = getRuntimeHostClaimStorage();
+  if (!storage) return;
+  for (let index = storage.length - 1; index >= 0; index -= 1) {
+    const key = storage.key(index);
+    if (key?.startsWith(RUNTIME_HOST_CLAIM_STORAGE_PREFIX)) {
+      storage.removeItem(key);
+    }
+  }
+}
+
+function claimRuntimeHostForTerminal(
+  claimKey: string | null,
+  ownerId: string,
+) {
+  if (!claimKey) return false;
+  const currentOwnerId = activeRuntimeHostClaims.get(claimKey);
+  if (currentOwnerId && currentOwnerId !== ownerId) {
+    return false;
+  }
+
+  const storageKey = `${RUNTIME_HOST_CLAIM_STORAGE_PREFIX}:${claimKey}`;
+  const now = Date.now();
+  const storage = getRuntimeHostClaimStorage();
+  try {
+    const currentRaw = storage?.getItem(storageKey);
+    if (currentRaw) {
+      const current = JSON.parse(currentRaw) as {
+        claimedAt?: unknown;
+        ownerId?: unknown;
+      };
+      if (
+        typeof current.ownerId === "string" &&
+        current.ownerId !== ownerId &&
+        typeof current.claimedAt === "number" &&
+        now - current.claimedAt < RUNTIME_HOST_CLAIM_TTL_MS
+      ) {
+        return false;
+      }
+    }
+    storage?.setItem(storageKey, JSON.stringify({ claimedAt: now, ownerId }));
+  } catch {
+    // Fall back to the in-memory claim below when storage is unavailable.
+  }
+
+  activeRuntimeHostClaims.set(claimKey, ownerId);
+  return true;
+}
+
+function releaseRuntimeHostClaim(claimKey: string | null, ownerId: string) {
+  if (!claimKey) return;
+  const storageKey = `${RUNTIME_HOST_CLAIM_STORAGE_PREFIX}:${claimKey}`;
+  const storage = getRuntimeHostClaimStorage();
+  try {
+    const currentRaw = storage?.getItem(storageKey);
+    if (currentRaw) {
+      const current = JSON.parse(currentRaw) as { ownerId?: unknown };
+      if (current.ownerId === ownerId) {
+        storage?.removeItem(storageKey);
+      }
+    }
+  } catch {
+    // Ignore storage release failures; the TTL will expire stale claims.
+  }
+
+  if (activeRuntimeHostClaims.get(claimKey) === ownerId) {
+    activeRuntimeHostClaims.delete(claimKey);
+  }
+}
+
+function getRuntimeHostClaimStorage(): Storage | null {
+  try {
+    if (
+      typeof window !== "undefined" &&
+      typeof window.localStorage !== "undefined"
+    ) {
+      return window.localStorage;
+    }
+    if (typeof globalThis.localStorage !== "undefined") {
+      return globalThis.localStorage;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function createRuntimeHostOwnerId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}:${Math.random().toString(36).slice(2)}`;
 }
 
 function withRuntimeTransportState(

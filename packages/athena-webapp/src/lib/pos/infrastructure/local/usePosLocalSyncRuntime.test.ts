@@ -87,6 +87,7 @@ import {
   RUNTIME_STATUS_FRESHNESS_WAKEUP_INTERVAL_MS,
   getRuntimeStatusPublishMaterialSignature,
   shouldPublishRuntimeStatus,
+  shouldDelayTransientSyncingRuntimeStatusPublish,
   startRuntimeStatusFreshnessHeartbeat,
 } from "./runtimeStatusPublisher";
 import { buildPosLocalSyncUploadEvents } from "./syncContract";
@@ -145,6 +146,7 @@ describe("usePosLocalSyncRuntimeStatus", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     resetRuntimeStatusPublishStateForTests();
+    localStorage.clear();
     vi.useRealTimers();
   });
 
@@ -4110,7 +4112,7 @@ describe("usePosLocalSyncRuntimeStatus", () => {
       kind: "ok";
       data: Record<string, never>;
     }>();
-    mocks.reportTerminalRuntimeStatus.mockReturnValue(nextPublish.promise);
+    mocks.reportTerminalRuntimeStatus.mockReturnValueOnce(nextPublish.promise);
     const store = {
       listEvents: vi.fn(async () => ({
         ok: true,
@@ -4212,6 +4214,127 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     await waitFor(() =>
       expect(mocks.reportTerminalRuntimeStatus).toHaveBeenCalledTimes(1),
     );
+    nextPublish.resolve({
+      kind: "ok",
+      data: {},
+    });
+    await nextPublish.promise;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(mocks.reportTerminalRuntimeStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not replay a changed duplicate publisher while another owner is in flight", async () => {
+    const nextPublish = deferred<{
+      kind: "ok";
+      data: Record<string, never>;
+    }>();
+    mocks.reportTerminalRuntimeStatus.mockReturnValueOnce(nextPublish.promise);
+    const store = {
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-1",
+          displayName: "Front",
+          provisionedAt: 1,
+          schemaVersion: 1,
+          syncSecretHash: "sync-secret-1",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+    };
+
+    const storeFactory = () => store as never;
+    renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        mode: "status-only",
+        storeFactory,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+    renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        appSessionRecovery: {
+          reason: "app_account_not_pos_scoped",
+          status: "blocked",
+        },
+        mode: "status-only",
+        storeFactory,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(mocks.reportTerminalRuntimeStatus).toHaveBeenCalledTimes(1),
+    );
+    nextPublish.resolve({
+      kind: "ok",
+      data: {},
+    });
+    await nextPublish.promise;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(mocks.reportTerminalRuntimeStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not replay an unchanged runtime check-in after a stale effect invalidation", async () => {
+    const nextPublish = deferred<{
+      kind: "ok";
+      data: Record<string, never>;
+    }>();
+    mocks.reportTerminalRuntimeStatus.mockReturnValue(nextPublish.promise);
+    const store = {
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-1",
+          displayName: "Front",
+          provisionedAt: 1,
+          schemaVersion: 1,
+          syncSecretHash: "sync-secret-1",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+    };
+
+    const storeFactory = () => store as never;
+    const { rerender } = renderHook(
+      ({ appSessionRecovery }) =>
+        usePosLocalSyncRuntimeStatus({
+          appSessionRecovery,
+          mode: "status-only",
+          storeFactory,
+          storeId: "store-1",
+          terminalId: "terminal-cloud-1",
+        }),
+      {
+        initialProps: {
+          appSessionRecovery: null as
+            | null
+            | undefined
+            | { reason: "app_account_not_pos_scoped"; status: "blocked" },
+        },
+      },
+    );
+
+    await waitFor(() =>
+      expect(mocks.reportTerminalRuntimeStatus).toHaveBeenCalledTimes(1),
+    );
+
+    rerender({ appSessionRecovery: undefined });
+
     await act(async () => {
       nextPublish.resolve({
         kind: "ok",
@@ -4219,6 +4342,110 @@ describe("usePosLocalSyncRuntimeStatus", () => {
       });
       await nextPublish.promise;
     });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(mocks.reportTerminalRuntimeStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it("coalesces same-material runtime check-ins across browser contexts", async () => {
+    const store = {
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-1",
+          displayName: "Front",
+          provisionedAt: 1,
+          schemaVersion: 1,
+          syncSecretHash: "sync-secret-1",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+    };
+    const firstContext = renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        mode: "status-only",
+        storeFactory: () => store as never,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(mocks.reportTerminalRuntimeStatus).toHaveBeenCalledTimes(1),
+    );
+
+    firstContext.unmount();
+    resetRuntimeStatusPublishStateForTests({
+      preserveCrossContextClaims: true,
+    });
+
+    renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        mode: "status-only",
+        storeFactory: () => store as never,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(mocks.reportTerminalRuntimeStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it("coalesces fresh-context runtime check-ins with different material inside the claim window", async () => {
+    const store = {
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-1",
+          displayName: "Front",
+          provisionedAt: 1,
+          schemaVersion: 1,
+          syncSecretHash: "sync-secret-1",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+    };
+    const firstContext = renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        mode: "status-only",
+        storeFactory: () => store as never,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(mocks.reportTerminalRuntimeStatus).toHaveBeenCalledTimes(1),
+    );
+
+    firstContext.unmount();
+    resetRuntimeStatusPublishStateForTests({
+      preserveCrossContextClaims: true,
+    });
+
+    renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        appSessionRecovery: {
+          reason: "app_account_not_pos_scoped",
+          status: "blocked",
+        },
+        mode: "status-only",
+        storeFactory: () => store as never,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(mocks.reportTerminalRuntimeStatus).toHaveBeenCalledTimes(1);
@@ -4673,6 +4900,44 @@ describe("usePosLocalSyncRuntimeStatus", () => {
         publishSignature: "publish-b",
       }),
     ).toBe(true);
+  });
+
+  it("delays fresh transient syncing status publishes until the debounce is ready", () => {
+    expect(
+      shouldDelayTransientSyncingRuntimeStatusPublish({
+        forcePublish: false,
+        materialSignature: "syncing-material",
+        readyMaterialSignature: null,
+        syncStatus: "syncing",
+      }),
+    ).toBe(true);
+  });
+
+  it("does not delay forced, ready, or settled runtime status publishes", () => {
+    expect(
+      shouldDelayTransientSyncingRuntimeStatusPublish({
+        forcePublish: true,
+        materialSignature: "syncing-material",
+        readyMaterialSignature: null,
+        syncStatus: "syncing",
+      }),
+    ).toBe(false);
+    expect(
+      shouldDelayTransientSyncingRuntimeStatusPublish({
+        forcePublish: false,
+        materialSignature: "syncing-material",
+        readyMaterialSignature: "syncing-material",
+        syncStatus: "syncing",
+      }),
+    ).toBe(false);
+    expect(
+      shouldDelayTransientSyncingRuntimeStatusPublish({
+        forcePublish: false,
+        materialSignature: "idle-material",
+        readyMaterialSignature: null,
+        syncStatus: "idle",
+      }),
+    ).toBe(false);
   });
 
   it("drains persisted-proof multi-staff local history from the hub in stored upload order", async () => {
