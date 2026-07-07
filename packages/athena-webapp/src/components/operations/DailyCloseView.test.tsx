@@ -1396,6 +1396,48 @@ describe("DailyCloseViewContent", () => {
     );
   });
 
+  it("shows summary comparison deltas only when comparison access is allowed", () => {
+    const snapshotWithPriorDay: DailyCloseSnapshot = {
+      ...readySnapshot,
+      priorDaySummary: {
+        ...baseSummary,
+        currentDayCashTotal: 90000,
+        paymentTotals: [
+          { amount: 90000, method: "cash", transactionCount: 4 },
+          { amount: 1420, method: "card", transactionCount: 2 },
+          { amount: 5000, method: "mobile_money", transactionCount: 2 },
+        ],
+        totalSales: 251000,
+      },
+    };
+
+    const { rerender } = renderContent(snapshotWithPriorDay);
+
+    expect(screen.getAllByText(/vs prior day/i).length).toBeGreaterThan(0);
+
+    rerender(
+      <DailyCloseViewContent
+        canViewSummaryComparisons={false}
+        currency="GHS"
+        hasFinancialDetailsAccess
+        hasFullAdminAccess
+        isAuthenticated
+        isCompleting={false}
+        isLoadingAccess={false}
+        isLoadingSnapshot={false}
+        onComplete={vi.fn(async () => ok({ closeId: "close-1" }))}
+        orgUrlSlug="wigclub"
+        snapshot={snapshotWithPriorDay}
+        storeId={"store-1" as Id<"store">}
+        storeUrlSlug="osu"
+      />,
+    );
+
+    expect(screen.queryByText(/vs prior day/i)).not.toBeInTheDocument();
+    expect(screen.getByText("14 transactions")).toBeInTheDocument();
+    expect(screen.getByText("2 cash transactions")).toBeInTheDocument();
+  });
+
   it("redacts EOD Review financial details without manager access", async () => {
     const user = userEvent.setup();
     renderContent(blockedSnapshot, {
@@ -1955,6 +1997,44 @@ describe("DailyCloseViewContent", () => {
       dailyCloseId: "daily-close-1",
       reason: "Cash deposit corrected.",
     });
+  });
+
+  it("reopens completed close snapshots when broad access redacts the full close record", async () => {
+    const user = userEvent.setup();
+    const onReopen = vi.fn(async () => ok({ action: "reopened" }));
+
+    renderContent(
+      {
+        ...readySnapshot,
+        completedClose: {
+          dailyCloseId: "daily-close-1",
+          completedAt: Date.UTC(2026, 4, 7, 23, 15),
+          completedByStaffName: "Ama Mensah",
+          restrictedDetailsRedacted: true,
+        },
+        existingClose: null,
+        status: "completed",
+      },
+      { onReopen },
+    );
+
+    await user.type(
+      screen.getByLabelText("Reopen reason"),
+      "Cash deposit corrected.",
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Reopen EOD Review" }),
+    );
+
+    expect(onReopen).toHaveBeenCalledWith({
+      dailyCloseId: "daily-close-1",
+      reason: "Cash deposit corrected.",
+    });
+    expect(
+      screen.queryByText(
+        "end of day review record unavailable. Refresh before reopening.",
+      ),
+    ).not.toBeInTheDocument();
   });
 
   it("does not show reopen for superseded or already reopened close records", () => {

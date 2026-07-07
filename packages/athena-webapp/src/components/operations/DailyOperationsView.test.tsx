@@ -1365,6 +1365,22 @@ describe("DailyOperationsViewContent", () => {
     expect(closeAutomationLink).toHaveClass("sm:ml-layout-md", "self-start");
   });
 
+  it("hides automation status evidence when full admin access is not active", () => {
+    renderContent(automationSnapshot, {
+      canViewAutomationStatuses: false,
+    });
+
+    expect(screen.queryByText("Athena automation")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Athena started Opening Handoff."),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", {
+        name: "Open Opening Handoff automation source",
+      }),
+    ).not.toBeInTheDocument();
+  });
+
   it("shows Athena completion attribution for a closed store day", () => {
     renderContent({
       ...closedSnapshot,
@@ -2706,6 +2722,29 @@ describe("DailyOperationsView", () => {
     expect(
       screen.getByText("Athena started Opening Handoff."),
     ).toBeInTheDocument();
+  });
+
+  it("does not subscribe to automation statuses without full admin access", () => {
+    mockedHooks.useProtectedAdminPageState.mockReturnValue({
+      activeStore: { _id: "store-1", currency: "GHS" },
+      canAccessProtectedSurface: true,
+      canQueryProtectedData: true,
+      hasFinancialDetailsAccess: true,
+      hasFullAdminAccess: false,
+      isAuthenticated: true,
+      isLoadingAccess: false,
+    });
+    mockedHooks.useQuery.mockImplementation((_query, args) =>
+      args === "skip" ? undefined : operatingSnapshot,
+    );
+
+    render(<DailyOperationsView />);
+
+    expect(mockedHooks.useQuery).toHaveBeenCalledWith(
+      mockedApi.getDailyOperationsAutomationSnapshot,
+      "skip",
+    );
+    expect(screen.queryByText("Athena automation")).not.toBeInTheDocument();
   });
 
   it("hydrates analytics detail on initial load for an uncached week", () => {

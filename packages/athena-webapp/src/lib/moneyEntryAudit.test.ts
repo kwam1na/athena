@@ -23,12 +23,6 @@ const storefrontSourceRoot = join(storefrontRoot, "src");
 
 const reviewedRawParses: ReviewedRawParse[] = [
   {
-    file: "src/components/cash-controls/RegisterSessionView.tsx",
-    textIncludes: "parsedAmount = Number(amount)",
-    reason:
-      "Backend-owned conversion boundary: cash deposit mutation converts display amount with toPesewas.",
-  },
-  {
     file: "src/components/promo-codes/PromoCodePreview.tsx",
     textIncludes: "Number.parseFloat(discount)",
     reason: "Display-only preview formatting. V26-369 covers mutation persistence.",

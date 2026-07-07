@@ -8,6 +8,7 @@ import {
 import {
   getEodAutoCompletePolicy,
   getOpeningAutoStartPolicy,
+  getRegisterCloseoutApprovalPolicy,
   prepareDailyCloseAutomationWithCtx,
   runHistoricEodAutoCloseBatchWithCtx,
   runDailyCloseAutoCompleteEligibilityWithCtx,
@@ -17,6 +18,7 @@ import {
   sendDailyManagerReportsForAppliedEodAutomationWithCtx,
   updateEodAutoCompletePolicy,
   updateOpeningAutoStartPolicy,
+  updateRegisterCloseoutApprovalPolicy,
 } from "./dailyOperationsAutomation";
 
 const accessMocks = vi.hoisted(() => ({
@@ -331,6 +333,14 @@ function completedDailyClose(overrides: Partial<Row> = {}): Row {
   };
 }
 
+function restoreStageEnv(originalStage: string | undefined) {
+  if (originalStage === undefined) {
+    delete process.env.STAGE;
+  } else {
+    process.env.STAGE = originalStage;
+  }
+}
+
 describe("daily operations automation adapter", () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -406,6 +416,98 @@ describe("daily operations automation adapter", () => {
     ).rejects.toThrow("Only full admins can access stock operations.");
     expect(inserts).toEqual([]);
     expect(patches).toEqual([]);
+  });
+
+  it("requires full-admin access for register closeout approval policy reads", async () => {
+    const { db } = createDb({ store: [store] });
+    accessMocks.requireStoreFullAdminAccess.mockRejectedValue(
+      new Error("Only full admins can access stock operations."),
+    );
+
+    await expect(
+      getHandler(getRegisterCloseoutApprovalPolicy)(
+        { db } as unknown as MutationCtx,
+        {
+          storeId: "store-1" as Id<"store">,
+        },
+      ),
+    ).rejects.toThrow("Only full admins can access stock operations.");
+  });
+
+  it("updates the register closeout approval threshold in store config", async () => {
+    const configuredStore = {
+      ...store,
+      config: {
+        operations: {
+          cashControls: {
+            requireManagerSignoffForShorts: true,
+            varianceApprovalThreshold: 5000,
+          },
+        },
+      },
+    };
+    const { db, patches } = createDb({ store: [configuredStore] });
+    accessMocks.requireStoreFullAdminAccess.mockResolvedValue({
+      athenaUser: { _id: "user-1" },
+      store: configuredStore,
+    });
+
+    const readResult = await getHandler(getRegisterCloseoutApprovalPolicy)(
+      { db } as unknown as MutationCtx,
+      {
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(readResult).toMatchObject({
+      requireManagerSignoffForShorts: true,
+      varianceApprovalThreshold: 5000,
+    });
+
+    const updateResult = await getHandler(updateRegisterCloseoutApprovalPolicy)(
+      { db } as unknown as MutationCtx,
+      {
+        storeId: "store-1" as Id<"store">,
+        varianceApprovalThreshold: 7500,
+      },
+    );
+
+    expect(updateResult).toMatchObject({
+      requireManagerSignoffForShorts: true,
+      varianceApprovalThreshold: 7500,
+    });
+    expect(patches).toContainEqual({
+      id: "store-1",
+      table: "store",
+      value: {
+        config: {
+          operations: {
+            cashControls: {
+              requireManagerSignoffForShorts: true,
+              varianceApprovalThreshold: 7500,
+            },
+          },
+        },
+      },
+    });
+  });
+
+  it("rejects invalid register closeout approval thresholds", async () => {
+    const { db } = createDb({ store: [store] });
+    accessMocks.requireStoreFullAdminAccess.mockResolvedValue({
+      athenaUser: { _id: "user-1" },
+      store,
+    });
+
+    await expect(
+      getHandler(updateRegisterCloseoutApprovalPolicy)(
+        { db } as unknown as MutationCtx,
+        {
+          storeId: "store-1" as Id<"store">,
+          varianceApprovalThreshold: -1,
+        },
+      ),
+    ).rejects.toThrow("Variance approval threshold must be non-negative.");
   });
 
   it("maps Opening auto-start policy API values at the public handler boundary", async () => {
@@ -935,6 +1037,8 @@ describe("daily operations automation adapter", () => {
   });
 
   it("sends manager reports for freshly applied or prepared EOD automation outcomes", async () => {
+    const originalStage = process.env.STAGE;
+    process.env.STAGE = "prod";
     const runAction = vi.fn(async (_functionRef: unknown, args: unknown) => {
       const operatingDate = (args as { operatingDate: string }).operatingDate;
 
@@ -951,90 +1055,133 @@ describe("daily operations automation adapter", () => {
       ];
     });
 
-    const result = await sendDailyManagerReportsForAppliedEodAutomationWithCtx(
-      { runAction } as never,
-      {
-        results: [
-          {
-            action: "applied",
-            run: {
-              _id: "automation-run-applied",
-              operatingDate: "2026-06-08",
-              outcome: "applied",
-              storeId: "store-1",
+    try {
+      const result = await sendDailyManagerReportsForAppliedEodAutomationWithCtx(
+        { runAction } as never,
+        {
+          results: [
+            {
+              action: "applied",
+              run: {
+                _id: "automation-run-applied",
+                operatingDate: "2026-06-08",
+                outcome: "applied",
+                storeId: "store-1",
+              },
             },
-          },
-          {
-            action: "already_recorded",
-            run: {
-              _id: "automation-run-existing",
-              operatingDate: "2026-06-07",
-              outcome: "applied",
-              storeId: "store-1",
+            {
+              action: "already_recorded",
+              run: {
+                _id: "automation-run-existing",
+                operatingDate: "2026-06-07",
+                outcome: "applied",
+                storeId: "store-1",
+              },
             },
-          },
-          {
-            action: "recorded",
-            run: {
-              _id: "automation-run-skipped",
-              operatingDate: "2026-06-06",
-              outcome: "skipped",
-              storeId: "store-1",
+            {
+              action: "recorded",
+              run: {
+                _id: "automation-run-skipped",
+                operatingDate: "2026-06-06",
+                outcome: "skipped",
+                storeId: "store-1",
+              },
             },
-          },
-          {
-            action: "recorded",
-            run: {
-              _id: "automation-run-prepared",
-              operatingDate: "2026-06-05",
-              outcome: "prepared",
-              storeId: "store-1",
+            {
+              action: "recorded",
+              run: {
+                _id: "automation-run-prepared",
+                operatingDate: "2026-06-05",
+                outcome: "prepared",
+                storeId: "store-1",
+              },
             },
-          },
-        ] as never,
-      },
-    );
+          ] as never,
+        },
+      );
 
-    expect(runAction).toHaveBeenCalledTimes(2);
-    expect(runAction.mock.calls[0]?.[1]).toEqual({
-      operatingDate: "2026-06-08",
-      status: "applied",
-      storeId: "store-1",
-    });
-    expect(runAction.mock.calls[1]?.[1]).toEqual({
-      operatingDate: "2026-06-05",
-      status: "prepared",
-      storeId: "store-1",
-    });
-    expect(result).toEqual([
-      {
+      expect(runAction).toHaveBeenCalledTimes(2);
+      expect(runAction.mock.calls[0]?.[1]).toEqual({
         operatingDate: "2026-06-08",
-        reports: [
-          {
-            dailyCloseId: "daily-close-1",
-            operatingDate: "2026-06-08",
-            recipientEmail: "manager@example.com",
-            status: 202,
-            storeName: "Accra",
-          },
-        ],
-        runId: "automation-run-applied",
+        status: "applied",
         storeId: "store-1",
-      },
-      {
+      });
+      expect(runAction.mock.calls[1]?.[1]).toEqual({
         operatingDate: "2026-06-05",
-        reports: [
-          {
-            operatingDate: "2026-06-05",
-            recipientEmail: "manager@example.com",
-            status: 202,
-            storeName: "Accra",
-          },
-        ],
-        runId: "automation-run-prepared",
+        status: "prepared",
         storeId: "store-1",
-      },
-    ]);
+      });
+      expect(result).toEqual([
+        {
+          operatingDate: "2026-06-08",
+          reports: [
+            {
+              dailyCloseId: "daily-close-1",
+              operatingDate: "2026-06-08",
+              recipientEmail: "manager@example.com",
+              status: 202,
+              storeName: "Accra",
+            },
+          ],
+          runId: "automation-run-applied",
+          storeId: "store-1",
+        },
+        {
+          operatingDate: "2026-06-05",
+          reports: [
+            {
+              operatingDate: "2026-06-05",
+              recipientEmail: "manager@example.com",
+              status: 202,
+              storeName: "Accra",
+            },
+          ],
+          runId: "automation-run-prepared",
+          storeId: "store-1",
+        },
+      ]);
+    } finally {
+      restoreStageEnv(originalStage);
+    }
+  });
+
+  it("skips scheduled manager report sends outside production", async () => {
+    const originalStage = process.env.STAGE;
+    process.env.STAGE = "";
+    const runAction = vi.fn();
+
+    try {
+      const result = await sendDailyManagerReportsForAppliedEodAutomationWithCtx(
+        { runAction } as never,
+        {
+          results: [
+            {
+              action: "applied",
+              run: {
+                _id: "automation-run-applied",
+                operatingDate: "2026-06-08",
+                outcome: "applied",
+                storeId: "store-1",
+              },
+            },
+            {
+              action: "recorded",
+              run: {
+                _id: "automation-run-prepared",
+                operatingDate: "2026-06-05",
+                outcome: "prepared",
+                storeId: "store-1",
+              },
+            },
+          ] as never,
+        },
+      );
+
+      expect(runAction).not.toHaveBeenCalled();
+      expect(result).toEqual([]);
+    } finally {
+      restoreStageEnv(originalStage);
+    }
   });
 
   it("persists canonical store schedule context in EOD auto-complete evidence", async () => {

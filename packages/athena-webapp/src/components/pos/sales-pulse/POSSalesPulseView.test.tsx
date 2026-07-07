@@ -309,7 +309,7 @@ describe("POSStorePulseSection", () => {
     ).toBeInTheDocument();
   });
 
-  it("hides financial sales cards when full admin access is not active", () => {
+  it("hides manager-only sales cards when full admin access is not active", () => {
     renderStorePulse({ hasFullAdminAccess: false });
 
     expect(screen.queryByText("Manager only")).not.toBeInTheDocument();
@@ -323,7 +323,7 @@ describe("POSStorePulseSection", () => {
     expect(screen.queryByText("Sales")).not.toBeInTheDocument();
     expect(screen.queryByText("Average sale")).not.toBeInTheDocument();
     expect(screen.getByText("Transactions")).toBeInTheDocument();
-    expect(screen.getByText("Items sold")).toBeInTheDocument();
+    expect(screen.queryByText("Items sold")).not.toBeInTheDocument();
     expect(screen.queryByText(/vs yesterday/)).not.toBeInTheDocument();
     expect(screen.queryByText("Sales trend")).not.toBeInTheDocument();
     expect(screen.queryByText("Top items")).not.toBeInTheDocument();
@@ -349,7 +349,7 @@ describe("POSStorePulseSection", () => {
     expect(screen.queryByText("Sales")).not.toBeInTheDocument();
     expect(screen.queryByText("Average sale")).not.toBeInTheDocument();
     expect(screen.getByText("Transactions")).toBeInTheDocument();
-    expect(screen.getByText("Items sold")).toBeInTheDocument();
+    expect(screen.queryByText("Items sold")).not.toBeInTheDocument();
     expect(screen.queryByText("Sales trend")).not.toBeInTheDocument();
     expect(screen.queryByText("Top items")).not.toBeInTheDocument();
     expect(screen.queryByText("How customers paid")).not.toBeInTheDocument();

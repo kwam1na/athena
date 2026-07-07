@@ -277,6 +277,10 @@ describe("pr-athena delivery run wrapper", () => {
             command: "bun run --filter '@athena/webapp' test:coverage",
             coverage: { mode: "full" },
           },
+          {
+            capability: "athena-webapp-typecheck",
+            command: "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
+          },
         ],
       });
     } finally {

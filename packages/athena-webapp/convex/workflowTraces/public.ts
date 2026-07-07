@@ -5,6 +5,8 @@ import type { QueryCtx } from "../_generated/server";
 import { query } from "../_generated/server";
 import { normalizeWorkflowTraceLookupValue } from "../../shared/workflowTrace";
 import { requireStoreFullAdminAccess } from "../stockOps/access";
+import { getAuthenticatedAthenaUserWithCtx } from "../lib/athenaUserAuth";
+import { getActiveManagerElevationWithCtx } from "../operations/managerElevations";
 import { listWorkflowTraceEventsWithCtx } from "./core";
 import { buildWorkflowTraceViewModel } from "./presentation";
 
@@ -12,6 +14,7 @@ export type WorkflowTraceAccessAuthorizer = (
   ctx: QueryCtx,
   args: {
     storeId: Id<"store">;
+    terminalId?: Id<"posTerminal">;
     trace: {
       traceId: string;
       workflowType: string;
@@ -30,14 +33,47 @@ const requireAdminWorkflowTraceAccess: WorkflowTraceAccessAuthorizer = async (
   ctx,
   args,
 ) => {
-  await requireStoreFullAdminAccess(ctx, args.storeId);
+  await requireFullAdminOrManagerElevationTraceAccess(ctx, args);
   return true;
 };
+
+async function requireFullAdminOrManagerElevationTraceAccess(
+  ctx: QueryCtx,
+  args: {
+    storeId: Id<"store">;
+    terminalId?: Id<"posTerminal">;
+  },
+) {
+  try {
+    await requireStoreFullAdminAccess(ctx, args.storeId);
+    return;
+  } catch (error) {
+    if (!args.terminalId) {
+      throw error;
+    }
+
+    const account = await getAuthenticatedAthenaUserWithCtx(ctx);
+    if (!account) {
+      throw error;
+    }
+
+    const elevation = await getActiveManagerElevationWithCtx(ctx, {
+      accountId: account._id,
+      storeId: args.storeId,
+      terminalId: args.terminalId,
+    });
+
+    if (!elevation) {
+      throw error;
+    }
+  }
+}
 
 async function assertWorkflowTraceAccess(
   ctx: QueryCtx,
   args: {
     storeId: Id<"store">;
+    terminalId?: Id<"posTerminal">;
     trace: {
       traceId: string;
       workflowType: string;
@@ -52,6 +88,7 @@ async function assertWorkflowTraceAccess(
     requireAdminWorkflowTraceAccess;
   const isAuthorized = await authorizer(ctx, {
     storeId: args.storeId,
+    terminalId: args.terminalId,
     trace: args.trace,
   });
 
@@ -65,19 +102,21 @@ async function assertDefaultWorkflowTraceAccess(
   args: {
     accessAuthorizers?: WorkflowTraceAccessAuthorizers;
     storeId: Id<"store">;
+    terminalId?: Id<"posTerminal">;
   },
 ) {
   if (args.accessAuthorizers) {
     return;
   }
 
-  await requireStoreFullAdminAccess(ctx, args.storeId);
+  await requireFullAdminOrManagerElevationTraceAccess(ctx, args);
 }
 
 export async function getWorkflowTraceViewByIdWithCtx(
   ctx: QueryCtx,
   args: {
     storeId: Id<"store">;
+    terminalId?: Id<"posTerminal">;
     traceId: string;
     accessAuthorizers?: WorkflowTraceAccessAuthorizers;
   },
@@ -97,6 +136,7 @@ export async function getWorkflowTraceViewByIdWithCtx(
 
   await assertWorkflowTraceAccess(ctx, {
     storeId: args.storeId,
+    terminalId: args.terminalId,
     trace,
     accessAuthorizers: args.accessAuthorizers,
   });
@@ -112,6 +152,7 @@ export async function getWorkflowTraceViewByIdWithCtx(
 export const getWorkflowTraceViewById = query({
   args: {
     storeId: v.id("store"),
+    terminalId: v.optional(v.id("posTerminal")),
     traceId: v.string(),
   },
   handler: (ctx, args) => getWorkflowTraceViewByIdWithCtx(ctx, args),
@@ -121,6 +162,7 @@ export async function getWorkflowTraceViewByLookupWithCtx(
   ctx: QueryCtx,
   args: {
     storeId: Id<"store">;
+    terminalId?: Id<"posTerminal">;
     workflowType: string;
     lookupType: string;
     lookupValue: string;
@@ -146,6 +188,7 @@ export async function getWorkflowTraceViewByLookupWithCtx(
 
   return getWorkflowTraceViewByIdWithCtx(ctx as never, {
     storeId: args.storeId,
+    terminalId: args.terminalId,
     traceId: lookup.traceId,
     accessAuthorizers: args.accessAuthorizers,
   });
@@ -154,6 +197,7 @@ export async function getWorkflowTraceViewByLookupWithCtx(
 export const getWorkflowTraceByLookup = query({
   args: {
     storeId: v.id("store"),
+    terminalId: v.optional(v.id("posTerminal")),
     workflowType: v.string(),
     lookupType: v.string(),
     lookupValue: v.string(),

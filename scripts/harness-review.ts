@@ -62,7 +62,8 @@ type HarnessReviewOptions = {
 type LocalProviderCapability =
   | "harness-doc-freshness"
   | "root-script-tests"
-  | "athena-webapp-vitest";
+  | "athena-webapp-vitest"
+  | "athena-webapp-typecheck";
 
 type LocalProviderEvidenceCapability = {
   capability?: string;
@@ -220,6 +221,14 @@ function localCapabilityForCommand(
     return "athena-webapp-vitest";
   }
 
+  if (
+    command.kind === "raw" &&
+    command.command.trim() ===
+      "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json"
+  ) {
+    return "athena-webapp-typecheck";
+  }
+
   return null;
 }
 
@@ -345,7 +354,8 @@ function buildProviderSkip(
           (entry): entry is LocalProviderCapability =>
             entry === "harness-doc-freshness" ||
             entry === "root-script-tests" ||
-            entry === "athena-webapp-vitest"
+            entry === "athena-webapp-vitest" ||
+            entry === "athena-webapp-typecheck"
         ) ?? [],
     evidence: evidencePath,
   };

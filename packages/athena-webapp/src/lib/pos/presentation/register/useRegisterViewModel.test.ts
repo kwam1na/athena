@@ -3623,6 +3623,7 @@ describe("useRegisterViewModel", () => {
     });
 
     expect(result.current.drawerGate?.closeoutDraftVariance).toBe(-200);
+    expect(result.current.drawerGate?.canViewCloseoutFinancials).toBe(true);
 
     await act(async () => {
       await result.current.drawerGate?.onSubmitCloseout?.();
@@ -4104,6 +4105,7 @@ describe("useRegisterViewModel", () => {
     );
 
     expect(result.current.drawerGate?.expectedCash).toBe(610000);
+    expect(result.current.drawerGate?.canViewCloseoutFinancials).toBe(false);
     expect(result.current.drawerGate?.pendingCashVoidApprovals).toEqual({
       cashAffectingCount: 1,
       cashAdjustmentCount: 0,

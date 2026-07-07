@@ -62,7 +62,9 @@ vi.mock("../common/PageHeader", () => ({
 
 const readyProtectedState = {
   activeStore: { _id: "store-1" as Id<"store">, currency: "USD" },
+  canAccessProtectedSurface: true,
   canQueryProtectedData: true,
+  hasFinancialDetailsAccess: true,
   hasFullAdminAccess: true,
   isAuthenticated: true,
   isLoadingAccess: false,
@@ -119,6 +121,9 @@ describe("CashControlsDashboard auth readiness", () => {
   it("subscribes to cash-controls data once the shared admin gate is ready", () => {
     render(<CashControlsDashboard />);
 
+    expect(mockedHooks.useProtectedAdminPageState).toHaveBeenCalledWith({
+      surface: "cash_controls",
+    });
     expect(mockedHooks.useQuery.mock.calls.map(([, args]) => args)).toEqual([
       { storeId: "store-1" },
     ]);

@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { POSTerminalDetailView } from "~/src/components/pos/terminals/POSTerminalDetailView";
+import { ProtectedRoute } from "~/src/components/ProtectedRoute";
 import { NotFoundView } from "~/src/components/states/not-found/NotFoundView";
 
 type NotFoundPayload = {
@@ -23,6 +24,10 @@ function POSTerminalDetailNotFoundRoute({ data }: { data?: unknown }) {
 export const Route = createFileRoute(
   "/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/$terminalId"
 )({
-  component: POSTerminalDetailView,
+  component: () => (
+    <ProtectedRoute requires="manager">
+      <POSTerminalDetailView />
+    </ProtectedRoute>
+  ),
   notFoundComponent: POSTerminalDetailNotFoundRoute,
 });

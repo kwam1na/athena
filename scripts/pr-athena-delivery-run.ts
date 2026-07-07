@@ -124,6 +124,10 @@ export async function writePrAthenaProviderEvidence(
             command: "bun run --filter '@athena/webapp' test:coverage",
             coverage: { mode: "full" },
           },
+          {
+            capability: "athena-webapp-typecheck",
+            command: "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
+          },
         ],
       },
       null,

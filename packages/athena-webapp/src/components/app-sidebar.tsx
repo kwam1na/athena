@@ -172,7 +172,10 @@ export function AppSidebar({
     activeStore?._id ? { storeId: activeStore._id } : "skip",
   );
 
-  const { canAccessStoreDaySurfaces, hasFullAdminAccess } = usePermissions();
+  const {
+    hasFinancialDetailsAccess,
+    hasFullAdminAccess,
+  } = usePermissions();
   const isOperationsRoute = location.pathname.includes("/operations");
   const isOrdersRoute = location.pathname.includes("/orders");
   const isProductsRoute = location.pathname.includes("/products");
@@ -223,7 +226,7 @@ export function AppSidebar({
 
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  disabled={!canAccessStoreDaySurfaces()}
+                  disabled={!hasFinancialDetailsAccess}
                   asChild
                 >
                   <Link
@@ -243,7 +246,7 @@ export function AppSidebar({
 
               <SidebarMenuCollapsible
                 defaultOpen={isOperationsRoute}
-                disabled={!canAccessStoreDaySurfaces()}
+                disabled={!hasFinancialDetailsAccess}
                 icon={Workflow}
                 label="Operations"
                 onClick={() => {
@@ -259,7 +262,7 @@ export function AppSidebar({
                 <SidebarMenuSub>
                   <SidebarMenuSubItem>
                     <SidebarMenuButton
-                      disabled={!canAccessStoreDaySurfaces()}
+                      disabled={!hasFinancialDetailsAccess}
                       asChild
                     >
                       <Link
@@ -278,7 +281,7 @@ export function AppSidebar({
 
                   <SidebarMenuSubItem>
                     <SidebarMenuButton
-                      disabled={!canAccessStoreDaySurfaces()}
+                      disabled={!hasFinancialDetailsAccess}
                       asChild
                     >
                       <Link
@@ -297,7 +300,7 @@ export function AppSidebar({
 
                   <SidebarMenuSubItem>
                     <SidebarMenuButton
-                      disabled={!canAccessStoreDaySurfaces()}
+                      disabled={!hasFinancialDetailsAccess}
                       asChild
                     >
                       <Link
@@ -316,7 +319,7 @@ export function AppSidebar({
 
                   <SidebarMenuSubItem>
                     <SidebarMenuButton
-                      disabled={!canAccessStoreDaySurfaces()}
+                      disabled={!hasFinancialDetailsAccess}
                       asChild
                     >
                       <Link
@@ -335,7 +338,7 @@ export function AppSidebar({
 
                   <SidebarMenuSubItem>
                     <SidebarMenuButton
-                      disabled={!canAccessStoreDaySurfaces()}
+                      disabled={!hasFinancialDetailsAccess}
                       asChild
                     >
                       <Link
@@ -354,7 +357,7 @@ export function AppSidebar({
 
                   <SidebarMenuSubItem>
                     <SidebarMenuButton
-                      disabled={!canAccessStoreDaySurfaces()}
+                      disabled={!hasFinancialDetailsAccess}
                       asChild
                     >
                       <Link
@@ -373,7 +376,7 @@ export function AppSidebar({
 
                   <SidebarMenuSubItem>
                     <SidebarMenuButton
-                      disabled={!canAccessStoreDaySurfaces()}
+                      disabled={!hasFinancialDetailsAccess}
                       asChild
                     >
                       <Link
@@ -392,7 +395,7 @@ export function AppSidebar({
 
                   <SidebarMenuSubItem>
                     <SidebarMenuButton
-                      disabled={!canAccessStoreDaySurfaces()}
+                      disabled={!hasFinancialDetailsAccess}
                       asChild
                     >
                       <Link
@@ -640,6 +643,7 @@ export function AppSidebar({
               {/* Products section */}
               <SidebarMenuCollapsible
                 defaultOpen={isProductsRoute}
+                disabled={!hasFinancialDetailsAccess}
                 icon={Tag}
                 label="Products"
                 onClick={() => {
@@ -655,7 +659,10 @@ export function AppSidebar({
                 {categories?.map((category) => (
                   <SidebarMenuSub key={category._id}>
                     <SidebarMenuSubItem>
-                      <SidebarMenuButton asChild>
+                      <SidebarMenuButton
+                        disabled={!hasFinancialDetailsAccess}
+                        asChild
+                      >
                         <Link
                           to="/$orgUrlSlug/store/$storeUrlSlug/products"
                           params={(p) => ({
@@ -678,7 +685,10 @@ export function AppSidebar({
                 {productsWithNoImages && productsWithNoImages.length > 0 && (
                   <SidebarMenuSub>
                     <SidebarMenuSubItem>
-                      <SidebarMenuButton asChild>
+                      <SidebarMenuButton
+                        disabled={!hasFinancialDetailsAccess}
+                        asChild
+                      >
                         <Link
                           to="/$orgUrlSlug/store/$storeUrlSlug/products/unresolved"
                           params={(p) => ({

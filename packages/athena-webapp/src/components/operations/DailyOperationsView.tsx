@@ -338,6 +338,7 @@ type DailyOperationsViewContentProps = {
   cachedWeekMetrics?: DailyOperationsSnapshot["weekMetrics"];
   cachedWeekStorePulse?: StorePulseSummary | null;
   currency: string;
+  canViewAutomationStatuses?: boolean;
   hasDetailSnapshot: boolean;
   hasFullAdminAccess: boolean;
   hasFinancialDetailsAccess: boolean;
@@ -3065,6 +3066,7 @@ export function DailyOperationsViewContent({
   cachedWeekAnalyticsFetchedAt,
   cachedWeekMetrics,
   cachedWeekStorePulse,
+  canViewAutomationStatuses,
   currency,
   hasDetailSnapshot,
   hasFullAdminAccess,
@@ -3095,6 +3097,8 @@ export function DailyOperationsViewContent({
   timelineSnapshot,
 }: DailyOperationsViewContentProps) {
   const [localTimelineSheetOpen, setLocalTimelineSheetOpen] = useState(false);
+  const shouldShowAutomationStatuses =
+    canViewAutomationStatuses ?? hasFullAdminAccess;
   const isMobile = useIsMobile();
   const isTimelineSheetOpen =
     controlledTimelineSheetOpen ?? localTimelineSheetOpen;
@@ -3332,7 +3336,7 @@ export function DailyOperationsViewContent({
                   </div>
                 </div>
 
-                {!isHistoricalDate ? (
+                {!isHistoricalDate && shouldShowAutomationStatuses ? (
                   <>
                     <AutomationStatusPanel
                       orgUrlSlug={orgUrlSlug}
@@ -3937,7 +3941,9 @@ function DailyOperationsConnectedView({
   ) as DailyOperationsStoreRequestsSnapshot | undefined;
   const automationSnapshot = useExpectedDailyOperationsQuery(
     getDailyOperationsAutomationSnapshot ?? getDailyOperationsSnapshot,
-    getDailyOperationsAutomationSnapshot && canQueryProtectedData
+    getDailyOperationsAutomationSnapshot &&
+      canQueryProtectedData &&
+      hasFullAdminAccess
       ? snapshotArgs
       : "skip",
   ) as DailyOperationsAutomationSnapshot | undefined;
@@ -4208,6 +4214,7 @@ function DailyOperationsConnectedView({
         cachedDaySnapshotEntry?.hasDetail === true
       }
       hasFullAdminAccess={canAccessSurface}
+      canViewAutomationStatuses={hasFullAdminAccess}
       hasFinancialDetailsAccess={hasFinancialDetailsAccess}
       isAuthenticated={isAuthenticated}
       isLoadingAccess={isLoadingAccess}

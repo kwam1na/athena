@@ -15,6 +15,7 @@ import {
 } from "../ui/tooltip";
 import { api } from "~/convex/_generated/api";
 import { capitalizeWords, getRelativeTime } from "~/src/lib/utils";
+import { useGetTerminal } from "@/hooks/useGetTerminal";
 
 export type WorkflowTraceHeaderModel = {
   health: string;
@@ -185,10 +186,12 @@ export function WorkflowTraceView({
   storeId: Id<"store">;
   traceId: string;
 }) {
+  const terminal = useGetTerminal();
   const workflowTrace = useQuery(
     api.workflowTraces.public.getWorkflowTraceViewById,
     {
       storeId,
+      terminalId: terminal?._id,
       traceId,
     },
   );

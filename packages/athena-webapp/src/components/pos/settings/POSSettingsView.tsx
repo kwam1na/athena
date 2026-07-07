@@ -411,6 +411,13 @@ type EodAutoCompletePolicy = {
   operatingTimezoneOffsetMinutes?: number | null;
 };
 
+type RegisterCloseoutApprovalPolicy = {
+  requireManagerSignoffForAnyVariance?: boolean | null;
+  requireManagerSignoffForOvers?: boolean | null;
+  requireManagerSignoffForShorts?: boolean | null;
+  varianceApprovalThreshold?: number | null;
+};
+
 type UpdateEodAutoCompletePolicy = (args: {
   cleanDayAutoCompleteEnabled: boolean;
   localCompletionWindowMinutes: number;
@@ -420,6 +427,11 @@ type UpdateEodAutoCompletePolicy = (args: {
   mode: AutomationPolicyMode;
   operatingTimezoneOffsetMinutes?: number;
   storeId: Id<"store">;
+}) => Promise<unknown>;
+
+type UpdateRegisterCloseoutApprovalPolicy = (args: {
+  storeId: Id<"store">;
+  varianceApprovalThreshold: number;
 }) => Promise<unknown>;
 
 type UpdateOpeningAutoStartPolicy = (args: {
@@ -658,6 +670,175 @@ function StoreHoursTimingReadout({
             Open Store Hours
           </HealthLink>
         ) : null}
+      </div>
+    </section>
+  );
+}
+
+function RegisterCloseoutApprovalPolicyAdminPanel({
+  currency,
+  storeId,
+}: {
+  currency: string;
+  storeId?: Id<"store"> | null;
+}) {
+  const { hasFullAdminAccess, isLoading } = usePermissions();
+  const policy = useQuery(
+    api.operations.dailyOperationsAutomation.getRegisterCloseoutApprovalPolicy,
+    !isLoading && hasFullAdminAccess && storeId
+      ? { storeId }
+      : "skip",
+  ) as RegisterCloseoutApprovalPolicy | null | undefined;
+  const updateRegisterCloseoutApprovalPolicy = useMutation(
+    api.operations.dailyOperationsAutomation.updateRegisterCloseoutApprovalPolicy,
+  ) as unknown as UpdateRegisterCloseoutApprovalPolicy;
+  const [varianceApprovalThreshold, setVarianceApprovalThreshold] =
+    useState("50");
+  const [isSaving, setIsSaving] = useState(false);
+  const [message, setMessage] = useState<{
+    kind: "error" | "success";
+    text: string;
+  } | null>(null);
+  const currencySymbol = currencyDisplaySymbol(currency);
+  const parsedVarianceApprovalThreshold = parseNonNegativeMoneyInput(
+    varianceApprovalThreshold,
+  );
+  const canSave =
+    Boolean(storeId) &&
+    parsedVarianceApprovalThreshold !== null &&
+    !isSaving;
+
+  useEffect(() => {
+    if (policy?.varianceApprovalThreshold == null) {
+      return;
+    }
+
+    setVarianceApprovalThreshold(
+      formatMinorUnitInputValue(policy.varianceApprovalThreshold),
+    );
+  }, [policy?.varianceApprovalThreshold]);
+
+  if (isLoading || !hasFullAdminAccess) {
+    return null;
+  }
+
+  const handleSave = async () => {
+    if (!storeId) {
+      setMessage({
+        kind: "error",
+        text: "Select a store before saving closeout approval policy.",
+      });
+      return;
+    }
+
+    if (parsedVarianceApprovalThreshold === null) {
+      setMessage({
+        kind: "error",
+        text: "Enter a valid closeout variance threshold.",
+      });
+      return;
+    }
+
+    setIsSaving(true);
+    setMessage(null);
+    try {
+      await updateRegisterCloseoutApprovalPolicy({
+        storeId,
+        varianceApprovalThreshold: parsedVarianceApprovalThreshold,
+      });
+      setMessage({
+        kind: "success",
+        text: "Closeout approval policy saved.",
+      });
+      toast.success("Closeout approval policy saved.");
+    } catch (error) {
+      console.error(error);
+      setMessage({
+        kind: "error",
+        text: "Closeout approval policy was not saved.",
+      });
+      toast.error("Closeout approval policy was not saved.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <section className="grid gap-layout-xl border-b border-border py-layout-2xl lg:grid-cols-[17rem_minmax(0,1fr)]">
+      <div className="space-y-layout-sm">
+        <h2 className="text-2xl font-medium text-foreground">
+          Closeout approval policy
+        </h2>
+        <p className="text-sm leading-6 text-muted-foreground">
+          Set when register cash variances require manager review before final
+          closeout.
+        </p>
+      </div>
+
+      <div className="space-y-layout-lg">
+        <div className="flex flex-wrap gap-layout-xs">
+          <span className="inline-flex rounded-full border border-border bg-background px-layout-sm py-layout-2xs text-sm text-muted-foreground">
+            Manager review above threshold
+          </span>
+          {policy?.requireManagerSignoffForAnyVariance ? (
+            <span className="inline-flex rounded-full border border-border bg-background px-layout-sm py-layout-2xs text-sm text-muted-foreground">
+              Any variance requires review
+            </span>
+          ) : null}
+          {policy?.requireManagerSignoffForOvers ? (
+            <span className="inline-flex rounded-full border border-border bg-background px-layout-sm py-layout-2xs text-sm text-muted-foreground">
+              Overage review enabled
+            </span>
+          ) : null}
+          {policy?.requireManagerSignoffForShorts ? (
+            <span className="inline-flex rounded-full border border-border bg-background px-layout-sm py-layout-2xs text-sm text-muted-foreground">
+              Shortage review enabled
+            </span>
+          ) : null}
+        </div>
+
+        <div className="max-w-[18rem] space-y-layout-xs">
+          <Label htmlFor="register-closeout-variance-threshold">
+            Closeout variance threshold ({currencySymbol})
+          </Label>
+          <Input
+            id="register-closeout-variance-threshold"
+            min={0}
+            onChange={(event) =>
+              setVarianceApprovalThreshold(event.target.value)
+            }
+            step="0.01"
+            type="number"
+            value={varianceApprovalThreshold}
+          />
+          <p className="text-sm leading-5 text-muted-foreground">
+            Variances greater than this amount require manager approval.
+          </p>
+        </div>
+
+        {message ? (
+          <div
+            className={
+              message.kind === "error"
+                ? "rounded-md border border-danger/20 bg-danger/10 px-layout-md py-layout-sm text-sm text-danger"
+                : "rounded-md border border-success/20 bg-success/10 px-layout-md py-layout-sm text-sm text-success"
+            }
+            role={message.kind === "error" ? "alert" : "status"}
+          >
+            {message.text}
+          </div>
+        ) : null}
+
+        <div className="border-t border-border pt-layout-md">
+          <LoadingButton
+            disabled={!canSave}
+            isLoading={isSaving}
+            onClick={handleSave}
+            variant="default"
+          >
+            Save closeout approval policy
+          </LoadingButton>
+        </div>
       </div>
     </section>
   );
@@ -2017,6 +2198,11 @@ export function POSSettingsView({
             orgUrlSlug={routeParams?.orgUrlSlug}
             storeId={activeStore?._id ?? null}
             storeUrlSlug={routeParams?.storeUrlSlug}
+          />
+
+          <RegisterCloseoutApprovalPolicyAdminPanel
+            currency={activeStore?.currency ?? "GHS"}
+            storeId={activeStore?._id ?? null}
           />
 
           <EodCompletionAutomationAdminPanel

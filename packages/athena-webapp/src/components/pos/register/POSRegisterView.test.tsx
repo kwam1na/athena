@@ -3783,9 +3783,9 @@ describe("POSRegisterView", () => {
       "href",
       "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/drawer-1?o=%252F",
     );
-    expect(screen.getByText("Expected")).toBeInTheDocument();
-    expect(screen.getByText("GH₵50")).toBeInTheDocument();
-    expect(screen.getByText("GH₵-5")).toBeInTheDocument();
+    expect(screen.queryByText("Expected")).not.toBeInTheDocument();
+    expect(screen.queryByText("GH₵50")).not.toBeInTheDocument();
+    expect(screen.queryByText("GH₵-5")).not.toBeInTheDocument();
     expect(screen.getByLabelText(/counted cash/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/closeout notes/i)).not.toBeRequired();
     expect(
@@ -3873,9 +3873,9 @@ describe("POSRegisterView", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Cloud session")).toBeInTheDocument();
     expect(screen.getByText("8980ZC")).toBeInTheDocument();
-    expect(screen.getByText("GH₵8,681")).toBeInTheDocument();
-    expect(screen.getByText("GH₵3,000")).toBeInTheDocument();
-    expect(screen.getByText("GH₵-5,681")).toBeInTheDocument();
+    expect(screen.queryByText("GH₵8,681")).not.toBeInTheDocument();
+    expect(screen.queryByText("GH₵3,000")).not.toBeInTheDocument();
+    expect(screen.queryByText("GH₵-5,681")).not.toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: /cash controls/i }),
     ).toHaveAttribute(

@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { POSTerminalHealthView } from "~/src/components/pos/terminals/POSTerminalHealthView";
+import { ProtectedRoute } from "~/src/components/ProtectedRoute";
 import { NotFoundView } from "~/src/components/states/not-found/NotFoundView";
 
 type NotFoundPayload = {
@@ -23,6 +24,10 @@ function POSTerminalHealthNotFoundRoute({ data }: { data?: unknown }) {
 export const Route = createFileRoute(
   "/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/"
 )({
-  component: POSTerminalHealthView,
+  component: () => (
+    <ProtectedRoute requires="manager">
+      <POSTerminalHealthView />
+    </ProtectedRoute>
+  ),
   notFoundComponent: POSTerminalHealthNotFoundRoute,
 });

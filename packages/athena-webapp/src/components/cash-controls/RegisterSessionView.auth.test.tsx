@@ -65,7 +65,9 @@ vi.mock("../common/PageHeader", () => ({
 
 const readyProtectedState = {
   activeStore: { _id: "store-1" as Id<"store">, currency: "USD" },
+  canAccessProtectedSurface: true,
   canQueryProtectedData: true,
+  hasFinancialDetailsAccess: true,
   hasFullAdminAccess: true,
   isAuthenticated: true,
   isLoadingAccess: false,
@@ -127,6 +129,9 @@ describe("RegisterSessionView auth readiness", () => {
 
     render(<RegisterSessionView />);
 
+    expect(mockedHooks.useProtectedAdminPageState).toHaveBeenCalledWith({
+      surface: "cash_controls",
+    });
     expect(mockedHooks.useQuery.mock.calls.map(([, args]) => args)).toEqual([
       {
         registerSessionId: "session-1",

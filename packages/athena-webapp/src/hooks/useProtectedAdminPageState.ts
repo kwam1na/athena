@@ -2,7 +2,7 @@ import { useAuth } from "@/hooks/useAuth";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { usePermissions } from "@/hooks/usePermissions";
 
-type ProtectedSurfaceAccess = "full_admin" | "store_day";
+type ProtectedSurfaceAccess = "cash_controls" | "full_admin" | "store_day";
 
 export function useProtectedAdminPageState(
   options: { surface?: ProtectedSurfaceAccess } = {},
@@ -20,10 +20,13 @@ export function useProtectedAdminPageState(
   const fullAdminAccess = hasFullAdminAccess ?? canAccessOperations();
   const storeDaySurfaceAccess =
     hasStoreDaySurfaceAccess ?? canAccessOperations();
+  const cashControlsAccess = hasFinancialDetailsAccess ?? fullAdminAccess;
   const canAccessSurface =
-    options.surface === "store_day"
-      ? storeDaySurfaceAccess
-      : fullAdminAccess;
+    options.surface === "cash_controls"
+      ? cashControlsAccess
+      : options.surface === "store_day"
+        ? storeDaySurfaceAccess
+        : fullAdminAccess;
   const hasReadyAuthenticatedUser = Boolean(user);
   const isLoadingAccess = isLoadingPermissions || isLoadingUser || isLoadingStores;
   const canQueryProtectedData = Boolean(

@@ -163,6 +163,7 @@ export type DailyCloseSnapshot = {
   blockers: DailyCloseItem[];
   carryForwardItems: DailyCloseItem[];
   completedClose?: {
+    dailyCloseId?: Id<"dailyClose"> | string;
     actorType?: "human" | "automation";
     automationDecisionReason?: string | null;
     automationPolicyVersion?: string | null;
@@ -302,6 +303,7 @@ type BucketConfig = {
 };
 
 type DailyCloseViewContentProps = {
+  canViewSummaryComparisons?: boolean;
   currency: string;
   hasFinancialDetailsAccess: boolean;
   hasFullAdminAccess: boolean;
@@ -1911,6 +1913,7 @@ function normalizeCompletedReportSnapshot(
     blockers: [],
     carryForwardItems: storedSnapshot.carryForwardItems ?? [],
     completedClose: {
+      dailyCloseId: snapshot.completedClose?.dailyCloseId,
       completedAt:
         storedSnapshot.closeMetadata.completedAt ??
         snapshot.completedClose?.completedAt,
@@ -2806,11 +2809,13 @@ function TransactionReportAction({
 
 export function DailyCloseReadOnlyReport({
   canViewFinancialDetails = true,
+  canViewSummaryComparisons = canViewFinancialDetails,
   currency,
   orgUrlSlug,
   snapshot,
   storeUrlSlug,
 }: {
+  canViewSummaryComparisons?: boolean;
   canViewFinancialDetails?: boolean;
   currency: string;
   orgUrlSlug: string;
@@ -2837,6 +2842,7 @@ export function DailyCloseReadOnlyReport({
   const otherPaymentTotals = getOtherPaymentTotals(displaySnapshot.summary);
   const priorDaySummary = displaySnapshot.priorDaySummary ?? undefined;
   const priorWindowLabel = getPriorWindowLabel(displaySnapshot.operatingDate);
+  const shouldShowSummaryComparisons = canViewSummaryComparisons;
 
   return (
     <PageWorkspace>
@@ -2887,6 +2893,7 @@ export function DailyCloseReadOnlyReport({
                 ? getSummaryAmount(priorDaySummary, "totalSales", "salesTotal")
                 : undefined,
               priorWindowLabel,
+              showComparison: shouldShowSummaryComparisons,
             })}
             label={salesMetricLabels.netSales}
             link={{
@@ -2933,6 +2940,7 @@ export function DailyCloseReadOnlyReport({
                   )
                 : undefined,
               priorWindowLabel,
+              showComparison: shouldShowSummaryComparisons,
             })}
             label={salesMetricLabels.cash}
             link={{
@@ -2968,6 +2976,7 @@ export function DailyCloseReadOnlyReport({
                   paymentTotal.method,
                 ),
                 priorWindowLabel,
+                showComparison: shouldShowSummaryComparisons,
               })}
               key={paymentTotal.method}
               label={formatPaymentMethodLabel(paymentTotal.method)}
@@ -3431,6 +3440,7 @@ function CompletionRail({
 }
 
 export function DailyCloseViewContent({
+  canViewSummaryComparisons,
   currency,
   hasFinancialDetailsAccess,
   hasFullAdminAccess,
@@ -3549,6 +3559,8 @@ export function DailyCloseViewContent({
   const priorWindowLabel = displaySnapshot
     ? getPriorWindowLabel(displaySnapshot.operatingDate)
     : "yesterday";
+  const shouldShowSummaryComparisons =
+    canViewSummaryComparisons ?? hasFullAdminAccess;
   const buckets = displaySnapshot ? getBucketConfigs(displaySnapshot) : [];
   const defaultBucketValue = displaySnapshot
     ? getDefaultBucketValue(displaySnapshot, status)
@@ -3619,7 +3631,8 @@ export function DailyCloseViewContent({
 
     setCommandMessage(null);
 
-    const dailyCloseId = snapshot.existingClose?._id;
+    const dailyCloseId =
+      snapshot.existingClose?._id ?? snapshot.completedClose?.dailyCloseId;
 
     if (!dailyCloseId) {
       setCommandMessage({
@@ -3850,6 +3863,7 @@ export function DailyCloseViewContent({
                     )
                   : undefined,
                 priorWindowLabel,
+                showComparison: shouldShowSummaryComparisons,
               })}
               label={salesMetricLabels?.netSales ?? "Net sales"}
               link={{
@@ -3896,6 +3910,7 @@ export function DailyCloseViewContent({
                     )
                   : undefined,
                 priorWindowLabel,
+                showComparison: shouldShowSummaryComparisons,
               })}
               label={salesMetricLabels?.cash ?? "Cash"}
               link={{
@@ -3931,6 +3946,7 @@ export function DailyCloseViewContent({
                     paymentTotal.method,
                   ),
                   priorWindowLabel,
+                  showComparison: shouldShowSummaryComparisons,
                 })}
                 key={paymentTotal.method}
                 label={formatPaymentMethodLabel(paymentTotal.method)}
@@ -4232,6 +4248,7 @@ function DailyCloseConnectedView({
   return (
     <DailyCloseViewContent
       currency={activeStore?.currency || "USD"}
+      canViewSummaryComparisons={hasFullAdminAccess}
       hasFinancialDetailsAccess={hasFinancialDetailsAccess}
       hasFullAdminAccess={canAccessSurface}
       isAuthenticated={isAuthenticated}

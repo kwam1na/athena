@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  canAccessCashControlsSurface,
   canAccessFullAdminSurface,
   canAccessStoreDaySurface,
   canViewFinancialDetails,
@@ -31,7 +32,7 @@ describe("surface capability access", () => {
     ).toBe(false);
   });
 
-  it("allows POS-only accounts to open store-day surfaces", () => {
+  it("keeps store-day surfaces manager-only", () => {
     expect(
       canAccessStoreDaySurface({
         role: "pos_only",
@@ -39,8 +40,20 @@ describe("surface capability access", () => {
       }),
     ).toBe(true);
     expect(canAccessStoreDaySurface({ role: "full_admin" })).toBe(true);
-    expect(canAccessStoreDaySurface({ role: "pos_only" })).toBe(true);
+    expect(canAccessStoreDaySurface({ role: "pos_only" })).toBe(false);
     expect(canAccessStoreDaySurface({ role: null })).toBe(false);
+  });
+
+  it("keeps cash controls manager-only", () => {
+    expect(canAccessCashControlsSurface({ role: "full_admin" })).toBe(true);
+    expect(
+      canAccessCashControlsSurface({
+        role: "pos_only",
+        activeManagerElevation: activeElevation,
+      }),
+    ).toBe(true);
+    expect(canAccessCashControlsSurface({ role: "pos_only" })).toBe(false);
+    expect(canAccessCashControlsSurface({ role: null })).toBe(false);
   });
 
   it("keeps excluded admin surfaces full-admin only", () => {
@@ -48,11 +61,11 @@ describe("surface capability access", () => {
       role: "pos_only" as const,
     };
 
-    expect(getSurfaceAccess("cash_controls", posOnly)).toBe(true);
-    expect(getSurfaceAccess("daily_operations", posOnly)).toBe(true);
-    expect(getSurfaceAccess("open_work", posOnly)).toBe(true);
-    expect(getSurfaceAccess("approvals", posOnly)).toBe(true);
-    expect(getSurfaceAccess("stock_adjustments", posOnly)).toBe(true);
+    expect(getSurfaceAccess("cash_controls", posOnly)).toBe(false);
+    expect(getSurfaceAccess("daily_operations", posOnly)).toBe(false);
+    expect(getSurfaceAccess("open_work", posOnly)).toBe(false);
+    expect(getSurfaceAccess("approvals", posOnly)).toBe(false);
+    expect(getSurfaceAccess("stock_adjustments", posOnly)).toBe(false);
 
     expect(getSurfaceAccess("procurement", posOnly)).toBe(false);
     expect(getSurfaceAccess("analytics", posOnly)).toBe(false);

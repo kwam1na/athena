@@ -170,15 +170,16 @@ describe("AppSidebar capability gates", () => {
     });
   });
 
-  it("lets POS-only accounts open store-day surfaces without admin surfaces", () => {
+  it("keeps manager surfaces disabled for POS-only accounts", () => {
     mocks.usePermissions.mockReturnValue({
       canAccessAdmin: () => false,
       canAccessFullAdminSurfaces: () => false,
       canAccessPOS: () => true,
       canAccessOperations: () => true,
-      canAccessStoreDaySurfaces: () => true,
+      canAccessStoreDaySurfaces: () => false,
       hasFullAdminAccess: false,
-      hasStoreDaySurfaceAccess: true,
+      hasFinancialDetailsAccess: false,
+      hasStoreDaySurfaceAccess: false,
       isLoading: false,
       role: "pos_only",
     });
@@ -187,26 +188,30 @@ describe("AppSidebar capability gates", () => {
 
     expect(screen.getByRole("link", { name: /cash controls/i })).toHaveAttribute(
       "aria-disabled",
-      "false",
+      "true",
     );
     expect(screen.getByRole("button", { name: /operations/i })).toHaveAttribute(
       "aria-disabled",
-      "false",
+      "true",
+    );
+    expect(screen.getByRole("button", { name: /products/i })).toHaveAttribute(
+      "aria-disabled",
+      "true",
     );
     expect(screen.getByRole("link", { name: /open work/i })).toHaveAttribute(
       "aria-disabled",
-      "false",
+      "true",
     );
     expect(screen.getByRole("link", { name: /approvals/i })).toHaveAttribute(
       "aria-disabled",
-      "false",
+      "true",
     );
     expect(
       screen.getByRole("link", { name: /stock adjustments/i }),
-    ).toHaveAttribute("aria-disabled", "false");
+    ).toHaveAttribute("aria-disabled", "true");
     expect(screen.getByRole("link", { name: /sku activity/i })).toHaveAttribute(
       "aria-disabled",
-      "false",
+      "true",
     );
 
     expect(screen.getByRole("link", { name: /procurement/i })).toHaveAttribute(
@@ -233,6 +238,36 @@ describe("AppSidebar capability gates", () => {
     expect(screen.queryByRole("heading", { name: /organization/i })).toBeNull();
   });
 
+  it("lets manager-elevated sessions open Cash Controls, Operations, and Products", () => {
+    mocks.usePermissions.mockReturnValue({
+      canAccessAdmin: () => false,
+      canAccessFullAdminSurfaces: () => false,
+      canAccessPOS: () => true,
+      canAccessOperations: () => true,
+      canAccessStoreDaySurfaces: () => true,
+      hasFullAdminAccess: false,
+      hasFinancialDetailsAccess: true,
+      hasStoreDaySurfaceAccess: true,
+      isLoading: false,
+      role: "pos_only",
+    });
+
+    render(<AppSidebar />);
+
+    expect(screen.getByRole("link", { name: /cash controls/i })).toHaveAttribute(
+      "aria-disabled",
+      "false",
+    );
+    expect(screen.getByRole("button", { name: /operations/i })).toHaveAttribute(
+      "aria-disabled",
+      "false",
+    );
+    expect(screen.getByRole("button", { name: /products/i })).toHaveAttribute(
+      "aria-disabled",
+      "false",
+    );
+  });
+
   it("renders the contained shell variant full-height on mobile and fit-height on desktop", () => {
     mocks.usePermissions.mockReturnValue({
       canAccessAdmin: () => true,
@@ -241,6 +276,7 @@ describe("AppSidebar capability gates", () => {
       canAccessOperations: () => true,
       canAccessStoreDaySurfaces: () => true,
       hasFullAdminAccess: true,
+      hasFinancialDetailsAccess: true,
       hasStoreDaySurfaceAccess: true,
       isLoading: false,
       role: "full_admin",
@@ -279,6 +315,7 @@ describe("AppSidebar capability gates", () => {
       canAccessOperations: () => true,
       canAccessStoreDaySurfaces: () => true,
       hasFullAdminAccess: true,
+      hasFinancialDetailsAccess: true,
       hasStoreDaySurfaceAccess: true,
       isLoading: false,
       role: "full_admin",
@@ -300,6 +337,7 @@ describe("AppSidebar capability gates", () => {
       canAccessOperations: () => true,
       canAccessStoreDaySurfaces: () => true,
       hasFullAdminAccess: true,
+      hasFinancialDetailsAccess: true,
       hasStoreDaySurfaceAccess: true,
       isLoading: false,
       role: "full_admin",
