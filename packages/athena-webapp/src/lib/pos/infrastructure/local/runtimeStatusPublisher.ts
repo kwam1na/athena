@@ -3,6 +3,7 @@ import type { PosTerminalRuntimeStatusPayload } from "./terminalRuntimeStatus";
 export const RUNTIME_STATUS_FRESHNESS_WAKEUP_INTERVAL_MS = 30_000;
 // Keep below the 2 minute terminal-health freshness boundary.
 export const RUNTIME_STATUS_FRESHNESS_PUBLISH_INTERVAL_MS = 110_000;
+export const RUNTIME_STATUS_TRANSIENT_SYNCING_PUBLISH_DELAY_MS = 1_500;
 
 export function startRuntimeStatusFreshnessHeartbeat(
   onHeartbeat: () => void,
@@ -98,6 +99,19 @@ export function shouldPublishRuntimeStatus(input: {
   const freshnessIntervalMs =
     input.freshnessIntervalMs ?? RUNTIME_STATUS_FRESHNESS_PUBLISH_INTERVAL_MS;
   return input.now - input.lastPublishedAt >= freshnessIntervalMs;
+}
+
+export function shouldDelayTransientSyncingRuntimeStatusPublish(input: {
+  forcePublish: boolean;
+  materialSignature: string;
+  readyMaterialSignature: string | null;
+  syncStatus: PosTerminalRuntimeStatusPayload["sync"]["status"];
+}) {
+  return (
+    input.syncStatus === "syncing" &&
+    !input.forcePublish &&
+    input.readyMaterialSignature !== input.materialSignature
+  );
 }
 
 function normalizeRuntimeStatusSignature(

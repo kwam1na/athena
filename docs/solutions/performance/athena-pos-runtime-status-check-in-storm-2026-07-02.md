@@ -1,7 +1,7 @@
 ---
 title: Athena POS Runtime Status Check-In Storm
 date: 2026-07-02
-last_updated: 2026-07-06
+last_updated: 2026-07-07
 category: performance
 module: athena-webapp
 problem_type: performance_issue
@@ -10,6 +10,7 @@ symptoms:
   - "Convex production logs showed repeated POS runtime check-ins from the local runtime"
   - "reportTerminalRuntimeStatus calls clustered around the same terminal and produced optimistic concurrency retries"
   - "Remote Assist and terminal recovery queries were repeatedly invalidated by redundant runtime-status writes"
+  - "A route-entry sync cycle wrote transient syncing status and then wrote the settled status about 100ms later"
 root_cause: logic_error
 resolution_type: code_fix
 severity: high
@@ -61,6 +62,10 @@ write load and optimistic concurrency retries.
   effective state look different.
 - Sampling logs before the terminals reload to the deployed build can make the
   fix look ineffective because old-client traffic dominates the window.
+- Filtering only by mutation name is ambiguous once two terminals are live in
+  production. Correlate current `posTerminalRuntimeStatus` rows by terminal,
+  app version, platform, and write bytes before deciding a global pair is a
+  same-terminal duplicate.
 
 ## Solution
 
@@ -101,6 +106,16 @@ publisher reports `staffProfileId` and another same-status publisher omits it,
 the repository keeps the richer identity instead of flipping the latest row
 back and forth.
 
+For transient local sync states, debounce the browser publish boundary before
+calling Convex. A route-entry drain can briefly make `buildSyncMetrics` report
+`sync.status = "syncing"` and then settle to `idle` or `needs_review` in the
+same cycle. Because `sync.status` is intentionally material for terminal
+health, the fix is not to erase it from the material signature. Instead,
+`runtimeStatusPublisher.ts` delays first-time `syncing` material for a short
+window, and `usePosLocalSyncRuntime.ts` cancels that timer when the state
+settles. Long-running syncing still becomes reportable after the debounce, but
+fast `syncing -> settled` churn produces only the settled write.
+
 ## Why This Works
 
 The latest runtime status row should change when terminal posture changes, not
@@ -130,6 +145,14 @@ and recovery subscriptions for reports that did not change terminal state.
   optional staff fields.
 - After production deploys, first verify active terminal `appVersion` /
   `buildSha`, then sample `convex logs --deployment colorless-cardinal-870`.
+- When validating duplicate fixes in production with multiple terminals live,
+  treat `databaseWriteBytes > 0` material writes as the critical signal. A
+  no-op mutation with `databaseWriteBytes = 0` may still appear on heartbeat or
+  idempotent report paths and is not the same failure.
+- If a duplicate pair is `syncing` followed by `idle` or `needs_review` within
+  a few hundred milliseconds, preserve `sync.status` as side-effect material
+  and debounce the transient publisher instead of weakening terminal-health
+  semantics.
 - Regression coverage should include duplicate publishers, fast duplicate
   server writes, omitted app-update evidence, omitted staff identity, and the
   heartbeat-boundary duplicate window.
