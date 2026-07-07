@@ -1,6 +1,8 @@
 import type { PosTerminalRuntimeStatusPayload } from "./terminalRuntimeStatus";
 
-export const RUNTIME_STATUS_FRESHNESS_PUBLISH_INTERVAL_MS = 30_000;
+export const RUNTIME_STATUS_FRESHNESS_WAKEUP_INTERVAL_MS = 30_000;
+// Keep below the 2 minute terminal-health freshness boundary.
+export const RUNTIME_STATUS_FRESHNESS_PUBLISH_INTERVAL_MS = 110_000;
 
 export function startRuntimeStatusFreshnessHeartbeat(
   onHeartbeat: () => void,
@@ -13,7 +15,7 @@ export function startRuntimeStatusFreshnessHeartbeat(
   const clearIntervalFn = timers.clearIntervalFn ?? clearInterval;
   const heartbeatTimer = setIntervalFn(
     onHeartbeat,
-    RUNTIME_STATUS_FRESHNESS_PUBLISH_INTERVAL_MS,
+    RUNTIME_STATUS_FRESHNESS_WAKEUP_INTERVAL_MS,
   );
 
   return () => clearIntervalFn(heartbeatTimer);
@@ -115,7 +117,11 @@ function normalizeRuntimeStatusSignature(
 function normalizeRuntimeStatusPublishMaterial(
   runtimeStatus: PosTerminalRuntimeStatusPayload,
 ) {
-  const stableStatus: Partial<PosTerminalRuntimeStatusPayload> = {
+  const stableStatus: Partial<
+    Omit<PosTerminalRuntimeStatusPayload, "sync"> & {
+      sync?: Partial<PosTerminalRuntimeStatusPayload["sync"]>;
+    }
+  > = {
     ...normalizeRuntimeStatusSignature(runtimeStatus),
   };
   delete stableStatus.reportedAt;
@@ -158,7 +164,15 @@ function normalizeRuntimeStatusPublishMaterial(
     };
   }
   if (stableStatus.sync) {
-    delete stableStatus.sync;
+    const reviewEventCount = stableStatus.sync.reviewEventCount ?? 0;
+    stableStatus.sync = {
+      reviewEventCount,
+      reviewEvents:
+        reviewEventCount > 0
+          ? stableStatus.sync.reviewEvents
+          : undefined,
+      status: stableStatus.sync.status,
+    };
   }
 
   return stableStatus;

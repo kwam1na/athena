@@ -450,6 +450,7 @@ export async function submitTerminalRuntimeStatus(
   args: {
     storeId: Id<"store">;
     terminalId: Id<"posTerminal">;
+    trustedTerminal?: Doc<"posTerminal">;
     status: TerminalRuntimeStatusInput;
   },
 ): Promise<
@@ -462,9 +463,11 @@ export async function submitTerminalRuntimeStatus(
     receivedAt: number;
   }>
 > {
-  const terminal = await getTerminalById(ctx, args.terminalId);
+  const terminal =
+    args.trustedTerminal ?? (await getTerminalById(ctx, args.terminalId));
   if (
     !terminal ||
+    terminal._id !== args.terminalId ||
     terminal.storeId !== args.storeId ||
     terminal.status !== "active"
   ) {
@@ -483,6 +486,9 @@ export async function submitTerminalRuntimeStatus(
     args.status.activeRegisterSession,
   );
   const drawerAuthority = cleanDrawerAuthority(args.status.drawerAuthority);
+  const runtimeCloudRegisterSessionCache = activeRegisterSession
+    ? createRuntimeCloudRegisterSessionCache()
+    : undefined;
   const runtimeStatusWrite = await upsertLatestRuntimeStatusWithOutcome(ctx, {
     storeId: args.storeId,
     terminalId: args.terminalId,
@@ -554,6 +560,14 @@ export async function submitTerminalRuntimeStatus(
     terminalIntegrity: cleanTerminalIntegrity(args.status.terminalIntegrity),
     drawerAuthority,
   });
+  if (!runtimeStatusWrite.didWrite) {
+    return ok({
+      acceptedForSideEffects: false,
+      terminalId: args.terminalId,
+      reportedAt,
+      receivedAt,
+    });
+  }
 
   const drawerAuthorityDirective = await buildRuntimeDrawerAuthorityDirective(
     ctx,
@@ -561,6 +575,7 @@ export async function submitTerminalRuntimeStatus(
       activeRegisterSession,
       drawerAuthority,
       receivedAt,
+      runtimeCloudRegisterSessionCache,
       storeId: args.storeId,
     },
   );
@@ -569,6 +584,7 @@ export async function submitTerminalRuntimeStatus(
       activeRegisterSession,
       receivedAt,
       runtimeStatus: args.status,
+      runtimeCloudRegisterSessionCache,
       storeId: args.storeId,
       terminal,
     });
@@ -578,7 +594,7 @@ export async function submitTerminalRuntimeStatus(
       activeRegisterSessionDirective,
       drawerAuthorityDirective,
     }),
-    acceptedForSideEffects: runtimeStatusWrite.didWrite,
+    acceptedForSideEffects: true,
     terminalId: args.terminalId,
     reportedAt,
     receivedAt,
@@ -593,6 +609,7 @@ async function buildRuntimeActiveRegisterSessionDirective(
       | undefined;
     receivedAt: number;
     runtimeStatus: TerminalRuntimeStatusInput;
+    runtimeCloudRegisterSessionCache?: RuntimeCloudRegisterSessionCache;
     storeId: Id<"store">;
     terminal: Doc<"posTerminal">;
   },
@@ -607,6 +624,24 @@ async function buildRuntimeActiveRegisterSessionDirective(
     return undefined;
   }
 
+  let runtimeCloudRegisterSession: Doc<"registerSession"> | null = null;
+  if (args.activeRegisterSession) {
+    runtimeCloudRegisterSession = await loadRuntimeActiveCloudRegisterSession(
+      ctx,
+      {
+        activeRegisterSession: args.activeRegisterSession,
+        storeId: args.storeId,
+      },
+      args.runtimeCloudRegisterSessionCache,
+    );
+    if (
+      !runtimeCloudRegisterSession ||
+      isRegisterSessionSaleUsable(runtimeCloudRegisterSession)
+    ) {
+      return undefined;
+    }
+  }
+
   const cloudRegisterSession = await getSaleUsableRegisterSessionForTerminal(
     ctx,
     {
@@ -619,18 +654,7 @@ async function buildRuntimeActiveRegisterSessionDirective(
     return undefined;
   }
   if (args.activeRegisterSession) {
-    const runtimeCloudRegisterSession =
-      await getRuntimeActiveCloudRegisterSession(ctx, {
-        activeRegisterSession: args.activeRegisterSession,
-        storeId: args.storeId,
-      });
-    if (
-      !runtimeCloudRegisterSession ||
-      isRegisterSessionSaleUsable(runtimeCloudRegisterSession)
-    ) {
-      return undefined;
-    }
-    if (runtimeCloudRegisterSession._id === cloudRegisterSession._id) {
+    if (runtimeCloudRegisterSession?._id === cloudRegisterSession._id) {
       return undefined;
     }
   }
@@ -675,6 +699,40 @@ async function getRuntimeActiveCloudRegisterSession(
   }
 
   return registerSession;
+}
+
+type RuntimeCloudRegisterSessionCache = {
+  loaded: boolean;
+  session: Doc<"registerSession"> | null;
+};
+
+function createRuntimeCloudRegisterSessionCache(): RuntimeCloudRegisterSessionCache {
+  return {
+    loaded: false,
+    session: null,
+  };
+}
+
+async function loadRuntimeActiveCloudRegisterSession(
+  ctx: MutationCtx,
+  args: {
+    activeRegisterSession: NonNullable<
+      ReturnType<typeof cleanActiveRegisterSession>
+    >;
+    storeId: Id<"store">;
+  },
+  cache?: RuntimeCloudRegisterSessionCache,
+) {
+  if (cache?.loaded) {
+    return cache.session;
+  }
+
+  const session = await getRuntimeActiveCloudRegisterSession(ctx, args);
+  if (cache) {
+    cache.loaded = true;
+    cache.session = session;
+  }
+  return session;
 }
 
 async function getSaleUsableRegisterSessionForTerminal(
@@ -744,6 +802,7 @@ async function buildRuntimeDrawerAuthorityDirective(
       | undefined;
     drawerAuthority: ReturnType<typeof cleanDrawerAuthority> | undefined;
     receivedAt: number;
+    runtimeCloudRegisterSessionCache?: RuntimeCloudRegisterSessionCache;
     storeId: Id<"store">;
   },
 ): Promise<DrawerAuthorityDirective | undefined> {
@@ -766,21 +825,16 @@ async function buildRuntimeDrawerAuthorityDirective(
     return undefined;
   }
 
-  const cloudRegisterSessionId = ctx.db.normalizeId(
-    "registerSession",
-    session.cloudRegisterSessionId,
-  );
-  if (!cloudRegisterSessionId) {
-    return undefined;
-  }
-
-  const cloudRegisterSession = await ctx.db.get(
-    "registerSession",
-    cloudRegisterSessionId,
+  const cloudRegisterSession = await loadRuntimeActiveCloudRegisterSession(
+    ctx,
+    {
+      activeRegisterSession: session,
+      storeId: args.storeId,
+    },
+    args.runtimeCloudRegisterSessionCache,
   );
   if (
     !cloudRegisterSession ||
-    cloudRegisterSession.storeId !== args.storeId ||
     isRegisterSessionSaleUsable(cloudRegisterSession)
   ) {
     return undefined;

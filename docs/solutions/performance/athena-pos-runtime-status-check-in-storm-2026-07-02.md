@@ -1,6 +1,7 @@
 ---
 title: Athena POS Runtime Status Check-In Storm
 date: 2026-07-02
+last_updated: 2026-07-06
 category: performance
 module: athena-webapp
 problem_type: performance_issue
@@ -46,6 +47,9 @@ write load and optimistic concurrency retries.
 - Earlier samples had `occInfo` / `willRetry` on runtime-status writes.
 - After the first throttle, calls still clustered because alternating publishers
   sometimes omitted staff identity or reported sync-only churn.
+- A server duplicate window equal to the client heartbeat can still skip a
+  freshness write when the prior request had more network delay than the next
+  request.
 
 ## What Didn't Work
 
@@ -75,10 +79,22 @@ normal heartbeat.
 
 On the server, make
 `convex/pos/infrastructure/repositories/terminalRepository.ts` return a write
-outcome from the latest-status upsert. Fast duplicate reports within the
-heartbeat window return `didWrite: false`; the public mutation strips that
+outcome from the latest-status upsert. Fast duplicate reports within a server
+coalescing window return `didWrite: false`; the public mutation strips that
 internal flag from the response and skips Remote Assist / recovery side effects
 for redundant reports.
+
+Keep the server duplicate window shorter than the client freshness cadence. A
+110-second client heartbeat with a 90-second server no-write window leaves room
+for request timing jitter, so a successful client-cadence heartbeat still
+refreshes terminal health before the two-minute online threshold. The no-write
+path should be reserved for real fast duplicates.
+
+Do not treat every `materialChanged: false` write as disposable. A
+freshness-only write with `didWrite: true` must still build runtime directives
+and run side-effect freshness for recovery and Remote Assist. Only
+`didWrite: false` duplicates should skip those reads and return
+`acceptedForSideEffects: false`.
 
 Also preserve same-status staff identity during server merges. If one runtime
 publisher reports `staffProfileId` and another same-status publisher omits it,
@@ -102,7 +118,14 @@ and recovery subscriptions for reports that did not change terminal state.
   for every diagnostic heartbeat if material state did not change.
 - Keep volatile fields out of publish signatures and server duplicate
   comparison: timestamps, snapshot ages, sync trigger labels, and sync-only
-  status churn.
+  counters.
+- Keep operational sync posture in publish signatures when the server treats it
+  as side-effect material. For example, `sync.status` and review-event evidence
+  should not be erased from the client material signature if the server uses
+  them to decide whether side effects should run.
+- Keep the server duplicate window lower than the client heartbeat cadence, and
+  add a regression where the prior server `receivedAt` lagged the prior client
+  attempt but the next client-cadence heartbeat still writes.
 - Preserve richer known identity when a duplicate same-status report omits
   optional staff fields.
 - After production deploys, first verify active terminal `appVersion` /
