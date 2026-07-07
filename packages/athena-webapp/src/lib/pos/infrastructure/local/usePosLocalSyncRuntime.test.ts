@@ -84,6 +84,7 @@ import type {
 } from "./posLocalStore";
 import {
   RUNTIME_STATUS_FRESHNESS_PUBLISH_INTERVAL_MS,
+  RUNTIME_STATUS_FRESHNESS_WAKEUP_INTERVAL_MS,
   getRuntimeStatusPublishMaterialSignature,
   shouldPublishRuntimeStatus,
   startRuntimeStatusFreshnessHeartbeat,
@@ -4235,7 +4236,7 @@ describe("usePosLocalSyncRuntimeStatus", () => {
 
     expect(setIntervalFn).toHaveBeenCalledWith(
       heartbeat,
-      RUNTIME_STATUS_FRESHNESS_PUBLISH_INTERVAL_MS,
+      RUNTIME_STATUS_FRESHNESS_WAKEUP_INTERVAL_MS,
     );
     expect(heartbeat).not.toHaveBeenCalled();
 
@@ -4601,6 +4602,24 @@ describe("usePosLocalSyncRuntimeStatus", () => {
             ...runtimeStatus.sync,
             pendingEventCount: 7,
             lastTrigger: "foreground-interval",
+          },
+        } as never,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+    expect(
+      getRuntimeStatusPublishMaterialSignature({
+        runtimeStatus: runtimeStatus as never,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    ).not.toEqual(
+      getRuntimeStatusPublishMaterialSignature({
+        runtimeStatus: {
+          ...runtimeStatus,
+          sync: {
+            ...runtimeStatus.sync,
             status: "needs_review",
           },
         } as never,
@@ -4618,6 +4637,17 @@ describe("usePosLocalSyncRuntimeStatus", () => {
         lastPublishSignature: "publish-a",
         materialSignature: "material-a",
         now: 1_500,
+        publishSignature: "publish-b",
+      }),
+    ).toBe(false);
+
+    expect(
+      shouldPublishRuntimeStatus({
+        lastMaterialSignature: "material-a",
+        lastPublishedAt: 1_000,
+        lastPublishSignature: "publish-a",
+        materialSignature: "material-a",
+        now: 31_000,
         publishSignature: "publish-b",
       }),
     ).toBe(false);

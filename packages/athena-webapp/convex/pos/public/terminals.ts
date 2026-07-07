@@ -931,6 +931,7 @@ export const submitTerminalRuntimeStatus = mutation({
     const result = await submitTerminalRuntimeStatusCommand(ctx, {
       storeId: args.storeId,
       terminalId: args.terminalId,
+      trustedTerminal: terminal,
       status: safeStatus,
     });
     if (result.kind !== "ok") {

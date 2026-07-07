@@ -130,6 +130,7 @@ export async function upsertLatestRuntimeStatusWithOutcome(
   input: Omit<Doc<"posTerminalRuntimeStatus">, "_id" | "_creationTime">,
 ): Promise<{
   didWrite: boolean;
+  materialChanged: boolean;
   runtimeStatusId: Id<"posTerminalRuntimeStatus">;
 }> {
   const existing = await getLatestRuntimeStatusForTerminal(ctx, {
@@ -141,14 +142,20 @@ export async function upsertLatestRuntimeStatusWithOutcome(
     if (input.reportedAt < existing.reportedAt) {
       return {
         didWrite: false,
+        materialChanged: false,
         runtimeStatusId: existing._id,
       };
     }
 
     const patch = mergeRuntimeStatusPatch(existing, input);
-    if (isFastDuplicateRuntimeStatus(existing, patch)) {
+    const materialChanged = hasRuntimeStatusMaterialChanged(existing, patch);
+    if (
+      !materialChanged &&
+      isRuntimeStatusWithinMaterialRefreshWindow(existing, patch)
+    ) {
       return {
         didWrite: false,
+        materialChanged: false,
         runtimeStatusId: existing._id,
       };
     }
@@ -156,12 +163,14 @@ export async function upsertLatestRuntimeStatusWithOutcome(
     await ctx.db.patch("posTerminalRuntimeStatus", existing._id, patch);
     return {
       didWrite: true,
+      materialChanged,
       runtimeStatusId: existing._id,
     };
   }
 
   return {
     didWrite: true,
+    materialChanged: true,
     runtimeStatusId: await ctx.db.insert(
       "posTerminalRuntimeStatus",
       omitUndefined(input),
@@ -169,21 +178,24 @@ export async function upsertLatestRuntimeStatusWithOutcome(
   };
 }
 
-const RUNTIME_STATUS_FAST_DUPLICATE_WINDOW_MS = 30_000;
+const RUNTIME_STATUS_MATERIAL_REFRESH_WINDOW_MS = 90_000;
 
-function isFastDuplicateRuntimeStatus(
+function isRuntimeStatusWithinMaterialRefreshWindow(
   existing: Doc<"posTerminalRuntimeStatus">,
   patch: Omit<Doc<"posTerminalRuntimeStatus">, "_id" | "_creationTime">,
 ) {
-  if (
-    patch.receivedAt - existing.receivedAt >=
-    RUNTIME_STATUS_FAST_DUPLICATE_WINDOW_MS
-  ) {
-    return false;
-  }
-
   return (
-    runtimeStatusMaterialSignature(existing) ===
+    patch.receivedAt - existing.receivedAt <
+    RUNTIME_STATUS_MATERIAL_REFRESH_WINDOW_MS
+  );
+}
+
+function hasRuntimeStatusMaterialChanged(
+  existing: Doc<"posTerminalRuntimeStatus">,
+  patch: Omit<Doc<"posTerminalRuntimeStatus">, "_id" | "_creationTime">,
+) {
+  return (
+    runtimeStatusMaterialSignature(existing) !==
     runtimeStatusMaterialSignature(patch)
   );
 }
@@ -193,23 +205,92 @@ function runtimeStatusMaterialSignature(
 ) {
   const material = stripUndefined({
     activeRegisterSession: stripObservedAt(status.activeRegisterSession),
-    appSessionRecovery: status.appSessionRecovery,
-    appShell: stripObservedAt(status.appShell),
-    appUpdate: stripObservedAt(status.appUpdate),
-    appVersion: status.appVersion,
-    browserInfo: status.browserInfo,
-    buildSha: status.buildSha,
-    drawerAuthority: stripObservedAt(status.drawerAuthority),
-    localStore: status.localStore,
-    saleAuthority: stripObservedAt(status.saleAuthority),
-    source: status.source,
-    staffAuthority: status.staffAuthority,
-    storeId: status.storeId,
-    terminalId: status.terminalId,
-    terminalIntegrity: stripObservedAt(status.terminalIntegrity),
+    appSessionRecovery: stripAuthorityStatus(status.appSessionRecovery),
+    appUpdate: stripAppUpdateForRuntimeEffects(status.appUpdate),
+    drawerAuthority: stripDrawerAuthorityForRuntimeEffects(
+      status.drawerAuthority,
+    ),
+    localStore: stripLocalStoreForRuntimeEffects(status.localStore),
+    saleAuthority: stripAuthorityStatus(status.saleAuthority),
+    staffAuthority: stripAuthorityStatus(status.staffAuthority),
+    sync: stripSyncForRuntimeEffects(status.sync),
+    terminalIntegrity: stripAuthorityStatus(status.terminalIntegrity),
   });
 
   return JSON.stringify(material);
+}
+
+function stripLocalStoreForRuntimeEffects(
+  value: Partial<Doc<"posTerminalRuntimeStatus">["localStore"]> | undefined,
+) {
+  if (!value) {
+    return undefined;
+  }
+
+  return stripUndefined({
+    available: value.available,
+    terminalSeedReady: value.terminalSeedReady,
+  });
+}
+
+function stripAppUpdateForRuntimeEffects(
+  value:
+    | Partial<NonNullable<Doc<"posTerminalRuntimeStatus">["appUpdate"]>>
+    | undefined,
+) {
+  if (!value) {
+    return undefined;
+  }
+
+  return stripUndefined({
+    commandExecutionId: value.commandExecutionId,
+    status: value.status,
+  });
+}
+
+function stripSyncForRuntimeEffects(
+  value: Partial<Doc<"posTerminalRuntimeStatus">["sync"]> | undefined,
+) {
+  if (!value) {
+    return undefined;
+  }
+
+  return stripUndefined({
+    localReviewEventCount: value.reviewEventCount,
+    reviewEvents:
+      value.reviewEventCount && value.reviewEventCount > 0
+        ? value.reviewEvents
+        : undefined,
+    status: value.status,
+  });
+}
+
+function stripDrawerAuthorityForRuntimeEffects(
+  value:
+    | Partial<NonNullable<Doc<"posTerminalRuntimeStatus">["drawerAuthority"]>>
+    | undefined,
+) {
+  if (!value) {
+    return undefined;
+  }
+
+  return stripUndefined({
+    cloudRegisterSessionId: value.cloudRegisterSessionId,
+    localRegisterSessionId: value.localRegisterSessionId,
+    status: value.status,
+  });
+}
+
+function stripAuthorityStatus<T extends { status?: unknown } | undefined>(
+  value: T,
+) {
+  if (!value) {
+    return undefined;
+  }
+
+  return stripUndefined({
+    status: value.status,
+  });
 }
 
 function stripObservedAt<T extends Record<string, unknown> | undefined>(

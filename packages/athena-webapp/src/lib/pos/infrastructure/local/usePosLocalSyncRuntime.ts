@@ -1284,6 +1284,8 @@ export function usePosLocalSyncRuntimeStatus(input: {
       .catch(() => {
         if (!isCurrentPublishScope()) return;
 
+        forceNextRuntimeStatusPublishRef.current = true;
+        publishState.forceNextPublish = true;
         setDebug((current) =>
           withCheckInPublishDebug(current, {
             checkInPublishCompletedAt: Date.now(),

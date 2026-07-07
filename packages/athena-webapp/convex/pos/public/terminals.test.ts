@@ -748,6 +748,11 @@ describe("POS terminal public mutations", () => {
       expect.objectContaining({
         storeId: "store-1",
         terminalId: "terminal-1",
+        trustedTerminal: expect.objectContaining({
+          _id: "terminal-1",
+          storeId: "store-1",
+          status: "active",
+        }),
         status: expect.objectContaining({
           drawerAuthority: {
             cloudRegisterSessionId: "cloud-register-1",

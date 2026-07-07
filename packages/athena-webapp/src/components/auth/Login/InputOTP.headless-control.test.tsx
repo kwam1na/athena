@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { forwardRef, type InputHTMLAttributes, type ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { InputOTPForm } from "./InputOTP";
@@ -17,6 +18,31 @@ vi.mock("@convex-dev/auth/react", () => ({
 
 vi.mock("@tanstack/react-router", () => ({
   useNavigate: () => mocked.navigate,
+}));
+
+vi.mock("@/components/ui/input-otp", () => ({
+  InputOTP: forwardRef<
+    HTMLInputElement,
+    InputHTMLAttributes<HTMLInputElement> & {
+      children?: ReactNode;
+      onChange?: (value: string) => void;
+      pasteTransformer?: (value: string) => string;
+    }
+  >(({ children: _children, onChange, pasteTransformer: _paste, ...props }, ref) => (
+    <>
+      {void _children}
+      {void _paste}
+      <input
+        {...props}
+        ref={ref}
+        onChange={(event) => onChange?.(event.currentTarget.value)}
+      />
+    </>
+  )),
+  InputOTPGroup: ({ children }: { children?: ReactNode }) => (
+    <div>{children}</div>
+  ),
+  InputOTPSlot: () => <span />,
 }));
 
 describe("InputOTPForm headless control", () => {

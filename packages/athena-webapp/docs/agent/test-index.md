@@ -350,6 +350,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/components/traces/WorkflowTraceView.test.tsx`](../../src/components/traces/WorkflowTraceView.test.tsx)
 - [`src/components/ui/button.test.tsx`](../../src/components/ui/button.test.tsx)
 - [`src/components/ui/calendar.test.tsx`](../../src/components/ui/calendar.test.tsx)
+- [`src/components/ui/input-otp.test.tsx`](../../src/components/ui/input-otp.test.tsx)
 - [`src/components/ui/primitives.test.tsx`](../../src/components/ui/primitives.test.tsx)
 - [`src/components/ui/sidebar.test.tsx`](../../src/components/ui/sidebar.test.tsx)
 - [`src/components/users/TimelineEventCard.test.tsx`](../../src/components/users/TimelineEventCard.test.tsx)
