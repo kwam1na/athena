@@ -256,6 +256,7 @@ function setViewportWidth(width: number) {
 describe("Authed layout", () => {
   beforeEach(() => {
     mocked.OutletComponent = null;
+    document.cookie = "sidebar_state=; path=/; max-age=0";
     window.history.replaceState({}, "", "/wigclub/store/wigclub/products");
     Object.defineProperty(window.navigator, "onLine", {
       configurable: true,

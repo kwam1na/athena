@@ -1261,12 +1261,14 @@ describe("DailyOperationsViewContent", () => {
     expect(
       screen.queryByRole("link", { name: "Open Open work" }),
     ).not.toBeInTheDocument();
-    expect(
-      screen.getByRole("link", { name: "Open Close history workspace" }),
-    ).toHaveAttribute(
+    const closeHistoryLink = screen.getByRole("link", {
+      name: "Open Close history workspace",
+    });
+    expect(closeHistoryLink).toHaveAttribute(
       "href",
       "/wigclub/store/osu/operations/daily-close-history?o=%252Fwigclub%252Fstore%252Fosu%252Foperations",
     );
+    expect(closeHistoryLink.querySelector(".lucide-history")).not.toBeNull();
     expect(
       screen.getByRole("link", { name: "Open Stock adjustments workspace" }),
     ).toHaveAttribute(
@@ -1288,6 +1290,49 @@ describe("DailyOperationsViewContent", () => {
     expect(
       screen.queryByRole("link", { name: "Open Open work workspace" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("orders summary metrics by standard tender sequence before remaining cards", () => {
+    renderContent({
+      ...operatingSnapshot,
+      closeSummary: {
+        ...operatingSnapshot.closeSummary,
+        paymentTotals: [
+          { amount: 349100, method: "cash", transactionCount: 2 },
+          { amount: 1184000, method: "mobile_money", transactionCount: 2 },
+          { amount: 670000, method: "card", transactionCount: 1 },
+        ],
+      },
+      operatingDate: getCurrentLocalOperatingDate(),
+    });
+
+    expect(
+      screen
+        .getByRole("link", { name: "Open transactions" })
+        .compareDocumentPosition(
+          screen.getByRole("link", { name: "Open cash transactions" }),
+        ) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      screen
+        .getByRole("link", { name: "Open cash transactions" })
+        .compareDocumentPosition(
+          screen.getByRole("link", { name: "Open Card transactions" }),
+        ) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      screen
+        .getByRole("link", { name: "Open Card transactions" })
+        .compareDocumentPosition(
+          screen.getByRole("link", { name: "Open Mobile Money transactions" }),
+        ) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      screen
+        .getByRole("link", { name: "Open Mobile Money transactions" })
+        .compareDocumentPosition(screen.getByText("Carried-over cash")) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it("shows normalized automation status for the current store day", () => {

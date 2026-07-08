@@ -8258,10 +8258,53 @@ describe("useRegisterViewModel", () => {
     });
 
     expect(result.current.drawerGate?.errorMessage).toBe(
-      "Opening float required. Enter an amount greater than 0.",
+      "Opening float required. Enter 0 or more.",
     );
     expect(mockOpenDrawer).not.toHaveBeenCalled();
     expect(mockStartSession).not.toHaveBeenCalled();
+  });
+
+  it("allows a zero opening float when opening the drawer", async () => {
+    mockRegisterState = {
+      phase: "readyToStart",
+      terminal: { _id: "terminal-1", displayName: "Front Counter" },
+      cashier: { _id: "staff-1", firstName: "Ama", lastName: "Kusi" },
+      activeRegisterSession: null,
+      activeSession: null,
+      resumableSession: null,
+    };
+    mockActiveSession = null;
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        buildStaffAuthenticationResult(),
+      );
+    });
+
+    act(() => {
+      result.current.drawerGate?.onOpeningFloatChange?.("0");
+    });
+
+    await act(async () => {
+      await result.current.drawerGate?.onSubmit?.();
+    });
+
+    await waitFor(() =>
+      expect(mockAppendLocalEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "register.opened",
+          payload: expect.objectContaining({
+            openingFloat: 0,
+          }),
+        }),
+      ),
+    );
+    expect(result.current.drawerGate?.errorMessage).not.toBe(
+      "Opening float required. Enter 0 or more.",
+    );
   });
 
   it("records a pending local drawer-open event after opening the drawer", async () => {

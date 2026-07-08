@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link, useParams } from "@tanstack/react-router";
+import { Link, useParams, useSearch } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
 import {
@@ -68,6 +68,12 @@ type RouteParams =
       orgUrlSlug?: string;
       storeUrlSlug?: string;
       transactionId: string;
+    }
+  | undefined;
+
+type RouteSearch =
+  | {
+      intent?: string;
     }
   | undefined;
 
@@ -346,6 +352,9 @@ export function TransactionView() {
   const params = useParams({
     strict: false,
   }) as RouteParams;
+  const search = useSearch({
+    strict: false,
+  }) as RouteSearch;
   const transactionId = params?.transactionId;
   const [correctionPanelOpen, setCorrectionPanelOpen] = useState(false);
   const [selectedCorrection, setSelectedCorrection] = useState<
@@ -373,7 +382,9 @@ export function TransactionView() {
   >(null);
   const [correctionHistoryExpanded, setCorrectionHistoryExpanded] =
     useState(false);
-  const [voidPanelOpen, setVoidPanelOpen] = useState(false);
+  const [voidPanelOpen, setVoidPanelOpen] = useState(
+    search?.intent === "void",
+  );
   const [voidReason, setVoidReason] = useState("");
   const [voidError, setVoidError] = useState<string | null>(null);
   const [voidSubmitting, setVoidSubmitting] = useState(false);
@@ -954,6 +965,14 @@ export function TransactionView() {
 
   function cancelItemAdjustmentWorkflow() {
     resetItemAdjustmentWorkflow();
+    setCorrectionError(null);
+    setPendingCorrection(null);
+    setSelectedCorrection(null);
+  }
+
+  function cancelPaymentMethodWorkflow() {
+    setPaymentCorrectionReason("");
+    setPaymentMethodInput("");
     setCorrectionError(null);
     setPendingCorrection(null);
     setSelectedCorrection(null);
@@ -1683,10 +1702,11 @@ export function TransactionView() {
                     ) : null}
                     <div className="grid gap-2">
                       <Button
+                        className="border-danger/40 bg-danger/5 text-danger hover:bg-danger/10 hover:text-danger"
                         disabled={voidSubmitting}
                         onClick={requestVoidSubmit}
                         type="button"
-                        variant="destructive"
+                        variant="outline"
                       >
                         Submit void
                       </Button>
@@ -1779,13 +1799,10 @@ export function TransactionView() {
                         <Button
                           aria-label="Customer attribution"
                           className="h-auto justify-start whitespace-normal px-3 py-3 text-left"
-                          onClick={() => setSelectedCorrection("customer")}
+                          disabled
+                          onClick={() => undefined}
                           type="button"
-                          variant={
-                            selectedCorrection === "customer"
-                              ? "workflow-soft"
-                              : "outline"
-                          }
+                          variant="outline"
                         >
                           <span className="grid gap-1">
                             <span>Customer attribution</span>
@@ -1913,15 +1930,26 @@ export function TransactionView() {
                                 {correctionError}
                               </p>
                             ) : null}
-                            <Button
-                              disabled={correctionSubmitting}
-                              onClick={() =>
-                                requestCorrectionSubmit("payment_method")
-                              }
-                              type="button"
-                            >
-                              Submit payment update
-                            </Button>
+                            <div className="grid gap-2">
+                              <Button
+                                disabled={correctionSubmitting}
+                                onClick={() =>
+                                  requestCorrectionSubmit("payment_method")
+                                }
+                                type="button"
+                                variant="workflow"
+                              >
+                                Submit payment update
+                              </Button>
+                              <Button
+                                disabled={correctionSubmitting}
+                                onClick={cancelPaymentMethodWorkflow}
+                                type="button"
+                                variant="outline"
+                              >
+                                Cancel payment update
+                              </Button>
+                            </div>
                           </div>
                         ) : null}
                       </div>
@@ -1951,26 +1979,20 @@ export function TransactionView() {
                         <Button
                           aria-label="Amounts or totals"
                           className="h-auto justify-start whitespace-normal px-3 py-2.5 text-left"
-                          onClick={() => setSelectedCorrection("amounts")}
+                          disabled
+                          onClick={() => undefined}
                           type="button"
-                          variant={
-                            selectedCorrection === "amounts"
-                              ? "workflow-soft"
-                              : "outline"
-                          }
+                          variant="outline"
                         >
                           Amounts or totals
                         </Button>
                         <Button
                           aria-label="Discounts"
                           className="h-auto justify-start whitespace-normal px-3 py-2.5 text-left"
-                          onClick={() => setSelectedCorrection("discounts")}
+                          disabled
+                          onClick={() => undefined}
                           type="button"
-                          variant={
-                            selectedCorrection === "discounts"
-                              ? "workflow-soft"
-                              : "outline"
-                          }
+                          variant="outline"
                         >
                           Discounts
                         </Button>
@@ -2194,6 +2216,7 @@ export function TransactionView() {
                               requestCorrectionSubmit("line_items")
                             }
                             type="button"
+                            variant="workflow"
                           >
                             Submit item adjustment
                           </Button>

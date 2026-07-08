@@ -1796,7 +1796,11 @@ interface POSRegisterViewProps {
 
 export function POSRegisterView(props: POSRegisterViewProps) {
   return (
-    <SidebarProvider className="contents" defaultOpen={false}>
+    <SidebarProvider
+      className="contents"
+      defaultOpen={false}
+      persistOpenState={false}
+    >
       <POSRegisterViewContent {...props} />
     </SidebarProvider>
   );

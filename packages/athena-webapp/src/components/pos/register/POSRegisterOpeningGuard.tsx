@@ -1,7 +1,14 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
-import { ArrowUpRight, CheckCircle2, Loader2, RefreshCw, Store } from "lucide-react";
+import {
+  AlertCircle,
+  ArrowUpRight,
+  CheckCircle2,
+  Loader2,
+  RefreshCw,
+  Store,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { ComposedPageHeader } from "@/components/common/PageHeader";
@@ -38,6 +45,7 @@ import { logger } from "@/lib/logger";
 import { reloadWindow } from "@/lib/navigationUtils";
 
 type DailyOpeningSnapshot = {
+  operatingDate?: string;
   status?: "blocked" | "needs_attention" | "ready" | "started";
 };
 
@@ -46,6 +54,12 @@ type DailyCloseSnapshot = {
     lifecycleStatus?: "active" | "reopened" | "superseded";
   } | null;
   status?: "blocked" | "needs_review" | "carry_forward" | "ready" | "completed";
+};
+
+type ReadinessChecklistItem = {
+  label: string;
+  state: "checking" | "ready" | "attention";
+  value: string;
 };
 
 function getLocalOperatingDate(date = new Date()) {
@@ -208,7 +222,7 @@ export function POSRegisterOpeningGuard({
           status: "ready",
           source: "local_readiness",
           storeDayStatus: "started",
-        } satisfies LocalPosReadiness)
+      } satisfies LocalPosReadiness)
       : localReadiness;
 
   if (isLoadingStores && entryContext.status === "loading") {
@@ -287,7 +301,7 @@ function POSReadinessLoadingState({
   isLoadingStores: boolean;
   localReadiness: LocalPosReadiness;
   openingSnapshot?: DailyOpeningSnapshot;
-  operatingDate: string;
+  operatingDate?: string;
   storeId?: Id<"store">;
 }) {
   const blockers = getReadinessLoadingBlockers({
@@ -298,15 +312,16 @@ function POSReadinessLoadingState({
     openingSnapshot,
     storeId,
   });
-  const rows = getReadinessDiagnosticRows({
+  const checklist = getReadinessChecklistItems({
     closeSnapshot,
     entryContext,
     isLoadingStores,
     localReadiness,
     openingSnapshot,
-    operatingDate,
+    operatingDate: openingSnapshot?.operatingDate ?? operatingDate,
     storeId,
   });
+  const hasBlockers = blockers.length > 0;
 
   return (
     <View
@@ -330,44 +345,85 @@ function POSReadinessLoadingState({
       }
     >
       <FadeIn className="flex h-full min-h-0 items-center justify-center p-6">
-        <div className="flex w-full max-w-3xl flex-col items-center rounded-lg border border-border bg-surface px-10 py-12 text-center shadow-sm">
-          <div className="mb-6 flex h-[4.5rem] w-[4.5rem] items-center justify-center rounded-full bg-muted text-muted-foreground">
-            <Loader2 className="h-7 w-7 animate-spin" />
+        <div className="flex w-full max-w-2xl flex-col items-center rounded-lg border border-border/80 bg-surface px-8 py-10 text-center shadow-sm">
+          <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-muted text-muted-foreground">
+            <Loader2 className="h-5 w-5 animate-spin" />
           </div>
           <h2 className="text-xl font-medium text-foreground/80">
-            Preparing POS
+            Checking this register
           </h2>
           <p className="mt-3 max-w-lg text-base leading-7 text-muted-foreground">
-            Checking register readiness.
+            Athena is confirming the store day and local register state before
+            checkout opens.
           </p>
-          <div className="mt-8 w-full rounded-lg border border-border bg-muted/30 p-4 text-left">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                Waiting on
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {blockers.map((blocker) => (
-                  <span
-                    className="rounded-full border border-border bg-surface px-3 py-1 text-xs font-medium text-foreground"
-                    key={blocker}
-                  >
-                    {blocker}
-                  </span>
-                ))}
+          <div className="mt-8 w-full rounded-lg border border-border/80 bg-muted/20 p-4 text-left">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-foreground">
+                  Register checks
+                </p>
+                <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                  This usually takes a moment.
+                </p>
               </div>
+              {hasBlockers ? (
+                <div className="flex flex-wrap justify-end gap-2">
+                  {blockers.map((blocker) => (
+                    <span
+                      className="rounded-full border border-border bg-surface px-3 py-1 text-xs font-medium text-muted-foreground"
+                      key={blocker}
+                    >
+                      {blocker}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
             </div>
-            <div className="mt-5 grid gap-2 sm:grid-cols-2">
-              {rows.map((row) => (
+            <div className="mt-5 grid gap-2">
+              {checklist.map((item) => (
                 <div
-                  className="rounded-md border border-border/70 bg-surface px-3 py-2"
-                  key={row.label}
+                  className="flex items-start gap-3 rounded-md border border-border/70 bg-surface px-3 py-2.5"
+                  key={item.label}
                 >
-                  <p className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                    {row.label}
-                  </p>
-                  <p className="mt-1 break-words text-sm font-medium text-foreground">
-                    {row.value}
-                  </p>
+                  <span
+                    className={[
+                      "mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full",
+                      item.state === "ready"
+                        ? "bg-emerald-50 text-emerald-700"
+                        : item.state === "attention"
+                          ? "bg-amber-50 text-amber-700"
+                          : "bg-muted text-muted-foreground",
+                    ].join(" ")}
+                    title={getReadinessChecklistStateLabel(item.state)}
+                  >
+                    {item.state === "ready" ? (
+                      <CheckCircle2
+                        className="h-3.5 w-3.5"
+                        aria-hidden="true"
+                      />
+                    ) : item.state === "attention" ? (
+                      <AlertCircle
+                        className="h-3.5 w-3.5"
+                        aria-hidden="true"
+                      />
+                    ) : (
+                      <Loader2
+                        className="h-3.5 w-3.5 animate-spin"
+                        aria-hidden="true"
+                      />
+                    )}
+                    <span className="sr-only">
+                      {getReadinessChecklistStateLabel(item.state)}
+                    </span>
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-foreground">
+                      {item.label}
+                    </p>
+                    <p className="mt-0.5 text-sm leading-5 text-muted-foreground">
+                      {item.value}
+                    </p>
+                  </div>
                 </div>
               ))}
             </div>
@@ -419,10 +475,10 @@ function getReadinessLoadingBlockers({
     blockers.push("local register readiness");
   }
 
-  return blockers.length > 0 ? blockers : ["readiness evaluation"];
+  return blockers;
 }
 
-function getReadinessDiagnosticRows({
+function getReadinessChecklistItems({
   closeSnapshot,
   entryContext,
   isLoadingStores,
@@ -436,79 +492,135 @@ function getReadinessDiagnosticRows({
   isLoadingStores: boolean;
   localReadiness: LocalPosReadiness;
   openingSnapshot?: DailyOpeningSnapshot;
-  operatingDate: string;
+  operatingDate?: string;
   storeId?: Id<"store">;
-}) {
-  const terminalStatus =
-    entryContext.status === "ready"
-      ? `${entryContext.source}; seed ${entryContext.terminalSeed ? "present" : "missing"}`
-      : entryContext.status;
+}): ReadinessChecklistItem[] {
   const localLoadingDiagnostics =
     localReadiness.status === "loading" ? localReadiness.diagnostics : null;
+  const operatingDateLabel = formatOperatingDateLabel(operatingDate);
 
-  const rows = [
+  const items: ReadinessChecklistItem[] = [
     {
       label: "Store",
+      state: isLoadingStores ? "checking" : storeId ? "ready" : "attention",
       value: isLoadingStores
-        ? "loading"
+        ? "Looking up the active store."
         : storeId
-          ? `ready: ${storeId}`
-          : "missing",
+          ? "Active store found."
+          : "Active store is missing.",
     },
     {
-      label: "Terminal",
-      value: terminalStatus,
+      label: "Register setup",
+      state:
+        entryContext.status === "loading"
+          ? "checking"
+          : entryContext.status === "ready" && entryContext.terminalSeed
+            ? "ready"
+            : "attention",
+      value:
+        entryContext.status === "loading"
+          ? "Checking this device."
+          : entryContext.status === "ready" && entryContext.terminalSeed
+            ? "This device is connected to a register."
+            : "This device needs register setup.",
     },
     {
-      label: "Operating date",
-      value: operatingDate,
+      label: "Opening handoff",
+      state:
+        !storeId || !openingSnapshot
+          ? "checking"
+          : openingSnapshot.status === "started"
+            ? "ready"
+            : "attention",
+      value:
+        !storeId || !openingSnapshot
+          ? "Checking today's opening state."
+          : openingSnapshot.status === "started"
+            ? getStartedStoreDayMessage(operatingDateLabel)
+            : "Opening handoff still needs attention.",
     },
     {
-      label: "Opening snapshot",
-      value: storeId ? (openingSnapshot?.status ?? "loading") : "skipped",
+      label: "Day close",
+      state:
+        !storeId || (openingSnapshot?.status === "started" && !closeSnapshot)
+          ? "checking"
+          : closeSnapshot?.status === "completed" &&
+              closeSnapshot.existingClose?.lifecycleStatus !== "reopened"
+            ? "attention"
+            : "ready",
+      value:
+        !storeId
+          ? "Waiting for store details."
+          : openingSnapshot?.status === "started" && !closeSnapshot
+            ? "Checking whether the day is already closed."
+            : closeSnapshot?.status === "completed" &&
+                closeSnapshot.existingClose?.lifecycleStatus !== "reopened"
+              ? "Store day is closed."
+              : "No closed day is blocking this register.",
     },
     {
-      label: "Close snapshot",
-      value: storeId
-        ? (closeSnapshot?.status ??
-          (openingSnapshot?.status === "started" ? "loading" : "pending"))
-        : "skipped",
-    },
-    {
-      label: "Local readiness",
-      value: localReadiness.status,
+      label: "Local register state",
+      state:
+        localReadiness.status === "loading"
+          ? "checking"
+          : localReadiness.status === "ready"
+            ? "ready"
+            : "attention",
+      value:
+        localReadiness.status === "loading"
+          ? "Reading saved register state on this device."
+          : localReadiness.status === "ready"
+            ? "Local register state is available."
+            : localReadiness.message,
     },
   ];
 
   if (localLoadingDiagnostics) {
-    rows.push({
-      label: "Local read stage",
-      value: localLoadingDiagnostics.stage,
-    });
-
-    if (localLoadingDiagnostics.stateKey) {
-      rows.push({
-        label: "Local read key",
-        value: localLoadingDiagnostics.stateKey,
-      });
-    }
-
-    if (localLoadingDiagnostics.activeStateKey) {
-      rows.push({
-        label: "Active read key",
-        value: localLoadingDiagnostics.activeStateKey,
-      });
-    }
-
     if (localLoadingDiagnostics.startedAt) {
-      rows.push({
-        label: "Local read started",
-        value: new Date(localLoadingDiagnostics.startedAt).toLocaleTimeString(),
+      items.push({
+        label: "Started checking",
+        state: "checking",
+        value: new Date(
+          localLoadingDiagnostics.startedAt,
+        ).toLocaleTimeString(),
       });
     }
   }
 
-  return rows;
+  return items;
+}
+
+function getReadinessChecklistStateLabel(
+  state: ReadinessChecklistItem["state"],
+) {
+  if (state === "ready") return "Ready";
+  if (state === "attention") return "Review";
+  return "Checking";
+}
+
+function getStartedStoreDayMessage(operatingDateLabel: string | null) {
+  return operatingDateLabel
+    ? `Store day for ${operatingDateLabel} has started.`
+    : "Store day has started.";
+}
+
+function formatOperatingDateLabel(operatingDate?: string) {
+  if (!operatingDate) {
+    return null;
+  }
+
+  const date = new Date(`${operatingDate}T00:00:00.000Z`);
+
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    day: "numeric",
+    month: "short",
+    timeZone: "UTC",
+    year: "numeric",
+  }).format(date);
 }
 
 function StoreDayNotStartedState({

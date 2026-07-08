@@ -21,6 +21,7 @@ import {
   listInventoryImportReviewSkuContextWithCtx,
   listProductPageProvisionalSkuBinding,
   listProductPageProvisionalSkuBindingWithCtx,
+  repairOnboardedLegacyImportTrustedSkuVisibilityWithCtx,
   saveInventoryImportReviewVersion,
   saveInventoryImportReviewVersionWithCtx,
   stageInventoryImportReviewRowsForPos,
@@ -1126,6 +1127,661 @@ describe("catalog import", () => {
           status: "committed",
         }),
       ]),
+    );
+  });
+
+  it("dry-runs onboarded legacy import trusted SKU visibility repair", async () => {
+    const { ctx, tables } = createMutationCtx({
+      category: [
+        {
+          _id: "category-hair",
+          name: "Hair Care",
+          slug: "hair-care",
+          storeId: "store-1",
+        },
+        {
+          _id: "category-legacy",
+          name: "Legacy import",
+          slug: "legacy-import",
+          storeId: "store-1",
+        },
+      ],
+      inventoryImportProvisionalSku: [
+        {
+          _id: "provisional-hidden-draft",
+          finalizedAt: 1_000,
+          productId: "product-hidden-draft",
+          productSkuId: "sku-hidden-draft",
+          status: "finalized",
+          storeId: "store-1",
+        },
+        {
+          _id: "provisional-legacy",
+          finalizedAt: 1_000,
+          productId: "product-legacy",
+          productSkuId: "sku-legacy",
+          status: "finalized",
+          storeId: "store-1",
+        },
+      ],
+      product: [
+        {
+          _id: "product-hidden-draft",
+          availability: "draft",
+          categoryId: "category-hair",
+          isVisible: false,
+          name: "Hidden Draft",
+          storeId: "store-1",
+          subcategoryId: "subcategory-hair",
+        },
+        {
+          _id: "product-legacy",
+          availability: "draft",
+          categoryId: "category-legacy",
+          isVisible: false,
+          name: "Still Legacy",
+          storeId: "store-1",
+          subcategoryId: "subcategory-legacy",
+        },
+      ],
+      productSku: [
+        {
+          _id: "sku-hidden-draft",
+          productId: "product-hidden-draft",
+          sku: "SKU-HIDDEN-DRAFT",
+          storeId: "store-1",
+        },
+        {
+          _id: "sku-legacy",
+          productId: "product-legacy",
+          sku: "SKU-LEGACY",
+          storeId: "store-1",
+        },
+      ],
+      subcategory: [
+        {
+          _id: "subcategory-hair",
+          categoryId: "category-hair",
+          name: "Hair Oils",
+          slug: "hair-oils",
+          storeId: "store-1",
+        },
+        {
+          _id: "subcategory-legacy",
+          categoryId: "category-legacy",
+          name: "Imported inventory",
+          slug: "imported-inventory",
+          storeId: "store-1",
+        },
+      ],
+    });
+
+    const result = await repairOnboardedLegacyImportTrustedSkuVisibilityWithCtx(
+      ctx,
+      {
+        dryRun: true,
+        limit: 10,
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result).toMatchObject({
+      dryRun: true,
+      promotedToLive: 1,
+      refreshedSearchProjections: 0,
+      repairedProducts: 1,
+      scannedRows: 2,
+      skippedLegacyTaxonomy: 1,
+      taxonomyWorkItemsEnsured: 1,
+      visibleProducts: 1,
+    });
+    expect(result.repairedSkus).toEqual([
+      expect.objectContaining({
+        productId: "product-hidden-draft",
+        productName: "Hidden Draft",
+        productSkuId: "sku-hidden-draft",
+        sku: "SKU-HIDDEN-DRAFT",
+      }),
+    ]);
+    expect(result.taxonomyWorkItemSkus).toEqual([
+      expect.objectContaining({
+        productId: "product-legacy",
+        productName: "Still Legacy",
+        productSkuId: "sku-legacy",
+        sku: "SKU-LEGACY",
+      }),
+    ]);
+    expect(tables.product.get("product-hidden-draft")).toMatchObject({
+      availability: "draft",
+      isVisible: false,
+    });
+    expect(Array.from(tables.operationalWorkItem.values())).toEqual([]);
+    expect(mockedSkuSearch.upsertProductSkuSearchProjection).not.toHaveBeenCalled();
+  });
+
+  it("repairs onboarded legacy import trusted SKU visibility and draft status", async () => {
+    const { ctx, tables } = createMutationCtx({
+      category: [
+        {
+          _id: "category-hair",
+          name: "Hair Care",
+          slug: "hair-care",
+          storeId: "store-1",
+        },
+        {
+          _id: "category-legacy",
+          name: "Legacy import",
+          slug: "legacy-import",
+          storeId: "store-1",
+        },
+      ],
+      inventoryImportProvisionalSku: [
+        {
+          _id: "provisional-hidden-draft",
+          finalizedAt: 1_000,
+          productId: "product-hidden-draft",
+          productSkuId: "sku-hidden-draft",
+          status: "finalized",
+          storeId: "store-1",
+        },
+        {
+          _id: "provisional-visible-live",
+          finalizedAt: 1_100,
+          productId: "product-visible-live",
+          productSkuId: "sku-visible-live",
+          status: "active",
+          storeId: "store-1",
+        },
+        {
+          _id: "provisional-hidden-draft-other",
+          finalizedAt: 1_150,
+          productId: "product-hidden-draft",
+          productSkuId: "sku-hidden-draft-other",
+          status: "finalized",
+          storeId: "store-1",
+        },
+        {
+          _id: "provisional-other-store",
+          finalizedAt: 1_200,
+          productId: "product-other-store",
+          productSkuId: "sku-other-store",
+          status: "finalized",
+          storeId: "store-other",
+        },
+        {
+          _id: "provisional-legacy",
+          finalizedAt: 1_300,
+          productId: "product-legacy",
+          productSkuId: "sku-legacy",
+          status: "finalized",
+          storeId: "store-1",
+        },
+      ],
+      product: [
+        {
+          _id: "product-hidden-draft",
+          availability: "draft",
+          categoryId: "category-hair",
+          isVisible: false,
+          name: "Hidden Draft",
+          storeId: "store-1",
+          subcategoryId: "subcategory-hair",
+        },
+        {
+          _id: "product-visible-live",
+          availability: "live",
+          categoryId: "category-hair",
+          isVisible: true,
+          name: "Visible Live",
+          storeId: "store-1",
+          subcategoryId: "subcategory-hair",
+        },
+        {
+          _id: "product-other-store",
+          availability: "draft",
+          categoryId: "category-hair",
+          isVisible: false,
+          name: "Other Store",
+          storeId: "store-other",
+          subcategoryId: "subcategory-hair",
+        },
+        {
+          _id: "product-legacy",
+          availability: "draft",
+          categoryId: "category-legacy",
+          isVisible: false,
+          name: "Still Legacy",
+          organizationId: "org-1",
+          storeId: "store-1",
+          subcategoryId: "subcategory-legacy",
+        },
+      ],
+      productSku: [
+        {
+          _id: "sku-hidden-draft",
+          productId: "product-hidden-draft",
+          sku: "SKU-HIDDEN-DRAFT",
+          storeId: "store-1",
+        },
+        {
+          _id: "sku-hidden-draft-other",
+          productId: "product-hidden-draft",
+          sku: "SKU-HIDDEN-DRAFT-OTHER",
+          storeId: "store-1",
+        },
+        {
+          _id: "sku-visible-live",
+          productId: "product-visible-live",
+          sku: "SKU-VISIBLE-LIVE",
+          storeId: "store-1",
+        },
+        {
+          _id: "sku-other-store",
+          productId: "product-other-store",
+          sku: "SKU-OTHER",
+          storeId: "store-other",
+        },
+        {
+          _id: "sku-legacy",
+          productId: "product-legacy",
+          sku: "SKU-LEGACY",
+          storeId: "store-1",
+        },
+      ],
+      subcategory: [
+        {
+          _id: "subcategory-hair",
+          categoryId: "category-hair",
+          name: "Hair Oils",
+          slug: "hair-oils",
+          storeId: "store-1",
+        },
+        {
+          _id: "subcategory-legacy",
+          categoryId: "category-legacy",
+          name: "Imported inventory",
+          slug: "imported-inventory",
+          storeId: "store-1",
+        },
+      ],
+    });
+
+    const result = await repairOnboardedLegacyImportTrustedSkuVisibilityWithCtx(
+      ctx,
+      {
+        dryRun: false,
+        limit: 10,
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result).toMatchObject({
+      dryRun: false,
+      promotedToLive: 1,
+      refreshedSearchProjections: 2,
+      repairedProducts: 1,
+      scannedRows: 4,
+      skippedLegacyTaxonomy: 1,
+      taxonomyWorkItemsEnsured: 1,
+      visibleProducts: 1,
+    });
+    expect(tables.product.get("product-hidden-draft")).toMatchObject({
+      availability: "live",
+      isVisible: true,
+    });
+    expect(tables.product.get("product-visible-live")).toMatchObject({
+      availability: "live",
+      isVisible: true,
+    });
+    expect(mockedSkuSearch.upsertProductSkuSearchProjection).toHaveBeenCalledWith(
+      ctx,
+      "sku-hidden-draft",
+    );
+    expect(
+      mockedSkuSearch.upsertProductSkuSearchProjection,
+    ).not.toHaveBeenCalledWith(ctx, "sku-visible-live");
+    expect(
+      mockedSkuSearch.upsertProductSkuSearchProjection,
+    ).toHaveBeenCalledWith(ctx, "sku-hidden-draft-other");
+    expect(Array.from(tables.operationalWorkItem.values())).toEqual([
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          categorySlug: "legacy-import",
+          productId: "product-legacy",
+          productSkuId: "sku-legacy",
+          provisionalSkuId: "provisional-legacy",
+          sku: "SKU-LEGACY",
+        }),
+        productId: "product-legacy",
+        productSkuId: "sku-legacy",
+        status: "open",
+        title: "Assign catalog category: Still Legacy",
+        type: "catalog_taxonomy_setup",
+      }),
+    ]);
+  });
+
+  it("scans finalized active rows without letting non-finalized rows consume the repair page", async () => {
+    const nonFinalizedRows = Array.from({ length: 3 }, (_, index) => ({
+      _id: `provisional-active-draft-${index + 1}`,
+      createdAt: index + 1,
+      productId: `product-active-draft-${index + 1}`,
+      productSkuId: `sku-active-draft-${index + 1}`,
+      status: "active",
+      storeId: "store-1",
+    }));
+    const { ctx, tables } = createMutationCtx({
+      category: [
+        {
+          _id: "category-hair",
+          name: "Hair Care",
+          slug: "hair-care",
+          storeId: "store-1",
+        },
+      ],
+      inventoryImportProvisionalSku: [
+        ...nonFinalizedRows,
+        {
+          _id: "provisional-finalized-active",
+          createdAt: 10,
+          finalizedAt: 1_500,
+          productId: "product-hidden-draft",
+          productSkuId: "sku-hidden-draft",
+          status: "active",
+          storeId: "store-1",
+        },
+      ],
+      product: [
+        {
+          _id: "product-hidden-draft",
+          availability: "draft",
+          categoryId: "category-hair",
+          isVisible: false,
+          name: "Hidden Draft",
+          storeId: "store-1",
+          subcategoryId: "subcategory-hair",
+        },
+      ],
+      productSku: [
+        {
+          _id: "sku-hidden-draft",
+          productId: "product-hidden-draft",
+          sku: "SKU-HIDDEN-DRAFT",
+          storeId: "store-1",
+        },
+      ],
+      subcategory: [
+        {
+          _id: "subcategory-hair",
+          categoryId: "category-hair",
+          name: "Hair Oils",
+          slug: "hair-oils",
+          storeId: "store-1",
+        },
+      ],
+    });
+
+    const result = await repairOnboardedLegacyImportTrustedSkuVisibilityWithCtx(
+      ctx,
+      {
+        dryRun: false,
+        limit: 1,
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result).toMatchObject({
+      promotedToLive: 1,
+      refreshedSearchProjections: 1,
+      repairedProducts: 1,
+      scannedRows: 1,
+      visibleProducts: 1,
+    });
+    expect(tables.product.get("product-hidden-draft")).toMatchObject({
+      availability: "live",
+      isVisible: true,
+    });
+    expect(mockedSkuSearch.upsertProductSkuSearchProjection).toHaveBeenCalledWith(
+      ctx,
+      "sku-hidden-draft",
+    );
+  });
+
+  it("returns a cursor so legacy visibility repair can advance past skipped rows", async () => {
+    const { ctx, tables } = createMutationCtx({
+      category: [
+        {
+          _id: "category-hair",
+          name: "Hair Care",
+          slug: "hair-care",
+          storeId: "store-1",
+        },
+      ],
+      inventoryImportProvisionalSku: [
+        {
+          _id: "provisional-clean",
+          finalizedAt: 100,
+          productId: "product-clean",
+          productSkuId: "sku-clean",
+          status: "active",
+          storeId: "store-1",
+        },
+        {
+          _id: "provisional-hidden-draft",
+          finalizedAt: 200,
+          productId: "product-hidden-draft",
+          productSkuId: "sku-hidden-draft",
+          status: "active",
+          storeId: "store-1",
+        },
+      ],
+      product: [
+        {
+          _id: "product-clean",
+          availability: "live",
+          categoryId: "category-hair",
+          isVisible: true,
+          name: "Clean Product",
+          storeId: "store-1",
+          subcategoryId: "subcategory-hair",
+        },
+        {
+          _id: "product-hidden-draft",
+          availability: "draft",
+          categoryId: "category-hair",
+          isVisible: false,
+          name: "Hidden Draft",
+          storeId: "store-1",
+          subcategoryId: "subcategory-hair",
+        },
+      ],
+      productSku: [
+        {
+          _id: "sku-clean",
+          productId: "product-clean",
+          sku: "SKU-CLEAN",
+          storeId: "store-1",
+        },
+        {
+          _id: "sku-hidden-draft",
+          productId: "product-hidden-draft",
+          sku: "SKU-HIDDEN-DRAFT",
+          storeId: "store-1",
+        },
+      ],
+      subcategory: [
+        {
+          _id: "subcategory-hair",
+          categoryId: "category-hair",
+          name: "Hair Oils",
+          slug: "hair-oils",
+          storeId: "store-1",
+        },
+      ],
+    });
+
+    const firstPage = await repairOnboardedLegacyImportTrustedSkuVisibilityWithCtx(
+      ctx,
+      {
+        dryRun: false,
+        limit: 1,
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(firstPage).toMatchObject({
+      refreshedSearchProjections: 0,
+      repairedProducts: 0,
+      scannedRows: 1,
+      truncated: true,
+      nextCursor: {
+        finalizedAt: 100,
+        scannedRowIds: ["provisional-clean"],
+        status: "active",
+      },
+    });
+
+    const secondPage =
+      await repairOnboardedLegacyImportTrustedSkuVisibilityWithCtx(ctx, {
+        cursor: firstPage.nextCursor,
+        dryRun: false,
+        limit: 1,
+        storeId: "store-1" as Id<"store">,
+      });
+
+    expect(secondPage).toMatchObject({
+      promotedToLive: 1,
+      refreshedSearchProjections: 1,
+      repairedProducts: 1,
+      scannedRows: 1,
+      truncated: false,
+      visibleProducts: 1,
+    });
+    expect(tables.product.get("product-hidden-draft")).toMatchObject({
+      availability: "live",
+      isVisible: true,
+    });
+    expect(mockedSkuSearch.upsertProductSkuSearchProjection).toHaveBeenCalledWith(
+      ctx,
+      "sku-hidden-draft",
+    );
+  });
+
+  it("continues through repair candidates that share a finalizedAt timestamp", async () => {
+    const { ctx, tables } = createMutationCtx({
+      category: [
+        {
+          _id: "category-hair",
+          name: "Hair Care",
+          slug: "hair-care",
+          storeId: "store-1",
+        },
+      ],
+      inventoryImportProvisionalSku: [
+        {
+          _id: "provisional-hidden-draft-1",
+          finalizedAt: 300,
+          productId: "product-hidden-draft-1",
+          productSkuId: "sku-hidden-draft-1",
+          status: "active",
+          storeId: "store-1",
+        },
+        {
+          _id: "provisional-hidden-draft-2",
+          finalizedAt: 300,
+          productId: "product-hidden-draft-2",
+          productSkuId: "sku-hidden-draft-2",
+          status: "active",
+          storeId: "store-1",
+        },
+      ],
+      product: [
+        {
+          _id: "product-hidden-draft-1",
+          availability: "draft",
+          categoryId: "category-hair",
+          isVisible: false,
+          name: "Hidden Draft 1",
+          storeId: "store-1",
+          subcategoryId: "subcategory-hair",
+        },
+        {
+          _id: "product-hidden-draft-2",
+          availability: "draft",
+          categoryId: "category-hair",
+          isVisible: false,
+          name: "Hidden Draft 2",
+          storeId: "store-1",
+          subcategoryId: "subcategory-hair",
+        },
+      ],
+      productSku: [
+        {
+          _id: "sku-hidden-draft-1",
+          productId: "product-hidden-draft-1",
+          sku: "SKU-HIDDEN-DRAFT-1",
+          storeId: "store-1",
+        },
+        {
+          _id: "sku-hidden-draft-2",
+          productId: "product-hidden-draft-2",
+          sku: "SKU-HIDDEN-DRAFT-2",
+          storeId: "store-1",
+        },
+      ],
+      subcategory: [
+        {
+          _id: "subcategory-hair",
+          categoryId: "category-hair",
+          name: "Hair Oils",
+          slug: "hair-oils",
+          storeId: "store-1",
+        },
+      ],
+    });
+
+    const firstPage = await repairOnboardedLegacyImportTrustedSkuVisibilityWithCtx(
+      ctx,
+      {
+        dryRun: false,
+        limit: 1,
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+    const secondPage =
+      await repairOnboardedLegacyImportTrustedSkuVisibilityWithCtx(ctx, {
+        cursor: firstPage.nextCursor,
+        dryRun: false,
+        limit: 1,
+        storeId: "store-1" as Id<"store">,
+      });
+
+    expect(firstPage.nextCursor).toMatchObject({
+      finalizedAt: 300,
+      scannedRowIds: ["provisional-hidden-draft-1"],
+      status: "active",
+    });
+    expect(secondPage).toMatchObject({
+      refreshedSearchProjections: 1,
+      repairedProducts: 1,
+      scannedRows: 1,
+      truncated: false,
+    });
+    expect(tables.product.get("product-hidden-draft-1")).toMatchObject({
+      availability: "live",
+      isVisible: true,
+    });
+    expect(tables.product.get("product-hidden-draft-2")).toMatchObject({
+      availability: "live",
+      isVisible: true,
+    });
+    expect(mockedSkuSearch.upsertProductSkuSearchProjection).toHaveBeenCalledWith(
+      ctx,
+      "sku-hidden-draft-1",
+    );
+    expect(mockedSkuSearch.upsertProductSkuSearchProjection).toHaveBeenCalledWith(
+      ctx,
+      "sku-hidden-draft-2",
     );
   });
 

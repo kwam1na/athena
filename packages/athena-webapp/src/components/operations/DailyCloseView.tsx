@@ -437,7 +437,31 @@ function formatPaymentMethodLabel(method: string) {
 function getOtherPaymentTotals(summary: DailyCloseSnapshot["summary"]) {
   return (summary.paymentTotals ?? [])
     .filter((paymentTotal) => paymentTotal.method.toLowerCase() !== "cash")
-    .sort((left, right) => right.amount - left.amount);
+    .sort(compareSummaryPaymentTotals);
+}
+
+function getPaymentMethodDisplayRank(method: string) {
+  switch (method.toLowerCase()) {
+    case "card":
+      return 0;
+    case "mobile_money":
+      return 1;
+    default:
+      return 2;
+  }
+}
+
+function compareSummaryPaymentTotals(
+  left: { amount: number; method: string },
+  right: { amount: number; method: string },
+) {
+  const rankDelta =
+    getPaymentMethodDisplayRank(left.method) -
+    getPaymentMethodDisplayRank(right.method);
+
+  if (rankDelta !== 0) return rankDelta;
+
+  return right.amount - left.amount;
 }
 
 function getPaymentTotalAmount(

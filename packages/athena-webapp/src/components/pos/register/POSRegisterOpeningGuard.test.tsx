@@ -340,20 +340,19 @@ describe("POSRegisterOpeningGuard", () => {
       expect.stringContaining("bg-surface"),
     );
     expect(screen.getByText("POS")).toBeInTheDocument();
-    expect(screen.getByText("Preparing POS")).toBeInTheDocument();
-    expect(screen.getByText("Checking register readiness.")).toBeInTheDocument();
-    expect(screen.getByText("Waiting on")).toBeInTheDocument();
-    expect(screen.getByText("close snapshot")).toBeInTheDocument();
-    expect(screen.getByText("local register readiness")).toBeInTheDocument();
-    expect(screen.getByText("Opening snapshot")).toBeInTheDocument();
-    expect(screen.getByText("started")).toBeInTheDocument();
-    expect(screen.getByText("Close snapshot")).toBeInTheDocument();
-    expect(screen.getAllByText("loading").length).toBeGreaterThan(0);
-    expect(screen.getByText("Local read stage")).toBeInTheDocument();
-    expect(screen.getByText("reading_local_store")).toBeInTheDocument();
-    expect(screen.getByText("Local read key")).toBeInTheDocument();
+    expect(screen.getByText("Checking this register")).toBeInTheDocument();
     expect(
-      screen.getByText("store-1:2026-05-09:no-terminal"),
+      screen.getByText(
+        "Athena is confirming the store day and local register state before checkout opens.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Day close")).toBeInTheDocument();
+    expect(
+      screen.getByText("Checking whether the day is already closed."),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Local register state")).toBeInTheDocument();
+    expect(
+      screen.getByText("Reading saved register state on this device."),
     ).toBeInTheDocument();
   });
 

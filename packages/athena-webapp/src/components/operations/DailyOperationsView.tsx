@@ -14,7 +14,6 @@ import {
 import { useQuery } from "convex/react";
 import {
   ArrowUpRight,
-  Archive,
   Ban,
   Barcode,
   Bot,
@@ -24,6 +23,7 @@ import {
   ChevronRight,
   CircleAlert,
   Clock3,
+  History,
   PackageSearch,
   RefreshCw,
 } from "lucide-react";
@@ -99,7 +99,7 @@ type OperationsWorkspaceLink = {
 const SUPPORTING_OPERATIONS_WORKSPACE_LINKS: OperationsWorkspaceLink[] = [
   {
     description: "Review completed close records for prior store days.",
-    icon: Archive,
+    icon: History,
     label: "Close history",
     to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close-history",
   },
@@ -1081,7 +1081,31 @@ function getOtherPaymentTotals(
 ) {
   return (summary.paymentTotals ?? [])
     .filter((paymentTotal) => paymentTotal.method.toLowerCase() !== "cash")
-    .sort((left, right) => right.amount - left.amount);
+    .sort(compareSummaryPaymentTotals);
+}
+
+function getPaymentMethodDisplayRank(method: string) {
+  switch (method.toLowerCase()) {
+    case "card":
+      return 0;
+    case "mobile_money":
+      return 1;
+    default:
+      return 2;
+  }
+}
+
+function compareSummaryPaymentTotals(
+  left: { amount: number; method: string },
+  right: { amount: number; method: string },
+) {
+  const rankDelta =
+    getPaymentMethodDisplayRank(left.method) -
+    getPaymentMethodDisplayRank(right.method);
+
+  if (rankDelta !== 0) return rankDelta;
+
+  return right.amount - left.amount;
 }
 
 function getPaymentTotalAmount(

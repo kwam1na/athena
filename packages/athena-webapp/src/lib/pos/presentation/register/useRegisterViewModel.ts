@@ -3084,9 +3084,9 @@ export function useRegisterViewModel(): RegisterViewModel {
     }
 
     const parsedOpeningFloat = parseDisplayAmountInput(drawerOpeningFloat);
-    if (parsedOpeningFloat === undefined || parsedOpeningFloat <= 0) {
+    if (parsedOpeningFloat === undefined) {
       setDrawerErrorMessage(
-        "Opening float required. Enter an amount greater than 0.",
+        "Opening float required. Enter 0 or more.",
       );
       return;
     }

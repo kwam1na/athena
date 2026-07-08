@@ -271,7 +271,7 @@ describe("createLocalSyncIngestionService", () => {
     expect(repository.createdPaymentAllocations).toHaveLength(2);
   });
 
-  it("returns inventory review work item mappings when a conflicted sale is retried", async () => {
+  it("returns inventory review work item mappings when a reviewed sale is retried", async () => {
     const repository = createFakeSyncRepository();
     const service = createLocalSyncIngestionService({
       repository,
@@ -322,7 +322,7 @@ describe("createLocalSyncIngestionService", () => {
       expect(result.data.accepted).toEqual([
         expect.objectContaining({
           localEventId: "event-sale-completed-1",
-          status: "conflicted",
+          status: "projected",
         }),
       ]);
       expect(result.data.mappings).toEqual(
@@ -338,14 +338,306 @@ describe("createLocalSyncIngestionService", () => {
           }),
         ]),
       );
-      expect(result.data.conflicts).toEqual([
-        expect.objectContaining({
-          conflictType: "inventory",
-          status: "needs_review",
-        }),
-      ]);
+      expect(result.data.conflicts).toEqual([]);
     }
     expect(repository.createdTransactions).toHaveLength(1);
+  });
+
+  it("projects eligible SKU inventory movement when another SKU needs review", async () => {
+    const repository = createFakeSyncRepository({
+      skus: [
+        {
+          _id: "sku-1",
+          storeId: "store-1",
+          productId: "product-1",
+          sku: "CAP-1",
+          price: 25,
+          quantityAvailable: 0,
+          inventoryCount: 0,
+          images: [],
+        },
+        {
+          _id: "sku-2",
+          storeId: "store-1",
+          productId: "product-2",
+          sku: "BRUSH-1",
+          price: 15,
+          quantityAvailable: 4,
+          inventoryCount: 4,
+          images: [],
+        },
+      ],
+    });
+    const service = createLocalSyncIngestionService({
+      repository,
+      projectionRepository: repository,
+      now: () => 100,
+    });
+    const sale = buildSaleCompletedEvent({
+      sequence: 1,
+      payload: {
+        ...buildSaleCompletedEvent({ sequence: 1 }).payload,
+        totals: {
+          subtotal: 55,
+          tax: 0,
+          total: 55,
+        },
+        items: [
+          {
+            localTransactionItemId: "local-blocked-line-1",
+            productId: "product-1" as never,
+            productSkuId: "sku-1" as never,
+            productName: "Wig Cap",
+            productSku: "CAP-1",
+            quantity: 1,
+            unitPrice: 25,
+          },
+          {
+            localTransactionItemId: "local-eligible-line-1",
+            productId: "product-2" as never,
+            productSkuId: "sku-2" as never,
+            productName: "Edge Brush",
+            productSku: "BRUSH-1",
+            quantity: 2,
+            unitPrice: 15,
+          },
+        ],
+        payments: [
+          {
+            localPaymentId: "local-payment-1",
+            method: "cash",
+            amount: 55,
+            timestamp: 21,
+          },
+        ],
+      },
+    });
+
+    const result = await service.ingestBatch(buildBatch({ events: [sale] }));
+
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") {
+      throw new Error("Expected ok result");
+    }
+    expect(result.data.accepted).toEqual([
+      expect.objectContaining({
+        localEventId: "event-sale-completed-1",
+        status: "projected",
+      }),
+    ]);
+    expect(result.data.conflicts).toEqual([]);
+    expect(repository.createdServiceWorkItems).toEqual([
+      expect.objectContaining({
+        type: "synced_sale_inventory_review",
+        metadata: expect.objectContaining({
+          primaryProductSkuId: "sku-1",
+          skippedMutationItems: [
+            expect.objectContaining({
+              productSkuId: "sku-1",
+              reason: "stock_shortfall",
+              requestedQuantity: 1,
+            }),
+          ],
+        }),
+      }),
+    ]);
+    expect(repository.recordedSaleInventoryMovements).toEqual([
+      expect.objectContaining({
+        productSkuId: "sku-2",
+        quantity: 2,
+        transactionNumber: "LR-001",
+      }),
+    ]);
+    expect(repository.productPatches).toEqual([
+      {
+        productSkuId: "sku-2",
+        patch: {
+          inventoryCount: 2,
+          quantityAvailable: 2,
+        },
+      },
+    ]);
+  });
+
+  it("backfills eligible SKU movement when an already-projected reviewed sale retries", async () => {
+    const repository = createFakeSyncRepository({
+      skus: [
+        {
+          _id: "sku-1",
+          storeId: "store-1",
+          productId: "product-1",
+          sku: "CAP-1",
+          price: 25,
+          quantityAvailable: 0,
+          inventoryCount: 0,
+          images: [],
+        },
+        {
+          _id: "sku-2",
+          storeId: "store-1",
+          productId: "product-2",
+          sku: "BRUSH-1",
+          price: 15,
+          quantityAvailable: 4,
+          inventoryCount: 4,
+          images: [],
+        },
+      ],
+    });
+    const service = createLocalSyncIngestionService({
+      repository,
+      projectionRepository: repository,
+      now: () => 200,
+    });
+    const sale = buildSaleCompletedEvent({
+      sequence: 1,
+      payload: {
+        ...buildSaleCompletedEvent({ sequence: 1 }).payload,
+        totals: {
+          subtotal: 55,
+          tax: 0,
+          total: 55,
+        },
+        items: [
+          {
+            localTransactionItemId: "local-blocked-line-1",
+            productId: "product-1" as never,
+            productSkuId: "sku-1" as never,
+            productName: "Wig Cap",
+            productSku: "CAP-1",
+            quantity: 1,
+            unitPrice: 25,
+          },
+          {
+            localTransactionItemId: "local-eligible-line-1",
+            productId: "product-2" as never,
+            productSkuId: "sku-2" as never,
+            productName: "Edge Brush",
+            productSku: "BRUSH-1",
+            quantity: 2,
+            unitPrice: 15,
+          },
+        ],
+        payments: [
+          {
+            localPaymentId: "local-payment-1",
+            method: "cash",
+            amount: 55,
+            timestamp: 21,
+          },
+        ],
+      },
+    });
+    const salePayload = sale.payload as PosLocalSalePayload;
+    repository.events.push({
+      _id: "sync-event-existing",
+      acceptedAt: 100,
+      eventType: "sale_completed",
+      localEventId: sale.localEventId,
+      localRegisterSessionId: sale.localRegisterSessionId ?? "",
+      occurredAt: sale.occurredAt,
+      payload: {
+        ...salePayload,
+        receiptNumber: salePayload.localReceiptNumber,
+      },
+      projectedAt: 100,
+      sequence: sale.sequence,
+      staffProfileId: sale.staffProfileId as never,
+      status: "projected",
+      storeId: "store-1" as never,
+      submittedAt: 100,
+      syncScope: "pos",
+      terminalId: "terminal-1" as never,
+    });
+    repository.mappings.push({
+      _id: "mapping-transaction-existing",
+      cloudId: "transaction-existing" as never,
+      cloudTable: "posTransaction",
+      createdAt: 100,
+      localEventId: sale.localEventId,
+      localId: salePayload.localTransactionId,
+      localIdKind: "transaction",
+      localRegisterSessionId: sale.localRegisterSessionId ?? "",
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+    });
+    repository.conflicts.push({
+      _id: "conflict-reviewed-inventory",
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      localRegisterSessionId: sale.localRegisterSessionId ?? "",
+      localEventId: sale.localEventId,
+      sequence: sale.sequence,
+      conflictType: "inventory",
+      status: "resolved",
+      summary: "Inventory needs manager review for a synced offline sale.",
+      details: {
+        localTransactionId: salePayload.localTransactionId,
+        productSkuId: "sku-1",
+        quantityAvailable: 0,
+        requestedQuantity: 1,
+      },
+      createdAt: 100,
+      resolvedAt: 150,
+    });
+
+    const retry = await service.ingestBatch(buildBatch({ events: [sale] }));
+
+    expect(retry.kind).toBe("ok");
+    if (retry.kind !== "ok") {
+      throw new Error("Expected ok result");
+    }
+    expect(retry.data.accepted).toEqual([
+      expect.objectContaining({
+        localEventId: "event-sale-completed-1",
+        status: "projected",
+      }),
+    ]);
+    expect(repository.recordedSaleInventoryMovements).toEqual([
+      expect.objectContaining({
+        posTransactionId: "transaction-existing",
+        productSkuId: "sku-2",
+        quantity: 2,
+      }),
+    ]);
+    expect(repository.productPatches).toEqual([
+      {
+        productSkuId: "sku-2",
+        patch: {
+          inventoryCount: 2,
+          quantityAvailable: 2,
+        },
+      },
+    ]);
+
+    const secondRetry = await service.ingestBatch(buildBatch({ events: [sale] }));
+
+    expect(secondRetry.kind).toBe("ok");
+    if (secondRetry.kind !== "ok") {
+      throw new Error("Expected ok result");
+    }
+    expect(secondRetry.data.accepted).toEqual([
+      expect.objectContaining({
+        localEventId: "event-sale-completed-1",
+        status: "projected",
+      }),
+    ]);
+    expect(repository.recordedSaleInventoryMovements).toEqual([
+      expect.objectContaining({
+        posTransactionId: "transaction-existing",
+        productSkuId: "sku-2",
+        quantity: 2,
+      }),
+    ]);
+    expect(repository.productPatches).toEqual([
+      {
+        productSkuId: "sku-2",
+        patch: {
+          inventoryCount: 2,
+          quantityAvailable: 2,
+        },
+      },
+    ]);
   });
 
   it("rejects and preserves a projected event when a duplicate local event id has changed data", async () => {
@@ -4244,6 +4536,16 @@ function createFakeSyncRepository(
       storeId: string;
       terminalId: string;
     };
+    skus: Array<{
+      _id: string;
+      storeId: string;
+      productId: string;
+      sku: string;
+      price: number;
+      quantityAvailable: number;
+      inventoryCount: number;
+      images: string[];
+    }>;
     consumedHoldQuantities: Map<string, number>;
     existingRegisterSession: {
       _id: string;
@@ -4267,11 +4569,14 @@ function createFakeSyncRepository(
   createdExpenseSessionItems: unknown[];
   createdExpenseTransactions: unknown[];
   createdExpenseTransactionItems: unknown[];
+  createdServiceWorkItems: unknown[];
   createdRegisterSessions: unknown[];
   createdTransactions: unknown[];
   events: LocalSyncEventRecord[];
   mappings: LocalSyncMappingRecord[];
+  productPatches: unknown[];
   registerSessionPatches: Array<{ registerSessionId: string; patch: unknown }>;
+  recordedSaleInventoryMovements: unknown[];
   roleChecks: Array<{
     allowedRoles: string[];
     staffProfileId: string;
@@ -4295,6 +4600,9 @@ function createFakeSyncRepository(
   const createdExpenseSessionItems: unknown[] = [];
   const createdExpenseTransactions: unknown[] = [];
   const createdExpenseTransactionItems: unknown[] = [];
+  const createdServiceWorkItems: unknown[] = [];
+  const productPatches: unknown[] = [];
+  const recordedSaleInventoryMovements: unknown[] = [];
   const registerSessionPatches: Array<{
     registerSessionId: string;
     patch: unknown;
@@ -4322,6 +4630,18 @@ function createFakeSyncRepository(
     storeId: "store-1",
     terminalId: "terminal-1",
   };
+  const skus = overrides.skus ?? [
+    {
+      _id: "sku-1",
+      storeId: "store-1",
+      productId: "product-1",
+      sku: "CAP-1",
+      price: 25,
+      quantityAvailable: 10,
+      inventoryCount: 10,
+      images: [],
+    },
+  ];
 
   return {
     conflicts,
@@ -4331,11 +4651,14 @@ function createFakeSyncRepository(
     createdExpenseSessionItems,
     createdExpenseTransactions,
     createdExpenseTransactionItems,
+    createdServiceWorkItems,
     createdRegisterSessions,
     createdTransactions,
     events,
     mappings,
+    productPatches,
     registerSessionPatches,
+    recordedSaleInventoryMovements,
     roleChecks,
     async getTerminal(terminalId) {
       return terminal && terminal._id === terminalId
@@ -4393,26 +4716,16 @@ function createFakeSyncRepository(
       } as never;
     },
     async getProduct(productId) {
-      return productId === "product-1"
+      const sku = skus.find((candidate) => candidate.productId === productId);
+      return sku
         ? ({
-            _id: "product-1",
-            storeId: "store-1",
+            _id: productId,
+            storeId: sku.storeId,
           } as never)
         : null;
     },
     async getProductSku(productSkuId) {
-      return productSkuId === "sku-1"
-        ? ({
-            _id: "sku-1",
-            storeId: "store-1",
-            productId: "product-1",
-            sku: "CAP-1",
-            price: 25,
-            quantityAvailable: 10,
-            inventoryCount: 10,
-            images: [],
-          } as never)
-        : null;
+      return (skus.find((candidate) => candidate._id === productSkuId) as never) ?? null;
     },
     async getPendingCheckoutItem(pendingCheckoutItemId) {
       const created = createdPendingCheckoutItems.find(
@@ -4774,8 +5087,10 @@ function createFakeSyncRepository(
     async recordPendingCheckoutItemSaleEvidence(input) {
       return this.getPendingCheckoutItem(input.pendingCheckoutItemId);
     },
-    async createServiceWorkItem() {
-      return `service-work-item-${nextId++}` as never;
+    async createServiceWorkItem(input) {
+      const id = `service-work-item-${nextId++}`;
+      createdServiceWorkItems.push({ _id: id, ...input });
+      return id as never;
     },
     async createServiceCase() {
       return `service-case-${nextId++}` as never;
@@ -4834,8 +5149,27 @@ function createFakeSyncRepository(
     async createTransactionServiceLine() {
       return `transaction-service-line-${nextId++}` as never;
     },
-    async patchProductSku() {},
-    async recordSaleInventoryMovement() {
+    async patchProductSku(productSkuId, patch) {
+      productPatches.push({ productSkuId, patch });
+    },
+    async recordSaleInventoryMovement(input) {
+      if (
+        recordedSaleInventoryMovements.some(
+          (movement) => {
+            const recordedMovement = movement as {
+              posTransactionId?: unknown;
+              productSkuId?: unknown;
+            };
+            return (
+              recordedMovement.posTransactionId === input.posTransactionId &&
+              recordedMovement.productSkuId === input.productSkuId
+            );
+          },
+        )
+      ) {
+        return "existing";
+      }
+      recordedSaleInventoryMovements.push(input);
       return "inserted";
     },
     async createPaymentAllocation(input) {

@@ -49,7 +49,7 @@ export function RegisterCheckoutPanel({
         storeUrlSlug: current.storeUrlSlug!,
         transactionId: completedTransactionId,
       }),
-      search: { o: getOrigin() },
+      search: { intent: "void", o: getOrigin() },
     });
   }, [completedTransactionId, navigate]);
 

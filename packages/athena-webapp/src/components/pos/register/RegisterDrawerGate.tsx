@@ -297,6 +297,7 @@ export function RegisterDrawerGate({
               disabled={Boolean(drawerGate.isCorrectingOpeningFloat)}
               isLoading={Boolean(drawerGate.isCorrectingOpeningFloat)}
               type="submit"
+              variant="workflow"
             >
               Save correction
             </LoadingButton>

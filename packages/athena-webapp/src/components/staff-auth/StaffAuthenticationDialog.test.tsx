@@ -56,6 +56,9 @@ describe("StaffAuthenticationDialog", () => {
       screen.getByRole("heading", { name: "Confirm staff credentials" }),
     ).toBeInTheDocument();
     expect(screen.getByText("Authenticate to continue.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Continue" })).toHaveClass(
+      "bg-action-workflow",
+    );
   });
 
   it("renders embedded presentation without requiring a Dialog provider", () => {

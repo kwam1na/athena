@@ -162,20 +162,7 @@ export function ProductCard({
           </div>
         )}
 
-        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          {/* Availability */}
-          <p className="text-xs text-muted-foreground">
-            {product.availabilityMessage ? (
-              product.availabilityMessage
-            ) : usesPendingCount ? (
-              "Count pending"
-            ) : (
-              <>
-                <b>{product.quantityAvailable ?? 0}</b> available
-              </>
-            )}
-          </p>
-
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-end">
           <div
             className="flex items-center rounded-md border border-border bg-background p-1.5 shadow-sm"
             onClick={(event) => event.stopPropagation()}

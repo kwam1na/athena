@@ -535,6 +535,7 @@ type ReopenedCloseoutSubmitIntent = {
 type OpeningFloatCorrectionIntent = {
   correctedOpeningFloat: number;
   reason: string;
+  registerNumber?: string | null;
   registerSessionId: string;
 };
 
@@ -1112,6 +1113,14 @@ function formatRegisterHeaderName(registerNumber?: string | null) {
   }
 
   return `Register ${registerName}`;
+}
+
+function formatRegisterCloseoutSubjectLabel(registerNumber?: string | null) {
+  return `${formatRegisterHeaderName(registerNumber)} closeout correction`;
+}
+
+function formatRegisterOpeningFloatSubjectLabel(registerNumber?: string | null) {
+  return `${formatRegisterHeaderName(registerNumber)} opening float correction`;
 }
 
 function getVarianceTone(variance?: number) {
@@ -3166,7 +3175,9 @@ export function RegisterSessionViewContent({
       resolutionModes: [{ kind: "inline_manager_proof" }],
       subject: {
         id: registerSession._id,
-        label: registerSession.registerNumber ?? undefined,
+        label: formatRegisterCloseoutSubjectLabel(
+          registerSession.registerNumber,
+        ),
         type: "register_session",
       },
     };
@@ -3208,7 +3219,9 @@ export function RegisterSessionViewContent({
         resolutionModes: [{ kind: "inline_manager_proof" }],
         subject: {
           id: registerSession._id,
-          label: registerSession.registerNumber ?? undefined,
+          label: formatRegisterCloseoutSubjectLabel(
+            registerSession.registerNumber,
+          ),
           type: "register_session",
         },
       };
@@ -3392,6 +3405,7 @@ export function RegisterSessionViewContent({
     const intent = {
       correctedOpeningFloat: parsedOpeningFloat,
       reason: trimmedReason,
+      registerNumber: registerSession.registerNumber,
       registerSessionId: registerSession._id,
     };
 
@@ -3570,7 +3584,15 @@ export function RegisterSessionViewContent({
 
       if (isApprovalRequiredResult(commandResult)) {
         setOpeningFloatCorrectionInfo("");
-        setPendingOpeningFloatApproval(commandResult.approval);
+        setPendingOpeningFloatApproval({
+          ...commandResult.approval,
+          subject: {
+            ...commandResult.approval.subject,
+            label: formatRegisterOpeningFloatSubjectLabel(
+              intent.registerNumber,
+            ),
+          },
+        });
         return;
       }
 
@@ -5005,8 +5027,8 @@ export function RegisterSessionViewContent({
                       className={
                         isOpeningFloatCorrectionOpen ||
                         openingFloatCorrectionSuccess
-                          ? "order-3 space-y-4 rounded-lg border border-border bg-surface-raised p-layout-md"
-                          : "order-3 space-y-3 rounded-lg border border-border bg-muted/20 px-layout-md py-3"
+                          ? "order-1 space-y-4 rounded-lg border border-border bg-surface-raised p-layout-md"
+                          : "order-1 space-y-3 rounded-lg border border-border bg-muted/20 px-layout-md py-3"
                       }
                     >
                       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -5075,7 +5097,7 @@ export function RegisterSessionViewContent({
 
                           <label className="block space-y-2">
                             <span className="text-sm font-medium text-foreground">
-                              Corrected amount
+                              Corrected amount ({formattedCurrency})
                             </span>
                             <Input
                               aria-label="Corrected opening float"
@@ -5135,6 +5157,7 @@ export function RegisterSessionViewContent({
                                 void handleSubmitOpeningFloatCorrection()
                               }
                               type="button"
+                              variant="workflow"
                             >
                               Submit
                             </LoadingButton>
