@@ -858,6 +858,40 @@ describe("stock ops adjustments", () => {
     });
   });
 
+  it("excludes archived products from store-level inventory unit summaries", async () => {
+    const { ctx, tables } = createInventorySnapshotQueryCtx();
+
+    tables.product.set("archived-product", {
+      _id: "archived-product",
+      availability: "archived",
+      categoryId: "category-1",
+      name: "Archived Wig",
+    });
+    tables.productSku.set("archived-sku", {
+      _id: "archived-sku",
+      images: [],
+      inventoryCount: 12,
+      productId: "archived-product",
+      quantityAvailable: 2,
+      sku: "ARCHIVED-22",
+      storeId: "store-1",
+    });
+
+    const summary = await getInventoryUnitSummaryWithCtx(ctx, {
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(summary).toEqual({
+      availableUnits: 8,
+      hasMoreSkus: false,
+      onHandUnits: 10,
+      reservedUnits: 2,
+      skuCount: 1,
+      unavailableSkuCount: 1,
+      unavailableUnits: 2,
+    });
+  });
+
   it("hydrates generic SKU search candidates through stock-owned snapshot rows", async () => {
     const { ctx, tables } = createInventorySnapshotQueryCtx();
 
@@ -1050,6 +1084,45 @@ describe("stock ops adjustments", () => {
       saleEvidence: {
         saleCount: 0,
         totalQuantitySold: 0,
+      },
+      status: "active",
+      storeId: "store-1",
+    });
+
+    const rows = await listInventorySnapshotWithCtx(ctx, {
+      now: 1_000,
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).not.toHaveProperty("stockAdjustmentBlockedMessage");
+    expect(rows[0]).not.toHaveProperty("stockAdjustmentBlockedReason");
+  });
+
+  it("does not block sold provisional rows linked to onboarded trusted SKUs", async () => {
+    const { ctx, tables } = createInventorySnapshotQueryCtx();
+
+    tables.category.set("category-1", {
+      _id: "category-1",
+      name: "Hair Accessories",
+      slug: "hair-accessories",
+      storeId: "store-1",
+    });
+    tables.product.set("product-1", {
+      _id: "product-1",
+      availability: "live",
+      categoryId: "category-1",
+      name: "Tweezers",
+      storeId: "store-1",
+      subcategoryId: "subcategory-1",
+    });
+    tables.inventoryImportProvisionalSku.set("provisional-1", {
+      _id: "provisional-1",
+      productId: "product-1",
+      productSkuId: "sku-1",
+      saleEvidence: {
+        saleCount: 1,
+        totalQuantitySold: 1,
       },
       status: "active",
       storeId: "store-1",
@@ -1859,6 +1932,49 @@ describe("stock ops adjustments", () => {
       expect.objectContaining({
         status: "applied",
         submissionKey: "trusted-zero-sale-provisional-adjustment",
+      }),
+    ]);
+  });
+
+  it("allows stock adjustments for sold provisional rows linked to onboarded trusted SKUs", async () => {
+    const { ctx, tables } = createSubmissionMutationCtx({
+      authUserId: "auth-user-1",
+      membershipRole: "full_admin",
+    });
+
+    tables.inventoryImportProvisionalSku.set("provisional-1", {
+      _id: "provisional-1",
+      productId: "product-1",
+      productSkuId: "sku-1",
+      saleEvidence: {
+        saleCount: 1,
+        totalQuantitySold: 1,
+      },
+      status: "active",
+      storeId: "store-1",
+    });
+
+    await submitStockAdjustmentBatchWithCtx(ctx, {
+      adjustmentType: "manual",
+      lineItems: [
+        {
+          productSkuId: "sku-1" as Id<"productSku">,
+          quantityDelta: 1,
+        },
+      ],
+      reasonCode: "correction",
+      storeId: "store-1" as Id<"store">,
+      submissionKey: "trusted-sold-provisional-adjustment",
+    });
+
+    expect(tables.productSku.get("sku-1")).toMatchObject({
+      inventoryCount: 9,
+      quantityAvailable: 7,
+    });
+    expect(Array.from(tables.stockAdjustmentBatch.values())).toEqual([
+      expect.objectContaining({
+        status: "applied",
+        submissionKey: "trusted-sold-provisional-adjustment",
       }),
     ]);
   });

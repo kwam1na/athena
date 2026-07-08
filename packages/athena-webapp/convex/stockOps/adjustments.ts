@@ -209,7 +209,6 @@ async function shouldBlockStockAdjustmentForProvisionalImportRow(
   },
 ) {
   if (args.row.finalizedAt !== undefined) return false;
-  if ((args.row.saleEvidence?.totalQuantitySold ?? 0) > 0) return true;
 
   const isTrustedProduct = await isOnboardedTrustedProductForStockAdjustment(
     ctx,
@@ -219,7 +218,9 @@ async function shouldBlockStockAdjustmentForProvisionalImportRow(
       storeId: args.storeId,
     },
   );
-  return !isTrustedProduct;
+  if (isTrustedProduct) return false;
+
+  return true;
 }
 
 async function listProductSkusForStockAdjustmentScopeWithCtx(
@@ -945,8 +946,27 @@ export async function getInventoryUnitSummaryWithCtx(
     .query("productSku")
     .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
     .take(INVENTORY_SUMMARY_SKU_LIMIT);
+  const productIds = Array.from(
+    new Set(productSkus.map((productSku) => productSku.productId)),
+  );
+  const products = await Promise.all(
+    productIds.map((productId) => ctx.db.get("product", productId)),
+  );
+  const productMap = new Map<
+    Id<"product">,
+    NonNullable<(typeof products)[number]>
+  >();
+  products.forEach((product) => {
+    if (product) {
+      productMap.set(product._id, product);
+    }
+  });
+  const activeProductSkus = productSkus.filter((productSku) => {
+    const product = productMap.get(productSku.productId);
+    return product?.availability !== "archived";
+  });
 
-  return productSkus.reduce(
+  return activeProductSkus.reduce(
     (summary, productSku) => {
       const onHandUnits = Math.max(0, productSku.inventoryCount);
       const availableUnits = Math.max(0, productSku.quantityAvailable);

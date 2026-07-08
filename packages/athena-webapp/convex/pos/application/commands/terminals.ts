@@ -98,6 +98,7 @@ export async function registerTerminal(
     fingerprintHash: string;
     syncSecretHash: string;
     displayName: string;
+    heartbeatEnabled?: boolean;
     registerNumber: string;
     loginMode?: PosTerminalLoginMode;
     transactionCapability?: PosTerminalTransactionCapability;
@@ -144,6 +145,7 @@ export async function registerTerminal(
 
       await patchTerminalRecord(ctx, existing._id, {
         displayName: args.displayName,
+        heartbeatEnabled: args.heartbeatEnabled ?? true,
         syncSecretHash: args.syncSecretHash,
         registeredByUserId: args.registeredByUserId,
         browserInfo: args.browserInfo,
@@ -171,6 +173,7 @@ export async function registerTerminal(
       fingerprintHash: args.fingerprintHash,
       syncSecretHash: args.syncSecretHash,
       displayName: args.displayName,
+      heartbeatEnabled: args.heartbeatEnabled ?? true,
       registerNumber: nextRegisterNumber,
       registeredByUserId: args.registeredByUserId,
       browserInfo: args.browserInfo,
@@ -199,6 +202,7 @@ export async function updateTerminal(
   args: {
     terminalId: Id<"posTerminal">;
     displayName?: string;
+    heartbeatEnabled?: boolean;
     status?: "active" | "revoked" | "lost";
     browserInfo?: Doc<"posTerminal">["browserInfo"];
   },
@@ -211,6 +215,9 @@ export async function updateTerminal(
   const updates: Partial<Doc<"posTerminal">> = {};
   if (args.displayName !== undefined) {
     updates.displayName = args.displayName;
+  }
+  if (args.heartbeatEnabled !== undefined) {
+    updates.heartbeatEnabled = args.heartbeatEnabled;
   }
   if (args.status !== undefined) {
     if (terminal.status !== "active" && args.status === "active") {

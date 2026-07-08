@@ -98,6 +98,7 @@ const terminalReturnValidator = v.object({
   storeId: v.id("store"),
   fingerprintHash: v.string(),
   displayName: v.string(),
+  heartbeatEnabled: v.optional(v.boolean()),
   registerNumber: v.optional(v.string()),
   loginMode: v.optional(loginModeValidator),
   transactionCapability: v.optional(transactionCapabilityValidator),
@@ -114,6 +115,7 @@ const terminalProvisioningReturnValidator = v.object({
   fingerprintHash: v.string(),
   syncSecretHash: v.optional(v.string()),
   displayName: v.string(),
+  heartbeatEnabled: v.optional(v.boolean()),
   registerNumber: v.optional(v.string()),
   loginMode: v.optional(loginModeValidator),
   transactionCapability: v.optional(transactionCapabilityValidator),
@@ -486,6 +488,7 @@ const terminalAppUpdatePreviewReturnValidator = v.object({
 const terminalRegistrationSummaryReturnValidator = v.object({
   _id: v.id("posTerminal"),
   displayName: v.string(),
+  heartbeatEnabled: v.optional(v.boolean()),
   registerNumber: v.optional(v.string()),
   loginMode: v.optional(loginModeValidator),
   transactionCapability: v.optional(transactionCapabilityValidator),
@@ -905,6 +908,34 @@ export const previewTerminalRecovery = query({
 export const listTerminalHealth = listTerminalHealthSummaries;
 export const getTerminalHealthDetail = getTerminalHealthSummary;
 
+export const getTerminalRuntimeConfig = query({
+  args: {
+    storeId: v.id("store"),
+    syncSecretHash: v.string(),
+    terminalId: v.id("posTerminal"),
+  },
+  returns: v.union(
+    v.object({
+      heartbeatEnabled: v.boolean(),
+    }),
+    v.null(),
+  ),
+  handler: async (ctx, args) => {
+    const terminal = await requireActiveTerminalSyncSecret(ctx, {
+      storeId: args.storeId,
+      syncSecretHash: args.syncSecretHash,
+      terminalId: args.terminalId,
+    });
+    if (!terminal) {
+      return null;
+    }
+
+    return {
+      heartbeatEnabled: terminal.heartbeatEnabled !== false,
+    };
+  },
+});
+
 export const submitTerminalRuntimeStatus = mutation({
   args: {
     storeId: v.id("store"),
@@ -1047,6 +1078,7 @@ export const registerTerminal = mutation({
     fingerprintHash: v.string(),
     syncSecretHash: v.string(),
     displayName: v.string(),
+    heartbeatEnabled: v.optional(v.boolean()),
     registerNumber: v.string(),
     loginMode: v.optional(loginModeValidator),
     transactionCapability: v.optional(transactionCapabilityValidator),
@@ -1089,6 +1121,7 @@ export const updateTerminal = mutation({
   args: {
     terminalId: v.id("posTerminal"),
     displayName: v.optional(v.string()),
+    heartbeatEnabled: v.optional(v.boolean()),
     status: v.optional(statusValidator),
     browserInfo: v.optional(browserInfoValidator),
   },

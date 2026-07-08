@@ -377,6 +377,9 @@ export async function buildPosOperatorSnapshot(
     args.historyStart ?? currentDayStart - (historyDays - 1) * DAY_MS;
   const historyEnd = args.historyEnd ?? currentDayStart + DAY_MS - 1;
   const queryStart = args.comparisonStart ?? historyStart;
+  const appliesHistoryLimit =
+    args.historyEnd === undefined ||
+    args.historyBucketMode !== "transaction_dates";
   const loadedTransactions =
     args.historyEnd === undefined
       ? await listCompletedTransactionsSince(ctx, {
@@ -392,7 +395,12 @@ export async function buildPosOperatorSnapshot(
           })
         )
           .sort((first, second) => second.completedAt - first.completedAt)
-          .slice(0, POS_OPERATOR_HISTORY_LIMIT);
+          .slice(
+            0,
+            args.historyBucketMode === "transaction_dates"
+              ? undefined
+              : POS_OPERATOR_HISTORY_LIMIT,
+          );
   const transactions = args.comparisonStart
     ? loadedTransactions.filter(
         (transaction) =>
@@ -568,7 +576,8 @@ export async function buildPosOperatorSnapshot(
     },
     historyDays:
       args.historyBucketMode === "transaction_dates" ? days.length : historyDays,
-    isLimited: loadedTransactions.length >= POS_OPERATOR_HISTORY_LIMIT,
+    isLimited:
+      appliesHistoryLimit && loadedTransactions.length >= POS_OPERATOR_HISTORY_LIMIT,
     paymentMix,
     topItems,
     trend: days,

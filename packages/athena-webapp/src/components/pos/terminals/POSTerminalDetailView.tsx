@@ -7,6 +7,7 @@ import {
   ArrowRight,
   CheckCircle2,
   Clock3,
+  Heart,
   MonitorUp,
   Send,
   ShieldCheck,
@@ -26,6 +27,7 @@ import { NoPermissionView } from "@/components/states/no-permission/NoPermission
 import { ProtectedAdminSignInView } from "@/components/states/signed-out/ProtectedAdminSignInView";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import {
   Tooltip,
   TooltipContent,
@@ -168,6 +170,10 @@ type POSTerminalDetailViewContentProps = {
     reason: string;
     sessionId: Id<"remoteAssistSession"> | string;
   }) => Promise<RemoteAssistEndResult>;
+  onSetTerminalHeartbeat?: (args: {
+    heartbeatEnabled: boolean;
+    terminalId: Id<"posTerminal"> | string;
+  }) => Promise<void>;
   orgUrlSlug?: string;
   queryUnavailable?: boolean;
   remoteAssistClient?: RemoteAssistClientSummary | null;
@@ -609,10 +615,12 @@ function RailSection({
 function TerminalContextRail({
   classification,
   detail,
+  onSetTerminalHeartbeat,
   runtimeStatus,
 }: {
   classification: ReturnType<typeof classifyTerminalHealth>;
   detail: TerminalHealthDetail;
+  onSetTerminalHeartbeat?: POSTerminalDetailViewContentProps["onSetTerminalHeartbeat"];
   runtimeStatus: TerminalRuntimeStatus | null;
 }) {
   return (
@@ -672,11 +680,76 @@ function TerminalContextRail({
                   : "Not reported"
             }
           />
+          <TerminalHeartbeatRailControl
+            detail={detail}
+            onSetTerminalHeartbeat={onSetTerminalHeartbeat}
+          />
           <RuntimeReportGroup runtimeStatus={runtimeStatus} />
           <SnapshotReadinessGroup runtimeStatus={runtimeStatus} />
         </RailSection>
       </div>
     </aside>
+  );
+}
+
+function TerminalHeartbeatRailControl({
+  detail,
+  onSetTerminalHeartbeat,
+}: {
+  detail: TerminalHealthDetail;
+  onSetTerminalHeartbeat?: POSTerminalDetailViewContentProps["onSetTerminalHeartbeat"];
+}) {
+  const [isSaving, setIsSaving] = useState(false);
+  const heartbeatEnabled = detail.terminal.heartbeatEnabled !== false;
+  const canChange = Boolean(onSetTerminalHeartbeat);
+
+  async function handleHeartbeatChange(nextHeartbeatEnabled: boolean) {
+    if (!onSetTerminalHeartbeat || nextHeartbeatEnabled === heartbeatEnabled) {
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      await onSetTerminalHeartbeat({
+        heartbeatEnabled: nextHeartbeatEnabled,
+        terminalId: detail.terminal._id,
+      });
+      toast.success(
+        nextHeartbeatEnabled
+          ? "Terminal heartbeat resumed."
+          : "Terminal heartbeat paused.",
+      );
+    } catch {
+      toast.error("Terminal heartbeat setting could not be updated.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  return (
+    <div className="rounded-md border border-border bg-background px-layout-sm py-layout-sm">
+      <div className="flex items-center justify-between gap-layout-sm">
+        <div className="flex min-w-0 items-center gap-layout-xs">
+          <Heart aria-hidden="true" className="h-3.5 w-3.5 text-muted-foreground" />
+          <div className="min-w-0">
+            <p className="text-xs font-medium uppercase text-muted-foreground">
+              Heartbeat
+            </p>
+            <p className="truncate text-sm text-foreground">
+              {heartbeatEnabled ? "Sending" : "Paused"}
+            </p>
+          </div>
+        </div>
+        <Switch
+          aria-label="Send terminal heartbeat"
+          checked={heartbeatEnabled}
+          disabled={!canChange || isSaving}
+          onCheckedChange={(checked) => {
+            void handleHeartbeatChange(checked);
+          }}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -2969,6 +3042,7 @@ export function POSTerminalDetailViewContent({
   onIssueTerminalRecoveryCommand,
   onResolveTerminalCloudRepair,
   onResolveRegisterSessionReview,
+  onSetTerminalHeartbeat,
   onStartRemoteAssist,
   orgUrlSlug,
   queryUnavailable = false,
@@ -3026,6 +3100,7 @@ export function POSTerminalDetailViewContent({
             <TerminalContextRail
               classification={classification}
               detail={detail}
+              onSetTerminalHeartbeat={onSetTerminalHeartbeat}
               runtimeStatus={runtimeStatus}
             />
 
@@ -3131,6 +3206,7 @@ export function POSTerminalDetailView() {
   const issueTerminalRecoveryCommand = useMutation(
     api.pos.public.terminals.issueTerminalRecoveryCommand,
   );
+  const updateTerminal = useMutation(api.pos.public.terminals.updateTerminal);
   const startRemoteAssistSession = useMutation(remoteAssistApi.startSession);
   const endRemoteAssistSession = useMutation(remoteAssistApi.endSupportSession);
 
@@ -3246,6 +3322,19 @@ export function POSTerminalDetailView() {
     }) as Promise<RemoteAssistEndResult>;
   }
 
+  async function onSetTerminalHeartbeat({
+    heartbeatEnabled,
+    terminalId,
+  }: {
+    heartbeatEnabled: boolean;
+    terminalId: Id<"posTerminal"> | string;
+  }): Promise<void> {
+    await updateTerminal({
+      heartbeatEnabled,
+      terminalId: terminalId as Id<"posTerminal">,
+    });
+  }
+
   if (isLoadingAccess) {
     return null;
   }
@@ -3286,6 +3375,9 @@ export function POSTerminalDetailView() {
         hasFullAdminAccess ? onResolveTerminalCloudRepair : undefined
       }
       onResolveRegisterSessionReview={onResolveRegisterSessionReview}
+      onSetTerminalHeartbeat={
+        hasFullAdminAccess ? onSetTerminalHeartbeat : undefined
+      }
       onEndRemoteAssist={onEndRemoteAssist}
       onStartRemoteAssist={onStartRemoteAssist}
       orgUrlSlug={params.orgUrlSlug}

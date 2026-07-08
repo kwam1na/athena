@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   ingestLocalEvents: vi.fn(),
   ingestRegisterSessionActivity: vi.fn(),
   listTerminalRecoveryCommands: vi.fn(),
+  getTerminalRuntimeConfig: vi.fn(),
   reportTerminalRuntimeStatus: vi.fn(),
   refreshTerminalStaffAuthority: vi.fn(),
 }));
@@ -33,6 +34,8 @@ vi.mock("convex/react", () => ({
   useQuery: (query: string, args: unknown) =>
     query === "listTerminalRecoveryCommands"
       ? mocks.listTerminalRecoveryCommands(args)
+      : query === "getTerminalRuntimeConfig"
+        ? mocks.getTerminalRuntimeConfig(args)
       : undefined,
 }));
 
@@ -48,6 +51,7 @@ vi.mock("~/convex/_generated/api", () => ({
           acknowledgeTerminalRecoveryCommand:
             "acknowledgeTerminalRecoveryCommand",
           claimTerminalRecoveryCommand: "claimTerminalRecoveryCommand",
+          getTerminalRuntimeConfig: "getTerminalRuntimeConfig",
           listTerminalRecoveryCommands: "listTerminalRecoveryCommands",
           reportTerminalRuntimeStatus: "reportTerminalRuntimeStatus",
         },
@@ -122,6 +126,9 @@ describe("usePosLocalSyncRuntimeStatus", () => {
       },
     });
     mocks.listTerminalRecoveryCommands.mockReturnValue(undefined);
+    mocks.getTerminalRuntimeConfig.mockReturnValue({
+      heartbeatEnabled: true,
+    });
     mocks.claimTerminalRecoveryCommand.mockResolvedValue({
       kind: "user_error",
       error: {
@@ -1769,6 +1776,9 @@ describe("usePosLocalSyncRuntimeStatus", () => {
       }),
     );
 
+    await waitFor(() =>
+      expect(mocks.reportTerminalRuntimeStatus).toHaveBeenCalled(),
+    );
     await waitFor(() =>
       expect(result.current?.debug).toEqual(
         expect.objectContaining({
@@ -4470,6 +4480,49 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     stopHeartbeat();
 
     expect(clearIntervalFn).toHaveBeenCalledWith("timer-1");
+  });
+
+  it("does not publish runtime check-ins when terminal heartbeat is disabled", async () => {
+    mocks.getTerminalRuntimeConfig.mockReturnValue({
+      heartbeatEnabled: false,
+    });
+    const store = {
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-1",
+          displayName: "Front",
+          provisionedAt: 1,
+          schemaVersion: 1,
+          syncSecretHash: "sync-secret-1",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+    };
+
+    const { result } = renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        mode: "status-only",
+        storeFactory: () => store as never,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(result.current?.debug).toEqual(
+        expect.objectContaining({
+          checkInPublishReason: "disabled",
+          checkInPublishStatus: "disabled",
+        }),
+      ),
+    );
+    expect(mocks.reportTerminalRuntimeStatus).not.toHaveBeenCalled();
   });
 
   it("queues changed runtime check-ins while a previous publish is in flight", async () => {

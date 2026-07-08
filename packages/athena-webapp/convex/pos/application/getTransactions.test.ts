@@ -1227,6 +1227,44 @@ describe("getTodaySummary", () => {
     ]);
   });
 
+  it("keeps every transaction-date bucket for all-time POS pulse history", async () => {
+    vi.setSystemTime(new Date("2026-06-20T15:30:00.000Z"));
+    const transactions = Array.from({ length: 401 }, (_, index) => ({
+      _id: `txn-${index}` as Id<"posTransaction">,
+      completedAt: Date.UTC(2025, 0, 1 + index, 12),
+      payments: [{ amount: 1_000, method: "cash", timestamp: 1 }],
+      storeId: "store-1" as Id<"store">,
+      total: 1_000,
+    }));
+    vi.mocked(listCompletedTransactionsForRange).mockResolvedValue(
+      transactions as never,
+    );
+    vi.mocked(listTransactionItems).mockResolvedValue([] as never);
+    const query = vi.fn(() => ({
+      withIndex: vi.fn(() => ({
+        collect: vi.fn().mockResolvedValue([]),
+        take: vi.fn().mockResolvedValue([]),
+        order: vi.fn(() => ({
+          take: vi.fn().mockResolvedValue([]),
+        })),
+      })),
+    }));
+
+    const result = await getTodaySummary(
+      {
+        db: { query },
+      } as never,
+      {
+        pulseWindow: "all_time",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result.totalTransactions).toBe(401);
+    expect(result.operatorSnapshot.trend).toHaveLength(401);
+    expect(result.operatorSnapshot.isLimited).toBe(false);
+  });
+
   it("returns a bounded operator snapshot for recent POS history", async () => {
     vi.setSystemTime(new Date("2026-06-20T15:30:00.000Z"));
     vi.mocked(listCompletedTransactionsForDay).mockResolvedValue([

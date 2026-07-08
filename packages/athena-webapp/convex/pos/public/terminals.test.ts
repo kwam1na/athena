@@ -87,6 +87,7 @@ import {
   deleteTerminal,
   getTerminalByFingerprint,
   getTerminalHealthSummary,
+  getTerminalRuntimeConfig,
   getRuntimeRemoteAssistSession,
   issueTerminalRecoveryCommand,
   listTerminalRecoveryCommands,
@@ -353,6 +354,7 @@ describe("POS terminal public mutations", () => {
         fingerprintHash: "fingerprint-1",
         syncSecretHash: "sync-secret-1",
         displayName: "Front register",
+        heartbeatEnabled: true,
         registeredByUserId: "athena-user-1",
         browserInfo: { userAgent: "test" },
         registeredAt: 1,
@@ -367,6 +369,7 @@ describe("POS terminal public mutations", () => {
       fingerprintHash: "fingerprint-1",
       syncSecretHash: "sync-secret-1",
       displayName: "Front register",
+      heartbeatEnabled: true,
       registeredByUserId: "athena-user-1",
       browserInfo: { userAgent: "test" },
       registeredAt: 1,
@@ -572,6 +575,43 @@ describe("POS terminal public mutations", () => {
         syncSecretHash: expect.any(String),
       }),
     );
+  });
+
+  it("allows full admins to pause terminal heartbeat", async () => {
+    const ctx = buildCtx();
+
+    await getHandler(updateTerminal)(ctx as never, {
+      heartbeatEnabled: false,
+      terminalId: "terminal-1",
+    });
+
+    expect(mocks.updateTerminalCommand).toHaveBeenCalledWith(ctx, {
+      heartbeatEnabled: false,
+      terminalId: "terminal-1",
+    });
+  });
+
+  it("returns runtime heartbeat config for an active terminal proof", async () => {
+    const ctx = buildCtx({
+      terminal: {
+        _id: "terminal-1",
+        heartbeatEnabled: false,
+        registeredByUserId: "athena-user-1",
+        status: "active",
+        storeId: "store-1",
+        syncSecretHash: SYNC_SECRET_HASH,
+      },
+    });
+
+    const result = await getHandler(getTerminalRuntimeConfig)(ctx as never, {
+      storeId: "store-1",
+      syncSecretHash: "sync-secret-1",
+      terminalId: "terminal-1",
+    });
+
+    expect(result).toEqual({
+      heartbeatEnabled: false,
+    });
   });
 
   it("requires store membership before listing terminals", async () => {
@@ -1477,6 +1517,9 @@ describe("POS terminal public mutations", () => {
       },
     });
     assertConformsToExportedReturns(getRuntimeRemoteAssistSession as never, null);
+    assertConformsToExportedReturns(getTerminalRuntimeConfig as never, {
+      heartbeatEnabled: true,
+    });
     assertConformsToExportedReturns(disconnectRemoteAssistSession as never, null);
     assertConformsToExportedReturns(registerTerminal as never, {
       kind: "ok",

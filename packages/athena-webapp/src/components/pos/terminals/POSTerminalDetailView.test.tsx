@@ -254,6 +254,7 @@ const detail: TerminalHealthDetail = {
     _id: "terminal-1",
     browserInfo: { platform: "MacIntel", userAgent: "test" },
     displayName: "Front counter",
+    heartbeatEnabled: true,
     registeredAt: Date.now() - 10 * 24 * 60 * 60_000,
     registeredByUserId: "user-1",
     registerNumber: "1",
@@ -2668,6 +2669,7 @@ describe("POSTerminalDetailView", () => {
     mocks.activeStoreState.activeStore = { _id: "store-1" };
     mocks.activeStoreState.isLoadingStores = false;
     mocks.canAccessPOS.mockReturnValue(true);
+    mocks.hasFullAdminAccess = true;
     mocks.action.mockResolvedValue({
       data: null,
       kind: "ok",
@@ -2728,5 +2730,29 @@ describe("POSTerminalDetailView", () => {
     });
 
     expect((mocks.useQuery.mock.calls as unknown[][])[2]?.[1]).toBe("skip");
+  });
+
+  it("updates the terminal heartbeat setting from the detail page", async () => {
+    mocks.mutation.mockResolvedValue({
+      ...detail.terminal,
+      heartbeatEnabled: false,
+    });
+    (mocks.useQuery as ReturnType<typeof vi.fn>).mockReturnValueOnce(detail);
+
+    render(<POSTerminalDetailView />);
+
+    fireEvent.click(
+      await screen.findByRole("switch", { name: "Send terminal heartbeat" }),
+    );
+
+    await waitFor(() =>
+      expect(mocks.mutation).toHaveBeenCalledWith({
+        heartbeatEnabled: false,
+        terminalId: "terminal-1",
+      }),
+    );
+    expect(mocks.toastSuccess).toHaveBeenCalledWith(
+      "Terminal heartbeat paused.",
+    );
   });
 });

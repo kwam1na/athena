@@ -12,6 +12,7 @@ export type TerminalRecord = {
     vendor?: string;
   };
   displayName: string;
+  heartbeatEnabled?: boolean;
   registeredAt: number;
   registeredByUserId: Id<"athenaUser"> | string;
   registerNumber?: string | null;
