@@ -1,6 +1,7 @@
 ---
 title: Register Closeout Variance Alerts and Operations IA
 date: 2026-07-08
+last_updated: 2026-07-08
 category: design-patterns
 module: Athena operations email and dashboards
 problem_type: design_pattern
@@ -10,6 +11,7 @@ severity: medium
 applies_when:
   - Adding operator alerts for register closeout variance events
   - Refining Daily Operations or Cash Controls surfaces around closeout review
+  - Formatting backend-generated register closeout review reasons for operators
 tags: [register-closeout, variance-alerts, operations-ia, email, cash-controls]
 related_components: [convex, daily-operations, cash-controls, mailersend]
 ---
@@ -31,8 +33,14 @@ Treat closeout variance alerting as one operational path with a production gate
 and shared review facts.
 
 - Build the email payload from the register closeout facts that operators
-  review: expected cash, counted cash, net variance, register identity, staff
-  attribution, notes, and review reason.
+  review: operating date, expected cash, counted cash, net variance, register
+  identity, staff attribution, notes, and review reason. Include the operating
+  date in both the report header and subject so managers can triage alerts from
+  multiple store days without opening each email.
+- Treat review reasons as backend-generated evidence strings. If they embed a
+  stored minor-unit variance, run them through the shared review-reason
+  formatter with the store currency before they reach email previews, sent
+  MailerSend payloads, Daily Operations, or Cash Controls UI.
 - Trigger the email from the POS public sync path only after closeout projection
   creates a non-zero variance that has not already been marked as emailed.
 - Gate the scheduling helper on `process.env.STAGE === "prod"` so dev, tests,
@@ -75,6 +83,12 @@ metadata instead of squeezed table columns.
 - When adding cash metrics, choose a single source of truth and test a
   prod-shaped payload where summary cards and reviewed items could otherwise
   diverge.
+- Add both payload-level and render-level tests for review reasons that contain
+  raw stored amounts, including a non-GHS currency case, so previews and sent
+  emails cannot drift back to unformatted `2000`-style values.
+- Prefer the register session's resolved `closeoutOperatingDate` for variance
+  alert reports, then fall back to `openedOperatingDate` or a timestamp-derived
+  date only for older sessions without stored schedule evidence.
 - On mobile dashboards, replace dense tables with card summaries when the data
   is preview/reference material rather than active spreadsheet work.
 
@@ -97,6 +111,14 @@ Compact mobile metadata for closed sessions:
   <dt>Closed</dt>
   <dd>{session.closedAt ? formatTimestamp(session.closedAt) : "Not recorded"}</dd>
 </dl>
+```
+
+Shared review-reason formatting:
+
+```ts
+formatStoredReviewReason(reason, (amount) =>
+  currencyFormatter(storeCurrency).format(toDisplayAmount(amount)),
+);
 ```
 
 ## Related

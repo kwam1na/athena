@@ -9,9 +9,12 @@ import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
 import { ADMIN_EMAILS } from "../constants/email";
 import type { RegisterCloseoutVarianceAlertProps } from "../emails/RegisterCloseoutVarianceAlert";
+import { getStoreScheduleContextForStoreAtWithCtx } from "../inventory/storeSchedule";
 import { toDisplayAmount } from "../lib/currency";
+import type { StoreScheduleContext } from "../lib/storeScheduleTime";
 import { sendRegisterCloseoutVarianceAlertEmail } from "../mailersend";
 import { currencyFormatter } from "../utils";
+import { formatStoredReviewReason } from "../../shared/reviewReasonFormatter";
 import { resolveAppUrl } from "./dailyManagerReportEmail";
 
 type RegisterCloseoutVariancePayload =
@@ -65,10 +68,16 @@ export const getRegisterCloseoutVarianceAlertPayload = internalQuery({
     }
 
     const metadata = readCloseoutVarianceMetadata(approvalRequest.metadata);
+    const closeoutOccurredAt =
+      metadata.closeoutOccurredAt ?? approvalRequest.createdAt;
     const terminalId = metadata.terminalId ?? registerSession.terminalId;
-    const [organization, terminal] = await Promise.all([
+    const [organization, terminal, closeoutScheduleContext] = await Promise.all([
       ctx.db.get("organization", store.organizationId),
       terminalId ? ctx.db.get("posTerminal", terminalId) : Promise.resolve(null),
+      getStoreScheduleContextForStoreAtWithCtx(ctx, {
+        at: closeoutOccurredAt,
+        storeId: store._id,
+      }).then((result) => result.context),
     ]);
     const currency = store.currency || "GHS";
     const money = currencyFormatter(currency);
@@ -90,15 +99,22 @@ export const getRegisterCloseoutVarianceAlertPayload = internalQuery({
       storeId: store._id,
       storeName: store.name,
       registerLabel: formatRegisterLabel({ registerSession, terminal }),
-      submittedAt: formatSubmittedAt(
-        metadata.closeoutOccurredAt ?? approvalRequest.createdAt,
-      ),
+      operatingDate: formatRegisterCloseoutVarianceAlertOperatingDate({
+        closeoutScheduleContext,
+        closeoutOperatingDate: registerSession.closeoutOperatingDate,
+        openedOperatingDate: registerSession.openedOperatingDate,
+      }),
+      submittedAt: formatSubmittedAt(closeoutOccurredAt, closeoutScheduleContext),
       submittedBy: requestedBy?.fullName ?? "POS operator",
       expectedCash: money.format(toDisplayAmount(expectedCash)),
       countedCash: money.format(toDisplayAmount(countedCash)),
+      currency,
       variance: money.format(toDisplayAmount(variance)),
       varianceDirection: variance >= 0 ? "over" : "short",
-      reason: approvalRequest.reason,
+      reason: formatRegisterCloseoutVarianceAlertReason(
+        currency,
+        approvalRequest.reason,
+      ),
       notes: approvalRequest.notes,
       reviewUrl: buildRegisterReviewUrl({
         organization,
@@ -108,6 +124,29 @@ export const getRegisterCloseoutVarianceAlertPayload = internalQuery({
     };
   },
 });
+
+export function formatRegisterCloseoutVarianceAlertReason(
+  currency: string,
+  reason?: string | null,
+) {
+  const money = currencyFormatter(currency || "GHS");
+
+  return formatStoredReviewReason(reason, (amount) =>
+    money.format(toDisplayAmount(amount)),
+  );
+}
+
+export function formatRegisterCloseoutVarianceAlertOperatingDate(args: {
+  closeoutScheduleContext: StoreScheduleContext;
+  closeoutOperatingDate?: string | null;
+  openedOperatingDate?: string | null;
+}) {
+  return formatOperatingDate(
+    args.closeoutOperatingDate ??
+      args.openedOperatingDate ??
+      args.closeoutScheduleContext.operatingDate,
+  );
+}
 
 export async function sendRegisterCloseoutVarianceAlertToAdminsWithCtx(
   ctx: Pick<ActionCtx, "runQuery">,
@@ -129,7 +168,7 @@ export async function sendRegisterCloseoutVarianceAlertToAdminsWithCtx(
       ...payload,
       recipientEmail: recipient.email,
       recipientName: recipient.name,
-      subject: `${payload.storeName} register variance - ${payload.registerLabel}`,
+      subject: `${payload.storeName} register variance - ${payload.registerLabel} - ${payload.operatingDate}`,
     });
 
     if (!response.ok) {
@@ -204,12 +243,31 @@ function formatRegisterLabel(args: {
   return "Register session";
 }
 
-function formatSubmittedAt(timestamp: number) {
+function formatSubmittedAt(
+  timestamp: number,
+  closeoutScheduleContext: StoreScheduleContext,
+) {
   return new Intl.DateTimeFormat("en-US", {
     hour: "numeric",
     minute: "2-digit",
-    timeZone: "Africa/Accra",
+    timeZone:
+      closeoutScheduleContext.kind === "resolved"
+        ? closeoutScheduleContext.timezone
+        : "UTC",
   }).format(new Date(timestamp));
+}
+
+function formatOperatingDate(operatingDate: string) {
+  const parsed = new Date(`${operatingDate}T00:00:00Z`);
+
+  if (Number.isNaN(parsed.getTime())) return operatingDate;
+
+  return parsed.toLocaleDateString("en-US", {
+    day: "numeric",
+    month: "long",
+    timeZone: "UTC",
+    weekday: "long",
+  });
 }
 
 function buildRegisterReviewUrl(args: {

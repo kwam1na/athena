@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ADMIN_EMAILS } from "../constants/email";
-import { sendRegisterCloseoutVarianceAlertToAdminsWithCtx } from "./registerCloseoutVarianceEmail";
+import {
+  formatRegisterCloseoutVarianceAlertOperatingDate,
+  formatRegisterCloseoutVarianceAlertReason,
+  sendRegisterCloseoutVarianceAlertToAdminsWithCtx,
+} from "./registerCloseoutVarianceEmail";
 
 describe("register closeout variance email", () => {
   afterEach(() => {
@@ -18,6 +22,7 @@ describe("register closeout variance email", () => {
       approvalRequestId: "approval-variance-1",
       countedCash: "GH₵1,201.82",
       expectedCash: "GH₵1,244.00",
+      operatingDate: "Friday, July 3",
       reason: "Variance exceeded the closeout approval threshold.",
       registerLabel: "Front counter / Register 2",
       reviewUrl:
@@ -48,8 +53,11 @@ describe("register closeout variance email", () => {
     const body = JSON.parse(
       String((fetchMock.mock.calls[0]?.[1] as RequestInit).body),
     );
-    expect(body.subject).toBe("Wigclub register variance - Front counter / Register 2");
+    expect(body.subject).toBe(
+      "Wigclub register variance - Front counter / Register 2 - Friday, July 3",
+    );
     expect(body.html).toContain("Submitted with cash variance");
+    expect(body.html).toContain("Friday, July 3");
     expect(body.html).toContain("Review register closeout");
     expect(result).toEqual(
       ADMIN_EMAILS.map((recipient) => ({
@@ -59,5 +67,48 @@ describe("register closeout variance email", () => {
         storeName: "Wigclub",
       })),
     );
+  });
+
+  it("formats stored variance amounts in review reasons with the store currency", () => {
+    expect(
+      formatRegisterCloseoutVarianceAlertReason(
+        "GHS",
+        "Variance of 2000 exceeded the closeout approval threshold.",
+      ),
+    ).toBe("Variance of GH₵20 exceeded the closeout approval threshold");
+  });
+
+  it("formats register closeout operating dates for the alert header", () => {
+    expect(
+      formatRegisterCloseoutVarianceAlertOperatingDate({
+        closeoutScheduleContext: {
+          kind: "resolved",
+          timezone: "America/New_York",
+          operatingDate: "2026-07-09",
+          phase: "after_last_window",
+          isOpen: false,
+          scheduleVersionId: "schedule-1",
+          currentWindow: null,
+          nextWindow: null,
+        },
+        closeoutOperatingDate: "2026-07-08",
+        openedOperatingDate: "2026-07-07",
+      }),
+    ).toBe("Wednesday, July 8");
+
+    expect(
+      formatRegisterCloseoutVarianceAlertOperatingDate({
+        closeoutScheduleContext: {
+          kind: "resolved",
+          timezone: "America/New_York",
+          operatingDate: "2026-07-08",
+          phase: "after_last_window",
+          isOpen: false,
+          scheduleVersionId: "schedule-1",
+          currentWindow: null,
+          nextWindow: null,
+        },
+      }),
+    ).toBe("Wednesday, July 8");
   });
 });

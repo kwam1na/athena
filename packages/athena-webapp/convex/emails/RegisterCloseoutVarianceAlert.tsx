@@ -12,6 +12,9 @@ import {
   Text,
 } from "@react-email/components";
 import { ArrowUpRight } from "lucide-react";
+import { toDisplayAmount } from "../lib/currency";
+import { currencyFormatter } from "../utils";
+import { formatStoredReviewReason } from "../../shared/reviewReasonFormatter";
 
 export interface RegisterCloseoutVarianceAlertMetric {
   label: string;
@@ -22,10 +25,12 @@ export interface RegisterCloseoutVarianceAlertMetric {
 export interface RegisterCloseoutVarianceAlertProps {
   storeName: string;
   registerLabel: string;
+  operatingDate: string;
   submittedAt: string;
   submittedBy: string;
   expectedCash: string;
   countedCash: string;
+  currency?: string;
   variance: string;
   varianceDirection: "over" | "short";
   reason?: string;
@@ -35,8 +40,10 @@ export interface RegisterCloseoutVarianceAlertProps {
 
 export const registerCloseoutVarianceAlertPreviewProps = {
   countedCash: "GH₵1,201.82",
+  currency: "GHS",
   expectedCash: "GH₵1,244.00",
   notes: "Cash drawer was counted twice before submission. Operator noted one missing GH₵50 note from the morning float.",
+  operatingDate: "Friday, July 3",
   reason: "Variance exceeded the closeout approval threshold.",
   registerLabel: "Front counter / Register 2",
   reviewUrl:
@@ -51,10 +58,12 @@ export const registerCloseoutVarianceAlertPreviewProps = {
 export default function RegisterCloseoutVarianceAlert({
   storeName = registerCloseoutVarianceAlertPreviewProps.storeName,
   registerLabel = registerCloseoutVarianceAlertPreviewProps.registerLabel,
+  operatingDate = registerCloseoutVarianceAlertPreviewProps.operatingDate,
   submittedAt = registerCloseoutVarianceAlertPreviewProps.submittedAt,
   submittedBy = registerCloseoutVarianceAlertPreviewProps.submittedBy,
   expectedCash = registerCloseoutVarianceAlertPreviewProps.expectedCash,
   countedCash = registerCloseoutVarianceAlertPreviewProps.countedCash,
+  currency = registerCloseoutVarianceAlertPreviewProps.currency,
   variance = registerCloseoutVarianceAlertPreviewProps.variance,
   varianceDirection = registerCloseoutVarianceAlertPreviewProps.varianceDirection,
   reason = registerCloseoutVarianceAlertPreviewProps.reason,
@@ -63,6 +72,10 @@ export default function RegisterCloseoutVarianceAlert({
 }: Partial<RegisterCloseoutVarianceAlertProps> = {}) {
   const previewText = `${storeName}: ${registerLabel} closeout submitted with ${variance} variance.`;
   const varianceLabel = varianceDirection === "over" ? "Cash over" : "Cash short";
+  const reasonFormatter = currencyFormatter(currency ?? "GHS");
+  const formattedReason = formatStoredReviewReason(reason, (amount) =>
+    reasonFormatter.format(toDisplayAmount(amount)),
+  );
   const metrics: RegisterCloseoutVarianceAlertMetric[] = [
     { label: "Expected cash", value: expectedCash },
     { label: "Counted cash", value: countedCash },
@@ -79,7 +92,8 @@ export default function RegisterCloseoutVarianceAlert({
             <Text style={styles.eyebrow}>Athena cash controls</Text>
             <Text style={styles.title}>{storeName}</Text>
             <Text style={styles.subtitle}>
-              {registerLabel} | Submitted at {submittedAt} by {submittedBy}
+              {registerLabel} | {operatingDate} | Submitted at {submittedAt} by{" "}
+              {submittedBy}
             </Text>
           </Section>
 
@@ -105,10 +119,10 @@ export default function RegisterCloseoutVarianceAlert({
             <SummaryMetricGrid metrics={metrics} />
           </Section>
 
-          {reason ? (
+          {formattedReason ? (
             <Section style={styles.separatedSection}>
               <SectionHeading title="Review reason" />
-              <Text style={styles.reasonText}>{reason}</Text>
+              <Text style={styles.reasonText}>{formattedReason}</Text>
             </Section>
           ) : null}
 
