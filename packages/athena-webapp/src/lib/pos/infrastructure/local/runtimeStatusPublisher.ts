@@ -34,12 +34,14 @@ export type RuntimeCheckInPublishDebugPatch = {
   checkInPublishReason?:
     | RuntimeCheckInNotReadyReason
     | "authorization_failed"
+    | "disabled"
     | "not_ready"
     | "rejected"
     | "unavailable";
   checkInPublishStatus?:
     | "accepted"
     | "failed"
+    | "disabled"
     | "not_ready"
     | "pending"
     | "rejected";

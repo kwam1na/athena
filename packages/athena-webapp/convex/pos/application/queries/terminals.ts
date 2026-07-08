@@ -116,6 +116,7 @@ export type TerminalHealthSummary = {
     registeredAt: number;
     status: Doc<"posTerminal">["status"];
     browserInfo: Doc<"posTerminal">["browserInfo"];
+    heartbeatEnabled?: boolean;
   };
   health: TerminalHealth;
   runtimeAgeMs: number | null;
@@ -262,6 +263,7 @@ async function buildTerminalHealthSummary(
       registeredAt: args.terminal.registeredAt,
       status: args.terminal.status,
       browserInfo: args.terminal.browserInfo,
+      heartbeatEnabled: args.terminal.heartbeatEnabled ?? true,
     },
     health: operationalState.terminalHealth,
     runtimeAgeMs,

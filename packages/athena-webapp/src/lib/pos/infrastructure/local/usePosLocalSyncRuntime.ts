@@ -145,6 +145,7 @@ export type PosLocalRuntimeSyncDebug = {
   checkInPublishMessage?: string;
   checkInPublishReason?:
     | "authorization_failed"
+    | "disabled"
     | "missing_store"
     | "missing_sync_secret"
     | "missing_terminal"
@@ -153,6 +154,7 @@ export type PosLocalRuntimeSyncDebug = {
     | "unavailable";
   checkInPublishStatus?:
     | "accepted"
+    | "disabled"
     | "failed"
     | "not_ready"
     | "pending"
@@ -1019,16 +1021,28 @@ export function usePosLocalSyncRuntimeStatus(input: {
     api.pos.public.terminals.listTerminalRecoveryCommands,
     recoveryCommandArgs,
   );
+  const terminalRuntimeConfig = useQuery(
+    api.pos.public.terminals.getTerminalRuntimeConfig,
+    recoveryCommandArgs,
+  ) as { heartbeatEnabled: boolean } | null | undefined;
 
   useEffect(() => {
     if (!storeId || !runtimeStatusTerminalId || !runtimeStatusSyncSecretHash) {
+      return;
+    }
+    if (terminalRuntimeConfig?.heartbeatEnabled === false) {
       return;
     }
 
     return startRuntimeStatusFreshnessHeartbeat(() => {
       setRuntimeStatusObservationToken((current) => current + 1);
     });
-  }, [runtimeStatusSyncSecretHash, runtimeStatusTerminalId, storeId]);
+  }, [
+    runtimeStatusSyncSecretHash,
+    runtimeStatusTerminalId,
+    storeId,
+    terminalRuntimeConfig?.heartbeatEnabled,
+  ]);
 
   useEffect(() => {
     const notReadyReason = getRuntimeCheckInNotReadyReason({
@@ -1050,6 +1064,24 @@ export function usePosLocalSyncRuntimeStatus(input: {
         withCheckInPublishDebug(current, {
           checkInPublishReason: "not_ready",
           checkInPublishStatus: "not_ready",
+        }),
+      );
+      return;
+    }
+    if (terminalRuntimeConfig === undefined) {
+      setDebug((current) =>
+        withCheckInPublishDebug(current, {
+          checkInPublishReason: "not_ready",
+          checkInPublishStatus: "not_ready",
+        }),
+      );
+      return;
+    }
+    if (terminalRuntimeConfig?.heartbeatEnabled === false) {
+      setDebug((current) =>
+        withCheckInPublishDebug(current, {
+          checkInPublishReason: "disabled",
+          checkInPublishStatus: "disabled",
         }),
       );
       return;
@@ -1411,6 +1443,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
     runtimeStatusObservationToken,
     runtimeReadiness.terminalIntegrity,
     runtimeReadiness.terminalSeed,
+    terminalRuntimeConfig,
     storeFactory,
     staffProfileId,
     staffProofToken,
@@ -1459,12 +1492,14 @@ export function usePosLocalSyncRuntimeStatus(input: {
       terminalRecoveryCommandStatus: "pending",
     }));
 
-    void claimTerminalRecoveryCommand({
-      commandId: command._id,
-      storeId: storeId as Id<"store">,
-      syncSecretHash: runtimeStatusSyncSecretHash,
-      terminalId: runtimeStatusTerminalId as Id<"posTerminal">,
-    })
+    void Promise.resolve(
+      claimTerminalRecoveryCommand({
+        commandId: command._id,
+        storeId: storeId as Id<"store">,
+        syncSecretHash: runtimeStatusSyncSecretHash,
+        terminalId: runtimeStatusTerminalId as Id<"posTerminal">,
+      }),
+    )
       .then(async (claimResult) => {
         if (claimResult.kind !== "ok") {
           observedRecoveryCommandIdsRef.current.delete(command._id);

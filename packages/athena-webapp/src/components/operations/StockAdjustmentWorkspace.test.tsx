@@ -1239,6 +1239,45 @@ describe("StockAdjustmentWorkspaceContent", () => {
     await waitFor(() => expect(onLoadMoreInventoryItems).toHaveBeenCalled());
   });
 
+  it("keeps reserved filtering pending while reserved SKUs are not loaded yet", async () => {
+    const onLoadMoreInventoryItems = vi.fn();
+
+    renderStockAdjustmentWorkspace({
+      canLoadMoreInventoryItems: true,
+      inventoryItems: [
+        {
+          _id: "sku-alpha" as Id<"productSku">,
+          inventoryCount: 2,
+          productCategory: "Hair",
+          productName: "alpha comb",
+          quantityAvailable: 2,
+          sku: "ALPHA-1",
+        },
+      ],
+      inventoryUnitSummary: {
+        availableUnits: 2,
+        onHandUnits: 12,
+        reservedUnits: 10,
+        skuCount: 2,
+        unavailableSkuCount: 1,
+        unavailableUnits: 10,
+      },
+      onLoadMoreInventoryItems,
+      searchState: {
+        availability: "unavailable",
+      },
+    });
+
+    const table = screen.getByRole("table");
+
+    expect(screen.getByText("Loading reserved SKUs")).toBeInTheDocument();
+    expect(
+      screen.getByText("Checking remaining inventory for reserved units."),
+    ).toBeInTheDocument();
+    expect(within(table).getByText("Searching more SKUs")).toBeInTheDocument();
+    await waitFor(() => expect(onLoadMoreInventoryItems).toHaveBeenCalled());
+  });
+
   it("ranks direct product-name phrase matches before broader fuzzy hits", async () => {
     const user = userEvent.setup();
 
@@ -1967,7 +2006,7 @@ describe("StockAdjustmentWorkspaceContent", () => {
       ],
     });
 
-    expect(screen.getByLabelText("SKU image unavailable")).toBeInTheDocument();
+    expect(screen.getByText("No SKU selected")).toBeInTheDocument();
     expect(
       screen.queryByRole("link", {
         name: /view product detail for closure/i,
@@ -2648,6 +2687,10 @@ describe("StockAdjustmentWorkspaceContent", () => {
 
     renderStockAdjustmentWorkspace();
 
+    expect(screen.getByText("No SKU selected")).toBeInTheDocument();
+    expect(
+      screen.getByText("Select a row to review SKU details."),
+    ).toBeInTheDocument();
     expect(
       screen.queryByAltText('18" Natural Black Closure Wig'),
     ).not.toBeInTheDocument();
@@ -2656,6 +2699,7 @@ describe("StockAdjustmentWorkspaceContent", () => {
       screen.getByLabelText(/counted quantity for body wave bundle/i),
     );
 
+    expect(screen.queryByText("No SKU selected")).not.toBeInTheDocument();
     expect(screen.getByAltText("Body Wave Bundle")).toHaveAttribute(
       "src",
       "https://cdn.example.com/body-wave.jpg",

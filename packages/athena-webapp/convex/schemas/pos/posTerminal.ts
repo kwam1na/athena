@@ -16,6 +16,7 @@ export const posTerminalSchema = v.object({
   fingerprintHash: v.string(),
   syncSecretHash: v.optional(v.string()),
   displayName: v.string(),
+  heartbeatEnabled: v.optional(v.boolean()),
   registerNumber: v.optional(v.string()),
   transactionCapability: v.optional(transactionCapabilityValidator),
   loginMode: v.optional(loginModeValidator),

@@ -536,67 +536,98 @@ export function SkuDetailPanel({
       <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
         SKU detail
       </p>
-      <div className="overflow-hidden rounded-md bg-muted/30">
-        {activeInventoryItem?.imageUrl ? (
-          <img
-            alt={getInventoryItemDisplayName(activeInventoryItem)}
-            className="aspect-square w-full object-cover"
-            src={activeInventoryItem.imageUrl}
-          />
-        ) : (
-          <div className="flex aspect-square w-full items-center justify-center bg-muted">
+      {!activeInventoryItem ? (
+        <>
+          <div className="flex aspect-square w-full items-center justify-center overflow-hidden rounded-md border border-dashed border-border bg-muted/20">
             <Package
-              aria-label="SKU image unavailable"
+              aria-hidden="true"
               className="h-8 w-8 text-muted-foreground"
             />
           </div>
-        )}
-      </div>
-      <div className="space-y-4">
-        <div className="flex items-start justify-between gap-3">
-          {activeInventoryItem ? (
-            <p className="line-clamp-2 text-sm font-medium text-foreground">
-              {getInventoryItemDisplayName(activeInventoryItem)}
-            </p>
-          ) : null}
-          {activeInventoryItem?.productId ? (
-            <Link
-              aria-label={`View product detail for ${getInventoryItemDisplayName(
-                activeInventoryItem,
-              )}`}
-              className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border px-2 py-1 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              params={(prev) => ({
-                ...prev,
-                orgUrlSlug: prev.orgUrlSlug!,
-                productSlug: activeInventoryItem.productId!,
-                storeUrlSlug: prev.storeUrlSlug!,
-              })}
-              search={{
-                o: getOrigin(),
-                variant: activeInventoryItem?.sku || undefined,
-              }}
-              to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug"
-            >
-              View
-              <ArrowUpRight className="h-3 w-3" />
-            </Link>
-          ) : null}
-        </div>
-        {activeInventoryItemDetails.length > 0 ? (
-          <dl className="grid grid-cols-2 gap-x-layout-md gap-y-layout-md pt-layout-xs text-xs">
-            {activeInventoryItemDetails.map((entry) => (
-              <div className="min-w-0" key={entry.label}>
-                <dt className="font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                  {entry.label}
-                </dt>
-                <dd className="mt-0.5 truncate text-foreground capitalize">
-                  {entry.value}
-                </dd>
+          <div className="space-y-4">
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-foreground">
+                No SKU selected
+              </p>
+              <p className="text-xs leading-5 text-muted-foreground">
+                Select a row to review SKU details.
+              </p>
+            </div>
+            <dl className="grid grid-cols-2 gap-x-layout-md gap-y-layout-md pt-layout-xs text-xs">
+              {["SKU", "Category", "On hand", "Available"].map((label) => (
+                <div className="min-w-0" key={label}>
+                  <dt className="font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                    {label}
+                  </dt>
+                  <dd className="mt-0.5 text-muted-foreground">-</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="overflow-hidden rounded-md bg-muted/30">
+            {activeInventoryItem.imageUrl ? (
+              <img
+                alt={getInventoryItemDisplayName(activeInventoryItem)}
+                className="aspect-square w-full object-cover"
+                src={activeInventoryItem.imageUrl}
+              />
+            ) : (
+              <div className="flex aspect-square w-full items-center justify-center bg-muted">
+                <Package
+                  aria-label="SKU image unavailable"
+                  className="h-8 w-8 text-muted-foreground"
+                />
               </div>
-            ))}
-          </dl>
-        ) : null}
-      </div>
+            )}
+          </div>
+          <div className="space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <p className="line-clamp-2 text-sm font-medium text-foreground">
+                {getInventoryItemDisplayName(activeInventoryItem)}
+              </p>
+              {activeInventoryItem.productId ? (
+                <Link
+                  aria-label={`View product detail for ${getInventoryItemDisplayName(
+                    activeInventoryItem,
+                  )}`}
+                  className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border px-2 py-1 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  params={(prev) => ({
+                    ...prev,
+                    orgUrlSlug: prev.orgUrlSlug!,
+                    productSlug: activeInventoryItem.productId!,
+                    storeUrlSlug: prev.storeUrlSlug!,
+                  })}
+                  search={{
+                    o: getOrigin(),
+                    variant: activeInventoryItem.sku || undefined,
+                  }}
+                  to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug"
+                >
+                  View
+                  <ArrowUpRight className="h-3 w-3" />
+                </Link>
+              ) : null}
+            </div>
+            {activeInventoryItemDetails.length > 0 ? (
+              <dl className="grid grid-cols-2 gap-x-layout-md gap-y-layout-md pt-layout-xs text-xs">
+                {activeInventoryItemDetails.map((entry) => (
+                  <div className="min-w-0" key={entry.label}>
+                    <dt className="font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                      {entry.label}
+                    </dt>
+                    <dd className="mt-0.5 truncate text-foreground capitalize">
+                      {entry.value}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            ) : null}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -2188,18 +2219,29 @@ export function StockAdjustmentWorkspaceContent({
       requestedTablePageIndex * STOCK_ADJUSTMENT_TABLE_PAGE_SIZE;
   const isSearchMissingLoadedRows =
     Boolean(normalizedFilterQuery) && tableRows.length === 0;
+  const isReservedFilterMissingLoadedRows =
+    filters.availability === "unavailable" &&
+    !normalizedFilterQuery &&
+    tableRows.length === 0 &&
+    (inventoryUnitSummary?.unavailableUnits ?? 0) > 0;
   const isTableAwaitingMoreInventoryRows =
     Boolean(onLoadMoreInventoryItems) &&
     (canLoadMoreInventoryItems || isLoadingMoreInventoryItems) &&
     (isRestoredItemMissing ||
       isRequestedPageMissing ||
-      isSearchMissingLoadedRows);
+      isSearchMissingLoadedRows ||
+      isReservedFilterMissingLoadedRows);
   const stockAdjustmentAutoLoadStatus = isTableAwaitingMoreInventoryRows
     ? isRestoredItemMissing || isRequestedPageMissing
       ? {
           description: "Loading more SKUs to recover the selected row and page.",
           label: "Restoring saved stock view",
         }
+      : isReservedFilterMissingLoadedRows
+        ? {
+            description: "Checking remaining inventory for reserved units.",
+            label: "Loading reserved SKUs",
+          }
       : {
           description:
             "Loading more SKUs before showing final search results.",
@@ -2405,7 +2447,8 @@ export function StockAdjustmentWorkspaceContent({
     if (
       isRestoredItemMissing ||
       isRequestedPageMissing ||
-      isSearchMissingLoadedRows
+      isSearchMissingLoadedRows ||
+      isReservedFilterMissingLoadedRows
     ) {
       onLoadMoreInventoryItems();
     }
@@ -2413,6 +2456,7 @@ export function StockAdjustmentWorkspaceContent({
     canLoadMoreInventoryItems,
     isRestoredItemMissing,
     isRequestedPageMissing,
+    isReservedFilterMissingLoadedRows,
     isSearchMissingLoadedRows,
     isLoadingMoreInventoryItems,
     onLoadMoreInventoryItems,

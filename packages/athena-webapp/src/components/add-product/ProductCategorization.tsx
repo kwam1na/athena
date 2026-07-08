@@ -30,6 +30,7 @@ import { getProductName } from "~/src/lib/productUtils";
 import { FadeIn } from "../common/FadeIn";
 import { Switch } from "../ui/switch";
 import { useSearch } from "@tanstack/react-router";
+import { formatTaxonomySelectOptionLabel } from "./taxonomySelectLabels";
 
 function ProductCategorization({
   setInitialSelectedOption,
@@ -74,15 +75,17 @@ function ProductCategorization({
     categoriesData
       ?.map((category) => ({
         name: category.name,
+        displayName: formatTaxonomySelectOptionLabel(category.name),
         id: category._id,
         slug: category.slug,
       }))
-      .sort((a, b) => a.name.localeCompare(b.name)) || [];
+      .sort((a, b) => a.displayName.localeCompare(b.displayName)) || [];
 
   const subcategories =
     subcategoriesData
       ?.map((subcategory) => ({
         name: subcategory.name,
+        displayName: formatTaxonomySelectOptionLabel(subcategory.name),
         id: subcategory._id,
         slug: subcategory.slug,
         categoryId: subcategory.categoryId,
@@ -90,7 +93,7 @@ function ProductCategorization({
       .filter(
         (subcategory) => subcategory.categoryId === productData.categoryId,
       )
-      .sort((a, b) => a.name.localeCompare(b.name)) || [];
+      .sort((a, b) => a.displayName.localeCompare(b.displayName)) || [];
 
   const shouldShowCatalogSetupRequirement =
     trustedInventoryFinalizedSkuIds.size > 0 &&
@@ -142,7 +145,7 @@ function ProductCategorization({
                   {categories.map((category) => {
                     return (
                       <SelectItem key={category.id} value={category.id}>
-                        {category.name}
+                        {category.displayName}
                       </SelectItem>
                     );
                   })}
@@ -195,7 +198,7 @@ function ProductCategorization({
                 {subcategories.map((subcategory) => {
                   return (
                     <SelectItem key={subcategory.id} value={subcategory.id}>
-                      {subcategory.name}
+                      {subcategory.displayName}
                     </SelectItem>
                   );
                 })}

@@ -47,6 +47,7 @@ export function mapTerminalRecord(
     storeId: terminal.storeId,
     fingerprintHash: terminal.fingerprintHash,
     displayName: terminal.displayName,
+    heartbeatEnabled: terminal.heartbeatEnabled,
     registerNumber: terminal.registerNumber,
     loginMode: terminal.loginMode,
     transactionCapability: terminal.transactionCapability,
