@@ -1007,6 +1007,126 @@ describe("projectLocalSyncEvent", () => {
     ]);
   });
 
+  it("projects eligible SKU movements when another SKU in the sale needs inventory review", async () => {
+    const repository = createProjectionRepository({
+      skus: [
+        {
+          _id: "sku-1",
+          storeId: "store-1",
+          productId: "product-1",
+          sku: "CAP-1",
+          price: 25,
+          quantityAvailable: 0,
+          inventoryCount: 0,
+          images: [],
+        },
+        {
+          _id: "sku-2",
+          storeId: "store-1",
+          productId: "product-2",
+          sku: "BRUSH-1",
+          price: 15,
+          quantityAvailable: 4,
+          inventoryCount: 4,
+          images: [],
+        },
+      ],
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildSaleCompletedEvent({
+        payload: {
+          ...buildSaleCompletedEvent().payload,
+          items: [
+            {
+              localTransactionItemId: "local-blocked-line-1",
+              productId: "product-1" as never,
+              productSkuId: "sku-1" as never,
+              productName: "Wig Cap",
+              productSku: "CAP-1",
+              quantity: 1,
+              unitPrice: 25,
+            },
+            {
+              localTransactionItemId: "local-eligible-line-1",
+              productId: "product-2" as never,
+              productSkuId: "sku-2" as never,
+              productName: "Edge Brush",
+              productSku: "BRUSH-1",
+              quantity: 2,
+              unitPrice: 15,
+            },
+          ],
+          totals: {
+            subtotal: 55,
+            tax: 0,
+            total: 55,
+          },
+          payments: [
+            {
+              localPaymentId: "local-payment-1",
+              method: "cash",
+              amount: 55,
+              timestamp: 21,
+            },
+          ],
+        },
+      }),
+      syncEventId: "sync-event-1",
+      submittedByUserId: "athena-user-1" as never,
+      now: 100,
+      options: {
+        allowReviewedInventorySaleProjection: true,
+      },
+    });
+
+    expect(result.status).toBe("projected");
+    expect(repository.createdConflicts).toEqual([]);
+    expect(repository.recordedSaleInventoryMovements).toEqual([
+      expect.objectContaining({
+        productSkuId: "sku-2",
+        quantity: 2,
+        transactionNumber: "LR-001",
+      }),
+    ]);
+    expect(repository.productPatches).toEqual([
+      {
+        productSkuId: "sku-2",
+        patch: {
+          inventoryCount: 2,
+          quantityAvailable: 2,
+        },
+      },
+    ]);
+    expect(repository.createdServiceWorkItems).toEqual([
+      expect.objectContaining({
+        type: "synced_sale_inventory_review",
+        metadata: expect.objectContaining({
+          primaryProductSkuId: "sku-1",
+          skippedMutationItems: [
+            expect.objectContaining({
+              productSkuId: "sku-1",
+              reason: "stock_shortfall",
+              requestedQuantity: 1,
+            }),
+          ],
+          trustedInventoryLines: expect.arrayContaining([
+            expect.objectContaining({
+              productSkuId: "sku-1",
+              quantity: 1,
+            }),
+            expect.objectContaining({
+              productSkuId: "sku-2",
+              quantity: 2,
+            }),
+          ]),
+        }),
+      }),
+    ]);
+  });
+
   it("routes only the finalized slice to inventory review when trusted same-SKU stock still fits", async () => {
     const repository = createProjectionRepository({
       sku: {
@@ -3895,6 +4015,202 @@ describe("projectLocalSyncEvent", () => {
     );
     expect(repository.createdTransactions).toEqual([]);
     expect(repository.createdServiceWorkItems).toHaveLength(1);
+  });
+
+  it("does not create inventory review work for ordinary projected sale retries", async () => {
+    const repository = createProjectionRepository({
+      sku: {
+        _id: "sku-1",
+        storeId: "store-1",
+        productId: "product-1",
+        sku: "CAP-1",
+        price: 25,
+        quantityAvailable: 0,
+        inventoryCount: 0,
+        images: [],
+      },
+    });
+    repository.mappings.push(
+      {
+        _id: "mapping-existing-transaction",
+        storeId: "store-1" as never,
+        terminalId: "terminal-1" as never,
+        localRegisterSessionId: "local-register-1",
+        localEventId: "event-sale-completed-1",
+        localIdKind: "transaction",
+        localId: "local-txn-1",
+        cloudTable: "posTransaction",
+        cloudId: "transaction-1",
+        createdAt: 1,
+      },
+      {
+        _id: "mapping-existing-receipt",
+        storeId: "store-1" as never,
+        terminalId: "terminal-1" as never,
+        localRegisterSessionId: "local-register-1",
+        localEventId: "event-sale-completed-1",
+        localIdKind: "receipt",
+        localId: "LR-001",
+        cloudTable: "posTransaction",
+        cloudId: "transaction-1",
+        createdAt: 1,
+      },
+    );
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildSaleCompletedEvent(),
+      syncEventId: "sync-event-1",
+      submittedByUserId: "athena-user-1" as never,
+      now: 100,
+      options: {
+        allowReviewedInventorySaleProjection: true,
+      },
+    });
+
+    expect(result.status).toBe("projected");
+    expect(result.conflicts).toEqual([]);
+    expect(repository.createdConflicts).toEqual([]);
+    expect(repository.createdServiceWorkItems).toEqual([]);
+    expect(repository.recordedSaleInventoryMovements).toEqual([]);
+    expect(repository.productPatches).toEqual([]);
+    expect(result.mappings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          localIdKind: "transaction",
+          cloudId: "transaction-1",
+        }),
+      ]),
+    );
+  });
+
+  it("backfills stock movement for reviewed sale replay once inventory is available", async () => {
+    const repository = createProjectionRepository({
+      consumedHoldQuantities: new Map([["sku-1", 1]]),
+      existingPosSession: {
+        _id: "local-session-1",
+        registerSessionId: "register-session-1",
+        staffProfileId: "staff-1",
+        status: "completed",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+        transactionId: "transaction-1",
+      },
+      sku: {
+        _id: "sku-1",
+        storeId: "store-1",
+        productId: "product-1",
+        sku: "CAP-1",
+        price: 25,
+        quantityAvailable: 4,
+        inventoryCount: 4,
+        images: [],
+      },
+    });
+    repository.createdPosSessions.push({
+      _id: "pos-session-1",
+      completedAt: 20,
+      createdAt: 20,
+      expiresAt: 20,
+      inventoryHoldMode: "ledger",
+      payments: [
+        {
+          amount: 25,
+          method: "cash",
+          timestamp: 21,
+        },
+      ],
+      registerNumber: "1",
+      registerSessionId: "register-session-1",
+      sessionNumber: "local-session-1",
+      staffProfileId: "staff-1",
+      status: "completed",
+      storeId: "store-1",
+      subtotal: 25,
+      tax: 0,
+      terminalId: "terminal-1",
+      total: 25,
+      transactionId: "transaction-1",
+      updatedAt: 20,
+    });
+    repository.mappings.push(
+      {
+        _id: "mapping-existing-pos-session",
+        storeId: "store-1" as never,
+        terminalId: "terminal-1" as never,
+        localRegisterSessionId: "local-register-1",
+        localEventId: "event-sale-completed-1",
+        localIdKind: "posSession",
+        localId: "local-session-1",
+        cloudTable: "posSession",
+        cloudId: "pos-session-1",
+        createdAt: 1,
+      },
+      {
+        _id: "mapping-existing-transaction",
+        storeId: "store-1" as never,
+        terminalId: "terminal-1" as never,
+        localRegisterSessionId: "local-register-1",
+        localEventId: "event-sale-completed-1",
+        localIdKind: "transaction",
+        localId: "local-txn-1",
+        cloudTable: "posTransaction",
+        cloudId: "transaction-1",
+        createdAt: 1,
+      },
+    );
+    repository.createdConflicts.push({
+      _id: "conflict-reviewed-inventory",
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      localRegisterSessionId: "local-register-1",
+      localEventId: "event-sale-completed-1",
+      sequence: 2,
+      conflictType: "inventory",
+      status: "resolved",
+      summary: "Inventory needs manager review for a synced offline sale.",
+      details: {
+        localTransactionId: "local-txn-1",
+        productSkuId: "sku-1",
+        quantityAvailable: 0,
+        requestedQuantity: 1,
+      },
+      createdAt: 1,
+      resolvedAt: 50,
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildSaleCompletedEvent(),
+      syncEventId: "sync-event-1",
+      submittedByUserId: "athena-user-1" as never,
+      now: 100,
+      options: {
+        allowReviewedInventorySaleProjection: true,
+      },
+    });
+
+    expect(result.status).toBe("projected");
+    expect(result.conflicts).toEqual([]);
+    expect(repository.createdServiceWorkItems).toEqual([]);
+    expect(repository.recordedSaleInventoryMovements).toEqual([
+      expect.objectContaining({
+        posTransactionId: "transaction-1",
+        productSkuId: "sku-1",
+        quantity: 1,
+      }),
+    ]);
+    expect(repository.productPatches).toEqual([
+      {
+        productSkuId: "sku-1",
+        patch: {
+          inventoryCount: 3,
+          quantityAvailable: 3,
+        },
+      },
+    ]);
   });
 
   it("preserves a reviewed sale without reusing a duplicate local POS session", async () => {
@@ -7708,6 +8024,17 @@ function createProjectionRepository(
       inventoryCount: number;
       images: string[];
     };
+    skus: Array<{
+      _id: string;
+      storeId: string;
+      productId: string;
+      sku: string;
+      price: number;
+      netPrice?: number;
+      quantityAvailable: number;
+      inventoryCount: number;
+      images: string[];
+    }>;
     productStoreId: string;
     customerStoreId: string;
     serviceCatalog: {
@@ -7921,6 +8248,7 @@ function createProjectionRepository(
     inventoryCount: 10,
     images: [],
   };
+  const skus = overrides.skus ?? [sku];
   const registerSession =
     overrides.registerSession === null
       ? null
@@ -8048,15 +8376,16 @@ function createProjectionRepository(
       } as never;
     },
     async getProduct(productId) {
-      return productId === "product-1"
+      const productSku = skus.find((candidate) => candidate.productId === productId);
+      return productSku
         ? ({
-            _id: "product-1",
-            storeId: overrides.productStoreId ?? "store-1",
+            _id: productId,
+            storeId: overrides.productStoreId ?? productSku.storeId,
           } as never)
         : null;
     },
     async getProductSku(productSkuId) {
-      return productSkuId === "sku-1" ? (sku as never) : null;
+      return (skus.find((candidate) => candidate._id === productSkuId) as never) ?? null;
     },
     async getPendingCheckoutItem(pendingCheckoutItemId) {
       const created = createdPendingCheckoutItems.find(
@@ -8559,6 +8888,22 @@ function createProjectionRepository(
       productPatches.push({ productSkuId, patch });
     },
     async recordSaleInventoryMovement(input) {
+      if (
+        recordedSaleInventoryMovements.some(
+          (movement) => {
+            const recordedMovement = movement as {
+              posTransactionId?: unknown;
+              productSkuId?: unknown;
+            };
+            return (
+              recordedMovement.posTransactionId === input.posTransactionId &&
+              recordedMovement.productSkuId === input.productSkuId
+            );
+          },
+        )
+      ) {
+        return "existing";
+      }
       recordedSaleInventoryMovements.push(input);
       return "inserted";
     },

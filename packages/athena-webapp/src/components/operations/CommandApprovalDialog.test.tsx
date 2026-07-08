@@ -196,6 +196,9 @@ describe("CommandApprovalDialog", () => {
     expect(
       screen.getByRole("heading", { name: "Enter manager credentials" }),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Approve and continue" }),
+    ).toHaveClass("bg-action-workflow");
   });
 
   it("formats closeout variance approval copy as stored currency", () => {

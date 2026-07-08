@@ -15,6 +15,10 @@ const apiGatewayUrl =
   process.env.ATHENA_PROD_CONVEX_SITE_URL ||
   process.env.VITE_API_GATEWAY_URL ||
   "https://colorless-cardinal-870.convex.site";
+const webServerTimeout = Number(
+  process.env.PLAYWRIGHT_WEB_SERVER_TIMEOUT_MS ||
+    (process.env.CI ? 300_000 : 120_000),
+);
 
 export default defineConfig({
   testDir: "./src/tests/prod",
@@ -52,7 +56,7 @@ export default defineConfig({
         },
         url: baseURL,
         reuseExistingServer: !process.env.CI,
-        timeout: 120_000,
+        timeout: webServerTimeout,
         stdout: "pipe",
         stderr: "pipe",
       }

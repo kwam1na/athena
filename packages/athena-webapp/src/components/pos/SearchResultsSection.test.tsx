@@ -144,7 +144,7 @@ describe("SearchResultsSection", () => {
     expect(onQuickAddProduct).not.toHaveBeenCalled();
   });
 
-  it("keeps a missing-availability result visible with readiness copy but does not add it", () => {
+  it("keeps a missing-availability result disabled without availability copy", () => {
     const onAddProduct = vi.fn();
     renderSearchResults({
       onAddProduct,
@@ -160,10 +160,10 @@ describe("SearchResultsSection", () => {
     });
 
     expect(
-      screen.getByText(
+      screen.queryByText(
         "Availability not ready. Reconnect or refresh this terminal before selling this item.",
       ),
-    ).toBeInTheDocument();
+    ).not.toBeInTheDocument();
     expect(screen.getByText("Club").closest("[aria-disabled]")).toHaveAttribute(
       "aria-disabled",
       "true",
@@ -200,6 +200,20 @@ describe("SearchResultsSection", () => {
 
     expect(onAddProduct).toHaveBeenCalledWith(product, 3);
     expect(onClearSearch).toHaveBeenCalled();
+  });
+
+  it("does not render availability count labels for trusted product results", () => {
+    renderSearchResults({
+      products: [
+        buildProduct({
+          id: "sku-trusted",
+          name: "Eco Gel",
+          quantityAvailable: 12,
+        }),
+      ],
+    });
+
+    expect(screen.queryByText("12 available")).not.toBeInTheDocument();
   });
 
   it("emphasizes the product price without using action styling", () => {
@@ -250,7 +264,7 @@ describe("SearchResultsSection", () => {
     expect(sku).not.toHaveClass("bg-muted", "rounded", "px-2", "py-1");
   });
 
-  it("allows provisional import results to be added while trusted counts are pending", async () => {
+  it("allows provisional import results to be added without count labels", async () => {
     const user = userEvent.setup();
     const product = buildProduct({
       availabilityMessage: "Count pending",
@@ -268,7 +282,7 @@ describe("SearchResultsSection", () => {
       onAddProduct,
     });
 
-    expect(screen.getByText("Count pending")).toBeInTheDocument();
+    expect(screen.queryByText("Count pending")).not.toBeInTheDocument();
     const quantityInput = screen.getByRole("spinbutton", {
       name: /quantity for imported wig/i,
     });
@@ -301,7 +315,7 @@ describe("SearchResultsSection", () => {
     expect(screen.queryByText("NULL")).not.toBeInTheDocument();
   });
 
-  it("shows count pending for pending checkout results", async () => {
+  it("allows pending checkout results to be added without count labels", async () => {
     const user = userEvent.setup();
     const product = buildProduct({
       id: "pending-checkout-1",
@@ -317,7 +331,7 @@ describe("SearchResultsSection", () => {
       onAddProduct,
     });
 
-    expect(screen.getByText("Count pending")).toBeInTheDocument();
+    expect(screen.queryByText("Count pending")).not.toBeInTheDocument();
     expect(screen.queryByText("0 available")).not.toBeInTheDocument();
 
     const quantityInput = screen.getByRole("spinbutton", {
@@ -370,7 +384,7 @@ describe("SearchResultsSection", () => {
       onAddProduct,
     });
 
-    expect(screen.getByText("0")).toBeInTheDocument();
+    expect(screen.queryByText("0 available")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /^add$/i }));
 
     expect(onAddProduct).toHaveBeenCalledWith(product, 1);

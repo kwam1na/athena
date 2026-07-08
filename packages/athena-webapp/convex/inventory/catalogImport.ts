@@ -1,4 +1,5 @@
 import {
+  internalMutation,
   mutation,
   query,
   type MutationCtx,
@@ -42,12 +43,43 @@ const CATALOG_TAXONOMY_FINALIZATION_ROW_LIMIT = 25;
 const TRUSTED_FINALIZATION_ACTIVE_CHECKOUT_SESSION_LIMIT = 200;
 const DEFAULT_CATEGORY_SLUG = toSlug(DEFAULT_CATEGORY_NAME);
 const TRUSTED_FINALIZATION_CHECKOUT_SESSION_ITEM_LIMIT = 200;
+const LEGACY_IMPORT_TRUSTED_VISIBILITY_REPAIR_LIMIT = 200;
 
 type ProvisionalImportIdentity = {
   productId: Id<"product">;
   productSkuId: Id<"productSku">;
   sku?: string;
   barcode?: string;
+};
+
+type LegacyImportTrustedVisibilityRepairSku = {
+  productId: Id<"product">;
+  productName: string;
+  productSkuId: Id<"productSku">;
+  sku?: string;
+};
+
+type LegacyImportTrustedVisibilityRepairCursor = {
+  finalizedAt: number;
+  scannedRowIds: Array<Id<"inventoryImportProvisionalSku">>;
+  status: "active" | "finalized";
+};
+
+type LegacyImportTrustedVisibilityRepairResult = {
+  dryRun: boolean;
+  limit: number;
+  nextCursor?: LegacyImportTrustedVisibilityRepairCursor;
+  promotedToLive: number;
+  refreshedSearchProjections: number;
+  repairedProducts: number;
+  repairedSkus: LegacyImportTrustedVisibilityRepairSku[];
+  scannedRows: number;
+  skippedArchivedProducts: number;
+  skippedLegacyTaxonomy: number;
+  taxonomyWorkItemsEnsured: number;
+  taxonomyWorkItemSkus: LegacyImportTrustedVisibilityRepairSku[];
+  truncated: boolean;
+  visibleProducts: number;
 };
 
 const importStatusValidator = v.union(
@@ -101,6 +133,36 @@ const inventoryImportReviewVersionValidator = v.object({
   rowCount: v.number(),
   sourceFormat: importSourceFormatValidator,
   versionNumber: v.number(),
+});
+
+const legacyImportTrustedVisibilityRepairSkuValidator = v.object({
+  productId: v.id("product"),
+  productName: v.string(),
+  productSkuId: v.id("productSku"),
+  sku: v.optional(v.string()),
+});
+
+const legacyImportTrustedVisibilityRepairCursorValidator = v.object({
+  finalizedAt: v.number(),
+  scannedRowIds: v.array(v.id("inventoryImportProvisionalSku")),
+  status: v.union(v.literal("active"), v.literal("finalized")),
+});
+
+const legacyImportTrustedVisibilityRepairResultValidator = v.object({
+  dryRun: v.boolean(),
+  limit: v.number(),
+  nextCursor: v.optional(legacyImportTrustedVisibilityRepairCursorValidator),
+  promotedToLive: v.number(),
+  refreshedSearchProjections: v.number(),
+  repairedProducts: v.number(),
+  repairedSkus: v.array(legacyImportTrustedVisibilityRepairSkuValidator),
+  scannedRows: v.number(),
+  skippedArchivedProducts: v.number(),
+  skippedLegacyTaxonomy: v.number(),
+  taxonomyWorkItemsEnsured: v.number(),
+  taxonomyWorkItemSkus: v.array(legacyImportTrustedVisibilityRepairSkuValidator),
+  truncated: v.boolean(),
+  visibleProducts: v.number(),
 });
 
 const provisionalImportStageRowValidator = v.object({
@@ -1019,6 +1081,236 @@ export const finalizeTrustedInventoryFromProductPage = mutation({
     }
   },
 });
+
+export const repairOnboardedLegacyImportTrustedSkuVisibility = internalMutation({
+  args: {
+    cursor: v.optional(legacyImportTrustedVisibilityRepairCursorValidator),
+    dryRun: v.optional(v.boolean()),
+    limit: v.optional(v.number()),
+    storeId: v.id("store"),
+  },
+  returns: legacyImportTrustedVisibilityRepairResultValidator,
+  async handler(ctx, args) {
+    return repairOnboardedLegacyImportTrustedSkuVisibilityWithCtx(ctx, {
+      cursor: args.cursor,
+      dryRun: args.dryRun ?? true,
+      limit: args.limit,
+      storeId: args.storeId,
+    });
+  },
+});
+
+export async function repairOnboardedLegacyImportTrustedSkuVisibilityWithCtx(
+  ctx: MutationCtx,
+  args: {
+    cursor?: LegacyImportTrustedVisibilityRepairCursor;
+    dryRun?: boolean;
+    limit?: number;
+    storeId: Id<"store">;
+  },
+): Promise<LegacyImportTrustedVisibilityRepairResult> {
+  const dryRun = args.dryRun ?? true;
+  const limit = normalizeLegacyImportTrustedVisibilityRepairLimit(args.limit);
+  const candidateRows = await listLegacyImportTrustedVisibilityRepairRows(ctx, {
+    cursor: args.cursor,
+    limit: limit + 1,
+    storeId: args.storeId,
+  });
+  const rows = candidateRows.slice(0, limit);
+  const lastScannedRow = rows.at(-1);
+  const nextCursor =
+    candidateRows.length > limit && lastScannedRow?.finalizedAt !== undefined
+      ? {
+          finalizedAt: lastScannedRow.finalizedAt,
+          scannedRowIds: [
+            ...(args.cursor?.status === lastScannedRow.status &&
+            args.cursor.finalizedAt === lastScannedRow.finalizedAt
+              ? args.cursor.scannedRowIds
+              : []),
+            ...rows
+              .filter(
+                (row) =>
+                  row.status === lastScannedRow.status &&
+                  row.finalizedAt === lastScannedRow.finalizedAt,
+              )
+              .map((row) => row._id),
+          ],
+          status: lastScannedRow.status as "active" | "finalized",
+        }
+      : undefined;
+  const repairedSkus: LegacyImportTrustedVisibilityRepairSku[] = [];
+  const taxonomyWorkItemSkus: LegacyImportTrustedVisibilityRepairSku[] = [];
+  const repairedProductIds = new Set<Id<"product">>();
+  let promotedToLive = 0;
+  let refreshedSearchProjections = 0;
+  let skippedArchivedProducts = 0;
+  let skippedLegacyTaxonomy = 0;
+  let taxonomyWorkItemsEnsured = 0;
+  let visibleProducts = 0;
+
+  for (const row of rows) {
+    if (!row.productId || !row.productSkuId || row.finalizedAt === undefined) {
+      continue;
+    }
+
+    const [product, productSku, taxonomyState] = await Promise.all([
+      ctx.db.get("product", row.productId),
+      ctx.db.get("productSku", row.productSkuId),
+      readProductTaxonomyStateWithCtx(ctx, {
+        productId: row.productId,
+        storeId: args.storeId,
+      }),
+    ]);
+
+    if (
+      !product ||
+      product.storeId !== args.storeId ||
+      !productSku ||
+      productSku.storeId !== args.storeId ||
+      productSku.productId !== product._id
+    ) {
+      continue;
+    }
+
+    if (product.availability === "archived") {
+      skippedArchivedProducts += 1;
+      continue;
+    }
+
+    if (!taxonomyState?.hasAthenaTaxonomy) {
+      skippedLegacyTaxonomy += 1;
+      taxonomyWorkItemSkus.push({
+        productId: product._id,
+        productName: product.name,
+        productSkuId: productSku._id,
+        ...(productSku.sku ? { sku: productSku.sku } : {}),
+      });
+      if (!dryRun) {
+        await ensureCatalogTaxonomySetupWorkForProductWithCtx(ctx, {
+          productId: product._id,
+          productSkuId: productSku._id,
+          provisionalSkuId: row._id,
+          storeId: args.storeId,
+        });
+        taxonomyWorkItemsEnsured += 1;
+      }
+      continue;
+    }
+
+    const shouldPromoteToLive = product.availability === "draft";
+    const shouldMakeVisible = product.isVisible === false;
+    const productAlreadyRepaired = repairedProductIds.has(product._id);
+    if (!shouldPromoteToLive && !shouldMakeVisible && !productAlreadyRepaired) {
+      continue;
+    }
+
+    repairedSkus.push({
+      productId: product._id,
+      productName: product.name,
+      productSkuId: productSku._id,
+      ...(productSku.sku ? { sku: productSku.sku } : {}),
+    });
+    if (shouldPromoteToLive) promotedToLive += 1;
+    if (shouldMakeVisible) visibleProducts += 1;
+
+    if (dryRun) {
+      continue;
+    }
+
+    if (!productAlreadyRepaired) {
+      await ctx.db.patch("product", product._id, {
+        ...(shouldPromoteToLive ? { availability: "live" as const } : {}),
+        ...(shouldMakeVisible ? { isVisible: true } : {}),
+      });
+      repairedProductIds.add(product._id);
+    }
+
+    await upsertProductSkuSearchProjection(ctx, productSku._id);
+    refreshedSearchProjections += 1;
+  }
+
+  return {
+    dryRun,
+    limit,
+    ...(nextCursor ? { nextCursor } : {}),
+    promotedToLive,
+    refreshedSearchProjections,
+    repairedProducts: new Set(repairedSkus.map((sku) => sku.productId)).size,
+    repairedSkus,
+    scannedRows: rows.length,
+    skippedArchivedProducts,
+    skippedLegacyTaxonomy,
+    taxonomyWorkItemsEnsured: dryRun
+      ? taxonomyWorkItemSkus.length
+      : taxonomyWorkItemsEnsured,
+    taxonomyWorkItemSkus,
+    truncated: Boolean(nextCursor),
+    visibleProducts,
+  };
+}
+
+function normalizeLegacyImportTrustedVisibilityRepairLimit(limit?: number) {
+  if (!Number.isFinite(limit) || limit === undefined) {
+    return LEGACY_IMPORT_TRUSTED_VISIBILITY_REPAIR_LIMIT;
+  }
+
+  return Math.max(
+    1,
+    Math.min(
+      LEGACY_IMPORT_TRUSTED_VISIBILITY_REPAIR_LIMIT,
+      Math.trunc(limit),
+    ),
+  );
+}
+
+async function listLegacyImportTrustedVisibilityRepairRows(
+  ctx: Pick<MutationCtx, "db">,
+  args: {
+    cursor?: LegacyImportTrustedVisibilityRepairCursor;
+    limit: number;
+    storeId: Id<"store">;
+  },
+) {
+  const rows: Array<Doc<"inventoryImportProvisionalSku">> = [];
+  const statuses = ["active", "finalized"] as const;
+  const startStatusIndex = args.cursor
+    ? Math.max(0, statuses.indexOf(args.cursor.status))
+    : 0;
+
+  for (const status of statuses.slice(startStatusIndex)) {
+    if (rows.length >= args.limit) break;
+    const finalizedAtFloor =
+      args.cursor?.status === status ? args.cursor.finalizedAt - 1 : -1;
+    const scannedRowIds =
+      args.cursor?.status === status ? new Set(args.cursor.scannedRowIds) : null;
+
+    const statusRows = await ctx.db
+      .query("inventoryImportProvisionalSku")
+      .withIndex("by_storeId_status_finalizedAt", (q) =>
+        q
+          .eq("storeId", args.storeId)
+          .eq("status", status)
+          .gt("finalizedAt", finalizedAtFloor),
+      )
+      .take((args.limit - rows.length) + (scannedRowIds?.size ?? 0));
+
+    rows.push(
+      ...statusRows
+        .filter((row) => {
+          if (!args.cursor || args.cursor.status !== status) return true;
+          if (row.finalizedAt === undefined) return false;
+          if (row.finalizedAt < args.cursor.finalizedAt) return false;
+          return !(
+            row.finalizedAt === args.cursor.finalizedAt &&
+            scannedRowIds?.has(row._id)
+          );
+        })
+        .slice(0, args.limit - rows.length),
+    );
+  }
+
+  return rows;
+}
 
 export async function listProductPageProvisionalSkuBindingWithCtx(
   ctx: Pick<QueryCtx | MutationCtx, "db">,

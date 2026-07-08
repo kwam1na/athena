@@ -88,16 +88,9 @@ export function ProductLookup({
                               {product.length && `Length: ${product.length}"`}
                             </p>
                           )}
-                          <div className="flex items-center gap-2">
-                            <p className="text-sm font-semibold">
-                              {formatStoredAmount(formatter, product.price)}
-                            </p>
-                            {product.quantityAvailable && (
-                              <span className="text-xs text-muted-foreground">
-                                ({product.quantityAvailable} available)
-                              </span>
-                            )}
-                          </div>
+                          <p className="text-sm font-semibold">
+                            {formatStoredAmount(formatter, product.price)}
+                          </p>
                         </div>
 
                         <Button

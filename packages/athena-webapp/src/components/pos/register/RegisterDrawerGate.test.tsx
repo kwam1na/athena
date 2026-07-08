@@ -44,6 +44,19 @@ function renderGate(overrides: Partial<RegisterDrawerGateState> = {}) {
 }
 
 describe("RegisterDrawerGate", () => {
+  it("uses workflow styling for opening float corrections", () => {
+    renderGate({
+      correctedOpeningFloat: "5",
+      correctionReason: "Opening count was corrected.",
+      expectedCash: 20500,
+      mode: "openingFloatCorrection",
+    });
+
+    expect(screen.getByRole("button", { name: "Save correction" })).toHaveClass(
+      "bg-action-workflow",
+    );
+  });
+
   it("blocks drawer opening unless the signed-in staff member is a cashier or manager", async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn();

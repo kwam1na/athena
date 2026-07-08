@@ -6,6 +6,10 @@ const convexUrl =
   process.env.VITE_CONVEX_URL || "https://playwright-athena.convex.cloud";
 const apiGatewayUrl =
   process.env.VITE_API_GATEWAY_URL || "https://playwright-athena.convex.site";
+const webServerTimeout = Number(
+  process.env.PLAYWRIGHT_WEB_SERVER_TIMEOUT_MS ||
+    (process.env.CI ? 300_000 : 120_000),
+);
 
 export default defineConfig({
   testDir: "./src/tests",
@@ -32,7 +36,7 @@ export default defineConfig({
     },
     url: baseURL,
     reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
+    timeout: webServerTimeout,
     stdout: "pipe",
     stderr: "pipe",
   },

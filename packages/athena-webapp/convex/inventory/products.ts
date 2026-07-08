@@ -1096,10 +1096,18 @@ export const update = mutation({
     if (taxonomyChanged) {
       const productAfterPatch = await ctx.db.get("product", args.id);
       if (productAfterPatch) {
-        await completeFinalizedLegacyImportRowsForProductTaxonomyWithCtx(ctx, {
-          productId: productAfterPatch._id,
-          storeId: productAfterPatch.storeId,
-        });
+        const completedLegacyImportRows =
+          await completeFinalizedLegacyImportRowsForProductTaxonomyWithCtx(ctx, {
+            productId: productAfterPatch._id,
+            storeId: productAfterPatch.storeId,
+          });
+        if (
+          completedLegacyImportRows > 0 &&
+          args.isVisible !== false &&
+          productAfterPatch.isVisible === false
+        ) {
+          await ctx.db.patch("product", args.id, { isVisible: true });
+        }
         await completeCatalogTaxonomySetupWorkForProductWithCtx(ctx, {
           productId: productAfterPatch._id,
           storeId: productAfterPatch.storeId,

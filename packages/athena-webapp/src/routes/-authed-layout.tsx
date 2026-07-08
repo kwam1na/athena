@@ -590,7 +590,6 @@ function MobileSidebarRouteDismiss({ routeKey }: { routeKey: string }) {
 }
 
 export default function Layout() {
-  const [defaultOpen] = useState<boolean | null>(true);
   const [fullscreenOverride, setFullscreenOverride] = useState<boolean | null>(
     null,
   );
@@ -705,23 +704,6 @@ export default function Layout() {
     ? browserPathWithSearch
     : getRedirectPathWithSearch(pathname, browserPathWithSearch);
 
-  // useEffect(() => {
-  //   // Read the sidebar state from cookies
-  //   const cookies = document.cookie.split(";");
-  //   const sidebarCookie = cookies.find((cookie) =>
-  //     cookie.trim().startsWith("sidebar:state=")
-  //   );
-
-  //   if (sidebarCookie) {
-  //     const sidebarState = sidebarCookie.split("=")[1];
-  //     setDefaultOpen(sidebarState === "true");
-  //   } else {
-  //     // If no cookie exists, default to true (expanded)
-  //     setDefaultOpen(true);
-  //   }
-  // }, []);
-
-  // Don't render until we've read the cookie
   useEffect(() => {
     if (
       shouldRenderPosTerminalShell ||
@@ -765,12 +747,11 @@ export default function Layout() {
   }, [routeWantsFullscreen]);
 
   if (
-    defaultOpen === null ||
-    (!shouldRenderPosTerminalShell &&
+    !shouldRenderPosTerminalShell &&
       !shouldRenderPosSignInGate &&
       !shouldRenderPendingPosTerminalShell &&
       !isBlockedPosAppSession &&
-      (isLoading || user === null))
+      (isLoading || user === null)
   ) {
     return null; // or a loading spinner if you prefer
   }
@@ -824,7 +805,6 @@ export default function Layout() {
         <AppShellFullscreenContext.Provider value={{ setFullscreenOverride }}>
           <SidebarProvider
             className="fixed inset-0 h-svh !min-h-0 flex-col overflow-hidden bg-app-canvas"
-            defaultOpen={defaultOpen}
           >
             <MobileSidebarRouteDismiss routeKey={routeKey} />
             {isFullscreenActive ? null : (

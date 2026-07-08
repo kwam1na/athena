@@ -1389,6 +1389,27 @@ describe("DailyCloseViewContent", () => {
       "/wigclub/store/osu/pos/transactions?o=%252Fwigclub%252Fstore%252Fosu%252Foperations%252Fdaily-close&operatingDate=2026-05-07&paymentMethod=card",
     );
     expect(
+      screen
+        .getByRole("link", { name: "Open transactions" })
+        .compareDocumentPosition(
+          screen.getByRole("link", { name: "Open cash transactions" }),
+        ) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      screen
+        .getByRole("link", { name: "Open cash transactions" })
+        .compareDocumentPosition(
+          screen.getByRole("link", { name: "Open Card transactions" }),
+        ) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      screen
+        .getByRole("link", { name: "Open Card transactions" })
+        .compareDocumentPosition(
+          screen.getByRole("link", { name: "Open Mobile Money transactions" }),
+        ) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
       screen.getByRole("link", { name: "Open expense reports" }),
     ).toHaveAttribute(
       "href",

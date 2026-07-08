@@ -108,6 +108,7 @@ type IngestionDependencies = {
 const TERMINAL_NOT_PROVISIONED_MESSAGE =
   "This terminal is not provisioned for POS sync.";
 const TERMINAL_INGESTION_PROJECTION_OPTIONS = {
+  allowReviewedInventorySaleProjection: true,
   trustStoredStaffProof: true,
 } as const;
 
@@ -251,6 +252,45 @@ export function createLocalSyncIngestionService(
                   },
                 );
                 continue;
+              }
+
+              if (
+                existing.status === "projected" &&
+                retryParseResult.event.eventType === "sale_completed"
+              ) {
+                const acceptedAt = existing.acceptedAt ?? dependencies.now();
+                const projection = await projectLocalSyncEvent(
+                  dependencies.projectionRepository,
+                  {
+                    storeId: batch.storeId,
+                    terminalId: batch.terminalId,
+                    event: retryParseResult.event,
+                    syncEventId: existing._id,
+                    submittedByUserId: batch.submittedByUserId,
+                    now: acceptedAt,
+                    options: TERMINAL_INGESTION_PROJECTION_OPTIONS,
+                  },
+                );
+                if (
+                  projection.status === "projected" &&
+                  projection.conflicts.length === 0
+                ) {
+                  await dependencies.repository.patchEvent(existing._id, {
+                    projectedAt: dependencies.now(),
+                    submittedAt: batch.submittedAt,
+                  });
+                  accepted.push({
+                    localEventId: existing.localEventId,
+                    sequence: existing.sequence,
+                    status: "projected",
+                  });
+                  mappings.push(...projection.mappings);
+                  acceptedThroughSequence = advanceAcceptedThroughSequence(
+                    acceptedThroughSequence,
+                    existing,
+                  );
+                  continue;
+                }
               }
             }
 

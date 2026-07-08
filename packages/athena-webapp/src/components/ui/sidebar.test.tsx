@@ -1,15 +1,33 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   SidebarInset,
   SidebarMenuButton,
   SidebarProvider,
+  useSidebar,
 } from "@/components/ui/sidebar";
 
 vi.mock("@/hooks/use-mobile", () => ({
   useIsMobile: () => false,
 }));
+
+beforeEach(() => {
+  document.cookie = "sidebar_state=; path=/; max-age=0";
+});
+
+function SidebarToggleProbe() {
+  const { open, setOpen } = useSidebar();
+
+  return (
+    <>
+      <div data-testid="sidebar-open-state">{String(open)}</div>
+      <button type="button" onClick={() => setOpen(!open)}>
+        Toggle
+      </button>
+    </>
+  );
+}
 
 describe("SidebarMenuButton", () => {
   it("marks enabled menu buttons as Remote Assist controls", () => {
@@ -49,5 +67,45 @@ describe("SidebarInset", () => {
     );
 
     expect(screen.getByText("Workspace")).toHaveClass("bg-app-canvas");
+  });
+});
+
+describe("SidebarProvider", () => {
+  it("restores persisted sidebar state when no explicit default is provided", () => {
+    document.cookie = "sidebar_state=false; path=/";
+
+    render(
+      <SidebarProvider>
+        <SidebarToggleProbe />
+      </SidebarProvider>,
+    );
+
+    expect(screen.getByTestId("sidebar-open-state")).toHaveTextContent("false");
+  });
+
+  it("lets explicit defaults override persisted sidebar state", () => {
+    document.cookie = "sidebar_state=true; path=/";
+
+    render(
+      <SidebarProvider defaultOpen={false}>
+        <SidebarToggleProbe />
+      </SidebarProvider>,
+    );
+
+    expect(screen.getByTestId("sidebar-open-state")).toHaveTextContent("false");
+  });
+
+  it("does not persist automatic sidebar state changes when persistence is disabled", () => {
+    document.cookie = "sidebar_state=true; path=/";
+
+    render(
+      <SidebarProvider defaultOpen persistOpenState={false}>
+        <SidebarToggleProbe />
+      </SidebarProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Toggle" }));
+
+    expect(document.cookie).toContain("sidebar_state=true");
   });
 });

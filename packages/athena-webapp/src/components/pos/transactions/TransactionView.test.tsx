@@ -23,6 +23,7 @@ const useQueryMock = vi.fn();
 const useMutationMock = vi.fn();
 const useActionMock = vi.fn();
 const useParamsMock = vi.fn();
+const useSearchMock = vi.fn();
 const useProtectedAdminPageStateMock = vi.fn();
 
 vi.mock("convex/react", () => ({
@@ -49,6 +50,7 @@ vi.mock("@tanstack/react-router", () => ({
     return <a href={href}>{children}</a>;
   },
   useParams: (...args: unknown[]) => useParamsMock(...args),
+  useSearch: (...args: unknown[]) => useSearchMock(...args),
 }));
 
 vi.mock("../../View", () => ({
@@ -417,15 +419,27 @@ vi.mock("../../ui/button", () => ({
   Button: ({
     asChild,
     children,
+    className,
+    variant,
     ...props
   }: {
     asChild?: boolean;
     children?: React.ReactNode;
+    variant?: "workflow";
   } & React.ButtonHTMLAttributes<HTMLButtonElement>) =>
     asChild ? (
       <>{children}</>
     ) : (
-      <button type="button" {...props}>
+      <button
+        className={[
+          className,
+          variant === "workflow" ? "bg-action-workflow" : undefined,
+        ]
+          .filter(Boolean)
+          .join(" ")}
+        type="button"
+        {...props}
+      >
         {children}
       </button>
     ),
@@ -524,6 +538,8 @@ describe("TransactionView", () => {
     useMutationMock.mockReturnValue(vi.fn());
     useQueryMock.mockReset();
     useParamsMock.mockReset();
+    useSearchMock.mockReset();
+    useSearchMock.mockReturnValue({});
     useProtectedAdminPageStateMock.mockReturnValue({
       activeStore: { _id: "store_1" },
       isAuthenticated: true,
@@ -884,7 +900,7 @@ describe("TransactionView", () => {
 
     expect(
       screen.getByRole("button", { name: "Customer attribution" }),
-    ).toBeInTheDocument();
+    ).toBeDisabled();
     expect(
       screen.getByRole("button", { name: "Payment method" }),
     ).toBeInTheDocument();
@@ -928,6 +944,11 @@ describe("TransactionView", () => {
       screen.getByLabelText("Void reason"),
       "Duplicate sale recorded.",
     );
+    expect(screen.getByRole("button", { name: "Submit void" })).toHaveClass(
+      "border-danger/40",
+      "bg-danger/5",
+      "text-danger",
+    );
     await user.click(screen.getByRole("button", { name: "Submit void" }));
     await user.click(screen.getByRole("button", { name: "Confirm" }));
 
@@ -945,6 +966,20 @@ describe("TransactionView", () => {
       staffProofToken: "proof-token-1",
       transactionId: "txn_void",
     });
+  });
+
+  it("opens the void workflow from the route intent", () => {
+    mockTransactionMutations(vi.fn(), vi.fn(), vi.fn(), vi.fn(), vi.fn());
+    useParamsMock.mockReturnValue({ transactionId: "txn_void_intent" });
+    useSearchMock.mockReturnValue({ intent: "void" });
+    useQueryMock.mockReturnValue(baseTransaction);
+
+    render(<TransactionView />);
+
+    expect(
+      screen.getByRole("heading", { name: "Void completed sale" }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Void reason")).toBeInTheDocument();
   });
 
   it("disables completed sale voids while a void approval request is pending", async () => {
@@ -1441,7 +1476,7 @@ describe("TransactionView", () => {
     expect(screen.queryByRole("button", { name: "Submit void" })).not.toBeInTheDocument();
   });
 
-  it("routes high-risk transaction corrections to safe guidance", async () => {
+  it("disables unavailable amount and discount correction routes", async () => {
     const user = userEvent.setup();
     useParamsMock.mockReturnValue({ transactionId: "txn_7" });
     useQueryMock.mockReturnValue(baseTransaction);
@@ -1449,13 +1484,16 @@ describe("TransactionView", () => {
     render(<TransactionView />);
 
     await user.click(screen.getByRole("button", { name: "Update" }));
-    await user.click(screen.getByRole("button", { name: "Amounts or totals" }));
 
     expect(
-      screen.getByText(
+      screen.getByRole("button", { name: "Amounts or totals" }),
+    ).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Discounts" })).toBeDisabled();
+    expect(
+      screen.queryByText(
         "Use refund, exchange, or manager review for item, amount, total, or discount updates.",
       ),
-    ).toBeInTheDocument();
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByLabelText("Payment method update reason"),
     ).not.toBeInTheDocument();
@@ -1474,6 +1512,9 @@ describe("TransactionView", () => {
       screen.getByLabelText("Updated payment method"),
       "card",
     );
+    expect(
+      screen.getByRole("button", { name: "Submit payment update" }),
+    ).toHaveClass("bg-action-workflow");
     await user.click(
       screen.getByRole("button", { name: "Submit payment update" }),
     );
@@ -1516,7 +1557,7 @@ describe("TransactionView", () => {
     );
   });
 
-  it("places customer reason errors under the customer reason input", async () => {
+  it("keeps customer attribution updates disabled", async () => {
     const user = userEvent.setup();
     useParamsMock.mockReturnValue({ transactionId: "txn_20" });
     useQueryMock.mockReturnValue(baseTransaction);
@@ -1524,20 +1565,13 @@ describe("TransactionView", () => {
     render(<TransactionView />);
 
     await user.click(screen.getByRole("button", { name: "Update" }));
-    await user.click(
+
+    expect(
       screen.getByRole("button", { name: "Customer attribution" }),
-    );
-    await user.click(
-      screen.getByRole("button", { name: "Submit customer update" }),
-    );
-
-    const reasonInput = screen.getByLabelText("Customer update reason");
-    const reasonError = screen.getByText("Add a reason for this update");
-    const formChildren = Array.from(reasonInput.parentElement?.children ?? []);
-
-    expect(formChildren.indexOf(reasonError)).toBe(
-      formChildren.indexOf(reasonInput) + 1,
-    );
+    ).toBeDisabled();
+    expect(
+      screen.queryByText("Customer attribution update"),
+    ).not.toBeInTheDocument();
   });
 
   it("keeps payment method selection errors with the payment method form", async () => {
@@ -1695,6 +1729,33 @@ describe("TransactionView", () => {
     expect(
       screen.queryByPlaceholderText("cash, card, mobile_money..."),
     ).not.toBeInTheDocument();
+  });
+
+  it("cancels the payment method correction workflow", async () => {
+    const user = userEvent.setup();
+    useParamsMock.mockReturnValue({ transactionId: "txn_payment_cancel" });
+    useQueryMock.mockReturnValue(baseTransaction);
+
+    render(<TransactionView />);
+
+    await user.click(screen.getByRole("button", { name: "Update" }));
+    await user.click(screen.getByRole("button", { name: "Payment method" }));
+    await user.selectOptions(
+      screen.getByLabelText("Updated payment method"),
+      "card",
+    );
+    await user.type(
+      screen.getByLabelText("Payment method update reason"),
+      "Wrong tender selected.",
+    );
+    await user.click(screen.getByRole("button", { name: "Cancel payment update" }));
+
+    expect(
+      screen.queryByText("Same-amount payment method update"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Payment method" })).not.toHaveClass(
+      "bg-action-workflow",
+    );
   });
 
   it("filters the current payment method from correction options", async () => {
@@ -2367,6 +2428,9 @@ describe("TransactionView", () => {
       screen.getByLabelText("Item adjustment reason"),
       "Customer received one unit.",
     );
+    expect(
+      screen.getByRole("button", { name: "Submit item adjustment" }),
+    ).toHaveClass("bg-action-workflow");
     await user.click(
       screen.getByRole("button", { name: "Submit item adjustment" }),
     );

@@ -2714,7 +2714,7 @@ describe("RegisterSessionViewContent", () => {
       storeId: "store-1",
       subject: {
         id: "session-1",
-        label: "Register 3",
+        label: "Register 3 closeout correction",
         type: "register_session",
       },
       username: "manager",
@@ -3252,7 +3252,7 @@ describe("RegisterSessionViewContent", () => {
       storeId: "store-1",
       subject: {
         id: "session-1",
-        label: "Register 3",
+        label: "Register 3 closeout correction",
         type: "register_session",
       },
       username: "manager",
@@ -3616,6 +3616,16 @@ describe("RegisterSessionViewContent", () => {
       "Opening cash was recounted.",
     );
     expect(screen.getByText("$10")).toBeInTheDocument();
+    expect(screen.getByText("Corrected amount ($)")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Submit" })).toHaveClass(
+      "bg-action-workflow",
+    );
+    expect(
+      screen
+        .getByRole("heading", { name: "Opening float correction" })
+        .compareDocumentPosition(screen.getByText("Linked transactions")) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Submit" }));
     await user.click(
       screen.getByRole("button", { name: "Approve correction" }),
@@ -3628,7 +3638,7 @@ describe("RegisterSessionViewContent", () => {
       storeId: "store-1",
       subject: {
         id: "session-1",
-        label: "Register 3",
+        label: "Register 3 opening float correction",
         type: "register_session",
       },
       username: "manager",

@@ -1464,18 +1464,17 @@ async function resolveExistingSaleProjection(
       !reviewedConflictIds.has(conflict._id) &&
       !reviewedConflictIds.has(conflict.localEventId),
   );
-  const reviewedInventoryConflicts = eventConflicts.filter(
+  const hasReviewedInventoryConflict = eventConflicts.some(
     (conflict) =>
-      conflict.status === "needs_review" &&
       conflict.conflictType === "inventory" &&
-      (reviewedConflictIds.has(conflict._id) ||
+      (conflict.status !== "needs_review" ||
+        reviewedConflictIds.has(conflict._id) ||
         reviewedConflictIds.has(conflict.localEventId)),
   );
-
   if (
     args.options?.allowReviewedInventorySaleProjection === true &&
-    existingConflicts.length === 0 &&
-    reviewedInventoryConflicts.length > 0
+    hasReviewedInventoryConflict &&
+    existingConflicts.length === 0
   ) {
     const existingSaleInventoryProjection =
       await createSkippedInventoryReviewForExistingSale(repository, args, {
@@ -1524,11 +1523,24 @@ async function createSkippedInventoryReviewForExistingSale(
   if (inventoryValidation.conflict) {
     return conflictResult(inventoryValidation.conflict);
   }
-  if (inventoryValidation.stockMutationAllowed) {
-    return null;
-  }
 
-  await createSkippedInventoryReviewWorkItem(repository, args, {
+  if (!inventoryValidation.stockMutationAllowed) {
+    await createSkippedInventoryReviewWorkItem(repository, args, {
+      inventoryValidation,
+      linePoliciesByLocalId: validation.catalogValidation.linePoliciesByLocalId,
+      payload: validation.payload,
+      sale: {
+        receiptMapping: input.transactionMapping,
+        registerSessionId: sessionResolution.registerSession._id,
+        transactionId: input.transactionMapping.cloudId as Id<"posTransaction">,
+        transactionMapping: input.transactionMapping,
+      },
+      session: sessionResolution,
+      store: validation.store,
+    });
+  }
+  await applySaleInventoryMovements(repository, args, {
+    consumeExistingSessionHolds: true,
     inventoryValidation,
     linePoliciesByLocalId: validation.catalogValidation.linePoliciesByLocalId,
     payload: validation.payload,
@@ -2216,18 +2228,23 @@ async function persistSaleItemsAndInventory(
     saleSession,
   } = input;
   const itemMappings: LocalSyncMappingRecord[] = [];
+  const mutationQuantities = collectSaleSkuQuantities(
+    payload,
+    input.linePoliciesByLocalId,
+    inventoryValidation,
+  );
+  const shouldConsumeHolds =
+    inventoryValidation.conflict === null &&
+    (inventoryValidation.stockMutationAllowed || mutationQuantities.size > 0);
   const consumedHoldQuantities =
-    inventoryValidation.stockMutationAllowed &&
+    shouldConsumeHolds &&
     saleSession.reusedExistingSession &&
     saleSession.posSessionId
       ? await repository.consumeInventoryHoldsForSession({
           sessionId: saleSession.posSessionId,
-          items: trustedInventorySaleItems(
-            payload,
-            input.linePoliciesByLocalId,
-          ).map((item) => ({
-            productSkuId: item.productSkuId as Id<"productSku">,
-            quantity: item.quantity,
+          items: [...mutationQuantities].map(([productSkuId, quantity]) => ({
+            productSkuId,
+            quantity,
           })),
           now: args.event.occurredAt,
         })
@@ -2373,27 +2390,68 @@ async function persistSaleItemsAndInventory(
     if (reviewWorkItemMapping) {
       itemMappings.push(reviewWorkItemMapping);
     }
-    return itemMappings;
   }
 
-  for (const [productSkuId, requestedQuantity] of collectSaleSkuQuantities(
+  await applySaleInventoryMovements(repository, args, {
+    inventoryValidation,
+    linePoliciesByLocalId: input.linePoliciesByLocalId,
     payload,
+    sale,
+    session: input.session,
+    store: input.store,
+  });
+
+  return itemMappings;
+}
+
+async function applySaleInventoryMovements(
+  repository: SyncProjectionRepository,
+  args: SaleCompletedArgs,
+  input: {
+    consumeExistingSessionHolds?: boolean;
+    inventoryValidation: SaleInventoryValidation;
+    linePoliciesByLocalId: Map<string, SaleInventoryLinePolicy>;
+    payload: PosLocalSalePayload;
+    sale: PersistedSale;
+    session: SaleSessionResolution;
+    store: StoreRecord;
+  },
+) {
+  const mutationQuantities = collectSaleSkuQuantities(
+    input.payload,
     input.linePoliciesByLocalId,
-  )) {
+    input.inventoryValidation,
+  );
+  if (
+    input.consumeExistingSessionHolds === true &&
+    mutationQuantities.size > 0 &&
+    input.session.existingPosSession
+  ) {
+    await repository.consumeInventoryHoldsForSession({
+      sessionId: input.session.existingPosSession._id,
+      items: [...mutationQuantities].map(([productSkuId, quantity]) => ({
+        productSkuId,
+        quantity,
+      })),
+      now: args.event.occurredAt,
+    });
+  }
+
+  for (const [productSkuId, requestedQuantity] of mutationQuantities) {
     const sku = await repository.getProductSku(productSkuId);
     if (!sku) continue;
 
     const movementDisposition = await repository.recordSaleInventoryMovement({
       customerProfileId: input.session.existingPosSession?.customerProfileId,
       organizationId: input.store?.organizationId,
-      posTransactionId: sale.transactionId,
+      posTransactionId: input.sale.transactionId,
       productId: sku.productId,
       productSkuId,
       quantity: requestedQuantity,
-      registerSessionId: sale.registerSessionId,
+      registerSessionId: input.sale.registerSessionId,
       staffProfileId: args.event.staffProfileId,
       storeId: args.storeId,
-      transactionNumber: payload.receiptNumber,
+      transactionNumber: input.payload.receiptNumber,
     });
 
     if (movementDisposition === "inserted") {
@@ -2406,8 +2464,6 @@ async function persistSaleItemsAndInventory(
       });
     }
   }
-
-  return itemMappings;
 }
 
 async function createSkippedInventoryReviewWorkItem(
@@ -3187,8 +3243,16 @@ async function validateSaleInventory(
 function collectSaleSkuQuantities(
   payload: PosLocalSalePayload,
   linePoliciesByLocalId: Map<string, SaleInventoryLinePolicy>,
+  inventoryValidation?: SaleInventoryValidation,
 ) {
   const quantities = new Map<Id<"productSku">, number>();
+  if (inventoryValidation?.conflict) {
+    return quantities;
+  }
+  const skippedProductSkuIds = new Set(
+    inventoryValidation?.skippedMutationItems.map((item) => item.productSkuId) ??
+      [],
+  );
   for (const [index, item] of payload.items.entries()) {
     if (!isTrustedInventorySaleItem(item, linePoliciesByLocalId, index)) {
       continue;
@@ -3198,6 +3262,9 @@ function collectSaleSkuQuantities(
       continue;
     }
     const productSkuId = item.productSkuId as Id<"productSku">;
+    if (skippedProductSkuIds.has(productSkuId)) {
+      continue;
+    }
     quantities.set(
       productSkuId,
       (quantities.get(productSkuId) ?? 0) + item.quantity,

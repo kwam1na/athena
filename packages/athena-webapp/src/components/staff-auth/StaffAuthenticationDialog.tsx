@@ -10,6 +10,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingButton } from "@/components/ui/loading-button";
+import type { ButtonProps } from "@/components/ui/button";
 import { type NormalizedCommandResult } from "@/lib/errors/runCommand";
 import { presentCommandToast } from "@/lib/errors/presentCommandToast";
 import { hashPin } from "@/lib/security/pinHash";
@@ -78,6 +79,7 @@ export type StaffAuthenticationDialogProps = {
   open: boolean;
   presentation?: "dialog" | "inline" | "embedded";
   returnTriggerLabel?: string;
+  submitButtonVariant?: ButtonProps["variant"];
 };
 
 export function StaffAuthenticationDialog({
@@ -94,6 +96,7 @@ export function StaffAuthenticationDialog({
   open,
   presentation = "dialog",
   returnTriggerLabel,
+  submitButtonVariant = "workflow",
 }: StaffAuthenticationDialogProps) {
   const [mode, setMode] = useState<StaffAuthMode>("authenticate");
   const [username, setUsername] = useState("");
@@ -340,6 +343,7 @@ export function StaffAuthenticationDialog({
           onClick={handleSubmit}
           isLoading={isAuthenticating}
           disabled={!canSubmit || isAuthenticating}
+          variant={submitButtonVariant}
         >
           {activeCopy.submitLabel}
         </LoadingButton>

@@ -167,6 +167,7 @@ export function CommandApprovalDialog({
                 approval.copy.primaryActionLabel ?? "Approve and continue",
             }}
             getSuccessMessage={() => null}
+            submitButtonVariant="workflow"
             onAuthenticate={async (args) => {
               const proofResult = await onAuthenticateForApproval({
                 actionKey: approval.action.key,

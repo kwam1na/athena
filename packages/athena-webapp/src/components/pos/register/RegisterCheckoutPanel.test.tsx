@@ -84,6 +84,7 @@ describe("RegisterCheckoutPanel", () => {
       to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId",
       params: expect.any(Function),
       search: {
+        intent: "void",
         o: "%2Fwigclub%2Fstore%2Fwigclub%2Fpos%2Fregister%3Fo%3D%252Fwigclub%252Fstore%252Fwigclub%252Fpos",
       },
     });

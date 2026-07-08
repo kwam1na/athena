@@ -1316,6 +1316,143 @@ describe("product archiving", () => {
     });
   });
 
+  it("makes onboarded trusted legacy import products visible in catalog search", async () => {
+    const { ctx, tables } = createSkuMutationCtx({
+      category: [
+        {
+          _id: "category-hair",
+          name: "Hair Care",
+          slug: "hair-care",
+          storeId: "storezzzz",
+        },
+      ],
+      inventoryImportProvisionalSku: [
+        {
+          _id: "provisional001",
+          finalTrustedQuantity: 5,
+          finalizedAt: 1_000,
+          productId: "product001",
+          productSkuId: "sku001",
+          status: "active",
+          storeId: "storezzzz",
+        },
+      ],
+      product: [
+        {
+          _id: "product001",
+          availability: "live",
+          categoryId: "category-legacy",
+          isVisible: false,
+          name: "Quick And Go Bonding Glue",
+          organizationId: "org0001",
+          storeId: "storezzzz",
+          subcategoryId: "subcategory-legacy",
+        },
+      ],
+      productSku: [
+        {
+          _id: "sku001",
+          productId: "product001",
+          storeId: "storezzzz",
+        },
+      ],
+      subcategory: [
+        {
+          _id: "subcategory-protectant",
+          categoryId: "category-hair",
+          name: "Heat Protectant",
+          slug: "heat-protectant",
+          storeId: "storezzzz",
+        },
+      ],
+    });
+
+    await getHandler(update)(ctx, {
+      categoryId: "category-hair" as Id<"category">,
+      id: "product001" as Id<"product">,
+      subcategoryId: "subcategory-protectant" as Id<"subcategory">,
+    });
+
+    expect(tables.product.get("product001")).toMatchObject({
+      categoryId: "category-hair",
+      isVisible: true,
+      subcategoryId: "subcategory-protectant",
+    });
+    expect(mocks.refreshProductSkuSearchForProduct).toHaveBeenCalledWith(
+      ctx,
+      "product001",
+    );
+  });
+
+  it("keeps onboarded trusted legacy import products hidden when explicitly requested", async () => {
+    const { ctx, tables } = createSkuMutationCtx({
+      category: [
+        {
+          _id: "category-hair",
+          name: "Hair Care",
+          slug: "hair-care",
+          storeId: "storezzzz",
+        },
+      ],
+      inventoryImportProvisionalSku: [
+        {
+          _id: "provisional001",
+          finalTrustedQuantity: 5,
+          finalizedAt: 1_000,
+          productId: "product001",
+          productSkuId: "sku001",
+          status: "active",
+          storeId: "storezzzz",
+        },
+      ],
+      product: [
+        {
+          _id: "product001",
+          availability: "live",
+          categoryId: "category-legacy",
+          isVisible: false,
+          name: "Quick And Go Bonding Glue",
+          organizationId: "org0001",
+          storeId: "storezzzz",
+          subcategoryId: "subcategory-legacy",
+        },
+      ],
+      productSku: [
+        {
+          _id: "sku001",
+          productId: "product001",
+          storeId: "storezzzz",
+        },
+      ],
+      subcategory: [
+        {
+          _id: "subcategory-protectant",
+          categoryId: "category-hair",
+          name: "Heat Protectant",
+          slug: "heat-protectant",
+          storeId: "storezzzz",
+        },
+      ],
+    });
+
+    await getHandler(update)(ctx, {
+      categoryId: "category-hair" as Id<"category">,
+      id: "product001" as Id<"product">,
+      isVisible: false,
+      subcategoryId: "subcategory-protectant" as Id<"subcategory">,
+    });
+
+    expect(tables.product.get("product001")).toMatchObject({
+      categoryId: "category-hair",
+      isVisible: false,
+      subcategoryId: "subcategory-protectant",
+    });
+    expect(mocks.refreshProductSkuSearchForProduct).toHaveBeenCalledWith(
+      ctx,
+      "product001",
+    );
+  });
+
   it("rejects finalized legacy import review row saves when taxonomy remains legacy import", async () => {
     const { ctx, tables } = createSkuMutationCtx({
       category: [
