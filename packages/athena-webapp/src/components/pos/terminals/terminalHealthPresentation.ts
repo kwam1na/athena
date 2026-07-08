@@ -100,21 +100,21 @@ export type TerminalOperationalExplanationPresentation = {
 type TerminalHealthClassificationInput = {
   attentionReasons?: TerminalHealthAttentionReason[];
   health?:
-    | "needs_attention"
-    | "offline"
-    | "online"
-    | "stale"
-    | "unknown"
-    | string;
+  | "needs_attention"
+  | "offline"
+  | "online"
+  | "stale"
+  | "unknown"
+  | string;
   operationalExplanation?: TerminalOperationalExplanation | null;
   recovery?: TerminalRecoveryPreview | null;
   recoveryPreview?: TerminalRecoveryPreview | null;
   runtimeStatus:
-    | (Omit<Partial<TerminalRuntimeStatus>, "localStore" | "sync"> & {
-        localStore?: Partial<TerminalRuntimeStatus["localStore"]>;
-        sync?: Partial<TerminalRuntimeStatus["sync"]>;
-      })
-    | null;
+  | (Omit<Partial<TerminalRuntimeStatus>, "localStore" | "sync"> & {
+    localStore?: Partial<TerminalRuntimeStatus["localStore"]>;
+    sync?: Partial<TerminalRuntimeStatus["sync"]>;
+  })
+  | null;
   syncEvidence: Partial<TerminalSyncEvidence>;
   terminal: Pick<TerminalRecord, "status"> & Partial<TerminalRecord>;
 };
@@ -1048,8 +1048,8 @@ export function buildTerminalRecoveryPresentation(
       status: formatStatusLabel(recovery?.commandStatus?.status ?? "idle"),
       verificationStatus: formatStatusLabel(
         recovery?.commandStatus?.verificationStatus ??
-          recovery?.verification?.status ??
-          "not_started",
+        recovery?.verification?.status ??
+        "not_started",
       ),
     },
     groups,
@@ -1058,8 +1058,8 @@ export function buildTerminalRecoveryPresentation(
     verification: {
       status: formatStatusLabel(
         recovery?.verification?.status ??
-          recovery?.commandStatus?.verificationStatus ??
-          "not_started",
+        recovery?.commandStatus?.verificationStatus ??
+        "not_started",
       ),
       summary:
         normalizeSupportCopy(recovery?.verification?.summary) ??
@@ -1127,8 +1127,8 @@ function getTerminalAppUpdatePreview(
 
   const runtimeStatus = summary.runtimeStatus as
     | (TerminalHealthClassificationInput["runtimeStatus"] & {
-        appUpdate?: unknown;
-      })
+      appUpdate?: unknown;
+    })
     | null;
   return normalizeTerminalAppUpdatePreview(runtimeStatus?.appUpdate);
 }
@@ -1280,7 +1280,7 @@ function getAppUpdateStatusFallback(status: TerminalAppUpdateStatus) {
       };
     case "update_ready":
       return {
-        label: "Update ready",
+        label: "New version available",
         toneClassName: "border-warning/30 bg-warning/15 text-warning",
       };
     case "update_ready_unstaged":
@@ -1486,9 +1486,8 @@ function buildRecoveryBlockersFromPreview(
         status: commandStatus ?? "available",
       },
       category: "cloud_repair",
-      detail: `${preview.cloudRepair?.safeConflictIds.length ?? 0} safe conflict${
-        preview.cloudRepair?.safeConflictIds.length === 1 ? "" : "s"
-      } matched.`,
+      detail: `${preview.cloudRepair?.safeConflictIds.length ?? 0} safe conflict${preview.cloudRepair?.safeConflictIds.length === 1 ? "" : "s"
+        } matched.`,
       id: "cloud-repair-preview",
       status: commandStatus ?? "available",
       summary:
@@ -1639,7 +1638,7 @@ function buildRecoveryReadiness(
           : "healthy_idle";
   const status =
     explicitStatus &&
-    explicitReadinessMatchesVisibleEvidence(explicitStatus, groups)
+      explicitReadinessMatchesVisibleEvidence(explicitStatus, groups)
       ? explicitStatus
       : derivedStatus;
 
@@ -1734,13 +1733,13 @@ function normalizeBackendRecoveryBlocker(
   const category = normalizeRecoveryCategory(blocker.category);
   const safeAction =
     blocker.action &&
-    ["cloud_repair", "terminal_command"].includes(blocker.action.kind)
+      ["cloud_repair", "terminal_command"].includes(blocker.action.kind)
       ? {
-          ...blocker.action,
-          label:
-            normalizeSupportCopy(blocker.action.label) ?? blocker.action.label,
-          status: normalizeActionStatus(blocker.action.status),
-        }
+        ...blocker.action,
+        label:
+          normalizeSupportCopy(blocker.action.label) ?? blocker.action.label,
+        status: normalizeActionStatus(blocker.action.status),
+      }
       : undefined;
 
   return {
@@ -1831,13 +1830,13 @@ function getTerminalCommandRecoverySummary(
       ? "Update app command"
       : commandType === "collect_local_review"
         ? "Local review collection"
-      : commandType === "clear_local_review_items"
-        ? "Local review cleanup"
-      : commandType === "clear_stale_drawer_authority"
-        ? "Drawer repair command"
-        : commandType === "retry_sync"
-          ? "Sync retry command"
-          : "Terminal repair command";
+        : commandType === "clear_local_review_items"
+          ? "Local review cleanup"
+          : commandType === "clear_stale_drawer_authority"
+            ? "Drawer repair command"
+            : commandType === "retry_sync"
+              ? "Sync retry command"
+              : "Terminal repair command";
   if (status === "verified" && commandType === "collect_local_review") {
     return "Local review collection completed, but the terminal still reports local review items.";
   }

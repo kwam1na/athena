@@ -236,7 +236,7 @@ describe("terminal health presentation", () => {
           commandType: "update_app",
           status: "available",
         }),
-        label: "Update ready",
+        label: "New version available",
         status: "update_ready",
       }),
     );
@@ -399,7 +399,7 @@ describe("terminal health presentation", () => {
         }),
         description:
           "An app update is ready, but the POS app shell could not cache every required asset for offline use. 1 of 17 asset needs attention.",
-        label: "Update ready",
+        label: "New version available",
         status: "update_ready",
       }),
     );

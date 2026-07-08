@@ -164,10 +164,10 @@ describe("PointOfSaleView", () => {
               localDate: "2026-07-08",
               localStartLabel: "09:00",
             },
-            timezone: "Africa/Accra",
+            timezone: "America/New_York",
           },
           schedule: {
-            timezone: "Africa/Accra",
+            timezone: "America/New_York",
           },
         };
       }

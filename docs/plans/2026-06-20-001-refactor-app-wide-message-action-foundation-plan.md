@@ -116,7 +116,7 @@ flowchart LR
   AppUpdate["App update adapter"] --> Message["App-wide message/action registry"]
   Blocker --> Message
   Message --> Host["App message host renderers"]
-  Host --> Operator["Operator sees Update ready / blocked guidance"]
+  Host --> Operator["Operator sees New version available / blocked guidance"]
   Operator --> Action["Update action"]
   Action --> AppUpdate
   AppUpdate --> Reload["Controlled app-update reload boundary"]

@@ -12,6 +12,7 @@ import { toDisplayAmount } from "../lib/currency";
 import { currencyFormatter } from "../utils";
 import { sendDailyManagerReportEmail } from "../mailersend";
 import { ADMIN_EMAILS } from "../constants/email";
+import { getStoreScheduleContextForStoreAtWithCtx } from "../inventory/storeSchedule";
 import { buildDailyCloseSnapshotWithCtx } from "./dailyClose";
 import type {
   DailyManagerReportItem,
@@ -103,6 +104,10 @@ export const getMostRecentDailyManagerReportPayload = internalQuery({
       ? await resolveStaffName(ctx, dailyClose.completedByStaffProfileId)
       : null;
     const snapshot = dailyClose.reportSnapshot as DailyCloseReportSnapshot;
+    const completedTimezone = await resolveStoreScheduleTimezoneForAt(ctx, {
+      at: snapshot.closeMetadata.completedAt,
+      storeId: store._id,
+    });
     const cashPositionSummary = await buildRegisterCashPositionSummary(ctx, {
       endAt: snapshot.closeMetadata.endAt,
       operatingDate: snapshot.closeMetadata.operatingDate,
@@ -114,6 +119,7 @@ export const getMostRecentDailyManagerReportPayload = internalQuery({
       cashPositionSummary,
       dailyClose,
       completedBy: completedBy ?? "Athena",
+      completedTimezone,
       store,
     });
   },
@@ -164,12 +170,23 @@ export const getDailyManagerReportPayloadsForDateRange = internalQuery({
         });
       }),
     );
+    const completedTimezones = await Promise.all(
+      dailyClosesWithSnapshots.map((dailyClose) => {
+        const snapshot = dailyClose.reportSnapshot as DailyCloseReportSnapshot;
+
+        return resolveStoreScheduleTimezoneForAt(ctx, {
+          at: snapshot.closeMetadata.completedAt,
+          storeId: store._id,
+        });
+      }),
+    );
 
     return dailyClosesWithSnapshots.map((dailyClose, index) =>
       buildDailyManagerReportPayload({
         cashPositionSummary: cashPositionSummaries[index],
         dailyClose,
         completedBy: completedByNames[index] ?? "Athena",
+        completedTimezone: completedTimezones[index],
         store,
       }),
     );
@@ -194,10 +211,15 @@ export const getPreparedDailyManagerReportPayloadForDate = internalQuery({
       startAt: snapshot.startAt,
       storeId: store._id,
     });
+    const preparedAt = args.preparedAt ?? Date.now();
 
     return buildPreparedDailyManagerReportPayload({
       cashPositionSummary,
-      preparedAt: args.preparedAt,
+      completedTimezone: await resolveStoreScheduleTimezoneForAt(ctx, {
+        at: preparedAt,
+        storeId: store._id,
+      }),
+      preparedAt,
       snapshot,
       store,
     });
@@ -392,6 +414,7 @@ async function resolveStaffName(
 function buildDailyManagerReportPayload(args: {
   cashPositionSummary?: RegisterCashPositionSummary;
   completedBy: string;
+  completedTimezone: string;
   dailyClose: Doc<"dailyClose">;
   store: Doc<"store">;
 }): DailyManagerReportPayload {
@@ -409,7 +432,10 @@ function buildDailyManagerReportPayload(args: {
     operatingDateValue: operatingDate,
     storeName: args.store.name,
     operatingDate: formatOperatingDate(operatingDate),
-    completedAt: formatCompletedAt(snapshot.closeMetadata.completedAt),
+    completedAt: formatCompletedAt(
+      snapshot.closeMetadata.completedAt,
+      args.completedTimezone,
+    ),
     completedBy: args.completedBy,
     storeCurrency,
     status: "applied",
@@ -434,6 +460,7 @@ function buildDailyManagerReportPayload(args: {
 
 function buildPreparedDailyManagerReportPayload(args: {
   cashPositionSummary?: RegisterCashPositionSummary;
+  completedTimezone: string;
   preparedAt?: number;
   snapshot: PreparedDailyCloseSnapshot;
   store: Doc<"store">;
@@ -450,7 +477,10 @@ function buildPreparedDailyManagerReportPayload(args: {
     operatingDateValue: args.snapshot.operatingDate,
     storeName: args.store.name,
     operatingDate: formatOperatingDate(args.snapshot.operatingDate),
-    completedAt: formatCompletedAt(args.preparedAt ?? Date.now()),
+    completedAt: formatCompletedAt(
+      args.preparedAt ?? Date.now(),
+      args.completedTimezone,
+    ),
     completedBy: "Athena",
     storeCurrency,
     status: "prepared",
@@ -801,11 +831,19 @@ function formatOperatingDate(operatingDate: string) {
   });
 }
 
-function formatCompletedAt(completedAt: number) {
+async function resolveStoreScheduleTimezoneForAt(
+  ctx: Pick<QueryCtx, "db">,
+  args: { at: number; storeId: Id<"store"> },
+) {
+  const { context } = await getStoreScheduleContextForStoreAtWithCtx(ctx, args);
+  return context.kind === "resolved" ? context.timezone : "UTC";
+}
+
+function formatCompletedAt(completedAt: number, timezone: string) {
   return new Date(completedAt).toLocaleTimeString("en-US", {
     hour: "numeric",
     minute: "2-digit",
-    timeZone: "Africa/Accra",
+    timeZone: timezone,
   });
 }
 

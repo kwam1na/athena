@@ -655,10 +655,10 @@ describe("registerAndProvisionPosTerminal", () => {
                 isOpen: true,
                 nextWindow: null,
                 phase: "during_window",
-                timezone: "Africa/Accra",
+                timezone: "America/New_York",
               },
               schedule: {
-                timezone: "Africa/Accra",
+                timezone: "America/New_York",
               },
             }
           : null,
@@ -914,10 +914,10 @@ describe("registerAndProvisionPosTerminal", () => {
                 isOpen: true,
                 nextWindow: null,
                 phase: "during_window",
-                timezone: "Africa/Accra",
+                timezone: "America/New_York",
               },
               schedule: {
-                timezone: "Africa/Accra",
+                timezone: "America/New_York",
               },
             }
           : null,

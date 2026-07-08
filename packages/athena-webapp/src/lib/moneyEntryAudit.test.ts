@@ -34,8 +34,8 @@ const reviewedRawParses: ReviewedRawParse[] = [
       "Shared parser implementation: raw parse is contained inside parseDisplayAmountInput.",
   },
   {
-    file: "src/components/cash-controls/formatReviewReason.ts",
-    textIncludes: "formatStoredAmount(formatter, Number(rawVariance))",
+    file: "shared/reviewReasonFormatter.ts",
+    textIncludes: "formatStoredAmount(Number(rawVariance))",
     reason:
       "Display-only formatting for a backend-generated minor-unit variance reason; no persisted money input boundary.",
   },
