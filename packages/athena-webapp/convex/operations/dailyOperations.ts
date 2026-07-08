@@ -2167,11 +2167,11 @@ function buildLanes(args: {
           : closeBlockerCount,
       description:
         args.closeStatus === "blocked" && args.isCloseReopened
-          ? `${pluralize(closeBlockerCount, "close blocker")} must be resolved after reopening the end of day review.`
+          ? `${pluralize(closeBlockerCount, "blocker")} after reopening.`
           : args.closeStatus === "completed"
             ? "The end of day review is saved for this store day."
             : args.closeStatus === "blocked"
-              ? `${pluralize(closeBlockerCount, "close blocker")} must be resolved before close.`
+              ? `${pluralize(closeBlockerCount, "blocker")} before close.`
               : "The end of day review is available for review.",
       key: "close",
       label: "EOD Review",
@@ -2183,9 +2183,9 @@ function buildLanes(args: {
       countLabel: args.queueCounts.workItemCountLabel,
       description:
         args.queueCounts.workItemCount > 0
-          ? `${args.queueCounts.workItemCountLabel} open work item${
+          ? `${args.queueCounts.workItemCountLabel} open item${
               args.queueCounts.workItemCount === 1 ? "" : "s"
-            } visible in the operations queue.`
+            }.`
           : "No open queue work.",
       key: "queue",
       label: "Open work",
@@ -2200,7 +2200,9 @@ function buildLanes(args: {
       count: args.closeBlockerCounts.registerCount,
       description:
         args.closeBlockerCounts.registerCount > 0
-          ? `${pluralize(args.closeBlockerCounts.registerCount, "register")} need attention before close.`
+          ? `${pluralize(args.closeBlockerCounts.registerCount, "register")} ${
+              args.closeBlockerCounts.registerCount === 1 ? "needs" : "need"
+            } attention.`
           : "No register blockers.",
       key: "registers",
       label: "Registers",
@@ -2211,7 +2213,7 @@ function buildLanes(args: {
       count: args.closeBlockerCounts.posSessionCount,
       description:
         args.closeBlockerCounts.posSessionCount > 0
-          ? `${pluralize(args.closeBlockerCounts.posSessionCount, "POS session")} still open or held.`
+          ? `${pluralize(args.closeBlockerCounts.posSessionCount, "POS session")} open or held.`
           : "No unresolved POS sessions.",
       key: "pos_sessions",
       label: "POS sessions",
@@ -2222,7 +2224,7 @@ function buildLanes(args: {
       count: args.closeBlockerCounts.expenseCount,
       description:
         args.closeBlockerCounts.expenseCount > 0
-          ? `${pluralize(args.closeBlockerCounts.expenseCount, "expense")} included in the close review.`
+          ? `${pluralize(args.closeBlockerCounts.expenseCount, "expense")} in close review.`
           : "No expense exceptions.",
       key: "expenses",
       label: "Expenses",

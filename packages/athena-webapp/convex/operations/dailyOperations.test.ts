@@ -1368,8 +1368,7 @@ describe("daily operations overview read model", () => {
     });
     expect(snapshot.lanes.find((lane) => lane.key === "close")).toMatchObject({
       count: 1,
-      description:
-        "1 close blocker must be resolved after reopening the end of day review.",
+      description: "1 blocker after reopening.",
       status: "blocked",
     });
     expect(snapshot.attentionItems).toContainEqual(

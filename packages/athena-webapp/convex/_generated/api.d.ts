@@ -55,6 +55,7 @@ import type * as emails_FeedbackRequest from "../emails/FeedbackRequest.js";
 import type * as emails_NewOrderAdmin from "../emails/NewOrderAdmin.js";
 import type * as emails_OrderEmail from "../emails/OrderEmail.js";
 import type * as emails_PosReceiptEmail from "../emails/PosReceiptEmail.js";
+import type * as emails_RegisterCloseoutVarianceAlert from "../emails/RegisterCloseoutVarianceAlert.js";
 import type * as emails_VerificationCode from "../emails/VerificationCode.js";
 import type * as env from "../env.js";
 import type * as http from "../http.js";
@@ -182,6 +183,7 @@ import type * as operations_operationalEvents from "../operations/operationalEve
 import type * as operations_operationalWorkItems from "../operations/operationalWorkItems.js";
 import type * as operations_paymentAllocations from "../operations/paymentAllocations.js";
 import type * as operations_paymentTotals from "../operations/paymentTotals.js";
+import type * as operations_registerCloseoutVarianceEmail from "../operations/registerCloseoutVarianceEmail.js";
 import type * as operations_registerSessionCloseoutGate from "../operations/registerSessionCloseoutGate.js";
 import type * as operations_registerSessionTracing from "../operations/registerSessionTracing.js";
 import type * as operations_registerSessions from "../operations/registerSessions.js";
@@ -498,6 +500,7 @@ declare const fullApi: ApiFromModules<{
   "emails/NewOrderAdmin": typeof emails_NewOrderAdmin;
   "emails/OrderEmail": typeof emails_OrderEmail;
   "emails/PosReceiptEmail": typeof emails_PosReceiptEmail;
+  "emails/RegisterCloseoutVarianceAlert": typeof emails_RegisterCloseoutVarianceAlert;
   "emails/VerificationCode": typeof emails_VerificationCode;
   env: typeof env;
   http: typeof http;
@@ -625,6 +628,7 @@ declare const fullApi: ApiFromModules<{
   "operations/operationalWorkItems": typeof operations_operationalWorkItems;
   "operations/paymentAllocations": typeof operations_paymentAllocations;
   "operations/paymentTotals": typeof operations_paymentTotals;
+  "operations/registerCloseoutVarianceEmail": typeof operations_registerCloseoutVarianceEmail;
   "operations/registerSessionCloseoutGate": typeof operations_registerSessionCloseoutGate;
   "operations/registerSessionTracing": typeof operations_registerSessionTracing;
   "operations/registerSessions": typeof operations_registerSessions;

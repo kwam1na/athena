@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ADMIN_EMAILS } from "../constants/email";
 import {
+  buildCashMetrics,
   buildSummaryMetrics,
   resolveAppUrl,
   sendDailyManagerReportToAdminsForDateWithCtx,
@@ -82,6 +83,26 @@ describe("daily manager report email URLs", () => {
         money,
       ),
     ).toContainEqual({ label: "Voids", value: "2" });
+  });
+
+  it("builds cash metrics from register expected and counted totals", () => {
+    const money = (amount: number) => `GHS ${amount}`;
+
+    expect(
+      buildCashMetrics(
+        {
+          countedCashTotal: 208000,
+          currentDayCashTotal: 162500,
+          expectedCashTotal: 178000,
+          netCashVariance: 30000,
+        },
+        money,
+      ),
+    ).toEqual([
+      { label: "Expected cash", value: "GHS 178000" },
+      { label: "Counted cash", value: "GHS 208000" },
+      { label: "Net variance", value: "GHS 30000" },
+    ]);
   });
 
   it("sends the completed daily report to every configured admin email", async () => {

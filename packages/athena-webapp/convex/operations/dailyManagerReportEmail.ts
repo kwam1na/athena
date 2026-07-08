@@ -402,13 +402,6 @@ function buildDailyManagerReportPayload(args: {
     ...snapshot.summary,
     ...(args.cashPositionSummary ?? {}),
   };
-  const expectedCash = numberFromSummaryWithFallback(
-    summary,
-    "currentDayCashTotal",
-    numberFromSummary(summary, "expectedCashTotal"),
-  );
-  const netCashVariance = numberFromSummary(summary, "netCashVariance");
-  const countedCash = expectedCash + netCashVariance;
   const operatingDate = snapshot.closeMetadata.operatingDate;
   const reportUrl = `${resolveAppUrl()}/${args.store.slug}/store/${args.store.slug}/operations/daily-close?operatingDate=${encodeURIComponent(operatingDate)}`;
   return {
@@ -433,20 +426,7 @@ function buildDailyManagerReportPayload(args: {
     carryForwardItems: buildCarryForwardItems(snapshot),
     blockers: buildBlockers(snapshot),
     summaryMetrics: buildSummaryMetrics(summary, money),
-    cashMetrics: [
-      {
-        label: "Expected cash",
-        value: money(expectedCash),
-      },
-      {
-        label: "Counted cash",
-        value: money(countedCash),
-      },
-      {
-        label: "Net variance",
-        value: money(netCashVariance),
-      },
-    ],
+    cashMetrics: buildCashMetrics(summary, money),
     paymentTotals: buildPaymentTotals(summary, money),
     notes: snapshot.closeMetadata.notes ?? args.dailyClose.notes,
   };
@@ -464,13 +444,6 @@ function buildPreparedDailyManagerReportPayload(args: {
     ...args.snapshot.summary,
     ...(args.cashPositionSummary ?? {}),
   };
-  const expectedCash = numberFromSummaryWithFallback(
-    summary,
-    "currentDayCashTotal",
-    numberFromSummary(summary, "expectedCashTotal"),
-  );
-  const netCashVariance = numberFromSummary(summary, "netCashVariance");
-  const countedCash = expectedCash + netCashVariance;
   const reportUrl = `${resolveAppUrl()}/${args.store.slug}/store/${args.store.slug}/operations/daily-close?operatingDate=${encodeURIComponent(args.snapshot.operatingDate)}`;
 
   return {
@@ -486,20 +459,7 @@ function buildPreparedDailyManagerReportPayload(args: {
     carryForwardItems: buildPreparedCarryForwardItems(args.snapshot),
     blockers: buildPreparedBlockers(args.snapshot),
     summaryMetrics: buildSummaryMetrics(summary, money),
-    cashMetrics: [
-      {
-        label: "Expected cash",
-        value: money(expectedCash),
-      },
-      {
-        label: "Counted cash",
-        value: money(countedCash),
-      },
-      {
-        label: "Net variance",
-        value: money(netCashVariance),
-      },
-    ],
+    cashMetrics: buildCashMetrics(summary, money),
     paymentTotals: buildPaymentTotals(summary, money),
     notes: "EOD Review is waiting for manager review.",
   };
@@ -750,6 +710,34 @@ export function buildSummaryMetrics(
           },
         ]
       : []),
+  ];
+}
+
+export function buildCashMetrics(
+  summary: Record<string, unknown>,
+  money: (amount: number) => string,
+): DailyManagerReportMetric[] {
+  const expectedCash = numberFromSummary(summary, "expectedCashTotal");
+  const netCashVariance = numberFromSummary(summary, "netCashVariance");
+  const countedCash = numberFromSummaryWithFallback(
+    summary,
+    "countedCashTotal",
+    expectedCash + netCashVariance,
+  );
+
+  return [
+    {
+      label: "Expected cash",
+      value: money(expectedCash),
+    },
+    {
+      label: "Counted cash",
+      value: money(countedCash),
+    },
+    {
+      label: "Net variance",
+      value: money(netCashVariance),
+    },
   ];
 }
 
