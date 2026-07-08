@@ -9,7 +9,7 @@ import { currencyFormatter } from "../utils";
 const ghs = currencyFormatter("GHS");
 
 const baseProps: DailyManagerReportProps = {
-  storeName: "Wigclub East Legon",
+  storeName: "Wigclub",
   operatingDate: "Friday, July 3",
   completedAt: "8:42 PM",
   completedBy: "Athena",

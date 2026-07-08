@@ -4,6 +4,7 @@ import { ArrowRight, ArrowUpRight } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
   formatPendingCashVoidNotice,
   getPendingCashVoidContext,
@@ -254,7 +255,6 @@ function CashPositionSummary({
   snapshot: CashControlsDashboardSnapshot;
 }) {
   const {
-    depositedTotal,
     expectedCashTotal,
     onHandTotal,
     unresolvedVarianceTotal,
@@ -270,18 +270,6 @@ function CashPositionSummary({
           canView={hasFinancialDetailsAccess}
           currency={currency}
           label="Expected in drawers"
-        />
-      ),
-    },
-    {
-      label: "Deposits recorded",
-      supporting: `${snapshot.recentDeposits.length == 0 ? "No" : snapshot.recentDeposits.length} recent drop${snapshot.recentDeposits.length === 1 ? "" : "s"}`,
-      value: (
-        <CashControlsFinancialValue
-          amount={depositedTotal}
-          canView={hasFinancialDetailsAccess}
-          currency={currency}
-          label="Deposits recorded"
         />
       ),
     },
@@ -316,7 +304,7 @@ function CashPositionSummary({
   ];
 
   return (
-    <dl className="grid gap-layout-sm md:grid-cols-2 2xl:grid-cols-4">
+    <dl className="grid gap-layout-sm md:grid-cols-3">
       {items.map((item) => (
         <div
           className="rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface"
@@ -565,19 +553,21 @@ function DrawerSessionCard({
       search={{ o: getOrigin() }}
       to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId"
     >
-      <div className="flex items-start justify-between gap-layout-md">
-        <div className="min-w-0 space-y-1">
+      <div className="flex flex-col gap-layout-sm sm:flex-row sm:items-start sm:justify-between sm:gap-layout-md">
+        <div className="min-w-0 flex-1 space-y-1">
           <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
-            <p className="truncate font-medium text-foreground">
+            <p className="min-w-0 font-medium text-foreground">
               {formatRegisterName(session.registerNumber)}
             </p>
-            <p className="truncate text-xs text-muted-foreground">
+            <p className="min-w-0 break-all text-xs text-muted-foreground">
               {sessionIdentifier}
             </p>
           </div>
-          <p className="text-xs text-muted-foreground">{openedLine}</p>
+          <p className="text-xs leading-5 text-muted-foreground">
+            {openedLine}
+          </p>
         </div>
-        <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
+        <div className="flex shrink-0 flex-wrap justify-start gap-1.5 sm:justify-end">
           {needsVarianceReview(session) && !isCloseoutSyncReview ? (
             <Badge
               className="border-transparent bg-danger/10 text-danger"
@@ -611,13 +601,16 @@ function DrawerSessionCard({
       <dl
         className={cn(
           "mt-layout-md grid gap-layout-sm",
+          metricColumnCount === 1 ? "grid-cols-1" : "grid-cols-2",
           metricColumnCount === 4
-            ? "grid-cols-4"
+            ? "sm:grid-cols-4"
             : metricColumnCount === 5
-              ? "grid-cols-5"
+              ? "sm:grid-cols-5"
               : metricColumnCount === 3
-                ? "grid-cols-3"
-                : "grid-cols-2",
+                ? "sm:grid-cols-3"
+                : metricColumnCount === 2
+                  ? "sm:grid-cols-2"
+                  : null,
         )}
       >
         <div>
@@ -804,6 +797,7 @@ function ClosedSessionsSummary({
   sessions: CashControlsDashboardSession[];
   storeUrlSlug: string;
 }) {
+  const isMobile = useIsMobile();
   const previewSessions = sessions.slice(0, CLOSED_SESSION_PREVIEW_LIMIT);
   const hasAdditionalSessions = sessions.length > previewSessions.length;
   const tableHeadClass =
@@ -833,6 +827,78 @@ function ClosedSessionsSummary({
         <p className="rounded-lg border border-dashed border-border bg-background/60 px-layout-md py-layout-lg text-sm text-muted-foreground">
           Closed sessions will appear after closeout.
         </p>
+      ) : isMobile ? (
+        <div className="space-y-layout-sm">
+          {previewSessions.map((session) => (
+            <Link
+              className="block rounded-lg border border-border bg-surface-raised px-layout-md py-layout-sm shadow-surface transition-colors hover:border-signal/50 hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              key={session._id}
+              params={{
+                orgUrlSlug,
+                sessionId: session._id,
+                storeUrlSlug,
+              }}
+              search={{ o: getOrigin() }}
+              to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId"
+            >
+              <div className="flex items-start justify-between gap-layout-sm">
+                <div className="min-w-0">
+                  <p className="font-medium text-foreground">
+                    {formatRegisterName(session.registerNumber)}
+                  </p>
+                  <dl className="mt-2 grid grid-cols-[auto_minmax(0,1fr)] gap-x-layout-sm gap-y-1 text-xs">
+                    <dt className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                      Opened
+                    </dt>
+                    <dd className="min-w-0 text-muted-foreground">
+                      {formatTimestamp(session.openedAt)}
+                    </dd>
+                    <dt className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                      Closed
+                    </dt>
+                    <dd className="min-w-0 text-muted-foreground">
+                      {session.closedAt
+                        ? formatTimestamp(session.closedAt)
+                        : "Not recorded"}
+                    </dd>
+                  </dl>
+                </div>
+                <p
+                  className={cn(
+                    "shrink-0 font-numeric text-sm tabular-nums",
+                    getVarianceTone(session.variance),
+                  )}
+                >
+                  <CashControlsFinancialValue
+                    amount={session.variance ?? 0}
+                    canView={hasFinancialDetailsAccess}
+                    currency={currency}
+                    label="Variance"
+                  />
+                </p>
+              </div>
+            </Link>
+          ))}
+
+          {hasAdditionalSessions ? (
+            <div className="flex flex-col gap-layout-sm rounded-lg border border-border bg-background/70 px-layout-md py-layout-sm">
+              <p className="text-sm text-muted-foreground">
+                Showing latest {previewSessions.length} of {sessions.length}{" "}
+                closed sessions.
+              </p>
+              <Button asChild className="w-full" size="sm" variant="outline">
+                <Link
+                  params={{ orgUrlSlug, storeUrlSlug }}
+                  search={{ o: getOrigin() }}
+                  to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers"
+                >
+                  View all register sessions
+                  <ArrowUpRight className="h-3.5 w-3.5" />
+                </Link>
+              </Button>
+            </div>
+          ) : null}
+        </div>
       ) : (
         <div
           className="overflow-hidden rounded-lg border border-border bg-transparent"
@@ -1263,120 +1329,6 @@ function CashroomWorkflow({
   );
 }
 
-function DepositsLedger({
-  currency,
-  deposits,
-  hasFinancialDetailsAccess,
-  orgUrlSlug,
-  storeUrlSlug,
-}: {
-  currency: string;
-  deposits: CashControlsDashboardDeposit[];
-  hasFinancialDetailsAccess: boolean;
-  orgUrlSlug: string;
-  storeUrlSlug: string;
-}) {
-  const tableHeadClass =
-    "text-[11px] uppercase tracking-[0.18em] text-muted-foreground";
-
-  return (
-    <section className="space-y-layout-md">
-      <div className="space-y-layout-2xs">
-        <h2 className="font-display text-2xl font-semibold tracking-tight text-foreground">
-          Recent deposits
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          Recorded bank deposits grouped by register, with a quick path back
-          into deposit entry when another drop needs logging.
-        </p>
-      </div>
-
-      {deposits.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-border bg-surface-raised px-layout-lg py-layout-xl">
-          <EmptyState
-            description="Cash drops will appear here once deposits start getting recorded"
-            title="No deposits recorded yet"
-          />
-        </div>
-      ) : (
-        <div className="overflow-hidden rounded-lg border border-border bg-surface-raised shadow-surface">
-          <Table>
-            <TableHeader>
-              <TableRow className="border-b border-border hover:bg-transparent">
-                <TableHead className={tableHeadClass}>Register</TableHead>
-                <TableHead className={tableHeadClass}>Amount</TableHead>
-                <TableHead className={tableHeadClass}>Recorded</TableHead>
-                <TableHead className={tableHeadClass}>Reference</TableHead>
-                <TableHead className={tableHeadClass}>By</TableHead>
-                <TableHead className={tableHeadClass}>Notes</TableHead>
-                <TableHead className={cn(tableHeadClass, "text-right")}>
-                  Next step
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {deposits.map((deposit) => (
-                <TableRow
-                  className="group border-b border-border/70 transition-colors hover:bg-muted/40"
-                  key={deposit._id}
-                >
-                  <TableCell className="font-medium text-foreground">
-                    {formatRegisterName(deposit.registerNumber)}
-                  </TableCell>
-                  <TableCell className="font-numeric tabular-nums text-foreground">
-                    <CashControlsFinancialValue
-                      amount={deposit.amount}
-                      canView={hasFinancialDetailsAccess}
-                      currency={currency}
-                      label="Deposit amount"
-                    />
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {formatTimestamp(deposit.recordedAt)}
-                  </TableCell>
-                  <TableCell>{deposit.reference ?? "—"}</TableCell>
-                  <TableCell>
-                    {deposit.recordedByStaffName
-                      ? formatStaffDisplayName({
-                          fullName: deposit.recordedByStaffName,
-                        })
-                      : "—"}
-                  </TableCell>
-                  <TableCell>{deposit.notes ?? "—"}</TableCell>
-                  <TableCell className="text-right">
-                    {deposit.registerSessionId ? (
-                      <Button
-                        asChild
-                        className="border-border bg-background text-foreground hover:bg-surface"
-                        size="sm"
-                        variant="outline"
-                      >
-                        <Link
-                          params={{
-                            orgUrlSlug,
-                            sessionId: deposit.registerSessionId,
-                            storeUrlSlug,
-                          }}
-                          search={{ o: getOrigin() }}
-                          to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId"
-                        >
-                          Record bank deposit
-                        </Link>
-                      </Button>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      )}
-    </section>
-  );
-}
-
 export function CashControlsDashboardContent({
   currency,
   dashboardSnapshot,
@@ -1410,7 +1362,7 @@ export function CashControlsDashboardContent({
                       aria-hidden
                       className="h-2 w-2 rounded-full bg-signal"
                     />
-                    Live drawers, recent deposits, and session history
+                    Live drawers, variances, and session history
                   </div>
                 </div>
                 <CashPositionSummary
@@ -1425,14 +1377,6 @@ export function CashControlsDashboardContent({
                 hasFinancialDetailsAccess={hasFinancialDetailsAccess}
                 orgUrlSlug={orgUrlSlug}
                 snapshot={dashboardSnapshot}
-                storeUrlSlug={storeUrlSlug}
-              />
-
-              <DepositsLedger
-                currency={currency}
-                deposits={dashboardSnapshot.recentDeposits}
-                hasFinancialDetailsAccess={hasFinancialDetailsAccess}
-                orgUrlSlug={orgUrlSlug}
                 storeUrlSlug={storeUrlSlug}
               />
             </PageWorkspaceMain>

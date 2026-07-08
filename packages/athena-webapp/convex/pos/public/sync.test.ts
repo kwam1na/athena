@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { assertConformsToExportedReturns } from "../../lib/returnValidatorContract";
 
 const mocks = vi.hoisted(() => ({
@@ -28,12 +28,17 @@ import { ingestLocalEvents, ingestRegisterSessionActivity } from "./sync";
 
 const SYNC_SECRET_HASH =
   "e3aaef72556405db4093f59a9aa8ee6539f8e6542e60d92f08e782faa0d246fa";
+const originalStage = process.env.STAGE;
 
 function getHandler(definition: unknown) {
   return (definition as { _handler: Function })._handler;
 }
 
 describe("POS local sync public mutation", () => {
+  afterEach(() => {
+    process.env.STAGE = originalStage;
+  });
+
   beforeEach(() => {
     vi.resetAllMocks();
     mocks.requireAuthenticatedAthenaUserWithCtx.mockResolvedValue({
@@ -119,6 +124,241 @@ describe("POS local sync public mutation", () => {
         submittedAt: 123,
       }),
     );
+  });
+
+  it("schedules an admin email for a fresh register closeout variance review in prod", async () => {
+    process.env.STAGE = "prod";
+    const ctx = buildCtx({
+      approvalRequests: [
+        {
+          _id: "approval-variance-1",
+          metadata: {
+            localEventId: "event-closeout-1",
+            variance: -4218,
+          },
+          registerSessionId: "register-session-1",
+          requestType: "variance_review",
+          status: "pending",
+        },
+      ],
+    });
+    mocks.ingestLocalEventsWithCtx.mockResolvedValue({
+      kind: "ok",
+      data: {
+        accepted: [
+          {
+            localEventId: "event-closeout-1",
+            sequence: 2,
+            status: "projected",
+          },
+        ],
+        held: [],
+        mappings: [
+          {
+            _id: "mapping-closeout-1",
+            storeId: "store-1",
+            terminalId: "terminal-1",
+            localRegisterSessionId: "local-register-1",
+            localEventId: "event-closeout-1",
+            localIdKind: "closeout",
+            localId: "event-closeout-1",
+            cloudTable: "registerSession",
+            cloudId: "register-session-1",
+            createdAt: 124,
+          },
+        ],
+        conflicts: [],
+        syncCursor: {
+          localRegisterSessionId: "local-register-1",
+          acceptedThroughSequence: 2,
+        },
+      },
+    });
+
+    await getHandler(ingestLocalEvents)(ctx as never, {
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      syncSecretHash: "sync-secret-1",
+      events: [
+        {
+          localEventId: "event-closeout-1",
+          localRegisterSessionId: "local-register-1",
+          sequence: 2,
+          eventType: "register_closed",
+          occurredAt: 123,
+          staffProfileId: "staff-1",
+          payload: {
+            countedCash: 120182,
+            notes: "Counted twice.",
+          },
+        },
+      ],
+    });
+
+    expect(ctx.db.patch).toHaveBeenCalledWith(
+      "approvalRequest",
+      "approval-variance-1",
+      {
+        metadata: expect.objectContaining({
+          localEventId: "event-closeout-1",
+          variance: -4218,
+          varianceNotificationScheduledAt: expect.any(Number),
+        }),
+      },
+    );
+    expect(ctx.scheduler.runAfter).toHaveBeenCalledWith(
+      0,
+      expect.anything(),
+      {
+        approvalRequestId: "approval-variance-1",
+      },
+    );
+  });
+
+  it("does not schedule a variance alert outside prod", async () => {
+    process.env.STAGE = "dev";
+    const ctx = buildCtx({
+      approvalRequests: [
+        {
+          _id: "approval-variance-1",
+          metadata: {
+            localEventId: "event-closeout-1",
+            variance: -4218,
+          },
+          registerSessionId: "register-session-1",
+          requestType: "variance_review",
+          status: "pending",
+        },
+      ],
+    });
+    mocks.ingestLocalEventsWithCtx.mockResolvedValue({
+      kind: "ok",
+      data: {
+        accepted: [
+          {
+            localEventId: "event-closeout-1",
+            sequence: 2,
+            status: "projected",
+          },
+        ],
+        held: [],
+        mappings: [
+          {
+            _id: "mapping-closeout-1",
+            storeId: "store-1",
+            terminalId: "terminal-1",
+            localRegisterSessionId: "local-register-1",
+            localEventId: "event-closeout-1",
+            localIdKind: "closeout",
+            localId: "event-closeout-1",
+            cloudTable: "registerSession",
+            cloudId: "register-session-1",
+            createdAt: 124,
+          },
+        ],
+        conflicts: [],
+        syncCursor: {
+          localRegisterSessionId: "local-register-1",
+          acceptedThroughSequence: 2,
+        },
+      },
+    });
+
+    await getHandler(ingestLocalEvents)(ctx as never, {
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      syncSecretHash: "sync-secret-1",
+      events: [
+        {
+          localEventId: "event-closeout-1",
+          localRegisterSessionId: "local-register-1",
+          sequence: 2,
+          eventType: "register_closed",
+          occurredAt: 123,
+          staffProfileId: "staff-1",
+          payload: {
+            countedCash: 120182,
+            notes: "Counted twice.",
+          },
+        },
+      ],
+    });
+
+    expect(ctx.db.patch).not.toHaveBeenCalled();
+    expect(ctx.scheduler.runAfter).not.toHaveBeenCalled();
+  });
+
+  it("does not reschedule a variance alert that was already marked", async () => {
+    process.env.STAGE = "prod";
+    const ctx = buildCtx({
+      approvalRequests: [
+        {
+          _id: "approval-variance-1",
+          metadata: {
+            localEventId: "event-closeout-1",
+            variance: -4218,
+            varianceNotificationScheduledAt: 123,
+          },
+          registerSessionId: "register-session-1",
+          requestType: "variance_review",
+          status: "pending",
+        },
+      ],
+    });
+    mocks.ingestLocalEventsWithCtx.mockResolvedValue({
+      kind: "ok",
+      data: {
+        accepted: [
+          {
+            localEventId: "event-closeout-1",
+            sequence: 2,
+            status: "projected",
+          },
+        ],
+        held: [],
+        mappings: [
+          {
+            _id: "mapping-closeout-1",
+            storeId: "store-1",
+            terminalId: "terminal-1",
+            localRegisterSessionId: "local-register-1",
+            localEventId: "event-closeout-1",
+            localIdKind: "closeout",
+            localId: "event-closeout-1",
+            cloudTable: "registerSession",
+            cloudId: "register-session-1",
+            createdAt: 124,
+          },
+        ],
+        conflicts: [],
+        syncCursor: {
+          localRegisterSessionId: "local-register-1",
+          acceptedThroughSequence: 2,
+        },
+      },
+    });
+
+    await getHandler(ingestLocalEvents)(ctx as never, {
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      syncSecretHash: "sync-secret-1",
+      events: [
+        {
+          localEventId: "event-closeout-1",
+          localRegisterSessionId: "local-register-1",
+          sequence: 2,
+          eventType: "register_closed",
+          occurredAt: 123,
+          staffProfileId: "staff-1",
+          payload: {
+            countedCash: 120182,
+          },
+        },
+      ],
+    });
+
+    expect(ctx.db.patch).not.toHaveBeenCalled();
+    expect(ctx.scheduler.runAfter).not.toHaveBeenCalled();
   });
 
   it("accepts actor events without staff proof at the public sync boundary", async () => {
@@ -872,6 +1112,13 @@ describe("POS local sync public mutation", () => {
 
 function buildCtx(
   options: {
+    approvalRequests?: Array<{
+      _id: string;
+      metadata?: Record<string, unknown>;
+      registerSessionId?: string;
+      requestType: string;
+      status: string;
+    }>;
     missingTerminal?: boolean;
     staffLinkedUserId?: string;
     terminalRegisteredByUserId?: string;
@@ -921,6 +1168,50 @@ function buildCtx(
 
         return null;
       }),
+      patch: vi.fn(),
+      query: vi.fn((tableName: string) => {
+        if (tableName !== "approvalRequest") {
+          return {
+            withIndex: vi.fn(() => ({
+              take: vi.fn(async () => []),
+            })),
+          };
+        }
+
+        return {
+          withIndex: vi.fn(
+            (
+              _indexName: string,
+              indexBuilder: (q: {
+                eq: (field: string, value: unknown) => unknown;
+              }) => unknown,
+            ) => {
+              const filters: Record<string, unknown> = {};
+              const q = {
+                eq(field: string, value: unknown) {
+                  filters[field] = value;
+                  return q;
+                },
+              };
+              indexBuilder(q);
+
+              return {
+                take: vi.fn(async () =>
+                  (options.approvalRequests ?? []).filter(
+                    (request) =>
+                      request.registerSessionId === filters.registerSessionId &&
+                      request.status === filters.status &&
+                      request.requestType === filters.requestType,
+                  ),
+                ),
+              };
+            },
+          ),
+        };
+      }),
+    },
+    scheduler: {
+      runAfter: vi.fn(),
     },
   };
 }

@@ -9,6 +9,9 @@ import DiscountReminder from "../emails/DiscountReminder";
 import DailyManagerReport, {
   type DailyManagerReportProps,
 } from "../emails/DailyManagerReport";
+import RegisterCloseoutVarianceAlert, {
+  type RegisterCloseoutVarianceAlertProps,
+} from "../emails/RegisterCloseoutVarianceAlert";
 import { ADMIN_EMAILS } from "../constants/email";
 
 const MAILERSEND_API_URL = "https://api.mailersend.com/v1/email";
@@ -393,6 +396,42 @@ export const sendDailyManagerReportEmail = async (
     subject:
       params.subject ??
       `${params.storeName} daily report - ${params.operatingDate}`,
+    html,
+  };
+
+  return await fetch(MAILERSEND_API_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${process.env.MAILERSEND_API_KEY}`,
+    },
+    body: JSON.stringify(message),
+  });
+};
+
+export const sendRegisterCloseoutVarianceAlertEmail = async (
+  params: RegisterCloseoutVarianceAlertProps & {
+    recipientEmail: string;
+    recipientName?: string;
+    subject?: string;
+  },
+) => {
+  const html = await render(<RegisterCloseoutVarianceAlert {...params} />);
+
+  const message = {
+    from: {
+      email: "noreply@wigclub.store",
+      name: "Athena",
+    },
+    to: [
+      {
+        email: params.recipientEmail,
+        name: params.recipientName ?? "",
+      },
+    ],
+    subject:
+      params.subject ??
+      `${params.storeName} register variance - ${params.registerLabel}`,
     html,
   };
 

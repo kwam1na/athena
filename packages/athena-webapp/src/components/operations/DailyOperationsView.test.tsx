@@ -1727,7 +1727,7 @@ describe("DailyOperationsViewContent", () => {
         {
           count: 2,
           countLabel: "2 registers",
-          description: "2 registers need attention before close.",
+          description: "2 registers need attention.",
           key: "registers",
           label: "Registers",
           status: "blocked",
@@ -1746,9 +1746,7 @@ describe("DailyOperationsViewContent", () => {
 
     expect(workflow.queryByText("0")).not.toBeInTheDocument();
     expect(workflow.queryByText("2 registers")).not.toBeInTheDocument();
-    expect(
-      workflow.getByText("2 registers need attention before close."),
-    ).toBeInTheDocument();
+    expect(workflow.getByText("2 registers need attention.")).toBeInTheDocument();
   });
 
   it("uses compact icons for workflow lanes that need attention or are blocked", () => {
@@ -1766,7 +1764,7 @@ describe("DailyOperationsViewContent", () => {
         },
         {
           count: 2,
-          description: "2 registers need attention before close.",
+          description: "2 registers need attention.",
           key: "registers",
           label: "Registers",
           status: "blocked",
@@ -1980,14 +1978,16 @@ describe("DailyOperationsViewContent", () => {
       });
 
     let view = renderCurrentState(notOpenedSnapshot);
-    expect(
-      screen.getByRole("link", { name: "Start Opening Handoff" }),
-    ).toHaveClass(
+    const openingLink = screen.getByRole("link", {
+      name: "Start Opening Handoff",
+    });
+    expect(openingLink).toHaveClass(
       "border-border",
       "text-muted-foreground",
       "hover:text-foreground",
       "active:scale-[0.98]",
     );
+    expect(openingLink.querySelectorAll("svg")).toHaveLength(1);
     view.unmount();
 
     view = renderCurrentState({
@@ -1998,45 +1998,59 @@ describe("DailyOperationsViewContent", () => {
         status: "operating",
       },
     });
-    expect(screen.getByRole("link", { name: "Start EOD Review" })).toHaveClass(
+    const activeEodReviewLink = screen.getByRole("link", {
+      name: "Start EOD Review",
+    });
+    expect(activeEodReviewLink).toHaveClass(
       "border-action-workflow-border",
       "bg-action-workflow-soft",
       "text-action-workflow",
       "hover:text-action-workflow",
       "active:scale-[0.98]",
     );
+    expect(activeEodReviewLink.querySelectorAll("svg")).toHaveLength(1);
     view.unmount();
 
     view = renderCurrentState(blockedSnapshot);
-    expect(
-      screen.getByRole("link", { name: "Review close blockers" }),
-    ).toHaveClass(
+    const blockedReviewLink = screen.getByRole("link", {
+      name: "Review close blockers",
+    });
+    expect(blockedReviewLink).toHaveClass(
       "border-danger/30",
       "bg-danger/10",
       "text-danger",
       "hover:text-danger",
       "active:scale-[0.98]",
     );
+    expect(blockedReviewLink.querySelectorAll("svg")).toHaveLength(2);
     view.unmount();
 
     view = renderCurrentState(operatingSnapshot);
-    expect(screen.getByRole("link", { name: "Start EOD Review" })).toHaveClass(
+    const readyEodReviewLink = screen.getByRole("link", {
+      name: "Start EOD Review",
+    });
+    expect(readyEodReviewLink).toHaveClass(
       "border-success/35",
       "bg-success/10",
       "text-success",
       "hover:text-success",
       "active:scale-[0.98]",
     );
+    expect(readyEodReviewLink.querySelectorAll("svg")).toHaveLength(1);
     view.unmount();
 
     renderCurrentState(closedSnapshot);
-    expect(screen.getByRole("link", { name: "Review EOD Review" })).toHaveClass(
+    const closedEodReviewLink = screen.getByRole("link", {
+      name: "Review EOD Review",
+    });
+    expect(closedEodReviewLink).toHaveClass(
       "border-success/25",
       "bg-success/10",
       "text-success",
       "hover:text-success",
       "active:scale-[0.98]",
     );
+    expect(closedEodReviewLink.querySelectorAll("svg")).toHaveLength(1);
   });
 
   it("tones historical EOD Review links across reviewable lifecycle states", () => {

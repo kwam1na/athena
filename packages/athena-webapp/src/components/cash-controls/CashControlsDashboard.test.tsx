@@ -4,6 +4,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CashControlsDashboardContent } from "./CashControlsDashboard";
 
 const mockNavigate = vi.fn();
+const mockHooks = vi.hoisted(() => ({
+  useIsMobile: vi.fn(() => false),
+}));
 
 vi.mock("@tanstack/react-router", () => ({
   Link: ({
@@ -45,6 +48,10 @@ vi.mock("../common/PageHeader", () => ({
   NavigateBackButton: ({ label = "Back" }: { label?: string }) => (
     <button type="button">{label}</button>
   ),
+}));
+
+vi.mock("@/hooks/use-mobile", () => ({
+  useIsMobile: mockHooks.useIsMobile,
 }));
 
 const baseSnapshot = {
@@ -136,6 +143,8 @@ const baseSnapshot = {
 describe("CashControlsDashboardContent", () => {
   beforeEach(() => {
     mockNavigate.mockReset();
+    mockHooks.useIsMobile.mockReset();
+    mockHooks.useIsMobile.mockReturnValue(false);
     window.scrollTo = vi.fn();
   });
 
@@ -165,7 +174,7 @@ describe("CashControlsDashboardContent", () => {
     expect(screen.queryByText("Current control snapshot")).not.toBeInTheDocument();
   });
 
-  it("renders overview metrics, register activity, and recent deposits", () => {
+  it("renders overview metrics and register activity", () => {
     const closedAt = new Date("2026-04-20T19:45:00.000Z").getTime();
     const expectedClosedAt = new Date(closedAt).toLocaleString("en-US", {
       dateStyle: "medium",
@@ -357,8 +366,8 @@ describe("CashControlsDashboardContent", () => {
     expect(screen.getByText("Expected in drawers")).toBeInTheDocument();
     expect(screen.getByText("$424")).toBeInTheDocument();
     expect(screen.getByText("1 live drawer, 1 in review")).toBeInTheDocument();
-    expect(screen.getByText("Deposits recorded")).toBeInTheDocument();
-    expect(screen.getByText("$104")).toBeInTheDocument();
+    expect(screen.queryByText("Deposits recorded")).not.toBeInTheDocument();
+    expect(screen.queryByText("$104")).not.toBeInTheDocument();
     expect(screen.getAllByText("Still in drawers").length).toBeGreaterThan(0);
     expect(screen.getAllByText("$320").length).toBeGreaterThan(0);
     expect(
@@ -366,7 +375,8 @@ describe("CashControlsDashboardContent", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Variance to review")).toBeInTheDocument();
     expect(screen.getAllByText("$5").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Recent deposits").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Recent deposits")).not.toBeInTheDocument();
+    expect(screen.queryByText("No deposits recorded yet")).not.toBeInTheDocument();
     expect(screen.queryByText("Review closeouts")).not.toBeInTheDocument();
     expect(screen.getByText("Needs action")).toBeInTheDocument();
     expect(screen.getByText("Live drawers")).toBeInTheDocument();
@@ -429,8 +439,8 @@ describe("CashControlsDashboardContent", () => {
       ),
     ).not.toBeInTheDocument();
     expect(screen.getByText(/Opened .* by Maame S\./)).toBeInTheDocument();
-    expect(screen.getByText("Midday safe drop")).toBeInTheDocument();
-    expect(screen.getByText("BANK-339")).toBeInTheDocument();
+    expect(screen.queryByText("Midday safe drop")).not.toBeInTheDocument();
+    expect(screen.queryByText("BANK-339")).not.toBeInTheDocument();
   });
 
   it("redacts cash amounts for POS-only users without manager access", () => {
@@ -563,6 +573,51 @@ describe("CashControlsDashboardContent", () => {
       "href",
       "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers?o=%252F",
     );
+  });
+
+  it("renders closed-session preview cards on mobile", () => {
+    mockHooks.useIsMobile.mockReturnValue(true);
+
+    render(
+      <CashControlsDashboardContent
+        currency="USD"
+        dashboardSnapshot={{
+          ...baseSnapshot,
+          registerSessions: [
+            {
+              _id: "session-live-mobile",
+              expectedCash: 15500,
+              openedAt: new Date("2026-07-07T12:14:00.000Z").getTime(),
+              openingFloat: 5000,
+              registerNumber: "8",
+              status: "active",
+              totalDeposited: 0,
+              variance: 0,
+            },
+            {
+              _id: "session-closed-mobile",
+              closedAt: new Date("2026-07-07T19:16:00.000Z").getTime(),
+              countedCash: 10000,
+              expectedCash: 10500,
+              openedAt: new Date("2026-07-07T12:07:00.000Z").getTime(),
+              openingFloat: 5000,
+              registerNumber: "8",
+              status: "closed",
+              totalDeposited: 0,
+              variance: -500,
+            },
+          ],
+        }}
+        isLoading={false}
+        orgUrlSlug="v26"
+        storeUrlSlug="east-legon"
+      />,
+    );
+
+    expect(screen.queryByTestId("closed-sessions-table")).not.toBeInTheDocument();
+    expect(screen.getByText("Opened")).toBeInTheDocument();
+    expect(screen.getByText("Closed")).toBeInTheDocument();
+    expect(screen.getByText("-$5")).toHaveClass("text-danger");
   });
 
   it("hides zero deposited value on variance session cards", () => {
@@ -730,7 +785,7 @@ describe("CashControlsDashboardContent", () => {
     );
   });
 
-  it("surfaces a drawer opened from POS in the cash-controls ledgers", () => {
+  it("surfaces a drawer opened from POS in the cash-controls workspace", () => {
     render(
       <CashControlsDashboardContent
         currency="USD"
@@ -788,9 +843,9 @@ describe("CashControlsDashboardContent", () => {
       screen.queryByText("No drawer needs closeout or variance review"),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByText("First safe drop after POS drawer open"),
-    ).toBeInTheDocument();
-    expect(screen.getByText("SAFE-120")).toBeInTheDocument();
+      screen.queryByText("First safe drop after POS drawer open"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("SAFE-120")).not.toBeInTheDocument();
   });
 
   it("does not use closed register sessions for the live register workflow card", () => {

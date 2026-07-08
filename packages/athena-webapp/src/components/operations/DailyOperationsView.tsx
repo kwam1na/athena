@@ -13,10 +13,10 @@ import {
 } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import {
-  Activity,
   ArrowUpRight,
   Archive,
   Ban,
+  Barcode,
   Bot,
   Calendar as CalendarIcon,
   Check,
@@ -111,7 +111,7 @@ const SUPPORTING_OPERATIONS_WORKSPACE_LINKS: OperationsWorkspaceLink[] = [
   },
   {
     description: "Trace SKU movements across sales and stock operations.",
-    icon: Activity,
+    icon: Barcode,
     label: "SKU activity",
     to: "/$orgUrlSlug/store/$storeUrlSlug/operations/sku-activity",
   },
@@ -1343,37 +1343,34 @@ function LaneCard({
   storeUrlSlug: string;
 }) {
   return (
-    <article className="rounded-md border border-border/70 bg-background/60 px-layout-md py-layout-sm transition-colors hover:bg-background">
-      <div className="flex items-start justify-between gap-layout-sm">
-        <div className="min-w-0">
-          <h3 className="text-sm font-medium text-foreground">{lane.label}</h3>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            {lane.description}
-          </p>
-        </div>
-        {["ready", "closed"].includes(lane.status) ? (
-          <SuccessCheckIcon className="mt-0.5" label={`${lane.label} ready`} />
-        ) : (
-          <LaneStatusIcon
-            className="mt-0.5"
-            label={`${lane.label} ${lane.status === "blocked" ? "blocked" : "needs attention"}`}
-            status={lane.status}
-          />
-        )}
+    <article className="flex min-w-0 items-center gap-layout-sm rounded-md border border-border/70 bg-background/60 px-layout-sm py-2 transition-colors hover:bg-background">
+      {["ready", "closed"].includes(lane.status) ? (
+        <SuccessCheckIcon label={`${lane.label} ready`} />
+      ) : (
+        <LaneStatusIcon
+          label={`${lane.label} ${lane.status === "blocked" ? "blocked" : "needs attention"}`}
+          status={lane.status}
+        />
+      )}
+      <div className="min-w-0 flex-1">
+        <h3 className="text-xs font-medium text-foreground">
+          {lane.label}
+        </h3>
+        <p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">
+          {lane.description}
+        </p>
       </div>
-      <div className="mt-layout-sm flex items-center justify-end">
-        <Button asChild className="h-8 px-2 text-xs" size="sm" variant="ghost">
-          <Link
-            aria-label={`Open ${lane.label}`}
-            params={buildParams(orgUrlSlug, storeUrlSlug)}
-            search={getWorkflowSearch(lane.to, operatingDate) as never}
-            to={lane.to}
-          >
-            Open
-            <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
-          </Link>
-        </Button>
-      </div>
+      <Button asChild className="h-7 shrink-0 px-2 text-xs" size="sm" variant="ghost">
+        <Link
+          aria-label={`Open ${lane.label}`}
+          params={buildParams(orgUrlSlug, storeUrlSlug)}
+          search={getWorkflowSearch(lane.to, operatingDate) as never}
+          to={lane.to}
+        >
+          Open
+          <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
+        </Link>
+      </Button>
     </article>
   );
 }
@@ -2688,35 +2685,35 @@ function SupportingWorkspaceLinks({
   return (
     <div
       aria-labelledby="supporting-workspaces-heading"
-      className="border-t border-border/70 px-layout-md py-layout-md"
+      className="border-t border-border/70 px-layout-sm py-2"
     >
-      <div className="mt-layout-sm grid gap-layout-xs md:grid-cols-3">
+      <h4 className="sr-only" id="supporting-workspaces-heading">
+        Supporting workspaces
+      </h4>
+      <div className="grid gap-layout-xs md:grid-cols-3">
         {SUPPORTING_OPERATIONS_WORKSPACE_LINKS.map((workspace) => {
           const Icon = workspace.icon;
 
           return (
             <Link
               aria-label={`Open ${workspace.label} workspace`}
-              className="group flex min-w-0 items-start gap-layout-sm rounded-md border border-border/70 bg-background/60 px-layout-md py-layout-sm text-left transition-colors hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="group flex min-w-0 items-center gap-2 rounded-md border border-transparent px-2 py-1.5 text-left transition-colors hover:border-border/60 hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               key={workspace.label}
               params={buildParams(orgUrlSlug, storeUrlSlug)}
               search={getWorkflowSearch(workspace.to, operatingDate) as never}
               to={workspace.to}
             >
-              <span className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted-foreground transition-colors group-hover:text-foreground">
+              <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-border/70 bg-surface text-muted-foreground transition-colors group-hover:text-foreground">
                 <Icon aria-hidden="true" className="h-3.5 w-3.5" />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-medium text-foreground">
+                <span className="block truncate text-xs font-medium text-foreground">
                   {workspace.label}
-                </span>
-                <span className="mt-0.5 block text-xs leading-5 text-muted-foreground">
-                  {workspace.description}
                 </span>
               </span>
               <ArrowUpRight
                 aria-hidden="true"
-                className="mt-1 h-3.5 w-3.5 shrink-0 text-muted-foreground transition-colors group-hover:text-foreground"
+                className="h-3.5 w-3.5 shrink-0 text-muted-foreground transition-colors group-hover:text-foreground"
               />
             </Link>
           );
@@ -3163,6 +3160,8 @@ export function DailyOperationsViewContent({
     ? getPrimaryActionEmphasis(primaryActionEmphasisStatus)
     : null;
   const PrimaryActionIcon = primaryActionEmphasis?.Icon;
+  const showPrimaryActionStatusIcon =
+    primaryActionEmphasisStatus === "close_blocked";
   const storeRequestsApprovalsLane =
     snapshot && storeRequestsSnapshot?.operatingDate === snapshot.operatingDate
       ? storeRequestsSnapshot.approvalsLane
@@ -3280,7 +3279,7 @@ export function DailyOperationsViewContent({
                           }
                           to="/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close"
                         >
-                          {PrimaryActionIcon ? (
+                          {showPrimaryActionStatusIcon && PrimaryActionIcon ? (
                             <PrimaryActionIcon
                               aria-hidden="true"
                               className={cn(
@@ -3316,7 +3315,7 @@ export function DailyOperationsViewContent({
                           }
                           to={snapshot.primaryAction.to}
                         >
-                          {PrimaryActionIcon ? (
+                          {showPrimaryActionStatusIcon && PrimaryActionIcon ? (
                             <PrimaryActionIcon
                               aria-hidden="true"
                               className={cn(
@@ -3666,14 +3665,14 @@ export function DailyOperationsViewContent({
                       storeUrlSlug={storeUrlSlug}
                     />
                   ) : (
-                    <section className="space-y-layout-lg">
+                    <section className="space-y-layout-sm">
                       <div>
-                        <h3 className="text-base font-medium text-foreground">
+                        <h3 className="text-sm font-medium text-foreground">
                           Workflow status
                         </h3>
                       </div>
-                      <div className="overflow-hidden rounded-lg border border-border bg-surface-raised shadow-surface">
-                        <div className="grid gap-layout-xs p-layout-sm md:grid-cols-2 xl:grid-cols-3">
+                      <div className="overflow-hidden rounded-md border border-border bg-surface-raised shadow-surface">
+                        <div className="grid gap-layout-xs p-2 md:grid-cols-2 xl:grid-cols-3">
                           {actionableLanes.length > 0 ? (
                             actionableLanes.map((lane) => (
                               <LaneCard

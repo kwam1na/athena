@@ -1,6 +1,9 @@
 import { v } from "convex/values";
 
+import { internal } from "../../_generated/api";
 import { mutation } from "../../_generated/server";
+import type { Doc, Id } from "../../_generated/dataModel";
+import type { MutationCtx } from "../../_generated/server";
 import { commandResultValidator } from "../../lib/commandResultValidators";
 import {
   requireAuthenticatedAthenaUserWithCtx,
@@ -396,13 +399,104 @@ export const ingestLocalEvents = mutation({
       });
     }
 
-    return ingestLocalEventsWithCtx(ctx, {
+    const result = await ingestLocalEventsWithCtx(ctx, {
       ...args,
       submittedByUserId: athenaUser._id,
       submittedAt: args.submittedAt ?? Date.now(),
     });
+
+    if (
+      result.kind === "ok" &&
+      shouldScheduleRegisterCloseoutVarianceAlerts()
+    ) {
+      await scheduleRegisterCloseoutVarianceAlerts(ctx, {
+        events: args.events,
+        mappings: result.data.mappings,
+      });
+    }
+
+    return result;
   },
 });
+
+function shouldScheduleRegisterCloseoutVarianceAlerts() {
+  return process.env.STAGE === "prod";
+}
+
+async function scheduleRegisterCloseoutVarianceAlerts(
+  ctx: MutationCtx,
+  args: {
+    events: Array<{ eventType: string; localEventId: string }>;
+    mappings: Array<{
+      cloudId: string;
+      cloudTable: string;
+      localEventId: string;
+      localIdKind: string;
+    }>;
+  },
+) {
+  const closeoutEventIds = new Set(
+    args.events
+      .filter((event) => event.eventType === "register_closed")
+      .map((event) => event.localEventId),
+  );
+
+  if (closeoutEventIds.size === 0) return;
+
+  for (const mapping of args.mappings) {
+    if (
+      mapping.cloudTable !== "registerSession" ||
+      mapping.localIdKind !== "closeout" ||
+      !closeoutEventIds.has(mapping.localEventId)
+    ) {
+      continue;
+    }
+
+    const registerSessionId = mapping.cloudId as Id<"registerSession">;
+    const pendingVarianceReviews = await ctx.db
+      .query("approvalRequest")
+      .withIndex("by_registerSessionId_status_requestType", (q) =>
+        q
+          .eq("registerSessionId", registerSessionId)
+          .eq("status", "pending")
+          .eq("requestType", "variance_review"),
+      )
+      .take(2);
+    const approvalRequest = pendingVarianceReviews.find((request) =>
+      isFreshVarianceReviewForCloseout(request, mapping.localEventId),
+    );
+
+    if (!approvalRequest) continue;
+
+    await ctx.db.patch("approvalRequest", approvalRequest._id, {
+      metadata: {
+        ...(approvalRequest.metadata ?? {}),
+        varianceNotificationScheduledAt: Date.now(),
+      },
+    });
+    await ctx.scheduler.runAfter(
+      0,
+      internal.operations.registerCloseoutVarianceEmail
+        .sendRegisterCloseoutVarianceAlertToAdmins,
+      {
+        approvalRequestId: approvalRequest._id,
+      },
+    );
+  }
+}
+
+function isFreshVarianceReviewForCloseout(
+  approvalRequest: Doc<"approvalRequest">,
+  localEventId: string,
+) {
+  const metadata = approvalRequest.metadata;
+  return (
+    metadata?.localEventId === localEventId &&
+    typeof metadata.variance === "number" &&
+    metadata.variance !== 0 &&
+    typeof metadata.varianceNotificationScheduledAt !== "number"
+  );
+}
 
 export const ingestRegisterSessionActivity = mutation({
   args: {
