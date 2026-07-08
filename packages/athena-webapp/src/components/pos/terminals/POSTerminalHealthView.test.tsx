@@ -314,7 +314,7 @@ describe("POSTerminalHealthViewContent", () => {
     );
     expect(screen.getAllByText("Offline checkout").length).toBeGreaterThan(0);
     expect(screen.getAllByText("App update").length).toBeGreaterThan(0);
-    expect(screen.getByText("Update ready")).toBeInTheDocument();
+    expect(screen.getByText("New version available")).toBeInTheDocument();
     expect(screen.getAllByText("Products and stock").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Register details").length).toBeGreaterThan(0);
     expect(

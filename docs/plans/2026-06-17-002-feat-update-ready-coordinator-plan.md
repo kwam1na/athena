@@ -340,7 +340,7 @@ flowchart LR
 - Use a fixed root-level slot in `__root.tsx`, adjacent to but not inside the toaster. The banner should sit above route content without covering navigation or POS controls, wrap cleanly on mobile, and preserve stable spacing while visible.
 - Use compact inline UI, not a blocking modal. A toast may announce readiness once, but a persistent affordance should remain discoverable.
 - Show a primary apply action only when no active blocker exists. When blocked, do not render the apply action; show state and next action guidance from the selected blocker until blockers clear.
-- Use calm copy shaped like "Update ready. Save this work before refreshing." or "Update ready. Finish this sale before refreshing." Final copy can be adjusted during implementation to match surface context.
+- Use calm copy shaped like "New version available. Save this work before refreshing." or "New version available. Finish this sale before refreshing." Final copy can be adjusted during implementation to match surface context.
 - Include accessible labeling and avoid text overflow on narrow screens. Announce new Update Ready state and blocker guidance changes through a polite status region, do not move focus when the banner appears, keep the apply control keyboard reachable with visible focus, expose applying as busy/disabled until reload, and preserve minimum touch target sizing.
 
 **Patterns to follow:**

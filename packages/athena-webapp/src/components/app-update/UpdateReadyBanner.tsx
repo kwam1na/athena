@@ -30,16 +30,16 @@ function UpdateReadyMessageAdapter() {
     () =>
       showUpdateAction
         ? {
-            actionId: "app-update.apply",
-            disabled: !canApply || isApplying,
-            iconName: "download" as const,
-            label: "Update",
-            onInvoke: () => {
-              if (canApply && !isApplying) {
-                applyUpdate();
-              }
-            },
-          }
+          actionId: "app-update.apply",
+          disabled: !canApply || isApplying,
+          iconName: "download" as const,
+          label: "Update",
+          onInvoke: () => {
+            if (canApply && !isApplying) {
+              applyUpdate();
+            }
+          },
+        }
         : undefined,
     [applyUpdate, canApply, isApplying, showUpdateAction],
   );
@@ -47,7 +47,7 @@ function UpdateReadyMessageAdapter() {
   useAppMessage({
     id: "app-update.ready",
     active: hasUpdate,
-    label: "Update ready",
+    label: "New version available",
     message: content.message,
     compactLabel: "New Athena version available",
     details: content.tooltip,
@@ -74,29 +74,29 @@ function getUpdateReadyBannerContent(
       case "asset-staging-failed":
       case "service-worker-error":
         return {
-          message: "Update ready",
+          message: "New version available",
           tooltip: "Some files were not cached for offline use.",
         };
       case "service-worker-timeout":
         return {
-          message: "Update ready. Offline file caching is still catching up.",
+          message: "New version available. Offline file caching is still catching up.",
         };
       case "service-worker-unavailable":
-        return { message: "Update ready. App shell cache is not connected." };
+        return { message: "New version available. App shell cache is not connected." };
       case "cache-storage-unavailable":
       case "no-entry-html":
       case "no-static-assets":
         return {
-          message: "Update ready. Offline cache preparation is unavailable.",
+          message: "New version available. Offline cache preparation is unavailable.",
         };
       default:
         return {
-          message: "Update ready. Offline cache preparation is incomplete.",
+          message: "New version available. Offline cache preparation is incomplete.",
         };
     }
   }
   if (snapshot.canApply) {
-    return { message: "Update ready" };
+    return { message: "New version available" };
   }
 
   return { message: "Update detected. Preparing refresh." };

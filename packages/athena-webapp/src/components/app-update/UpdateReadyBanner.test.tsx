@@ -168,7 +168,7 @@ describe("UpdateReadyBanner", () => {
   it("renders no banner while the app is current", () => {
     renderWithUpdateProviders(<UpdateReadyBanner />);
 
-    expect(screen.queryByLabelText("Update ready")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("New version available")).not.toBeInTheDocument();
   });
 
   it("does not show the toast variant while the app is current", () => {
@@ -179,7 +179,7 @@ describe("UpdateReadyBanner", () => {
       </>,
     );
 
-    expect(screen.queryByLabelText("Update ready")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("New version available")).not.toBeInTheDocument();
     expect(toastMock.message).not.toHaveBeenCalled();
   });
 
@@ -204,7 +204,7 @@ describe("UpdateReadyBanner", () => {
     fireEvent.click(applyingButton);
     fireEvent.click(applyingButton);
 
-    expect(screen.getByLabelText("Update ready")).toBeInTheDocument();
+    expect(screen.getByLabelText("New version available")).toBeInTheDocument();
     expect(reload).toHaveBeenCalledTimes(1);
     expect(toastMock.message).not.toHaveBeenCalled();
   });
@@ -242,9 +242,9 @@ describe("UpdateReadyBanner", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "mark ready" }));
 
-    expect(screen.queryByLabelText("Update ready")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("New version available")).not.toBeInTheDocument();
     expect(toastMock.message).toHaveBeenCalledWith(
-      "Update ready",
+      "New version available",
       expect.objectContaining({
         action: expect.any(Object),
         className: "min-w-80",
@@ -274,7 +274,7 @@ describe("UpdateReadyBanner", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "mark ready" }));
 
-    expect(screen.getByLabelText("Update ready")).toHaveClass("top-0");
+    expect(screen.getByLabelText("New version available")).toHaveClass("top-0");
     fireEvent.click(screen.getByRole("button", { name: "Update" }));
     expect(reload).toHaveBeenCalledTimes(1);
   });
@@ -317,7 +317,7 @@ describe("UpdateReadyBanner", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "mark ready" }));
 
-    expect(screen.getByText("Update ready")).toBeInTheDocument();
+    expect(screen.getByText("New version available")).toBeInTheDocument();
     expect(
       screen.queryByText("Some files were not cached for offline use."),
     ).not.toBeInTheDocument();
@@ -351,9 +351,9 @@ describe("UpdateReadyBanner", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "mark ready" }));
 
-    expect(screen.queryByLabelText("Update ready")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("New version available")).not.toBeInTheDocument();
     expect(toastMock.message).toHaveBeenCalledWith(
-      "Update ready",
+      "New version available",
       expect.objectContaining({ id: "athena-update-ready-toast" }),
     );
   });
@@ -373,9 +373,9 @@ describe("UpdateReadyBanner", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "mark ready" }));
 
-    expect(screen.queryByLabelText("Update ready")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("New version available")).not.toBeInTheDocument();
     expect(toastMock.message).toHaveBeenCalledWith(
-      "Update ready",
+      "New version available",
       expect.objectContaining({ id: "athena-update-ready-toast" }),
     );
   });
