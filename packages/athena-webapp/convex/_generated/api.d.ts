@@ -333,6 +333,7 @@ import type * as schemas_pos_expenseTransactionItem from "../schemas/pos/expense
 import type * as schemas_pos_index from "../schemas/pos/index.js";
 import type * as schemas_pos_posLocalStaffProof from "../schemas/pos/posLocalStaffProof.js";
 import type * as schemas_pos_posLocalSyncConflict from "../schemas/pos/posLocalSyncConflict.js";
+import type * as schemas_pos_posLocalSyncContractValidators from "../schemas/pos/posLocalSyncContractValidators.js";
 import type * as schemas_pos_posLocalSyncCursor from "../schemas/pos/posLocalSyncCursor.js";
 import type * as schemas_pos_posLocalSyncEvent from "../schemas/pos/posLocalSyncEvent.js";
 import type * as schemas_pos_posLocalSyncMapping from "../schemas/pos/posLocalSyncMapping.js";
@@ -778,6 +779,7 @@ declare const fullApi: ApiFromModules<{
   "schemas/pos/index": typeof schemas_pos_index;
   "schemas/pos/posLocalStaffProof": typeof schemas_pos_posLocalStaffProof;
   "schemas/pos/posLocalSyncConflict": typeof schemas_pos_posLocalSyncConflict;
+  "schemas/pos/posLocalSyncContractValidators": typeof schemas_pos_posLocalSyncContractValidators;
   "schemas/pos/posLocalSyncCursor": typeof schemas_pos_posLocalSyncCursor;
   "schemas/pos/posLocalSyncEvent": typeof schemas_pos_posLocalSyncEvent;
   "schemas/pos/posLocalSyncMapping": typeof schemas_pos_posLocalSyncMapping;

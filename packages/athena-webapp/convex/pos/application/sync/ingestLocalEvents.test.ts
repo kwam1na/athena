@@ -248,6 +248,45 @@ describe("createLocalSyncIngestionService", () => {
     ]);
   });
 
+  it.each([
+    ["mystery_sync_event", "mystery_sync_event"],
+    ["", ""],
+    [undefined, "undefined"],
+  ])(
+    "rejects unsupported event type %p without falling through to register reopened",
+    async (eventType, expectedMessageEventType) => {
+      const repository = createFakeSyncRepository();
+      const service = createLocalSyncIngestionService({
+        repository,
+        projectionRepository: repository,
+        now: () => 100,
+      });
+
+      const result = await service.ingestBatch(
+        buildBatch({
+          events: [
+            {
+              ...buildRegisterOpenedEvent({ sequence: 1 }),
+              eventType: eventType as never,
+              localEventId: "event-mystery-1",
+              payload: { reason: "Should not reopen" },
+            },
+          ],
+        }),
+      );
+
+      expect(result).toEqual({
+        kind: "user_error",
+        error: {
+          code: "validation_failed",
+          message: `Unsupported POS sync event type: ${expectedMessageEventType}.`,
+        },
+      });
+      expect(repository.events).toEqual([]);
+      expect(repository.createdRegisterSessions).toEqual([]);
+    },
+  );
+
   it("returns stable outcomes and mappings when a projected batch is retried", async () => {
     const repository = createFakeSyncRepository();
     const service = createLocalSyncIngestionService({

@@ -14,6 +14,7 @@ import type {
   PosLocalSyncPendingCheckoutItemLocalMetadata,
   PosLocalSyncPendingCheckoutItemSearchContext,
 } from "../../../../../shared/posLocalSyncContract";
+import { canUploadPosLocalSyncLocalEventType } from "../../../../../shared/posLocalSyncContract";
 import {
   canReportPosRegisterSessionLocalActivityType,
   type PosRegisterSessionActivitySkipReasonCode,
@@ -103,14 +104,7 @@ export interface PosLocalEventValidationMetadata {
 }
 
 export function canUploadPosLocalEventType(type: PosLocalEventType): boolean {
-  return (
-    type === "register.opened" ||
-    type === "pending_checkout_item.defined" ||
-    type === "transaction.completed" ||
-    type === "cart.cleared" ||
-    type === "register.closeout_started" ||
-    type === "expense.completed"
-  );
+  return canUploadPosLocalSyncLocalEventType(type);
 }
 
 export interface PosProvisionedTerminalSeed {

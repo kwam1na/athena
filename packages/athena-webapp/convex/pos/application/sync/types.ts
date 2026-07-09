@@ -2,8 +2,19 @@ import type { Doc, Id, TableNames } from "../../../_generated/dataModel";
 import type { RegisterSessionTraceableSession } from "../../../operations/registerSessionTracing";
 import type { PosSessionTraceableSession } from "../commands/posSessionTracing";
 import type {
+  PosLocalSyncExpenseRecordedPayload,
   PosLocalSyncEventStatus,
   PosLocalSyncEventType,
+  PosLocalSyncPaymentPayload,
+  PosLocalSyncPendingCheckoutItemDefinedPayload,
+  PosLocalSyncPayloadByEventType,
+  PosLocalSyncRegisterClosedPayload,
+  PosLocalSyncRegisterOpenedPayload,
+  PosLocalSyncRegisterReopenedPayload,
+  PosLocalSyncSaleClearedPayload,
+  PosLocalSyncSaleCompletedPayload,
+  PosLocalSyncSaleItemPayload,
+  PosLocalSyncServiceLinePayload,
 } from "../../../../shared/posLocalSyncContract";
 import type { RegisterSessionCloseoutHold } from "./registerSessionCloseoutHolds";
 
@@ -27,117 +38,54 @@ export type PosLocalSyncMappingKind =
   | "expenseSession"
   | "expenseTransaction";
 
-export type PosLocalPaymentInput = {
-  localPaymentId?: string;
-  method: string;
-  amount: number;
-  timestamp: number;
-};
+export type PosLocalPaymentInput = PosLocalSyncPaymentPayload;
 
-export type PosLocalSaleItemInput = {
-  localTransactionItemId?: string;
+export type PosLocalSaleItemInput = Omit<
+  PosLocalSyncSaleItemPayload,
+  "pendingCheckoutItemId" | "productId" | "productSkuId"
+> & {
   productId: Id<"product"> | string;
   productSkuId: Id<"productSku"> | string;
   pendingCheckoutItemId?: Id<"posPendingCheckoutItem"> | string;
-  pendingCheckoutAliasState?: "linked_to_catalog";
-  inventoryImportProvisionalSkuId?: string;
-  productName: string;
-  productSku: string;
-  barcode?: string;
-  quantity: number;
-  unitPrice: number;
-  image?: string;
 };
 
-export type PosLocalServiceLineInput = {
-  localServiceLineId?: string;
-  localServiceCaseId?: string;
+export type PosLocalServiceLineInput = Omit<
+  PosLocalSyncServiceLinePayload,
+  "customerProfileId" | "existingServiceCaseId" | "serviceCatalogId"
+> & {
   existingServiceCaseId?: Id<"serviceCase">;
   serviceCatalogId: Id<"serviceCatalog">;
-  serviceCatalogName: string;
-  serviceMode: "same_day" | "consultation" | "repair" | "revamp";
-  pricingModel: "fixed" | "starting_at" | "quote_after_consultation";
-  quantity: number;
-  unitPrice: number;
-  totalPrice: number;
-  catalogUpdatedAt?: number;
   customerProfileId?: Id<"customerProfile">;
 };
 
-export type PosLocalPendingCheckoutItemDefinedPayload = {
-  localPendingCheckoutItemId: string;
-  name: string;
-  lookupCode?: string;
-  searchContext?: {
-    query?: string;
-    source?:
-      "barcode" | "lookup_code" | "manual" | "catalog_search" | "unknown";
-    matched?: "existing_product" | "pending_checkout_item" | "none" | "unknown";
-  };
-  price: number;
-  quantitySold: number;
-  localMetadata?: {
-    schema: "pos_pending_checkout_item_local_metadata_v1";
-    source?: "offline_search" | "online_search" | "manual_entry" | "unknown";
-    reusedExistingPendingItem?: boolean;
-    createdOffline?: boolean;
-    appSessionValidation?: "supported" | "unverified";
-    cloudValidation?: "uncertain";
-  };
-};
+export type PosLocalPendingCheckoutItemDefinedPayload =
+  PosLocalSyncPendingCheckoutItemDefinedPayload;
 
-export type PosLocalSalePayload = {
-  localPosSessionId: string;
-  localTransactionId: string;
-  localReceiptNumber: string;
-  receiptNumber: string;
-  registerNumber?: string;
+export type PosLocalSalePayload = Omit<
+  PosLocalSyncSaleCompletedPayload,
+  "customerProfileId" | "items" | "payments" | "serviceLines"
+> & {
   customerProfileId?: Id<"customerProfile">;
-  customerInfo?: {
-    name?: string;
-    email?: string;
-    phone?: string;
-  };
-  totals: {
-    subtotal: number;
-    tax: number;
-    total: number;
-  };
   items: PosLocalSaleItemInput[];
   serviceLines?: PosLocalServiceLineInput[];
   payments: PosLocalPaymentInput[];
 };
 
-export type PosLocalRegisterOpenedPayload = {
-  openingFloat: number;
-  registerNumber?: string;
-  notes?: string;
-};
+export type PosLocalRegisterOpenedPayload =
+  PosLocalSyncRegisterOpenedPayload;
 
-export type PosLocalRegisterClosedPayload = {
-  countedCash?: number;
-  notes?: string;
-};
+export type PosLocalRegisterClosedPayload =
+  PosLocalSyncRegisterClosedPayload;
 
-export type PosLocalSaleClearedPayload = {
-  localPosSessionId: string;
-  reason?: string;
-};
+export type PosLocalSaleClearedPayload = PosLocalSyncSaleClearedPayload;
 
-export type PosLocalRegisterReopenedPayload = {
-  reason?: string;
-};
+export type PosLocalRegisterReopenedPayload =
+  PosLocalSyncRegisterReopenedPayload;
 
-export type PosLocalExpenseRecordedPayload = {
-  localExpenseSessionId: string;
-  localExpenseEventId: string;
-  reason?: string;
-  notes?: string;
-  totals: {
-    subtotal: number;
-    tax: number;
-    total: number;
-  };
+export type PosLocalExpenseRecordedPayload = Omit<
+  PosLocalSyncExpenseRecordedPayload,
+  "items"
+> & {
   items: PosLocalSaleItemInput[];
 };
 
@@ -154,9 +102,16 @@ export type PosLocalSyncEventInput = {
   payload: Record<string, unknown>;
 };
 
+type ConvexPosLocalSyncPayloadByEventType = Omit<
+  PosLocalSyncPayloadByEventType,
+  "expense_recorded" | "sale_completed"
+> & {
+  sale_completed: PosLocalSalePayload;
+  expense_recorded: PosLocalExpenseRecordedPayload;
+};
+
 type ParsedPosLocalSyncPosEventBase<
   EventType extends Exclude<PosLocalSyncEventType, "expense_recorded">,
-  Payload,
 > = Omit<
   PosLocalSyncEventInput,
   "eventType" | "payload" | "syncScope" | "localRegisterSessionId"
@@ -164,12 +119,11 @@ type ParsedPosLocalSyncPosEventBase<
   syncScope?: "pos";
   localRegisterSessionId: string;
   eventType: EventType;
-  payload: Payload;
+  payload: ConvexPosLocalSyncPayloadByEventType[EventType];
 };
 
 type ParsedPosLocalSyncExpenseEventBase<
   EventType extends "expense_recorded",
-  Payload,
 > = Omit<
   PosLocalSyncEventInput,
   "eventType" | "payload" | "syncScope" | "localExpenseSessionId"
@@ -177,32 +131,15 @@ type ParsedPosLocalSyncExpenseEventBase<
   syncScope: "expense";
   localExpenseSessionId: string;
   eventType: EventType;
-  payload: Payload;
+  payload: ConvexPosLocalSyncPayloadByEventType[EventType];
 };
 
 export type ParsedPosLocalSyncEventInput =
-  | ParsedPosLocalSyncPosEventBase<
-      "register_opened",
-      PosLocalRegisterOpenedPayload
-    >
-  | ParsedPosLocalSyncPosEventBase<
-      "pending_checkout_item_defined",
-      PosLocalPendingCheckoutItemDefinedPayload
-    >
-  | ParsedPosLocalSyncPosEventBase<"sale_completed", PosLocalSalePayload>
-  | ParsedPosLocalSyncPosEventBase<"sale_cleared", PosLocalSaleClearedPayload>
-  | ParsedPosLocalSyncPosEventBase<
-      "register_closed",
-      PosLocalRegisterClosedPayload
-    >
-  | ParsedPosLocalSyncPosEventBase<
-      "register_reopened",
-      PosLocalRegisterReopenedPayload
-    >
-  | ParsedPosLocalSyncExpenseEventBase<
-      "expense_recorded",
-      PosLocalExpenseRecordedPayload
-    >;
+  | {
+      [EventType in Exclude<PosLocalSyncEventType, "expense_recorded">]:
+        ParsedPosLocalSyncPosEventBase<EventType>;
+    }[Exclude<PosLocalSyncEventType, "expense_recorded">]
+  | ParsedPosLocalSyncExpenseEventBase<"expense_recorded">;
 
 export type LocalSyncEventRecord = {
   _id: string;
