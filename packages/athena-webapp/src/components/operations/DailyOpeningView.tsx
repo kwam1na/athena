@@ -741,7 +741,7 @@ function OpeningAutomationStatusPanel({
   if (!automationStatus) return null;
 
   return (
-    <section className="rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface">
+    <section className="px-layout-md py-layout-sm">
       <h3 className="flex items-center gap-layout-xs text-base font-medium text-foreground">
         <Bot aria-hidden="true" className="h-4 w-4" />
         Athena automation
@@ -1872,6 +1872,11 @@ export function DailyOpeningViewContent({
         ) : null
       }
       afterGrid={null}
+      beforeMetrics={
+        snapshot ? (
+          <OpeningAutomationStatusPanel automationStatus={automationStatus} />
+        ) : null
+      }
       description="Review prior close handoff, acknowledge carry-forward work, and confirm whether the store day can start."
       eyebrow="Store Ops"
       isLoading={isLoadingSnapshot || !snapshot}
@@ -1880,7 +1885,6 @@ export function DailyOpeningViewContent({
       main={
         snapshot ? (
           <div className="space-y-layout-lg">
-            <OpeningAutomationStatusPanel automationStatus={automationStatus} />
             {isStarted ? (
               <OpeningAutomationReviewPanel
                 currency={currency}

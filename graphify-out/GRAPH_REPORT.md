@@ -5,7 +5,7 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 8895 nodes · 10849 edges · 2134 communities detected
+- 8898 nodes · 10855 edges · 2134 communities detected
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
@@ -2184,8 +2184,8 @@ Cohesion: 0.06
 Nodes (68): buildLegacyOperationalExplanation(), buildRecoveryBlockers(), buildRecoveryBlockersFromPreview(), buildRecoveryReadiness(), buildStaticOperationalExplanation(), buildTerminalAppUpdatePresentation(), buildTerminalOperationalExplanationPresentation(), buildTerminalRecoveryPresentation() (+60 more)
 
 ### Community 3 - "Community 3"
-Cohesion: 0.06
-Nodes (66): attentionSeverity(), automationRunClassification(), automationStatusBucketForRun(), buildApprovalsLane(), buildDailyOperationsSnapshotWithCtx(), buildLanes(), buildPendingRegisterCountTimelineMessage(), buildRegisterCloseoutTimelineEvents() (+58 more)
+Cohesion: 0.05
+Nodes (68): attentionSeverity(), automationRunClassification(), automationStatusBucketForRun(), buildApprovalsLane(), buildDailyOperationsSnapshotWithCtx(), buildLanes(), buildPendingRegisterCountTimelineMessage(), buildRegisterCloseoutTimelineEvents() (+60 more)
 
 ### Community 4 - "Community 4"
 Cohesion: 0.04
@@ -2808,16 +2808,16 @@ Cohesion: 0.29
 Nodes (7): formatDeliveryAddress(), getAmountPaidForOrder(), getDiscountValue(), getOrderAmount(), getOrderState(), getPickupActionState(), getPotentialPoints()
 
 ### Community 159 - "Community 159"
-Cohesion: 0.29
-Nodes (7): resolveVerificationCodeRecipient(), sendDiscountCodeEmail(), sendDiscountReminderEmail(), sendFeedbackRequestEmail(), sendNewOrderEmail(), sendOrderEmail(), sendVerificationCode()
-
-### Community 160 - "Community 160"
 Cohesion: 0.36
 Nodes (10): buildQuickAddEventMessage(), findExistingSku(), findOrCreateQuickAddCategory(), findOrCreateQuickAddSubcategory(), generateSKU(), getActorLabel(), isBarcodeLike(), mapSkuToCatalogResult() (+2 more)
 
-### Community 161 - "Community 161"
+### Community 160 - "Community 160"
 Cohesion: 0.18
 Nodes (0):
+
+### Community 161 - "Community 161"
+Cohesion: 0.29
+Nodes (7): resolveVerificationCodeRecipient(), sendDiscountCodeEmail(), sendDiscountReminderEmail(), sendFeedbackRequestEmail(), sendNewOrderEmail(), sendOrderEmail(), sendVerificationCode()
 
 ### Community 162 - "Community 162"
 Cohesion: 0.33
@@ -3540,100 +3540,100 @@ Cohesion: 0.4
 Nodes (2): formatTraceTimestamp(), RelativeTraceTimestamp()
 
 ### Community 342 - "Community 342"
-Cohesion: 0.33
-Nodes (0):
+Cohesion: 0.47
+Nodes (3): onDrop(), removeImage(), unmarkForDeletion()
 
 ### Community 343 - "Community 343"
 Cohesion: 0.33
 Nodes (0):
 
 ### Community 344 - "Community 344"
-Cohesion: 0.73
-Nodes (5): canAccessCashControlsSurface(), canAccessFullAdminSurface(), canAccessStoreDaySurface(), canViewFinancialDetails(), getSurfaceAccess()
-
-### Community 345 - "Community 345"
 Cohesion: 0.33
 Nodes (0):
+
+### Community 345 - "Community 345"
+Cohesion: 0.73
+Nodes (5): canAccessCashControlsSurface(), canAccessFullAdminSurface(), canAccessStoreDaySurface(), canViewFinancialDetails(), getSurfaceAccess()
 
 ### Community 346 - "Community 346"
 Cohesion: 0.33
 Nodes (0):
 
 ### Community 347 - "Community 347"
+Cohesion: 0.33
+Nodes (0):
+
+### Community 348 - "Community 348"
 Cohesion: 0.53
 Nodes (4): derivePosLocalSyncStatus(), getContiguousSyncedSequence(), getSyncState(), isLocallySettledSyncStatus()
 
-### Community 348 - "Community 348"
+### Community 349 - "Community 349"
 Cohesion: 0.4
 Nodes (2): buildRecoveryCommandStore(), storeFactory()
-
-### Community 349 - "Community 349"
-Cohesion: 0.33
-Nodes (0):
 
 ### Community 350 - "Community 350"
 Cohesion: 0.33
 Nodes (0):
 
 ### Community 351 - "Community 351"
-Cohesion: 0.53
-Nodes (4): isBarcodeShapedSearchQuery(), matchesSkuSearchTerms(), normalizeIdentifier(), scoreSkuSearchTerms()
-
-### Community 352 - "Community 352"
-Cohesion: 0.6
-Nodes (5): isExcludedFromPosAppShellCache(), isPosAppShellNavigationRequest(), isPosAppShellRoutePath(), isPosAppShellStaticAssetRequest(), readHeader()
-
-### Community 353 - "Community 353"
-Cohesion: 0.33
-Nodes (1): MemoryCache
-
-### Community 354 - "Community 354"
 Cohesion: 0.33
 Nodes (0):
 
+### Community 352 - "Community 352"
+Cohesion: 0.53
+Nodes (4): isBarcodeShapedSearchQuery(), matchesSkuSearchTerms(), normalizeIdentifier(), scoreSkuSearchTerms()
+
+### Community 353 - "Community 353"
+Cohesion: 0.6
+Nodes (5): isExcludedFromPosAppShellCache(), isPosAppShellNavigationRequest(), isPosAppShellRoutePath(), isPosAppShellStaticAssetRequest(), readHeader()
+
+### Community 354 - "Community 354"
+Cohesion: 0.33
+Nodes (1): MemoryCache
+
 ### Community 355 - "Community 355"
-Cohesion: 0.47
-Nodes (3): completePendingAuthSync(), navigationTargetForRedirect(), sleep()
+Cohesion: 0.33
+Nodes (0):
 
 ### Community 356 - "Community 356"
-Cohesion: 0.4
-Nodes (2): onSubmit(), saveStoreChanges()
+Cohesion: 0.47
+Nodes (3): completePendingAuthSync(), navigationTargetForRedirect(), sleep()
 
 ### Community 357 - "Community 357"
 Cohesion: 0.4
 Nodes (2): onSubmit(), saveStoreChanges()
 
 ### Community 358 - "Community 358"
-Cohesion: 0.33
-Nodes (0):
+Cohesion: 0.4
+Nodes (2): onSubmit(), saveStoreChanges()
 
 ### Community 359 - "Community 359"
-Cohesion: 0.47
-Nodes (4): fetchPosTransaction(), getBaseUrl(), getPosTransactionByReceiptToken(), PosTransactionReceiptError
+Cohesion: 0.33
+Nodes (0):
 
 ### Community 360 - "Community 360"
 Cohesion: 0.47
-Nodes (3): getBaseUrl(), getPromoCodes(), redeemPromoCode()
+Nodes (4): fetchPosTransaction(), getBaseUrl(), getPosTransactionByReceiptToken(), PosTransactionReceiptError
 
 ### Community 361 - "Community 361"
-Cohesion: 0.33
-Nodes (0):
+Cohesion: 0.47
+Nodes (3): getBaseUrl(), getPromoCodes(), redeemPromoCode()
 
 ### Community 362 - "Community 362"
 Cohesion: 0.33
 Nodes (0):
 
 ### Community 363 - "Community 363"
-Cohesion: 0.4
-Nodes (2): handleConfirm(), handlePrimaryAction()
-
-### Community 364 - "Community 364"
 Cohesion: 0.33
 Nodes (0):
 
+### Community 364 - "Community 364"
+Cohesion: 0.4
+Nodes (2): handleConfirm(), handlePrimaryAction()
+
 ### Community 365 - "Community 365"
-Cohesion: 0.47
-Nodes (3): onDrop(), removeImage(), unmarkForDeletion()
+Cohesion: 0.33
+Nodes (0):
 
 ### Community 366 - "Community 366"
 Cohesion: 0.53
@@ -13459,7 +13459,7 @@ _Questions this graph is uniquely positioned to answer:_
 - **Should `Community 2` be split into smaller, more focused modules?**
   _Cohesion score 0.06 - nodes in this community are weakly interconnected._
 - **Should `Community 3` be split into smaller, more focused modules?**
-  _Cohesion score 0.06 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.05 - nodes in this community are weakly interconnected._
 - **Should `Community 4` be split into smaller, more focused modules?**
   _Cohesion score 0.04 - nodes in this community are weakly interconnected._
 - **Should `Community 5` be split into smaller, more focused modules?**

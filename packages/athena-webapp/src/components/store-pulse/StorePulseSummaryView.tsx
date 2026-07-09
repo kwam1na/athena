@@ -94,6 +94,12 @@ export type StorePulseWindow =
   | "this_month"
   | "all_time";
 
+export type StorePulseEmptyStateTimeContext = "current" | "historical";
+
+export type StorePulseTimelineVariant = "card" | "canvas";
+
+export type StorePulseDetailVariant = "card" | "canvas";
+
 const storePulseWindowOptions: Array<{
   label: string;
   value: StorePulseWindow;
@@ -139,6 +145,7 @@ const salesPulseChartConfig = {
 const detailCardClassName =
   "overflow-hidden rounded-lg border border-border bg-surface-raised shadow-surface";
 const detailRowClassName = "px-layout-md py-layout-sm";
+const canvasDetailRowClassName = "py-layout-sm";
 const topItemsPageSize = 5;
 const salesTrendAxisInset = 72;
 const mobileSalesTrendTickCount = 3;
@@ -322,6 +329,7 @@ export function StorePulseTimeline({
   currencyFormatter,
   pulseWindow,
   snapshot,
+  variant = "card",
 }: {
   animationKey?: string;
   canViewFinancialDetails: boolean;
@@ -329,6 +337,7 @@ export function StorePulseTimeline({
   currencyFormatter: Intl.NumberFormat;
   pulseWindow: StorePulseWindow;
   snapshot: StorePulseOperatorSnapshot;
+  variant?: StorePulseTimelineVariant;
 }) {
   const isMobile = useIsMobile();
   const chartData = useMemo(
@@ -393,7 +402,13 @@ export function StorePulseTimeline({
           ) : null}
         </div>
       </div>
-      <div className="overflow-hidden rounded-lg border border-border bg-surface-raised px-layout-sm py-8 shadow-surface sm:p-8">
+      <div
+        className={
+          variant === "canvas"
+            ? "py-8"
+            : "overflow-hidden rounded-lg border border-border bg-surface-raised px-layout-sm py-8 shadow-surface sm:p-8"
+        }
+      >
         <ChartContainer
           config={salesPulseChartConfig}
           className="store-pulse-sales-trend-chart h-[22rem] w-full"
@@ -516,13 +531,17 @@ export function StorePulseTimeline({
 export function TopItemsPanel({
   canViewFinancialDetails,
   currencyFormatter,
+  emptyStateTimeContext = "current",
   snapshot,
   title = "Top items",
+  variant = "card",
 }: {
   canViewFinancialDetails: boolean;
   currencyFormatter: Intl.NumberFormat;
+  emptyStateTimeContext?: StorePulseEmptyStateTimeContext;
   snapshot: StorePulseOperatorSnapshot;
   title?: string;
+  variant?: StorePulseDetailVariant;
 }) {
   const [page, setPage] = useState(1);
   const topItemCount = snapshot.topItems.length;
@@ -535,6 +554,10 @@ export function TopItemsPanel({
     pageStartIndex + topItemsPageSize,
   );
   const totalItemsSold = snapshot.comparison.currentItemsSold;
+  const panelClassName =
+    variant === "canvas" ? "" : detailCardClassName;
+  const rowClassName =
+    variant === "canvas" ? canvasDetailRowClassName : detailRowClassName;
 
   return (
     <section className="space-y-layout-md">
@@ -558,8 +581,8 @@ export function TopItemsPanel({
       <div
         className={
           isPaginated
-            ? `${detailCardClassName} flex min-h-[23.5rem] flex-col`
-            : detailCardClassName
+            ? `${panelClassName} flex min-h-[23.5rem] flex-col`
+            : panelClassName
         }
       >
         {snapshot.topItems.length ? (
@@ -575,7 +598,7 @@ export function TopItemsPanel({
 
                 return (
                   <div
-                    className={`${detailRowClassName} grid gap-2 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center`}
+                    className={`${rowClassName} grid gap-2 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center`}
                     key={`${item.name}:${item.productSku ?? rank}`}
                   >
                     <span className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-border bg-surface text-xs font-medium text-muted-foreground">
@@ -618,8 +641,16 @@ export function TopItemsPanel({
           </>
         ) : (
           <EmptyState
-            description="Completed POS sales will populate item movement here."
-            title="No item history yet"
+            description={
+              emptyStateTimeContext === "historical"
+                ? "No completed POS item movement was recorded for this day."
+                : "Completed POS sales will populate item movement here."
+            }
+            title={
+              emptyStateTimeContext === "historical"
+                ? "No item history"
+                : "No item history yet"
+            }
           />
         )}
       </div>
@@ -628,14 +659,20 @@ export function TopItemsPanel({
 }
 
 export function PaymentMethodsPanel({
+  emptyStateTimeContext = "current",
   snapshot,
+  variant = "card",
 }: {
+  emptyStateTimeContext?: StorePulseEmptyStateTimeContext;
   snapshot: StorePulseOperatorSnapshot;
+  variant?: StorePulseDetailVariant;
 }) {
   const totalPaymentTransactions = snapshot.paymentMix.reduce(
     (total, payment) => total + payment.count,
     0,
   );
+  const rowClassName =
+    variant === "canvas" ? canvasDetailRowClassName : detailRowClassName;
 
   return (
     <section aria-label="Payment methods" className="space-y-layout-md">
@@ -647,7 +684,7 @@ export function PaymentMethodsPanel({
           Share of synced POS sales by payment method.
         </p>
       </div>
-      <div className={detailCardClassName}>
+      <div className={variant === "canvas" ? "" : detailCardClassName}>
         <div className="divide-y divide-border/70">
           {snapshot.paymentMix.length ? (
             snapshot.paymentMix.map((payment) => {
@@ -659,7 +696,7 @@ export function PaymentMethodsPanel({
 
               return (
                 <div
-                  className={`${detailRowClassName} grid gap-1`}
+                  className={`${rowClassName} grid gap-1`}
                   key={payment.method}
                 >
                   <div className="flex items-center justify-between gap-layout-sm text-sm">
@@ -688,8 +725,16 @@ export function PaymentMethodsPanel({
             })
           ) : (
             <EmptyState
-              description="Payment method shares will appear after completed sales sync."
-              title="No payment mix yet"
+              description={
+                emptyStateTimeContext === "historical"
+                  ? "No synced POS payment methods were recorded for this day."
+                  : "Payment method shares will appear after completed sales sync."
+              }
+              title={
+                emptyStateTimeContext === "historical"
+                  ? "No payment mix"
+                  : "No payment mix yet"
+              }
             />
           )}
         </div>
@@ -699,13 +744,21 @@ export function PaymentMethodsPanel({
 }
 
 function StorePulseRail({
+  detailVariant,
+  emptyStateTimeContext,
   snapshot,
 }: {
+  detailVariant?: StorePulseDetailVariant;
+  emptyStateTimeContext?: StorePulseEmptyStateTimeContext;
   snapshot: StorePulseOperatorSnapshot;
 }) {
   return (
     <PageWorkspaceRail>
-      <PaymentMethodsPanel snapshot={snapshot} />
+      <PaymentMethodsPanel
+        variant={detailVariant}
+        emptyStateTimeContext={emptyStateTimeContext}
+        snapshot={snapshot}
+      />
     </PageWorkspaceRail>
   );
 }
@@ -717,7 +770,11 @@ const loadingMetrics = [
   { helper: "-", label: "Items sold" },
 ] as const;
 
-function StorePulseChartSkeleton() {
+function StorePulseChartSkeleton({
+  variant = "card",
+}: {
+  variant?: StorePulseTimelineVariant;
+}) {
   return (
     <section aria-label="Sales trend loading" className="space-y-layout-sm">
       <div className="flex flex-col gap-layout-xs sm:flex-row sm:items-end sm:justify-between">
@@ -729,7 +786,13 @@ function StorePulseChartSkeleton() {
         </div>
         <Skeleton className="h-6 w-28 rounded-sm" />
       </div>
-      <div className="overflow-hidden rounded-lg border border-border bg-surface-raised p-8 shadow-surface">
+      <div
+        className={
+          variant === "canvas"
+            ? "py-8"
+            : "overflow-hidden rounded-lg border border-border bg-surface-raised p-8 shadow-surface"
+        }
+      >
         <div className="relative h-[22rem] w-full">
           <div className="absolute inset-y-0 left-0 flex w-16 flex-col justify-between py-1">
             {Array.from({ length: 5 }).map((_, index) => (
@@ -755,24 +818,29 @@ function StorePulseChartSkeleton() {
 
 function StorePulseDetailSkeleton({
   description,
+  variant = "card",
   rowCount,
   title,
 }: {
   description: string;
+  variant?: StorePulseDetailVariant;
   rowCount: number;
   title: string;
 }) {
+  const rowClassName =
+    variant === "canvas" ? canvasDetailRowClassName : detailRowClassName;
+
   return (
     <section aria-label={`${title} loading`} className="space-y-layout-md">
       <div>
         <h3 className="text-base font-medium text-foreground">{title}</h3>
         <p className="mt-1 text-sm text-muted-foreground">{description}</p>
       </div>
-      <div className={detailCardClassName}>
+      <div className={variant === "canvas" ? "" : detailCardClassName}>
         <div className="divide-y divide-border/70">
           {Array.from({ length: rowCount }).map((_, index) => (
             <div
-              className={`${detailRowClassName} grid gap-2 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center`}
+              className={`${rowClassName} grid gap-2 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center`}
               key={index}
             >
               <Skeleton className="h-6 w-6 rounded-sm" />
@@ -789,12 +857,16 @@ function StorePulseDetailSkeleton({
 }
 
 function StorePulseSkeleton({
+  detailVariant,
   showFinancialSalesCards,
   showSummaryMetrics,
+  timelineVariant,
   topItemsTitle = "Top items",
 }: {
+  detailVariant?: StorePulseDetailVariant;
   showFinancialSalesCards: boolean;
   showSummaryMetrics: boolean;
+  timelineVariant?: StorePulseTimelineVariant;
   topItemsTitle?: string;
 }) {
   const visibleLoadingMetrics = showFinancialSalesCards
@@ -820,7 +892,9 @@ function StorePulseSkeleton({
           </div>
         ) : null}
 
-        {showFinancialSalesCards ? <StorePulseChartSkeleton /> : null}
+        {showFinancialSalesCards ? (
+          <StorePulseChartSkeleton variant={timelineVariant} />
+        ) : null}
       </section>
 
       {showFinancialSalesCards ? (
@@ -828,6 +902,7 @@ function StorePulseSkeleton({
           <PageWorkspaceMain>
             <StorePulseDetailSkeleton
               description="Highest-volume items in the current history window."
+              variant={detailVariant}
               rowCount={5}
               title={topItemsTitle}
             />
@@ -836,6 +911,7 @@ function StorePulseSkeleton({
           <PageWorkspaceRail>
             <StorePulseDetailSkeleton
               description="Share of synced POS sales by payment method."
+              variant={detailVariant}
               rowCount={3}
               title="How customers paid"
             />
@@ -851,24 +927,30 @@ export function StorePulseSummaryView({
   chartAnimationKey,
   chartDescription,
   currencyFormatter,
+  detailVariant = "card",
+  emptyStateTimeContext = "current",
   onPulseWindowChange,
   pulseWindow,
   showDetailPanels = true,
   showPulseWindowFilter = true,
   showSummaryMetrics = true,
   summary,
+  timelineVariant = "card",
   topItemsTitle = "Top items",
 }: {
   canViewFinancialDetails: boolean;
   chartAnimationKey?: string;
   chartDescription?: string;
   currencyFormatter: Intl.NumberFormat;
+  detailVariant?: StorePulseDetailVariant;
+  emptyStateTimeContext?: StorePulseEmptyStateTimeContext;
   onPulseWindowChange: (pulseWindow: StorePulseWindow) => void;
   pulseWindow: StorePulseWindow;
   showDetailPanels?: boolean;
   showPulseWindowFilter?: boolean;
   showSummaryMetrics?: boolean;
   summary: StorePulseSummary | undefined;
+  timelineVariant?: StorePulseTimelineVariant;
   topItemsTitle?: string;
 }) {
   const snapshot = summary?.operatorSnapshot;
@@ -921,8 +1003,10 @@ export function StorePulseSummaryView({
 
       {!snapshot ? (
         <StorePulseSkeleton
+          detailVariant={detailVariant}
           showFinancialSalesCards={canViewFinancialDetails}
           showSummaryMetrics={showSummaryMetrics}
+          timelineVariant={timelineVariant}
           topItemsTitle={topItemsTitle}
         />
       ) : (
@@ -1021,6 +1105,7 @@ export function StorePulseSummaryView({
                 currencyFormatter={currencyFormatter}
                 pulseWindow={pulseWindow}
                 snapshot={snapshot}
+                variant={timelineVariant}
               />
             ) : null}
           </section>
@@ -1031,12 +1116,18 @@ export function StorePulseSummaryView({
                 <TopItemsPanel
                   canViewFinancialDetails={canViewFinancialDetails}
                   currencyFormatter={currencyFormatter}
+                  variant={detailVariant}
+                  emptyStateTimeContext={emptyStateTimeContext}
                   snapshot={snapshot}
                   title={topItemsTitle}
                 />
               </PageWorkspaceMain>
 
-              <StorePulseRail snapshot={snapshot} />
+              <StorePulseRail
+                detailVariant={detailVariant}
+                emptyStateTimeContext={emptyStateTimeContext}
+                snapshot={snapshot}
+              />
             </PageWorkspaceGrid>
           ) : null}
         </div>

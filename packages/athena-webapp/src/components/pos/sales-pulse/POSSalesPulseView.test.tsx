@@ -173,9 +173,27 @@ describe("POSStorePulseSection", () => {
     expect(screen.getAllByText("50%").length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText("Card")).toBeInTheDocument();
     expect(screen.getByText("Braiding Hair")).toBeInTheDocument();
+    expect(
+      screen.getByText("Braiding Hair").closest(".divide-y")?.parentElement,
+    ).toHaveClass("rounded-lg", "border", "bg-surface-raised", "shadow-surface");
+    expect(screen.getByText("Braiding Hair").closest(".grid")).toHaveClass(
+      "px-layout-md",
+    );
+    expect(screen.getByText("Cash").closest(".divide-y")?.parentElement).toHaveClass(
+      "rounded-lg",
+      "border",
+      "bg-surface-raised",
+      "shadow-surface",
+    );
+    expect(screen.getByText("Cash").closest(".grid")).toHaveClass(
+      "px-layout-md",
+    );
     expect(screen.getByLabelText("Total items sold: 3")).toBeInTheDocument();
     expect(screen.getByText("2 units sold")).toBeInTheDocument();
     expect(screen.getByTestId("store-pulse-chart")).toBeInTheDocument();
+    expect(
+      screen.getByTestId("store-pulse-chart-container").parentElement,
+    ).toHaveClass("rounded-lg", "border", "bg-surface-raised", "shadow-surface");
     expect(screen.getByTestId("store-pulse-area")).toBeInTheDocument();
     expect(screen.queryByText("Transaction review")).not.toBeInTheDocument();
   });
