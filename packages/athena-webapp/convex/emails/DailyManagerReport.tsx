@@ -24,6 +24,12 @@ type DailyReportStatus =
   | "eligible";
 
 type AttentionTone = "neutral" | "success" | "warning" | "danger";
+type DailyReportStatusCopy = {
+  label: string;
+  preview: string;
+  summary: string;
+  tone: AttentionTone;
+};
 
 export interface DailyManagerReportMetric {
   label: string;
@@ -65,16 +71,6 @@ export interface DailyManagerReportProps {
   notes?: string;
 }
 
-export const dailyManagerReportPreviewProps = {
-  completedAt: "8:42 PM",
-  completedBy: "Athena",
-  operatingDate: "Friday, July 3",
-  reportUrl:
-    "https://athena.wigclub.store/wigclub/store/wigclub/operations/daily-close",
-  status: "prepared",
-  storeName: "Wigclub",
-} satisfies DailyManagerReportProps;
-
 const sampleBlockers: DailyManagerReportItem[] = [
   {
     title: "Register session is still open",
@@ -84,10 +80,26 @@ const sampleBlockers: DailyManagerReportItem[] = [
   },
 ];
 
-const statusCopy: Record<
-  DailyReportStatus,
-  { label: string; preview: string; summary: string; tone: AttentionTone }
-> = {
+const previewMoney = formatReportAmount("GHS");
+
+export const dailyManagerReportPreviewProps = {
+  blockers: sampleBlockers,
+  cashMetrics: sampleCashMetricsFor(previewMoney),
+  carryForwardItems: [],
+  completedAt: "8:42 PM",
+  completedBy: "Athena",
+  operatingDate: "Friday, July 3",
+  paymentTotals: samplePaymentTotalsFor(previewMoney),
+  reportUrl:
+    "https://athena.wigclub.store/wigclub/store/wigclub/operations/daily-close",
+  reviewedItems: sampleReviewedItemsFor(previewMoney),
+  status: "prepared",
+  storeCurrency: "GHS",
+  storeName: "Wigclub",
+  summaryMetrics: sampleSummaryMetricsFor(previewMoney),
+} satisfies DailyManagerReportProps;
+
+const statusCopy: Record<DailyReportStatus, DailyReportStatusCopy> = {
   applied: {
     label: "Completed under policy",
     preview: "EOD completion applied.",
@@ -135,42 +147,48 @@ const statusCopy: Record<
   },
 };
 
+const unavailableStatusCopy: DailyReportStatusCopy = {
+  label: "Status unavailable",
+  preview: "Daily report status was not included.",
+  summary: "Open Athena to review the daily report.",
+  tone: "neutral",
+};
+
 export default function DailyManagerReport({
-  storeName = "Wigclub",
-  operatingDate = "Friday, July 3",
-  completedAt = "8:42 PM",
-  completedBy = "Athena",
+  storeName,
+  operatingDate,
+  completedAt,
+  completedBy,
   frameVariant = "unbordered",
   storeCurrency = "GHS",
-  status = "prepared",
+  status,
   statusLabel,
   statusSummary,
-  reportUrl = "https://athena.wigclub.store/wigclub/store/wigclub/operations/daily-close",
-  reviewedItems,
+  reportUrl,
+  reviewedItems = [],
   carryForwardItems = [],
-  blockers = sampleBlockers,
-  summaryMetrics,
-  cashMetrics,
-  paymentTotals,
-  notes = "No additional manager notes were added.",
+  blockers = [],
+  summaryMetrics = [],
+  cashMetrics = [],
+  paymentTotals = [],
+  notes,
 }: DailyManagerReportProps) {
-  const money = formatReportAmount(storeCurrency);
-  const resolvedReviewedItems = reviewedItems ?? sampleReviewedItemsFor(money);
-  const resolvedSummaryMetrics =
-    summaryMetrics ?? sampleSummaryMetricsFor(money);
-  const resolvedCashMetrics = cashMetrics ?? sampleCashMetricsFor(money);
-  const resolvedPaymentTotals = paymentTotals ?? samplePaymentTotalsFor(money);
-  const copy = statusCopy[status];
+  const copy = statusCopy[status] ?? unavailableStatusCopy;
   const resolvedStatusLabel = statusLabel ?? copy.label;
   const resolvedStatusSummary = statusSummary ?? copy.summary;
-  const previewText = `${storeName} EOD: ${resolvedStatusLabel}. ${copy.preview}`;
-  const timestampLabel = status === "applied" ? "Closed" : "Prepared";
+  const previewText = `${storeName ?? "Athena"} EOD: ${resolvedStatusLabel}. ${copy.preview}`;
+  const timestampLabel =
+    status === "applied"
+      ? "Closed"
+      : status === "prepared"
+        ? "Prepared"
+        : "Updated";
   const attentionItems = buildAttentionItems({
     blockers,
     carryForwardItems,
   });
   const hasRegisterSessionBlocker = blockers.some(isRegisterSessionBlocker);
-  const expectedCashMetrics = resolvedCashMetrics.filter((metric) =>
+  const expectedCashMetrics = cashMetrics.filter((metric) =>
     /expected cash/i.test(metric.label),
   );
   const handoffSectionTitle =
@@ -178,7 +196,7 @@ export default function DailyManagerReport({
   const attentionSummary = buildAttentionSummary({
     blockers: blockers.length,
     carryForward: carryForwardItems.length,
-    reviewed: resolvedReviewedItems.length,
+    reviewed: reviewedItems.length,
     status,
   });
   const showStatusBadge = blockers.length > 0;
@@ -250,7 +268,7 @@ export default function DailyManagerReport({
 
           <Section style={styles.separatedSection}>
             <SectionHeading title="Operating summary" quietTitle />
-            <OperatingSummaryGrid metrics={resolvedSummaryMetrics} />
+            <OperatingSummaryGrid metrics={summaryMetrics} />
           </Section>
 
           <Section style={styles.separatedSection}>
@@ -266,14 +284,14 @@ export default function DailyManagerReport({
                 </EmptyState>
               </>
             ) : (
-              <SummaryMetricGrid metrics={resolvedCashMetrics} />
+              <SummaryMetricGrid metrics={cashMetrics} />
             )}
           </Section>
 
-          {resolvedPaymentTotals.length > 0 && (
+          {paymentTotals.length > 0 && (
             <Section style={styles.separatedSection}>
               <SectionHeading title="Payment mix" quietTitle />
-              <PaymentTotalsGrid payments={resolvedPaymentTotals} />
+              <PaymentTotalsGrid payments={paymentTotals} />
             </Section>
           )}
 

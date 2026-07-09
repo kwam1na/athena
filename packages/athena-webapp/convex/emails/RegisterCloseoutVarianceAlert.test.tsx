@@ -2,6 +2,7 @@ import { render } from "@react-email/components";
 import { describe, expect, it } from "vitest";
 
 import RegisterCloseoutVarianceAlert, {
+  registerCloseoutVarianceAlertPreviewProps,
   type RegisterCloseoutVarianceAlertProps,
 } from "./RegisterCloseoutVarianceAlert";
 
@@ -39,7 +40,9 @@ describe("RegisterCloseoutVarianceAlert", () => {
     expect(html).toContain("color:#dc4438");
     expect(html).toContain("Review register closeout");
     expect(html).toContain("lucide-arrow-up-right");
-    expect(html).toContain("Variance exceeded the closeout approval threshold.");
+    expect(html).toContain(
+      "Variance exceeded the closeout approval threshold.",
+    );
     expect(html).toContain("Cash counted twice before closeout.");
   });
 
@@ -70,7 +73,62 @@ describe("RegisterCloseoutVarianceAlert", () => {
       />,
     );
 
-    expect(html).toContain("Variance of $20 exceeded the closeout approval threshold");
+    expect(html).toContain(
+      "Variance of $20 exceeded the closeout approval threshold",
+    );
     expect(html).not.toContain("Variance of 2000 exceeded");
+  });
+
+  it("does not fill omitted production reason or notes with preview defaults", async () => {
+    const { notes: _notes, reason: _reason, ...requiredProps } = baseProps;
+
+    const html = await render(
+      <RegisterCloseoutVarianceAlert {...requiredProps} />,
+    );
+
+    expect(html).toContain("Submitted with cash variance");
+    expect(html).not.toContain("Review reason");
+    expect(html).not.toContain("Closeout notes");
+    expect(html).not.toContain(
+      registerCloseoutVarianceAlertPreviewProps.reason,
+    );
+    expect(html).not.toContain(registerCloseoutVarianceAlertPreviewProps.notes);
+  });
+
+  it("keeps variance preview data explicit for email previews", async () => {
+    const html = await render(
+      <RegisterCloseoutVarianceAlert
+        {...registerCloseoutVarianceAlertPreviewProps}
+      />,
+    );
+
+    expect(html).toContain(registerCloseoutVarianceAlertPreviewProps.reason);
+    expect(html).toContain(registerCloseoutVarianceAlertPreviewProps.notes);
+  });
+
+  it("degrades incomplete runtime payloads without inventing variance direction", async () => {
+    const html = await render(
+      <RegisterCloseoutVarianceAlert
+        {...({
+          countedCash: "GH₵1,201.82",
+          expectedCash: "GH₵1,244.00",
+          operatingDate: "Friday, July 3",
+          registerLabel: "Front counter / Register 2",
+          reviewUrl:
+            "https://athena.wigclub.store/wigclub/store/wigclub/cash-controls/registers/register-session-1",
+          storeName: "Wigclub East Legon",
+          submittedAt: "8:42 PM",
+          submittedBy: "Ama Mensah",
+          variance: "GH₵-42.18",
+        } as RegisterCloseoutVarianceAlertProps)}
+      />,
+    );
+
+    expect(html).toContain("Cash variance");
+    expect(html).not.toContain("Cash short");
+    expect(html).not.toContain(
+      registerCloseoutVarianceAlertPreviewProps.reason,
+    );
+    expect(html).not.toContain(registerCloseoutVarianceAlertPreviewProps.notes);
   });
 });
