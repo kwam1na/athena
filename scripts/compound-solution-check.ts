@@ -1,6 +1,14 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import {
+  collectDeliverableDiffFingerprint,
+  normalizeRepoPath,
+  sortUniquePaths,
+} from "./delivery-diff-fingerprint";
+
+export { collectDeliverableDiffFingerprint } from "./delivery-diff-fingerprint";
+
 type LineChange = {
   additions: number;
   deletions: number;
@@ -13,6 +21,7 @@ type CompoundSolutionCheckInput = {
   solutionDocContents?: Map<string, string>;
   agentDocContents?: Map<string, string>;
   sourceLineChanges: Map<string, LineChange>;
+  deliverableDiffFingerprint?: string;
   threshold?: number;
 };
 
@@ -63,16 +72,6 @@ const COMPOUND_SENSITIVE_PATTERNS = [
 ] as const;
 const SOLUTION_REFERENCE_PATTERN =
   /(?:^|[\s('"`])((?:(?:\.\.?\/)+)?docs\/solutions\/[A-Za-z0-9._/-]+\.md)(?=$|[\s)'"`,.])/g;
-
-function normalizeRepoPath(repoPath: string) {
-  return repoPath.replaceAll("\\", "/").replace(/^\.\//, "");
-}
-
-function sortUniquePaths(paths: string[]) {
-  return [...new Set(paths.map((entry) => normalizeRepoPath(entry)).filter(Boolean))].sort(
-    (left, right) => left.localeCompare(right)
-  );
-}
 
 export function isSolutionDocPath(repoPath: string) {
   return /^docs\/solutions\/.+\.md$/.test(normalizeRepoPath(repoPath));
@@ -175,6 +174,42 @@ function solutionFrontmatterField(markdown: string, field: string) {
   return match?.[1]?.replace(/^["']|["']$/g, "").trim() ?? "";
 }
 
+function solutionDeliveryDiffFingerprint(markdown: string) {
+  return solutionFrontmatterField(markdown, "delivery_diff_fingerprint");
+}
+
+function collectSolutionFingerprintFindings(
+  changedSolutionDocs: string[],
+  markdownContents: Map<string, string>,
+  expectedFingerprint: string
+) {
+  const matchingDoc = changedSolutionDocs.find(
+    (filePath) =>
+      solutionDeliveryDiffFingerprint(markdownContents.get(filePath) ?? "") ===
+      expectedFingerprint
+  );
+
+  if (matchingDoc) {
+    return [];
+  }
+
+  return changedSolutionDocs.map((filePath) => {
+    const actualFingerprint = solutionDeliveryDiffFingerprint(
+      markdownContents.get(filePath) ?? ""
+    );
+
+    if (!actualFingerprint) {
+      return {
+        message: `Changed solution note ${filePath} is missing delivery_diff_fingerprint for current deliverable diff ${expectedFingerprint}. Regenerate or update the note after final code and workflow changes.`,
+      };
+    }
+
+    return {
+      message: `Changed solution note ${filePath} is stale: delivery_diff_fingerprint ${actualFingerprint} does not match current deliverable diff ${expectedFingerprint}. Regenerate or update the note after final code and workflow changes.`,
+    };
+  });
+}
+
 function isFoundationalArchitectureSolutionNote(filePath: string, markdown: string) {
   if (solutionFrontmatterField(markdown, "category") !== "architecture") {
     return false;
@@ -235,6 +270,7 @@ export function collectCompoundSolutionFindings({
   solutionDocContents = markdownContents,
   agentDocContents = markdownContents,
   sourceLineChanges,
+  deliverableDiffFingerprint,
   threshold = DEFAULT_SOURCE_LINE_THRESHOLD,
 }: CompoundSolutionCheckInput) {
   const findings: CompoundSolutionFinding[] = [];
@@ -299,6 +335,8 @@ export function collectCompoundSolutionFindings({
   }
 
   const sourceLineTotal = totalConsiderableSourceLineChanges(sourceLineChanges);
+  const requiresSolutionDoc =
+    sourceLineTotal >= threshold || changedSensitiveWorkflowFiles.length > 0;
 
   if (sourceLineTotal >= threshold && changedSolutionDocs.length === 0) {
     findings.push({
@@ -312,6 +350,20 @@ export function collectCompoundSolutionFindings({
         ", "
       )} without a docs/solutions/**/*.md update.`,
     });
+  }
+
+  if (
+    requiresSolutionDoc &&
+    changedSolutionDocs.length > 0 &&
+    deliverableDiffFingerprint
+  ) {
+    findings.push(
+      ...collectSolutionFingerprintFindings(
+        changedSolutionDocs,
+        markdownContents,
+        deliverableDiffFingerprint
+      )
+    );
   }
 
   return findings;
@@ -491,6 +543,7 @@ function collectExistingFiles(rootDir: string) {
 function parseArgs(argv: string[]) {
   let baseRef = "origin/main";
   let threshold = DEFAULT_SOURCE_LINE_THRESHOLD;
+  let printFingerprint = false;
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -515,10 +568,15 @@ function parseArgs(argv: string[]) {
       continue;
     }
 
+    if (arg === "--print-fingerprint") {
+      printFingerprint = true;
+      continue;
+    }
+
     throw new Error(`Unknown argument: ${arg}.`);
   }
 
-  return { baseRef, threshold };
+  return { baseRef, threshold, printFingerprint };
 }
 
 export function assertCompoundSolutionCheck(
@@ -529,6 +587,11 @@ export function assertCompoundSolutionCheck(
   const threshold = options.threshold ?? DEFAULT_SOURCE_LINE_THRESHOLD;
   const changedFiles = collectChangedFiles(rootDir, baseRef);
   const existingFiles = collectExistingFiles(rootDir);
+  const deliverableDiffFingerprint = collectDeliverableDiffFingerprint(
+    rootDir,
+    baseRef,
+    changedFiles
+  );
   const findings = collectCompoundSolutionFindings({
     changedFiles,
     existingFiles,
@@ -536,6 +599,7 @@ export function assertCompoundSolutionCheck(
     solutionDocContents: collectSolutionDocContents(rootDir, existingFiles),
     agentDocContents: collectAgentDocContents(rootDir, existingFiles),
     sourceLineChanges: collectSourceLineChanges(rootDir, baseRef, changedFiles),
+    deliverableDiffFingerprint,
     threshold,
   });
 
@@ -551,7 +615,16 @@ export function assertCompoundSolutionCheck(
 if (import.meta.main) {
   try {
     const options = parseArgs(process.argv.slice(2));
-    assertCompoundSolutionCheck(path.resolve(import.meta.dirname, ".."), options);
+    const rootDir = path.resolve(import.meta.dirname, "..");
+
+    if (options.printFingerprint) {
+      const changedFiles = collectChangedFiles(rootDir, options.baseRef);
+      console.log(
+        collectDeliverableDiffFingerprint(rootDir, options.baseRef, changedFiles)
+      );
+    } else {
+      assertCompoundSolutionCheck(rootDir, options);
+    }
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(message);
