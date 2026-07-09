@@ -2,6 +2,7 @@ import { render } from "@react-email/components";
 import { describe, expect, it } from "vitest";
 
 import DailyManagerReport, {
+  dailyManagerReportPreviewProps,
   type DailyManagerReportProps,
 } from "./DailyManagerReport";
 import { currencyFormatter } from "../utils";
@@ -65,7 +66,7 @@ describe("DailyManagerReport", () => {
     );
   });
 
-  it("uses the cedi display symbol for GHS preview defaults", async () => {
+  it("does not fill omitted production sections with preview defaults", async () => {
     const html = await render(
       <DailyManagerReport
         storeName="Wigclub East Legon"
@@ -80,21 +81,55 @@ describe("DailyManagerReport", () => {
 
     expect(html).toContain("Ready for manager review");
     expect(html).not.toContain("Review the close when you are ready.");
-    expect(html).toContain("Before close");
-    expect(html).toContain("Register session is still open");
-    expect(html).toContain("Front Counter is still open.");
-    expect(html).toContain(
+    expect(html).toContain("Next opening");
+    expect(html).not.toContain("Register session is still open");
+    expect(html).not.toContain("Front Counter is still open.");
+    expect(html).not.toContain(
       "Final cash count and variance will be available after the register is closed.",
     );
     expect(html).not.toContain("opening team");
     expect(html).not.toContain("Cash variance");
-    expect(html).toContain("GH₵1,201.82");
-    expect(html).toContain("Expected cash");
+    expect(html).not.toContain("GH₵1,201.82");
+    expect(html).not.toContain("Expected cash");
     expect(html).not.toContain("Counted cash");
     expect(html).not.toContain("Cash deposit");
     expect(html).not.toContain("Net variance");
     expect(html).not.toContain("TXN-1048 | GH₵220");
     expect(html).not.toContain("GHS 1,244");
+    expect(html).not.toContain("No additional manager notes were added.");
+  });
+
+  it("keeps preview sample data explicit for email previews", async () => {
+    const html = await render(
+      <DailyManagerReport {...dailyManagerReportPreviewProps} />,
+    );
+
+    expect(html).toContain("Ready for manager review");
+    expect(html).toContain("Register session is still open");
+    expect(html).toContain("Front Counter is still open.");
+    expect(html).toContain("GH₵1,201.82");
+    expect(html).toContain("Expected cash");
+  });
+
+  it("degrades incomplete runtime payloads without using preview status defaults", async () => {
+    const html = await render(
+      <DailyManagerReport
+        {...({
+          completedAt: "8:42 PM",
+          completedBy: "Athena",
+          operatingDate: "Friday, July 3",
+          reportUrl:
+            "https://athena.wigclub.store/wigclub/store/wigclub/operations",
+          storeName: "Wigclub East Legon",
+        } as DailyManagerReportProps)}
+      />,
+    );
+
+    expect(html).toContain("Status unavailable");
+    expect(html).toContain("Open Athena to review the daily report.");
+    expect(html).not.toContain("Ready for manager review");
+    expect(html).not.toContain("Register session is still open");
+    expect(html).not.toContain("GH₵1,201.82");
   });
 
   it("groups payment totals into amount-first payment columns", async () => {

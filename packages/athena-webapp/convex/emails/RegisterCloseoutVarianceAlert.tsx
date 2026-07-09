@@ -42,7 +42,8 @@ export const registerCloseoutVarianceAlertPreviewProps = {
   countedCash: "GH₵1,201.82",
   currency: "GHS",
   expectedCash: "GH₵1,244.00",
-  notes: "Cash drawer was counted twice before submission. Operator noted one missing GH₵50 note from the morning float.",
+  notes:
+    "Cash drawer was counted twice before submission. Operator noted one missing GH₵50 note from the morning float.",
   operatingDate: "Friday, July 3",
   reason: "Variance exceeded the closeout approval threshold.",
   registerLabel: "Front counter / Register 2",
@@ -56,22 +57,27 @@ export const registerCloseoutVarianceAlertPreviewProps = {
 } satisfies RegisterCloseoutVarianceAlertProps;
 
 export default function RegisterCloseoutVarianceAlert({
-  storeName = registerCloseoutVarianceAlertPreviewProps.storeName,
-  registerLabel = registerCloseoutVarianceAlertPreviewProps.registerLabel,
-  operatingDate = registerCloseoutVarianceAlertPreviewProps.operatingDate,
-  submittedAt = registerCloseoutVarianceAlertPreviewProps.submittedAt,
-  submittedBy = registerCloseoutVarianceAlertPreviewProps.submittedBy,
-  expectedCash = registerCloseoutVarianceAlertPreviewProps.expectedCash,
-  countedCash = registerCloseoutVarianceAlertPreviewProps.countedCash,
-  currency = registerCloseoutVarianceAlertPreviewProps.currency,
-  variance = registerCloseoutVarianceAlertPreviewProps.variance,
-  varianceDirection = registerCloseoutVarianceAlertPreviewProps.varianceDirection,
-  reason = registerCloseoutVarianceAlertPreviewProps.reason,
-  notes = registerCloseoutVarianceAlertPreviewProps.notes,
-  reviewUrl = registerCloseoutVarianceAlertPreviewProps.reviewUrl,
-}: Partial<RegisterCloseoutVarianceAlertProps> = {}) {
+  storeName,
+  registerLabel,
+  operatingDate,
+  submittedAt,
+  submittedBy,
+  expectedCash,
+  countedCash,
+  currency = "GHS",
+  variance,
+  varianceDirection,
+  reason,
+  notes,
+  reviewUrl,
+}: RegisterCloseoutVarianceAlertProps) {
   const previewText = `${storeName}: ${registerLabel} closeout submitted with ${variance} variance.`;
-  const varianceLabel = varianceDirection === "over" ? "Cash over" : "Cash short";
+  const varianceLabel =
+    varianceDirection === "over"
+      ? "Cash over"
+      : varianceDirection === "short"
+        ? "Cash short"
+        : "Cash variance";
   const reasonFormatter = currencyFormatter(currency ?? "GHS");
   const formattedReason = formatStoredReviewReason(reason, (amount) =>
     reasonFormatter.format(toDisplayAmount(amount)),
