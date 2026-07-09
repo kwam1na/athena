@@ -17,6 +17,7 @@ const EXPIRED_PROOF_OPTIONS = {
     reason: "test proof disabled",
   }),
   runCompoundCheck: async () => {},
+  runLandedReportCheck: async () => {},
 };
 
 describe("pre-push review wiring", () => {

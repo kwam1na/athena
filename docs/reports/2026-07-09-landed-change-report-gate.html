@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="a35446754ec96c1370bd49b8b06f421c320fe8abbfdc0f939bb234c2993ecb1b">
+<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="6d2d87fccf98b2d608965000f0a40ca68990201ccf6963378e6df5417ae6f513">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -90,6 +90,8 @@
 <li>Updated the execute skill so substantial merged deliveries generate a landed-change report as part of handoff.</li>
 <li>Added landed-report:check to the PR validation provider so large source branches must include a valid docs/reports HTML artifact.</li>
 <li>Stamped generated reports with data-athena-landed-change-report=&quot;v1&quot; so sensors can distinguish intentional report artifacts from ordinary HTML.</li>
+<li>Refactored the Daily Operations top status band shell so compact Athena automation, incomplete historical close context, and completed policy attribution share the same horizontal shell while leaving the mobile Opening review card outside that set.</li>
+<li>Aligned the pre-push review test harness with the new landed-report step so CI mocks the policy check in repair-path tests instead of accidentally invoking the real repo command with a missing base ref.</li>
 </ul>
 </section>
 <section class="panel"><h2>How The Sensor Thinks</h2>
@@ -107,23 +109,26 @@
 <tr><td><code>.agents/skills/execute/SKILL.md</code></td><td>Adds report generation to delivery handoff for substantial merged work.</td></tr>
 <tr><td><code>scripts/landed-change-report-check.ts</code></td><td>Implements the repo sensor that requires reports for large source changes.</td></tr>
 <tr><td><code>package.json</code></td><td>Runs landed-report:check during pr:athena validation.</td></tr>
-<tr><td><code>docs/solutions/harness/landed-change-report-gate-2026-07-09.md</code></td><td>Captures the durable harness rationale for the new sensor.</td></tr></tbody>
+<tr><td><code>docs/solutions/harness/landed-change-report-gate-2026-07-09.md</code></td><td>Captures the durable harness rationale for the new sensor.</td></tr>
+<tr><td><code>packages/athena-webapp/src/components/operations/DailyOperationsView.tsx</code></td><td>Shares the automation-band shell across the top Daily Operations status bands that belong in that section.</td></tr>
+<tr><td><code>scripts/pre-push-review.test.ts</code></td><td>Keeps CI harness tests aligned with the added landed-report pre-push step.</td></tr></tbody>
   </table>
 </section>
 
       
 <section class="panel">
   <h2>Subagent Evidence</h2>
-  <ul><li><strong>SessionContextResearcher:</strong> Confirmed the report workflow must gather prior-session context and delivered diff context before authoring.</li>
+<ul><li><strong>SessionContextResearcher:</strong> Confirmed the report workflow must gather prior-session context and delivered diff context before authoring.</li>
 <li><strong>DesignShellReviewer:</strong> Required the HTML shell to follow the repo-local Emil design guidance and keep the quiz usable as a comprehension checkpoint.</li>
-<li><strong>ValidationReviewer:</strong> Approved adding a PR-time sensor beside compound:check so the expectation is enforced by repo validation rather than only by skill prose.</li></ul>
+<li><strong>ValidationReviewer:</strong> Approved adding a PR-time sensor beside compound:check so the expectation is enforced by repo validation rather than only by skill prose.</li>
+<li><strong>UI Scope Reviewer:</strong> Confirmed the shared Daily Operations shell applies to the top automation and historical context bands, while the mobile Opening review evidence card keeps its separate card treatment.</li></ul>
 </section>
 
       
 <section id="quiz" class="panel">
   <h2>Quiz: Pass Required</h2>
-  <p>You must score at least 4 out of 5 to pass.</p>
-  <form id="changeQuiz" data-threshold="4">
+  <p>You must score at least 5 out of 6 to pass.</p>
+  <form id="changeQuiz" data-threshold="5">
     
 <div class="quiz-question" data-answer="0">
   <fieldset>
@@ -178,6 +183,17 @@
 <label><input type="radio" name="q5" value="3" /> A production deploy log.</label>
   </fieldset>
   <div class="answer-detail">The sensor checks for the marker, subagent evidence, quiz heading, and quiz form id.</div>
+</div>
+
+<div class="quiz-question" data-answer="0">
+  <fieldset>
+    <legend>6. Which Daily Operations components now share the automation-band shell?</legend>
+    <label><input type="radio" name="q6" value="0" /> Compact Athena automation, incomplete historical close context, and completed Athena policy attribution.</label>
+<label><input type="radio" name="q6" value="1" /> Every card in the Daily Operations page, including metrics and timeline.</label>
+<label><input type="radio" name="q6" value="2" /> Only the mobile Opening review evidence card.</label>
+<label><input type="radio" name="q6" value="3" /> No Daily Operations components changed.</label>
+  </fieldset>
+  <div class="answer-detail">The shared shell is scoped to the top status bands; the Opening review evidence panel keeps its distinct card shell.</div>
 </div>
 
     <div class="quiz-actions">

@@ -1449,20 +1449,19 @@ describe("DailyOperationsViewContent", () => {
     expect(
       screen.getByText("Athena completed EOD Review under store policy."),
     ).toBeInTheDocument();
-    const attributionNotice = screen
+    const attributionBand = screen
       .getByText("Athena completed EOD Review under store policy.")
-      .closest("div");
-    expect(attributionNotice).not.toBeNull();
-    expect(attributionNotice).toHaveClass("py-layout-sm");
-    expect(attributionNotice).not.toHaveClass(
-      "px-layout-md",
+      .closest("section");
+    expect(attributionBand).not.toBeNull();
+    expect(attributionBand).toHaveClass("px-layout-md", "py-layout-sm");
+    expect(attributionBand).not.toHaveClass(
       "rounded-lg",
       "border",
       "bg-success/10",
       "shadow-surface",
     );
     expect(
-      attributionNotice!.compareDocumentPosition(screen.getByText("Net sales")) &
+      attributionBand!.compareDocumentPosition(screen.getByText("Net sales")) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(
@@ -1497,10 +1496,10 @@ describe("DailyOperationsViewContent", () => {
       },
     } as DailyOperationsSnapshot);
 
-    const attributionNotice = screen
+    const attributionBand = screen
       .getByText("Athena completed EOD Review under store policy.")
-      .closest("div");
-    const statusStack = attributionNotice?.closest("section");
+      .closest("section");
+    const statusStack = attributionBand?.parentElement;
 
     expect(
       screen.queryByRole("heading", { name: "Historical store-day view" }),
@@ -1510,10 +1509,9 @@ describe("DailyOperationsViewContent", () => {
         "This historical operating date is view-only. Workflow actions are available only on the current operating date.",
       ),
     ).not.toBeInTheDocument();
-    expect(attributionNotice).not.toBeNull();
+    expect(attributionBand).not.toBeNull();
     expect(statusStack).not.toBeNull();
-    expect(attributionNotice).toHaveClass("py-layout-sm");
-    expect(attributionNotice).not.toHaveClass("px-layout-md");
+    expect(attributionBand).toHaveClass("px-layout-md", "py-layout-sm");
     expect(
       statusStack!.compareDocumentPosition(screen.getByText("Net sales")) &
         Node.DOCUMENT_POSITION_FOLLOWING,
@@ -1842,7 +1840,9 @@ describe("DailyOperationsViewContent", () => {
         name: "Review EOD Review for Friday, May 8, 2026",
       }),
     ).toBeInTheDocument();
-    expect(screen.queryByText("Closed store-day record")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Closed store-day record"),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText("Athena automation")).not.toBeInTheDocument();
     expect(
       screen.queryByText("Athena checked EOD Review. No change was made."),
@@ -1945,7 +1945,9 @@ describe("DailyOperationsViewContent", () => {
     );
     expect(workflow.queryByText("0")).not.toBeInTheDocument();
     expect(workflow.queryByText("2 registers")).not.toBeInTheDocument();
-    expect(workflow.getByText("2 registers need attention.")).toBeInTheDocument();
+    expect(
+      workflow.getByText("2 registers need attention."),
+    ).toBeInTheDocument();
     expect(
       workflow.getByRole("link", { name: "Open Registers" }).closest("article"),
     ).toHaveClass("rounded-md", "border", "bg-background/60");
