@@ -831,6 +831,21 @@ describe("DailyOpeningViewContent", () => {
 
     expect(screen.getByText("Store day started")).toBeInTheDocument();
     expect(screen.getByText("Athena started Opening Handoff.")).toBeInTheDocument();
+    const automationPanel = screen
+      .getByRole("heading", { name: "Athena automation" })
+      .closest("section");
+    expect(automationPanel).toHaveClass("px-layout-md", "py-layout-sm");
+    expect(automationPanel).not.toHaveClass(
+      "rounded-lg",
+      "border",
+      "bg-surface-raised",
+      "shadow-surface",
+    );
+    expect(automationPanel).not.toBeNull();
+    expect(
+      automationPanel!.compareDocumentPosition(screen.getByText("Prior close")) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     expect(screen.getByText("Started by")).toBeInTheDocument();
     expect(screen.getByText("Athena")).toBeInTheDocument();
     expect(screen.queryByText("Staff unavailable")).not.toBeInTheDocument();

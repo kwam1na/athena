@@ -1132,8 +1132,8 @@ describe("DailyOperationsViewContent", () => {
       screen.queryByRole("link", { name: "Start EOD Review" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("heading", { name: "Historical store-day view" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("heading", { name: "Historical store-day view" }),
+    ).not.toBeInTheDocument();
     const historicalEodReviewLink = screen.getByRole("link", {
       name: "Review EOD Review for Friday, May 8, 2026",
     });
@@ -1147,7 +1147,7 @@ describe("DailyOperationsViewContent", () => {
       "text-success",
       "hover:text-success",
     );
-    expect(screen.queryByText("Workflow status")).not.toBeInTheDocument();
+    expect(screen.queryByText("Store-day follow-up")).not.toBeInTheDocument();
     expect(screen.queryByText("Current day only")).not.toBeInTheDocument();
     expect(screen.queryByText("Needs attention")).not.toBeInTheDocument();
     expect(
@@ -1347,7 +1347,13 @@ describe("DailyOperationsViewContent", () => {
     const automationPanel = automationHeading.closest("section");
     const netSalesMetric = screen.getByText(/^(Today's net sales|Net sales)$/);
 
-    expect(automationPanel).toHaveClass("py-layout-sm", "rounded-md");
+    expect(automationPanel).toHaveClass("px-layout-md", "py-layout-sm");
+    expect(automationPanel).not.toHaveClass(
+      "rounded-md",
+      "border",
+      "bg-surface-raised",
+      "shadow-surface",
+    );
     expect(automationHeading).toHaveClass(
       "text-sm",
       "font-medium",
@@ -1438,8 +1444,34 @@ describe("DailyOperationsViewContent", () => {
     } as DailyOperationsSnapshot);
 
     expect(
+      screen.getByRole("heading", { name: "Athena automation" }),
+    ).toBeInTheDocument();
+    expect(
       screen.getByText("Athena completed EOD Review under store policy."),
     ).toBeInTheDocument();
+    const attributionNotice = screen
+      .getByText("Athena completed EOD Review under store policy.")
+      .closest("div");
+    expect(attributionNotice).not.toBeNull();
+    expect(attributionNotice).toHaveClass("py-layout-sm");
+    expect(attributionNotice).not.toHaveClass(
+      "px-layout-md",
+      "rounded-lg",
+      "border",
+      "bg-success/10",
+      "shadow-surface",
+    );
+    expect(
+      attributionNotice!.compareDocumentPosition(screen.getByText("Net sales")) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      screen
+        .getByRole("heading", { name: "Athena automation" })
+        .compareDocumentPosition(
+          screen.getByText("Athena completed EOD Review under store policy."),
+        ) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     expect(
       screen.getByText(
         "Policy checked low-risk review evidence before completion.",
@@ -1451,6 +1483,41 @@ describe("DailyOperationsViewContent", () => {
       ),
     ).not.toBeInTheDocument();
     expect(screen.queryByText(/manager approved/i)).not.toBeInTheDocument();
+  });
+
+  it("omits generic historical view copy when Athena completion attribution is present", () => {
+    renderContent({
+      ...notOpenedSnapshot,
+      completedClose: {
+        actorType: "automation",
+        automationDecisionReason:
+          "EOD Review has only low-risk review evidence within policy thresholds.",
+        carryForwardCount: 1,
+        completedAt: Date.UTC(2026, 4, 8, 22),
+      },
+    } as DailyOperationsSnapshot);
+
+    const attributionNotice = screen
+      .getByText("Athena completed EOD Review under store policy.")
+      .closest("div");
+    const statusStack = attributionNotice?.closest("section");
+
+    expect(
+      screen.queryByRole("heading", { name: "Historical store-day view" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        "This historical operating date is view-only. Workflow actions are available only on the current operating date.",
+      ),
+    ).not.toBeInTheDocument();
+    expect(attributionNotice).not.toBeNull();
+    expect(statusStack).not.toBeNull();
+    expect(attributionNotice).toHaveClass("py-layout-sm");
+    expect(attributionNotice).not.toHaveClass("px-layout-md");
+    expect(
+      statusStack!.compareDocumentPosition(screen.getByText("Net sales")) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it("shows preserved carry-forward copy when the completed close has carry-forward", () => {
@@ -1533,10 +1600,16 @@ describe("DailyOperationsViewContent", () => {
 
     expect(within(storePulse).getByText("Sales trend")).toBeInTheDocument();
     expect(chart).toBeInTheDocument();
-    expect(chartContainer.parentElement).toHaveClass(
+    expect(chartContainer.parentElement).toHaveClass("py-8");
+    expect(chartContainer.parentElement).not.toHaveClass(
       "px-layout-sm",
-      "py-8",
       "sm:p-8",
+    );
+    expect(chartContainer.parentElement).not.toHaveClass(
+      "rounded-lg",
+      "border",
+      "bg-surface-raised",
+      "shadow-surface",
     );
     expect(chart).toHaveAttribute(
       "data-display-labels",
@@ -1548,6 +1621,37 @@ describe("DailyOperationsViewContent", () => {
     expect(chart).toHaveAttribute("data-margin-right", "72");
     expect(within(storePulse).getByText("Braiding Hair")).toBeInTheDocument();
     expect(within(storePulse).getByText("Top items")).toBeInTheDocument();
+    const topItemsPanel = within(storePulse)
+      .getByText("Braiding Hair")
+      .closest(".divide-y")?.parentElement;
+    const topItemRow = within(storePulse)
+      .getByText("Braiding Hair")
+      .closest(".grid");
+    const paymentPanel = within(storePulse)
+      .getByText("Cash")
+      .closest(".divide-y")?.parentElement;
+    const paymentRow = within(storePulse).getByText("Cash").closest(".grid");
+
+    expect(topItemsPanel).not.toBeNull();
+    expect(topItemRow).not.toBeNull();
+    expect(paymentPanel).not.toBeNull();
+    expect(paymentRow).not.toBeNull();
+    expect(topItemsPanel!).not.toHaveClass(
+      "rounded-lg",
+      "border",
+      "bg-surface-raised",
+      "shadow-surface",
+    );
+    expect(topItemRow!).toHaveClass("py-layout-sm");
+    expect(topItemRow!).not.toHaveClass("px-layout-md");
+    expect(paymentPanel!).not.toHaveClass(
+      "rounded-lg",
+      "border",
+      "bg-surface-raised",
+      "shadow-surface",
+    );
+    expect(paymentRow!).toHaveClass("py-layout-sm");
+    expect(paymentRow!).not.toHaveClass("px-layout-md");
     expect(
       within(storePulse).getByLabelText("Total items sold: 3"),
     ).toBeInTheDocument();
@@ -1568,6 +1672,37 @@ describe("DailyOperationsViewContent", () => {
     expect(
       within(storePulse).getByText("This week's completed POS sales."),
     ).toBeInTheDocument();
+  });
+
+  it("uses completed-day empty state copy for historical store pulse detail", () => {
+    vi.useRealTimers();
+    const storePulse = buildStorePulseSummary({ date: "2026-06-28" });
+    const operatorSnapshot = storePulse.operatorSnapshot!;
+
+    operatorSnapshot.topItems = [];
+    operatorSnapshot.paymentMix = [];
+    operatorSnapshot.comparison.currentItemsSold = 0;
+
+    renderContent({
+      ...operatingSnapshot,
+      operatingDate: "2026-06-28",
+      storePulse,
+    });
+
+    expect(screen.getByText("No item history")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "No completed POS item movement was recorded for this day.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("No payment mix")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "No synced POS payment methods were recorded for this day.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("No item history yet")).not.toBeInTheDocument();
+    expect(screen.queryByText("No payment mix yet")).not.toBeInTheDocument();
   });
 
   it("uses evenly spaced store pulse trend ticks on mobile", () => {
@@ -1645,7 +1780,7 @@ describe("DailyOperationsViewContent", () => {
       .closest("section");
     const timeline = screen.getByLabelText("Store-day timeline");
     const workflowSection = screen
-      .getByRole("heading", { name: "Workflow status" })
+      .getByRole("heading", { name: "Store-day follow-up" })
       .closest("section");
 
     expect(openingReview?.parentElement).toBe(timeline.parentElement);
@@ -1702,7 +1837,12 @@ describe("DailyOperationsViewContent", () => {
   it("keeps closed lifecycle state primary over stale skipped automation decisions", () => {
     renderContent(staleSkippedAutomationSnapshot);
 
-    expect(screen.getByText("Closed store-day record")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", {
+        name: "Review EOD Review for Friday, May 8, 2026",
+      }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Closed store-day record")).not.toBeInTheDocument();
     expect(screen.queryByText("Athena automation")).not.toBeInTheDocument();
     expect(
       screen.queryByText("Athena checked EOD Review. No change was made."),
@@ -1759,7 +1899,14 @@ describe("DailyOperationsViewContent", () => {
         ],
       });
 
-      expect(screen.getByText("Closed store-day record")).toBeInTheDocument();
+      expect(
+        screen.getByRole("link", {
+          name: "Review EOD Review for Friday, May 8, 2026",
+        }),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByText("Closed store-day record"),
+      ).not.toBeInTheDocument();
       expect(screen.queryByText("Athena automation")).not.toBeInTheDocument();
     },
   );
@@ -1783,15 +1930,33 @@ describe("DailyOperationsViewContent", () => {
     });
 
     const workflowSection = screen
-      .getByRole("heading", { name: "Workflow status" })
+      .getByRole("heading", { name: "Store-day follow-up" })
       .closest("section");
 
     expect(workflowSection).not.toBeNull();
     const workflow = within(workflowSection!);
+    const workflowShell = workflowSection!.lastElementChild;
 
+    expect(workflowShell).not.toHaveClass(
+      "rounded-md",
+      "border",
+      "bg-surface-raised",
+      "shadow-surface",
+    );
     expect(workflow.queryByText("0")).not.toBeInTheDocument();
     expect(workflow.queryByText("2 registers")).not.toBeInTheDocument();
     expect(workflow.getByText("2 registers need attention.")).toBeInTheDocument();
+    expect(
+      workflow.getByRole("link", { name: "Open Registers" }).closest("article"),
+    ).toHaveClass("rounded-md", "border", "bg-background/60");
+    expect(
+      workflow.getByRole("link", { name: "Open Close history workspace" })
+        .parentElement?.parentElement,
+    ).toHaveClass("mt-layout-md");
+    expect(
+      workflow.getByRole("link", { name: "Open Close history workspace" })
+        .parentElement?.parentElement,
+    ).not.toHaveClass("border-t");
   });
 
   it("uses compact icons for workflow lanes that need attention or are blocked", () => {
@@ -1835,7 +2000,7 @@ describe("DailyOperationsViewContent", () => {
       weekMetrics: [
         {
           ...weekMetrics[0],
-          isClosed: false,
+          isClosed: true,
           isReopened: true,
           isSelected: true,
           operatingDate: getCurrentLocalOperatingDate(),
@@ -1960,23 +2125,23 @@ describe("DailyOperationsViewContent", () => {
       screen.queryByRole("link", { name: "Review EOD Review" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("heading", { name: "Historical store-day view" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("heading", { name: "Historical store-day view" }),
+    ).not.toBeInTheDocument();
     expect(
-      screen.getByText(
+      screen.queryByText(
         "This historical operating date is view-only. Workflow actions are available only on the current operating date.",
       ),
-    ).toBeInTheDocument();
+    ).not.toBeInTheDocument();
     expect(screen.queryByText("Needs attention")).not.toBeInTheDocument();
-    expect(screen.queryByText("Workflow status")).not.toBeInTheDocument();
+    expect(screen.queryByText("Store-day follow-up")).not.toBeInTheDocument();
   });
 
   it("links historical started store days to EOD Review even before close", () => {
     renderContent(operatingSnapshot);
 
     expect(
-      screen.getByRole("heading", { name: "Historical store-day view" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("heading", { name: "Historical store-day view" }),
+    ).not.toBeInTheDocument();
     const historicalEodReviewLink = screen.getByRole("link", {
       name: "Review EOD Review for Friday, May 8, 2026",
     });
@@ -1994,10 +2159,10 @@ describe("DailyOperationsViewContent", () => {
       screen.queryByRole("link", { name: "Review EOD Review" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByText(
+      screen.queryByText(
         "This historical operating date is view-only. Workflow actions are available only on the current operating date.",
       ),
-    ).toBeInTheDocument();
+    ).not.toBeInTheDocument();
   });
 
   it("keeps current-day opening actions available", () => {
@@ -2121,6 +2286,12 @@ describe("DailyOperationsViewContent", () => {
       screen.getByRole("heading", { name: "Incomplete store-day close" }),
     ).toBeInTheDocument();
     expect(
+      screen
+        .getByRole("heading", { name: "Incomplete store-day close" })
+        .compareDocumentPosition(screen.getByText("Net sales")) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
       screen.getByText(
         "This historical store day does not have a completed close.",
       ),
@@ -2143,6 +2314,14 @@ describe("DailyOperationsViewContent", () => {
       "text-danger",
       "hover:text-danger",
     );
+    expect(
+      screen.getByRole("heading", { name: "Incomplete store-day close" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "This historical store day does not have a completed close.",
+      ),
+    ).toBeInTheDocument();
     view.unmount();
 
     renderContent(closedSnapshot);
@@ -2273,7 +2452,12 @@ describe("DailyOperationsViewContent", () => {
       screen.queryByRole("link", { name: "Review close blockers" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("heading", { name: "Historical store-day view" }),
+      screen.getByRole("heading", { name: "Incomplete store-day close" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "This historical store day does not have a completed close.",
+      ),
     ).toBeInTheDocument();
     expect(
       screen.queryByLabelText("Operator attention"),
@@ -2283,12 +2467,15 @@ describe("DailyOperationsViewContent", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("keeps historical EOD Review links on the selected operating date", () => {
+  it("keeps historical EOD Review in the top action bar for closed dates", () => {
     renderContent(closedSnapshot);
 
     expect(
-      screen.getByRole("heading", { name: "Closed store-day record" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("heading", { name: "Closed store-day record" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Review EOD Review" }),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByText(
         "This operating date is closed. The saved The end of day review is available for this store-day record.",
@@ -2300,12 +2487,6 @@ describe("DailyOperationsViewContent", () => {
       ),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: "Review EOD Review" }),
-    ).toHaveAttribute(
-      "href",
-      "/wigclub/store/osu/operations/daily-close?o=%252Fwigclub%252Fstore%252Fosu%252Foperations&operatingDate=2026-05-08",
-    );
-    expect(
       screen.getByRole("link", {
         name: "Review EOD Review for Friday, May 8, 2026",
       }),
@@ -2313,7 +2494,7 @@ describe("DailyOperationsViewContent", () => {
       "href",
       "/wigclub/store/osu/operations/daily-close?o=%252Fwigclub%252Fstore%252Fosu%252Foperations&operatingDate=2026-05-08",
     );
-    expect(screen.queryByText("Workflow status")).not.toBeInTheDocument();
+    expect(screen.queryByText("Store-day follow-up")).not.toBeInTheDocument();
     expect(
       screen.queryByRole("link", { name: "Open EOD Review" }),
     ).not.toBeInTheDocument();
@@ -2328,7 +2509,9 @@ describe("DailyOperationsViewContent", () => {
     renderContent(closedSnapshot);
 
     expect(
-      screen.getByRole("link", { name: "Review EOD Review" }),
+      screen.getByRole("link", {
+        name: "Review EOD Review for Friday, May 8, 2026",
+      }),
     ).toBeInTheDocument();
     expect(screen.getByText("EOD Review completed.")).toBeInTheDocument();
     expect(
@@ -2736,8 +2919,8 @@ describe("DailyOperationsView", () => {
       }),
     );
     expect(
-      screen.getByRole("heading", { name: "Historical store-day view" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("heading", { name: "Historical store-day view" }),
+    ).not.toBeInTheDocument();
   });
 
   it("subscribes to automation statuses separately from the main snapshot", () => {
@@ -2843,11 +3026,19 @@ describe("DailyOperationsView", () => {
 
     const storePulse = screen.getByRole("region", { name: "Store pulse" });
 
-    expect(
-      within(storePulse).getByRole("button", {
-        name: "Load analytics for sales trend",
-      }),
-    ).toBeInTheDocument();
+    const salesTrendPreview = within(storePulse).getByRole("button", {
+      name: "Load analytics for sales trend",
+    });
+
+    expect(salesTrendPreview).toBeInTheDocument();
+    expect(salesTrendPreview).toHaveClass("py-8");
+    expect(salesTrendPreview).not.toHaveClass("p-8");
+    expect(salesTrendPreview).not.toHaveClass(
+      "rounded-lg",
+      "border",
+      "bg-surface-raised",
+      "shadow-surface",
+    );
     expect(
       within(storePulse).getByRole("heading", { name: "Sales trend" }),
     ).toBeInTheDocument();
@@ -2860,6 +3051,31 @@ describe("DailyOperationsView", () => {
     expect(
       within(storePulse).getByText("Store pulse detail loads with analytics."),
     ).toBeInTheDocument();
+    const topItemsPreview = within(storePulse).getByRole("button", {
+      name: "Load analytics for Top items",
+    });
+    const paymentPreview = within(storePulse).getByRole("button", {
+      name: "Load analytics for How customers paid",
+    });
+    expect(topItemsPreview).not.toHaveClass(
+      "rounded-lg",
+      "border",
+      "bg-surface-raised",
+      "shadow-surface",
+    );
+    const topItemsPreviewRow = topItemsPreview.querySelector(".grid");
+    const paymentPreviewRow = paymentPreview.querySelector(".grid");
+
+    expect(topItemsPreviewRow).not.toBeNull();
+    expect(topItemsPreviewRow!).not.toHaveClass("px-layout-md");
+    expect(paymentPreview).not.toHaveClass(
+      "rounded-lg",
+      "border",
+      "bg-surface-raised",
+      "shadow-surface",
+    );
+    expect(paymentPreviewRow).not.toBeNull();
+    expect(paymentPreviewRow!).not.toHaveClass("px-layout-md");
     expect(
       within(storePulse).getByRole("heading", { name: "Top items" }),
     ).toBeInTheDocument();

@@ -1509,6 +1509,87 @@ describe("daily operations overview read model", () => {
     });
   });
 
+  it("marks week metrics reopened when the completed close was superseded by reopening", async () => {
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx({
+        dailyClose: [
+          {
+            ...priorClose,
+            _id: "close-original",
+            completedAt: Date.UTC(2026, 4, 8, 22),
+            isCurrent: false,
+            lifecycleStatus: "superseded",
+            operatingDate: "2026-05-08",
+            reopenedAt: Date.UTC(2026, 4, 9, 8),
+            status: "completed",
+            supersededByDailyCloseId: "close-reopened",
+          },
+        ],
+        dailyOpening: [startedOpening],
+        store: [store],
+      }),
+      {
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(
+      snapshot.weekMetrics.find(
+        (metric) => metric.operatingDate === "2026-05-08",
+      ),
+    ).toMatchObject({
+      isClosed: false,
+      isReopened: true,
+    });
+  });
+
+  it("marks week metrics closed when a reopened close was completed again", async () => {
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx({
+        dailyClose: [
+          {
+            ...priorClose,
+            _id: "close-original",
+            completedAt: Date.UTC(2026, 4, 8, 22),
+            isCurrent: false,
+            lifecycleStatus: "superseded",
+            operatingDate: "2026-05-08",
+            reopenedAt: Date.UTC(2026, 4, 9, 8),
+            status: "completed",
+            supersededByDailyCloseId: "close-reclosed",
+          },
+          {
+            ...priorClose,
+            _id: "close-reclosed",
+            completedAt: Date.UTC(2026, 4, 9, 10),
+            isCurrent: false,
+            lifecycleStatus: "active",
+            operatingDate: "2026-05-08",
+            reopenedAt: Date.UTC(2026, 4, 9, 8),
+            reopenedFromDailyCloseId: "close-original",
+            status: "completed",
+          },
+        ],
+        dailyOpening: [startedOpening],
+        store: [store],
+      }),
+      {
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(
+      snapshot.weekMetrics.find(
+        (metric) => metric.operatingDate === "2026-05-08",
+      ),
+    ).toMatchObject({
+      isClosed: true,
+      isReopened: false,
+    });
+  });
+
   it("exposes prior-day metric when yesterday is outside the selected week", async () => {
     const snapshot = await buildDailyOperationsSnapshotWithCtx(
       buildCtx({

@@ -1531,7 +1531,7 @@ function AutomationStatusPanel({
 
   if (variant === "compact") {
     return (
-      <section className="rounded-md border border-border bg-surface-raised px-layout-md py-layout-sm shadow-surface">
+      <section className="px-layout-md py-layout-sm">
         <div className="flex flex-col gap-layout-md">
           <h3 className="flex shrink-0 items-center gap-layout-xs text-sm font-medium text-foreground">
             <Bot aria-hidden="true" className="h-4 w-4 text-muted-foreground" />
@@ -1696,8 +1696,12 @@ function DailyOperationsCompletionAttributionNotice({
   }
 
   return (
-    <div className="rounded-lg border border-success/25 bg-success/10 p-layout-md text-sm leading-6 shadow-surface">
-      <p className="font-medium text-success">
+    <div className="py-layout-sm text-sm leading-6">
+      <h3 className="flex items-center gap-layout-xs text-sm font-medium text-foreground">
+        <Bot aria-hidden="true" className="h-4 w-4 text-muted-foreground" />
+        Athena automation
+      </h3>
+      <p className="mt-layout-sm font-medium text-success">
         Athena completed EOD Review under store policy.
       </p>
       <p className="mt-1 text-muted-foreground">
@@ -1890,68 +1894,27 @@ function isPendingCheckoutReview(item: DailyOperationsReviewEvidence) {
 }
 
 function HistoricalWorkflowPanel({
-  orgUrlSlug,
   snapshot,
-  storeUrlSlug,
 }: {
-  orgUrlSlug: string;
   snapshot: DailyOperationsSnapshot;
-  storeUrlSlug: string;
 }) {
   const isClosed = snapshot.lifecycle.status === "closed";
-  const isHistoricalOperating = snapshot.lifecycle.status === "operating";
+  const isIncompleteStoreDay = shouldShowHistoricalEodReviewAction(snapshot);
+
+  if (isClosed || !isIncompleteStoreDay) return null;
 
   return (
     <section className="space-y-layout-md">
       <h3 className="text-base font-medium text-foreground">
-        {isClosed
-          ? "Closed store-day record"
-          : isHistoricalOperating
-            ? "Incomplete store-day close"
-            : "Historical store-day view"}
+        Incomplete store-day close
       </h3>
-      <div className="rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface">
-        {isClosed ? (
-          <Button
-            asChild
-            className={getPrimaryActionEmphasis("closed").className}
-            size="sm"
-            variant="outline"
-          >
-            <Link
-              params={buildParams(orgUrlSlug, storeUrlSlug)}
-              search={
-                getWorkflowSearch(
-                  "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
-                  snapshot.operatingDate,
-                ) as never
-              }
-              to="/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close"
-            >
-              Review EOD Review
-              <ArrowUpRight aria-hidden="true" className="h-4 w-4" />
-            </Link>
-          </Button>
-        ) : isHistoricalOperating ? (
-          <>
-            <p className="text-sm leading-6 text-foreground">
-              This historical store day does not have a completed close.
-            </p>
-            <p className="mt-layout-xs text-sm leading-6 text-muted-foreground">
-              Review EOD before treating this date as a closed store-day record.
-            </p>
-          </>
-        ) : (
-          <>
-            <p className="text-sm leading-6 text-foreground">
-              This historical operating date is view-only. Workflow actions are
-              available only on the current operating date.
-            </p>
-            <p className="mt-layout-xs text-sm leading-6 text-muted-foreground">
-              Metrics and timeline remain available for this historical day.
-            </p>
-          </>
-        )}
+      <div>
+        <p className="text-sm leading-6 text-foreground">
+          This historical store day does not have a completed close.
+        </p>
+        <p className="mt-layout-xs text-sm leading-6 text-muted-foreground">
+          Review EOD before treating this date as a closed store-day record.
+        </p>
       </div>
     </section>
   );
@@ -1973,6 +1936,10 @@ function DailyOperationsStorePulsePanel({
   snapshot: DailyOperationsSnapshot;
 }) {
   const storePulseSummary = buildWeekToDateStorePulseSummary(snapshot);
+  const emptyStateTimeContext =
+    snapshot.operatingDate === getLocalOperatingDate()
+      ? "current"
+      : "historical";
 
   return (
     <section className="space-y-layout-md">
@@ -1986,6 +1953,9 @@ function DailyOperationsStorePulsePanel({
           showPulseWindowFilter={false}
           showSummaryMetrics={false}
           summary={storePulseSummary}
+          detailVariant="canvas"
+          emptyStateTimeContext={emptyStateTimeContext}
+          timelineVariant="canvas"
           topItemsTitle={getTopItemsTitle(snapshot.operatingDate)}
         />
       ) : (
@@ -2485,6 +2455,8 @@ function DailyOperationsStorePulsePreview({
   operatingDate: string;
 }) {
   const topItemsTitle = getTopItemsTitle(operatingDate);
+  const emptyStateTimeContext =
+    operatingDate === getLocalOperatingDate() ? "current" : "historical";
   const selectedCachedStorePulse = buildCachedStorePulseForOperatingDate({
     operatingDate,
     selectedDayStorePulse: cachedSelectedStorePulse,
@@ -2513,6 +2485,7 @@ function DailyOperationsStorePulsePreview({
             currencyFormatter={currencyFormatter(currency)}
             pulseWindow="this_week"
             snapshot={selectedCachedStorePulseTrend!.operatorSnapshot!}
+            variant="canvas"
           />
         ) : (
           <section
@@ -2534,7 +2507,7 @@ function DailyOperationsStorePulsePreview({
             </div>
             <div
               aria-label="Load analytics for sales trend"
-              className="group relative cursor-pointer overflow-hidden rounded-lg border border-border bg-surface-raised p-8 shadow-surface transition-[box-shadow] duration-200 ease-out hover:shadow-sm focus:outline-none focus-visible:border-action-workflow-border focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-within:border-action-workflow-border focus-within:shadow-sm"
+              className="group relative cursor-pointer py-8 transition-[background-color] duration-200 ease-out hover:bg-surface/45 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               onClick={() => {
                 if (!isLoading) onRequest();
               }}
@@ -2583,6 +2556,8 @@ function DailyOperationsStorePulsePreview({
             <TopItemsPanel
               canViewFinancialDetails={hasFullAdminAccess}
               currencyFormatter={currencyFormatter(currency)}
+              emptyStateTimeContext={emptyStateTimeContext}
+              variant="canvas"
               snapshot={detailSnapshot}
               title={topItemsTitle}
             />
@@ -2593,12 +2568,17 @@ function DailyOperationsStorePulsePreview({
               onRequest={onRequest}
               rowCount={5}
               title={topItemsTitle}
+              variant="canvas"
             />
           )}
         </PageWorkspaceMain>
         <PageWorkspaceRail>
           {detailSnapshot ? (
-            <PaymentMethodsPanel snapshot={detailSnapshot} />
+            <PaymentMethodsPanel
+              emptyStateTimeContext={emptyStateTimeContext}
+              variant="canvas"
+              snapshot={detailSnapshot}
+            />
           ) : (
             <DailyOperationsStorePulsePreviewList
               description="Share of synced POS sales by payment method."
@@ -2606,6 +2586,7 @@ function DailyOperationsStorePulsePreview({
               onRequest={onRequest}
               rowCount={3}
               title="How customers paid"
+              variant="canvas"
             />
           )}
         </PageWorkspaceRail>
@@ -2620,13 +2601,24 @@ function DailyOperationsStorePulsePreviewList({
   onRequest,
   rowCount,
   title,
+  variant = "card",
 }: {
   description: string;
   isLoading?: boolean;
   onRequest: () => void;
   rowCount: number;
   title: string;
+  variant?: "card" | "canvas";
 }) {
+  const panelClassName =
+    variant === "canvas"
+      ? "group relative cursor-pointer transition-[background-color] duration-200 ease-out hover:bg-surface/45 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-within:bg-surface/45"
+      : "group relative cursor-pointer rounded-lg border border-border bg-surface-raised shadow-surface transition-[box-shadow] duration-200 ease-out hover:shadow-sm focus:outline-none focus-visible:border-action-workflow-border focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-within:border-action-workflow-border focus-within:shadow-sm";
+  const rowClassName =
+    variant === "canvas"
+      ? "grid gap-2 py-layout-sm sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center"
+      : "grid gap-2 px-layout-md py-layout-sm sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center";
+
   return (
     <section aria-label={`${title} preview`} className="space-y-layout-md">
       <div>
@@ -2635,7 +2627,7 @@ function DailyOperationsStorePulsePreviewList({
       </div>
       <div
         aria-label={`Load analytics for ${title}`}
-        className="group relative cursor-pointer rounded-lg border border-border bg-surface-raised shadow-surface transition-[box-shadow] duration-200 ease-out hover:shadow-sm focus:outline-none focus-visible:border-action-workflow-border focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-within:border-action-workflow-border focus-within:shadow-sm"
+        className={panelClassName}
         onClick={() => {
           if (!isLoading) onRequest();
         }}
@@ -2651,10 +2643,7 @@ function DailyOperationsStorePulsePreviewList({
         />
         <div className="divide-y divide-border/70">
           {Array.from({ length: rowCount }).map((_, index) => (
-            <div
-              className="grid gap-2 px-layout-md py-layout-sm sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center"
-              key={index}
-            >
+            <div className={rowClassName} key={index}>
               <span
                 aria-hidden="true"
                 className="h-6 w-6 rounded-sm bg-muted"
@@ -2709,7 +2698,7 @@ function SupportingWorkspaceLinks({
   return (
     <div
       aria-labelledby="supporting-workspaces-heading"
-      className="border-t border-border/70 px-layout-sm py-2"
+      className="mt-layout-md px-layout-sm py-2"
     >
       <h4 className="sr-only" id="supporting-workspaces-heading">
         Supporting workspaces
@@ -3003,13 +2992,13 @@ function WeekMetricsStrip({
                   <span className="text-xs font-medium uppercase tracking-wide">
                     {formatWeekdayLabel(metric.operatingDate)}
                   </span>
-                  {metric.isClosed ? (
-                    <span className="rounded-full bg-success/10 px-1.5 py-0.5 text-[10px] font-medium text-success">
-                      Closed
-                    </span>
-                  ) : metric.isReopened ? (
+                  {metric.isReopened ? (
                     <span className="rounded-full bg-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-warning">
                       Reopened
+                    </span>
+                  ) : metric.isClosed ? (
+                    <span className="rounded-full bg-success/10 px-1.5 py-0.5 text-[10px] font-medium text-success">
+                      Closed
                     </span>
                   ) : null}
                 </div>
@@ -3174,6 +3163,12 @@ export function DailyOperationsViewContent({
   const isHistoricalDate = snapshot
     ? isHistoricalOperatingDate(snapshot.operatingDate)
     : false;
+  const shouldShowHistoricalWorkflowPanel =
+    isHistoricalDate && showHistoricalEodReviewAction;
+  const shouldShowTopStatusStack = snapshot
+    ? shouldShowHistoricalWorkflowPanel ||
+      snapshot.completedClose?.actorType === "automation"
+    : false;
   const primaryActionEmphasisStatus = snapshot
     ? getPrimaryActionEmphasisStatus({
         isHistoricalDate,
@@ -3226,7 +3221,7 @@ export function DailyOperationsViewContent({
   return (
     <View hideBorder hideHeaderBottomBorder scrollMode="page">
       <FadeIn className="container mx-auto w-full py-layout-lg md:py-layout-xl">
-        <PageWorkspace>
+        <PageWorkspace className="md:space-y-layout-3xl">
           <PageLevelHeader
             eyebrow="Store Ops"
             title="Daily Operations"
@@ -3234,8 +3229,8 @@ export function DailyOperationsViewContent({
           />
 
           {isLoadingSnapshot || !snapshot ? null : (
-            <PageWorkspace>
-              <section className="space-y-layout-2xl">
+            <PageWorkspace className="space-y-layout-2xl md:space-y-layout-3xl">
+              <section className="space-y-layout-2xl md:space-y-layout-3xl">
                 <div className="flex flex-col gap-layout-sm lg:flex-row lg:items-center lg:justify-between">
                   {pendingApprovalsLane ? (
                     <div className="flex flex-col gap-layout-sm sm:flex-row sm:items-center">
@@ -3376,8 +3371,21 @@ export function DailyOperationsViewContent({
                     ) : null}
                   </>
                 ) : null}
+                {shouldShowTopStatusStack ? (
+                  <section className="space-y-layout-md">
+                    {shouldShowHistoricalWorkflowPanel ? (
+                      <HistoricalWorkflowPanel snapshot={snapshot} />
+                    ) : null}
+                    <DailyOperationsCompletionAttributionNotice
+                      carryForwardCount={
+                        snapshot.completedClose?.carryForwardCount
+                      }
+                      completedClose={snapshot.completedClose}
+                    />
+                  </section>
+                ) : null}
 
-                <div className="grid gap-layout-sm [grid-template-columns:repeat(auto-fit,minmax(min(14rem,100%),1fr))]">
+                <div className="grid gap-layout-md [grid-template-columns:repeat(auto-fit,minmax(min(14rem,100%),1fr))] md:gap-layout-lg">
                   <OperationsSummaryMetric
                     helper={formatOperationsMetricHelper({
                       currentValue: snapshot.closeSummary.salesTotal,
@@ -3587,7 +3595,7 @@ export function DailyOperationsViewContent({
                 ) : null}
               </section>
 
-              <PageWorkspaceGrid>
+              <PageWorkspaceGrid className="gap-layout-2xl lg:gap-layout-3xl">
                 <PageWorkspaceMain className="xl:col-start-1 xl:row-start-1">
                   {requestStorePulseSnapshot ? (
                     <DailyOperationsStorePulsePreview
@@ -3610,12 +3618,6 @@ export function DailyOperationsViewContent({
                       snapshot={storePulseDetailSnapshot}
                     />
                   ) : null}
-                  <DailyOperationsCompletionAttributionNotice
-                    carryForwardCount={
-                      snapshot.completedClose?.carryForwardCount
-                    }
-                    completedClose={snapshot.completedClose}
-                  />
                 </PageWorkspaceMain>
 
                 <PageWorkspaceRail className="xl:col-start-2 xl:row-span-2 xl:row-start-1">
@@ -3681,22 +3683,16 @@ export function DailyOperationsViewContent({
                   ) : null}
                 </PageWorkspaceRail>
 
-                <PageWorkspaceMain className="xl:col-start-1 xl:row-start-2">
-                  {isHistoricalDate ? (
-                    <HistoricalWorkflowPanel
-                      orgUrlSlug={orgUrlSlug}
-                      snapshot={snapshot}
-                      storeUrlSlug={storeUrlSlug}
-                    />
-                  ) : (
+                {!isHistoricalDate ? (
+                  <PageWorkspaceMain className="xl:col-start-1 xl:row-start-2">
                     <section className="space-y-layout-sm">
                       <div>
                         <h3 className="text-sm font-medium text-foreground">
-                          Workflow status
+                          Store-day follow-up
                         </h3>
                       </div>
-                      <div className="overflow-hidden rounded-md border border-border bg-surface-raised shadow-surface">
-                        <div className="grid gap-layout-xs p-2 md:grid-cols-2 xl:grid-cols-3">
+                      <div>
+                        <div className="grid gap-layout-xs md:grid-cols-2 xl:grid-cols-3">
                           {actionableLanes.length > 0 ? (
                             actionableLanes.map((lane) => (
                               <LaneCard
@@ -3718,8 +3714,8 @@ export function DailyOperationsViewContent({
                         />
                       </div>
                     </section>
-                  )}
-                </PageWorkspaceMain>
+                  </PageWorkspaceMain>
+                ) : null}
               </PageWorkspaceGrid>
 
               <Sheet

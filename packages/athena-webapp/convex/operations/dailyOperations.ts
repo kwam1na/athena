@@ -393,8 +393,11 @@ async function buildWeekMetricForDate(
       )
       .take(MAX_OPERATIONS_QUERY_LIMIT),
   ]);
-  const currentDailyClose =
-    dailyClose.find((close) => close.isCurrent) ?? dailyClose[0];
+  const currentDailyClose = selectEffectiveDailyClose(dailyClose);
+  const isReopened =
+    currentDailyClose?.lifecycleStatus === "reopened" ||
+    (currentDailyClose?.lifecycleStatus === "superseded" &&
+      typeof currentDailyClose.reopenedAt === "number");
   const currentDayCashTotal = completedTransactions.reduce(
     (sum, transaction) => sum + transactionCashDelta(transaction),
     0,
@@ -424,8 +427,8 @@ async function buildWeekMetricForDate(
     expenseTransactionCount: expenseTransactions.length,
     isClosed:
       currentDailyClose?.status === "completed" &&
-      currentDailyClose.lifecycleStatus !== "reopened",
-    isReopened: currentDailyClose?.lifecycleStatus === "reopened",
+      !isReopened,
+    isReopened,
     isSelected: args.isSelected,
     operatingDate: args.operatingDate,
     paymentTotals: buildPaymentTotals(completedTransactions),
@@ -459,6 +462,55 @@ async function buildWeekMetrics(
         storeId: args.storeId,
       }),
     ),
+  );
+}
+
+function dailyCloseSortTime(close: {
+  _creationTime?: number;
+  completedAt?: number;
+  createdAt?: number;
+  reopenedAt?: number;
+  updatedAt?: number;
+}) {
+  return Math.max(
+    close.completedAt ?? 0,
+    close.reopenedAt ?? 0,
+    close.updatedAt ?? 0,
+    close.createdAt ?? 0,
+    close._creationTime ?? 0,
+  );
+}
+
+function latestDailyClose<T extends { _creationTime?: number }>(
+  closes: T[],
+) {
+  return closes
+    .slice()
+    .sort((left, right) => dailyCloseSortTime(right) - dailyCloseSortTime(left))
+    .at(0);
+}
+
+function selectEffectiveDailyClose<
+  T extends {
+    _creationTime?: number;
+    completedAt?: number;
+    createdAt?: number;
+    isCurrent?: boolean;
+    lifecycleStatus?: string;
+    reopenedAt?: number;
+    updatedAt?: number;
+  },
+>(dailyClose: T[]) {
+  return (
+    dailyClose.find((close) => close.isCurrent) ??
+    latestDailyClose(
+      dailyClose.filter((close) => close.lifecycleStatus === "active"),
+    ) ??
+    latestDailyClose(
+      dailyClose.filter((close) => close.lifecycleStatus === "reopened"),
+    ) ??
+    latestDailyClose(dailyClose) ??
+    null
   );
 }
 
@@ -1657,7 +1709,7 @@ async function getDailyCloseRecordForDate(
     )
     .take(MAX_OPERATIONS_QUERY_LIMIT);
 
-  return dailyClose.find((close) => close.isCurrent) ?? dailyClose[0] ?? null;
+  return selectEffectiveDailyClose(dailyClose);
 }
 
 async function getDailyOpeningRecordForDate(

@@ -12,6 +12,7 @@ import {
 type OperationReviewWorkspaceProps = {
   actions?: ReactNode;
   afterGrid?: ReactNode;
+  beforeMetrics?: ReactNode;
   description: ReactNode;
   eyebrow: string;
   isLoading?: boolean;
@@ -28,6 +29,7 @@ type OperationReviewWorkspaceProps = {
 export function OperationReviewWorkspace({
   actions,
   afterGrid,
+  beforeMetrics,
   description,
   eyebrow,
   isLoading = false,
@@ -69,6 +71,8 @@ export function OperationReviewWorkspace({
                     </div>
                   ) : null}
                 </div>
+
+                {beforeMetrics}
 
                 <div className="grid gap-layout-lg md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
                   {metrics}
