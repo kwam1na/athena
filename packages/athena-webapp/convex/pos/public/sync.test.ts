@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { assertConformsToExportedReturns } from "../../lib/returnValidatorContract";
+import {
+  assertConformsToExportedReturns,
+  collectReturnValidatorIssues,
+} from "../../lib/returnValidatorContract";
+import { POS_LOCAL_SYNC_EVENT_CONTRACT } from "../../../shared/posLocalSyncContract";
 
 const mocks = vi.hoisted(() => ({
   requireAuthenticatedAthenaUserWithCtx: vi.fn(),
@@ -925,6 +929,59 @@ describe("POS local sync public mutation", () => {
     );
   });
 
+  it("derives public upload validator event names from the shared sync contract", () => {
+    const argsValidator = JSON.stringify((ingestLocalEvents as any).exportArgs());
+
+    for (const { eventType } of POS_LOCAL_SYNC_EVENT_CONTRACT) {
+      expect(argsValidator).toContain(eventType);
+    }
+    expect(argsValidator).toContain("openingFloat");
+    expect(argsValidator).toContain("localPendingCheckoutItemId");
+    expect(argsValidator).toContain("localTransactionId");
+    expect(argsValidator).toContain("localExpenseEventId");
+    expect(argsValidator).not.toContain('"payload":{"type":"record"');
+  });
+
+  it("strictly validates public upload event discriminants and payload shapes", () => {
+    const validArgs = {
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      syncSecretHash: "sync-secret-1",
+      events: [buildEvent()],
+    };
+
+    expectPublicSyncArgsToConform(validArgs);
+    expectPublicSyncArgsToReject({
+      ...validArgs,
+      events: [
+        {
+          ...buildEvent(),
+          eventType: "mystery_sync_event",
+        },
+      ],
+    });
+    expectPublicSyncArgsToReject({
+      ...validArgs,
+      events: [
+        {
+          ...buildEvent(),
+          eventType: "sale_completed",
+        },
+      ],
+    });
+    expectPublicSyncArgsToReject({
+      ...validArgs,
+      events: [
+        {
+          ...buildEvent(),
+          payload: {
+            registerNumber: "1",
+          },
+        },
+      ],
+    });
+  });
+
   it("passes drawerless expense sync batches to ingestion", async () => {
     const ctx = buildCtx();
 
@@ -1109,6 +1166,21 @@ describe("POS local sync public mutation", () => {
     expect(mocks.ingestRegisterSessionActivityWithCtx).not.toHaveBeenCalled();
   });
 });
+
+function expectPublicSyncArgsToConform(value: unknown) {
+  expect(collectPublicSyncArgsIssues(value)).toEqual([]);
+}
+
+function expectPublicSyncArgsToReject(value: unknown) {
+  expect(collectPublicSyncArgsIssues(value).length).toBeGreaterThan(0);
+}
+
+function collectPublicSyncArgsIssues(value: unknown) {
+  return collectReturnValidatorIssues(
+    JSON.parse((ingestLocalEvents as any).exportArgs()),
+    value,
+  );
+}
 
 function buildCtx(
   options: {

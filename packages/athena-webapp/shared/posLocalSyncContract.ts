@@ -1,12 +1,69 @@
-export const POS_LOCAL_SYNC_EVENT_TYPES = [
-  "register_opened",
-  "pending_checkout_item_defined",
-  "sale_completed",
-  "register_closed",
-  "register_reopened",
-  "sale_cleared",
-  "expense_recorded",
+export const POS_LOCAL_SYNC_EVENT_CONTRACT = [
+  {
+    eventType: "register_opened",
+    localEventType: "register.opened",
+    syncScope: "pos",
+    browserUploadable: true,
+  },
+  {
+    eventType: "pending_checkout_item_defined",
+    localEventType: "pending_checkout_item.defined",
+    syncScope: "pos",
+    browserUploadable: true,
+  },
+  {
+    eventType: "sale_completed",
+    localEventType: "transaction.completed",
+    syncScope: "pos",
+    browserUploadable: true,
+  },
+  {
+    eventType: "register_closed",
+    localEventType: "register.closeout_started",
+    syncScope: "pos",
+    browserUploadable: true,
+  },
+  {
+    eventType: "register_reopened",
+    localEventType: "register.reopened",
+    syncScope: "pos",
+    browserUploadable: false,
+  },
+  {
+    eventType: "sale_cleared",
+    localEventType: "cart.cleared",
+    syncScope: "pos",
+    browserUploadable: true,
+  },
+  {
+    eventType: "expense_recorded",
+    localEventType: "expense.completed",
+    syncScope: "expense",
+    browserUploadable: true,
+  },
 ] as const;
+
+type PosLocalSyncContractEventTypes<
+  Contract extends readonly unknown[],
+> = Contract extends readonly [infer First, ...infer Rest]
+  ? First extends { readonly eventType: infer EventType }
+    ? readonly [EventType, ...PosLocalSyncContractEventTypes<Rest>]
+    : PosLocalSyncContractEventTypes<Rest>
+  : readonly [];
+
+function eventTypesFromContract<
+  const Contract extends readonly { readonly eventType: string }[],
+>(
+  contract: Contract,
+): PosLocalSyncContractEventTypes<Contract> {
+  return contract.map(
+    (entry) => entry.eventType,
+  ) as unknown as PosLocalSyncContractEventTypes<Contract>;
+}
+
+export const POS_LOCAL_SYNC_EVENT_TYPES = eventTypesFromContract(
+  POS_LOCAL_SYNC_EVENT_CONTRACT,
+);
 
 export const POS_LOCAL_SYNC_EVENT_STATUSES = [
   "accepted",
@@ -21,6 +78,70 @@ export type PosLocalSyncEventType =
 
 export type PosLocalSyncEventStatus =
   (typeof POS_LOCAL_SYNC_EVENT_STATUSES)[number];
+
+export type PosLocalSyncEventContract =
+  (typeof POS_LOCAL_SYNC_EVENT_CONTRACT)[number];
+
+export type PosLocalSyncLocalEventType =
+  PosLocalSyncEventContract["localEventType"];
+
+export type PosLocalSyncBrowserUploadableLocalEventType = Extract<
+  PosLocalSyncEventContract,
+  { browserUploadable: true }
+>["localEventType"];
+
+export type PosLocalSyncScope = PosLocalSyncEventContract["syncScope"];
+
+const POS_LOCAL_SYNC_EVENT_TYPE_SET = new Set<string>(
+  POS_LOCAL_SYNC_EVENT_TYPES,
+);
+
+const POS_LOCAL_SYNC_EVENT_CONTRACT_BY_LOCAL_EVENT_TYPE = Object.fromEntries(
+  POS_LOCAL_SYNC_EVENT_CONTRACT.map((contract) => [
+    contract.localEventType,
+    contract,
+  ]),
+) as {
+  [LocalEventType in PosLocalSyncLocalEventType]: Extract<
+    PosLocalSyncEventContract,
+    { localEventType: LocalEventType }
+  >;
+};
+
+export function isPosLocalSyncEventType(
+  eventType: string,
+): eventType is PosLocalSyncEventType {
+  return POS_LOCAL_SYNC_EVENT_TYPE_SET.has(eventType);
+}
+
+export function getPosLocalSyncEventContractForLocalEventType(
+  localEventType: string,
+): PosLocalSyncEventContract | null {
+  return Object.prototype.hasOwnProperty.call(
+    POS_LOCAL_SYNC_EVENT_CONTRACT_BY_LOCAL_EVENT_TYPE,
+    localEventType,
+  )
+    ? POS_LOCAL_SYNC_EVENT_CONTRACT_BY_LOCAL_EVENT_TYPE[
+        localEventType as PosLocalSyncLocalEventType
+      ]
+    : null;
+}
+
+export function getPosLocalSyncEventTypeForLocalEventType(
+  localEventType: string,
+): PosLocalSyncEventType | null {
+  return getPosLocalSyncEventContractForLocalEventType(localEventType)
+    ?.eventType ?? null;
+}
+
+export function canUploadPosLocalSyncLocalEventType(
+  localEventType: string,
+): localEventType is PosLocalSyncBrowserUploadableLocalEventType {
+  return (
+    getPosLocalSyncEventContractForLocalEventType(localEventType)
+      ?.browserUploadable === true
+  );
+}
 
 export type PosLocalSyncRegisterOpenedPayload = {
   openingFloat: number;

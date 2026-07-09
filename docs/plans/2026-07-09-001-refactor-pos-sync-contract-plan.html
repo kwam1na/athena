@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>refactor: Single-source POS local sync contract</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f7f4;
+      --fg: #202124;
+      --muted: #5f6368;
+      --line: #d8d7d2;
+      --panel: #ffffff;
+      --accent: #315f72;
+      --accent-soft: #e5eef1;
+      --warn-soft: #fff3d6;
+    }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--fg);
+      font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 36px 24px 56px;
+    }
+    header {
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 24px;
+      padding-bottom: 20px;
+    }
+    h1 {
+      font-size: 32px;
+      line-height: 1.15;
+      margin: 0 0 12px;
+      letter-spacing: 0;
+    }
+    h2 {
+      border-top: 1px solid var(--line);
+      font-size: 21px;
+      margin: 30px 0 12px;
+      padding-top: 22px;
+      letter-spacing: 0;
+    }
+    h3 {
+      font-size: 17px;
+      margin: 18px 0 8px;
+      letter-spacing: 0;
+    }
+    p {
+      margin: 8px 0 12px;
+    }
+    a {
+      color: var(--accent);
+    }
+    code {
+      background: #eeeeea;
+      border-radius: 4px;
+      padding: 1px 4px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.94em;
+    }
+    nav {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin: 18px 0 24px;
+    }
+    nav a {
+      display: inline-block;
+      margin: 3px 14px 3px 0;
+      text-decoration: none;
+    }
+    ul {
+      padding-left: 22px;
+    }
+    li {
+      margin: 6px 0;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--panel);
+      margin: 14px 0 20px;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: #eeeeea;
+    }
+    .meta {
+      color: var(--muted);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 18px;
+      margin: 0;
+    }
+    .callout {
+      background: var(--accent-soft);
+      border-left: 4px solid var(--accent);
+      padding: 12px 14px;
+      margin: 14px 0;
+    }
+    .warning {
+      background: var(--warn-soft);
+      border-left-color: #9a6a00;
+    }
+    .unit {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      margin: 16px 0;
+      padding: 14px 16px;
+    }
+    .unit h3 {
+      margin-top: 0;
+    }
+    .grid {
+      display: grid;
+      gap: 16px;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px 16px;
+    }
+    @media (max-width: 720px) {
+      main {
+        padding: 24px 16px 40px;
+      }
+      h1 {
+        font-size: 26px;
+      }
+      table {
+        display: block;
+        overflow-x: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>refactor: Single-source POS local sync contract</h1>
+      <p class="meta">
+        <span>Type: refactor</span>
+        <span>Status: active</span>
+        <span>Date: 2026-07-09</span>
+        <span>Markdown: <a href="./2026-07-09-001-refactor-pos-sync-contract-plan.md">2026-07-09-001-refactor-pos-sync-contract-plan.md</a></span>
+      </p>
+    </header>
+
+    <nav aria-label="Plan sections">
+      <a href="#summary">Summary</a>
+      <a href="#requirements">Requirements</a>
+      <a href="#decisions">Decisions</a>
+      <a href="#units">Implementation Units</a>
+      <a href="#risks">Risks</a>
+      <a href="#validation">Validation</a>
+    </nav>
+
+    <section id="summary">
+      <h2>Summary</h2>
+      <p>Make <code>shared/posLocalSyncContract.ts</code> the authoritative source for POS local-sync event identity, upload metadata, literal vocabulary, and payload types. Browser upload conversion and Convex ingestion should consume that same contract metadata while Convex-local helpers build real <code>v.*</code> validators, preserving current local-first sync semantics, server-authoritative rejection, and projection behavior.</p>
+      <div class="callout warning">
+        <strong>Core guardrail:</strong> browser payload conversion stays best-effort. Server ingestion remains responsible for semantic rejection and retry-visible outcomes.
+      </div>
+    </section>
+
+    <section id="requirements">
+      <h2>Requirements</h2>
+      <ul>
+        <li><strong>R1-R3:</strong> Browser upload and Convex ingestion use one canonical source for event identity, upload metadata, literal vocabulary, and dot-to-underscore mapping.</li>
+        <li><strong>R4-R5:</strong> Convex public argument validators are composed from contract-owned metadata while remaining real Convex validators, and Convex parsed types derive from shared payloads where possible.</li>
+        <li><strong>R6-R8:</strong> Existing sync semantics, projection behavior, POS/expense cursor identity, and retry/idempotency stay stable. Retry lookup remains store + terminal + <code>localEventId</code> before cursor scope.</li>
+        <li><strong>R9-R10:</strong> <code>register_reopened</code> remains server/review-supported only, and activity events remain outside core sync.</li>
+        <li><strong>R11-R12:</strong> Characterization coverage, focused POS sync validation, generated-artifact handling, Graphify, and PR gate coverage prove the refactor.</li>
+        <li><strong>R13-R14:</strong> Raw staff proof and terminal sync secret values stay transient, and public auth/role/terminal-secret gates remain before ingestion.</li>
+      </ul>
+    </section>
+
+    <section id="decisions">
+      <h2>Key Decisions</h2>
+      <div class="grid">
+        <article class="panel">
+          <h3>Contract-Owned Event Map</h3>
+          <p>The shared contract owns upload event type, local dot-event source, sync scope, browser upload eligibility, and intentional exceptions.</p>
+        </article>
+        <article class="panel">
+          <h3>Convex-Local Validators</h3>
+          <p>Convex validator construction consumes shared metadata from a Convex-side helper so shared browser-safe code never imports Convex server modules.</p>
+        </article>
+        <article class="panel">
+          <h3>Server-Authoritative Rejection</h3>
+          <p>Browser conversion continues normalizing and redacting. Ingestion keeps semantic validation for totals, references, cursor identity, and retry mismatch.</p>
+        </article>
+        <article class="panel">
+          <h3>Activity Stays Separate</h3>
+          <p>Register-session activity reporting remains adjacent to, but outside, core POS local sync.</p>
+        </article>
+      </div>
+
+      <h3>Classification Matrix</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Classification</th>
+            <th>Examples</th>
+            <th>Contract expectation</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Core browser upload</td>
+            <td><code>register.opened</code>, <code>transaction.completed</code>, <code>cart.cleared</code>, <code>expense.completed</code></td>
+            <td>Maps to one shared underscore upload event and one Convex validator case.</td>
+          </tr>
+          <tr>
+            <td>Server/review supported only</td>
+            <td><code>register_reopened</code></td>
+            <td>Valid server event, not selected from browser local <code>register.reopened</code>.</td>
+          </tr>
+          <tr>
+            <td>Register-session activity</td>
+            <td><code>cash.movement_recorded</code></td>
+            <td>Excluded from core upload mapping.</td>
+          </tr>
+          <tr>
+            <td>Local-only state</td>
+            <td><code>session.started</code>, cart draft edits</td>
+            <td>Excluded from core upload mapping.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Validator Boundaries</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Boundary</th>
+            <th>Shape owner</th>
+            <th>Constraint</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Public upload arguments</td>
+            <td>Convex-side helper keyed by shared metadata</td>
+            <td>Strict per-event payload validators with positive and negative shape proof.</td>
+          </tr>
+          <tr>
+            <td>Stored event rows</td>
+            <td>Existing schema plus shared event/status literal helpers</td>
+            <td>Preserve broad stored payload compatibility.</td>
+          </tr>
+          <tr>
+            <td>Ingestion parser</td>
+            <td><code>ingestLocalEvents.ts</code></td>
+            <td>Semantic validation and exhaustive dispatch with no unknown-event fallback.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="units">
+      <h2>Implementation Units</h2>
+      <article class="unit">
+        <h3>U1. Characterize Contract Parity and Failure Boundaries</h3>
+        <p>Add exhaustive mapping and failure-boundary tests for every <code>PosLocalEventType</code>, including core-upload, activity-only, local-only, server/review-only, unknown event rejection, public validator rejection, POS/expense identity, auth/secret gates, raw proof/secret omission, and log redaction.</p>
+        <p><strong>Retry invariant:</strong> ingestion retry lookup is keyed by store, terminal, and <code>localEventId</code> before cursor scope. If same-terminal POS/expense collisions exist, execution stops for remediation before refactoring.</p>
+        <p><strong>Primary files:</strong> <code>syncContract.test.ts</code>, <code>posLocalStore.test.ts</code>, <code>convex/pos/public/sync.test.ts</code>, <code>ingestLocalEvents.test.ts</code>.</p>
+      </article>
+      <article class="unit">
+        <h3>U2. Promote Shared Contract Metadata and Browser Consumers</h3>
+        <p>Add browser-safe event metadata and helper exports to the shared contract, then replace browser uploadability and mapping duplication while preserving normalization behavior and keeping <code>staffProofToken</code> transient.</p>
+        <p><strong>Primary files:</strong> <code>shared/posLocalSyncContract.ts</code>, <code>posLocalStore.ts</code>, <code>syncContract.ts</code>, local sync tests.</p>
+      </article>
+      <article class="unit">
+        <h3>U3. Replace Convex Public Validators With Contract-Derived Validators</h3>
+        <p>Create a Convex-side validator helper that consumes shared metadata and powers strict public upload validators. Share stored schema event/status literals only where stored row compatibility stays unchanged.</p>
+        <p><strong>Primary files:</strong> <code>convex/pos/application/sync/posLocalSyncValidators.ts</code>, <code>convex/pos/public/sync.ts</code>, <code>convex/schemas/pos/posLocalSyncEvent.ts</code>.</p>
+      </article>
+      <article class="unit">
+        <h3>U4. Derive Ingestion Types and Add Explicit Parser Guard</h3>
+        <p>Alias Convex payload types to shared payloads where possible, keep semantic validation in ingestion, reject unknown events through exhaustive dispatch, and persist only staff proof hashes.</p>
+        <p><strong>Primary files:</strong> <code>convex/pos/application/sync/types.ts</code>, <code>ingestLocalEvents.ts</code>, sync and projection tests.</p>
+      </article>
+      <article class="unit">
+        <h3>U5. Document, Validate, and Prepare Delivery Handoff</h3>
+        <p>Update durable solution guidance, refresh generated and Graphify artifacts when needed, then validate with focused POS sync tests and the full Athena PR gate.</p>
+      </article>
+    </section>
+
+    <section id="risks">
+      <h2>Risks</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Risk</th>
+            <th>Mitigation</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Convex validators drift from shared metadata or get widened</td>
+            <td>Add executable parity tests plus shape-level positive and negative validator cases for every event family.</td>
+          </tr>
+          <tr>
+            <td>Shared module imports Convex server code</td>
+            <td>Keep Convex imports in Convex-side helper modules only.</td>
+          </tr>
+          <tr>
+            <td>Public and stored validator shapes are conflated</td>
+            <td>Share only event/status literals unless tests prove stored row compatibility.</td>
+          </tr>
+          <tr>
+            <td>Browser strict validation changes retry/review behavior</td>
+            <td>Preserve browser best-effort normalization and server-authoritative rejection.</td>
+          </tr>
+          <tr>
+            <td>Unknown internal event falls through as <code>register_reopened</code></td>
+            <td>Add explicit known-event guard and ingestion regression coverage.</td>
+          </tr>
+          <tr>
+            <td>Raw proof or secret values leak through refactor</td>
+            <td>Keep raw values transient, persist only hashes, and test returned errors/conflicts/mappings/logging omit raw values.</td>
+          </tr>
+          <tr>
+            <td>Public auth or terminal-secret checks are bypassed</td>
+            <td>Preserve existing public sync gate order and regression-test no ingestion call on auth or secret failure.</td>
+          </tr>
+          <tr>
+            <td>Runtime surfaces are changed but not deployed</td>
+            <td>Current finish line intentionally stops at merged PR and local root alignment; report production deploy as skipped by user instruction.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="validation">
+      <h2>Validation and Delivery</h2>
+      <ul>
+        <li>Focused POS sync tests: browser sync contract, POS local store, scheduler/runtime, Convex public sync, ingestion, and projection.</li>
+        <li>Repo sensors: changed Convex lint/audit, typecheck/build, architecture check, generated-artifact refresh when needed, Graphify rebuild after code edits, and full Athena PR gate.</li>
+        <li>Reviewer loop: plan reviewers before execution, then implementation reviewer loop to unanimous approval.</li>
+        <li>Post-approval sequence: track the approved plan in Linear, execute V26-966, merge PR, align local root <code>main</code>, and skip production deploy by current user instruction.</li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>

@@ -5,8 +5,89 @@ import {
   buildPosLocalSyncUploadEvents,
   isSyncablePosLocalEvent,
 } from "./syncContract";
+import {
+  POS_LOCAL_SYNC_EVENT_CONTRACT,
+  POS_LOCAL_SYNC_EVENT_TYPES,
+  getPosLocalSyncEventTypeForLocalEventType,
+} from "../../../../../shared/posLocalSyncContract";
 
 describe("syncContract", () => {
+  it("keeps local event names and upload event names in the shared contract", () => {
+    expect(
+      POS_LOCAL_SYNC_EVENT_TYPES,
+    ).toEqual(
+      POS_LOCAL_SYNC_EVENT_CONTRACT.map((contract) => contract.eventType),
+    );
+    expect(
+      POS_LOCAL_SYNC_EVENT_CONTRACT.map(
+        ({ browserUploadable, eventType, localEventType, syncScope }) => ({
+          browserUploadable,
+          eventType,
+          localEventType,
+          syncScope,
+        }),
+      ),
+    ).toEqual([
+      {
+        browserUploadable: true,
+        eventType: "register_opened",
+        localEventType: "register.opened",
+        syncScope: "pos",
+      },
+      {
+        browserUploadable: true,
+        eventType: "pending_checkout_item_defined",
+        localEventType: "pending_checkout_item.defined",
+        syncScope: "pos",
+      },
+      {
+        browserUploadable: true,
+        eventType: "sale_completed",
+        localEventType: "transaction.completed",
+        syncScope: "pos",
+      },
+      {
+        browserUploadable: true,
+        eventType: "register_closed",
+        localEventType: "register.closeout_started",
+        syncScope: "pos",
+      },
+      {
+        browserUploadable: false,
+        eventType: "register_reopened",
+        localEventType: "register.reopened",
+        syncScope: "pos",
+      },
+      {
+        browserUploadable: true,
+        eventType: "sale_cleared",
+        localEventType: "cart.cleared",
+        syncScope: "pos",
+      },
+      {
+        browserUploadable: true,
+        eventType: "expense_recorded",
+        localEventType: "expense.completed",
+        syncScope: "expense",
+      },
+    ]);
+    expect(
+      POS_LOCAL_SYNC_EVENT_CONTRACT.filter(
+        (contract) => contract.browserUploadable,
+      ).map((contract) => contract.localEventType),
+    ).toEqual([
+      "register.opened",
+      "pending_checkout_item.defined",
+      "transaction.completed",
+      "register.closeout_started",
+      "cart.cleared",
+      "expense.completed",
+    ]);
+    expect(getPosLocalSyncEventTypeForLocalEventType("register.reopened")).toBe(
+      "register_reopened",
+    );
+  });
+
   it("keeps scheduler selection and upload conversion on the same syncable event set", () => {
     const syncableEvents = [
       buildLocalEvent({ type: "register.opened" }),

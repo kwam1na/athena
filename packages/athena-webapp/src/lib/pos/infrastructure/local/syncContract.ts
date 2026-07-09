@@ -5,6 +5,7 @@ import {
 import type {
   PosLocalSyncPaymentPayload,
   PosLocalSyncExpenseRecordedPayload,
+  PosLocalSyncEventType,
   PosLocalSyncPendingCheckoutItemDefinedPayload,
   PosLocalSyncPendingCheckoutItemLocalMetadata,
   PosLocalSyncPendingCheckoutItemSearchContext,
@@ -12,6 +13,7 @@ import type {
   PosLocalSyncServiceLinePayload,
   PosLocalSyncUploadEvent,
 } from "../../../../../shared/posLocalSyncContract";
+import { getPosLocalSyncEventTypeForLocalEventType } from "../../../../../shared/posLocalSyncContract";
 
 export type PosLocalUploadEvent = PosLocalSyncUploadEvent;
 export type PosLocalSyncUploadSupport = {
@@ -122,7 +124,7 @@ function toUploadEvent(
     return {
       localEventId: event.localEventId,
       localRegisterSessionId: event.localRegisterSessionId,
-      eventType: "register_opened",
+      eventType: syncEventTypeForLocalEvent(event.type, "register_opened"),
       occurredAt: event.createdAt,
       staffProfileId: event.staffProfileId,
       ...(event.staffProofToken ? { staffProofToken: event.staffProofToken } : {}),
@@ -141,7 +143,7 @@ function toUploadEvent(
     return {
       localEventId: event.localEventId,
       localRegisterSessionId: event.localRegisterSessionId,
-      eventType: "sale_completed",
+      eventType: syncEventTypeForLocalEvent(event.type, "sale_completed"),
       occurredAt: event.createdAt,
       staffProfileId: event.staffProfileId,
       ...(event.staffProofToken ? { staffProofToken: event.staffProofToken } : {}),
@@ -176,7 +178,10 @@ function toUploadEvent(
     return {
       localEventId: event.localEventId,
       localRegisterSessionId: event.localRegisterSessionId,
-      eventType: "pending_checkout_item_defined",
+      eventType: syncEventTypeForLocalEvent(
+        event.type,
+        "pending_checkout_item_defined",
+      ),
       occurredAt: event.createdAt,
       staffProfileId: event.staffProfileId,
       ...(event.staffProofToken ? { staffProofToken: event.staffProofToken } : {}),
@@ -195,7 +200,7 @@ function toUploadEvent(
     return {
       localEventId: event.localEventId,
       localRegisterSessionId: event.localRegisterSessionId,
-      eventType: "sale_cleared",
+      eventType: syncEventTypeForLocalEvent(event.type, "sale_cleared"),
       occurredAt: event.createdAt,
       staffProfileId: event.staffProfileId,
       ...(event.staffProofToken ? { staffProofToken: event.staffProofToken } : {}),
@@ -211,7 +216,7 @@ function toUploadEvent(
     return {
       localEventId: event.localEventId,
       localRegisterSessionId: event.localRegisterSessionId,
-      eventType: "register_closed",
+      eventType: syncEventTypeForLocalEvent(event.type, "register_closed"),
       occurredAt: event.createdAt,
       staffProfileId: event.staffProfileId,
       ...(event.staffProofToken ? { staffProofToken: event.staffProofToken } : {}),
@@ -267,12 +272,26 @@ function toExpenseUploadEvent(
     syncScope: "expense",
     localEventId: event.localEventId,
     localExpenseSessionId,
-    eventType: "expense_recorded",
+    eventType: syncEventTypeForLocalEvent(event.type, "expense_recorded"),
     occurredAt: event.createdAt,
     staffProfileId: event.staffProfileId,
     ...(event.staffProofToken ? { staffProofToken: event.staffProofToken } : {}),
     payload: expensePayload,
   };
+}
+
+function syncEventTypeForLocalEvent<EventType extends PosLocalSyncEventType>(
+  localEventType: PosLocalEventRecord["type"],
+  expectedEventType: EventType,
+): EventType {
+  const eventType = getPosLocalSyncEventTypeForLocalEventType(localEventType);
+  if (eventType !== expectedEventType) {
+    throw new Error(
+      `POS local sync contract maps ${localEventType} to ${eventType ?? "none"}, expected ${expectedEventType}.`,
+    );
+  }
+
+  return expectedEventType;
 }
 
 function hasLaterCompletedSale(

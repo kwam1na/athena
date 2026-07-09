@@ -1,6 +1,7 @@
 import type { Id, TableNames } from "../../../_generated/dataModel";
 import type { MutationCtx } from "../../../_generated/server";
 import { ok, userError, type CommandResult } from "../../../../shared/commandResult";
+import { isPosLocalSyncEventType } from "../../../../shared/posLocalSyncContract";
 import { createConvexLocalSyncRepository } from "../../infrastructure/repositories/localSyncRepository";
 import { projectLocalSyncEvent } from "./projectLocalEvents";
 import { patchRegisterSessionActivityFromLocalSyncWithCtx } from "./posRegisterSessionActivity";
@@ -145,6 +146,15 @@ export function createLocalSyncIngestionService(
         return userError({
           code: "validation_failed",
           message: "POS sync batches cannot mix POS and expense events.",
+        });
+      }
+      const unsupportedEvent = batch.events.find(
+        (event) => !isPosLocalSyncEventType(event.eventType),
+      );
+      if (unsupportedEvent !== undefined) {
+        return userError({
+          code: "validation_failed",
+          message: `Unsupported POS sync event type: ${String(unsupportedEvent.eventType)}.`,
         });
       }
 
@@ -603,6 +613,13 @@ function parseLocalSyncEvent(
 ):
   | { ok: true; event: ParsedPosLocalSyncEventInput }
   | { ok: false; message: string } {
+  if (!isPosLocalSyncEventType(event.eventType)) {
+    return {
+      ok: false,
+      message: `Unsupported POS sync event type: ${String(event.eventType)}.`,
+    };
+  }
+
   const payloadMessage = validateLocalSyncEventPayload(event);
   const referenceMessage =
     payloadMessage ?? validateLocalSyncEventReferences(repository, event);
@@ -711,17 +728,24 @@ function parseLocalSyncEvent(
     };
   }
 
-  return {
-    ok: true,
-    event: {
-      ...event,
-      syncScope: "pos",
-      localRegisterSessionId: event.localRegisterSessionId ?? "",
-      eventType: "register_reopened",
-      payload: {
-        reason: optionalString(event.payload.reason),
+  if (event.eventType === "register_reopened") {
+    return {
+      ok: true,
+      event: {
+        ...event,
+        syncScope: "pos",
+        localRegisterSessionId: event.localRegisterSessionId ?? "",
+        eventType: "register_reopened",
+        payload: {
+          reason: optionalString(event.payload.reason),
+        },
       },
-    },
+    };
+  }
+
+  return {
+    ok: false,
+    message: `Unsupported POS sync event type: ${String(event.eventType)}.`,
   };
 }
 
@@ -774,7 +798,11 @@ function validateLocalSyncEventPayload(event: PosLocalSyncEventInput): string | 
     return validateExpenseRecordedPayload(event);
   }
 
-  return validateRegisterReopenedPayload(event.payload);
+  if (event.eventType === "register_reopened") {
+    return validateRegisterReopenedPayload(event.payload);
+  }
+
+  return `Unsupported POS sync event type: ${String(event.eventType)}.`;
 }
 
 function validateExpenseRecordedPayload(event: PosLocalSyncEventInput): string | null {
