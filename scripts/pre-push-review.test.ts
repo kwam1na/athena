@@ -17,6 +17,7 @@ const EXPIRED_PROOF_OPTIONS = {
     reason: "test proof disabled",
   }),
   runCompoundCheck: async () => {},
+  runLandedReportCheck: async () => {},
 };
 
 describe("pre-push review wiring", () => {
@@ -105,7 +106,7 @@ describe("pre-push review wiring", () => {
     ]);
   });
 
-  it("runs graphify and compound checks before self-review, architecture checks, harness review, and inferential review", async () => {
+  it("runs graphify, compound, and landed-report checks before self-review, architecture checks, harness review, and inferential review", async () => {
     const steps: string[] = [];
 
     await prePushReview.runPrePushReview(ROOT_DIR, {
@@ -119,6 +120,9 @@ describe("pre-push review wiring", () => {
       },
       runCompoundCheck: async () => {
         steps.push("compound:check");
+      },
+      runLandedReportCheck: async () => {
+        steps.push("landed-report:check");
       },
       runHarnessSelfReview: async () => {
         steps.push("harness:self-review:origin/main");
@@ -143,6 +147,7 @@ describe("pre-push review wiring", () => {
     expect(steps).toEqual([
       "graphify:check",
       "compound:check",
+      "landed-report:check",
       "harness:self-review:origin/main",
       "architecture:check",
       "changed-files",
@@ -888,6 +893,7 @@ describe("repo harness ergonomics", () => {
     expect(workflow).toContain("fetch-depth: 0");
     expect(workflow).toContain("run: bun run workflow:check");
     expect(workflow).toContain("run: bun run compound:check");
+    expect(workflow).toContain("run: bun run landed-report:check");
     expect(workflow).toContain(
       "run: bun run harness:self-review --base origin/main",
     );
@@ -958,6 +964,9 @@ describe("repo harness ergonomics", () => {
     );
     expect(packageJson.scripts?.["pr:athena:validate-provider"]).toContain(
       "bun run compound:check",
+    );
+    expect(packageJson.scripts?.["pr:athena:validate-provider"]).toContain(
+      "bun run landed-report:check",
     );
     expect(packageJson.scripts?.["pr:athena:validate-provider"]).toContain(
       "bun run workflow:check",
@@ -1049,9 +1058,14 @@ describe("repo harness ergonomics", () => {
     expect(readme).toContain(
       "`pre-push:review` starts with `bun run graphify:check`",
     );
-    expect(readme).toContain("then runs `bun run compound:check`");
+    expect(readme).toContain(
+      "then runs `bun run compound:check` and `bun run landed-report:check`",
+    );
     expect(readme).toContain(
       "`compound:check` is intentionally early so solution-doc policy failures are caught locally before the branch reaches CI.",
+    );
+    expect(readme).toContain(
+      "`landed-report:check` is equally early so stale report fingerprints from review-loop edits are caught before merge.",
     );
     expect(readme).toContain(
       "runs `bun run graphify:rebuild` once, reruns `bun run graphify:check`, and then stops",

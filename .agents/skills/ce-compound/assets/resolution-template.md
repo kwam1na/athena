@@ -24,6 +24,7 @@ root_cause: [schema enum]
 resolution_type: [schema enum]
 severity: [schema enum]
 tags: [keyword-one, keyword-two]
+delivery_diff_fingerprint: [sha256 from `bun scripts/compound-solution-check.ts --base origin/main --print-fingerprint` when the note satisfies compound:check for substantial/sensitive delivery]
 ---
 
 # [Clear problem title]
@@ -71,6 +72,7 @@ severity: [schema enum]
 applies_when:
   - [Condition where this applies]
 tags: [keyword-one, keyword-two]
+delivery_diff_fingerprint: [sha256 from `bun scripts/compound-solution-check.ts --base origin/main --print-fingerprint` when the note satisfies compound:check for substantial/sensitive delivery]
 ---
 
 # [Clear, descriptive title]

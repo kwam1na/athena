@@ -238,10 +238,11 @@ The orchestrating agent (main conversation) performs these steps:
    - Tag session-sourced content with "(session history)" so its origin is clear to future readers
    - If findings are thin or "no relevant prior sessions," proceed without session context
 4. Assemble complete markdown file from the collected pieces, reading `assets/resolution-template.md` for the section structure of new docs
-5. Validate YAML frontmatter against `references/schema.yaml`, including the YAML-safety quoting rule for array items (see `references/yaml-schema.md` > YAML Safety Rules)
-6. Create directory if needed: `mkdir -p docs/solutions/[category]/`
-7. Write the file: either the updated existing doc or the new `docs/solutions/[category]/[filename].md`
-8. **Run the repo-local validator with the correct path for your working directory.** From the repository root, run `python3 .agents/skills/ce-compound/scripts/validate-frontmatter.py <output-path>`. If your shell is already inside `.agents/skills/ce-compound/`, run `python3 scripts/validate-frontmatter.py <output-path>`. This catches silent-corruption parser-safety issues that the prose rules miss: malformed `---` delimiter lines, unquoted ` #` in scalar values (silent comment truncation), and unquoted `: ` in scalar values (silent mapping confusion). Exit 0 means the doc is parser-safe; exit 1 means the script's stderr names the offending field(s) and what to fix — quote the value(s), re-write the doc, and re-run until exit 0. Do not declare success while validation fails. The script does not enforce schema rules and does not flag YAML reserved-indicator characters (those produce loud parser errors downstream rather than silent corruption — out of scope). Uses Python 3 stdlib only (no PyYAML or other deps).
+5. If this note satisfies `compound:check` for substantial source changes or compound-sensitive workflow changes, add `delivery_diff_fingerprint:` to frontmatter using the value from `bun scripts/compound-solution-check.ts --base origin/main --print-fingerprint`. Run it after final code/workflow edits; if review-loop edits happen later, update the note fingerprint before final validation.
+6. Validate YAML frontmatter against `references/schema.yaml`, including the YAML-safety quoting rule for array items (see `references/yaml-schema.md` > YAML Safety Rules)
+7. Create directory if needed: `mkdir -p docs/solutions/[category]/`
+8. Write the file: either the updated existing doc or the new `docs/solutions/[category]/[filename].md`
+9. **Run the repo-local validator with the correct path for your working directory.** From the repository root, run `python3 .agents/skills/ce-compound/scripts/validate-frontmatter.py <output-path>`. If your shell is already inside `.agents/skills/ce-compound/`, run `python3 scripts/validate-frontmatter.py <output-path>`. This catches silent-corruption parser-safety issues that the prose rules miss: malformed `---` delimiter lines, unquoted ` #` in scalar values (silent comment truncation), and unquoted `: ` in scalar values (silent mapping confusion). Exit 0 means the doc is parser-safe; exit 1 means the script's stderr names the offending field(s) and what to fix — quote the value(s), re-write the doc, and re-run until exit 0. Do not declare success while validation fails. The script does not enforce schema rules and does not flag YAML reserved-indicator characters (those produce loud parser errors downstream rather than silent corruption — out of scope). Uses Python 3 stdlib only (no PyYAML or other deps).
 
 When creating a new doc, preserve the section order from `assets/resolution-template.md` unless the user explicitly asks for a different structure.
 
@@ -364,6 +365,7 @@ The orchestrator (main conversation) performs ALL of the following in one sequen
 2. **Classify**: Read `references/schema.yaml` and `references/yaml-schema.md`, then determine track (bug vs knowledge), category, and filename
 3. **Write minimal doc**: Create `docs/solutions/[category]/[filename].md` using the appropriate track template from `assets/resolution-template.md`, with:
    - YAML frontmatter with track-appropriate fields, applying the YAML-safety quoting rule for array items (see `references/yaml-schema.md` > YAML Safety Rules)
+   - `delivery_diff_fingerprint:` when the note is satisfying `compound:check` for substantial/sensitive delivery work
    - Bug track: Problem, root cause, solution with key code snippets, one prevention tip
    - Knowledge track: Problem, solution/guidance with key examples, one prevention/applicability note
 4. **Skip specialized agent reviews** (Phase 3) to conserve context

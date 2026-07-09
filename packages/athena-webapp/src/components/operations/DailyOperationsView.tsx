@@ -1,6 +1,7 @@
 import {
   useEffect,
   type KeyboardEvent,
+  type ReactNode,
   useCallback,
   useMemo,
   useState,
@@ -118,22 +119,13 @@ const SUPPORTING_OPERATIONS_WORKSPACE_LINKS: OperationsWorkspaceLink[] = [
 ];
 
 export type DailyOperationsLifecycleStatus =
-  | "not_opened"
-  | "operating"
-  | "close_blocked"
-  | "ready_to_close"
-  | "closed";
+  "not_opened" | "operating" | "close_blocked" | "ready_to_close" | "closed";
 
 export type DailyOperationsLaneStatus =
-  | "blocked"
-  | "needs_attention"
-  | "ready"
-  | "closed"
-  | "unknown";
+  "blocked" | "needs_attention" | "ready" | "closed" | "unknown";
 
 type PrimaryActionEmphasisStatus =
-  | DailyOperationsLifecycleStatus
-  | "historical_operating";
+  DailyOperationsLifecycleStatus | "historical_operating";
 
 type DailyOperationsAutomationOutcome =
   | "applied"
@@ -655,9 +647,7 @@ function selectWeekMetricsForOperatingDate(
 function replaceWeekMetricForOperatingDate(
   metrics: DailyOperationsSnapshot["weekMetrics"] | undefined,
   refreshedMetric:
-    | DailyOperationsSnapshot["weekMetrics"][number]
-    | null
-    | undefined,
+    DailyOperationsSnapshot["weekMetrics"][number] | null | undefined,
   operatingDate: string,
 ) {
   if (!metrics || !refreshedMetric) return metrics;
@@ -1377,14 +1367,17 @@ function LaneCard({
         />
       )}
       <div className="min-w-0 flex-1">
-        <h3 className="text-xs font-medium text-foreground">
-          {lane.label}
-        </h3>
+        <h3 className="text-xs font-medium text-foreground">{lane.label}</h3>
         <p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">
           {lane.description}
         </p>
       </div>
-      <Button asChild className="h-7 shrink-0 px-2 text-xs" size="sm" variant="ghost">
+      <Button
+        asChild
+        className="h-7 shrink-0 px-2 text-xs"
+        size="sm"
+        variant="ghost"
+      >
         <Link
           aria-label={`Open ${lane.label}`}
           params={buildParams(orgUrlSlug, storeUrlSlug)}
@@ -1514,6 +1507,28 @@ function getVisibleAutomationStatuses(snapshot: DailyOperationsSnapshot) {
   });
 }
 
+function DailyOperationsTopBandShell({
+  children,
+  icon,
+  title,
+}: {
+  children: ReactNode;
+  icon: ReactNode;
+  title: string;
+}) {
+  return (
+    <section className="px-layout-md py-layout-sm">
+      <div className="flex flex-col gap-layout-md">
+        <h3 className="flex shrink-0 items-center gap-layout-xs text-sm font-medium text-foreground">
+          {icon}
+          {title}
+        </h3>
+        {children}
+      </div>
+    </section>
+  );
+}
+
 function AutomationStatusPanel({
   orgUrlSlug,
   snapshot,
@@ -1531,70 +1546,69 @@ function AutomationStatusPanel({
 
   if (variant === "compact") {
     return (
-      <section className="px-layout-md py-layout-sm">
-        <div className="flex flex-col gap-layout-md">
-          <h3 className="flex shrink-0 items-center gap-layout-xs text-sm font-medium text-foreground">
-            <Bot aria-hidden="true" className="h-4 w-4 text-muted-foreground" />
-            Athena automation
-          </h3>
-          <div className="flex min-w-0 flex-col divide-y divide-border/70">
-            {statuses.map((status) => {
-              const label = getAutomationLaneLabel(status.lane);
-              const link = status.sourceLink;
+      <DailyOperationsTopBandShell
+        icon={
+          <Bot aria-hidden="true" className="h-4 w-4 text-muted-foreground" />
+        }
+        title="Athena automation"
+      >
+        <div className="flex min-w-0 flex-col divide-y divide-border/70">
+          {statuses.map((status) => {
+            const label = getAutomationLaneLabel(status.lane);
+            const link = status.sourceLink;
 
-              return (
-                <article
-                  className="flex min-w-0 flex-col gap-layout-xs py-layout-sm first:pt-0 last:pb-0 sm:flex-row sm:items-start sm:justify-between"
-                  key={status.id}
-                >
-                  <div className="min-w-0">
-                    <p className="break-words text-sm leading-5 text-foreground">
-                      {getAutomationStatusMessage(status)}
-                    </p>
-                    <div className="mt-1.5 flex flex-wrap items-center gap-layout-xs">
-                      {status.occurredAt ? (
-                        <p className="font-numeric text-xs tabular-nums text-muted-foreground">
-                          {formatEventTime(status.occurredAt)}
-                        </p>
-                      ) : null}
-                    </div>
+            return (
+              <article
+                className="flex min-w-0 flex-col gap-layout-xs py-layout-sm first:pt-0 last:pb-0 sm:flex-row sm:items-start sm:justify-between"
+                key={status.id}
+              >
+                <div className="min-w-0">
+                  <p className="break-words text-sm leading-5 text-foreground">
+                    {getAutomationStatusMessage(status)}
+                  </p>
+                  <div className="mt-1.5 flex flex-wrap items-center gap-layout-xs">
+                    {status.occurredAt ? (
+                      <p className="font-numeric text-xs tabular-nums text-muted-foreground">
+                        {formatEventTime(status.occurredAt)}
+                      </p>
+                    ) : null}
                   </div>
-                  {link?.to ? (
-                    <Button
-                      asChild
-                      className="h-7 shrink-0 self-start px-2 text-xs sm:ml-layout-md"
-                      size="sm"
-                      variant="ghost"
+                </div>
+                {link?.to ? (
+                  <Button
+                    asChild
+                    className="h-7 shrink-0 self-start px-2 text-xs sm:ml-layout-md"
+                    size="sm"
+                    variant="ghost"
+                  >
+                    <Link
+                      aria-label={`Open ${label} automation source`}
+                      params={buildParams(
+                        orgUrlSlug,
+                        storeUrlSlug,
+                        link.params,
+                      )}
+                      search={
+                        {
+                          o: getOrigin(),
+                          ...(link.search ?? {}),
+                        } as never
+                      }
+                      to={link.to}
                     >
-                      <Link
-                        aria-label={`Open ${label} automation source`}
-                        params={buildParams(
-                          orgUrlSlug,
-                          storeUrlSlug,
-                          link.params,
-                        )}
-                        search={
-                          {
-                            o: getOrigin(),
-                            ...(link.search ?? {}),
-                          } as never
-                        }
-                        to={link.to}
-                      >
-                        Open
-                        <ArrowUpRight
-                          aria-hidden="true"
-                          className="h-3.5 w-3.5"
-                        />
-                      </Link>
-                    </Button>
-                  ) : null}
-                </article>
-              );
-            })}
-          </div>
+                      Open
+                      <ArrowUpRight
+                        aria-hidden="true"
+                        className="h-3.5 w-3.5"
+                      />
+                    </Link>
+                  </Button>
+                ) : null}
+              </article>
+            );
+          })}
         </div>
-      </section>
+      </DailyOperationsTopBandShell>
     );
   }
 
@@ -1696,21 +1710,24 @@ function DailyOperationsCompletionAttributionNotice({
   }
 
   return (
-    <div className="py-layout-sm text-sm leading-6">
-      <h3 className="flex items-center gap-layout-xs text-sm font-medium text-foreground">
+    <DailyOperationsTopBandShell
+      icon={
         <Bot aria-hidden="true" className="h-4 w-4 text-muted-foreground" />
-        Athena automation
-      </h3>
-      <p className="mt-layout-sm font-medium text-success">
-        Athena completed EOD Review under store policy.
-      </p>
-      <p className="mt-1 text-muted-foreground">
-        {getDailyOperationsCompletionAttributionDetail(
-          completedClose,
-          carryForwardCount ?? completedClose.carryForwardCount ?? 0,
-        )}
-      </p>
-    </div>
+      }
+      title="Athena automation"
+    >
+      <div className="text-sm leading-6">
+        <p className="font-medium text-success">
+          Athena completed EOD Review under store policy.
+        </p>
+        <p className="mt-1 text-muted-foreground">
+          {getDailyOperationsCompletionAttributionDetail(
+            completedClose,
+            carryForwardCount ?? completedClose.carryForwardCount ?? 0,
+          )}
+        </p>
+      </div>
+    </DailyOperationsTopBandShell>
   );
 }
 
@@ -1904,10 +1921,12 @@ function HistoricalWorkflowPanel({
   if (isClosed || !isIncompleteStoreDay) return null;
 
   return (
-    <section className="space-y-layout-md">
-      <h3 className="text-base font-medium text-foreground">
-        Incomplete store-day close
-      </h3>
+    <DailyOperationsTopBandShell
+      icon={
+        <Clock3 aria-hidden="true" className="h-4 w-4 text-muted-foreground" />
+      }
+      title="Incomplete store-day close"
+    >
       <div>
         <p className="text-sm leading-6 text-foreground">
           This historical store day does not have a completed close.
@@ -1916,7 +1935,7 @@ function HistoricalWorkflowPanel({
           Review EOD before treating this date as a closed store-day record.
         </p>
       </div>
-    </section>
+    </DailyOperationsTopBandShell>
   );
 }
 

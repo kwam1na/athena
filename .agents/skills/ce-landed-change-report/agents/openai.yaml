@@ -1,0 +1,4 @@
+interface:
+  display_name: "Landed Change Report"
+  short_description: "Create subagent-grounded HTML reports for landed changes"
+  default_prompt: "Use $ce-landed-change-report to create a digestible HTML report with subagent-gathered context and a comprehension quiz for the landed change."

@@ -45,6 +45,9 @@ jobs:
       - name: Check compound solution docs
         run: bun run compound:check
 
+      - name: Check landed change reports
+        run: bun run landed-report:check
+
       - name: Install Graphify runtime
         run: python3 -m pip install -r .graphify-requirements.txt
 

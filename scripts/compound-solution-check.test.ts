@@ -9,6 +9,7 @@ import {
   REQUIRED_SOLUTION_FRONTMATTER_FIELDS,
   REQUIRED_SOLUTION_SECTIONS,
   assertCompoundSolutionCheck,
+  collectDeliverableDiffFingerprint,
   collectCompoundSolutionFindings,
   extractSolutionReferences,
   isConsiderableSourcePath,
@@ -76,7 +77,11 @@ function lineChanges(entries: Array<[string, number, number]>) {
   );
 }
 
-function solutionNote(title = "Procurement") {
+function solutionNote(title = "Procurement", fingerprint?: string) {
+  const fingerprintLine = fingerprint
+    ? `delivery_diff_fingerprint: ${fingerprint}\n`
+    : "";
+
   return `---
 title: ${title}
 date: 2026-05-06
@@ -88,6 +93,7 @@ resolution_type: guardrail
 severity: medium
 tags:
   - compound
+${fingerprintLine}
 ---
 
 # ${title}
@@ -332,14 +338,42 @@ describe("collectCompoundSolutionFindings", () => {
         "packages/athena-webapp/src/components/ProcurementView.tsx",
       ]),
       markdownContents: new Map([
-        ["docs/solutions/logic-errors/procurement.md", solutionNote()],
+        ["docs/solutions/logic-errors/procurement.md", solutionNote("Procurement", "current-fingerprint")],
       ]),
       sourceLineChanges: lineChanges([
         ["packages/athena-webapp/src/components/ProcurementView.tsx", 151, 0],
       ]),
+      deliverableDiffFingerprint: "current-fingerprint",
     });
 
     expect(findings).toEqual([]);
+  });
+
+  it("fails substantial source changes when the changed solution note fingerprint is stale", () => {
+    const findings = collectCompoundSolutionFindings({
+      changedFiles: [
+        "docs/solutions/logic-errors/procurement.md",
+        "packages/athena-webapp/src/components/ProcurementView.tsx",
+      ],
+      existingFiles: new Set([
+        "docs/solutions/logic-errors/procurement.md",
+        "packages/athena-webapp/src/components/ProcurementView.tsx",
+      ]),
+      markdownContents: new Map([
+        ["docs/solutions/logic-errors/procurement.md", solutionNote("Procurement", "old-fingerprint")],
+      ]),
+      sourceLineChanges: lineChanges([
+        ["packages/athena-webapp/src/components/ProcurementView.tsx", 151, 0],
+      ]),
+      deliverableDiffFingerprint: "current-fingerprint",
+    });
+
+    expect(findings).toEqual([
+      {
+        message:
+          "Changed solution note docs/solutions/logic-errors/procurement.md is stale: delivery_diff_fingerprint old-fingerprint does not match current deliverable diff current-fingerprint. Regenerate or update the note after final code and workflow changes.",
+      },
+    ]);
   });
 
   it("passes small source changes below the threshold", () => {
@@ -701,7 +735,13 @@ describe("assertCompoundSolutionCheck", () => {
     await write(
       rootDir,
       "docs/solutions/harness/compound-solution-gate.md",
-      solutionNote("Compound Solution Gate")
+      solutionNote(
+        "Compound Solution Gate",
+        collectDeliverableDiffFingerprint(rootDir, "HEAD", [
+          "docs/solutions/harness/compound-solution-gate.md",
+          "scripts/new-harness-sensor.ts",
+        ])
+      )
     );
 
     expect(() =>
@@ -710,6 +750,42 @@ describe("assertCompoundSolutionCheck", () => {
         threshold: 10,
       })
     ).not.toThrow();
+  });
+
+  it("fails when a solution note was generated before final source edits", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      rootDir,
+      "scripts/new-harness-sensor.ts",
+      Array.from({ length: 12 }, (_, index) => `export const value${index} = ${index};`)
+        .join("\n")
+        .concat("\n")
+    );
+    await write(
+      rootDir,
+      "docs/solutions/harness/compound-solution-gate.md",
+      solutionNote(
+        "Compound Solution Gate",
+        collectDeliverableDiffFingerprint(rootDir, "HEAD", [
+          "docs/solutions/harness/compound-solution-gate.md",
+          "scripts/new-harness-sensor.ts",
+        ])
+      )
+    );
+    await write(
+      rootDir,
+      "scripts/new-harness-sensor.ts",
+      Array.from({ length: 13 }, (_, index) => `export const value${index} = ${index};`)
+        .join("\n")
+        .concat("\n")
+    );
+
+    expect(() =>
+      assertCompoundSolutionCheck(rootDir, {
+        baseRef: "HEAD",
+        threshold: 10,
+      })
+    ).toThrow("Regenerate or update the note after final code and workflow changes.");
   });
 
   it("points agents to the repo-local ce-compound skill when the gate fails", async () => {
