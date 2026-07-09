@@ -4,6 +4,7 @@ import {
   userError,
   type CommandResult,
 } from "../../../../shared/commandResult";
+import { isPosCatalogVisible } from "../../../../shared/posCatalogVisibility";
 
 export type TransactionAdjustmentStatus =
   | "pending_approval"
@@ -52,8 +53,10 @@ export type TransactionAdjustmentSkuSnapshot = {
   netPrice?: number;
   quantityAvailable: number;
   isVisible?: boolean;
+  posVisible?: boolean;
   productAvailability?: "archived" | "draft" | "live";
   productIsVisible?: boolean;
+  productPosVisible?: boolean;
 };
 
 export type TransactionAdjustmentDraft = {
@@ -210,8 +213,11 @@ function isSkuAvailableForAddition(
   return (
     sku.storeId === storeId &&
     sku.productAvailability === "live" &&
-    sku.isVisible !== false &&
-    sku.productIsVisible !== false
+    isPosCatalogVisible(sku) &&
+    isPosCatalogVisible({
+      isVisible: sku.productIsVisible,
+      posVisible: sku.productPosVisible,
+    })
   );
 }
 

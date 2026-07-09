@@ -7815,7 +7815,7 @@ describe("useRegisterViewModel", () => {
     expect(mockStartSession).not.toHaveBeenCalled();
   });
 
-  it("requires a fresh staff proof before appending an online drawer opening", async () => {
+  it("allows local drawer opening while online without a fresh staff proof", async () => {
     mockRegisterState = {
       phase: "readyToStart",
       terminal: { _id: "terminal-1", displayName: "Front Counter" },
@@ -7849,18 +7849,17 @@ describe("useRegisterViewModel", () => {
       await result.current.drawerGate?.onSubmit?.();
     });
 
-    expect(mockAppendLocalEvent).not.toHaveBeenCalledWith(
+    expect(mockAppendLocalEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         type: "register.opened",
+        staffProofToken: undefined,
       }),
     );
     expect(result.current.authDialog?.open).toBe(false);
-    expect(result.current.drawerGate).toEqual(
-      expect.objectContaining({
-        errorMessage: "Sign in again before opening the drawer.",
-      }),
+    expect(result.current.drawerGate?.errorMessage).not.toBe(
+      "Sign in again before opening the drawer.",
     );
-    expect(toast.error).toHaveBeenCalledWith(
+    expect(toast.error).not.toHaveBeenCalledWith(
       "Sign out, then sign in again before opening the drawer.",
     );
   });

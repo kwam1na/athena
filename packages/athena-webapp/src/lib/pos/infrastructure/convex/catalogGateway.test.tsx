@@ -13,6 +13,7 @@ import {
   useConvexRegisterCatalogState,
   useConvexRegisterCatalogAvailability,
   useConvexRegisterCatalogAvailabilityState,
+  useConvexProductIdLookup,
   useConvexRegisterServiceCatalog,
   usePrewarmRegisterCatalogOfflineSnapshots,
 } from "./catalogGateway";
@@ -214,6 +215,62 @@ describe("catalogGateway", () => {
     expect(result.current).toBeUndefined();
     expect(convexMocks.useQuery).not.toHaveBeenCalled();
     expect(convexMocks.query).not.toHaveBeenCalled();
+  });
+
+  it("honors POS SKU visibility when mapping product-id lookup results", async () => {
+    convexMocks.useQuery.mockReturnValue({
+      _id: "ks7ab1h23h38zjz2pw1wpdfr5d88d2h8",
+      name: "Needle Sewing",
+      description: "Needle product",
+      skus: [
+        {
+          _id: "sku-online-hidden" as Id<"productSku">,
+          sku: "ONLINE-HIDDEN",
+          barcode: "111",
+          images: [],
+          isVisible: false,
+          posVisible: true,
+          price: 500,
+          quantityAvailable: 1,
+        },
+        {
+          _id: "sku-legacy-hidden" as Id<"productSku">,
+          sku: "LEGACY-HIDDEN",
+          barcode: "333",
+          images: [],
+          isVisible: false,
+          price: 900,
+          quantityAvailable: 1,
+        },
+        {
+          _id: "sku-pos-hidden" as Id<"productSku">,
+          sku: "POS-HIDDEN",
+          barcode: "222",
+          images: [],
+          isVisible: true,
+          posVisible: false,
+          price: 700,
+          quantityAvailable: 1,
+        },
+      ],
+    });
+
+    const { result } = renderHook(() =>
+      useConvexProductIdLookup({
+        productId: "ks7ab1h23h38zjz2pw1wpdfr5d88d2h8" as Id<"product">,
+        storeId: "store-1" as Id<"store">,
+      }),
+    );
+
+    expect(result.current?.map((row) => row.sku)).toEqual(["ONLINE-HIDDEN"]);
+    expect(convexMocks.useQuery).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        id: "ks7ab1h23h38zjz2pw1wpdfr5d88d2h8",
+        includeHiddenSkus: true,
+        storeId: "store-1",
+      },
+    );
   });
 
   it("persists explicitly refreshed register catalog rows for the next offline lookup", async () => {

@@ -2,10 +2,14 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import React, { type ReactElement, type ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { AppSidebar } from "./app-sidebar";
+import {
+  AppSidebar,
+  resetAppSidebarSubmenuStateForTests,
+} from "./app-sidebar";
 
 const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
+  pathname: "/org/store/main/operations",
   useGetActiveStore: vi.fn(),
   useGetActiveOrganization: vi.fn(),
   usePermissions: vi.fn(),
@@ -36,7 +40,7 @@ vi.mock("@tanstack/react-router", () => ({
       </a>
     );
   },
-  useLocation: () => ({ pathname: "/org/store/main/operations" }),
+  useLocation: () => ({ pathname: mocks.pathname }),
   useNavigate: () => mocks.navigate,
 }));
 
@@ -148,15 +152,66 @@ vi.mock("@/components/ui/sidebar", () => {
   };
 });
 
-vi.mock("@radix-ui/react-collapsible", () => ({
-  Root: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  Trigger: ({ children }: { children: ReactNode }) => <>{children}</>,
-  Content: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-}));
+vi.mock("@radix-ui/react-collapsible", () => {
+  const CollapsibleContext = React.createContext<{
+    onOpenChange?: (open: boolean) => void;
+    open: boolean;
+  }>({
+    open: false,
+  });
+
+  return {
+    Root: ({
+      children,
+      defaultOpen = false,
+      onOpenChange,
+      open,
+    }: {
+      children: ReactNode;
+      defaultOpen?: boolean;
+      onOpenChange?: (open: boolean) => void;
+      open?: boolean;
+    }) => (
+      <CollapsibleContext.Provider
+        value={{ onOpenChange, open: open ?? defaultOpen }}
+      >
+        <div>{children}</div>
+      </CollapsibleContext.Provider>
+    ),
+    Trigger: ({ children }: { children: ReactNode }) => {
+      const { onOpenChange, open } = React.useContext(CollapsibleContext);
+
+      if (!React.isValidElement(children)) {
+        return <>{children}</>;
+      }
+
+      const child = children as ReactElement<{
+        disabled?: boolean;
+        onClick?: React.MouseEventHandler;
+      }>;
+
+      return React.cloneElement(child, {
+        onClick: (event: React.MouseEvent) => {
+          child.props.onClick?.(event);
+          if (!child.props.disabled) {
+            onOpenChange?.(!open);
+          }
+        },
+      });
+    },
+    Content: ({ children }: { children: ReactNode }) => {
+      const { open } = React.useContext(CollapsibleContext);
+
+      return open ? <div>{children}</div> : null;
+    },
+  };
+});
 
 describe("AppSidebar capability gates", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetAppSidebarSubmenuStateForTests();
+    mocks.pathname = "/org/store/main/operations";
     mocks.useGetActiveStore.mockReturnValue({
       activeStore: { _id: "store-1", slug: "main" },
     });
@@ -355,5 +410,95 @@ describe("AppSidebar capability gates", () => {
     );
     fireEvent.click(toggle);
     expect(mocks.toggleSidebar).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves opened submenus when the sidebar remounts after POS fullscreen", () => {
+    mocks.pathname = "/org/store/main/pos";
+    mocks.usePermissions.mockReturnValue({
+      canAccessAdmin: () => true,
+      canAccessFullAdminSurfaces: () => true,
+      canAccessPOS: () => true,
+      canAccessOperations: () => true,
+      canAccessStoreDaySurfaces: () => true,
+      hasFullAdminAccess: true,
+      hasFinancialDetailsAccess: true,
+      hasStoreDaySurfaceAccess: true,
+      isLoading: false,
+      role: "full_admin",
+    });
+
+    const { unmount } = render(<AppSidebar />);
+
+    expect(screen.queryByRole("link", { name: /assets/i })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /storefront/i }));
+    expect(screen.getByRole("link", { name: /assets/i })).toBeInTheDocument();
+
+    unmount();
+    render(<AppSidebar />);
+
+    expect(screen.getByRole("link", { name: /assets/i })).toBeInTheDocument();
+  });
+
+  it("keeps route defaults for submenus the operator has not changed", () => {
+    mocks.pathname = "/org/store/main/pos";
+    mocks.usePermissions.mockReturnValue({
+      canAccessAdmin: () => true,
+      canAccessFullAdminSurfaces: () => true,
+      canAccessPOS: () => true,
+      canAccessOperations: () => true,
+      canAccessStoreDaySurfaces: () => true,
+      hasFullAdminAccess: true,
+      hasFinancialDetailsAccess: true,
+      hasStoreDaySurfaceAccess: true,
+      isLoading: false,
+      role: "full_admin",
+    });
+
+    const { unmount } = render(<AppSidebar />);
+
+    fireEvent.click(screen.getByRole("button", { name: /storefront/i }));
+
+    unmount();
+    mocks.pathname = "/org/store/main/operations";
+    render(<AppSidebar />);
+
+    expect(
+      screen.getByRole("link", { name: /daily operations/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /assets/i })).toBeInTheDocument();
+  });
+
+  it("preserves collapsed route submenus when the sidebar remounts after POS fullscreen", () => {
+    mocks.usePermissions.mockReturnValue({
+      canAccessAdmin: () => true,
+      canAccessFullAdminSurfaces: () => true,
+      canAccessPOS: () => true,
+      canAccessOperations: () => true,
+      canAccessStoreDaySurfaces: () => true,
+      hasFullAdminAccess: true,
+      hasFinancialDetailsAccess: true,
+      hasStoreDaySurfaceAccess: true,
+      isLoading: false,
+      role: "full_admin",
+    });
+
+    const { unmount } = render(<AppSidebar />);
+
+    expect(
+      screen.getByRole("link", { name: /daily operations/i }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /operations/i }));
+    expect(
+      screen.queryByRole("link", { name: /daily operations/i }),
+    ).toBeNull();
+
+    unmount();
+    render(<AppSidebar />);
+
+    expect(
+      screen.queryByRole("link", { name: /daily operations/i }),
+    ).toBeNull();
   });
 });

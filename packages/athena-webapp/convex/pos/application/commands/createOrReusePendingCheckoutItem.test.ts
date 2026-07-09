@@ -909,6 +909,122 @@ describe("createOrReusePendingCheckoutItem", () => {
     expect(tables.operationalWorkItem.size).toBe(0);
   });
 
+  it("uses POS visibility when deciding whether lookup matches trusted catalog stock", async () => {
+    for (const [label, productPatch, skuPatch] of [
+      ["product POS-hidden", { posVisible: false }, { posVisible: true }],
+      ["SKU POS-hidden", { posVisible: true }, { posVisible: false }],
+    ] as const) {
+      const { ctx, tables } = createPendingCheckoutCtx({
+        ...baseSeed,
+        product: [
+          {
+            _id: `product-${label}`,
+            availability: "live",
+            isVisible: true,
+            storeId: "storezzzz",
+            ...productPatch,
+          },
+        ],
+        productSku: [
+          {
+            _id: `sku-${label}`,
+            barcode: "123456789012",
+            isVisible: true,
+            productId: `product-${label}`,
+            sku: "LIVE-SKU",
+            storeId: "storezzzz",
+            ...skuPatch,
+          },
+        ],
+      });
+
+      const result = await createOrReusePendingCheckoutItem(ctx, {
+        createdByUserId: "user0001" as Id<"athenaUser">,
+        lookupCode: "123456789012",
+        name: "Known item",
+        price: 30000,
+        quantitySold: 1,
+        storeId: "storezzzz" as Id<"store">,
+      });
+
+      expect(result.status).toBe("pending_review");
+      expect(tables.posPendingCheckoutItem.size).toBe(1);
+    }
+
+    const legacyHidden = createPendingCheckoutCtx({
+      ...baseSeed,
+      product: [
+        {
+          _id: "product-legacy-hidden",
+          availability: "live",
+          isVisible: false,
+          storeId: "storezzzz",
+        },
+      ],
+      productSku: [
+        {
+          _id: "sku-legacy-hidden",
+          barcode: "123456789012",
+          isVisible: false,
+          productId: "product-legacy-hidden",
+          sku: "LEGACY-HIDDEN",
+          storeId: "storezzzz",
+        },
+      ],
+    });
+
+    const legacyHiddenResult = await createOrReusePendingCheckoutItem(
+      legacyHidden.ctx,
+      {
+        createdByUserId: "user0001" as Id<"athenaUser">,
+        lookupCode: "123456789012",
+        name: "Known hidden legacy item",
+        price: 30000,
+        quantitySold: 1,
+        storeId: "storezzzz" as Id<"store">,
+      },
+    );
+
+    expect(legacyHiddenResult.status).toBe("pending_review");
+    expect(legacyHidden.tables.posPendingCheckoutItem.size).toBe(1);
+
+    const { ctx, tables } = createPendingCheckoutCtx({
+      ...baseSeed,
+      product: [
+        {
+          _id: "product-online-hidden",
+          availability: "live",
+          isVisible: false,
+          posVisible: true,
+          storeId: "storezzzz",
+        },
+      ],
+      productSku: [
+        {
+          _id: "sku-online-hidden",
+          barcode: "123456789012",
+          isVisible: false,
+          posVisible: true,
+          productId: "product-online-hidden",
+          sku: "LIVE-SKU",
+          storeId: "storezzzz",
+        },
+      ],
+    });
+
+    await expect(
+      createOrReusePendingCheckoutItem(ctx, {
+        createdByUserId: "user0001" as Id<"athenaUser">,
+        lookupCode: "123456789012",
+        name: "Known item",
+        price: 30000,
+        quantitySold: 1,
+        storeId: "storezzzz" as Id<"store">,
+      }),
+    ).rejects.toThrow("This item is already in the catalog.");
+    expect(tables.posPendingCheckoutItem.size).toBe(0);
+  });
+
   it("treats visible legacy catalog rows without availability as trusted stock", async () => {
     const { ctx, tables } = createPendingCheckoutCtx({
       ...baseSeed,

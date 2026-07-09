@@ -445,6 +445,7 @@ export const repairCatalogSummary = mutation({
 
 export const getById = query({
   args: {
+    includeHiddenSkus: v.optional(v.boolean()),
     id: v.id(entity),
     storeId: v.id("store"),
   },
@@ -496,7 +497,10 @@ export const getById = query({
         productName: product?.name,
         colorName: sku.color ? colorMap[sku.color] : null,
       }))
-      .filter((sku) => sku.isVisible || sku.isVisible === undefined);
+      .filter(
+        (sku) =>
+          args.includeHiddenSkus || sku.isVisible || sku.isVisible === undefined,
+      );
 
     return {
       ...product,
@@ -949,6 +953,7 @@ export const updateSku = mutation({
     id: v.id("productSku"),
     images: v.optional(v.array(v.string())),
     isVisible: v.optional(v.boolean()),
+    posVisible: v.optional(v.boolean()),
     length: v.optional(v.number()),
     size: v.optional(v.string()),
     color: v.optional(v.id("color")),
@@ -1047,6 +1052,7 @@ export const update = mutation({
     description: v.optional(v.string()),
     inventoryCount: v.optional(v.number()),
     isVisible: v.optional(v.boolean()),
+    posVisible: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const { id, ...rest } = args;

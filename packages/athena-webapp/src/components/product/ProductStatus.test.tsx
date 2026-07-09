@@ -34,7 +34,7 @@ describe("ProductStatus", () => {
       />,
     );
 
-    expect(screen.getByText("Hidden")).toBeInTheDocument();
+    expect(screen.getByText("Hidden online")).toBeInTheDocument();
   });
 
   it("shows variant visibility when product is visible", () => {
@@ -45,7 +45,7 @@ describe("ProductStatus", () => {
       />,
     );
 
-    expect(screen.getByText("Hidden")).toBeInTheDocument();
+    expect(screen.getByText("Hidden online")).toBeInTheDocument();
   });
 
   it("shows live status when product and variant are visible", () => {

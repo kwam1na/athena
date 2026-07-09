@@ -299,6 +299,7 @@ function buildTrustedConversionArgs(
     provisionalSkuId: "provisional-1" as Id<"inventoryImportProvisionalSku">,
     reviewedInventoryCount: 10,
     reviewedIsVisible: true,
+    reviewedPosVisible: true,
     reviewedPrice: 50000,
     reviewedQuantityAvailable: 8,
     saleEvidenceFingerprint: binding.saleEvidenceFingerprint,
@@ -892,6 +893,7 @@ describe("catalog import", () => {
         provisionalSkuId: "provisional-1" as Id<"inventoryImportProvisionalSku">,
         reviewedInventoryCount: 10,
         reviewedIsVisible: true,
+        reviewedPosVisible: true,
         reviewedPrice: 50000,
         reviewedQuantityAvailable: 8,
         saleEvidenceFingerprint: binding.saleEvidenceFingerprint,
@@ -1042,6 +1044,7 @@ describe("catalog import", () => {
         provisionalSkuId: "provisional-1" as Id<"inventoryImportProvisionalSku">,
         reviewedInventoryCount: 10,
         reviewedIsVisible: true,
+        reviewedPosVisible: true,
         reviewedPrice: 50000,
         reviewedQuantityAvailable: 8,
         reviewedUnitCost: 25000,
@@ -1061,6 +1064,7 @@ describe("catalog import", () => {
       productSkuId: "sku-1",
       product: {
         availability: "live",
+        posVisible: true,
       },
       provisionalSoldQuantity: 2,
       provisionalSkuId: "provisional-1",
@@ -1069,6 +1073,7 @@ describe("catalog import", () => {
     expect(tables.productSku.get("sku-1")).toMatchObject({
       inventoryCount: 10,
       isVisible: true,
+      posVisible: true,
       price: 50000,
       quantityAvailable: 8,
       unitCost: 25000,
@@ -1079,6 +1084,7 @@ describe("catalog import", () => {
     expect(tables.product.get("product-1")).toMatchObject({
       availability: "live",
       inventoryCount: 10,
+      posVisible: true,
       quantityAvailable: 8,
     });
     expect(tables.inventoryImportProvisionalSku.get("provisional-1")).toMatchObject({
@@ -1170,6 +1176,7 @@ describe("catalog import", () => {
           availability: "draft",
           categoryId: "category-hair",
           isVisible: false,
+          posVisible: false,
           name: "Hidden Draft",
           storeId: "store-1",
           subcategoryId: "subcategory-hair",
@@ -1323,6 +1330,7 @@ describe("catalog import", () => {
           availability: "draft",
           categoryId: "category-hair",
           isVisible: false,
+          posVisible: false,
           name: "Hidden Draft",
           storeId: "store-1",
           subcategoryId: "subcategory-hair",
@@ -1427,7 +1435,8 @@ describe("catalog import", () => {
     });
     expect(tables.product.get("product-hidden-draft")).toMatchObject({
       availability: "live",
-      isVisible: true,
+      isVisible: false,
+      posVisible: true,
     });
     expect(tables.product.get("product-visible-live")).toMatchObject({
       availability: "live",
@@ -1497,6 +1506,7 @@ describe("catalog import", () => {
           availability: "draft",
           categoryId: "category-hair",
           isVisible: false,
+          posVisible: false,
           name: "Hidden Draft",
           storeId: "store-1",
           subcategoryId: "subcategory-hair",
@@ -1539,7 +1549,8 @@ describe("catalog import", () => {
     });
     expect(tables.product.get("product-hidden-draft")).toMatchObject({
       availability: "live",
-      isVisible: true,
+      isVisible: false,
+      posVisible: true,
     });
     expect(mockedSkuSearch.upsertProductSkuSearchProjection).toHaveBeenCalledWith(
       ctx,
@@ -1590,6 +1601,7 @@ describe("catalog import", () => {
           availability: "draft",
           categoryId: "category-hair",
           isVisible: false,
+          posVisible: false,
           name: "Hidden Draft",
           storeId: "store-1",
           subcategoryId: "subcategory-hair",
@@ -1659,7 +1671,8 @@ describe("catalog import", () => {
     });
     expect(tables.product.get("product-hidden-draft")).toMatchObject({
       availability: "live",
-      isVisible: true,
+      isVisible: false,
+      posVisible: true,
     });
     expect(mockedSkuSearch.upsertProductSkuSearchProjection).toHaveBeenCalledWith(
       ctx,
@@ -1701,6 +1714,7 @@ describe("catalog import", () => {
           availability: "draft",
           categoryId: "category-hair",
           isVisible: false,
+          posVisible: false,
           name: "Hidden Draft 1",
           storeId: "store-1",
           subcategoryId: "subcategory-hair",
@@ -1769,11 +1783,13 @@ describe("catalog import", () => {
     });
     expect(tables.product.get("product-hidden-draft-1")).toMatchObject({
       availability: "live",
-      isVisible: true,
+      isVisible: false,
+      posVisible: true,
     });
     expect(tables.product.get("product-hidden-draft-2")).toMatchObject({
       availability: "live",
-      isVisible: true,
+      isVisible: false,
+      posVisible: true,
     });
     expect(mockedSkuSearch.upsertProductSkuSearchProjection).toHaveBeenCalledWith(
       ctx,
@@ -1816,6 +1832,35 @@ describe("catalog import", () => {
       status: "committed",
       stockQuantityDelta: 0,
     });
+  });
+
+  it("rejects POS-hidden trusted inventory finalization", async () => {
+    const { ctx, tables } = seedTrustedConversionData();
+    const binding = await readTrustedConversionBinding(ctx);
+
+    const result = await finalizeTrustedInventoryFromProductPageWithCtx(
+      ctx,
+      buildTrustedConversionArgs(binding, {
+        reviewedIsVisible: true,
+        reviewedPosVisible: false,
+      }),
+      access,
+    );
+
+    expect(result).toMatchObject({
+      error: {
+        code: "precondition_failed",
+        message: "Make this SKU available in POS before finalizing trusted inventory.",
+      },
+      kind: "user_error",
+    });
+    expect(tables.productSku.get("sku-1")).toMatchObject({
+      inventoryCount: 2,
+      quantityAvailable: 2,
+    });
+    expect(tables.productSku.get("sku-1")).not.toHaveProperty("posVisible");
+    expect(Array.from(tables.inventoryMovement.values())).toHaveLength(0);
+    expect(Array.from(tables.skuActivityEvent.values())).toHaveLength(0);
   });
 
   it("returns the stored success on identical product-page finalization retries", async () => {
@@ -1892,6 +1937,7 @@ describe("catalog import", () => {
         provisionalSkuId: "provisional-1" as Id<"inventoryImportProvisionalSku">,
         reviewedInventoryCount: 10,
         reviewedIsVisible: true,
+        reviewedPosVisible: true,
         reviewedPrice: 50000,
         reviewedQuantityAvailable: 8,
         saleEvidenceFingerprint: binding.saleEvidenceFingerprint!,
@@ -1971,6 +2017,7 @@ describe("catalog import", () => {
         provisionalSkuId: "provisional-1" as Id<"inventoryImportProvisionalSku">,
         reviewedInventoryCount: 10,
         reviewedIsVisible: true,
+        reviewedPosVisible: true,
         reviewedPrice: 50000,
         reviewedQuantityAvailable: 8,
         saleEvidenceFingerprint: binding.saleEvidenceFingerprint!,
@@ -2145,6 +2192,7 @@ describe("catalog import", () => {
         provisionalSkuId: "provisional-1" as Id<"inventoryImportProvisionalSku">,
         reviewedInventoryCount: 10,
         reviewedIsVisible: true,
+        reviewedPosVisible: true,
         reviewedPrice: 50000,
         reviewedQuantityAvailable: 8,
         saleEvidenceFingerprint: binding.saleEvidenceFingerprint,

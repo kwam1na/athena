@@ -63,7 +63,7 @@ describe("ProductStock money inputs", () => {
       variant: {
         id: "sku-1",
         existsInDB: true,
-        isVisible: false,
+        posVisible: false,
         stock: 4,
         quantityAvailable: 4,
         netPrice: 25,
@@ -73,9 +73,10 @@ describe("ProductStock money inputs", () => {
 
     expect(state).toMatchObject({
       action: "make_visible",
-      ctaLabel: "Make SKU visible",
+      ctaLabel: "Make SKU available in POS",
       disabled: false,
-      message: "Make this SKU visible before reviewing trusted inventory.",
+      message:
+        "Make this SKU available in POS before reviewing trusted inventory.",
     });
   });
 
@@ -106,7 +107,7 @@ describe("ProductStock money inputs", () => {
       variant: {
         id: "sku-1",
         existsInDB: true,
-        isVisible: false,
+        posVisible: false,
         stock: 0,
         quantityAvailable: 0,
         netPrice: 25,
@@ -161,7 +162,7 @@ describe("ProductStock money inputs", () => {
       variant: {
         id: "sku-1",
         existsInDB: true,
-        isVisible: false,
+        posVisible: false,
         stock: 4,
         quantityAvailable: 4,
         netPrice: 25,
@@ -484,6 +485,7 @@ describe("ProductStock money inputs", () => {
       reviewedNetPrice: 4567,
       reviewedUnitCost: 1234,
       reviewedIsVisible: true,
+      reviewedPosVisible: true,
       sourceSurface: "product_edit",
     });
   });
@@ -550,6 +552,7 @@ describe("ProductStock money inputs", () => {
     const merged = mergeTrustedInventoryFinalizationIntoProduct(product, {
       availability: "live",
       inventoryCount: 1,
+      posVisible: true,
       quantityAvailable: 1,
     });
 
@@ -559,6 +562,7 @@ describe("ProductStock money inputs", () => {
       inventoryCount: 1,
       isVisible: false,
       name: "Apron Stylist",
+      posVisible: true,
       quantityAvailable: 1,
     });
   });

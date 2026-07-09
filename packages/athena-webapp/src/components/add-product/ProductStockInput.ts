@@ -273,6 +273,7 @@ export type TrustedInventoryReviewStateInput = {
     | "existsInDB"
     | "id"
     | "isVisible"
+    | "posVisible"
     | "netPrice"
     | "price"
     | "quantityAvailable"
@@ -296,6 +297,7 @@ export type TrustedInventoryFinalizationPayload = {
   reviewedNetPrice?: number;
   reviewedUnitCost?: number;
   reviewedIsVisible: boolean;
+  reviewedPosVisible: boolean;
   sourceSurface: "product_edit";
 };
 
@@ -386,12 +388,13 @@ export function resolveTrustedInventoryReviewState({
     };
   }
 
-  if (variant.isVisible === false) {
+  if (variant.posVisible === false) {
     return {
       action: "make_visible",
-      ctaLabel: "Make SKU visible",
+      ctaLabel: "Make SKU available in POS",
       disabled: false,
-      message: "Make this SKU visible before reviewing trusted inventory.",
+      message:
+        "Make this SKU available in POS before reviewing trusted inventory.",
       status: "blocked",
     };
   }
@@ -555,6 +558,7 @@ export function buildTrustedInventoryFinalizationPayload({
     reviewedNetPrice: moneyPayload.netPrice,
     reviewedUnitCost: moneyPayload.unitCost,
     reviewedIsVisible: variant.isVisible !== false,
+    reviewedPosVisible: variant.posVisible !== false,
     sourceSurface: "product_edit",
   };
 }

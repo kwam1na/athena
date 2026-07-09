@@ -41,8 +41,8 @@ vi.mock("../application/queries/listRegisterCatalog", () => ({
     ({ category, product, sku }) =>
       product.availability !== "archived" &&
       product.availability !== "draft" &&
-      (product.isVisible !== false || category?.slug === "pos-quick-add") &&
-      (sku.isVisible !== false || category?.slug === "pos-quick-add"),
+      (product.posVisible !== false || category?.slug === "pos-quick-add") &&
+      (sku.posVisible !== false || category?.slug === "pos-quick-add"),
   ),
   listRegisterCatalog: vi.fn(),
   listRegisterCatalogAvailability: vi.fn(),
@@ -1424,7 +1424,7 @@ describe("POS public catalog queries", () => {
         product: {
           availability: "live",
           inventoryCount: 20,
-          isVisible: true,
+          posVisible: true,
           quantityAvailable: 20,
         },
         productId: "product-provisional-1",
@@ -1441,6 +1441,7 @@ describe("POS public catalog queries", () => {
       {
         inventoryCount: 20,
         isVisible: true,
+        posVisible: true,
         netPrice: 350000,
         price: 350000,
         quantityAvailable: 20,
@@ -1453,7 +1454,7 @@ describe("POS public catalog queries", () => {
       {
         availability: "live",
         inventoryCount: 20,
-        isVisible: true,
+        posVisible: true,
         quantityAvailable: 20,
       },
     );
@@ -1486,6 +1487,99 @@ describe("POS public catalog queries", () => {
     assertConformsToExportedReturns(
       finalizePendingCheckoutTrustedInventoryFromProductPage,
       result,
+    );
+  });
+
+  it("rejects POS-hidden pending checkout trusted inventory finalization", async () => {
+    const product = {
+      _id: "product-provisional-1",
+      availability: "draft",
+      categoryId: "category-legacy",
+      inventoryCount: 0,
+      isVisible: false,
+      posVisible: true,
+      name: "Imported SKU",
+      quantityAvailable: 0,
+      storeId: "store-1",
+    };
+    const productSku = {
+      _id: "sku-provisional-1",
+      inventoryCount: 0,
+      isVisible: true,
+      posVisible: true,
+      price: 350000,
+      productId: "product-provisional-1",
+      quantityAvailable: 0,
+      storeId: "store-1",
+    };
+    const pendingCheckoutItem = {
+      _id: "pending-1",
+      evidence: {
+        observedLookupCodes: ["123"],
+        observedPrices: [350000],
+        totalQuantitySold: 20,
+        transactionCount: 1,
+      },
+      lookupCode: "123",
+      name: "Imported SKU",
+      provisionalPrice: 350000,
+      provisionalProductId: "product-provisional-1",
+      provisionalProductSkuId: "sku-provisional-1",
+      reviewPriority: "normal",
+      status: "pending_review",
+      storeId: "store-1",
+      updatedAt: 1,
+    };
+    const ctx = buildCtx({
+      pendingCheckoutItem,
+      pendingCheckoutItems: [pendingCheckoutItem],
+      product,
+      productSku,
+    });
+    const binding = await getHandler(listPendingCheckoutProductPageBinding)(
+      ctx as never,
+      {
+        productSkuId: "sku-provisional-1",
+        storeId: "store-1",
+      },
+    );
+
+    const result = await getHandler(
+      finalizePendingCheckoutTrustedInventoryFromProductPage,
+    )(ctx as never, {
+      conversionRequestId: "conversion-1",
+      productId: "product-provisional-1",
+      productSkuId: "sku-provisional-1",
+      provisionalSkuId: "pending-1",
+      reviewedInventoryCount: 20,
+      reviewedIsVisible: true,
+      reviewedPosVisible: false,
+      reviewedNetPrice: 350000,
+      reviewedPrice: 350000,
+      reviewedQuantityAvailable: 20,
+      reviewedUnitCost: 0,
+      saleEvidenceFingerprint: binding.saleEvidenceFingerprint,
+      sourceSurface: "product_edit",
+      storeId: "store-1",
+      trustedSkuFingerprint: binding.trustedSkuFingerprint,
+    });
+
+    expect(result).toMatchObject({
+      error: {
+        code: "precondition_failed",
+        message: "Make this SKU available in POS before finalizing trusted inventory.",
+      },
+      kind: "user_error",
+    });
+    expect(ctx.db.patch).not.toHaveBeenCalledWith(
+      "productSku",
+      "sku-provisional-1",
+      expect.anything(),
+    );
+    expect(ctx.db.patch).not.toHaveBeenCalledWith(
+      "product",
+      "product-provisional-1",
+      expect.anything(),
     );
   });
 

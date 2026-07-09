@@ -14,7 +14,15 @@ import {
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 import * as Collapsible from "@radix-ui/react-collapsible";
-import type { ComponentType, MouseEventHandler, ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ComponentType,
+  type MouseEventHandler,
+  type ReactNode,
+} from "react";
 import {
   BadgePercent,
   CheckCircle,
@@ -61,6 +69,34 @@ type SidebarOrderSummary = {
 };
 
 type AppSidebarShellVariant = "classic" | "contained";
+type SidebarSubmenuId = "operations" | "orders" | "products" | "storefront";
+type SidebarSubmenuOpenState = Record<SidebarSubmenuId, boolean>;
+
+const persistedSidebarSubmenuState = new Map<
+  string,
+  Partial<SidebarSubmenuOpenState>
+>();
+
+export function resetAppSidebarSubmenuStateForTests() {
+  persistedSidebarSubmenuState.clear();
+}
+
+function getSidebarSubmenuOpenState({
+  defaultOpen,
+  scopeKey,
+}: {
+  defaultOpen: SidebarSubmenuOpenState;
+  scopeKey: string;
+}): SidebarSubmenuOpenState {
+  const persistedState = persistedSidebarSubmenuState.get(scopeKey) ?? {};
+
+  return {
+    operations: persistedState.operations ?? defaultOpen.operations,
+    orders: persistedState.orders ?? defaultOpen.orders,
+    products: persistedState.products ?? defaultOpen.products,
+    storefront: persistedState.storefront ?? defaultOpen.storefront,
+  };
+}
 
 function ContainedSidebarToggle() {
   const { state, toggleSidebar } = useSidebar();
@@ -88,21 +124,24 @@ function SidebarMenuCollapsible({
   icon: Icon,
   label,
   disabled,
-  defaultOpen = false,
+  open,
+  onOpenChange,
   onClick,
   children,
 }: {
   icon: ComponentType<{ className?: string }>;
   label: string;
   disabled?: boolean;
-  defaultOpen?: boolean;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   onClick?: MouseEventHandler<HTMLButtonElement>;
   children: ReactNode;
 }) {
   return (
     <SidebarMenuItem>
       <Collapsible.Root
-        defaultOpen={defaultOpen}
+        open={open}
+        onOpenChange={onOpenChange}
         className="group/sidebar-collapsible"
       >
         <Collapsible.Trigger asChild>
@@ -180,6 +219,55 @@ export function AppSidebar({
   const isOrdersRoute = location.pathname.includes("/orders");
   const isProductsRoute = location.pathname.includes("/products");
 
+  const sidebarSubmenuScopeKey = [
+    activeOrganization?._id ?? "no-org",
+    activeStore?._id ?? "no-store",
+  ].join(":");
+  const defaultSidebarSubmenuOpenState = useMemo<SidebarSubmenuOpenState>(
+    () => ({
+      operations: isOperationsRoute,
+      orders: isOrdersRoute,
+      products: isProductsRoute,
+      storefront: false,
+    }),
+    [isOperationsRoute, isOrdersRoute, isProductsRoute],
+  );
+  const [sidebarSubmenuOpenState, setSidebarSubmenuOpenState] =
+    useState<SidebarSubmenuOpenState>(() =>
+      getSidebarSubmenuOpenState({
+        defaultOpen: defaultSidebarSubmenuOpenState,
+        scopeKey: sidebarSubmenuScopeKey,
+      }),
+    );
+
+  useEffect(() => {
+    setSidebarSubmenuOpenState(
+      getSidebarSubmenuOpenState({
+        defaultOpen: defaultSidebarSubmenuOpenState,
+        scopeKey: sidebarSubmenuScopeKey,
+      }),
+    );
+  }, [defaultSidebarSubmenuOpenState, sidebarSubmenuScopeKey]);
+
+  const setSidebarSubmenuOpen = useCallback(
+    (id: SidebarSubmenuId, open: boolean) => {
+      setSidebarSubmenuOpenState((currentState) => {
+        const currentPersistedState =
+          persistedSidebarSubmenuState.get(sidebarSubmenuScopeKey) ?? {};
+        const nextState = {
+          ...currentState,
+          [id]: open,
+        };
+        persistedSidebarSubmenuState.set(sidebarSubmenuScopeKey, {
+          ...currentPersistedState,
+          [id]: open,
+        });
+        return nextState;
+      });
+    },
+    [sidebarSubmenuScopeKey],
+  );
+
   if (!activeStore || !activeOrganization) {
     return null;
   }
@@ -245,10 +333,13 @@ export function AppSidebar({
               </SidebarMenuItem>
 
               <SidebarMenuCollapsible
-                defaultOpen={isOperationsRoute}
                 disabled={!hasFinancialDetailsAccess}
                 icon={Workflow}
                 label="Operations"
+                open={sidebarSubmenuOpenState.operations}
+                onOpenChange={(open) =>
+                  setSidebarSubmenuOpen("operations", open)
+                }
                 onClick={() => {
                   void navigate({
                     to: "/$orgUrlSlug/store/$storeUrlSlug/operations",
@@ -469,10 +560,11 @@ export function AppSidebar({
 
               {/* Orders section */}
               <SidebarMenuCollapsible
-                defaultOpen={isOrdersRoute}
                 icon={ShoppingBag}
                 label="Orders"
                 disabled={!hasFullAdminAccess}
+                open={sidebarSubmenuOpenState.orders}
+                onOpenChange={(open) => setSidebarSubmenuOpen("orders", open)}
                 onClick={() => {
                   void navigate({
                     to: "/$orgUrlSlug/store/$storeUrlSlug/orders",
@@ -642,10 +734,13 @@ export function AppSidebar({
 
               {/* Products section */}
               <SidebarMenuCollapsible
-                defaultOpen={isProductsRoute}
                 disabled={!hasFinancialDetailsAccess}
                 icon={Tag}
                 label="Products"
+                open={sidebarSubmenuOpenState.products}
+                onOpenChange={(open) =>
+                  setSidebarSubmenuOpen("products", open)
+                }
                 onClick={() => {
                   void navigate({
                     to: "/$orgUrlSlug/store/$storeUrlSlug/products",
@@ -797,6 +892,10 @@ export function AppSidebar({
                 icon={PanelTop}
                 label="Storefront"
                 disabled={!hasFullAdminAccess}
+                open={sidebarSubmenuOpenState.storefront}
+                onOpenChange={(open) =>
+                  setSidebarSubmenuOpen("storefront", open)
+                }
               >
                 <SidebarMenuSub>
                   <SidebarMenuSubItem>

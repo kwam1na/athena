@@ -1,5 +1,6 @@
 import type { Doc, Id } from "../../../_generated/dataModel";
 import type { QueryCtx } from "../../../_generated/server";
+import { isPosCatalogVisible } from "../../../../shared/posCatalogVisibility";
 
 import {
   findActiveProvisionalImportSkuForStoreSku,
@@ -60,8 +61,8 @@ function isTrustedCatalogResult(args: {
   return (
     args.product.availability !== "archived" &&
     (args.product.availability !== "draft" || isDraftAllowed) &&
-    (args.product.isVisible !== false || isReservedPosOperationalProduct) &&
-    (args.sku.isVisible !== false || isDraftAllowed)
+    (isPosCatalogVisible(args.product) || isReservedPosOperationalProduct) &&
+    (isPosCatalogVisible(args.sku) || isDraftAllowed)
   );
 }
 
@@ -81,8 +82,8 @@ async function isSuppressedByActiveLegacyImportProvisionalRow(
   return (
     args.category?.slug === "legacy-import" &&
     (args.product.availability === "draft" ||
-      args.product.isVisible === false ||
-      args.sku.isVisible === false) &&
+      !isPosCatalogVisible(args.product) ||
+      !isPosCatalogVisible(args.sku)) &&
     Boolean(
       await findActiveProvisionalImportSkuForStoreSku(ctx, {
         storeId: args.storeId,
@@ -210,7 +211,7 @@ export async function searchProducts(
       product.availability !== "archived" &&
       (product.availability !== "draft" ||
         isDraftAllowedInTrustedCatalog(category?.slug)) &&
-      (product.isVisible !== false ||
+      (isPosCatalogVisible(product) ||
         POS_OPERATIONAL_CATEGORY_SLUGS.has(category?.slug ?? ""))
     ) {
       const productSkus = await listProductSkusByProductId(ctx, product._id);
@@ -368,7 +369,7 @@ export async function lookupByBarcode(
       product.availability !== "archived" &&
       (product.availability !== "draft" ||
         isDraftAllowedInTrustedCatalog(category?.slug)) &&
-      (product.isVisible !== false ||
+      (isPosCatalogVisible(product) ||
         POS_OPERATIONAL_CATEGORY_SLUGS.has(category?.slug ?? ""))
     ) {
       const allSkus = await listProductSkusByProductId(ctx, product._id);
@@ -411,7 +412,7 @@ export async function lookupByBarcode(
     product.availability === "archived" ||
     (product.availability === "draft" &&
       !isDraftAllowedInTrustedCatalog(category?.slug)) ||
-    (product.isVisible === false &&
+    (!isPosCatalogVisible(product) &&
       !POS_OPERATIONAL_CATEGORY_SLUGS.has(category?.slug ?? ""))
   ) {
     return null;

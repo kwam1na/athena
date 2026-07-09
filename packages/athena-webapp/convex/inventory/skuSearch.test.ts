@@ -347,6 +347,35 @@ function baseSeed() {
 }
 
 describe("SKU search foundation", () => {
+  it("keeps changed public return contracts executable", () => {
+    assertConformsToExportedReturns(searchProductSkus, {
+      candidateOverflow: false,
+      limit: 20,
+      results: [],
+      truncated: false,
+    });
+    assertConformsToExportedReturns(repairProductSkuSearchPage, {
+      continueCursor: null,
+      duplicatesCollapsed: 0,
+      isDone: true,
+      scanned: 0,
+      sourceOrphans: 0,
+      staleOrphansRemoved: 0,
+      unchanged: 0,
+      upserted: 0,
+    });
+    assertConformsToExportedReturns(removeStaleProductSkuSearchPage, {
+      continueCursor: null,
+      duplicatesCollapsed: 0,
+      isDone: true,
+      scanned: 0,
+      sourceOrphans: 0,
+      staleOrphansRemoved: 0,
+      unchanged: 0,
+      upserted: 0,
+    });
+  });
+
   it("requires an authenticated operator before searching store SKUs", async () => {
     const { ctx } = createCtx(baseSeed());
 

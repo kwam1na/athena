@@ -9,6 +9,7 @@ export const productSchema = z.object({
   subcategoryId: z.string(),
   name: z.string().min(2),
   isVisible: z.boolean().optional(),
+  posVisible: z.boolean().optional(),
   areProcessingFeesAbsorbed: z.boolean().optional(),
   attributes: z.record(z.string(), z.any()).optional(),
 });

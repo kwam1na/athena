@@ -273,10 +273,21 @@ export function ProductCategorizationView() {
 
   const handleProductVisibility = async (checked: boolean) => {
     if (!productData._id) return;
+    updateProductData({ isVisible: checked });
 
     await updateProduct({
       id: productData._id,
       isVisible: checked,
+    });
+  };
+
+  const handleProductPosVisibility = async (checked: boolean) => {
+    if (!productData._id) return;
+    updateProductData({ posVisible: checked });
+
+    await updateProduct({
+      id: productData._id,
+      posVisible: checked,
     });
   };
 
@@ -325,15 +336,25 @@ export function ProductCategorizationView() {
       </div>
 
       {productData._id && (
-        <div className="flex items-center gap-4 px-4 pt-4">
-          <div>
-            <Label htmlFor="fees-toggle">Visible on store</Label>
+        <div className="flex items-center gap-6 px-4 pt-4">
+          <div className="flex items-center gap-3">
+            <Label htmlFor="storefront-visibility-toggle">
+              Available on online store
+            </Label>
+            <Switch
+              id="storefront-visibility-toggle"
+              checked={productData.isVisible !== false}
+              onCheckedChange={handleProductVisibility}
+            />
           </div>
-          <Switch
-            id="fees-toggle"
-            checked={productData.isVisible}
-            onCheckedChange={handleProductVisibility}
-          />
+          <div className="flex items-center gap-3">
+            <Label htmlFor="pos-visibility-toggle">Available in POS</Label>
+            <Switch
+              id="pos-visibility-toggle"
+              checked={productData.posVisible !== false}
+              onCheckedChange={handleProductPosVisibility}
+            />
+          </div>
         </div>
       )}
 
