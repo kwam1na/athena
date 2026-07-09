@@ -29,6 +29,7 @@ import {
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
 import type { CommandResult } from "~/shared/commandResult";
+import { isPosCatalogVisible } from "~/shared/posCatalogVisibility";
 
 const REGISTER_CATALOG_AVAILABILITY_LIMIT = 50;
 const REGISTER_AVAILABILITY_SNAPSHOT_WRITE_RETRY_DELAY_MS = 250;
@@ -124,6 +125,7 @@ type ProductByIdResult = {
     quantityAvailable: number;
     images?: string[];
     isVisible?: boolean;
+    posVisible?: boolean;
     size?: string;
     length?: number | null;
     colorName?: string;
@@ -137,7 +139,9 @@ function mapProductByIdResult(
     return [];
   }
 
-  const availableSkus = productData.skus.filter((sku) => sku.isVisible);
+  const availableSkus = productData.skus.filter(
+    (sku) => isPosCatalogVisible(sku),
+  );
 
   return availableSkus.map((sku) => ({
     id: sku._id,
@@ -750,6 +754,7 @@ export function useConvexProductIdLookup(
     api.inventory.products.getById,
     shouldQuery
       ? {
+          includeHiddenSkus: true,
           id: normalizedProductId as Id<"product">,
           storeId: input.storeId as Id<"store">,
         }

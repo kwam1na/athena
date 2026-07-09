@@ -95,7 +95,7 @@ export const ProductStatus = ({
       <Badge variant="outline" className={`${bg}`}>
         <div className="flex items-center text-xs">
           <EyeOff className="w-3.5 h-3.5 mr-2 text-zinc-700" />
-          <p className={text}>Hidden</p>
+          <p className={text}>Hidden online</p>
         </div>
       </Badge>
     );

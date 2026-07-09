@@ -3075,14 +3075,6 @@ export function useRegisterViewModel(): RegisterViewModel {
       return;
     }
 
-    const isOnline = globalThis.navigator?.onLine ?? true;
-
-    if (isOnline && !staffProofToken) {
-      setDrawerErrorMessage("Sign in again before opening the drawer.");
-      toast.error("Sign out, then sign in again before opening the drawer.");
-      return;
-    }
-
     const parsedOpeningFloat = parseDisplayAmountInput(drawerOpeningFloat);
     if (parsedOpeningFloat === undefined) {
       setDrawerErrorMessage(
@@ -3137,7 +3129,6 @@ export function useRegisterViewModel(): RegisterViewModel {
     activeStoreId,
     canSignedInStaffOpenDrawer,
     staffProfileId,
-    staffProofToken,
     drawerNotes,
     drawerOpeningFloat,
     hasProvisionedLocalSyncSeed,

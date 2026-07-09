@@ -452,6 +452,7 @@ describe("inventory SKU generation", () => {
     });
 
     expect(result.success).toBe(true);
+    assertConformsToExportedReturns(generateUniqueBarcode, result);
     expect(mocks.upsertProductSkuSearchProjection).toHaveBeenCalledWith(
       ctx,
       "productSku001",

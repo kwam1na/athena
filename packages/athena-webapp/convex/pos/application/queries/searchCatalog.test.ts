@@ -67,7 +67,7 @@ describe("searchCatalog", () => {
     );
   });
 
-  it("excludes draft products, hidden products, and hidden SKUs from text search", async () => {
+  it("excludes draft products, POS-hidden products, and POS-hidden SKUs from text search", async () => {
     mocks.findActiveProvisionalImportSkuForStoreSku.mockImplementation(
       async (_ctx, args) =>
         args.productSkuId === "sku-active-legacy-import"
@@ -101,6 +101,10 @@ describe("searchCatalog", () => {
         product: productById["product-hidden-sku"],
         sku: skuById["sku-hidden"],
       },
+      {
+        product: productById["product-online-hidden-pos-visible"],
+        sku: skuById["sku-online-hidden-pos-visible"],
+      },
     ]);
 
     await expect(
@@ -126,6 +130,11 @@ describe("searchCatalog", () => {
         productId: "product-finalized-legacy-import",
         skuId: "sku-finalized-legacy-import",
         price: 4000,
+      }),
+      expect.objectContaining({
+        id: "sku-online-hidden-pos-visible",
+        productId: "product-online-hidden-pos-visible",
+        skuId: "sku-online-hidden-pos-visible",
       }),
     ]);
     expect(
@@ -317,6 +326,7 @@ const productById = {
     name: "Hidden Product",
     description: "",
     isVisible: false,
+    posVisible: false,
   },
   "product-pos-quick-add": {
     _id: "product-pos-quick-add",
@@ -360,6 +370,16 @@ const productById = {
     categoryId: "category-1",
     name: "Hidden SKU Product",
     description: "",
+  },
+  "product-online-hidden-pos-visible": {
+    _id: "product-online-hidden-pos-visible",
+    storeId,
+    categoryId: "category-1",
+    name: "Counter Only Product",
+    description: "",
+    availability: "live",
+    isVisible: false,
+    posVisible: true,
   },
   "product-pending-archived": {
     _id: "product-pending-archived",
@@ -416,6 +436,7 @@ const skuById = {
     price: 1000,
     quantityAvailable: 1,
     isVisible: false,
+    posVisible: false,
   },
   "sku-hidden-product": {
     _id: "sku-hidden-product",
@@ -482,6 +503,19 @@ const skuById = {
     price: 1000,
     quantityAvailable: 1,
     isVisible: false,
+    posVisible: false,
+  },
+  "sku-online-hidden-pos-visible": {
+    _id: "sku-online-hidden-pos-visible",
+    storeId,
+    productId: "product-online-hidden-pos-visible",
+    sku: "COUNTER-ONLY",
+    barcode: "222",
+    images: [],
+    price: 2000,
+    quantityAvailable: 5,
+    isVisible: false,
+    posVisible: true,
   },
   "sku-pending-archived": {
     _id: "sku-pending-archived",

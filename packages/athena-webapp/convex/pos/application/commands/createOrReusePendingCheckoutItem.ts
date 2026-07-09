@@ -1,5 +1,6 @@
 import type { Doc, Id } from "../../../_generated/dataModel";
 import type { MutationCtx } from "../../../_generated/server";
+import { isPosCatalogVisible } from "../../../../shared/posCatalogVisibility";
 import { isPosUsableRegisterSessionStatus } from "../../../../shared/registerSessionStatus";
 import { upsertProductSkuSearchProjection } from "../../../inventory/skuSearch";
 import { recordOperationalEventWithCtx } from "../../../operations/operationalEvents";
@@ -95,9 +96,9 @@ function isTrustedCatalogProductSku(
     product?.storeId === storeId &&
     product.availability !== "archived" &&
     product.availability !== "draft" &&
-    product.isVisible !== false &&
+    isPosCatalogVisible(product) &&
     sku.storeId === storeId &&
-    sku.isVisible !== false
+    isPosCatalogVisible(sku)
   );
 }
 

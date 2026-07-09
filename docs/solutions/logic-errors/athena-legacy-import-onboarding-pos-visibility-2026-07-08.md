@@ -72,4 +72,5 @@ Once a product leaves that legacy taxonomy, the exception no longer applies. Upd
 
 ## Related Issues
 
+- [Athena POS Catalog Visibility Policy](./athena-pos-catalog-visibility-policy-2026-07-08.md)
 - [Athena POS Sale Inventory Review SKU Scope](./athena-pos-sale-inventory-review-sku-scope-2026-07-08.md)

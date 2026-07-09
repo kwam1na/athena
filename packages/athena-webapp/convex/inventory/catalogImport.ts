@@ -23,6 +23,7 @@ import { createOperationalWorkItemWithCtx } from "../operations/operationalWorkI
 import { recordSkuActivityEventWithCtx } from "../operations/skuActivity";
 import { toSlug } from "../utils";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
+import { isPosCatalogVisible } from "../../shared/posCatalogVisibility";
 import { refreshCatalogSummaryWithCtx } from "./catalogSummary";
 import { upsertProductSkuSearchProjection } from "./skuSearch";
 
@@ -281,6 +282,7 @@ export type ProductPageTrustedInventoryFinalizationArgs = {
   provisionalSkuId: Id<"inventoryImportProvisionalSku">;
   reviewedInventoryCount: number;
   reviewedIsVisible: boolean;
+  reviewedPosVisible?: boolean;
   reviewedNetPrice?: number;
   reviewedPrice: number;
   reviewedQuantityAvailable: number;
@@ -296,6 +298,7 @@ export type ProductPageTrustedInventoryFinalizationResult = {
   inventoryMovementId?: Id<"inventoryMovement">;
   product?: {
     availability?: Doc<"product">["availability"];
+    posVisible?: boolean;
   };
   productId: Id<"product">;
   productSkuId: Id<"productSku">;
@@ -1052,6 +1055,7 @@ export const finalizeTrustedInventoryFromProductPage = mutation({
     provisionalSkuId: v.id("inventoryImportProvisionalSku"),
     reviewedInventoryCount: v.number(),
     reviewedIsVisible: v.boolean(),
+    reviewedPosVisible: v.optional(v.boolean()),
     reviewedNetPrice: v.optional(v.number()),
     reviewedPrice: v.number(),
     reviewedQuantityAvailable: v.number(),
@@ -1198,7 +1202,7 @@ export async function repairOnboardedLegacyImportTrustedSkuVisibilityWithCtx(
     }
 
     const shouldPromoteToLive = product.availability === "draft";
-    const shouldMakeVisible = product.isVisible === false;
+    const shouldMakeVisible = !isPosCatalogVisible(product);
     const productAlreadyRepaired = repairedProductIds.has(product._id);
     if (!shouldPromoteToLive && !shouldMakeVisible && !productAlreadyRepaired) {
       continue;
@@ -1220,7 +1224,7 @@ export async function repairOnboardedLegacyImportTrustedSkuVisibilityWithCtx(
     if (!productAlreadyRepaired) {
       await ctx.db.patch("product", product._id, {
         ...(shouldPromoteToLive ? { availability: "live" as const } : {}),
-        ...(shouldMakeVisible ? { isVisible: true } : {}),
+        ...(shouldMakeVisible ? { posVisible: true } : {}),
       });
       repairedProductIds.add(product._id);
     }
@@ -1433,6 +1437,7 @@ export async function finalizeTrustedInventoryFromProductPageWithCtx(
   await ctx.db.patch("productSku", normalizedArgs.productSkuId, productSkuPatch);
   await ctx.db.patch("product", normalizedArgs.productId, {
     availability: "live",
+    posVisible: true,
   });
   await ensureCatalogTaxonomySetupWorkForProductWithCtx(ctx, {
     actorUserId: access.athenaUser._id,
@@ -1883,6 +1888,7 @@ async function validateProductPageTrustedInventoryFinalization(
     finalTrustedQuantity: args.reviewedInventoryCount,
     product: {
       availability: "live" as const,
+      posVisible: true,
     },
     productId: args.productId,
     productSkuId: args.productSkuId,
@@ -1900,6 +1906,7 @@ async function validateProductPageTrustedInventoryFinalization(
     productSkuPatch: omitUndefined({
       inventoryCount: args.reviewedInventoryCount,
       isVisible: args.reviewedIsVisible,
+      posVisible: reviewedPosVisibleFor(args),
       netPrice: args.reviewedNetPrice,
       price: args.reviewedPrice,
       quantityAvailable: args.reviewedQuantityAvailable,
@@ -1935,10 +1942,10 @@ function validateReviewedTrustedInventoryFields(
     });
   }
 
-  if (!args.reviewedIsVisible) {
+  if (!reviewedPosVisibleFor(args)) {
     return userError({
       code: "precondition_failed",
-      message: "Make this SKU visible before finalizing trusted inventory.",
+      message: "Make this SKU available in POS before finalizing trusted inventory.",
     });
   }
 
@@ -2067,8 +2074,18 @@ function trustedSkuMatchesReviewedPayload(
     productSku.price === args.reviewedPrice &&
     productSku.netPrice === args.reviewedNetPrice &&
     productSku.unitCost === args.reviewedUnitCost &&
-    productSku.isVisible === args.reviewedIsVisible
+    productSku.isVisible === args.reviewedIsVisible &&
+    productSku.posVisible === reviewedPosVisibleFor(args)
   );
+}
+
+function reviewedPosVisibleFor(
+  args: Pick<
+    ProductPageTrustedInventoryFinalizationArgs,
+    "reviewedIsVisible" | "reviewedPosVisible"
+  >,
+) {
+  return args.reviewedPosVisible ?? args.reviewedIsVisible;
 }
 
 function buildSaleEvidenceFingerprint(row: Doc<"inventoryImportProvisionalSku">) {
@@ -2086,6 +2103,7 @@ function buildTrustedSkuFingerprint(productSku: Doc<"productSku">) {
   return stableStringify({
     inventoryCount: productSku.inventoryCount,
     isVisible: productSku.isVisible,
+    posVisible: productSku.posVisible,
     netPrice: productSku.netPrice,
     price: productSku.price,
     quantityAvailable: productSku.quantityAvailable,
@@ -2103,6 +2121,7 @@ function buildProductPageFinalizationPayloadHash(
     provisionalSkuId: args.provisionalSkuId,
     reviewedInventoryCount: args.reviewedInventoryCount,
     reviewedIsVisible: args.reviewedIsVisible,
+    reviewedPosVisible: reviewedPosVisibleFor(args),
     reviewedNetPrice: args.reviewedNetPrice,
     reviewedPrice: args.reviewedPrice,
     reviewedQuantityAvailable: args.reviewedQuantityAvailable,

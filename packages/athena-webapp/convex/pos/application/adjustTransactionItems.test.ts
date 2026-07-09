@@ -1034,6 +1034,67 @@ describe("adjustTransactionItems", () => {
     expect(recordInventoryMovementWithCtx).not.toHaveBeenCalled();
   });
 
+  it("rejects POS-hidden SKUs in item adjustments", async () => {
+    for (const [label, productPatch, skuPatch] of [
+      ["SKU POS-hidden", {}, { posVisible: false }],
+      ["product POS-hidden", { posVisible: false }, {}],
+      ["legacy SKU hidden", {}, { isVisible: false }],
+      ["legacy product hidden", { isVisible: false }, {}],
+    ] as const) {
+      const { ctx, tables } = createFakeCtx();
+      tables.product.set("product-2", {
+        ...tables.product.get("product-2"),
+        ...productPatch,
+      });
+      tables.productSku.set("sku-2", {
+        ...tables.productSku.get("sku-2"),
+        ...skuPatch,
+      });
+
+      await expect(
+        adjustTransactionItems(ctx as never, {
+          actorStaffProfileId: "cashier-1" as Id<"staffProfile">,
+          payload: basePayload({
+            correctedTotal: 1000,
+            lines: [
+              {
+                adjustedQuantity: 0,
+                inventoryDelta: 2,
+                originalQuantity: 2,
+                originalTransactionItemId: "item-1" as Id<"posTransactionItem">,
+                productId: "product-1" as Id<"product">,
+                productName: "Closure Wig",
+                productSku: "SKU-1",
+                productSkuId: "sku-1" as Id<"productSku">,
+                unitPrice: 500,
+              },
+              {
+                adjustedQuantity: 2,
+                inventoryDelta: -2,
+                originalQuantity: 0,
+                productId: "product-2" as Id<"product">,
+                productName: "Body Wave",
+                productSku: "SKU-2",
+                productSkuId: "sku-2" as Id<"productSku">,
+                unitPrice: 500,
+              },
+            ],
+            settlementAmount: 0,
+            settlementDirection: "none",
+            settlementMethod: undefined,
+          }),
+          reason: `Equal value swap with ${label}`,
+          transactionId: "txn-1" as Id<"posTransaction">,
+        }),
+      ).rejects.toThrow(
+        "The added SKU is not active for this store. Choose a live SKU before submitting the adjustment.",
+      );
+
+      expect(tables.approvalRequest.size).toBe(0);
+      expect(recordInventoryMovementWithCtx).not.toHaveBeenCalled();
+    }
+  });
+
   it("rejects mismatched proofs before side effects", async () => {
     const { ctx } = createFakeCtx();
     vi.mocked(consumeCommandApprovalProofWithCtx).mockResolvedValue({

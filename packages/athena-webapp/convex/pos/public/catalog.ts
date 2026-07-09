@@ -255,6 +255,7 @@ type PendingCheckoutTrustedInventoryFinalizationArgs = {
   provisionalSkuId: Id<"posPendingCheckoutItem">;
   reviewedInventoryCount: number;
   reviewedIsVisible: boolean;
+  reviewedPosVisible?: boolean;
   reviewedNetPrice?: number;
   reviewedPrice: number;
   reviewedQuantityAvailable: number;
@@ -314,6 +315,7 @@ function buildTrustedSkuFingerprint(productSku: Doc<"productSku">) {
   return stableStringify({
     inventoryCount: productSku.inventoryCount,
     isVisible: productSku.isVisible,
+    posVisible: productSku.posVisible,
     netPrice: productSku.netPrice,
     price: productSku.price,
     quantityAvailable: productSku.quantityAvailable,
@@ -326,6 +328,15 @@ function pendingCheckoutLinkPricesMatch(args: {
   trustedSkuStoredPrice: number;
 }) {
   return args.pendingStoredPrice === args.trustedSkuStoredPrice;
+}
+
+function reviewedPosVisibleFor(
+  args: Pick<
+    PendingCheckoutTrustedInventoryFinalizationArgs,
+    "reviewedIsVisible" | "reviewedPosVisible"
+  >,
+) {
+  return args.reviewedPosVisible ?? args.reviewedIsVisible;
 }
 
 function validateReviewedTrustedInventoryFields(
@@ -358,10 +369,10 @@ function validateReviewedTrustedInventoryFields(
     });
   }
 
-  if (!args.reviewedIsVisible) {
+  if (!reviewedPosVisibleFor(args)) {
     return userError({
       code: "precondition_failed",
-      message: "Make this SKU visible before finalizing trusted inventory.",
+      message: "Make this SKU available in POS before finalizing trusted inventory.",
     });
   }
 
@@ -404,6 +415,7 @@ function buildPendingCheckoutFinalizationPayloadHash(
     provisionalSkuId: args.provisionalSkuId,
     reviewedInventoryCount: args.reviewedInventoryCount,
     reviewedIsVisible: args.reviewedIsVisible,
+    reviewedPosVisible: reviewedPosVisibleFor(args),
     reviewedNetPrice: args.reviewedNetPrice,
     reviewedPrice: args.reviewedPrice,
     reviewedQuantityAvailable: args.reviewedQuantityAvailable,
@@ -949,6 +961,7 @@ export const finalizePendingCheckoutTrustedInventoryFromProductPage = mutation({
     provisionalSkuId: v.id("posPendingCheckoutItem"),
     reviewedInventoryCount: v.number(),
     reviewedIsVisible: v.boolean(),
+    reviewedPosVisible: v.optional(v.boolean()),
     reviewedNetPrice: v.optional(v.number()),
     reviewedPrice: v.number(),
     reviewedQuantityAvailable: v.number(),
@@ -963,6 +976,7 @@ export const finalizePendingCheckoutTrustedInventoryFromProductPage = mutation({
     const normalizedArgs = {
       ...args,
       conversionRequestId: args.conversionRequestId.trim(),
+      reviewedPosVisible: args.reviewedPosVisible ?? args.reviewedIsVisible,
     };
     const access = await requirePendingCheckoutReviewAccess(
       ctx,
@@ -1052,6 +1066,7 @@ export const finalizePendingCheckoutTrustedInventoryFromProductPage = mutation({
     const productSkuPatch = omitUndefined({
       inventoryCount: normalizedArgs.reviewedInventoryCount,
       isVisible: normalizedArgs.reviewedIsVisible,
+      posVisible: normalizedArgs.reviewedPosVisible,
       netPrice: normalizedArgs.reviewedNetPrice,
       price: normalizedArgs.reviewedPrice,
       quantityAvailable: normalizedArgs.reviewedQuantityAvailable,
@@ -1060,7 +1075,7 @@ export const finalizePendingCheckoutTrustedInventoryFromProductPage = mutation({
     const productPatch = {
       availability: "live" as const,
       inventoryCount: normalizedArgs.reviewedInventoryCount,
-      isVisible: true,
+      posVisible: true,
       quantityAvailable: normalizedArgs.reviewedQuantityAvailable,
     };
 

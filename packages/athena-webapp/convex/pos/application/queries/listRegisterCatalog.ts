@@ -4,6 +4,11 @@ import {
   readActiveHeldQuantitiesForStoreSkus,
   validateInventoryAvailability,
 } from "../../../inventory/helpers/inventoryHolds";
+import {
+  isPosCatalogVisible,
+  isProjectionProductPosCatalogVisible,
+  isProjectionSkuPosCatalogVisible,
+} from "../../../../shared/posCatalogVisibility";
 
 type InventoryImportProvisionalSkuId = Id<"inventoryImportProvisionalSku">;
 
@@ -325,8 +330,8 @@ export function isTrustedRegisterCatalogSku(args: {
   return (
     args.product.availability !== "archived" &&
     (args.product.availability !== "draft" || isDraftAllowed) &&
-    (args.product.isVisible !== false || isReservedPosOperationalProduct) &&
-    (args.sku.isVisible !== false || isDraftAllowed)
+    (isPosCatalogVisible(args.product) || isReservedPosOperationalProduct) &&
+    (isPosCatalogVisible(args.sku) || isDraftAllowed)
   );
 }
 
@@ -343,9 +348,9 @@ function isTrustedRegisterCatalogProjection(
   return (
     projection.productAvailability !== "archived" &&
     (projection.productAvailability !== "draft" || isDraftAllowed) &&
-    (projection.productIsVisible !== false ||
+    (isProjectionProductPosCatalogVisible(projection) ||
       isReservedPosOperationalProduct) &&
-    (projection.isVisible !== false || isDraftAllowed)
+    (isProjectionSkuPosCatalogVisible(projection) || isDraftAllowed)
   );
 }
 
@@ -402,8 +407,8 @@ async function listScopedRegisterCatalogProjections(
     if (
       projection.categorySlug === "legacy-import" &&
       (projection.productAvailability === "draft" ||
-        projection.productIsVisible === false ||
-        projection.isVisible === false) &&
+        !isProjectionProductPosCatalogVisible(projection) ||
+        !isProjectionSkuPosCatalogVisible(projection)) &&
       args.activeProvisionalProductSkuIds.has(projection.productSkuId)
     ) {
       continue;
@@ -454,8 +459,8 @@ async function listScopedRegisterCatalogAvailabilitySkus(
 
     const needsOperationalCategoryCheck =
       product.availability === "draft" ||
-      product.isVisible === false ||
-      sku.isVisible === false;
+      !isPosCatalogVisible(product) ||
+      !isPosCatalogVisible(sku);
     const category = needsOperationalCategoryCheck
       ? await readCategoryDoc(ctx, categoryCache, product.categoryId)
       : null;
@@ -775,8 +780,8 @@ async function readActiveLegacyImportProvisionalPolicyRow(
     !product ||
     product.availability === "archived" ||
     (product.availability !== "draft" &&
-      product.isVisible !== false &&
-      args.sku.isVisible !== false)
+      isPosCatalogVisible(product) &&
+      isPosCatalogVisible(args.sku))
   ) {
     return null;
   }

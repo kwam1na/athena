@@ -9,6 +9,7 @@ export const productSchema = v.object({
     v.literal("live")
   ),
   isVisible: v.optional(v.boolean()),
+  posVisible: v.optional(v.boolean()),
   categoryId: v.id("category"),
   createdByUserId: v.id("athenaUser"),
   currency: v.string(),
@@ -29,6 +30,7 @@ export const productSkuSchema = v.object({
   color: v.optional(v.id("color")),
   images: v.array(v.string()),
   isVisible: v.optional(v.boolean()),
+  posVisible: v.optional(v.boolean()),
   inventoryCount: v.number(),
   length: v.optional(v.number()),
   netPrice: v.optional(v.number()),

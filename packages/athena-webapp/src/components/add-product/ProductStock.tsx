@@ -56,6 +56,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
+import { Switch } from "../ui/switch";
 import { useSheet } from "./SheetProvider";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { CopyImagesView } from "./copy-images/CopyImagesView";
@@ -111,6 +113,7 @@ export type ProductVariant = {
   stock?: number;
   quantityAvailable?: number;
   isVisible?: boolean;
+  posVisible?: boolean;
   cost?: number;
   price?: number;
   netPrice?: number;
@@ -131,6 +134,7 @@ type ProductPageTrustedInventoryFinalizationResult = {
     availability?: Product["availability"];
     inventoryCount?: number;
     isVisible?: boolean;
+    posVisible?: boolean;
     quantityAvailable?: number;
   };
   productId: Id<"product">;
@@ -358,6 +362,7 @@ function LegacyImportTrustPreview({
       availability?: Product["availability"];
       inventoryCount?: number;
       isVisible?: boolean;
+      posVisible?: boolean;
       quantityAvailable?: number;
     };
     sku: {
@@ -368,6 +373,7 @@ function LegacyImportTrustPreview({
       price?: number;
       netPrice?: number;
       isVisible?: boolean;
+      posVisible?: boolean;
     };
   }) => void;
   onMakeVisible: (id: string) => void;
@@ -502,6 +508,7 @@ function LegacyImportTrustPreview({
           price: variant.price,
           netPrice: variant.netPrice,
           isVisible: variant.isVisible,
+          posVisible: variant.posVisible,
         },
       });
       setCommandMessage(null);
@@ -1321,6 +1328,8 @@ function Stock({
       sku: undefined,
       stock: undefined,
       quantityAvailable: undefined,
+      isVisible: true,
+      posVisible: true,
       cost: undefined,
       price: undefined,
       images: [],
@@ -1357,18 +1366,78 @@ function Stock({
     );
   };
 
-  const setVisibility = (id: string) => {
+  const patchVariantVisibility = (
+    id: string,
+    patch: Pick<ProductVariant, "isVisible" | "posVisible">,
+  ) => {
     updateProductVariants((prevVariants) =>
       prevVariants.map((variant) =>
         variant.id === id
           ? {
               ...variant,
-              isVisible:
-                variant.isVisible == undefined ? false : !variant.isVisible,
+              ...patch,
             }
           : variant,
       ),
     );
+  };
+
+  const persistSkuVisibility = async (
+    variant: ProductVariant,
+    patch: Pick<ProductVariant, "isVisible" | "posVisible">,
+  ) => {
+    patchVariantVisibility(variant.id, patch);
+
+    if (!variant.existsInDB) {
+      return;
+    }
+
+    try {
+      const result = await updateSkuMutation({
+        id: variant.id as Id<"productSku">,
+        ...omitUndefinedVisibilityPatch(patch),
+      });
+
+      if ((result as { success?: boolean })?.success === false) {
+        throw new Error("SKU visibility was not saved.");
+      }
+    } catch (error) {
+      console.error(error);
+      patchVariantVisibility(variant.id, {
+        isVisible: variant.isVisible,
+        posVisible: variant.posVisible,
+      });
+      presentUnexpectedErrorToast("SKU visibility was not saved");
+    }
+  };
+
+  const omitUndefinedVisibilityPatch = (
+    patch: Pick<ProductVariant, "isVisible" | "posVisible">,
+  ) => ({
+    ...(patch.isVisible !== undefined ? { isVisible: patch.isVisible } : {}),
+    ...(patch.posVisible !== undefined ? { posVisible: patch.posVisible } : {}),
+  });
+
+  const setVisibility = (variant: ProductVariant, isVisible?: boolean) => {
+    const nextIsVisible =
+      isVisible ??
+      (variant.isVisible == undefined ? false : !variant.isVisible);
+
+    void persistSkuVisibility(variant, {
+      isVisible: nextIsVisible,
+      posVisible: variant.posVisible,
+    });
+  };
+
+  const setPosVisibility = (variant: ProductVariant, posVisible?: boolean) => {
+    const nextPosVisible =
+      posVisible ??
+      (variant.posVisible == undefined ? false : !variant.posVisible);
+
+    void persistSkuVisibility(variant, {
+      isVisible: variant.isVisible,
+      posVisible: nextPosVisible,
+    });
   };
 
   const isLastActiveVariant = (index: number) => {
@@ -1377,16 +1446,22 @@ function Stock({
     );
   };
 
-  const isLastVisibleVariant = (index: number) => {
+  const isVariantAvailableOnAnySurface = (variant: ProductVariant) =>
+    variant.isVisible !== false || variant.posVisible !== false;
+
+  const isLastAvailableVariant = (index: number) => {
     return productVariants.every(
-      (v, idx) => index == idx || v.isVisible == false,
+      (variant, idx) =>
+        index == idx ||
+        variant.markedForDeletion ||
+        !isVariantAvailableOnAnySurface(variant),
     );
   };
 
   const shouldDisable = (variant: ProductVariant) => {
     return (
       variant.markedForDeletion ||
-      variant.isVisible == false ||
+      !isVariantAvailableOnAnySurface(variant) ||
       isSkuReserved(variant.sku)
     );
   };
@@ -1427,6 +1502,7 @@ function Stock({
       availability?: Product["availability"];
       inventoryCount?: number;
       isVisible?: boolean;
+      posVisible?: boolean;
       quantityAvailable?: number;
     };
     sku: {
@@ -1437,6 +1513,7 @@ function Stock({
       price?: number;
       netPrice?: number;
       isVisible?: boolean;
+      posVisible?: boolean;
     };
   }) => {
     mergeTrustedInventoryFinalization(result);
@@ -1559,6 +1636,20 @@ function Stock({
               );
               const shouldDisableNonBarcodeFields =
                 shouldDisable(variant) || isLinkedPendingCheckoutSku;
+              const disablesOnlineVisibility =
+                variant.isVisible !== false &&
+                variant.posVisible === false &&
+                productVariants.length > 1 &&
+                isLastAvailableVariant(index);
+              const disablesPosVisibility =
+                variant.posVisible !== false &&
+                variant.isVisible === false &&
+                productVariants.length > 1 &&
+                isLastAvailableVariant(index);
+              const visibilityDisabledMessage =
+                disablesOnlineVisibility || disablesPosVisibility
+                  ? "At least one active SKU must stay available."
+                  : "";
 
               return (
                 <Fragment key={variant.id}>
@@ -1911,36 +2002,73 @@ function Stock({
                       <div className="flex items-center gap-2">
                         <TooltipProvider>
                           <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => setVisibility(variant.id)}
-                                disabled={
-                                  (productVariants.length > 1 &&
-                                    (isLastActiveVariant(index) ||
-                                      isLastVisibleVariant(index))) ||
-                                  isSkuReserved(variant.sku) ||
-                                  isLinkedPendingCheckoutSku
-                                }
-                              >
-                                {(variant.isVisible == undefined ||
-                                  variant.isVisible) && (
-                                  <EyeOff className="w-4 h-4" />
-                                )}
+                            <Popover>
+                              <TooltipTrigger asChild>
+                                <PopoverTrigger asChild>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    aria-label="SKU visibility"
+                                    disabled={
+                                      isSkuReserved(variant.sku) ||
+                                      isLinkedPendingCheckoutSku
+                                    }
+                                  >
+                                    {variant.isVisible == false ||
+                                    variant.posVisible == false ? (
+                                      <Eye className="w-4 h-4 text-muted-foreground" />
+                                    ) : (
+                                      <EyeOff className="w-4 h-4" />
+                                    )}
+                                  </Button>
+                                </PopoverTrigger>
+                              </TooltipTrigger>
+                              <PopoverContent align="end" className="w-64 p-3">
+                                <div className="space-y-3">
+                                  <p className="text-xs font-medium text-muted-foreground">
+                                    Visibility
+                                  </p>
+                                  <div className="flex items-center justify-between gap-4">
+                                    <Label
+                                      htmlFor={`sku-online-visibility-${index}`}
+                                    >
+                                      Online store
+                                    </Label>
+                                    <Switch
+                                      id={`sku-online-visibility-${index}`}
+                                      checked={variant.isVisible !== false}
+                                      disabled={disablesOnlineVisibility}
+                                      onCheckedChange={(checked) =>
+                                        setVisibility(variant, checked)
+                                      }
+                                    />
+                                  </div>
 
-                                {variant.isVisible == false && (
-                                  <Eye className="w-4 h-4 text-muted-foreground" />
-                                )}
-                              </Button>
-                            </TooltipTrigger>
+                                  <div className="flex items-center justify-between gap-4">
+                                    <Label
+                                      htmlFor={`sku-pos-visibility-${index}`}
+                                    >
+                                      POS checkout
+                                    </Label>
+                                    <Switch
+                                      id={`sku-pos-visibility-${index}`}
+                                      checked={variant.posVisible !== false}
+                                      disabled={disablesPosVisibility}
+                                      onCheckedChange={(checked) =>
+                                        setPosVisibility(variant, checked)
+                                      }
+                                    />
+                                  </div>
+                                  {visibilityDisabledMessage ? (
+                                    <p className="text-xs leading-4 text-muted-foreground">
+                                      {visibilityDisabledMessage}
+                                    </p>
+                                  ) : null}
+                                </div>
+                              </PopoverContent>
+                            </Popover>
                             <TooltipContent>
-                              {(variant.isVisible == undefined ||
-                                variant.isVisible) && <p>Hide</p>}
-
-                              {variant.isVisible == false && (
-                                <p>Make visible</p>
-                              )}
+                              <p>SKU visibility</p>
                             </TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
@@ -2027,7 +2155,14 @@ function Stock({
                           trustedInventoryApi.listProvisionalSkuBindingQuery
                         }
                         onFinalized={handleTrustedInventoryFinalized}
-                        onMakeVisible={setVisibility}
+                        onMakeVisible={(id) => {
+                          const targetVariant = productVariants.find(
+                            (candidate) => candidate.id === id,
+                          );
+                          if (targetVariant) {
+                            setPosVisibility(targetVariant, true);
+                          }
+                        }}
                         reservationType={getReservationType(variant.sku)}
                         sourceLabel={trustedInventoryApi.sourceLabel}
                         storeId={activeStore?._id}

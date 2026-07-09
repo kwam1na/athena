@@ -10,6 +10,7 @@ export type ProductVariant = {
   stock?: number;
   quantityAvailable?: number;
   isVisible?: boolean;
+  posVisible?: boolean;
   cost?: number;
   price?: number;
   netPrice?: number;

@@ -240,6 +240,7 @@ function ProductViewContent() {
         inventoryCount: 0,
         attributes: validatedProductData.attributes || {},
         isVisible: true,
+        posVisible: true,
       });
 
       if (product) setProductid(product?._id);
@@ -390,6 +391,7 @@ function ProductViewContent() {
       attributes: variant.attributes || {},
       storeId: activeStore!._id,
       isVisible: variant.isVisible,
+      posVisible: variant.posVisible,
       images,
     });
   };
@@ -444,6 +446,7 @@ function ProductViewContent() {
       quantityAvailable: variant.quantityAvailable || 0,
       unitCost: moneyPayload.unitCost,
       isVisible: variant.isVisible,
+      posVisible: variant.posVisible,
       length: variant.length,
       size: variant.size,
       color: variant.color as Id<"color"> | undefined,
@@ -540,7 +543,7 @@ function ProductViewContent() {
                 className="rounded-md px-2 py-1 text-muted-foreground flex items-center gap-2"
               >
                 <EyeOff className="h-3.5 w-3.5" />
-                <p className="text-xs ">This product is hidden</p>
+                <p className="text-xs ">Hidden online</p>
               </Badge>
             )}
             {activeProduct && <ProductStatus product={activeProduct} />}

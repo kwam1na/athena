@@ -184,6 +184,7 @@ async function buildServerAdjustmentPlan(
         ...sku,
         productAvailability: product?.availability,
         productIsVisible: product?.isVisible,
+        productPosVisible: product?.posVisible,
       };
     }),
   );
