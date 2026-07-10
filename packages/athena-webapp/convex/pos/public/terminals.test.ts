@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  acknowledgeRegisterLifecycleAuthorityService: vi.fn(),
   acknowledgeTerminalRecoveryCommandService: vi.fn(),
   claimTerminalRecoveryCommandService: vi.fn(),
   createTerminalRecoveryCommandReadRepository: vi.fn(),
@@ -9,6 +10,9 @@ const mocks = vi.hoisted(() => ({
   getTerminalHealthSummaryQuery: vi.fn(),
   getTerminalByFingerprintQuery: vi.fn(),
   getLatestRuntimeStatusForTerminal: vi.fn(),
+  getRegisterLifecycleAuthorityQuery: vi.fn(),
+  getRegisterLifecycleAuthorityAcknowledgementQuery: vi.fn(),
+  getRegisterLifecycleAuthorityShadowQuery: vi.fn(),
   issueTerminalRecoveryCommandService: vi.fn(),
   listClaimableTerminalRecoveryCommands: vi.fn(),
   listTerminalHealthSummariesQuery: vi.fn(),
@@ -44,6 +48,11 @@ vi.mock("../application/commands/terminals", () => ({
   updateTerminal: mocks.updateTerminalCommand,
 }));
 
+vi.mock("../application/commands/registerLifecycleAuthority", () => ({
+  acknowledgeRegisterLifecycleAuthority:
+    mocks.acknowledgeRegisterLifecycleAuthorityService,
+}));
+
 vi.mock("../application/queries/terminals", () => ({
   getTerminalByFingerprint: mocks.getTerminalByFingerprintQuery,
   getTerminalHealthSummary: mocks.getTerminalHealthSummaryQuery,
@@ -51,6 +60,18 @@ vi.mock("../application/queries/terminals", () => ({
   listTerminals: mocks.listTerminalsQuery,
   previewTerminalRecovery: mocks.previewTerminalRecoveryQuery,
 }));
+
+vi.mock(
+  "../application/queries/registerLifecycleAuthority",
+  async (importOriginal) => ({
+    ...(await importOriginal()),
+    getRegisterLifecycleAuthority: mocks.getRegisterLifecycleAuthorityQuery,
+    getRegisterLifecycleAuthorityAcknowledgement:
+      mocks.getRegisterLifecycleAuthorityAcknowledgementQuery,
+    getRegisterLifecycleAuthorityShadow:
+      mocks.getRegisterLifecycleAuthorityShadowQuery,
+  }),
+);
 
 vi.mock("../application/terminalRecovery/resolveTerminalCloudRepair", () => ({
   resolveTerminalCloudRepair: mocks.resolveTerminalCloudRepairCommand,
@@ -84,10 +105,14 @@ vi.mock("../../remoteAssist/infrastructure/remoteAssistRepository", () => ({
 
 import { assertConformsToExportedReturns } from "../../lib/returnValidatorContract";
 import {
+  acknowledgeRegisterLifecycleAuthority,
   deleteTerminal,
   getTerminalByFingerprint,
   getTerminalHealthSummary,
   getTerminalRuntimeConfig,
+  getRegisterLifecycleAuthority,
+  getRegisterLifecycleAuthorityAcknowledgement,
+  getRegisterLifecycleAuthorityShadow,
   getRuntimeRemoteAssistSession,
   issueTerminalRecoveryCommand,
   listTerminalRecoveryCommands,
@@ -345,6 +370,10 @@ describe("POS terminal public mutations", () => {
       _id: "athena-user-1",
     });
     mocks.requireOrganizationMemberRoleWithCtx.mockResolvedValue(undefined);
+    mocks.acknowledgeRegisterLifecycleAuthorityService.mockResolvedValue({
+      status: "accepted",
+      coalesced: false,
+    });
     mocks.registerTerminalCommand.mockResolvedValue({
       kind: "ok",
       data: {
@@ -380,6 +409,50 @@ describe("POS terminal public mutations", () => {
     mocks.listTerminalHealthSummariesQuery.mockResolvedValue([]);
     mocks.getTerminalHealthSummaryQuery.mockResolvedValue(null);
     mocks.getLatestRuntimeStatusForTerminal.mockResolvedValue(null);
+    mocks.getRegisterLifecycleAuthorityQuery.mockResolvedValue({
+      candidateCount: 1,
+      maximumDocumentReads: 3,
+      results: [
+        {
+          authorityCursor: {
+            lifecycleRevision: 4,
+            mappingAuthorityRevision: 2,
+          },
+          classification: "sale_blocked",
+          cloudRegisterSessionId: "cloud-register-1",
+          cloudStatus: "closed",
+          lifecycleRevision: 4,
+          localRegisterSessionId: "local-register-1",
+          mappingAuthorityRevision: 2,
+        },
+      ],
+    });
+    mocks.getRegisterLifecycleAuthorityAcknowledgementQuery.mockResolvedValue({
+      appVersion: "1.2.3",
+      buildSha: "abc123",
+      cloudRegisterSessionId: "cloud-register-1",
+      lifecycleRevision: 4,
+      localRegisterSessionId: "local-register-1",
+      mappingAuthorityRevision: 2,
+      outcome: "applied",
+      receivedAt: 100,
+      rolloutCohort: "canary",
+      rolloutMode: "canary",
+      terminalId: "terminal-1",
+    });
+    mocks.getRegisterLifecycleAuthorityShadowQuery.mockResolvedValue({
+      candidateCount: 1,
+      maximumDocumentReads: 3,
+      mode: "shadow",
+      results: [
+        {
+          classification: "sale_blocked",
+          cloudRegisterSessionId: "cloud-register-1",
+          cloudStatus: "closed",
+          localRegisterSessionId: "local-register-1",
+        },
+      ],
+    });
     mocks.previewTerminalRecoveryQuery.mockResolvedValue({
       appUpdate: {
         description: "Current",
@@ -612,6 +685,324 @@ describe("POS terminal public mutations", () => {
     expect(result).toEqual({
       heartbeatEnabled: false,
     });
+  });
+
+  it("returns exact lifecycle shadow authority without consulting heartbeat", async () => {
+    const ctx = buildCtx({
+      terminal: {
+        _id: "terminal-1",
+        heartbeatEnabled: false,
+        registerNumber: "1",
+        registeredByUserId: "athena-user-1",
+        status: "active",
+        storeId: "store-1",
+        syncSecretHash: SYNC_SECRET_HASH,
+      },
+    });
+
+    const result = await getHandler(getRegisterLifecycleAuthorityShadow)(
+      ctx as never,
+      {
+        candidates: [
+          {
+            cloudRegisterSessionId: "cloud-register-1",
+            localRegisterSessionId: "local-register-1",
+          },
+        ],
+        storeId: "store-1",
+        syncSecretHash: "sync-secret-1",
+        terminalId: "terminal-1",
+      },
+    );
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        mode: "shadow",
+        results: [expect.objectContaining({ classification: "sale_blocked" })],
+      }),
+    );
+    expect(mocks.getRegisterLifecycleAuthorityShadowQuery).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        candidates: [
+          {
+            cloudRegisterSessionId: "cloud-register-1",
+            localRegisterSessionId: "local-register-1",
+          },
+        ],
+        storeId: "store-1",
+        terminal: expect.objectContaining({
+          _id: "terminal-1",
+          heartbeatEnabled: false,
+        }),
+      }),
+    );
+  });
+
+  it("returns versioned lifecycle authority from terminal proof", async () => {
+    const ctx = buildCtx({
+      terminal: {
+        _id: "terminal-1",
+        heartbeatEnabled: false,
+        registerNumber: "1",
+        registeredByUserId: "athena-user-1",
+        status: "active",
+        storeId: "store-1",
+        syncSecretHash: SYNC_SECRET_HASH,
+      },
+    });
+
+    const result = await getHandler(getRegisterLifecycleAuthority)(
+      ctx as never,
+      {
+        candidates: [{ localRegisterSessionId: "local-register-1" }],
+        storeId: "store-1",
+        syncSecretHash: "sync-secret-1",
+        terminalId: "terminal-1",
+      },
+    );
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        results: [
+          expect.objectContaining({
+            authorityCursor: {
+              lifecycleRevision: 4,
+              mappingAuthorityRevision: 2,
+            },
+            classification: "sale_blocked",
+          }),
+        ],
+      }),
+    );
+    expect(mocks.getRegisterLifecycleAuthorityQuery).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        storeId: "store-1",
+        terminal: expect.objectContaining({ _id: "terminal-1" }),
+      }),
+    );
+  });
+
+  it("exposes redacted latest lifecycle replication evidence through store-authorized terminal management", async () => {
+    const ctx = buildCtx();
+
+    const result = await getHandler(
+      getRegisterLifecycleAuthorityAcknowledgement,
+    )(ctx as never, {
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
+
+    expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        allowedRoles: ["full_admin", "pos_only"],
+        organizationId: "org-1",
+        userId: "athena-user-1",
+      }),
+    );
+    expect(
+      mocks.getRegisterLifecycleAuthorityAcknowledgementQuery,
+    ).toHaveBeenCalledWith(ctx, {
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
+    expect(result).toEqual(
+      expect.objectContaining({
+        outcome: "applied",
+        rolloutCohort: "canary",
+        rolloutMode: "canary",
+      }),
+    );
+    expect(JSON.stringify(result)).not.toMatch(/secret|cashier|payload|staff/i);
+    expect(() =>
+      assertConformsToExportedReturns(
+        getRegisterLifecycleAuthorityAcknowledgement,
+        result,
+      ),
+    ).not.toThrow();
+  });
+
+  it("does not inspect lifecycle replication evidence without store membership", async () => {
+    mocks.requireOrganizationMemberRoleWithCtx.mockRejectedValue(
+      new Error("forbidden"),
+    );
+
+    await expect(
+      getHandler(getRegisterLifecycleAuthorityAcknowledgement)(
+        buildCtx() as never,
+        { storeId: "store-1", terminalId: "terminal-1" },
+      ),
+    ).rejects.toThrow("forbidden");
+    expect(
+      mocks.getRegisterLifecycleAuthorityAcknowledgementQuery,
+    ).not.toHaveBeenCalled();
+  });
+
+  it("accepts a redacted lifecycle-authority acknowledgement with terminal proof", async () => {
+    const ctx = buildCtx({
+      terminal: {
+        _id: "terminal-1",
+        heartbeatEnabled: false,
+        registeredByUserId: "athena-user-1",
+        status: "active",
+        storeId: "store-1",
+        syncSecretHash: SYNC_SECRET_HASH,
+      },
+    });
+    const args = {
+      appVersion: "1.2.3",
+      buildSha: "abc123",
+      cloudRegisterSessionId: "cloud-register-1",
+      lifecycleRevision: 4,
+      localRegisterSessionId: "local-register-1",
+      mappingAuthorityRevision: 2,
+      outcome: "applied" as const,
+      rolloutCohort: "canary" as const,
+      rolloutMode: "canary" as const,
+      storeId: "store-1",
+      syncSecretHash: "sync-secret-1",
+      terminalId: "terminal-1",
+    };
+
+    const result = await getHandler(acknowledgeRegisterLifecycleAuthority)(
+      ctx as never,
+      args,
+    );
+
+    expect(result).toEqual({ accepted: true, coalesced: false });
+    expect(
+      mocks.acknowledgeRegisterLifecycleAuthorityService,
+    ).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        appVersion: "1.2.3",
+        cloudRegisterSessionId: "cloud-register-1",
+        terminal: expect.objectContaining({ _id: "terminal-1" }),
+      }),
+    );
+    expect(() =>
+      assertConformsToExportedReturns(
+        acknowledgeRegisterLifecycleAuthority,
+        result,
+      ),
+    ).not.toThrow();
+  });
+
+  it("makes invalid-proof and cross-tenant acknowledgements indistinguishable", async () => {
+    const args = {
+      cloudRegisterSessionId: "cloud-register-1",
+      lifecycleRevision: 4,
+      localRegisterSessionId: "local-register-1",
+      mappingAuthorityRevision: 2,
+      outcome: "applied" as const,
+      rolloutCohort: "canary" as const,
+      rolloutMode: "canary" as const,
+      storeId: "store-1",
+      syncSecretHash: "invalid",
+      terminalId: "terminal-1",
+    };
+    const invalidProofCtx = buildCtx({ terminal: null });
+    const foreignTerminalCtx = buildCtx({
+      terminal: {
+        _id: "terminal-1",
+        registeredByUserId: "athena-user-2",
+        status: "active",
+        storeId: "store-2",
+        syncSecretHash: SYNC_SECRET_HASH,
+      },
+    });
+
+    await expect(
+      getHandler(acknowledgeRegisterLifecycleAuthority)(
+        invalidProofCtx as never,
+        args,
+      ),
+    ).resolves.toBeNull();
+    await expect(
+      getHandler(acknowledgeRegisterLifecycleAuthority)(
+        foreignTerminalCtx as never,
+        { ...args, syncSecretHash: "sync-secret-1" },
+      ),
+    ).resolves.toBeNull();
+    expect(
+      mocks.acknowledgeRegisterLifecycleAuthorityService,
+    ).not.toHaveBeenCalled();
+  });
+
+  it("keeps acknowledgement failure advisory", async () => {
+    mocks.acknowledgeRegisterLifecycleAuthorityService.mockRejectedValue(
+      new Error("ack sink unavailable"),
+    );
+    const ctx = buildCtx();
+
+    await expect(
+      getHandler(acknowledgeRegisterLifecycleAuthority)(ctx as never, {
+        cloudRegisterSessionId: "cloud-register-1",
+        lifecycleRevision: 4,
+        localRegisterSessionId: "local-register-1",
+        mappingAuthorityRevision: 2,
+        outcome: "persistence_failed",
+        rolloutCohort: "canary",
+        rolloutMode: "canary",
+        storeId: "store-1",
+        syncSecretHash: "sync-secret-1",
+        terminalId: "terminal-1",
+      }),
+    ).resolves.toBeNull();
+    expect(mocks.submitTerminalRuntimeStatusCommand).not.toHaveBeenCalled();
+    expect(mocks.issueTerminalRecoveryCommandService).not.toHaveBeenCalled();
+  });
+
+  it("returns no authority for invalid proof or oversized candidate input", async () => {
+    const invalidProofCtx = buildCtx({ terminal: null });
+    const candidates = [{ localRegisterSessionId: "local-register-1" }];
+
+    await expect(
+      getHandler(getRegisterLifecycleAuthorityShadow)(invalidProofCtx as never, {
+        candidates,
+        storeId: "store-1",
+        syncSecretHash: "invalid",
+        terminalId: "terminal-1",
+      }),
+    ).resolves.toBeNull();
+    expect(mocks.getRegisterLifecycleAuthorityShadowQuery).not.toHaveBeenCalled();
+    await expect(
+      getHandler(getRegisterLifecycleAuthority)(invalidProofCtx as never, {
+        candidates,
+        storeId: "store-1",
+        syncSecretHash: "invalid",
+        terminalId: "terminal-1",
+      }),
+    ).resolves.toBeNull();
+    expect(mocks.getRegisterLifecycleAuthorityQuery).not.toHaveBeenCalled();
+
+    const oversizedCtx = buildCtx();
+    await expect(
+      getHandler(getRegisterLifecycleAuthorityShadow)(oversizedCtx as never, {
+        candidates: Array.from({ length: 17 }, (_, index) => ({
+          localRegisterSessionId: `local-${index}`,
+        })),
+        storeId: "store-1",
+        syncSecretHash: "sync-secret-1",
+        terminalId: "terminal-1",
+      }),
+    ).resolves.toBeNull();
+    expect(oversizedCtx.db.get).not.toHaveBeenCalled();
+    expect(mocks.getRegisterLifecycleAuthorityShadowQuery).not.toHaveBeenCalled();
+    await expect(
+      getHandler(getRegisterLifecycleAuthority)(oversizedCtx as never, {
+        candidates: Array.from({ length: 17 }, (_, index) => ({
+          localRegisterSessionId: `local-${index}`,
+        })),
+        storeId: "store-1",
+        syncSecretHash: "sync-secret-1",
+        terminalId: "terminal-1",
+      }),
+    ).resolves.toBeNull();
+    expect(oversizedCtx.db.get).not.toHaveBeenCalled();
+    expect(mocks.getRegisterLifecycleAuthorityQuery).not.toHaveBeenCalled();
   });
 
   it("requires store membership before listing terminals", async () => {
@@ -1519,6 +1910,40 @@ describe("POS terminal public mutations", () => {
     assertConformsToExportedReturns(getRuntimeRemoteAssistSession as never, null);
     assertConformsToExportedReturns(getTerminalRuntimeConfig as never, {
       heartbeatEnabled: true,
+    });
+    assertConformsToExportedReturns(
+      getRegisterLifecycleAuthorityShadow as never,
+      {
+        candidateCount: 1,
+        maximumDocumentReads: 3,
+        mode: "shadow",
+        results: [
+          {
+            classification: "sale_usable",
+            cloudRegisterSessionId: "register-session-1",
+            cloudStatus: "active",
+            localRegisterSessionId: "local-register-session-1",
+          },
+        ],
+      },
+    );
+    assertConformsToExportedReturns(getRegisterLifecycleAuthority as never, {
+      candidateCount: 1,
+      maximumDocumentReads: 3,
+      results: [
+        {
+          authorityCursor: {
+            lifecycleRevision: 4,
+            mappingAuthorityRevision: 2,
+          },
+          classification: "sale_blocked",
+          cloudRegisterSessionId: "register-session-1",
+          cloudStatus: "closed",
+          lifecycleRevision: 4,
+          localRegisterSessionId: "local-register-session-1",
+          mappingAuthorityRevision: 2,
+        },
+      ],
     });
     assertConformsToExportedReturns(disconnectRemoteAssistSession as never, null);
     assertConformsToExportedReturns(registerTerminal as never, {

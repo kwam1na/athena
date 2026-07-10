@@ -49,10 +49,17 @@ export function getCloseoutLocalRegisterSessionId(
 
 export function getCloseoutCloudRegisterSessionId(
   session:
-    | { _id?: Id<"registerSession"> | string; localRegisterSessionId?: string }
+    | {
+        _id?: Id<"registerSession"> | string;
+        cloudRegisterSessionId?: Id<"registerSession"> | string;
+        localRegisterSessionId?: string;
+      }
     | null
     | undefined,
 ): Id<"registerSession"> | undefined {
+  if (session?.cloudRegisterSessionId) {
+    return session.cloudRegisterSessionId as Id<"registerSession">;
+  }
   return session?.localRegisterSessionId
     ? undefined
     : (session?._id as Id<"registerSession"> | undefined);

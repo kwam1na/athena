@@ -353,6 +353,7 @@ vi.mock("./RegisterCustomerPanel", () => ({
 vi.mock("./RegisterCheckoutPanel", () => ({
   RegisterCheckoutPanel: ({
     checkout,
+    readOnly,
     onPaymentFlowChange,
     onPaymentEntryStart,
     onEditingPaymentChange,
@@ -364,6 +365,7 @@ vi.mock("./RegisterCheckoutPanel", () => ({
       serviceLines?: Array<{ quantity?: number }>;
       total?: number;
     };
+    readOnly?: boolean;
     onPaymentFlowChange: (active: boolean) => void;
     onPaymentEntryStart: () => void;
     onEditingPaymentChange?: (editing: boolean) => void;
@@ -391,6 +393,7 @@ vi.mock("./RegisterCheckoutPanel", () => ({
         }`}
       </div>
       <div>{`checkout-total-${checkout.total ?? 0}`}</div>
+      <div>{`checkout-readonly-${readOnly ? "yes" : "no"}`}</div>
       <div>register-checkout-panel</div>
     </div>
   ),
@@ -3710,6 +3713,67 @@ describe("POSRegisterView", () => {
     await userEvent.click(signOutButtons.at(-1)!);
 
     expect(onSignOut).toHaveBeenCalled();
+  });
+
+  it("keeps a blocked previous-drawer cart visible and read-only", async () => {
+    mockUseRegisterViewModel.mockReturnValue({
+      hasActiveStore: true,
+      header: { title: "POS", isSessionActive: true },
+      registerInfo: { registerLabel: "Front Counter", hasTerminal: true },
+      customerPanel: {},
+      productEntry: {},
+      cart: {
+        items: [{ id: "item-1", name: "Body Wave", price: 120, quantity: 1 }],
+        readOnly: true,
+      },
+      checkout: { isTransactionCompleted: false },
+      drawerGate: {
+        mode: "recovery",
+        registerLabel: "Front Counter",
+        registerNumber: "1",
+        errorMessage: null,
+        onClearSale: vi.fn(),
+        onSignOut: vi.fn(),
+      },
+      sessionPanel: null,
+      cashierCard: null,
+      authDialog: { open: false },
+      onNavigateBack: vi.fn(),
+    });
+
+    const { POSRegisterView } = await import("./POSRegisterView");
+    render(<POSRegisterView />);
+
+    expect(screen.getByText("cart-items-count-1")).toBeInTheDocument();
+    expect(screen.getByText("cart-items-readonly-yes")).toBeInTheDocument();
+    expect(screen.getByText("checkout-readonly-yes")).toBeInTheDocument();
+  });
+
+  it("forwards read-only state to the lookup-cart split", async () => {
+    mockUseRegisterViewModel.mockReturnValue({
+      hasActiveStore: true,
+      header: { title: "POS", isSessionActive: true },
+      registerInfo: { registerLabel: "Front Counter", hasTerminal: true },
+      customerPanel: {},
+      productEntry: {},
+      cart: {
+        items: [{ id: "item-1", name: "Body Wave", price: 120, quantity: 1 }],
+        readOnly: true,
+      },
+      checkout: { cartItems: [], isTransactionCompleted: false },
+      drawerGate: null,
+      sessionPanel: null,
+      cashierCard: null,
+      authDialog: { open: false },
+      onNavigateBack: vi.fn(),
+    });
+
+    const { POSRegisterView } = await import("./POSRegisterView");
+    render(<POSRegisterView />);
+
+    expect(screen.getByTestId("cart-items-compact")).toHaveTextContent(
+      "cart-items-readonly-yes",
+    );
   });
 
   it("renders closeout-blocked copy without drawer-opening controls", async () => {

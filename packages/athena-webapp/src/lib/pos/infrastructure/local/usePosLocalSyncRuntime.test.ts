@@ -36,7 +36,7 @@ vi.mock("convex/react", () => ({
       ? mocks.listTerminalRecoveryCommands(args)
       : query === "getTerminalRuntimeConfig"
         ? mocks.getTerminalRuntimeConfig(args)
-      : undefined,
+        : undefined,
 }));
 
 vi.mock("~/convex/_generated/api", () => ({
@@ -413,6 +413,9 @@ describe("usePosLocalSyncRuntimeStatus", () => {
       localId: "register-1",
       cloudId: "register-session-1",
       mappedAt: 12,
+      registerCandidateState: "current",
+      storeId: "store-1",
+      terminalId: "local-terminal-1",
     });
     expect(
       store.writeLocalCloudMapping.mock.calls.length,
@@ -1975,6 +1978,48 @@ describe("usePosLocalSyncRuntimeStatus", () => {
       localId: "local-expense-event-1",
       cloudId: "expense-transaction-1",
       mappedAt: 11,
+    });
+  });
+
+  it("persists returned register mappings as exact scoped current candidates", async () => {
+    const store = {
+      writeLocalCloudMapping: vi.fn(async () => ({ ok: true, value: null })),
+    };
+
+    const result = await writeReturnedLocalCloudMappings(
+      store as never,
+      [
+        {
+          cloudId: "cloud-register-2",
+          createdAt: 12,
+          localId: "local-register-2",
+          localIdKind: "registerSession",
+        },
+      ],
+      {
+        events: [
+          {
+            localRegisterSessionId: "local-register-2",
+            registerNumber: "2",
+            type: "register.opened",
+          } as never,
+        ],
+        registerNumber: "fallback",
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      },
+    );
+
+    expect(result).toEqual({ ok: true });
+    expect(store.writeLocalCloudMapping).toHaveBeenCalledWith({
+      cloudId: "cloud-register-2",
+      entity: "registerSession",
+      localId: "local-register-2",
+      mappedAt: 12,
+      registerCandidateState: "current",
+      registerNumber: "2",
+      storeId: "store-1",
+      terminalId: "local-terminal-1",
     });
   });
 
@@ -3680,6 +3725,10 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     });
     const onLocalEventsChanged = vi.fn();
     const store = {
+      applyRegisterLifecycleAuthority: vi.fn(async () => ({
+        ok: true,
+        value: { disposition: "applied", reason: "committed" },
+      })),
       listEvents: vi.fn(async () => ({
         ok: true,
         value: [
@@ -3707,10 +3756,7 @@ describe("usePosLocalSyncRuntimeStatus", () => {
           terminalId: "local-terminal-1",
         },
       })),
-      writeDrawerAuthorityState: vi.fn(async () => ({
-        ok: true,
-        value: null,
-      })),
+      writeDrawerAuthorityState: vi.fn(),
     };
 
     renderHook(() =>
@@ -3724,19 +3770,24 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     );
 
     await waitFor(() =>
-      expect(store.writeDrawerAuthorityState).toHaveBeenCalledWith({
-        cloudRegisterSessionId: "cloud-register-1",
-        localRegisterSessionId: "register-1",
-        message:
-          "The mapped cloud register is closed. Open a register before selling.",
-        observedAt: 200,
-        reason: "cloud_closed",
-        registerNumber: "8",
-        status: "blocked",
+      expect(store.applyRegisterLifecycleAuthority).toHaveBeenCalledWith({
+        observation: {
+          classification: "sale_blocked",
+          cloudRegisterSessionId: "cloud-register-1",
+          localRegisterSessionId: "register-1",
+          message:
+            "The mapped cloud register is closed. Open a register before selling.",
+          observedAt: 200,
+          reason: "cloud_closed",
+          registerNumber: "8",
+          source: "legacy_runtime_directive",
+          status: "blocked",
+        },
         storeId: "store-1",
         terminalId: "local-terminal-1",
       }),
     );
+    expect(store.writeDrawerAuthorityState).not.toHaveBeenCalled();
     expect(onLocalEventsChanged).toHaveBeenCalled();
   });
 

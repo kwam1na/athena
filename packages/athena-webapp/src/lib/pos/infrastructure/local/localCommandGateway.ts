@@ -10,7 +10,10 @@ import {
 import type { PosLocalSyncPendingCheckoutItemDefinedPayload } from "~/shared/posLocalSyncContract";
 
 import { readProjectedLocalRegisterModel } from "./localRegisterReader";
-import { hasSettledRegisterCloseout } from "./registerReadModel";
+import {
+  hasSettledRegisterCloseout,
+  type PosLocalRegisterReadModel,
+} from "./registerReadModel";
 import { deriveLocalSaleBlocker } from "./saleBlockerPolicy";
 import type {
   PosLocalAppendEventInput,
@@ -50,6 +53,7 @@ type CreateLocalCommandGatewayOptions = {
   allowExplicitRegisterSessionWithoutProjection?: boolean;
   allowRegisterSessionSeedAfterSettledHistory?: boolean;
   allowRegisterSessionSeedFromRuntimeDirective?: boolean;
+  authorityPersistenceFailed?: boolean | (() => boolean);
   store: PosLocalCommandStore;
   clock?: () => number;
   createLocalId?: (kind: string) => string;
@@ -339,8 +343,21 @@ export function createLocalCommandGateway(
     return result.ok;
   }
 
+  function isAuthorityPersistenceFailed() {
+    return typeof options.authorityPersistenceFailed === "function"
+      ? options.authorityPersistenceFailed()
+      : options.authorityPersistenceFailed === true;
+  }
+
+  function authorityPersistenceUserError() {
+    return toLocalUserError(
+      "Drawer status could not be saved locally. Retry before continuing.",
+    );
+  }
+
   return {
     async appendCartItem(input: AppendLocalCartItemInput) {
+      if (isAuthorityPersistenceFailed()) return false;
       if (!(await canAppendSaleAffectingEvent(input))) return false;
       return appendBoolean({
         type: "cart.item_added",
@@ -356,6 +373,7 @@ export function createLocalCommandGateway(
     },
 
     async definePendingCheckoutItem(input: DefineLocalPendingCheckoutItemInput) {
+      if (isAuthorityPersistenceFailed()) return false;
       if (!(await canAppendSaleAffectingEvent(input))) return false;
       return appendBoolean({
         type: "pending_checkout_item.defined",
@@ -375,6 +393,7 @@ export function createLocalCommandGateway(
     },
 
     async appendServiceLine(input: AppendLocalServiceLineInput) {
+      if (isAuthorityPersistenceFailed()) return false;
       if (!(await canAppendSaleAffectingEvent(input))) return false;
       return appendBoolean({
         type: "cart.service_added",
@@ -393,6 +412,7 @@ export function createLocalCommandGateway(
     },
 
     async appendPaymentState(input: AppendLocalPaymentStateInput) {
+      if (isAuthorityPersistenceFailed()) return false;
       if (!(await canAppendSaleAffectingEvent(input))) return false;
       return appendBoolean({
         type: "session.payments_updated",
@@ -432,7 +452,8 @@ export function createLocalCommandGateway(
       );
       if (
         hasPriorSaleActivity &&
-        !(await canAppendSaleAffectingEvent(input))
+        !(await canAppendSaleAffectingEvent(input)) &&
+        !canClearExactCloudClosedDrawer(model.value, input)
       ) {
         return false;
       }
@@ -462,6 +483,7 @@ export function createLocalCommandGateway(
     },
 
     async completeTransaction(input: CompleteLocalTransactionInput) {
+      if (isAuthorityPersistenceFailed()) return false;
       if (!(await canAppendSaleAffectingEvent(input))) return false;
       return appendBoolean({
         type: "transaction.completed",
@@ -484,6 +506,9 @@ export function createLocalCommandGateway(
     async openDrawer(
       input: LocalOpenDrawerInput,
     ): Promise<LocalOpenDrawerResult> {
+      if (isAuthorityPersistenceFailed()) {
+        return authorityPersistenceUserError();
+      }
       if (!hasCommandIdentity({ ...input, localRegisterSessionId: "pending" })) {
         return toLocalUserError(
           blockedSaleMessage(
@@ -562,6 +587,7 @@ export function createLocalCommandGateway(
     },
 
     async reopenRegister(input: ReopenLocalRegisterInput) {
+      if (isAuthorityPersistenceFailed()) return false;
       if (!(await canAppendRegisterReopen(input))) return false;
       return appendBoolean({
         type: "register.reopened",
@@ -582,6 +608,7 @@ export function createLocalCommandGateway(
     },
 
     async seedRegisterSession(input: SeedLocalRegisterSessionInput) {
+      if (isAuthorityPersistenceFailed()) return false;
       const seedDecision = await resolveRegisterSessionSeedDecision(input);
       if (seedDecision === "blocked") return false;
       if (seedDecision === "already_seeded") {
@@ -614,6 +641,9 @@ export function createLocalCommandGateway(
     async startSession(
       input: LocalStartSessionInput,
     ): Promise<LocalStartSessionResult> {
+      if (isAuthorityPersistenceFailed()) {
+        return authorityPersistenceUserError();
+      }
       if (!hasCommandIdentity({ ...input, localRegisterSessionId: "pending" })) {
         return toLocalUserError(
           blockedSaleMessage(
@@ -705,6 +735,9 @@ export function createLocalCommandGateway(
     },
 
     async startCloseout(input: StartLocalCloseoutInput) {
+      if (isAuthorityPersistenceFailed()) {
+        return authorityPersistenceUserError();
+      }
       if (!(await canAppendSaleAffectingEvent(input))) {
         return toLocalUserError(
           "Drawer setup needs repair before closeout can continue.",
@@ -768,6 +801,20 @@ function hasLocalSaleActivity(
       event.type === "transaction.completed"
     );
   });
+}
+
+function canClearExactCloudClosedDrawer(
+  model: PosLocalRegisterReadModel,
+  input: ClearLocalCartInput,
+) {
+  return (
+    hasCommandIdentity(input) &&
+    model.drawerAuthorityReason === "cloud_closed" &&
+    model.activeRegisterSession?.localRegisterSessionId ===
+      input.localRegisterSessionId &&
+    model.activeSale?.localPosSessionId === input.localPosSessionId &&
+    model.activeSale.localRegisterSessionId === input.localRegisterSessionId
+  );
 }
 
 function isOpenLocalRegisterSessionStatus(status: string) {

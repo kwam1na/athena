@@ -153,21 +153,12 @@ export type PosLocalRuntimeSyncDebug = {
     | "rejected"
     | "unavailable";
   checkInPublishStatus?:
-    | "accepted"
-    | "disabled"
-    | "failed"
-    | "not_ready"
-    | "pending"
-    | "rejected";
+    "accepted" | "disabled" | "failed" | "not_ready" | "pending" | "rejected";
   terminalRecoveryCommandAttemptedAt?: number;
   terminalRecoveryCommandCompletedAt?: number;
   terminalRecoveryCommandMessage?: string;
   terminalRecoveryCommandStatus?:
-    | "completed"
-    | "failed"
-    | "ignored"
-    | "pending"
-    | "precondition_failed";
+    "completed" | "failed" | "ignored" | "pending" | "precondition_failed";
   appSessionUnverifiedEventCount?: number;
   cloudValidationUncertainEventCount?: number;
   deferredUploadEventCount?: number;
@@ -271,9 +262,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
     useState<AppUpdateCommandCorrelation | null>(() =>
       readStoredAppUpdateCommandCorrelation(),
     );
-  const [runtimeBuildMetadata] = useState(
-    getInitialRuntimeBuildMetadata,
-  );
+  const [runtimeBuildMetadata] = useState(getInitialRuntimeBuildMetadata);
   const [recoveryCommandRetryToken, setRecoveryCommandRetryToken] = useState(0);
   const [debug, setDebug] = useState<PosLocalRuntimeSyncDebug>({});
   const [isOnline, setIsOnline] = useState(() =>
@@ -508,9 +497,13 @@ export function usePosLocalSyncRuntimeStatus(input: {
               setReadError(pending.error.message);
               throw new Error(pending.error.message);
             }
-            const uploadableEvents = pending.value.events.filter((event) =>
-              isPosLocalRuntimeDrainCandidate(event, options, uploadSupport) ||
-              isPosLocalRuntimeActivityReportCandidate(event),
+            const uploadableEvents = pending.value.events.filter(
+              (event) =>
+                isPosLocalRuntimeDrainCandidate(
+                  event,
+                  options,
+                  uploadSupport,
+                ) || isPosLocalRuntimeActivityReportCandidate(event),
             );
             if (!shouldStop()) {
               setDebug((current) => ({
@@ -675,6 +668,12 @@ export function usePosLocalSyncRuntimeStatus(input: {
             const mappingWrite = await writeReturnedLocalCloudMappings(
               store,
               result.data.mappings,
+              {
+                events: latestEvents.value.events,
+                registerNumber: syncSeed.registerNumber,
+                storeId: syncSeed.storeId,
+                terminalId: syncSeed.terminalId,
+              },
             );
             if (shouldStop()) {
               return { syncedEventIds: [] };
@@ -1119,7 +1118,8 @@ export function usePosLocalSyncRuntimeStatus(input: {
     ) {
       scheduleRuntimeStatusSyncingPublishDelay({
         materialSignature,
-        onReady: () => setRuntimeStatusObservationToken((current) => current + 1),
+        onReady: () =>
+          setRuntimeStatusObservationToken((current) => current + 1),
         readyMaterialSignatureRef:
           runtimeStatusSyncingPublishReadyMaterialSignatureRef,
         timerMaterialSignatureRef:
@@ -1143,7 +1143,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
     ) {
       if (
         publishState.inFlight === true &&
-          publishState.inFlightPublisherId !== publisherId
+        publishState.inFlightPublisherId !== publisherId
       ) {
         return;
       }
@@ -1809,8 +1809,7 @@ export function resetRuntimeStatusPublishStateForTests(options?: {
 function getRuntimeStatusGlobalPublishState(): RuntimeStatusGlobalPublishState {
   const host = globalThis as typeof globalThis & {
     [RUNTIME_STATUS_GLOBAL_PUBLISH_STATE_KEY]?:
-      | RuntimeStatusGlobalPublishState
-      | undefined;
+      RuntimeStatusGlobalPublishState | undefined;
   };
   const existing = host[RUNTIME_STATUS_GLOBAL_PUBLISH_STATE_KEY];
   if (existing) return existing;
@@ -1964,10 +1963,7 @@ function claimRuntimeStatusPublishForCycle(input: {
       publisherId: input.publisherId,
     };
     runtimeStatusCrossContextClaims.set(key, nextClaim);
-    storage?.setItem(
-      key,
-      JSON.stringify(nextClaim),
-    );
+    storage?.setItem(key, JSON.stringify(nextClaim));
     return true;
   } catch {
     runtimeStatusCrossContextClaims.set(key, {
@@ -2072,7 +2068,9 @@ function readRuntimeDrawerAuthorityDirective(
       ? { message: candidate.message }
       : {}),
     observedAt:
-      typeof candidate.observedAt === "number" ? candidate.observedAt : Date.now(),
+      typeof candidate.observedAt === "number"
+        ? candidate.observedAt
+        : Date.now(),
     reason: "cloud_closed",
     ...(typeof candidate.registerNumber === "string"
       ? { registerNumber: candidate.registerNumber }
@@ -2085,12 +2083,10 @@ function readRuntimeActiveRegisterSessionDirective(
   data: unknown,
 ): RuntimeActiveRegisterSessionDirective | null {
   if (!data || typeof data !== "object") return null;
-  const directive = (
-    data as { activeRegisterSessionDirective?: unknown }
-  ).activeRegisterSessionDirective;
+  const directive = (data as { activeRegisterSessionDirective?: unknown })
+    .activeRegisterSessionDirective;
   if (!directive || typeof directive !== "object") return null;
-  const candidate =
-    directive as Partial<RuntimeActiveRegisterSessionDirective>;
+  const candidate = directive as Partial<RuntimeActiveRegisterSessionDirective>;
   if (
     typeof candidate.cloudRegisterSessionId !== "string" ||
     candidate.cloudRegisterSessionId.length === 0 ||
@@ -2109,7 +2105,9 @@ function readRuntimeActiveRegisterSessionDirective(
     expectedCash: candidate.expectedCash,
     localRegisterSessionId: candidate.localRegisterSessionId,
     observedAt:
-      typeof candidate.observedAt === "number" ? candidate.observedAt : Date.now(),
+      typeof candidate.observedAt === "number"
+        ? candidate.observedAt
+        : Date.now(),
     openedAt: candidate.openedAt,
     openingFloat: candidate.openingFloat,
     ...(typeof candidate.registerNumber === "string"
@@ -2185,7 +2183,8 @@ async function persistRuntimeDrawerAuthorityDirective(input: {
 }): Promise<boolean> {
   if (
     !input.directive ||
-    typeof input.store.writeDrawerAuthorityState !== "function"
+    (typeof input.store.applyRegisterLifecycleAuthority !== "function" &&
+      typeof input.store.writeDrawerAuthorityState !== "function")
   ) {
     return false;
   }
@@ -2195,6 +2194,29 @@ async function persistRuntimeDrawerAuthorityDirective(input: {
     storeId: input.storeId,
     terminalId: input.terminalSeed.terminalId,
   };
+  if (typeof input.store.applyRegisterLifecycleAuthority === "function") {
+    const result = await input.store.applyRegisterLifecycleAuthority({
+      observation: {
+        classification: "sale_blocked",
+        ...(state.cloudRegisterSessionId
+          ? { cloudRegisterSessionId: state.cloudRegisterSessionId }
+          : {}),
+        localRegisterSessionId: state.localRegisterSessionId,
+        ...(state.message ? { message: state.message } : {}),
+        observedAt: state.observedAt,
+        reason: "cloud_closed",
+        ...(state.registerNumber
+          ? { registerNumber: state.registerNumber }
+          : {}),
+        source: "legacy_runtime_directive",
+        status: "blocked",
+      },
+      storeId: state.storeId,
+      terminalId: state.terminalId,
+    });
+    assertPosLocalStoreOk(result);
+    return result.value.disposition === "applied";
+  }
   if (typeof input.store.readDrawerAuthorityState === "function") {
     const current = await input.store.readDrawerAuthorityState({
       localRegisterSessionId: state.localRegisterSessionId,
@@ -2273,9 +2295,7 @@ function isRetryableSyncAuthorizationFailure(result: {
 
 function isTerminalAuthorizationUserError(
   error:
-    | { code?: string; metadata?: Record<string, unknown> }
-    | null
-    | undefined,
+    { code?: string; metadata?: Record<string, unknown> } | null | undefined,
 ) {
   return (
     error?.code === "authorization_failed" &&
@@ -2410,8 +2430,7 @@ export function isPosLocalRuntimeDrainCandidate(
   uploadSupport: PosLocalSyncUploadSupport = {},
 ) {
   const isReviewEvent = event.sync.status === "needs_review";
-  const isUploadedReviewEvent =
-    isReviewEvent && event.sync.uploaded === true;
+  const isUploadedReviewEvent = isReviewEvent && event.sync.uploaded === true;
   const isIncludedReviewEvent =
     options.includeReviewEvents === true
       ? isReviewEvent
@@ -2430,7 +2449,9 @@ export function isPosLocalRuntimeDrainCandidate(
     options.onlyReviewEvents === true ||
     options.onlyUploadedReviewEvents === true
   ) {
-    return isIncludedReviewEvent && isSyncablePosLocalEvent(event, uploadSupport);
+    return (
+      isIncludedReviewEvent && isSyncablePosLocalEvent(event, uploadSupport)
+    );
   }
 
   return (
@@ -2469,7 +2490,9 @@ async function reportRegisterSessionActivityForEvents(input: {
   store: PosLocalRuntimeStore;
   syncSeed: PosProvisionedTerminalSeed;
 }) {
-  const candidates = input.events.filter(isPosLocalRuntimeActivityReportCandidate);
+  const candidates = input.events.filter(
+    isPosLocalRuntimeActivityReportCandidate,
+  );
   if (candidates.length === 0) return;
 
   const groups = groupRegisterSessionActivityCandidates(candidates);
@@ -2479,9 +2502,12 @@ async function reportRegisterSessionActivityForEvents(input: {
       activity: PosRegisterSessionLocalActivitySummary;
     }> = [];
     const failedEventIds: string[] = [];
-    const failedReasonCodes = new Map<string, Parameters<
-      PosLocalRuntimeStore["markEventsActivityFailed"]
-    >[1]["reasonCode"]>();
+    const failedReasonCodes = new Map<
+      string,
+      Parameters<
+        PosLocalRuntimeStore["markEventsActivityFailed"]
+      >[1]["reasonCode"]
+    >();
 
     for (const event of events) {
       const sanitized = sanitizePosRegisterSessionLocalActivity({
@@ -2537,7 +2563,8 @@ async function reportRegisterSessionActivityForEvents(input: {
           occurredAt: activity.createdAt,
           registerNumber: activity.registerNumber,
           sequence: activity.sequence,
-          staffProfileId: activity.staffProfileId as Id<"staffProfile"> | undefined,
+          staffProfileId: activity.staffProfileId as
+            Id<"staffProfile"> | undefined,
           uploadSequence: activity.uploadSequence,
         })),
         localRegisterSessionId,
@@ -2555,7 +2582,11 @@ async function reportRegisterSessionActivityForEvents(input: {
       } satisfies IngestRegisterSessionActivityArgs);
 
       if (!isCommandOk(result)) {
-        await markActivityReportFailed(input.store, reportableEvents, "server_rejected");
+        await markActivityReportFailed(
+          input.store,
+          reportableEvents,
+          "server_rejected",
+        );
         continue;
       }
 
@@ -2570,7 +2601,9 @@ async function reportRegisterSessionActivityForEvents(input: {
       const skippedIds = new Set(
         result.data.skipped
           .map((activity) => activity.localEventId)
-          .filter((localEventId): localEventId is string => Boolean(localEventId)),
+          .filter((localEventId): localEventId is string =>
+            Boolean(localEventId),
+          ),
       );
       const reportedIds = reportableEvents
         .filter(
@@ -2616,7 +2649,11 @@ async function reportRegisterSessionActivityForEvents(input: {
         );
       }
     } catch {
-      await markActivityReportFailed(input.store, reportableEvents, "network_error");
+      await markActivityReportFailed(
+        input.store,
+        reportableEvents,
+        "network_error",
+      );
     }
   }
 }
@@ -2651,9 +2688,7 @@ async function markActivityReportFailed(
   assertPosLocalStoreOk(failed);
 }
 
-function isCommandOk(
-  result: unknown,
-): result is {
+function isCommandOk(result: unknown): result is {
   kind: "ok";
   data: {
     accepted: Array<{
@@ -2674,9 +2709,7 @@ function isCommandOk(
     (result as { kind?: unknown }).kind === "ok" &&
     typeof (result as { data?: unknown }).data === "object" &&
     (result as { data?: unknown }).data !== null &&
-    Array.isArray(
-      (result as { data: { accepted?: unknown } }).data.accepted,
-    ) &&
+    Array.isArray((result as { data: { accepted?: unknown } }).data.accepted) &&
     Array.isArray((result as { data: { skipped?: unknown } }).data.skipped)
   );
 }
@@ -2817,16 +2850,53 @@ export async function writeReturnedLocalCloudMappings(
     localIdKind: string;
     createdAt: number;
   }>,
+  scope?: {
+    events: PosLocalEventRecord[];
+    registerNumber?: string;
+    storeId: string;
+    terminalId: string;
+  },
 ) {
   for (const mapping of mappings) {
     const entity = toLocalCloudMappingEntity(mapping.localIdKind);
     if (!entity) continue;
+
+    let registerScope:
+      | {
+          registerCandidateState: "current" | "historical";
+          registerNumber?: string;
+          storeId: string;
+          terminalId: string;
+        }
+      | undefined;
+    if (entity === "registerSession") {
+      const sourceEvent = scope?.events.find(
+        (event) =>
+          event.type === "register.opened" &&
+          event.localRegisterSessionId === mapping.localId,
+      );
+      const registerNumber =
+        sourceEvent?.registerNumber ?? scope?.registerNumber;
+      if (!scope) {
+        return {
+          ok: false as const,
+          message: "Register mapping scope is unavailable.",
+        };
+      }
+      registerScope = {
+        registerCandidateState: "current",
+        ...(registerNumber ? { registerNumber } : {}),
+        storeId: scope.storeId,
+        terminalId: scope.terminalId,
+      };
+    }
 
     const result = await store.writeLocalCloudMapping({
       entity,
       localId: mapping.localId,
       cloudId: mapping.cloudId,
       mappedAt: mapping.createdAt,
+      ...registerScope,
     });
     if (!result.ok)
       return { ok: false as const, message: result.error.message };

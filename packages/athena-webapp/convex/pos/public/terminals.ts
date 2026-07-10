@@ -9,6 +9,9 @@ import {
 } from "../../lib/athenaUserAuth";
 import { ok, userError } from "../../../shared/commandResult";
 import {
+  acknowledgeRegisterLifecycleAuthority as acknowledgeRegisterLifecycleAuthorityService,
+} from "../application/commands/registerLifecycleAuthority";
+import {
   deleteTerminal as deleteTerminalCommand,
   registerTerminal as registerTerminalCommand,
   submitTerminalRuntimeStatus as submitTerminalRuntimeStatusCommand,
@@ -22,6 +25,12 @@ import {
   listTerminals as listTerminalsQuery,
   previewTerminalRecovery as previewTerminalRecoveryQuery,
 } from "../application/queries/terminals";
+import {
+  getRegisterLifecycleAuthority as getRegisterLifecycleAuthorityQuery,
+  getRegisterLifecycleAuthorityAcknowledgement as getRegisterLifecycleAuthorityAcknowledgementQuery,
+  getRegisterLifecycleAuthorityShadow as getRegisterLifecycleAuthorityShadowQuery,
+  isValidRegisterLifecycleAuthorityCandidates,
+} from "../application/queries/registerLifecycleAuthority";
 import { hashPosTerminalSyncSecret } from "../application/sync/terminalSyncSecret";
 import { resolveTerminalCloudRepair as resolveTerminalCloudRepairCommand } from "../application/terminalRecovery/resolveTerminalCloudRepair";
 import {
@@ -49,6 +58,11 @@ import {
   posTerminalRecoveryLocalReviewEventValidator,
   posTerminalRecoveryVerificationStatusValidator,
 } from "../../schemas/pos/posTerminalRecovery";
+import {
+  posRegisterAuthorityReplicationOutcomeValidator,
+  posRegisterAuthorityReplicationRolloutCohortValidator,
+  posRegisterAuthorityReplicationRolloutModeValidator,
+} from "../../schemas/pos/posRegisterAuthorityReplicationStatus";
 import {
   posTerminalRuntimeActiveRegisterSessionValidator,
   posTerminalRuntimeAppSessionRecoveryValidator,
@@ -196,6 +210,90 @@ const runtimeStatusSnapshotReturnValidator = v.object({
   ...runtimeStatusInputValidator.fields,
   receivedAt: v.number(),
 });
+
+const registerLifecycleAuthorityCandidateValidator = v.object({
+  cloudRegisterSessionId: v.optional(v.string()),
+  localRegisterSessionId: v.string(),
+});
+
+const registerLifecycleAuthorityShadowReturnValidator = v.object({
+  candidateCount: v.number(),
+  maximumDocumentReads: v.number(),
+  mode: v.literal("shadow"),
+  results: v.array(
+    v.object({
+      classification: v.union(
+        v.literal("unmapped"),
+        v.literal("sale_usable"),
+        v.literal("sale_blocked"),
+        v.literal("repair_required"),
+      ),
+      cloudRegisterSessionId: v.optional(v.string()),
+      cloudStatus: v.optional(
+        v.union(
+          v.literal("open"),
+          v.literal("active"),
+          v.literal("closing"),
+          v.literal("closeout_rejected"),
+          v.literal("closed"),
+        ),
+      ),
+      localRegisterSessionId: v.string(),
+    }),
+  ),
+});
+
+const registerLifecycleAuthorityReturnValidator = v.object({
+  candidateCount: v.number(),
+  maximumDocumentReads: v.number(),
+  results: v.array(
+    v.object({
+      authorityCursor: v.object({
+        lifecycleRevision: v.number(),
+        mappingAuthorityRevision: v.number(),
+      }),
+      classification: v.union(
+        v.literal("unmapped"),
+        v.literal("sale_usable"),
+        v.literal("sale_blocked"),
+        v.literal("repair_required"),
+      ),
+      cloudRegisterSessionId: v.optional(v.string()),
+      cloudStatus: v.optional(
+        v.union(
+          v.literal("open"),
+          v.literal("active"),
+          v.literal("closing"),
+          v.literal("closeout_rejected"),
+          v.literal("closed"),
+        ),
+      ),
+      lifecycleRevision: v.number(),
+      localRegisterSessionId: v.string(),
+      mappingAuthorityRevision: v.number(),
+    }),
+  ),
+});
+
+const registerLifecycleAuthorityAcknowledgementReturnValidator = v.object({
+  accepted: v.literal(true),
+  coalesced: v.boolean(),
+});
+
+const registerLifecycleAuthorityAcknowledgementInspectionReturnValidator =
+  v.object({
+    appVersion: v.optional(v.string()),
+    buildSha: v.optional(v.string()),
+    cloudRegisterSessionId: v.optional(v.string()),
+    lifecycleRevision: v.number(),
+    localRegisterSessionId: v.string(),
+    mappingAuthorityRevision: v.number(),
+    outcome: posRegisterAuthorityReplicationOutcomeValidator,
+    receivedAt: v.number(),
+    rolloutCohort: posRegisterAuthorityReplicationRolloutCohortValidator,
+    rolloutMode: posRegisterAuthorityReplicationRolloutModeValidator,
+    terminalId: v.id("posTerminal"),
+  });
 
 const terminalSyncReviewTargetReturnValidator = v.object({
   type: v.literal("open_work"),
@@ -887,6 +985,28 @@ export const getTerminalHealthSummary = query({
   },
 });
 
+export const getRegisterLifecycleAuthorityAcknowledgement = query({
+  args: {
+    storeId: v.id("store"),
+    terminalId: v.id("posTerminal"),
+  },
+  returns: v.union(
+    registerLifecycleAuthorityAcknowledgementInspectionReturnValidator,
+    v.null(),
+  ),
+  handler: async (ctx, args) => {
+    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+    await requireTerminalStoreAccess(ctx, {
+      allowedRoles: ["full_admin", "pos_only"],
+      failureMessage:
+        "You do not have access to view POS terminal authority replication.",
+      storeId: args.storeId,
+      userId: athenaUser._id,
+    });
+    return getRegisterLifecycleAuthorityAcknowledgementQuery(ctx, args);
+  },
+});
+
 export const previewTerminalRecovery = query({
   args: {
     storeId: v.id("store"),
@@ -933,6 +1053,112 @@ export const getTerminalRuntimeConfig = query({
     return {
       heartbeatEnabled: terminal.heartbeatEnabled !== false,
     };
+  },
+});
+
+export const getRegisterLifecycleAuthorityShadow = query({
+  args: {
+    candidates: v.array(registerLifecycleAuthorityCandidateValidator),
+    storeId: v.id("store"),
+    syncSecretHash: v.string(),
+    terminalId: v.id("posTerminal"),
+  },
+  returns: v.union(registerLifecycleAuthorityShadowReturnValidator, v.null()),
+  handler: async (ctx, args) => {
+    if (!isValidRegisterLifecycleAuthorityCandidates(args.candidates)) {
+      return null;
+    }
+
+    const terminal = await requireActiveTerminalSyncSecret(ctx, {
+      storeId: args.storeId,
+      syncSecretHash: args.syncSecretHash,
+      terminalId: args.terminalId,
+    });
+    if (!terminal) return null;
+
+    return getRegisterLifecycleAuthorityShadowQuery(ctx, {
+      candidates: args.candidates,
+      storeId: args.storeId,
+      terminal,
+    });
+  },
+});
+
+export const getRegisterLifecycleAuthority = query({
+  args: {
+    candidates: v.array(registerLifecycleAuthorityCandidateValidator),
+    storeId: v.id("store"),
+    syncSecretHash: v.string(),
+    terminalId: v.id("posTerminal"),
+  },
+  returns: v.union(registerLifecycleAuthorityReturnValidator, v.null()),
+  handler: async (ctx, args) => {
+    if (!isValidRegisterLifecycleAuthorityCandidates(args.candidates)) {
+      return null;
+    }
+
+    const terminal = await requireActiveTerminalSyncSecret(ctx, {
+      storeId: args.storeId,
+      syncSecretHash: args.syncSecretHash,
+      terminalId: args.terminalId,
+    });
+    if (!terminal) return null;
+
+    return getRegisterLifecycleAuthorityQuery(ctx, {
+      candidates: args.candidates,
+      storeId: args.storeId,
+      terminal,
+    });
+  },
+});
+
+export const acknowledgeRegisterLifecycleAuthority = mutation({
+  args: {
+    appVersion: v.optional(v.string()),
+    buildSha: v.optional(v.string()),
+    cloudRegisterSessionId: v.optional(v.string()),
+    lifecycleRevision: v.number(),
+    localRegisterSessionId: v.string(),
+    mappingAuthorityRevision: v.number(),
+    outcome: posRegisterAuthorityReplicationOutcomeValidator,
+    rolloutCohort: posRegisterAuthorityReplicationRolloutCohortValidator,
+    rolloutMode: posRegisterAuthorityReplicationRolloutModeValidator,
+    storeId: v.id("store"),
+    syncSecretHash: v.string(),
+    terminalId: v.id("posTerminal"),
+  },
+  returns: v.union(
+    registerLifecycleAuthorityAcknowledgementReturnValidator,
+    v.null(),
+  ),
+  handler: async (ctx, args) => {
+    const terminal = await requireActiveTerminalSyncSecret(ctx, {
+      storeId: args.storeId,
+      syncSecretHash: args.syncSecretHash,
+      terminalId: args.terminalId,
+    });
+    if (!terminal) return null;
+
+    try {
+      const result = await acknowledgeRegisterLifecycleAuthorityService(ctx, {
+        appVersion: args.appVersion,
+        buildSha: args.buildSha,
+        cloudRegisterSessionId: args.cloudRegisterSessionId,
+        lifecycleRevision: args.lifecycleRevision,
+        localRegisterSessionId: args.localRegisterSessionId,
+        mappingAuthorityRevision: args.mappingAuthorityRevision,
+        outcome: args.outcome,
+        rolloutCohort: args.rolloutCohort,
+        rolloutMode: args.rolloutMode,
+        storeId: args.storeId,
+        terminal,
+      });
+      return result.status === "accepted"
+        ? { accepted: true as const, coalesced: result.coalesced }
+        : null;
+    } catch {
+      return null;
+    }
   },
 });
 

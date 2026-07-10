@@ -30,6 +30,7 @@ import type {
 } from "./transactionAdjustmentPlanner";
 import { planTransactionAdjustment } from "./transactionAdjustmentPlanner";
 import { recordPendingCheckoutItemEvidenceCorrection } from "./createOrReusePendingCheckoutItem";
+import { patchRegisterSessionWithAuthority } from "../../../operations/registerSessionAuthorityRevision";
 import {
   appendReportingIngressWithCtx,
   type ReportingIngressLineInput,
@@ -920,7 +921,7 @@ async function adjustRegisterSessionExpectedCashForSettlement(
     return expectedCashDelta;
   }
 
-  await ctx.db.patch("registerSession", args.registerSessionId, {
+  await patchRegisterSessionWithAuthority(ctx, args.registerSessionId, {
     expectedCash: nextExpectedCash,
     ...(registerSession.countedCash !== undefined
       ? { variance: registerSession.countedCash - nextExpectedCash }

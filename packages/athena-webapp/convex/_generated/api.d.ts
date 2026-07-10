@@ -185,6 +185,7 @@ import type * as operations_operationalWorkItems from "../operations/operational
 import type * as operations_paymentAllocations from "../operations/paymentAllocations.js";
 import type * as operations_paymentTotals from "../operations/paymentTotals.js";
 import type * as operations_registerCloseoutVarianceEmail from "../operations/registerCloseoutVarianceEmail.js";
+import type * as operations_registerSessionAuthorityRevision from "../operations/registerSessionAuthorityRevision.js";
 import type * as operations_registerSessionCloseoutGate from "../operations/registerSessionCloseoutGate.js";
 import type * as operations_registerSessionTracing from "../operations/registerSessionTracing.js";
 import type * as operations_registerSessions from "../operations/registerSessions.js";
@@ -206,6 +207,7 @@ import type * as pos_application_commands_pendingCheckoutReviewWorkLifecycle fro
 import type * as pos_application_commands_posSessionTracing from "../pos/application/commands/posSessionTracing.js";
 import type * as pos_application_commands_quickAddCatalogItem from "../pos/application/commands/quickAddCatalogItem.js";
 import type * as pos_application_commands_register from "../pos/application/commands/register.js";
+import type * as pos_application_commands_registerLifecycleAuthority from "../pos/application/commands/registerLifecycleAuthority.js";
 import type * as pos_application_commands_sessionCommands from "../pos/application/commands/sessionCommands.js";
 import type * as pos_application_commands_terminals from "../pos/application/commands/terminals.js";
 import type * as pos_application_commands_transactionAdjustmentPlanner from "../pos/application/commands/transactionAdjustmentPlanner.js";
@@ -216,6 +218,7 @@ import type * as pos_application_pendingCheckoutSkuResolution from "../pos/appli
 import type * as pos_application_queries_getRegisterState from "../pos/application/queries/getRegisterState.js";
 import type * as pos_application_queries_getTransactions from "../pos/application/queries/getTransactions.js";
 import type * as pos_application_queries_listRegisterCatalog from "../pos/application/queries/listRegisterCatalog.js";
+import type * as pos_application_queries_registerLifecycleAuthority from "../pos/application/queries/registerLifecycleAuthority.js";
 import type * as pos_application_queries_searchCatalog from "../pos/application/queries/searchCatalog.js";
 import type * as pos_application_queries_searchCustomers from "../pos/application/queries/searchCustomers.js";
 import type * as pos_application_queries_storePulse from "../pos/application/queries/storePulse.js";
@@ -225,6 +228,7 @@ import type * as pos_application_sync_ingestLocalEvents from "../pos/application
 import type * as pos_application_sync_posRegisterSessionActivity from "../pos/application/sync/posRegisterSessionActivity.js";
 import type * as pos_application_sync_projectLocalEvents from "../pos/application/sync/projectLocalEvents.js";
 import type * as pos_application_sync_projectionPolicies from "../pos/application/sync/projectionPolicies.js";
+import type * as pos_application_sync_registerMappingAuthorityRevision from "../pos/application/sync/registerMappingAuthorityRevision.js";
 import type * as pos_application_sync_registerSessionCloseoutHolds from "../pos/application/sync/registerSessionCloseoutHolds.js";
 import type * as pos_application_sync_registerSessionSyncReview from "../pos/application/sync/registerSessionSyncReview.js";
 import type * as pos_application_sync_staffProof from "../pos/application/sync/staffProof.js";
@@ -251,6 +255,8 @@ import type * as pos_infrastructure_repositories_catalogRepository from "../pos/
 import type * as pos_infrastructure_repositories_customerRepository from "../pos/infrastructure/repositories/customerRepository.js";
 import type * as pos_infrastructure_repositories_expenseSessionCommandRepository from "../pos/infrastructure/repositories/expenseSessionCommandRepository.js";
 import type * as pos_infrastructure_repositories_localSyncRepository from "../pos/infrastructure/repositories/localSyncRepository.js";
+import type * as pos_infrastructure_repositories_registerLifecycleAuthorityRepository from "../pos/infrastructure/repositories/registerLifecycleAuthorityRepository.js";
+import type * as pos_infrastructure_repositories_registerLifecycleAuthorityStatusRepository from "../pos/infrastructure/repositories/registerLifecycleAuthorityStatusRepository.js";
 import type * as pos_infrastructure_repositories_registerSessionRepository from "../pos/infrastructure/repositories/registerSessionRepository.js";
 import type * as pos_infrastructure_repositories_sessionCommandRepository from "../pos/infrastructure/repositories/sessionCommandRepository.js";
 import type * as pos_infrastructure_repositories_sessionRepository from "../pos/infrastructure/repositories/sessionRepository.js";
@@ -391,6 +397,8 @@ import type * as schemas_pos_posLocalSyncMapping from "../schemas/pos/posLocalSy
 import type * as schemas_pos_posPendingCheckoutItem from "../schemas/pos/posPendingCheckoutItem.js";
 import type * as schemas_pos_posPendingCheckoutLookupAlias from "../schemas/pos/posPendingCheckoutLookupAlias.js";
 import type * as schemas_pos_posRecoveryCredential from "../schemas/pos/posRecoveryCredential.js";
+import type * as schemas_pos_posRegisterAuthorityReplicationStatus from "../schemas/pos/posRegisterAuthorityReplicationStatus.js";
+import type * as schemas_pos_posRegisterMappingAuthority from "../schemas/pos/posRegisterMappingAuthority.js";
 import type * as schemas_pos_posRegisterSessionActivity from "../schemas/pos/posRegisterSessionActivity.js";
 import type * as schemas_pos_posRegisterSessionActivityCheckpoint from "../schemas/pos/posRegisterSessionActivityCheckpoint.js";
 import type * as schemas_pos_posSession from "../schemas/pos/posSession.js";
@@ -687,6 +695,7 @@ declare const fullApi: ApiFromModules<{
   "operations/paymentAllocations": typeof operations_paymentAllocations;
   "operations/paymentTotals": typeof operations_paymentTotals;
   "operations/registerCloseoutVarianceEmail": typeof operations_registerCloseoutVarianceEmail;
+  "operations/registerSessionAuthorityRevision": typeof operations_registerSessionAuthorityRevision;
   "operations/registerSessionCloseoutGate": typeof operations_registerSessionCloseoutGate;
   "operations/registerSessionTracing": typeof operations_registerSessionTracing;
   "operations/registerSessions": typeof operations_registerSessions;
@@ -708,6 +717,7 @@ declare const fullApi: ApiFromModules<{
   "pos/application/commands/posSessionTracing": typeof pos_application_commands_posSessionTracing;
   "pos/application/commands/quickAddCatalogItem": typeof pos_application_commands_quickAddCatalogItem;
   "pos/application/commands/register": typeof pos_application_commands_register;
+  "pos/application/commands/registerLifecycleAuthority": typeof pos_application_commands_registerLifecycleAuthority;
   "pos/application/commands/sessionCommands": typeof pos_application_commands_sessionCommands;
   "pos/application/commands/terminals": typeof pos_application_commands_terminals;
   "pos/application/commands/transactionAdjustmentPlanner": typeof pos_application_commands_transactionAdjustmentPlanner;
@@ -718,6 +728,7 @@ declare const fullApi: ApiFromModules<{
   "pos/application/queries/getRegisterState": typeof pos_application_queries_getRegisterState;
   "pos/application/queries/getTransactions": typeof pos_application_queries_getTransactions;
   "pos/application/queries/listRegisterCatalog": typeof pos_application_queries_listRegisterCatalog;
+  "pos/application/queries/registerLifecycleAuthority": typeof pos_application_queries_registerLifecycleAuthority;
   "pos/application/queries/searchCatalog": typeof pos_application_queries_searchCatalog;
   "pos/application/queries/searchCustomers": typeof pos_application_queries_searchCustomers;
   "pos/application/queries/storePulse": typeof pos_application_queries_storePulse;
@@ -727,6 +738,7 @@ declare const fullApi: ApiFromModules<{
   "pos/application/sync/posRegisterSessionActivity": typeof pos_application_sync_posRegisterSessionActivity;
   "pos/application/sync/projectLocalEvents": typeof pos_application_sync_projectLocalEvents;
   "pos/application/sync/projectionPolicies": typeof pos_application_sync_projectionPolicies;
+  "pos/application/sync/registerMappingAuthorityRevision": typeof pos_application_sync_registerMappingAuthorityRevision;
   "pos/application/sync/registerSessionCloseoutHolds": typeof pos_application_sync_registerSessionCloseoutHolds;
   "pos/application/sync/registerSessionSyncReview": typeof pos_application_sync_registerSessionSyncReview;
   "pos/application/sync/staffProof": typeof pos_application_sync_staffProof;
@@ -753,6 +765,8 @@ declare const fullApi: ApiFromModules<{
   "pos/infrastructure/repositories/customerRepository": typeof pos_infrastructure_repositories_customerRepository;
   "pos/infrastructure/repositories/expenseSessionCommandRepository": typeof pos_infrastructure_repositories_expenseSessionCommandRepository;
   "pos/infrastructure/repositories/localSyncRepository": typeof pos_infrastructure_repositories_localSyncRepository;
+  "pos/infrastructure/repositories/registerLifecycleAuthorityRepository": typeof pos_infrastructure_repositories_registerLifecycleAuthorityRepository;
+  "pos/infrastructure/repositories/registerLifecycleAuthorityStatusRepository": typeof pos_infrastructure_repositories_registerLifecycleAuthorityStatusRepository;
   "pos/infrastructure/repositories/registerSessionRepository": typeof pos_infrastructure_repositories_registerSessionRepository;
   "pos/infrastructure/repositories/sessionCommandRepository": typeof pos_infrastructure_repositories_sessionCommandRepository;
   "pos/infrastructure/repositories/sessionRepository": typeof pos_infrastructure_repositories_sessionRepository;
@@ -893,6 +907,8 @@ declare const fullApi: ApiFromModules<{
   "schemas/pos/posPendingCheckoutItem": typeof schemas_pos_posPendingCheckoutItem;
   "schemas/pos/posPendingCheckoutLookupAlias": typeof schemas_pos_posPendingCheckoutLookupAlias;
   "schemas/pos/posRecoveryCredential": typeof schemas_pos_posRecoveryCredential;
+  "schemas/pos/posRegisterAuthorityReplicationStatus": typeof schemas_pos_posRegisterAuthorityReplicationStatus;
+  "schemas/pos/posRegisterMappingAuthority": typeof schemas_pos_posRegisterMappingAuthority;
   "schemas/pos/posRegisterSessionActivity": typeof schemas_pos_posRegisterSessionActivity;
   "schemas/pos/posRegisterSessionActivityCheckpoint": typeof schemas_pos_posRegisterSessionActivityCheckpoint;
   "schemas/pos/posSession": typeof schemas_pos_posSession;

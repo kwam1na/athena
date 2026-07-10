@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Plan: Replicate register lifecycle authority into local POS</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #172033;
+      --muted: #667085;
+      --line: #d9dee8;
+      --paper: #ffffff;
+      --wash: #f5f7fb;
+      --accent: #3f51b5;
+      --accent-wash: #eef0ff;
+      --warn: #9a5b13;
+      --warn-wash: #fff7e8;
+      --good: #166534;
+      --good-wash: #ecfdf3;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--wash);
+      color: var(--ink);
+      font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 16px;
+      line-height: 1.6;
+    }
+    main {
+      width: min(1120px, calc(100% - 32px));
+      margin: 32px auto 72px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: 0 12px 32px rgba(23, 32, 51, 0.08);
+      overflow: hidden;
+    }
+    header { padding: 48px 56px 36px; border-bottom: 1px solid var(--line); }
+    article { padding: 8px 56px 56px; }
+    h1 { max-width: 860px; margin: 10px 0 18px; font-size: clamp(2rem, 5vw, 3.4rem); line-height: 1.08; letter-spacing: -0.035em; }
+    h2 { margin: 48px 0 14px; padding-top: 8px; font-size: 1.55rem; letter-spacing: -0.015em; }
+    h3 { margin: 28px 0 8px; font-size: 1.12rem; }
+    p { max-width: 82ch; }
+    a { color: var(--accent); }
+    .eyebrow { color: var(--accent); font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; font-size: 0.78rem; }
+    .meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+    .pill { border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; color: var(--muted); font-size: 0.84rem; }
+    .lead { max-width: 860px; color: #344054; font-size: 1.14rem; }
+    nav { margin: 28px 0 8px; padding: 20px 24px; background: var(--wash); border: 1px solid var(--line); border-radius: 10px; }
+    nav strong { display: block; margin-bottom: 8px; }
+    nav ol { columns: 2; margin: 0; padding-left: 22px; }
+    nav li { break-inside: avoid; margin: 4px 0; }
+    .callout { margin: 22px 0; padding: 18px 20px; border-left: 4px solid var(--accent); background: var(--accent-wash); border-radius: 6px; }
+    .callout.warn { border-left-color: var(--warn); background: var(--warn-wash); }
+    .callout.good { border-left-color: var(--good); background: var(--good-wash); }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    .card { padding: 18px 20px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+    .card h3 { margin-top: 0; }
+    table { width: 100%; border-collapse: collapse; margin: 18px 0 28px; font-size: 0.93rem; }
+    th, td { padding: 11px 12px; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { background: var(--wash); }
+    code { padding: 0.12em 0.35em; background: #f0f2f6; border-radius: 4px; font-size: 0.9em; }
+    .flow { margin: 24px 0; padding: 22px; background: #111827; color: #f9fafb; border-radius: 10px; overflow-x: auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9rem; white-space: pre; }
+    .unit { margin: 18px 0; padding: 20px 22px; border: 1px solid var(--line); border-radius: 10px; }
+    .unit h3 { margin: 0 0 6px; }
+    .unit .dep { color: var(--muted); font-size: 0.88rem; }
+    ul, ol { padding-left: 22px; }
+    li { margin: 6px 0; }
+    footer { margin-top: 48px; padding-top: 24px; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.9rem; }
+    @media (max-width: 760px) {
+      header, article { padding-left: 24px; padding-right: 24px; }
+      nav ol { columns: 1; }
+      .grid { grid-template-columns: 1fr; }
+      table { display: block; overflow-x: auto; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">Delivery plan</div>
+    <h1>Replicate register lifecycle authority into local POS</h1>
+    <p class="lead">A heartbeat-independent inbound channel will persist exact cloud drawer authority into IndexedDB before POS presentation or commands act on it. Cashier commands remain local-first; runtime heartbeat returns to diagnostics-only responsibility after a mixed-client rollout.</p>
+    <div class="meta">
+      <span class="pill">Created 2026-07-10</span>
+      <span class="pill">Type: fix</span>
+      <span class="pill">Status: active</span>
+      <span class="pill">Depth: deep</span>
+      <span class="pill">Risk: financial lifecycle + persistent state</span>
+    </div>
+    <p><a href="2026-07-10-001-fix-pos-register-authority-replication-plan.md">Open canonical Markdown plan</a></p>
+  </header>
+
+  <article>
+    <nav aria-label="Table of contents">
+      <strong>Contents</strong>
+      <ol>
+        <li><a href="#problem">Problem and outcome</a></li>
+        <li><a href="#contract">Required contract</a></li>
+        <li><a href="#decisions">Technical decisions</a></li>
+        <li><a href="#flow">Authority flow</a></li>
+        <li><a href="#units">Implementation units</a></li>
+        <li><a href="#rollout">Phased rollout</a></li>
+        <li><a href="#risks">Risks</a></li>
+        <li><a href="#verification">Verification</a></li>
+      </ol>
+    </nav>
+
+    <section id="problem">
+      <h2>Problem and intended outcome</h2>
+      <p>Arc's reactive cloud register query knew the mapped register session had been closed from Cash Controls, so the view model displayed the drawer gate. Heartbeat was paused, so the runtime-status response that normally persists <code>cloud_closed</code> never arrived in IndexedDB. The local command gateway therefore saw the old local drawer as healthy and returned its ID as an idempotent open.</p>
+      <div class="callout warn"><strong>Root defect:</strong> presentation and commands made one lifecycle decision from different authority sources.</div>
+      <p>The redesign replicates the exact cloud lifecycle consequence into durable local authority first. The drawer gate and <code>openDrawer</code> then consume the same local projection. A remote close remains cloud financial truth; the terminal stores only its authority consequence.</p>
+    </section>
+
+    <section id="contract">
+      <h2>Required contract</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>Local-first remains intact</h3>
+          <p>Drawer and sale commands append locally and never wait for a Convex mutation. Cloud state is replicated evidence, not a command prerequisite.</p>
+        </div>
+        <div class="card">
+          <h3>Exact subject only</h3>
+          <p>Authority is scoped to store, terminal, register, local session, and mapped cloud session. Foreign-scope cases are externally indistinguishable.</p>
+        </div>
+        <div class="card">
+          <h3>Monotonic persistence</h3>
+          <p>A server-owned lexicographic cursor compares the durable mapping epoch first, then lifecycle revision only within the same exact cloud-session subject.</p>
+        </div>
+        <div class="card">
+          <h3>No invented finance</h3>
+          <p>Remote closure does not create local counted cash, variance, approval, closeout, or manager-review events.</p>
+        </div>
+        <div class="card">
+          <h3>Offline is last-known truth</h3>
+          <p>A disconnected or reconnecting terminal uses last-known local truth until the first authoritative snapshot. Intervening local facts stay attached and reconcile to review.</p>
+        </div>
+        <div class="card">
+          <h3>History stays attached</h3>
+          <p>Replacement uses a distinct local ID. Old carts, transactions, mappings, and hard authority evidence remain tied to the original drawer.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="decisions">
+      <h2>Key technical decisions</h2>
+      <table>
+        <thead><tr><th>Boundary</th><th>Decision</th><th>Reason</th></tr></thead>
+        <tbody>
+          <tr><td>Inbound transport</td><td>Terminal-authenticated reactive query</td><td>Independent of heartbeat mutation success and usable while connected and idle.</td></tr>
+          <tr><td>Server selection</td><td>Exact local-to-cloud mapping</td><td>Prevents cross-terminal, cross-register, and unmapped-session adoption.</td></tr>
+          <tr><td>Ordering</td><td>Mapping epoch first; lifecycle revision second</td><td>A newer repaired mapping must outrank an old mapping even when the old session has a higher lifecycle revision.</td></tr>
+          <tr><td>Local persistence</td><td>Atomic compare-and-apply in the existing authority store</td><td>Crash-safe ordering without a new IndexedDB object store or schema upgrade.</td></tr>
+          <tr><td>Operational source</td><td>Refreshed local projection only</td><td>Presentation and commands use identical durable evidence.</td></tr>
+          <tr><td>Compatibility</td><td>Legacy and dedicated delivery share one reducer</td><td>Supports mixed clients without destructive writer races; directive retirement is a separate adoption-gated change.</td></tr>
+        </tbody>
+      </table>
+      <div class="callout"><strong>Classification rule:</strong> unmapped local drawer is normal pending outbound state; mapped target missing, ambiguity, or scope mismatch durably blocks the requested local drawer as <code>authority_unknown</code> and routes repair; only an exact mapped non-sale-usable session becomes <code>cloud_closed</code>.</div>
+      <h3>Operator states</h3>
+      <table>
+        <thead><tr><th>State</th><th>What the cashier sees</th><th>Action</th></tr></thead>
+        <tbody>
+          <tr><td>Loading/offline</td><td>Last-known local register and visible sync posture</td><td>Continue locally; received evidence is persisted before UI changes.</td></tr>
+          <tr><td>Closed, empty cart</td><td>Replacement drawer gate</td><td>Open a distinct replacement.</td></tr>
+          <tr><td>Closed, non-empty cart</td><td>Old cart visible but read-only</td><td>Explicitly clear the old draft, then open a replacement with an empty sale.</td></tr>
+          <tr><td><code>authority_unknown</code></td><td>Existing drawer repair presentation</td><td>Retry or use existing terminal recovery; no replacement guessing.</td></tr>
+          <tr><td>Terminal unauthorized</td><td>Existing setup repair presentation</td><td>Repair setup or sign out.</td></tr>
+          <tr><td>Authority write failed</td><td>Safe persistence-failure guard</td><td>Retry/reload; drawer and sale commands remain disabled.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="flow">
+      <h2>Authority flow</h2>
+      <div class="flow" role="img" aria-label="Register authority replication flow">Cash Controls / sync projection
+          │ lifecycle mutation + revision
+          ▼
+Register session ─── exact mapping ───► Terminal authority query
+                                             │ versioned exact subject
+                                             ▼
+                                    IndexedDB compare-and-apply
+                                             │ durable commit
+                                             ▼
+                                      Local register projection
+                                         ┌───┴────┐
+                                         ▼        ▼
+                                    Drawer gate  Local commands
+                                                      │
+                                                      ▼
+                                         distinct register.opened
+
+Runtime heartbeat ─ ─ diagnostics only ─ ─► Terminal Health / recovery</div>
+      <p>Loading, offline state, transport error, and skipped query input are non-authoritative and perform no local mutation. Persistence precedes read-model refresh, so a crash after commit recovers from IndexedDB on restart.</p>
+    </section>
+
+    <section id="units">
+      <h2>Implementation units</h2>
+
+      <div class="unit">
+        <h3>U1. Characterize the split-authority incident</h3>
+        <div class="dep">Dependencies: none</div>
+        <p>Reproduce the exact heartbeat-disabled, cloud-closed, locally-open drawer flow and protect healthy duplicate-open idempotency.</p>
+      </div>
+      <div class="unit">
+        <h3>U8. Validate the query contract in read-only shadow mode</h3>
+        <div class="dep">Dependencies: U1</div>
+        <p>Prove terminal authentication, exact 16-candidate scoping, reactive behavior, and a 40-document-read worst-case budget before durable revision infrastructure lands.</p>
+      </div>
+      <div class="unit">
+        <h3>U2. Add monotonic lifecycle and mapping authority revisions</h3>
+        <div class="dep">Dependencies: U8 preflight gate</div>
+        <p>Add lifecycle revision, a durable per-local-drawer mapping-authority revision/tombstone, centralized transition helpers, and a repository-wide writer guard.</p>
+      </div>
+      <div class="unit">
+        <h3>U3. Expose an exact terminal lifecycle-authority query</h3>
+        <div class="dep">Dependencies: U1, U2</div>
+        <p>Add a terminal-sync-secret query for at most 16 prioritized local candidates. Foreign-scope probes are indistinguishable; missing event history remains closure-reconcilable but is not reconstructed in this delivery.</p>
+      </div>
+      <div class="unit">
+        <h3>U4. Add an atomic IndexedDB authority reducer</h3>
+        <div class="dep">Dependencies: U1, U2</div>
+        <p>Compare mapping-authority epoch first and lifecycle revision only inside the same exact mapping epoch. Repair and deletion preserve tombstones and remain monotonically ordered.</p>
+      </div>
+      <div class="unit">
+        <h3>U5. Mount heartbeat-independent inbound replication</h3>
+        <div class="dep">Dependencies: U3, U4</div>
+        <p>Compose a focused runtime under <code>useRegisterLocalRuntime</code>, mounted even when idle or heartbeat-paused. Canary acknowledgements and the authority-persistence failure guard land here before gate cutover.</p>
+      </div>
+      <div class="unit">
+        <h3>U6. Make local projection the sole drawer decision source</h3>
+        <div class="dep">Dependencies: U5</div>
+        <p>Remove the direct cloud blocker. Repair states stay actionable; a non-empty old cart remains read-only until explicitly cleared before opening an empty replacement sale.</p>
+      </div>
+      <div class="unit">
+        <h3>U7. Roll out with mixed-client compatibility</h3>
+        <div class="dep">Dependencies: U6 plus supported-client adoption milestone</div>
+        <p>Shadow, canary, and expand with legacy delivery retained. U5 already supplies a one-row-per-terminal, cursor-validated, redacted acknowledgement sink independent of heartbeat.</p>
+      </div>
+    </section>
+
+    <section id="rollout">
+      <h2>Phased rollout</h2>
+      <ol>
+        <li><strong>Read-only preflight:</strong> characterize the incident and prove exact query identity/read-cost assumptions without local application.</li>
+        <li><strong>Additive server foundation:</strong> after preflight, add lifecycle/mapping revisions and the versioned query; keep legacy directives.</li>
+        <li><strong>Shadow and canary client:</strong> classify first, then apply for Arc and a small heartbeat-disabled cohort.</li>
+        <li><strong>Sole local operational projection:</strong> remove direct cloud gating after canary proof and expand by supported build.</li>
+        <li><strong>Compatibility retirement follow-up:</strong> separately retire closure directives after adoption proof and active-session directives only after exact-mapping/recovery parity.</li>
+      </ol>
+      <div class="callout good"><strong>Expansion gate:</strong> zero closed-ID reuse, zero cross-terminal adoption, durable restart behavior, and a distinct sale-usable cloud mapping for the replacement drawer.</div>
+      <p>Rollback disables new snapshot application but does not delete already-persisted hard blocks. The additive server query remains deployed through the client rollback horizon, and legacy directives remain available until old-client risk expires.</p>
+    </section>
+
+    <section id="risks">
+      <h2>Primary risks</h2>
+      <table>
+        <thead><tr><th>Risk</th><th>Impact</th><th>Mitigation</th></tr></thead>
+        <tbody>
+          <tr><td>Lifecycle or mapping writer omits revision</td><td>High</td><td>Centralize both rules, preserve mapping tombstones, and enforce a repository-wide writer guard.</td></tr>
+          <tr><td>Stale or legacy observation wins</td><td>High</td><td>Atomic revision comparison and source precedence.</td></tr>
+          <tr><td>Wrong cloud drawer adopted</td><td>Critical</td><td>Exact mapping and full scope; never select latest.</td></tr>
+          <tr><td>Financial fact fabricated</td><td>Critical</td><td>Authority-only reducer with negative event-append tests.</td></tr>
+          <tr><td>Offline terminal acts after remote close</td><td>High but unavoidable</td><td>Explicit last-known contract, reconnect convergence, immutable reviewable facts.</td></tr>
+          <tr><td>Replacement reuses closed cloud target</td><td>High</td><td>Projection rejection and sync review.</td></tr>
+          <tr><td>Mixed-client regression</td><td>High</td><td>Server-first rollout, shared reducer, legacy compatibility window.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="verification">
+      <h2>Verification strategy</h2>
+      <ul>
+        <li>Exact incident: mapped local drawer, no local closeout, Cash Controls close, heartbeat false, durable local block, distinct replacement ID.</li>
+        <li>Ordering: duplicate, stale, healthy-after-block, block-after-healthy, legacy/new writer arrival in both orders.</li>
+        <li>Identity: wrong store, terminal, register, local ID, cloud ID, duplicate mapping, and mapping-change race.</li>
+        <li>Durability: restart after closure, crash before React refresh, write failure and retry, durable fail-closed mapping repair classifications.</li>
+        <li>Local-first: no Convex mutation in drawer command; outbound sync continues with heartbeat disabled.</li>
+        <li>Projection: replacement maps to a new sale-usable cloud session; closed-target reuse becomes review; retry is idempotent.</li>
+        <li>Reconnect race: a sale before the first snapshot remains on the original drawer and projects through manager review; received authority persists before changing UI or commands.</li>
+        <li>Rollout: redacted heartbeat-independent apply acknowledgements, shadow mismatch metrics, canary convergence latency, supported build adoption, and zero closed-ID reuse.</li>
+      </ul>
+      <p>Merge-grade validation covers focused Vitest suites, Convex audit and lint, frontend lint, webapp typecheck and build, harness review, graphify rebuild after source changes, and the Athena PR gate.</p>
+    </section>
+
+    <footer>
+      <p>The Markdown plan is canonical. This HTML file is a review digest and must be updated if the plan changes materially.</p>
+    </footer>
+  </article>
+</main>
+</body>
+</html>

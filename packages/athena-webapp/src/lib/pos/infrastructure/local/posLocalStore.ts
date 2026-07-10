@@ -19,6 +19,11 @@ import {
   canReportPosRegisterSessionLocalActivityType,
   type PosRegisterSessionActivitySkipReasonCode,
 } from "../../../../../shared/posRegisterSessionActivityContract";
+import {
+  reconcileRegisterLifecycleServerAuthority,
+  type PosRegisterLifecycleAuthorityObservation,
+  type PosRegisterLifecycleServerAuthority,
+} from "./registerLifecycleAuthorityReconciliation";
 
 export const POS_LOCAL_STORE_SCHEMA_VERSION = 9;
 
@@ -64,10 +69,7 @@ export type PosLocalSyncEventStatus =
   | "failed";
 
 export type PosLocalActivityReportStatus =
-  | "pending"
-  | "reported"
-  | "mapping_pending"
-  | "failed";
+  "pending" | "reported" | "mapping_pending" | "failed";
 
 export type PosLocalActivityReportReasonCode =
   | PosRegisterSessionActivitySkipReasonCode
@@ -92,8 +94,7 @@ export interface PosLocalReviewResolutionMetadata {
 }
 
 export type PosLocalEventValidationFlag =
-  | "app-session-unverified"
-  | "cloud-validation-uncertain";
+  "app-session-unverified" | "cloud-validation-uncertain";
 
 export type PosLocalEventUploadDeferral = "app-session-validated";
 
@@ -155,13 +156,15 @@ export interface PosLocalCloudMapping {
   localId: string;
   cloudId: string;
   mappedAt: number;
+  mappingAuthorityRevision?: number;
+  registerCandidateState?: "current" | "historical";
+  registerNumber?: string;
+  storeId?: string;
+  terminalId?: string;
 }
 
 export type PosTerminalIntegrityStatus =
-  | "healthy"
-  | "repairing"
-  | "requires_reprovision"
-  | "reset_required";
+  "healthy" | "repairing" | "requires_reprovision" | "reset_required";
 
 export type PosTerminalIntegrityReason =
   | "authorization_failed"
@@ -186,9 +189,7 @@ export interface PosTerminalIntegrityState {
 export type PosDrawerAuthorityStatus = "healthy" | "blocked";
 
 export type PosDrawerAuthorityBlockReason =
-  | "cloud_closed"
-  | "lifecycle_rejected"
-  | "authority_unknown";
+  "cloud_closed" | "lifecycle_rejected" | "authority_unknown";
 
 export interface PosDrawerAuthorityState {
   cloudRegisterSessionId?: string;
@@ -200,14 +201,34 @@ export interface PosDrawerAuthorityState {
   status: PosDrawerAuthorityStatus;
   storeId: string;
   terminalId: string;
+  localReviewAuthority?: PosDrawerLocalReviewAuthority;
+  serverAuthority?: PosRegisterLifecycleServerAuthority;
 }
 
+export type PosDrawerLocalReviewAuthority = {
+  message?: string;
+  observedAt: number;
+  reason: "lifecycle_rejected" | "authority_unknown";
+  status: "blocked";
+};
+
+export type PosRegisterLifecycleAuthorityApplyResult =
+  | {
+      disposition: "applied";
+      reason: "committed";
+      value: PosDrawerAuthorityState;
+    }
+  | {
+      disposition: "noop";
+      reason: "duplicate" | "lower_confidence" | "stale";
+    }
+  | {
+      disposition: "rejected";
+      reason: "cursor_conflict" | "mapping_invalidated";
+    };
+
 export type PosLocalStoreDayReadinessStatus =
-  | "started"
-  | "not_started"
-  | "closed"
-  | "reopened"
-  | "unknown";
+  "started" | "not_started" | "closed" | "reopened" | "unknown";
 
 export interface PosLocalStoreDayReadiness {
   storeId: string;
@@ -295,9 +316,7 @@ export interface PosLocalRegisterAvailabilitySnapshot {
 }
 
 export type PosLocalStoreErrorCode =
-  | "missing_object_stores"
-  | "unsupported_schema_version"
-  | "write_failed";
+  "missing_object_stores" | "unsupported_schema_version" | "write_failed";
 
 export type PosLocalStoreResult<T> =
   | { ok: true; value: T }
@@ -753,13 +772,126 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
           ["meta", "authority"],
           async (transaction) => {
             await ensureSupportedSchema(transaction, "readwrite");
-            const normalized = normalizeDrawerAuthorityState(state);
+            const current = await transaction.get<unknown>(
+              "authority",
+              drawerAuthorityKey(state),
+            );
+            const normalized = mergeDrawerAuthorityState(
+              isDrawerAuthorityState(current) ? current : null,
+              state,
+            );
             await transaction.put(
               "authority",
               drawerAuthorityKey(normalized),
               normalized,
             );
             return normalized;
+          },
+        );
+
+        return { ok: true, value };
+      } catch (error) {
+        return toFailure(error);
+      }
+    },
+
+    async applyRegisterLifecycleAuthority(input: {
+      expectedMapping?: {
+        cloudRegisterSessionId?: string;
+        mappedAt?: number;
+        mappingAuthorityRevision?: number;
+        registerCandidateState?: "current" | "historical";
+        registerNumber?: string;
+        storeId?: string;
+        terminalId?: string;
+      };
+      observation: PosRegisterLifecycleAuthorityObservation;
+      storeId: string;
+      terminalId: string;
+    }): Promise<PosLocalStoreResult<PosRegisterLifecycleAuthorityApplyResult>> {
+      try {
+        const value = await options.adapter.transaction(
+          "readwrite",
+          ["meta", "mappings", "authority"],
+          async (transaction) => {
+            await ensureSupportedSchema(transaction, "readwrite");
+            const mapping = await transaction.get<PosLocalCloudMapping>(
+              "mappings",
+              mappingKey(
+                "registerSession",
+                input.observation.localRegisterSessionId,
+              ),
+            );
+            if (
+              !registerAuthorityMappingMatchesExpectation({
+                expected: input.expectedMapping,
+                mapping,
+                observation: input.observation,
+              })
+            ) {
+              return {
+                disposition: "rejected" as const,
+                reason: "mapping_invalidated" as const,
+              };
+            }
+
+            const key = drawerAuthorityKey({
+              localRegisterSessionId: input.observation.localRegisterSessionId,
+              storeId: input.storeId,
+              terminalId: input.terminalId,
+            });
+            const rawCurrent = await transaction.get<unknown>("authority", key);
+            const current = isDrawerAuthorityState(rawCurrent)
+              ? toDrawerAuthorityEnvelope(rawCurrent)
+              : null;
+            if (
+              input.observation.cursor &&
+              mapping?.mappingAuthorityRevision !== undefined &&
+              input.observation.cursor.mappingAuthorityRevision <
+                mapping.mappingAuthorityRevision
+            ) {
+              return {
+                disposition: "noop" as const,
+                reason: "stale" as const,
+              };
+            }
+            const decision = reconcileRegisterLifecycleServerAuthority(
+              current?.serverAuthority,
+              toServerAuthority(input.observation),
+            );
+            if (decision.disposition !== "applied") return decision;
+
+            const next = buildEffectiveDrawerAuthorityState({
+              base: current ?? {
+                localRegisterSessionId:
+                  input.observation.localRegisterSessionId,
+                observedAt: input.observation.observedAt,
+                registerNumber: input.observation.registerNumber,
+                status: input.observation.status,
+                storeId: input.storeId,
+                terminalId: input.terminalId,
+              },
+              serverAuthority: decision.value,
+            });
+            await transaction.put("authority", key, next);
+
+            if (mapping && decision.value.cursor) {
+              await transaction.put(
+                "mappings",
+                mappingKey(mapping.entity, mapping.localId),
+                {
+                  ...mapping,
+                  mappingAuthorityRevision:
+                    decision.value.cursor.mappingAuthorityRevision,
+                },
+              );
+            }
+
+            return {
+              disposition: "applied" as const,
+              reason: "committed" as const,
+              value: next,
+            };
           },
         );
 
@@ -828,6 +960,42 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
         );
 
         return { ok: true as const, value: null };
+      } catch (error) {
+        return toFailure(error);
+      }
+    },
+
+    async clearLocalDrawerReviewAuthorityState(input: {
+      localRegisterSessionId: string;
+      storeId: string;
+      terminalId: string;
+    }): Promise<PosLocalStoreResult<null>> {
+      try {
+        await options.adapter.transaction(
+          "readwrite",
+          ["meta", "authority"],
+          async (transaction) => {
+            await ensureSupportedSchema(transaction, "readwrite");
+            const key = drawerAuthorityKey(input);
+            const rawCurrent = await transaction.get<unknown>("authority", key);
+            if (!isDrawerAuthorityState(rawCurrent)) return;
+            const current = toDrawerAuthorityEnvelope(rawCurrent);
+            if (!current.localReviewAuthority) return;
+            if (!current.serverAuthority) {
+              await transaction.delete("authority", key);
+              return;
+            }
+            await transaction.put(
+              "authority",
+              key,
+              buildEffectiveDrawerAuthorityState({
+                base: current,
+                localReviewAuthority: null,
+              }),
+            );
+          },
+        );
+        return { ok: true, value: null };
       } catch (error) {
         return toFailure(error);
       }
@@ -1500,12 +1668,45 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
           ["meta", "mappings"],
           async (transaction) => {
             await ensureSupportedSchema(transaction, "readwrite");
+            const current = await transaction.get<PosLocalCloudMapping>(
+              "mappings",
+              mappingKey(mapping.entity, mapping.localId),
+            );
+            if (
+              mapping.entity === "registerSession" &&
+              mapping.registerCandidateState === "current" &&
+              mapping.storeId &&
+              mapping.terminalId
+            ) {
+              const mappings =
+                await transaction.getAll<PosLocalCloudMapping>("mappings");
+              for (const existing of mappings) {
+                if (
+                  existing.entity === "registerSession" &&
+                  existing.localId !== mapping.localId &&
+                  existing.registerCandidateState === "current" &&
+                  existing.storeId === mapping.storeId &&
+                  existing.terminalId === mapping.terminalId &&
+                  existing.registerNumber === mapping.registerNumber
+                ) {
+                  await transaction.put(
+                    "mappings",
+                    mappingKey(existing.entity, existing.localId),
+                    { ...existing, registerCandidateState: "historical" },
+                  );
+                }
+              }
+            }
+            const next =
+              current?.cloudId === mapping.cloudId
+                ? { ...current, ...mapping }
+                : mapping;
             await transaction.put(
               "mappings",
               mappingKey(mapping.entity, mapping.localId),
-              mapping,
+              next,
             );
-            return mapping;
+            return next;
           },
         );
 
@@ -1828,7 +2029,8 @@ function normalizeActivityReportState(
     ...(isLocalActivityReasonCode(state.reasonCode)
       ? { reasonCode: state.reasonCode }
       : {}),
-    ...(typeof state.reportedAt === "number" && Number.isFinite(state.reportedAt)
+    ...(typeof state.reportedAt === "number" &&
+    Number.isFinite(state.reportedAt)
       ? { reportedAt: state.reportedAt }
       : {}),
     status: isLocalActivityReportStatus(state.status)
@@ -2259,6 +2461,193 @@ function normalizeDrawerAuthorityState(
   };
 }
 
+function mergeDrawerAuthorityState(
+  current: PosDrawerAuthorityState | null,
+  incoming: PosDrawerAuthorityState,
+): PosDrawerAuthorityState {
+  const envelope = current ? toDrawerAuthorityEnvelope(current) : null;
+  if (isLocalReviewAuthorityState(incoming)) {
+    return buildEffectiveDrawerAuthorityState({
+      base: { ...(envelope ?? incoming), ...incoming },
+      localReviewAuthority: {
+        ...(incoming.message ? { message: incoming.message } : {}),
+        observedAt: incoming.observedAt,
+        reason: incoming.reason,
+        status: "blocked",
+      },
+    });
+  }
+
+  return buildEffectiveDrawerAuthorityState({
+    base: { ...(envelope ?? incoming), ...incoming },
+    serverAuthority:
+      incoming.serverAuthority ??
+      ({
+        classification:
+          incoming.status === "healthy" ? "sale_usable" : "sale_blocked",
+        ...(incoming.cloudRegisterSessionId
+          ? { cloudRegisterSessionId: incoming.cloudRegisterSessionId }
+          : {}),
+        ...(incoming.message ? { message: incoming.message } : {}),
+        observedAt: incoming.observedAt,
+        ...(incoming.reason === "cloud_closed" ||
+        incoming.reason === "authority_unknown"
+          ? { reason: incoming.reason }
+          : {}),
+        source: "legacy_runtime_directive",
+        status: incoming.status,
+      } satisfies PosRegisterLifecycleServerAuthority),
+  });
+}
+
+function toDrawerAuthorityEnvelope(
+  state: PosDrawerAuthorityState,
+): PosDrawerAuthorityState {
+  if (state.serverAuthority || state.localReviewAuthority) {
+    return buildEffectiveDrawerAuthorityState({ base: state });
+  }
+  return mergeDrawerAuthorityState(null, state);
+}
+
+function buildEffectiveDrawerAuthorityState(input: {
+  base: PosDrawerAuthorityState;
+  localReviewAuthority?: PosDrawerLocalReviewAuthority | null;
+  serverAuthority?: PosRegisterLifecycleServerAuthority | null;
+}): PosDrawerAuthorityState {
+  const localReviewAuthority =
+    input.localReviewAuthority === undefined
+      ? input.base.localReviewAuthority
+      : (input.localReviewAuthority ?? undefined);
+  const serverAuthority =
+    input.serverAuthority === undefined
+      ? input.base.serverAuthority
+      : (input.serverAuthority ?? undefined);
+  const effective = localReviewAuthority ?? serverAuthority;
+  return normalizeDrawerAuthorityState({
+    localRegisterSessionId: input.base.localRegisterSessionId,
+    observedAt: effective?.observedAt ?? input.base.observedAt,
+    status: effective?.status ?? input.base.status,
+    storeId: input.base.storeId,
+    terminalId: input.base.terminalId,
+    ...(input.base.registerNumber
+      ? { registerNumber: input.base.registerNumber }
+      : {}),
+    ...(serverAuthority?.cloudRegisterSessionId
+      ? { cloudRegisterSessionId: serverAuthority.cloudRegisterSessionId }
+      : input.base.cloudRegisterSessionId
+        ? { cloudRegisterSessionId: input.base.cloudRegisterSessionId }
+        : {}),
+    ...(effective?.message ? { message: effective.message } : {}),
+    ...(effective?.reason ? { reason: effective.reason } : {}),
+    ...(localReviewAuthority ? { localReviewAuthority } : {}),
+    ...(serverAuthority ? { serverAuthority } : {}),
+  });
+}
+
+function isLocalReviewAuthorityState(
+  state: PosDrawerAuthorityState,
+): state is PosDrawerAuthorityState & {
+  reason: PosDrawerLocalReviewAuthority["reason"];
+  status: "blocked";
+} {
+  return (
+    state.status === "blocked" &&
+    !state.serverAuthority &&
+    (state.reason === "lifecycle_rejected" ||
+      state.reason === "authority_unknown")
+  );
+}
+
+function toServerAuthority(
+  observation: PosRegisterLifecycleAuthorityObservation,
+): PosRegisterLifecycleServerAuthority {
+  return {
+    classification: observation.classification,
+    ...(observation.cloudRegisterSessionId
+      ? { cloudRegisterSessionId: observation.cloudRegisterSessionId }
+      : {}),
+    ...(observation.cursor ? { cursor: observation.cursor } : {}),
+    ...(observation.message ? { message: observation.message } : {}),
+    observedAt: observation.observedAt,
+    ...(observation.reason ? { reason: observation.reason } : {}),
+    source: observation.source,
+    status: observation.status,
+  };
+}
+
+function registerAuthorityMappingMatchesExpectation(input: {
+  expected?: {
+    cloudRegisterSessionId?: string;
+    mappedAt?: number;
+    mappingAuthorityRevision?: number;
+    registerCandidateState?: "current" | "historical";
+    registerNumber?: string;
+    storeId?: string;
+    terminalId?: string;
+  };
+  mapping?: PosLocalCloudMapping;
+  observation: PosRegisterLifecycleAuthorityObservation;
+}) {
+  if (input.observation.source === "dedicated_snapshot" && !input.expected) {
+    return false;
+  }
+  if (!input.expected) {
+    return (
+      !input.mapping ||
+      !input.observation.cloudRegisterSessionId ||
+      input.mapping.cloudId === input.observation.cloudRegisterSessionId
+    );
+  }
+  if (!input.mapping || input.mapping.entity !== "registerSession") {
+    return false;
+  }
+  if (
+    input.expected.cloudRegisterSessionId !== undefined &&
+    input.mapping.cloudId !== input.expected.cloudRegisterSessionId
+  ) {
+    return false;
+  }
+  if (
+    input.expected.mappedAt !== undefined &&
+    input.mapping.mappedAt !== input.expected.mappedAt
+  ) {
+    return false;
+  }
+  if (
+    Object.hasOwn(input.expected, "mappingAuthorityRevision") &&
+    input.mapping.mappingAuthorityRevision !==
+      input.expected.mappingAuthorityRevision
+  ) {
+    return false;
+  }
+  if (
+    Object.hasOwn(input.expected, "registerCandidateState") &&
+    input.mapping.registerCandidateState !==
+      input.expected.registerCandidateState
+  ) {
+    return false;
+  }
+  if (
+    Object.hasOwn(input.expected, "registerNumber") &&
+    input.mapping.registerNumber !== input.expected.registerNumber
+  ) {
+    return false;
+  }
+  if (
+    Object.hasOwn(input.expected, "storeId") &&
+    input.mapping.storeId !== input.expected.storeId
+  ) {
+    return false;
+  }
+  if (
+    Object.hasOwn(input.expected, "terminalId") &&
+    input.mapping.terminalId !== input.expected.terminalId
+  ) {
+    return false;
+  }
+  return true;
+}
+
 function toSafeAuthorityMessage(
   message: string,
   reason?: PosTerminalIntegrityReason,
@@ -2319,8 +2708,7 @@ function isStaffAuthorityRecord(
   const record = value as Record<string, unknown>;
   const verifier = record.verifier as Record<string, unknown> | undefined;
   const wrappedProof = record.wrappedPosLocalStaffProof as
-    | Record<string, unknown>
-    | undefined;
+    Record<string, unknown> | undefined;
 
   return (
     Array.isArray(record.activeRoles) &&
@@ -2357,8 +2745,7 @@ function isCashierPresenceRecord(
   if (!value || typeof value !== "object") return false;
   const record = value as Record<string, unknown>;
   const wrappedProof = record.wrappedPosLocalStaffProof as
-    | Record<string, unknown>
-    | undefined;
+    Record<string, unknown> | undefined;
 
   return (
     Array.isArray(record.activeRoles) &&
@@ -2718,8 +3105,7 @@ export function createMemoryPosLocalStorageAdapter(options?: {
         const transaction: PosLocalStoreTransaction = {
           async get<T>(storeName: PosLocalObjectStoreName, key: string) {
             return cloneValue(transactionData[storeName].get(key)) as
-              | T
-              | undefined;
+              T | undefined;
           },
           async getAll<T>(storeName: PosLocalObjectStoreName) {
             return Array.from(transactionData[storeName].values()).map(

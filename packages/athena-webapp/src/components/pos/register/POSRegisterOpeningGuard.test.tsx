@@ -356,6 +356,32 @@ describe("POSRegisterOpeningGuard", () => {
     ).toBeInTheDocument();
   });
 
+  it("shows terminal recovery when the local register read times out", () => {
+    useLocalPosReadinessMock.mockReturnValue({
+      status: "blocked",
+      reason: "local_store_unavailable",
+      message:
+        "Local register state could not be read in time. Clear and reprovision this terminal before continuing.",
+    });
+
+    render(
+      <POSRegisterOpeningGuard>
+        <div>Register workspace</div>
+      </POSRegisterOpeningGuard>,
+    );
+
+    expect(screen.queryByText("Register workspace")).not.toBeInTheDocument();
+    expect(screen.getByText("POS setup required")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Local register state could not be read in time. Clear and reprovision this terminal before continuing.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Clear and reprovision terminal" }),
+    ).toBeInTheDocument();
+  });
+
   it("shows a blocked state when the store day has not started", () => {
     useQueryMock.mockImplementation((queryName: string) => {
       if (queryName === "getDailyOpeningSnapshot") {

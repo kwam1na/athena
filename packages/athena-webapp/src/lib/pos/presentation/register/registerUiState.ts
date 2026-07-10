@@ -112,6 +112,7 @@ export interface RegisterServiceEntryState {
 
 export interface RegisterCartState {
   items: CartItem[];
+  readOnly?: boolean;
   serviceItems?: RegisterServiceLineState[];
   onUpdateServiceAmount?: (lineId: string, amount: number) => Promise<void>;
   onRemoveService?: (lineId: string) => Promise<void>;
@@ -235,6 +236,8 @@ export interface RegisterDrawerGateState {
     | "terminalRepair"
     | "drawerAuthorityRepair";
   isRecovery?: boolean;
+  isReplacement?: boolean;
+  repairReason?: "authority_unknown" | "persistence_failed" | "sync_review";
   registerLabel: string;
   registerNumber: string;
   currency?: string;
@@ -283,6 +286,8 @@ export interface RegisterDrawerGateState {
   onSubmitOpeningFloatCorrection?: () => Promise<void>;
   onSubmitCloseout?: () => Promise<void>;
   onReopenRegister?: () => Promise<void>;
+  onClearSale?: () => Promise<void>;
+  isClearingSale?: boolean;
   onRetrySync?: () => void;
   onRepairTerminalSetup?: () => Promise<void>;
   onSubmit?: () => Promise<void>;

@@ -14,11 +14,14 @@ vi.mock("@tanstack/react-router", () => ({
 
 vi.mock("../OrderSummary", () => ({
   OrderSummary: ({
+    disabled,
     onVoidTransaction,
   }: {
+    disabled?: boolean;
     onVoidTransaction?: () => void | Promise<void>;
   }) => (
     <div>
+      <span>{disabled ? "checkout-disabled" : "checkout-enabled"}</span>
       {onVoidTransaction ? (
         <button onClick={() => void onVoidTransaction()} type="button">
           Void sale
@@ -110,5 +113,11 @@ describe("RegisterCheckoutPanel", () => {
     expect(
       screen.queryByRole("button", { name: "Void sale" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("keeps the checkout visible while disabling mutations behind a drawer gate", () => {
+    render(<RegisterCheckoutPanel checkout={buildCheckout()} readOnly />);
+
+    expect(screen.getByText("checkout-disabled")).toBeInTheDocument();
   });
 });

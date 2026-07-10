@@ -11,6 +11,10 @@ import { isRegisterSessionReplacementBlocking } from "../../shared/registerSessi
 import { getStoreScheduleContextForStoreAtWithCtx } from "../inventory/storeSchedule";
 import type { StoreScheduleContext } from "../lib/storeScheduleTime";
 import { recordRegisterSessionTraceBestEffort } from "./registerSessionTracing";
+import {
+  insertRegisterSessionWithAuthority,
+  patchRegisterSessionWithAuthority,
+} from "./registerSessionAuthorityRevision";
 
 const registerSessionStatusSet = (
   ...statuses: RegisterSessionStatus[]
@@ -174,7 +178,7 @@ async function persistRegisterSessionWorkflowTraceIdBestEffort(
   }
 
   try {
-    await ctx.db.patch("registerSession", args.registerSessionId, {
+    await patchRegisterSessionWithAuthority(ctx, args.registerSessionId, {
       workflowTraceId: args.traceId,
     });
   } catch (error) {
@@ -719,8 +723,8 @@ export const openRegisterSession = internalMutation({
       at: sessionInput.openedAt,
       storeId: args.storeId,
     });
-    const sessionId = await ctx.db.insert(
-      "registerSession",
+    const sessionId = await insertRegisterSessionWithAuthority(
+      ctx,
       omitUndefined({
         ...sessionInput,
         ...buildRegisterSessionDateDerivationPatch({
@@ -918,7 +922,7 @@ export const recordRegisterSessionTransaction = internalMutation({
     }
 
     if (Object.keys(updates).length > 0) {
-      await ctx.db.patch("registerSession", args.registerSessionId, updates);
+      await patchRegisterSessionWithAuthority(ctx, args.registerSessionId, updates);
     }
 
     const updatedSession = await ctx.db.get("registerSession", args.registerSessionId);
@@ -982,8 +986,8 @@ export const beginRegisterSessionCloseout = internalMutation({
       storeId: session.storeId,
     });
     const closeoutPatch = buildRegisterSessionCloseoutPatch(session, args);
-    await ctx.db.patch(
-      "registerSession",
+    await patchRegisterSessionWithAuthority(
+      ctx,
       args.registerSessionId,
       {
         ...closeoutPatch,
@@ -1009,8 +1013,8 @@ export const reopenRegisterSession = internalMutation({
       throw new Error("Register session not found.");
     }
 
-    await ctx.db.patch(
-      "registerSession",
+    await patchRegisterSessionWithAuthority(
+      ctx,
       args.registerSessionId,
       buildReopenedRegisterSessionPatch(session)
     );
@@ -1034,8 +1038,8 @@ export async function rejectRegisterSessionCloseoutWithCtx(
     throw new Error("Register session not found.");
   }
 
-  await ctx.db.patch(
-    "registerSession",
+  await patchRegisterSessionWithAuthority(
+    ctx,
     args.registerSessionId,
     buildRejectedRegisterSessionCloseoutPatch(session, args)
   );
@@ -1057,8 +1061,8 @@ export async function reopenRejectedRegisterSessionCloseoutWithCtx(
     throw new Error("Register session not found.");
   }
 
-  await ctx.db.patch(
-    "registerSession",
+  await patchRegisterSessionWithAuthority(
+    ctx,
     args.registerSessionId,
     buildReopenedRejectedRegisterSessionCloseoutPatch(session, args)
   );
@@ -1091,8 +1095,8 @@ export const reopenClosedRegisterSessionCloseout = internalMutation({
       });
     }
 
-    await ctx.db.patch(
-      "registerSession",
+    await patchRegisterSessionWithAuthority(
+      ctx,
       args.registerSessionId,
       buildReopenedClosedRegisterSessionPatch(session, args)
     );
@@ -1120,8 +1124,8 @@ export async function recordRegisterSessionDepositWithCtx(
     );
   }
 
-  await ctx.db.patch(
-    "registerSession",
+  await patchRegisterSessionWithAuthority(
+    ctx,
     args.registerSessionId,
     buildRegisterSessionDepositPatch(session, args)
   );
@@ -1153,7 +1157,7 @@ export async function correctRegisterSessionOpeningFloatWithCtx(
   const updates = buildRegisterSessionOpeningFloatCorrectionPatch(session, args);
 
   if (Object.keys(updates).length > 0) {
-    await ctx.db.patch("registerSession", args.registerSessionId, updates);
+    await patchRegisterSessionWithAuthority(ctx, args.registerSessionId, updates);
   }
 
   return ctx.db.get("registerSession", args.registerSessionId);
@@ -1186,8 +1190,8 @@ export const closeRegisterSession = internalMutation({
       at: closeoutPatch.closedAt,
       storeId: session.storeId,
     });
-    await ctx.db.patch(
-      "registerSession",
+    await patchRegisterSessionWithAuthority(
+      ctx,
       args.registerSessionId,
       {
         ...closeoutPatch,
@@ -1236,7 +1240,7 @@ export const linkExistingRegisterSessionWorkflowTrace = internalMutation({
     }
 
     if (!registerSession.workflowTraceId) {
-      await ctx.db.patch("registerSession", args.registerSessionId, {
+      await patchRegisterSessionWithAuthority(ctx, args.registerSessionId, {
         workflowTraceId: traceId,
       });
     }

@@ -22,6 +22,7 @@ import {
   type RegisterSessionCloseoutReview,
 } from "../operations/registerSessionCloseoutGate";
 import { recordRegisterSessionTraceBestEffort } from "../operations/registerSessionTracing";
+import { patchRegisterSessionWithAuthority } from "../operations/registerSessionAuthorityRevision";
 import { createApprovalRequesterChallengeWithCtx } from "../operations/approvalRequesterChallenges";
 import { authenticateStaffCredentialWithCtx } from "../operations/staffCredentials";
 import type { OperationalRole } from "../operations/staffRoles";
@@ -425,7 +426,7 @@ async function persistRegisterSessionWorkflowTraceIdBestEffort(
   }
 
   try {
-    await ctx.db.patch("registerSession", args.registerSessionId, {
+    await patchRegisterSessionWithAuthority(ctx, args.registerSessionId, {
       workflowTraceId: args.traceId,
     });
   } catch (error) {
@@ -1337,7 +1338,7 @@ export const submitRegisterSessionCloseout = mutation({
         storeId: args.storeId,
       });
 
-      await ctx.db.patch("registerSession", registerSession._id, {
+      await patchRegisterSessionWithAuthority(ctx, registerSession._id, {
         managerApprovalRequestId: approvalRequestId,
         ...buildRegisterSessionDateDerivationPatch({
           closeoutContext,

@@ -353,6 +353,19 @@ export type SyncProjectionRepository = {
   createMapping(
     input: LocalSyncMappingRecordInput,
   ): Promise<LocalSyncMappingRecord>;
+  markRegisterSessionMappingAmbiguous?(args: {
+    storeId: Id<"store">;
+    terminalId: Id<"posTerminal">;
+    localRegisterSessionId: string;
+  }): Promise<void>;
+  markRegisterSessionMappingMapped?(args: {
+    cloudRegisterSessionId: string;
+    localRegisterSessionId: string;
+    mappingId: Id<"posLocalSyncMapping">;
+    sourceEventType?: string;
+    storeId: Id<"store">;
+    terminalId: Id<"posTerminal">;
+  }): Promise<void>;
   createConflict(
     input: Omit<LocalSyncConflictRecord, "_id">,
   ): Promise<LocalSyncConflictRecord>;

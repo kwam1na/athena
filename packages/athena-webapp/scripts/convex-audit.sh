@@ -4,6 +4,12 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CONVEX_DIR="$ROOT_DIR/convex"
+BUN_EXECUTABLE="${BUN_EXECUTABLE:-$(command -v bun 2>/dev/null || true)}"
+
+if [ -z "$BUN_EXECUTABLE" ] || [ ! -x "$BUN_EXECUTABLE" ]; then
+  echo "audit:convex requires Bun via BUN_EXECUTABLE or PATH" >&2
+  exit 1
+fi
 
 if command -v rg >/dev/null 2>&1; then
   SEARCH_BACKEND="rg"
@@ -81,6 +87,7 @@ echo "ctx.runAction calls: $(count_fixed_matches 'ctx.runAction(')"
 echo "api.* refs inside Convex: $(count_fixed_matches 'api.')"
 echo "Date.now() occurrences: $(count_fixed_matches 'Date.now(')"
 python3 "$ROOT_DIR/scripts/convexPaginationAntiPatternCheck.py" "$ROOT_DIR"
+"$BUN_EXECUTABLE" "$ROOT_DIR/../../scripts/check-register-session-authority-writers.ts"
 echo
 
 echo "Top files by hotspot count"

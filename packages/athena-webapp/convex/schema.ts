@@ -67,6 +67,8 @@ import {
   posLocalSyncCursorSchema,
   posLocalSyncEventSchema,
   posLocalSyncMappingSchema,
+  posRegisterMappingAuthoritySchema,
+  posRegisterAuthorityReplicationStatusSchema,
   posPendingCheckoutItemSchema,
   posPendingCheckoutLookupAliasSchema,
   posLocalStaffProofSchema,
@@ -861,6 +863,18 @@ const schema = defineSchema({
       "cloudId",
     ])
     .index("by_localEventId", ["localEventId"]),
+  posRegisterMappingAuthority: defineTable(posRegisterMappingAuthoritySchema)
+    .index("by_store_terminal_localRegisterSession", [
+      "storeId",
+      "terminalId",
+      "localRegisterSessionId",
+    ])
+    .index("by_store_terminal", ["storeId", "terminalId"]),
+  posRegisterAuthorityReplicationStatus: defineTable(
+    posRegisterAuthorityReplicationStatusSchema
+  )
+    .index("by_terminalId", ["terminalId"])
+    .index("by_store_terminal", ["storeId", "terminalId"]),
   posLocalSyncConflict: defineTable(posLocalSyncConflictSchema)
     .index("by_store_status", ["storeId", "status"])
     .index("by_store_type_status", ["storeId", "conflictType", "status"])

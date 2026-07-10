@@ -1,4 +1,4 @@
-import type { FormEvent } from "react";
+import { useEffect, useRef, type FormEvent } from "react";
 import {
   ArrowRightIcon,
   Clock3Icon,
@@ -113,6 +113,15 @@ export function RegisterDrawerGate({
 }: {
   drawerGate: RegisterDrawerGateState;
 }) {
+  const blockingGateHeadingRef = useRef<HTMLHeadingElement>(null);
+  const isClearOnlyRecovery = Boolean(
+    drawerGate.mode === "recovery" && drawerGate.onClearSale,
+  );
+  useEffect(() => {
+    if (isClearOnlyRecovery) {
+      blockingGateHeadingRef.current?.focus();
+    }
+  }, [isClearOnlyRecovery]);
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (drawerGate.canOpenDrawer === false) {
@@ -144,8 +153,72 @@ export function RegisterDrawerGate({
     drawerGate.mode === "drawerAuthorityRepair";
   const canSignOut = drawerGate.hasSignedInStaff !== false;
 
+  if (isRecovery && drawerGate.onClearSale) {
+    return (
+      <div className="mx-auto max-w-2xl rounded-lg border border-border bg-surface-raised p-8 shadow-surface">
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <p className="text-sm font-medium uppercase tracking-[0.2em] text-muted-foreground">
+              Register {drawerGate.registerNumber}
+            </p>
+            <span className="rounded-full border border-warning/35 bg-warning/10 px-2.5 py-1 text-xs font-medium text-warning-foreground">
+              Sale paused
+            </span>
+          </div>
+          <div className="space-y-2">
+            <h2
+              className="text-2xl font-semibold text-foreground focus:outline-none"
+              ref={blockingGateHeadingRef}
+              tabIndex={-1}
+            >
+              Drawer changed
+            </h2>
+            <p aria-live="polite" className="sr-only" role="status">
+              Sale paused. This sale belongs to the previous drawer.
+            </p>
+            <p className="text-sm leading-6 text-muted-foreground">
+              This sale belongs to the previous drawer. Clear the sale before
+              opening a replacement drawer.
+            </p>
+            {drawerGate.errorMessage ? (
+              <p className="text-sm text-danger" role="alert">
+                {drawerGate.errorMessage}
+              </p>
+            ) : null}
+          </div>
+          <div className="flex flex-wrap gap-2 pt-2">
+            <LoadingButton
+              aria-label="Clear sale"
+              disabled={Boolean(drawerGate.isClearingSale)}
+              isLoading={Boolean(drawerGate.isClearingSale)}
+              onClick={() => void drawerGate.onClearSale?.()}
+              type="button"
+              variant="workflow"
+            >
+              Clear sale
+            </LoadingButton>
+            {canSignOut ? (
+              <Button
+                disabled={Boolean(drawerGate.isClearingSale)}
+                type="button"
+                variant="outline"
+                onClick={() => void drawerGate.onSignOut()}
+              >
+                <LogOutIcon className="mr-2 h-4 w-4" />
+                Sign out
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (isAuthorityRepair) {
     const isTerminalRepair = drawerGate.mode === "terminalRepair";
+    const isPersistenceFailure =
+      drawerGate.repairReason === "persistence_failed";
+    const isSyncReview = drawerGate.repairReason === "sync_review";
 
     return (
       <div className="mx-auto max-w-2xl rounded-lg border border-border bg-surface-raised p-8 shadow-surface">
@@ -162,12 +235,20 @@ export function RegisterDrawerGate({
             <h2 className="text-2xl font-semibold text-foreground">
               {isTerminalRepair
                 ? "Terminal setup needs repair"
-                : "Drawer needs repair"}
+                : isPersistenceFailure
+                  ? "Drawer status not saved"
+                  : isSyncReview
+                    ? "Drawer sync needs review"
+                    : "Drawer needs repair"}
             </h2>
             <p className="text-sm leading-6 text-muted-foreground">
               {isTerminalRepair
                 ? `${drawerGate.registerLabel} cannot record new sales until terminal setup is repaired. Existing local activity is preserved for support.`
-                : `${drawerGate.registerLabel} needs a current drawer before sales can continue. Existing local activity is preserved for support.`}
+                : isPersistenceFailure
+                  ? "Athena could not save the latest drawer status on this register. Retry before continuing."
+                  : isSyncReview
+                    ? "Selling is paused while this drawer’s local activity is reviewed."
+                    : "Athena could not confirm the current drawer. Existing local activity is preserved."}
             </p>
             {drawerGate.errorMessage ? (
               <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm leading-6 text-destructive">
@@ -197,7 +278,11 @@ export function RegisterDrawerGate({
                 onClick={drawerGate.onRetrySync}
               >
                 <RefreshCwIcon className="mr-2 h-4 w-4" />
-                Retry sync
+                {isPersistenceFailure
+                  ? "Retry"
+                  : isSyncReview
+                    ? "Retry sync"
+                    : "Retry drawer check"}
               </Button>
             ) : null}
             {canSignOut ? (
@@ -679,14 +764,18 @@ export function RegisterDrawerGate({
         </div>
         <div className="space-y-2">
           <h2 className="text-2xl font-semibold text-foreground">
-            {isRecovery
-              ? "Open drawer to continue"
-              : "Open drawer to start selling"}
+            {drawerGate.isReplacement
+              ? "Open a replacement drawer"
+              : isRecovery
+                ? "Open drawer to continue"
+                : "Open drawer to start selling"}
           </h2>
           <p className="text-sm leading-6 text-muted-foreground">
-            {isRecovery
-              ? `${drawerGate.registerLabel} is closed. Open the drawer to continue this sale.`
-              : `${drawerGate.registerLabel} is closed. Enter the opening float before starting sales.`}
+            {drawerGate.isReplacement
+              ? "The previous drawer is closed. Enter the opening float for a new drawer."
+              : isRecovery
+                ? `${drawerGate.registerLabel} is closed. Open the drawer to continue this sale.`
+                : `${drawerGate.registerLabel} is closed. Enter the opening float before starting sales.`}
           </p>
         </div>
       </div>
@@ -740,7 +829,11 @@ export function RegisterDrawerGate({
             }
             type="submit"
           >
-            {drawerGate.isSubmitting ? "Opening drawer" : "Open drawer"}
+            {drawerGate.isSubmitting
+              ? "Opening drawer"
+              : drawerGate.isReplacement
+                ? "Open replacement drawer"
+                : "Open drawer"}
           </Button>
 
           {canSignOut ? (

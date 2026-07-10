@@ -2509,6 +2509,7 @@ function POSRegisterViewContent({
                       }
                       onRemoveService={viewModel.cart.onRemoveService}
                       clearCart={viewModel.cart.onClearCart}
+                      readOnly={viewModel.cart.readOnly}
                       density="compact"
                     />
                     {isEmptyStateQuickAddActive
@@ -2576,7 +2577,10 @@ function POSRegisterViewContent({
                       }
                       onRemoveService={viewModel.cart.onRemoveService}
                       clearCart={viewModel.cart.onClearCart}
-                      readOnly={shouldPreviewCompletedExpenseItems}
+                      readOnly={
+                        shouldPreviewCompletedExpenseItems ||
+                        viewModel.cart.readOnly
+                      }
                       density={
                         shouldPreviewCompletedExpenseItems
                           ? "comfortable"
@@ -2599,6 +2603,7 @@ function POSRegisterViewContent({
                       {isPosWorkflow ? (
                         <RegisterCheckoutPanel
                           checkout={workspaceSidebarCheckout}
+                          readOnly={viewModel.cart.readOnly}
                           onPaymentFlowChange={handlePaymentFlowChange}
                           onPaymentEntryStart={handlePaymentEntryStart}
                           onCompletionBlockAction={handleCompletionBlockAction}

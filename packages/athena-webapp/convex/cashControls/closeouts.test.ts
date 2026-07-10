@@ -268,7 +268,7 @@ function createPendingItemAdjustmentApprovalCtx(options: {
 }
 
 describe("cash control closeouts", () => {
-  it("validates representative public closeout command results against exported return validators", () => {
+  it("proves changed public closeout exports conform to their return validators", () => {
     const validationError = {
       kind: "user_error" as const,
       error: {
@@ -1538,7 +1538,16 @@ describe("cash control closeouts", () => {
       failedAuthenticationAttempts: 0,
       lastAuthenticatedAt: expect.any(Number),
     });
-    expect(runMutation).toHaveBeenCalledWith(
+    expect(runMutation).toHaveBeenNthCalledWith(
+      1,
+      expect.anything(),
+      expect.objectContaining({
+        countedCash: 70000,
+        registerSessionId: "session-1",
+      }),
+    );
+    expect(runMutation).toHaveBeenNthCalledWith(
+      2,
       expect.anything(),
       expect.objectContaining({
         closedByStaffProfileId: "cashier-1",

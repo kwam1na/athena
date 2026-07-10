@@ -83,6 +83,84 @@ async function createBlockedSaleGateway() {
 }
 
 describe("createLocalCommandGateway", () => {
+  it("blocks mutating drawer and sale commands while authority persistence failed", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+    });
+    await appendOpenDrawer(store);
+    const authorityPersistenceFailed = vi.fn(() => true);
+    const gateway = createLocalCommandGateway({
+      authorityPersistenceFailed,
+      store,
+    });
+
+    await expect(
+      gateway.appendCartItem({
+        ...saleCommandInput(),
+        payload: { productId: "product-1" },
+      }),
+    ).resolves.toBe(false);
+    await expect(
+      gateway.openDrawer({
+        openingFloat: 100,
+        registerNumber: "1",
+        staffProfileId: "staff-1" as never,
+        storeId: "store-1" as never,
+        terminalId: "terminal-1" as never,
+      }),
+    ).resolves.toMatchObject({
+      kind: "user_error",
+      error: { code: "unavailable", retryable: true },
+    });
+    await expect(
+      gateway.startSession({
+        ...saleCommandInput(),
+      }),
+    ).resolves.toMatchObject({
+      kind: "user_error",
+      error: { code: "unavailable", retryable: true },
+    });
+    expect(authorityPersistenceFailed).toHaveBeenCalled();
+    await expect(store.listEvents()).resolves.toMatchObject({
+      ok: true,
+      value: [expect.objectContaining({ type: "register.opened" })],
+    });
+  });
+
+  it("keeps explicit clear-cart available during authority persistence failure", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+    });
+    await appendOpenDrawer(store);
+    await store.appendEvent({
+      type: "session.started",
+      terminalId: "terminal-1",
+      storeId: "store-1",
+      registerNumber: "1",
+      localRegisterSessionId: "drawer-1",
+      localPosSessionId: "session-1",
+      staffProfileId: "staff-1",
+      payload: { localPosSessionId: "session-1" },
+    });
+    const gateway = createLocalCommandGateway({
+      authorityPersistenceFailed: true,
+      store,
+    });
+
+    await expect(
+      gateway.clearCart({
+        ...saleCommandInput(),
+        reason: "Clear before retry",
+      }),
+    ).resolves.toBe(true);
+    await expect(store.listEvents()).resolves.toMatchObject({
+      ok: true,
+      value: expect.arrayContaining([
+        expect.objectContaining({ type: "cart.cleared" }),
+      ]),
+    });
+  });
+
   it("opens the drawer and starts a sale locally without Convex", async () => {
     let nextId = 1;
     const store = createPosLocalStore({
@@ -1369,14 +1447,6 @@ describe("createLocalCommandGateway", () => {
           },
         }),
     ],
-    [
-      "clear cart with prior sale activity",
-      async (gateway: ReturnType<typeof createLocalCommandGateway>) =>
-        gateway.clearCart({
-          ...saleCommandInput(),
-          reason: "Cart cleared",
-        }),
-    ],
   ])("blocks %s when drawer authority is blocked", async (_label, runCommand) => {
     const { gateway, store } = await createBlockedSaleGateway();
 
@@ -1388,6 +1458,27 @@ describe("createLocalCommandGateway", () => {
         expect.objectContaining({ type: "session.started" }),
         expect.objectContaining({ type: "cart.item_added" }),
       ],
+    });
+  });
+
+  it("allows only cart clear for the exact old drawer when cloud authority closed it", async () => {
+    const { gateway, store } = await createBlockedSaleGateway();
+
+    await expect(
+      gateway.clearCart({
+        ...saleCommandInput(),
+        reason: "Clear old drawer sale",
+      }),
+    ).resolves.toBe(true);
+    await expect(store.listEvents()).resolves.toMatchObject({
+      ok: true,
+      value: expect.arrayContaining([
+        expect.objectContaining({
+          localPosSessionId: "session-1",
+          localRegisterSessionId: "drawer-1",
+          type: "cart.cleared",
+        }),
+      ]),
     });
   });
 

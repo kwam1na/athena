@@ -18,6 +18,24 @@ function createCommandShimBin() {
   return binDir;
 }
 
+function resolveBunExecutable() {
+  const configured = process.env.BUN_EXECUTABLE;
+  if (configured) return configured;
+
+  const bunInstall = process.env.BUN_INSTALL;
+  if (bunInstall) {
+    return join(bunInstall, "bin", "bun");
+  }
+
+  const pathResult = spawnSync("/bin/sh", ["-c", "command -v bun"], {
+    encoding: "utf8",
+  });
+  const bunPath = pathResult.stdout.trim();
+  if (pathResult.status === 0 && bunPath) return bunPath;
+
+  throw new Error("BUN_INSTALL, BUN_EXECUTABLE, or bun on PATH is required.");
+}
+
 afterEach(() => {
   createdDirs.splice(0).forEach((dir) => {
     try {
@@ -39,6 +57,7 @@ describe("convex audit script", () => {
       cwd: scriptDir,
       env: {
         ...process.env,
+        BUN_EXECUTABLE: resolveBunExecutable(),
         PATH: shimBin,
       },
       encoding: "utf8",
@@ -49,5 +68,8 @@ describe("convex audit script", () => {
       "ripgrep (rg) is required for audit:convex",
     );
     expect(result.stdout).toContain("Convex audit report");
+    expect(result.stdout).toContain(
+      "Register-session authority writers are centralized.",
+    );
   }, 15_000);
 });

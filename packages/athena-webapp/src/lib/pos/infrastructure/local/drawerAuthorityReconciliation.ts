@@ -119,11 +119,14 @@ export async function clearRecoverableDrawerAuthorityForSyncedEvents(input: {
   store: PosLocalRuntimeStore;
   syncedEventIds: string[];
 }) {
-  const clearDrawerAuthorityState = (
-    input.store as {
-      clearDrawerAuthorityState?: PosLocalRuntimeStore["clearDrawerAuthorityState"];
-    }
-  ).clearDrawerAuthorityState;
+  const clearDrawerAuthorityState =
+    (
+      input.store as {
+        clearLocalDrawerReviewAuthorityState?: PosLocalRuntimeStore["clearLocalDrawerReviewAuthorityState"];
+        clearDrawerAuthorityState?: PosLocalRuntimeStore["clearDrawerAuthorityState"];
+      }
+    ).clearLocalDrawerReviewAuthorityState ??
+    input.store.clearDrawerAuthorityState;
   const readDrawerAuthorityState = (
     input.store as {
       readDrawerAuthorityState?: PosLocalRuntimeStore["readDrawerAuthorityState"];
@@ -208,11 +211,14 @@ export async function clearSupersededRecoverableDrawerAuthorityBlocks(input: {
   }>;
   store: PosLocalRuntimeStore;
 }) {
-  const clearDrawerAuthorityState = (
-    input.store as {
-      clearDrawerAuthorityState?: PosLocalRuntimeStore["clearDrawerAuthorityState"];
-    }
-  ).clearDrawerAuthorityState;
+  const clearDrawerAuthorityState =
+    (
+      input.store as {
+        clearLocalDrawerReviewAuthorityState?: PosLocalRuntimeStore["clearLocalDrawerReviewAuthorityState"];
+        clearDrawerAuthorityState?: PosLocalRuntimeStore["clearDrawerAuthorityState"];
+      }
+    ).clearLocalDrawerReviewAuthorityState ??
+    input.store.clearDrawerAuthorityState;
   const readDrawerAuthorityState = (
     input.store as {
       readDrawerAuthorityState?: PosLocalRuntimeStore["readDrawerAuthorityState"];
@@ -325,15 +331,20 @@ export async function clearSettledRecoverableDrawerAuthorityBlock(input: {
   events: PosLocalEventRecord[];
   store: PosLocalRuntimeStore;
 }): Promise<PosLocalStoreResult<boolean>> {
-  const clearDrawerAuthorityState = (
-    input.store as {
-      clearDrawerAuthorityState?: PosLocalRuntimeStore["clearDrawerAuthorityState"];
-    }
-  ).clearDrawerAuthorityState;
+  const clearDrawerAuthorityState =
+    (
+      input.store as {
+        clearLocalDrawerReviewAuthorityState?: PosLocalRuntimeStore["clearLocalDrawerReviewAuthorityState"];
+        clearDrawerAuthorityState?: PosLocalRuntimeStore["clearDrawerAuthorityState"];
+      }
+    ).clearLocalDrawerReviewAuthorityState ??
+    input.store.clearDrawerAuthorityState;
   if (
     !clearDrawerAuthorityState ||
     input.drawerAuthority.status !== "blocked" ||
-    !isRecoverableDrawerAuthorityReason(input.drawerAuthority.reason)
+    !isRecoverableDrawerAuthorityReason(input.drawerAuthority.reason) ||
+    (input.drawerAuthority.serverAuthority?.source === "dedicated_snapshot" &&
+      !input.drawerAuthority.localReviewAuthority)
   ) {
     return { ok: true, value: false };
   }

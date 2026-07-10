@@ -16,6 +16,7 @@ import {
   patchPosTransaction,
 } from "../../infrastructure/repositories/transactionRepository";
 import { appendReportingIngressWithCtx } from "../../../reporting/ingress";
+import { patchRegisterSessionWithAuthority } from "../../../operations/registerSessionAuthorityRevision";
 
 type CorrectionActor = {
   actorUserId?: Id<"athenaUser">;
@@ -274,7 +275,7 @@ async function adjustRegisterSessionExpectedCashForPaymentCorrection(
     throw new Error("Register session expected cash cannot be negative.");
   }
 
-  await ctx.db.patch("registerSession", args.registerSessionId, {
+  await patchRegisterSessionWithAuthority(ctx, args.registerSessionId, {
     expectedCash: nextExpectedCash,
     ...(registerSession.countedCash !== undefined
       ? { variance: registerSession.countedCash - nextExpectedCash }
