@@ -87,10 +87,7 @@ function formatServiceLineMeta(line: PosServiceReceiptLine) {
     .join(" • ");
 }
 
-function formatProductLineMeta(
-  item: CartItem,
-  formatter: Intl.NumberFormat,
-) {
+function formatProductLineMeta(item: CartItem, formatter: Intl.NumberFormat) {
   const skuOrBarcode = item.sku || item.barcode;
 
   return [
@@ -116,6 +113,7 @@ interface OrderSummaryProps {
   payments?: Payment[];
   hasTerminal?: boolean;
   isTransactionCompleted?: boolean;
+  disabled?: boolean;
   readOnly?: boolean;
   completedOrderNumber?: string | null;
   completionBlockMessage?: string;
@@ -211,6 +209,7 @@ export function OrderSummary({
   payments = [],
   hasTerminal = true,
   isTransactionCompleted = false,
+  disabled = false,
   readOnly = false,
   completedOrderNumber,
   completionBlockMessage,
@@ -251,6 +250,7 @@ export function OrderSummary({
   const [paymentAmountDraft, setPaymentAmountDraft] = useState<
     number | undefined
   >(undefined);
+  const wasDisabledRef = useRef(disabled);
   const printedReceiptKeyRef = useRef<string | null>(null);
 
   const effectiveCartItems =
@@ -266,7 +266,8 @@ export function OrderSummary({
   const completedProductLines = completedTransactionData
     ? effectiveCartItems.filter((item) => item.lineKind !== "service")
     : [];
-  const showCompletedLineSections = Boolean(completedTransactionData) && !readOnly;
+  const showCompletedLineSections =
+    Boolean(completedTransactionData) && !readOnly;
   const serviceLinesCount = effectiveServiceLines.reduce(
     (sum, line) => sum + (line.quantity ?? 1),
     0,
@@ -422,19 +423,21 @@ export function OrderSummary({
     !isTransactionCompleted &&
     !isEditingPaymentAmount &&
     selectedPaymentMethod === null &&
-    (payments.length === 0 || remainingDue > 0);
+    (disabled || payments.length === 0 || remainingDue > 0);
   const paymentMethodsDisabled =
-    cartItemsCount === 0 || Boolean(completionBlockMessage);
+    disabled || cartItemsCount === 0 || Boolean(completionBlockMessage);
   const showPaymentEditor =
     !readOnly &&
     !isTransactionCompleted &&
     !isEditingPaymentAmount &&
-    !showPaymentButtons;
+    !showPaymentButtons &&
+    !disabled;
   const shouldDockPaymentButtons = showPaymentButtons;
   const shouldShowPaymentButtonBalance =
     payments.length === 0 && !hideActiveSummaryCards;
   const isPaymentEntryActive = showPaymentEditor;
   const isPaymentFlowActive =
+    !disabled &&
     !readOnly &&
     !isTransactionCompleted &&
     (showPaymentEditor || payments.length > 0);
@@ -502,6 +505,21 @@ export function OrderSummary({
 
     onPaymentFlowChange?.(isPaymentEntryActive);
   }, [isPaymentEntryActive, onPaymentFlowChange, selectedPaymentMethod]);
+
+  useEffect(() => {
+    const becameDisabled = disabled && !wasDisabledRef.current;
+    wasDisabledRef.current = disabled;
+    if (!becameDisabled) {
+      return;
+    }
+
+    setSelectedPaymentMethod(null);
+    setPaymentAmountDraft(undefined);
+    setEditingPaymentId(null);
+    if (editingPaymentId !== null) {
+      onEditingPaymentChange?.(false);
+    }
+  }, [disabled, editingPaymentId, onEditingPaymentChange]);
 
   useEffect(() => {
     if (!completionBlockMessage || selectedPaymentMethod === null) {
@@ -1387,7 +1405,7 @@ export function OrderSummary({
             }
             selectedPaymentMethod={selectedPaymentMethod}
             paymentAmountDraft={paymentAmountDraft}
-            readOnly={readOnly}
+            readOnly={readOnly || disabled}
             isTransactionCompleted={isTransactionCompleted}
             editingPaymentId={editingPaymentId}
             onEditingPaymentIdChange={handleEditingPaymentIdChange}
@@ -1460,7 +1478,7 @@ export function OrderSummary({
             {completionBlockMessage ? (
               <button
                 type="button"
-                disabled={!onCompletionBlockAction}
+                disabled={disabled || !onCompletionBlockAction}
                 onClick={onCompletionBlockAction}
                 className={cn(
                   "flex w-full items-center gap-3 rounded-xl border border-action-workflow-border bg-action-workflow-soft px-3.5 py-3 text-left text-action-workflow transition-colors hover:bg-action-workflow-soft/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-default disabled:hover:bg-action-workflow-soft",

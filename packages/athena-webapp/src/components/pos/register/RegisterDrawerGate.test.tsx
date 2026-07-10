@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -343,11 +343,86 @@ describe("RegisterDrawerGate", () => {
       screen.getByText("Drawer needs repair"),
     ).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Retry sync" }));
+    await user.click(
+      screen.getByRole("button", { name: "Retry drawer check" }),
+    );
     expect(onRetrySync).toHaveBeenCalledTimes(1);
 
     await user.click(screen.getByRole("button", { name: "Sign out" }));
 
     expect(onSignOut).toHaveBeenCalledTimes(1);
+  });
+
+  it("requires clearing a sale from a closed drawer before replacement", async () => {
+    const user = userEvent.setup();
+    const onClearSale = vi.fn();
+    renderGate({
+      mode: "recovery",
+      onClearSale,
+      onSubmit: undefined,
+    });
+
+    expect(screen.getByText("Sale paused")).toBeInTheDocument();
+    expect(screen.getByText("Drawer changed")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "This sale belongs to the previous drawer. Clear the sale before opening a replacement drawer.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Opening float/)).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Sale paused. This sale belongs to the previous drawer.",
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("heading", { name: "Drawer changed" })).toHaveFocus(),
+    );
+
+    await user.click(screen.getByRole("button", { name: "Clear sale" }));
+    expect(onClearSale).toHaveBeenCalledOnce();
+  });
+
+  it("disables repeat clear attempts while the durable clear is running", () => {
+    renderGate({
+      isClearingSale: true,
+      mode: "recovery",
+      onClearSale: vi.fn(),
+      onSubmit: undefined,
+    });
+
+    expect(screen.getByRole("button", { name: "Clear sale" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Sign out" })).toBeDisabled();
+  });
+
+  it("labels the opening form as a replacement after a durable clear", () => {
+    renderGate({ isReplacement: true });
+
+    expect(screen.getByText("Open a replacement drawer")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "The previous drawer is closed. Enter the opening float for a new drawer.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Open replacement drawer" }),
+    ).toBeInTheDocument();
+  });
+
+  it("gives authority persistence failures a dedicated retry action", async () => {
+    const user = userEvent.setup();
+    const onRetrySync = vi.fn();
+    renderGate({
+      mode: "drawerAuthorityRepair",
+      onRetrySync,
+      repairReason: "persistence_failed",
+    });
+
+    expect(screen.getByText("Drawer status not saved")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Athena could not save the latest drawer status on this register. Retry before continuing.",
+      ),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Retry" }));
+    expect(onRetrySync).toHaveBeenCalledOnce();
   });
 });

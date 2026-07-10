@@ -548,6 +548,22 @@ function createMissingMappingRepairSeed(
 }
 
 describe("cash control deposits", () => {
+  it("proves changed public deposit exports conform to their return validators", () => {
+    const authorizationError = userError({
+      code: "authorization_failed",
+      message: "You do not have access to cash controls.",
+    });
+
+    assertConformsToExportedReturns(
+      recordRegisterSessionDeposit,
+      authorizationError,
+    );
+    assertConformsToExportedReturns(
+      resolveRegisterSessionSyncReview,
+      authorizationError,
+    );
+  });
+
   beforeEach(() => {
     mockedAuthServer.getAuthUserId.mockResolvedValue("auth_user_1");
   });

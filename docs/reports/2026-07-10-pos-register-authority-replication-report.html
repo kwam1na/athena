@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="bbcdb20196896c7dd1d907dddb4b399da2af0e40680fd342f6eca3fc7afa2f6b">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>POS Register Authority Replication</title>
+    <style>
+      :root {
+        --ink: #1f2933;
+        --muted: #596674;
+        --line: #d9e2ec;
+        --paper: #ffffff;
+        --soft: #f6f8fb;
+        --accent: #1d4ed8;
+        --accent-soft: #dbeafe;
+        --good: #166534;
+        --bad: #b91c1c;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--soft);
+        color: var(--ink);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        line-height: 1.55;
+      }
+      main { max-width: 1120px; margin: 0 auto; padding: 48px 24px 72px; }
+      header { border-bottom: 1px solid var(--line); margin-bottom: 28px; padding-bottom: 28px; }
+      h1, h2, h3 { line-height: 1.18; letter-spacing: 0; }
+      h1 { font-size: 42px; max-width: 880px; margin: 0 0 16px; }
+      h2 { font-size: 28px; margin: 0 0 16px; }
+      p { margin: 0 0 14px; }
+      .lede { color: var(--muted); font-size: 18px; max-width: 880px; }
+      .meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+      .pill { border: 1px solid var(--line); border-radius: 999px; background: var(--paper); color: var(--muted); font-size: 13px; padding: 6px 10px; }
+      .panel { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; margin: 18px 0; padding: 22px; }
+      code { background: #eef2f7; border: 1px solid #d8dee8; border-radius: 5px; padding: 1px 5px; }
+      pre { overflow: auto; background: #111827; color: #e5e7eb; border-radius: 8px; padding: 16px; }
+      pre code { background: transparent; border: 0; color: inherit; padding: 0; }
+      table { width: 100%; border-collapse: collapse; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+      th, td { border-bottom: 1px solid var(--line); padding: 11px 12px; text-align: left; vertical-align: top; }
+      th { background: #eef2f7; color: var(--muted); font-size: 13px; text-transform: uppercase; }
+      tr:last-child td { border-bottom: 0; }
+      .quiz-question { border-top: 1px solid var(--line); padding: 18px 0; }
+      .quiz-question:first-child { border-top: 0; }
+      fieldset { border: 0; margin: 0; padding: 0; }
+      legend { font-weight: 700; margin-bottom: 10px; }
+      label { display: block; border: 1px solid var(--line); border-radius: 8px; background: #fbfdff; margin: 8px 0; padding: 10px 12px; cursor: pointer; }
+      @media (hover: hover) and (pointer: fine) {
+        label:hover { border-color: #b6c5d8; }
+      }
+      button {
+        appearance: none;
+        border: 0;
+        border-radius: 8px;
+        background: var(--accent);
+        color: #ffffff;
+        cursor: pointer;
+        font-weight: 700;
+        padding: 11px 16px;
+        transition: transform 140ms cubic-bezier(0.23, 1, 0.32, 1);
+      }
+      button:active { transform: scale(0.97); }
+      button.secondary { background: #475569; }
+      .quiz-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
+      #quizResult { font-weight: 700; }
+      .answer-detail { display: none; border-top: 1px dashed var(--line); color: var(--muted); margin-top: 10px; padding-top: 10px; }
+      .answer-detail.visible { display: block; }
+      .correct { border-color: #86efac !important; background: #f0fdf4 !important; }
+      .incorrect { border-color: #fecaca !important; background: #fef2f2 !important; }
+      @media (prefers-reduced-motion: reduce) { button { transition-duration: 0ms; } }
+      @media (max-width: 820px) { h1 { font-size: 32px; } main { padding: 32px 16px 56px; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>POS Register Authority Replication</h1>
+        <p class="lede">How Athena keeps remote drawer lifecycle authority local-first, heartbeat-independent, and safe under repair and rollout.</p>
+        <div class="meta"><span class="pill">Branch: codex/pos-register-authority-replication</span><span class="pill">Linear: V26-997 through V26-1003</span><span class="pill">Status: delivery validation in progress</span><span class="pill">Finish line: open mergeable PR</span><span class="pill">No merge</span><span class="pill">No production deploy</span></div>
+      </header>
+      <section class="panel"><h2>Executive Summary</h2>
+<p>Arc exposed a split-authority bug: a reactive Convex read knew the cloud drawer was closed, but paused heartbeat meant IndexedDB never received the closure. The UI showed an opening gate while the local command gateway still reused the old drawer.</p>
+<p>Athena now replicates exact register lifecycle authority through a dedicated terminal-authenticated lane. The result is committed to IndexedDB before the local projection changes, so presentation and cashier commands make the drawer decision from the same durable source.</p>
+</section>
+<section class="panel"><h2>Mental Model: Replicate Authority, Keep Commands Local</h2>
+<p>Think of Convex as the source of external lifecycle evidence and IndexedDB as the cashier&#x27;s operational authority. Convex does not execute drawer commands for the cashier. It publishes an exact, versioned observation; the browser validates and persists it; then both the view model and command gateway read the refreshed local projection.</p>
+<pre><code>Cash Controls -&gt; lifecycle + mapping revisions -&gt; terminal query
+-&gt; snapshot bijection -&gt; IndexedDB compare-and-apply
+-&gt; local projection -&gt; UI + local command gateway</code></pre>
+</section>
+<section class="panel"><h2>Before vs After</h2>
+
+<ul>
+<li>Before: the view model gated from reactive Convex state while drawer commands gated from IndexedDB.</li>
+<li>Before: runtime-status heartbeat was the only ordinary server-to-local closure directive path.</li>
+<li>After: a heartbeat-independent query accepts only exact locally known candidates and returns redacted classifications.</li>
+<li>After: mapping epoch is primary; lifecycle revision is secondary within the same exact cloud subject.</li>
+<li>After: snapshot results must match requested candidates one-for-one before any local write.</li>
+<li>After: IndexedDB atomically revalidates the complete mapping fingerprint and rejects stale or conflicting evidence.</li>
+<li>After: the local projection exclusively controls drawer operability; Convex register state is passive enrichment.</li>
+</ul>
+</section>
+<section class="panel"><h2>Operator Behavior</h2>
+
+<ul>
+<li>Exact cloud closure with an empty sale shows a replacement-drawer form and creates a distinct local drawer identity.</li>
+<li>Exact cloud closure with an old draft keeps cart, payments, and customer visible but read-only. Only Clear sale and Sign out remain available.</li>
+<li>Clear sale stays attached to the old drawer. The replacement form appears only after the durable clear is reprojected.</li>
+<li>An unmapped local drawer is normal pending outbound state. A mapped missing, ambiguous, or scope-invalid target becomes redacted repair authority.</li>
+<li>Authority unknown, local persistence failure, terminal repair, and sync review remain distinct states with separate retry ownership.</li>
+<li>Checkout-local payment editor state is cleared when the register becomes read-only, so it cannot leak into a replacement drawer.</li>
+</ul>
+</section>
+<section class="panel"><h2>Ordering, Races, and Failure Boundaries</h2>
+
+<ul>
+<li>Missing legacy revisions baseline deterministically to zero.</li>
+<li>Production mapping creation, ambiguity, and repair advance a durable mapping epoch. Tombstone helpers and states exist for future deletion or supersession paths, but those transitions are not yet active production flows.</li>
+<li>Versioned dedicated observations outrank unversioned legacy runtime directives.</li>
+<li>Mapping changes between subscription and IndexedDB commit produce mapping_invalidated, not an arrival-order overwrite.</li>
+<li>Partial, duplicate, foreign, or count-mismatched snapshots fail before any apply.</li>
+<li>Offline, loading, and transport absence preserve last-known durable authority.</li>
+<li>A wedged local IndexedDB readiness read times out into a local-store repair state instead of leaving POS indefinitely on a checking screen.</li>
+<li>Semantic snapshot and candidate signatures prevent fresh-but-equivalent Convex results or local projections from retriggering persistence and refresh in a render loop.</li>
+<li>Persistence failure latches drawer, sale, payment, and checkout mutations closed until reconciliation reaches a later durable ready state. The exact old-sale Clear sale command remains the recovery escape hatch.</li>
+<li>Remote close never fabricates counted cash, variance, approval, deposit, or closeout history.</li>
+</ul>
+</section>
+<section class="panel"><h2>Rollout and Observability</h2>
+
+<ul>
+<li>disabled: stops new subscription and application without clearing durable authority.</li>
+<li>shadow: observes and acknowledges without applying authority.</li>
+<li>canary: applies only for exact configured terminal IDs.</li>
+<li>broad: applies for every eligible provisioned terminal.</li>
+<li>Development defaults broad; production defaults shadow until release configuration opts into canary or broad.</li>
+<li>Acknowledgements are terminal-scoped, cursor-validated, redacted, coalesced, and advisory. They do not authorize cashier commands.</li>
+</ul>
+</section>
+<section class="panel"><h2>Intentionally Unchanged</h2>
+
+<ul>
+<li>Drawer, cart, payment, completion, and closeout commands remain local-first.</li>
+<li>Fully offline operation continues from last-known IndexedDB authority.</li>
+<li>Facts completed before the first reconnect snapshot remain immutable reconciliation history.</li>
+<li>Existing carts, transactions, payments, mappings, and closeout history are never rebound to a replacement drawer.</li>
+<li>Legacy runtime directives and active-session seeding remain during mixed-client rollout.</li>
+<li>The new lane never reconstructs a missing local register.opened event from a cloud drawer.</li>
+</ul>
+</section>
+<section class="panel"><h2>Validation and Review Evidence</h2>
+
+<ul>
+<li>Focused suites cover terminal auth and read bounds, lifecycle and mapping revisions, writer guards, IndexedDB ordering and races, rollout modes, restart durability, command guards, and register UI transitions.</li>
+<li>In-app dev testing opened and closed Register 9 with the documented Athena and cashier accounts. It exposed an authority-runtime update-depth loop; semantic snapshot, candidate, callback, and terminal-descriptor stabilization removed the loop, and fresh-identity regressions now prove a single apply and refresh.</li>
+<li>The live POS flow completed a real dev sale: transaction <code>#089899</code>, product <code>Oshe</code>, cash payment GH₵5,500, then register closeout with counted cash GH₵5,500.</li>
+<li>The Cash Controls path closed session <code>8A8HSF</code> with counted cash GH₵0. POS then showed the replacement-drawer gate, and opening from that gate created distinct session <code>8A9Y7V</code> rather than reusing the closed session. The cleanup session was also closed from Cash Controls and POS returned to the closed-drawer gate.</li>
+<li>The Cash Controls closeout regression now asserts the submit path calls both the begin-closeout mutation and the final close-register mutation, preserving the revision-aware lifecycle writer behind that UI path.</li>
+<li>The Convex audit script fallback test now resolves Bun through <code>BUN_EXECUTABLE</code>, <code>BUN_INSTALL</code>, or <code>bun</code> on <code>PATH</code>, matching the script contract and the GitHub Actions runner environment.</li>
+<li>Reload, sale completion, register closeout, Cash Controls closeout, replacement opening, and cleanup return checks produced no fresh <code>Maximum update depth exceeded</code> logs. The only observed unrelated dev noise was the existing version-check JSON parse warning and TanStack ScrollRestoration deprecation warnings.</li>
+<li>Architecture, security/data-integrity, and frontend UX reviewers repeatedly withheld approval until mapping, rollout, retry-latch, acknowledgement, and clear-to-replacement gaps were fixed.</li>
+<li>Generated Convex API, harness indexes, and Graphify artifacts are refreshed through repo-owned workflows.</li>
+<li>The requested finish line is an open mergeable PR only. This report does not claim merge or deployment.</li>
+</ul>
+</section>
+<section class="panel"><h2>Next-Time Guidance</h2>
+
+<ul>
+<li>When a local-first feature reacts to server state, replicate that state into the durable local authority model before using it operationally.</li>
+<li>Keep diagnostic heartbeat and recovery channels out of ordinary correctness ownership.</li>
+<li>Version identity repair separately from entity lifecycle; lifecycle ordering alone cannot defeat stale mappings.</li>
+<li>Test both observation orders, restart with compacted history, metadata-only mapping races, disabled rollback, and non-empty in-progress work.</li>
+<li>Treat canary acknowledgements as rollout evidence, never as command authority or sole compatibility-retirement proof.</li>
+</ul>
+</section>
+
+<section class="panel">
+  <h2>Key Files</h2>
+  <table>
+    <thead><tr><th>File</th><th>Why It Matters</th></tr></thead>
+    <tbody><tr><td><code>packages/athena-webapp/convex/operations/registerSessionAuthorityRevision.ts</code></td><td>Centralizes register-session writes and advances lifecycle authority only on real status changes.</td></tr>
+<tr><td><code>packages/athena-webapp/convex/pos/application/sync/registerMappingAuthorityRevision.ts</code></td><td>Owns durable mapping epochs, ambiguity, repair, and tombstone ordering.</td></tr>
+<tr><td><code>packages/athena-webapp/convex/pos/application/queries/registerLifecycleAuthority.ts</code></td><td>Classifies bounded exact terminal candidates and returns versioned, redacted authority.</td></tr>
+<tr><td><code>packages/athena-webapp/src/lib/pos/infrastructure/local/posLocalStore.ts</code></td><td>Atomically revalidates mappings and compare-and-applies authority in IndexedDB.</td></tr>
+<tr><td><code>packages/athena-webapp/src/lib/pos/infrastructure/local/useRegisterLifecycleAuthorityRuntime.ts</code></td><td>Mounts heartbeat-independent subscription, rollout policy, persistence-before-refresh, retry, and advisory acknowledgements.</td></tr>
+<tr><td><code>packages/athena-webapp/src/lib/pos/infrastructure/local/localPosReadiness.ts</code></td><td>Bounds local IndexedDB readiness checks and converts local-store read stalls into actionable repair state.</td></tr>
+<tr><td><code>packages/athena-webapp/src/lib/pos/infrastructure/local/localCommandGateway.ts</code></td><td>Enforces the same local authority for cashier commands and preserves only the exact old-sale clear escape hatch.</td></tr>
+<tr><td><code>packages/athena-webapp/src/lib/pos/presentation/register/useRegisterViewModel.ts</code></td><td>Makes the local projection the sole operational drawer decision and retains cloud state as enrichment.</td></tr>
+<tr><td><code>packages/athena-webapp/src/components/pos/register/RegisterDrawerGate.tsx</code></td><td>Presents replacement, clear-only recovery, persistence, mapping, terminal, and sync-review states.</td></tr>
+<tr><td><code>scripts/check-register-session-authority-writers.ts</code></td><td>Prevents raw register-session or register-mapping writes from bypassing revision-aware facades.</td></tr></tbody>
+  </table>
+</section>
+
+
+<section class="panel">
+  <h2>Subagent Evidence</h2>
+  <ul><li><strong>session context:</strong> Reconstructed the Arc incident, Linear V26-997 through V26-1003 dependency chain, design decisions, reviewer loops, and PR-only finish line.</li>
+<li><strong>delivered diff:</strong> Mapped the cross-layer changes, before/after data flow, failure boundaries, intentionally unchanged behavior, key files, and generated artifact implications.</li></ul>
+</section>
+
+
+<section id="quiz" class="panel">
+  <h2>Quiz: Pass Required</h2>
+  <p>You must score at least 8 out of 10 to pass.</p>
+  <form id="changeQuiz" data-threshold="8">
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>1. What is the operational source of drawer authority after this change?</legend>
+    <label><input type="radio" name="q1" value="0" /> The latest Convex register query</label>
+<label><input type="radio" name="q1" value="1" /> The refreshed durable local projection</label>
+<label><input type="radio" name="q1" value="2" /> The runtime heartbeat response</label>
+<label><input type="radio" name="q1" value="3" /> The terminal-health page</label>
+  </fieldset>
+  <div class="answer-detail">Both presentation and commands consume the refreshed IndexedDB-backed local projection.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>2. Why did the original drawer gate reuse the closed drawer?</legend>
+    <label><input type="radio" name="q2" value="0" /> Cash Controls reopened it</label>
+<label><input type="radio" name="q2" value="1" /> The local command gateway still had stale usable IndexedDB authority</label>
+<label><input type="radio" name="q2" value="2" /> The cloud session ID was malformed</label>
+<label><input type="radio" name="q2" value="3" /> The cashier double-clicked</label>
+  </fieldset>
+  <div class="answer-detail">The UI saw cloud closure directly, but heartbeat-paused IndexedDB did not, so local idempotency returned the old drawer.</div>
+</div>
+
+<div class="quiz-question" data-answer="2">
+  <fieldset>
+    <legend>3. Which cursor component is compared first?</legend>
+    <label><input type="radio" name="q3" value="0" /> Lifecycle revision</label>
+<label><input type="radio" name="q3" value="1" /> Observed timestamp</label>
+<label><input type="radio" name="q3" value="2" /> Mapping authority revision</label>
+<label><input type="radio" name="q3" value="3" /> Status rank</label>
+  </fieldset>
+  <div class="answer-detail">A newer mapping epoch outranks lifecycle observations from an older subject.</div>
+</div>
+
+<div class="quiz-question" data-answer="2">
+  <fieldset>
+    <legend>4. What happens when an exact cloud closure arrives with a non-empty old sale?</legend>
+    <label><input type="radio" name="q4" value="0" /> Items move to the replacement drawer</label>
+<label><input type="radio" name="q4" value="1" /> Checkout continues offline</label>
+<label><input type="radio" name="q4" value="2" /> The sale stays visible/read-only until explicit clear</label>
+<label><input type="radio" name="q4" value="3" /> A local closeout is synthesized</label>
+  </fieldset>
+  <div class="answer-detail">The old sale remains attached to the old drawer and must be durably cleared before replacement opening.</div>
+</div>
+
+<div class="quiz-question" data-answer="0">
+  <fieldset>
+    <legend>5. What does a remote closure create locally?</legend>
+    <label><input type="radio" name="q5" value="0" /> External lifecycle authority evidence</label>
+<label><input type="radio" name="q5" value="1" /> Counted cash and variance</label>
+<label><input type="radio" name="q5" value="2" /> A manager approval</label>
+<label><input type="radio" name="q5" value="3" /> A completed closeout event</label>
+  </fieldset>
+  <div class="answer-detail">It is authority evidence only and never fabricates financial facts.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>6. How does shadow mode behave?</legend>
+    <label><input type="radio" name="q6" value="0" /> Applies authority for all terminals</label>
+<label><input type="radio" name="q6" value="1" /> Observes and acknowledges without applying</label>
+<label><input type="radio" name="q6" value="2" /> Deletes prior authority</label>
+<label><input type="radio" name="q6" value="3" /> Disables the query endpoint</label>
+  </fieldset>
+  <div class="answer-detail">Shadow mode gathers bounded rollout evidence but leaves operational IndexedDB authority unchanged.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>7. What happens if the mapping changes after the query but before IndexedDB commit?</legend>
+    <label><input type="radio" name="q7" value="0" /> Arrival order wins</label>
+<label><input type="radio" name="q7" value="1" /> The observation is rejected as mapping-invalidated</label>
+<label><input type="radio" name="q7" value="2" /> The newer mapping inherits the old lifecycle revision</label>
+<label><input type="radio" name="q7" value="3" /> The old mapping is restored</label>
+  </fieldset>
+  <div class="answer-detail">The transaction rechecks the complete mapping fingerprint and refuses a stale subject.</div>
+</div>
+
+<div class="quiz-question" data-answer="2">
+  <fieldset>
+    <legend>8. When may the persistence command guard clear after a write failure?</legend>
+    <label><input type="radio" name="q8" value="0" /> As soon as Retry is clicked</label>
+<label><input type="radio" name="q8" value="1" /> When the query starts loading</label>
+<label><input type="radio" name="q8" value="2" /> Only after successful reconciliation reaches durable ready state</label>
+<label><input type="radio" name="q8" value="3" /> After a heartbeat succeeds</label>
+  </fieldset>
+  <div class="answer-detail">Retry and applying remain guarded; reconciliation may clear the latch only after durable ready state, including an already-current authoritative result.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>9. What should future work do before retiring legacy runtime directives?</legend>
+    <label><input type="radio" name="q9" value="0" /> Trust acknowledgement presence alone</label>
+<label><input type="radio" name="q9" value="1" /> Prove supported-build adoption and active-seeding parity with live canaries</label>
+<label><input type="radio" name="q9" value="2" /> Delete old IndexedDB authority</label>
+<label><input type="radio" name="q9" value="3" /> Move drawer commands to Convex</label>
+  </fieldset>
+  <div class="answer-detail">Compatibility retirement is separately planned and requires adoption plus seeding/recovery parity, not telemetry alone.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>10. What is the delivery finish line for this branch?</legend>
+    <label><input type="radio" name="q10" value="0" /> Merged and deployed</label>
+<label><input type="radio" name="q10" value="1" /> Open and mergeable PR, with no merge or deployment</label>
+<label><input type="radio" name="q10" value="2" /> Local changes only</label>
+<label><input type="radio" name="q10" value="3" /> Production broad rollout</label>
+  </fieldset>
+  <div class="answer-detail">The user explicitly requested an open mergeable PR and stopped before merge or deployment.</div>
+</div>
+
+    <div class="quiz-actions">
+      <button type="button" id="gradeQuiz">Grade quiz</button>
+      <button type="button" class="secondary" id="resetQuiz">Reset</button>
+      <span id="quizResult" aria-live="polite"></span>
+    </div>
+  </form>
+</section>
+
+    </main>
+    <script>
+      const questions = Array.from(document.querySelectorAll(".quiz-question"));
+      const result = document.getElementById("quizResult");
+      const form = document.getElementById("changeQuiz");
+      const threshold = Number(form.dataset.threshold || 0);
+      function clearGrades() {
+        questions.forEach((question) => {
+          question.classList.remove("correct", "incorrect");
+          question.querySelector(".answer-detail").classList.remove("visible");
+        });
+        result.textContent = "";
+        result.style.color = "";
+      }
+      document.getElementById("gradeQuiz").addEventListener("click", () => {
+        clearGrades();
+        let score = 0;
+        questions.forEach((question, index) => {
+          const selected = document.querySelector(`input[name="q${index + 1}"]:checked`);
+          const isCorrect = selected && Number(selected.value) === Number(question.dataset.answer);
+          if (isCorrect) score += 1;
+          question.classList.add(isCorrect ? "correct" : "incorrect");
+          question.querySelector(".answer-detail").classList.add("visible");
+        });
+        const passed = score >= threshold;
+        result.textContent = passed
+          ? `Passed: ${score}/${questions.length}.`
+          : `Not passed: ${score}/${questions.length}. Review the report and try again.`;
+        result.style.color = passed ? "var(--good)" : "var(--bad)";
+      });
+      document.getElementById("resetQuiz").addEventListener("click", () => {
+        form.reset();
+        clearGrades();
+      });
+    </script>
+  </body>
+</html>

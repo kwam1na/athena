@@ -647,6 +647,79 @@ describe("terminalRecoveryCommands", () => {
     ).resolves.toEqual({ ok: true, value: null });
   });
 
+  it("does not let recovery clear versioned dedicated drawer authority", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+      createLocalId: () => "event-1",
+    });
+    await store.appendEvent({
+      initialSyncStatus: "synced",
+      localRegisterSessionId: "register-local-1",
+      payload: {},
+      storeId: "store-1",
+      terminalId: "local-terminal-1",
+      type: "transaction.completed",
+    });
+    await store.writeLocalCloudMapping({
+      cloudId: "register-cloud-1",
+      entity: "registerSession",
+      localId: "register-local-1",
+      mappedAt: 1_000,
+    });
+    await store.applyRegisterLifecycleAuthority({
+      expectedMapping: {
+        cloudRegisterSessionId: "register-cloud-1",
+        mappedAt: 1_000,
+      },
+      observation: {
+        classification: "sale_blocked",
+        cloudRegisterSessionId: "register-cloud-1",
+        cursor: {
+          lifecycleRevision: 2,
+          mappingAuthorityRevision: 3,
+        },
+        localRegisterSessionId: "register-local-1",
+        observedAt: 1_500,
+        reason: "cloud_closed",
+        source: "dedicated_snapshot",
+        status: "blocked",
+      },
+      storeId: "store-1",
+      terminalId: "local-terminal-1",
+    });
+
+    const result = await executeTerminalRecoveryCommand({
+      command: buildCommand({
+        type: "clear_stale_drawer_authority",
+        preconditions: {
+          blockerReason: "cloud_closed",
+          cloudRegisterSessionId: "register-cloud-1",
+          localEventSettlement: "settled",
+          localRegisterSessionId: "register-local-1",
+        },
+      }),
+      store,
+      storeId: "store-1",
+      terminalId: "terminal-cloud-1",
+      terminalSeed: seed,
+    });
+
+    expect(result).toMatchObject({
+      reason: "unsafe_authority_state",
+      status: "precondition_failed",
+    });
+    await expect(
+      store.readDrawerAuthorityState({
+        localRegisterSessionId: "register-local-1",
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: { serverAuthority: { source: "dedicated_snapshot" } },
+    });
+  });
+
   it("accepts backend-shaped command documents with commandType and safe payload fields", async () => {
     const store = createPosLocalStore({
       adapter: createMemoryPosLocalStorageAdapter(),

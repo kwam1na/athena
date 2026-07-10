@@ -143,4 +143,44 @@ describe("RegisterActionBar", () => {
       screen.queryByRole("button", { name: /closeout/i }),
     ).not.toBeInTheDocument();
   });
+
+  it("hides drawer and session actions while a previous sale must be cleared", () => {
+    render(
+      <RegisterActionBar
+        cashierCard={{ cashierName: "Ato K.", onSignOut: vi.fn() }}
+        closeoutControl={{
+          canCloseout: true,
+          canShowOpeningFloatCorrection: true,
+          canCorrectOpeningFloat: true,
+          onRequestCloseout: vi.fn(),
+          onRequestOpeningFloatCorrection: vi.fn(),
+        }}
+        drawerGate={{
+          mode: "recovery",
+          registerLabel: "Front Counter",
+          registerNumber: "1",
+          canOpenDrawer: true,
+          errorMessage: null,
+          isSubmitting: false,
+          onClearSale: vi.fn(),
+          onSubmit: undefined,
+          onSignOut: vi.fn(),
+        }}
+        registerInfo={registerInfo}
+        sessionPanel={{} as never}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: /open drawer/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("register-actions")).not.toBeInTheDocument();
+    expect(screen.queryByText("session-panel")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /float|closeout/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /sign out/i }),
+    ).toBeInTheDocument();
+  });
 });

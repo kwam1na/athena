@@ -5,6 +5,10 @@ import { buildApprovalRequest } from "../../../operations/approvalRequestHelpers
 import { areRegisterSessionCloseoutReviewFactsEquivalent } from "../../../operations/registerSessionCloseoutGate";
 import { recordRegisterSessionTraceBestEffort } from "../../../operations/registerSessionTracing";
 import {
+  insertRegisterSessionWithAuthority,
+  patchRegisterSessionWithAuthority,
+} from "../../../operations/registerSessionAuthorityRevision";
+import {
   buildRegisterSessionDateDerivationPatch,
   resolveRegisterSessionOperatingDateContext,
 } from "../../../operations/registerSessions";
@@ -39,6 +43,11 @@ import { listRegisterSessionCloseoutHolds } from "../../application/sync/registe
 import { validatePosLocalStaffProofWithCtx } from "../../application/sync/staffProofValidation";
 import { appendReportingIngressWithCtx } from "../../../reporting/ingress";
 import { applyCommerceInventoryEffectWithCtx } from "../../../reporting/inventory/commerceEffects";
+import {
+  createPosLocalSyncMappingWithAuthority,
+  markRegisterMappingAuthorityAmbiguous,
+  markRegisterMappingAuthorityMapped,
+} from "../../application/sync/registerMappingAuthorityRevision";
 
 function omitUndefined<T extends Record<string, unknown>>(value: T) {
   return Object.fromEntries(
@@ -356,34 +365,13 @@ export function createConvexLocalSyncRepository(
         .unique();
     },
     async createMapping(input) {
-      const existing =
-        (await ctx.db
-          .query("posLocalSyncMapping")
-          .withIndex("by_store_terminal_local", (q) =>
-            q
-              .eq("storeId", input.storeId)
-              .eq("terminalId", input.terminalId)
-              .eq("localRegisterSessionId", input.localRegisterSessionId)
-              .eq("localIdKind", input.localIdKind)
-              .eq("localId", input.localId),
-          )
-          .unique()) ?? null;
-      if (existing) {
-        if (
-          existing.localEventId === input.localEventId &&
-          existing.cloudTable === input.cloudTable &&
-          existing.cloudId === input.cloudId
-        ) {
-          return existing;
-        }
-
-        throw new Error(
-          "POS local sync mapping already belongs to another projection.",
-        );
-      }
-
-      const id = await ctx.db.insert("posLocalSyncMapping", input);
-      return { _id: id, ...input } as LocalSyncMappingRecord;
+      return createPosLocalSyncMappingWithAuthority(ctx, input);
+    },
+    async markRegisterSessionMappingAmbiguous(args) {
+      await markRegisterMappingAuthorityAmbiguous(ctx, args);
+    },
+    async markRegisterSessionMappingMapped(args) {
+      await markRegisterMappingAuthorityMapped(ctx, args);
     },
     async listMappingsForEvent(args) {
       const mappings = await ctx.db
@@ -462,8 +450,8 @@ export function createConvexLocalSyncRepository(
           storeId: input.storeId,
         },
       );
-      return ctx.db.insert(
-        "registerSession",
+      return insertRegisterSessionWithAuthority(
+        ctx,
         omitUndefined({
           storeId: input.storeId,
           organizationId: input.organizationId,
@@ -705,7 +693,7 @@ export function createConvexLocalSyncRepository(
         }
       }
 
-      await ctx.db.patch("registerSession", registerSessionId, {
+      await patchRegisterSessionWithAuthority(ctx, registerSessionId, {
         ...patch,
         ...datePatch,
       });

@@ -17,6 +17,7 @@ import {
   rejectRegisterSessionCloseoutWithCtx,
 } from "../operations/registerSessions";
 import { recordRegisterSessionTraceBestEffort } from "../operations/registerSessionTracing";
+import { patchRegisterSessionWithAuthority } from "../operations/registerSessionAuthorityRevision";
 import { consumeApprovalProofWithCtx } from "../operations/approvalProofs";
 import { toPesewas } from "../lib/currency";
 import {
@@ -555,7 +556,7 @@ async function persistRegisterSessionWorkflowTraceIdBestEffort(
   }
 
   try {
-    await ctx.db.patch("registerSession", args.registerSessionId, {
+    await patchRegisterSessionWithAuthority(ctx, args.registerSessionId, {
       workflowTraceId: args.traceId,
     });
   } catch (error) {
@@ -1994,14 +1995,22 @@ export const resolveRegisterSessionSyncReview = mutation({
         }
 
         try {
-          await createOrReuseRegisterSessionRepairMapping(localSyncRepository, {
-            localEventId: syncEvent.localEventId,
-            localRegisterSessionId: syncEvent.localRegisterSessionId,
-            now: resolvedAt,
-            registerSessionId: args.registerSessionId,
-            storeId: args.storeId,
-            terminalId,
-          });
+          const mappingResult =
+            await createOrReuseRegisterSessionRepairMapping(localSyncRepository, {
+              localEventId: syncEvent.localEventId,
+              localRegisterSessionId: syncEvent.localRegisterSessionId,
+              now: resolvedAt,
+              registerSessionId: args.registerSessionId,
+              storeId: args.storeId,
+              terminalId,
+            });
+          if ("status" in mappingResult && mappingResult.status === "conflict") {
+            return userError({
+              code: "precondition_failed",
+              message:
+                "This synced sale is already mapped to a different register session.",
+            });
+          }
         } catch {
           return userError({
             code: "precondition_failed",

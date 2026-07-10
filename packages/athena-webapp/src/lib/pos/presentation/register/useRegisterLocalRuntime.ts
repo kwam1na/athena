@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MutableRefObject } from "react";
 
 import type { Id } from "~/convex/_generated/dataModel";
@@ -13,6 +13,7 @@ import { createLocalCommandGateway } from "@/lib/pos/infrastructure/local/localC
 import { readProjectedLocalRegisterModel } from "@/lib/pos/infrastructure/local/localRegisterReader";
 import type { PosLocalRegisterReadModel } from "@/lib/pos/infrastructure/local/registerReadModel";
 import { usePosLocalSyncRuntimeStatus } from "@/lib/pos/infrastructure/local/usePosLocalSyncRuntime";
+import { useRegisterLifecycleAuthorityRuntime } from "@/lib/pos/infrastructure/local/useRegisterLifecycleAuthorityRuntime";
 import { usePosTerminalAppSessionRecoveryRuntimeInput } from "@/lib/pos/infrastructure/terminal/posTerminalAppSessionRecoveryContext";
 
 type RegisterLocalRuntimeTerminal = Parameters<
@@ -57,6 +58,9 @@ export function useRegisterLocalRuntime(input: {
   localCommandGateway: RegisterLocalCommandGateway;
   localRegisterReadModel: PosLocalRegisterReadModel | null;
   localRuntimeSyncSource: ReturnType<typeof usePosLocalSyncRuntimeStatus>;
+  registerLifecycleAuthority: ReturnType<
+    typeof useRegisterLifecycleAuthorityRuntime
+  >;
   localSaleValidationMetadata: PosLocalEventValidationMetadata | undefined;
   localStaffAuthorityStatus: string;
   localStore: RegisterLocalStore;
@@ -83,6 +87,10 @@ export function useRegisterLocalRuntime(input: {
   const [localSyncEventAppendToken, setLocalSyncEventAppendToken] = useState(0);
   const [localStaffAuthorityStatus, setLocalStaffAuthorityStatus] =
     useState("unknown");
+  const [registerOperationalResetStatus, setRegisterOperationalResetStatus] =
+    useState<"pending" | "ready" | "failed">("pending");
+  const authorityPersistenceFailedRef = useRef(false);
+  const registerOperationalResetReadyRef = useRef(false);
 
   const localStore = useMemo(
     () =>
@@ -105,33 +113,6 @@ export function useRegisterLocalRuntime(input: {
     setLocalSyncEventAppendToken((current) => current + 1);
   }, []);
 
-  const localCommandGateway = useMemo(
-    () =>
-      createLocalCommandGateway({
-        allowExplicitRegisterSessionWithoutProjection: true,
-        store: localStore,
-        createLocalId: (kind) => {
-          if (kind === "local-register-session" && terminal?._id) {
-            return createLocalFallbackId(`local-register-${terminal._id}`);
-          }
-          return createLocalFallbackId(kind);
-        },
-        onEventAppended: noteLocalEventAppended,
-        staffProofToken: (requestedStaffProfileId) =>
-          requestedStaffProfileId === staffProfileIdRef.current
-            ? (staffProofTokenRef.current ?? undefined)
-            : undefined,
-      }),
-    [
-      createLocalFallbackId,
-      localStore,
-      noteLocalEventAppended,
-      staffProfileIdRef,
-      staffProofTokenRef,
-      terminal?._id,
-    ],
-  );
-
   const appSessionRecovery = usePosTerminalAppSessionRecoveryRuntimeInput();
   const updateCoordinator = useOptionalUpdateCoordinator();
   const appUpdateCoordinator = useMemo(
@@ -147,6 +128,17 @@ export function useRegisterLocalRuntime(input: {
   const localSaleValidationMetadata = useMemo(
     () => buildLocalSaleValidationMetadata(appSessionRecovery?.status),
     [appSessionRecovery?.status],
+  );
+  const terminalDescriptor = useMemo<RegisterLocalRuntimeTerminal | null>(
+    () =>
+      terminal
+        ? {
+            _id: terminal._id,
+            cloudTerminalId: terminal.cloudTerminalId,
+            localTerminalId: terminal.localTerminalId,
+          }
+        : null,
+    [terminal?._id, terminal?.cloudTerminalId, terminal?.localTerminalId],
   );
 
   useEffect(() => {
@@ -220,30 +212,107 @@ export function useRegisterLocalRuntime(input: {
   }, [activeStoreId, localStore, terminal?._id]);
 
   const readCurrentLocalRegisterModel = useCallback(async () => {
-    if (!activeStoreId || !terminal?._id || typeof indexedDB === "undefined") {
+    if (
+      !activeStoreId ||
+      !terminalDescriptor?._id ||
+      typeof indexedDB === "undefined"
+    ) {
+      setRegisterOperationalResetStatus("failed");
       return null;
     }
 
     if (
       typeof localStore.listEvents !== "function" ||
-      typeof localStore.readProvisionedTerminalSeed !== "function"
+      typeof localStore.readProvisionedTerminalSeed !== "function" ||
+      typeof localStore.resetRegisterOperationalStateForAuthorityCutover !==
+        "function"
     ) {
       return null;
     }
 
+    let reset: Awaited<
+      ReturnType<
+        typeof localStore.resetRegisterOperationalStateForAuthorityCutover
+      >
+    > | null = null;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      reset =
+        await localStore.resetRegisterOperationalStateForAuthorityCutover();
+      if (reset.ok) break;
+    }
+    if (
+      !reset?.ok ||
+      (reset.value.status !== "applied" &&
+        reset.value.status !== "already_applied")
+    ) {
+      registerOperationalResetReadyRef.current = false;
+      setRegisterOperationalResetStatus("failed");
+      return null;
+    }
+    registerOperationalResetReadyRef.current = true;
+    setRegisterOperationalResetStatus("ready");
+
     const model = await readProjectedLocalRegisterModel({
       store: localStore,
       storeId: activeStoreId,
-      terminal,
+      terminal: terminalDescriptor,
       isOnline: globalThis.navigator?.onLine ?? false,
     });
     return model.ok ? model.value : null;
-  }, [activeStoreId, localStore, terminal]);
+  }, [activeStoreId, localStore, terminalDescriptor]);
 
   const refreshLocalRegisterReadModel = useCallback(async () => {
     const model = await readCurrentLocalRegisterModel();
     setLocalRegisterReadModel(model);
   }, [readCurrentLocalRegisterModel]);
+
+  const registerLifecycleAuthority = useRegisterLifecycleAuthorityRuntime({
+    isOnline: globalThis.navigator?.onLine ?? false,
+    localRegisterReadModel,
+    refreshLocalRegisterReadModel,
+    store: localStore,
+    storeId: activeStoreId,
+    terminal: terminalDescriptor?._id
+      ? {
+          _id: terminalDescriptor._id as Id<"posTerminal">,
+        }
+      : null,
+  });
+  if (registerLifecycleAuthority.persistence.status === "failed") {
+    authorityPersistenceFailedRef.current = true;
+  } else if (registerLifecycleAuthority.persistence.status === "ready") {
+    authorityPersistenceFailedRef.current = false;
+  }
+
+  const localCommandGateway = useMemo(
+    () =>
+      createLocalCommandGateway({
+        allowExplicitRegisterSessionWithoutProjection: true,
+        authorityPersistenceFailed: () =>
+          authorityPersistenceFailedRef.current ||
+          !registerOperationalResetReadyRef.current,
+        store: localStore,
+        createLocalId: (kind) => {
+          if (kind === "local-register-session" && terminal?._id) {
+            return createLocalFallbackId(`local-register-${terminal._id}`);
+          }
+          return createLocalFallbackId(kind);
+        },
+        onEventAppended: noteLocalEventAppended,
+        staffProofToken: (requestedStaffProfileId) =>
+          requestedStaffProfileId === staffProfileIdRef.current
+            ? (staffProofTokenRef.current ?? undefined)
+            : undefined,
+      }),
+    [
+      createLocalFallbackId,
+      localStore,
+      noteLocalEventAppended,
+      staffProfileIdRef,
+      staffProofTokenRef,
+      terminal?._id,
+    ],
+  );
 
   useEffect(() => {
     void refreshLocalRegisterReadModel();
@@ -257,7 +326,8 @@ export function useRegisterLocalRuntime(input: {
     eventAppendToken: localSyncEventAppendToken,
     mode: "status-only",
     onLocalEventsChanged: noteLocalRegisterEventChanged,
-    storeId: activeStoreId,
+    storeId:
+      registerOperationalResetStatus === "ready" ? activeStoreId : undefined,
     staffProfileId,
     staffProofToken,
     terminalId: terminal?._id,
@@ -271,6 +341,7 @@ export function useRegisterLocalRuntime(input: {
     localCommandGateway,
     localRegisterReadModel,
     localRuntimeSyncSource,
+    registerLifecycleAuthority,
     localSaleValidationMetadata,
     localStaffAuthorityStatus,
     localStore,

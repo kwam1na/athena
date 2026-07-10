@@ -509,6 +509,12 @@ async function executeClearStaleDrawerAuthority(
   if (!matchesDrawerPreconditions(drawerAuthority.value, preconditions)) {
     return preconditionFailed(context.command);
   }
+  if (
+    drawerAuthority.value.serverAuthority?.source === "dedicated_snapshot" &&
+    !drawerAuthority.value.localReviewAuthority
+  ) {
+    return preconditionFailed(context.command, "unsafe_authority_state");
+  }
 
   const events = await context.store.listEvents();
   if (!events.ok) {
@@ -527,7 +533,13 @@ async function executeClearStaleDrawerAuthority(
     return preconditionFailed(context.command);
   }
 
-  const clear = await clearDrawerAuthorityState({
+  const clearAuthority = drawerAuthority.value.localReviewAuthority
+    ? context.store.clearLocalDrawerReviewAuthorityState
+    : clearDrawerAuthorityState;
+  if (typeof clearAuthority !== "function") {
+    return failed(context.command, "local_store_failure");
+  }
+  const clear = await clearAuthority({
     localRegisterSessionId: drawerAuthority.value.localRegisterSessionId,
     storeId: drawerAuthority.value.storeId,
     terminalId: drawerAuthority.value.terminalId,

@@ -6,6 +6,7 @@ export const registerSessionSchema = v.object({
   terminalId: v.optional(v.id("posTerminal")),
   registerNumber: v.optional(v.string()),
   workflowTraceId: v.optional(v.string()),
+  lifecycleAuthorityRevision: v.optional(v.number()),
   recordedTransactionKeys: v.optional(v.array(v.string())),
   status: v.union(
     v.literal("open"),

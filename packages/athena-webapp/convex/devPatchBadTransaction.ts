@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 
 import { mutation } from "./_generated/server";
+import { patchRegisterSessionWithAuthority } from "./operations/registerSessionAuthorityRevision";
 
 export const patchBadTransaction = mutation({
   args: {
@@ -113,7 +114,7 @@ export const patchBadTransaction = mutation({
         };
         const nextExpectedCash =
           registerSession.expectedCash + cashExposureDelta;
-        await ctx.db.patch("registerSession", registerSession._id, {
+        await patchRegisterSessionWithAuthority(ctx, registerSession._id, {
           expectedCash: nextExpectedCash,
           ...(registerSession.countedCash === undefined
             ? {}

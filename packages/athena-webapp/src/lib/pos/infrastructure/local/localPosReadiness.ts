@@ -570,13 +570,10 @@ export function useLocalPosReadiness(input: {
     }
 
     if (localState.status === "failed") {
-      return {
-        status: "loading" as const,
-        diagnostics: {
-          activeStateKey: formatReadinessStateKey(activeStateKey),
-          stage: "reading_local_store" as const,
-        },
-      };
+      return blocked(
+        "local_store_unavailable",
+        "Local register state could not be read in time. Clear and reprovision this terminal before continuing.",
+      );
     }
 
     if (!readinessStateKeysEqual(localState.stateKey, activeStateKey)) {

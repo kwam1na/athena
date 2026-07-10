@@ -324,12 +324,27 @@ export async function createOrReuseRegisterSessionRepairMapping(
       existing.cloudTable === "registerSession" &&
       existing.cloudId === args.registerSessionId
     ) {
+      await repository.markRegisterSessionMappingMapped?.({
+        cloudRegisterSessionId: existing.cloudId,
+        localRegisterSessionId: args.localRegisterSessionId,
+        mappingId: existing._id as Id<"posLocalSyncMapping">,
+        sourceEventType: "repair",
+        storeId: args.storeId,
+        terminalId: args.terminalId,
+      });
       return existing;
     }
 
-    throw new Error(
-      "POS local sync register-session mapping already belongs to another projection.",
-    );
+    await repository.markRegisterSessionMappingAmbiguous?.({
+      storeId: args.storeId,
+      terminalId: args.terminalId,
+      localRegisterSessionId: args.localRegisterSessionId,
+    });
+    return {
+      status: "conflict" as const,
+      reason:
+        "POS local sync register-session mapping already belongs to another projection.",
+    };
   }
 
   return repository.createMapping({
@@ -1071,6 +1086,11 @@ async function projectRegisterOpened(
       existing.localEventId !== args.event.localEventId &&
       existing.sourceEventType === "register_opened"
     ) {
+      await repository.markRegisterSessionMappingAmbiguous?.({
+        storeId: args.storeId,
+        terminalId: args.terminalId,
+        localRegisterSessionId: args.event.localRegisterSessionId,
+      });
       const conflict = await createConflict(repository, args, {
         conflictType: "duplicate_local_id",
         summary:

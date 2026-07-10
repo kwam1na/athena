@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { Id } from "../../../_generated/dataModel";
 import {
@@ -105,6 +105,9 @@ describe("projectLocalSyncEvent", () => {
 
   it("reuses an existing register-session repair mapping for the same cloud drawer", async () => {
     const repository = createProjectionRepository();
+    const markMapped = vi.fn().mockResolvedValue(undefined);
+    (repository as never as { markRegisterSessionMappingMapped: typeof markMapped })
+      .markRegisterSessionMappingMapped = markMapped;
 
     const mapping = await createOrReuseRegisterSessionRepairMapping(
       repository,
@@ -126,6 +129,13 @@ describe("projectLocalSyncEvent", () => {
       }),
     );
     expect(repository.mappings).toHaveLength(1);
+    expect(markMapped).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cloudRegisterSessionId: "register-session-1",
+        localRegisterSessionId: "local-register-1",
+        mappingId: "mapping-register",
+      }),
+    );
   });
 
   it("replays register open idempotently after a repair-created register mapping", async () => {
@@ -171,6 +181,8 @@ describe("projectLocalSyncEvent", () => {
 
   it("rejects register-session repair when the local drawer maps elsewhere", async () => {
     const repository = createProjectionRepository();
+    const markAmbiguous = vi.fn().mockResolvedValue(undefined);
+    repository.markRegisterSessionMappingAmbiguous = markAmbiguous;
 
     await expect(
       createOrReuseRegisterSessionRepairMapping(repository, {
@@ -181,8 +193,13 @@ describe("projectLocalSyncEvent", () => {
         storeId: "store-1" as Id<"store">,
         terminalId: "terminal-1" as Id<"posTerminal">,
       }),
-    ).rejects.toThrow(
-      "POS local sync register-session mapping already belongs to another projection.",
+    ).resolves.toEqual({
+      status: "conflict",
+      reason:
+        "POS local sync register-session mapping already belongs to another projection.",
+    });
+    expect(markAmbiguous).toHaveBeenCalledWith(
+      expect.objectContaining({ localRegisterSessionId: "local-register-1" }),
     );
   });
 
@@ -5165,6 +5182,8 @@ describe("projectLocalSyncEvent", () => {
 
   it("conflicts duplicate register opens that reuse the same local drawer id from another source event", async () => {
     const repository = createProjectionRepository();
+    const markAmbiguous = vi.fn().mockResolvedValue(undefined);
+    repository.markRegisterSessionMappingAmbiguous = markAmbiguous;
 
     const result = await projectLocalSyncEvent(repository, {
       storeId: "store-1" as never,
@@ -5200,6 +5219,9 @@ describe("projectLocalSyncEvent", () => {
         }),
       }),
     ]);
+    expect(markAmbiguous).toHaveBeenCalledWith(
+      expect.objectContaining({ localRegisterSessionId: "local-register-1" }),
+    );
   });
 
   it("conflicts a stale register open when the active drawer has a newer closeout review", async () => {

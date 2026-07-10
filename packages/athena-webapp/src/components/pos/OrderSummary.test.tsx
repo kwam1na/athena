@@ -1066,7 +1066,9 @@ describe("OrderSummary completed transaction summary", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: /clear all/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /clear all/i }),
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /edit/i })).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /remove cash payment/i }),
@@ -1089,8 +1091,12 @@ describe("OrderSummary completed transaction summary", () => {
     );
     expect(screen.getByText("GH₵8")).toBeInTheDocument();
     expect(screen.getByText("Amount to add")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /clear all/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /edit/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /clear all/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /edit/i }),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /remove cash payment/i }),
     ).not.toBeInTheDocument();
@@ -1147,6 +1153,126 @@ describe("OrderSummary completed transaction summary", () => {
     expect(
       screen.queryByRole("button", { name: "Complete Sale" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("keeps draft totals and payments visible while disabling checkout controls", () => {
+    render(
+      <OrderSummary
+        cartItems={[
+          {
+            id: "item-1",
+            name: "Hair",
+            barcode: "123456789012",
+            price: 1700,
+            quantity: 1,
+            productId: "product-1",
+            skuId: "sku-1",
+          } as never,
+        ]}
+        disabled
+        payments={[
+          { id: "payment-1", method: "cash", amount: 1700, timestamp: 1 },
+        ]}
+        total={1700}
+      />,
+    );
+
+    expect(screen.getAllByText("Cash")).toHaveLength(2);
+    expect(screen.getByText("GH₵17")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cash" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Card" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Mobile Money" })).toBeDisabled();
+    expect(
+      screen.queryByRole("button", { name: /complete sale/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("returns to neutral checkout after a disabled sale is cleared and re-enabled", async () => {
+    const user = userEvent.setup();
+    const onPaymentFlowChange = vi.fn();
+    const cartItems = [
+      {
+        id: "item-1",
+        name: "Hair",
+        barcode: "123456789012",
+        price: 1700,
+        quantity: 1,
+        productId: "product-1",
+        skuId: "sku-1",
+      } as never,
+    ];
+    const { rerender } = render(
+      <OrderSummary
+        cartItems={cartItems}
+        onPaymentFlowChange={onPaymentFlowChange}
+        total={1700}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Cash" }));
+    expect(screen.getByText("Amount to add")).toBeInTheDocument();
+
+    rerender(
+      <OrderSummary
+        cartItems={cartItems}
+        disabled
+        onPaymentFlowChange={onPaymentFlowChange}
+        total={1700}
+      />,
+    );
+    expect(screen.queryByText("Amount to add")).not.toBeInTheDocument();
+
+    rerender(
+      <OrderSummary
+        cartItems={[]}
+        onPaymentFlowChange={onPaymentFlowChange}
+        payments={[]}
+        total={0}
+      />,
+    );
+
+    expect(screen.queryByText("Amount to add")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cash" })).toBeDisabled();
+    expect(onPaymentFlowChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it("ends payment editing when checkout becomes disabled", async () => {
+    const user = userEvent.setup();
+    const onEditingPaymentChange = vi.fn();
+    const props = {
+      cartItems: [
+        {
+          id: "item-1",
+          name: "Hair",
+          barcode: "123456789012",
+          price: 1700,
+          quantity: 1,
+          productId: "product-1",
+          skuId: "sku-1",
+        } as never,
+      ],
+      onEditingPaymentChange,
+      onUpdatePayment: vi.fn(),
+      payments: [
+        { id: "payment-1", method: "cash" as const, amount: 800, timestamp: 1 },
+      ],
+      paymentsExpanded: true,
+      total: 1700,
+    };
+    const { rerender } = render(<OrderSummary {...props} />);
+
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    expect(onEditingPaymentChange).toHaveBeenLastCalledWith(true);
+    expect(screen.getByRole("button", { name: "Save" })).toBeInTheDocument();
+
+    rerender(<OrderSummary {...props} disabled />);
+    expect(onEditingPaymentChange).toHaveBeenLastCalledWith(false);
+
+    rerender(<OrderSummary {...props} />);
+    expect(
+      screen.queryByRole("button", { name: "Save" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit" })).toBeInTheDocument();
   });
 
   it("enables payment methods for service-only active carts", async () => {
@@ -1282,10 +1408,7 @@ describe("OrderSummary completed transaction summary", () => {
     const paymentRow = paymentLabel?.closest(".flex");
     expect(paymentRow).toHaveTextContent("GH₵8");
     expect(paymentRow).toHaveClass("gap-2");
-    expect(paymentLabel).toHaveClass(
-      "font-medium",
-      "text-muted-foreground",
-    );
+    expect(paymentLabel).toHaveClass("font-medium", "text-muted-foreground");
     expect(screen.getByText("GH₵8")).toHaveClass(
       "font-semibold",
       "text-gray-950",

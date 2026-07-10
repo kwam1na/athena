@@ -41,6 +41,16 @@ Convex artifact refresh rule:
 - If a change needs new `convex/_generated` artifacts or refreshed client refs, start `bunx convex dev` from `packages/athena-webapp` before validation.
 - Do not substitute `bunx convex codegen` for this workflow; local agent worktrees may not have `CONVEX_DEPLOYMENT` configured, and `convex dev` is the documented artifact-refresh path in this repo.
 
+## Local dev POS cashier
+
+For localhost and development live testing only, sign into Athena with the development account below, then open its seeded store and use the provisioned POS cashier:
+
+- Athena user: `knownothing955@gmail.com`
+- Username: `jdoog`
+- PIN: `1111`
+
+Retrieve the one-time login code from that account's Gmail inbox when needed; never copy one-time codes into repository files. Do not use these credentials against production. If the cashier is missing or the PIN no longer works in development, provision or reset the cashier through Staff Management rather than adding a test-only authentication bypass.
+
 Start with the package suite in [vitest.config.ts](../../vitest.config.ts): `bun run --filter '@athena/webapp' test`. It covers `src/**/*.test.{ts,tsx}`, `convex/**/*.test.{ts,tsx}`, and `shared/**/*.test.{ts,tsx}`, so it is the default regression pass for mixed UI and backend changes.
 
 Client/server error-foundation rule:

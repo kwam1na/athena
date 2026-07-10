@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Plan: Reset dev and production POS onto register authority replication</title>
+  <style>
+    :root { --ink:#172033; --muted:#667085; --line:#d9dee8; --paper:#fff; --wash:#f5f7fb; --accent:#3f51b5; --accent-wash:#eef0ff; --warn:#9a5b13; --warn-wash:#fff7e8; --good:#166534; --good-wash:#ecfdf3; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--wash); color:var(--ink); font-family:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; line-height:1.6; }
+    main { width:min(1120px,calc(100% - 32px)); margin:32px auto 72px; background:var(--paper); border:1px solid var(--line); border-radius:14px; box-shadow:0 12px 32px rgba(23,32,51,.08); overflow:hidden; }
+    header { padding:46px 54px 34px; border-bottom:1px solid var(--line); }
+    article { padding:8px 54px 56px; }
+    h1 { max-width:900px; margin:8px 0 16px; font-size:clamp(2rem,5vw,3.25rem); line-height:1.08; letter-spacing:-.035em; }
+    h2 { margin:44px 0 14px; font-size:1.5rem; }
+    h3 { margin:24px 0 8px; font-size:1.08rem; }
+    p { max-width:84ch; }
+    a { color:var(--accent); }
+    .eyebrow { color:var(--accent); font-weight:700; letter-spacing:.12em; text-transform:uppercase; font-size:.78rem; }
+    .lead { color:#344054; font-size:1.13rem; max-width:900px; }
+    .meta { display:flex; flex-wrap:wrap; gap:8px; margin-top:18px; }
+    .pill { border:1px solid var(--line); border-radius:999px; padding:4px 10px; color:var(--muted); font-size:.84rem; }
+    nav { margin:26px 0 8px; padding:18px 22px; background:var(--wash); border:1px solid var(--line); border-radius:10px; }
+    nav ol { columns:2; margin:8px 0 0; padding-left:22px; }
+    .callout { margin:20px 0; padding:17px 19px; border-left:4px solid var(--accent); background:var(--accent-wash); border-radius:6px; }
+    .warn { border-left-color:var(--warn); background:var(--warn-wash); }
+    .good { border-left-color:var(--good); background:var(--good-wash); }
+    .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:15px; }
+    .card,.unit { padding:18px 20px; border:1px solid var(--line); border-radius:10px; }
+    .card h3,.unit h3 { margin-top:0; }
+    table { width:100%; border-collapse:collapse; margin:17px 0 26px; font-size:.93rem; }
+    th,td { padding:10px 11px; border:1px solid var(--line); text-align:left; vertical-align:top; }
+    th { background:var(--wash); }
+    code { padding:.12em .35em; background:#f0f2f6; border-radius:4px; }
+    .flow { padding:20px; background:#111827; color:#f9fafb; border-radius:10px; overflow-x:auto; white-space:pre; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:.88rem; }
+    ul,ol { padding-left:22px; }
+    li { margin:5px 0; }
+    footer { margin-top:44px; padding-top:22px; border-top:1px solid var(--line); color:var(--muted); font-size:.9rem; }
+    @media (max-width:760px) { header,article { padding-left:24px; padding-right:24px; } nav ol { columns:1; } .grid { grid-template-columns:1fr; } table { display:block; overflow-x:auto; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">Delivery plan</div>
+    <h1>Align dev and production POS with targeted local reset</h1>
+    <p class="lead">Finish heartbeat-independent register authority, then automatically remove stale business projections and drawer identity on all seven active dev terminals and all six active production terminals while preserving terminal and cashier state.</p>
+    <div class="meta">
+      <span class="pill">Created 2026-07-10</span><span class="pill">Type: fix</span><span class="pill">Status: active</span><span class="pill">13 terminals</span><span class="pill">Destructive cutover approved</span>
+    </div>
+    <p><a href="2026-07-10-001-fix-pos-register-authority-replication-plan.md">Open canonical Markdown plan</a></p>
+  </header>
+  <article>
+    <nav aria-label="Table of contents"><strong>Contents</strong><ol><li><a href="#decision">Decision</a></li><li><a href="#fleets">Fleet scope</a></li><li><a href="#contract">Contract</a></li><li><a href="#flow">Cutover flow</a></li><li><a href="#units">Implementation units</a></li><li><a href="#rollout">Rollout</a></li><li><a href="#risks">Risks</a></li><li><a href="#verify">Verification</a></li></ol></nav>
+
+    <section id="decision">
+      <h2>Decision</h2>
+      <p>The authority channel fixes the split between Convex presentation evidence and IndexedDB command authority. The remaining problem was legacy local mapping inference. That work is removed.</p>
+      <div class="callout warn"><strong>Approved destructive posture:</strong> business events have already projected to the server and remaining local review items are stale. Every non-seed local business event may be deleted.</div>
+      <p>The one-time IndexedDB transaction removes business events, register-session mappings, and drawer authority. It preserves terminal seed and integrity, cashier presence, staff authority, readiness, catalogs, and sequence counters.</p>
+    </section>
+
+    <section id="fleets">
+      <h2>Fleet scope</h2>
+      <div class="grid">
+        <div class="card"><h3>Dev — 7 terminals</h3><p>Arc, Codex, Codex Authority Test, Codex Cash Controls Test, Codex Cash Controls Headless, Codex II, and Olorin run the reset automatically on register startup.</p></div>
+        <div class="card"><h3>Production — 6 terminals</h3><p>Mission Control, M Supplies, Wigshop, iPhone, Codex, and Olorin receive the same deterministic one-time cutover.</p></div>
+      </div>
+      <div class="callout good"><strong>Identity invariant:</strong> terminal seed, sync secret, cloud terminal ID, register number, and cashier presence are unchanged. Neither environment can gain a duplicate terminal.</div>
+    </section>
+
+    <section id="contract">
+      <h2>Required contract</h2>
+      <table><thead><tr><th>Boundary</th><th>Decision</th></tr></thead><tbody>
+        <tr><td>Inbound correctness</td><td>Terminal-authenticated reactive query independent of runtime heartbeat.</td></tr>
+        <tr><td>Operational authority</td><td>Presentation and commands consume the same refreshed IndexedDB projection.</td></tr>
+        <tr><td>Legacy local state</td><td>Delete business events, register-session mappings, and non-integrity authority.</td></tr>
+        <tr><td>Reset method</td><td>Automatic versioned IndexedDB transaction before projection, commands, or sync.</td></tr>
+        <tr><td>Preservation</td><td>Keep terminal/cashier/staff authority, catalogs, readiness, integrity, and counters.</td></tr>
+        <tr><td>Sales proof</td><td>Controlled sales in dev; ordinary or explicitly approved reconciled transactions in production.</td></tr>
+        <tr><td>Legacy directives</td><td>Retain during the reset sequence; retire only in a later reviewed change.</td></tr>
+      </tbody></table>
+    </section>
+
+    <section id="flow">
+      <h2>Cutover flow</h2>
+      <div class="flow" role="img" aria-label="Dev and production POS reset sequence">Deploy server authority contract to dev
+            │
+            ▼
+Deploy supported dev client
+            │
+            ▼
+Run targeted reset before dev register projection
+            │
+            ▼
+Sale → Cash Controls close → replacement → sale → reload
+            │ all dev passes
+            ▼
+Deploy server then client to production
+            │
+            ▼
+Run targeted reset before production register projection
+            │
+            ▼
+Sale → Cash Controls close → replacement → sale → reload
+            │ representative proof passes
+            ▼
+All terminals self-align on startup; legacy retirement stays separate</div>
+    </section>
+
+    <section id="units">
+      <h2>Implementation units</h2>
+      <div class="unit"><h3>U1 + U8 — Characterize and preflight</h3><p>Lock the old-ID reuse regression and prove the exact terminal-authenticated query in read-only shadow mode.</p></div>
+      <div class="unit"><h3>U2 + U3 — Server ordering and query</h3><p>Add lifecycle/mapping revisions and return exact bounded authority without heartbeat coupling or latest-session guesses.</p></div>
+      <div class="unit"><h3>U4 + U5 — Atomic local persistence and runtime</h3><p>Persist versioned authority before refresh. New candidates come only from post-reset active/pending drawers and new mappings; legacy inference is removed.</p></div>
+      <div class="unit"><h3>U6 — Sole local decision source</h3><p>Remove direct cloud operational gating. Exact local closure creates a distinct replacement; non-empty carts remain read-only until explicit clear.</p></div>
+      <div class="unit"><h3>U9 — Apply targeted reset to both fleets</h3><p>Atomically delete business events, register-session mappings, and drawer authority before projection while preserving terminal/operator state and counters.</p></div>
+      <div class="unit"><h3>U10 — Verify the complete flow</h3><p>Open, sell, reload, close from Cash Controls, persist the block, open a distinct replacement, sell again, reload, and record representative dev/production evidence.</p></div>
+      <div class="unit"><h3>U7 — Close rollout evidence</h3><p>Confirm all 13 terminals run supported builds on post-reset identities while legacy directive retirement remains a separate PR.</p></div>
+    </section>
+
+    <section id="rollout">
+      <h2>Rollout</h2>
+      <ol>
+        <li><strong>Dev foundation:</strong> deploy server then client; verify the automatic reset and complete flow.</li>
+        <li><strong>Production foundation:</strong> deploy identical server contract then supported client; verify build adoption.</li>
+        <li><strong>Automatic production cutover:</strong> each terminal resets once on its next register startup.</li>
+        <li><strong>Closure:</strong> retain the original 7 dev and 6 production terminal IDs, zero duplicates, and no stale business/drawer projection.</li>
+      </ol>
+      <p>No attended site-data clear or reprovisioning is required. A persistent reset failure blocks only the affected terminal.</p>
+    </section>
+
+    <section id="risks">
+      <h2>Primary risks</h2>
+      <table><thead><tr><th>Risk</th><th>Mitigation</th></tr></thead><tbody>
+        <tr><td>Local-only facts are deleted</td><td>Explicitly accepted: server business history is complete and local review state is stale.</td></tr>
+        <tr><td>Reset races outbound sync</td><td>Withhold sync and commands until the atomic marker commits.</td></tr>
+        <tr><td>Malformed drawer authority survives</td><td>Delete all non-terminal-integrity authority keys by key.</td></tr>
+        <tr><td>Transient IndexedDB failure</td><td>Retry up to 3 times; persistent failure remains fail-closed.</td></tr>
+        <tr><td>Validation distorts production finance</td><td>Prefer ordinary sales; require an approved SKU/tender/accounting/void protocol for test transactions.</td></tr>
+        <tr><td>Cutover runs twice</td><td>Commit a versioned marker atomically and preserve all post-cutover events.</td></tr>
+      </tbody></table>
+    </section>
+
+    <section id="verify">
+      <h2>Verification strategy</h2>
+      <ul>
+        <li>Seven dev and six production terminals retain their original cloud IDs and register assignments; no duplicate active terminals.</li>
+        <li>Every reset store begins without business events, register-session mappings, or drawer authority while terminal/cashier/staff/catalog state remains.</li>
+        <li>Every terminal creates a new drawer, completes a sale, consumes Cash Controls closure through the dedicated lane, opens a distinct replacement, and completes another sale.</li>
+        <li>Reload preserves new post-reset state and product lookup remains usable.</li>
+        <li>No persistent <code>Drawer status not saved</code> gate, closed local ID reuse, closed cloud-session reuse, or heartbeat dependency.</li>
+      </ul>
+    </section>
+
+    <footer><p>The Markdown plan is canonical. This HTML file is a review digest and must stay synchronized with material plan changes.</p></footer>
+  </article>
+</main>
+</body>
+</html>

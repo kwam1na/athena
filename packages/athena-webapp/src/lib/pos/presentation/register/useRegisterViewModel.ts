@@ -38,7 +38,6 @@ import { logger } from "@/lib/logger";
 import { useConvexCommandGateway } from "@/lib/pos/infrastructure/convex/commandGateway";
 import { type PosLocalEventRecord } from "@/lib/pos/infrastructure/local/posLocalStore";
 import {
-  hasSettledRegisterCloseout,
   type PosLocalActiveSaleReadModel,
   type PosLocalRegisterReadModel,
 } from "@/lib/pos/infrastructure/local/registerReadModel";
@@ -163,7 +162,6 @@ import {
   getCloseoutLocalRegisterSessionId,
   getPendingLocalCashVoidApprovals,
   getPendingLocalCloseoutRegisterSession,
-  isKnownCloudRegisterSessionBlockingLocalProjection,
   readLocalSyncStatus,
 } from "./registerDrawerPresentation";
 import {
@@ -368,88 +366,6 @@ type LocalOperableRegisterSession = {
   terminalId: Id<"posTerminal">;
 };
 
-type CloseoutBlockedRegisterSession = {
-  _id?: Id<"registerSession"> | string;
-  cloudRegisterSessionId?: Id<"registerSession"> | string;
-  countedCash?: number;
-  expectedCash: number;
-  localRegisterSessionId?: string;
-  localSyncStatus?: {
-    pendingEventCount?: number;
-    status: string;
-  };
-  managerApprovalRequestId?: Id<"approvalRequest">;
-  openedAt: number;
-  openingFloat: number;
-  pendingVoidApprovals?: {
-    cashAffectingCount: number;
-    cashAdjustmentCount?: number;
-    cashAdjustmentDelta?: number;
-    cashAmount: number;
-    count: number;
-  } | null;
-  registerNumber: string;
-  status: "closing" | "closeout_rejected";
-  terminalId: Id<"posTerminal">;
-  variance?: number;
-};
-
-function selectPassiveCloseoutBlockedRegisterSession(
-  session:
-    | {
-        _id?: Id<"registerSession"> | string;
-        countedCash?: number;
-        expectedCash?: number;
-        localSyncStatus?:
-          | CloseoutBlockedRegisterSession["localSyncStatus"]
-          | null;
-        managerApprovalRequestId?: Id<"approvalRequest">;
-        openedAt?: number;
-        openingFloat?: number;
-        pendingVoidApprovals?: CloseoutBlockedRegisterSession["pendingVoidApprovals"];
-        registerNumber?: string;
-        status?: string;
-        terminalId?: Id<"posTerminal">;
-        variance?: number;
-      }
-    | null
-    | undefined,
-): CloseoutBlockedRegisterSession | null {
-  if (
-    !session ||
-    (session.status !== "closing" && session.status !== "closeout_rejected") ||
-    !session.terminalId ||
-    session.expectedCash === undefined ||
-    session.openedAt === undefined ||
-    session.openingFloat === undefined
-  ) {
-    return null;
-  }
-  const hasSubmittedCloseoutEvidence =
-    session.status === "closeout_rejected" ||
-    session.countedCash !== undefined ||
-    Boolean(session.managerApprovalRequestId) ||
-    session.localSyncStatus?.status === "needs_review";
-  if (!hasSubmittedCloseoutEvidence) {
-    return null;
-  }
-
-  return {
-    _id: session._id,
-    countedCash: session.countedCash,
-    expectedCash: session.expectedCash,
-    localSyncStatus: session.localSyncStatus ?? undefined,
-    managerApprovalRequestId: session.managerApprovalRequestId,
-    openedAt: session.openedAt,
-    openingFloat: session.openingFloat,
-    pendingVoidApprovals: session.pendingVoidApprovals,
-    registerNumber: session.registerNumber ?? "",
-    status: session.status,
-    terminalId: session.terminalId,
-    variance: session.variance,
-  };
-}
-
 type LocalOperablePosSession = {
   localPosSessionId: string;
   localRegisterSessionId: string;
@@ -489,8 +405,7 @@ type LocalOperableActiveSession = {
 };
 
 type OperableActiveSession =
-  | CloudOperableActiveSession
-  | LocalOperableActiveSession;
+  CloudOperableActiveSession | LocalOperableActiveSession;
 
 function asCloudOperableSession(
   session: PosSessionDetail | null,
@@ -605,12 +520,13 @@ export function useRegisterViewModel(): RegisterViewModel {
     null,
   );
   const [isOpeningDrawer, setIsOpeningDrawer] = useState(false);
+  const [isClearingSale, setIsClearingSale] = useState(false);
+  const isClearingSaleRef = useRef(false);
   const [isRepairingTerminalSetup, setIsRepairingTerminalSetup] =
     useState(false);
   const [isCorrectingOpeningFloat, setIsCorrectingOpeningFloat] =
     useState(false);
   const [isSubmittingCloseout, setIsSubmittingCloseout] = useState(false);
-  const [isReopeningCloseout, setIsReopeningCloseout] = useState(false);
   const [isCloseoutRequested, setIsCloseoutRequested] = useState(false);
   const [
     isOpeningFloatCorrectionRequested,
@@ -681,6 +597,10 @@ export function useRegisterViewModel(): RegisterViewModel {
     hasProvisionedLocalSyncSeed,
     localCommandGateway,
     localRegisterReadModel,
+    registerLifecycleAuthority: {
+      persistence: registerLifecycleAuthorityPersistence,
+      retry: retryRegisterLifecycleAuthority,
+    },
     localRuntimeSyncSource,
     localSaleValidationMetadata,
     localStaffAuthorityStatus,
@@ -866,16 +786,10 @@ export function useRegisterViewModel(): RegisterViewModel {
     staffProfileId &&
     projectedLocalActiveSaleStaffProfileId === staffProfileId,
   );
-  const cloudRegisterSessionBlocksLocalProjection =
-    isKnownCloudRegisterSessionBlockingLocalProjection(
-      registerState?.activeRegisterSession,
-      localRegisterReadModel?.activeRegisterSession,
-    );
   const projectedLocalRegisterSession =
     localRegisterReadModel?.activeRegisterSession &&
     activeStoreId &&
     terminal?._id &&
-    !cloudRegisterSessionBlocksLocalProjection &&
     isRegisterSessionSaleUsable(localRegisterReadModel.activeRegisterSession)
       ? {
           expectedCash:
@@ -903,12 +817,6 @@ export function useRegisterViewModel(): RegisterViewModel {
           terminal?._id === localOperableRegisterSession.terminalId
         ? localOperableRegisterSession
         : projectedLocalRegisterSession;
-  const closeoutBlockedRegisterSession =
-    locallyOperableRegisterSession === null
-      ? selectPassiveCloseoutBlockedRegisterSession(
-          registerState?.activeRegisterSession,
-        )
-      : null;
   const activeCloudRegisterSessionHasCloseoutReview = Boolean(
     findRegisterCloseoutReviewItem(usableActiveRegisterSession),
   );
@@ -920,12 +828,11 @@ export function useRegisterViewModel(): RegisterViewModel {
     activeSession?.registerNumber ??
     locallyOperableRegisterSession?.registerNumber ??
     saleUsableActiveRegisterSession?.registerNumber ??
-    closeoutBlockedRegisterSession?.registerNumber ??
     registerState?.activeSession?.registerNumber ??
     registerState?.resumableSession?.registerNumber;
-  const activeRegisterSessionId = saleUsableActiveRegisterSession?._id as
-    | Id<"registerSession">
-    | undefined;
+  const activeRegisterSessionId =
+    locallyOperableRegisterSession?.cloudRegisterSessionId as
+      Id<"registerSession"> | undefined;
   const cloudRegisterSessionId = activeRegisterSessionId?.toString();
   const localEventRegisterSessionId =
     locallyOperableRegisterSession?.localRegisterSessionId ??
@@ -1352,6 +1259,11 @@ export function useRegisterViewModel(): RegisterViewModel {
   ]);
   const visibleActiveSession = asCloudOperableSession(
     activeSession &&
+      (!locallyOperableRegisterSession ||
+        !activeSession.registerSessionId ||
+        (locallyOperableRegisterSession.cloudRegisterSessionId !== undefined &&
+          activeSession.registerSessionId.toString() ===
+            locallyOperableRegisterSession.cloudRegisterSessionId)) &&
       !locallyCompletedSessionIdsRef.current.has(
         activeSession._id.toString(),
       ) &&
@@ -1793,63 +1705,31 @@ export function useRegisterViewModel(): RegisterViewModel {
     operableActiveSession && hasInProgressSaleDraft,
   );
   const hasActivePosSession = Boolean(operableActiveSession?._id);
-  const hasCloudBlockedRecoverableLocalSale = Boolean(
-    cloudRegisterSessionBlocksLocalProjection &&
-    projectedLocalActiveSale &&
-    isProjectedLocalActiveSaleOwnedByCurrentStaff,
-  );
-  const activeSessionNeedsRegisterBinding = Boolean(
-    isCloudOperableSession(operableActiveSession) &&
-    !operableActiveSession.registerSessionId &&
-    !locallyOperableRegisterSession,
-  );
-  const activeSessionHasMismatchedRegisterBinding = Boolean(
-    isCloudOperableSession(operableActiveSession) &&
-    operableActiveSession.registerSessionId &&
-    activeRegisterSessionId &&
-    operableActiveSession.registerSessionId !== activeRegisterSessionId,
-  );
-  const activeSessionHasBlockedRegisterBinding =
-    activeSessionNeedsRegisterBinding ||
-    activeSessionHasMismatchedRegisterBinding;
-  const hasCloseoutBlockedDrawerState = Boolean(
-    bootstrapState &&
-    closeoutBlockedRegisterSession &&
-    !saleUsableActiveRegisterSession,
+  const activeSessionHasBlockedRegisterBinding = Boolean(
+    hasActivePosSession &&
+    localRegisterReadModel &&
+    (!locallyOperableRegisterSession ||
+      (Boolean(localRegisterReadModel.saleBlockReason) &&
+        localRegisterReadModel.saleBlockReason !== "drawer_closed") ||
+      registerLifecycleAuthorityPersistence.status === "failed"),
   );
   const hasMissingDrawerStartupState = Boolean(
-    bootstrapState &&
-    (bootstrapState.phase === "readyToStart" ||
-      bootstrapState.phase === "resumable") &&
-    !saleUsableActiveRegisterSession &&
-    !locallyOperableRegisterSession,
+    localRegisterReadModel && !locallyOperableRegisterSession,
   );
   const hasMissingDrawerRecoveryState = Boolean(
-    bootstrapState &&
-    !saleUsableActiveRegisterSession &&
+    localRegisterReadModel &&
     !locallyOperableRegisterSession &&
-    (bootstrapState.phase === "active" ||
-      bootstrapState.phase === "resumable" ||
-      hasActivePosSession),
+    hasActivePosSession,
   );
   const hasDraftDrawerRecoveryState = Boolean(
     hasInProgressSaleDraft &&
-    !saleUsableActiveRegisterSession &&
     !locallyOperableRegisterSession &&
     !localEventRegisterSessionId &&
     !isTransactionCompleted,
   );
   const rawLocalSaleAuthorityBlockReason =
     localRegisterReadModel?.saleBlockReason ?? null;
-  const hasSettledLocalCloseoutBlock =
-    rawLocalSaleAuthorityBlockReason === "drawer_closed" &&
-    hasSettledRegisterCloseout({
-      events: localRegisterReadModel?.sourceEvents ?? [],
-      session: localRegisterReadModel?.activeRegisterSession,
-    });
-  const localSaleAuthorityBlockReason = hasSettledLocalCloseoutBlock
-    ? null
-    : rawLocalSaleAuthorityBlockReason;
+  const localSaleAuthorityBlockReason = rawLocalSaleAuthorityBlockReason;
   const localDrawerAuthorityReason =
     localRegisterReadModel?.drawerAuthorityReason ?? null;
   const hasRecoverableDrawerAuthorityBlock =
@@ -1857,22 +1737,17 @@ export function useRegisterViewModel(): RegisterViewModel {
   const hasLifecycleReviewDrawerBlock =
     localDrawerAuthorityReason === "lifecycle_rejected";
   const hasLocalSaleAuthorityBlock = Boolean(localSaleAuthorityBlockReason);
+  const hasAuthorityPersistenceFailure =
+    registerLifecycleAuthorityPersistence.status === "failed";
   const requiresDrawerGate = Boolean(
     activeStoreId &&
     terminal?._id &&
     staffProfileId &&
-    ((bootstrapState &&
-      (hasMissingDrawerStartupState ||
-        hasCloseoutBlockedDrawerState ||
-        hasMissingDrawerRecoveryState)) ||
-      hasCloudBlockedRecoverableLocalSale ||
+    (hasMissingDrawerStartupState ||
+      hasMissingDrawerRecoveryState ||
       hasDraftDrawerRecoveryState ||
-      activeSessionHasBlockedRegisterBinding ||
-      hasLocalSaleAuthorityBlock),
-  );
-  const closeoutBlockedGateIsRecovery = Boolean(
-    hasCloseoutBlockedDrawerState &&
-    (hasMissingDrawerRecoveryState || activeSessionHasBlockedRegisterBinding),
+      hasLocalSaleAuthorityBlock ||
+      hasAuthorityPersistenceFailure),
   );
   const localCloseoutRegisterSession = locallyOperableRegisterSession
     ? {
@@ -1901,13 +1776,12 @@ export function useRegisterViewModel(): RegisterViewModel {
     localRegisterReadModel,
   );
   const activeCloseoutRegisterSession =
-    closeoutBlockedRegisterSession ??
     pendingLocalCloseoutRegisterSession ??
     (isCloseoutRequested
       ? (localCloseoutRegisterSession ?? saleUsableActiveRegisterSession)
       : null);
   const activeCloseoutCanOpenReplacementDrawer = Boolean(
-    closeoutBlockedRegisterSession || pendingLocalCloseoutRegisterSession,
+    pendingLocalCloseoutRegisterSession,
   );
   const activeCloseoutRegisterSessionHasSyncReview = Boolean(
     findRegisterCloseoutReviewItem(activeCloseoutRegisterSession),
@@ -1917,9 +1791,7 @@ export function useRegisterViewModel(): RegisterViewModel {
   const activeCloseoutRegisterSessionSyncStatus =
     activeCloseoutRegisterSession?.localSyncStatus?.status;
   const activeCloseoutSubmittedReason:
-    | "manager_review"
-    | "pending_sync"
-    | undefined =
+    "manager_review" | "pending_sync" | undefined =
     activeCloseoutRegisterSessionHasSyncReview ||
     activeCloseoutRegisterSession?.status === "closeout_rejected" ||
     Boolean(activeCloseoutRegisterSession?.managerApprovalRequestId)
@@ -1935,6 +1807,12 @@ export function useRegisterViewModel(): RegisterViewModel {
     isOpeningFloatCorrectionRequested && usableActiveRegisterSession
       ? usableActiveRegisterSession
       : null;
+  const isClosedDrawerSaleRecovery = Boolean(
+    localDrawerAuthorityReason === "cloud_closed" && hasInProgressSaleDraft,
+  );
+  const isClosedDrawerReplacement = Boolean(
+    localDrawerAuthorityReason === "cloud_closed" && !hasInProgressSaleDraft,
+  );
   const drawerGateMode:
     | "initialSetup"
     | "recovery"
@@ -1943,23 +1821,25 @@ export function useRegisterViewModel(): RegisterViewModel {
     | "terminalRepair"
     | "drawerAuthorityRepair" = activeOpeningFloatCorrectionRegisterSession
     ? "openingFloatCorrection"
-    : localSaleAuthorityBlockReason === "terminal_integrity"
-      ? "terminalRepair"
-      : hasLifecycleReviewDrawerBlock
-        ? "recovery"
-        : localSaleAuthorityBlockReason === "drawer_authority" &&
-            hasRecoverableDrawerAuthorityBlock
+    : hasAuthorityPersistenceFailure
+      ? "drawerAuthorityRepair"
+      : localSaleAuthorityBlockReason === "terminal_integrity"
+        ? "terminalRepair"
+        : hasLifecycleReviewDrawerBlock
           ? "drawerAuthorityRepair"
-          : activeCloseoutCanOpenReplacementDrawer && canSignedInStaffOpenDrawer
-            ? "initialSetup"
-            : hasCloseoutBlockedDrawerState || activeCloseoutRegisterSession
-              ? "closeoutBlocked"
-              : hasMissingDrawerRecoveryState ||
-                  hasCloudBlockedRecoverableLocalSale ||
-                  hasDraftDrawerRecoveryState ||
-                  activeSessionHasBlockedRegisterBinding
-                ? "recovery"
-                : "initialSetup";
+          : localSaleAuthorityBlockReason === "drawer_authority" &&
+              hasRecoverableDrawerAuthorityBlock
+            ? "drawerAuthorityRepair"
+            : isClosedDrawerSaleRecovery
+              ? "recovery"
+              : activeCloseoutCanOpenReplacementDrawer &&
+                  canSignedInStaffOpenDrawer
+                ? "initialSetup"
+                : activeCloseoutRegisterSession
+                  ? "closeoutBlocked"
+                  : hasMissingDrawerRecoveryState || hasDraftDrawerRecoveryState
+                    ? "recovery"
+                    : "initialSetup";
   const handleRepairTerminalSetup = useCallback(async () => {
     if (!activeStoreId || !terminal?._id || typeof indexedDB === "undefined") {
       setDrawerErrorMessage(
@@ -2227,12 +2107,7 @@ export function useRegisterViewModel(): RegisterViewModel {
   ]);
 
   const ensureLocalRegisterSessionReady = useCallback(
-    async (
-      localRegisterSessionId: string,
-      options?: { staffProfileId?: Id<"staffProfile"> },
-    ) => {
-      const actingStaffProfileId = options?.staffProfileId ?? staffProfileId;
-
+    async (localRegisterSessionId: string) => {
       if (
         seededRegisterSessionIdsRef.current.has(localRegisterSessionId) ||
         locallyOperableRegisterSession?.localRegisterSessionId ===
@@ -2244,47 +2119,12 @@ export function useRegisterViewModel(): RegisterViewModel {
         return true;
       }
 
-      if (
-        !usableActiveRegisterSession ||
-        usableActiveRegisterSession._id.toString() !== localRegisterSessionId ||
-        !activeStoreId ||
-        !terminal?._id ||
-        !actingStaffProfileId
-      ) {
-        return false;
-      }
-
-      const savedLocally = await localCommandGateway.seedRegisterSession({
-        terminalId: terminal._id,
-        storeId: activeStoreId!,
-        registerNumber,
-        cloudRegisterSessionId: usableActiveRegisterSession._id,
-        localRegisterSessionId,
-        staffProfileId: actingStaffProfileId,
-        validationMetadata: localSaleValidationMetadata,
-        openingFloat: usableActiveRegisterSession.openingFloat,
-        expectedCash: usableActiveRegisterSession.expectedCash,
-        notes: usableActiveRegisterSession.notes ?? null,
-        status: usableActiveRegisterSession.status,
-      });
-      if (savedLocally) {
-        seededRegisterSessionIdsRef.current.add(localRegisterSessionId);
-        noteLocalRegisterEventChanged();
-      }
-      return Boolean(savedLocally);
+      return false;
     },
     [
-      activeStoreId,
       localRegisterReadModel?.activeRegisterSession?.localRegisterSessionId,
       localRegisterReadModel?.canSell,
-      localCommandGateway,
-      localSaleValidationMetadata,
       locallyOperableRegisterSession?.localRegisterSessionId,
-      noteLocalRegisterEventChanged,
-      registerNumber,
-      staffProfileId,
-      terminal?._id,
-      usableActiveRegisterSession,
     ],
   );
 
@@ -2334,10 +2174,6 @@ export function useRegisterViewModel(): RegisterViewModel {
       }
       noteLocalRegisterEventChanged();
       return operableActiveSession._id.toString();
-    }
-
-    if (registerState?.activeSession?._id) {
-      return registerState.activeSession._id.toString();
     }
 
     if (!localRegisterSessionId) {
@@ -2412,7 +2248,6 @@ export function useRegisterViewModel(): RegisterViewModel {
     noteLocalRegisterEventChanged,
     staffProfileId,
     registerNumber,
-    registerState?.activeSession?._id,
     terminal?._id,
   ]);
 
@@ -2976,11 +2811,7 @@ export function useRegisterViewModel(): RegisterViewModel {
           return;
         }
 
-        if (
-          !(await ensureLocalRegisterSessionReady(localRegisterSessionId, {
-            staffProfileId: actingStaffProfileId,
-          }))
-        ) {
+        if (!(await ensureLocalRegisterSessionReady(localRegisterSessionId))) {
           toast.error("Drawer closed. Open the drawer before starting a sale.");
           return;
         }
@@ -3077,9 +2908,7 @@ export function useRegisterViewModel(): RegisterViewModel {
 
     const parsedOpeningFloat = parseDisplayAmountInput(drawerOpeningFloat);
     if (parsedOpeningFloat === undefined) {
-      setDrawerErrorMessage(
-        "Opening float required. Enter 0 or more.",
-      );
+      setDrawerErrorMessage("Opening float required. Enter 0 or more.");
       return;
     }
 
@@ -3201,10 +3030,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     const cloudRegisterSessionId = getCloseoutCloudRegisterSessionId(
       activeCloseoutRegisterSession,
     );
-    let attemptedDirectCloudCloseout = false;
-    let directCloudCloseoutMarkedSynced = false;
     if (!hasCloseoutVariance && cloudRegisterSessionId) {
-      attemptedDirectCloudCloseout = true;
       const closeoutResult = await runCommand(() =>
         submitRegisterSessionCloseout({
           actorStaffProfileId: staffProfileId,
@@ -3222,7 +3048,6 @@ export function useRegisterViewModel(): RegisterViewModel {
           { uploaded: true },
         );
         if (markSyncedResult.ok) {
-          directCloudCloseoutMarkedSynced = true;
           noteLocalRegisterEventChanged();
         }
       }
@@ -3242,11 +3067,6 @@ export function useRegisterViewModel(): RegisterViewModel {
       setLocalOperableRegisterSession(null);
     }
     requestBootstrap();
-    toast.success(
-      attemptedDirectCloudCloseout && !directCloudCloseoutMarkedSynced
-        ? "Closeout saved locally. Athena will finish it after sync."
-        : "Register closed.",
-    );
   }, [
     activeStoreId,
     activeCloseoutRegisterSession,
@@ -3275,89 +3095,6 @@ export function useRegisterViewModel(): RegisterViewModel {
     setDrawerErrorMessage(null);
   }, []);
 
-  const handleReopenRegisterCloseout = useCallback(async () => {
-    if (!closeoutBlockedRegisterSession) {
-      setIsCloseoutRequested(false);
-      setCloseoutCountedCash("");
-      setCloseoutNotes("");
-      setDrawerErrorMessage(null);
-      return;
-    }
-
-    if (!activeStoreId || !terminal?._id || !staffProfileId) {
-      setDrawerErrorMessage(
-        "Register sign-in required. Sign in before reopening the register.",
-      );
-      return;
-    }
-
-    if (!isCashierManager) {
-      setDrawerErrorMessage(
-        "Manager approval required. Ask a manager to reopen this register.",
-      );
-      return;
-    }
-
-    const registerSessionId = getCloseoutLocalRegisterSessionId(
-      activeCloseoutRegisterSession,
-      localRegisterReadModel,
-    );
-
-    if (!registerSessionId) {
-      setDrawerErrorMessage(
-        "Reopen unavailable. Refresh the register and try again.",
-      );
-      return;
-    }
-
-    setDrawerErrorMessage(null);
-    setIsReopeningCloseout(true);
-
-    const savedLocally = await localCommandGateway.reopenRegister({
-      terminalId: terminal._id,
-      storeId: activeStoreId!,
-      registerNumber,
-      localRegisterSessionId: registerSessionId,
-      staffProfileId,
-      validationMetadata: localSaleValidationMetadata,
-      reason: "Register closeout reopened from POS drawer gate.",
-    });
-    setIsReopeningCloseout(false);
-
-    if (!savedLocally) {
-      setDrawerErrorMessage("Unable to reopen this register. Try again.");
-      return;
-    }
-
-    noteLocalRegisterEventChanged();
-    setCloseoutCountedCash("");
-    setCloseoutNotes("");
-    setLocalOperableRegisterSession({
-      expectedCash: closeoutBlockedRegisterSession.expectedCash,
-      localRegisterSessionId: registerSessionId,
-      openedAt: closeoutBlockedRegisterSession.openedAt,
-      openingFloat: closeoutBlockedRegisterSession.openingFloat,
-      registerNumber,
-      storeId: activeStoreId!,
-      terminalId: terminal._id,
-    });
-    requestBootstrap();
-    toast.success("Register reopened. You can start selling.");
-  }, [
-    activeStoreId,
-    activeCloseoutRegisterSession,
-    closeoutBlockedRegisterSession,
-    isCashierManager,
-    localCommandGateway,
-    localSaleValidationMetadata,
-    localRegisterReadModel,
-    noteLocalRegisterEventChanged,
-    registerNumber,
-    requestBootstrap,
-    staffProfileId,
-    terminal?._id,
-  ]);
-
   const handleSubmitOpeningFloatCorrection = useCallback(async () => {
     if (!activeStoreId || !user?._id || !staffProfileId) {
       setDrawerErrorMessage(
@@ -3368,8 +3105,7 @@ export function useRegisterViewModel(): RegisterViewModel {
 
     const registerSessionId =
       activeOpeningFloatCorrectionRegisterSession?._id as
-        | Id<"registerSession">
-        | undefined;
+        Id<"registerSession"> | undefined;
 
     if (!registerSessionId) {
       setDrawerErrorMessage(
@@ -3492,6 +3228,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       !terminal?._id ||
       !staffProfileId ||
       !bootstrapState ||
+      !locallyOperableRegisterSession ||
       isTransactionCompleted ||
       bootstrapInitialized.current ||
       requiresDrawerGate
@@ -3538,6 +3275,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     activeStoreId,
     activeRegisterSessionId,
     bootstrapState,
+    locallyOperableRegisterSession,
     staffProfileId,
     isTransactionCompleted,
     requiresDrawerGate,
@@ -4465,6 +4203,9 @@ export function useRegisterViewModel(): RegisterViewModel {
   );
 
   const handleClearCart = useCallback(async () => {
+    if (isClosedDrawerSaleRecovery && isClearingSaleRef.current) {
+      return;
+    }
     if (checkoutMutationLockedRef.current) {
       toast.error(
         "Finish the current checkout update before clearing the sale.",
@@ -4476,11 +4217,15 @@ export function useRegisterViewModel(): RegisterViewModel {
       return;
     }
 
-    if (activeSessionHasBlockedRegisterBinding) {
+    if (activeSessionHasBlockedRegisterBinding && !isClosedDrawerSaleRecovery) {
       toast.error("Drawer closed. Open the drawer before updating this sale.");
       return;
     }
 
+    if (isClosedDrawerSaleRecovery) {
+      isClearingSaleRef.current = true;
+      setIsClearingSale(true);
+    }
     setCheckoutMutationLocked(true);
     try {
       await waitForCheckoutMutationQueues();
@@ -4527,6 +4272,8 @@ export function useRegisterViewModel(): RegisterViewModel {
       });
       setOptimisticCartProducts({});
       setServiceLineDrafts([]);
+      setShowCustomerPanel(false);
+      setCustomerInfo(EMPTY_REGISTER_CUSTOMER_INFO);
       noteLocalRegisterEventChanged();
       setPaymentState([]);
       if (activeCartItems.length > 0 || serviceLineDrafts.length > 0) {
@@ -4534,10 +4281,15 @@ export function useRegisterViewModel(): RegisterViewModel {
       }
     } finally {
       setCheckoutMutationLocked(false);
+      if (isClosedDrawerSaleRecovery) {
+        isClearingSaleRef.current = false;
+        setIsClearingSale(false);
+      }
     }
   }, [
     operableActiveSession,
     activeSessionHasBlockedRegisterBinding,
+    isClosedDrawerSaleRecovery,
     localEventRegisterSessionId,
     activeCartItems,
     activeStoreId,
@@ -5367,6 +5119,10 @@ export function useRegisterViewModel(): RegisterViewModel {
     localRuntimeSyncSource?.onRetrySync?.();
     requestBootstrap();
   }, [localRuntimeSyncSource, requestBootstrap]);
+  const handleRetryDrawerAuthority = useCallback(() => {
+    retryRegisterLifecycleAuthority();
+    requestBootstrap();
+  }, [requestBootstrap, retryRegisterLifecycleAuthority]);
 
   const drawerGate =
     activeStoreId && terminal?._id && staffProfileId && shouldShowDrawerGate
@@ -5405,7 +5161,6 @@ export function useRegisterViewModel(): RegisterViewModel {
         : drawerGateMode === "closeoutBlocked"
           ? {
               mode: drawerGateMode,
-              isRecovery: closeoutBlockedGateIsRecovery,
               registerLabel: terminal.displayName,
               registerNumber,
               currency: activeStoreCurrency,
@@ -5438,8 +5193,9 @@ export function useRegisterViewModel(): RegisterViewModel {
               cashControlsRegisterSessionId:
                 activeCloseoutCloudRegisterSessionId ??
                 (activeCloseoutCloudRegisterSessionCode as
-                  | Id<"registerSession">
-                  | undefined),
+                  Id<"registerSession"> | undefined) ??
+                (registerState?.activeRegisterSession?._id as
+                  Id<"registerSession"> | undefined),
               canOpenDrawer: activeCloseoutCanOpenReplacementDrawer
                 ? canSignedInStaffOpenDrawer
                 : undefined,
@@ -5451,7 +5207,6 @@ export function useRegisterViewModel(): RegisterViewModel {
               errorMessage: drawerErrorMessage,
               hasSignedInStaff,
               isCloseoutSubmitting: isSubmittingCloseout,
-              isReopeningCloseout,
               isSubmitting: isOpeningDrawer,
               onCloseoutCountedCashChange: (value: string) => {
                 setCloseoutCountedCash(value);
@@ -5471,12 +5226,21 @@ export function useRegisterViewModel(): RegisterViewModel {
                 ? undefined
                 : isCashierManager &&
                     !activeCloseoutRegisterSessionHasSyncReview
-                  ? handleReopenRegisterCloseout
+                  ? async () => handleCancelRegisterCloseout()
                   : undefined,
               onSignOut: handleCashierSignOut,
             }
           : {
               mode: drawerGateMode,
+              isReplacement: isClosedDrawerReplacement,
+              repairReason:
+                drawerGateMode === "drawerAuthorityRepair"
+                  ? hasAuthorityPersistenceFailure
+                    ? ("persistence_failed" as const)
+                    : hasLifecycleReviewDrawerBlock
+                      ? ("sync_review" as const)
+                      : ("authority_unknown" as const)
+                  : undefined,
               registerLabel: terminal.displayName,
               registerNumber,
               currency: activeStoreCurrency,
@@ -5484,18 +5248,16 @@ export function useRegisterViewModel(): RegisterViewModel {
               cashControlsRegisterSessionId:
                 activeCloseoutCloudRegisterSessionId ??
                 (activeCloseoutCloudRegisterSessionCode as
-                  | Id<"registerSession">
-                  | undefined),
+                  Id<"registerSession"> | undefined) ??
+                (registerState?.activeRegisterSession?._id as
+                  Id<"registerSession"> | undefined),
               canOpenDrawer: canSignedInStaffOpenDrawer,
               openingFloat: drawerOpeningFloat,
               notes: drawerNotes,
-              errorMessage:
-                drawerErrorMessage ??
-                (activeSessionHasMismatchedRegisterBinding
-                  ? "Sale assigned to a different drawer. Open that drawer before continuing."
-                  : null),
+              errorMessage: drawerErrorMessage,
               hasSignedInStaff,
               isSubmitting: isOpeningDrawer,
+              isClearingSale,
               isRepairingTerminalSetup,
               onOpeningFloatChange: (value: string) => {
                 setDrawerOpeningFloat(value);
@@ -5505,10 +5267,20 @@ export function useRegisterViewModel(): RegisterViewModel {
                 setDrawerNotes(value);
                 setDrawerErrorMessage(null);
               },
-              onSubmit: handleOpenDrawer,
+              onClearSale: isClosedDrawerSaleRecovery
+                ? handleClearCart
+                : undefined,
+              onSubmit:
+                drawerGateMode === "drawerAuthorityRepair" ||
+                drawerGateMode === "terminalRepair" ||
+                isClosedDrawerSaleRecovery
+                  ? undefined
+                  : handleOpenDrawer,
               onRetrySync:
                 drawerGateMode === "drawerAuthorityRepair"
-                  ? handleRetryLocalSync
+                  ? hasLifecycleReviewDrawerBlock
+                    ? handleRetryLocalSync
+                    : handleRetryDrawerAuthority
                   : undefined,
               onRepairTerminalSetup:
                 drawerGateMode === "terminalRepair"
@@ -5651,7 +5423,6 @@ export function useRegisterViewModel(): RegisterViewModel {
     hasDrawerTransitionInFlight:
       isOpeningDrawer ||
       isSubmittingCloseout ||
-      isReopeningCloseout ||
       isCorrectingOpeningFloat ||
       isRepairingTerminalSetup,
     hasLocalRuntimeApplyRisk: Boolean(
@@ -5683,8 +5454,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       : null;
 
   const readinessGuardCandidateReason:
-    | RegisterReadinessGuardState["reason"]
-    | null =
+    RegisterReadinessGuardState["reason"] | null =
     !isTransactionCompleted &&
     cashierPresenceRestore.status === "pending" &&
     !staffProfileId &&
@@ -5933,8 +5703,6 @@ export function useRegisterViewModel(): RegisterViewModel {
         !staffProfileId ||
         cashierPresenceBlocksSale ||
         shouldShowDrawerGate ||
-        cloudRegisterSessionBlocksLocalProjection ||
-        activeSessionHasBlockedRegisterBinding ||
         isOpeningDrawer,
       showProductLookup: showProductEntry,
       setShowProductLookup: setShowProductEntry,
@@ -5964,8 +5732,6 @@ export function useRegisterViewModel(): RegisterViewModel {
             !staffProfileId ||
             cashierPresenceBlocksSale ||
             shouldShowDrawerGate ||
-            cloudRegisterSessionBlocksLocalProjection ||
-            activeSessionHasBlockedRegisterBinding ||
             isOpeningDrawer,
           serviceSearchQuery: productSearchQuery,
           setServiceSearchQuery: setProductSearchQuery,
@@ -5981,6 +5747,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       : undefined,
     cart: {
       items: activeCartItems,
+      readOnly: hasInProgressSaleDraft && shouldShowDrawerGate,
       serviceItems: serviceLineDrafts,
       onUpdateServiceAmount: handleUpdateServiceAmount,
       onRemoveService: handleRemoveService,

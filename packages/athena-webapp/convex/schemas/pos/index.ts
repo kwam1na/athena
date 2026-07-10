@@ -22,3 +22,5 @@ export * from "./posPendingCheckoutItem";
 export * from "./posPendingCheckoutLookupAlias";
 export * from "./posRegisterSessionActivity";
 export * from "./posRegisterSessionActivityCheckpoint";
+export * from "./posRegisterMappingAuthority";
+export * from "./posRegisterAuthorityReplicationStatus";

@@ -656,7 +656,7 @@ describe("localPosReadiness", () => {
     });
   });
 
-  it("keeps POS loading when the local readiness read stalls", async () => {
+  it("stops loading with actionable recovery when the local readiness read stalls", async () => {
     vi.useFakeTimers();
     Object.defineProperty(globalThis, "indexedDB", {
       configurable: true,
@@ -695,12 +695,11 @@ describe("localPosReadiness", () => {
       vi.advanceTimersByTime(3_000);
     });
 
-    expect(result.current).toMatchObject({
-      diagnostics: {
-        activeStateKey: "store-1:2026-05-14:no-terminal",
-        stage: "reading_local_store",
-      },
-      status: "loading",
+    expect(result.current).toEqual({
+      status: "blocked",
+      reason: "local_store_unavailable",
+      message:
+        "Local register state could not be read in time. Clear and reprovision this terminal before continuing.",
     });
   });
 

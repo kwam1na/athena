@@ -12,6 +12,7 @@ import { OrderSummary } from "../OrderSummary";
 
 interface RegisterCheckoutPanelProps {
   checkout: RegisterCheckoutState;
+  readOnly?: boolean;
   onPaymentFlowChange?: (isActive: boolean) => void;
   onPaymentEntryStart?: () => void;
   onCompletionBlockAction?: () => void;
@@ -24,6 +25,7 @@ interface RegisterCheckoutPanelProps {
 
 export function RegisterCheckoutPanel({
   checkout,
+  readOnly = false,
   onPaymentFlowChange,
   onPaymentEntryStart,
   onCompletionBlockAction,
@@ -56,6 +58,7 @@ export function RegisterCheckoutPanel({
   return (
     <div className="scrollbar-hide flex h-full min-h-0 flex-1 flex-col gap-6 overflow-y-auto overscroll-contain pr-1">
       <OrderSummary
+        disabled={readOnly}
         cartItems={checkout.cartItems}
         registerNumber={checkout.registerNumber}
         subtotal={checkout.subtotal}

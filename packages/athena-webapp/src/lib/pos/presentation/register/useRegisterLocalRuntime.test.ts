@@ -2,6 +2,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Id } from "~/convex/_generated/dataModel";
+import type { RegisterLifecycleAuthorityRuntimeState } from "@/lib/pos/infrastructure/local/useRegisterLifecycleAuthorityRuntime";
 
 import { useRegisterLocalRuntime } from "./useRegisterLocalRuntime";
 
@@ -11,6 +12,7 @@ const mocks = vi.hoisted(() => {
     getStaffAuthorityReadiness: vi.fn(),
     listEvents: vi.fn(),
     readProvisionedTerminalSeed: vi.fn(),
+    resetRegisterOperationalStateForAuthorityCutover: vi.fn(),
   };
 
   return {
@@ -22,6 +24,14 @@ const mocks = vi.hoisted(() => {
     createPosLocalStore: vi.fn(() => localStore),
     localStore,
     readProjectedLocalRegisterModel: vi.fn(),
+    useRegisterLifecycleAuthorityRuntime: vi.fn<
+      (input: unknown) => RegisterLifecycleAuthorityRuntimeState
+    >(() => ({
+        authorization: { status: "authorized" },
+        candidates: { candidates: [], status: "empty" },
+        persistence: { status: "ready" },
+        retry: vi.fn(),
+      })),
     usePosLocalSyncRuntimeStatus: vi.fn(() => ({
       pendingEventCount: 0,
       status: "synced",
@@ -50,6 +60,14 @@ vi.mock("@/lib/pos/infrastructure/local/localRegisterReader", () => ({
 vi.mock("@/lib/pos/infrastructure/local/usePosLocalSyncRuntime", () => ({
   usePosLocalSyncRuntimeStatus: mocks.usePosLocalSyncRuntimeStatus,
 }));
+
+vi.mock(
+  "@/lib/pos/infrastructure/local/useRegisterLifecycleAuthorityRuntime",
+  () => ({
+    useRegisterLifecycleAuthorityRuntime:
+      mocks.useRegisterLifecycleAuthorityRuntime,
+  }),
+);
 
 vi.mock("@/lib/app-update", () => ({
   useOptionalUpdateCoordinator: mocks.useOptionalUpdateCoordinator,
@@ -102,6 +120,12 @@ function renderRuntime(
 describe("useRegisterLocalRuntime", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.useRegisterLifecycleAuthorityRuntime.mockReturnValue({
+      authorization: { status: "authorized" },
+      candidates: { candidates: [], status: "empty" },
+      persistence: { status: "ready" },
+      retry: vi.fn(),
+    });
     Object.defineProperty(globalThis, "indexedDB", {
       configurable: true,
       value: {},
@@ -122,6 +146,12 @@ describe("useRegisterLocalRuntime", () => {
         syncSecretHash: "hash",
       },
     });
+    mocks.localStore.resetRegisterOperationalStateForAuthorityCutover.mockResolvedValue(
+      {
+        ok: true,
+        value: { resetAt: 1_000, status: "already_applied" },
+      },
+    );
     mocks.readProjectedLocalRegisterModel.mockResolvedValue({
       ok: true,
       value: { canSell: true },
@@ -137,12 +167,39 @@ describe("useRegisterLocalRuntime", () => {
     });
     const firstStore = result.current.localStore;
     const firstGateway = result.current.localCommandGateway;
-    rerender({});
+    act(() => rerender({}));
 
     expect(result.current.localStore).toBe(firstStore);
     expect(result.current.localCommandGateway).toBe(firstGateway);
     expect(mocks.createPosLocalStore).toHaveBeenCalledTimes(1);
     expect(mocks.createLocalCommandGateway).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the authority refresh bridge stable across equivalent terminal objects", async () => {
+    const { rerender, result } = renderRuntime();
+    await waitFor(() => {
+      expect(result.current.localStaffAuthorityStatus).toBe("ready");
+    });
+    const initialInput = mocks.useRegisterLifecycleAuthorityRuntime.mock.calls.at(
+      -1,
+    )?.[0] as
+      | { refreshLocalRegisterReadModel: () => Promise<void> }
+      | undefined;
+
+    act(() =>
+      rerender({
+        terminal: { ...terminal },
+      }),
+    );
+    const rerenderedInput = mocks.useRegisterLifecycleAuthorityRuntime.mock.calls.at(
+      -1,
+    )?.[0] as
+      | { refreshLocalRegisterReadModel: () => Promise<void> }
+      | undefined;
+
+    expect(rerenderedInput?.refreshLocalRegisterReadModel).toBe(
+      initialInput?.refreshLocalRegisterReadModel,
+    );
   });
 
   it("reports provisioned seed readiness only for the current store and terminal", async () => {
@@ -220,10 +277,162 @@ describe("useRegisterLocalRuntime", () => {
       expect.objectContaining({
         store: mocks.localStore,
         storeId,
-        terminal,
+        terminal: {
+          _id: terminal._id,
+          cloudTerminalId: undefined,
+          localTerminalId: undefined,
+        },
       }),
     );
     expect(result.current.localRegisterReadModel).toEqual({ canSell: true });
+  });
+
+  it("blocks commands until the targeted register reset succeeds while keeping sync mounted", async () => {
+    let resolveReset: ((value: unknown) => void) | undefined;
+    mocks.localStore.resetRegisterOperationalStateForAuthorityCutover.mockReturnValue(
+      new Promise((resolve) => {
+        resolveReset = resolve;
+      }),
+    );
+
+    const { result } = renderRuntime();
+    const gatewayOptions = mocks.createLocalCommandGateway.mock.calls[0]?.[0];
+
+    await waitFor(() => {
+      expect(
+        mocks.localStore.resetRegisterOperationalStateForAuthorityCutover,
+      ).toHaveBeenCalled();
+    });
+    expect(result.current.localRegisterReadModel).toBeNull();
+    expect(gatewayOptions.authorityPersistenceFailed()).toBe(true);
+    expect(mocks.readProjectedLocalRegisterModel).not.toHaveBeenCalled();
+    expect(mocks.usePosLocalSyncRuntimeStatus).toHaveBeenCalledWith(
+      expect.objectContaining({
+        storeFactory: expect.any(Function),
+        storeId: undefined,
+        terminalId: terminal._id,
+      }),
+    );
+
+    await act(async () => {
+      resolveReset?.({
+        ok: true,
+        value: {
+          deletedAuthorityCount: 1,
+          deletedEventCount: 1,
+          deletedMappingCount: 1,
+          resetAt: 1_000,
+          status: "applied",
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(result.current.localRegisterReadModel).toEqual({ canSell: true });
+    });
+    expect(gatewayOptions.authorityPersistenceFailed()).toBe(false);
+    expect(mocks.usePosLocalSyncRuntimeStatus).toHaveBeenLastCalledWith(
+      expect.objectContaining({ storeId }),
+    );
+    expect(
+      mocks.localStore.resetRegisterOperationalStateForAuthorityCutover,
+    ).toHaveBeenCalled();
+  });
+
+  it("retries a transient reset failure without requiring a page reload", async () => {
+    mocks.localStore.resetRegisterOperationalStateForAuthorityCutover
+      .mockResolvedValueOnce({
+        error: { code: "write_failed", message: "transaction aborted" },
+        ok: false,
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        value: {
+          deletedAuthorityCount: 1,
+          deletedEventCount: 2,
+          deletedMappingCount: 1,
+          resetAt: 1_000,
+          status: "applied",
+        },
+      });
+
+    const { result } = renderRuntime();
+
+    await waitFor(() => {
+      expect(result.current.localRegisterReadModel).toEqual({ canSell: true });
+    });
+    expect(
+      mocks.localStore.resetRegisterOperationalStateForAuthorityCutover,
+    ).toHaveBeenCalledTimes(2);
+    const gatewayOptions = mocks.createLocalCommandGateway.mock.calls[0]?.[0];
+    expect(gatewayOptions.authorityPersistenceFailed()).toBe(false);
+  });
+
+  it("mounts lifecycle authority independently and shares its persistence guard", async () => {
+    mocks.useRegisterLifecycleAuthorityRuntime.mockReturnValue({
+      authorization: { status: "authorized" },
+      candidates: {
+        candidates: [
+          { localRegisterSessionId: "local-register-1" },
+        ],
+        status: "ready",
+      },
+      persistence: { reason: "write_failed", status: "failed" },
+      retry: vi.fn(),
+    });
+
+    const { result } = renderRuntime();
+
+    await waitFor(() => {
+      expect(result.current.registerLifecycleAuthority.persistence.status).toBe(
+        "failed",
+      );
+    });
+    expect(mocks.useRegisterLifecycleAuthorityRuntime).toHaveBeenCalledWith(
+      expect.objectContaining({
+        localRegisterReadModel: expect.anything(),
+        refreshLocalRegisterReadModel: expect.any(Function),
+        store: mocks.localStore,
+        storeId,
+        terminal: { _id: terminal._id },
+      }),
+    );
+    const gatewayOptions = mocks.createLocalCommandGateway.mock.calls[0]?.[0];
+    expect(gatewayOptions.authorityPersistenceFailed()).toBe(true);
+  });
+
+  it("keeps the persistence command guard latched until a retry is durably ready", async () => {
+    const retry = vi.fn();
+    mocks.useRegisterLifecycleAuthorityRuntime.mockReturnValue({
+      authorization: { status: "authorized" },
+      candidates: { candidates: [], status: "empty" },
+      persistence: { reason: "write_failed", status: "failed" },
+      retry,
+    });
+    const { result, rerender } = renderRuntime();
+    await waitFor(() => {
+      expect(result.current.localStaffAuthorityStatus).toBe("ready");
+    });
+    const gatewayOptions = mocks.createLocalCommandGateway.mock.calls[0]?.[0];
+    expect(gatewayOptions.authorityPersistenceFailed()).toBe(true);
+
+    mocks.useRegisterLifecycleAuthorityRuntime.mockReturnValue({
+      authorization: { status: "authorized" },
+      candidates: { candidates: [], status: "empty" },
+      persistence: { status: "applying" },
+      retry,
+    });
+    act(() => rerender({}));
+    expect(gatewayOptions.authorityPersistenceFailed()).toBe(true);
+
+    mocks.useRegisterLifecycleAuthorityRuntime.mockReturnValue({
+      authorization: { status: "authorized" },
+      candidates: { candidates: [], status: "empty" },
+      persistence: { status: "ready" },
+      retry,
+    });
+    act(() => rerender({}));
+    expect(gatewayOptions.authorityPersistenceFailed()).toBe(false);
   });
 
   it("attaches staff proof to pending events and advances the append token", async () => {

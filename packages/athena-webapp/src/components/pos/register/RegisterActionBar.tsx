@@ -2,7 +2,6 @@ import {
   ArrowRightIcon,
   BanknoteIcon,
   LockKeyhole,
-  RotateCcw,
 } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 
@@ -35,19 +34,33 @@ export function RegisterActionBar({
   registerInfo,
   sessionPanel,
 }: RegisterActionBarProps) {
-  const drawerRecoveryGate = drawerGate?.mode === "recovery" ? drawerGate : null;
+  const clearOnlyRecoveryGate = Boolean(
+    drawerGate?.mode === "recovery" &&
+      drawerGate.onClearSale &&
+      !drawerGate.onSubmit,
+  );
+  const drawerRecoveryGate =
+    drawerGate?.mode === "recovery" && drawerGate.onSubmit
+      ? drawerGate
+      : null;
 
   return (
     <div className="flex flex-wrap items-center justify-end gap-4">
-      <RegisterCashierControl cashierCard={cashierCard} />
-      <RegisterSessionPanel sessionPanel={sessionPanel} />
+      <RegisterCashierControl
+        cashierCard={cashierCard}
+        disabled={Boolean(clearOnlyRecoveryGate && drawerGate?.isClearingSale)}
+      />
+      {!clearOnlyRecoveryGate ? (
+        <RegisterSessionPanel sessionPanel={sessionPanel} />
+      ) : null}
 
-      <div
-        className={cn(
-          "flex items-center gap-3 rounded-lg border bg-surface-raised px-3 py-2",
-          !registerInfo.hasTerminal && "animate-pulse text-danger",
-        )}
-      >
+      {!clearOnlyRecoveryGate ? (
+        <div
+          className={cn(
+            "flex items-center gap-3 rounded-lg border bg-surface-raised px-3 py-2",
+            !registerInfo.hasTerminal && "animate-pulse text-danger",
+          )}
+        >
         <RegisterActions
           customerName={registerInfo.customerName}
           registerNumber={registerInfo.registerLabel}
@@ -68,7 +81,6 @@ export function RegisterActionBar({
               type="button"
               variant="outline"
             >
-              <RotateCcw className="mr-2 h-4 w-4" />
               Open drawer
             </Button>
           </div>
@@ -115,15 +127,18 @@ export function RegisterActionBar({
             <ArrowRightIcon className="w-4 h-4" />
           </Link>
         )}
-      </div>
+        </div>
+      ) : null}
     </div>
   );
 }
 
 function RegisterCashierControl({
   cashierCard,
+  disabled = false,
 }: {
   cashierCard: RegisterCashierCardState | null;
+  disabled?: boolean;
 }) {
   return (
     <div className="flex h-12 min-w-[15rem] items-center justify-between gap-4 rounded-lg border bg-surface-raised px-4">
@@ -138,6 +153,7 @@ function RegisterCashierControl({
       {cashierCard ? (
         <Button
           className="h-8 shrink-0 px-3 text-xs"
+          disabled={disabled}
           onClick={cashierCard.onSignOut}
           title="Sign out"
           type="button"
