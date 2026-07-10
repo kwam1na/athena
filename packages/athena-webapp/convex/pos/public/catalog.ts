@@ -16,7 +16,12 @@ import { upsertProductSkuSearchProjection } from "../../inventory/skuSearch";
 import { refreshCatalogSummaryWithCtx } from "../../inventory/catalogSummary";
 import { quickAddCatalogItem } from "../application/commands/quickAddCatalogItem";
 import { createOrReusePendingCheckoutItem } from "../application/commands/createOrReusePendingCheckoutItem";
-import { recordInventoryMovementWithCtx } from "../../operations/inventoryMovements";
+import { applyInventoryEffectWithCtx } from "../../reporting/inventory/effects";
+import { recordPendingCheckoutSkuAttributionWithCtx } from "../../reporting/evidence";
+import {
+  knownUnitCostBasis,
+  uncostedBasis,
+} from "../../reporting/inventory/valuation";
 import { recordOperationalEventWithCtx } from "../../operations/operationalEvents";
 import { updateOperationalWorkItemStatusWithCtx } from "../../operations/operationalWorkItems";
 import {
@@ -243,10 +248,7 @@ async function isLinkedPendingCheckoutAliasVisible(
 }
 
 type PendingCheckoutReviewStatus =
-  | "approved"
-  | "linked_to_catalog"
-  | "rejected"
-  | "flagged";
+  "approved" | "linked_to_catalog" | "rejected" | "flagged";
 
 type PendingCheckoutTrustedInventoryFinalizationArgs = {
   conversionRequestId: string;
@@ -372,7 +374,8 @@ function validateReviewedTrustedInventoryFields(
   if (!reviewedPosVisibleFor(args)) {
     return userError({
       code: "precondition_failed",
-      message: "Make this SKU available in POS before finalizing trusted inventory.",
+      message:
+        "Make this SKU available in POS before finalizing trusted inventory.",
     });
   }
 
@@ -925,10 +928,13 @@ export const listLinkedPendingCheckoutProvisionalBindingsBySku = query({
 
     const bindings = await Promise.all(
       Array.from(new Set(args.productSkuIds)).map(async (productSkuId) => {
-        const binding = await listPendingCheckoutProductPageBindingWithCtx(ctx, {
-          productSkuId,
-          storeId: args.storeId,
-        });
+        const binding = await listPendingCheckoutProductPageBindingWithCtx(
+          ctx,
+          {
+            productSkuId,
+            storeId: args.storeId,
+          },
+        );
 
         if (
           binding.state !== "unique" ||
@@ -1064,13 +1070,10 @@ export const finalizePendingCheckoutTrustedInventoryFromProductPage = mutation({
     const payloadHash =
       buildPendingCheckoutFinalizationPayloadHash(normalizedArgs);
     const productSkuPatch = omitUndefined({
-      inventoryCount: normalizedArgs.reviewedInventoryCount,
       isVisible: normalizedArgs.reviewedIsVisible,
       posVisible: normalizedArgs.reviewedPosVisible,
       netPrice: normalizedArgs.reviewedNetPrice,
       price: normalizedArgs.reviewedPrice,
-      quantityAvailable: normalizedArgs.reviewedQuantityAvailable,
-      unitCost: normalizedArgs.reviewedUnitCost,
     });
     const productPatch = {
       availability: "live" as const,
@@ -1079,33 +1082,76 @@ export const finalizePendingCheckoutTrustedInventoryFromProductPage = mutation({
       quantityAvailable: normalizedArgs.reviewedQuantityAvailable,
     };
 
-    await ctx.db.patch(
-      "productSku",
-      normalizedArgs.productSkuId,
-      productSkuPatch,
-    );
+    const stockDelta =
+      normalizedArgs.reviewedInventoryCount - productSku.inventoryCount;
+    const availabilityDelta =
+      normalizedArgs.reviewedQuantityAvailable - productSku.quantityAvailable;
+    const valuation =
+      stockDelta > 0
+        ? {
+            costBasis:
+              normalizedArgs.reviewedUnitCost === undefined
+                ? uncostedBasis()
+                : knownUnitCostBasis({
+                    currency: product.currency ?? item.currency,
+                    quantity: stockDelta,
+                    unitCost: normalizedArgs.reviewedUnitCost,
+                  }),
+            deficitLots: [],
+            kind: "inbound" as const,
+            quantity: stockDelta,
+          }
+        : stockDelta < 0
+          ? {
+              disposition: "stock_correction" as const,
+              kind: "outbound" as const,
+              quantity: Math.abs(stockDelta),
+            }
+          : { kind: "availability_only" as const };
+    const inventoryEffect = await applyInventoryEffectWithCtx(ctx, {
+      actorUserId: access.athenaUser._id,
+      activityType: "pending_checkout_trusted_finalization",
+      businessEventKey: `pending_checkout:${item._id}:trusted:${normalizedArgs.conversionRequestId}`,
+      compatibilityBalance: {
+        onHandQuantity: normalizedArgs.reviewedInventoryCount,
+        sellableQuantity: normalizedArgs.reviewedQuantityAvailable,
+      },
+      completeness: "partial",
+      contentFingerprint: payloadHash,
+      effectType: "baseline",
+      movementType: "pending_checkout_trusted_finalization",
+      notes: "Trusted inventory finalized from pending checkout review.",
+      occurrenceAt: now,
+      organizationId: access.store.organizationId,
+      physicalQuantityDelta: stockDelta,
+      productId: normalizedArgs.productId,
+      productSkuId: normalizedArgs.productSkuId,
+      reasonCode: "trusted_inventory_conversion",
+      sellableQuantityDelta: availabilityDelta,
+      sourceDomain: "inventory",
+      sourceId: String(item._id),
+      sourceType: "pos_pending_checkout_item",
+      storeId: normalizedArgs.storeId,
+      valuation,
+    });
+    await ctx.db.patch("productSku", normalizedArgs.productSkuId, {
+      ...(productSkuPatch.isVisible !== undefined
+        ? { isVisible: productSkuPatch.isVisible }
+        : {}),
+      ...(productSkuPatch.posVisible !== undefined
+        ? { posVisible: productSkuPatch.posVisible }
+        : {}),
+      ...(productSkuPatch.netPrice !== undefined
+        ? { netPrice: productSkuPatch.netPrice }
+        : {}),
+      ...(productSkuPatch.price !== undefined
+        ? { price: productSkuPatch.price }
+        : {}),
+    });
     await ctx.db.patch("product", normalizedArgs.productId, productPatch);
     await upsertProductSkuSearchProjection(ctx, normalizedArgs.productSkuId);
 
-    let inventoryMovementId: Id<"inventoryMovement"> | undefined;
-    const stockDelta =
-      normalizedArgs.reviewedInventoryCount - productSku.inventoryCount;
-    if (stockDelta !== 0) {
-      const movement = await recordInventoryMovementWithCtx(ctx, {
-        actorUserId: access.athenaUser._id,
-        movementType: "pending_checkout_trusted_finalization",
-        notes: "Trusted inventory finalized from pending checkout review.",
-        organizationId: access.store.organizationId,
-        productId: normalizedArgs.productId,
-        productSkuId: normalizedArgs.productSkuId,
-        quantityDelta: stockDelta,
-        reasonCode: "trusted_inventory_conversion",
-        sourceId: String(item._id),
-        sourceType: "pos_pending_checkout_item",
-        storeId: normalizedArgs.storeId,
-      });
-      inventoryMovementId = movement?._id;
-    }
+    const inventoryMovementId = inventoryEffect.movement?._id;
 
     await ctx.db.patch("posPendingCheckoutItem", item._id, {
       approvedProductId: normalizedArgs.productId,
@@ -1350,7 +1396,8 @@ export const resolvePendingCheckoutItemReview = mutation({
         } catch (error) {
           if (
             error instanceof Error &&
-            error.message === "This lookup code is already linked to another SKU."
+            error.message ===
+              "This lookup code is already linked to another SKU."
           ) {
             return userError({
               code: "conflict",
@@ -1371,6 +1418,21 @@ export const resolvePendingCheckoutItemReview = mutation({
       status: args.status,
       updatedAt: reviewedAt,
     });
+    if (
+      (args.status === "approved" || args.status === "linked_to_catalog") &&
+      args.approvedProductSkuId &&
+      item.provisionalProductSkuId
+    ) {
+      await recordPendingCheckoutSkuAttributionWithCtx(ctx, {
+        canonicalProductId: args.approvedProductId,
+        canonicalProductSkuId: args.approvedProductSkuId,
+        organizationId: store.organizationId,
+        originalProductId: item.provisionalProductId,
+        originalProductSkuId: item.provisionalProductSkuId,
+        pendingCheckoutItemId: item._id,
+        storeId: args.storeId,
+      });
+    }
 
     if (item.operationalWorkItemId) {
       const workItemPatch = mapPendingCheckoutReviewStatusToWorkItemPatch(

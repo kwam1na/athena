@@ -24,6 +24,7 @@ export async function recordRetailSalePaymentAllocations(
 ) {
   const allocations = buildInStorePaymentAllocations({
     allocationType: "retail_sale",
+    businessEventKeyPrefix: `pos:${args.posTransactionId}:sale`,
     changeGiven: args.changeGiven,
     externalReferencePrefix: `${args.transactionNumber}:sale`,
     organizationId: args.organizationId,
@@ -56,6 +57,7 @@ export async function recordRetailVoidPaymentAllocations(
 ) {
   const allocations = buildInStorePaymentAllocations({
     allocationType: "retail_sale_void",
+    businessEventKeyPrefix: `pos:${args.posTransactionId}:void`,
     changeGiven: args.changeGiven,
     direction: "out",
     externalReferencePrefix: `${args.transactionNumber}:void`,

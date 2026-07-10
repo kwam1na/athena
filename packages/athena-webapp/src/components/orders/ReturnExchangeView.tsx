@@ -32,9 +32,18 @@ export type ReturnExchangePayload = {
     quantity: number;
     unitPrice: number;
   }>;
+  returnDisposition?:
+    | "non_restocked"
+    | "damaged"
+    | "missing"
+    | "financial_only";
   restockReturnedItems: boolean;
   returnItemIds: string[];
 };
+
+type NonSellableReturnDisposition = NonNullable<
+  ReturnExchangePayload["returnDisposition"]
+>;
 
 type ReturnExchangeOverview = {
   balanceCollectedTotal: number;
@@ -52,10 +61,17 @@ type ReturnExchangeOverview = {
 type ReturnExchangeOrderItem = {
   _id?: string;
   isRefunded?: boolean;
+  isRestocked?: boolean;
   price: number;
   productName?: string;
   productSku?: string;
   quantity: number;
+  returnDisposition?:
+    | "sellable"
+    | "non_restocked"
+    | "damaged"
+    | "missing"
+    | "financial_only";
   workflowTraceId?: string;
 };
 
@@ -94,6 +110,8 @@ export function ReturnExchangeViewContent({
   const [replacementQuantity, setReplacementQuantity] = useState("1");
   const [replacementUnitPrice, setReplacementUnitPrice] = useState("");
   const [restockReturnedItems, setRestockReturnedItems] = useState(true);
+  const [returnDisposition, setReturnDisposition] =
+    useState<NonSellableReturnDisposition>("non_restocked");
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
   const [validationError, setValidationError] = useState<string | null>(null);
 
@@ -104,7 +122,10 @@ export function ReturnExchangeViewContent({
   const availableItems =
     order?.items?.filter(
       (item): item is ReturnExchangeOrderItem & { _id: string } =>
-        Boolean(item._id) && !item.isRefunded,
+        Boolean(item._id) &&
+        !item.isRestocked &&
+        (item.returnDisposition === undefined ||
+          item.returnDisposition === "financial_only"),
     ) ?? [];
 
   const toggleItem = (itemId: string) => {
@@ -138,6 +159,7 @@ export function ReturnExchangeViewContent({
     const payload: ReturnExchangePayload = {
       operationType,
       replacementItems: [],
+      ...(restockReturnedItems ? {} : { returnDisposition }),
       restockReturnedItems,
       returnItemIds: Array.from(selectedItemIds),
     };
@@ -177,6 +199,7 @@ export function ReturnExchangeViewContent({
     setSelectedItemIds(new Set());
     resetReplacementFields();
     setOperationType("return");
+    setReturnDisposition("non_restocked");
     setRestockReturnedItems(true);
   };
 
@@ -358,6 +381,42 @@ export function ReturnExchangeViewContent({
         </Label>
       </div>
 
+      {!restockReturnedItems ? (
+        <div className="space-y-4 rounded-md border p-4">
+          <div>
+            <p className="text-sm font-medium" id="return-disposition-label">
+              Return disposition
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Record what happened to the returned items.
+            </p>
+          </div>
+          <RadioGroup
+            aria-labelledby="return-disposition-label"
+            className="grid gap-3 sm:grid-cols-2"
+            onValueChange={(value) =>
+              setReturnDisposition(value as NonSellableReturnDisposition)
+            }
+            value={returnDisposition}
+          >
+            {[
+              ["non_restocked", "Not restocked"],
+              ["damaged", "Damaged"],
+              ["missing", "Missing"],
+              ["financial_only", "Financial only"],
+            ].map(([value, label]) => {
+              const id = `return-disposition-${value}`;
+              return (
+                <div className="flex items-center gap-3" key={value}>
+                  <RadioGroupItem id={id} value={value} />
+                  <Label htmlFor={id}>{label}</Label>
+                </div>
+              );
+            })}
+          </RadioGroup>
+        </div>
+      ) : null}
+
       {validationError && (
         <p className="text-sm text-red-600">{validationError}</p>
       )}
@@ -445,6 +504,7 @@ export function ReturnExchangeView() {
             quantity: item.quantity,
             unitPrice: item.unitPrice,
           })),
+          returnDisposition: payload.returnDisposition,
           restockReturnedItems: payload.restockReturnedItems,
           returnItemIds: payload.returnItemIds.map(
             (itemId) => itemId as Id<"onlineOrderItem">,

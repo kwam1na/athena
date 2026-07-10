@@ -95,9 +95,11 @@ export const convertSkuToVariant = (sku: ProductSku): ProductVariant => ({
   barcodePersistedInDb: !!sku.barcode,
   stock: sku.inventoryCount,
   quantityAvailable: sku.quantityAvailable,
-  cost: sku.unitCost ? toDisplayAmount(sku.unitCost) : undefined,
+  cost:
+    sku.unitCost !== undefined ? toDisplayAmount(sku.unitCost) : undefined,
   price: toDisplayAmount(sku.price),
-  netPrice: sku.netPrice ? toDisplayAmount(sku.netPrice) : undefined,
+  netPrice:
+    sku.netPrice !== undefined ? toDisplayAmount(sku.netPrice) : undefined,
   size: normalizeSkuAttributeValue(sku.size),
   color: normalizeSkuAttributeValue(sku.color),
   colorName: sku.colorName || undefined,
@@ -251,7 +253,6 @@ export function ProductProvider({
       quantityAvailable: 0,
       isVisible: true,
       posVisible: true,
-      cost: 0,
       price: 0,
       images: [],
     },

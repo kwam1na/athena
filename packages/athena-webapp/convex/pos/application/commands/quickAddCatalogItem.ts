@@ -3,6 +3,8 @@ import type { MutationCtx } from "../../../_generated/server";
 import { markCatalogSummaryNeedsRefresh } from "../../../inventory/catalogSummary";
 import { upsertProductSkuSearchProjection } from "../../../inventory/skuSearch";
 import { recordOperationalEventWithCtx } from "../../../operations/operationalEvents";
+import { applyInventoryEffectWithCtx } from "../../../reporting/inventory/effects";
+import { uncostedBasis } from "../../../reporting/inventory/valuation";
 import { toSlug } from "../../../utils";
 
 type CatalogResult = {
@@ -363,11 +365,11 @@ export async function quickAddCatalogItem(
       createdByUserId: args.createdByUserId,
       currency: store.currency,
       description: "",
-      inventoryCount: quantityAvailable,
+      inventoryCount: 0,
       isVisible: false,
       name: productName,
       organizationId: store.organizationId,
-      quantityAvailable,
+      quantityAvailable: 0,
       slug: toSlug(productName),
       storeId: args.storeId,
       subcategoryId: subcategory._id,
@@ -390,13 +392,13 @@ export async function quickAddCatalogItem(
     attributes: {},
     barcode,
     images: [],
-    inventoryCount: quantityAvailable,
+    inventoryCount: 0,
     isVisible: true,
     netPrice: args.price,
     price: args.price,
     productId,
     productName,
-    quantityAvailable,
+    quantityAvailable: 0,
     sku: "TEMP_SKU",
     storeId: args.storeId,
   });
@@ -407,6 +409,46 @@ export async function quickAddCatalogItem(
     skuId,
   });
   await ctx.db.patch("productSku", skuId, { sku });
+  if (quantityAvailable > 0) {
+    await applyInventoryEffectWithCtx(ctx, {
+      actorStaffProfileId: args.createdByStaffProfileId,
+      actorUserId: args.createdByUserId,
+      activityType: "pos_quick_add_opening_stock",
+      businessEventKey: `pos_quick_add:${skuId}:opening_stock`,
+      compatibilityBalance: {
+        onHandQuantity: quantityAvailable,
+        sellableQuantity: quantityAvailable,
+      },
+      completeness: "partial",
+      contentFingerprint: `quantity:${quantityAvailable}:cost:unknown`,
+      effectType: "baseline",
+      movementType: "opening_stock",
+      notes: "Opening stock recorded from POS quick add.",
+      occurrenceAt: Date.now(),
+      organizationId: store.organizationId,
+      physicalQuantityDelta: quantityAvailable,
+      productId,
+      productSkuId: skuId,
+      reasonCode: "pos_quick_add",
+      sellableQuantityDelta: quantityAvailable,
+      sourceDomain: "inventory",
+      sourceId: String(skuId),
+      sourceType: "product_sku",
+      storeId: args.storeId,
+      valuation: {
+        costBasis: uncostedBasis(),
+        deficitLots: [],
+        kind: "inbound",
+        quantity: quantityAvailable,
+      },
+    });
+    if (!args.productId) {
+      await ctx.db.patch("product", productId, {
+        inventoryCount: quantityAvailable,
+        quantityAvailable,
+      });
+    }
+  }
   await upsertProductSkuSearchProjection(ctx, skuId);
 
   const productSku = (await ctx.db.get("productSku", skuId))!;

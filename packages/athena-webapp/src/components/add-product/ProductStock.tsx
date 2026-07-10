@@ -99,6 +99,7 @@ import {
   resolveTrustedInventoryReviewClickAction,
   resolveTrustedInventoryReviewState,
   resolveStockInputUpdate,
+  resolveVariantNumericInputValue,
   type ProductPageProvisionalSkuBinding,
   type ProductVariantInputField,
   type TrustedInventoryFinalizationPayload,
@@ -1914,7 +1915,7 @@ function Stock({
                           type="number"
                           placeholder="0"
                           onChange={(e) => handleChange(e, variant.id, "stock")}
-                          value={variant.stock || ""}
+                          value={resolveVariantNumericInputValue(variant.stock)}
                           disabled={shouldDisableNonBarcodeFields}
                         />
                       )}
@@ -1937,7 +1938,9 @@ function Stock({
                           onChange={(e) =>
                             handleChange(e, variant.id, "quantityAvailable")
                           }
-                          value={variant.quantityAvailable || ""}
+                          value={resolveVariantNumericInputValue(
+                            variant.quantityAvailable,
+                          )}
                           disabled={shouldDisableNonBarcodeFields}
                           className={
                             hasQuantityError(variant) ? "border-red-500" : ""
@@ -1968,7 +1971,9 @@ function Stock({
                           onChange={(e) =>
                             handleChange(e, variant.id, "netPrice")
                           }
-                          value={variant.netPrice || ""}
+                          value={resolveVariantNumericInputValue(
+                            variant.netPrice,
+                          )}
                           disabled={shouldDisableNonBarcodeFields}
                           className={
                             hasPriceError(variant) ? "border-red-500" : ""
@@ -1992,7 +1997,7 @@ function Stock({
                           type="number"
                           placeholder="999"
                           onChange={(e) => handleChange(e, variant.id, "cost")}
-                          value={variant.cost || ""}
+                          value={resolveVariantNumericInputValue(variant.cost)}
                           disabled={shouldDisableNonBarcodeFields}
                         />
                       )}

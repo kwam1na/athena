@@ -17,10 +17,14 @@ import {
   getActiveManagerElevationByIdWithCtx,
   getActiveManagerElevationWithCtx,
 } from "../operations/managerElevations";
-import { recordInventoryMovementWithCtx } from "../operations/inventoryMovements";
 import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
 import { createOperationalWorkItemWithCtx } from "../operations/operationalWorkItems";
 import { recordSkuActivityEventWithCtx } from "../operations/skuActivity";
+import { applyInventoryEffectWithCtx } from "../reporting/inventory/effects";
+import {
+  knownUnitCostBasis,
+  uncostedBasis,
+} from "../reporting/inventory/valuation";
 import { toSlug } from "../utils";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
 import { isPosCatalogVisible } from "../../shared/posCatalogVisibility";
@@ -106,7 +110,10 @@ const importRowValidator = v.object({
   status: v.optional(importStatusValidator),
 });
 
-const importSourceFormatValidator = v.union(v.literal("csv"), v.literal("json"));
+const importSourceFormatValidator = v.union(
+  v.literal("csv"),
+  v.literal("json"),
+);
 
 const inventoryImportReviewVersionValidator = v.object({
   _id: v.id("inventoryImportReviewVersion"),
@@ -122,10 +129,16 @@ const inventoryImportReviewVersionValidator = v.object({
         action: v.optional(
           v.union(v.literal("create_item"), v.literal("skip_row")),
         ),
-        nameSource: v.optional(v.union(v.literal("import"), v.literal("athena"))),
-        priceSource: v.optional(v.union(v.literal("import"), v.literal("athena"))),
+        nameSource: v.optional(
+          v.union(v.literal("import"), v.literal("athena")),
+        ),
+        priceSource: v.optional(
+          v.union(v.literal("import"), v.literal("athena")),
+        ),
         productName: v.string(),
-        quantitySource: v.optional(v.union(v.literal("import"), v.literal("athena"))),
+        quantitySource: v.optional(
+          v.union(v.literal("import"), v.literal("athena")),
+        ),
         rowKey: v.string(),
         rowNumber: v.number(),
       }),
@@ -161,7 +174,9 @@ const legacyImportTrustedVisibilityRepairResultValidator = v.object({
   skippedArchivedProducts: v.number(),
   skippedLegacyTaxonomy: v.number(),
   taxonomyWorkItemsEnsured: v.number(),
-  taxonomyWorkItemSkus: v.array(legacyImportTrustedVisibilityRepairSkuValidator),
+  taxonomyWorkItemSkus: v.array(
+    legacyImportTrustedVisibilityRepairSkuValidator,
+  ),
   truncated: v.boolean(),
   visibleProducts: v.number(),
 });
@@ -313,8 +328,7 @@ type ImportAccess = {
 };
 
 type InventoryImportAccessCtx =
-  | Pick<QueryCtx, "auth" | "db">
-  | Pick<MutationCtx, "auth" | "db">;
+  Pick<QueryCtx, "auth" | "db"> | Pick<MutationCtx, "auth" | "db">;
 
 type MutableSummary = Omit<CatalogImportSummary, "alreadyApplied">;
 
@@ -363,30 +377,36 @@ export async function importInventoryRowsWithCtx(
       q
         .eq("storeId", args.storeId)
         .eq("subjectType", "inventory_import")
-        .eq("subjectId", args.importKey)
+        .eq("subjectId", args.importKey),
     )
     .first();
 
   if (existingImportEvent?.metadata) {
     return {
       alreadyApplied: true,
-      categoriesCreated: Number(existingImportEvent.metadata.categoriesCreated ?? 0),
-      productsCreated: Number(existingImportEvent.metadata.productsCreated ?? 0),
-      productsUpdated: Number(existingImportEvent.metadata.productsUpdated ?? 0),
+      categoriesCreated: Number(
+        existingImportEvent.metadata.categoriesCreated ?? 0,
+      ),
+      productsCreated: Number(
+        existingImportEvent.metadata.productsCreated ?? 0,
+      ),
+      productsUpdated: Number(
+        existingImportEvent.metadata.productsUpdated ?? 0,
+      ),
       rowsImported: Number(existingImportEvent.metadata.rowsImported ?? 0),
       skusCreated: Number(existingImportEvent.metadata.skusCreated ?? 0),
       skusUpdated: Number(existingImportEvent.metadata.skusUpdated ?? 0),
-      subcategoriesCreated: Number(existingImportEvent.metadata.subcategoriesCreated ?? 0),
+      subcategoriesCreated: Number(
+        existingImportEvent.metadata.subcategoriesCreated ?? 0,
+      ),
     };
   }
 
-  const activeProvisionalRows = await listActiveProvisionalImportRowsForFinalization(
-    ctx,
-    {
+  const activeProvisionalRows =
+    await listActiveProvisionalImportRowsForFinalization(ctx, {
       importKey: args.importKey,
       storeId: args.storeId,
-    },
-  );
+    });
 
   const summary: MutableSummary = {
     categoriesCreated: 0,
@@ -433,11 +453,29 @@ export async function importInventoryRowsWithCtx(
     }
 
     if (existingSku) {
-      await ctx.db.patch(
-        "productSku",
-        existingSku._id,
-        buildSkuPatch(row, product._id, finalTrustedQuantity),
-      );
+      const skuMetadata = buildSkuPatch(row, product._id, finalTrustedQuantity);
+      await ctx.db.patch("productSku", existingSku._id, {
+        attributes: skuMetadata.attributes,
+        barcode: skuMetadata.barcode,
+        isVisible: skuMetadata.isVisible,
+        length: skuMetadata.length,
+        netPrice: skuMetadata.netPrice,
+        price: skuMetadata.price,
+        productId: skuMetadata.productId,
+        productName: skuMetadata.productName,
+        size: skuMetadata.size,
+        sku: skuMetadata.sku,
+        weight: skuMetadata.weight,
+      });
+      await applyImportedSkuInventoryWithCtx(ctx, {
+        access,
+        currentSku: existingSku,
+        importKey: args.importKey,
+        product,
+        row,
+        storeId: args.storeId,
+        targetQuantity: finalTrustedQuantity,
+      });
       await upsertProductSkuSearchProjection(ctx, existingSku._id);
       summary.skusUpdated += 1;
     } else {
@@ -445,6 +483,19 @@ export async function importInventoryRowsWithCtx(
         "productSku",
         buildSkuInsert(row, product._id, args.storeId, finalTrustedQuantity),
       );
+      const createdSku = await ctx.db.get("productSku", productSkuId);
+      if (!createdSku) {
+        throw new Error(`Row ${row.rowNumber}: SKU could not be loaded.`);
+      }
+      await applyImportedSkuInventoryWithCtx(ctx, {
+        access,
+        currentSku: createdSku,
+        importKey: args.importKey,
+        product,
+        row,
+        storeId: args.storeId,
+        targetQuantity: finalTrustedQuantity,
+      });
       await upsertProductSkuSearchProjection(ctx, productSkuId);
       summary.skusCreated += 1;
     }
@@ -504,15 +555,20 @@ export async function importInventoryCommandWithCtx(
     const access = await requireInventoryImportAccess(ctx, args);
     return ok(await importInventoryRowsWithCtx(ctx, args, access));
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Inventory import failed.";
+    const message =
+      error instanceof Error ? error.message : "Inventory import failed.";
 
-    if (message === "Authentication required." || message === "Sign in again to continue.") {
+    if (
+      message === "Authentication required." ||
+      message === "Sign in again to continue."
+    ) {
       return userError({ code: "authentication_failed", message });
     }
 
     if (
       message === "Manager elevation is required before importing inventory." ||
-      message === "Terminal context is required before using manager elevation." ||
+      message ===
+        "Terminal context is required before using manager elevation." ||
       message === "You do not have permission to import inventory." ||
       message === "Athena user not found."
     ) {
@@ -563,11 +619,14 @@ export async function saveInventoryImportReviewVersionWithCtx(
   resolvedAccess?: ImportAccess,
 ): Promise<InventoryImportReviewVersionSummary> {
   requireTerminalContextForManagerElevation(args);
-  const access = resolvedAccess ?? await requireInventoryImportAccess(ctx, args);
+  const access =
+    resolvedAccess ?? (await requireInventoryImportAccess(ctx, args));
   const rawContent = args.rawContent.trim();
 
   if (!rawContent) {
-    throw new Error("Import content is required before saving a review version.");
+    throw new Error(
+      "Import content is required before saving a review version.",
+    );
   }
 
   const latestVersion = await ctx.db
@@ -637,15 +696,22 @@ export async function saveInventoryImportReviewVersionCommandWithCtx(
   try {
     return ok(await saveInventoryImportReviewVersionWithCtx(ctx, args));
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Review version could not be saved.";
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Review version could not be saved.";
 
-    if (message === "Authentication required." || message === "Sign in again to continue.") {
+    if (
+      message === "Authentication required." ||
+      message === "Sign in again to continue."
+    ) {
       return userError({ code: "authentication_failed", message });
     }
 
     if (
       message === "Manager elevation is required before importing inventory." ||
-      message === "Terminal context is required before using manager elevation." ||
+      message ===
+        "Terminal context is required before using manager elevation." ||
       message === "You do not have permission to import inventory." ||
       message === "Athena user not found."
     ) {
@@ -656,7 +722,9 @@ export async function saveInventoryImportReviewVersionCommandWithCtx(
       return userError({ code: "not_found", message });
     }
 
-    if (message === "Import content is required before saving a review version.") {
+    if (
+      message === "Import content is required before saving a review version."
+    ) {
       return userError({ code: "validation_failed", message });
     }
 
@@ -677,10 +745,16 @@ export const saveInventoryImportReviewVersion = mutation({
           action: v.optional(
             v.union(v.literal("create_item"), v.literal("skip_row")),
           ),
-          nameSource: v.optional(v.union(v.literal("import"), v.literal("athena"))),
-          priceSource: v.optional(v.union(v.literal("import"), v.literal("athena"))),
+          nameSource: v.optional(
+            v.union(v.literal("import"), v.literal("athena")),
+          ),
+          priceSource: v.optional(
+            v.union(v.literal("import"), v.literal("athena")),
+          ),
           productName: v.string(),
-          quantitySource: v.optional(v.union(v.literal("import"), v.literal("athena"))),
+          quantitySource: v.optional(
+            v.union(v.literal("import"), v.literal("athena")),
+          ),
           rowKey: v.string(),
           rowNumber: v.number(),
         }),
@@ -711,8 +785,12 @@ export async function stageInventoryImportReviewRowsForPosWithCtx(
   resolvedAccess?: ImportAccess,
 ): Promise<ProvisionalInventoryImportStageSummary> {
   requireTerminalContextForManagerElevation(args);
-  const access = resolvedAccess ?? await requireInventoryImportAccess(ctx, args);
-  const reviewVersion = await ctx.db.get("inventoryImportReviewVersion", args.reviewVersionId);
+  const access =
+    resolvedAccess ?? (await requireInventoryImportAccess(ctx, args));
+  const reviewVersion = await ctx.db.get(
+    "inventoryImportReviewVersion",
+    args.reviewVersionId,
+  );
 
   if (!reviewVersion || reviewVersion.storeId !== args.storeId) {
     throw new Error("Inventory import review version not found.");
@@ -724,7 +802,9 @@ export async function stageInventoryImportReviewRowsForPosWithCtx(
 
   const rows = normalizeProvisionalStageRows(args.rows);
   if (rows.length === 0) {
-    throw new Error("At least one import review row is required before staging POS availability.");
+    throw new Error(
+      "At least one import review row is required before staging POS availability.",
+    );
   }
 
   const summary: ProvisionalInventoryImportStageSummary = {
@@ -745,7 +825,7 @@ export async function stageInventoryImportReviewRowsForPosWithCtx(
         q
           .eq("storeId", args.storeId)
           .eq("importKey", args.importKey)
-          .eq("rowKey", row.rowKey)
+          .eq("rowKey", row.rowKey),
       )
       .first();
 
@@ -863,28 +943,38 @@ export async function stageInventoryImportReviewRowsForPosCommandWithCtx(
     return ok(await stageInventoryImportReviewRowsForPosWithCtx(ctx, args));
   } catch (error) {
     const message =
-      error instanceof Error ? error.message : "Inventory import rows could not be staged.";
+      error instanceof Error
+        ? error.message
+        : "Inventory import rows could not be staged.";
 
-    if (message === "Authentication required." || message === "Sign in again to continue.") {
+    if (
+      message === "Authentication required." ||
+      message === "Sign in again to continue."
+    ) {
       return userError({ code: "authentication_failed", message });
     }
 
     if (
       message === "Manager elevation is required before importing inventory." ||
-      message === "Terminal context is required before using manager elevation." ||
+      message ===
+        "Terminal context is required before using manager elevation." ||
       message === "You do not have permission to import inventory." ||
       message === "Athena user not found."
     ) {
       return userError({ code: "authorization_failed", message });
     }
 
-    if (message === "Store not found." || message === "Inventory import review version not found.") {
+    if (
+      message === "Store not found." ||
+      message === "Inventory import review version not found."
+    ) {
       return userError({ code: "not_found", message });
     }
 
     if (
       message === "Import key does not match the saved review version." ||
-      message === "At least one import review row is required before staging POS availability."
+      message ===
+        "At least one import review row is required before staging POS availability."
     ) {
       return userError({ code: "validation_failed", message });
     }
@@ -962,8 +1052,12 @@ export async function listInventoryImportReviewSkuContextWithCtx(
     productSkus.push(productSku);
   }
 
-  const productIds = Array.from(new Set(productSkus.map((productSku) => productSku.productId)));
-  const products = await Promise.all(productIds.map((productId) => ctx.db.get("product", productId)));
+  const productIds = Array.from(
+    new Set(productSkus.map((productSku) => productSku.productId)),
+  );
+  const products = await Promise.all(
+    productIds.map((productId) => ctx.db.get("product", productId)),
+  );
   const productById = new Map<Id<"product">, Doc<"product">>();
   products.forEach((product) => {
     if (product) {
@@ -980,7 +1074,11 @@ export async function listInventoryImportReviewSkuContextWithCtx(
         price: productSku.netPrice ?? productSku.price,
         productAvailability: product?.availability,
         productId: productSku.productId,
-        productName: product?.name ?? productSku.productName ?? productSku.sku ?? "Unnamed SKU",
+        productName:
+          product?.name ??
+          productSku.productName ??
+          productSku.sku ??
+          "Unnamed SKU",
         productSkuId: productSku._id,
         quantityAvailable: productSku.quantityAvailable,
         sku: normalizeOptional(productSku.sku),
@@ -1086,23 +1184,25 @@ export const finalizeTrustedInventoryFromProductPage = mutation({
   },
 });
 
-export const repairOnboardedLegacyImportTrustedSkuVisibility = internalMutation({
-  args: {
-    cursor: v.optional(legacyImportTrustedVisibilityRepairCursorValidator),
-    dryRun: v.optional(v.boolean()),
-    limit: v.optional(v.number()),
-    storeId: v.id("store"),
+export const repairOnboardedLegacyImportTrustedSkuVisibility = internalMutation(
+  {
+    args: {
+      cursor: v.optional(legacyImportTrustedVisibilityRepairCursorValidator),
+      dryRun: v.optional(v.boolean()),
+      limit: v.optional(v.number()),
+      storeId: v.id("store"),
+    },
+    returns: legacyImportTrustedVisibilityRepairResultValidator,
+    async handler(ctx, args) {
+      return repairOnboardedLegacyImportTrustedSkuVisibilityWithCtx(ctx, {
+        cursor: args.cursor,
+        dryRun: args.dryRun ?? true,
+        limit: args.limit,
+        storeId: args.storeId,
+      });
+    },
   },
-  returns: legacyImportTrustedVisibilityRepairResultValidator,
-  async handler(ctx, args) {
-    return repairOnboardedLegacyImportTrustedSkuVisibilityWithCtx(ctx, {
-      cursor: args.cursor,
-      dryRun: args.dryRun ?? true,
-      limit: args.limit,
-      storeId: args.storeId,
-    });
-  },
-});
+);
 
 export async function repairOnboardedLegacyImportTrustedSkuVisibilityWithCtx(
   ctx: MutationCtx,
@@ -1260,10 +1360,7 @@ function normalizeLegacyImportTrustedVisibilityRepairLimit(limit?: number) {
 
   return Math.max(
     1,
-    Math.min(
-      LEGACY_IMPORT_TRUSTED_VISIBILITY_REPAIR_LIMIT,
-      Math.trunc(limit),
-    ),
+    Math.min(LEGACY_IMPORT_TRUSTED_VISIBILITY_REPAIR_LIMIT, Math.trunc(limit)),
   );
 }
 
@@ -1286,7 +1383,9 @@ async function listLegacyImportTrustedVisibilityRepairRows(
     const finalizedAtFloor =
       args.cursor?.status === status ? args.cursor.finalizedAt - 1 : -1;
     const scannedRowIds =
-      args.cursor?.status === status ? new Set(args.cursor.scannedRowIds) : null;
+      args.cursor?.status === status
+        ? new Set(args.cursor.scannedRowIds)
+        : null;
 
     const statusRows = await ctx.db
       .query("inventoryImportProvisionalSku")
@@ -1296,7 +1395,7 @@ async function listLegacyImportTrustedVisibilityRepairRows(
           .eq("status", status)
           .gt("finalizedAt", finalizedAtFloor),
       )
-      .take((args.limit - rows.length) + (scannedRowIds?.size ?? 0));
+      .take(args.limit - rows.length + (scannedRowIds?.size ?? 0));
 
     rows.push(
       ...statusRows
@@ -1412,8 +1511,7 @@ export async function finalizeTrustedInventoryFromProductPageWithCtx(
     }
 
     const storedResult = existingFinalization.finalizationResult as
-      | ProductPageTrustedInventoryFinalizationResult
-      | undefined;
+      ProductPageTrustedInventoryFinalizationResult | undefined;
     if (storedResult) return ok(storedResult);
   }
 
@@ -1431,10 +1529,79 @@ export async function finalizeTrustedInventoryFromProductPageWithCtx(
     metadata,
     now,
     previousInventoryCount,
-    productSkuPatch,
   } = validation.data;
-
-  await ctx.db.patch("productSku", normalizedArgs.productSkuId, productSkuPatch);
+  const stockDelta =
+    normalizedArgs.reviewedInventoryCount - previousInventoryCount;
+  const currentSku = await ctx.db.get(
+    "productSku",
+    normalizedArgs.productSkuId,
+  );
+  if (!currentSku) {
+    return userError({
+      code: "not_found",
+      message: "Trusted SKU could not be loaded.",
+    });
+  }
+  const availabilityDelta =
+    normalizedArgs.reviewedQuantityAvailable - currentSku.quantityAvailable;
+  const valuation =
+    stockDelta > 0
+      ? {
+          costBasis:
+            normalizedArgs.reviewedUnitCost === undefined
+              ? uncostedBasis()
+              : knownUnitCostBasis({
+                  currency: access.store.currency ?? "GHS",
+                  quantity: stockDelta,
+                  unitCost: normalizedArgs.reviewedUnitCost,
+                }),
+          deficitLots: [],
+          kind: "inbound" as const,
+          quantity: stockDelta,
+        }
+      : stockDelta < 0
+        ? {
+            disposition: "stock_correction" as const,
+            kind: "outbound" as const,
+            quantity: Math.abs(stockDelta),
+          }
+        : { kind: "availability_only" as const };
+  const inventoryEffect = await applyInventoryEffectWithCtx(ctx, {
+    actorUserId: access.athenaUser._id,
+    activityType: "provisional_import_finalization",
+    businessEventKey: `inventory_import:${activeRow._id}:trusted:${normalizedArgs.conversionRequestId}`,
+    compatibilityBalance: {
+      onHandQuantity: normalizedArgs.reviewedInventoryCount,
+      sellableQuantity: normalizedArgs.reviewedQuantityAvailable,
+    },
+    completeness: "partial",
+    contentFingerprint: payloadHash,
+    effectType: "baseline",
+    movementType: "provisional_import_finalization",
+    notes: "Trusted inventory finalized from product edit.",
+    occurrenceAt: now,
+    organizationId: access.store.organizationId,
+    physicalQuantityDelta: stockDelta,
+    productId: normalizedArgs.productId,
+    productSkuId: normalizedArgs.productSkuId,
+    reasonCode: "trusted_inventory_conversion",
+    sellableQuantityDelta: availabilityDelta,
+    sourceDomain: "inventory",
+    sourceId: String(activeRow._id),
+    sourceType: "inventory_import_provisional_sku",
+    storeId: normalizedArgs.storeId,
+    valuation,
+  });
+  await ctx.db.patch("productSku", normalizedArgs.productSkuId, {
+    isVisible: normalizedArgs.reviewedIsVisible,
+    ...(normalizedArgs.reviewedPosVisible !== undefined
+      ? { posVisible: normalizedArgs.reviewedPosVisible }
+      : {}),
+    ...(normalizedArgs.reviewedNetPrice !== undefined
+      ? { netPrice: normalizedArgs.reviewedNetPrice }
+      : {}),
+    price: normalizedArgs.reviewedPrice,
+  });
   await ctx.db.patch("product", normalizedArgs.productId, {
     availability: "live",
     posVisible: true,
@@ -1448,24 +1615,7 @@ export async function finalizeTrustedInventoryFromProductPageWithCtx(
   });
   await upsertProductSkuSearchProjection(ctx, normalizedArgs.productSkuId);
 
-  let inventoryMovementId: Id<"inventoryMovement"> | undefined;
-  const stockDelta = normalizedArgs.reviewedInventoryCount - previousInventoryCount;
-  if (stockDelta !== 0) {
-    const movement = await recordInventoryMovementWithCtx(ctx, {
-      actorUserId: access.athenaUser._id,
-      movementType: "provisional_import_finalization",
-      notes: "Trusted inventory finalized from product edit.",
-      organizationId: access.store.organizationId,
-      productId: normalizedArgs.productId,
-      productSkuId: normalizedArgs.productSkuId,
-      quantityDelta: stockDelta,
-      reasonCode: "trusted_inventory_conversion",
-      sourceId: String(activeRow._id),
-      sourceType: "inventory_import_provisional_sku",
-      storeId: normalizedArgs.storeId,
-    });
-    inventoryMovementId = movement?._id;
-  }
+  const inventoryMovementId = inventoryEffect.movement?._id;
 
   const finalizationResult = {
     ...finalizationResultBase,
@@ -1485,7 +1635,8 @@ export async function finalizeTrustedInventoryFromProductPageWithCtx(
     finalizedByUserId: access.athenaUser._id,
     hiddenAt: now,
     posExposureStatus: "hidden",
-    provisionalSoldQuantityAtFinalization: activeRow.saleEvidence.totalQuantitySold,
+    provisionalSoldQuantityAtFinalization:
+      activeRow.saleEvidence.totalQuantitySold,
     updatedAt: now,
   });
   await refreshCatalogSummaryWithCtx(ctx, normalizedArgs.storeId);
@@ -1541,11 +1692,11 @@ async function readProductTaxonomyStateWithCtx(
 
   const hasAthenaTaxonomy = Boolean(
     category &&
-      subcategory &&
-      category.storeId === args.storeId &&
-      subcategory.storeId === args.storeId &&
-      subcategory.categoryId === category._id &&
-      category.slug !== DEFAULT_CATEGORY_SLUG,
+    subcategory &&
+    category.storeId === args.storeId &&
+    subcategory.storeId === args.storeId &&
+    subcategory.categoryId === category._id &&
+    category.slug !== DEFAULT_CATEGORY_SLUG,
   );
 
   return {
@@ -1632,7 +1783,8 @@ export async function ensureCatalogTaxonomySetupWorkForProductWithCtx(
   const workItem = await createOperationalWorkItemWithCtx(ctx, {
     createdByUserId: args.actorUserId,
     metadata,
-    notes: "Assign an Athena category and subcategory before saving this product.",
+    notes:
+      "Assign an Athena category and subcategory before saving this product.",
     organizationId: product.organizationId,
     priority: "medium",
     productId: product._id,
@@ -1855,7 +2007,8 @@ async function validateProductPageTrustedInventoryFinalization(
   if (binding.saleEvidenceFingerprint !== args.saleEvidenceFingerprint) {
     return userError({
       code: "conflict",
-      message: "Provisional sales changed. Refresh and review the counts again.",
+      message:
+        "Provisional sales changed. Refresh and review the counts again.",
     });
   }
 
@@ -1918,7 +2071,10 @@ async function validateProductPageTrustedInventoryFinalization(
 function validateReviewedTrustedInventoryFields(
   args: ProductPageTrustedInventoryFinalizationArgs,
 ): CommandResult<never> | null {
-  if (!Number.isInteger(args.reviewedInventoryCount) || args.reviewedInventoryCount < 0) {
+  if (
+    !Number.isInteger(args.reviewedInventoryCount) ||
+    args.reviewedInventoryCount < 0
+  ) {
     return userError({
       code: "validation_failed",
       message: "Stock must be a non-negative whole number.",
@@ -1945,7 +2101,8 @@ function validateReviewedTrustedInventoryFields(
   if (!reviewedPosVisibleFor(args)) {
     return userError({
       code: "precondition_failed",
-      message: "Make this SKU available in POS before finalizing trusted inventory.",
+      message:
+        "Make this SKU available in POS before finalizing trusted inventory.",
     });
   }
 
@@ -1998,7 +2155,10 @@ async function findProvisionalRowByConversionRequestId(
 
 async function readFinalizationReservationBlock(
   ctx: MutationCtx,
-  args: Pick<ProductPageTrustedInventoryFinalizationArgs, "productSkuId" | "storeId">,
+  args: Pick<
+    ProductPageTrustedInventoryFinalizationArgs,
+    "productSkuId" | "storeId"
+  >,
 ): Promise<CommandResult<never> | null> {
   const now = Date.now();
   const activePosHold = await ctx.db
@@ -2035,8 +2195,7 @@ async function readFinalizationReservationBlock(
   ) {
     return userError({
       code: "precondition_failed",
-      message:
-        "Clear active checkout reservations before finalizing this SKU.",
+      message: "Clear active checkout reservations before finalizing this SKU.",
     });
   }
 
@@ -2049,14 +2208,16 @@ async function readFinalizationReservationBlock(
     if (items.length > TRUSTED_FINALIZATION_CHECKOUT_SESSION_ITEM_LIMIT) {
       return userError({
         code: "precondition_failed",
-        message: "Clear active checkout reservations before finalizing this SKU.",
+        message:
+          "Clear active checkout reservations before finalizing this SKU.",
       });
     }
 
     if (items.some((item) => item.productSkuId === args.productSkuId)) {
       return userError({
         code: "precondition_failed",
-        message: "Clear active checkout reservations before finalizing this SKU.",
+        message:
+          "Clear active checkout reservations before finalizing this SKU.",
       });
     }
   }
@@ -2088,7 +2249,9 @@ function reviewedPosVisibleFor(
   return args.reviewedPosVisible ?? args.reviewedIsVisible;
 }
 
-function buildSaleEvidenceFingerprint(row: Doc<"inventoryImportProvisionalSku">) {
+function buildSaleEvidenceFingerprint(
+  row: Doc<"inventoryImportProvisionalSku">,
+) {
   return stableStringify({
     lastPosTransactionId: row.saleEvidence.lastPosTransactionId,
     lastRegisterSessionId: row.saleEvidence.lastRegisterSessionId,
@@ -2146,13 +2309,13 @@ function buildProductPageFinalizationMetadata(args: {
     finalTrustedQuantity: args.args.reviewedInventoryCount,
     importKey: args.provisionalSku.importKey,
     lastPosTransactionId: args.provisionalSku.saleEvidence.lastPosTransactionId,
-    lastRegisterSessionId: args.provisionalSku.saleEvidence.lastRegisterSessionId,
+    lastRegisterSessionId:
+      args.provisionalSku.saleEvidence.lastRegisterSessionId,
     lastSoldAt: args.provisionalSku.saleEvidence.lastSoldAt,
     productId: args.product._id,
     productSkuId: args.productSku._id,
     provisionalSkuId: args.provisionalSku._id,
-    provisionalSoldQuantity:
-      args.provisionalSku.saleEvidence.totalQuantitySold,
+    provisionalSoldQuantity: args.provisionalSku.saleEvidence.totalQuantitySold,
     quantityAvailable: args.args.reviewedQuantityAvailable,
     reviewVersionId: args.provisionalSku.reviewVersionId,
     reviewVersionNumber: args.provisionalSku.reviewVersionNumber,
@@ -2235,7 +2398,9 @@ async function requireInventoryImportAccess(
   }
 
   if (!args.terminalId) {
-    throw new Error("Manager elevation is required before importing inventory.");
+    throw new Error(
+      "Manager elevation is required before importing inventory.",
+    );
   }
 
   const activeElevation = await getActiveManagerElevationWithCtx(ctx, {
@@ -2245,7 +2410,9 @@ async function requireInventoryImportAccess(
   });
 
   if (!activeElevation) {
-    throw new Error("Manager elevation is required before importing inventory.");
+    throw new Error(
+      "Manager elevation is required before importing inventory.",
+    );
   }
 
   return { athenaUser, store };
@@ -2256,7 +2423,8 @@ function isInventoryImportAccessError(message: string) {
     message === "Authentication required." ||
     message === "Sign in again to continue." ||
     message === "Manager elevation is required before importing inventory." ||
-    message === "Terminal context is required before using manager elevation." ||
+    message ===
+      "Terminal context is required before using manager elevation." ||
     message === "You do not have permission to import inventory." ||
     message === "Athena user not found." ||
     message === "Store not found."
@@ -2268,7 +2436,9 @@ function requireTerminalContextForManagerElevation(args: {
   terminalId?: Id<"posTerminal">;
 }) {
   if (args.managerElevationId && !args.terminalId) {
-    throw new Error("Terminal context is required before using manager elevation.");
+    throw new Error(
+      "Terminal context is required before using manager elevation.",
+    );
   }
 }
 
@@ -2281,13 +2451,22 @@ function validateImportRows(rows: CatalogImportRow[]) {
 
   rows.forEach((row) => {
     if (!Number.isInteger(row.quantity) || row.quantity < 0) {
-      errors.push(`Row ${row.rowNumber}: quantity must be a non-negative whole number.`);
+      errors.push(
+        `Row ${row.rowNumber}: quantity must be a non-negative whole number.`,
+      );
     }
     if (!Number.isInteger(row.price) || row.price < 0) {
-      errors.push(`Row ${row.rowNumber}: price must be a non-negative stored amount.`);
+      errors.push(
+        `Row ${row.rowNumber}: price must be a non-negative stored amount.`,
+      );
     }
-    if (row.unitCost !== undefined && (!Number.isInteger(row.unitCost) || row.unitCost < 0)) {
-      errors.push(`Row ${row.rowNumber}: unit cost must be a non-negative stored amount.`);
+    if (
+      row.unitCost !== undefined &&
+      (!Number.isInteger(row.unitCost) || row.unitCost < 0)
+    ) {
+      errors.push(
+        `Row ${row.rowNumber}: unit cost must be a non-negative stored amount.`,
+      );
     }
   });
 
@@ -2302,11 +2481,15 @@ function normalizeImportRow(row: CatalogImportRow): CatalogImportRow {
     `Imported row ${row.rowNumber}`;
   const sku =
     normalizeOptional(row.sku) ||
-    (normalizeOptional(row.barcode) ? undefined : `legacy-row-${row.rowNumber}`);
+    (normalizeOptional(row.barcode)
+      ? undefined
+      : `legacy-row-${row.rowNumber}`);
   const price = isNonNegativeInteger(row.price) ? row.price : 0;
   const quantity = isNonNegativeInteger(row.quantity) ? row.quantity : 0;
   const unitCost =
-    row.unitCost === undefined || !isNonNegativeInteger(row.unitCost) ? undefined : row.unitCost;
+    row.unitCost === undefined || !isNonNegativeInteger(row.unitCost)
+      ? undefined
+      : row.unitCost;
 
   return {
     ...row,
@@ -2330,7 +2513,9 @@ async function findOrCreateCategory(
   const slug = toSlug(name) || toSlug(DEFAULT_CATEGORY_NAME);
   const existing = await ctx.db
     .query("category")
-    .withIndex("by_storeId_slug", (q) => q.eq("storeId", args.storeId).eq("slug", slug))
+    .withIndex("by_storeId_slug", (q) =>
+      q.eq("storeId", args.storeId).eq("slug", slug),
+    )
     .first();
 
   if (existing) return existing;
@@ -2358,7 +2543,7 @@ async function findOrCreateSubcategory(
   const existing = await ctx.db
     .query("subcategory")
     .withIndex("by_categoryId_slug", (q) =>
-      q.eq("categoryId", args.categoryId).eq("slug", slug)
+      q.eq("categoryId", args.categoryId).eq("slug", slug),
     )
     .first();
 
@@ -2384,7 +2569,7 @@ async function findExistingSku(
     const byBarcode = await ctx.db
       .query("productSku")
       .withIndex("by_storeId_barcode", (q) =>
-        q.eq("storeId", storeId).eq("barcode", barcode)
+        q.eq("storeId", storeId).eq("barcode", barcode),
       )
       .first();
     if (byBarcode) return byBarcode;
@@ -2394,7 +2579,9 @@ async function findExistingSku(
   if (sku) {
     return ctx.db
       .query("productSku")
-      .withIndex("by_storeId_sku", (q) => q.eq("storeId", storeId).eq("sku", sku))
+      .withIndex("by_storeId_sku", (q) =>
+        q.eq("storeId", storeId).eq("sku", sku),
+      )
       .first();
   }
 
@@ -2414,7 +2601,7 @@ async function listActiveProvisionalImportRowsForFinalization(
       q
         .eq("storeId", args.storeId)
         .eq("importKey", args.importKey)
-        .eq("status", "active")
+        .eq("status", "active"),
     )
     .take(PROVISIONAL_IMPORT_FINALIZATION_LIMIT + 1);
 
@@ -2729,18 +2916,17 @@ function buildSkuInsert(
     barcode: normalizeOptional(row.barcode),
     barcodeAutoGenerated: false,
     images: [],
-    inventoryCount: finalTrustedQuantity,
+    inventoryCount: 0,
     isVisible: row.status !== "archived",
     length: row.length,
     netPrice: row.price,
     price: row.price,
     productId,
     productName: row.productName.trim(),
-    quantityAvailable: finalTrustedQuantity,
+    quantityAvailable: 0,
     size: normalizeOptional(row.size),
     sku: normalizeOptional(row.sku) ?? normalizeOptional(row.barcode),
     storeId,
-    unitCost: row.unitCost,
     weight: normalizeOptional(row.weight),
   };
 }
@@ -2756,22 +2942,93 @@ function buildSkuPatch(
       ...(row.color ? { legacyColor: row.color } : null),
     },
     barcode: normalizeOptional(row.barcode),
-    inventoryCount: finalTrustedQuantity,
     isVisible: row.status !== "archived",
     length: row.length,
     netPrice: row.price,
     price: row.price,
     productId,
     productName: row.productName.trim(),
-    quantityAvailable: finalTrustedQuantity,
     size: normalizeOptional(row.size),
     sku: normalizeOptional(row.sku),
-    unitCost: row.unitCost,
     weight: normalizeOptional(row.weight),
   };
 }
 
-async function recomputeProductInventory(ctx: MutationCtx, productId: Id<"product">) {
+async function applyImportedSkuInventoryWithCtx(
+  ctx: MutationCtx,
+  args: {
+    access: ImportAccess;
+    currentSku: Doc<"productSku">;
+    importKey: string;
+    product: Doc<"product">;
+    row: CatalogImportRow;
+    storeId: Id<"store">;
+    targetQuantity: number;
+  },
+) {
+  const physicalQuantityDelta =
+    args.targetQuantity - args.currentSku.inventoryCount;
+  const sellableQuantityDelta =
+    args.targetQuantity - args.currentSku.quantityAvailable;
+  if (physicalQuantityDelta === 0 && sellableQuantityDelta === 0) return;
+
+  const valuation =
+    physicalQuantityDelta > 0
+      ? {
+          costBasis:
+            args.row.unitCost === undefined
+              ? uncostedBasis()
+              : knownUnitCostBasis({
+                  currency: args.product.currency,
+                  quantity: physicalQuantityDelta,
+                  unitCost: args.row.unitCost,
+                }),
+          deficitLots: [],
+          kind: "inbound" as const,
+          quantity: physicalQuantityDelta,
+        }
+      : physicalQuantityDelta < 0
+        ? {
+            disposition: "stock_correction" as const,
+            kind: "outbound" as const,
+            quantity: Math.abs(physicalQuantityDelta),
+          }
+        : { kind: "availability_only" as const };
+
+  await applyInventoryEffectWithCtx(ctx, {
+    actorUserId: args.access.athenaUser._id,
+    activityType: "inventory_import_applied",
+    businessEventKey: `inventory_import:${args.importKey}:row:${args.row.rowNumber}:sku:${args.currentSku._id}`,
+    compatibilityBalance: {
+      onHandQuantity: args.targetQuantity,
+      sellableQuantity: args.targetQuantity,
+    },
+    completeness: "partial",
+    contentFingerprint: `quantity:${args.targetQuantity}:cost:${args.row.unitCost ?? "unknown"}`,
+    effectType:
+      args.currentSku.inventoryCount === 0 ? "baseline" : "adjustment",
+    movementType: "inventory_import",
+    notes: "Inventory applied from a reviewed catalog import.",
+    occurrenceAt: Date.now(),
+    organizationId: args.access.store.organizationId,
+    physicalQuantityDelta,
+    productId: args.product._id,
+    productSkuId: args.currentSku._id,
+    reasonCode: "inventory_import",
+    sellableQuantityDelta,
+    sourceDomain: "inventory",
+    sourceId: args.importKey,
+    sourceLineId: String(args.row.rowNumber),
+    sourceType: "inventory_import",
+    storeId: args.storeId,
+    valuation,
+  });
+}
+
+async function recomputeProductInventory(
+  ctx: MutationCtx,
+  productId: Id<"product">,
+) {
   const product = await ctx.db.get("product", productId);
   if (!product) return false;
 
@@ -2781,7 +3038,10 @@ async function recomputeProductInventory(ctx: MutationCtx, productId: Id<"produc
     .take(1000);
 
   const inventoryCount = skus.reduce((sum, sku) => sum + sku.inventoryCount, 0);
-  const quantityAvailable = skus.reduce((sum, sku) => sum + sku.quantityAvailable, 0);
+  const quantityAvailable = skus.reduce(
+    (sum, sku) => sum + sku.quantityAvailable,
+    0,
+  );
 
   await ctx.db.patch("product", productId, {
     inventoryCount,
@@ -2873,7 +3133,8 @@ function buildProvisionalSkuPatch(args: {
   const now = Date.now();
   const importedSku = normalizeOptional(args.identity.sku);
   const importedBarcode =
-    normalizeOptional(args.identity.barcode) ?? normalizeOptional(args.row.barcode);
+    normalizeOptional(args.identity.barcode) ??
+    normalizeOptional(args.row.barcode);
 
   return {
     storeId: args.storeId,

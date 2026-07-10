@@ -586,7 +586,7 @@ export const voidExpenseSession = mutation({
       }),
     );
 
-    await releaseLegacyExpenseQuantityPatchHolds(ctx.db, releaseItems);
+    await releaseLegacyExpenseQuantityPatchHolds(ctx, releaseItems);
 
     // Mark session as void
     await ctx.db.patch("expenseSession", args.sessionId, {

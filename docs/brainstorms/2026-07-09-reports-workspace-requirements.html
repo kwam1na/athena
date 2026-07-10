@@ -1,0 +1,1242 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Product requirements for Athena's store-scoped Reports workspace."
+    />
+    <link rel="icon" href="data:," />
+    <title>Athena Reports Workspace Requirements</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --canvas: #f1f3ef;
+        --paper: #ffffff;
+        --ink: #18211d;
+        --muted: #5e6a64;
+        --line: #d6ddd8;
+        --line-strong: #aab6af;
+        --green: #176b54;
+        --green-soft: #e3f0eb;
+        --blue: #2b5f8f;
+        --blue-soft: #e8f0f7;
+        --gold: #946316;
+        --gold-soft: #f5ecd9;
+        --red: #ad493b;
+        --red-soft: #f7e8e5;
+        --shadow: 0 18px 55px rgba(21, 35, 28, 0.1);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        background: var(--canvas);
+        color: var(--ink);
+        font-family:
+          Inter,
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+        line-height: 1.55;
+      }
+
+      a {
+        color: var(--blue);
+        text-decoration-thickness: 1px;
+        text-underline-offset: 3px;
+      }
+
+      a:hover {
+        color: #17466f;
+      }
+
+      .document {
+        width: min(1180px, calc(100% - 32px));
+        margin: 24px auto 64px;
+        background: var(--paper);
+        border: 1px solid var(--line);
+        box-shadow: var(--shadow);
+      }
+
+      header {
+        padding: 48px 56px 36px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .eyebrow {
+        margin: 0 0 10px;
+        color: var(--green);
+        font-size: 0.78rem;
+        font-weight: 760;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2,
+      h3,
+      h4 {
+        margin: 0;
+        line-height: 1.2;
+        letter-spacing: 0;
+      }
+
+      h1 {
+        max-width: 900px;
+        font-size: clamp(2.15rem, 5vw, 4.5rem);
+        font-weight: 820;
+      }
+
+      h2 {
+        margin-bottom: 16px;
+        font-size: 1.55rem;
+      }
+
+      h3 {
+        margin-bottom: 10px;
+        font-size: 1.05rem;
+      }
+
+      h4 {
+        margin-bottom: 8px;
+        font-size: 0.95rem;
+      }
+
+      p {
+        margin: 0 0 14px;
+      }
+
+      p:last-child {
+        margin-bottom: 0;
+      }
+
+      ul,
+      ol {
+        margin: 0;
+        padding-left: 1.25rem;
+      }
+
+      li {
+        margin: 7px 0;
+      }
+
+      code {
+        overflow-wrap: anywhere;
+        color: #253a31;
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+        font-size: 0.9em;
+      }
+
+      .lede {
+        max-width: 850px;
+        margin-top: 22px;
+        color: var(--muted);
+        font-size: 1.14rem;
+      }
+
+      .meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 18px;
+        margin-top: 28px;
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+
+      .meta strong {
+        color: var(--ink);
+      }
+
+      .toc {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 18px;
+        padding: 18px 56px;
+        border-bottom: 1px solid var(--line);
+        background: #f8faf8;
+        font-size: 0.88rem;
+      }
+
+      .toc a {
+        color: var(--ink);
+        font-weight: 650;
+        text-decoration: none;
+      }
+
+      .toc a:hover {
+        color: var(--green);
+        text-decoration: underline;
+      }
+
+      section {
+        padding: 34px 56px;
+        border-bottom: 1px solid var(--line);
+        scroll-margin-top: 16px;
+      }
+
+      section:last-child {
+        border-bottom: 0;
+      }
+
+      .muted {
+        color: var(--muted);
+      }
+
+      .decision-grid,
+      .metric-grid,
+      .flow-grid,
+      .boundary-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .decision {
+        min-height: 100%;
+        padding: 18px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: #fbfcfb;
+      }
+
+      .decision.green {
+        border-color: #99b9ad;
+        background: var(--green-soft);
+      }
+
+      .decision.blue {
+        border-color: #a8bdd1;
+        background: var(--blue-soft);
+      }
+
+      .decision.gold {
+        border-color: #d0b27d;
+        background: var(--gold-soft);
+      }
+
+      .decision.red {
+        border-color: #d7aaa3;
+        background: var(--red-soft);
+      }
+
+      .label {
+        display: block;
+        margin-bottom: 8px;
+        color: var(--muted);
+        font-size: 0.72rem;
+        font-weight: 780;
+        text-transform: uppercase;
+      }
+
+      .callout {
+        padding: 20px;
+        border-left: 5px solid var(--green);
+        background: var(--green-soft);
+      }
+
+      .callout.warning {
+        border-left-color: var(--gold);
+        background: var(--gold-soft);
+      }
+
+      .table-wrap {
+        overflow-x: auto;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+      }
+
+      table {
+        width: 100%;
+        min-width: 860px;
+        border-collapse: collapse;
+      }
+
+      th,
+      td {
+        padding: 13px 15px;
+        border-bottom: 1px solid var(--line);
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th {
+        background: #eef2ef;
+        font-size: 0.76rem;
+        text-transform: uppercase;
+      }
+
+      tr:last-child td {
+        border-bottom: 0;
+      }
+
+      .status {
+        display: inline-block;
+        min-width: 112px;
+        color: var(--green);
+        font-size: 0.78rem;
+        font-weight: 760;
+      }
+
+      .status.foundation {
+        color: var(--red);
+      }
+
+      .status.normalize {
+        color: var(--gold);
+      }
+
+      .metric {
+        padding: 16px 0;
+        border-top: 1px solid var(--line);
+      }
+
+      .metric:nth-child(-n + 2) {
+        border-top: 0;
+        padding-top: 0;
+      }
+
+      .metric p {
+        color: var(--muted);
+        font-size: 0.94rem;
+      }
+
+      details {
+        border-top: 1px solid var(--line);
+      }
+
+      details:last-child {
+        border-bottom: 1px solid var(--line);
+      }
+
+      summary {
+        cursor: pointer;
+        padding: 16px 0;
+        color: var(--ink);
+        font-weight: 760;
+      }
+
+      summary:hover {
+        color: var(--green);
+      }
+
+      .requirements {
+        padding: 0 0 18px;
+      }
+
+      .requirements li {
+        padding-left: 4px;
+      }
+
+      .flow {
+        padding: 18px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+      }
+
+      .flow .trigger {
+        margin-bottom: 8px;
+        color: var(--green);
+        font-size: 0.8rem;
+        font-weight: 760;
+      }
+
+      .acceptance {
+        counter-reset: example;
+        list-style: none;
+        padding: 0;
+      }
+
+      .acceptance li {
+        position: relative;
+        padding: 16px 16px 16px 48px;
+        margin: 0;
+        border-top: 1px solid var(--line);
+      }
+
+      .acceptance li:last-child {
+        border-bottom: 1px solid var(--line);
+      }
+
+      .acceptance li::before {
+        counter-increment: example;
+        content: counter(example);
+        position: absolute;
+        left: 12px;
+        top: 16px;
+        width: 24px;
+        height: 24px;
+        border: 1px solid var(--line-strong);
+        border-radius: 50%;
+        color: var(--green);
+        font-size: 0.76rem;
+        font-weight: 800;
+        line-height: 22px;
+        text-align: center;
+      }
+
+      .footer-note {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        gap: 12px;
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+
+      @media (max-width: 800px) {
+        .document {
+          width: 100%;
+          margin: 0;
+          border-left: 0;
+          border-right: 0;
+        }
+
+        header,
+        section,
+        .toc {
+          padding-left: 22px;
+          padding-right: 22px;
+        }
+
+        .decision-grid,
+        .metric-grid,
+        .flow-grid,
+        .boundary-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .metric:nth-child(2) {
+          border-top: 1px solid var(--line);
+          padding-top: 16px;
+        }
+      }
+
+      @media print {
+        body {
+          background: white;
+        }
+
+        .document {
+          width: 100%;
+          margin: 0;
+          border: 0;
+          box-shadow: none;
+        }
+
+        .toc {
+          display: none;
+        }
+
+        section,
+        header,
+        .decision,
+        .flow,
+        table,
+        details {
+          break-inside: avoid;
+        }
+
+        details:not([open]) > *:not(summary) {
+          display: block;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="document">
+      <header>
+        <p class="eyebrow">Athena product requirements · July 9, 2026</p>
+        <h1>Reports workspace</h1>
+        <p class="lede">
+          A store-scoped, full-admin workspace that connects money, merchandise,
+          inventory position, and operational evidence without pretending Athena
+          is a general ledger.
+        </p>
+        <div class="meta" aria-label="Document metadata">
+          <span><strong>Scope:</strong> selected store</span>
+          <span><strong>Access:</strong> full admin</span>
+          <span><strong>Default:</strong> week to date</span>
+          <span><strong>Item level:</strong> SKU first</span>
+          <span><strong>Action model:</strong> highlight and route</span>
+        </div>
+      </header>
+
+      <nav class="toc" aria-label="Document sections">
+        <a href="#thesis">Thesis</a>
+        <a href="#decisions">Decisions</a>
+        <a href="#grounding">Athena grounding</a>
+        <a href="#flows">Flows</a>
+        <a href="#metrics">Metric contract</a>
+        <a href="#requirements">Requirements</a>
+        <a href="#acceptance">Acceptance</a>
+        <a href="#boundaries">Boundaries</a>
+      </nav>
+
+      <section id="thesis">
+        <h2>Product thesis</h2>
+        <p>
+          Athena already stores useful business facts across Store Pulse, Daily
+          Operations, Cash Controls, Procurement, SKU Activity, Transactions,
+          Services, online orders, and storefront analytics. Reports should
+          compose those facts into one balanced business read, explain material
+          changes, disclose incomplete evidence, and preserve a path back to
+          every supporting record.
+        </p>
+        <div class="callout">
+          <strong>Reports interprets and routes.</strong> Procurement, Cash
+          Controls, Transactions, Product editing, SKU Activity, Daily
+          Operations, and Terminal health continue to own corrective action.
+        </div>
+      </section>
+
+      <section id="decisions">
+        <h2>Approved decisions</h2>
+        <div class="decision-grid">
+          <article class="decision green">
+            <span class="label">Overview</span>
+            <h3>Balanced business pulse</h3>
+            <p>
+              Lead with unified net sales, merchandise gross profit, units sold,
+              current inventory value, and attention signals.
+            </p>
+          </article>
+          <article class="decision blue">
+            <span class="label">Time</span>
+            <h3>Week to date</h3>
+            <p>
+              Compare with the same elapsed portion of the prior week in the
+              store's operating timezone.
+            </p>
+          </article>
+          <article class="decision gold">
+            <span class="label">Revenue</span>
+            <h3>Unified, with explicit lanes</h3>
+            <p>
+              Combine POS, storefront, products, and services at the top line;
+              keep merchandise and service profitability distinct.
+            </p>
+          </article>
+          <article class="decision red">
+            <span class="label">Cost</span>
+            <h3>Moving weighted average</h3>
+            <p>
+              Receipts update future SKU cost, sales snapshot cost, and missing
+              cost remains visible without blocking trade.
+            </p>
+          </article>
+          <article class="decision">
+            <span class="label">Items</span>
+            <h3>SKU first</h3>
+            <p>
+              SKU is authoritative for stock, cost, velocity, and replenishment;
+              products and categories roll up from SKU facts.
+            </p>
+          </article>
+          <article class="decision">
+            <span class="label">Refunds</span>
+            <h3>Dual basis</h3>
+            <p>
+              Money moves in the refund period, while adjusted SKU performance
+              attributes the outcome to the original sale.
+            </p>
+          </article>
+          <article class="decision">
+            <span class="label">Evidence</span>
+            <h3>Every aggregate drills down</h3>
+            <p>
+              SKU performance links to every attached transaction and then to
+              full SKU Activity for non-sale evidence.
+            </p>
+          </article>
+          <article class="decision">
+            <span class="label">Protection</span>
+            <h3>Full-admin only</h3>
+            <p>
+              Route and backend reads protect revenue, cost, margin, valuation,
+              and evidence from manager elevation and POS-only access.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section id="grounding">
+        <h2>Grounded in Athena today</h2>
+        <p class="muted">
+          The requirement separates reusable facts from normalization work and
+          new reporting foundations.
+        </p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Domain</th>
+                <th>Status</th>
+                <th>Current evidence</th>
+                <th>Reports consequence</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Storefront engagement</td>
+                <td><span class="status">Reusable</span></td>
+                <td>
+                  Shoppers, product views, checkout activity, recent events.
+                </td>
+                <td>
+                  Move under a secondary Storefront view; not financial truth.
+                </td>
+              </tr>
+              <tr>
+                <td>POS pulse</td>
+                <td><span class="status">Reusable</span></td>
+                <td>
+                  Sales, transaction count, average ticket, units, tender mix,
+                  trends, top items.
+                </td>
+                <td>
+                  Reuse operator pulse concepts in the broader business
+                  contract.
+                </td>
+              </tr>
+              <tr>
+                <td>Daily financial operations</td>
+                <td><span class="status">Reusable</span></td>
+                <td>
+                  Adjustments, refunds, inventory expense, payment totals, cash
+                  variance, completeness.
+                </td>
+                <td>
+                  Preserve close-aware evidence and trusted operating dates.
+                </td>
+              </tr>
+              <tr>
+                <td>Unified revenue</td>
+                <td><span class="status normalize">Normalize</span></td>
+                <td>
+                  POS, online orders, service lines, service-case allocations.
+                </td>
+                <td>Create one recognition and deduplication contract.</td>
+              </tr>
+              <tr>
+                <td>Current inventory</td>
+                <td><span class="status">Reusable</span></td>
+                <td>
+                  On-hand units, sellable availability, price, optional unit
+                  cost.
+                </td>
+                <td>Show current units and valuation coverage.</td>
+              </tr>
+              <tr>
+                <td>Weighted-average cost</td>
+                <td><span class="status foundation">Foundation</span></td>
+                <td>
+                  Purchase-order line cost exists; receiving currently
+                  increments quantity only.
+                </td>
+                <td>
+                  Add durable future cost and immutable sale-cost evidence.
+                </td>
+              </tr>
+              <tr>
+                <td>Trusted SKU transaction history</td>
+                <td><span class="status foundation">Foundation</span></td>
+                <td>
+                  Provisional history has dedicated lookups; ordinary sale lines
+                  do not.
+                </td>
+                <td>Provide reporting-grade SKU transaction evidence.</td>
+              </tr>
+              <tr>
+                <td>Inventory movement</td>
+                <td><span class="status normalize">Normalize</span></td>
+                <td>
+                  Quantity provenance exists for many sales, receipts, returns,
+                  adjustments, and service flows.
+                </td>
+                <td>
+                  Complete stock-changing paths and add time and cost evidence.
+                </td>
+              </tr>
+              <tr>
+                <td>Procurement</td>
+                <td><span class="status">Reusable</span></td>
+                <td>
+                  PO cost, ordered and received units, vendors, expected dates,
+                  fixed pressure rules.
+                </td>
+                <td>
+                  Show commitments and cover; add velocity after sales
+                  normalization.
+                </td>
+              </tr>
+              <tr>
+                <td>Service profitability</td>
+                <td><span class="status foundation">Foundation</span></td>
+                <td>
+                  Revenue, payments, staff, and material usage exist; labor cost
+                  does not.
+                </td>
+                <td>
+                  Include service revenue without claiming service or combined
+                  profit.
+                </td>
+              </tr>
+              <tr>
+                <td>General operating expenses</td>
+                <td><span class="status foundation">Not recorded</span></td>
+                <td>
+                  Current expense transactions are SKU inventory consumption.
+                </td>
+                <td>
+                  Do not claim operating expense, cash flow, or net profit.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="flows">
+        <h2>Key operator flows</h2>
+        <div class="flow-grid">
+          <article class="flow">
+            <p class="trigger">Open Reports</p>
+            <h3>Read the business pulse</h3>
+            <p>
+              Review week-to-date money, merchandise profit, units, inventory
+              value, and attention against the equivalent prior-week window.
+            </p>
+          </article>
+          <article class="flow">
+            <p class="trigger">Open a SKU</p>
+            <h3>Connect performance to evidence</h3>
+            <p>
+              Inspect sales, returns, margin, stock, velocity, cover, and every
+              attached transaction before opening full SKU Activity.
+            </p>
+          </article>
+          <article class="flow">
+            <p class="trigger">Inspect inventory</p>
+            <h3>Understand capital exposure</h3>
+            <p>
+              Compare current value, receipts, movement, purchase commitments,
+              incoming cover, stockout risk, and weak inventory.
+            </p>
+          </article>
+          <article class="flow">
+            <p class="trigger">Follow attention</p>
+            <h3>Move to the owning workflow</h3>
+            <p>
+              See affected value, the rule that fired, completeness context, and
+              one destination for resolution.
+            </p>
+          </article>
+          <article class="flow">
+            <p class="trigger">Review a refund</p>
+            <h3>Keep money and item semantics clear</h3>
+            <p>
+              Recognize refund-period money movement while attributing adjusted
+              SKU outcome to the original sale and actual restock disposition.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section id="metrics">
+        <h2>Metric contract</h2>
+        <div class="metric-grid">
+          <article class="metric">
+            <h3>Unified net sales</h3>
+            <p>
+              Recognized product and service sales across POS and storefront,
+              less refunds recognized in the selected period, without duplicate
+              settlement paths.
+            </p>
+          </article>
+          <article class="metric">
+            <h3>Merchandise gross profit</h3>
+            <p>
+              Eligible merchandise net sales less immutable recognized
+              merchandise cost. Service revenue is excluded from this profit
+              lane.
+            </p>
+          </article>
+          <article class="metric">
+            <h3>Cost coverage</h3>
+            <p>
+              Merchandise revenue with known immutable cost divided by total
+              eligible merchandise revenue, with the uncovered amount visible.
+            </p>
+          </article>
+          <article class="metric">
+            <h3>Current inventory value</h3>
+            <p>
+              Current on-hand units multiplied by trustworthy weighted-average
+              SKU cost, with uncosted units disclosed.
+            </p>
+          </article>
+          <article class="metric">
+            <h3>Sales velocity</h3>
+            <p>
+              Net recognized units per active day over a disclosed lookback
+              window.
+            </p>
+          </article>
+          <article class="metric">
+            <h3>Estimated days of cover</h3>
+            <p>
+              Current sellable units divided by disclosed daily velocity;
+              unavailable when history is insufficient.
+            </p>
+          </article>
+          <article class="metric">
+            <h3>Purchase commitment</h3>
+            <p>
+              Remaining ordered quantity and value for purchase orders not fully
+              received or cancelled, split between planned and inbound state.
+            </p>
+          </article>
+          <article class="metric">
+            <h3>Refund activity</h3>
+            <p>
+              Financial refund value processed during the period, regardless of
+              original sale date.
+            </p>
+          </article>
+          <article class="metric">
+            <h3>Adjusted SKU performance</h3>
+            <p>
+              Item outcome with later refunds, returns, and corrections
+              attributed to the original sale for performance analysis.
+            </p>
+          </article>
+          <article class="metric">
+            <h3>Inventory consumed</h3>
+            <p>
+              SKU quantity and item cost recorded by expense or service usage;
+              never labeled as complete operating expense.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section id="requirements">
+        <h2>Requirements</h2>
+        <p class="muted">
+          Expand each group to review the complete approved behavioral contract.
+        </p>
+
+        <details open>
+          <summary>Workspace and access · R1-R12</summary>
+          <ol class="requirements">
+            <li>
+              <strong>R1.</strong> Scope Reports to the currently selected
+              store.
+            </li>
+            <li>
+              <strong>R2.</strong> Require full-admin access at route and
+              backend read boundaries.
+            </li>
+            <li>
+              <strong>R3.</strong> Do not expose Reports through manager
+              elevation or <code>pos_only</code> access.
+            </li>
+            <li>
+              <strong>R4.</strong> Default to week to date in the store
+              operating timezone.
+            </li>
+            <li>
+              <strong>R5.</strong> Compare with the same elapsed portion of the
+              prior week.
+            </li>
+            <li>
+              <strong>R6.</strong> Support today, prior week, trailing 30 days,
+              and custom ranges.
+            </li>
+            <li>
+              <strong>R7.</strong> Show selected range, comparison range,
+              refresh time, and partial days.
+            </li>
+            <li>
+              <strong>R8.</strong> Present a balanced money-and-inventory pulse.
+            </li>
+            <li>
+              <strong>R9.</strong> Lead with net sales, merchandise profit,
+              units, inventory value, and attention.
+            </li>
+            <li>
+              <strong>R10.</strong> Move storefront engagement analytics under a
+              secondary Storefront view.
+            </li>
+            <li>
+              <strong>R11.</strong> Reuse Athena workspace metric and drill-down
+              patterns.
+            </li>
+            <li>
+              <strong>R12.</strong> Format all amounts with the active store
+              currency.
+            </li>
+          </ol>
+        </details>
+
+        <details open>
+          <summary>Unified revenue and profitability · R13-R22</summary>
+          <ol class="requirements" start="13">
+            <li>
+              <strong>R13.</strong> Include completed POS products, POS
+              services, storefront orders, and recognized service-case revenue.
+            </li>
+            <li>
+              <strong>R14.</strong> Prevent duplicate counting across settlement
+              and source records.
+            </li>
+            <li>
+              <strong>R15.</strong> Show product, service, POS, and storefront
+              contributions beneath the total.
+            </li>
+            <li>
+              <strong>R16.</strong> Give gross sales, discounts, refunds, and
+              net sales one documented meaning.
+            </li>
+            <li>
+              <strong>R17.</strong> Calculate merchandise COGS from immutable
+              sale-line cost.
+            </li>
+            <li>
+              <strong>R18.</strong> Define merchandise gross profit as eligible
+              net sales less recognized COGS.
+            </li>
+            <li>
+              <strong>R19.</strong> Calculate margin only on merchandise revenue
+              with known cost.
+            </li>
+            <li>
+              <strong>R20.</strong> Show cost coverage beside every profit or
+              margin view.
+            </li>
+            <li>
+              <strong>R21.</strong> Keep service revenue separate from
+              merchandise profit until service cost exists.
+            </li>
+            <li>
+              <strong>R22.</strong> Do not present combined product-and-service
+              gross profit while service delivery cost is unknown.
+            </li>
+          </ol>
+        </details>
+
+        <details open>
+          <summary>SKU-first item performance · R23-R30</summary>
+          <ol class="requirements" start="23">
+            <li>
+              <strong>R23.</strong> Use SKU as the authoritative
+              item-performance level.
+            </li>
+            <li>
+              <strong>R24.</strong> Derive product and category totals from SKU
+              facts.
+            </li>
+            <li>
+              <strong>R25.</strong> Show units, returns, net movement, sales,
+              cost, profit, margin, stock, value, velocity, cover, and
+              comparison where trustworthy.
+            </li>
+            <li>
+              <strong>R26.</strong> Support finding winners, slow movers,
+              low-cover winners, weak-margin volume, and trapped capital.
+            </li>
+            <li>
+              <strong>R27.</strong> Distinguish on-hand inventory from sellable
+              availability.
+            </li>
+            <li>
+              <strong>R28.</strong> Withhold period inventory metrics when
+              opening, inbound, or outbound evidence is incomplete.
+            </li>
+            <li>
+              <strong>R29.</strong> Disclose the velocity window behind
+              estimated cover.
+            </li>
+            <li>
+              <strong>R30.</strong> Do not label time since movement or sale as
+              true stock age.
+            </li>
+          </ol>
+        </details>
+
+        <details open>
+          <summary>Highlight and route · R31-R38</summary>
+          <ol class="requirements" start="31">
+            <li>
+              <strong>R31.</strong> Highlight deterministic integrity, money,
+              inventory, and operational exceptions.
+            </li>
+            <li>
+              <strong>R32.</strong> Explain the change, affected value, rule,
+              and completeness limitation.
+            </li>
+            <li>
+              <strong>R33.</strong> Provide one route to the workflow that owns
+              resolution.
+            </li>
+            <li>
+              <strong>R34.</strong> Route stock-cover and inbound issues to
+              Procurement.
+            </li>
+            <li>
+              <strong>R35.</strong> Route register variance to Cash Controls or
+              session evidence.
+            </li>
+            <li>
+              <strong>R36.</strong> Route refund, discount, void, and correction
+              signals to transaction evidence.
+            </li>
+            <li>
+              <strong>R37.</strong> Route missing cost to SKU editing without
+              blocking sales.
+            </li>
+            <li>
+              <strong>R38.</strong> Route uncertain POS synchronization to
+              Terminal health.
+            </li>
+          </ol>
+        </details>
+
+        <details open>
+          <summary>Evidence and drill-down · R39-R46</summary>
+          <ol class="requirements" start="39">
+            <li>
+              <strong>R39.</strong> Preserve a path from every aggregate to
+              supporting records.
+            </li>
+            <li>
+              <strong>R40.</strong> Show all selected-period transactions
+              attached to a trusted SKU with financial and adjustment evidence.
+            </li>
+            <li>
+              <strong>R41.</strong> Route to full SKU Activity for non-sale
+              movement and provenance.
+            </li>
+            <li>
+              <strong>R42.</strong> State when results are truncated, omitted,
+              stale, or awaiting POS synchronization.
+            </li>
+            <li>
+              <strong>R43.</strong> Keep missing cost distinct from legitimate
+              zero cost.
+            </li>
+            <li>
+              <strong>R44.</strong> Never block trade because cost is missing.
+            </li>
+            <li>
+              <strong>R45.</strong> Never substitute current cost for unknown
+              historical sale cost.
+            </li>
+            <li>
+              <strong>R46.</strong> Use Daily Close completeness evidence to
+              inform trust for closed days.
+            </li>
+          </ol>
+        </details>
+
+        <details open>
+          <summary>Cost and inventory valuation · R47-R52</summary>
+          <ol class="requirements" start="47">
+            <li>
+              <strong>R47.</strong> Maintain moving weighted-average cost at SKU
+              level.
+            </li>
+            <li>
+              <strong>R48.</strong> Update future weighted-average cost from
+              eligible on-hand cost and costed receipts.
+            </li>
+            <li>
+              <strong>R49.</strong> Snapshot applicable cost on every recognized
+              merchandise sale line.
+            </li>
+            <li>
+              <strong>R50.</strong> Reintroduce sellable returns at the original
+              known sale cost.
+            </li>
+            <li>
+              <strong>R51.</strong> Apply manual cost corrections prospectively
+              unless an explicit auditable backfill occurs.
+            </li>
+            <li>
+              <strong>R52.</strong> Keep unknown-cost inventory visibly uncosted
+              until a trustworthy basis exists.
+            </li>
+          </ol>
+        </details>
+
+        <details open>
+          <summary>Refund and return semantics · R53-R58</summary>
+          <ol class="requirements" start="53">
+            <li>
+              <strong>R53.</strong> Recognize financial refunds when they occur.
+            </li>
+            <li>
+              <strong>R54.</strong> Keep refund activity visible in the refund
+              period.
+            </li>
+            <li>
+              <strong>R55.</strong> Attribute adjusted SKU outcome to the
+              original sale.
+            </li>
+            <li>
+              <strong>R56.</strong> Distinguish refund, return, restock,
+              exchange, void, and correction.
+            </li>
+            <li>
+              <strong>R57.</strong> Reverse COGS only when inventory disposition
+              supports it.
+            </li>
+            <li>
+              <strong>R58.</strong> Keep non-restocked merchandise represented
+              as loss, expense, or adjustment.
+            </li>
+          </ol>
+        </details>
+
+        <details open>
+          <summary>Expense and service boundaries · R59-R63</summary>
+          <ol class="requirements" start="59">
+            <li>
+              <strong>R59.</strong> Label existing expense transactions as
+              inventory expense or inventory consumed.
+            </li>
+            <li>
+              <strong>R60.</strong> Do not describe SKU expense transactions as
+              complete operating expenses.
+            </li>
+            <li>
+              <strong>R61.</strong> Do not claim net profit, cash flow, payroll,
+              rent, utilities, or unrecorded overhead.
+            </li>
+            <li>
+              <strong>R62.</strong> Add service profitability later without
+              redefining merchandise metrics.
+            </li>
+            <li>
+              <strong>R63.</strong> Keep historical service cost unknown unless
+              explicitly and audibly backfilled.
+            </li>
+          </ol>
+        </details>
+      </section>
+
+      <section id="acceptance">
+        <h2>Acceptance examples</h2>
+        <ol class="acceptance">
+          <li>
+            Wednesday afternoon compares Monday through the current Wednesday
+            time with the equivalent prior-week window and identifies Wednesday
+            as partial.
+          </li>
+          <li>
+            A mixed POS product-and-service transaction, its service case, and a
+            storefront order each contribute recognized revenue exactly once.
+          </li>
+          <li>
+            A period with 90% costed merchandise revenue shows profit only for
+            eligible revenue, 90% coverage, and the uncovered amount.
+          </li>
+          <li>
+            Product variants with different stock, cost, and velocity remain
+            separate SKU rows while their product rollup reconciles exactly.
+          </li>
+          <li>
+            A trusted SKU with POS and storefront sales exposes every attached
+            transaction and a route to its complete SKU Activity history.
+          </li>
+          <li>
+            Ten units at GHS 20 plus ten received at GHS 30 produce a future
+            weighted-average cost of GHS 25 without rewriting older sales.
+          </li>
+          <li>
+            A Week 2 refund for a Week 1 sale appears in Week 2 money movement,
+            adjusts original SKU performance, and increases inventory only when
+            the item is restocked.
+          </li>
+          <li>
+            A low-cover fast mover with no inbound PO explains the risk and
+            links to Procurement without creating a purchase order in Reports.
+          </li>
+          <li>
+            Delayed terminal synchronization marks affected values incomplete
+            and links to terminal evidence rather than presenting them as final.
+          </li>
+          <li>
+            SKU inventory consumed through an expense workflow is labeled
+            inventory consumed; Reports does not present operating or net
+            profit.
+          </li>
+        </ol>
+      </section>
+
+      <section id="boundaries">
+        <h2>Product boundaries</h2>
+        <div class="boundary-grid">
+          <article class="decision green">
+            <h3>Inside this product</h3>
+            <ul>
+              <li>Store-level business performance</li>
+              <li>Unified recognized revenue</li>
+              <li>Merchandise profit with coverage</li>
+              <li>SKU movement, stock, value, and evidence</li>
+              <li>Purchase commitments and incoming cover</li>
+              <li>Deterministic signals and workflow routes</li>
+              <li>Freshness and completeness disclosure</li>
+            </ul>
+          </article>
+          <article class="decision red">
+            <h3>Outside this product</h3>
+            <ul>
+              <li>Organization-wide rollups</li>
+              <li>POS-only or manager-elevation access</li>
+              <li>Mutation and operational work queues</li>
+              <li>General ledger and accounting net profit</li>
+              <li>Service profit before delivery cost exists</li>
+              <li>FIFO, true stock age, and lot analysis</li>
+              <li>Opaque forecasting and configurable targets</li>
+            </ul>
+          </article>
+        </div>
+        <div class="callout warning" style="margin-top: 18px">
+          <strong>Truth over availability.</strong> Missing cost, incomplete
+          movement history, or delayed POS data withholds or qualifies affected
+          metrics. Reports never fills gaps with current values presented as
+          historical fact.
+        </div>
+      </section>
+
+      <section>
+        <h2>Planning handoff</h2>
+        <p>
+          Planning must resolve canonical revenue recognition, weighted-average
+          behavior for legacy unknown-cost stock, bounded custom-range
+          aggregation, deterministic signal precedence, trusted-SKU transaction
+          lookup, and the relationship between live partial days and completed
+          Daily Close snapshots.
+        </p>
+        <div class="footer-note">
+          <span>Next workflow: <strong>/ce-plan</strong></span>
+          <a href="2026-07-09-reports-workspace-requirements.md"
+            >Open the Markdown source</a
+          >
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

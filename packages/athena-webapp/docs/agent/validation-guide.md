@@ -25,6 +25,20 @@ Run:
 
 Run this for changed browser-facing TypeScript or TSX files so introduced ESLint failures are caught before PR handoff.
 
+## Reporting fact, valuation, projection, and activation edits
+
+Touched surfaces: `convex/reporting`, `convex/schemas/reporting`, `shared/reportingContract.ts`
+
+Run:
+
+- `bun run --filter '@athena/webapp' test -- convex/reporting`
+- `bun run --filter '@athena/webapp' audit:convex`
+- `bun run --filter '@athena/webapp' lint:convex:changed`
+- `bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json`
+- `bun run --filter '@athena/webapp' build`
+
+Use this for reporting contracts, source adapters, canonical facts, valuation, projections, maintenance, access, public reads, health, or activation. Pair it with the owning source-domain scenario when a POS, storefront, service, payment, inventory, procurement, or Daily Close command emits new evidence. Source state and inventory effects remain atomic with the command; reporting projections remain replayable asynchronous work and must not decide operational success.
+
 ## Daily store operations lifecycle edits
 
 Touched surfaces: `convex/operations/dailyClose.ts`, `convex/operations/dailyOpening.ts`, `convex/operations/dailyOperations.ts`, `convex/schemas/operations/dailyClose.ts`, `convex/schemas/operations/dailyOpening.ts`, `src/components/operations/DailyCloseHistoryView.tsx`, `src/components/operations/DailyCloseView.tsx`, `src/components/operations/DailyOpeningView.tsx`, `src/components/operations/DailyOperationsView.tsx`, `src/components/app-sidebar.tsx`, `src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/index.tsx`, `src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close-history.tsx`, `src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close.tsx`, `src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/opening.tsx`

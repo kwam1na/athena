@@ -2,6 +2,7 @@ import { v } from "convex/values";
 
 export const paymentAllocationSchema = v.object({
   storeId: v.id("store"),
+  businessEventKey: v.optional(v.string()),
   organizationId: v.optional(v.id("organization")),
   targetType: v.string(),
   targetId: v.string(),
@@ -20,6 +21,7 @@ export const paymentAllocationSchema = v.object({
   registerSessionId: v.optional(v.id("registerSession")),
   onlineOrderId: v.optional(v.id("onlineOrder")),
   posTransactionId: v.optional(v.id("posTransaction")),
+  evidenceProductSkuIds: v.optional(v.array(v.id("productSku"))),
   externalReference: v.optional(v.string()),
   notes: v.optional(v.string()),
 });

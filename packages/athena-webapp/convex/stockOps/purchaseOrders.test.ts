@@ -8,15 +8,22 @@ import { assertConformsToExportedReturns } from "../lib/returnValidatorContract"
 const mockedAuthServer = vi.hoisted(() => ({
   getAuthUserId: vi.fn(),
 }));
+const reportingMocks = vi.hoisted(() => ({
+  appendReportingIngressWithCtx: vi.fn(),
+}));
 
 vi.mock("@convex-dev/auth/server", () => ({
   getAuthUserId: mockedAuthServer.getAuthUserId,
+}));
+vi.mock("../reporting/ingress", () => ({
+  appendReportingIngressWithCtx: reportingMocks.appendReportingIngressWithCtx,
 }));
 
 import {
   assertValidPurchaseOrderStatusTransition,
   calculatePurchaseOrderTotals,
   advancePurchaseOrderToOrderedCommand,
+  buildPurchaseOrderCommitmentStatusDelta,
   createPurchaseOrderCommand,
   createPurchaseOrderWithCtx,
   mapPurchaseOrderStatusToWorkItemStatus,
@@ -86,6 +93,29 @@ describe("stock ops purchase orders", () => {
       totalAmount: 5700,
       totalUnits: 5,
     });
+  });
+
+  it("releases only outstanding line commitment on cancellation or received close", () => {
+    expect(
+      buildPurchaseOrderCommitmentStatusDelta({
+        closesCommitment: true,
+        orderedQuantity: 5,
+        receivedQuantity: 2,
+        unitCost: 100,
+      }),
+    ).toEqual({
+      amountMinor: -300,
+      quantity: -3,
+      remainingQuantity: 3,
+    });
+    expect(
+      buildPurchaseOrderCommitmentStatusDelta({
+        closesCommitment: false,
+        orderedQuantity: 5,
+        receivedQuantity: 2,
+        unitCost: 100,
+      }),
+    ).toEqual({ amountMinor: 0, quantity: 0, remainingQuantity: 3 });
   });
 
   it("blocks invalid purchase-order status transitions", () => {
@@ -184,6 +214,7 @@ describe("stock ops purchase orders", () => {
     mockedAuthServer.getAuthUserId.mockResolvedValue("auth-user-1");
 
     const purchaseOrder = {
+      currency: "GHS",
       _id: "purchase-order-1",
       operationalWorkItemId: "work-item-1",
       organizationId: "org-1",
@@ -232,11 +263,25 @@ describe("stock ops purchase orders", () => {
           withIndex: vi.fn(() => ({
             collect: vi.fn(async () => []),
             first: vi.fn(async () => null),
-            take: vi.fn(async () => []),
+            take: vi.fn(async () =>
+              table === "purchaseOrderLineItem"
+                ? [
+                    {
+                      _id: "line-1",
+                      orderedQuantity: 5,
+                      productSkuId: "sku-1",
+                      purchaseOrderId: "purchase-order-1",
+                      receivedQuantity: 2,
+                      unitCost: 100,
+                    },
+                  ]
+                : [],
+            ),
           })),
         })),
       },
       runMutation,
+      scheduler: { runAfter: vi.fn().mockResolvedValue(undefined) },
     } as unknown as MutationCtx;
 
     const result = await updatePurchaseOrderStatusWithCtx(ctx, {
@@ -252,6 +297,22 @@ describe("stock ops purchase orders", () => {
       status: "cancelled",
       workItemId: "work-item-1",
     });
+    expect(reportingMocks.appendReportingIngressWithCtx).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        businessEventKey:
+          "purchase_order:purchase-order-1:commitment:cancelled:line:line-1",
+        lines: [
+          expect.objectContaining({
+            grossAmountMinor: -300,
+            lineKey: "line-1",
+            netAmountMinor: -300,
+            quantity: -3,
+          }),
+        ],
+        sourceEventType: "purchase_order_commitment_released",
+      }),
+    );
   });
 
   it("maps expected purchase-order creation failures to command-result user errors", () => {

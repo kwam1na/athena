@@ -4,6 +4,15 @@ export const onlineOrderItemSchema = v.object({
   isReady: v.optional(v.boolean()),
   isRefunded: v.optional(v.boolean()),
   isRestocked: v.optional(v.boolean()),
+  returnDisposition: v.optional(
+    v.union(
+      v.literal("sellable"),
+      v.literal("non_restocked"),
+      v.literal("damaged"),
+      v.literal("missing"),
+      v.literal("financial_only"),
+    ),
+  ),
   isUnavailable: v.optional(v.boolean()),
   feedbackRequested: v.optional(v.boolean()),
   feedbackRequestedAt: v.optional(v.number()),

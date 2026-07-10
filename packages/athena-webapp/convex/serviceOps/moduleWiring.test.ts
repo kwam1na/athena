@@ -36,8 +36,17 @@ describe("service ops module wiring", () => {
       "export const recordServiceInventoryUsage = mutation({"
     );
     expect(serviceCasesSource).toContain("export const recordServicePayment = mutation({");
-    expect(serviceCasesSource).toContain("recordInventoryMovementWithCtx");
+    expect(serviceCasesSource).toContain("applyInventoryEffectWithCtx");
+    expect(serviceCasesSource).toContain('usageType !== "planned"');
+    expect(serviceCasesSource).toContain('disposition: "service_consumption"');
+    expect(serviceCasesSource).toContain(
+      'sourceEventType: "service_completed"',
+    );
+    expect(serviceCasesSource).toContain(
+      '.query("posTransactionServiceLine")',
+    );
     expect(serviceCasesSource).toContain("recordPaymentAllocationWithCtx");
+    expect(serviceCasesSource).toContain("args.businessEventKey ??");
     expect(serviceCasesSource).toContain("updateOperationalWorkItemStatus");
   });
 

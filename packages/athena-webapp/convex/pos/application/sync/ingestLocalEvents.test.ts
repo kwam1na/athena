@@ -3690,9 +3690,25 @@ describe("createLocalSyncIngestionService", () => {
     });
     const repository = createConvexLocalSyncRepository(ctx as never);
 
-    await repository.patchProductSku("sku-1" as never, {
-      inventoryCount: 7,
-      quantityAvailable: 7,
+    await repository.applyCommerceInventoryEffect?.({
+      activityType: "test",
+      businessEventKey: "test:sku-1",
+      completeness: "partial",
+      contentFingerprint: "test",
+      disposition: "stock_correction",
+      effectType: "adjustment",
+      kind: "outbound",
+      movementType: "test",
+      occurrenceAt: 10,
+      organizationId: "org-1" as never,
+      productId: "product-1" as never,
+      productSkuId: "sku-1" as never,
+      quantity: 1,
+      sellableQuantityDelta: -1,
+      sourceDomain: "inventory",
+      sourceId: "test",
+      sourceType: "test",
+      storeId: "store-1" as never,
     });
     await repository.flushCatalogSummaryRefreshes?.();
 
@@ -4255,6 +4271,7 @@ function createFakeConvexCtx(
         queriedTables.push(tableName);
         const filters: Array<[string, unknown]> = [];
         const gtFilters: Array<[string, number]> = [];
+        const lteFilters: Array<[string, number]> = [];
         const query = {
           withIndex: (_indexName: string, build: (q: any) => unknown) => {
             const indexQuery = {
@@ -4264,6 +4281,10 @@ function createFakeConvexCtx(
               },
               gt(field: string, value: number) {
                 gtFilters.push([field, value]);
+                return indexQuery;
+              },
+              lte(field: string, value: number) {
+                lteFilters.push([field, value]);
                 return indexQuery;
               },
             };
@@ -4278,6 +4299,10 @@ function createFakeConvexCtx(
                   gtFilters.every(
                     ([field, value]) =>
                       typeof row[field] === "number" && row[field] > value,
+                  ) &&
+                  lteFilters.every(
+                    ([field, value]) =>
+                      typeof row[field] === "number" && row[field] <= value,
                   ),
               )
               .slice(0, limit);
@@ -4290,9 +4315,16 @@ function createFakeConvexCtx(
                   gtFilters.every(
                     ([field, value]) =>
                       typeof row[field] === "number" && row[field] > value,
+                  ) &&
+                  lteFilters.every(
+                    ([field, value]) =>
+                      typeof row[field] === "number" && row[field] <= value,
                   ),
               ) ?? null
             );
+          },
+          order() {
+            return query;
           },
           async first() {
             return this.unique();
@@ -4304,12 +4336,19 @@ function createFakeConvexCtx(
                 gtFilters.every(
                   ([field, value]) =>
                     typeof row[field] === "number" && row[field] > value,
+                ) &&
+                lteFilters.every(
+                  ([field, value]) =>
+                    typeof row[field] === "number" && row[field] <= value,
                 ),
             );
           },
         };
         return query;
       },
+    },
+    scheduler: {
+      runAfter: vi.fn(),
     },
   };
 }
@@ -5188,8 +5227,23 @@ function createFakeSyncRepository(
     async createTransactionServiceLine() {
       return `transaction-service-line-${nextId++}` as never;
     },
-    async patchProductSku(productSkuId, patch) {
-      productPatches.push({ productSkuId, patch });
+    async applyCommerceInventoryEffect(input) {
+      const productSku = skus.find(
+        (candidate) => candidate._id === input.productSkuId,
+      );
+      productPatches.push({
+        productSkuId: input.productSkuId,
+        patch: {
+          inventoryCount: productSku
+            ? productSku.inventoryCount -
+              (input.kind === "outbound" ? input.quantity : 0)
+            : undefined,
+          quantityAvailable: productSku
+            ? productSku.quantityAvailable + input.sellableQuantityDelta
+            : undefined,
+        },
+      });
+      return "inserted";
     },
     async recordSaleInventoryMovement(input) {
       if (
@@ -5209,6 +5263,19 @@ function createFakeSyncRepository(
         return "existing";
       }
       recordedSaleInventoryMovements.push(input);
+      const productSku = skus.find(
+        (candidate) => candidate._id === input.productSkuId,
+      );
+      if (productSku) {
+        productPatches.push({
+          productSkuId: input.productSkuId,
+          patch: {
+            inventoryCount: productSku.inventoryCount - input.quantity,
+            quantityAvailable:
+              productSku.quantityAvailable - input.quantity,
+          },
+        });
+      }
       return "inserted";
     },
     async createPaymentAllocation(input) {

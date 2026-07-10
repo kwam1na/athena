@@ -49,6 +49,10 @@ export function resolveStockInputUpdate(
   };
 }
 
+export function resolveVariantNumericInputValue(value?: number): number | "" {
+  return value ?? "";
+}
+
 export type TrustedInventoryReviewClickAction =
   | "make_visible"
   | "refresh_review"
@@ -492,21 +496,22 @@ export function resolveTrustedInventoryReviewState({
   };
 }
 
-export function parseVariantDisplayMoney(value?: number): number {
+export function parseVariantDisplayMoney(value?: number): number | undefined {
   if (value === undefined) {
-    return 0;
+    return undefined;
   }
 
-  return parseDisplayAmountInput(String(value)) ?? 0;
+  return parseDisplayAmountInput(String(value));
 }
 
 export function buildTrustedInventoryMoneyPayload(
   variant: Pick<ProductVariant, "cost" | "netPrice">,
   areProcessingFeesAbsorbed?: boolean,
-): { netPrice: number; price: number; unitCost: number } {
-  const netPrice = parseVariantDisplayMoney(variant.netPrice);
+): { netPrice: number; price: number; unitCost?: number } {
+  const netPrice = parseVariantDisplayMoney(variant.netPrice) ?? 0;
   const netPriceDisplay = toDisplayAmount(netPrice);
   const processingFee = (netPriceDisplay * PAYSTACK_PROCESSING_FEE) / 100;
+  const unitCost = parseVariantDisplayMoney(variant.cost);
 
   const priceDisplay = areProcessingFeesAbsorbed
     ? netPriceDisplay
@@ -515,7 +520,7 @@ export function buildTrustedInventoryMoneyPayload(
   return {
     netPrice,
     price: parseDisplayAmountInput(String(priceDisplay)) ?? 0,
-    unitCost: parseVariantDisplayMoney(variant.cost),
+    ...(unitCost !== undefined ? { unitCost } : {}),
   };
 }
 
@@ -556,7 +561,9 @@ export function buildTrustedInventoryFinalizationPayload({
     reviewedQuantityAvailable: variant.quantityAvailable!,
     reviewedPrice: moneyPayload.price,
     reviewedNetPrice: moneyPayload.netPrice,
-    reviewedUnitCost: moneyPayload.unitCost,
+    ...(moneyPayload.unitCost !== undefined
+      ? { reviewedUnitCost: moneyPayload.unitCost }
+      : {}),
     reviewedIsVisible: variant.isVisible !== false,
     reviewedPosVisible: variant.posVisible !== false,
     sourceSurface: "product_edit",

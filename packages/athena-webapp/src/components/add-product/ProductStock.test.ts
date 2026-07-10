@@ -11,6 +11,7 @@ import {
   resolveTrustedInventoryReviewState,
   resolvePendingCheckoutSkuLinkPriceState,
   resolveStockInputUpdate,
+  resolveVariantNumericInputValue,
 } from "./ProductStockInput";
 import type { Product } from "~/types";
 import type { ProductVariant } from "./ProductStock";
@@ -40,6 +41,11 @@ describe("ProductStock money inputs", () => {
   it("preserves blank numeric fields as unset", () => {
     expect(parseVariantInputValue("netPrice", "")).toBeUndefined();
     expect(parseVariantInputValue("stock", " ")).toBeUndefined();
+  });
+
+  it("renders zero numeric values without turning missing values into zero", () => {
+    expect(resolveVariantNumericInputValue(0)).toBe(0);
+    expect(resolveVariantNumericInputValue(undefined)).toBe("");
   });
 
   it("keeps quantity available matched to the latest stock input", () => {

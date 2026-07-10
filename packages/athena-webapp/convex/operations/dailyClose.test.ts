@@ -1,7 +1,15 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import * as athenaUserAuth from "../lib/athenaUserAuth";
+const reportingIngressMocks = vi.hoisted(() => ({
+  appendReportingIngressWithCtx: vi.fn(),
+}));
+
+vi.mock("../reporting/ingress", () => ({
+  appendReportingIngressWithCtx:
+    reportingIngressMocks.appendReportingIngressWithCtx,
+}));
 import {
   buildDailyCloseSnapshotWithCtx,
   completeDailyClose,
@@ -452,7 +460,15 @@ function mockDailyCloseSnapshotAccess(role: "full_admin" | "pos_only") {
 }
 
 describe("end-of-day review backend foundation", () => {
+  beforeEach(() => {
+    reportingIngressMocks.appendReportingIngressWithCtx.mockResolvedValue({
+      ingressId: "reporting-ingress-1",
+      kind: "appended",
+    });
+  });
+
   afterEach(() => {
+    reportingIngressMocks.appendReportingIngressWithCtx.mockClear();
     vi.restoreAllMocks();
   });
 
@@ -2751,6 +2767,9 @@ describe("end-of-day review backend foundation", () => {
       assertConformsToExportedReturns(completeDailyClose, result),
     ).not.toThrow();
     expect(inserts).toEqual([]);
+    expect(
+      reportingIngressMocks.appendReportingIngressWithCtx,
+    ).not.toHaveBeenCalled();
   });
 
   it("requires manager approval before completing a review-only day", async () => {
@@ -3010,6 +3029,43 @@ describe("end-of-day review backend foundation", () => {
       "operationalEvent",
       "operationalEvent",
     ]);
+    const completedDailyCloseId =
+      result.kind === "ok" ? result.data.dailyClose._id : null;
+    expect(
+      reportingIngressMocks.appendReportingIngressWithCtx,
+    ).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        acceptedAt: Date.UTC(2026, 4, 7, 22),
+        adapterVersion: 1,
+        businessEventKey: `daily_close:${completedDailyCloseId}:completed:v1`,
+        closeSnapshot: {
+          acceptedDeficitAdjustmentMinor: 0,
+          acceptedNetSalesMinor: 12000,
+          acceptedRefundsMinor: 0,
+          completeness: "complete",
+          snapshotVersion: 1,
+        },
+        contentFingerprint: expect.stringContaining('"salesTotal":12000'),
+        currencyCode: "GHS",
+        currencyMinorUnitScale: 2,
+        netAmountMinor: 12000,
+        occurredAt: Date.UTC(2026, 4, 8) - 1,
+        sourceDomain: "daily_close",
+        sourceEventType: "daily_close_completed",
+        sourceReferences: [
+          {
+            relation: "owns",
+            sourceId: completedDailyCloseId,
+            sourceType: "daily_close",
+          },
+        ],
+      }),
+    );
+    expect(
+      vi.mocked(reportingIngressMocks.appendReportingIngressWithCtx).mock
+        .calls[0]?.[1]?.contentFingerprint,
+    ).toContain('"sourceCompleteness":{"complete":true');
     expect(
       inserts.find(
         (insert) =>
@@ -3962,6 +4018,18 @@ describe("end-of-day review backend foundation", () => {
     expect(reportSnapshot?.closeMetadata).not.toHaveProperty(
       "approvalProofId",
     );
+    expect(
+      reportingIngressMocks.appendReportingIngressWithCtx,
+    ).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        businessEventKey: expect.stringMatching(
+          /^daily_close:dailyClose-\d+:completed:v1$/,
+        ),
+        netAmountMinor: 12000,
+        sourceEventType: "daily_close_completed",
+      }),
+    );
     expect(reportSnapshot?.closeMetadata).not.toHaveProperty(
       "approvedByStaffProfileId",
     );
@@ -4335,6 +4403,9 @@ describe("end-of-day review backend foundation", () => {
       tables.get("dailyClose")?.get("daily-close-1"),
     ).not.toHaveProperty("automationRunId");
     expect(inserts).toEqual([]);
+    expect(
+      reportingIngressMocks.appendReportingIngressWithCtx,
+    ).not.toHaveBeenCalled();
   });
 
   it("requires policy evidence before automation completes an open close", async () => {
@@ -5427,6 +5498,30 @@ describe("end-of-day review backend foundation", () => {
       reportSnapshot: completedDailyCloseSnapshot(),
       status: "completed",
     });
+    expect(
+      reportingIngressMocks.appendReportingIngressWithCtx,
+    ).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        businessEventKey: "daily_close:daily-close-reopened:completed:v2",
+        closeSnapshot: expect.objectContaining({
+          snapshotVersion: 2,
+          supersedesCloseId: "daily-close-1",
+        }),
+        sourceReferences: [
+          {
+            relation: "owns",
+            sourceId: "daily-close-reopened",
+            sourceType: "daily_close",
+          },
+          {
+            relation: "supersedes",
+            sourceId: "daily-close-1",
+            sourceType: "daily_close",
+          },
+        ],
+      }),
+    );
   });
 
   it("lists completed daily close history for a store newest first and returns snapshot-backed detail", async () => {

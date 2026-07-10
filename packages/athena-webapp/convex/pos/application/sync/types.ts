@@ -17,6 +17,8 @@ import type {
   PosLocalSyncServiceLinePayload,
 } from "../../../../shared/posLocalSyncContract";
 import type { RegisterSessionCloseoutHold } from "./registerSessionCloseoutHolds";
+import type { ReportingIngressArgs } from "../../../reporting/ingress";
+import type { CommerceInventoryEffectArgs } from "../../../reporting/inventory/commerceEffects";
 
 export type { PosLocalSyncEventStatus, PosLocalSyncEventType };
 
@@ -248,6 +250,7 @@ export type PosSyncWorkflowTraceResult = {
 };
 
 export type SyncProjectionRepository = {
+  appendReportingIngress?(input: ReportingIngressArgs): Promise<unknown>;
   getTerminal(
     terminalId: Id<"posTerminal">,
   ): Promise<Doc<"posTerminal"> | null>;
@@ -643,10 +646,9 @@ export type SyncProjectionRepository = {
     totalPrice: number;
     notes?: string;
   }): Promise<Id<"posTransactionServiceLine">>;
-  patchProductSku(
-    productSkuId: Id<"productSku">,
-    patch: Partial<Omit<Doc<"productSku">, "_id" | "_creationTime">>,
-  ): Promise<void>;
+  applyCommerceInventoryEffect?(
+    input: CommerceInventoryEffectArgs,
+  ): Promise<"conflict" | "inserted" | "existing">;
   flushCatalogSummaryRefreshes?(): Promise<void>;
   recordSaleInventoryMovement(input: {
     storeId: Id<"store">;
@@ -658,14 +660,22 @@ export type SyncProjectionRepository = {
     registerSessionId: Id<"registerSession">;
     staffProfileId: Id<"staffProfile">;
     customerProfileId?: Id<"customerProfile">;
+    occurrenceAt: number;
+    recordedAt: number;
     transactionNumber: string;
-  }): Promise<"inserted" | "existing">;
+  }): Promise<"conflict" | "inserted" | "existing">;
+  getReportingInventoryEffectByBusinessEventKey?(input: {
+    businessEventKey: string;
+    sourceDomain: "pos";
+    storeId: Id<"store">;
+  }): Promise<Doc<"reportingInventoryEffect"> | null>;
   patchPosSession(
     posSessionId: Id<"posSession">,
     patch: Partial<Omit<Doc<"posSession">, "_id" | "_creationTime">>,
   ): Promise<void>;
   createPaymentAllocation(input: {
     storeId: Id<"store">;
+    businessEventKey: string;
     organizationId?: Id<"organization">;
     targetType: string;
     targetId: string;

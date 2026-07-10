@@ -7,18 +7,41 @@ type AthenaAuthCtx =
   | Pick<MutationCtx, "auth" | "db">;
 type OrganizationMemberRole = "full_admin" | "pos_only";
 
-function normalizeEmail(email: string) {
+export function normalizeAthenaUserEmail(email: string) {
   return email.trim().toLowerCase();
 }
 
-async function findAthenaUserByEmailWithCtx(ctx: AthenaAuthCtx, email: string) {
-  const normalizedEmail = normalizeEmail(email);
-  // Case-insensitive duplicate detection requires scanning until the schema gains
-  // a normalized-email index for athenaUser records.
+export async function findAthenaUserByEmailWithCtx(
+  ctx: AthenaAuthCtx,
+  email: string,
+) {
+  const normalizedEmail = normalizeAthenaUserEmail(email);
+  const indexedMatches = await ctx.db
+    .query("athenaUser")
+    .withIndex("by_normalizedEmail", (q) =>
+      q.eq("normalizedEmail", normalizedEmail),
+    )
+    .take(3);
+  const missingNormalizedIdentity = await ctx.db
+    .query("athenaUser")
+    .withIndex("by_normalizedEmail", (q) => q.eq("normalizedEmail", undefined))
+    .first();
+
+  if (!missingNormalizedIdentity) {
+    if (indexedMatches.length > 1) {
+      throw new Error(
+        "Multiple Athena users match this email. Resolve duplicate accounts before continuing.",
+      );
+    }
+    return indexedMatches[0] ?? null;
+  }
+
+  // Compatibility scan remains required until every row has an indexed value.
   // eslint-disable-next-line @convex-dev/no-collect-in-query
   const athenaUsers = await ctx.db.query("athenaUser").collect();
   const matchingUsers = athenaUsers.filter(
-    (athenaUser) => normalizeEmail(athenaUser.email) === normalizedEmail,
+    (athenaUser) =>
+      normalizeAthenaUserEmail(athenaUser.email) === normalizedEmail,
   );
 
   if (matchingUsers.length > 1) {
@@ -46,7 +69,7 @@ async function getAuthenticatedUserRecord(ctx: AthenaAuthCtx) {
   return {
     authUser,
     authUserId,
-    normalizedEmail: normalizeEmail(authUser.email),
+    normalizedEmail: normalizeAthenaUserEmail(authUser.email),
   };
 }
 
@@ -113,6 +136,7 @@ export async function syncAuthenticatedAthenaUserWithCtx(ctx: MutationCtx) {
 
   const athenaUserId = await ctx.db.insert("athenaUser", {
     email: authUserRecord.normalizedEmail,
+    normalizedEmail: authUserRecord.normalizedEmail,
   });
 
   return ctx.db.get("athenaUser", athenaUserId);

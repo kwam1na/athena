@@ -224,6 +224,52 @@ describe("SKU activity ledger helpers", () => {
     expect(tables.skuActivityEvent).toHaveLength(1);
   });
 
+  it("rejects an idempotency replay when line identity or quantity changes", async () => {
+    const { ctx, tables } = createIndexedDb({
+      productSku: new Map([
+        [
+          "sku-1",
+          {
+            _id: "sku-1",
+            inventoryCount: 5,
+            productId: "product-1",
+            quantityAvailable: 5,
+            sku: "CW-18",
+            storeId: "store-1",
+          },
+        ],
+      ]),
+    });
+    const args = {
+      activityType: "stock_sale",
+      idempotencyKey: "movement:1",
+      occurredAt: 1_000,
+      productSkuId: "sku-1" as Id<"productSku">,
+      sourceId: "sale-1",
+      sourceLineId: "line-1",
+      sourceType: "posTransaction",
+      status: "committed",
+      stockQuantityDelta: -1,
+      storeId: "store-1" as Id<"store">,
+    };
+
+    await recordSkuActivityEventWithCtx(ctx, args);
+
+    await expect(
+      recordSkuActivityEventWithCtx(ctx, {
+        ...args,
+        sourceLineId: "line-2",
+      }),
+    ).rejects.toThrow(/idempotency key conflicts/i);
+    await expect(
+      recordSkuActivityEventWithCtx(ctx, {
+        ...args,
+        stockQuantityDelta: -2,
+      }),
+    ).rejects.toThrow(/idempotency key conflicts/i);
+    expect(tables.skuActivityEvent).toHaveLength(1);
+  });
+
   it("records product-page trusted conversion evidence for support review", async () => {
     const { ctx, tables } = createIndexedDb({
       productSku: new Map([

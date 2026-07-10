@@ -264,6 +264,11 @@ export const HARNESS_APP_REGISTRY = [
               "Stock-adjustment, procurement, replenishment, receiving, and vendor flows layered over inventory state.",
           },
           {
+            path: "convex/reporting",
+            description:
+              "Versioned facts, inventory valuation, replayable projections, activation, evidence, and store-scoped reporting reads.",
+          },
+          {
             path: "convex/serviceOps",
             description:
               "Service catalog, appointment, and service-case workflows layered on operational work items.",
@@ -313,6 +318,30 @@ export const HARNESS_APP_REGISTRY = [
         touchedPaths: ["src", "shared", "types.ts"],
         commands: [{ kind: "script", script: "lint:frontend:changed" }],
         note: "Run this for changed browser-facing TypeScript or TSX files so introduced ESLint failures are caught before PR handoff.",
+      },
+      {
+        title: "Reporting fact, valuation, projection, and activation edits",
+        touchedPaths: [
+          "convex/reporting",
+          "convex/schemas/reporting",
+          "shared/reportingContract.ts",
+        ],
+        commands: [
+          {
+            kind: "raw",
+            command:
+              "bun run --filter '@athena/webapp' test -- convex/reporting",
+          },
+          { kind: "script", script: "audit:convex" },
+          { kind: "script", script: "lint:convex:changed" },
+          {
+            kind: "raw",
+            command:
+              "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
+          },
+          { kind: "script", script: "build" },
+        ],
+        note: "Use this for reporting contracts, source adapters, canonical facts, valuation, projections, maintenance, access, public reads, health, or activation. Pair it with the owning source-domain scenario when a POS, storefront, service, payment, inventory, procurement, or Daily Close command emits new evidence. Source state and inventory effects remain atomic with the command; reporting projections remain replayable asynchronous work and must not decide operational success.",
       },
       {
         title: "Daily store operations lifecycle edits",

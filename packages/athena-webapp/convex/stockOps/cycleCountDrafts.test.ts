@@ -14,16 +14,61 @@ import {
 const mockedAuthServer = vi.hoisted(() => ({
   getAuthUserId: vi.fn(),
 }));
+const reportingMocks = vi.hoisted(() => ({
+  applyInventoryEffectWithCtx: vi.fn(),
+  resolveReportingOperatingPeriodWithCtx: vi.fn(),
+}));
 
 vi.mock("@convex-dev/auth/server", () => ({
   getAuthUserId: mockedAuthServer.getAuthUserId,
 }));
+vi.mock("../reporting/inventory/effects", () => ({
+  applyInventoryEffectWithCtx: reportingMocks.applyInventoryEffectWithCtx,
+}));
+vi.mock("../reporting/operatingPeriods", () => ({
+  resolveReportingOperatingPeriodWithCtx:
+    reportingMocks.resolveReportingOperatingPeriodWithCtx,
+}));
 
 function createCycleCountDraftCtx() {
+  reportingMocks.resolveReportingOperatingPeriodWithCtx.mockResolvedValue({
+    kind: "missing_schedule",
+  });
+  reportingMocks.applyInventoryEffectWithCtx.mockImplementation(
+    async (ctx: MutationCtx, args: Record<string, any>) => {
+      await ctx.db.patch("productSku", args.productSkuId, {
+        inventoryCount: args.compatibilityBalance.onHandQuantity,
+        quantityAvailable: args.compatibilityBalance.sellableQuantity,
+      });
+      const movementId = await ctx.db.insert("inventoryMovement", {
+        actorUserId: args.actorUserId,
+        createdAt: args.recordedAt,
+        movementType: args.movementType,
+        organizationId: args.organizationId,
+        productId: args.productId,
+        productSkuId: args.productSkuId,
+        quantityDelta: args.physicalQuantityDelta,
+        reasonCode: args.reasonCode,
+        sourceId: args.sourceId,
+        sourceType: args.sourceType,
+        storeId: args.storeId,
+      });
+      return {
+        movement: await ctx.db.get("inventoryMovement", movementId),
+      };
+    },
+  );
   const tables = {
     approvalRequest: new Map<string, Record<string, any>>(),
     athenaUser: new Map<string, Record<string, any>>([
-      ["operator-1", { _id: "operator-1", email: "operator@example.com" }],
+      [
+        "operator-1",
+        {
+          _id: "operator-1",
+          email: "operator@example.com",
+          normalizedEmail: "operator@example.com",
+        },
+      ],
     ]),
     cycleCountDraft: new Map<string, Record<string, any>>(),
     cycleCountDraftLine: new Map<string, Record<string, any>>(),
@@ -136,6 +181,35 @@ function createCycleCountDraftCtx() {
         if (table === "athenaUser") {
           return {
             collect: async () => Array.from(tables.athenaUser.values()),
+            withIndex(
+              _index: string,
+              applyIndex: (queryBuilder: {
+                eq: (field: string, value: unknown) => unknown;
+              }) => unknown,
+            ) {
+              const filters: Array<[string, unknown]> = [];
+              const queryBuilder = {
+                eq(field: string, value: unknown) {
+                  filters.push([field, value]);
+                  return queryBuilder;
+                },
+              };
+              applyIndex(queryBuilder);
+              return {
+                first: async () =>
+                  Array.from(tables.athenaUser.values()).find((record) =>
+                    filters.every(([field, value]) => record[field] === value),
+                  ) ?? null,
+                take: async (limit: number) =>
+                  Array.from(tables.athenaUser.values())
+                    .filter((record) =>
+                      filters.every(
+                        ([field, value]) => record[field] === value,
+                      ),
+                    )
+                    .slice(0, limit),
+              };
+            },
           };
         }
 
@@ -497,6 +571,20 @@ describe("cycle count drafts", () => {
     expect(tables.productSku.get("sku-1")).toMatchObject({
       inventoryCount: 5,
     });
+    expect(reportingMocks.applyInventoryEffectWithCtx).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        activityType: "stock_cycle_count",
+        businessEventKey:
+          "stock_adjustment_batch:stockAdjustmentBatch-1:sku:sku-1",
+        movementType: "cycle_count",
+        valuation: {
+          disposition: "stock_correction",
+          kind: "outbound",
+          quantity: 3,
+        },
+      }),
+    );
     expect(
       tables.cycleCountDraft.get(String(ensured.data.draft._id)),
     ).toMatchObject({

@@ -9,6 +9,8 @@ import { commandResultValidator } from "../lib/commandResultValidators";
 import { requireStoreFullAdminAccess } from "./access";
 import { bestEffortRecordPurchaseOrderStatusTraceWithCtx } from "./purchaseOrderTracing";
 import { getWorkflowTraceByLookupWithCtx } from "../workflowTraces/core";
+import { appendReportingIngressWithCtx } from "../reporting/ingress";
+import { canonicalReportingBusinessEventKey } from "../reporting/factIdentity";
 import {
   PURCHASE_ORDER_ID_LOOKUP_TYPE,
   PURCHASE_ORDER_WORKFLOW_TYPE,
@@ -96,6 +98,25 @@ type AdvancePurchaseOrderToOrderedArgs = {
   actorUserId?: Id<"athenaUser">;
   notes?: string;
 };
+
+export function buildPurchaseOrderCommitmentStatusDelta(args: {
+  closesCommitment: boolean;
+  orderedQuantity: number;
+  receivedQuantity: number;
+  unitCost: number;
+}) {
+  const remainingQuantity = Math.max(
+    0,
+    args.orderedQuantity - args.receivedQuantity,
+  );
+  return {
+    amountMinor: args.closesCommitment
+      ? -(remainingQuantity * args.unitCost)
+      : 0,
+    quantity: args.closesCommitment ? -remainingQuantity : 0,
+    remainingQuantity,
+  };
+}
 
 function trimOptional(value?: string | null) {
   const nextValue = value?.trim();
@@ -367,10 +388,10 @@ export async function createPurchaseOrderWithCtx(
     createdAt,
   });
 
-  await Promise.all(
+  const purchaseOrderLineItemIds = await Promise.all(
     args.lineItems.map(async (lineItem, index) => {
       const productSku = productSkus[index]!;
-      await ctx.db.insert("purchaseOrderLineItem", {
+      return ctx.db.insert("purchaseOrderLineItem", {
         purchaseOrderId,
         storeId: args.storeId,
         productId: productSku.productId,
@@ -382,6 +403,73 @@ export async function createPurchaseOrderWithCtx(
         unitCost: lineItem.unitCost,
         lineTotal: lineItem.orderedQuantity * lineItem.unitCost,
         createdAt,
+      });
+    }),
+  );
+
+  const currency = trimOptional(args.currency)?.toUpperCase();
+  await Promise.all(
+    args.lineItems.map((lineItem, index) => {
+      const lineItemId = purchaseOrderLineItemIds[index]!;
+      const lineTotal = lineItem.orderedQuantity * lineItem.unitCost;
+      return appendReportingIngressWithCtx(ctx, {
+        acceptedAt: createdAt,
+        adapterVersion: 1,
+        businessEventKey: canonicalReportingBusinessEventKey({
+          kind: "purchase_commitment",
+          lineId: String(lineItemId),
+          purchaseOrderId: String(purchaseOrderId),
+        }),
+        ...(currency
+          ? {
+              currencyCode: currency,
+              currencyMinorUnitScale: 2,
+              grossAmountMinor: lineTotal,
+              netAmountMinor: lineTotal,
+            }
+          : {}),
+        contentFingerprint: `po-line:v1:${lineItemId}:${lineItem.productSkuId}:${lineItem.orderedQuantity}:${lineItem.unitCost}:${currency ?? "unknown"}:${args.expectedAt ?? "none"}`,
+        factContractVersion: 1,
+        lines: [
+          {
+            costStatus: "not_applicable",
+            discountAmountMinor: 0,
+            grossAmountMinor: lineTotal,
+            lineKey: String(lineItemId),
+            lineKind: "merchandise",
+            netAmountMinor: lineTotal,
+            productSkuId: lineItem.productSkuId,
+            expectedInboundAt: args.expectedAt,
+            commitmentConfirmed: false,
+            procurementSignal: "commitment",
+            quantity: lineItem.orderedQuantity,
+          },
+        ],
+        materialFields: [
+          "currencyCode",
+          "grossAmountMinor",
+          "quantity",
+          "sourceDomain",
+          "storeId",
+        ],
+        occurredAt: createdAt,
+        organizationId: store.organizationId,
+        quantity: lineItem.orderedQuantity,
+        sourceDomain: "procurement",
+        sourceEventType: "purchase_order_line_created",
+        sourceReferences: [
+          {
+            relation: "owns",
+            sourceId: String(lineItemId),
+            sourceType: "purchase_order_line",
+          },
+          {
+            relation: "owns",
+            sourceId: String(purchaseOrderId),
+            sourceType: "purchase_order",
+          },
+        ],
+        storeId: args.storeId,
       });
     }),
   );
@@ -481,7 +569,7 @@ export async function updatePurchaseOrderStatusWithCtx(
     throw new Error("Purchase order not found.");
   }
 
-  const { athenaUser } = await requireStoreFullAdminAccess(
+  const { athenaUser, store } = await requireStoreFullAdminAccess(
     ctx,
     purchaseOrder.storeId,
   );
@@ -495,7 +583,14 @@ export async function updatePurchaseOrderStatusWithCtx(
     return purchaseOrder;
   }
 
+  const previousStatus = purchaseOrder.status;
   const statusChangedAt = Date.now();
+  const lineItems = await ctx.db
+    .query("purchaseOrderLineItem")
+    .withIndex("by_purchaseOrderId", (q) =>
+      q.eq("purchaseOrderId", purchaseOrder._id),
+    )
+    .take(MAX_LINE_ITEMS);
   const updates: Record<string, unknown> = {
     notes: trimOptional(args.notes) ?? purchaseOrder.notes,
     status: args.nextStatus,
@@ -523,6 +618,90 @@ export async function updatePurchaseOrderStatusWithCtx(
 
   await ctx.db.patch("purchaseOrder", args.purchaseOrderId, updates);
 
+  const closesCommitment =
+    args.nextStatus === "cancelled" || args.nextStatus === "received";
+  const currencyCode = purchaseOrder.currency?.trim().toUpperCase();
+  await Promise.all(
+    lineItems.map((lineItem) => {
+      const commitmentDelta = buildPurchaseOrderCommitmentStatusDelta({
+        closesCommitment,
+        orderedQuantity: lineItem.orderedQuantity,
+        receivedQuantity: lineItem.receivedQuantity,
+        unitCost: lineItem.unitCost,
+      });
+      const quantity = commitmentDelta.quantity;
+      const amount = commitmentDelta.amountMinor;
+      return appendReportingIngressWithCtx(ctx, {
+        acceptedAt: statusChangedAt,
+        adapterVersion: 1,
+        businessEventKey: canonicalReportingBusinessEventKey({
+          kind: "purchase_commitment_transition",
+          lineId: String(lineItem._id),
+          purchaseOrderId: String(purchaseOrder._id),
+          status: args.nextStatus,
+        }),
+        ...(currencyCode
+          ? {
+              currencyCode,
+              currencyMinorUnitScale: 2,
+              grossAmountMinor: amount,
+              netAmountMinor: amount,
+            }
+          : {}),
+        contentFingerprint: `po-line-status:v1:${lineItem._id}:${previousStatus}:${args.nextStatus}:${lineItem.orderedQuantity}:${lineItem.receivedQuantity}:${lineItem.unitCost}:${purchaseOrder.expectedAt ?? "none"}`,
+        factContractVersion: 1,
+        lines: [
+          {
+            costStatus: "not_applicable",
+            discountAmountMinor: 0,
+            grossAmountMinor: amount,
+            lineKey: String(lineItem._id),
+            lineKind: "merchandise",
+            netAmountMinor: amount,
+            productSkuId: lineItem.productSkuId,
+            expectedInboundAt: purchaseOrder.expectedAt,
+            commitmentConfirmed: ["approved", "ordered", "partially_received", "received"].includes(
+              args.nextStatus,
+            ),
+            procurementSignal:
+              args.nextStatus === "received" &&
+              lineItem.receivedQuantity < lineItem.orderedQuantity
+                ? "short_receipt"
+                : "commitment",
+            quantity,
+          },
+        ],
+        materialFields: [
+          "currencyCode",
+          "grossAmountMinor",
+          "quantity",
+          "sourceDomain",
+          "storeId",
+        ],
+        occurredAt: statusChangedAt,
+        organizationId: store.organizationId,
+        quantity,
+        sourceDomain: "procurement",
+        sourceEventType: closesCommitment
+          ? "purchase_order_commitment_released"
+          : "purchase_order_commitment_revision",
+        sourceReferences: [
+          {
+            relation: closesCommitment ? "corrects" : "supports",
+            sourceId: String(lineItem._id),
+            sourceType: "purchase_order_line",
+          },
+          {
+            relation: "owns",
+            sourceId: String(purchaseOrder._id),
+            sourceType: "purchase_order",
+          },
+        ],
+        storeId: purchaseOrder.storeId,
+      });
+    }),
+  );
+
   if (purchaseOrder.operationalWorkItemId) {
     await ctx.runMutation(
       internal.operations.operationalWorkItems.updateOperationalWorkItemStatus,
@@ -542,7 +721,7 @@ export async function updatePurchaseOrderStatusWithCtx(
     )}.`,
     metadata: {
       nextStatus: args.nextStatus,
-      previousStatus: purchaseOrder.status,
+      previousStatus,
     },
     organizationId: purchaseOrder.organizationId,
     storeId: purchaseOrder.storeId,
@@ -564,7 +743,7 @@ export async function updatePurchaseOrderStatusWithCtx(
     actorUserId: athenaUser._id,
     nextStatus: args.nextStatus,
     occurredAt: statusChangedAt,
-    previousStatus: purchaseOrder.status,
+    previousStatus,
     purchaseOrder: updatedPurchaseOrder,
   });
 

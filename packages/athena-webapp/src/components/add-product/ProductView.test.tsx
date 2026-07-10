@@ -38,6 +38,36 @@ describe("ProductView SKU money payloads", () => {
       unitCost: 999,
     });
   });
+
+  it("keeps missing cost out of the SKU money payload", () => {
+    expect(
+      buildVariantSkuMoneyPayload(
+        {
+          netPrice: 45.67,
+        },
+        true,
+      ),
+    ).toEqual({
+      netPrice: 4567,
+      price: 4567,
+    });
+  });
+
+  it("preserves a legitimate zero unit cost", () => {
+    expect(
+      buildVariantSkuMoneyPayload(
+        {
+          cost: 0,
+          netPrice: 45.67,
+        },
+        true,
+      ),
+    ).toEqual({
+      netPrice: 4567,
+      price: 4567,
+      unitCost: 0,
+    });
+  });
 });
 
 describe("ProductView archived product redirects", () => {

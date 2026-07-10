@@ -2,7 +2,11 @@ import { v } from "convex/values";
 import { action, internalMutation, mutation } from "../_generated/server";
 import { sendVerificationCode } from "../mailersend";
 import { internal } from "../_generated/api";
-import { syncAuthenticatedAthenaUserWithCtx } from "../lib/athenaUserAuth";
+import {
+  findAthenaUserByEmailWithCtx,
+  normalizeAthenaUserEmail,
+  syncAuthenticatedAthenaUserWithCtx,
+} from "../lib/athenaUserAuth";
 import { ok, userError } from "../../shared/commandResult";
 import { commandResultValidator } from "../lib/commandResultValidators";
 
@@ -79,28 +83,28 @@ export const verifyCode = mutation({
       isUsed: true,
     });
 
-    let user = await ctx.db
-      .query("athenaUser")
-      .filter((q) =>
-        q.eq(q.field("email"), verificationCode.email.toLowerCase())
-      )
-      .first();
+    const user = await findAthenaUserByEmailWithCtx(
+      ctx,
+      verificationCode.email,
+    );
 
     if (!user) {
+      const normalizedEmail = normalizeAthenaUserEmail(verificationCode.email);
       const id = await ctx.db.insert("athenaUser", {
         email: verificationCode.email,
+        normalizedEmail,
         firstName: verificationCode.firstName,
         lastName: verificationCode.lastName,
       });
 
-      user = await ctx.db.get("athenaUser", id);
-    }
-
-    if (!user) {
-      return userError({
-        code: "unavailable",
-        message: "Could not retrieve user.",
-      });
+      const createdUser = await ctx.db.get("athenaUser", id);
+      if (!createdUser) {
+        return userError({
+          code: "unavailable",
+          message: "Could not retrieve user.",
+        });
+      }
+      return ok(createdUser);
     }
 
     return ok(user);

@@ -35,6 +35,8 @@ import type {
   PosSyncOperationalRole,
   SyncProjectionRepository,
 } from "./types";
+import type { ReportingIngressLineInput } from "../../../reporting/ingress";
+import { reportingLineCostFromEffect } from "../../../reporting/inventory/commerceEffects";
 
 type ProjectionStatus = "projected" | "conflicted";
 
@@ -395,6 +397,7 @@ async function projectExpenseRecorded(
   const trustedExpenseSkuQuantities = new Map<
     Id<"productSku">,
     {
+      productId: Id<"product">;
       productSkuId: Id<"productSku">;
       requestedQuantity: number;
       inventoryCount: number;
@@ -572,6 +575,7 @@ async function projectExpenseRecorded(
 
     if (!pendingCheckoutItemId && !inventoryImportProvisionalSkuId) {
       const current = trustedExpenseSkuQuantities.get(productSkuId) ?? {
+        productId,
         productSkuId,
         requestedQuantity: 0,
         inventoryCount: sku.inventoryCount,
@@ -736,16 +740,32 @@ async function projectExpenseRecorded(
       continue;
     }
 
-    await repository.patchProductSku(aggregate.productSkuId, {
-      inventoryCount: Math.max(
-        0,
-        aggregate.inventoryCount - aggregate.requestedQuantity,
-      ),
-      quantityAvailable: Math.max(
-        0,
-        aggregate.quantityAvailable - aggregate.requestedQuantity,
-      ),
-    });
+    if (repository.applyCommerceInventoryEffect && store.organizationId) {
+      await repository.applyCommerceInventoryEffect({
+        activityType: "stock_inventory_expense",
+        actorStaffProfileId: args.event.staffProfileId,
+        businessEventKey: `expense:${transactionId}:sku:${aggregate.productSkuId}:completed`,
+        completeness: "partial",
+        contentFingerprint: `offline-expense-inventory-v1:${transactionId}:${aggregate.productSkuId}:${aggregate.requestedQuantity}`,
+        disposition: "inventory_expense",
+        effectType: "adjustment",
+        kind: "outbound",
+        movementType: "inventory_expense",
+        notes: args.event.payload.notes ?? args.event.payload.reason,
+        occurrenceAt: args.event.occurredAt,
+        organizationId: store.organizationId,
+        productId: aggregate.productId,
+        productSkuId: aggregate.productSkuId,
+        quantity: aggregate.requestedQuantity,
+        reasonCode: "expense_transaction_completed",
+        sellableQuantityDelta: -aggregate.requestedQuantity,
+        sourceDomain: "inventory",
+        sourceId: String(transactionId),
+        sourceLineId: String(aggregate.productSkuId),
+        sourceType: "expense_transaction",
+        storeId: args.storeId,
+      });
+    }
   }
 
   const transactionMapping = await createMapping(repository, args, {
@@ -1388,6 +1408,222 @@ async function projectSaleCompleted(
     session: sessionResolution,
     store: validation.store,
   });
+
+  if (validation.store?.organizationId && repository.appendReportingIngress) {
+    const merchandiseQuantities = new Map<string, number>();
+    for (const item of validation.payload.items) {
+      const skuId = String(item.productSkuId);
+      merchandiseQuantities.set(
+        skuId,
+        (merchandiseQuantities.get(skuId) ?? 0) + item.quantity,
+      );
+    }
+    const inventoryEffectBySku = new Map();
+    if (repository.getReportingInventoryEffectByBusinessEventKey) {
+      await Promise.all(
+        [...merchandiseQuantities.keys()].map(async (skuId) => {
+          const effect = await repository.getReportingInventoryEffectByBusinessEventKey!({
+            businessEventKey: `pos:${sale.transactionId}:sku:${skuId}:sale`,
+            sourceDomain: "pos",
+            storeId: args.storeId,
+          });
+          inventoryEffectBySku.set(skuId, effect);
+        }),
+      );
+    }
+    const remainingBasisBySku = new Map(
+      [...merchandiseQuantities].map(([skuId, quantity]) => {
+        const effect = inventoryEffectBySku.get(skuId) ?? null;
+        const cost = reportingLineCostFromEffect(effect, quantity);
+        return [
+          skuId,
+          {
+            effect,
+            remainingCost:
+              cost.costStatus === "known" || cost.costStatus === "partial"
+                ? cost.cogsKnownMinor
+                : null,
+            remainingKnownQuantity:
+              cost.costStatus === "known"
+                ? quantity
+                : cost.costStatus === "partial"
+                  ? cost.cogsKnownQuantity
+                  : 0,
+            remainingQuantity: quantity,
+            valuationCurrencyCode:
+              cost.costStatus === "known" || cost.costStatus === "partial"
+                ? cost.valuationCurrencyCode
+                : undefined,
+            valuationCurrencyMinorUnitScale:
+              cost.costStatus === "known" || cost.costStatus === "partial"
+                ? cost.valuationCurrencyMinorUnitScale
+                : undefined,
+          },
+        ];
+      }),
+    );
+    const baseLines: Array<
+      ReportingIngressLineInput & {
+        grossAmountMinor: number;
+        lineKey: string;
+      }
+    > = [
+      ...validation.payload.items.map((item, index) => {
+        const basis = remainingBasisBySku.get(String(item.productSkuId));
+        const cogsKnownQuantity = Math.min(
+          item.quantity,
+          basis?.remainingKnownQuantity ?? 0,
+        );
+        const cogsUncoveredQuantity = item.quantity - cogsKnownQuantity;
+        const cogsKnownMinor =
+          basis?.remainingCost !== null &&
+          basis?.remainingCost !== undefined &&
+          cogsKnownQuantity > 0
+            ? basis.remainingKnownQuantity === cogsKnownQuantity
+              ? basis.remainingCost
+              : Math.floor(
+                  (basis.remainingCost * cogsKnownQuantity) /
+                    basis.remainingKnownQuantity,
+                )
+            : undefined;
+        if (basis && cogsKnownMinor !== undefined) {
+          basis.remainingCost = (basis.remainingCost ?? 0) - cogsKnownMinor;
+          basis.remainingKnownQuantity -= cogsKnownQuantity;
+          basis.remainingQuantity -= item.quantity;
+        }
+        return {
+        ...(cogsKnownMinor === undefined
+          ? { costStatus: "unknown" as const }
+          : cogsUncoveredQuantity > 0
+            ? {
+                cogsKnownMinor,
+                cogsKnownQuantity,
+                cogsUncoveredQuantity,
+                costStatus: "partial" as const,
+                valuationCurrencyCode: basis?.valuationCurrencyCode,
+                valuationCurrencyMinorUnitScale:
+                  basis?.valuationCurrencyMinorUnitScale,
+              }
+            : {
+                cogsKnownMinor,
+                costStatus: "known" as const,
+                valuationCurrencyCode: basis?.valuationCurrencyCode,
+                valuationCurrencyMinorUnitScale:
+                  basis?.valuationCurrencyMinorUnitScale,
+              }),
+        discountAmountMinor: 0,
+        grossAmountMinor: item.unitPrice * item.quantity,
+        lineKey:
+          item.localTransactionItemId ??
+          `${String(item.productSkuId)}:${index}`,
+        lineKind: "merchandise" as const,
+        netAmountMinor: item.unitPrice * item.quantity,
+        productSkuId: item.productSkuId as Id<"productSku">,
+        quantity: item.quantity,
+        ...(basis?.effect ? { inventoryEffectId: basis.effect._id } : {}),
+      };
+      }),
+      ...serviceProjection.serviceLines.map(
+        ({ line, serviceCaseId }, index) => ({
+        costStatus: "not_applicable" as const,
+        discountAmountMinor: 0,
+        grossAmountMinor: line.totalPrice,
+        lineKey:
+          line.localServiceLineId ?? `${String(serviceCaseId)}:${index}`,
+        lineKind: "service" as const,
+        netAmountMinor: line.totalPrice,
+        quantity: line.quantity,
+        serviceCaseId,
+        }),
+      ),
+    ];
+    const grossTotal = baseLines.reduce(
+      (sum, line) => sum + line.grossAmountMinor,
+      0,
+    );
+    const discountTotal = Math.max(
+      grossTotal + validation.payload.totals.tax -
+        validation.payload.totals.total,
+      0,
+    );
+    let remainingDiscount = discountTotal;
+    let remainingGross = grossTotal;
+    const lines = baseLines.map((line, index) => {
+      const discount =
+        index === baseLines.length - 1
+          ? remainingDiscount
+          : remainingGross > 0
+            ? Math.floor(
+                (remainingDiscount * line.grossAmountMinor) / remainingGross,
+              )
+            : 0;
+      remainingDiscount -= discount;
+      remainingGross -= line.grossAmountMinor;
+      return {
+        ...line,
+        discountAmountMinor: discount,
+        netAmountMinor: line.grossAmountMinor - discount,
+      };
+    });
+    if (validation.payload.totals.tax !== 0) {
+      lines.push({
+        costStatus: "not_applicable",
+        discountAmountMinor: 0,
+        grossAmountMinor: validation.payload.totals.tax,
+        lineKey: "tax",
+        lineKind: "tax",
+        netAmountMinor: validation.payload.totals.tax,
+        quantity: 0,
+        taxAmountMinor: validation.payload.totals.tax,
+      });
+    }
+    const currencyCode = validation.store.currency?.trim().toUpperCase();
+    await repository.appendReportingIngress({
+      acceptedAt: args.now,
+      adapterVersion: 1,
+      businessEventKey: `pos:${sale.transactionId}:complete`,
+      contentFingerprint: [
+        "pos-offline-complete-v1",
+        args.event.localEventId,
+        validation.payload.totals.subtotal,
+        validation.payload.totals.tax,
+        validation.payload.totals.total,
+        ...lines.flatMap((line) => [
+          line.lineKey,
+          line.quantity,
+          line.netAmountMinor,
+        ]),
+      ].join(":"),
+      discountAmountMinor: discountTotal,
+      grossAmountMinor: grossTotal,
+      lines,
+      materialFields: ["amountMinor", "occurrenceAt", "quantity", "storeId"],
+      netAmountMinor: validation.payload.totals.total,
+      occurredAt: args.event.occurredAt,
+      organizationId: validation.store.organizationId,
+      quantity: lines.reduce((sum, line) => sum + line.quantity, 0),
+      sourceDomain: "pos",
+      sourceEventType: "pos_completed_offline",
+      sourceReferences: [
+        {
+          relation: "owns",
+          sourceId: String(sale.transactionId),
+          sourceType: "pos_transaction",
+        },
+        ...serviceProjection.serviceLines.map(({ serviceCaseId }) => ({
+          relation: "supports" as const,
+          sourceId: String(serviceCaseId),
+          sourceType: "service_case",
+        })),
+      ],
+      storeId: args.storeId,
+      synchronizedAt: args.now,
+      taxAmountMinor: validation.payload.totals.tax,
+      ...(currencyCode
+        ? { currencyCode, currencyMinorUnitScale: 2 }
+        : {}),
+    });
+  }
 
   await recordSaleProjectedEvent(repository, args, {
     payments,
@@ -2441,8 +2677,10 @@ async function applySaleInventoryMovements(
     const sku = await repository.getProductSku(productSkuId);
     if (!sku) continue;
 
-    const movementDisposition = await repository.recordSaleInventoryMovement({
+    await repository.recordSaleInventoryMovement({
       customerProfileId: input.session.existingPosSession?.customerProfileId,
+      occurrenceAt: args.event.occurredAt,
+      recordedAt: args.now,
       organizationId: input.store?.organizationId,
       posTransactionId: input.sale.transactionId,
       productId: sku.productId,
@@ -2454,15 +2692,6 @@ async function applySaleInventoryMovements(
       transactionNumber: input.payload.receiptNumber,
     });
 
-    if (movementDisposition === "inserted") {
-      await repository.patchProductSku(productSkuId, {
-        inventoryCount: Math.max(0, sku.inventoryCount - requestedQuantity),
-        quantityAvailable: Math.max(
-          0,
-          sku.quantityAvailable - requestedQuantity,
-        ),
-      });
-    }
   }
 }
 
@@ -2660,11 +2889,14 @@ async function persistSaleServiceLines(
       );
     }
 
-    for (const payment of input.payments.serviceAllocationsByLineKey.get(
-      lineKey,
-    ) ?? []) {
+    for (const [paymentIndex, payment] of (
+      input.payments.serviceAllocationsByLineKey.get(lineKey) ?? []
+    ).entries()) {
       const allocationId = await repository.createPaymentAllocation({
         storeId: args.storeId,
+        businessEventKey: payment.localPaymentId
+          ? `pos_local:${args.event.localEventId}:payment:${payment.localPaymentId}:service:${lineKey}`
+          : `pos_local:${args.event.localEventId}:service:${lineKey}:payment:${paymentIndex}`,
         organizationId: input.store?.organizationId,
         targetType: "service_case",
         targetId: serviceCaseId,
@@ -2770,9 +3002,12 @@ async function persistPaymentAllocations(
   const { payments, sale, session, store } = input;
   const paymentMappings: LocalSyncMappingRecord[] = [];
 
-  for (const payment of payments.retailAllocations) {
+  for (const [paymentIndex, payment] of payments.retailAllocations.entries()) {
     const allocationId = await repository.createPaymentAllocation({
       storeId: args.storeId,
+      businessEventKey: payment.localPaymentId
+        ? `pos_local:${args.event.localEventId}:payment:${payment.localPaymentId}:retail`
+        : `pos_local:${args.event.localEventId}:retail:payment:${paymentIndex}`,
       organizationId: store?.organizationId,
       targetType: "pos_transaction",
       targetId: sale.transactionId,

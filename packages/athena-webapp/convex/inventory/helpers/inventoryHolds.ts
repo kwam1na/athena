@@ -1,9 +1,14 @@
-import { DatabaseReader, DatabaseWriter } from "../../_generated/server";
+import {
+  DatabaseReader,
+  DatabaseWriter,
+  type MutationCtx,
+} from "../../_generated/server";
 import { Id } from "../../_generated/dataModel";
 import {
   recordSkuActivityEventWithDb,
   type RecordSkuActivityEventArgs,
 } from "../../operations/skuActivity";
+import { applyInventoryEffectWithCtx } from "../../reporting/inventory/effects";
 
 export type { RecordSkuActivityEventArgs } from "../../operations/skuActivity";
 
@@ -527,18 +532,51 @@ export async function releaseInventoryHoldsBatch(
 }
 
 export async function releaseLegacyExpenseQuantityPatchHolds(
-  db: DatabaseWriter,
-  items: Array<{ skuId: Id<"productSku">; quantity: number }>,
+  ctx: MutationCtx,
+  items: Array<{
+    skuId: Id<"productSku">;
+    quantity: number;
+    sourceId?: string;
+  }>,
 ): Promise<void> {
   await Promise.all(
     items.map(async (item) => {
-      const sku = await db.get("productSku", item.skuId);
+      const sku = await ctx.db.get("productSku", item.skuId);
       if (!sku || typeof sku.quantityAvailable !== "number") {
         return;
       }
+      const [product, store] = await Promise.all([
+        ctx.db.get("product", sku.productId),
+        ctx.db.get("store", sku.storeId),
+      ]);
+      if (!product || !store) return;
 
-      await db.patch("productSku", item.skuId, {
-        quantityAvailable: sku.quantityAvailable + item.quantity,
+      const sourceId =
+        item.sourceId ??
+        `legacy_expense_release:${item.skuId}:${item.quantity}`;
+      await applyInventoryEffectWithCtx(ctx, {
+        activityType: "legacy_expense_hold_released",
+        businessEventKey: `legacy_expense_hold_release:${sourceId}:${item.skuId}`,
+        compatibilityBalance: {
+          onHandQuantity: sku.inventoryCount,
+          sellableQuantity: sku.quantityAvailable + item.quantity,
+        },
+        completeness: "partial",
+        contentFingerprint: `quantity:${item.quantity}`,
+        effectType: "adjustment",
+        movementType: "reservation_release",
+        occurrenceAt: Date.now(),
+        organizationId: store.organizationId,
+        physicalQuantityDelta: 0,
+        productId: product._id,
+        productSkuId: item.skuId,
+        reasonCode: "legacy_expense_hold_release",
+        sellableQuantityDelta: item.quantity,
+        sourceDomain: "inventory",
+        sourceId,
+        sourceType: "expense_session",
+        storeId: sku.storeId,
+        valuation: { kind: "availability_only" },
       });
     }),
   );
@@ -817,10 +855,7 @@ export async function readActiveHeldQuantitiesForStoreSkus(
   const holds = await db
     .query("inventoryHold")
     .withIndex("by_storeId_status_expiresAt", (q) =>
-      q
-        .eq("storeId", args.storeId)
-        .eq("status", "active")
-        .gt("expiresAt", now),
+      q.eq("storeId", args.storeId).eq("status", "active").gt("expiresAt", now),
     )
     .take(ACTIVE_SESSION_HOLD_LIST_LIMIT + 1);
 

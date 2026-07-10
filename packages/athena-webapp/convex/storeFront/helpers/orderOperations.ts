@@ -259,6 +259,7 @@ export async function recordOnlineOrderPaymentVerified(
     actorUserId: args.signedInAthenaUser?.id,
     allocationType: "online_payment",
     amount,
+    businessEventKey: `storefront:${args.order._id}:payment_verified`,
     customerProfileId,
     externalReference:
       args.order.externalTransactionId ?? args.order.externalReference,
@@ -315,6 +316,7 @@ export async function recordOnlineOrderPaymentCollected(
     actorUserId: args.signedInAthenaUser?.id,
     allocationType: "payment_on_delivery_collection",
     amount,
+    businessEventKey: `storefront:${args.order._id}:payment_collected`,
     collectedInStore,
     customerProfileId,
     externalReference:
@@ -348,6 +350,7 @@ export async function recordOnlineOrderRefundAllocation(
   ctx: MutationCtx,
   args: {
     amount: number;
+    businessEventKey: string;
     externalReference?: string;
     order: Doc<"onlineOrder">;
     signedInAthenaUser?: SignedInAthenaUser;
@@ -366,8 +369,10 @@ export async function recordOnlineOrderRefundAllocation(
     actorUserId: args.signedInAthenaUser?.id,
     allocationType: "refund",
     amount: args.amount,
+    businessEventKey: args.businessEventKey,
     customerProfileId,
     direction: "out",
+    evidenceProductSkuIds: [],
     externalReference: args.externalReference ?? args.order.externalTransactionId,
     method: getOnlineOrderPaymentMethodLabel(args.order),
     onlineOrderId: args.order._id,

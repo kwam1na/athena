@@ -1,4 +1,5 @@
 import { Doc, Id } from "../../_generated/dataModel";
+import type { InventoryReturnDisposition } from "../../reporting/inventory/types";
 import { getRemainingRefundableBalance } from "./paymentHelpers";
 
 type ReturnExchangeOrder = Pick<
@@ -12,6 +13,7 @@ type ReturnExchangeOrderItem = Pick<
   | "isReady"
   | "isRefunded"
   | "isRestocked"
+  | "returnDisposition"
   | "price"
   | "productId"
   | "productName"
@@ -31,7 +33,7 @@ export type ReturnExchangeReplacementInput = {
   unitPrice: number;
 };
 
-type ReturnExchangeMovement = {
+export type ReturnExchangeMovement = {
   orderItemId?: Id<"onlineOrderItem">;
   productId: Id<"product">;
   productName?: string;
@@ -67,6 +69,25 @@ export type OnlineOrderReturnExchangePlan = {
   returnMovements: ReturnExchangeMovement[];
   selectedItems: ReturnExchangeOrderItem[];
 };
+
+export function buildOnlineOrderReportedReturns(args: {
+  disposition: InventoryReturnDisposition;
+  selectedItems: ReturnExchangeOrderItem[];
+}): ReturnExchangeMovement[] {
+  return args.selectedItems.map((item) => ({
+    orderItemId: item._id,
+    productId: item.productId,
+    productName: item.productName,
+    productSkuId: item.productSkuId,
+    quantity: item.quantity,
+    quantityDelta: args.disposition === "sellable" ? item.quantity : 0,
+    reasonCode:
+      args.disposition === "sellable"
+        ? "online_order_return_restocked"
+        : `online_order_return_${args.disposition}`,
+    skuLabel: item.productSku,
+  }));
+}
 
 function getLineRefundAmount(item: ReturnExchangeOrderItem) {
   return Math.round(item.price * item.quantity);
@@ -117,9 +138,13 @@ export function buildOnlineOrderReturnExchangePlan(args: {
   order: ReturnExchangeOrder;
   orderItems: ReturnExchangeOrderItem[];
   replacementItems?: ReturnExchangeReplacementInput[];
+  returnDisposition?: InventoryReturnDisposition;
   restockReturnedItems: boolean;
   returnItemIds: Array<Id<"onlineOrderItem">>;
 }): OnlineOrderReturnExchangePlan {
+  const requestedDisposition = args.restockReturnedItems
+    ? "sellable"
+    : (args.returnDisposition ?? "non_restocked");
   const returnItemIdSet = new Set(args.returnItemIds);
   const selectedItems = args.orderItems.filter((item) =>
     returnItemIdSet.has(item._id),
@@ -129,7 +154,15 @@ export function buildOnlineOrderReturnExchangePlan(args: {
     throw new Error("Select at least one order line to return or exchange.");
   }
 
-  if (selectedItems.some((item) => item.isRefunded || item.isRestocked)) {
+  if (
+    selectedItems.some(
+      (item) =>
+        item.isRestocked ||
+        (item.returnDisposition !== undefined &&
+          item.returnDisposition !== "financial_only") ||
+        (requestedDisposition === "financial_only" && item.isRefunded),
+    )
+  ) {
     throw new Error("Selected items have already been returned.");
   }
 
@@ -140,7 +173,10 @@ export function buildOnlineOrderReturnExchangePlan(args: {
   }
 
   const totalRefundableCount = args.orderItems.filter(
-    (item) => !item.isRefunded && !item.isRestocked,
+    (item) =>
+      !item.isRestocked &&
+      (item.returnDisposition === undefined ||
+        item.returnDisposition === "financial_only"),
   ).length;
   const kind = getKind({
     replacementItems,
@@ -224,16 +260,10 @@ export function buildOnlineOrderReturnExchangePlan(args: {
     replacementItems,
     requiresApproval: false,
     returnMovements: args.restockReturnedItems
-      ? selectedItems.map((item) => ({
-          orderItemId: item._id,
-          productId: item.productId,
-          productName: item.productName,
-          productSkuId: item.productSkuId,
-          quantity: item.quantity,
-          quantityDelta: item.quantity,
-          reasonCode: "online_order_return_restocked",
-          skuLabel: item.productSku,
-        }))
+      ? buildOnlineOrderReportedReturns({
+          disposition: "sellable",
+          selectedItems,
+        })
       : [],
     selectedItems,
   };

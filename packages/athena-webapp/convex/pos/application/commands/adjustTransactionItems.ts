@@ -7,7 +7,6 @@ import {
   APPROVAL_ACTIONS,
   consumeCommandApprovalProofWithCtx,
 } from "../../../operations/approvalActions";
-import { recordInventoryMovementWithCtx } from "../../../operations/inventoryMovements";
 import { recordOperationalEventWithCtx } from "../../../operations/operationalEvents";
 import { recordPaymentAllocationWithCtx } from "../../../operations/paymentAllocations";
 import { markCatalogSummaryNeedsRefresh } from "../../../inventory/catalogSummary";
@@ -31,6 +30,15 @@ import type {
 } from "./transactionAdjustmentPlanner";
 import { planTransactionAdjustment } from "./transactionAdjustmentPlanner";
 import { recordPendingCheckoutItemEvidenceCorrection } from "./createOrReusePendingCheckoutItem";
+import {
+  appendReportingIngressWithCtx,
+  type ReportingIngressLineInput,
+} from "../../../reporting/ingress";
+import {
+  applyCommerceInventoryEffectWithCtx,
+  outboundBasisFromEffect,
+  reportingLineCostFromEffect,
+} from "../../../reporting/inventory/commerceEffects";
 
 const ITEM_ADJUSTMENT_ACTION = APPROVAL_ACTIONS.transactionItemAdjustment;
 const ITEM_ADJUSTMENT_ACTION_KEY = ITEM_ADJUSTMENT_ACTION.key;
@@ -691,7 +699,9 @@ async function applyInventoryDeltas(
     adjustmentId: Id<"posTransactionAdjustment">;
     customerProfileId?: Id<"customerProfile">;
     lines: AdjustmentPlan["lines"];
+    lineIds: Array<Id<"posTransactionAdjustmentLine">>;
     organizationId?: Id<"organization">;
+    occurredAt: number;
     reason?: string;
     registerSessionId?: Id<"registerSession">;
     storeId: Id<"store">;
@@ -699,8 +709,12 @@ async function applyInventoryDeltas(
   },
 ) {
   const movementIds: Array<Id<"inventoryMovement">> = [];
+  const effectsByLineId = new Map<
+    string,
+    Awaited<ReturnType<typeof applyCommerceInventoryEffectWithCtx>>["effect"]
+  >();
 
-  for (const line of args.lines) {
+  for (const [index, line] of args.lines.entries()) {
     if (line.pendingCheckoutItemId) {
       if (line.quantityDelta !== 0) {
         await recordPendingCheckoutItemEvidenceCorrection(ctx, {
@@ -727,45 +741,85 @@ async function applyInventoryDeltas(
       throw new Error("Item adjustment SKU not found for this store.");
     }
 
-    const nextInventoryCount = productSku.inventoryCount + line.inventoryDelta;
-    const nextQuantityAvailable = productSku.quantityAvailable + line.inventoryDelta;
-
-    if (nextInventoryCount < 0 || nextQuantityAvailable < 0) {
-      throw new Error("Item adjustment cannot reduce inventory below zero.");
+    if (!args.organizationId) {
+      throw new Error("Item adjustment organization could not be resolved.");
     }
-
-    await ctx.db.patch("productSku", line.productSkuId, {
-      inventoryCount: nextInventoryCount,
-      quantityAvailable: nextQuantityAvailable,
-    });
-
-    const movement = await recordInventoryMovementWithCtx(ctx, {
+    const sourceLineId = String(
+      line.originalTransactionItemId ?? line.productSkuId,
+    );
+    const originalSaleEffect =
+      line.inventoryDelta > 0 && line.originalTransactionItemId
+        ? await ctx.db
+            .query("reportingInventoryEffect")
+            .withIndex("by_storeId_sourceDomain_businessEventKey", (q) =>
+              q
+                .eq("storeId", args.storeId)
+                .eq("sourceDomain", "pos")
+                .eq(
+                  "businessEventKey",
+                  `pos:${args.transactionId}:line:${line.originalTransactionItemId}:sale`,
+                ),
+            )
+            .first()
+        : null;
+    const effect = await applyCommerceInventoryEffectWithCtx(ctx, {
+      activityType: "stock_pos_item_adjustment",
       actorStaffProfileId: args.actorStaffProfileId,
       actorUserId: args.actorUserId,
+      businessEventKey: `pos:${args.transactionId}:adjustment:${args.adjustmentId}:line:${sourceLineId}`,
+      contentFingerprint: [
+        "pos-item-inventory-adjustment-v1",
+        String(args.adjustmentId),
+        sourceLineId,
+        String(line.productSkuId),
+        String(line.inventoryDelta),
+      ].join(":"),
       customerProfileId: args.customerProfileId,
+      effectType: line.inventoryDelta > 0 ? "return" : "sale",
+      ...(line.inventoryDelta > 0
+        ? {
+            kind: "return" as const,
+            originalBasis:
+              originalSaleEffect
+                ? outboundBasisFromEffect(
+                    originalSaleEffect,
+                    line.originalQuantity,
+                  ) ?? undefined
+                : undefined,
+            quantity: line.inventoryDelta,
+          }
+        : {
+            disposition: "merchandise_sale" as const,
+            kind: "outbound" as const,
+            quantity: Math.abs(line.inventoryDelta),
+          }),
       movementType: "pos_item_adjustment",
       notes: args.reason,
+      occurrenceAt: args.occurredAt,
       organizationId: args.organizationId,
       posTransactionId: args.transactionId,
       productId: line.productId,
       productSkuId: line.productSkuId,
-      quantityDelta: line.inventoryDelta,
       reasonCode:
         line.inventoryDelta > 0
           ? "pos_transaction_adjustment_restock"
           : "pos_transaction_adjustment_issue",
       registerSessionId: args.registerSessionId,
-      sourceId: args.adjustmentId,
+      sellableQuantityDelta: line.inventoryDelta,
+      sourceDomain: "pos",
+      sourceId: String(args.adjustmentId),
+      sourceLineId,
       sourceType: ITEM_ADJUSTMENT_SUBJECT_TYPE,
       storeId: args.storeId,
     });
 
-    if (movement?._id) {
-      movementIds.push(movement._id);
+    if (effect.movement?._id) {
+      movementIds.push(effect.movement._id);
     }
+    effectsByLineId.set(String(args.lineIds[index]), effect.effect);
   }
 
-  return movementIds;
+  return { effectsByLineId, movementIds };
 }
 
 async function recordSettlementPaymentAllocation(
@@ -792,9 +846,20 @@ async function recordSettlementPaymentAllocation(
     actorUserId: args.actorUserId,
     allocationType: "pos_item_adjustment",
     amount: args.plan.settlementAmount,
+    businessEventKey: `pos_adjustment:${args.adjustmentId}:settlement`,
     collectedInStore: true,
     customerProfileId: args.customerProfileId,
     direction: args.plan.settlementDirection === "refund" ? "out" : "in",
+    evidenceProductSkuIds:
+      args.plan.settlementDirection === "refund"
+        ? [
+            ...new Set(
+              args.plan.lines
+                .filter((line) => line.inventoryDelta > 0)
+                .map((line) => line.productSkuId),
+            ),
+          ]
+        : undefined,
     method: args.plan.settlementMethod ?? "cash",
     notes: args.reason,
     organizationId: args.organizationId,
@@ -965,18 +1030,21 @@ async function applyApprovedAdjustment(
   const adjustmentId = created.adjustmentId as Id<"posTransactionAdjustment">;
   const lineIds = created.lineIds as Array<Id<"posTransactionAdjustmentLine">>;
 
-  const inventoryMovementIds = await applyInventoryDeltas(ctx, {
-    actorStaffProfileId: args.actorStaffProfileId,
-    actorUserId: args.actorUserId,
-    adjustmentId,
-    customerProfileId: args.transaction.customerProfileId,
-    lines: args.plan.lines,
-    organizationId: store?.organizationId,
-    reason: args.reason,
-    registerSessionId: args.transaction.registerSessionId,
-    storeId: args.transaction.storeId,
-    transactionId: args.transaction._id,
-  });
+  const { effectsByLineId, movementIds: inventoryMovementIds } =
+    await applyInventoryDeltas(ctx, {
+      actorStaffProfileId: args.actorStaffProfileId,
+      actorUserId: args.actorUserId,
+      adjustmentId,
+      customerProfileId: args.transaction.customerProfileId,
+      lines: args.plan.lines,
+      lineIds,
+      organizationId: store?.organizationId,
+      occurredAt: now,
+      reason: args.reason,
+      registerSessionId: args.transaction.registerSessionId,
+      storeId: args.transaction.storeId,
+      transactionId: args.transaction._id,
+    });
 
   const paymentAllocationId = await recordSettlementPaymentAllocation(ctx, {
     actorStaffProfileId: args.actorStaffProfileId,
@@ -1056,6 +1124,127 @@ async function applyApprovedAdjustment(
     status: "applied",
     updatedAt: now,
   });
+
+  if (store?.organizationId) {
+    const lines: ReportingIngressLineInput[] = args.plan.lines.map(
+      (line, index) => {
+        const lineKey = String(lineIds[index]);
+        const outboundCost =
+          line.inventoryDelta < 0
+            ? reportingLineCostFromEffect(
+                effectsByLineId.get(lineKey) ?? null,
+                Math.abs(line.inventoryDelta),
+              )
+            : { costStatus: "not_applicable" as const };
+        return {
+          // The inventory effect owns physical returns and their COGS reversal.
+          // This line owns the revenue delta and any newly sold quantity.
+          ...outboundCost,
+          allocatedDiscountMinor: 0,
+          attributionKind: line.pendingCheckoutItemId
+            ? "pending_checkout"
+            : "direct",
+          canonicalProductSkuId: line.pendingCheckoutItemId
+            ? undefined
+            : line.productSkuId,
+          channel: "pos",
+          discountAmountMinor: 0,
+          grossAmountMinor: line.correctedTotal - line.originalTotal,
+          inventoryEffectId: effectsByLineId.get(lineKey)?._id,
+          lineKey,
+          lineKind: "merchandise",
+          netAmountMinor: line.correctedTotal - line.originalTotal,
+          originalProductSkuId: line.productSkuId,
+          originalQuantity: line.originalQuantity,
+          pendingCheckoutItemId: line.pendingCheckoutItemId,
+          productId: line.productId,
+          productSkuId: line.productSkuId,
+          provisionalProductSkuId: line.pendingCheckoutItemId
+            ? line.productSkuId
+            : undefined,
+          quantity: line.inventoryDelta < 0 ? line.quantityDelta : 0,
+          recognizedNetAmountMinor:
+            line.correctedTotal - line.originalTotal,
+          recognitionProductId: line.productId,
+          recognitionProductSkuId: line.productSkuId,
+          unitPriceMinor: line.unitPrice,
+        };
+      },
+    );
+    const taxDelta = args.plan.correctedTax - args.plan.originalTax;
+    if (taxDelta !== 0) {
+      lines.push({
+        costStatus: "not_applicable",
+        discountAmountMinor: 0,
+        grossAmountMinor: taxDelta,
+        lineKey: "tax",
+        lineKind: "tax",
+        netAmountMinor: taxDelta,
+        quantity: 0,
+        taxAmountMinor: taxDelta,
+      });
+    }
+    const currencyCode = store.currency?.trim().toUpperCase();
+    await appendReportingIngressWithCtx(ctx, {
+      acceptedAt: now,
+      adapterVersion: 1,
+      businessEventKey: `pos:${args.transaction._id}:adjustment:${adjustmentId}`,
+      contentFingerprint: [
+        "pos-item-adjustment-v1",
+        String(adjustmentId),
+        args.plan.fingerprint,
+        String(args.plan.deltaTotal),
+        ...lines.flatMap((line) => [
+          line.lineKey,
+          String(line.quantity),
+          String(line.netAmountMinor),
+        ]),
+      ].join(":"),
+      ...(currencyCode
+        ? { currencyCode, currencyMinorUnitScale: 2 }
+        : {}),
+      grossAmountMinor:
+        args.plan.correctedSubtotal - args.plan.originalSubtotal,
+      lines,
+      materialFields: ["amountMinor", "occurrenceAt", "quantity", "storeId"],
+      netAmountMinor: args.plan.deltaTotal,
+      occurredAt: now,
+      organizationId: store.organizationId,
+      quantity: args.plan.lines.reduce(
+        (sum, line) => sum + line.quantityDelta,
+        0,
+      ),
+      settlementAmountMinor:
+        args.plan.settlementDirection === "refund"
+          ? -args.plan.settlementAmount
+          : args.plan.settlementAmount,
+      sourceDomain: "pos",
+      sourceEventType: "pos_item_correction",
+      sourceReferences: [
+        {
+          relation: "corrects",
+          sourceId: String(args.transaction._id),
+          sourceType: "pos_transaction",
+        },
+        {
+          relation: "owns",
+          sourceId: String(adjustmentId),
+          sourceType: "pos_transaction_adjustment",
+        },
+        ...(paymentAllocationId
+          ? [
+              {
+                relation: "supports" as const,
+                sourceId: String(paymentAllocationId),
+                sourceType: "payment_allocation",
+              },
+            ]
+          : []),
+      ],
+      storeId: args.transaction.storeId,
+      taxAmountMinor: taxDelta,
+    });
+  }
 
   await recordItemAdjustmentRegisterSessionTrace(ctx, {
     actorStaffProfileId: args.actorStaffProfileId,

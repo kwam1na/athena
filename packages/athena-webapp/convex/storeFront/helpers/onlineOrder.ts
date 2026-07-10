@@ -9,11 +9,14 @@ import {
   getOnlineOrderPaymentAmount,
   getOnlineOrderPaymentMethodLabel,
   recordOnlineOrderCreatedEvent,
-  recordOnlineOrderRestockMovement,
   resolveCustomerProfileForStoreFrontActor,
 } from "./orderOperations";
 import { markCatalogSummaryNeedsRefresh } from "../../inventory/catalogSummary";
 import { recordOnlineOrderTraceBestEffort } from "../onlineOrderTracing";
+import {
+  applyCommerceInventoryEffectWithCtx,
+  outboundBasisFromEffect,
+} from "../../reporting/inventory/commerceEffects";
 
 const MAX_BAG_ITEMS = 200;
 const MAX_CHECKOUT_SESSION_ITEMS = 200;
@@ -85,26 +88,64 @@ export async function returnOrderItemsToStock(
       });
 
       const productSku = await ctx.db.get("productSku", item.productSkuId);
-      if (!productSku) {
+      if (!productSku || !order) {
         return;
       }
-
-      await ctx.db.patch("productSku", item.productSkuId, {
-        quantityAvailable: productSku.quantityAvailable + item.quantity,
-        inventoryCount: item.isReady
-          ? productSku.inventoryCount + item.quantity
-          : productSku.inventoryCount,
-      });
-
-      if (order) {
-        await recordOnlineOrderRestockMovement(ctx, {
-          item,
-          order,
-          reasonCode: item.isReady
-            ? "online_order_item_restocked"
-            : "online_order_reservation_released",
-        });
+      const store = await ctx.db.get("store", order.storeId);
+      if (!store?.organizationId) {
+        throw new Error("Online order organization could not be resolved.");
       }
+      const occurredAt = Date.now();
+      const originalEffect = item.isReady
+        ? await ctx.db
+            .query("reportingInventoryEffect")
+            .withIndex("by_storeId_sourceDomain_businessEventKey", (q) =>
+              q
+                .eq("storeId", order.storeId)
+                .eq("sourceDomain", "storefront")
+                .eq(
+                  "businessEventKey",
+                  `storefront:${order._id}:line:${item._id}:fulfillment`,
+                ),
+            )
+            .first()
+        : null;
+      await applyCommerceInventoryEffectWithCtx(ctx, {
+        activityType: item.isReady
+          ? "stock_restock"
+          : "reservation_released",
+        businessEventKey: `storefront:${order._id}:line:${item._id}:cancelled_return`,
+        completeness: "partial",
+        contentFingerprint: `storefront-cancelled-return-v1:${order._id}:${item._id}:${item.quantity}:${item.isReady === true}`,
+        effectType: item.isReady ? "return" : "adjustment",
+        ...(item.isReady
+          ? {
+              financialContribution: "none" as const,
+              kind: "return" as const,
+              originalBasis:
+                originalEffect
+                  ? outboundBasisFromEffect(originalEffect, item.quantity) ??
+                    undefined
+                  : undefined,
+              quantity: item.quantity,
+            }
+          : { kind: "availability_only" as const }),
+        movementType: item.isReady ? "restock" : "reservation_release",
+        occurrenceAt: occurredAt,
+        onlineOrderId: order._id,
+        organizationId: store.organizationId,
+        productId: item.productId,
+        productSkuId: item.productSkuId,
+        reasonCode: item.isReady
+          ? "online_order_item_restocked"
+          : "online_order_reservation_released",
+        sellableQuantityDelta: item.quantity,
+        sourceDomain: "storefront",
+        sourceId: String(order._id),
+        sourceLineId: String(item._id),
+        sourceType: "online_order_item",
+        storeId: order.storeId,
+      });
     })
   );
 

@@ -87,6 +87,7 @@ describe("POS public transaction query validators", () => {
     };
 
     assertConformsToExportedReturns(completeTransaction, validationError);
+    assertConformsToExportedReturns(getCompletedTransactions, []);
     assertConformsToExportedReturns(getCompletedTransactions, [
       {
         _id: "txn-void" as Id<"posTransaction">,

@@ -100,6 +100,56 @@ describe("inventory movement helpers", () => {
     expect(movement.createdAt).toEqual(expect.any(Number));
   });
 
+  it("preserves enriched inventory evidence on movement and SKU activity rows", () => {
+    const movement = buildInventoryMovement({
+      afterOnHandQuantity: 3,
+      afterSellableQuantity: 2,
+      beforeOnHandQuantity: 5,
+      beforeSellableQuantity: 4,
+      businessEventKey: "pos:sale-1:line-1",
+      contentFingerprint: "fingerprint-1",
+      disposition: "merchandise_sale",
+      movementType: "sale",
+      occurrenceAt: 1_000,
+      productSkuId: "sku-1" as Id<"productSku">,
+      quantityDelta: -2,
+      recordedAt: 1_100,
+      reportingInventoryEffectId:
+        "reporting-effect-1" as Id<"reportingInventoryEffect">,
+      sellableQuantityDelta: -2,
+      sourceId: "sale-1",
+      sourceLineId: "line-1",
+      sourceType: "posTransaction",
+      storeId: "store-1" as Id<"store">,
+    });
+    const activity = buildSkuActivityForInventoryMovement({
+      ...movement,
+      inventoryMovementId: "movement-1" as Id<"inventoryMovement">,
+    });
+
+    expect(movement).toMatchObject({
+      businessEventKey: "pos:sale-1:line-1",
+      contentFingerprint: "fingerprint-1",
+      createdAt: 1_100,
+      occurrenceAt: 1_000,
+      recordedAt: 1_100,
+      reportingInventoryEffectId: "reporting-effect-1",
+      sourceLineId: "line-1",
+    });
+    expect(activity).toMatchObject({
+      occurredAt: 1_000,
+      sourceLineId: "line-1",
+      metadata: expect.objectContaining({
+        afterOnHandQuantity: 3,
+        beforeOnHandQuantity: 5,
+        businessEventKey: "pos:sale-1:line-1",
+        contentFingerprint: "fingerprint-1",
+        reportingInventoryEffectId: "reporting-effect-1",
+        sellableQuantityDelta: -2,
+      }),
+    });
+  });
+
   it("summarizes net stock deltas across movements", () => {
     expect(
       summarizeInventoryMovements([
@@ -213,5 +263,43 @@ describe("inventory movement helpers", () => {
       movement: { _id: first.movement?._id },
     });
     expect(tables.inventoryMovement).toHaveLength(1);
+  });
+
+  it("rejects a reused business event key with conflicting content", async () => {
+    const { ctx, tables } = createInventoryMovementCtx({
+      productSku: new Map([
+        [
+          "sku-1",
+          {
+            _id: "sku-1",
+            inventoryCount: 5,
+            productId: "product-1",
+            quantityAvailable: 5,
+            storeId: "store-1",
+          },
+        ],
+      ]),
+    });
+    const args = {
+      businessEventKey: "pos:sale-1:line-1",
+      contentFingerprint: "fingerprint-1",
+      movementType: "sale",
+      productSkuId: "sku-1" as Id<"productSku">,
+      quantityDelta: -1,
+      sourceId: "sale-1",
+      sourceType: "posTransaction",
+      storeId: "store-1" as Id<"store">,
+    };
+
+    await recordInventoryMovementWithDispositionWithCtx(ctx, args);
+
+    await expect(
+      recordInventoryMovementWithDispositionWithCtx(ctx, {
+        ...args,
+        contentFingerprint: "different-fingerprint",
+      }),
+    ).rejects.toThrow(/business event key conflicts/i);
+    expect(tables.inventoryMovement).toHaveLength(1);
+    expect(tables.skuActivityEvent).toHaveLength(1);
   });
 });

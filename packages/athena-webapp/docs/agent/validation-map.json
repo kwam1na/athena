@@ -42,6 +42,37 @@
       "behaviorScenarios": []
     },
     {
+      "name": "reporting-fact-valuation-projection-and-activation-edits",
+      "pathPrefixes": [
+        "packages/athena-webapp/convex/reporting",
+        "packages/athena-webapp/convex/schemas/reporting",
+        "packages/athena-webapp/shared/reportingContract.ts"
+      ],
+      "commands": [
+        {
+          "kind": "raw",
+          "command": "bun run --filter '@athena/webapp' test -- convex/reporting"
+        },
+        {
+          "kind": "script",
+          "script": "audit:convex"
+        },
+        {
+          "kind": "script",
+          "script": "lint:convex:changed"
+        },
+        {
+          "kind": "raw",
+          "command": "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json"
+        },
+        {
+          "kind": "script",
+          "script": "build"
+        }
+      ],
+      "behaviorScenarios": []
+    },
+    {
       "name": "daily-store-operations-lifecycle-edits",
       "pathPrefixes": [
         "packages/athena-webapp/convex/operations/dailyClose.ts",

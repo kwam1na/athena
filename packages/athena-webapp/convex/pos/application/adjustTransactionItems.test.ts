@@ -17,6 +17,12 @@ import {
   getStoreById,
   listTransactionItems,
 } from "../infrastructure/repositories/transactionRepository";
+import { appendReportingIngressWithCtx } from "../../reporting/ingress";
+import {
+  applyCommerceInventoryEffectWithCtx,
+  outboundBasisFromEffect,
+  reportingLineCostFromEffect,
+} from "../../reporting/inventory/commerceEffects";
 
 vi.mock("../../operations/approvalActions", () => ({
   APPROVAL_ACTIONS: {
@@ -73,6 +79,16 @@ vi.mock("../../operations/paymentAllocations", () => ({
 
 vi.mock("../../operations/registerSessionTracing", () => ({
   recordRegisterSessionTraceBestEffort: vi.fn(),
+}));
+
+vi.mock("../../reporting/ingress", () => ({
+  appendReportingIngressWithCtx: vi.fn(),
+}));
+
+vi.mock("../../reporting/inventory/commerceEffects", () => ({
+  applyCommerceInventoryEffectWithCtx: vi.fn(),
+  outboundBasisFromEffect: vi.fn(() => null),
+  reportingLineCostFromEffect: vi.fn(() => ({ costStatus: "unknown" })),
 }));
 
 vi.mock("../infrastructure/repositories/transactionRepository", () => ({
@@ -206,6 +222,17 @@ function createFakeCtx() {
           price: 500,
           quantityAvailable: 5,
           sku: "SKU-2",
+        },
+      ],
+    ]),
+    reportingInventoryEffect: new Map([
+      [
+        "sale-effect-1",
+        {
+          _id: "sale-effect-1",
+          businessEventKey: "pos:txn-1:line:item-1:sale",
+          sourceDomain: "pos",
+          storeId: "store-1",
         },
       ],
     ]),
@@ -346,6 +373,24 @@ function mockCompletedTransaction() {
 beforeEach(() => {
   vi.resetAllMocks();
   mockCompletedTransaction();
+  vi.mocked(applyCommerceInventoryEffectWithCtx).mockResolvedValue({
+    disposition: "inserted",
+    effect: { _id: "effect-1" as Id<"reportingInventoryEffect"> },
+    movement: { _id: "movement-1" as Id<"inventoryMovement"> },
+  } as never);
+  vi.mocked(reportingLineCostFromEffect).mockReturnValue({
+    costStatus: "unknown",
+  });
+  vi.mocked(outboundBasisFromEffect).mockReturnValue({
+    allocatedKnownCost: 400,
+    basisVersion: 3,
+    costedQuantity: 2,
+    currency: "GHS",
+    knownCostPoolBefore: 400,
+    roundedWeightedAverageUnitCost: 200,
+    uncostedQuantity: 0,
+    unresolvedDeficitQuantity: 0,
+  });
   vi.mocked(recordInventoryMovementWithCtx).mockResolvedValue({
     _id: "movement-1" as Id<"inventoryMovement">,
   } as never);
@@ -523,15 +568,26 @@ describe("adjustTransactionItems", () => {
         }),
       }),
     );
-    expect(recordInventoryMovementWithCtx).toHaveBeenCalledWith(
+    expect(applyCommerceInventoryEffectWithCtx).toHaveBeenCalledWith(
       ctx as never,
       expect.objectContaining({
+        businessEventKey: expect.stringContaining(
+          "pos:txn-1:adjustment:posTransactionAdjustment-1",
+        ),
         movementType: "pos_item_adjustment",
+        originalBasis: expect.objectContaining({
+          allocatedKnownCost: 400,
+          costedQuantity: 2,
+        }),
         posTransactionId: "txn-1",
         productSkuId: "sku-1",
-        quantityDelta: 1,
+        quantity: 1,
         sourceType: "pos_transaction_item_adjustment",
       }),
+    );
+    expect(outboundBasisFromEffect).toHaveBeenCalledWith(
+      expect.objectContaining({ _id: "sale-effect-1" }),
+      2,
     );
     expect(recordPaymentAllocationWithCtx).toHaveBeenCalledWith(
       ctx as never,
@@ -539,6 +595,7 @@ describe("adjustTransactionItems", () => {
         allocationType: "pos_item_adjustment",
         amount: 500,
         direction: "out",
+        evidenceProductSkuIds: ["sku-1"],
         method: "cash",
         posTransactionId: "txn-1",
         targetType: "pos_transaction_adjustment",
@@ -561,6 +618,22 @@ describe("adjustTransactionItems", () => {
           ],
           transactionNumber: "POS-111111",
         }),
+      }),
+    );
+    expect(appendReportingIngressWithCtx).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        businessEventKey:
+          "pos:txn-1:adjustment:posTransactionAdjustment-1",
+        lines: expect.arrayContaining([
+          expect.objectContaining({
+            costStatus: "not_applicable",
+            lineKind: "merchandise",
+            productSkuId: "sku-1",
+            quantity: 0,
+          }),
+        ]),
+        sourceEventType: "pos_item_correction",
       }),
     );
     expect(recordRegisterSessionTraceBestEffort).toHaveBeenCalledWith(
@@ -590,8 +663,8 @@ describe("adjustTransactionItems", () => {
       }),
     );
     expect(tables.productSku.get("sku-1")).toMatchObject({
-      inventoryCount: 11,
-      quantityAvailable: 11,
+      inventoryCount: 10,
+      quantityAvailable: 10,
     });
     expect(ctx.db.patch).not.toHaveBeenCalledWith(
       "posTransaction",
@@ -666,6 +739,12 @@ describe("adjustTransactionItems", () => {
 
   it("records collection allocations for higher corrected totals", async () => {
     const { ctx } = createFakeCtx();
+    vi.mocked(reportingLineCostFromEffect).mockReturnValue({
+      cogsKnownMinor: 200,
+      costStatus: "known",
+      valuationCurrencyCode: "GHS",
+      valuationCurrencyMinorUnitScale: 2,
+    });
     vi.mocked(consumeCommandApprovalProofWithCtx).mockResolvedValue({
       kind: "ok",
       data: {
@@ -711,6 +790,20 @@ describe("adjustTransactionItems", () => {
       expectedCash: 1500,
       variance: -300,
     });
+    expect(appendReportingIngressWithCtx).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        lines: expect.arrayContaining([
+          expect.objectContaining({
+            cogsKnownMinor: 200,
+            costStatus: "known",
+            inventoryEffectId: "effect-1",
+            quantity: 1,
+            valuationCurrencyCode: "GHS",
+          }),
+        ]),
+      }),
+    );
   });
 
   it("rejects cash settlements against closed register sessions before writing effects", async () => {
@@ -940,7 +1033,7 @@ describe("adjustTransactionItems", () => {
       transactionId: "txn-1" as Id<"posTransaction">,
     });
 
-    expect(recordInventoryMovementWithCtx).toHaveBeenCalled();
+    expect(applyCommerceInventoryEffectWithCtx).toHaveBeenCalled();
     expect(recordPaymentAllocationWithCtx).not.toHaveBeenCalled();
   });
 
@@ -1146,7 +1239,7 @@ describe("adjustTransactionItems", () => {
       paymentAllocationId: "allocation-1",
     });
     expect(consumeCommandApprovalProofWithCtx).toHaveBeenCalledTimes(1);
-    expect(recordInventoryMovementWithCtx).toHaveBeenCalledTimes(1);
+    expect(applyCommerceInventoryEffectWithCtx).toHaveBeenCalledTimes(1);
     expect(recordPaymentAllocationWithCtx).toHaveBeenCalledTimes(1);
   });
 
@@ -1194,7 +1287,7 @@ describe("adjustTransactionItems", () => {
       "This transaction already has an item adjustment applied.",
     );
 
-    expect(recordInventoryMovementWithCtx).toHaveBeenCalledTimes(1);
+    expect(applyCommerceInventoryEffectWithCtx).toHaveBeenCalledTimes(1);
     expect(recordPaymentAllocationWithCtx).toHaveBeenCalledTimes(1);
   });
 
@@ -1230,7 +1323,7 @@ describe("adjustTransactionItems", () => {
       transactionId: "txn-1",
     });
     expect(tables.posTransactionAdjustment.size).toBe(1);
-    expect(recordInventoryMovementWithCtx).toHaveBeenCalled();
+    expect(applyCommerceInventoryEffectWithCtx).toHaveBeenCalled();
   });
 
   it("records rejected async item adjustment requests without applying effects", async () => {

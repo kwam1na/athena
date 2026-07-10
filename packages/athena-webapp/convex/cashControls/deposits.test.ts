@@ -7488,6 +7488,7 @@ describe("cash control deposits", () => {
         actorStaffProfileId: "staff_1",
         actorUserId: "athena_user_1",
         amount: 10000,
+        businessEventKey: "cash_deposit:session_open:deposit-1",
       }),
     ]);
     expect(ctx.tables.get("operationalEvent")).toEqual([
@@ -7506,6 +7507,33 @@ describe("cash control deposits", () => {
         step: "register_session_deposit_recorded",
       }),
     ]);
+  });
+
+  it("replays matching deposit keys and rejects conflicting reuse", async () => {
+    const ctx = createAuthorizedRegisterDepositCtx();
+    const args = {
+      actorStaffProfileId: "staff_1" as Id<"staffProfile">,
+      amount: 100,
+      registerSessionId: "session_open" as Id<"registerSession">,
+      storeId: "store_1" as Id<"store">,
+      submissionKey: "deposit-retry",
+    };
+
+    await expect(
+      getHandler(recordRegisterSessionDeposit)(ctx as never, args),
+    ).resolves.toMatchObject({ kind: "ok", data: { action: "recorded" } });
+    await expect(
+      getHandler(recordRegisterSessionDeposit)(ctx as never, args),
+    ).resolves.toMatchObject({ kind: "ok", data: { action: "duplicate" } });
+    await expect(
+      getHandler(recordRegisterSessionDeposit)(ctx as never, {
+        ...args,
+        amount: 200,
+      }),
+    ).rejects.toThrow(
+      "Payment business event conflicts with an existing allocation.",
+    );
+    expect(ctx.tables.get("paymentAllocation")).toHaveLength(1);
   });
 
   it("writes through payment allocations, register-session math, and operational events", () => {

@@ -1980,11 +1980,29 @@ describe("projectLocalSyncEvent", () => {
     ]);
     expect(repository.createdPaymentAllocations).toEqual([
       expect.objectContaining({
+        businessEventKey:
+          "pos_local:event-sale-completed-1:payment:local-payment-1:retail",
         targetType: "pos_transaction",
         method: "cash",
         amount: 25,
         registerSessionId: "register-session-1",
         posTransactionId: "transaction-1",
+      }),
+    ]);
+    expect(repository.createdReportingIngress).toEqual([
+      expect.objectContaining({
+        businessEventKey: "pos:transaction-1:complete",
+        occurredAt: 20,
+        sourceEventType: "pos_completed_offline",
+        synchronizedAt: 100,
+        lines: [
+          expect.objectContaining({
+            costStatus: "unknown",
+            lineKey: "local-txn-item-1",
+            lineKind: "merchandise",
+            productSkuId: "sku-1",
+          }),
+        ],
       }),
     ]);
     expect(repository.registerSessionPatches).toEqual(
@@ -2335,12 +2353,16 @@ describe("projectLocalSyncEvent", () => {
     expect(repository.createdPaymentAllocations).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
+          businessEventKey:
+            "pos_local:event-sale-completed-1:payment:local-payment-cash:retail",
           targetType: "pos_transaction",
           targetId: "transaction-1",
           method: "cash",
           amount: 25,
         }),
         expect.objectContaining({
+          businessEventKey:
+            "pos_local:event-sale-completed-1:payment:local-payment-cash:service:local-service-line-1",
           targetType: "service_case",
           targetId: "service-case-1",
           method: "cash",
@@ -2349,6 +2371,8 @@ describe("projectLocalSyncEvent", () => {
           posTransactionId: "transaction-1",
         }),
         expect.objectContaining({
+          businessEventKey:
+            "pos_local:event-sale-completed-1:payment:local-payment-card:service:local-service-line-1",
           targetType: "service_case",
           targetId: "service-case-1",
           method: "card",
@@ -8171,6 +8195,7 @@ function createProjectionRepository(
   createdOperationalEvents: unknown[];
   createdPendingCheckoutItems: unknown[];
   createdPaymentAllocations: unknown[];
+  createdReportingIngress: unknown[];
   createdExpenseSessions: unknown[];
   createdExpenseSessionItems: unknown[];
   createdExpenseTransactions: unknown[];
@@ -8214,6 +8239,7 @@ function createProjectionRepository(
   const createdOperationalEvents: unknown[] = [];
   const createdPendingCheckoutItems: unknown[] = [];
   const createdPaymentAllocations: unknown[] = [];
+  const createdReportingIngress: unknown[] = [];
   const createdExpenseSessions: unknown[] = [];
   const createdExpenseSessionItems: unknown[] = [];
   const createdExpenseTransactions: unknown[] = [];
@@ -8289,6 +8315,7 @@ function createProjectionRepository(
     createdOperationalEvents,
     createdPendingCheckoutItems,
     createdPaymentAllocations,
+    createdReportingIngress,
     createdExpenseSessions,
     createdExpenseSessionItems,
     createdExpenseTransactions,
@@ -8314,6 +8341,10 @@ function createProjectionRepository(
     releasedHoldRequests,
     approvalRequests,
     mappings,
+    async appendReportingIngress(input) {
+      createdReportingIngress.push(input);
+      return { kind: "appended" };
+    },
     async getTerminal(terminalId) {
       return terminalId === "terminal-1" ? (terminal as never) : null;
     },
@@ -8884,8 +8915,23 @@ function createProjectionRepository(
       createdTransactionServiceLines.push({ _id: id, ...input });
       return id as never;
     },
-    async patchProductSku(productSkuId, patch) {
-      productPatches.push({ productSkuId, patch });
+    async applyCommerceInventoryEffect(input) {
+      const productSku = skus.find(
+        (candidate) => candidate._id === input.productSkuId,
+      );
+      productPatches.push({
+        productSkuId: input.productSkuId,
+        patch: {
+          inventoryCount: productSku
+            ? productSku.inventoryCount -
+              (input.kind === "outbound" ? input.quantity : 0)
+            : undefined,
+          quantityAvailable: productSku
+            ? productSku.quantityAvailable + input.sellableQuantityDelta
+            : undefined,
+        },
+      });
+      return "inserted";
     },
     async recordSaleInventoryMovement(input) {
       if (
@@ -8905,6 +8951,19 @@ function createProjectionRepository(
         return "existing";
       }
       recordedSaleInventoryMovements.push(input);
+      const productSku = skus.find(
+        (candidate) => candidate._id === input.productSkuId,
+      );
+      if (productSku) {
+        productPatches.push({
+          productSkuId: input.productSkuId,
+          patch: {
+            inventoryCount: productSku.inventoryCount - input.quantity,
+            quantityAvailable:
+              productSku.quantityAvailable - input.quantity,
+          },
+        });
+      }
       return "inserted";
     },
     async createPaymentAllocation(input) {

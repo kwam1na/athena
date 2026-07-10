@@ -360,6 +360,7 @@ function mapCorrectionError(error: unknown): CommandResult<never> | null {
 
 export const updateInventory = mutation({
   args: {
+    businessEventKey: v.string(),
     skuId: v.id("productSku"),
     quantityToSubtract: v.number(),
   },

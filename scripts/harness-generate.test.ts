@@ -176,6 +176,12 @@ describe("generateHarnessDocs", () => {
       "src/routeTree.browser-boundary.test.ts"
     );
     expect(docs.get("packages/athena-webapp/docs/agent/validation-guide.md")).toContain(
+      "Reporting fact, valuation, projection, and activation edits"
+    );
+    expect(docs.get("packages/athena-webapp/docs/agent/validation-guide.md")).toContain(
+      "test -- convex/reporting"
+    );
+    expect(docs.get("packages/athena-webapp/docs/agent/validation-guide.md")).toContain(
       "Touched surfaces: `src/lib`, `shared`, `src/settings`, `src/utils`, `src/stores`, `types.ts`"
     );
     expect(docs.get("packages/athena-webapp/docs/agent/validation-map.json")).toContain(
@@ -183,6 +189,18 @@ describe("generateHarnessDocs", () => {
     );
     expect(docs.get("packages/athena-webapp/docs/agent/validation-map.json")).toContain(
       "\"behaviorScenarios\""
+    );
+    expect(docs.get("packages/athena-webapp/docs/agent/validation-map.json")).toContain(
+      "\"name\": \"reporting-fact-valuation-projection-and-activation-edits\""
+    );
+    expect(docs.get("packages/athena-webapp/docs/agent/validation-map.json")).toContain(
+      "packages/athena-webapp/convex/reporting"
+    );
+    expect(docs.get("packages/athena-webapp/docs/agent/validation-map.json")).toContain(
+      "packages/athena-webapp/convex/schemas/reporting"
+    );
+    expect(docs.get("packages/athena-webapp/docs/agent/validation-map.json")).toContain(
+      "packages/athena-webapp/shared/reportingContract.ts"
     );
     expect(docs.get("packages/storefront-webapp/docs/agent/validation-map.json")).toContain(
       "\"kind\": \"raw\""

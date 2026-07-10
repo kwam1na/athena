@@ -39,6 +39,10 @@ function getHandler(definition: unknown) {
 describe("storefront refund money contract", () => {
   it("accepts representative changed payment action return contracts", () => {
     assertConformsToExportedReturns(createTransaction, {
+      success: false,
+      message: "Session not found",
+    });
+    assertConformsToExportedReturns(createTransaction, {
       access_code: "access-code",
       authorization_url: "https://pay.example/authorize",
       reference: "payment-reference",

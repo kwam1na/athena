@@ -13,7 +13,6 @@ import {
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
 import { buildApprovalRequest } from "../operations/approvalRequestHelpers";
-import { recordInventoryMovementWithCtx } from "../operations/inventoryMovements";
 import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
 import {
   createOperationalWorkItemWithCtx,
@@ -33,6 +32,9 @@ import {
 } from "../../shared/stockAdjustment";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
 import { commandResultValidator } from "../lib/commandResultValidators";
+import { applyInventoryEffectWithCtx } from "../reporting/inventory/effects";
+import { uncostedBasis } from "../reporting/inventory/valuation";
+import { resolveReportingOperatingPeriodWithCtx } from "../reporting/operatingPeriods";
 
 export {
   CYCLE_COUNT_REASON_CODE,
@@ -91,8 +93,7 @@ async function scheduleCatalogSummaryDirtyMarker(
   storeId: Id<"store">,
 ) {
   const scheduler = ctx.scheduler as
-    | { runAfter?: MutationCtx["scheduler"]["runAfter"] }
-    | undefined;
+    { runAfter?: MutationCtx["scheduler"]["runAfter"] } | undefined;
   if (typeof scheduler?.runAfter !== "function") return;
 
   await scheduler.runAfter(
@@ -103,8 +104,7 @@ async function scheduleCatalogSummaryDirtyMarker(
 }
 
 type StockAdjustmentBlockedSkuReason =
-  | "provisional_import"
-  | "pos_pending_checkout";
+  "provisional_import" | "pos_pending_checkout";
 
 type StockAdjustmentBlockedSkuStatus = {
   message: string;
@@ -174,7 +174,11 @@ async function isOnboardedTrustedProductForStockAdjustment(
 ) {
   if (!args.productId) return false;
 
-  const product = await readProductWithCache(ctx, caches.products, args.productId);
+  const product = await readProductWithCache(
+    ctx,
+    caches.products,
+    args.productId,
+  );
   if (!product || product.storeId !== args.storeId) return false;
   if (product.availability === "draft" || product.availability === "archived") {
     return false;
@@ -188,11 +192,11 @@ async function isOnboardedTrustedProductForStockAdjustment(
 
   return Boolean(
     category &&
-      subcategory &&
-      category.storeId === args.storeId &&
-      subcategory.storeId === args.storeId &&
-      subcategory.categoryId === category._id &&
-      category.slug !== "legacy-import",
+    subcategory &&
+    category.storeId === args.storeId &&
+    subcategory.storeId === args.storeId &&
+    subcategory.categoryId === category._id &&
+    category.slug !== "legacy-import",
   );
 }
 
@@ -417,6 +421,16 @@ async function applyStockAdjustmentBatchWithCtx(
 ) {
   const sourceId = buildStockAdjustmentSourceId(String(args.batchId));
   const inventoryMovements: Doc<"inventoryMovement">[] = [];
+  const now = Date.now();
+  const store = await ctx.db.get("store", args.storeId);
+  const organizationId = args.organizationId ?? store?.organizationId;
+  if (!organizationId) {
+    throw new Error("Stock adjustment organization could not be resolved.");
+  }
+  const reportingPeriod = await resolveReportingOperatingPeriodWithCtx(ctx, {
+    occurrenceAt: now,
+    storeId: args.storeId,
+  });
 
   for (const lineItem of args.lineItems) {
     const productSku = await ctx.db.get("productSku", lineItem.productSkuId);
@@ -425,29 +439,75 @@ async function applyStockAdjustmentBatchWithCtx(
       throw new Error("Stock adjustment SKU not found for this store.");
     }
 
-    await ctx.db.patch("productSku", lineItem.productSkuId, {
-      inventoryCount: productSku.inventoryCount + lineItem.quantityDelta,
-      quantityAvailable: Math.max(
-        0,
-        productSku.quantityAvailable + lineItem.quantityDelta,
-      ),
-    });
-
-    const inventoryMovement = await recordInventoryMovementWithCtx(ctx, {
+    const nextOnHand = productSku.inventoryCount + lineItem.quantityDelta;
+    const nextSellable = Math.max(
+      0,
+      productSku.quantityAvailable + lineItem.quantityDelta,
+    );
+    const businessEventKey = `${sourceId}:sku:${lineItem.productSkuId}`;
+    const inventoryEffect = await applyInventoryEffectWithCtx(ctx, {
+      activityType:
+        lineItem.countedQuantity === undefined
+          ? "stock_adjustment"
+          : "stock_cycle_count",
       actorUserId: args.actorUserId,
+      businessEventKey,
+      compatibilityBalance: {
+        onHandQuantity: nextOnHand,
+        sellableQuantity: Math.min(nextOnHand, nextSellable),
+      },
+      completeness:
+        reportingPeriod.kind === "resolved" ? "complete" : "partial",
+      contentFingerprint: [
+        "stock-adjustment:v1",
+        String(args.batchId),
+        String(lineItem.productSkuId),
+        String(lineItem.systemQuantity),
+        String(lineItem.quantityDelta),
+        lineItem.countedQuantity === undefined
+          ? "manual"
+          : String(lineItem.countedQuantity),
+        args.reasonCode,
+      ].join(":"),
+      effectType: "adjustment",
       movementType:
         lineItem.countedQuantity === undefined ? "adjustment" : "cycle_count",
       notes: args.notes,
-      organizationId: args.organizationId,
-      productId: lineItem.productId,
+      occurrenceAt: now,
+      ...(reportingPeriod.kind === "resolved"
+        ? {
+            operatingDate: reportingPeriod.operatingDate,
+            scheduleVersionId:
+              reportingPeriod.scheduleVersionId as Id<"storeSchedule">,
+          }
+        : {}),
+      organizationId,
+      physicalQuantityDelta: lineItem.quantityDelta,
+      productId: productSku.productId,
       productSkuId: lineItem.productSkuId,
-      quantityDelta: lineItem.quantityDelta,
       reasonCode: args.reasonCode,
+      recordedAt: now,
+      sellableQuantityDelta: lineItem.quantityDelta,
+      sourceDomain: "inventory",
       sourceId,
+      sourceLineId: String(lineItem.productSkuId),
       sourceType: "stock_adjustment_batch",
       storeId: args.storeId,
+      valuation:
+        lineItem.quantityDelta > 0
+          ? {
+              costBasis: uncostedBasis(),
+              kind: "inbound",
+              quantity: lineItem.quantityDelta,
+            }
+          : {
+              disposition: "stock_correction",
+              kind: "outbound",
+              quantity: Math.abs(lineItem.quantityDelta),
+            },
       workItemId: args.workItemId,
     });
+    const inventoryMovement = inventoryEffect.movement;
 
     if (inventoryMovement) {
       inventoryMovements.push(inventoryMovement);
@@ -457,7 +517,7 @@ async function applyStockAdjustmentBatchWithCtx(
   await autoResolveSyncedSaleInventoryReviewsForStockAdjustmentWithCtx(ctx, {
     actorUserId: args.actorUserId,
     inventoryMovements,
-    organizationId: args.organizationId,
+    organizationId,
     stockAdjustmentBatchId: args.batchId,
     storeId: args.storeId,
   });
@@ -975,7 +1035,8 @@ export async function getInventoryUnitSummaryWithCtx(
       return {
         availableUnits: summary.availableUnits + availableUnits,
         hasMoreSkus:
-          summary.hasMoreSkus || productSkus.length === INVENTORY_SUMMARY_SKU_LIMIT,
+          summary.hasMoreSkus ||
+          productSkus.length === INVENTORY_SUMMARY_SKU_LIMIT,
         onHandUnits: summary.onHandUnits + onHandUnits,
         reservedUnits: summary.reservedUnits + reservedUnits,
         skuCount: summary.skuCount + 1,

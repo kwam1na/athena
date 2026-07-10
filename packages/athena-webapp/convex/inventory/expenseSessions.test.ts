@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ok } from "../../shared/commandResult";
+import { ok, userError } from "../../shared/commandResult";
+import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
 
 const mocks = vi.hoisted(() => ({
   createExpenseTransactionFromSessionHandler: vi.fn(),
+  releaseLegacyExpenseQuantityPatchHolds: vi.fn(),
 }));
 
 vi.mock("./expenseTransactions", () => ({
@@ -10,17 +12,57 @@ vi.mock("./expenseTransactions", () => ({
     mocks.createExpenseTransactionFromSessionHandler,
 }));
 
+vi.mock("./helpers/inventoryHolds", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./helpers/inventoryHolds")>()),
+  releaseLegacyExpenseQuantityPatchHolds:
+    mocks.releaseLegacyExpenseQuantityPatchHolds,
+}));
+
 import {
+  bindExpenseSessionToRegisterSession,
   completeExpenseSession,
   createExpenseSession,
+  getActiveExpenseSession,
+  getExpenseSessionById,
+  getStoreExpenseSessions,
+  holdExpenseSession,
   releaseExpenseSessionItems,
   releaseExpenseSessionInventoryHoldsAndDeleteItems,
+  resumeExpenseSession,
   updateExpenseSession,
   voidExpenseSession,
 } from "./expenseSessions";
 
 afterEach(() => {
   vi.restoreAllMocks();
+  mocks.releaseLegacyExpenseQuantityPatchHolds.mockReset();
+});
+
+describe("expense session return contracts", () => {
+  it("accepts representative query and command results", () => {
+    const unavailable = userError({
+      code: "unavailable",
+      message: "Expense session is temporarily unavailable.",
+    });
+
+    assertConformsToExportedReturns(getStoreExpenseSessions, []);
+    assertConformsToExportedReturns(getExpenseSessionById, null);
+    assertConformsToExportedReturns(getActiveExpenseSession, null);
+    assertConformsToExportedReturns(createExpenseSession, unavailable);
+    assertConformsToExportedReturns(
+      bindExpenseSessionToRegisterSession,
+      unavailable,
+    );
+    assertConformsToExportedReturns(updateExpenseSession, unavailable);
+    assertConformsToExportedReturns(holdExpenseSession, unavailable);
+    assertConformsToExportedReturns(resumeExpenseSession, unavailable);
+    assertConformsToExportedReturns(completeExpenseSession, unavailable);
+    assertConformsToExportedReturns(voidExpenseSession, unavailable);
+    assertConformsToExportedReturns(
+      releaseExpenseSessionInventoryHoldsAndDeleteItems,
+      unavailable,
+    );
+  });
 });
 
 type SessionRecord = {
@@ -440,6 +482,17 @@ describe("expense session command results", () => {
       ],
       productSkus: [{ _id: "sku-1", quantityAvailable: 4 }],
     });
+    mocks.releaseLegacyExpenseQuantityPatchHolds.mockImplementationOnce(
+      async (
+        mutationCtx: { db: { patch: Function } },
+        items: Array<{ quantity: number; skuId: string }>,
+      ) => {
+        const quantity = items.reduce((total, item) => total + item.quantity, 0);
+        await mutationCtx.db.patch("productSku", "sku-1", {
+          quantityAvailable: 4 + quantity,
+        });
+      },
+    );
 
     const result = await getHandler(voidExpenseSession)(ctx as never, {
       sessionId: "expense-session-1",
@@ -455,6 +508,10 @@ describe("expense session command results", () => {
     expect(ctx.db.patch).toHaveBeenCalledWith("productSku", "sku-1", {
       quantityAvailable: 9,
     });
+    expect(mocks.releaseLegacyExpenseQuantityPatchHolds).toHaveBeenCalledWith(
+      ctx,
+      [{ quantity: 5, skuId: "sku-1" }],
+    );
   });
 
   it("does not expire or release old expense sessions from the legacy cleanup hook", async () => {

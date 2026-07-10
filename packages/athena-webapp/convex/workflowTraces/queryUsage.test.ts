@@ -228,32 +228,77 @@ function createAdminTraceReadCtx(
     },
     query(tableName: string) {
       if (tableName === "athenaUser") {
+        const athenaUser = {
+          _id: "athena-user-1",
+          email: "manager@example.com",
+          normalizedEmail: "manager@example.com",
+        };
         return {
-          collect: async () => [
-            {
-              _id: "athena-user-1",
-              email: "manager@example.com",
-            },
-          ],
+          collect: async () => [athenaUser],
           filter: () => ({
-            first: async () => ({
-              _id: "athena-user-1",
-              email: "manager@example.com",
-            }),
+            first: async () => athenaUser,
           }),
+          withIndex: (
+            _indexName: string,
+            apply: (builder: {
+              eq(field: string, value: unknown): unknown;
+            }) => unknown,
+          ) => {
+            const filters: Array<[string, unknown]> = [];
+            const builder = {
+              eq(field: string, value: unknown) {
+                filters.push([field, value]);
+                return builder;
+              },
+            };
+            apply(builder);
+            const matches = filters.every(
+              ([field, value]) =>
+                athenaUser[field as keyof typeof athenaUser] === value,
+            )
+              ? [athenaUser]
+              : [];
+            return {
+              first: async () => matches[0] ?? null,
+              take: async (limit: number) => matches.slice(0, limit),
+            };
+          },
         };
       }
 
       if (tableName === "organizationMember") {
+        const membership = {
+          _id: "member-1",
+          organizationId: "org-1",
+          role,
+          userId: "athena-user-1",
+        };
         return {
           filter: () => ({
-            first: async () => ({
-              _id: "member-1",
-              organizationId: "org-1",
-              role,
-              userId: "athena-user-1",
-            }),
+            first: async () => membership,
           }),
+          withIndex: (
+            _indexName: string,
+            apply: (builder: {
+              eq(field: string, value: unknown): unknown;
+            }) => unknown,
+          ) => {
+            const filters: Array<[string, unknown]> = [];
+            const builder = {
+              eq(field: string, value: unknown) {
+                filters.push([field, value]);
+                return builder;
+              },
+            };
+            apply(builder);
+            const matches = filters.every(
+              ([field, value]) =>
+                membership[field as keyof typeof membership] === value,
+            )
+              ? [membership]
+              : [];
+            return { first: async () => matches[0] ?? null };
+          },
         };
       }
 

@@ -12,6 +12,8 @@ import {
   type ExpenseSessionTraceRecorder,
   type ExpenseSessionTraceStage,
 } from "./expenseSessionTracing";
+import { applyInventoryEffectWithCtx } from "../../../reporting/inventory/effects";
+import { resolveReportingOperatingPeriodWithCtx } from "../../../reporting/operatingPeriods";
 
 type CommandFailureStatus =
   | "cashierMismatch"
@@ -202,9 +204,7 @@ async function validateExpensePendingCheckoutLine(
     productSkuId: Id<"productSku">;
     storeId: Id<"store">;
   },
-): Promise<
-  ExpenseSessionCommandOutcome<{ isPendingCheckoutLine: boolean }>
-> {
+): Promise<ExpenseSessionCommandOutcome<{ isPendingCheckoutLine: boolean }>> {
   if (!args.pendingCheckoutItemId) {
     return success({ isPendingCheckoutLine: false });
   }
@@ -274,19 +274,28 @@ interface ExpenseInventoryHoldGatewayResult {
 
 interface ExpenseInventoryHoldGateway {
   acquireHold(
-    skuId: Id<"productSku">,
-    quantity: number,
+    args: ExpenseInventoryHoldEffectArgs,
   ): Promise<ExpenseInventoryHoldGatewayResult>;
   adjustHold(
-    skuId: Id<"productSku">,
-    oldQuantity: number,
-    newQuantity: number,
+    args: ExpenseInventoryHoldEffectArgs & {
+      oldQuantity: number;
+    },
   ): Promise<ExpenseInventoryHoldGatewayResult>;
   releaseHold(
-    skuId: Id<"productSku">,
-    quantity: number,
+    args: ExpenseInventoryHoldEffectArgs,
   ): Promise<ExpenseInventoryHoldGatewayResult>;
 }
+
+type ExpenseInventoryHoldEffectArgs = {
+  actorStaffProfileId: Id<"staffProfile">;
+  businessEventKey: string;
+  occurredAt: number;
+  quantity: number;
+  sessionId: Id<"expenseSession">;
+  sourceLineId: string;
+  skuId: Id<"productSku">;
+  storeId: Id<"store">;
+};
 
 export function createExpenseSessionCommandService(
   dependencies: ExpenseSessionCommandDependencies,
@@ -318,8 +327,7 @@ export function createExpenseSessionCommandService(
 
       const existingSessionOnDifferentTerminal = staffSessions.find(
         (session) =>
-          session.terminalId !== args.terminalId &&
-          !isSessionExpired(session),
+          session.terminalId !== args.terminalId && !isSessionExpired(session),
       );
 
       if (existingSessionOnDifferentTerminal) {
@@ -540,10 +548,12 @@ export function createExpenseSessionCommandService(
       }
       const isProvisionalImportLine =
         provisionalImportValidation.data.isProvisionalImportLine;
-      const sameSkuItems = (await dependencies.repository.listSessionItems(
-        args.sessionId,
-      )).filter((item) => item.productSkuId === args.productSkuId);
-      const linkedPendingTrustedItemIds = new Set<Id<"posPendingCheckoutItem">>();
+      const sameSkuItems = (
+        await dependencies.repository.listSessionItems(args.sessionId)
+      ).filter((item) => item.productSkuId === args.productSkuId);
+      const linkedPendingTrustedItemIds = new Set<
+        Id<"posPendingCheckoutItem">
+      >();
       if (!isPendingCheckoutLine && args.pendingCheckoutItemId) {
         linkedPendingTrustedItemIds.add(args.pendingCheckoutItemId);
       }
@@ -606,11 +616,17 @@ export function createExpenseSessionCommandService(
       if (existingItem) {
         let nextInventoryHoldApplied = existingItem.inventoryHoldApplied;
         if (expenseSessionItemHasTrustedAvailabilityHold(existingItem)) {
-          const adjustResult = await dependencies.inventory.adjustHold(
-            args.productSkuId,
-            existingItem.quantity,
-            args.quantity,
-          );
+          const adjustResult = await dependencies.inventory.adjustHold({
+            actorStaffProfileId: args.staffProfileId,
+            businessEventKey: `expense_session:${args.sessionId}:item:${existingItem._id}:adjust:${existingItem.updatedAt}`,
+            occurredAt: now,
+            oldQuantity: existingItem.quantity,
+            quantity: args.quantity,
+            sessionId: args.sessionId,
+            sourceLineId: String(existingItem._id),
+            skuId: args.productSkuId,
+            storeId: validation.data.storeId,
+          });
           if (!adjustResult.success) {
             return failure(
               "inventoryUnavailable",
@@ -652,10 +668,16 @@ export function createExpenseSessionCommandService(
       } else {
         let inventoryHoldApplied = false;
         if (!isPendingCheckoutLine && !isProvisionalImportLine) {
-          const holdResult = await dependencies.inventory.acquireHold(
-            args.productSkuId,
-            args.quantity,
-          );
+          const holdResult = await dependencies.inventory.acquireHold({
+            actorStaffProfileId: args.staffProfileId,
+            businessEventKey: `expense_session:${args.sessionId}:sku:${args.productSkuId}:acquire:${validation.data.updatedAt}`,
+            occurredAt: now,
+            quantity: args.quantity,
+            sessionId: args.sessionId,
+            sourceLineId: nextLineSourceKey,
+            skuId: args.productSkuId,
+            storeId: validation.data.storeId,
+          });
           if (!holdResult.success) {
             return failure(
               "inventoryUnavailable",
@@ -738,10 +760,16 @@ export function createExpenseSessionCommandService(
       }
 
       if (expenseSessionItemHasTrustedAvailabilityHold(item)) {
-        const releaseResult = await dependencies.inventory.releaseHold(
-          item.productSkuId,
-          item.quantity,
-        );
+        const releaseResult = await dependencies.inventory.releaseHold({
+          actorStaffProfileId: args.staffProfileId,
+          businessEventKey: `expense_session:${args.sessionId}:item:${item._id}:release`,
+          occurredAt: now,
+          quantity: item.quantity,
+          sessionId: args.sessionId,
+          sourceLineId: String(item._id),
+          skuId: item.productSkuId,
+          storeId: validation.data.storeId,
+        });
         if (!releaseResult.success) {
           return failure(
             "inventoryUnavailable",
@@ -794,10 +822,24 @@ export function createExpenseSessionCommandService(
       }
 
       for (const [skuId, quantity] of heldQuantities.entries()) {
-        const releaseResult = await dependencies.inventory.releaseHold(
-          skuId,
+        const sourceLineIds = items
+          .filter(
+            (item) =>
+              item.productSkuId === skuId &&
+              expenseSessionItemHasTrustedAvailabilityHold(item),
+          )
+          .map((item) => String(item._id))
+          .sort();
+        const releaseResult = await dependencies.inventory.releaseHold({
+          actorStaffProfileId: session.staffProfileId,
+          businessEventKey: `expense_session:${args.sessionId}:clear:${skuId}:${sourceLineIds.join(",")}`,
+          occurredAt: now,
           quantity,
-        );
+          sessionId: args.sessionId,
+          sourceLineId: sourceLineIds.join(","),
+          skuId,
+          storeId: session.storeId,
+        });
         if (!releaseResult.success) {
           return failure(
             "inventoryUnavailable",
@@ -932,34 +974,92 @@ function createExpenseInventoryHoldGateway(
   ctx: MutationCtx,
 ): ExpenseInventoryHoldGateway {
   return {
-    acquireHold(skuId, quantity) {
-      return acquireExpenseQuantityPatchHold(ctx, skuId, quantity);
+    acquireHold(args) {
+      return acquireExpenseQuantityEffectHold(ctx, args);
     },
-    adjustHold(skuId, oldQuantity, newQuantity) {
-      return adjustExpenseQuantityPatchHold(
-        ctx,
-        skuId,
-        oldQuantity,
-        newQuantity,
-      );
+    adjustHold(args) {
+      return adjustExpenseQuantityEffectHold(ctx, args);
     },
-    releaseHold(skuId, quantity) {
-      return releaseExpenseQuantityPatchHold(ctx, skuId, quantity);
+    releaseHold(args) {
+      return releaseExpenseQuantityEffectHold(ctx, args);
     },
   };
 }
 
-async function acquireExpenseQuantityPatchHold(
+async function applyExpenseAvailabilityEffect(
   ctx: MutationCtx,
-  skuId: Id<"productSku">,
-  quantity: number,
+  args: ExpenseInventoryHoldEffectArgs & {
+    activityType: "reservation_acquired" | "reservation_released";
+    sellableQuantityDelta: number;
+  },
+) {
+  const sku = await ctx.db.get("productSku", args.skuId);
+  if (!sku || typeof sku.quantityAvailable !== "number") {
+    return false;
+  }
+  const store = await ctx.db.get("store", args.storeId);
+  if (!store || sku.storeId !== args.storeId) {
+    return false;
+  }
+  const reportingPeriod = await resolveReportingOperatingPeriodWithCtx(ctx, {
+    occurrenceAt: args.occurredAt,
+    storeId: args.storeId,
+  });
+  const nextSellable = Math.min(
+    sku.inventoryCount,
+    sku.quantityAvailable + args.sellableQuantityDelta,
+  );
+  await applyInventoryEffectWithCtx(ctx, {
+    activityStatus:
+      args.activityType === "reservation_acquired" ? "active" : "released",
+    activityType: args.activityType,
+    actorStaffProfileId: args.actorStaffProfileId,
+    businessEventKey: args.businessEventKey,
+    compatibilityBalance: {
+      onHandQuantity: sku.inventoryCount,
+      sellableQuantity: nextSellable,
+    },
+    completeness: reportingPeriod.kind === "resolved" ? "complete" : "partial",
+    contentFingerprint: `expense-hold:v1:${args.businessEventKey}:${args.sellableQuantityDelta}`,
+    effectType: "adjustment",
+    movementType: "reservation",
+    occurrenceAt: args.occurredAt,
+    ...(reportingPeriod.kind === "resolved"
+      ? {
+          operatingDate: reportingPeriod.operatingDate,
+          scheduleVersionId:
+            reportingPeriod.scheduleVersionId as Id<"storeSchedule">,
+        }
+      : {}),
+    organizationId: store.organizationId,
+    physicalQuantityDelta: 0,
+    productId: sku.productId,
+    productSkuId: args.skuId,
+    reasonCode:
+      args.activityType === "reservation_acquired"
+        ? "expense_inventory_hold_acquired"
+        : "expense_inventory_hold_released",
+    recordedAt: args.occurredAt,
+    sellableQuantityDelta: args.sellableQuantityDelta,
+    sourceDomain: "pos",
+    sourceId: String(args.sessionId),
+    sourceLineId: args.sourceLineId,
+    sourceType: "expense_session",
+    storeId: args.storeId,
+    valuation: { kind: "availability_only" },
+  });
+  return true;
+}
+
+async function acquireExpenseQuantityEffectHold(
+  ctx: MutationCtx,
+  args: ExpenseInventoryHoldEffectArgs,
 ): Promise<ExpenseInventoryHoldGatewayResult> {
-  const sku = await ctx.db.get("productSku", skuId);
+  const sku = await ctx.db.get("productSku", args.skuId);
   if (!sku || typeof sku.quantityAvailable !== "number") {
     return { success: false, message: "Product not found" };
   }
-
-  if (sku.quantityAvailable < quantity) {
+  if (sku.quantityAvailable < args.quantity) {
     return {
       success: true,
       holdApplied: false,
@@ -967,45 +1067,49 @@ async function acquireExpenseQuantityPatchHold(
       message: `Only ${sku.quantityAvailable} unit${sku.quantityAvailable !== 1 ? "s" : ""} available`,
     };
   }
-
-  await ctx.db.patch("productSku", skuId, {
-    quantityAvailable: sku.quantityAvailable - quantity,
+  const applied = await applyExpenseAvailabilityEffect(ctx, {
+    ...args,
+    activityType: "reservation_acquired",
+    sellableQuantityDelta: -args.quantity,
   });
+  if (!applied) return { success: false, message: "Product not found" };
   return { success: true, holdApplied: true };
 }
 
-async function releaseExpenseQuantityPatchHold(
+async function releaseExpenseQuantityEffectHold(
   ctx: MutationCtx,
-  skuId: Id<"productSku">,
-  quantity: number,
+  args: ExpenseInventoryHoldEffectArgs,
 ): Promise<ExpenseInventoryHoldGatewayResult> {
-  const sku = await ctx.db.get("productSku", skuId);
-  if (!sku || typeof sku.quantityAvailable !== "number") {
-    return { success: true, holdApplied: false };
-  }
-
-  await ctx.db.patch("productSku", skuId, {
-    quantityAvailable: sku.quantityAvailable + quantity,
+  const applied = await applyExpenseAvailabilityEffect(ctx, {
+    ...args,
+    activityType: "reservation_released",
+    sellableQuantityDelta: args.quantity,
   });
-  return { success: true, holdApplied: true };
+  return applied
+    ? { success: true, holdApplied: true }
+    : { success: true, holdApplied: false };
 }
 
-async function adjustExpenseQuantityPatchHold(
+async function adjustExpenseQuantityEffectHold(
   ctx: MutationCtx,
-  skuId: Id<"productSku">,
-  oldQuantity: number,
-  newQuantity: number,
+  args: ExpenseInventoryHoldEffectArgs & { oldQuantity: number },
 ): Promise<ExpenseInventoryHoldGatewayResult> {
-  const quantityChange = newQuantity - oldQuantity;
+  const quantityChange = args.quantity - args.oldQuantity;
   if (quantityChange === 0) {
     return { success: true, holdApplied: true };
   }
 
   if (quantityChange > 0) {
-    return acquireExpenseQuantityPatchHold(ctx, skuId, quantityChange);
+    return acquireExpenseQuantityEffectHold(ctx, {
+      ...args,
+      quantity: quantityChange,
+    });
   }
 
-  return releaseExpenseQuantityPatchHold(ctx, skuId, Math.abs(quantityChange));
+  return releaseExpenseQuantityEffectHold(ctx, {
+    ...args,
+    quantity: Math.abs(quantityChange),
+  });
 }
 
 function buildNextSessionNumber(
@@ -1101,10 +1205,7 @@ function validateActiveSession(
   staffProfileId: Id<"staffProfile">,
 ): ExpenseSessionCommandOutcome<Doc<"expenseSession">> {
   if (!session) {
-    return failure(
-      "sessionExpired",
-      "Session not found.",
-    );
+    return failure("sessionExpired", "Session not found.");
   }
 
   if (session.staffProfileId !== staffProfileId) {

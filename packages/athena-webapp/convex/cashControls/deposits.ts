@@ -144,6 +144,7 @@ type CashControlDepositAllocation = Pick<
   | "_id"
   | "actorStaffProfileId"
   | "amount"
+  | "businessEventKey"
   | "externalReference"
   | "notes"
   | "recordedAt"
@@ -1359,6 +1360,24 @@ export const recordRegisterSessionDeposit = mutation({
       registerSessionId: args.registerSessionId,
       submissionKey,
     });
+    const businessEventKey = `cash_deposit:${args.registerSessionId}:${submissionKey}`;
+    const paymentAllocationArgs = {
+      actorStaffProfileId,
+      actorUserId: athenaUserId,
+      allocationType: CASH_DEPOSIT_ALLOCATION_TYPE,
+      amount: storedAmount,
+      businessEventKey,
+      collectedInStore: true,
+      direction: "out" as const,
+      externalReference: trimOptional(args.reference),
+      method: "cash",
+      notes: trimOptional(args.notes),
+      organizationId: registerSession.organizationId,
+      registerSessionId: args.registerSessionId,
+      storeId: args.storeId,
+      targetId,
+      targetType: CASH_DEPOSIT_SUBJECT_TYPE,
+    };
     const existingDeposit = await ctx.db
       .query("paymentAllocation")
       .withIndex("by_storeId_target", (q) =>
@@ -1370,9 +1389,12 @@ export const recordRegisterSessionDeposit = mutation({
       .first();
 
     if (existingDeposit && isCashControlDepositAllocation(existingDeposit)) {
+      const validatedDeposit = existingDeposit.businessEventKey
+        ? await recordPaymentAllocationWithCtx(ctx, paymentAllocationArgs)
+        : existingDeposit;
       return ok({
         action: "duplicate" as const,
-        deposit: existingDeposit,
+        deposit: validatedDeposit,
         registerSession,
       });
     }
@@ -1398,22 +1420,10 @@ export const recordRegisterSessionDeposit = mutation({
       });
     }
 
-    const deposit = await recordPaymentAllocationWithCtx(ctx, {
-      actorStaffProfileId,
-      actorUserId: athenaUserId,
-      allocationType: CASH_DEPOSIT_ALLOCATION_TYPE,
-      amount: storedAmount,
-      collectedInStore: true,
-      direction: "out",
-      externalReference: trimOptional(args.reference),
-      method: "cash",
-      notes: trimOptional(args.notes),
-      organizationId: registerSession.organizationId,
-      registerSessionId: args.registerSessionId,
-      storeId: args.storeId,
-      targetId,
-      targetType: CASH_DEPOSIT_SUBJECT_TYPE,
-    });
+    const deposit = await recordPaymentAllocationWithCtx(
+      ctx,
+      paymentAllocationArgs,
+    );
     const updatedRegisterSession = await recordRegisterSessionDepositWithCtx(
       ctx,
       {

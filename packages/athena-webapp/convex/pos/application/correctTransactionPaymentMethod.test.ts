@@ -10,9 +10,11 @@ import { createApprovalRequesterChallengeWithCtx } from "../../operations/approv
 import { recordOperationalEventWithCtx } from "../../operations/operationalEvents";
 import { correctSameAmountSinglePaymentAllocationWithCtx } from "../../operations/paymentAllocations";
 import {
+  getStoreById,
   getPosTransactionById,
   patchPosTransaction,
 } from "../infrastructure/repositories/transactionRepository";
+import { appendReportingIngressWithCtx } from "../../reporting/ingress";
 
 vi.mock("../../operations/operationalEvents", () => ({
   recordOperationalEventWithCtx: vi.fn(),
@@ -47,7 +49,12 @@ vi.mock("../../operations/paymentAllocations", () => ({
   correctSameAmountSinglePaymentAllocationWithCtx: vi.fn(),
 }));
 
+vi.mock("../../reporting/ingress", () => ({
+  appendReportingIngressWithCtx: vi.fn(),
+}));
+
 vi.mock("../infrastructure/repositories/transactionRepository", () => ({
+  getStoreById: vi.fn(),
   getPosTransactionById: vi.fn(),
   patchPosTransaction: vi.fn(),
 }));
@@ -63,6 +70,11 @@ beforeEach(() => {
         requestedByStaffProfileId: "cashier-1",
       },
     },
+  } as never);
+  vi.mocked(getStoreById).mockResolvedValue({
+    _id: "store-1",
+    currency: "GHS",
+    organizationId: "org-1",
   } as never);
 });
 
@@ -278,6 +290,27 @@ describe("correctTransactionPaymentMethod", () => {
         operationalEventId: "event-1",
       }),
     );
+    expect(appendReportingIngressWithCtx).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        businessEventKey: "pos:txn-1:correction:event-1",
+        correctedSettlementMethod: "card",
+        priorSettlementMethod: "cash",
+        settlementAmountMinor: 0,
+        sourceReferences: expect.arrayContaining([
+          expect.objectContaining({
+            relation: "supports",
+            sourceId: "event-1",
+            sourceType: "operational_event",
+          }),
+        ]),
+        sourceEventType: "pos_settlement_method_reclassified",
+      }),
+    );
+    const correctionIngress = vi.mocked(appendReportingIngressWithCtx).mock
+      .calls.at(-1)?.[1];
+    expect(correctionIngress).not.toHaveProperty("grossAmountMinor");
+    expect(correctionIngress).not.toHaveProperty("netAmountMinor");
   });
 
   it("closes the queued approval request after same-submission manager approval", async () => {

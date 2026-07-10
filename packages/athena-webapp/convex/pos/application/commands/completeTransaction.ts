@@ -33,7 +33,6 @@ import {
   listTransactionItems,
   patchPosSession,
   patchPosTransaction,
-  patchProductSku,
 } from "../../infrastructure/repositories/transactionRepository";
 import {
   ok,
@@ -50,10 +49,6 @@ import {
   type SkuActivityRecorder,
   validateInventoryAvailability,
 } from "../../../inventory/helpers/inventoryHolds";
-import {
-  recordInventoryMovementWithCtx,
-  recordInventoryMovementWithDispositionWithCtx,
-} from "../../../operations/inventoryMovements";
 import { markCatalogSummaryNeedsRefresh } from "../../../inventory/catalogSummary";
 import { recordSkuActivityEventWithCtx } from "../../../operations/skuActivity";
 import {
@@ -61,6 +56,17 @@ import {
   recordPendingCheckoutItemSaleEvidence,
 } from "./createOrReusePendingCheckoutItem";
 import { readActiveProvisionalImportSkuForStoreSku } from "../queries/listRegisterCatalog";
+import {
+  appendReportingIngressWithCtx,
+  type ReportingIngressLineInput,
+} from "../../../reporting/ingress";
+import { canonicalReportingBusinessEventKey } from "../../../reporting/factIdentity";
+import {
+  applyCommerceInventoryEffectWithCtx,
+  outboundBasisFromEffect,
+  reportingLineCostFromEffect,
+  uncostedOutboundBasis,
+} from "../../../reporting/inventory/commerceEffects";
 
 type InventoryImportProvisionalSkuId = Id<"inventoryImportProvisionalSku">;
 
@@ -99,6 +105,273 @@ type TransactionTotals = {
   tax: number;
   total: number;
 };
+
+function reportingCurrency(currency: string | undefined) {
+  const currencyCode = currency?.trim().toUpperCase();
+  return currencyCode
+    ? { currencyCode, currencyMinorUnitScale: 2 }
+    : {};
+}
+
+async function appendCompletedPosSaleIngress(
+  ctx: MutationCtx,
+  args: {
+    acceptedAt: number;
+    items: Array<{
+      inventoryImportProvisionalSkuId?: Id<"inventoryImportProvisionalSku">;
+      lineKey: string;
+      pendingCheckoutItemId?: Id<"posPendingCheckoutItem">;
+      productId: Id<"product">;
+      productSkuId: Id<"productSku">;
+      quantity: number;
+      totalAmountMinor: number;
+      unitPriceMinor: number;
+    }>;
+    organizationId?: Id<"organization">;
+    storeCurrency?: string;
+    storeId: Id<"store">;
+    synchronizedAt?: number;
+    totals: TransactionTotals;
+    transactionId: Id<"posTransaction">;
+  },
+) {
+  if (!args.organizationId) return null;
+  const inventoryEffects =
+    ctx.db && typeof ctx.db.query === "function"
+      ? await Promise.all(
+          args.items.map((item) =>
+            ctx.db
+        .query("reportingInventoryEffect")
+        .withIndex("by_storeId_sourceDomain_businessEventKey", (q) =>
+          q
+            .eq("storeId", args.storeId)
+            .eq("sourceDomain", "pos")
+            .eq(
+              "businessEventKey",
+              `pos:${args.transactionId}:line:${item.lineKey}:sale`,
+            ),
+        )
+              .first(),
+          ),
+        )
+      : args.items.map(() => null);
+  const [products, pendingCheckoutItems] =
+    ctx.db && typeof ctx.db.get === "function"
+      ? await Promise.all([
+          Promise.all(
+            args.items.map((item) => ctx.db.get("product", item.productId)),
+          ),
+          Promise.all(
+            args.items.map((item) =>
+              item.pendingCheckoutItemId
+                ? ctx.db.get("posPendingCheckoutItem", item.pendingCheckoutItemId)
+                : null,
+            ),
+          ),
+        ])
+      : [args.items.map(() => null), args.items.map(() => null)];
+  const lines: ReportingIngressLineInput[] = args.items.map((item, index) => {
+    const inventoryEffect = inventoryEffects[index];
+    const product = products[index];
+    const pendingCheckoutItem = pendingCheckoutItems[index];
+    const pendingCheckoutIsResolved =
+      pendingCheckoutItem &&
+      (pendingCheckoutItem.status === "approved" ||
+        pendingCheckoutItem.status === "linked_to_catalog") &&
+      pendingCheckoutItem.approvedProductSkuId;
+    return {
+      allocatedDiscountMinor: 0,
+      attributionKind: item.pendingCheckoutItemId
+        ? "pending_checkout"
+        : item.inventoryImportProvisionalSkuId
+          ? "inventory_import"
+          : "direct",
+      canonicalProductSkuId: pendingCheckoutIsResolved
+        ? pendingCheckoutItem.approvedProductSkuId
+        : item.pendingCheckoutItemId
+          ? undefined
+          : item.productSkuId,
+      categoryId: product?.categoryId,
+      channel: "pos",
+      ...reportingLineCostFromEffect(inventoryEffect, item.quantity),
+      discountAmountMinor: 0,
+      grossAmountMinor: item.totalAmountMinor,
+      ...(inventoryEffect ? { inventoryEffectId: inventoryEffect._id } : {}),
+      inventoryImportProvisionalSkuId:
+        item.inventoryImportProvisionalSkuId,
+      lineKey: item.lineKey,
+      lineKind: "merchandise",
+      netAmountMinor: item.totalAmountMinor,
+      originalProductSkuId:
+        pendingCheckoutItem?.provisionalProductSkuId ?? item.productSkuId,
+      originalQuantity: item.quantity,
+      pendingCheckoutItemId: item.pendingCheckoutItemId,
+      productId: item.productId,
+      productSkuId: item.productSkuId,
+      provisionalProductSkuId:
+        pendingCheckoutItem?.provisionalProductSkuId ??
+        (item.pendingCheckoutItemId ? item.productSkuId : undefined),
+      quantity: item.quantity,
+      recognizedNetAmountMinor: item.totalAmountMinor,
+      recognitionCategoryId: product?.categoryId,
+      recognitionProductId: item.productId,
+      recognitionProductSkuId: item.productSkuId,
+      unitPriceMinor: item.unitPriceMinor,
+    };
+  });
+  if (args.totals.tax !== 0) {
+    lines.push({
+      costStatus: "not_applicable",
+      discountAmountMinor: 0,
+      grossAmountMinor: args.totals.tax,
+      lineKey: "tax",
+      lineKind: "tax",
+      netAmountMinor: args.totals.tax,
+      quantity: 0,
+      taxAmountMinor: args.totals.tax,
+    });
+  }
+  const contentFingerprint = [
+    "pos-complete-v1",
+    args.transactionId,
+    args.totals.subtotal,
+    args.totals.tax,
+    args.totals.total,
+    ...args.items.flatMap((item) => [
+      item.lineKey,
+      item.productSkuId,
+      item.pendingCheckoutItemId,
+      item.inventoryImportProvisionalSkuId,
+      item.quantity,
+      item.unitPriceMinor,
+      item.totalAmountMinor,
+    ]),
+    ...lines.flatMap((line) => [
+      line.canonicalProductSkuId,
+      line.originalProductSkuId,
+      line.recognitionProductId,
+      line.recognitionCategoryId,
+      line.recognitionProductSkuId,
+      line.provisionalProductSkuId,
+      line.attributionKind,
+    ]),
+  ].join(":");
+
+  return appendReportingIngressWithCtx(ctx, {
+    acceptedAt: args.acceptedAt,
+    adapterVersion: 1,
+    businessEventKey: canonicalReportingBusinessEventKey({
+      kind: "pos_sale",
+      transactionId: String(args.transactionId),
+    }),
+    contentFingerprint,
+    discountAmountMinor: 0,
+    grossAmountMinor: args.totals.subtotal,
+    lines,
+    materialFields: ["amountMinor", "occurrenceAt", "quantity", "storeId"],
+    netAmountMinor: args.totals.total,
+    occurredAt: args.acceptedAt,
+    organizationId: args.organizationId,
+    quantity: args.items.reduce((sum, item) => sum + item.quantity, 0),
+    sourceDomain: "pos",
+    sourceEventType: args.synchronizedAt
+      ? "pos_completed_offline"
+      : "pos_completed",
+    sourceReferences: [
+      {
+        relation: "owns",
+        sourceId: String(args.transactionId),
+        sourceType: "pos_transaction",
+      },
+    ],
+    storeId: args.storeId,
+    synchronizedAt: args.synchronizedAt,
+    taxAmountMinor: args.totals.tax,
+    ...reportingCurrency(args.storeCurrency),
+  });
+}
+
+async function appendPosVoidIngress(
+  ctx: MutationCtx,
+  args: {
+    acceptedAt: number;
+    items: Array<{
+      item: Awaited<ReturnType<typeof listTransactionItems>>[number];
+    }>;
+    organizationId?: Id<"organization">;
+    storeCurrency?: string;
+    transaction: NonNullable<Awaited<ReturnType<typeof getPosTransactionById>>>;
+  },
+) {
+  if (!args.organizationId) return null;
+  const lines: ReportingIngressLineInput[] = args.items.map(({ item }) => ({
+    allocatedDiscountMinor: item.discount ?? 0,
+    attributionKind: item.pendingCheckoutItemId
+      ? "pending_checkout"
+      : item.inventoryImportProvisionalSkuId
+        ? "inventory_import"
+        : "direct",
+    canonicalProductSkuId: item.pendingCheckoutItemId
+      ? undefined
+      : item.productSkuId,
+    channel: "pos",
+    costStatus: "not_applicable",
+    discountAmountMinor: item.discount ?? 0,
+    grossAmountMinor: item.totalPrice,
+    inventoryImportProvisionalSkuId: item.inventoryImportProvisionalSkuId,
+    lineKey: String(item._id),
+    lineKind: "merchandise",
+    netAmountMinor: item.totalPrice,
+    originalProductSkuId: item.productSkuId,
+    originalQuantity: item.quantity,
+    pendingCheckoutItemId: item.pendingCheckoutItemId,
+    productId: item.productId,
+    productSkuId: item.productSkuId,
+    provisionalProductSkuId: item.pendingCheckoutItemId
+      ? item.productSkuId
+      : undefined,
+    // The inventory return effect owns the unit reversal. This line owns only
+    // the voided revenue so units sold are not decremented twice.
+    quantity: 0,
+    recognizedNetAmountMinor: item.totalPrice,
+    recognitionProductId: item.productId,
+    recognitionProductSkuId: item.productSkuId,
+    unitPriceMinor: item.unitPrice,
+  }));
+  return appendReportingIngressWithCtx(ctx, {
+    acceptedAt: args.acceptedAt,
+    adapterVersion: 1,
+    businessEventKey: canonicalReportingBusinessEventKey({
+      kind: "pos_void",
+      transactionId: String(args.transaction._id),
+    }),
+    contentFingerprint: [
+      "pos-void-v1",
+      args.transaction._id,
+      args.transaction.total,
+      ...lines.flatMap((line) => [line.lineKey, line.quantity, line.netAmountMinor]),
+    ].join(":"),
+    grossAmountMinor: args.transaction.subtotal,
+    lines,
+    materialFields: ["amountMinor", "occurrenceAt", "quantity", "storeId"],
+    netAmountMinor: args.transaction.total,
+    occurredAt: args.acceptedAt,
+    organizationId: args.organizationId,
+    quantity: 0,
+    sourceDomain: "pos",
+    sourceEventType: "pos_transaction_voided",
+    sourceReferences: [
+      {
+        relation: "reverses",
+        sourceId: String(args.transaction._id),
+        sourceType: "pos_transaction",
+      },
+    ],
+    storeId: args.transaction.storeId,
+    taxAmountMinor: args.transaction.tax,
+    ...reportingCurrency(args.storeCurrency),
+  });
+}
 
 function hasReadableDb(ctx: MutationCtx): ctx is MutationCtx & {
   db: { get: MutationCtx["db"]["get"] };
@@ -335,16 +608,37 @@ async function recordPosSaleInventoryMovement(
     registerSessionId?: Id<"registerSession">;
     staffProfileId?: Id<"staffProfile">;
     customerProfileId?: Id<"customerProfile">;
+    occurrenceAt: number;
+    sourceLineId: Id<"posTransactionItem">;
+    sellableQuantityDelta: number;
     transactionNumber: string;
   },
 ) {
-  await recordInventoryMovementWithCtx(ctx, {
+  if (!args.organizationId) {
+    throw new Error("POS sale organization could not be resolved.");
+  }
+  return applyCommerceInventoryEffectWithCtx(ctx, {
+    activityType: "stock_sale",
+    businessEventKey: `pos:${args.posTransactionId}:line:${args.sourceLineId}:sale`,
+    completeness: "partial",
+    contentFingerprint: [
+      "pos-sale-inventory-v1",
+      String(args.posTransactionId),
+      String(args.sourceLineId),
+      String(args.productSkuId),
+      String(args.quantity),
+      String(args.sellableQuantityDelta),
+    ].join(":"),
+    disposition: "merchandise_sale",
+    effectType: "sale",
+    kind: "outbound",
+    quantity: args.quantity,
     storeId: args.storeId,
     organizationId: args.organizationId,
     movementType: "sale",
     sourceType: "posTransaction",
     sourceId: args.posTransactionId,
-    quantityDelta: -args.quantity,
+    occurrenceAt: args.occurrenceAt,
     productId: args.productId,
     productSkuId: args.productSkuId,
     actorStaffProfileId: args.staffProfileId,
@@ -352,6 +646,9 @@ async function recordPosSaleInventoryMovement(
     registerSessionId: args.registerSessionId,
     posTransactionId: args.posTransactionId,
     reasonCode: "pos_sale",
+    sellableQuantityDelta: args.sellableQuantityDelta,
+    sourceDomain: "pos",
+    sourceLineId: String(args.sourceLineId),
     notes: `POS sale ${args.transactionNumber}`,
   });
 }
@@ -594,6 +891,7 @@ export async function updateInventory(
   ctx: MutationCtx,
   args: {
     skuId: Id<"productSku">;
+    businessEventKey: string;
     quantityToSubtract: number;
   },
 ) {
@@ -606,18 +904,34 @@ export async function updateInventory(
     throw new Error("Insufficient inventory");
   }
 
-  const newQuantity = sku.quantityAvailable - args.quantityToSubtract;
-  const newInventoryCount = Math.max(
-    0,
-    sku.inventoryCount - args.quantityToSubtract,
-  );
-
-  await patchProductSku(ctx, args.skuId, {
-    quantityAvailable: newQuantity,
-    inventoryCount: newInventoryCount,
+  const store = await getStoreById(ctx, sku.storeId);
+  if (!store?.organizationId) {
+    throw new Error("POS inventory update organization could not be resolved.");
+  }
+  const now = Date.now();
+  const effect = await applyCommerceInventoryEffectWithCtx(ctx, {
+    activityType: "stock_pos_inventory_update",
+    businessEventKey: args.businessEventKey,
+    completeness: "partial",
+    contentFingerprint: `pos-inventory-update-v1:${args.skuId}:${args.quantityToSubtract}`,
+    disposition: "stock_correction",
+    effectType: "adjustment",
+    kind: "outbound",
+    movementType: "pos_inventory_update",
+    occurrenceAt: now,
+    organizationId: store.organizationId,
+    productId: sku.productId,
+    productSkuId: args.skuId,
+    quantity: args.quantityToSubtract,
+    reasonCode: "pos_inventory_update",
+    sellableQuantityDelta: -args.quantityToSubtract,
+    sourceDomain: "pos",
+    sourceId: args.businessEventKey,
+    sourceType: "pos_inventory_update",
+    storeId: sku.storeId,
   });
 
-  return { success: true, newQuantity };
+  return { success: true, newQuantity: effect.position.sellableQuantity };
 }
 
 export async function completeTransaction(
@@ -892,6 +1206,7 @@ export async function completeTransaction(
     });
   }
 
+  const reportingProductIds = new Map<Id<"productSku">, Id<"product">>();
   const transactionItems = await Promise.all(
     args.items.map(async (item) => {
       const sku = await getProductSkuById(ctx, item.skuId);
@@ -900,6 +1215,7 @@ export async function completeTransaction(
           `SKU ${item.skuId} not found during transaction processing`,
         );
       }
+      reportingProductIds.set(item.skuId, sku.productId);
 
       const image = item.image ?? sku.images?.[0];
       const provisionalSku = item.inventoryImportProvisionalSkuId
@@ -922,10 +1238,6 @@ export async function completeTransaction(
       });
 
       if (!provisionalSku) {
-        await patchProductSku(ctx, item.skuId, {
-          quantityAvailable: sku.quantityAvailable - item.quantity,
-          inventoryCount: Math.max(0, sku.inventoryCount - item.quantity),
-        });
         await recordPosSaleInventoryMovement(ctx, {
           storeId: args.storeId,
           organizationId: store?.organizationId,
@@ -936,6 +1248,9 @@ export async function completeTransaction(
           registerSessionId: args.registerSessionId,
           staffProfileId: args.staffProfileId,
           customerProfileId: args.customerProfileId,
+          occurrenceAt: completedAt,
+          sellableQuantityDelta: -item.quantity,
+          sourceLineId: transactionItemId,
           transactionNumber,
         });
       }
@@ -967,6 +1282,25 @@ export async function completeTransaction(
     storeId: args.storeId,
     total: canonicalTotals.total,
     transactionNumber,
+  });
+
+  await appendCompletedPosSaleIngress(ctx, {
+    acceptedAt: completedAt,
+    items: args.items.map((item, index) => ({
+      inventoryImportProvisionalSkuId:
+        item.inventoryImportProvisionalSkuId,
+      lineKey: String(transactionItems[index]),
+      productId: reportingProductIds.get(item.skuId)!,
+      productSkuId: item.skuId,
+      quantity: item.quantity,
+      totalAmountMinor: item.price * item.quantity,
+      unitPriceMinor: item.price,
+    })),
+    organizationId: store?.organizationId,
+    storeCurrency: store?.currency,
+    storeId: args.storeId,
+    totals: canonicalTotals,
+    transactionId,
   });
 
   await markCatalogSummaryNeedsRefresh(ctx, args.storeId);
@@ -1476,6 +1810,7 @@ async function applyApprovedTransactionVoid(
   });
 
   const inventoryMovementIds: Array<Id<"inventoryMovement">> = [];
+  const voidedAt = Date.now();
 
   const voidInventoryBySku = new Map<
     Id<"productSku">,
@@ -1483,7 +1818,7 @@ async function applyApprovedTransactionVoid(
       productId: Id<"product">;
       productSkuId: Id<"productSku">;
       quantity: number;
-      sku: (typeof args.items)[number]["sku"];
+      transactionItemIds: Array<Id<"posTransactionItem">>;
     }
   >();
 
@@ -1495,6 +1830,7 @@ async function applyApprovedTransactionVoid(
     const existing = voidInventoryBySku.get(item.productSkuId);
     if (existing) {
       existing.quantity += item.quantity;
+      existing.transactionItemIds.push(item._id);
       continue;
     }
 
@@ -1502,18 +1838,82 @@ async function applyApprovedTransactionVoid(
       productId: item.productId ?? sku.productId,
       productSkuId: item.productSkuId,
       quantity: item.quantity,
-      sku,
+      transactionItemIds: [item._id],
     });
   }
 
   for (const entry of voidInventoryBySku.values()) {
-    const movementResult = await recordInventoryMovementWithDispositionWithCtx(ctx, {
+    if (!store?.organizationId) {
+      throw new Error("POS void organization could not be resolved.");
+    }
+    const originalEffects = await Promise.all(
+      entry.transactionItemIds.map((transactionItemId) =>
+        ctx.db
+          .query("reportingInventoryEffect")
+          .withIndex("by_storeId_sourceDomain_businessEventKey", (q) =>
+            q
+              .eq("storeId", args.transaction.storeId)
+              .eq("sourceDomain", "pos")
+              .eq(
+                "businessEventKey",
+                `pos:${args.transaction._id}:line:${transactionItemId}:sale`,
+              ),
+          )
+          .first(),
+      ),
+    );
+    const originalBases = originalEffects.map((effect, index) => {
+      const sourceItem = args.items.find(
+        ({ item }) => item._id === entry.transactionItemIds[index],
+      )?.item;
+      return effect && sourceItem
+        ? outboundBasisFromEffect(effect, sourceItem.quantity)
+        : null;
+    });
+    const currencies = new Set(
+      originalBases
+        .map((basis) => basis?.currency)
+        .filter((currency): currency is string => Boolean(currency)),
+    );
+    const originalBasis =
+      originalBases.every(Boolean) && currencies.size <= 1
+        ? {
+            allocatedKnownCost: originalBases.reduce(
+              (sum, basis) => sum + (basis?.allocatedKnownCost ?? 0),
+              0,
+            ),
+            basisVersion: 0,
+            costedQuantity: originalBases.reduce(
+              (sum, basis) => sum + (basis?.costedQuantity ?? 0),
+              0,
+            ),
+            currency: [...currencies][0] ?? null,
+            knownCostPoolBefore: originalBases.reduce(
+              (sum, basis) => sum + (basis?.allocatedKnownCost ?? 0),
+              0,
+            ),
+            roundedWeightedAverageUnitCost: null,
+            uncostedQuantity: originalBases.reduce(
+              (sum, basis) => sum + (basis?.uncostedQuantity ?? 0),
+              0,
+            ),
+            unresolvedDeficitQuantity: 0,
+          }
+        : uncostedOutboundBasis(entry.quantity);
+    const movementResult = await applyCommerceInventoryEffectWithCtx(ctx, {
+      activityType: "stock_pos_transaction_void",
       storeId: args.transaction.storeId,
-      organizationId: store?.organizationId,
+      organizationId: store.organizationId,
+      businessEventKey: `pos:${args.transaction._id}:sku:${entry.productSkuId}:void`,
+      contentFingerprint: `pos-void-inventory-v1:${args.transaction._id}:${entry.productSkuId}:${entry.quantity}`,
+      effectType: "return",
+      kind: "return",
       movementType: "pos_transaction_void",
       sourceType: "posTransaction",
       sourceId: args.transaction._id,
-      quantityDelta: entry.quantity,
+      occurrenceAt: voidedAt,
+      originalBasis,
+      quantity: entry.quantity,
       productId: entry.productId,
       productSkuId: entry.productSkuId,
       actorUserId: args.requesterUserId,
@@ -1522,6 +1922,8 @@ async function applyApprovedTransactionVoid(
       registerSessionId: args.transaction.registerSessionId,
       posTransactionId: args.transaction._id,
       reasonCode: "pos_transaction_void",
+      sellableQuantityDelta: entry.quantity,
+      sourceDomain: "pos",
       notes: `Void ${args.transaction.transactionNumber}`,
     });
     const movement = movementResult.movement;
@@ -1530,12 +1932,6 @@ async function applyApprovedTransactionVoid(
       inventoryMovementIds.push(movement._id);
     }
 
-    if (movementResult.disposition === "inserted") {
-      await patchProductSku(ctx, entry.productSkuId, {
-        quantityAvailable: entry.sku.quantityAvailable + entry.quantity,
-        inventoryCount: entry.sku.inventoryCount + entry.quantity,
-      });
-    }
   }
 
   const pendingVoidCorrections = new Map<
@@ -1613,8 +2009,6 @@ async function applyApprovedTransactionVoid(
     subjectType: "pos_transaction",
   });
 
-  const voidedAt = Date.now();
-
   await patchPosTransaction(ctx, args.transaction._id, {
     status: "void",
     voidedAt,
@@ -1625,6 +2019,14 @@ async function applyApprovedTransactionVoid(
     voidApprovalRequestId: args.approvalRequestId,
     voidApprovedByStaffProfileId: args.approverStaffProfileId,
     voidOperationalEventId: event?._id,
+  });
+
+  await appendPosVoidIngress(ctx, {
+    acceptedAt: voidedAt,
+    items: args.items,
+    organizationId: store?.organizationId,
+    storeCurrency: store?.currency,
+    transaction: args.transaction,
   });
 
   await markCatalogSummaryNeedsRefresh(ctx, args.transaction.storeId);
@@ -2271,13 +2673,6 @@ export async function createTransactionFromSessionHandler(
         linkedPendingTrustedItemIds.has(item.pendingCheckoutItemId);
 
       if (!provisionalSku && (!item.pendingCheckoutItemId || linkedPendingTrustedLine)) {
-        await patchProductSku(ctx, item.productSkuId, {
-          quantityAvailable: Math.max(
-            0,
-            sku.quantityAvailable - quantityAvailableToSubtract,
-          ),
-          inventoryCount: Math.max(0, sku.inventoryCount - item.quantity),
-        });
         await recordPosSaleInventoryMovement(ctx, {
           storeId: session.storeId,
           organizationId: store?.organizationId,
@@ -2288,6 +2683,9 @@ export async function createTransactionFromSessionHandler(
           registerSessionId: resolvedRegisterSessionId.data,
           staffProfileId: session.staffProfileId,
           customerProfileId: session.customerProfileId,
+          occurrenceAt: completedAt,
+          sellableQuantityDelta: -quantityAvailableToSubtract,
+          sourceLineId: transactionItemId,
           transactionNumber,
         });
       } else if (item.pendingCheckoutItemId) {
@@ -2337,6 +2735,26 @@ export async function createTransactionFromSessionHandler(
     storeId: session.storeId,
     total,
     transactionNumber,
+  });
+
+  await appendCompletedPosSaleIngress(ctx, {
+    acceptedAt: completedAt,
+    items: items.map((item, index) => ({
+      inventoryImportProvisionalSkuId:
+        item.inventoryImportProvisionalSkuId,
+      lineKey: String(transactionItems[index]),
+      pendingCheckoutItemId: item.pendingCheckoutItemId,
+      productId: item.productId,
+      productSkuId: item.productSkuId,
+      quantity: item.quantity,
+      totalAmountMinor: item.price * item.quantity,
+      unitPriceMinor: item.price,
+    })),
+    organizationId: store?.organizationId,
+    storeCurrency: store?.currency,
+    storeId: session.storeId,
+    totals: { subtotal, tax, total },
+    transactionId,
   });
 
   await markCatalogSummaryNeedsRefresh(ctx, session.storeId);

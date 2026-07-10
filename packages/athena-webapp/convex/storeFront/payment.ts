@@ -734,6 +734,7 @@ export const refundPayment = action({
       await ctx.runMutation(internal.storeFront.onlineOrder.finalizeRefundInternal, {
         didRefundDeliveryFee: args.refundItems?.includes("delivery-fee"),
         externalTransactionId: args.externalTransactionId,
+        onlineOrderItemIds: args.onlineOrderItemIds,
         refundAmount,
         refundId,
         reservationId: reservation.reservationId,
@@ -763,41 +764,6 @@ export const refundPayment = action({
           },
         );
         console.log("Updated order items to refunded");
-      }
-
-      const order = await ctx.runQuery(
-        internal.storeFront.onlineOrder.getByExternalTransactionId,
-        {
-          externalTransactionId: args.externalTransactionId,
-        },
-      );
-
-      if (order) {
-        const store = await ctx.runQuery(internal.inventory.stores.findById, {
-          id: order.storeId,
-        });
-
-        await ctx.runMutation(internal.operations.paymentAllocations.recordPaymentAllocation, {
-          actorUserId: args.signedInAthenaUser?.id,
-          allocationType: "refund",
-          amount: refundAmount,
-          customerProfileId: order.customerProfileId,
-          direction: "out",
-          externalReference:
-            refundResponse.data?.transaction?.reference ??
-            order.externalTransactionId,
-          method:
-            order.podPaymentMethod ||
-            order.paymentMethod?.podPaymentMethod ||
-            order.paymentMethod?.channel ||
-            order.paymentMethod?.type ||
-            "unknown",
-          onlineOrderId: order._id,
-          organizationId: store?.organizationId,
-          storeId: order.storeId,
-          targetId: order._id,
-          targetType: "online_order",
-        });
       }
 
       return ok({

@@ -93,6 +93,77 @@ describe("ReturnExchangeViewContent", () => {
     });
   });
 
+  it("captures a non-sellable return disposition", async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <ReturnExchangeViewContent
+        isSubmitting={false}
+        onSubmit={onSubmit}
+        order={baseOrder}
+        pendingApprovalCount={0}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("checkbox", { name: /curly closure/i }),
+    );
+    await user.click(
+      screen.getByRole("switch", {
+        name: /return accepted items back into stock/i,
+      }),
+    );
+    await user.click(screen.getByRole("radio", { name: "Damaged" }));
+    await user.click(screen.getByRole("button", { name: /process return/i }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit).toHaveBeenCalledWith({
+      operationType: "return",
+      replacementItems: [],
+      restockReturnedItems: false,
+      returnDisposition: "damaged",
+      returnItemIds: ["item-1"],
+    });
+  });
+
+  it("keeps financially refunded lines available for a later physical return", async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    const financiallyRefundedOrder = {
+      ...baseOrder,
+      items: [
+        {
+          ...baseOrder.items[0],
+          isRefunded: true,
+          returnDisposition: "financial_only" as const,
+        },
+      ],
+    };
+
+    render(
+      <ReturnExchangeViewContent
+        isSubmitting={false}
+        onSubmit={onSubmit}
+        order={financiallyRefundedOrder}
+        pendingApprovalCount={0}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("checkbox", { name: /curly closure/i }),
+    );
+    await user.click(screen.getByRole("button", { name: /process return/i }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit).toHaveBeenCalledWith({
+      operationType: "return",
+      replacementItems: [],
+      restockReturnedItems: true,
+      returnItemIds: ["item-1"],
+    });
+  });
+
   it("captures exchange details and sends a replacement line payload", async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn().mockResolvedValue(undefined);
