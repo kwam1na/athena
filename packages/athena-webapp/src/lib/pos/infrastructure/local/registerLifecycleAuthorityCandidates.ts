@@ -132,6 +132,9 @@ export function deriveRegisterLifecycleAuthorityCandidates(input: {
       (mapping) => mapping.registerCandidateState === undefined,
     );
     if (legacyMappings.length > 0) {
+      const activeSessionMappings = legacyMappings.filter(
+        (mapping) => legacyMappingMatchesActiveSession(mapping, active),
+      );
       const exactScopedMappings = legacyMappings.filter(
         (mapping) =>
           mapping.storeId === input.storeId &&
@@ -139,10 +142,17 @@ export function deriveRegisterLifecycleAuthorityCandidates(input: {
           Boolean(mapping.registerNumber) &&
           mapping.registerNumber === input.registerNumber,
       );
-      if (legacyMappings.length !== 1 || exactScopedMappings.length !== 1) {
+      if (activeSessionMappings.length === 1) {
+        add(mappingCandidate(activeSessionMappings[0]));
+      } else if (activeSessionMappings.length > 1) {
         invalidReason = "ambiguous";
-      } else {
+      } else if (
+        legacyMappings.length === 1 &&
+        exactScopedMappings.length === 1
+      ) {
         add(mappingCandidate(exactScopedMappings[0]));
+      } else {
+        invalidReason = "ambiguous";
       }
     }
   }
@@ -169,6 +179,18 @@ function isEligibleRegisterMapping(
   );
 }
 
+function legacyMappingMatchesActiveSession(
+  mapping: PosLocalCloudMapping,
+  active: CandidateProjection["activeRegisterSession"],
+) {
+  return (
+    Boolean(active) &&
+    mapping.localId === active?.localRegisterSessionId &&
+    (!active.cloudRegisterSessionId ||
+      mapping.cloudId === active.cloudRegisterSessionId)
+  );
+}
+
 function mappingCandidate(
   mapping: PosLocalCloudMapping,
 ): RegisterLifecycleAuthorityCandidate {
@@ -177,11 +199,19 @@ function mappingCandidate(
     expectedMapping: {
       cloudRegisterSessionId: mapping.cloudId,
       mappedAt: mapping.mappedAt,
-      mappingAuthorityRevision: mapping.mappingAuthorityRevision,
-      registerCandidateState: mapping.registerCandidateState,
-      registerNumber: mapping.registerNumber,
-      storeId: mapping.storeId,
-      terminalId: mapping.terminalId,
+      ...(mapping.mappingAuthorityRevision !== undefined
+        ? { mappingAuthorityRevision: mapping.mappingAuthorityRevision }
+        : {}),
+      ...(mapping.registerCandidateState !== undefined
+        ? { registerCandidateState: mapping.registerCandidateState }
+        : {}),
+      ...(mapping.registerNumber !== undefined
+        ? { registerNumber: mapping.registerNumber }
+        : {}),
+      ...(mapping.storeId !== undefined ? { storeId: mapping.storeId } : {}),
+      ...(mapping.terminalId !== undefined
+        ? { terminalId: mapping.terminalId }
+        : {}),
     },
     localRegisterSessionId: mapping.localId,
   };

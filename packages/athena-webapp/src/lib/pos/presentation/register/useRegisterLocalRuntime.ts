@@ -87,7 +87,10 @@ export function useRegisterLocalRuntime(input: {
   const [localSyncEventAppendToken, setLocalSyncEventAppendToken] = useState(0);
   const [localStaffAuthorityStatus, setLocalStaffAuthorityStatus] =
     useState("unknown");
+  const [registerOperationalResetStatus, setRegisterOperationalResetStatus] =
+    useState<"pending" | "ready" | "failed">("pending");
   const authorityPersistenceFailedRef = useRef(false);
+  const registerOperationalResetReadyRef = useRef(false);
 
   const localStore = useMemo(
     () =>
@@ -214,15 +217,40 @@ export function useRegisterLocalRuntime(input: {
       !terminalDescriptor?._id ||
       typeof indexedDB === "undefined"
     ) {
+      setRegisterOperationalResetStatus("failed");
       return null;
     }
 
     if (
       typeof localStore.listEvents !== "function" ||
-      typeof localStore.readProvisionedTerminalSeed !== "function"
+      typeof localStore.readProvisionedTerminalSeed !== "function" ||
+      typeof localStore.resetRegisterOperationalStateForAuthorityCutover !==
+        "function"
     ) {
       return null;
     }
+
+    let reset: Awaited<
+      ReturnType<
+        typeof localStore.resetRegisterOperationalStateForAuthorityCutover
+      >
+    > | null = null;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      reset =
+        await localStore.resetRegisterOperationalStateForAuthorityCutover();
+      if (reset.ok) break;
+    }
+    if (
+      !reset?.ok ||
+      (reset.value.status !== "applied" &&
+        reset.value.status !== "already_applied")
+    ) {
+      registerOperationalResetReadyRef.current = false;
+      setRegisterOperationalResetStatus("failed");
+      return null;
+    }
+    registerOperationalResetReadyRef.current = true;
+    setRegisterOperationalResetStatus("ready");
 
     const model = await readProjectedLocalRegisterModel({
       store: localStore,
@@ -261,7 +289,8 @@ export function useRegisterLocalRuntime(input: {
       createLocalCommandGateway({
         allowExplicitRegisterSessionWithoutProjection: true,
         authorityPersistenceFailed: () =>
-          authorityPersistenceFailedRef.current,
+          authorityPersistenceFailedRef.current ||
+          !registerOperationalResetReadyRef.current,
         store: localStore,
         createLocalId: (kind) => {
           if (kind === "local-register-session" && terminal?._id) {
@@ -297,7 +326,8 @@ export function useRegisterLocalRuntime(input: {
     eventAppendToken: localSyncEventAppendToken,
     mode: "status-only",
     onLocalEventsChanged: noteLocalRegisterEventChanged,
-    storeId: activeStoreId,
+    storeId:
+      registerOperationalResetStatus === "ready" ? activeStoreId : undefined,
     staffProfileId,
     staffProofToken,
     terminalId: terminal?._id,

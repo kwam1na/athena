@@ -116,6 +116,46 @@ describe("deriveRegisterLifecycleAuthorityCandidates", () => {
     ).toEqual({ reason: "ambiguous", status: "invalid" });
   });
 
+  it("uses an active-session legacy mapping without scope metadata as the authority expectation", () => {
+    const result = deriveRegisterLifecycleAuthorityCandidates({
+      ...scope,
+      projection: {
+        activeRegisterSession: {
+          cloudRegisterSessionId: "cloud-active",
+          localRegisterSessionId: "local-active",
+        },
+        mappings: [
+          mapping("local-closed", "cloud-closed", {
+            mappedAt: 500,
+            registerCandidateState: undefined,
+            registerNumber: undefined,
+          }),
+          mapping("local-active", "cloud-active", {
+            registerCandidateState: undefined,
+            registerNumber: undefined,
+            storeId: undefined,
+            terminalId: undefined,
+          }),
+        ],
+        sourceEvents: [],
+      },
+    });
+
+    expect(result).toEqual({
+      candidates: [
+        {
+          cloudRegisterSessionId: "cloud-active",
+          expectedMapping: {
+            cloudRegisterSessionId: "cloud-active",
+            mappedAt: 1_000,
+          },
+          localRegisterSessionId: "local-active",
+        },
+      ],
+      status: "ready",
+    });
+  });
+
   it("keeps an exact scoped current mapping reachable after event history is compacted", () => {
     expect(
       deriveRegisterLifecycleAuthorityCandidates({

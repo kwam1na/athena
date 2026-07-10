@@ -328,6 +328,19 @@ export type PosLocalStoreResult<T> =
       };
     };
 
+export type PosRegisterOperationalStateResetResult =
+  | {
+      status: "applied";
+      deletedAuthorityCount: number;
+      deletedEventCount: number;
+      deletedMappingCount: number;
+      resetAt: number;
+    }
+  | {
+      status: "already_applied";
+      resetAt: number;
+    };
+
 export type PosLocalObjectStoreName =
   | "authority"
   | "meta"
@@ -347,6 +360,7 @@ export interface PosLocalStoreTransaction {
     key: string,
   ): Promise<T | undefined>;
   getAll<T>(storeName: PosLocalObjectStoreName): Promise<T[]>;
+  getAllKeys(storeName: PosLocalObjectStoreName): Promise<string[]>;
   put<T>(
     storeName: PosLocalObjectStoreName,
     key: string,
@@ -388,6 +402,8 @@ export type PosLocalAppendEventInput = {
 const META_SCHEMA_VERSION_KEY = "schemaVersion";
 const META_SEQUENCE_KEY = "sequence";
 const META_UPLOAD_SEQUENCE_PREFIX = "uploadSequence:";
+const META_REGISTER_OPERATIONAL_STATE_RESET_KEY =
+  "registerOperationalStateReset:v1";
 const TERMINAL_SEED_KEY = "current";
 const TERMINAL_INTEGRITY_PREFIX = "terminalIntegrity:";
 const DRAWER_AUTHORITY_PREFIX = "drawerAuthority:";
@@ -590,6 +606,81 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
   }
 
   return {
+    async resetRegisterOperationalStateForAuthorityCutover(): Promise<
+      PosLocalStoreResult<PosRegisterOperationalStateResetResult>
+    > {
+      try {
+        const value = await options.adapter.transaction(
+          "readwrite",
+          ["meta", "events", "mappings", "authority"],
+          async (transaction) => {
+            await ensureSupportedSchema(transaction, "readwrite");
+            const priorReset = await transaction.get<{ resetAt: number }>(
+              "meta",
+              META_REGISTER_OPERATIONAL_STATE_RESET_KEY,
+            );
+            if (priorReset) {
+              return {
+                status: "already_applied" as const,
+                resetAt: priorReset.resetAt,
+              };
+            }
+
+            const events = await transaction.getAll<PosLocalEventRecord>(
+              "events",
+            );
+            const registerOperationalEvents = events.filter((event) =>
+              isBusinessOperationalEvent(event.type),
+            );
+
+            const mappings = await transaction.getAll<PosLocalCloudMapping>(
+              "mappings",
+            );
+            const registerSessionMappings = mappings.filter(
+              (mapping) => mapping.entity === "registerSession",
+            );
+            const drawerAuthorityKeys = (
+              await transaction.getAllKeys("authority")
+            ).filter(
+              (key) => !key.startsWith(TERMINAL_INTEGRITY_PREFIX),
+            );
+
+            for (const event of registerOperationalEvents) {
+              await transaction.delete("events", String(event.sequence));
+            }
+            for (const mapping of registerSessionMappings) {
+              await transaction.delete(
+                "mappings",
+                mappingKey(mapping.entity, mapping.localId),
+              );
+            }
+            for (const key of drawerAuthorityKeys) {
+              await transaction.delete("authority", key);
+            }
+
+            const resetAt = clock();
+            const result = {
+              status: "applied" as const,
+              deletedAuthorityCount: drawerAuthorityKeys.length,
+              deletedEventCount: registerOperationalEvents.length,
+              deletedMappingCount: registerSessionMappings.length,
+              resetAt,
+            };
+            await transaction.put(
+              "meta",
+              META_REGISTER_OPERATIONAL_STATE_RESET_KEY,
+              result,
+            );
+            return result;
+          },
+        );
+
+        return { ok: true, value };
+      } catch (error) {
+        return toFailure(error);
+      }
+    },
+
     async writeProvisionedTerminalSeed(
       seed: PosProvisionedTerminalSeed,
     ): Promise<PosLocalStoreResult<PosProvisionedTerminalSeed>> {
@@ -2069,6 +2160,10 @@ function mappingKey(entity: PosLocalEntityKind, localId: string) {
   return `${entity}:${localId}`;
 }
 
+function isBusinessOperationalEvent(type: PosLocalEventType) {
+  return type !== "terminal.seeded";
+}
+
 function terminalIntegrityKey(storeId: string, terminalId: string) {
   return `${TERMINAL_INTEGRITY_PREFIX}${storeId}:${terminalId}`;
 }
@@ -2865,6 +2960,14 @@ export function createIndexedDbPosLocalStorageAdapter(options?: {
                 request.onsuccess = () => innerResolve(request.result);
               });
             },
+            getAllKeys(storeName) {
+              return new Promise((innerResolve, innerReject) => {
+                const request = transaction.objectStore(storeName).getAllKeys();
+                request.onerror = () => innerReject(request.error);
+                request.onsuccess = () =>
+                  innerResolve(request.result.map(String));
+              });
+            },
             put(storeName, key, value) {
               return new Promise((innerResolve, innerReject) => {
                 const request = transaction
@@ -3111,6 +3214,9 @@ export function createMemoryPosLocalStorageAdapter(options?: {
             return Array.from(transactionData[storeName].values()).map(
               (value) => cloneValue(value),
             ) as T[];
+          },
+          async getAllKeys(storeName: PosLocalObjectStoreName) {
+            return Array.from(transactionData[storeName].keys());
           },
           async put(storeName, key, value) {
             if (failNextPutForStore === storeName) {

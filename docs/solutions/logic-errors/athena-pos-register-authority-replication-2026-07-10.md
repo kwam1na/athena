@@ -20,7 +20,7 @@ tags:
   - indexeddb
   - convex
   - reconciliation
-delivery_diff_fingerprint: 937035ef0bd507be1eef6e6e541b052e913ba86f4c180b70923284e6697ef198
+delivery_diff_fingerprint: 9ad8e0d7e814b7ff2c9fd8af646f3e0cc91dbaa6886458892eb97a2a028ba1b2
 ---
 
 # Athena POS Register Authority Replication

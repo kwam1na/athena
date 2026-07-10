@@ -187,6 +187,262 @@ function installClearableIndexedDbMock(
 }
 
 describe("posLocalStore", () => {
+  it("atomically clears only synced register operational state for the authority cutover", async () => {
+    const adapter = createMemoryPosLocalStorageAdapter();
+    const store = createPosLocalStore({
+      adapter,
+      clock: () => 9_000,
+      createLocalId: (kind) => `${kind}-test`,
+    });
+
+    for (const type of [
+      "register.opened",
+      "session.started",
+      "cart.item_added",
+      "pending_checkout_item.defined",
+      "transaction.completed",
+      "register.closeout_started",
+      "expense.completed",
+      "cash.movement_recorded",
+    ] as const) {
+      await store.appendEvent({
+        initialSyncStatus: "synced",
+        localRegisterSessionId: "local-register-1",
+        payload: {},
+        storeId: "store-1",
+        terminalId: "terminal-1",
+        type,
+      });
+    }
+    await store.appendEvent({
+      initialSyncStatus: "synced",
+      payload: {},
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      type: "terminal.seeded",
+    });
+    await store.writeLocalCloudMapping({
+      cloudId: "cloud-register-1",
+      entity: "registerSession",
+      localId: "local-register-1",
+      mappedAt: 1_000,
+    });
+    await store.writeLocalCloudMapping({
+      cloudId: "cloud-pos-1",
+      entity: "posSession",
+      localId: "local-pos-1",
+      mappedAt: 1_000,
+    });
+    await store.writeDrawerAuthorityState({
+      localRegisterSessionId: "local-register-1",
+      observedAt: 1_000,
+      status: "healthy",
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
+    await store.writeTerminalIntegrityState({
+      observedAt: 1_000,
+      status: "healthy",
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
+    await adapter.transaction(
+      "readwrite",
+      ["authority"],
+      (transaction) =>
+        transaction.put("authority", "legacyDrawer:unparseable", {
+          legacyDrawer: true,
+        }),
+    );
+    await adapter.transaction(
+      "readwrite",
+      [
+        "meta",
+        "terminalSeed",
+        "readiness",
+        "cashierPresence",
+        "staffAuthority",
+        "registerCatalog",
+        "registerServiceCatalog",
+        "registerAvailability",
+      ],
+      async (transaction) => {
+        await transaction.put(
+          "meta",
+          "uploadSequence:local-register-1",
+          20,
+        );
+        await transaction.put("terminalSeed", "current", {
+          marker: "terminal-seed",
+        });
+        await transaction.put("readiness", "store-1:2026-07-10", {
+          marker: "readiness",
+        });
+        await transaction.put(
+          "cashierPresence",
+          "terminal-1",
+          buildCashierPresenceRecord(),
+        );
+        await transaction.put(
+          "staffAuthority",
+          "staff-1",
+          buildAuthorityRecord(),
+        );
+        await transaction.put("registerCatalog", "store-1", {
+          marker: "preserved",
+        });
+        await transaction.put("registerServiceCatalog", "store-1", {
+          marker: "service-catalog",
+        });
+        await transaction.put("registerAvailability", "store-1", {
+          marker: "availability",
+        });
+      },
+    );
+
+    const reset =
+      await store.resetRegisterOperationalStateForAuthorityCutover();
+    expect(reset).toEqual({
+      ok: true,
+      value: {
+        deletedAuthorityCount: 2,
+        deletedEventCount: 8,
+        deletedMappingCount: 1,
+        resetAt: 9_000,
+        status: "applied",
+      },
+    });
+
+    const [events, mappings, authority, preserved] = await Promise.all([
+      store.listEvents(),
+      store.listLocalCloudMappings(),
+      adapter.transaction("readonly", ["authority"], (transaction) =>
+        transaction.getAll("authority"),
+      ),
+      adapter.transaction(
+        "readonly",
+        [
+          "meta",
+          "terminalSeed",
+          "readiness",
+          "cashierPresence",
+          "staffAuthority",
+          "registerCatalog",
+          "registerServiceCatalog",
+          "registerAvailability",
+        ],
+        async (transaction) => ({
+          availability: await transaction.getAll("registerAvailability"),
+          cashier: await transaction.getAll("cashierPresence"),
+          catalog: await transaction.getAll("registerCatalog"),
+          readiness: await transaction.getAll("readiness"),
+          serviceCatalog: await transaction.getAll("registerServiceCatalog"),
+          staff: await transaction.getAll("staffAuthority"),
+          terminalSeed: await transaction.getAll("terminalSeed"),
+          uploadSequence: await transaction.get<number>(
+            "meta",
+            "uploadSequence:local-register-1",
+          ),
+        }),
+      ),
+    ]);
+    expect(events).toMatchObject({
+      ok: true,
+      value: [expect.objectContaining({ type: "terminal.seeded" })],
+    });
+    expect(mappings).toMatchObject({
+      ok: true,
+      value: [expect.objectContaining({ entity: "posSession" })],
+    });
+    expect(authority).toEqual([
+      expect.objectContaining({ status: "healthy", terminalId: "terminal-1" }),
+    ]);
+    expect(preserved.cashier).toHaveLength(1);
+    expect(preserved.staff).toHaveLength(1);
+    expect(preserved.catalog).toEqual([{ marker: "preserved" }]);
+    expect(preserved.serviceCatalog).toEqual([
+      { marker: "service-catalog" },
+    ]);
+    expect(preserved.availability).toEqual([{ marker: "availability" }]);
+    expect(preserved.readiness).toEqual([{ marker: "readiness" }]);
+    expect(preserved.terminalSeed).toEqual([{ marker: "terminal-seed" }]);
+    expect(preserved.uploadSequence).toBe(20);
+
+    const newEvent = await store.appendEvent({
+      localRegisterSessionId: "local-register-1",
+      payload: {},
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      type: "register.opened",
+    });
+    expect(newEvent).toMatchObject({
+      ok: true,
+      value: { sequence: 10, uploadSequence: 21 },
+    });
+    expect(
+      await store.resetRegisterOperationalStateForAuthorityCutover(),
+    ).toEqual({
+      ok: true,
+      value: { resetAt: 9_000, status: "already_applied" },
+    });
+    expect(await store.listEvents()).toMatchObject({
+      ok: true,
+      value: [
+        expect.objectContaining({ type: "terminal.seeded" }),
+        expect.objectContaining({ type: "register.opened" }),
+      ],
+    });
+  });
+
+  it("clears register operational state regardless of stale local sync status", async () => {
+    const adapter = createMemoryPosLocalStorageAdapter();
+    const store = createPosLocalStore({ adapter, clock: () => 9_000 });
+    await store.appendEvent({
+      payload: {},
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      type: "register.opened",
+    });
+    await store.writeLocalCloudMapping({
+      cloudId: "cloud-register-1",
+      entity: "registerSession",
+      localId: "local-register-1",
+      mappedAt: 1_000,
+    });
+    await store.writeDrawerAuthorityState({
+      localRegisterSessionId: "local-register-1",
+      observedAt: 1_000,
+      status: "healthy",
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
+
+    expect(
+      await store.resetRegisterOperationalStateForAuthorityCutover(),
+    ).toEqual({
+      ok: true,
+      value: {
+        deletedAuthorityCount: 1,
+        deletedEventCount: 1,
+        deletedMappingCount: 1,
+        resetAt: 9_000,
+        status: "applied",
+      },
+    });
+    expect(await store.listEvents()).toEqual({ ok: true, value: [] });
+    expect(await store.listLocalCloudMappings()).toEqual({
+      ok: true,
+      value: [],
+    });
+    expect(
+      await store.readDrawerAuthorityState({
+        localRegisterSessionId: "local-register-1",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    ).toEqual({ ok: true, value: null });
+  });
+
   it("keeps exactly one current register-session mapping per scope", async () => {
     const adapter = createMemoryPosLocalStorageAdapter();
     const store = createPosLocalStore({ adapter });
@@ -718,6 +974,49 @@ describe("posLocalStore", () => {
         terminalId: "local-terminal-1",
       }),
     ).resolves.toEqual({ ok: true, value: null });
+  });
+
+  it("accepts monotonic mapping enrichment when legacy metadata was not part of the expectation", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+    });
+    await store.writeLocalCloudMapping({
+      cloudId: "cloud-register-1",
+      entity: "registerSession",
+      localId: "local-register-1",
+      mappedAt: 1_000,
+      mappingAuthorityRevision: 1,
+      registerCandidateState: "current",
+      registerNumber: "2",
+      storeId: "store-1",
+      terminalId: "local-terminal-1",
+    });
+
+    await expect(
+      store.applyRegisterLifecycleAuthority({
+        expectedMapping: {
+          cloudRegisterSessionId: "cloud-register-1",
+          mappedAt: 1_000,
+        },
+        observation: {
+          classification: "sale_usable",
+          cloudRegisterSessionId: "cloud-register-1",
+          cursor: {
+            lifecycleRevision: 1,
+            mappingAuthorityRevision: 1,
+          },
+          localRegisterSessionId: "local-register-1",
+          observedAt: 3_000,
+          source: "dedicated_snapshot",
+          status: "healthy",
+        },
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: { disposition: "applied" },
+    });
   });
 
   it("does not expose an authority snapshot when its transaction write fails", async () => {

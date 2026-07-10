@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => {
     getStaffAuthorityReadiness: vi.fn(),
     listEvents: vi.fn(),
     readProvisionedTerminalSeed: vi.fn(),
+    resetRegisterOperationalStateForAuthorityCutover: vi.fn(),
   };
 
   return {
@@ -145,6 +146,12 @@ describe("useRegisterLocalRuntime", () => {
         syncSecretHash: "hash",
       },
     });
+    mocks.localStore.resetRegisterOperationalStateForAuthorityCutover.mockResolvedValue(
+      {
+        ok: true,
+        value: { resetAt: 1_000, status: "already_applied" },
+      },
+    );
     mocks.readProjectedLocalRegisterModel.mockResolvedValue({
       ok: true,
       value: { canSell: true },
@@ -278,6 +285,87 @@ describe("useRegisterLocalRuntime", () => {
       }),
     );
     expect(result.current.localRegisterReadModel).toEqual({ canSell: true });
+  });
+
+  it("blocks commands until the targeted register reset succeeds while keeping sync mounted", async () => {
+    let resolveReset: ((value: unknown) => void) | undefined;
+    mocks.localStore.resetRegisterOperationalStateForAuthorityCutover.mockReturnValue(
+      new Promise((resolve) => {
+        resolveReset = resolve;
+      }),
+    );
+
+    const { result } = renderRuntime();
+    const gatewayOptions = mocks.createLocalCommandGateway.mock.calls[0]?.[0];
+
+    await waitFor(() => {
+      expect(
+        mocks.localStore.resetRegisterOperationalStateForAuthorityCutover,
+      ).toHaveBeenCalled();
+    });
+    expect(result.current.localRegisterReadModel).toBeNull();
+    expect(gatewayOptions.authorityPersistenceFailed()).toBe(true);
+    expect(mocks.readProjectedLocalRegisterModel).not.toHaveBeenCalled();
+    expect(mocks.usePosLocalSyncRuntimeStatus).toHaveBeenCalledWith(
+      expect.objectContaining({
+        storeFactory: expect.any(Function),
+        storeId: undefined,
+        terminalId: terminal._id,
+      }),
+    );
+
+    await act(async () => {
+      resolveReset?.({
+        ok: true,
+        value: {
+          deletedAuthorityCount: 1,
+          deletedEventCount: 1,
+          deletedMappingCount: 1,
+          resetAt: 1_000,
+          status: "applied",
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(result.current.localRegisterReadModel).toEqual({ canSell: true });
+    });
+    expect(gatewayOptions.authorityPersistenceFailed()).toBe(false);
+    expect(mocks.usePosLocalSyncRuntimeStatus).toHaveBeenLastCalledWith(
+      expect.objectContaining({ storeId }),
+    );
+    expect(
+      mocks.localStore.resetRegisterOperationalStateForAuthorityCutover,
+    ).toHaveBeenCalled();
+  });
+
+  it("retries a transient reset failure without requiring a page reload", async () => {
+    mocks.localStore.resetRegisterOperationalStateForAuthorityCutover
+      .mockResolvedValueOnce({
+        error: { code: "write_failed", message: "transaction aborted" },
+        ok: false,
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        value: {
+          deletedAuthorityCount: 1,
+          deletedEventCount: 2,
+          deletedMappingCount: 1,
+          resetAt: 1_000,
+          status: "applied",
+        },
+      });
+
+    const { result } = renderRuntime();
+
+    await waitFor(() => {
+      expect(result.current.localRegisterReadModel).toEqual({ canSell: true });
+    });
+    expect(
+      mocks.localStore.resetRegisterOperationalStateForAuthorityCutover,
+    ).toHaveBeenCalledTimes(2);
+    const gatewayOptions = mocks.createLocalCommandGateway.mock.calls[0]?.[0];
+    expect(gatewayOptions.authorityPersistenceFailed()).toBe(false);
   });
 
   it("mounts lifecycle authority independently and shares its persistence guard", async () => {

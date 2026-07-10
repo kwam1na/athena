@@ -357,6 +357,47 @@ describe("useRegisterLifecycleAuthorityRuntime", () => {
     );
   });
 
+  it("uses the active legacy mapping as the authority expectation when the mapping lacks scope metadata", async () => {
+    mocks.snapshot = snapshot();
+    const { result, store } = renderRuntime({
+      localRegisterReadModel: {
+        activeRegisterSession: {
+          cloudRegisterSessionId: "cloud-register-1",
+          localRegisterSessionId: "local-register-1",
+        },
+        mappings: [
+          {
+            cloudId: "cloud-register-1",
+            entity: "registerSession",
+            localId: "local-register-1",
+            mappedAt: 1,
+            registerCandidateState: undefined,
+            registerNumber: undefined,
+            storeId: undefined,
+            terminalId: undefined,
+          },
+        ],
+        sourceEvents: [],
+      },
+    });
+
+    await waitFor(() =>
+      expect(result.current.persistence.status).toBe("ready"),
+    );
+    expect(store.applyRegisterLifecycleAuthority).toHaveBeenCalledWith(
+      expect.objectContaining({
+        expectedMapping: expect.objectContaining({
+          cloudRegisterSessionId: "cloud-register-1",
+          mappedAt: 1,
+        }),
+        observation: expect.objectContaining({
+          localRegisterSessionId: "local-register-1",
+          source: "dedicated_snapshot",
+        }),
+      }),
+    );
+  });
+
   it("observes and acknowledges shadow authority without applying or refreshing", async () => {
     mocks.snapshot = snapshot();
     const policy = {
