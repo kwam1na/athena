@@ -373,6 +373,10 @@ vi.mock("@/lib/pos/infrastructure/local/posLocalStore", () => ({
     readCashierPresence: mockReadCashierPresence,
     readDrawerAuthorityState: mockReadDrawerAuthorityState,
     readProvisionedTerminalSeed: mockReadProvisionedTerminalSeed,
+    resetRegisterOperationalStateForAuthorityCutover: vi.fn().mockResolvedValue({
+      ok: true,
+      value: { resetAt: 1_000, status: "already_applied" },
+    }),
     readStoreDayReadiness: mockReadStoreDayReadiness,
     readTerminalIntegrityState: mockReadTerminalIntegrityState,
     clearActiveCashierPresence: mockClearCashierPresence,
@@ -3838,7 +3842,7 @@ describe("useRegisterViewModel", () => {
       ),
     );
     expect(mockMarkLocalEventsSynced).not.toHaveBeenCalled();
-    expect(toast.success).toHaveBeenCalledWith("Register closed.");
+    expect(toast.success).not.toHaveBeenCalled();
   });
 
   it("keeps the POS drawer gate open when local closeout persistence fails", async () => {
@@ -4156,10 +4160,7 @@ describe("useRegisterViewModel", () => {
     );
     expect(mockSubmitRegisterSessionCloseout).toHaveBeenCalled();
     expect(mockMarkLocalEventsSynced).not.toHaveBeenCalled();
-    expect(toast.success).toHaveBeenCalledWith(
-      "Closeout saved locally. Athena will finish it after sync.",
-    );
-    expect(toast.success).not.toHaveBeenCalledWith("Register closed.");
+    expect(toast.success).not.toHaveBeenCalled();
   });
 
   it("opens the closeout drawer gate from an active empty register", async () => {
