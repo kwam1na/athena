@@ -1,0 +1,5 @@
+[mcp_servers.dual-graph]
+url = "http://localhost:8080/mcp"
+
+[mcp_servers.linear-server]
+url = "https://mcp.linear.app/mcp"
