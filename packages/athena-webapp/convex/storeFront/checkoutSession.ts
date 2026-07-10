@@ -36,6 +36,7 @@ import {
   deriveScheduledRunOutcome,
   type ScheduledCronFamily,
 } from "../automation/scheduledRunLedger";
+import { applyCommerceInventoryEffectWithCtx } from "../reporting/inventory/commerceEffects";
 
 const entity = "checkoutSession";
 
@@ -51,7 +52,6 @@ type Product = {
   price: number;
 };
 
-type AvailabilityUpdate = { id: Id<"productSku">; change: number };
 type SessionItemSnapshot = { price: number; quantity: number };
 type ScheduledRunStoreStats = {
   candidateCount: number;
@@ -62,6 +62,7 @@ type ScheduledRunStoreStats = {
   sampleSubjectIds: string[];
 };
 type CheckoutReservationActivityInput = {
+  businessEventKey?: string;
   activityType: string;
   status: SkuActivityStatus;
   sessionId: Id<"checkoutSession">;
@@ -74,6 +75,52 @@ type CheckoutReservationActivityInput = {
   sourceLineId?: Id<"checkoutSessionItem">;
   reason?: string;
 };
+
+async function applyCheckoutAvailabilityEffects(
+  ctx: MutationCtx,
+  activities: CheckoutReservationActivityInput[],
+) {
+  if (activities.length === 0) return;
+  const store = await ctx.db.get("store", activities[0].storeId);
+  if (!store?.organizationId) {
+    throw new Error("Checkout inventory organization could not be resolved.");
+  }
+  const occurredAt = Date.now();
+  for (const activity of activities) {
+    const sourceLineId = String(
+      activity.sourceLineId ?? activity.productSkuId,
+    );
+    await applyCommerceInventoryEffectWithCtx(ctx, {
+      activityType: activity.activityType,
+      businessEventKey:
+        activity.businessEventKey ??
+        `checkout:${activity.sessionId}:line:${sourceLineId}:${activity.activityType}`,
+      completeness: "partial",
+      contentFingerprint: [
+        "checkout-availability-v1",
+        String(activity.sessionId),
+        sourceLineId,
+        activity.activityType,
+        String(activity.quantityDelta),
+        activity.status,
+      ].join(":"),
+      effectType: "adjustment",
+      kind: "availability_only",
+      movementType: activity.activityType,
+      occurrenceAt: occurredAt,
+      organizationId: store.organizationId,
+      productId: activity.productId,
+      productSkuId: activity.productSkuId,
+      reasonCode: activity.reason,
+      sellableQuantityDelta: activity.quantityDelta,
+      sourceDomain: "storefront",
+      sourceId: String(activity.sessionId),
+      sourceLineId,
+      sourceType: "checkout_session",
+      storeId: activity.storeId,
+    });
+  }
+}
 
 export function buildCheckoutReservationActivityArgs(
   input: CheckoutReservationActivityInput,
@@ -507,24 +554,30 @@ export const create = mutation({
     });
 
     // Create session items
-    await createSessionItems(ctx, sessionId, args.storeFrontUserId, products);
+    const sessionItemIds = await createSessionItems(
+      ctx,
+      sessionId,
+      args.storeFrontUserId,
+      products,
+    );
 
     // Update availability counts
-    await updateProductAvailability(ctx, products, productSkus);
-    await recordCheckoutReservationActivities(
-      ctx,
-      products.map((product) => ({
+    const reservationActivities: CheckoutReservationActivityInput[] =
+      products.map((product, index) => ({
         activityType: "reservation_acquired",
+        businessEventKey: `checkout:${sessionId}:line:${sessionItemIds[index]}:acquired`,
         productId: product.productId,
         productSkuId: product.productSkuId,
         quantity: product.quantity,
         quantityDelta: -product.quantity,
+        sourceLineId: sessionItemIds[index],
         sessionId,
         status: "active",
         storeFrontUserId: args.storeFrontUserId,
         storeId: args.storeId,
-      })),
-    );
+      }));
+    await applyCheckoutAvailabilityEffects(ctx, reservationActivities);
+    await recordCheckoutReservationActivities(ctx, reservationActivities);
 
     // Auto-apply best-value promo code
     console.log(
@@ -677,36 +730,8 @@ export const releaseCheckoutItems = internalMutation({
           .filter((q) => q.eq(q.field("sesionId"), session._id))
           .collect();
 
-        const availabilityUpdates = new Map<Id<"productSku">, number>();
-
-        // Calculate the quantities to release
-        for (const item of sessionItems) {
-          const currentQuantity =
-            availabilityUpdates.get(item.productSkuId) || 0;
-          availabilityUpdates.set(
-            item.productSkuId,
-            currentQuantity + item.quantity,
-          );
-        }
-
-        // Update product SKU availability in bulk
-        await Promise.all(
-          Array.from(availabilityUpdates.entries()).map(
-            async ([skuId, quantityToRelease]) => {
-              const productSku = await ctx.db.get("productSku", skuId);
-              if (productSku) {
-                await ctx.db.patch("productSku", skuId, {
-                  quantityAvailable:
-                    productSku.quantityAvailable + quantityToRelease,
-                });
-              }
-            },
-          ),
-        );
-
         const releaseStatus = isScheduledRun ? "expired" : "released";
-        await recordCheckoutReservationActivities(
-          ctx,
+        const releaseActivities: CheckoutReservationActivityInput[] =
           sessionItems.map((item) => ({
             activityType:
               releaseStatus === "expired"
@@ -722,8 +747,9 @@ export const releaseCheckoutItems = internalMutation({
             status: releaseStatus,
             storeFrontUserId: item.storeFrontUserId,
             storeId: session.storeId,
-          })),
-        );
+          }));
+        await applyCheckoutAvailabilityEffects(ctx, releaseActivities);
+        await recordCheckoutReservationActivities(ctx, releaseActivities);
 
         // Delete session items and the expired session
         await Promise.all([
@@ -1411,6 +1437,7 @@ async function updateExistingSession(
   session: any,
   storeFrontUserId: Id<"storeFrontUser"> | Id<"guest">,
   products: Product[],
+  operationKey: string,
 ) {
   const sessionItems: CheckoutSessionItem[] = await ctx.db
     .query("checkoutSessionItem")
@@ -1429,7 +1456,6 @@ async function updateExistingSession(
     quantity: number;
   }[] = [];
   const itemsToDelete: Id<"checkoutSessionItem">[] = [];
-  const availabilityUpdates: AvailabilityUpdate[] = [];
   const reservationActivities: CheckoutReservationActivityInput[] = [];
 
   for (const product of products) {
@@ -1445,10 +1471,10 @@ async function updateExistingSession(
       }
 
       if (diff !== 0) {
-        availabilityUpdates.push({ id: product.productSkuId, change: -diff });
         reservationActivities.push({
           activityType:
             diff > 0 ? "reservation_acquired" : "reservation_released",
+          businessEventKey: `checkout:${session._id}:operation:${operationKey}:line:${existingItem._id}`,
           productId: product.productId,
           productSkuId: product.productSkuId,
           quantity: Math.abs(diff),
@@ -1472,12 +1498,9 @@ async function updateExistingSession(
         price: product.price,
         storeFrontUserId: storeFrontUserId,
       });
-      availabilityUpdates.push({
-        id: product.productSkuId,
-        change: -product.quantity,
-      });
       reservationActivities.push({
         activityType: "reservation_acquired",
+        businessEventKey: `checkout:${session._id}:operation:${operationKey}:sku:${product.productSkuId}:acquired`,
         productId: product.productId,
         productSkuId: product.productSkuId,
         quantity: product.quantity,
@@ -1493,12 +1516,9 @@ async function updateExistingSession(
 
   for (const [, staleItem] of sessionItemsMap) {
     itemsToDelete.push(staleItem._id);
-    availabilityUpdates.push({
-      id: staleItem.productSkuId,
-      change: staleItem.quantity,
-    });
     reservationActivities.push({
       activityType: "reservation_released",
+      businessEventKey: `checkout:${session._id}:operation:${operationKey}:line:${staleItem._id}:released`,
       productId: staleItem.productId,
       productSkuId: staleItem.productSkuId,
       quantity: staleItem.quantity,
@@ -1531,10 +1551,8 @@ async function updateExistingSession(
     ...itemsToUpdate.map(({ id, price, quantity }) =>
       ctx.db.patch("checkoutSessionItem", id, { price, quantity }),
     ),
-    ...availabilityUpdates.map(({ id, change }) =>
-      updateAvailability(ctx, id, change),
-    ),
   ]);
+  await applyCheckoutAvailabilityEffects(ctx, reservationActivities);
   await recordCheckoutReservationActivities(ctx, reservationActivities);
   await Promise.all(
     itemsToDelete.map((id) => ctx.db.delete("checkoutSessionItem", id)),
@@ -1572,35 +1590,6 @@ async function createSessionItems(
   );
 }
 
-async function updateProductAvailability(
-  ctx: MutationCtx,
-  products: Product[],
-  productSkus: any[],
-) {
-  await Promise.all(
-    products.map(({ productSkuId, quantity }) => {
-      const sku = productSkus.find((p) => p._id === productSkuId);
-      if (sku) {
-        return ctx.db.patch("productSku", productSkuId, {
-          quantityAvailable: sku.quantityAvailable - quantity,
-        });
-      }
-    }),
-  );
-}
-
-async function updateAvailability(
-  ctx: any,
-  productSkuId: Id<"productSku">,
-  change: number,
-) {
-  const productSku = await ctx.db.get("productSku", productSkuId);
-  if (productSku) {
-    await ctx.db.patch("productSku", productSkuId, {
-      quantityAvailable: productSku.quantityAvailable + change,
-    });
-  }
-}
 
 /**
  * Handle updating an existing checkout session with new items
@@ -1644,6 +1633,7 @@ async function handleExistingSession(
       existingSession,
       args.storeFrontUserId,
       args.products,
+      String(args.expiresAt),
     );
 
     if (!updateResult.success) {

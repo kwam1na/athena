@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import {
+  buildOnlineOrderReportedReturns,
   buildOnlineOrderReturnExchangePlan,
   type ReturnExchangeReplacementInput,
 } from "./helpers/returnExchangeOperations";
@@ -112,6 +113,84 @@ describe("online order return and exchange planning", () => {
         reasonCode: "online_order_return_restocked",
       }),
     ]);
+  });
+
+  it.each([
+    "non_restocked",
+    "damaged",
+    "missing",
+    "financial_only",
+  ] as const)(
+    "reports %s returns without a physical stock delta",
+    (disposition) => {
+      expect(
+        buildOnlineOrderReportedReturns({
+          disposition,
+          selectedItems: [createOrderItem()],
+        }),
+      ).toEqual([
+        expect.objectContaining({
+          orderItemId: "item-1",
+          productSkuId: "sku-1",
+          quantity: 2,
+          quantityDelta: 0,
+          reasonCode: `online_order_return_${disposition}`,
+        }),
+      ]);
+    },
+  );
+
+  it("allows a later sellable return after a financial-only refund without refunding twice", () => {
+    const plan = buildOnlineOrderReturnExchangePlan({
+      order: {
+        _id: "order-1",
+        amount: 9_000,
+        orderNumber: "10001",
+        refunds: [{ amount: 9_000, date: 1, id: "refund-1" }],
+        status: "picked-up",
+      } as any,
+      orderItems: [
+        createOrderItem({
+          isRefunded: true,
+          returnDisposition: "financial_only",
+        }),
+      ],
+      restockReturnedItems: true,
+      returnItemIds: ["item-1" as any],
+    });
+
+    expect(plan.paymentAllocation).toBeNull();
+    expect(plan.refundAmount).toBe(0);
+    expect(plan.returnMovements).toEqual([
+      expect.objectContaining({
+        orderItemId: "item-1",
+        quantityDelta: 2,
+        reasonCode: "online_order_return_restocked",
+      }),
+    ]);
+  });
+
+  it("rejects a duplicate financial-only outcome for an already refunded line", () => {
+    expect(() =>
+      buildOnlineOrderReturnExchangePlan({
+        order: {
+          _id: "order-1",
+          amount: 9_000,
+          orderNumber: "10001",
+          refunds: [{ amount: 9_000, date: 1, id: "refund-1" }],
+          status: "picked-up",
+        } as any,
+        orderItems: [
+          createOrderItem({
+            isRefunded: true,
+            returnDisposition: "financial_only",
+          }),
+        ],
+        restockReturnedItems: false,
+        returnDisposition: "financial_only",
+        returnItemIds: ["item-1" as any],
+      }),
+    ).toThrow("Selected items have already been returned.");
   });
 
   it("treats returning every remaining line as a full return and sums the total refund correctly", () => {
@@ -238,9 +317,21 @@ describe("online order return and exchange mutation wiring", () => {
     );
     expect(onlineOrderSource).toContain("buildOnlineOrderReturnExchangePlan");
     expect(onlineOrderSource).toContain("recordPaymentAllocationWithCtx");
-    expect(onlineOrderSource).toContain("recordInventoryMovementWithCtx");
+    expect(onlineOrderSource).toContain("applyCommerceInventoryEffectWithCtx");
     expect(onlineOrderSource).toContain("recordOperationalEventWithCtx");
     expect(onlineOrderSource).toContain("buildApprovalRequest");
+    expect(onlineOrderSource).toContain(
+      "buildOnlineOrderReportedReturns({",
+    );
+    expect(onlineOrderSource).toContain("disposition: returnDisposition");
+    expect(onlineOrderSource).toContain(
+      'returnDisposition === "sellable"\n' +
+        '                ? "reverse_original_lane"\n' +
+        '                : "none"',
+    );
+    expect(onlineOrderSource).toContain(
+      "plan.selectedItems.map((item) => item.productSkuId)",
+    );
   });
 
   it("prices replacement items from the server SKU instead of the client payload", () => {

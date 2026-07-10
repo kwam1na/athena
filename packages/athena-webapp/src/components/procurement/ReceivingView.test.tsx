@@ -52,8 +52,10 @@ describe("ReceivingView", () => {
             orderedQuantity: 4,
             productSkuId: "sku-1" as Id<"productSku">,
             receivedQuantity: 1,
+            unitCost: 1234,
           },
         ]}
+        currency="GHS"
         purchaseOrderId={"purchase-order-1" as Id<"purchaseOrder">}
         storeId={"store-1" as Id<"store">}
       />,
@@ -77,6 +79,8 @@ describe("ReceivingView", () => {
       expect(mockedConvex.receivePurchaseOrderBatch).toHaveBeenCalledWith({
         lineItems: [
           {
+            confirmedCurrency: "GHS",
+            confirmedUnitCost: 1234,
             purchaseOrderLineItemId: "line-item-1",
             receivedQuantity: 2,
           },
@@ -86,6 +90,75 @@ describe("ReceivingView", () => {
         storeId: "store-1",
         submissionKey: "receive-purchase-order-1-rs",
       }),
+    );
+    await waitFor(() =>
+      expect(mockedToast.success).toHaveBeenCalledWith(
+        "Receiving batch recorded",
+      ),
+    );
+  });
+
+  it("preserves zero and unknown confirmed costs as distinct values", async () => {
+    mockedConvex.receivePurchaseOrderBatch.mockResolvedValue(
+      ok({ _id: "receiving-batch-1" }),
+    );
+    const user = userEvent.setup();
+
+    render(
+      <ReceivingView
+        currency="GHS"
+        lineItems={[
+          {
+            _id: "line-item-zero" as Id<"purchaseOrderLineItem">,
+            description: "Zero-cost sample",
+            orderedQuantity: 1,
+            productSkuId: "sku-zero" as Id<"productSku">,
+            receivedQuantity: 0,
+            unitCost: 0,
+          },
+          {
+            _id: "line-item-unknown" as Id<"purchaseOrderLineItem">,
+            description: "Uncosted sample",
+            orderedQuantity: 1,
+            productSkuId: "sku-unknown" as Id<"productSku">,
+            receivedQuantity: 0,
+          },
+        ]}
+        purchaseOrderId={"purchase-order-1" as Id<"purchaseOrder">}
+        storeId={"store-1" as Id<"store">}
+      />,
+    );
+
+    expect(
+      screen.getByLabelText(/confirmed unit cost for zero-cost sample/i),
+    ).toHaveValue(0);
+    expect(
+      screen.getByLabelText(/confirmed unit cost for uncosted sample/i),
+    ).toHaveValue(null);
+
+    await user.click(
+      screen.getByRole("button", { name: /record receiving batch/i }),
+    );
+
+    await waitFor(() =>
+      expect(mockedConvex.receivePurchaseOrderBatch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          lineItems: [
+            {
+              confirmedCurrency: "GHS",
+              confirmedUnitCost: 0,
+              purchaseOrderLineItemId: "line-item-zero",
+              receivedQuantity: 1,
+            },
+            {
+              confirmedCurrency: "GHS",
+              confirmedUnitCost: undefined,
+              purchaseOrderLineItemId: "line-item-unknown",
+              receivedQuantity: 1,
+            },
+          ],
+        }),
+      ),
     );
     await waitFor(() =>
       expect(mockedToast.success).toHaveBeenCalledWith(
@@ -142,6 +215,8 @@ describe("ReceivingView", () => {
       expect(mockedConvex.receivePurchaseOrderBatch).toHaveBeenCalledWith({
         lineItems: [
           {
+            confirmedCurrency: undefined,
+            confirmedUnitCost: undefined,
             purchaseOrderLineItemId: "line-item-2",
             receivedQuantity: 2,
           },
@@ -234,6 +309,8 @@ describe("ReceivingView", () => {
         expect.objectContaining({
           lineItems: [
             {
+              confirmedCurrency: undefined,
+              confirmedUnitCost: undefined,
               purchaseOrderLineItemId: "line-item-1",
               receivedQuantity: 2,
             },

@@ -1,5 +1,11 @@
 import { v } from "convex/values";
 import { mutation, query } from "../_generated/server";
+import {
+  findAthenaUserByEmailWithCtx,
+  normalizeAthenaUserEmail,
+} from "../lib/athenaUserAuth";
+
+const MAX_INVITE_CODES = 500;
 
 export const redeem = mutation({
   args: { code: v.string(), email: v.string() },
@@ -39,7 +45,9 @@ export const redeem = mutation({
       return { success: false, message: "Invite code already redeemed" };
     }
 
-    await ctx.db.patch(inviteCode._id, { redeemedAt: Date.now() });
+    await ctx.db.patch("inviteCode", inviteCode._id, {
+      redeemedAt: Date.now(),
+    });
 
     return { success: true, inviteCode };
   },
@@ -59,17 +67,16 @@ export const create = mutation({
   }),
   handler: async (ctx, args) => {
     // check if the email is associated with an existing user
-    const user = await ctx.db
-      .query("athenaUser")
-      .filter((q) => q.eq(q.field("email"), args.recipientEmail))
-      .first();
+    const user = await findAthenaUserByEmailWithCtx(ctx, args.recipientEmail);
 
     let userId = user?._id;
 
     if (!user) {
       // create the user for the email
+      const normalizedEmail = normalizeAthenaUserEmail(args.recipientEmail);
       userId = await ctx.db.insert("athenaUser", {
         email: args.recipientEmail,
+        normalizedEmail,
       });
     }
 
@@ -129,6 +136,6 @@ export const getAll = query({
     return await ctx.db
       .query("inviteCode")
       .filter((q) => q.eq(q.field("organizationId"), args.organizationId))
-      .collect();
+      .take(MAX_INVITE_CODES);
   },
 });

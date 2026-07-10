@@ -35,7 +35,6 @@ import {
   listTransactionItems,
   patchPosTransaction,
   patchPosSession,
-  patchProductSku,
 } from "../infrastructure/repositories/transactionRepository";
 import {
   recordRetailSalePaymentAllocations,
@@ -45,6 +44,28 @@ import { updateCustomerStats } from "../infrastructure/repositories/customerRepo
 import { consumeCommandApprovalProofWithCtx } from "../../operations/approvalActions";
 import { createApprovalRequesterChallengeWithCtx } from "../../operations/approvalRequesterChallenges";
 import { recordOperationalEventWithCtx } from "../../operations/operationalEvents";
+import { appendReportingIngressWithCtx } from "../../reporting/ingress";
+import { applyCommerceInventoryEffectWithCtx } from "../../reporting/inventory/commerceEffects";
+
+vi.mock("../../reporting/ingress", () => ({
+  appendReportingIngressWithCtx: vi.fn(),
+}));
+
+vi.mock("../../reporting/inventory/commerceEffects", () => ({
+  applyCommerceInventoryEffectWithCtx: vi.fn(),
+  outboundBasisFromEffect: vi.fn(() => null),
+  reportingLineCostFromEffect: vi.fn(() => ({ costStatus: "unknown" })),
+  uncostedOutboundBasis: vi.fn((quantity: number) => ({
+    allocatedKnownCost: 0,
+    basisVersion: 0,
+    costedQuantity: 0,
+    currency: null,
+    knownCostPoolBefore: 0,
+    roundedWeightedAverageUnitCost: null,
+    uncostedQuantity: quantity,
+    unresolvedDeficitQuantity: 0,
+  })),
+}));
 
 vi.mock("../../workflowTraces/core", () => ({
   appendWorkflowTraceEventWithCtx: vi.fn(),
@@ -65,7 +86,6 @@ vi.mock("../infrastructure/repositories/transactionRepository", () => ({
   listTransactionItems: vi.fn(),
   patchPosSession: vi.fn(),
   patchPosTransaction: vi.fn(),
-  patchProductSku: vi.fn(),
 }));
 
 vi.mock("../infrastructure/integrations/paymentAllocationService", () => ({
@@ -143,6 +163,11 @@ vi.mock("../../operations/inventoryMovements", () => ({
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(applyCommerceInventoryEffectWithCtx).mockResolvedValue({
+    disposition: "inserted",
+    movement: { _id: "movement-1" },
+    position: { sellableQuantity: 9 },
+  } as never);
   vi.mocked(validateInventoryAvailability).mockResolvedValue({
     success: true,
     available: 10,
@@ -156,7 +181,7 @@ beforeEach(() => {
 function expectNoCompletionSideEffects() {
   expect(createPosTransaction).not.toHaveBeenCalled();
   expect(createPosTransactionItem).not.toHaveBeenCalled();
-  expect(patchProductSku).not.toHaveBeenCalled();
+  expect(applyCommerceInventoryEffectWithCtx).not.toHaveBeenCalled();
   expect(recordInventoryMovementWithCtx).not.toHaveBeenCalled();
   expect(patchPosSession).not.toHaveBeenCalled();
   expect(patchPosTransaction).not.toHaveBeenCalled();
@@ -169,7 +194,7 @@ function expectNoCompletionSideEffects() {
 
 function expectNoVoidBusinessSideEffects() {
   expect(patchPosTransaction).not.toHaveBeenCalled();
-  expect(patchProductSku).not.toHaveBeenCalled();
+  expect(applyCommerceInventoryEffectWithCtx).not.toHaveBeenCalled();
   expect(recordRetailVoidPaymentAllocations).not.toHaveBeenCalled();
   expect(recordInventoryMovementWithCtx).not.toHaveBeenCalled();
   expect(recordInventoryMovementWithDispositionWithCtx).not.toHaveBeenCalled();
@@ -214,6 +239,7 @@ function createVoidCtx(overrides?: {
       patch: overrides?.patch ?? vi.fn(),
       query: vi.fn((tableName: string) => ({
         withIndex: vi.fn(() => ({
+          first: vi.fn().mockResolvedValue(null),
           collect: vi
             .fn()
             .mockResolvedValue(
@@ -610,7 +636,7 @@ describe("voidTransaction", () => {
       data: {
         approvalProofId: "approval-proof-1",
         approverStaffProfileId: "manager-1",
-        inventoryMovementIds: ["inventory-movement-1"],
+        inventoryMovementIds: ["movement-1"],
         operationalEventId: "void-event-1",
         paymentAllocationIds: ["payment-allocation-1"],
         transactionId: "txn-1",
@@ -650,20 +676,31 @@ describe("voidTransaction", () => {
           registerSessionId: "register-1",
         }),
       );
-    expect(recordInventoryMovementWithDispositionWithCtx).toHaveBeenCalledWith(
+    expect(applyCommerceInventoryEffectWithCtx).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
+        kind: "return",
         movementType: "pos_transaction_void",
-        quantityDelta: 1,
+        quantity: 1,
         reasonCode: "pos_transaction_void",
         sourceId: "txn-1",
         sourceType: "posTransaction",
       }),
     );
-    expect(patchProductSku).toHaveBeenCalledWith(expect.anything(), "sku-1", {
-      inventoryCount: 5,
-      quantityAvailable: 5,
-    });
+    expect(appendReportingIngressWithCtx).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        lines: [
+          expect.objectContaining({
+            costStatus: "not_applicable",
+            productSkuId: "sku-1",
+            quantity: 0,
+          }),
+        ],
+        quantity: 0,
+        sourceEventType: "pos_transaction_voided",
+      }),
+    );
     expect(patchPosTransaction).toHaveBeenCalledWith(
       expect.anything(),
       "txn-1",
@@ -772,31 +809,24 @@ describe("voidTransaction", () => {
     ).resolves.toMatchObject({
       kind: "ok",
       data: {
-        inventoryMovementIds: ["inventory-movement-1"],
+        inventoryMovementIds: ["movement-1"],
       },
     });
 
-    expect(recordInventoryMovementWithDispositionWithCtx).toHaveBeenCalledTimes(
-      1,
-    );
-    expect(recordInventoryMovementWithDispositionWithCtx).toHaveBeenCalledWith(
+    expect(applyCommerceInventoryEffectWithCtx).toHaveBeenCalledTimes(1);
+    expect(applyCommerceInventoryEffectWithCtx).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         productSkuId: "sku-1",
-        quantityDelta: 1,
+        quantity: 1,
       }),
     );
-    expect(patchProductSku).toHaveBeenCalledTimes(1);
-    expect(patchProductSku).toHaveBeenCalledWith(expect.anything(), "sku-1", {
-      inventoryCount: 5,
-      quantityAvailable: 5,
-    });
-    expect(patchProductSku).not.toHaveBeenCalledWith(
+    expect(applyCommerceInventoryEffectWithCtx).not.toHaveBeenCalledWith(
       expect.anything(),
       "sku-pending-1",
       expect.anything(),
     );
-    expect(patchProductSku).not.toHaveBeenCalledWith(
+    expect(applyCommerceInventoryEffectWithCtx).not.toHaveBeenCalledWith(
       expect.anything(),
       "sku-import-1",
       expect.anything(),
@@ -922,13 +952,14 @@ describe("voidTransaction", () => {
         registerSessionId: "register-1",
       }),
     );
-    expect(recordInventoryMovementWithDispositionWithCtx).toHaveBeenCalledWith(
+    expect(applyCommerceInventoryEffectWithCtx).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         actorStaffProfileId: "staff-1",
         actorUserId: "cashier-user-1",
+        kind: "return",
         movementType: "pos_transaction_void",
-        quantityDelta: 1,
+        quantity: 1,
       }),
     );
     expect(recordOperationalEventWithCtx).toHaveBeenCalledWith(
@@ -1296,23 +1327,18 @@ describe("voidTransaction", () => {
       kind: "ok",
     });
 
-    expect(recordInventoryMovementWithDispositionWithCtx).toHaveBeenCalledTimes(1);
-    expect(recordInventoryMovementWithDispositionWithCtx).toHaveBeenCalledWith(
+    expect(applyCommerceInventoryEffectWithCtx).toHaveBeenCalledTimes(1);
+    expect(applyCommerceInventoryEffectWithCtx).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         productSkuId: "sku-1",
-        quantityDelta: 3,
+        quantity: 3,
       }),
     );
-    expect(patchProductSku).toHaveBeenCalledTimes(1);
-    expect(patchProductSku).toHaveBeenCalledWith(expect.anything(), "sku-1", {
-      inventoryCount: 7,
-      quantityAvailable: 7,
-    });
   });
 
   it("does not restore SKU quantities again when void inventory movement already exists", async () => {
-    vi.mocked(recordInventoryMovementWithDispositionWithCtx).mockResolvedValueOnce({
+    vi.mocked(applyCommerceInventoryEffectWithCtx).mockResolvedValueOnce({
       disposition: "existing",
       movement: { _id: "inventory-movement-existing" as Id<"inventoryMovement"> },
     } as never);
@@ -1331,8 +1357,7 @@ describe("voidTransaction", () => {
       },
     });
 
-    expect(recordInventoryMovementWithDispositionWithCtx).toHaveBeenCalledTimes(1);
-    expect(patchProductSku).not.toHaveBeenCalled();
+    expect(applyCommerceInventoryEffectWithCtx).toHaveBeenCalledTimes(1);
   });
 
   it.each([
@@ -1496,7 +1521,7 @@ describe("completeTransaction checkout side effects", () => {
     vi.mocked(createPosTransactionItem).mockResolvedValue(
       "txn-item-1" as never,
     );
-    vi.mocked(patchProductSku).mockResolvedValue(undefined as never);
+    vi.mocked(applyCommerceInventoryEffectWithCtx).mockResolvedValue(undefined as never);
 
     await expect(
       completeTransaction(ctx, {
@@ -1579,17 +1604,34 @@ describe("completeTransaction checkout side effects", () => {
         subjectType: "posTransaction",
       }),
     );
-    expect(recordInventoryMovementWithCtx).toHaveBeenCalledWith(
+    expect(applyCommerceInventoryEffectWithCtx).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         movementType: "sale",
         sourceType: "posTransaction",
         sourceId: "txn-1",
-        quantityDelta: -1,
+        quantity: 1,
         productSkuId: "sku-1",
         posTransactionId: "txn-1",
         registerSessionId: "register-1",
         reasonCode: "pos_sale",
+      }),
+    );
+    expect(appendReportingIngressWithCtx).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        businessEventKey: "pos:txn-1:complete",
+        lines: [
+          expect.objectContaining({
+            costStatus: "unknown",
+            lineKey: "txn-item-1",
+            lineKind: "merchandise",
+            productSkuId: "sku-1",
+            quantity: 1,
+          }),
+        ],
+        occurredAt: expect.any(Number),
+        sourceEventType: "pos_completed",
       }),
     );
   });
@@ -1727,7 +1769,7 @@ describe("completeTransaction checkout side effects", () => {
         }),
       }),
     );
-    expect(patchProductSku).not.toHaveBeenCalled();
+    expect(applyCommerceInventoryEffectWithCtx).not.toHaveBeenCalled();
     expect(recordInventoryMovementWithCtx).not.toHaveBeenCalled();
   });
 
@@ -1895,7 +1937,7 @@ describe("completeTransaction checkout side effects", () => {
         }),
       }),
     );
-    expect(patchProductSku).not.toHaveBeenCalled();
+    expect(applyCommerceInventoryEffectWithCtx).not.toHaveBeenCalled();
     expect(recordInventoryMovementWithCtx).not.toHaveBeenCalled();
   });
 
@@ -1964,7 +2006,7 @@ describe("completeTransaction checkout side effects", () => {
     expect(validateInventoryAvailability).not.toHaveBeenCalled();
     expect(createPosTransaction).not.toHaveBeenCalled();
     expect(createPosTransactionItem).not.toHaveBeenCalled();
-    expect(patchProductSku).not.toHaveBeenCalled();
+    expect(applyCommerceInventoryEffectWithCtx).not.toHaveBeenCalled();
     expect(recordInventoryMovementWithCtx).not.toHaveBeenCalled();
   });
 
@@ -2527,7 +2569,7 @@ describe("completeTransaction trace ordering", () => {
     vi.mocked(createPosTransactionItem).mockResolvedValue(
       "txn-item-1" as never,
     );
-    vi.mocked(patchProductSku).mockResolvedValue(undefined as never);
+    vi.mocked(applyCommerceInventoryEffectWithCtx).mockResolvedValue(undefined as never);
     vi.mocked(patchPosSession).mockRejectedValue(
       new Error("session patch unavailable"),
     );
@@ -2628,7 +2670,7 @@ describe("completeTransaction trace ordering", () => {
     vi.mocked(createPosTransactionItem).mockResolvedValue(
       "txn-item-1" as never,
     );
-    vi.mocked(patchProductSku).mockResolvedValue(undefined as never);
+    vi.mocked(applyCommerceInventoryEffectWithCtx).mockResolvedValue(undefined as never);
     vi.mocked(patchPosSession).mockResolvedValue(undefined as never);
     vi.mocked(createWorkflowTraceWithCtx).mockResolvedValue("trace-1" as never);
     vi.mocked(registerWorkflowTraceLookupWithCtx).mockResolvedValue(
@@ -2712,18 +2754,14 @@ describe("completeTransaction trace ordering", () => {
         items: [{ skuId: "sku-1", quantity: 1 }],
       }),
     );
-    expect(patchProductSku).toHaveBeenCalledWith(expect.anything(), "sku-1", {
-      quantityAvailable: 9,
-      inventoryCount: 9,
-    });
-    expect(recordInventoryMovementWithCtx).toHaveBeenCalledWith(
+    expect(applyCommerceInventoryEffectWithCtx).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         movementType: "sale",
         sourceType: "posTransaction",
-        sourceId: "txn-1",
-        quantityDelta: -1,
         productSkuId: "sku-1",
+        quantity: 1,
+        sourceId: "txn-1",
         posTransactionId: "txn-1",
         registerSessionId: "register-1",
         actorStaffProfileId: "staff-1",
@@ -2883,7 +2921,7 @@ describe("completeTransaction trace ordering", () => {
         }),
       }),
     );
-    expect(patchProductSku).not.toHaveBeenCalled();
+    expect(applyCommerceInventoryEffectWithCtx).not.toHaveBeenCalled();
     expect(recordInventoryMovementWithCtx).not.toHaveBeenCalled();
   });
 
@@ -2974,7 +3012,7 @@ describe("completeTransaction trace ordering", () => {
     vi.mocked(createPosTransactionItem).mockResolvedValue(
       "txn-item-1" as never,
     );
-    vi.mocked(patchProductSku).mockResolvedValue(undefined as never);
+    vi.mocked(applyCommerceInventoryEffectWithCtx).mockResolvedValue(undefined as never);
     vi.mocked(patchPosSession).mockResolvedValue(undefined as never);
     vi.mocked(consumeInventoryHoldsForSession).mockResolvedValue(
       new Map([["sku-1" as Id<"productSku">, 2]]),
@@ -3021,16 +3059,12 @@ describe("completeTransaction trace ordering", () => {
         totalPrice: 30,
       }),
     );
-    expect(patchProductSku).toHaveBeenCalledWith(expect.anything(), "sku-1", {
-      inventoryCount: 8,
-      quantityAvailable: 8,
-    });
-    expect(recordInventoryMovementWithCtx).toHaveBeenCalledWith(
+    expect(applyCommerceInventoryEffectWithCtx).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         movementType: "sale",
         productSkuId: "sku-1",
-        quantityDelta: -2,
+        quantity: 2,
         sourceId: "txn-1",
       }),
     );
@@ -3169,7 +3203,7 @@ describe("completeTransaction trace ordering", () => {
         }),
       }),
     );
-    expect(patchProductSku).not.toHaveBeenCalled();
+    expect(applyCommerceInventoryEffectWithCtx).not.toHaveBeenCalled();
     expect(recordInventoryMovementWithCtx).not.toHaveBeenCalled();
   });
 
@@ -3335,7 +3369,7 @@ describe("completeTransaction trace ordering", () => {
         }),
       }),
     );
-    expect(patchProductSku).not.toHaveBeenCalled();
+    expect(applyCommerceInventoryEffectWithCtx).not.toHaveBeenCalled();
     expect(recordInventoryMovementWithCtx).not.toHaveBeenCalled();
   });
 
@@ -3674,7 +3708,7 @@ describe("completeTransaction trace ordering", () => {
     expect(createPosTransactionItem).not.toHaveBeenCalled();
     expect(recordRetailSalePaymentAllocations).not.toHaveBeenCalled();
     expect(recordOperationalEventWithCtx).not.toHaveBeenCalled();
-    expect(patchProductSku).not.toHaveBeenCalled();
+    expect(applyCommerceInventoryEffectWithCtx).not.toHaveBeenCalled();
     expect(recordInventoryMovementWithCtx).not.toHaveBeenCalled();
   });
 
@@ -3860,7 +3894,7 @@ describe("completeTransaction trace ordering", () => {
     vi.mocked(createPosTransactionItem).mockResolvedValue(
       "txn-item-1" as never,
     );
-    vi.mocked(patchProductSku).mockResolvedValue(undefined as never);
+    vi.mocked(applyCommerceInventoryEffectWithCtx).mockResolvedValue(undefined as never);
     vi.mocked(patchPosSession).mockResolvedValue(undefined as never);
 
     const result = await createTransactionFromSessionHandler(ctx, {
@@ -3950,7 +3984,7 @@ describe("completeTransaction trace ordering", () => {
     vi.mocked(createPosTransactionItem).mockResolvedValue(
       "txn-item-1" as never,
     );
-    vi.mocked(patchProductSku).mockResolvedValue(undefined as never);
+    vi.mocked(applyCommerceInventoryEffectWithCtx).mockResolvedValue(undefined as never);
     vi.mocked(patchPosSession).mockResolvedValue(undefined as never);
     vi.mocked(patchPosTransaction).mockResolvedValue(undefined as never);
     vi.mocked(consumeInventoryHoldsForSession).mockResolvedValue(new Map());
@@ -3963,17 +3997,14 @@ describe("completeTransaction trace ordering", () => {
       }),
     ).resolves.toEqual(expect.objectContaining({ kind: "ok" }));
 
-    expect(patchProductSku).toHaveBeenCalledWith(expect.anything(), "sku-1", {
-      quantityAvailable: 10,
-      inventoryCount: 9,
-    });
-    expect(recordInventoryMovementWithCtx).toHaveBeenCalledWith(
+    expect(applyCommerceInventoryEffectWithCtx).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         movementType: "sale",
         sourceType: "posTransaction",
         sourceId: "txn-1",
-        quantityDelta: -1,
+        quantity: 1,
+        sellableQuantityDelta: -0,
         productSkuId: "sku-1",
         posTransactionId: "txn-1",
         registerSessionId: "register-1",
@@ -4441,7 +4472,7 @@ describe("completeTransaction trace ordering", () => {
     vi.mocked(createPosTransactionItem).mockResolvedValue(
       "txn-item-1" as never,
     );
-    vi.mocked(patchProductSku).mockResolvedValue(undefined as never);
+    vi.mocked(applyCommerceInventoryEffectWithCtx).mockResolvedValue(undefined as never);
     vi.mocked(updateCustomerStats).mockResolvedValue(undefined as never);
     vi.mocked(createWorkflowTraceWithCtx).mockResolvedValue("trace-1" as never);
     vi.mocked(registerWorkflowTraceLookupWithCtx).mockResolvedValue(

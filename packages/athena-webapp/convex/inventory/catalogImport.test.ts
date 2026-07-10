@@ -1,8 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Id } from "../_generated/dataModel";
+import type { MutationCtx } from "../_generated/server";
 
 const mockedSkuSearch = vi.hoisted(() => ({
+  applyInventoryEffectWithCtx: vi.fn(),
   upsertProductSkuSearchProjection: vi.fn(),
+}));
+
+vi.mock("../reporting/inventory/effects", () => ({
+  applyInventoryEffectWithCtx: mockedSkuSearch.applyInventoryEffectWithCtx,
 }));
 
 vi.mock("./skuSearch", () => ({
@@ -51,6 +57,47 @@ type TableName =
 type Row = Record<string, any> & { _id: string };
 
 beforeEach(() => {
+  mockedSkuSearch.applyInventoryEffectWithCtx.mockReset();
+  mockedSkuSearch.applyInventoryEffectWithCtx.mockImplementation(
+    async (
+      ctx: MutationCtx,
+      args: {
+        compatibilityBalance: {
+          onHandQuantity: number;
+          sellableQuantity: number;
+        };
+        physicalQuantityDelta: number;
+        productSkuId: Id<"productSku">;
+      },
+    ) => {
+      const testDb = ctx.db as unknown as {
+        insert(table: string, value: Record<string, unknown>): Promise<string>;
+      };
+      await ctx.db.patch("productSku", args.productSkuId, {
+        inventoryCount: args.compatibilityBalance.onHandQuantity,
+        quantityAvailable: args.compatibilityBalance.sellableQuantity,
+      });
+      const movementId =
+        args.physicalQuantityDelta === 0
+          ? null
+          : await testDb.insert("inventoryMovement", {
+              productSkuId: args.productSkuId,
+            });
+      if (movementId) {
+        await testDb.insert("skuActivityEvent", {
+          activityType: "stock_provisional_import_finalization",
+          inventoryMovementId: movementId,
+          productSkuId: args.productSkuId,
+          status: "committed",
+        });
+      }
+      return {
+        disposition: "inserted",
+        mode: "compatibility_shadow",
+        movement: movementId ? { _id: movementId } : null,
+      };
+    },
+  );
   mockedSkuSearch.upsertProductSkuSearchProjection.mockReset();
 });
 
@@ -75,7 +122,9 @@ function createMutationCtx(seed: Partial<Record<TableName, Row[]>> = {}) {
   };
   const counters = new Map<TableName, number>();
 
-  for (const [table, rows] of Object.entries(seed) as Array<[TableName, Row[]]>) {
+  for (const [table, rows] of Object.entries(seed) as Array<
+    [TableName, Row[]]
+  >) {
     rows.forEach((row) => tables[table].set(row._id, row));
   }
 
@@ -119,7 +168,9 @@ function createMutationCtx(seed: Partial<Record<TableName, Row[]>> = {}) {
           .filter((row) => {
             if (!indexName) return true;
             return (
-              Object.entries(eqs).every(([field, value]) => row[field] === value) &&
+              Object.entries(eqs).every(
+                ([field, value]) => row[field] === value,
+              ) &&
               Object.entries(gts).every(([field, value]) => row[field] > value)
             );
           })
@@ -182,7 +233,9 @@ const access = {
   } as any,
 };
 
-function seedTrustedConversionData(overrides: Partial<Record<TableName, Row[]>> = {}) {
+function seedTrustedConversionData(
+  overrides: Partial<Record<TableName, Row[]>> = {},
+) {
   return createMutationCtx({
     category: [
       {
@@ -367,6 +420,20 @@ describe("catalog import", () => {
       subjectId: "legacy-smartpos-1",
       subjectType: "inventory_import",
     });
+    expect(mockedSkuSearch.applyInventoryEffectWithCtx).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        businessEventKey: expect.stringMatching(
+          /^inventory_import:legacy-smartpos-1:row:2:sku:/,
+        ),
+        physicalQuantityDelta: 6,
+        valuation: expect.objectContaining({
+          costBasis: { kind: "uncosted" },
+          kind: "inbound",
+          quantity: 6,
+        }),
+      }),
+    );
   });
 
   it("updates existing SKUs by barcode and returns the prior result for repeated import keys", async () => {
@@ -432,6 +499,7 @@ describe("catalog import", () => {
           barcode: "123456789012",
           price: 50000,
           quantity: 9,
+          unitCost: 0,
         },
       ],
       sourceFormat: "json" as const,
@@ -450,6 +518,21 @@ describe("catalog import", () => {
     });
     expect(tables.product.size).toBe(1);
     expect(tables.operationalEvent.size).toBe(1);
+    expect(mockedSkuSearch.applyInventoryEffectWithCtx).toHaveBeenCalledTimes(
+      1,
+    );
+    expect(mockedSkuSearch.applyInventoryEffectWithCtx).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        businessEventKey: "inventory_import:legacy-smartpos-2:row:2:sku:sku-1",
+        physicalQuantityDelta: 7,
+        valuation: expect.objectContaining({
+          costBasis: expect.objectContaining({ kind: "known", unitCost: 0 }),
+          kind: "inbound",
+          quantity: 7,
+        }),
+      }),
+    );
   });
 
   it("imports sparse rows by applying fallback Athena fields", async () => {
@@ -580,25 +663,29 @@ describe("catalog import", () => {
       ],
     });
 
-    const saved = await saveInventoryImportReviewVersionWithCtx(ctx, {
-      fileName: "products.csv",
-      importKey: "legacy-review-2",
-      issueCount: 0,
-      notes: "Review before apply.",
-      rawContent: "product_name,sku,price,qty\nComb,COMB-1,25,4",
-      rowDecisions: [
-        {
-          priceSource: "athena",
-          productName: "Comb",
-          quantitySource: "import",
-          rowKey: "2:COMB-1::Comb",
-          rowNumber: 2,
-        },
-      ],
-      rowCount: 1,
-      sourceFormat: "csv",
-      storeId: "store-1" as Id<"store">,
-    }, access);
+    const saved = await saveInventoryImportReviewVersionWithCtx(
+      ctx,
+      {
+        fileName: "products.csv",
+        importKey: "legacy-review-2",
+        issueCount: 0,
+        notes: "Review before apply.",
+        rawContent: "product_name,sku,price,qty\nComb,COMB-1,25,4",
+        rowDecisions: [
+          {
+            priceSource: "athena",
+            productName: "Comb",
+            quantitySource: "import",
+            rowKey: "2:COMB-1::Comb",
+            rowNumber: 2,
+          },
+        ],
+        rowCount: 1,
+        sourceFormat: "csv",
+        storeId: "store-1" as Id<"store">,
+      },
+      access,
+    );
 
     expect(saved).toMatchObject({
       fileName: "products.csv",
@@ -638,7 +725,8 @@ describe("catalog import", () => {
           importKey: "legacy-review-1",
           issueCount: 0,
           organizationId: "org-1",
-          rawContent: "product_name,sku,price,qty\nBody Wave,LEGACY-BODY-WAVE,450,6",
+          rawContent:
+            "product_name,sku,price,qty\nBody Wave,LEGACY-BODY-WAVE,450,6",
           rowCount: 1,
           sourceFormat: "csv",
           storeId: "store-1",
@@ -677,25 +765,30 @@ describe("catalog import", () => {
       ],
     });
 
-    const staged = await stageInventoryImportReviewRowsForPosWithCtx(ctx, {
-      importKey: "legacy-review-1",
-      reviewVersionId: "review-version-1" as Id<"inventoryImportReviewVersion">,
-      rows: [
-        {
-          barcode: "123456789012",
-          price: 45000,
-          productId: "product-1" as Id<"product">,
-          productName: "Body Wave imported",
-          productSkuId: "sku-1" as Id<"productSku">,
-          quantity: 6,
-          rowKey: "2:LEGACY-BODY-WAVE:123456789012:Body Wave imported",
-          rowNumber: 2,
-          sku: "LEGACY-BODY-WAVE",
-        },
-      ],
-      sourceFormat: "csv",
-      storeId: "store-1" as Id<"store">,
-    }, access);
+    const staged = await stageInventoryImportReviewRowsForPosWithCtx(
+      ctx,
+      {
+        importKey: "legacy-review-1",
+        reviewVersionId:
+          "review-version-1" as Id<"inventoryImportReviewVersion">,
+        rows: [
+          {
+            barcode: "123456789012",
+            price: 45000,
+            productId: "product-1" as Id<"product">,
+            productName: "Body Wave imported",
+            productSkuId: "sku-1" as Id<"productSku">,
+            quantity: 6,
+            rowKey: "2:LEGACY-BODY-WAVE:123456789012:Body Wave imported",
+            rowNumber: 2,
+            sku: "LEGACY-BODY-WAVE",
+          },
+        ],
+        sourceFormat: "csv",
+        storeId: "store-1" as Id<"store">,
+      },
+      access,
+    );
 
     expect(staged).toMatchObject({
       alreadyStaged: false,
@@ -705,7 +798,9 @@ describe("catalog import", () => {
       rowsSkipped: 0,
       trustedStockRowsUpdated: 0,
     });
-    const provisionalRow = Array.from(tables.inventoryImportProvisionalSku.values())[0];
+    const provisionalRow = Array.from(
+      tables.inventoryImportProvisionalSku.values(),
+    )[0];
     expect(provisionalRow).toMatchObject({
       importKey: "legacy-review-1",
       importedBarcode: "123456789012",
@@ -840,7 +935,9 @@ describe("catalog import", () => {
       inventoryCount: 7,
       quantityAvailable: 7,
     });
-    expect(tables.inventoryImportProvisionalSku.get("provisional-1")).toMatchObject({
+    expect(
+      tables.inventoryImportProvisionalSku.get("provisional-1"),
+    ).toMatchObject({
       finalTrustedQuantity: 7,
       finalizedByUserId: "user-1",
       posExposureStatus: "hidden",
@@ -882,7 +979,10 @@ describe("catalog import", () => {
   it("keeps product-page provisional binding and finalization return values aligned to public Convex validators", async () => {
     const { ctx } = seedTrustedConversionData();
     const binding = await readTrustedConversionBinding(ctx);
-    assertConformsToExportedReturns(listProductPageProvisionalSkuBinding, binding);
+    assertConformsToExportedReturns(
+      listProductPageProvisionalSkuBinding,
+      binding,
+    );
 
     const result = await finalizeTrustedInventoryFromProductPageWithCtx(
       ctx,
@@ -890,7 +990,8 @@ describe("catalog import", () => {
         conversionRequestId: "conversion-1",
         productId: "product-1" as Id<"product">,
         productSkuId: "sku-1" as Id<"productSku">,
-        provisionalSkuId: "provisional-1" as Id<"inventoryImportProvisionalSku">,
+        provisionalSkuId:
+          "provisional-1" as Id<"inventoryImportProvisionalSku">,
         reviewedInventoryCount: 10,
         reviewedIsVisible: true,
         reviewedPosVisible: true,
@@ -947,7 +1048,10 @@ describe("catalog import", () => {
         trustedStockRowsUpdated: 0,
       },
     });
-    assertConformsToExportedReturns(getLatestInventoryImportReviewVersion, null);
+    assertConformsToExportedReturns(
+      getLatestInventoryImportReviewVersion,
+      null,
+    );
     assertConformsToExportedReturns(listInventoryImportReviewSkuContext, [
       {
         barcode: "123456789012",
@@ -1041,7 +1145,8 @@ describe("catalog import", () => {
         conversionRequestId: "conversion-1",
         productId: "product-1" as Id<"product">,
         productSkuId: "sku-1" as Id<"productSku">,
-        provisionalSkuId: "provisional-1" as Id<"inventoryImportProvisionalSku">,
+        provisionalSkuId:
+          "provisional-1" as Id<"inventoryImportProvisionalSku">,
         reviewedInventoryCount: 10,
         reviewedIsVisible: true,
         reviewedPosVisible: true,
@@ -1076,7 +1181,6 @@ describe("catalog import", () => {
       posVisible: true,
       price: 50000,
       quantityAvailable: 8,
-      unitCost: 25000,
     });
     expect(
       mockedSkuSearch.upsertProductSkuSearchProjection,
@@ -1087,7 +1191,9 @@ describe("catalog import", () => {
       posVisible: true,
       quantityAvailable: 8,
     });
-    expect(tables.inventoryImportProvisionalSku.get("provisional-1")).toMatchObject({
+    expect(
+      tables.inventoryImportProvisionalSku.get("provisional-1"),
+    ).toMatchObject({
       finalTrustedQuantity: 10,
       finalizationConversionRequestId: "conversion-1",
       finalizationSourceSurface: "product_edit",
@@ -1120,7 +1226,8 @@ describe("catalog import", () => {
       expect.arrayContaining([
         expect.objectContaining({
           activityType: "provisional_import_trusted_finalization",
-          idempotencyKey: "inventoryImportProvisionalSku:provisional-1:conversion-1",
+          idempotencyKey:
+            "inventoryImportProvisionalSku:provisional-1:conversion-1",
           productSkuId: "sku-1",
           sourceId: "provisional-1",
           sourceType: "inventory_import_provisional_sku",
@@ -1263,7 +1370,9 @@ describe("catalog import", () => {
       isVisible: false,
     });
     expect(Array.from(tables.operationalWorkItem.values())).toEqual([]);
-    expect(mockedSkuSearch.upsertProductSkuSearchProjection).not.toHaveBeenCalled();
+    expect(
+      mockedSkuSearch.upsertProductSkuSearchProjection,
+    ).not.toHaveBeenCalled();
   });
 
   it("repairs onboarded legacy import trusted SKU visibility and draft status", async () => {
@@ -1442,10 +1551,9 @@ describe("catalog import", () => {
       availability: "live",
       isVisible: true,
     });
-    expect(mockedSkuSearch.upsertProductSkuSearchProjection).toHaveBeenCalledWith(
-      ctx,
-      "sku-hidden-draft",
-    );
+    expect(
+      mockedSkuSearch.upsertProductSkuSearchProjection,
+    ).toHaveBeenCalledWith(ctx, "sku-hidden-draft");
     expect(
       mockedSkuSearch.upsertProductSkuSearchProjection,
     ).not.toHaveBeenCalledWith(ctx, "sku-visible-live");
@@ -1552,10 +1660,9 @@ describe("catalog import", () => {
       isVisible: false,
       posVisible: true,
     });
-    expect(mockedSkuSearch.upsertProductSkuSearchProjection).toHaveBeenCalledWith(
-      ctx,
-      "sku-hidden-draft",
-    );
+    expect(
+      mockedSkuSearch.upsertProductSkuSearchProjection,
+    ).toHaveBeenCalledWith(ctx, "sku-hidden-draft");
   });
 
   it("returns a cursor so legacy visibility repair can advance past skipped rows", async () => {
@@ -1632,14 +1739,12 @@ describe("catalog import", () => {
       ],
     });
 
-    const firstPage = await repairOnboardedLegacyImportTrustedSkuVisibilityWithCtx(
-      ctx,
-      {
+    const firstPage =
+      await repairOnboardedLegacyImportTrustedSkuVisibilityWithCtx(ctx, {
         dryRun: false,
         limit: 1,
         storeId: "store-1" as Id<"store">,
-      },
-    );
+      });
 
     expect(firstPage).toMatchObject({
       refreshedSearchProjections: 0,
@@ -1674,10 +1779,9 @@ describe("catalog import", () => {
       isVisible: false,
       posVisible: true,
     });
-    expect(mockedSkuSearch.upsertProductSkuSearchProjection).toHaveBeenCalledWith(
-      ctx,
-      "sku-hidden-draft",
-    );
+    expect(
+      mockedSkuSearch.upsertProductSkuSearchProjection,
+    ).toHaveBeenCalledWith(ctx, "sku-hidden-draft");
   });
 
   it("continues through repair candidates that share a finalizedAt timestamp", async () => {
@@ -1754,14 +1858,12 @@ describe("catalog import", () => {
       ],
     });
 
-    const firstPage = await repairOnboardedLegacyImportTrustedSkuVisibilityWithCtx(
-      ctx,
-      {
+    const firstPage =
+      await repairOnboardedLegacyImportTrustedSkuVisibilityWithCtx(ctx, {
         dryRun: false,
         limit: 1,
         storeId: "store-1" as Id<"store">,
-      },
-    );
+      });
     const secondPage =
       await repairOnboardedLegacyImportTrustedSkuVisibilityWithCtx(ctx, {
         cursor: firstPage.nextCursor,
@@ -1791,14 +1893,12 @@ describe("catalog import", () => {
       isVisible: false,
       posVisible: true,
     });
-    expect(mockedSkuSearch.upsertProductSkuSearchProjection).toHaveBeenCalledWith(
-      ctx,
-      "sku-hidden-draft-1",
-    );
-    expect(mockedSkuSearch.upsertProductSkuSearchProjection).toHaveBeenCalledWith(
-      ctx,
-      "sku-hidden-draft-2",
-    );
+    expect(
+      mockedSkuSearch.upsertProductSkuSearchProjection,
+    ).toHaveBeenCalledWith(ctx, "sku-hidden-draft-1");
+    expect(
+      mockedSkuSearch.upsertProductSkuSearchProjection,
+    ).toHaveBeenCalledWith(ctx, "sku-hidden-draft-2");
   });
 
   it("does not create an inventory movement when finalization has no trusted stock delta", async () => {
@@ -1811,7 +1911,8 @@ describe("catalog import", () => {
         conversionRequestId: "conversion-1",
         productId: "product-1" as Id<"product">,
         productSkuId: "sku-1" as Id<"productSku">,
-        provisionalSkuId: "provisional-1" as Id<"inventoryImportProvisionalSku">,
+        provisionalSkuId:
+          "provisional-1" as Id<"inventoryImportProvisionalSku">,
         reviewedInventoryCount: 2,
         reviewedIsVisible: true,
         reviewedPrice: 50000,
@@ -1850,7 +1951,8 @@ describe("catalog import", () => {
     expect(result).toMatchObject({
       error: {
         code: "precondition_failed",
-        message: "Make this SKU available in POS before finalizing trusted inventory.",
+        message:
+          "Make this SKU available in POS before finalizing trusted inventory.",
       },
       kind: "user_error",
     });
@@ -1868,8 +1970,16 @@ describe("catalog import", () => {
     const binding = await readTrustedConversionBinding(ctx);
     const args = buildTrustedConversionArgs(binding);
 
-    const first = await finalizeTrustedInventoryFromProductPageWithCtx(ctx, args, access);
-    const second = await finalizeTrustedInventoryFromProductPageWithCtx(ctx, args, access);
+    const first = await finalizeTrustedInventoryFromProductPageWithCtx(
+      ctx,
+      args,
+      access,
+    );
+    const second = await finalizeTrustedInventoryFromProductPageWithCtx(
+      ctx,
+      args,
+      access,
+    );
 
     expect(first).toEqual(second);
     expect(Array.from(tables.inventoryMovement.values())).toHaveLength(1);
@@ -1908,7 +2018,9 @@ describe("catalog import", () => {
       price: 50000,
       quantityAvailable: 8,
     });
-    expect(tables.inventoryImportProvisionalSku.get("provisional-1")).toMatchObject({
+    expect(
+      tables.inventoryImportProvisionalSku.get("provisional-1"),
+    ).toMatchObject({
       finalTrustedQuantity: 10,
       status: "active",
     });
@@ -1921,7 +2033,8 @@ describe("catalog import", () => {
     const binding = await readTrustedConversionBinding(ctx);
     await ctx.db.patch("inventoryImportProvisionalSku", "provisional-1", {
       saleEvidence: {
-        ...tables.inventoryImportProvisionalSku.get("provisional-1")!.saleEvidence,
+        ...tables.inventoryImportProvisionalSku.get("provisional-1")!
+          .saleEvidence,
         saleCount: 2,
         totalQuantitySold: 3,
       },
@@ -1934,7 +2047,8 @@ describe("catalog import", () => {
         conversionRequestId: "conversion-1",
         productId: "product-1" as Id<"product">,
         productSkuId: "sku-1" as Id<"productSku">,
-        provisionalSkuId: "provisional-1" as Id<"inventoryImportProvisionalSku">,
+        provisionalSkuId:
+          "provisional-1" as Id<"inventoryImportProvisionalSku">,
         reviewedInventoryCount: 10,
         reviewedIsVisible: true,
         reviewedPosVisible: true,
@@ -1953,7 +2067,9 @@ describe("catalog import", () => {
       kind: "user_error",
     });
     expect(tables.productSku.get("sku-1")).toMatchObject({ inventoryCount: 2 });
-    expect(tables.inventoryImportProvisionalSku.get("provisional-1")).toMatchObject({
+    expect(
+      tables.inventoryImportProvisionalSku.get("provisional-1"),
+    ).toMatchObject({
       status: "active",
     });
   });
@@ -1982,7 +2098,9 @@ describe("catalog import", () => {
       price: 31000,
       quantityAvailable: 3,
     });
-    expect(tables.inventoryImportProvisionalSku.get("provisional-1")).toMatchObject({
+    expect(
+      tables.inventoryImportProvisionalSku.get("provisional-1"),
+    ).toMatchObject({
       status: "active",
     });
     expect(Array.from(tables.inventoryMovement.values())).toHaveLength(0);
@@ -2014,7 +2132,8 @@ describe("catalog import", () => {
         conversionRequestId: "conversion-1",
         productId: "product-1" as Id<"product">,
         productSkuId: "sku-1" as Id<"productSku">,
-        provisionalSkuId: "provisional-1" as Id<"inventoryImportProvisionalSku">,
+        provisionalSkuId:
+          "provisional-1" as Id<"inventoryImportProvisionalSku">,
         reviewedInventoryCount: 10,
         reviewedIsVisible: true,
         reviewedPosVisible: true,
@@ -2032,7 +2151,9 @@ describe("catalog import", () => {
       error: { code: "precondition_failed" },
       kind: "user_error",
     });
-    expect(tables.inventoryImportProvisionalSku.get("provisional-1")).toMatchObject({
+    expect(
+      tables.inventoryImportProvisionalSku.get("provisional-1"),
+    ).toMatchObject({
       status: "active",
     });
   });
@@ -2074,7 +2195,9 @@ describe("catalog import", () => {
       kind: "user_error",
     });
     expect(tables.productSku.get("sku-1")).toMatchObject({ inventoryCount: 2 });
-    expect(tables.inventoryImportProvisionalSku.get("provisional-1")).toMatchObject({
+    expect(
+      tables.inventoryImportProvisionalSku.get("provisional-1"),
+    ).toMatchObject({
       status: "active",
     });
     expect(Array.from(tables.inventoryMovement.values())).toHaveLength(0);
@@ -2133,7 +2256,9 @@ describe("catalog import", () => {
       inventoryCount: 10,
       quantityAvailable: 8,
     });
-    expect(tables.inventoryImportProvisionalSku.get("provisional-1")).toMatchObject({
+    expect(
+      tables.inventoryImportProvisionalSku.get("provisional-1"),
+    ).toMatchObject({
       status: "active",
     });
   });
@@ -2189,7 +2314,8 @@ describe("catalog import", () => {
         conversionRequestId: "conversion-1",
         productId: "product-1" as Id<"product">,
         productSkuId: "sku-1" as Id<"productSku">,
-        provisionalSkuId: "provisional-1" as Id<"inventoryImportProvisionalSku">,
+        provisionalSkuId:
+          "provisional-1" as Id<"inventoryImportProvisionalSku">,
         reviewedInventoryCount: 10,
         reviewedIsVisible: true,
         reviewedPosVisible: true,
@@ -2208,7 +2334,9 @@ describe("catalog import", () => {
       kind: "user_error",
     });
     expect(tables.productSku.get("sku-1")).toMatchObject({ inventoryCount: 2 });
-    expect(tables.inventoryImportProvisionalSku.get("provisional-1")).toMatchObject({
+    expect(
+      tables.inventoryImportProvisionalSku.get("provisional-1"),
+    ).toMatchObject({
       status: "active",
     });
   });
@@ -2269,7 +2397,9 @@ describe("catalog import", () => {
       kind: "user_error",
     });
     expect(tables.productSku.get("sku-1")).toMatchObject({ inventoryCount: 2 });
-    expect(tables.inventoryImportProvisionalSku.get("provisional-1")).toMatchObject({
+    expect(
+      tables.inventoryImportProvisionalSku.get("provisional-1"),
+    ).toMatchObject({
       status: "active",
     });
     expect(Array.from(tables.inventoryMovement.values())).toHaveLength(0);
@@ -2456,23 +2586,28 @@ describe("catalog import", () => {
       ],
     });
 
-    const staged = await stageInventoryImportReviewRowsForPosWithCtx(ctx, {
-      importKey: "legacy-review-1",
-      reviewVersionId: "review-version-1" as Id<"inventoryImportReviewVersion">,
-      rows: [
-        {
-          category: "Accessories",
-          price: 2500,
-          productName: "Comb",
-          quantity: 4,
-          rowKey: "2:COMB-1::Comb",
-          rowNumber: 2,
-          sku: "COMB-1",
-        },
-      ],
-      sourceFormat: "csv",
-      storeId: "store-1" as Id<"store">,
-    }, access);
+    const staged = await stageInventoryImportReviewRowsForPosWithCtx(
+      ctx,
+      {
+        importKey: "legacy-review-1",
+        reviewVersionId:
+          "review-version-1" as Id<"inventoryImportReviewVersion">,
+        rows: [
+          {
+            category: "Accessories",
+            price: 2500,
+            productName: "Comb",
+            quantity: 4,
+            rowKey: "2:COMB-1::Comb",
+            rowNumber: 2,
+            sku: "COMB-1",
+          },
+        ],
+        sourceFormat: "csv",
+        storeId: "store-1" as Id<"store">,
+      },
+      access,
+    );
 
     const product = Array.from(tables.product.values())[0];
     const sku = Array.from(tables.productSku.values())[0];
@@ -2498,7 +2633,9 @@ describe("catalog import", () => {
     });
     expect(sku.sku).toMatch(/^[A-Z0-9]+-[A-Z0-9]+-[A-Z0-9]+$/);
     expect(sku.sku).not.toBe("COMB-1");
-    expect(Array.from(tables.inventoryImportProvisionalSku.values())[0]).toMatchObject({
+    expect(
+      Array.from(tables.inventoryImportProvisionalSku.values())[0],
+    ).toMatchObject({
       importedQuantity: 4,
       importedSku: sku.sku,
       productId: product._id,
@@ -2567,24 +2704,29 @@ describe("catalog import", () => {
       ],
     });
 
-    const staged = await stageInventoryImportReviewRowsForPosWithCtx(ctx, {
-      importKey: "legacy-review-1",
-      reviewVersionId: "review-version-1" as Id<"inventoryImportReviewVersion">,
-      rows: [
-        {
-          category: "Accessories",
-          price: 2500,
-          productName: "Comb",
-          quantity: 4,
-          rowKey: "2:COMB-1::Comb",
-          rowNumber: 2,
-          sku: "COMB-1",
-          subcategory: "General",
-        },
-      ],
-      sourceFormat: "csv",
-      storeId: "store-1" as Id<"store">,
-    }, access);
+    const staged = await stageInventoryImportReviewRowsForPosWithCtx(
+      ctx,
+      {
+        importKey: "legacy-review-1",
+        reviewVersionId:
+          "review-version-1" as Id<"inventoryImportReviewVersion">,
+        rows: [
+          {
+            category: "Accessories",
+            price: 2500,
+            productName: "Comb",
+            quantity: 4,
+            rowKey: "2:COMB-1::Comb",
+            rowNumber: 2,
+            sku: "COMB-1",
+            subcategory: "General",
+          },
+        ],
+        sourceFormat: "csv",
+        storeId: "store-1" as Id<"store">,
+      },
+      access,
+    );
 
     expect(staged).toMatchObject({
       catalogIdentitiesCreated: 1,
@@ -2613,7 +2755,9 @@ describe("catalog import", () => {
       name: "Comb",
       quantityAvailable: 0,
     });
-    expect(Array.from(tables.inventoryImportProvisionalSku.values())[0]).toMatchObject({
+    expect(
+      Array.from(tables.inventoryImportProvisionalSku.values())[0],
+    ).toMatchObject({
       productId: provisionalProduct?._id,
       status: "active",
     });
@@ -2663,11 +2807,19 @@ describe("catalog import", () => {
       storeId: "store-1" as Id<"store">,
     };
 
-    const first = await stageInventoryImportReviewRowsForPosWithCtx(ctx, args, access);
-    const second = await stageInventoryImportReviewRowsForPosWithCtx(ctx, {
-      ...args,
-      rows: [{ ...args.rows[0], price: 2700, quantity: 5 }, args.rows[1]],
-    }, access);
+    const first = await stageInventoryImportReviewRowsForPosWithCtx(
+      ctx,
+      args,
+      access,
+    );
+    const second = await stageInventoryImportReviewRowsForPosWithCtx(
+      ctx,
+      {
+        ...args,
+        rows: [{ ...args.rows[0], price: 2700, quantity: 5 }, args.rows[1]],
+      },
+      access,
+    );
 
     expect(first).toMatchObject({
       provisionalRowsCreated: 1,
@@ -2680,38 +2832,52 @@ describe("catalog import", () => {
       rowsSkipped: 1,
     });
     expect(tables.inventoryImportProvisionalSku.size).toBe(1);
-    expect(Array.from(tables.inventoryImportProvisionalSku.values())[0]).toMatchObject({
+    expect(
+      Array.from(tables.inventoryImportProvisionalSku.values())[0],
+    ).toMatchObject({
       importedPrice: 2700,
       importedQuantity: 5,
       rowKey: "2:COMB-1::Comb",
     });
 
-    const closed = await stageInventoryImportReviewRowsForPosWithCtx(ctx, {
-      ...args,
-      rows: [{ ...args.rows[0], action: "skip_row" as const }],
-    }, access);
+    const closed = await stageInventoryImportReviewRowsForPosWithCtx(
+      ctx,
+      {
+        ...args,
+        rows: [{ ...args.rows[0], action: "skip_row" as const }],
+      },
+      access,
+    );
 
     expect(closed).toMatchObject({
       alreadyStaged: true,
       provisionalRowsUpdated: 1,
       rowsSkipped: 1,
     });
-    expect(Array.from(tables.inventoryImportProvisionalSku.values())[0]).toMatchObject({
+    expect(
+      Array.from(tables.inventoryImportProvisionalSku.values())[0],
+    ).toMatchObject({
       posExposureStatus: "hidden",
       status: "closed",
     });
 
-    const notReopened = await stageInventoryImportReviewRowsForPosWithCtx(ctx, {
-      ...args,
-      rows: [{ ...args.rows[0], price: 3100, quantity: 9 }],
-    }, access);
+    const notReopened = await stageInventoryImportReviewRowsForPosWithCtx(
+      ctx,
+      {
+        ...args,
+        rows: [{ ...args.rows[0], price: 3100, quantity: 9 }],
+      },
+      access,
+    );
 
     expect(notReopened).toMatchObject({
       alreadyStaged: true,
       provisionalRowsUpdated: 0,
       rowsSkipped: 1,
     });
-    expect(Array.from(tables.inventoryImportProvisionalSku.values())[0]).toMatchObject({
+    expect(
+      Array.from(tables.inventoryImportProvisionalSku.values())[0],
+    ).toMatchObject({
       importedPrice: 2700,
       importedQuantity: 5,
       status: "closed",
@@ -2738,25 +2904,31 @@ describe("catalog import", () => {
     });
 
     await expect(
-      stageInventoryImportReviewRowsForPosWithCtx(ctx, {
-        importKey: "legacy-review-1",
-        managerElevationId: "elevation-1" as Id<"managerElevation">,
-        reviewVersionId:
-          "review-version-1" as Id<"inventoryImportReviewVersion">,
-        rows: [
-          {
-            price: 2500,
-            productName: "Comb",
-            quantity: 4,
-            rowKey: "2:COMB-1::Comb",
-            rowNumber: 2,
-            sku: "COMB-1",
-          },
-        ],
-        sourceFormat: "csv",
-        storeId: "store-1" as Id<"store">,
-      }, access),
-    ).rejects.toThrow("Terminal context is required before using manager elevation.");
+      stageInventoryImportReviewRowsForPosWithCtx(
+        ctx,
+        {
+          importKey: "legacy-review-1",
+          managerElevationId: "elevation-1" as Id<"managerElevation">,
+          reviewVersionId:
+            "review-version-1" as Id<"inventoryImportReviewVersion">,
+          rows: [
+            {
+              price: 2500,
+              productName: "Comb",
+              quantity: 4,
+              rowKey: "2:COMB-1::Comb",
+              rowNumber: 2,
+              sku: "COMB-1",
+            },
+          ],
+          sourceFormat: "csv",
+          storeId: "store-1" as Id<"store">,
+        },
+        access,
+      ),
+    ).rejects.toThrow(
+      "Terminal context is required before using manager elevation.",
+    );
   });
 
   it("requires terminal context when using manager elevation for import review helpers", async () => {
@@ -2772,13 +2944,17 @@ describe("catalog import", () => {
         sourceFormat: "csv",
         storeId: "store-1" as Id<"store">,
       }),
-    ).rejects.toThrow("Terminal context is required before using manager elevation.");
+    ).rejects.toThrow(
+      "Terminal context is required before using manager elevation.",
+    );
 
     await expect(
       listInventoryImportReviewSkuContextWithCtx(ctx, {
         managerElevationId: "elevation-1" as Id<"managerElevation">,
         storeId: "store-1" as Id<"store">,
       }),
-    ).rejects.toThrow("Terminal context is required before using manager elevation.");
+    ).rejects.toThrow(
+      "Terminal context is required before using manager elevation.",
+    );
   });
 });

@@ -112,6 +112,16 @@ export type StoreOperatingRangeForDateResult =
       reason: "invalid_operating_date" | "unresolvable_schedule_window";
     };
 
+export type StoreOperatingWindowsForDateResult =
+  | {
+      kind: "resolved";
+      timezone: string;
+      operatingDate: string;
+      scheduleVersionId: string | null;
+      windows: StoreScheduleContextWindow[];
+    }
+  | Exclude<StoreOperatingRangeForDateResult, { kind: "resolved" }>;
+
 export type StoreScheduleValidationResult =
   | { ok: true; fields: Record<string, never> }
   | { ok: false; fields: Record<string, string[]> };
@@ -704,6 +714,39 @@ export function resolveStoreOperatingRangeForDate(args: {
   schedule: StoreScheduleDraft | null | undefined;
   operatingDate: string;
 }): StoreOperatingRangeForDateResult {
+  const result = resolveStoreOperatingWindowsForDate(args);
+  if (result.kind !== "resolved") {
+    return result;
+  }
+
+  const startAt = Math.min(...result.windows.map((window) => window.startsAt));
+  const endAt = Math.max(...result.windows.map((window) => window.endsAt));
+
+  if (!Number.isFinite(startAt) || !Number.isFinite(endAt) || endAt <= startAt) {
+    return {
+      kind: "invalid",
+      timezone: result.timezone,
+      operatingDate: args.operatingDate,
+      scheduleVersionId: result.scheduleVersionId,
+      reason: "unresolvable_schedule_window",
+    };
+  }
+
+  return {
+    kind: "resolved",
+    timezone: result.timezone,
+    operatingDate: args.operatingDate,
+    scheduleVersionId: result.scheduleVersionId,
+    startAt,
+    endAt,
+    windowCount: result.windows.length,
+  };
+}
+
+export function resolveStoreOperatingWindowsForDate(args: {
+  schedule: StoreScheduleDraft | null | undefined;
+  operatingDate: string;
+}): StoreOperatingWindowsForDateResult {
   if (!parseLocalDate(args.operatingDate)) {
     return {
       kind: "invalid",
@@ -735,27 +778,12 @@ export function resolveStoreOperatingRangeForDate(args: {
     };
   }
 
-  const startAt = Math.min(...windows.map((window) => window.startsAt));
-  const endAt = Math.max(...windows.map((window) => window.endsAt));
-
-  if (!Number.isFinite(startAt) || !Number.isFinite(endAt) || endAt <= startAt) {
-    return {
-      kind: "invalid",
-      timezone: args.schedule.timezone,
-      operatingDate: args.operatingDate,
-      scheduleVersionId: args.schedule._id ?? null,
-      reason: "unresolvable_schedule_window",
-    };
-  }
-
   return {
     kind: "resolved",
     timezone: args.schedule.timezone,
     operatingDate: args.operatingDate,
     scheduleVersionId: args.schedule._id ?? null,
-    startAt,
-    endAt,
-    windowCount: windows.length,
+    windows,
   };
 }
 

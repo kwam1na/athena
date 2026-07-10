@@ -340,6 +340,7 @@ describe("service intake validation", () => {
       actorUserId: "user-auth",
       allocationType: "service_deposit",
       amount: 2500,
+      businessEventKey: "service:serviceCase-1:intake_deposit",
       targetId: "serviceCase-1",
       targetType: "service_case",
       workItemId: "operationalWorkItem-1",

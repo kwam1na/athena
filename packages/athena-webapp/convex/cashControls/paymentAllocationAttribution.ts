@@ -49,6 +49,7 @@ export function buildInStorePaymentAllocations(
     "amount" | "collectedInStore" | "direction" | "method"
   > & {
     changeGiven?: number;
+    businessEventKeyPrefix?: string;
     direction?: "in" | "out";
     externalReferencePrefix?: string;
     payments: InStorePayment[];
@@ -56,6 +57,7 @@ export function buildInStorePaymentAllocations(
 ) {
   const {
     changeGiven,
+    businessEventKeyPrefix,
     externalReference,
     externalReferencePrefix,
     payments,
@@ -68,6 +70,10 @@ export function buildInStorePaymentAllocations(
   }).map((payment, index) => ({
     ...baseArgs,
     amount: payment.amount,
+    businessEventKey:
+      businessEventKeyPrefix !== undefined
+        ? `${businessEventKeyPrefix}:${index}`
+        : undefined,
     collectedInStore: true,
     direction: args.direction ?? "in",
     externalReference:

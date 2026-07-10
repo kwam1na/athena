@@ -154,4 +154,5 @@ export const dailyCloseSchema = v.object({
   reopenedFromDailyCloseId: v.optional(v.id("dailyClose")),
   supersededByDailyCloseId: v.optional(v.id("dailyClose")),
   supersedesDailyCloseId: v.optional(v.id("dailyClose")),
+  reportingCloseVersion: v.optional(v.number()),
 });

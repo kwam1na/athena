@@ -214,6 +214,41 @@ describe("HARNESS_APP_REGISTRY", () => {
     });
   });
 
+  it("maps reporting foundation edits to focused and merge-grade validation", () => {
+    const athena = HARNESS_APP_REGISTRY.find(
+      (entry) => entry.appName === "athena-webapp"
+    );
+    const reportingScenario = athena?.validationScenarios.find(
+      (scenario) =>
+        scenario.title ===
+        "Reporting fact, valuation, projection, and activation edits"
+    );
+
+    expect(reportingScenario).toMatchObject({
+      touchedPaths: [
+        "convex/reporting",
+        "convex/schemas/reporting",
+        "shared/reportingContract.ts",
+      ],
+      commands: [
+        {
+          kind: "raw",
+          command: "bun run --filter '@athena/webapp' test -- convex/reporting",
+        },
+        { kind: "script", script: "audit:convex" },
+        { kind: "script", script: "lint:convex:changed" },
+        {
+          kind: "raw",
+          command: "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
+        },
+        { kind: "script", script: "build" },
+      ],
+    });
+    expect(reportingScenario?.note).toContain(
+      "reporting projections remain replayable asynchronous work"
+    );
+  });
+
   it("runs the Athena browser-boundary regression for route runtime changes", () => {
     const athena = HARNESS_APP_REGISTRY.find(
       (entry) => entry.appName === "athena-webapp"

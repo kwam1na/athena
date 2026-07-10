@@ -1024,6 +1024,9 @@ describe("daily operations automation adapter", () => {
     expect(inserts.map((insert) => insert.table)).toEqual([
       "automationRun",
       "dailyClose",
+      "reportingIngress",
+      "reportingIngressSourceReference",
+      "reportingFactProcessingAttempt",
       "operationalEvent",
     ]);
     expect(inserts.at(-1)?.value).toMatchObject({
@@ -1236,6 +1239,9 @@ describe("daily operations automation adapter", () => {
     expect(inserts.map((insert) => insert.table)).toEqual([
       "automationRun",
       "dailyClose",
+      "reportingIngress",
+      "reportingIngressSourceReference",
+      "reportingFactProcessingAttempt",
       "operationalEvent",
     ]);
   });
@@ -1337,6 +1343,9 @@ describe("daily operations automation adapter", () => {
     expect(inserts.map((insert) => insert.table)).toEqual([
       "automationRun",
       "dailyClose",
+      "reportingIngress",
+      "reportingIngressSourceReference",
+      "reportingFactProcessingAttempt",
       "operationalEvent",
     ]);
     expect(
@@ -2130,6 +2139,9 @@ describe("daily operations automation adapter", () => {
     expect(inserts.map((insert) => insert.table)).toEqual([
       "automationRun",
       "dailyClose",
+      "reportingIngress",
+      "reportingIngressSourceReference",
+      "reportingFactProcessingAttempt",
       "operationalEvent",
     ]);
     expect(

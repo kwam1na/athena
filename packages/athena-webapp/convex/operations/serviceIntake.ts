@@ -366,6 +366,7 @@ export const createServiceIntake = mutation({
             actorUserId,
             allocationType: "service_deposit",
             amount: args.depositAmount!,
+            businessEventKey: `service:${createdServiceCase._id}:intake_deposit`,
             collectedInStore,
             customerProfileId: customerProfile._id,
             method: args.depositMethod,

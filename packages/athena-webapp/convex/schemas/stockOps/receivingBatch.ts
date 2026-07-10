@@ -14,6 +14,8 @@ export const receivingBatchSchema = v.object({
       purchaseOrderLineItemId: v.id("purchaseOrderLineItem"),
       productSkuId: v.id("productSku"),
       receivedQuantity: v.number(),
+      confirmedUnitCost: v.optional(v.number()),
+      confirmedCurrency: v.optional(v.string()),
     })
   ),
   createdAt: v.number(),

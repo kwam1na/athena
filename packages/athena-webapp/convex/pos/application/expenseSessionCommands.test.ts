@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 type ExpenseSessionRecord = {
   _id: string;
@@ -70,7 +72,7 @@ type InventoryCall =
       oldQuantity: number;
       newQuantity: number;
     }
-	  | { kind: "release"; skuId: string; quantity: number };
+  | { kind: "release"; skuId: string; quantity: number };
 
 type InventoryGatewayResult = {
   success: boolean;
@@ -91,6 +93,19 @@ type TraceCall = {
 };
 
 describe("createExpenseSessionCommandService", () => {
+  it("routes the default inventory hold gateway through reporting effects", () => {
+    const source = readFileSync(
+      join(
+        process.cwd(),
+        "convex/pos/application/commands/expenseSessionCommands.ts",
+      ),
+      "utf8",
+    );
+
+    expect(source).toContain("applyInventoryEffectWithCtx");
+    expect(source).not.toContain('ctx.db.patch("productSku"');
+  });
+
   it("records a started trace when creating a fresh expense session", async () => {
     const commandService = await loadCommandService();
     const traceCalls: TraceCall[] = [];
@@ -810,15 +825,25 @@ function createDependencies(options: {
     calculateExpiration: () => options.nextExpiration,
     repository: options.repository,
     inventory: {
-      acquireHold: async (skuId: string, quantity: number) => {
+      acquireHold: async ({
+        skuId,
+        quantity,
+      }: {
+        skuId: string;
+        quantity: number;
+      }) => {
         options.inventoryCalls?.push({ kind: "acquire", skuId, quantity });
         return options.inventoryAcquireResult ?? { success: true };
       },
-      adjustHold: async (
-        skuId: string,
-        oldQuantity: number,
-        newQuantity: number,
-      ) => {
+      adjustHold: async ({
+        skuId,
+        oldQuantity,
+        quantity: newQuantity,
+      }: {
+        skuId: string;
+        oldQuantity: number;
+        quantity: number;
+      }) => {
         options.inventoryCalls?.push({
           kind: "adjust",
           skuId,
@@ -827,7 +852,13 @@ function createDependencies(options: {
         });
         return options.inventoryAdjustResult ?? { success: true };
       },
-      releaseHold: async (skuId: string, quantity: number) => {
+      releaseHold: async ({
+        skuId,
+        quantity,
+      }: {
+        skuId: string;
+        quantity: number;
+      }) => {
         options.inventoryCalls?.push({ kind: "release", skuId, quantity });
         return options.inventoryReleaseResult ?? { success: true };
       },

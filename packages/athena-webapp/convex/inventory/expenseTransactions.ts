@@ -5,12 +5,15 @@ import {
   type MutationCtx,
 } from "../_generated/server";
 import { v } from "convex/values";
-import type { Id } from "../_generated/dataModel";
+import type { Doc, Id } from "../_generated/dataModel";
 import { capitalizeWords, generateTransactionNumber } from "../utils";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import { ok, userError } from "../../shared/commandResult";
 import { formatStaffDisplayName } from "../../shared/staffDisplayName";
 import { markCatalogSummaryNeedsRefresh } from "./catalogSummary";
+import { applyInventoryEffectWithCtx } from "../reporting/inventory/effects";
+import { uncostedBasis } from "../reporting/inventory/valuation";
+import { resolveReportingOperatingPeriodWithCtx } from "../reporting/operatingPeriods";
 
 const expenseTransactionCreationValidator = v.object({
   transactionId: v.id("expenseTransaction"),
@@ -78,6 +81,18 @@ export async function createExpenseTransactionFromSessionHandler(
     return expenseTransactionError("Expense session not found", "not_found");
   }
 
+  const existingTransaction = await ctx.db
+    .query("expenseTransaction")
+    .withIndex("by_sessionId", (q) => q.eq("sessionId", args.sessionId))
+    .first();
+  if (existingTransaction) {
+    return ok({
+      transactionId: existingTransaction._id,
+      transactionNumber: existingTransaction.transactionNumber,
+      completedAt: existingTransaction.completedAt,
+    });
+  }
+
   // Query all items for this session from expenseSessionItem table
   // Expense session carts stay small enough to read in full for a single completion.
   // eslint-disable-next-line @convex-dev/no-collect-in-query
@@ -104,7 +119,9 @@ export async function createExpenseTransactionFromSessionHandler(
     skuQuantityMap.set(item.productSkuId, currentQuantity + item.quantity);
   }
 
-  // Validate SKUs exist and update inventory
+  const trustedSkus = new Map<Id<"productSku">, Doc<"productSku">>();
+
+  // Validate SKUs before creating any transaction evidence.
   for (const [skuId, totalQuantity] of skuQuantityMap) {
     const sku = await ctx.db.get("productSku", skuId);
     if (!sku) {
@@ -132,12 +149,7 @@ export async function createExpenseTransactionFromSessionHandler(
       );
     }
 
-    // Update inventory
-    // Note: quantityAvailable was already reduced when item was added to session (hold)
-    // Now we only need to reduce inventoryCount (actual stock)
-    await ctx.db.patch("productSku", skuId, {
-      inventoryCount: Math.max(0, sku.inventoryCount - totalQuantity),
-    });
+    trustedSkus.set(skuId, sku);
   }
 
   // Calculate total value from items (cost price * quantity)
@@ -151,6 +163,15 @@ export async function createExpenseTransactionFromSessionHandler(
 
   const completedAt = Date.now();
 
+  const store = await ctx.db.get("store", session.storeId);
+  if (!store) {
+    return expenseTransactionError("Store not found", "not_found");
+  }
+  const reportingPeriod = await resolveReportingOperatingPeriodWithCtx(ctx, {
+    occurrenceAt: completedAt,
+    storeId: session.storeId,
+  });
+
   // Create the expense transaction
   const transactionId = await ctx.db.insert("expenseTransaction", {
     transactionNumber,
@@ -163,6 +184,52 @@ export async function createExpenseTransactionFromSessionHandler(
     completedAt,
     notes: args.notes,
   });
+
+  for (const [skuId, totalQuantity] of skuQuantityMap) {
+    const sku = trustedSkus.get(skuId)!;
+    const nextOnHand = sku.inventoryCount - totalQuantity;
+    const nextSellable = Math.min(nextOnHand, sku.quantityAvailable);
+    await applyInventoryEffectWithCtx(ctx, {
+      activityType: "stock_inventory_expense",
+      actorStaffProfileId: session.staffProfileId,
+      businessEventKey: `expense_transaction:${transactionId}:sku:${skuId}:completed`,
+      compatibilityBalance: {
+        onHandQuantity: nextOnHand,
+        sellableQuantity: nextSellable,
+      },
+      completeness:
+        reportingPeriod.kind === "resolved" ? "complete" : "partial",
+      contentFingerprint: `expense-completion:v1:${transactionId}:${skuId}:${totalQuantity}`,
+      effectType: "adjustment",
+      movementType: "inventory_expense",
+      notes: args.notes,
+      occurrenceAt: completedAt,
+      ...(reportingPeriod.kind === "resolved"
+        ? {
+            operatingDate: reportingPeriod.operatingDate,
+            scheduleVersionId:
+              reportingPeriod.scheduleVersionId as Id<"storeSchedule">,
+          }
+        : {}),
+      organizationId: store.organizationId,
+      physicalQuantityDelta: -totalQuantity,
+      productId: sku.productId,
+      productSkuId: skuId,
+      reasonCode: "inventory_expense_completed",
+      recordedAt: completedAt,
+      sellableQuantityDelta: 0,
+      sourceDomain: "inventory",
+      sourceId: String(transactionId),
+      sourceLineId: String(skuId),
+      sourceType: "expense_transaction",
+      storeId: session.storeId,
+      valuation: {
+        disposition: "inventory_expense",
+        kind: "outbound",
+        quantity: totalQuantity,
+      },
+    });
+  }
 
   await markCatalogSummaryNeedsRefresh(ctx, session.storeId);
 
@@ -376,67 +443,182 @@ export const getExpenseTransactionById = query({
 });
 
 // Void an expense transaction
+export async function voidExpenseTransactionHandler(
+  ctx: MutationCtx,
+  args: {
+    transactionId: Id<"expenseTransaction">;
+    voidReason?: string;
+  },
+) {
+  const transaction = await ctx.db.get(
+    "expenseTransaction",
+    args.transactionId,
+  );
+  if (!transaction) {
+    return expenseTransactionError("Transaction not found", "not_found");
+  }
+
+  if (transaction.status !== "completed") {
+    return expenseTransactionError(
+      "Can only void completed transactions",
+      "precondition_failed",
+    );
+  }
+
+  // Get transaction items to restore inventory
+  // Individual transactions have a bounded item count, so reading all items is safe here.
+  // eslint-disable-next-line @convex-dev/no-collect-in-query
+  const items = await ctx.db
+    .query("expenseTransactionItem")
+    .withIndex("by_transactionId", (q) =>
+      q.eq("transactionId", transaction._id),
+    )
+    .collect();
+
+  const store = await ctx.db.get("store", transaction.storeId);
+  if (!store) {
+    return expenseTransactionError("Store not found", "not_found");
+  }
+  const voidedAt = Date.now();
+  const reportingPeriod = await resolveReportingOperatingPeriodWithCtx(ctx, {
+    occurrenceAt: voidedAt,
+    storeId: transaction.storeId,
+  });
+  const restoreBySku = new Map<
+    Id<"productSku">,
+    { physicalQuantity: number; sellableQuantity: number }
+  >();
+  for (const item of items) {
+    if (!expenseItemUsesTrustedInventory(item)) {
+      continue;
+    }
+
+    const current = restoreBySku.get(item.productSkuId) ?? {
+      physicalQuantity: 0,
+      sellableQuantity: 0,
+    };
+    current.physicalQuantity += item.quantity;
+    if (expenseItemHasTrustedAvailabilityHold(item)) {
+      current.sellableQuantity += item.quantity;
+    }
+    restoreBySku.set(item.productSkuId, current);
+  }
+
+  for (const [productSkuId, restore] of restoreBySku) {
+    const sku = await ctx.db.get("productSku", productSkuId);
+    if (sku) {
+      const completionBusinessEventKey = `expense_transaction:${args.transactionId}:sku:${productSkuId}:completed`;
+      const completionEffect = await ctx.db
+        .query("reportingInventoryEffect")
+        .withIndex("by_storeId_sourceDomain_businessEventKey", (q) =>
+          q
+            .eq("storeId", transaction.storeId)
+            .eq("sourceDomain", "inventory")
+            .eq("businessEventKey", completionBusinessEventKey),
+        )
+        .first();
+      const costedQuantity = Math.max(
+        0,
+        -(completionEffect?.costedQuantityDelta ?? 0),
+      );
+      const uncostedQuantity = Math.max(
+        0,
+        -(completionEffect?.uncostedQuantityDelta ?? 0),
+      );
+      const canReverseOriginalBasis =
+        completionEffect !== null &&
+        costedQuantity + uncostedQuantity === restore.physicalQuantity;
+      const nextOnHand = sku.inventoryCount + restore.physicalQuantity;
+      const nextSellable = Math.min(
+        nextOnHand,
+        sku.quantityAvailable + restore.sellableQuantity,
+      );
+      await applyInventoryEffectWithCtx(ctx, {
+        activityType: "stock_inventory_expense_voided",
+        actorStaffProfileId: transaction.staffProfileId,
+        businessEventKey: `expense_transaction:${args.transactionId}:sku:${productSkuId}:void`,
+        compatibilityBalance: {
+          onHandQuantity: nextOnHand,
+          sellableQuantity: nextSellable,
+        },
+        completeness:
+          reportingPeriod.kind === "resolved" && canReverseOriginalBasis
+            ? "complete"
+            : "partial",
+        contentFingerprint: `expense-void:v1:${args.transactionId}:${productSkuId}:${restore.physicalQuantity}:${restore.sellableQuantity}`,
+        effectType: "return",
+        movementType: "inventory_expense_void",
+        notes: args.voidReason,
+        occurrenceAt: voidedAt,
+        ...(reportingPeriod.kind === "resolved"
+          ? {
+              operatingDate: reportingPeriod.operatingDate,
+              scheduleVersionId:
+                reportingPeriod.scheduleVersionId as Id<"storeSchedule">,
+            }
+          : {}),
+        organizationId: store.organizationId,
+        physicalQuantityDelta: restore.physicalQuantity,
+        productId: sku.productId,
+        productSkuId,
+        reasonCode: "inventory_expense_voided",
+        recordedAt: voidedAt,
+        sellableQuantityDelta: restore.sellableQuantity,
+        sourceDomain: "inventory",
+        sourceId: String(args.transactionId),
+        sourceLineId: String(productSkuId),
+        sourceType: "expense_transaction",
+        storeId: transaction.storeId,
+        valuation: canReverseOriginalBasis
+          ? {
+              disposition: "sellable",
+              financialContribution: "reverse_original_lane",
+              kind: "return",
+              originalBasis: {
+                allocatedKnownCost: completionEffect.outboundBasisMinor ?? 0,
+                basisVersion: 0,
+                costedQuantity,
+                currency: completionEffect.currencyCode ?? null,
+                knownCostPoolBefore: completionEffect.outboundBasisMinor ?? 0,
+                roundedWeightedAverageUnitCost:
+                  costedQuantity > 0
+                    ? Math.round(
+                        (completionEffect.outboundBasisMinor ?? 0) /
+                          costedQuantity,
+                      )
+                    : null,
+                uncostedQuantity,
+                unresolvedDeficitQuantity: 0,
+              },
+              originalCostLane: "inventory_consumed",
+              quantity: restore.physicalQuantity,
+            }
+          : {
+              costBasis: uncostedBasis(),
+              kind: "inbound",
+              quantity: restore.physicalQuantity,
+            },
+      });
+    }
+  }
+
+  // Mark transaction as void
+  await ctx.db.patch("expenseTransaction", args.transactionId, {
+    status: "void",
+    voidedAt,
+    notes: args.voidReason,
+  });
+
+  await markCatalogSummaryNeedsRefresh(ctx, transaction.storeId);
+
+  return ok({ transactionId: args.transactionId });
+}
+
 export const voidExpenseTransaction = mutation({
   args: {
     transactionId: v.id("expenseTransaction"),
     voidReason: v.optional(v.string()),
   },
   returns: commandResultValidator(expenseTransactionIdValidator),
-  handler: async (ctx, args) => {
-    const transaction = await ctx.db.get(
-      "expenseTransaction",
-      args.transactionId,
-    );
-    if (!transaction) {
-      return expenseTransactionError("Transaction not found", "not_found");
-    }
-
-    if (transaction.status !== "completed") {
-      return expenseTransactionError(
-        "Can only void completed transactions",
-        "precondition_failed",
-      );
-    }
-
-    // Get transaction items to restore inventory
-    // Individual transactions have a bounded item count, so reading all items is safe here.
-    // eslint-disable-next-line @convex-dev/no-collect-in-query
-    const items = await ctx.db
-      .query("expenseTransactionItem")
-      .withIndex("by_transactionId", (q) =>
-        q.eq("transactionId", transaction._id),
-      )
-      .collect();
-
-    // Restore inventory for each item
-    for (const item of items) {
-      if (!expenseItemUsesTrustedInventory(item)) {
-        continue;
-      }
-
-      const sku = await ctx.db.get("productSku", item.productSkuId);
-      if (sku) {
-        await ctx.db.patch("productSku", item.productSkuId, {
-          inventoryCount: (sku.inventoryCount || 0) + item.quantity,
-          ...(expenseItemHasTrustedAvailabilityHold(item)
-            ? {
-                quantityAvailable:
-                  (sku.quantityAvailable || 0) + item.quantity,
-              }
-            : {}),
-        });
-      }
-    }
-
-    // Mark transaction as void
-    await ctx.db.patch("expenseTransaction", args.transactionId, {
-      status: "void",
-      voidedAt: Date.now(),
-      notes: args.voidReason,
-    });
-
-    await markCatalogSummaryNeedsRefresh(ctx, transaction.storeId);
-
-    return ok({ transactionId: args.transactionId });
-  },
+  handler: voidExpenseTransactionHandler,
 });

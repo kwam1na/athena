@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from "@testing-library/react";
+import { readFileSync } from "node:fs";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
@@ -361,5 +362,26 @@ describe("ServiceCasesViewContent", () => {
         screen.queryByText("Refund service payments before cancelling the case."),
       ).not.toBeInTheDocument(),
     );
+  });
+});
+
+describe("ServiceCasesView payment identity wiring", () => {
+  it("creates the service payment key outside the retry closure", () => {
+    const source = readFileSync(
+      `${process.cwd()}/src/components/services/ServiceCasesView.tsx`,
+      "utf8",
+    );
+    const keyIndex = source.indexOf(
+      "const businessEventKey = `service:${args.serviceCaseId}:payment:${crypto.randomUUID()}`",
+    );
+    const retryIndex = source.indexOf(
+      "return withSaveState(() =>",
+      keyIndex,
+    );
+    const mutationIndex = source.indexOf("businessEventKey,", retryIndex);
+
+    expect(keyIndex).toBeGreaterThan(-1);
+    expect(retryIndex).toBeGreaterThan(keyIndex);
+    expect(mutationIndex).toBeGreaterThan(retryIndex);
   });
 });

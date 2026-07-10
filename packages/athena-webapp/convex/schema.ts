@@ -142,6 +142,54 @@ import {
   remoteAssistSessionEventSchema,
   remoteAssistSessionSchema,
 } from "./schemas/remoteAssist";
+import {
+  reportingAttentionProjectionSchema,
+  reportingBackfillSourceAuditSchema,
+  reportingBackfillPreviewItemSchema,
+  reportingCurrentValuationProjectionSchema,
+  reportingCutoverPreviewItemSchema,
+  reportingDailyCloseProjectionSchema,
+  reportingCutoverBaselineSchema,
+  reportingFactProcessingAttemptSchema,
+  reportingFactSchema,
+  reportingFactSourceReferenceSchema,
+  reportingIngressConflictSchema,
+  reportingIngressLineSchema,
+  reportingIdentityMigrationRunSchema,
+  reportingIdentityMigrationCandidateSchema,
+  reportingIngressSchema,
+  reportingIngressSourceReferenceSchema,
+  reportingIntegrityAttemptSchema,
+  reportingInventoryEffectSchema,
+  reportingInventoryEffectSourceReferenceSchema,
+  reportingInventoryDeficitLotSchema,
+  reportingInventoryDeficitResolutionWorkSchema,
+  reportingInventoryOccurrenceReplaySchema,
+  reportingInventoryOccurrenceReplayLotSchema,
+  reportingInventoryOccurrenceReplayOutcomeSchema,
+  reportingCutoverBaselineDeficitLotSchema,
+  reportingInventoryDeficitLedgerSchema,
+  reportingInventoryPositionSchema,
+  reportingInventoryPositionRevisionSchema,
+  reportingSkuValuationCorrectionSchema,
+  reportingSkuAttributionSchema,
+  reportingMetricCoverageSchema,
+  reportingProjectionActivationSchema,
+  reportingProjectionGenerationSchema,
+  reportingProjectionHealthSchema,
+  reportingProjectionEvidenceSchema,
+  reportingQuarantineSchema,
+  reportingRangeProjectionSchema,
+  reportingReconciliationDiscrepancySchema,
+  reportingReconciliationAccumulatorSchema,
+  reportingRunEventSchema,
+  reportingRunSchema,
+  reportingExportChunkSchema,
+  reportingSkuDayProjectionSchema,
+  reportingSkuEvidenceSchema,
+  reportingSkuInsightProjectionSchema,
+  reportingStoreDayProjectionSchema,
+} from "./schemas/reporting";
 
 const schema = defineSchema({
   ...authTables,
@@ -266,7 +314,9 @@ const schema = defineSchema({
       "subjectId",
     ])
     .index("by_expiresAt", ["expiresAt"]),
-  athenaUser: defineTable(athenaUserSchema),
+  athenaUser: defineTable(athenaUserSchema).index("by_normalizedEmail", [
+    "normalizedEmail",
+  ]),
   contextEvent: defineTable(contextEventSchema)
     .index("by_storeId_surface_idempotencyKey", [
       "storeId",
@@ -544,6 +594,7 @@ const schema = defineSchema({
     .index("by_draftId_productSkuId", ["draftId", "productSkuId"]),
   receivingBatch: defineTable(receivingBatchSchema)
     .index("by_storeId", ["storeId"])
+    .index("by_storeId_receivedAt", ["storeId", "receivedAt"])
     .index("by_storeId_purchaseOrderId", ["storeId", "purchaseOrderId"])
     .index("by_storeId_purchaseOrderId_submissionKey", [
       "storeId",
@@ -557,6 +608,11 @@ const schema = defineSchema({
     .index("by_storeFrontUserId", ["storeFrontUserId"])
     .index("by_storeId", ["storeId"])
     .index("by_storeId_status", ["storeId", "status"])
+    .index("by_storeId_status_completedAt", [
+      "storeId",
+      "status",
+      "completedAt",
+    ])
     .index("by_externalReference", ["externalReference"]),
   onlineOrderItem: defineTable(onlineOrderItemSchema).index("by_orderId", [
     "orderId",
@@ -940,6 +996,7 @@ const schema = defineSchema({
     }),
   purchaseOrder: defineTable(purchaseOrderSchema)
     .index("by_storeId", ["storeId"])
+    .index("by_storeId_createdAt", ["storeId", "createdAt"])
     .index("by_storeId_status", ["storeId", "status"])
     .index("by_storeId_vendorId", ["storeId", "vendorId"])
     .index("by_storeId_poNumber", ["storeId", "poNumber"]),
@@ -1030,6 +1087,8 @@ const schema = defineSchema({
     .index("by_approvalState", ["approvalState"]),
   paymentAllocation: defineTable(paymentAllocationSchema)
     .index("by_storeId", ["storeId"])
+    .index("by_storeId_recordedAt", ["storeId", "recordedAt"])
+    .index("by_storeId_businessEventKey", ["storeId", "businessEventKey"])
     .index("by_storeId_target", ["storeId", "targetType", "targetId"])
     .index("by_registerSessionId", ["registerSessionId"])
     .index("by_posTransactionId", ["posTransactionId"])
@@ -1083,6 +1142,11 @@ const schema = defineSchema({
   serviceCase: defineTable(serviceCaseSchema)
     .index("by_storeId", ["storeId"])
     .index("by_storeId_status", ["storeId", "status"])
+    .index("by_storeId_status_completedAt", [
+      "storeId",
+      "status",
+      "completedAt",
+    ])
     .index("by_operationalWorkItemId", ["operationalWorkItemId"])
     .index("by_customerProfileId", ["customerProfileId"])
     .index("by_appointmentId", ["appointmentId"]),
@@ -1130,6 +1194,519 @@ const schema = defineSchema({
     .index("by_productSkuId", ["productSkuId"])
     .index("by_storeId", ["storeId"])
     .index("by_productId", ["productId"]),
+  reportingIngress: defineTable(reportingIngressSchema)
+    .index("by_storeId_sourceDomain_businessEventKey", [
+      "storeId",
+      "sourceDomain",
+      "businessEventKey",
+    ])
+    .index("by_storeId_status_acceptedAt", ["storeId", "status", "acceptedAt"])
+    .index("by_storeId_sourceDomain_status_acceptedAt", [
+      "storeId",
+      "sourceDomain",
+      "status",
+      "acceptedAt",
+    ]),
+  reportingIngressSourceReference: defineTable(
+    reportingIngressSourceReferenceSchema,
+  )
+    .index("by_ingressId", ["ingressId"])
+    .index("by_storeId_sourceType_sourceId", [
+      "storeId",
+      "sourceType",
+      "sourceId",
+    ]),
+  reportingIngressLine: defineTable(reportingIngressLineSchema)
+    .index("by_ingressId_lineKey", ["ingressId", "lineKey"])
+    .index("by_storeId_productSkuId_createdAt", [
+      "storeId",
+      "productSkuId",
+      "createdAt",
+    ]),
+  reportingIngressConflict: defineTable(reportingIngressConflictSchema)
+    .index("by_ingressId", ["ingressId"])
+    .index("by_storeId_status_detectedAt", ["storeId", "status", "detectedAt"]),
+  reportingFact: defineTable(reportingFactSchema)
+    .index("by_storeId", ["storeId"])
+    .index("by_storeId_recognitionAt", ["storeId", "recognitionAt"])
+    .index("by_storeId_acceptedAt", ["storeId", "acceptedAt"])
+    .index("by_storeId_createdAt", ["storeId", "createdAt"])
+    .index("by_storeId_productSkuId_recognitionAt", [
+      "storeId",
+      "productSkuId",
+      "recognitionAt",
+    ])
+    .index("by_storeId_canonicalProductSkuId_recognitionAt", [
+      "storeId",
+      "canonicalProductSkuId",
+      "recognitionAt",
+    ])
+    .index("by_storeId_pendingCheckoutItemId_recognitionAt", [
+      "storeId",
+      "pendingCheckoutItemId",
+      "recognitionAt",
+    ])
+    .index("by_storeId_productSkuId_sourceDomain_recognitionAt", [
+      "storeId",
+      "productSkuId",
+      "sourceDomain",
+      "recognitionAt",
+    ])
+    .index("by_storeId_productSkuId_factType_operatingDate", [
+      "storeId",
+      "productSkuId",
+      "factType",
+      "operatingDate",
+    ])
+    .index("by_storeId_operatingDate_factType", [
+      "storeId",
+      "operatingDate",
+      "factType",
+    ])
+    .index("by_storeId_sourceDomain_businessEventKey", [
+      "storeId",
+      "sourceDomain",
+      "businessEventKey",
+    ])
+    .index("by_storeId_sourceDomain_projectionStatus_createdAt", [
+      "storeId",
+      "sourceDomain",
+      "projectionStatus",
+      "createdAt",
+    ])
+    .index("by_storeId_projectionStatus_createdAt", [
+      "storeId",
+      "projectionStatus",
+      "createdAt",
+    ])
+    .index("by_ingressId", ["ingressId"])
+    .index("by_inventoryEffectId", ["inventoryEffectId"]),
+  reportingFactSourceReference: defineTable(reportingFactSourceReferenceSchema)
+    .index("by_factId", ["factId"])
+    .index("by_storeId_sourceType_sourceId", [
+      "storeId",
+      "sourceType",
+      "sourceId",
+    ]),
+  reportingFactProcessingAttempt: defineTable(
+    reportingFactProcessingAttemptSchema,
+  )
+    .index("by_ingressId_attempt", ["ingressId", "attempt"])
+    .index("by_storeId_outcome_startedAt", ["storeId", "outcome", "startedAt"]),
+  reportingSkuAttribution: defineTable(reportingSkuAttributionSchema)
+    .index("by_storeId_pendingCheckoutItemId", [
+      "storeId",
+      "pendingCheckoutItemId",
+    ])
+    .index("by_storeId_status_updatedAt", ["storeId", "status", "updatedAt"])
+    .index("by_storeId_canonicalProductSkuId", [
+      "storeId",
+      "canonicalProductSkuId",
+    ]),
+  reportingInventoryPosition: defineTable(reportingInventoryPositionSchema)
+    .index("by_storeId_productSkuId", ["storeId", "productSkuId"])
+    .index("by_storeId_mode", ["storeId", "mode"])
+    .index("by_storeId_mode_lastEffectAt", ["storeId", "mode", "lastEffectAt"])
+    .index("by_storeId_mode_updatedAt", ["storeId", "mode", "updatedAt"]),
+  reportingInventoryPositionRevision: defineTable(
+    reportingInventoryPositionRevisionSchema,
+  )
+    .index("by_positionId", ["positionId"])
+    .index("by_positionId_recordedAt", ["positionId", "recordedAt"])
+    .index("by_storeId", ["storeId"])
+    .index("by_storeId_recordedAt", ["storeId", "recordedAt"]),
+  reportingInventoryEffect: defineTable(reportingInventoryEffectSchema)
+    .index("by_storeId_productSkuId_occurrenceAt", [
+      "storeId",
+      "productSkuId",
+      "occurrenceAt",
+    ])
+    .index("by_storeId_sourceDomain_businessEventKey", [
+      "storeId",
+      "sourceDomain",
+      "businessEventKey",
+    ])
+    .index("by_storeId_sourceDomain_projectionStatus_createdAt", [
+      "storeId",
+      "sourceDomain",
+      "projectionStatus",
+      "createdAt",
+    ])
+    .index("by_storeId_projectionStatus_createdAt", [
+      "storeId",
+      "projectionStatus",
+      "createdAt",
+    ])
+    .index("by_positionId_occurrenceAt", ["positionId", "occurrenceAt"])
+    .index("by_positionId_effectType", ["positionId", "effectType"])
+    .index("by_linkedOutboundEffectId", ["linkedOutboundEffectId"])
+    .index("by_linkedOutboundEffectId_effectType", [
+      "linkedOutboundEffectId",
+      "effectType",
+    ]),
+  reportingInventoryEffectSourceReference: defineTable(
+    reportingInventoryEffectSourceReferenceSchema,
+  )
+    .index("by_effectId", ["effectId"])
+    .index("by_storeId_sourceType_sourceId", [
+      "storeId",
+      "sourceType",
+      "sourceId",
+    ]),
+  reportingInventoryDeficitLot: defineTable(reportingInventoryDeficitLotSchema)
+    .index("by_positionId", ["positionId"])
+    .index("by_positionId_status_occurredAt", [
+      "positionId",
+      "status",
+      "occurredAt",
+    ])
+    .index("by_positionId_status_occurredAt_outboundEffectId", [
+      "positionId",
+      "status",
+      "occurredAt",
+      "outboundEffectId",
+    ])
+    .index("by_ledgerId_status_occurredAt_outboundEffectId", [
+      "ledgerId",
+      "status",
+      "occurredAt",
+      "outboundEffectId",
+    ])
+    .index("by_ledgerId_outboundEffectId", ["ledgerId", "outboundEffectId"])
+    .index("by_outboundEffectId", ["outboundEffectId"]),
+  reportingInventoryDeficitLedger: defineTable(
+    reportingInventoryDeficitLedgerSchema,
+  )
+    .index("by_positionId_status", ["positionId", "status"])
+    .index("by_replayId", ["replayId"]),
+  reportingInventoryDeficitResolutionWork: defineTable(
+    reportingInventoryDeficitResolutionWorkSchema,
+  )
+    .index("by_inboundEffectId", ["inboundEffectId"])
+    .index("by_ledgerId_status_updatedAt", [
+      "ledgerId",
+      "status",
+      "updatedAt",
+    ])
+    .index("by_positionId_status_updatedAt", [
+      "positionId",
+      "status",
+      "updatedAt",
+    ])
+    .index("by_storeId_status_updatedAt", ["storeId", "status", "updatedAt"]),
+  reportingInventoryOccurrenceReplay: defineTable(
+    reportingInventoryOccurrenceReplaySchema,
+  )
+    .index("by_positionId", ["positionId"])
+    .index("by_storeId_status_updatedAt", ["storeId", "status", "updatedAt"]),
+  reportingInventoryOccurrenceReplayLot: defineTable(
+    reportingInventoryOccurrenceReplayLotSchema,
+  )
+    .index("by_replayId_status_occurredAt_outboundEffectId", [
+      "replayId",
+      "status",
+      "occurredAt",
+      "outboundEffectId",
+    ])
+    .index("by_replayId_outboundEffectId", ["replayId", "outboundEffectId"])
+    .index("by_replayId_appliedAt", ["replayId", "appliedAt"]),
+  reportingInventoryOccurrenceReplayOutcome: defineTable(
+    reportingInventoryOccurrenceReplayOutcomeSchema,
+  )
+    .index("by_replayId_status", ["replayId", "status"])
+    .index("by_effectId_status_appliedAt", ["effectId", "status", "appliedAt"])
+    .index("by_effectId_outcomeKind_settledAt", [
+      "effectId",
+      "outcomeKind",
+      "settledAt",
+    ])
+    .index("by_replayId_effectId_outcomeKind", [
+      "replayId",
+      "effectId",
+      "outcomeKind",
+    ]),
+  reportingCutoverBaselineDeficitLot: defineTable(
+    reportingCutoverBaselineDeficitLotSchema,
+  ).index("by_baselineId", ["baselineId"]),
+  reportingSkuValuationCorrection: defineTable(
+    reportingSkuValuationCorrectionSchema,
+  )
+    .index("by_storeId_requestKey", ["storeId", "requestKey"])
+    .index("by_storeId_productSkuId_occurredAt", [
+      "storeId",
+      "productSkuId",
+      "occurredAt",
+    ]),
+  reportingCutoverBaseline: defineTable(reportingCutoverBaselineSchema)
+    .index("by_storeId_productSkuId_status", [
+      "storeId",
+      "productSkuId",
+      "status",
+    ])
+    .index("by_storeId_status_effectiveAt", [
+      "storeId",
+      "status",
+      "effectiveAt",
+    ])
+    .index("by_runId", ["runId"]),
+  reportingProjectionGeneration: defineTable(
+    reportingProjectionGenerationSchema,
+  )
+    .index("by_storeId_projectionKind_status", [
+      "storeId",
+      "projectionKind",
+      "status",
+    ])
+    .index("by_storeId_projectionKind_sourceWatermark", [
+      "storeId",
+      "projectionKind",
+      "sourceWatermark",
+    ])
+    .index("by_runId", ["runId"]),
+  reportingProjectionActivation: defineTable(
+    reportingProjectionActivationSchema,
+  )
+    .index("by_storeId_projectionKind_activatedAt", [
+      "storeId",
+      "projectionKind",
+      "activatedAt",
+    ])
+    .index("by_generationId", ["generationId"]),
+  reportingStoreDayProjection: defineTable(reportingStoreDayProjectionSchema)
+    .index("by_generationId_operatingDate_metric", [
+      "generationId",
+      "operatingDate",
+      "metric",
+    ])
+    .index("by_storeId_operatingDate_metric", [
+      "storeId",
+      "operatingDate",
+      "metric",
+    ]),
+  reportingSkuDayProjection: defineTable(reportingSkuDayProjectionSchema)
+    .index("by_generationId_productSkuId_operatingDate_metric", [
+      "generationId",
+      "productSkuId",
+      "operatingDate",
+      "metric",
+    ])
+    .index("by_storeId_productSkuId_operatingDate", [
+      "storeId",
+      "productSkuId",
+      "operatingDate",
+    ])
+    .index("by_generationId_operatingDate_productSkuId_metric", [
+      "generationId",
+      "operatingDate",
+      "productSkuId",
+      "metric",
+    ]),
+  reportingCurrentValuationProjection: defineTable(
+    reportingCurrentValuationProjectionSchema,
+  )
+    .index("by_generationId_productSkuId_metric", [
+      "generationId",
+      "productSkuId",
+      "metric",
+    ])
+    .index("by_storeId_productSkuId", ["storeId", "productSkuId"]),
+  reportingRangeProjection: defineTable(reportingRangeProjectionSchema)
+    .index("by_generationId_metric_productSkuId", [
+      "generationId",
+      "metric",
+      "productSkuId",
+    ])
+    .index("by_generationId_metric_currencyCode_productSkuId", [
+      "generationId",
+      "metric",
+      "currencyCode",
+      "productSkuId",
+    ])
+    .index("by_storeId_rangeStartDate_rangeEndDate", [
+      "storeId",
+      "rangeStartDate",
+      "rangeEndDate",
+    ]),
+  reportingAttentionProjection: defineTable(reportingAttentionProjectionSchema)
+    .index("by_generationId_scope_productSkuId", [
+      "generationId",
+      "scope",
+      "productSkuId",
+    ])
+    .index("by_storeId_scope_primaryReason", [
+      "storeId",
+      "scope",
+      "primaryReason",
+    ]),
+  reportingDailyCloseProjection: defineTable(
+    reportingDailyCloseProjectionSchema,
+  )
+    .index("by_generationId_operatingDate_acceptedCloseVersion", [
+      "generationId",
+      "operatingDate",
+      "acceptedCloseVersion",
+    ])
+    .index("by_storeId_operatingDate_acceptedCloseVersion", [
+      "storeId",
+      "operatingDate",
+      "acceptedCloseVersion",
+    ]),
+  reportingSkuInsightProjection: defineTable(
+    reportingSkuInsightProjectionSchema,
+  )
+    .index("by_generationId_productSkuId", ["generationId", "productSkuId"])
+    .index("by_generationId_projectedDaysOfCover_productSkuId", [
+      "generationId",
+      "projectedDaysOfCover",
+      "productSkuId",
+    ]),
+  reportingMetricCoverage: defineTable(reportingMetricCoverageSchema)
+    .index("by_generationId_metric_sourceDomain", [
+      "generationId",
+      "metric",
+      "sourceDomain",
+    ])
+    .index("by_storeId_metric_sourceDomain", [
+      "storeId",
+      "metric",
+      "sourceDomain",
+    ]),
+  reportingProjectionEvidence: defineTable(reportingProjectionEvidenceSchema)
+    .index("by_generationId_productSkuId_operatingDate_metric", [
+      "generationId",
+      "productSkuId",
+      "operatingDate",
+      "metric",
+    ])
+    .index("by_generationId_productSkuId_recognitionAt_factId", [
+      "generationId",
+      "productSkuId",
+      "recognitionAt",
+      "factId",
+    ])
+    .index("by_generationId_factId_metric", [
+      "generationId",
+      "factId",
+      "metric",
+    ])
+    .index("by_storeId_factId", ["storeId", "factId"])
+    .index("by_generationId_recognitionAt_factId_metric", [
+      "generationId",
+      "recognitionAt",
+      "factId",
+      "metric",
+    ])
+    .index("by_generationId_inventoryEffectId_metric", [
+      "generationId",
+      "inventoryEffectId",
+      "metric",
+    ])
+    .index("by_storeId_inventoryEffectId", ["storeId", "inventoryEffectId"]),
+  reportingSkuEvidence: defineTable(reportingSkuEvidenceSchema)
+    .index("by_storeId_productSkuId_recognitionAt_identityKey", [
+      "storeId",
+      "productSkuId",
+      "recognitionAt",
+      "identityKey",
+    ])
+    .index("by_storeId_identityKey", ["storeId", "identityKey"]),
+  reportingRun: defineTable(reportingRunSchema)
+    .index("by_storeId_runType_status", ["storeId", "runType", "status"])
+    .index("by_runType_status_expiresAt", ["runType", "status", "expiresAt"])
+    .index("by_storeId_runType_requestKey", [
+      "storeId",
+      "runType",
+      "requestKey",
+    ])
+    .index("by_storeId_domain_createdAt", ["storeId", "domain", "createdAt"]),
+  reportingBackfillSourceAudit: defineTable(reportingBackfillSourceAuditSchema)
+    .index("by_runId_sourceDomain", ["runId", "sourceDomain"])
+    .index("by_storeId_runId_sourceDomain", [
+      "storeId",
+      "runId",
+      "sourceDomain",
+    ]),
+  reportingBackfillPreviewItem: defineTable(reportingBackfillPreviewItemSchema)
+    .index("by_runId_sourceDomain_businessEventKey", [
+      "runId",
+      "sourceDomain",
+      "businessEventKey",
+    ])
+    .index("by_storeId_runId_sourceDomain_businessEventKey", [
+      "storeId",
+      "runId",
+      "sourceDomain",
+      "businessEventKey",
+    ]),
+  reportingCutoverPreviewItem: defineTable(reportingCutoverPreviewItemSchema)
+    .index("by_runId_productSkuId", ["runId", "productSkuId"])
+    .index("by_storeId_runId_productSkuId", [
+      "storeId",
+      "runId",
+      "productSkuId",
+    ]),
+  reportingExportChunk: defineTable(reportingExportChunkSchema)
+    .index("by_runId_sequence", ["runId", "sequence"])
+    .index("by_storeId_runId_sequence", ["storeId", "runId", "sequence"]),
+  reportingRunEvent: defineTable(reportingRunEventSchema)
+    .index("by_runId_sequence", ["runId", "sequence"])
+    .index("by_storeId_occurredAt", ["storeId", "occurredAt"]),
+  reportingProjectionHealth: defineTable(reportingProjectionHealthSchema)
+    .index("by_storeId_sourceDomain_projectionKind", [
+      "storeId",
+      "sourceDomain",
+      "projectionKind",
+    ])
+    .index("by_storeId_limitingReason", ["storeId", "limitingReason"]),
+  reportingQuarantine: defineTable(reportingQuarantineSchema)
+    .index("by_storeId_status_detectedAt", ["storeId", "status", "detectedAt"])
+    .index("by_ingressId", ["ingressId"])
+    .index("by_factId", ["factId"])
+    .index("by_inventoryEffectId", ["inventoryEffectId"]),
+  reportingReconciliationDiscrepancy: defineTable(
+    reportingReconciliationDiscrepancySchema,
+  )
+    .index("by_storeId_status_detectedAt", ["storeId", "status", "detectedAt"])
+    .index("by_generationId", ["generationId"])
+    .index("by_runId", ["runId"])
+    .index("by_runId_invariant", ["runId", "invariant"])
+    .index("by_reconciliationKey", ["reconciliationKey"])
+    .index("by_runId_reconciliationKey", ["runId", "reconciliationKey"]),
+  reportingReconciliationAccumulator: defineTable(
+    reportingReconciliationAccumulatorSchema,
+  )
+    .index("by_runId_source_logicalKey_currencyKey", [
+      "runId",
+      "source",
+      "logicalKey",
+      "currencyKey",
+    ])
+    .index("by_runId_source_logicalKey", ["runId", "source", "logicalKey"])
+    .index("by_runId_source", ["runId", "source"]),
+  reportingIntegrityAttempt: defineTable(reportingIntegrityAttemptSchema)
+    .index("by_storeId_occurredAt", ["storeId", "occurredAt"])
+    .index("by_outcome_occurredAt", ["outcome", "occurredAt"]),
+  reportingIdentityMigrationRun: defineTable(
+    reportingIdentityMigrationRunSchema,
+  )
+    .index("by_automationIdentity_startedAt", [
+      "automationIdentity",
+      "startedAt",
+    ])
+    .index("by_operation_status", ["operation", "status"])
+    .index("by_operation_status_completedAt", [
+      "operation",
+      "status",
+      "completedAt",
+    ]),
+  reportingIdentityMigrationCandidate: defineTable(
+    reportingIdentityMigrationCandidateSchema,
+  )
+    .index("by_runId_userId", ["runId", "userId"])
+    .index("by_runId_normalizedIdentityFingerprint", [
+      "runId",
+      "normalizedIdentityFingerprint",
+    ]),
   rewardPoints: defineTable(rewardPointsSchema).index("by_user_store", [
     "storeFrontUserId",
     "storeId",

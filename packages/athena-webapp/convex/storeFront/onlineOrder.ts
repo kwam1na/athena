@@ -17,7 +17,6 @@ import { internal } from "../_generated/api";
 import { Doc, Id } from "../_generated/dataModel";
 import { getDiscountValue } from "../inventory/utils";
 import { buildApprovalRequest } from "../operations/approvalRequestHelpers";
-import { recordInventoryMovementWithCtx } from "../operations/inventoryMovements";
 import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
 import { recordPaymentAllocationWithCtx } from "../operations/paymentAllocations";
 import { markCatalogSummaryNeedsRefresh } from "../inventory/catalogSummary";
@@ -32,12 +31,14 @@ import {
   assertValidOnlineOrderStatusTransition,
   getOnlineOrderPaymentAmount,
   getOnlineOrderPaymentMethodLabel,
-  recordOnlineOrderRestockMovement,
   recordOnlineOrderPaymentCollected,
   recordOnlineOrderPaymentVerified,
   recordOnlineOrderStatusEvent,
 } from "./helpers/orderOperations";
-import { buildOnlineOrderReturnExchangePlan } from "./helpers/returnExchangeOperations";
+import {
+  buildOnlineOrderReportedReturns,
+  buildOnlineOrderReturnExchangePlan,
+} from "./helpers/returnExchangeOperations";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
 import {
   getRemainingRefundableBalance,
@@ -57,6 +58,16 @@ import {
   ORDER_RETURN_EXCHANGE_LOOKUP_TYPES,
   ORDER_RETURN_EXCHANGE_WORKFLOW_TYPE,
 } from "../workflowTraces/adapters/orderReturnExchange";
+import {
+  appendReportingIngressWithCtx,
+  type ReportingIngressLineInput,
+} from "../reporting/ingress";
+import { canonicalReportingBusinessEventKey } from "../reporting/factIdentity";
+import {
+  applyCommerceInventoryEffectWithCtx,
+  outboundBasisFromEffect,
+  reportingLineCostFromEffect,
+} from "../reporting/inventory/commerceEffects";
 
 const entity = "onlineOrder";
 const MAX_ORDER_ITEMS = 200;
@@ -113,6 +124,186 @@ function appendTransition(
       signedInAthenaUser,
     },
   ];
+}
+
+function allocateMinorAmounts(total: number, weights: number[]): number[] {
+  const safeTotal = Math.max(0, Math.round(total));
+  const totalWeight = weights.reduce(
+    (sum, weight) => sum + Math.max(0, Math.round(weight)),
+    0,
+  );
+  if (weights.length === 0) return [];
+  if (totalWeight === 0) {
+    return weights.map((_, index) => (index === 0 ? safeTotal : 0));
+  }
+
+  let remainingAmount = safeTotal;
+  let remainingWeight = totalWeight;
+  return weights.map((weight, index) => {
+    const normalizedWeight = Math.max(0, Math.round(weight));
+    const amount =
+      index === weights.length - 1
+        ? remainingAmount
+        : Math.round(
+            (remainingAmount * normalizedWeight) / remainingWeight,
+          );
+    remainingAmount -= amount;
+    remainingWeight -= normalizedWeight;
+    return amount;
+  });
+}
+
+function storefrontCurrency(currency: string | undefined) {
+  const currencyCode = currency?.trim().toUpperCase();
+  return currencyCode
+    ? { currencyCode, currencyMinorUnitScale: 2 }
+    : {};
+}
+
+function buildStorefrontFulfillmentLines(args: {
+  costByItemId?: Map<
+    string,
+    Pick<
+      ReportingIngressLineInput,
+      | "cogsKnownMinor"
+      | "cogsKnownQuantity"
+      | "cogsUncoveredQuantity"
+      | "costStatus"
+      | "inventoryEffectId"
+      | "valuationCurrencyCode"
+      | "valuationCurrencyMinorUnitScale"
+    >
+  >;
+  deliveryFee: number;
+  discountAmount: number;
+  items: Doc<"onlineOrderItem">[];
+  productByItemId?: Map<string, Doc<"product">>;
+}): ReportingIngressLineInput[] {
+  const merchandiseGross = args.items.map((item) => item.price * item.quantity);
+  const discounts = allocateMinorAmounts(
+    args.discountAmount,
+    merchandiseGross,
+  );
+  const lines: ReportingIngressLineInput[] = args.items.map((item, index) => {
+    const product = args.productByItemId?.get(String(item._id));
+    const recognizedNetAmountMinor =
+      merchandiseGross[index] - discounts[index];
+    return {
+      ...(args.costByItemId?.get(String(item._id)) ?? {
+        costStatus: "unknown" as const,
+      }),
+      allocatedDiscountMinor: discounts[index],
+      attributionKind: "direct",
+      canonicalProductSkuId: item.productSkuId,
+      categoryId: product?.categoryId,
+      channel: "storefront",
+      discountAmountMinor: discounts[index],
+      grossAmountMinor: merchandiseGross[index],
+      lineKey: String(item._id),
+      lineKind: "merchandise",
+      netAmountMinor: recognizedNetAmountMinor,
+      originalProductSkuId: item.productSkuId,
+      originalQuantity: item.quantity,
+      productId: item.productId,
+      productSkuId: item.productSkuId,
+      quantity: item.quantity,
+      recognizedNetAmountMinor,
+      recognitionCategoryId: product?.categoryId,
+      recognitionProductId: item.productId,
+      recognitionProductSkuId: item.productSkuId,
+      unitPriceMinor: item.price,
+    };
+  });
+  if (args.deliveryFee > 0) {
+    lines.push({
+      costStatus: "not_applicable",
+      allocatedDiscountMinor: 0,
+      channel: "storefront",
+      discountAmountMinor: 0,
+      grossAmountMinor: args.deliveryFee,
+      lineKey: "delivery",
+      lineKind: "delivery",
+      netAmountMinor: args.deliveryFee,
+      quantity: 0,
+      originalQuantity: 0,
+      recognizedNetAmountMinor: args.deliveryFee,
+    });
+  }
+  return lines;
+}
+
+function buildStorefrontRefundLines(args: {
+  deliveryFee: number;
+  items: Array<
+    Pick<
+      Doc<"onlineOrderItem">,
+      "_id" | "price" | "productId" | "productSkuId" | "quantity"
+    >
+  >;
+  refundAmount: number;
+}): ReportingIngressLineInput[] {
+  const components: Array<{
+    key: string;
+    kind: "delivery" | "merchandise";
+    productId?: Id<"product">;
+    productSkuId?: Id<"productSku">;
+    weight: number;
+  }> = [
+    ...args.items.map((item) => ({
+      key: String(item._id),
+      kind: "merchandise" as const,
+      productId: item.productId,
+      productSkuId: item.productSkuId,
+      weight: item.price * item.quantity,
+    })),
+    ...(args.deliveryFee > 0
+      ? [
+          {
+            key: "delivery",
+            kind: "delivery" as const,
+            productId: undefined,
+            productSkuId: undefined,
+            weight: args.deliveryFee,
+          },
+        ]
+      : []),
+  ];
+  if (components.length === 0) {
+    components.push({
+      key: "refund",
+      kind: "merchandise",
+      productId: undefined,
+      productSkuId: undefined,
+      weight: args.refundAmount,
+    });
+  }
+  const allocations = allocateMinorAmounts(
+    args.refundAmount,
+    components.map((component) => component.weight),
+  );
+  return components.map((component, index) => ({
+    costStatus:
+      component.kind === "merchandise" ? "unknown" : "not_applicable",
+    discountAmountMinor: 0,
+    allocatedDiscountMinor: 0,
+    attributionKind: component.productSkuId ? "direct" : undefined,
+    canonicalProductSkuId: component.productSkuId,
+    channel: "storefront",
+    grossAmountMinor: allocations[index],
+    lineKey: component.key,
+    lineKind: component.kind,
+    netAmountMinor: allocations[index],
+    ...(component.productSkuId
+      ? { productSkuId: component.productSkuId }
+      : {}),
+    quantity: 0,
+    originalProductSkuId: component.productSkuId,
+    originalQuantity: 0,
+    productId: component.productId,
+    recognizedNetAmountMinor: allocations[index],
+    recognitionProductId: component.productId,
+    recognitionProductSkuId: component.productSkuId,
+  }));
 }
 
 async function applyOnlineOrderUpdate(
@@ -223,6 +414,116 @@ async function applyOnlineOrderUpdate(
       signedInAthenaUser: args.signedInAthenaUser,
       stage: "statusChanged",
     });
+
+    if (
+      completedStatuses.includes(nextStatus!) &&
+      !completedStatuses.includes(order.status)
+    ) {
+      const [items, store] = await Promise.all([
+        listOrderItems(ctx, order._id),
+        ctx.db.get("store", order.storeId),
+      ]);
+      if (store?.organizationId) {
+        const deliveryFee = Math.max(0, Math.round(nextOrder.deliveryFee ?? 0));
+        const discountAmount = Math.max(
+          0,
+          Math.round(getDiscountValue(items, nextOrder.discount)),
+        );
+        const inventoryEffects = await Promise.all(
+          items.map((item) =>
+            ctx.db
+              .query("reportingInventoryEffect")
+              .withIndex("by_storeId_sourceDomain_businessEventKey", (q) =>
+                q
+                  .eq("storeId", order.storeId)
+                  .eq("sourceDomain", "storefront")
+                  .eq(
+                    "businessEventKey",
+                    `storefront:${order._id}:line:${item._id}:fulfillment`,
+                  ),
+              )
+              .first(),
+          ),
+        );
+        const products = await Promise.all(
+          items.map((item) => ctx.db.get("product", item.productId)),
+        );
+        const costByItemId = new Map(
+          items.map((item, index) => {
+            const effect = inventoryEffects[index];
+            return [
+              String(item._id),
+              {
+                ...reportingLineCostFromEffect(effect, item.quantity),
+                ...(effect ? { inventoryEffectId: effect._id } : {}),
+              },
+            ];
+          }),
+        );
+        const lines = buildStorefrontFulfillmentLines({
+          costByItemId,
+          deliveryFee,
+          discountAmount,
+          items,
+          productByItemId: new Map(
+            items.flatMap((item, index) => {
+              const product = products[index];
+              return product ? [[String(item._id), product] as const] : [];
+            }),
+          ),
+        });
+        await appendReportingIngressWithCtx(ctx, {
+          acceptedAt: now,
+          adapterVersion: 1,
+          businessEventKey: canonicalReportingBusinessEventKey({
+            kind: "storefront_fulfillment",
+            orderId: String(order._id),
+          }),
+          contentFingerprint: [
+            "storefront-fulfilled-v1",
+            String(order._id),
+            nextStatus!,
+            String(nextOrder.amount),
+            String(deliveryFee),
+            String(discountAmount),
+            ...lines.flatMap((line) => [
+              line.lineKey,
+              String(line.productId),
+              String(line.productSkuId),
+              String(line.recognitionCategoryId),
+              String(line.quantity),
+              String(line.unitPriceMinor),
+              String(line.allocatedDiscountMinor),
+              String(line.netAmountMinor),
+            ]),
+          ].join(":"),
+          discountAmountMinor: discountAmount,
+          grossAmountMinor: nextOrder.amount + deliveryFee,
+          lines,
+          materialFields: [
+            "amountMinor",
+            "occurrenceAt",
+            "quantity",
+            "storeId",
+          ],
+          netAmountMinor: getOnlineOrderPaymentAmount(nextOrder),
+          occurredAt: now,
+          organizationId: store.organizationId,
+          quantity: items.reduce((sum, item) => sum + item.quantity, 0),
+          sourceDomain: "storefront",
+          sourceEventType: "storefront_fulfilled",
+          sourceReferences: [
+            {
+              relation: "owns",
+              sourceId: String(order._id),
+              sourceType: "online_order",
+            },
+          ],
+          storeId: order.storeId,
+          ...storefrontCurrency(store.currency),
+        });
+      }
+    }
   }
 
   if (paymentVerifiedChanged) {
@@ -933,6 +1234,7 @@ export const finalizeRefundInternal = internalMutation({
   args: {
     didRefundDeliveryFee: v.optional(v.boolean()),
     externalTransactionId: v.string(),
+    onlineOrderItemIds: v.optional(v.array(v.id("onlineOrderItem"))),
     refundAmount: v.number(),
     refundId: v.string(),
     reservationId: v.string(),
@@ -972,6 +1274,102 @@ export const finalizeRefundInternal = internalMutation({
         status: "refund-submitted",
       },
     });
+    const store = await ctx.db.get("store", order.storeId);
+    const selectedItems = args.onlineOrderItemIds
+      ? await Promise.all(
+          args.onlineOrderItemIds.map((itemId) =>
+            ctx.db.get("onlineOrderItem", itemId),
+          ),
+        )
+      : [];
+    if (
+      selectedItems.some(
+        (item) => !item || item.orderId !== order._id,
+      )
+    ) {
+      throw new Error("Refund item could not be found for this order.");
+    }
+    const selectedRefundItems = selectedItems.filter(
+      (item): item is Doc<"onlineOrderItem"> => Boolean(item),
+    );
+    const paymentAllocation = await recordPaymentAllocationWithCtx(ctx, {
+      actorUserId: args.signedInAthenaUser?.id,
+      allocationType: "refund",
+      amount: args.refundAmount,
+      businessEventKey: `storefront:${order._id}:refund:${args.reservationId}`,
+      customerProfileId: order.customerProfileId,
+      direction: "out",
+      evidenceProductSkuIds: [
+        ...new Set(selectedRefundItems.map((item) => item.productSkuId)),
+      ],
+      externalReference: args.refundId,
+      method: getOnlineOrderPaymentMethodLabel(order),
+      onlineOrderId: order._id,
+      organizationId: store?.organizationId,
+      storeId: order.storeId,
+      targetId: order._id,
+      targetType: "online_order",
+    });
+    if (store?.organizationId) {
+      const refundLines = buildStorefrontRefundLines({
+        deliveryFee: args.didRefundDeliveryFee
+          ? Math.max(0, Math.round(order.deliveryFee ?? 0))
+          : 0,
+        items: selectedRefundItems,
+        refundAmount: args.refundAmount,
+      });
+      const reportingNow = Date.now();
+      await appendReportingIngressWithCtx(ctx, {
+        acceptedAt: reportingNow,
+        adapterVersion: 1,
+        businessEventKey: canonicalReportingBusinessEventKey({
+          kind: "storefront_refund",
+          orderId: String(order._id),
+          refundId: args.refundId,
+        }),
+        contentFingerprint: [
+          "storefront-refund-v1",
+          String(order._id),
+          args.reservationId,
+          args.refundId,
+          String(args.refundAmount),
+          args.didRefundDeliveryFee ? "delivery" : "no-delivery",
+          ...(args.onlineOrderItemIds ?? []).map(String).sort(),
+        ].join(":"),
+        grossAmountMinor: args.refundAmount,
+        linkedBusinessEventKey: canonicalReportingBusinessEventKey({
+          kind: "storefront_fulfillment",
+          orderId: String(order._id),
+        }),
+        lines: refundLines,
+        materialFields: ["amountMinor", "occurrenceAt", "storeId"],
+        netAmountMinor: args.refundAmount,
+        occurredAt: reportingNow,
+        organizationId: store.organizationId,
+        quantity: 0,
+        settlementAmountMinor: args.refundAmount,
+        sourceDomain: "storefront",
+        sourceEventType: "storefront_refund_finalized",
+        sourceReferences: [
+          {
+            relation: "reverses",
+            sourceId: String(order._id),
+            sourceType: "online_order",
+          },
+          ...(paymentAllocation?._id
+            ? [
+                {
+                  relation: "supports" as const,
+                  sourceId: String(paymentAllocation._id),
+                  sourceType: "payment_allocation",
+                },
+              ]
+            : []),
+        ],
+        storeId: order.storeId,
+        ...storefrontCurrency(store.currency),
+      });
+    }
     await recordOnlineOrderReturnExchangeTraceBestEffort(ctx, {
       amount: args.refundAmount,
       operationRef: args.reservationId,
@@ -1138,6 +1536,14 @@ export const processReturnExchange = mutation({
         }),
       ),
     ),
+    returnDisposition: v.optional(
+      v.union(
+        v.literal("non_restocked"),
+        v.literal("damaged"),
+        v.literal("missing"),
+        v.literal("financial_only"),
+      ),
+    ),
     restockReturnedItems: v.boolean(),
     returnItemIds: v.array(v.id("onlineOrderItem")),
     signedInAthenaUser: v.optional(
@@ -1209,10 +1615,14 @@ export const processReturnExchange = mutation({
         });
       }
 
+      const returnDisposition = args.restockReturnedItems
+        ? ("sellable" as const)
+        : (args.returnDisposition ?? "non_restocked");
       const plan = buildOnlineOrderReturnExchangePlan({
         order,
         orderItems,
         replacementItems,
+        returnDisposition,
         restockReturnedItems: args.restockReturnedItems,
         returnItemIds: args.returnItemIds,
       });
@@ -1288,6 +1698,7 @@ export const processReturnExchange = mutation({
         plan.selectedItems.map(async (item) => {
           const nextFields = {
             isRefunded: true,
+            returnDisposition,
             ...(args.restockReturnedItems ? { isRestocked: true } : {}),
           };
 
@@ -1295,8 +1706,12 @@ export const processReturnExchange = mutation({
         }),
       );
 
+      const reportedReturns = buildOnlineOrderReportedReturns({
+        disposition: returnDisposition,
+        selectedItems: plan.selectedItems,
+      });
       const returnMovementIds = await Promise.all(
-        plan.returnMovements.map(async (movement) => {
+        reportedReturns.map(async (movement) => {
           const productSku = await ctx.db.get(
             "productSku",
             movement.productSkuId
@@ -1306,31 +1721,64 @@ export const processReturnExchange = mutation({
             throw new Error("Returned item SKU not found.");
           }
 
-          await ctx.db.patch("productSku", movement.productSkuId, {
-            inventoryCount: productSku.inventoryCount + movement.quantity,
-            quantityAvailable: productSku.quantityAvailable + movement.quantity,
-          });
-
-          const inventoryMovement = await recordInventoryMovementWithCtx(ctx, {
+          if (!store?.organizationId) {
+            throw new Error("Online order organization could not be resolved.");
+          }
+          const originalEffect = movement.orderItemId
+            ? await ctx.db
+                .query("reportingInventoryEffect")
+                .withIndex("by_storeId_sourceDomain_businessEventKey", (q) =>
+                  q
+                    .eq("storeId", order.storeId)
+                    .eq("sourceDomain", "storefront")
+                    .eq(
+                      "businessEventKey",
+                      `storefront:${order._id}:line:${movement.orderItemId}:fulfillment`,
+                    ),
+                )
+                .first()
+            : null;
+          const inventoryEffect = await applyCommerceInventoryEffectWithCtx(ctx, {
+            activityType: "stock_restock",
             actorUserId: args.signedInAthenaUser?.id,
+            businessEventKey: `storefront:${order._id}:return_exchange:${returnExchangeRefundId}:return:${movement.orderItemId}`,
+            completeness: "partial",
+            contentFingerprint: `storefront-return-exchange-restock-v1:${order._id}:${returnExchangeRefundId}:${movement.orderItemId}:${movement.quantity}`,
             customerProfileId: order.customerProfileId,
+            disposition: returnDisposition,
+            effectType: "return",
+            financialContribution:
+              returnDisposition === "sellable"
+                ? "reverse_original_lane"
+                : "none",
+            kind: "return",
             movementType: "restock",
             notes: args.notes ?? order.orderNumber,
             onlineOrderId: order._id,
-            organizationId: store?.organizationId,
+            occurrenceAt: now,
+            organizationId: store.organizationId,
+            originalBasis:
+              originalEffect
+                ? outboundBasisFromEffect(originalEffect, movement.quantity) ??
+                  undefined
+                : undefined,
             productId: movement.productId,
             productSkuId: movement.productSkuId,
-            quantityDelta: movement.quantityDelta,
+            quantity: movement.quantity,
             reasonCode: movement.reasonCode,
             sourceId: buildReturnExchangeReturnSourceId(
               order._id,
               movement.orderItemId!
             ),
             sourceType: "online_order_return",
+            sellableQuantityDelta:
+              returnDisposition === "sellable" ? movement.quantity : 0,
+            sourceDomain: "storefront",
+            sourceLineId: String(movement.orderItemId),
             storeId: order.storeId,
           });
 
-          return inventoryMovement?._id ?? null;
+          return inventoryEffect.movement?._id ?? null;
         }),
       );
 
@@ -1345,27 +1793,27 @@ export const processReturnExchange = mutation({
             throw new Error("Replacement SKU not found.");
           }
 
-          await ctx.db.patch("productSku", movement.productSkuId, {
-            inventoryCount: Math.max(
-              productSku.inventoryCount - movement.quantity,
-              0
-            ),
-            quantityAvailable: Math.max(
-              productSku.quantityAvailable - movement.quantity,
-              0
-            ),
-          });
-
-          const inventoryMovement = await recordInventoryMovementWithCtx(ctx, {
+          if (!store?.organizationId) {
+            throw new Error("Online order organization could not be resolved.");
+          }
+          const inventoryEffect = await applyCommerceInventoryEffectWithCtx(ctx, {
+            activityType: "stock_exchange",
             actorUserId: args.signedInAthenaUser?.id,
+            businessEventKey: `storefront:${order._id}:return_exchange:${returnExchangeRefundId}:replacement:${index}`,
+            completeness: "partial",
+            contentFingerprint: `storefront-return-exchange-issue-v1:${order._id}:${returnExchangeRefundId}:${movement.productSkuId}:${index}:${movement.quantity}`,
             customerProfileId: order.customerProfileId,
+            disposition: "exchange_replacement",
+            effectType: "sale",
+            kind: "outbound",
             movementType: "exchange",
             notes: args.notes ?? order.orderNumber,
             onlineOrderId: order._id,
-            organizationId: store?.organizationId,
+            occurrenceAt: now,
+            organizationId: store.organizationId,
             productId: movement.productId,
             productSkuId: movement.productSkuId,
-            quantityDelta: movement.quantityDelta,
+            quantity: movement.quantity,
             reasonCode: movement.reasonCode,
             sourceId: buildReturnExchangeReplacementSourceId(
               order._id,
@@ -1373,10 +1821,13 @@ export const processReturnExchange = mutation({
               index
             ),
             sourceType: "online_order_exchange",
+            sellableQuantityDelta: -movement.quantity,
+            sourceDomain: "storefront",
+            sourceLineId: String(index),
             storeId: order.storeId,
           });
 
-          return inventoryMovement?._id ?? null;
+          return inventoryEffect.movement?._id ?? null;
         }),
       );
 
@@ -1385,9 +1836,18 @@ export const processReturnExchange = mutation({
           actorUserId: args.signedInAthenaUser?.id,
           allocationType: plan.paymentAllocation.allocationType,
           amount: plan.paymentAllocation.amount,
+          businessEventKey: `storefront:${order._id}:return_exchange:${returnExchangeRefundId}:settlement`,
           collectedInStore: plan.paymentAllocation.direction === "in",
           customerProfileId: order.customerProfileId,
           direction: plan.paymentAllocation.direction,
+          evidenceProductSkuIds:
+            plan.paymentAllocation.direction === "out"
+              ? [
+                  ...new Set(
+                    plan.selectedItems.map((item) => item.productSkuId),
+                  ),
+                ]
+              : undefined,
           method: getOnlineOrderPaymentMethodLabel(order),
           notes: args.notes ?? order.orderNumber,
           onlineOrderId: order._id,
@@ -1437,6 +1897,7 @@ export const processReturnExchange = mutation({
             quantity: item.quantity,
           })),
           refundAmount: plan.refundAmount,
+          returnDisposition,
           returnItemIds: args.returnItemIds,
         },
         onlineOrderId: order._id,
@@ -1448,6 +1909,70 @@ export const processReturnExchange = mutation({
         subjectLabel: order.orderNumber,
         subjectType: "online_order",
       });
+      if (plan.refundAmount > 0 && store?.organizationId) {
+        const refundLines = buildStorefrontRefundLines({
+          deliveryFee: 0,
+          items: plan.selectedItems,
+          refundAmount: plan.refundAmount,
+        });
+        await appendReportingIngressWithCtx(ctx, {
+          acceptedAt: now,
+          adapterVersion: 1,
+          businessEventKey: canonicalReportingBusinessEventKey({
+            kind: "storefront_refund",
+            orderId: String(order._id),
+            refundId: returnExchangeRefundId,
+          }),
+          contentFingerprint: [
+            "storefront-return-exchange-refund-v1",
+            String(order._id),
+            returnExchangeRefundId,
+            String(plan.refundAmount),
+            ...plan.selectedItems.map((item) => String(item._id)).sort(),
+          ].join(":"),
+          grossAmountMinor: plan.refundAmount,
+          linkedBusinessEventKey: canonicalReportingBusinessEventKey({
+            kind: "storefront_fulfillment",
+            orderId: String(order._id),
+          }),
+          lines: refundLines,
+          materialFields: ["amountMinor", "occurrenceAt", "storeId"],
+          netAmountMinor: plan.refundAmount,
+          occurredAt: now,
+          organizationId: store.organizationId,
+          quantity: 0,
+          settlementAmountMinor: plan.refundAmount,
+          sourceDomain: "storefront",
+          sourceEventType: "storefront_return_exchange_refund",
+          sourceReferences: [
+            {
+              relation: "reverses",
+              sourceId: String(order._id),
+              sourceType: "online_order",
+            },
+            ...(operationalEvent?._id
+              ? [
+                  {
+                    relation: "supports" as const,
+                    sourceId: String(operationalEvent._id),
+                    sourceType: "operational_event",
+                  },
+                ]
+              : []),
+            ...(paymentAllocation?._id
+              ? [
+                  {
+                    relation: "supports" as const,
+                    sourceId: String(paymentAllocation._id),
+                    sourceType: "payment_allocation",
+                  },
+                ]
+              : []),
+          ],
+          storeId: order.storeId,
+          ...storefrontCurrency(store.currency),
+        });
+      }
       const operationRef = String(operationalEvent?._id ?? `${order._id}:${now}`);
 
       if (plan.returnMovements.length > 0) {
@@ -1550,6 +2075,82 @@ export const processReturnExchange = mutation({
   },
 });
 
+async function returnSelectedOnlineOrderItemsToStock(
+  ctx: MutationCtx,
+  args: {
+    itemIds: Id<"onlineOrderItem">[];
+    order: Doc<"onlineOrder">;
+  },
+) {
+  const store = await ctx.db.get("store", args.order.storeId);
+  if (!store?.organizationId) {
+    throw new Error("Online order organization could not be resolved.");
+  }
+  const occurredAt = Date.now();
+  await Promise.all(
+    args.itemIds.map(async (itemId) => {
+      const item = await ctx.db.get("onlineOrderItem", itemId);
+      if (!item || item.orderId !== args.order._id || item.isRestocked) return;
+
+      await ctx.db.patch("onlineOrderItem", itemId, {
+        isRefunded: true,
+        isRestocked: true,
+      });
+      const sku = await ctx.db.get("productSku", item.productSkuId);
+      if (!sku) return;
+      const originalEffect = item.isReady
+        ? await ctx.db
+            .query("reportingInventoryEffect")
+            .withIndex("by_storeId_sourceDomain_businessEventKey", (q) =>
+              q
+                .eq("storeId", args.order.storeId)
+                .eq("sourceDomain", "storefront")
+                .eq(
+                  "businessEventKey",
+                  `storefront:${args.order._id}:line:${item._id}:fulfillment`,
+                ),
+            )
+            .first()
+        : null;
+      await applyCommerceInventoryEffectWithCtx(ctx, {
+        activityType: item.isReady
+          ? "stock_restock"
+          : "reservation_released",
+        businessEventKey: `storefront:${args.order._id}:line:${item._id}:refund_return`,
+        completeness: "partial",
+        contentFingerprint: `storefront-refund-return-v1:${args.order._id}:${item._id}:${item.quantity}:${item.isReady === true}`,
+        effectType: item.isReady ? "return" : "adjustment",
+        ...(item.isReady
+          ? {
+              kind: "return" as const,
+              originalBasis:
+                originalEffect
+                  ? outboundBasisFromEffect(originalEffect, item.quantity) ??
+                    undefined
+                  : undefined,
+              quantity: item.quantity,
+            }
+          : { kind: "availability_only" as const }),
+        movementType: item.isReady ? "restock" : "reservation_release",
+        occurrenceAt: occurredAt,
+        onlineOrderId: args.order._id,
+        organizationId: store.organizationId,
+        productId: item.productId,
+        productSkuId: item.productSkuId,
+        reasonCode: item.isReady
+          ? "online_order_item_restocked"
+          : "online_order_reservation_released",
+        sellableQuantityDelta: item.quantity,
+        sourceDomain: "storefront",
+        sourceId: String(args.order._id),
+        sourceLineId: String(item._id),
+        sourceType: "online_order_item",
+        storeId: args.order.storeId,
+      });
+    }),
+  );
+}
+
 export const returnItemsToStock = mutation({
   args: {
     externalTransactionId: v.string(),
@@ -1565,41 +2166,10 @@ export const returnItemsToStock = mutation({
       if (!order) return false;
 
       if (args.onlineOrderItemIds?.length) {
-        await Promise.all(
-          args.onlineOrderItemIds.map(async (itemId) => {
-            const onlineOrderItem = await ctx.db.get("onlineOrderItem", itemId);
-            if (!onlineOrderItem || onlineOrderItem.isRestocked) {
-              return;
-            }
-
-            await ctx.db.patch("onlineOrderItem", itemId, {
-              isRefunded: true,
-              isRestocked: true,
-            });
-
-            const productSku = await ctx.db.get(
-              "productSku",
-              onlineOrderItem.productSkuId,
-            );
-
-            if (productSku) {
-              await ctx.db.patch("productSku", onlineOrderItem.productSkuId, {
-                quantityAvailable:
-                  productSku.quantityAvailable + onlineOrderItem.quantity,
-                inventoryCount: onlineOrderItem.isReady
-                  ? productSku.inventoryCount + onlineOrderItem.quantity
-                  : productSku.inventoryCount,
-              });
-              await recordOnlineOrderRestockMovement(ctx, {
-                item: onlineOrderItem,
-                order,
-                reasonCode: onlineOrderItem.isReady
-                  ? "online_order_item_restocked"
-                  : "online_order_reservation_released",
-              });
-            }
-          }),
-        );
+        await returnSelectedOnlineOrderItemsToStock(ctx, {
+          itemIds: args.onlineOrderItemIds,
+          order,
+        });
 
         await markCatalogSummaryNeedsRefresh(ctx, order.storeId);
 
@@ -1628,41 +2198,10 @@ export const returnItemsToStockInternal = internalMutation({
       if (!order) return false;
 
       if (args.onlineOrderItemIds?.length) {
-        await Promise.all(
-          args.onlineOrderItemIds.map(async (itemId) => {
-            const onlineOrderItem = await ctx.db.get("onlineOrderItem", itemId);
-            if (!onlineOrderItem || onlineOrderItem.isRestocked) {
-              return;
-            }
-
-            await ctx.db.patch("onlineOrderItem", itemId, {
-              isRefunded: true,
-              isRestocked: true,
-            });
-
-            const productSku = await ctx.db.get(
-              "productSku",
-              onlineOrderItem.productSkuId,
-            );
-
-            if (productSku) {
-              await ctx.db.patch("productSku", onlineOrderItem.productSkuId, {
-                quantityAvailable:
-                  productSku.quantityAvailable + onlineOrderItem.quantity,
-                inventoryCount: onlineOrderItem.isReady
-                  ? productSku.inventoryCount + onlineOrderItem.quantity
-                  : productSku.inventoryCount,
-              });
-              await recordOnlineOrderRestockMovement(ctx, {
-                item: onlineOrderItem,
-                order,
-                reasonCode: onlineOrderItem.isReady
-                  ? "online_order_item_restocked"
-                  : "online_order_reservation_released",
-              });
-            }
-          }),
-        );
+        await returnSelectedOnlineOrderItemsToStock(ctx, {
+          itemIds: args.onlineOrderItemIds,
+          order,
+        });
 
         return true;
       }

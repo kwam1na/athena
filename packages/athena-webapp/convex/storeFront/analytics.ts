@@ -6,6 +6,7 @@ import {
   STOREFRONT_OBSERVABILITY_ACTION,
 } from "./storefrontObservabilityReport";
 import { SYNTHETIC_MONITOR_ORIGIN } from "./syntheticMonitor";
+import { requireReportingStoreAccess } from "../reporting/access";
 
 const entity = "analytics";
 const MAX_ANALYTICS_RESULTS = 500;
@@ -376,6 +377,7 @@ export const getWorkspaceSummary = query({
     currentTimeMs: v.number(),
   },
   handler: async (ctx, args) => {
+    await requireReportingStoreAccess(ctx, args.storeId);
     const startOfDay = new Date(args.currentTimeMs).setHours(0, 0, 0, 0);
     const sevenDaysAgo = args.currentTimeMs - 7 * 24 * 60 * 60 * 1000;
 
@@ -973,7 +975,7 @@ export const getStoreActivityTimeline = query({
     ),
     currentTimeMs: v.number(),
   },
-  // returns: v.array(
+  // Return shape: v.array(
   //   v.object({
   //     _id: v.id("analytics"),
   //     _creationTime: v.number(),

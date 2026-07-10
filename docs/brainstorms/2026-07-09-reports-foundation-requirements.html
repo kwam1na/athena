@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Aligned foundation requirements for Athena's Reports workspace." />
+    <link rel="icon" href="data:," />
+    <title>Athena Reports Foundation Requirements</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --canvas: #eef1ef;
+        --paper: #ffffff;
+        --ink: #17211c;
+        --muted: #5c6962;
+        --line: #d5ddd8;
+        --green: #12664e;
+        --green-soft: #e3f1eb;
+        --blue: #245e89;
+        --blue-soft: #e8f1f7;
+        --gold: #88611c;
+        --gold-soft: #f6eedc;
+        --red: #9a4138;
+        --shadow: 0 18px 52px rgba(20, 32, 26, 0.1);
+      }
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      body {
+        margin: 0;
+        background: var(--canvas);
+        color: var(--ink);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        line-height: 1.58;
+      }
+      a { color: var(--blue); text-underline-offset: 3px; }
+      .shell {
+        width: min(1320px, calc(100% - 28px));
+        margin: 22px auto 56px;
+        background: var(--paper);
+        border: 1px solid var(--line);
+        box-shadow: var(--shadow);
+      }
+      .hero { padding: 48px 56px 36px; border-bottom: 1px solid var(--line); }
+      .eyebrow { margin: 0 0 10px; color: var(--green); font-size: 0.78rem; font-weight: 800; text-transform: uppercase; }
+      .hero h1 { margin: 0; max-width: 900px; font-size: clamp(2.25rem, 5vw, 4.75rem); line-height: 1.04; letter-spacing: 0; }
+      .hero p { max-width: 850px; margin: 20px 0 0; color: var(--muted); font-size: 1.08rem; }
+      .status-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 26px; }
+      .pill { padding: 6px 10px; border: 1px solid #9ec1b3; border-radius: 4px; background: var(--green-soft); color: #164c3d; font-size: 0.82rem; font-weight: 750; }
+      .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-bottom: 1px solid var(--line); background: #f8faf8; }
+      .stat { padding: 18px 22px; border-right: 1px solid var(--line); }
+      .stat:last-child { border-right: 0; }
+      .stat strong { display: block; font-size: 1.5rem; }
+      .stat span { color: var(--muted); font-size: 0.82rem; }
+      .layout { display: grid; grid-template-columns: 244px minmax(0, 1fr); align-items: start; }
+      nav { position: sticky; top: 0; max-height: 100vh; overflow: auto; padding: 24px 20px; border-right: 1px solid var(--line); }
+      nav strong { display: block; margin-bottom: 12px; font-size: 0.8rem; text-transform: uppercase; color: var(--muted); }
+      nav a { display: block; padding: 7px 8px; color: var(--ink); font-size: 0.82rem; text-decoration: none; border-left: 2px solid transparent; }
+      nav a:hover { color: var(--green); border-color: var(--green); background: #f4f8f6; }
+      main { min-width: 0; padding: 10px 56px 48px; }
+      main > h1 { display: none; }
+      h1, h2, h3 { letter-spacing: 0; line-height: 1.2; }
+      h2 { margin: 0 -56px 22px; padding: 34px 56px 16px; border-top: 1px solid var(--line); font-size: 1.65rem; scroll-margin-top: 16px; }
+      main > h2:first-of-type { border-top: 0; }
+      h3 { margin: 30px 0 12px; color: #26352d; font-size: 1.1rem; scroll-margin-top: 16px; }
+      p { margin: 0 0 14px; }
+      ul, ol { padding-left: 1.35rem; }
+      li { margin: 8px 0; }
+      code { overflow-wrap: anywhere; color: #263d32; font-family: "SFMono-Regular", Consolas, monospace; font-size: 0.89em; }
+      table { width: 100%; margin: 18px 0 24px; border-collapse: collapse; font-size: 0.92rem; }
+      th, td { padding: 12px 14px; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+      th { background: #f2f6f3; }
+      blockquote { margin: 18px 0; padding: 14px 18px; border-left: 4px solid var(--gold); background: var(--gold-soft); }
+      main li:has(> strong:first-child) { padding: 10px 12px; border: 1px solid var(--line); border-radius: 4px; background: #fbfcfb; }
+      main li:has(> strong:first-child):hover { border-color: #a8bbb1; }
+      #reviewer-alignment + p, #reviewer-alignment ~ ul { background: var(--green-soft); }
+      .source-link { display: inline-flex; margin-top: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 4px; background: #fff; font-weight: 700; text-decoration: none; }
+      .footer { padding: 24px 56px; border-top: 1px solid var(--line); background: #f8faf8; color: var(--muted); }
+      @media (max-width: 920px) {
+        .layout { display: block; }
+        nav { position: static; max-height: none; display: flex; gap: 6px; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+        nav strong { display: none; }
+        nav a { flex: 0 0 auto; border-left: 0; border-bottom: 2px solid transparent; }
+        main { padding-inline: 28px; }
+        h2 { margin-inline: -28px; padding-inline: 28px; }
+      }
+      @media (max-width: 680px) {
+        .shell { width: 100%; margin: 0; border: 0; }
+        .hero { padding: 34px 22px 28px; }
+        .stats { grid-template-columns: repeat(2, 1fr); }
+        .stat:nth-child(2) { border-right: 0; }
+        .stat:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
+        main { padding-inline: 20px; }
+        h2 { margin-inline: -20px; padding-inline: 20px; }
+        table { display: block; overflow-x: auto; }
+        .footer { padding-inline: 22px; }
+      }
+      @media print {
+        body { background: #fff; }
+        .shell { width: 100%; margin: 0; border: 0; box-shadow: none; }
+        nav { display: none; }
+        .layout { display: block; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <header class="hero">
+        <p class="eyebrow">Athena · Requirements · 9 July 2026</p>
+        <h1>Reports Foundation</h1>
+        <p>The trust, valuation, reconciliation, and performance contract required before Athena's Reports workspace can safely publish business and inventory metrics.</p>
+        <div class="status-row">
+          <span class="pill">Unanimously aligned</span>
+          <span class="pill">Store scoped</span>
+          <span class="pill">Full admin</span>
+          <span class="pill">Read foundation</span>
+        </div>
+      </header>
+      <div class="stats">
+        <div class="stat"><strong>88</strong><span>foundation requirements</span></div>
+        <div class="stat"><strong>12</strong><span>acceptance examples</span></div>
+        <div class="stat"><strong>4</strong><span>review rounds</span></div>
+        <div class="stat"><strong>3 / 3</strong><span>reviewers aligned</span></div>
+      </div>
+      <div class="layout">
+        <nav aria-label="Document sections"><strong>Contents</strong><a href="#summary">Summary</a>
+<a href="#relationship-to-the-reports-workspace">Relationship to the Reports Workspace</a>
+<a href="#outcomes">Outcomes</a>
+<a href="#grounding-in-athena-today">Grounding in Athena Today</a>
+<a href="#definitions">Definitions</a>
+<a href="#foundation-principles">Foundation Principles</a>
+<a href="#requirements">Requirements</a>
+<a href="#invariants">Invariants</a>
+<a href="#acceptance-examples">Acceptance Examples</a>
+<a href="#success-criteria">Success Criteria</a>
+<a href="#scope-boundaries">Scope Boundaries</a>
+<a href="#key-decisions">Key Decisions</a>
+<a href="#dependencies-and-assumptions">Dependencies and Assumptions</a>
+<a href="#reviewer-alignment">Reviewer Alignment</a></nav>
+        <main><h1 id="reports-foundation">Reports Foundation</h1>
+<h2 id="summary">Summary</h2>
+<p>Athena needs a durable reporting foundation before the Reports workspace can safely present unified money, SKU movement, inventory value, and merchandise profitability. Existing operational records remain the source evidence, but they do not yet share one recognition contract, one inventory-and-valuation mutation contract, or one completeness and reconciliation model.</p>
+<p>This document defines the foundation that must be true before Reports depends on it. It closes the audited gaps without turning Reports into a general ledger, replacing existing operational workspaces, or blocking trade when cost or synchronization evidence is incomplete.</p>
+<h2 id="relationship-to-the-reports-workspace">Relationship to the Reports Workspace</h2>
+<p>The approved product requirements remain authoritative for the operator experience:</p>
+<ul>
+<li><code>docs/brainstorms/2026-07-09-reports-workspace-requirements.md</code></li>
+</ul>
+<p>This companion specification supplies the trust layer required by those product requirements. Reports may be designed before every foundation capability is complete, but a metric must not be activated for a store or period until its required facts, coverage, reconciliation, and authorization contracts are satisfied.</p>
+<table>
+<thead>
+<tr>
+<th>Reports need</th>
+<th>Foundation obligation</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Unified revenue without duplication</td>
+<td>Canonical recognition facts separate revenue from settlement and identify one owning business event.</td>
+</tr>
+<tr>
+<td>SKU-first performance</td>
+<td>Channel-neutral merchandise-line evidence resolves direct and provisional SKU identity.</td>
+</tr>
+<tr>
+<td>Merchandise COGS and margin</td>
+<td>Moving weighted-average valuation preserves known and unknown cost coverage and immutable sale cost basis.</td>
+</tr>
+<tr>
+<td>Inventory movement and value</td>
+<td>One stock-effect contract keeps balances, movement evidence, availability, and valuation aligned.</td>
+</tr>
+<tr>
+<td>Week-to-date and comparison periods</td>
+<td>Server-owned operating periods use the effective store schedule and preserve historical period assignment.</td>
+</tr>
+<tr>
+<td>Trustworthy closed and live reporting</td>
+<td>Immutable close evidence coexists with versioned post-close reconciliation.</td>
+</tr>
+<tr>
+<td>Durable performance</td>
+<td>Bounded daily and SKU projections replace uncapped history scans and per-parent fan-out.</td>
+</tr>
+<tr>
+<td>Highlight and route</td>
+<td>Every aggregate, limitation, and signal retains a path to its owning operational evidence.</td>
+</tr>
+</tbody></table>
+<h2 id="outcomes">Outcomes</h2>
+<ul>
+<li>Every amount, quantity, and cost used by Reports has one canonical recognition path and stable source evidence.</li>
+<li>Current on-hand units and inventory value reconcile from an accepted cutover baseline forward.</li>
+<li>Unknown cost, currency, attribution, synchronization, and pre-cutover history remain explicit rather than becoming zero or inferred truth.</li>
+<li>Closed-day evidence remains immutable while current reporting incorporates valid late activity through visible reconciliation.</li>
+<li>Report reads remain bounded as stores accumulate years of transactions and SKU history.</li>
+<li>A full administrator can tell whether a metric is complete, current, stale, partial, unsupported, or still rebuilding.</li>
+<li>New service-cost lanes and organization rollups can be added without changing the original merchandise definitions.</li>
+</ul>
+<h2 id="grounding-in-athena-today">Grounding in Athena Today</h2>
+<p>Athena already has foundations worth reusing:</p>
+<ul>
+<li>Daily Close preserves immutable report snapshots and source-completeness evidence: <code>packages/athena-webapp/convex/schemas/operations/dailyClose.ts:60-126</code>.</li>
+<li>The store schedule provides effective, IANA-timezone-aware operating windows: <code>packages/athena-webapp/convex/schemas/inventory/storeSchedule.ts:36-53</code> and <code>packages/athena-webapp/convex/lib/storeScheduleTime.ts:614-760</code>.</li>
+<li>SKU Activity preserves source, actor, occurrence time, source-line identity, and idempotency evidence: <code>packages/athena-webapp/convex/schemas/operations/skuActivityEvent.ts:3-33</code>.</li>
+<li>POS adjustments preserve original-line linkage and explicit correction evidence: <code>packages/athena-webapp/convex/schemas/pos/posTransactionAdjustment.ts:17-47</code>.</li>
+<li>Purchase-order lines already preserve ordered quantity and unit cost: <code>packages/athena-webapp/convex/schemas/stockOps/purchaseOrderLineItem.ts:3-13</code>.</li>
+<li>Existing performance guidance favors bounded server-shaped projections and purpose-specific hydration: <code>docs/solutions/performance/athena-analytics-workspace-snapshot-2026-05-08.md</code> and <code>docs/solutions/performance/athena-convex-read-amplification-2026-06-29.md</code>.</li>
+</ul>
+<p>The audited gaps are concrete:</p>
+<ul>
+<li>Mixed POS service sales can appear in both the POS total and service evidence: <code>packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.ts:2055-2170</code> and <code>:2623-2683</code>.</li>
+<li>Payment allocation replay currently can rely on matching business values instead of a required event identity: <code>packages/athena-webapp/convex/operations/paymentAllocations.ts:81-130</code>.</li>
+<li>Missing SKU cost can collapse to zero and direct edits can change stock or cost without a corresponding correction event: <code>packages/athena-webapp/src/components/add-product/ProductStockInput.ts:495-519</code> and <code>packages/athena-webapp/convex/inventory/products.ts:951-1035</code>.</li>
+<li>Receiving preserves purchase-order cost upstream but currently applies only quantity and quantity-only movement evidence: <code>packages/athena-webapp/convex/stockOps/receiving.ts:216-317</code>.</li>
+<li>Some stock changes bypass movement evidence, while some movement evidence does not change stock: <code>packages/athena-webapp/convex/inventory/expenseTransactions.ts:96-165</code> and <code>packages/athena-webapp/convex/serviceOps/serviceCases.ts:589-656</code>.</li>
+<li>POS and storefront sale lines do not snapshot cost, currency, or merchandising hierarchy: <code>packages/athena-webapp/convex/schemas/pos/posTransactionItem.ts:3-20</code> and <code>packages/athena-webapp/convex/schemas/storeFront/onlineOrder/onlineOrderItem.ts:3-24</code>.</li>
+<li>Existing summary queries scan history, fan out into line reads, or silently cap inputs: <code>packages/athena-webapp/convex/pos/application/queries/storePulse.ts:374-475</code> and <code>packages/athena-webapp/convex/storeFront/analytics.ts:10-23</code>.</li>
+<li>The current storefront Analytics summary lacks a server-side full-admin check: <code>packages/athena-webapp/convex/storeFront/analytics.ts:373-404</code>.</li>
+</ul>
+<h2 id="definitions">Definitions</h2>
+<ul>
+<li><strong>Business occurrence time:</strong> When the sale, refund, receipt, movement, or other business event occurred, independent of later synchronization or processing.</li>
+<li><strong>Recognition time:</strong> The time a metric contract assigns an event to financial or operational reporting.</li>
+<li><strong>Settlement:</strong> Movement of payment value, including collection, deposit, refund, reversal, change, or overpayment. Settlement is evidence about payment, not revenue by itself.</li>
+<li><strong>Canonical fact:</strong> The single reportable interpretation of an owning business event, retaining source identity and versioned meaning.</li>
+<li><strong>Known cost pool:</strong> The stored minor-unit value associated with costed on-hand quantity.</li>
+<li><strong>Uncosted quantity:</strong> On-hand quantity for which Athena does not have a trustworthy valuation basis.</li>
+<li><strong>Cutover baseline:</strong> The accepted effective-time position from which a store and SKU can be reconciled forward.</li>
+<li><strong>Verified projection:</strong> A reusable report result whose required source coverage and reconciliation checks have passed.</li>
+<li><strong>Post-close delta:</strong> Valid activity learned after a Daily Close was completed that affects current reporting without rewriting the accepted close snapshot.</li>
+</ul>
+<h2 id="foundation-principles">Foundation Principles</h2>
+<ol>
+<li>Source evidence remains immutable; interpretations evolve through linked, versioned facts.</li>
+<li>Revenue, settlement, physical stock, availability, and valuation are distinct effects that reconcile but do not substitute for each other.</li>
+<li>Athena preserves sales continuity. Missing cost or delayed synchronization reduces reporting certainty but does not block selling.</li>
+<li>Unknown remains unknown. Current catalog state must not be projected backward merely to increase coverage.</li>
+<li>Every aggregate must reconcile downward to evidence and upward to its published total.</li>
+<li>Reports consumes verified projections and routes action to existing operational owners.</li>
+</ol>
+<h2 id="requirements">Requirements</h2>
+<h3 id="authorization-and-store-isolation">Authorization and Store Isolation</h3>
+<ul>
+<li><strong>F-R1.</strong> Every public Reports read, evidence read, export, and operator-triggered foundation maintenance action must independently authenticate the caller and require active <code>full_admin</code> membership in the organization that owns the requested store.</li>
+<li><strong>F-R2.</strong> Route visibility, manager elevation, possession of a source record ID, or membership in another organization must never substitute for F-R1.</li>
+<li><strong>F-R3.</strong> Every source reference hydrated through Reports must be verified against the requested store before any value or metadata is returned.</li>
+<li><strong>F-R4.</strong> Authorization and store-mismatch failures must disclose neither report values nor the existence of sensitive source records. Canonical facts, projections, health records, logs, alerts, and exports must contain only fields required by their contract; credentials, authentication secrets, payment instrument data, and unnecessary customer PII must never be copied into reporting or diagnostic records.</li>
+<li><strong>F-R5.</strong> Every export, backfill, rebuild, reconciliation, repair, or activation must preserve the human actor or automation identity, store, domain, period, contract versions, operation, outcome, timestamps, and run identity. Automated work must remain store scoped and use an explicit internal authority boundary.</li>
+</ul>
+<h3 id="canonical-commerce-recognition">Canonical Commerce Recognition</h3>
+<ul>
+<li><strong>F-R6.</strong> Every recognized sale, discount, refund, void, correction, payment, return, receipt, and stock effect must carry a stable store-scoped business-event identity.</li>
+<li><strong>F-R7.</strong> Reprocessing the same identity with materially identical content must be a no-op. Reprocessing it with conflicting content must fail closed, preserve canonical source references, safe content fingerprints, sanitized material differences, and conflict evidence needed for diagnosis, and make the affected result uncertified.</li>
+<li><strong>F-R8.</strong> Two legitimate business events with identical amount, method, quantity, direction, and target must remain distinct.</li>
+<li><strong>F-R9.</strong> Revenue recognition must remain separate from settlement. Settlement records do not establish or reverse revenue by themselves. A payment refund or reversal affects net sales only when linked to a canonical financial-refund, void, or correction fact.</li>
+<li><strong>F-R10.</strong> POS merchandise and POS service lines must be recognized at completed-sale occurrence time. A service case represented by a POS service line must remain linked evidence and must not recognize the same service revenue again.</li>
+<li><strong>F-R11.</strong> A standalone service case must be recognized at service completion. Payments received before completion remain settlement until recognition.</li>
+<li><strong>F-R12.</strong> A storefront sale must be recognized from the order&#39;s completed fulfillment event, not order creation or an intermediate workflow status.</li>
+<li><strong>F-R13.</strong> Recognized commerce must preserve merchandise, service, discount, tax, delivery, and other non-revenue components separately enough for each lane and the unified total to reconcile.</li>
+<li><strong>F-R14.</strong> Recognized lines must preserve original quantity, unit price, allocated discount, recognized net value, currency, channel, occurrence time, recognition time, SKU or service identity, and recognition-time merchandising attribution.</li>
+<li><strong>F-R15.</strong> Completed source evidence must not be destructively rewritten for reporting. Voids, corrections, reclassifications, refunds, and reversals must create linked effects that preserve the earlier state.</li>
+<li><strong>F-R16.</strong> Financial refunds must be recognized as distinct events in the period when the refund occurred and must retain attribution to the original sale and sale line when known. The canonical financial-refund fact must reduce net sales in its recognition period while preserving the original completed sale.</li>
+<li><strong>F-R17.</strong> Financial refund, physical return, sellable restock, damaged return, missing return, exchange issue, void, and transaction correction must remain independently observable.</li>
+<li><strong>F-R18.</strong> An exchange must preserve the returned item&#39;s disposition, replacement item&#39;s outbound movement, and any additional collection or refund rather than collapsing them into one net amount or quantity.</li>
+<li><strong>F-R19.</strong> Every financial and valuation effect must preserve its currency and minor-unit convention. Unlike currencies must not be summed, and missing historical currency must not inherit current store or SKU currency without trustworthy evidence.</li>
+<li><strong>F-R20.</strong> Locally completed POS events must remain attributed to their durable business occurrence time while separately exposing synchronization delay, acceptance time, and unresolved projection conflicts.</li>
+</ul>
+<h3 id="authoritative-inventory-and-sku-evidence">Authoritative Inventory and SKU Evidence</h3>
+<ul>
+<li><strong>F-R21.</strong> Every workflow that changes on-hand stock must produce corresponding source-linked movement evidence as one atomic business outcome.</li>
+<li><strong>F-R22.</strong> A movement that claims a physical stock change without changing the authoritative balance, or a balance change without matching movement evidence, must create an explicit reconciliation state.</li>
+<li><strong>F-R23.</strong> Availability-only effects such as holds, reservations, and releases must not change on-hand quantity or inventory value; evidence must state whether on-hand, sellable availability, or both changed.</li>
+<li><strong>F-R24.</strong> Physical movement evidence must preserve SKU, signed on-hand delta, signed sellable delta, before and after balances, movement and disposition meaning, occurrence and recording times, actor when known, and source workflow, record, and line.</li>
+<li><strong>F-R25.</strong> Athena must preserve the full physical delta from a completed sale, exchange, consumption, or correction even when it exceeds last-known stock. Outbound quantity beyond available on-hand must create an explicit uncosted deficit with no negative known cost pool. Any later inbound physical movement must first resolve deficit quantity. A costed inbound must apply its confirmed cost to the resolved deficit through a linked valuation adjustment that preserves the original outbound snapshot and exposes the resulting historical or post-close delta under the applicable metric contract; an uncosted inbound resolves quantity without fabricating cost. Only residual inbound quantity enters current costed or uncosted on-hand. The deficit or conflict must remain explicit rather than being clamped or silently discarded.</li>
+<li><strong>F-R26.</strong> From an accepted cutover baseline forward, baseline on-hand plus committed physical deltas must equal current on-hand for every in-scope SKU, unless an explicit reconciliation discrepancy identifies the difference and owning source.</li>
+<li><strong>F-R27.</strong> POS and storefront merchandise lines for trusted SKUs must be discoverable by store, canonical SKU, and recognition period with source-linked evidence equivalent to provisional SKU investigation.</li>
+<li><strong>F-R28.</strong> Provisional or pending SKU evidence later resolved to a trusted SKU must become attributable to the canonical SKU without rewriting the original source line or losing provisional lineage.</li>
+<li><strong>F-R29.</strong> SKU, product, category, and channel rollups must preserve historical attribution and must not silently change when current catalog relationships change.</li>
+</ul>
+<h3 id="moving-weighted-average-valuation">Moving Weighted-Average Valuation</h3>
+<ul>
+<li><strong>F-R30.</strong> Unknown cost and legitimate zero cost must remain distinct through input, storage, movement evidence, sale evidence, projections, and display.</li>
+<li><strong>F-R31.</strong> Each SKU valuation position must distinguish costed on-hand quantity, uncosted on-hand quantity, unresolved deficit quantity, known cost pool, valuation currency, and current basis status.</li>
+<li><strong>F-R32.</strong> After F-R25 deficit resolution, only residual receipt quantity with trustworthy unit cost and its proportional extended cost may increase costed on-hand quantity and the known cost pool. Each costed receipt must preserve received quantity, confirmed receipt-time unit cost, currency, source line, and occurrence time. A planned purchase-order cost may be used only when explicitly confirmed as the receipt basis, and later source edits must not rewrite the accepted receipt cost. Moving weighted-average cost must derive from the pool divided by costed quantity using deterministic minor-unit rounding.</li>
+<li><strong>F-R33.</strong> After F-R25 deficit resolution, only residual receipt quantity without trustworthy cost may increase uncosted on-hand. It must not dilute, replace, or fabricate the known weighted-average cost.</li>
+<li><strong>F-R34.</strong> When costed and uncosted quantity coexist, outbound quantity must consume uncosted coverage first. A line that crosses the boundary may contain both uncosted and costed portions.</li>
+<li><strong>F-R35.</strong> Every physical outbound movement must preserve its costed and uncosted quantities and the immutable weighted-average basis applied to its costed quantity. At merchandise sale recognition, Athena must preserve known COGS, valuation currency, basis status, and cost-basis version. Service consumption, inventory expense, damage, writeoff, and other non-customer outbounds must classify known cost under their typed inventory disposition and must not be reported as merchandise COGS. An exchange replacement issue must preserve its known cost as a separately identified merchandise exchange effect linked to the original sale, include that cost in adjusted merchandise COGS and profit, and must not independently create revenue.</li>
+<li><strong>F-R36.</strong> Later receipts, catalog edits, or cost corrections must not rewrite a recognized sale&#39;s cost snapshot.</li>
+<li><strong>F-R37.</strong> A costed outbound movement must reduce costed quantity and known cost pool by the same immutable cost assigned to that movement. Rounding residue must resolve deterministically when costed quantity reaches zero.</li>
+<li><strong>F-R38.</strong> A sellable return must first resolve any deficit under F-R25. Residual returned quantity with known original sale cost must re-enter costed stock at that original cost; residual returned quantity with unknown original cost must re-enter uncosted stock.</li>
+<li><strong>F-R39.</strong> Damaged, missing, non-restocked, or financial-only returns must not increase sellable stock or reverse COGS.</li>
+<li><strong>F-R40.</strong> Manual valuation corrections must preserve actor, reason, occurrence time, prior basis, and new basis. They are prospective by default and must not silently rewrite earlier sales.</li>
+<li><strong>F-R41.</strong> A late event must use the valuation state effective at its original occurrence time when that state can be reconstructed. Otherwise its cost remains unknown until explicit, auditable reconciliation.</li>
+<li><strong>F-R42.</strong> Missing cost must never block POS, storefront, service, receiving, or other operational work; it must prominently reduce cost coverage and withhold unsupported profit claims.</li>
+</ul>
+<h3 id="operating-time-and-closed-day-reconciliation">Operating Time and Closed-Day Reconciliation</h3>
+<ul>
+<li><strong>F-R43.</strong> Every report period must be resolved on the server from the store schedule effective for that period, including IANA timezone, operating windows, closed days, exceptions, and cross-midnight windows.</li>
+<li><strong>F-R44.</strong> Period boundaries must remain correct across daylight-saving transitions and must not depend on browser timezone or fixed-offset arithmetic.</li>
+<li><strong>F-R45.</strong> Same-elapsed comparisons must compare equivalent scheduled operating time, exclude future portions of the comparison period, and identify partial operating days.</li>
+<li><strong>F-R46.</strong> Active-day denominators must derive from the effective schedule and disclose excluded closed, future, or materially incomplete days.</li>
+<li><strong>F-R47.</strong> Historical facts must retain the operating date and effective schedule version used for assignment so later schedule edits do not move facts silently.</li>
+<li><strong>F-R48.</strong> A completed Daily Close snapshot must remain immutable evidence of what Athena knew and what an administrator accepted at close time.</li>
+<li><strong>F-R49.</strong> Current Reports must present the latest reconciled truth while preserving the accepted close value and a separately identified post-close delta with source evidence.</li>
+<li><strong>F-R50.</strong> Reopened and superseded closes must preserve lineage and clearly identify the current interpretation without deleting earlier accepted evidence.</li>
+<li><strong>F-R51.</strong> Late activity must follow the owning metric&#39;s recognition rule: a late-synchronized original sale belongs to its resolved operating period, while a later refund remains financial activity in the refund period.</li>
+</ul>
+<h3 id="metric-contracts-projections-and-evidence">Metric Contracts, Projections, and Evidence</h3>
+<ul>
+<li><strong>F-R52.</strong> Every metric must have one named definition covering inclusion, exclusion, recognition time, sign handling, unknown-data behavior, comparison behavior, evidence, and required source coverage.</li>
+<li><strong>F-R53.</strong> Metric, fact, and projection contracts must be versioned. Definition changes must not silently alter an existing metric or completed Daily Close evidence.</li>
+<li><strong>F-R54.</strong> Channel lanes must equal the unified total, SKU facts must equal product and category rollups, and correction effects must reconcile to their original facts with zero tolerance for stored minor-unit money and integer quantities.</li>
+<li><strong>F-R55.</strong> Overview, trend, ranked-SKU, and current inventory results must come from reusable verified projections rather than independently recomputing business meaning in each workspace.</li>
+<li><strong>F-R56.</strong> Overview and aggregate reads must remain bounded as source history grows and must not perform one source query per displayed transaction, order, or SKU.</li>
+<li><strong>F-R57.</strong> Under supported production cardinality, overview reads must meet a two-second p95 target and SKU aggregate reads a three-second p95 target.</li>
+<li><strong>F-R58.</strong> Evidence lists must use stable pagination, identify the total or continuation state when known, and never present a fixed page limit as complete history.</li>
+<li><strong>F-R59.</strong> Incremental processing and complete rebuild must produce identical results for the same source facts and contract versions.</li>
+<li><strong>F-R60.</strong> Projection processing must be retry-safe, resumable, and isolated by store and domain so one failure cannot corrupt or stop unrelated stores. Every rejected, conflicting, or repeatedly failing source event must retain store-scoped source identity, safe failure code, first and latest failure times, attempt count, contract versions, and recovery disposition. It must remain inspectable and retryable until resolved, explicitly waived with actor evidence, or superseded; it must never be silently discarded.</li>
+<li><strong>F-R61.</strong> Readers must retain the last verified projection while a replacement rebuilds. A replacement may become current only after it reconciles to canonical facts with zero unexplained difference under the candidate contract; expected differences from the prior version must be quantified, attributable to the definition change, and disclosed before activation.</li>
+<li><strong>F-R62.</strong> Every aggregate and attention signal must link to contributing canonical facts and then to owning Athena records, including exclusions, unknowns, adjustments, and later corrections.</li>
+<li><strong>F-R63.</strong> Storefront engagement analytics must remain a separate contextual projection. Engagement events must not become financial recognition facts.</li>
+</ul>
+<h3 id="completeness-health-and-failure-behavior">Completeness, Health, and Failure Behavior</h3>
+<ul>
+<li><strong>F-R64.</strong> Completeness and freshness must be reported per metric and source domain, not only as a workspace-wide timestamp.</li>
+<li><strong>F-R65.</strong> Coverage must identify the relevant period, cutover boundary, latest processed business occurrence, projection update time, known lag, omissions, truncation, failed facts, unresolved POS sync, SKU attribution coverage, cost coverage, and inventory movement coverage.</li>
+<li><strong>F-R66.</strong> Athena must distinguish unauthorized, cross-store reference, duplicate conflict, source incomplete, source unsynchronized, pre-cutover unknown, uncosted, processing delayed, processing failed, reconciliation drift, rebuild in progress, rebuild failed, version incompatible, projection stale, and evidence truncated. None may collapse into generic no data.</li>
+<li><strong>F-R67.</strong> A metric with insufficient required evidence must be marked provisional, partial, stale, or unavailable according to its metric contract; Athena must not present an unqualified result that the missing evidence could materially change.</li>
+<li><strong>F-R68.</strong> Under normal cloud-connected operation, accepted source activity must appear in Reports within five minutes. Unsynchronized local activity must be identified separately and must not be represented as incorporated.</li>
+<li><strong>F-R69.</strong> Projection health must be observable per store and source domain, including active versions, processing watermark, freshness lag, quarantined count, backfill state, latest successful reconciliation, and current limiting reason.</li>
+<li><strong>F-R70.</strong> Lag, repeated failure, reconciliation drift, duplicate conflict, stalled backfill, and source-coverage regression must have explicit thresholds and an owned operational response before metric activation.</li>
+</ul>
+<h3 id="cutover-backfill-and-release-safety">Cutover, Backfill, and Release Safety</h3>
+<ul>
+<li><strong>F-R71.</strong> Every in-scope store and SKU must have an effective-time cutover baseline containing on-hand, sellable availability, currency, and either a trustworthy cost basis or explicit uncosted quantity before Athena claims movement-complete inventory reporting.</li>
+<li><strong>F-R72.</strong> The baseline establishes the earliest movement-reconcilable boundary. Reports must not infer pre-cutover receipts, stock age, turnover, or historical value from current balances.</li>
+<li><strong>F-R73.</strong> Existing non-null SKU cost may seed current on-hand only through an auditable baseline decision; it must not be applied retroactively to historical sales. Existing null cost remains uncosted.</li>
+<li><strong>F-R74.</strong> Backfills must support a non-mutating preview by store, period, source, eligible count, omitted count, duplicate count, conflict count, unknown fields, and expected coverage impact.</li>
+<li><strong>F-R75.</strong> Backfills must be restartable, deterministic, idempotent, and governed by the same recognition, provenance, version, and reconciliation contracts as live processing.</li>
+<li><strong>F-R76.</strong> Backfill must not manufacture historical cost, currency, classification, SKU attribution, or timestamps. Unsupported history must remain explicitly unknown.</li>
+<li><strong>F-R77.</strong> New facts and projections must run in shadow and reconcile against source evidence before Reports reads are activated for a store.</li>
+<li><strong>F-R78.</strong> Activation must be controllable per store and reversible without deleting facts or losing progress. Rollback must restore the last compatible verified read path.</li>
+<li><strong>F-R79.</strong> Foundation rollout must not change checkout, ordering, service, refund, receiving, stock-continuity, or Daily Close success behavior.</li>
+<li><strong>F-R80.</strong> Mixed contract versions during staged deployment must be detected and prevented from publishing an uncertified result.</li>
+</ul>
+<h3 id="verification">Verification</h3>
+<ul>
+<li><strong>F-R81.</strong> Contract tests must cover recognition, settlement separation, correction, reversal, currency, store ownership, occurrence time, source lineage, metric versions, and unknown-state preservation for every source lane.</li>
+<li><strong>F-R82.</strong> Negative authorization tests must cover unauthenticated callers, <code>pos_only</code>, manager elevation, full administrators from another organization, mismatched stores, direct source IDs, pagination, exports, and maintenance actions.</li>
+<li><strong>F-R83.</strong> Replay tests must cover identical duplicates, conflicting duplicates, legitimate same-value events, delayed and out-of-order events, partial retry, and concurrent processing.</li>
+<li><strong>F-R84.</strong> Inventory tests must prove balance-to-movement parity, on-hand versus availability semantics, unclamped deficits, moving-average pool arithmetic, unknown-first coverage, return disposition, and cutover reconciliation.</li>
+<li><strong>F-R85.</strong> Projection tests must prove incremental-versus-rebuild parity, channel-to-unified reconciliation, SKU-to-rollup reconciliation, post-close deltas, cutover coverage, and unknown-cost propagation.</li>
+<li><strong>F-R86.</strong> Scale tests must use at least ten times the largest observed production-store cardinality at planning time and prove bounded reads, latency targets, pagination, and store isolation.</li>
+<li><strong>F-R87.</strong> Deployment tests must prove preview, partial backfill, pause, resume, retry, activation, rollback, version transition, health alerting, and recovery from a failed build.</li>
+<li><strong>F-R88.</strong> Athena&#39;s merge-grade validation must include the new authorization, contract, reconciliation, migration, and performance coverage before foundation changes can ship.</li>
+</ul>
+<h2 id="invariants">Invariants</h2>
+<ul>
+<li>A source business event has at most one intended financial recognition effect and one intended physical effect per source line.</li>
+<li>Recognized revenue and settlement reconcile independently; tender totals never substitute for sales totals.</li>
+<li>From cutover forward, current on-hand equals baseline plus committed physical deltas unless a named reconciliation discrepancy exists.</li>
+<li>For nonnegative eligible on-hand, costed quantity plus uncosted quantity equals on-hand quantity.</li>
+<li>Known inventory value equals the known cost pool; weighted-average unit cost is derived from that pool, not catalog price.</li>
+<li>Known COGS never exceeds quantity backed by known cost.</li>
+<li>COGS reverses only when a typed disposition restores known-cost inventory or through an explicit audited valuation correction.</li>
+<li>Current SKU cost, name, category, or currency changes never mutate recognized historical lines.</li>
+<li>Published channel, SKU, product, category, quantity, and value totals reconcile exactly in stored units before display rounding.</li>
+</ul>
+<h2 id="acceptance-examples">Acceptance Examples</h2>
+<ul>
+<li><strong>F-AE1, covers F-R6-F-R20.</strong> A mixed POS sale contains GHS 80 merchandise and GHS 20 service linked to a service case. Athena recognizes GHS 100 once, preserves both classifications, and treats the service case and payment allocation as linked evidence rather than another GHS 20 of revenue.</li>
+<li><strong>F-AE2, covers F-R6-F-R9.</strong> Two GHS 50 mobile-money payments are made against one service case. Both remain distinct; replaying either original event creates no third allocation, while conflicting reuse of its identity creates an integrity state.</li>
+<li><strong>F-AE3, covers F-R21-F-R29.</strong> Service material consumption, inventory expense, receiving, POS sale, and direct stock correction change current stock only when matching source-linked movement evidence succeeds. A reservation release changes sellable availability without creating a physical restock.</li>
+<li><strong>F-AE4, covers F-R30-F-R42.</strong> Ten units at GHS 20 receive ten units at GHS 30. The cost pool becomes GHS 500 and future weighted-average cost GHS 25. A subsequent sale snapshots that basis without rewriting earlier sales.</li>
+<li><strong>F-AE5, covers F-R30-F-R42.</strong> A SKU has four uncosted and six costed units at GHS 10. A sale of five records four uncosted units and one costed unit with GHS 10 known COGS; missing cost does not prevent the sale.</li>
+<li><strong>F-AE6, covers F-R16-F-R18 and F-R35-F-R39.</strong> A Week 1 item costed at GHS 25 is refunded in Week 2 but not restocked. Week 2 records refund activity, original-sale SKU performance reflects the outcome, and inventory value does not increase. A later sellable return restores stock at GHS 25 without creating another refund. If a replacement item is issued, its known cost becomes exchange-related merchandise COGS; the sellable return reverses the original item&#39;s COGS, and no additional revenue is recognized except an explicit additional collection.</li>
+<li><strong>F-AE7, covers F-R20 and F-R41.</strong> An offline sale occurs Monday and syncs Wednesday after a Tuesday receipt changed cost. The sale remains Monday activity; if Monday&#39;s basis cannot be reconstructed, its COGS remains unknown rather than using Wednesday&#39;s cost.</li>
+<li><strong>F-AE8, covers F-R43-F-R51.</strong> A sale syncs after its operating day closed. The accepted Daily Close remains unchanged, current reporting includes the sale in its resolved operating period, and Reports exposes a source-linked post-close delta.</li>
+<li><strong>F-AE9, covers F-R55-F-R70.</strong> POS is current but storefront processing is delayed. Eligible POS metrics remain current, unified net sales is marked stale or partial with the affected source and lag, and the last verified projection remains readable.</li>
+<li><strong>F-AE10, covers F-R71-F-R80.</strong> A cutover baseline records 12 units with unknown cost. Reports shows 12 uncosted units and no invented historical value. A backfill fails halfway, resumes without duplication, and activates only after zero-delta reconciliation.</li>
+<li><strong>F-AE11, covers F-R27-F-R29 and F-R62.</strong> A trusted SKU shows direct POS and storefront sales plus earlier provisional sales attributed through canonical identity. Every contributing and excluded line is paginated and linked without rewriting original evidence.</li>
+<li><strong>F-AE12, covers F-R1-F-R5 and F-R82.</strong> A full administrator for Store A requests a Store B transaction directly. Athena returns no Store B metadata and records the integrity attempt.</li>
+</ul>
+<h2 id="success-criteria">Success Criteria</h2>
+<ul>
+<li>Reports can publish unified revenue, SKU movement, inventory value, cost coverage, and merchandise profitability without double counting or fabricated precision.</li>
+<li>Every activated metric declares its versions, recognition rule, source coverage, freshness, cutover boundary, and evidence path.</li>
+<li>All integer quantities and stored minor-unit money reconcile with zero unexplained difference.</li>
+<li>A complete rebuild produces the same results as incremental processing for the same facts and versions, with zero unexplained difference.</li>
+<li>Accepted cloud activity normally becomes reportable within five minutes, while local unsynchronized activity remains clearly excluded.</li>
+<li>High-volume report reads satisfy the declared latency targets without uncapped source scans or per-parent fan-out.</li>
+<li>An administrator can distinguish operational truth, accepted close evidence, post-close changes, and unresolved data limitations.</li>
+<li>Foundation rollout can be paused or reversed without disrupting operational workflows or deleting diagnostic evidence.</li>
+</ul>
+<h2 id="scope-boundaries">Scope Boundaries</h2>
+<ul>
+<li>This foundation does not provide a general ledger, chart of accounts, tax filing, statutory audit, bank reconciliation, payroll, rent, utilities, cash flow, or accounting net income.</li>
+<li>FIFO, LIFO, landed-cost allocation, serial tracking, and true stock-age claims remain outside the moving weighted-average model.</li>
+<li>Service labor, overhead, and delivery-cost valuation are deferred. The contract must allow later cost kinds without redefining original merchandise metrics.</li>
+<li>Store-scoped reporting comes first. Organization rollups and cross-store comparison remain deferred.</li>
+<li>Reports does not replace Daily Close, Terminal Health, SKU Activity, Transactions, Procurement, Cash Controls, Storefront, or Service Operations as action owners.</li>
+<li>Reports and foundation maintenance must not mutate operational source records merely to make reporting reconcile.</li>
+<li>Historical unknowns are not estimated for the purpose of maximizing apparent coverage.</li>
+<li>Exact tables, indexes, schedulers, queue topology, module boundaries, component structure, and rollout batches belong to implementation planning.</li>
+</ul>
+<h2 id="key-decisions">Key Decisions</h2>
+<ul>
+<li><strong>Latest reconciled truth with close evidence:</strong> Reports presents the current reconciled interpretation while preserving immutable Daily Close values and explicit post-close deltas.</li>
+<li><strong>Recognition basis:</strong> POS product and service lines recognize at completed sale; standalone service recognizes at service completion; storefront recognizes at completed fulfillment.</li>
+<li><strong>Unknown-first cost coverage:</strong> When costed and uncosted quantity coexist, outbound quantity consumes uncosted coverage first. This is conservative and avoids fractional estimated certainty.</li>
+<li><strong>No mixed-currency totals:</strong> Unlike currencies are segmented or withheld, never silently combined.</li>
+<li><strong>Zero-tolerance stored reconciliation:</strong> Integer quantities and minor-unit amounts must match exactly; only display percentages may use documented rounding.</li>
+<li><strong>Five-minute freshness objective:</strong> Accepted cloud facts normally appear within five minutes. Local unsynchronized activity is a separate completeness state.</li>
+<li><strong>Shadow before activation:</strong> Facts and projections prove parity and coverage before a store&#39;s Reports reads depend on them.</li>
+<li><strong>Per-store and per-SKU cutover:</strong> Historical movement and valuation claims begin only at an accepted baseline.</li>
+</ul>
+<h2 id="dependencies-and-assumptions">Dependencies and Assumptions</h2>
+<ul>
+<li>The effective store schedule remains the authority for store operating periods.</li>
+<li>Existing operational workflows remain the owners of sale, service, payment, refund, receipt, stock, and Daily Close commands.</li>
+<li>The foundation can add evidence and reportable effects to those workflows without changing their operator success boundary.</li>
+<li>Planning will establish observed production cardinality before converting the scale and latency requirements into test fixtures and budgets.</li>
+<li>Planning will map every existing stock and commerce mutation path to the relevant foundation contract before activation.</li>
+<li>Existing history will have uneven coverage; the product accepts explicit partial history instead of estimated completeness.</li>
+</ul>
+<h2 id="reviewer-alignment">Reviewer Alignment</h2>
+<p>All reviewers returned <code>ALIGNED</code> against the same final revision after four review rounds.</p>
+<ul>
+<li>Reporting architecture and projection durability: <code>ALIGNED</code>.</li>
+<li>Finance, inventory, and valuation correctness: <code>ALIGNED</code>.</li>
+<li>Security, operability, migration, and verification: <code>ALIGNED</code>.</li>
+</ul>
+<p>Material issues resolved during review included negative-inventory valuation, receipt and return deficit ordering, exchange replacement COGS, refund recognition versus settlement, immutable receipt cost evidence, diagnostic data minimization, failed-event recovery, and candidate-version reconciliation.</p>
+<h2 id="companion-artifact">Companion Artifact</h2>
+<ul>
+<li>Reviewable HTML: <code>docs/brainstorms/2026-07-09-reports-foundation-requirements.html</code></li>
+</ul>
+<h2 id="next-step">Next Step</h2>
+<p>After alignment, create an implementation plan that sequences the foundation into independently verifiable batches. Reports UI work may proceed in parallel only where it consumes explicit mock contracts and does not establish competing metric logic.</p>
+<a class="source-link" href="2026-07-09-reports-foundation-requirements.md">Open Markdown source</a></main>
+      </div>
+      <footer class="footer">Aligned foundation requirements for planning Athena's Reports workspace.</footer>
+    </div>
+  </body>
+</html>

@@ -120,12 +120,14 @@ type VendorSummary = {
 };
 
 type PurchaseOrderDetail = ProcurementOrderSummary & {
+  currency?: string;
   lineItems: Array<{
     _id: Id<"purchaseOrderLineItem">;
     description?: string;
     orderedQuantity: number;
     productSkuId: Id<"productSku">;
     receivedQuantity: number;
+    unitCost?: number;
   }>;
   vendor?: VendorSummary | null;
 };
@@ -1761,6 +1763,7 @@ export function ProcurementViewContent({
 
                 {storeId && receivingPurchaseOrder ? (
                   <ReceivingView
+                    currency={receivingPurchaseOrder.currency}
                     lineItems={receivingPurchaseOrder.lineItems}
                     onReceived={() => setSelectedReceivingOrderId(null)}
                     purchaseOrderId={receivingPurchaseOrder._id}

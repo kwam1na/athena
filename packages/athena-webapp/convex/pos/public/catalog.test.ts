@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Id } from "../../_generated/dataModel";
 
 const mocks = vi.hoisted(() => ({
+  applyInventoryEffectWithCtx: vi.fn(),
   createOrReusePendingCheckoutItem: vi.fn(),
   findStoreSkuByBarcode: vi.fn(),
   refreshCatalogSummaryWithCtx: vi.fn(),
@@ -14,6 +15,10 @@ const mocks = vi.hoisted(() => ({
   requireOrganizationMemberRoleWithCtx: vi.fn(),
   updateOperationalWorkItemStatusWithCtx: vi.fn(),
   upsertProductSkuSearchProjection: vi.fn(),
+}));
+
+vi.mock("../../reporting/inventory/effects", () => ({
+  applyInventoryEffectWithCtx: mocks.applyInventoryEffectWithCtx,
 }));
 
 vi.mock("../../lib/athenaUserAuth", () => ({
@@ -128,6 +133,9 @@ describe("POS public catalog queries", () => {
     mocks.findStoreSkuByBarcode.mockResolvedValue(null);
     mocks.recordInventoryMovementWithCtx.mockResolvedValue({
       _id: "movement-1",
+    });
+    mocks.applyInventoryEffectWithCtx.mockResolvedValue({
+      movement: { _id: "movement-1" },
     });
     mocks.refreshCatalogSummaryWithCtx.mockResolvedValue("summary-1");
     mocks.quickAddCatalogItem.mockResolvedValue({
@@ -252,13 +260,10 @@ describe("POS public catalog queries", () => {
         },
       ],
     );
-    assertConformsToExportedReturns(
-      resolvePendingCheckoutItemReview,
-      {
-        data: pendingReviewItem,
-        kind: "ok",
-      },
-    );
+    assertConformsToExportedReturns(resolvePendingCheckoutItemReview, {
+      data: pendingReviewItem,
+      kind: "ok",
+    });
     assertConformsToExportedReturns(listPendingCheckoutProductPageBinding, {
       activeRowCount: 1,
       row: {
@@ -1439,13 +1444,10 @@ describe("POS public catalog queries", () => {
       "productSku",
       "sku-provisional-1",
       {
-        inventoryCount: 20,
         isVisible: true,
         posVisible: true,
         netPrice: 350000,
         price: 350000,
-        quantityAvailable: 20,
-        unitCost: 0,
       },
     );
     expect(ctx.db.patch).toHaveBeenCalledWith(
@@ -1467,13 +1469,20 @@ describe("POS public catalog queries", () => {
         status: "approved",
       }),
     );
-    expect(mocks.recordInventoryMovementWithCtx).toHaveBeenCalledWith(
+    expect(mocks.applyInventoryEffectWithCtx).toHaveBeenCalledWith(
       ctx,
       expect.objectContaining({
+        businessEventKey: "pending_checkout:pending-1:trusted:conversion-1",
         movementType: "pending_checkout_trusted_finalization",
-        quantityDelta: 20,
+        physicalQuantityDelta: 20,
+        sellableQuantityDelta: 20,
         sourceId: "pending-1",
         sourceType: "pos_pending_checkout_item",
+        valuation: expect.objectContaining({
+          costBasis: expect.objectContaining({ kind: "known", unitCost: 0 }),
+          kind: "inbound",
+          quantity: 20,
+        }),
       }),
     );
     expect(mocks.updateOperationalWorkItemStatusWithCtx).toHaveBeenCalledWith(
@@ -1567,7 +1576,8 @@ describe("POS public catalog queries", () => {
     expect(result).toMatchObject({
       error: {
         code: "precondition_failed",
-        message: "Make this SKU available in POS before finalizing trusted inventory.",
+        message:
+          "Make this SKU available in POS before finalizing trusted inventory.",
       },
       kind: "user_error",
     });

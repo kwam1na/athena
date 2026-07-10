@@ -1,6 +1,15 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Id } from "../../_generated/dataModel";
+import type { MutationCtx } from "../../_generated/server";
+
+const mocks = vi.hoisted(() => ({
+  applyInventoryEffectWithCtx: vi.fn(),
+}));
+
+vi.mock("../../reporting/inventory/effects", () => ({
+  applyInventoryEffectWithCtx: mocks.applyInventoryEffectWithCtx,
+}));
 import {
   acquireInventoryHold,
   adjustInventoryHold,
@@ -53,6 +62,12 @@ function createDb(seed: { sku: SkuRecord; holds?: HoldRecord[] }) {
 
   const db = {
     get: vi.fn(async (tableNameOrId: string, maybeId?: string) => {
+      if (tableNameOrId === "product") {
+        return { _id: "product-1", storeId: seed.sku.storeId };
+      }
+      if (tableNameOrId === "store") {
+        return { _id: seed.sku.storeId, organizationId: "org-1" };
+      }
       const tableName = maybeId ? tableNameOrId : "productSku";
       const id = maybeId ?? tableNameOrId;
       if (tableName === "productSku" && id === seed.sku._id) {
@@ -163,6 +178,24 @@ function createDb(seed: { sku: SkuRecord; holds?: HoldRecord[] }) {
     skuActivityEvents,
   };
 }
+
+beforeEach(() => {
+  mocks.applyInventoryEffectWithCtx.mockReset();
+  mocks.applyInventoryEffectWithCtx.mockImplementation(
+    async (
+      ctx: MutationCtx,
+      args: {
+        compatibilityBalance: { sellableQuantity: number };
+        productSkuId: Id<"productSku">;
+      },
+    ) => {
+      await ctx.db.patch("productSku", args.productSkuId, {
+        quantityAvailable: args.compatibilityBalance.sellableQuantity,
+      });
+      return { disposition: "inserted", mode: "compatibility_shadow" };
+    },
+  );
+});
 
 describe("POS inventory hold ledger", () => {
   it("acquires a hold row without patching productSku availability", async () => {
@@ -567,11 +600,24 @@ describe("POS inventory hold ledger", () => {
       },
     });
 
-    await releaseLegacyExpenseQuantityPatchHolds(db as never, [
+    await releaseLegacyExpenseQuantityPatchHolds(
+      { db, scheduler: { runAfter: vi.fn() } } as never,
+      [
       { skuId: "sku-1" as Id<"productSku">, quantity: 2 },
-    ]);
+      ],
+    );
 
     expect(productSkuPatches).toEqual([{ quantityAvailable: 8 }]);
+    expect(mocks.applyInventoryEffectWithCtx).toHaveBeenCalledWith(
+      expect.objectContaining({ db }),
+      expect.objectContaining({
+        businessEventKey:
+          "legacy_expense_hold_release:legacy_expense_release:sku-1:2:sku-1",
+        physicalQuantityDelta: 0,
+        sellableQuantityDelta: 2,
+        valuation: { kind: "availability_only" },
+      }),
+    );
   });
 
   it("consumes matching completion holds and releases leftover session holds", async () => {

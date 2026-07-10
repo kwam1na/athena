@@ -8,9 +8,9 @@ import {
 import { Id } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
 import {
-  recordOnlineOrderFulfillmentMovement,
-  recordOnlineOrderRestockMovement,
-} from "./helpers/orderOperations";
+  applyCommerceInventoryEffectWithCtx,
+  outboundBasisFromEffect,
+} from "../reporting/inventory/commerceEffects";
 
 const entity = "onlineOrderItem";
 
@@ -64,15 +64,35 @@ const updateOnlineOrderItem = async (
 
     if (!productSku) return;
 
-    await ctx.db.patch("productSku", productSku._id, {
-      inventoryCount: Math.max(productSku.inventoryCount - orderItem.quantity, 0),
-    });
-
     const order = await ctx.db.get("onlineOrder", orderItem.orderId);
     if (order) {
-      await recordOnlineOrderFulfillmentMovement(ctx, {
-        item: orderItem,
-        order,
+      const store = await ctx.db.get("store", order.storeId);
+      if (!store?.organizationId) {
+        throw new Error("Online order organization could not be resolved.");
+      }
+      const occurredAt = Date.now();
+      await applyCommerceInventoryEffectWithCtx(ctx, {
+        activityType: "stock_fulfillment",
+        businessEventKey: `storefront:${order._id}:line:${orderItem._id}:fulfillment`,
+        completeness: "partial",
+        contentFingerprint: `storefront-fulfillment-inventory-v1:${order._id}:${orderItem._id}:${orderItem.quantity}`,
+        disposition: "merchandise_sale",
+        effectType: "sale",
+        kind: "outbound",
+        movementType: "fulfillment",
+        occurrenceAt: occurredAt,
+        onlineOrderId: order._id,
+        organizationId: store.organizationId,
+        productId: orderItem.productId,
+        productSkuId: orderItem.productSkuId,
+        quantity: orderItem.quantity,
+        reasonCode: "online_order_item_ready",
+        sellableQuantityDelta: 0,
+        sourceDomain: "storefront",
+        sourceId: String(order._id),
+        sourceLineId: String(orderItem._id),
+        sourceType: "online_order_item",
+        storeId: order.storeId,
       });
       await scheduleCatalogSummaryDirtyMarker(ctx, order.storeId);
     }
@@ -85,16 +105,51 @@ const updateOnlineOrderItem = async (
 
     if (!productSku) return;
 
-    await ctx.db.patch("productSku", productSku._id, {
-      inventoryCount: productSku.inventoryCount + orderItem.quantity,
-    });
-
     const order = await ctx.db.get("onlineOrder", orderItem.orderId);
     if (order) {
-      await recordOnlineOrderRestockMovement(ctx, {
-        item: orderItem,
-        order,
+      const store = await ctx.db.get("store", order.storeId);
+      if (!store?.organizationId) {
+        throw new Error("Online order organization could not be resolved.");
+      }
+      const originalEffect = await ctx.db
+        .query("reportingInventoryEffect")
+        .withIndex("by_storeId_sourceDomain_businessEventKey", (q) =>
+          q
+            .eq("storeId", order.storeId)
+            .eq("sourceDomain", "storefront")
+            .eq(
+              "businessEventKey",
+              `storefront:${order._id}:line:${orderItem._id}:fulfillment`,
+            ),
+        )
+        .first();
+      await applyCommerceInventoryEffectWithCtx(ctx, {
+        activityType: "stock_restock",
+        businessEventKey: `storefront:${order._id}:line:${orderItem._id}:unreadied`,
+        completeness: "partial",
+        contentFingerprint: `storefront-unready-inventory-v1:${order._id}:${orderItem._id}:${orderItem.quantity}`,
+        effectType: "return",
+        financialContribution: "none",
+        kind: "return",
+        movementType: "restock",
+        occurrenceAt: Date.now(),
+        onlineOrderId: order._id,
+        organizationId: store.organizationId,
+        originalBasis:
+          originalEffect
+            ? outboundBasisFromEffect(originalEffect, orderItem.quantity) ??
+              undefined
+            : undefined,
+        productId: orderItem.productId,
+        productSkuId: orderItem.productSkuId,
+        quantity: orderItem.quantity,
         reasonCode: "online_order_item_unreadied",
+        sellableQuantityDelta: 0,
+        sourceDomain: "storefront",
+        sourceId: String(order._id),
+        sourceLineId: String(orderItem._id),
+        sourceType: "online_order_item",
+        storeId: order.storeId,
       });
       await scheduleCatalogSummaryDirtyMarker(ctx, order.storeId);
     }

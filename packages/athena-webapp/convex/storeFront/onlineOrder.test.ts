@@ -98,4 +98,38 @@ describe("online order lifecycle workflow tracing", () => {
     );
     expect(source).toContain("traceId: traceSeed.trace.traceId");
   });
+
+  it("recognizes first fulfillment and finalized refunds through reporting ingress", () => {
+    const source = getSource("./onlineOrder.ts");
+    const paymentSource = getSource("./payment.ts");
+
+    expect(source).toContain("appendReportingIngressWithCtx(ctx, {");
+    expect(source).toContain('kind: "storefront_fulfillment"');
+    expect(source).toContain('sourceEventType: "storefront_fulfilled"');
+    expect(source).toContain('kind: "storefront_refund"');
+    expect(source).toContain("refundId: args.refundId");
+    expect(source).toContain(
+      'sourceEventType: "storefront_refund_finalized"',
+    );
+    expect(paymentSource).toContain(
+      "onlineOrderItemIds: args.onlineOrderItemIds",
+    );
+  });
+
+  it("attributes finalized refund payments only to the selected SKU lines", () => {
+    const source = getSource("./onlineOrder.ts");
+    const itemValidationIndex = source.indexOf(
+      'throw new Error("Refund item could not be found for this order.")',
+    );
+    const allocationIndex = source.indexOf(
+      "const paymentAllocation = await recordPaymentAllocationWithCtx",
+    );
+
+    expect(itemValidationIndex).toBeGreaterThan(-1);
+    expect(allocationIndex).toBeGreaterThan(itemValidationIndex);
+    expect(source).toContain(
+      "selectedRefundItems.map((item) => item.productSkuId)",
+    );
+    expect(source).toContain("evidenceProductSkuIds: [");
+  });
 });

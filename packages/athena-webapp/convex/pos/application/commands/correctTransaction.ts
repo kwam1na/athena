@@ -12,8 +12,10 @@ import { recordOperationalEventWithCtx } from "../../../operations/operationalEv
 import { correctSameAmountSinglePaymentAllocationWithCtx } from "../../../operations/paymentAllocations";
 import {
   getPosTransactionById,
+  getStoreById,
   patchPosTransaction,
 } from "../../infrastructure/repositories/transactionRepository";
+import { appendReportingIngressWithCtx } from "../../../reporting/ingress";
 
 type CorrectionActor = {
   actorUserId?: Id<"athenaUser">;
@@ -395,6 +397,54 @@ async function applyPaymentMethodCorrection(
     registerSessionId: args.transaction.registerSessionId,
     posTransactionId: args.transaction._id,
   });
+
+  const store = await getStoreById(ctx, args.transaction.storeId);
+  if (store?.organizationId && event?._id) {
+    const currencyCode = store.currency?.trim().toUpperCase();
+    await appendReportingIngressWithCtx(ctx, {
+      acceptedAt: event.createdAt,
+      adapterVersion: 1,
+      businessEventKey: `pos:${args.transaction._id}:correction:${event._id}`,
+      contentFingerprint: [
+        "pos-payment-method-correction-v1",
+        String(args.transaction._id),
+        String(event._id),
+        payment.method,
+        args.paymentMethod,
+        String(payment.amount),
+      ].join(":"),
+      correctedSettlementMethod: args.paymentMethod,
+      ...(currencyCode
+        ? { currencyCode, currencyMinorUnitScale: 2 }
+        : {}),
+      materialFields: ["amountMinor", "occurrenceAt", "storeId"],
+      occurredAt: event.createdAt,
+      organizationId: store.organizationId,
+      priorSettlementMethod: payment.method,
+      quantity: 0,
+      settlementAmountMinor: 0,
+      sourceDomain: "pos",
+      sourceEventType: "pos_settlement_method_reclassified",
+      sourceReferences: [
+        {
+          relation: "corrects",
+          sourceId: String(args.transaction._id),
+          sourceType: "pos_transaction",
+        },
+        {
+          relation: "supports",
+          sourceId: String(correctedAllocation._id),
+          sourceType: "payment_allocation",
+        },
+        {
+          relation: "supports",
+          sourceId: String(event._id),
+          sourceType: "operational_event",
+        },
+      ],
+      storeId: args.transaction.storeId,
+    });
+  }
 
   return {
     transactionId: args.transaction._id,

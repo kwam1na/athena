@@ -23,11 +23,16 @@ import {
 import { repairArchivedPendingCheckoutReviewWork } from "../pos/application/commands/pendingCheckoutReviewWorkLifecycle";
 
 const mocks = vi.hoisted(() => ({
+  applyInventoryEffectWithCtx: vi.fn(),
   refreshProductSkuSearchForProduct: vi.fn(),
   requireProductSkuSearchReadAccess: vi.fn(),
   requireStoreFullAdminAccess: vi.fn(),
   removeProductSkuSearchProjection: vi.fn(),
   upsertProductSkuSearchProjection: vi.fn(),
+}));
+
+vi.mock("../reporting/inventory/effects", () => ({
+  applyInventoryEffectWithCtx: mocks.applyInventoryEffectWithCtx,
 }));
 
 vi.mock("../stockOps/access", () => ({
@@ -64,8 +69,9 @@ function getHandler(definition: unknown) {
 }
 
 function getTestScheduler(ctx: QueryCtx | MutationCtx) {
-  return (ctx as unknown as { scheduler: { runAfter: ReturnType<typeof vi.fn> } })
-    .scheduler;
+  return (
+    ctx as unknown as { scheduler: { runAfter: ReturnType<typeof vi.fn> } }
+  ).scheduler;
 }
 
 function pendingCheckoutEvidence() {
@@ -157,7 +163,8 @@ function createSkuMutationCtx(seed: Partial<Record<TableName, Row[]>>) {
     catalogSummary: seed.catalogSummary?.length ?? 0,
     category: 0,
     inventoryHold: seed.inventoryHold?.length ?? 0,
-    inventoryImportProvisionalSku: seed.inventoryImportProvisionalSku?.length ?? 0,
+    inventoryImportProvisionalSku:
+      seed.inventoryImportProvisionalSku?.length ?? 0,
     operationalEvent: seed.operationalEvent?.length ?? 0,
     operationalWorkItem: seed.operationalWorkItem?.length ?? 0,
     posPendingCheckoutItem: seed.posPendingCheckoutItem?.length ?? 0,
@@ -181,7 +188,10 @@ function createSkuMutationCtx(seed: Partial<Record<TableName, Row[]>>) {
       first: async () => matches[0] ?? null,
       collect: async () => matches,
       take: async (count: number) => matches.slice(0, count),
-      paginate: async (paginationOpts: { cursor: string | null; numItems: number }) => {
+      paginate: async (paginationOpts: {
+        cursor: string | null;
+        numItems: number;
+      }) => {
         const start = paginationOpts.cursor ? Number(paginationOpts.cursor) : 0;
         const page = matches.slice(start, start + paginationOpts.numItems);
         const next = start + paginationOpts.numItems;
@@ -338,6 +348,25 @@ function createProductsQueryCtx(seed: Partial<Record<TableName, Row[]>>) {
 
 describe("inventory SKU generation", () => {
   beforeEach(() => {
+    mocks.applyInventoryEffectWithCtx.mockReset();
+    mocks.applyInventoryEffectWithCtx.mockImplementation(
+      async (
+        ctx: MutationCtx,
+        args: {
+          compatibilityBalance: {
+            onHandQuantity: number;
+            sellableQuantity: number;
+          };
+          productSkuId: Id<"productSku">;
+        },
+      ) => {
+        await ctx.db.patch("productSku", args.productSkuId, {
+          inventoryCount: args.compatibilityBalance.onHandQuantity,
+          quantityAvailable: args.compatibilityBalance.sellableQuantity,
+        });
+        return { disposition: "inserted", mode: "compatibility_shadow" };
+      },
+    );
     mocks.refreshProductSkuSearchForProduct.mockReset();
     mocks.removeProductSkuSearchProjection.mockReset();
     mocks.requireProductSkuSearchReadAccess.mockReset();
@@ -368,6 +397,21 @@ describe("inventory SKU generation", () => {
 
     expect(result.sku).toMatch(/^[A-Z0-9]+-[A-Z0-9]+-[A-Z0-9]+$/);
     expect(result.sku).not.toBe("TEMP_SKU");
+    expect(mocks.applyInventoryEffectWithCtx).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        businessEventKey: expect.stringMatching(
+          /^product_sku:productSku\d+:opening_stock$/,
+        ),
+        physicalQuantityDelta: 1,
+        sellableQuantityDelta: 1,
+        valuation: expect.objectContaining({
+          costBasis: { kind: "uncosted" },
+          kind: "inbound",
+          quantity: 1,
+        }),
+      }),
+    );
     expect(result.sku).not.toBe("   ");
     expect(Array.from(tables.productSku.values())[0].sku).toBe(result.sku);
     expect(mocks.upsertProductSkuSearchProjection).toHaveBeenCalledWith(
@@ -427,6 +471,76 @@ describe("inventory SKU generation", () => {
       needsRefresh: false,
       productCount: 1,
       storeId: "storezzzz",
+    });
+  });
+
+  it("records legitimate zero opening cost as known inventory", async () => {
+    const { ctx, tables } = createSkuMutationCtx({
+      product: [
+        {
+          _id: "product001",
+          currency: "GHS",
+          organizationId: "org001",
+          storeId: "storezzzz",
+        },
+      ],
+    });
+
+    await getHandler(createSku)(ctx, {
+      attributes: {},
+      images: [],
+      inventoryCount: 2,
+      price: 1000,
+      productId: "product001" as Id<"product">,
+      quantityAvailable: 2,
+      storeId: "storezzzz" as Id<"store">,
+      unitCost: 0,
+    });
+
+    expect(mocks.applyInventoryEffectWithCtx).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        physicalQuantityDelta: 2,
+        valuation: expect.objectContaining({
+          costBasis: expect.objectContaining({ kind: "known", unitCost: 0 }),
+          kind: "inbound",
+          quantity: 2,
+        }),
+      }),
+    );
+    expect(Array.from(tables.productSku.values())[0]).toMatchObject({
+      unitCost: 0,
+    });
+  });
+
+  it("keeps generic SKU metadata edits from changing inventory or cost", async () => {
+    const { ctx, tables } = createSkuMutationCtx({
+      productSku: [
+        {
+          _id: "sku001",
+          inventoryCount: 5,
+          productId: "product001",
+          quantityAvailable: 4,
+          sku: "SKU-1",
+          storeId: "storezzzz",
+          unitCost: 250,
+        },
+      ],
+    });
+
+    await getHandler(updateSku)(ctx, {
+      id: "sku001" as Id<"productSku">,
+      images: ["updated.webp"],
+      inventoryCount: 99,
+      quantityAvailable: 99,
+      unitCost: 999,
+    });
+
+    expect(tables.productSku.get("sku001")).toMatchObject({
+      images: ["updated.webp"],
+      inventoryCount: 5,
+      quantityAvailable: 4,
+      unitCost: 250,
     });
   });
 
@@ -981,15 +1095,32 @@ describe("product archiving", () => {
       candidates: [],
       repaired: [],
       skipped: [
-        { reason: "missing_pending_checkout_item_id", workItemId: "work-missing-metadata" },
-        { reason: "invalid_pending_checkout_item_id", workItemId: "work-invalid-pending" },
-        { reason: "pending_checkout_item_not_actionable", workItemId: "work-approved" },
-        { reason: "missing_provisional_product", workItemId: "work-missing-product" },
-        { reason: "provisional_product_not_archived", workItemId: "work-live-product" },
+        {
+          reason: "missing_pending_checkout_item_id",
+          workItemId: "work-missing-metadata",
+        },
+        {
+          reason: "invalid_pending_checkout_item_id",
+          workItemId: "work-invalid-pending",
+        },
+        {
+          reason: "pending_checkout_item_not_actionable",
+          workItemId: "work-approved",
+        },
+        {
+          reason: "missing_provisional_product",
+          workItemId: "work-missing-product",
+        },
+        {
+          reason: "provisional_product_not_archived",
+          workItemId: "work-live-product",
+        },
       ],
     });
     expect(
-      Array.from(tables.operationalWorkItem.values()).map((workItem) => workItem.status),
+      Array.from(tables.operationalWorkItem.values()).map(
+        (workItem) => workItem.status,
+      ),
     ).toEqual(["open", "open", "open", "open", "open"]);
   });
 
@@ -1104,7 +1235,9 @@ describe("product archiving", () => {
       ],
     });
     expect(
-      Array.from(tables.operationalWorkItem.values()).map((workItem) => workItem.status),
+      Array.from(tables.operationalWorkItem.values()).map(
+        (workItem) => workItem.status,
+      ),
     ).toEqual(["in_progress", "open", "open", "open", "open"]);
   });
 
@@ -1303,7 +1436,9 @@ describe("product archiving", () => {
       subcategoryId: "subcategory-protectant" as Id<"subcategory">,
     });
 
-    expect(tables.inventoryImportProvisionalSku.get("provisional001")).toMatchObject({
+    expect(
+      tables.inventoryImportProvisionalSku.get("provisional001"),
+    ).toMatchObject({
       status: "finalized",
       updatedAt: expect.any(Number),
     });
@@ -1535,7 +1670,9 @@ describe("product archiving", () => {
       "Catalog setup required. Assign an Athena category and subcategory before saving.",
     );
 
-    expect(tables.inventoryImportProvisionalSku.get("provisional001")).toMatchObject({
+    expect(
+      tables.inventoryImportProvisionalSku.get("provisional001"),
+    ).toMatchObject({
       status: "active",
     });
     expect(tables.operationalWorkItem.get("taxonomy-work-001")).toMatchObject({
@@ -1618,7 +1755,9 @@ describe("product archiving", () => {
       name: "Quick & Go Bonding Glue",
     });
 
-    expect(tables.inventoryImportProvisionalSku.get("provisional001")).toMatchObject({
+    expect(
+      tables.inventoryImportProvisionalSku.get("provisional001"),
+    ).toMatchObject({
       status: "active",
     });
     expect(tables.operationalWorkItem.get("taxonomy-work-001")).toMatchObject({

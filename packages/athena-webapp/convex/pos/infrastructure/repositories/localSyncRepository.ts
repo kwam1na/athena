@@ -14,8 +14,10 @@ import {
   buildServiceCase,
   buildServiceCaseLineItem,
 } from "../../../serviceOps/serviceCases";
-import { summarizePaymentAllocations } from "../../../operations/paymentAllocations";
-import { recordInventoryMovementWithDispositionWithCtx } from "../../../operations/inventoryMovements";
+import {
+  recordPaymentAllocationWithCtx,
+  summarizePaymentAllocations,
+} from "../../../operations/paymentAllocations";
 import { markCatalogSummaryNeedsRefresh } from "../../../inventory/catalogSummary";
 import { createPosSessionTraceRecorder } from "../../application/commands/posSessionTracing";
 import {
@@ -35,6 +37,8 @@ import type {
 } from "../../application/sync/types";
 import { listRegisterSessionCloseoutHolds } from "../../application/sync/registerSessionCloseoutHolds";
 import { validatePosLocalStaffProofWithCtx } from "../../application/sync/staffProofValidation";
+import { appendReportingIngressWithCtx } from "../../../reporting/ingress";
+import { applyCommerceInventoryEffectWithCtx } from "../../../reporting/inventory/commerceEffects";
 
 function omitUndefined<T extends Record<string, unknown>>(value: T) {
   return Object.fromEntries(
@@ -81,21 +85,6 @@ export function createConvexLocalSyncRepository(
   ctx: MutationCtx,
 ): LocalSyncRepository {
   const catalogSummaryDirtyStoreIds = new Set<Id<"store">>();
-  const markCatalogSummaryDirtyForSkuPatch = async (
-    productSkuId: Id<"productSku">,
-    patch: Partial<Record<string, unknown>>,
-  ) => {
-    if (
-      patch.inventoryCount === undefined &&
-      patch.images === undefined &&
-      patch.price === undefined
-    ) {
-      return;
-    }
-
-    const sku = await ctx.db.get("productSku", productSkuId);
-    if (sku) catalogSummaryDirtyStoreIds.add(sku.storeId);
-  };
 
   const normalizeCloudId = <TableName extends TableNames>(
     tableName: TableName,
@@ -146,6 +135,9 @@ export function createConvexLocalSyncRepository(
   };
 
   return {
+    appendReportingIngress(input) {
+      return appendReportingIngressWithCtx(ctx, input);
+    },
     getTerminal(terminalId) {
       return ctx.db.get("posTerminal", terminalId);
     },
@@ -1050,9 +1042,10 @@ export function createConvexLocalSyncRepository(
     async createTransactionServiceLine(input) {
       return ctx.db.insert("posTransactionServiceLine", input);
     },
-    async patchProductSku(productSkuId, patch) {
-      await markCatalogSummaryDirtyForSkuPatch(productSkuId, patch);
-      await ctx.db.patch("productSku", productSkuId, patch);
+    async applyCommerceInventoryEffect(input) {
+      const result = await applyCommerceInventoryEffectWithCtx(ctx, input);
+      catalogSummaryDirtyStoreIds.add(input.storeId);
+      return result.disposition;
     },
     async flushCatalogSummaryRefreshes() {
       for (const storeId of catalogSummaryDirtyStoreIds) {
@@ -1061,26 +1054,56 @@ export function createConvexLocalSyncRepository(
       catalogSummaryDirtyStoreIds.clear();
     },
     async recordSaleInventoryMovement(input) {
-      const result = await recordInventoryMovementWithDispositionWithCtx(ctx, {
+      if (!input.organizationId) {
+        throw new Error("Offline POS sale organization could not be resolved.");
+      }
+      const result = await applyCommerceInventoryEffectWithCtx(ctx, {
+        activityType: "stock_sale",
         actorStaffProfileId: input.staffProfileId,
+        businessEventKey: `pos:${input.posTransactionId}:sku:${input.productSkuId}:sale`,
+        completeness: "partial",
+        contentFingerprint: `offline-pos-sale-inventory-v1:${input.posTransactionId}:${input.productSkuId}:${input.quantity}`,
         customerProfileId: input.customerProfileId,
+        disposition: "merchandise_sale",
+        effectType: "sale",
+        kind: "outbound",
         movementType: "sale",
         notes: `POS sale ${input.transactionNumber}`,
         organizationId: input.organizationId,
         posTransactionId: input.posTransactionId,
         productId: input.productId,
         productSkuId: input.productSkuId,
-        quantityDelta: -input.quantity,
+        occurrenceAt: input.occurrenceAt,
+        recordedAt: input.recordedAt,
+        quantity: input.quantity,
         reasonCode: "pos_sale",
         registerSessionId: input.registerSessionId,
         sourceId: input.posTransactionId,
+        sourceDomain: "pos",
+        sourceLineId: String(input.productSkuId),
         sourceType: "posTransaction",
+        sellableQuantityDelta: -input.quantity,
         storeId: input.storeId,
       });
       return result.disposition;
     },
+    async getReportingInventoryEffectByBusinessEventKey(input) {
+      return ctx.db
+        .query("reportingInventoryEffect")
+        .withIndex("by_storeId_sourceDomain_businessEventKey", (q) =>
+          q
+            .eq("storeId", input.storeId)
+            .eq("sourceDomain", input.sourceDomain)
+            .eq("businessEventKey", input.businessEventKey),
+        )
+        .first();
+    },
     async createPaymentAllocation(input) {
-      return ctx.db.insert("paymentAllocation", input);
+      const allocation = await recordPaymentAllocationWithCtx(ctx, input);
+      if (!allocation) {
+        throw new Error("Payment allocation was not recorded.");
+      }
+      return allocation._id;
     },
     async createOperationalEvent(input) {
       return ctx.db.insert(

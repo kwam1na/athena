@@ -1,0 +1,1121 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Implementation plan for Athena's Reports foundation." />
+    <link rel="icon" href="data:," />
+    <title>Plan: Athena Reports Foundation</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --canvas: #eef1ef; --paper: #fff; --ink: #17211c; --muted: #5b6861;
+        --line: #d5ddd8; --green: #12664e; --green-soft: #e3f1eb;
+        --blue: #245e89; --blue-soft: #e8f1f7; --gold: #88611c; --gold-soft: #f6eedc;
+        --red: #9a4138; --red-soft: #f8e9e6; --shadow: 0 18px 52px rgba(20, 32, 26, .1);
+      }
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      body { margin: 0; background: var(--canvas); color: var(--ink); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.58; }
+      a { color: var(--blue); text-underline-offset: 3px; }
+      .shell { width: min(1380px, calc(100% - 28px)); margin: 22px auto 56px; background: var(--paper); border: 1px solid var(--line); box-shadow: var(--shadow); }
+      .hero { padding: 46px 56px 34px; border-bottom: 1px solid var(--line); }
+      .eyebrow { margin: 0 0 10px; color: var(--green); font-size: .78rem; font-weight: 800; text-transform: uppercase; }
+      .hero h1 { margin: 0; max-width: 980px; font-size: clamp(2.15rem, 4.8vw, 4.5rem); line-height: 1.04; letter-spacing: 0; }
+      .hero > p:not(.eyebrow) { max-width: 920px; margin: 20px 0 0; color: var(--muted); font-size: 1.08rem; }
+      .pills { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 24px; }
+      .pill { padding: 6px 10px; border: 1px solid #9ec1b3; border-radius: 4px; background: var(--green-soft); color: #164c3d; font-size: .82rem; font-weight: 750; }
+      .pill.pending { border-color: #d0b579; background: var(--gold-soft); color: #64450f; }
+      .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-bottom: 1px solid var(--line); background: #f8faf8; }
+      .stat { padding: 17px 22px; border-right: 1px solid var(--line); }
+      .stat:last-child { border-right: 0; }
+      .stat strong { display: block; font-size: 1.45rem; }
+      .stat span { color: var(--muted); font-size: .82rem; }
+      .unit-jump { display: flex; gap: 7px; padding: 12px 18px; border-bottom: 1px solid var(--line); background: var(--blue-soft); }
+      .unit-jump strong { margin-right: 5px; color: #36566f; font-size: .8rem; align-self: center; text-transform: uppercase; }
+      .unit-jump a { display: inline-flex; min-width: 34px; min-height: 32px; align-items: center; justify-content: center; border: 1px solid #abc1d2; border-radius: 4px; background: #fff; color: #1d4e72; font-weight: 800; text-decoration: none; }
+      .layout { display: grid; grid-template-columns: 250px minmax(0, 1fr); align-items: start; }
+      nav { position: sticky; top: 0; max-height: 100vh; overflow: auto; padding: 22px 18px; border-right: 1px solid var(--line); }
+      nav strong { display: block; margin: 0 0 12px 8px; color: var(--muted); font-size: .78rem; text-transform: uppercase; }
+      nav a { display: block; padding: 6px 8px; border-left: 2px solid transparent; color: var(--ink); font-size: .81rem; text-decoration: none; }
+      nav a:hover { color: var(--green); border-color: var(--green); background: #f4f8f6; }
+      main { min-width: 0; padding: 10px 54px 48px; }
+      main > h1 { display: none; }
+      h1, h2, h3 { letter-spacing: 0; line-height: 1.2; }
+      h2 { margin: 0 -54px 22px; padding: 34px 54px 16px; border-top: 1px solid var(--line); font-size: 1.65rem; scroll-margin-top: 16px; }
+      main > h2:first-of-type { border-top: 0; }
+      h3 { margin: 30px 0 12px; color: #26352d; font-size: 1.1rem; scroll-margin-top: 16px; }
+      h3.unit { display: flex; gap: 12px; align-items: baseline; margin: 42px -16px 18px; padding: 17px 16px; border: 1px solid #9fc2b4; border-radius: 5px; background: var(--green-soft); font-size: 1.18rem; }
+      h3.unit span { flex: 0 0 auto; color: var(--green); font-size: .82rem; font-weight: 850; }
+      li.unit-wrap { list-style: none; margin-left: -1.35rem; }
+      .unit-title { display: flex; gap: 12px; align-items: baseline; margin: 42px -16px 18px; padding: 17px 16px; border: 1px solid #9fc2b4; border-radius: 5px; background: var(--green-soft); font-size: 1.18rem; }
+      .unit-title span { flex: 0 0 auto; color: var(--green); font-size: .82rem; font-weight: 850; }
+      p { margin: 0 0 14px; }
+      ul, ol { padding-left: 1.35rem; }
+      li { margin: 8px 0; }
+      code { overflow-wrap: anywhere; color: #263d32; font-family: "SFMono-Regular", Consolas, monospace; font-size: .89em; }
+      pre { overflow-x: auto; padding: 17px; border: 1px solid var(--line); border-radius: 5px; background: #f6f8f7; font-size: .84rem; line-height: 1.48; }
+      pre code { overflow-wrap: normal; }
+      table { width: 100%; margin: 18px 0 24px; border-collapse: collapse; font-size: .9rem; }
+      th, td { padding: 11px 13px; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+      th { background: #f2f6f3; }
+      blockquote { margin: 18px 0; padding: 14px 18px; border-left: 4px solid var(--gold); background: var(--gold-soft); }
+      main li:has(> strong:first-child) { padding: 8px 11px; border-left: 3px solid #b5c8be; background: #fbfcfb; }
+      .source { display: inline-flex; margin-top: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 4px; background: #fff; font-weight: 700; text-decoration: none; }
+      .footer { padding: 23px 54px; border-top: 1px solid var(--line); background: #f8faf8; color: var(--muted); }
+      @media (max-width: 960px) {
+        .layout { display: block; }
+        nav { position: static; max-height: none; display: flex; gap: 5px; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+        nav strong { display: none; }
+        nav a { flex: 0 0 auto; border-left: 0; border-bottom: 2px solid transparent; }
+        main { padding-inline: 28px; }
+        h2 { margin-inline: -28px; padding-inline: 28px; }
+      }
+      @media (max-width: 680px) {
+        .shell { width: 100%; margin: 0; border: 0; }
+        .hero { padding: 32px 22px 27px; }
+        .stats { grid-template-columns: repeat(2, 1fr); }
+        .stat:nth-child(2) { border-right: 0; }
+        .stat:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
+        .unit-jump { overflow-x: auto; }
+        main { padding-inline: 20px; }
+        h2 { margin-inline: -20px; padding-inline: 20px; }
+        h3.unit { margin-inline: 0; align-items: flex-start; }
+        table { display: block; overflow-x: auto; }
+        .footer { padding-inline: 22px; }
+      }
+      @media print { body { background: #fff; } .shell { width: 100%; margin: 0; border: 0; box-shadow: none; } nav, .unit-jump { display: none; } .layout { display: block; } }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <header class="hero">
+        <p class="eyebrow">Athena · Implementation Plan · 9 July 2026</p>
+        <h1>Build the Reports foundation</h1>
+        <p>Atomic source truth, moving-average valuation, canonical commerce facts, verified projections, and reversible store-scoped activation.</p>
+        <div class="pills">
+          <span class="pill">Feature plan</span><span class="pill">Status: active</span>
+          <span class="pill ">Unanimously aligned</span>
+          <span class="pill">Foundation only</span>
+        </div>
+      </header>
+      <div class="stats">
+        <div class="stat"><strong>8</strong><span>implementation units</span></div>
+        <div class="stat"><strong>4</strong><span>delivery phases</span></div>
+        <div class="stat"><strong>88</strong><span>origin requirements</span></div>
+        <div class="stat"><strong>10x</strong><span>production scale target</span></div>
+      </div>
+      <div class="unit-jump"><strong>Units</strong><a href="#u1">U1</a><a href="#u2">U2</a><a href="#u3">U3</a><a href="#u4">U4</a><a href="#u5">U5</a><a href="#u6">U6</a><a href="#u7">U7</a><a href="#u8">U8</a></div>
+      <div class="layout">
+        <nav aria-label="Plan sections"><strong>Contents</strong><a href="#summary">Summary</a>
+<a href="#problem-frame">Problem Frame</a>
+<a href="#requirements-trace">Requirements Trace</a>
+<a href="#scope-boundaries">Scope Boundaries</a>
+<a href="#context-amp-research">Context &amp; Research</a>
+<a href="#key-technical-decisions">Key Technical Decisions</a>
+<a href="#open-questions">Open Questions</a>
+<a href="#output-structure">Output Structure</a>
+<a href="#high-level-technical-design">High-Level Technical Design</a>
+<a href="#implementation-units">Implementation Units</a>
+<a href="#phased-delivery">Phased Delivery</a>
+<a href="#system-wide-impact">System-Wide Impact</a>
+<a href="#alternative-approaches-considered">Alternative Approaches Considered</a>
+<a href="#risks-amp-mitigations">Risks &amp; Mitigations</a>
+<a href="#documentation-and-operational-notes">Documentation and Operational Notes</a>
+<a href="#success-metrics">Success Metrics</a>
+<a href="#reviewer-alignment">Reviewer Alignment</a>
+<a href="#sources-amp-references">Sources &amp; References</a></nav>
+        <main><h1 id="feat-build-the-reports-foundation">feat: Build the Reports foundation</h1>
+<h2 id="summary">Summary</h2>
+<p>Build a dedicated <code>convex/reporting/</code> domain that captures versioned commerce facts, makes inventory and valuation effects atomic with their owning commands, and derives bounded store-day and SKU projections through a verified activation lifecycle. Deliver the foundation through widen-migrate-shadow-activate stages so checkout, storefront, service, receiving, and Daily Close behavior remain operationally unchanged while Reports gains a trustworthy read contract.</p>
+<hr>
+<h2 id="problem-frame">Problem Frame</h2>
+<p>Athena currently has useful operational records and read models, but no shared recognition, valuation, completeness, or projection contract capable of supporting the approved Reports workspace. Existing queries recompute different meanings, historical cost can become false precision, stock changes do not all share one evidence boundary, and closed-day truth can diverge from live state without explicit reconciliation.</p>
+<p>The aligned foundation requirements define the necessary trust contract in <code>docs/brainstorms/2026-07-09-reports-foundation-requirements.md</code>. This plan defines how to introduce it without making reporting success part of an operational command&#39;s success boundary.</p>
+<hr>
+<h2 id="requirements-trace">Requirements Trace</h2>
+<p>All origin requirements <code>F-R1</code> through <code>F-R88</code> remain binding. The implementation units group them into these delivery contracts:</p>
+<ul>
+<li><strong>P-R1 — Access and minimization:</strong> Enforce backend full-admin/store isolation, normalized identity lookup, safe source hydration, and minimized diagnostic data (<code>F-R1</code>-<code>F-R5</code>, <code>F-R81</code>-<code>F-R82</code>).</li>
+<li><strong>P-R2 — Canonical commerce:</strong> Preserve unique business identity, revenue/settlement separation, typed recognition, immutable lines, corrections, currency, and occurrence time (<code>F-R6</code>-<code>F-R20</code>).</li>
+<li><strong>P-R3 — Authoritative inventory:</strong> Make physical, availability, movement, canonical SKU, and balance effects atomic and reconcilable (<code>F-R21</code>-<code>F-R29</code>).</li>
+<li><strong>P-R4 — Moving-average valuation:</strong> Preserve costed, uncosted, deficit, pool, outbound basis, return, and correction behavior without blocking trade (<code>F-R30</code>-<code>F-R42</code>).</li>
+<li><strong>P-R5 — Operating periods and close lineage:</strong> Resolve periods from Store Schedule and preserve immutable close evidence with post-close deltas (<code>F-R43</code>-<code>F-R51</code>).</li>
+<li><strong>P-R6 — Versioned bounded projections:</strong> Version metric contracts, derive reusable projections, paginate evidence, and prove rebuild parity (<code>F-R52</code>-<code>F-R63</code>).</li>
+<li><strong>P-R7 — Completeness and health:</strong> Expose per-metric/source coverage, failure states, five-minute cloud freshness, and owned health signals (<code>F-R64</code>-<code>F-R70</code>).</li>
+<li><strong>P-R8 — Cutover and rollout:</strong> Preview and accept baselines, backfill without invention, shadow and reconcile, then activate or roll back per store (<code>F-R71</code>-<code>F-R80</code>).</li>
+<li><strong>P-R9 — Merge-grade proof:</strong> Cover contracts, auth, replay, valuation, scale, deployment, and recovery in Athena&#39;s validation harness (<code>F-R81</code>-<code>F-R88</code>).</li>
+</ul>
+<p><strong>Origin acceptance examples:</strong> <code>F-AE1</code>-<code>F-AE12</code> from the foundation requirements and <code>AE1</code>-<code>AE10</code> from the parent Reports workspace requirements.</p>
+<hr>
+<h2 id="scope-boundaries">Scope Boundaries</h2>
+<ul>
+<li>This plan builds the reporting foundation and public read contracts. It does not implement the Reports workspace UI.</li>
+<li>It fixes server-side authorization for the existing storefront Analytics summary because that disclosure gap crosses the new Reports access boundary.</li>
+<li>It does not add service labor or overhead cost, organization rollups, cross-store comparison, FIFO/LIFO, true stock age, landed cost, or general accounting.</li>
+<li>It does not turn workflow traces, Analytics events, Store Pulse, or Daily Operations into the financial source of truth.</li>
+<li>It does not make projection freshness part of checkout, online order, service, receiving, or Daily Close success.</li>
+<li>It does not estimate historical cost, currency, SKU attribution, or movement evidence to increase apparent coverage.</li>
+<li>It does not perform unrelated cleanup in source modules beyond the changes needed to route authoritative effects and preserve behavior.</li>
+</ul>
+<h3 id="deferred-to-follow-up-work">Deferred to Follow-Up Work</h3>
+<ul>
+<li>Reports workspace navigation, overview, SKU tables, signal presentation, and storefront engagement placement: a follow-up feature plan against the verified public reporting contract.</li>
+<li>Service labor and delivery-cost valuation: a later cost-kind extension after Athena records trustworthy service-delivery cost.</li>
+<li>Organization-wide reporting: a later projection/authorization layer after store-scoped facts reconcile in production.</li>
+<li>Full-admin recovery UI: detailed maintenance remains deployment/support owned initially; Reports exposes concise health and evidence status only.</li>
+</ul>
+<hr>
+<h2 id="context-amp-research">Context &amp; Research</h2>
+<h3 id="relevant-code-and-patterns">Relevant Code and Patterns</h3>
+<ul>
+<li><code>packages/athena-webapp/convex/schema.ts</code> is the schema and index authority; reporting tables must use exact compound indexes and separate unbounded child rows.</li>
+<li><code>packages/athena-webapp/convex/operations/inventoryMovements.ts</code> and <code>packages/athena-webapp/convex/operations/skuActivity.ts</code> provide movement and source-evidence precedents but currently do not own atomic balance/valuation changes.</li>
+<li><code>packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.ts</code> preserves local occurrence and source identity; accepted projection is the correct offline reporting boundary.</li>
+<li><code>packages/athena-webapp/convex/schemas/operations/dailyClose.ts</code> preserves immutable close snapshots and source completeness.</li>
+<li><code>packages/athena-webapp/convex/lib/storeScheduleTime.ts</code> is the sole period authority for IANA timezone, effective schedule, DST, exceptions, and cross-midnight windows.</li>
+<li><code>packages/athena-webapp/convex/contextTracking/contextEvents.ts</code> demonstrates versioned, idempotent, source-linked append with conflict detection; reporting must reuse the pattern, not the open-ended payload.</li>
+<li><code>packages/athena-webapp/convex/migrations/backfillStoreSchedules.ts</code> demonstrates cursor-bounded dry-run/apply migration behavior.</li>
+<li><code>packages/athena-webapp/convex/automation/runLedger.ts</code> provides auditable run identity, source subjects, counts, outcome, and error evidence.</li>
+<li><code>packages/athena-webapp/convex/inventory/catalogSummary.ts</code> demonstrates projection repair and dirty-state behavior; Reports needs stronger generation, reconciliation, and activation state.</li>
+<li><code>packages/athena-webapp/convex/stockOps/access.ts</code> provides a full-admin precedent, while <code>packages/athena-webapp/convex/lib/athenaUserAuth.ts</code> needs indexed normalized identity lookup.</li>
+</ul>
+<h3 id="institutional-learnings">Institutional Learnings</h3>
+<ul>
+<li>Preserve accepted POS events and project idempotently; never build a second Reports-specific POS replay path (<code>docs/solutions/architecture/athena-pos-local-first-sync-2026-05-13.md</code>).</li>
+<li>Keep event identity and contract ownership centralized and fail closed on unknown versions (<code>docs/solutions/architecture/athena-pos-local-sync-contract-2026-07-09.md</code>).</li>
+<li>Preserve original sales and model corrections, voids, refunds, and reversals as linked effects (<code>docs/solutions/logic-errors/athena-pos-ledger-safe-corrections-2026-04-30.md</code>).</li>
+<li>Inventory authority belongs inside the owning mutation with source-aware evidence (<code>docs/solutions/logic-errors/athena-sku-activity-traceability-2026-05-13.md</code>).</li>
+<li>Workflow traces are best-effort investigation evidence and cannot replace transactional business facts (<code>docs/solutions/architecture/athena-workflow-investigation-evidence-2026-06-21.md</code>).</li>
+<li>Daily Close history is immutable and superseded through lineage, not recomputation (<code>docs/solutions/logic-errors/athena-daily-close-history-snapshots-2026-05-09.md</code>).</li>
+<li>Materialized projections must ship with freshness, repair, and drift diagnostics (<code>docs/solutions/logic-errors/athena-foundation-sku-search-catalog-summary-2026-06-25.md</code>).</li>
+<li>Overview posture and detail hydration must remain separate and bounded (<code>docs/solutions/performance/athena-convex-read-amplification-2026-06-29.md</code>).</li>
+<li>Public Convex facades should remain narrow while domain logic lives in directly tested sibling modules (<code>docs/solutions/architecture-patterns/athena-convex-facade-preserving-module-split-2026-07-06.md</code>).</li>
+</ul>
+<h3 id="official-convex-constraints">Official Convex Constraints</h3>
+<ul>
+<li>Mutations are atomic, serializable, and automatically retried after optimistic-concurrency conflicts; canonical facts and authoritative inventory effects belong in mutations, not actions. <a href="https://docs.convex.dev/database/advanced/occ">OCC and Atomicity</a></li>
+<li>Scheduling from a mutation is transactional, but scheduled authentication is not propagated and system schedule history is not a durable control plane. <a href="https://docs.convex.dev/scheduling/scheduled-functions">Scheduled Functions</a></li>
+<li>Large writes require bounded batches; migrations should widen, migrate, and narrow. <a href="https://docs.convex.dev/database/writing-data">Writing Data</a>, <a href="https://docs.convex.dev/production/overview">Production Deployment</a></li>
+<li>Evidence reads must use exact indexed pagination and transaction resource limits should be treated as deploy-time constraints. <a href="https://docs.convex.dev/database/pagination">Pagination</a>, <a href="https://docs.convex.dev/production/state/limits">Limits</a></li>
+</ul>
+<h3 id="production-cardinality-snapshot">Production Cardinality Snapshot</h3>
+<p>Read-only production counts captured on 2026-07-09 establish the minimum scale fixtures required by <code>F-R86</code>. No sampled table reached the bounded 10,000-row measurement cap.</p>
+<table>
+<thead>
+<tr>
+<th>Domain table</th>
+<th align="right">Observed rows</th>
+<th align="right">Minimum 10x fixture</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>productSku</code></td>
+<td align="right">1,788</td>
+<td align="right">17,880</td>
+</tr>
+<tr>
+<td><code>posTransaction</code></td>
+<td align="right">654</td>
+<td align="right">6,540</td>
+</tr>
+<tr>
+<td><code>posTransactionItem</code></td>
+<td align="right">1,618</td>
+<td align="right">16,180</td>
+</tr>
+<tr>
+<td><code>onlineOrder</code></td>
+<td align="right">51</td>
+<td align="right">1,000 floor</td>
+</tr>
+<tr>
+<td><code>onlineOrderItem</code></td>
+<td align="right">99</td>
+<td align="right">1,000 floor</td>
+</tr>
+<tr>
+<td><code>serviceCase</code></td>
+<td align="right">0</td>
+<td align="right">1,000 floor</td>
+</tr>
+<tr>
+<td><code>inventoryMovement</code></td>
+<td align="right">983</td>
+<td align="right">9,830</td>
+</tr>
+<tr>
+<td><code>paymentAllocation</code></td>
+<td align="right">664</td>
+<td align="right">6,640</td>
+</tr>
+<tr>
+<td><code>skuActivityEvent</code></td>
+<td align="right">1,121</td>
+<td align="right">11,210</td>
+</tr>
+</tbody></table>
+<p>The observed history spans storefront orders from March 2025 and operational POS/movement history from May 2026 through July 2026. Re-measure before activation if production grows beyond these baselines.</p>
+<hr>
+<h2 id="key-technical-decisions">Key Technical Decisions</h2>
+<ul>
+<li><strong>Dedicated reporting domain:</strong> Create <code>convex/reporting/</code> rather than expanding Store Pulse, Daily Operations, or storefront Analytics. Those remain consumers or adjacent surfaces, not metric owners.</li>
+<li><strong>Two coupled consistency boundaries:</strong> The source transition, typed reporting ingress, and any inline inventory/valuation effect commit atomically inside the owning mutation; canonical commerce facts and expensive projections derive asynchronously from durable ingress and may lag without changing operational success.</li>
+<li><strong>Commerce ingress, inventory inline effects:</strong> Commerce commands append small idempotent ingress/evidence rows and schedule bounded canonicalization. Physical inventory and valuation effects happen inline because reconstructing them later would violate balance authority.</li>
+<li><strong>Explicit signed book position:</strong> Reconciliation uses <code>on-hand quantity - unresolved deficit quantity</code>; oversells remain full physical deltas without creating a negative known cost pool.</li>
+<li><strong>Source-command adapters:</strong> Emit facts from typed business transitions, not later table-state scans. Mutable status rows cannot reconstruct distinct same-value events or original occurrence order reliably.</li>
+<li><strong>Application-owned projections:</strong> Use versioned store-day, SKU-day, current-valuation, and range generations because metric coverage, cost status, close lineage, and evidence are richer than a simple sum/count component.</li>
+<li><strong>Frozen-watermark activation:</strong> A candidate generation captures a cutoff, rebuilds through it, consumes the tail, reconciles at a stable watermark, then atomically replaces the active pointer only if its expected contract/version still matches.</li>
+<li><strong>Widen-migrate-shadow-activate:</strong> Add optional contracts and dual writes first, preview/backfill and shadow projections next, reconcile, then activate store reads. Tightening/removing legacy shapes is follow-up work after production proof.</li>
+<li><strong>Deployment-owned recovery:</strong> Initial backfill, activation, quarantine recovery, and rollback are internal operations with durable actor/run evidence. Public Reports endpoints expose health but not repair mutations.</li>
+<li><strong>Versioned deterministic attention rules:</strong> Initial thresholds and precedence live in a metric-versioned registry. They are reviewable inputs to projections, not UI heuristics, and later changes require candidate-version comparison.</li>
+<li><strong>Test posture:</strong> Novel recognition, period, and valuation math is test-first. Existing source commands receive characterization coverage before their write boundary changes.</li>
+</ul>
+<hr>
+<h2 id="open-questions">Open Questions</h2>
+<h3 id="resolved-during-planning">Resolved During Planning</h3>
+<ul>
+<li><strong>Should reporting facts be reconstructed from existing tables?</strong> No. They are emitted at source command boundaries because mutable records cannot preserve occurrence order, immutable cost, or distinct same-value events.</li>
+<li><strong>Should inventory effects be asynchronous?</strong> No. Balance, movement, availability, and valuation must commit atomically in the owning mutation.</li>
+<li><strong>Should report aggregates update synchronously in checkout?</strong> No. Checkout appends durable ingress/effects and schedules bounded continuation; projection freshness remains observable and repairable.</li>
+<li><strong>How should custom ranges avoid raw scans?</strong> Build a versioned, resumable range generation from daily/SKU facts and return pending/stale state until verified.</li>
+<li><strong>Who activates and repairs projections initially?</strong> Deployment/support automation through internal functions with durable run evidence; no first-release maintenance UI.</li>
+<li><strong>What scale must tests cover?</strong> At least the 10x production snapshot above, with a 1,000-row floor for empty or small domains.</li>
+</ul>
+<h3 id="deferred-to-implementation">Deferred to Implementation</h3>
+<ul>
+<li><strong>Exact batch sizes and transaction headroom:</strong> Start with conservative explicit caps, persist per-run row/read/write counters, and tune from Convex function metrics, logs, and the production cardinality snapshot while keeping every processor bounded.</li>
+<li><strong>Exact retention for superseded generations and sanitized conflicts:</strong> Choose after measuring storage growth; facts and accepted close evidence remain retained, while disposable projection generations may use a documented cleanup policy.</li>
+<li><strong>Exact alert delivery channel:</strong> Reuse Athena&#39;s operational alerting path selected during implementation; threshold state and ownership must exist before activation regardless of delivery channel.</li>
+<li><strong>Final names of narrow helper functions:</strong> Follow surrounding domain conventions without changing the boundaries in this plan.</li>
+</ul>
+<hr>
+<h2 id="output-structure">Output Structure</h2>
+<p>The structure is directional and may be refined during implementation while preserving the listed ownership boundaries.</p>
+<pre><code class="language-text">packages/athena-webapp/
+├── shared/
+│   └── reportingContract.ts
+├── convex/
+│   ├── schemas/reporting/
+│   │   ├── facts.ts
+│   │   ├── inventoryValuation.ts
+│   │   ├── projections.ts
+│   │   ├── maintenance.ts
+│   │   └── index.ts
+│   └── reporting/
+│       ├── access.ts
+│       ├── metricContracts.ts
+│       ├── operatingPeriods.ts
+│       ├── ingress.ts
+│       ├── facts.ts
+│       ├── integrity.ts
+│       ├── inventory/
+│       │   ├── effects.ts
+│       │   └── valuation.ts
+│       ├── sourceAdapters/
+│       ├── projections/
+│       ├── maintenance/
+│       ├── evidence.ts
+│       ├── health.ts
+│       └── public.ts
+</code></pre>
+<hr>
+<h2 id="high-level-technical-design">High-Level Technical Design</h2>
+<blockquote>
+<p>This illustrates the intended approach and is directional guidance for review, not implementation specification. The implementing agent should treat it as context, not code to reproduce.</p>
+</blockquote>
+<pre><code class="language-mermaid">flowchart LR
+  commands[&quot;Owning commands\nPOS · Storefront · Service · Stock&quot;]
+  stock[&quot;Atomic stock + valuation effect&quot;]
+  ingress[&quot;Versioned commerce ingress&quot;]
+  facts[&quot;Canonical reporting facts&quot;]
+  projections[&quot;Candidate projection generation&quot;]
+  verify[&quot;Coverage + zero-unexplained-delta verification&quot;]
+  active[&quot;Active verified generation&quot;]
+  reports[&quot;Full-admin bounded read facade&quot;]
+  evidence[&quot;Paginated source evidence&quot;]
+
+  commands --&gt; stock
+  commands --&gt; ingress
+  stock --&gt; facts
+  ingress --&gt; facts
+  facts --&gt; projections
+  projections --&gt; verify
+  verify --&gt; active
+  active --&gt; reports
+  facts --&gt; evidence
+  reports --&gt; evidence
+</code></pre>
+<pre><code class="language-mermaid">stateDiagram-v2
+  [*] --&gt; building
+  building --&gt; catching_up
+  catching_up --&gt; reconciling
+  reconciling --&gt; verified: coverage and invariants pass
+  reconciling --&gt; failed: drift or incompatible version
+  verified --&gt; active: compare-and-swap expected generation
+  active --&gt; superseded: compatible verified replacement
+  failed --&gt; building: retry or repair
+  active --&gt; active: rollback to prior compatible generation
+</code></pre>
+<h3 id="dependency-graph">Dependency Graph</h3>
+<pre><code class="language-mermaid">flowchart LR
+  U1[&quot;U1 Contracts, access, time&quot;] --&gt; U2[&quot;U2 Inventory + valuation kernel&quot;]
+  U2 --&gt; U3[&quot;U3 Non-commerce stock writers&quot;]
+  U3 --&gt; U4[&quot;U4 Commerce recognition&quot;]
+  U3 --&gt; U5[&quot;U5 Cutover + backfill&quot;]
+  U4 --&gt; U5
+  U5 --&gt; U6[&quot;U6 Verified projections&quot;]
+  U6 --&gt; U7[&quot;U7 Activation + reads + health&quot;]
+  U7 --&gt; U8[&quot;U8 Shadow rollout + merge gates&quot;]
+</code></pre>
+<hr>
+<h2 id="implementation-units">Implementation Units</h2>
+<h3 id="phase-1-contracts-and-atomic-truth">Phase 1 — Contracts and Atomic Truth</h3>
+<ul>
+<h3 class="unit" id="u1"><span>U1</span>Establish reporting contracts, authorization, time, and durable state</h3>
+</ul>
+<p><strong>Goal:</strong> Create the versioned reporting domain, exact indexes, full-admin/store access boundary, normalized identity lookup, safe source references, period resolver, and lifecycle records that every later unit depends on.</p>
+<p><strong>Requirements:</strong> P-R1, P-R2, P-R5, P-R6, P-R7; <code>F-R1</code>-<code>F-R8</code>, <code>F-R19</code>-<code>F-R20</code>, <code>F-R43</code>-<code>F-R54</code>, <code>F-R64</code>-<code>F-R70</code>, <code>F-R80</code>-<code>F-R82</code>.</p>
+<p><strong>Dependencies:</strong> None.</p>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Create: <code>packages/athena-webapp/shared/reportingContract.ts</code></li>
+<li>Create: <code>packages/athena-webapp/convex/schemas/reporting/facts.ts</code></li>
+<li>Create: <code>packages/athena-webapp/convex/schemas/reporting/inventoryValuation.ts</code></li>
+<li>Create: <code>packages/athena-webapp/convex/schemas/reporting/projections.ts</code></li>
+<li>Create: <code>packages/athena-webapp/convex/schemas/reporting/maintenance.ts</code></li>
+<li>Create: <code>packages/athena-webapp/convex/schemas/reporting/index.ts</code></li>
+<li>Create: <code>packages/athena-webapp/convex/reporting/access.ts</code></li>
+<li>Create: <code>packages/athena-webapp/convex/reporting/metricContracts.ts</code></li>
+<li>Create: <code>packages/athena-webapp/convex/reporting/operatingPeriods.ts</code></li>
+<li>Create: <code>packages/athena-webapp/convex/reporting/ingress.ts</code></li>
+<li>Create: <code>packages/athena-webapp/convex/reporting/integrity.ts</code></li>
+<li>Create: <code>packages/athena-webapp/convex/migrations/backfillAthenaUserNormalizedEmail.ts</code></li>
+<li>Modify: <code>packages/athena-webapp/convex/schema.ts</code></li>
+<li>Modify: <code>packages/athena-webapp/convex/schemas/inventory/athenaUser.ts</code></li>
+<li>Modify: <code>packages/athena-webapp/convex/lib/athenaUserAuth.ts</code></li>
+<li>Modify: <code>packages/athena-webapp/convex/storeFront/analytics.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/reporting/access.test.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/reporting/metricContracts.test.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/reporting/operatingPeriods.test.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/reporting/schemaIndexes.test.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/lib/athenaUserAuth.test.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/migrations/backfillAthenaUserNormalizedEmail.test.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/storeFront/analytics.test.ts</code></li>
+</ul>
+<p><strong>Approach:</strong></p>
+<ul>
+<li>Define narrow discriminated contracts for fact type, metric version, currency, source identity, recognition time, operating date, status, completeness, and safe source references; avoid open-ended financial payload records.</li>
+<li>Establish the generic idempotent ingress append and transactional scheduling boundary here so procurement and commerce adapters share one source-event contract.</li>
+<li>Use child rows for unbounded source references, conflicts, attempts, and run events.</li>
+<li>Add normalized-email maintenance to every Athena-user writer, preview/apply existing identities in cursor-bounded batches, quarantine duplicates, and retain compatibility lookup until indexed coverage is complete. Convex indexes are not uniqueness constraints, so indexed lookup must still fail closed on duplicates.</li>
+<li>Resolve reporting periods only through Store Schedule and retain the effective schedule version and resolved timestamps.</li>
+<li>Model fact processing, projection generations, cutover runs, health, quarantine, activation, and supersession explicitly from the first schema widening.</li>
+<li>Protect the existing Analytics summary with the same backend authorizer; do not move engagement events into financial contracts.</li>
+</ul>
+<p><strong>Execution note:</strong> Implement metric/version validation, period assignment, authorization, and identity lookup test-first. Keep all new fields/tables additive and optional where existing data must remain valid.</p>
+<p><strong>Patterns to follow:</strong></p>
+<ul>
+<li><code>packages/athena-webapp/convex/contextTracking/contextEvents.ts</code></li>
+<li><code>packages/athena-webapp/convex/lib/storeScheduleTime.ts</code></li>
+<li><code>packages/athena-webapp/convex/stockOps/access.ts</code></li>
+<li><code>packages/athena-webapp/convex/schemas/operations/dailyClose.ts</code></li>
+</ul>
+<p><strong>Test scenarios:</strong></p>
+<ul>
+<li>Happy path: a current full admin requests a store-scoped report contract and receives only that store&#39;s safe metadata.</li>
+<li>Covers <code>F-AE12</code>. Error path: a foreign-organization full admin supplies a direct Store B source ID and receives no value or existence disclosure.</li>
+<li>Error path: unauthenticated, <code>pos_only</code>, and manager-elevated callers are denied on summary, evidence, export-shaped, and maintenance-shaped boundaries.</li>
+<li>Edge case: case variants of the same email resolve through one normalized indexed identity; duplicates fail closed.</li>
+<li>Migration: pre-backfill users continue through compatibility lookup; partial migration remains usable; duplicate normalized identities block Reports activation; completed coverage enables indexed lookup and rollback preserves access.</li>
+<li>Happy path: a DST transition, cross-midnight window, exception day, and historical schedule version resolve stable operating dates.</li>
+<li>Error path: unknown fact or metric version is rejected and produces sanitized conflict evidence without copying sensitive payloads.</li>
+<li>Integration: the existing storefront Analytics summary now enforces backend full-admin/store access while preserving its authorized response.</li>
+<li>Architecture: schema source proves every reporting query path uses exact indexes and every unbounded child collection is a separate table.</li>
+</ul>
+<p><strong>Verification:</strong></p>
+<ul>
+<li><p>All later units can import one versioned contract and period authority.</p>
+</li>
+<li><p>Public and source-hydration reads cannot bypass backend full-admin/store isolation.</p>
+</li>
+<li><p>Existing production data remains schema-valid before any backfill.</p>
+</li>
+<li class="unit-wrap" id="u2"><p class="unit-title"><span>U2</span><strong>Build the authoritative inventory and moving-average valuation kernel</strong></p>
+</li>
+</ul>
+<p><strong>Goal:</strong> Make one deterministic mutation boundary own physical quantity, sellable availability, movement evidence, SKU Activity, costed/uncosted/deficit position, known cost pool, and immutable outbound basis, with an explicit pre-cutover compatibility-shadow mode.</p>
+<p><strong>Requirements:</strong> P-R3, P-R4, P-R9; <code>F-R21</code>-<code>F-R42</code>, <code>F-R83</code>-<code>F-R85</code>; <code>F-AE3</code>-<code>F-AE7</code>.</p>
+<p><strong>Dependencies:</strong> U1.</p>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Create: <code>packages/athena-webapp/convex/reporting/inventory/types.ts</code></li>
+<li>Create: <code>packages/athena-webapp/convex/reporting/inventory/effects.ts</code></li>
+<li>Create: <code>packages/athena-webapp/convex/reporting/inventory/valuation.ts</code></li>
+<li>Create: <code>packages/athena-webapp/convex/reporting/inventory/directWriteBoundary.test.ts</code></li>
+<li>Modify: <code>packages/athena-webapp/convex/schemas/operations/inventoryMovement.ts</code></li>
+<li>Modify: <code>packages/athena-webapp/convex/schemas/inventory/product.ts</code></li>
+<li>Modify: <code>packages/athena-webapp/convex/operations/inventoryMovements.ts</code></li>
+<li>Modify: <code>packages/athena-webapp/convex/operations/skuActivity.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/reporting/inventory/effects.test.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/reporting/inventory/valuation.test.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/operations/inventoryMovements.test.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/operations/skuActivity.test.ts</code></li>
+</ul>
+<p><strong>Approach:</strong></p>
+<ul>
+<li>Store current operational balances on <code>productSku</code> while making a one-row-per-SKU valuation position the authority for costed quantity, uncosted quantity, unresolved deficit, known minor-unit cost pool, currency, and basis version.</li>
+<li>Enrich movement evidence with business identity, source line, occurrence/recording times, typed on-hand and sellable deltas, before/after balances, disposition, and valuation-effect reference.</li>
+<li>Derive signed book position as on-hand minus unresolved deficit; never clamp completed outbound quantity and never make the known pool negative.</li>
+<li>Apply unknown-first outbound coverage, deficit-first inbound resolution, deterministic pool rounding, original-sale return basis, and typed non-sale/exchange cost treatment exactly as the origin requirements define.</li>
+<li>When a costed inbound resolves deficit, create a linked versioned valuation adjustment against the originating uncosted outbound using confirmed inbound cost while preserving the outbound snapshot; an uncosted inbound resolves quantity without creating cost. The adjustment is reportable as historical/adjusted COGS and post-close delta when applicable.</li>
+<li>Replace semantic-value dedupe with required source-line business identity and sanitized conflict evidence.</li>
+<li>Add an architecture allowlist test that fails when code outside approved boundaries directly patches stock, availability, or valuation fields.</li>
+<li>Before a store is activated, route every writer through the kernel in compatibility-shadow mode: preserve the legacy balance result atomically while recording the full intended typed effect and source identity without seeding an authoritative valuation position. After baseline catch-up and store activation, the same command intent uses authoritative quantity and valuation policy.</li>
+</ul>
+<p><strong>Execution note:</strong> Implement the state machine and arithmetic test-first before connecting any production writer. Use property/invariant coverage in addition to example tests.</p>
+<p><strong>Patterns to follow:</strong></p>
+<ul>
+<li><code>packages/athena-webapp/convex/operations/inventoryMovements.ts</code></li>
+<li><code>packages/athena-webapp/convex/operations/skuActivity.ts</code></li>
+<li><code>packages/athena-webapp/convex/pos/application/commands/transactionAdjustmentPlanner.ts</code></li>
+</ul>
+<p><strong>Test scenarios:</strong></p>
+<ul>
+<li>Covers <code>F-AE4</code>. Happy path: ten units at GHS 20 plus ten at GHS 30 produce a GHS 500 pool and GHS 25 future basis without changing old effects.</li>
+<li>Covers <code>F-AE5</code>. Edge case: four uncosted plus six costed units sold by five consume four unknown and one known unit.</li>
+<li>Edge case: an outbound beyond available quantity creates explicit deficit and a zero/nonnegative known pool; a costed or uncosted inbound resolves deficit before adding residual stock.</li>
+<li>Deficit valuation: a costed inbound links confirmed cost to the earlier uncosted outbound through a new adjustment effect; an uncosted inbound resolves only quantity; neither rewrites the original outbound basis.</li>
+<li>Edge case: partial costed outbound and repeated rounding drain the pool exactly when costed quantity reaches zero.</li>
+<li>Covers <code>F-AE6</code>. Integration: financial-only refund changes no inventory; sellable return restores original basis; damaged return restores neither stock nor COGS; replacement issue adds exchange COGS without revenue.</li>
+<li>Error path: identical business identity with different deltas is quarantined; legitimate same-value movements with different identities both commit.</li>
+<li>Integration: physical, availability, movement, valuation, and SKU Activity effects either all commit or all roll back.</li>
+<li>Architecture: a synthetic direct <code>inventoryCount</code>, <code>quantityAvailable</code>, or valuation patch outside the allowlist fails the boundary test.</li>
+<li>Cutover edge: a SKU with no accepted baseline continues trading in compatibility-shadow mode without fabricating cost or creating an authoritative deficit.</li>
+</ul>
+<p><strong>Verification:</strong></p>
+<ul>
+<li>The kernel proves all origin inventory/valuation invariants independently of source workflows.</li>
+<li>Current balance, movement evidence, SKU Activity, and valuation cannot partially diverge within one mutation.</li>
+</ul>
+<h3 id="phase-2-source-integration">Phase 2 — Source Integration</h3>
+<ul>
+<h3 class="unit" id="u3"><span>U3</span>Migrate non-commerce stock writers to the atomic kernel</h3>
+</ul>
+<p><strong>Goal:</strong> Route receiving, stock control, catalog/import, expense, and service-material workflows through U2 while preserving their current operator success, approval, idempotency, and trace behavior.</p>
+<p><strong>Requirements:</strong> P-R3, P-R4, P-R8, P-R9; <code>F-R21</code>-<code>F-R42</code>, <code>F-R71</code>-<code>F-R79</code>, <code>F-R83</code>-<code>F-R85</code>; <code>F-AE3</code>-<code>F-AE5</code>, <code>F-AE10</code>.</p>
+<p><strong>Dependencies:</strong> U2.</p>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Modify: <code>packages/athena-webapp/convex/stockOps/receiving.ts</code></li>
+<li>Modify: <code>packages/athena-webapp/convex/stockOps/purchaseOrders.ts</code></li>
+<li>Create: <code>packages/athena-webapp/convex/reporting/sourceAdapters/procurement.ts</code></li>
+<li>Modify: <code>packages/athena-webapp/convex/stockOps/adjustments.ts</code></li>
+<li>Modify: <code>packages/athena-webapp/convex/stockOps/cycleCountDrafts.ts</code></li>
+<li>Modify: <code>packages/athena-webapp/convex/inventory/products.ts</code></li>
+<li>Modify: <code>packages/athena-webapp/convex/inventory/catalogImport.ts</code></li>
+<li>Modify: <code>packages/athena-webapp/convex/inventory/expenseTransactions.ts</code></li>
+<li>Modify: <code>packages/athena-webapp/convex/inventory/helpers/inventoryHolds.ts</code></li>
+<li>Modify: <code>packages/athena-webapp/convex/serviceOps/serviceCases.ts</code></li>
+<li>Modify: <code>packages/athena-webapp/convex/operations/serviceIntake.ts</code></li>
+<li>Modify: <code>packages/athena-webapp/convex/pos/application/commands/expenseSessionCommands.ts</code></li>
+<li>Modify: <code>packages/athena-webapp/convex/pos/application/commands/quickAddCatalogItem.ts</code></li>
+<li>Modify: <code>packages/athena-webapp/convex/pos/public/catalog.ts</code></li>
+<li>Modify: <code>packages/athena-webapp/convex/storeFront/checkoutSession.ts</code></li>
+<li>Modify: <code>packages/athena-webapp/src/components/procurement/ReceivingView.tsx</code></li>
+<li>Modify: <code>packages/athena-webapp/src/components/add-product/ProductStockInput.ts</code></li>
+<li>Modify: <code>packages/athena-webapp/src/components/add-product/ProductView.tsx</code></li>
+<li>Modify: <code>packages/athena-webapp/src/contexts/ProductContext.tsx</code></li>
+<li>Modify: <code>packages/athena-webapp/src/components/add-product/copy-images/CopyImagesView.tsx</code></li>
+<li>Test: <code>packages/athena-webapp/convex/stockOps/receiving.test.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/stockOps/purchaseOrders.test.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/reporting/sourceAdapters/procurement.test.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/stockOps/adjustments.test.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/stockOps/cycleCountDrafts.test.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/inventory/catalogImport.test.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/inventory/expenseTransactions.test.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/inventory/helpers/inventoryHolds.test.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/serviceOps/serviceCases.test.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/operations/serviceIntake.test.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/pos/application/expenseSessionCommands.test.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/pos/application/commands/quickAddCatalogItem.test.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/pos/public/catalog.test.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/storeFront/checkoutSession.test.ts</code></li>
+<li>Test: <code>packages/athena-webapp/src/components/procurement/ReceivingView.test.tsx</code></li>
+<li>Test: <code>packages/athena-webapp/src/components/add-product/ProductView.test.tsx</code></li>
+<li>Test: <code>packages/athena-webapp/src/contexts/ProductContext.test.tsx</code></li>
+<li>Test: <code>packages/athena-webapp/src/components/add-product/copy-images/CopyImagesView.test.tsx</code></li>
+</ul>
+<p><strong>Approach:</strong></p>
+<ul>
+<li>Characterize each existing command&#39;s success, failure, approval, and trace behavior before replacing direct SKU patches.</li>
+<li>Add an operator-visible receiving contract for confirmed unit cost and currency. Pre-fill planned PO cost for review, but submit and freeze only the explicitly confirmed receipt basis; preserve corrected, legitimate zero, and unknown cost distinctly.</li>
+<li>Treat holds and reservation release as availability-only; receiving, approved adjustments, cycle-count apply, inventory expense, consumed/returned service material, import finalization, and explicit opening/correction actions use typed physical effects.</li>
+<li>Remove direct editing of inventory balances and cost from generic SKU patch behavior; route them through explicit correction commands with actor/reason evidence.</li>
+<li>Preserve null versus legitimate zero through product forms and context mapping.</li>
+<li>Keep pre-cutover imports distinguishable from post-cutover movements.</li>
+<li>In compatibility-shadow mode, the kernel owns the legacy balance patch plus shadow-effect journal so source modules no longer patch stock independently. The complete writer census is an exit gate for U3, not cleanup deferred to U8.</li>
+<li>Emit stable purchase-order and line event identity for creation, revision, expected-arrival change, status transition, cancellation, partial/short receipt linkage, and completion so later projections do not infer commitments from mutable current state alone.</li>
+<li>Append those procurement lifecycle events through U1&#39;s generic ingress contract and pure procurement adapter; U5 historical processing must reuse the same adapter.</li>
+<li>Remove inventory, availability, and cost fields from the copy-images caller; copying media must remain a metadata-only update.</li>
+</ul>
+<p><strong>Execution note:</strong> Add characterization tests first, then migrate one writer family at a time. Do not widen the command&#39;s operator-visible failure boundary.</p>
+<p><strong>Patterns to follow:</strong></p>
+<ul>
+<li><code>packages/athena-webapp/convex/stockOps/receiving.ts</code> submission-key behavior</li>
+<li><code>packages/athena-webapp/convex/inventory/catalogImport.ts</code> trusted finalization evidence</li>
+<li><code>packages/athena-webapp/convex/stockOps/cycleCountDrafts.ts</code> stale-baseline protection</li>
+</ul>
+<p><strong>Test scenarios:</strong></p>
+<ul>
+<li>Happy path: partial and multi-line receiving applies confirmed line costs once and resolves any deficit before valuing residual stock.</li>
+<li>Receiving edge: unchanged planned cost, operator-corrected cost, legitimate zero, and unknown cost persist distinct confirmed evidence and later PO edits do not rewrite it.</li>
+<li>Error path: duplicate receiving submission reuses its effects; conflicting reuse is visible and changes no balance.</li>
+<li>Integration: stock adjustment and cycle count preserve approval/stale-baseline behavior while producing matching movement and valuation evidence.</li>
+<li>Integration: expense completion consumes inventory at immutable basis; void restores the original basis exactly once.</li>
+<li>Integration: service material <code>planned</code>, <code>consumed</code>, and <code>returned</code> produce respectively no physical effect, outbound effect, and typed inbound effect.</li>
+<li>Edge case: new SKU opening stock with null cost becomes explicitly uncosted; zero remains known zero; a later product edit preserves both.</li>
+<li>Error path: generic SKU editing cannot change inventory or valuation without an explicit correction command.</li>
+<li>Regression: copying images preserves stock, sellable availability, known-zero cost, and unknown cost exactly.</li>
+<li>Procurement: PO create/revise/cancel/status events retain stable line identity and later receipt evidence links without creating a physical effect before receipt.</li>
+<li>Architecture: the direct-write allowlist shrinks as each source family migrates and no bypass remains in these modules.</li>
+</ul>
+<p><strong>Verification:</strong></p>
+<ul>
+<li><p>Every non-commerce stock-changing path identified in the writer census uses U2.</p>
+</li>
+<li><p>Existing workflow success/failure semantics remain characterized and unchanged.</p>
+</li>
+<li class="unit-wrap" id="u4"><p class="unit-title"><span>U4</span><strong>Integrate commerce recognition, settlement identity, and commerce stock effects</strong></p>
+</li>
+</ul>
+<p><strong>Goal:</strong> Emit canonical commerce ingress from POS, offline POS, storefront, service, payment, refund, void, correction, and exchange command boundaries while routing their physical effects through U2.</p>
+<p><strong>Requirements:</strong> P-R2, P-R3, P-R4, P-R9; <code>F-R6</code>-<code>F-R42</code>, <code>F-R81</code>-<code>F-R85</code>; <code>F-AE1</code>-<code>F-AE7</code>.</p>
+<p><strong>Dependencies:</strong> U3. Commerce integration follows the shared stock-writer migration because both touch service material behavior, source adapters, and the direct-write boundary.</p>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Create: <code>packages/athena-webapp/convex/reporting/facts.ts</code></li>
+<li>Create: <code>packages/athena-webapp/convex/reporting/sourceAdapters/pos.ts</code></li>
+<li>Create: <code>packages/athena-webapp/convex/reporting/sourceAdapters/storefront.ts</code></li>
+<li>Create: <code>packages/athena-webapp/convex/reporting/sourceAdapters/service.ts</code></li>
+<li>Create: <code>packages/athena-webapp/convex/reporting/sourceAdapters/settlement.ts</code></li>
+<li>Modify: <code>packages/athena-webapp/convex/schemas/operations/paymentAllocation.ts</code></li>
+<li>Modify: <code>packages/athena-webapp/convex/schema.ts</code></li>
+<li>Modify: <code>packages/athena-webapp/convex/operations/paymentAllocations.ts</code></li>
+<li>Modify: <code>packages/athena-webapp/convex/cashControls/deposits.ts</code></li>
+<li>Modify: <code>packages/athena-webapp/convex/cashControls/paymentAllocationAttribution.ts</code></li>
+<li>Modify: <code>packages/athena-webapp/convex/operations/serviceIntake.ts</code></li>
+<li>Modify: <code>packages/athena-webapp/convex/pos/application/commands/completeTransaction.ts</code></li>
+<li>Modify: <code>packages/athena-webapp/convex/pos/application/commands/adjustTransactionItems.ts</code></li>
+<li>Modify: <code>packages/athena-webapp/convex/pos/application/commands/correctTransaction.ts</code></li>
+<li>Modify: <code>packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.ts</code></li>
+<li>Modify: <code>packages/athena-webapp/convex/pos/application/sync/types.ts</code></li>
+<li>Modify: <code>packages/athena-webapp/convex/pos/infrastructure/repositories/localSyncRepository.ts</code></li>
+<li>Modify: <code>packages/athena-webapp/convex/pos/infrastructure/repositories/transactionRepository.ts</code></li>
+<li>Modify: <code>packages/athena-webapp/convex/pos/infrastructure/integrations/paymentAllocationService.ts</code></li>
+<li>Modify: <code>packages/athena-webapp/convex/pos/public/transactions.ts</code></li>
+<li>Modify: <code>packages/athena-webapp/convex/storeFront/helpers/orderOperations.ts</code></li>
+<li>Modify: <code>packages/athena-webapp/convex/storeFront/payment.ts</code></li>
+<li>Modify: <code>packages/athena-webapp/convex/storeFront/onlineOrder.ts</code></li>
+<li>Modify: <code>packages/athena-webapp/convex/storeFront/onlineOrderItem.ts</code></li>
+<li>Modify: <code>packages/athena-webapp/convex/storeFront/helpers/onlineOrder.ts</code></li>
+<li>Modify: <code>packages/athena-webapp/convex/serviceOps/serviceCases.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/reporting/commerceRecognition.test.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/reporting/sourceAdapters.test.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/operations/paymentAllocations.test.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/cashControls/deposits.test.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/cashControls/paymentAllocationAttribution.test.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/operations/serviceIntake.test.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/pos/application/completeTransaction.test.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/pos/application/adjustTransactionItems.test.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/pos/application/correctTransactionPaymentMethod.test.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.test.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/pos/infrastructure/repositories/transactionRepository.test.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/pos/public/transactions.test.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/storeFront/orderOperations.test.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/storeFront/payment.test.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/storeFront/returnExchangeOperations.test.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/serviceOps/serviceCases.test.ts</code></li>
+</ul>
+<p><strong>Approach:</strong></p>
+<ul>
+<li>Append a minimal, typed, store-scoped ingress row in the same mutation as each accepted business transition and schedule bounded internal canonicalization transactionally.</li>
+<li>Recognize POS merchandise/service at completed sale, standalone service at completion, storefront at first transition into delivered/picked-up, and refunds/voids/corrections as independently keyed linked effects.</li>
+<li>Treat a POS-linked service case and payment allocations as evidence/settlement, never second revenue.</li>
+<li>Allocate line/order discounts, delivery, tax, currency, historical category/SKU labels, and source line identity at recognition so all lanes reconcile.</li>
+<li>Require stable business-event keys for new payment/refund/reversal allocations; keep legacy rows readable but mark unsupported identity coverage incomplete.</li>
+<li>Preserve offline occurrence time and accepted sale continuity; held/rejected sync work is not incorporated until its source transition is accepted.</li>
+<li>Route POS/storefront sale, fulfillment, return, cancellation, void, item adjustment, and exchange physical effects through U2 without making asynchronous projection success part of the command.</li>
+<li>Complete the payment-allocation caller census across deposits, service intake, direct POS, offline POS, storefront returns, and service cases before requiring business-event keys.</li>
+<li>Add the exact store/business-event-key index used for payment duplicate/conflict lookup and carry the typed key through shared attribution, public POS wrappers, offline sync types, scheduled storefront refund work, and correction commands.</li>
+</ul>
+<p><strong>Execution note:</strong> Characterize each command first. Implement recognition and allocation policy test-first, then add one source adapter at a time.</p>
+<p><strong>Patterns to follow:</strong></p>
+<ul>
+<li><code>packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.ts</code></li>
+<li><code>packages/athena-webapp/convex/pos/infrastructure/integrations/paymentAllocationService.ts</code></li>
+<li><code>packages/athena-webapp/convex/pos/application/commands/transactionAdjustmentPlanner.ts</code></li>
+</ul>
+<p><strong>Test scenarios:</strong></p>
+<ul>
+<li>Covers <code>F-AE1</code>. A mixed GHS 80 merchandise/GHS 20 service POS sale recognizes GHS 100 once and keeps the linked service case/payment as evidence.</li>
+<li>Covers <code>F-AE2</code>. Two same-value payments with distinct keys survive; identical replay is a no-op; conflicting reuse is quarantined.</li>
+<li>Happy path: paid storefront order remains settlement-only until first delivered/picked-up transition; repeated completion updates do not duplicate revenue.</li>
+<li>Error path: refund reserve/release creates no refund fact; finalized refund reduces net sales in its event period and links original sale/line.</li>
+<li>Covers <code>F-AE6</code>. Exchange decomposes return disposition, replacement cost, and additional collection/refund without independent replacement revenue.</li>
+<li>Covers <code>F-AE7</code>. Monday offline sale synced after a Tuesday receipt keeps Monday occurrence and either reconstructs Monday basis or remains unknown.</li>
+<li>Integration: a completed commerce mutation commits source record, ingress, stock/valuation effect, and schedule request atomically; canonicalizer failure leaves source success intact and health stale.</li>
+<li>Error path: unknown source adapter/version or cross-store source reference is sanitized, quarantined, and cannot certify projections.</li>
+<li>Settlement edge: a scheduled storefront refund retry reuses its stable key; conflicting payload is quarantined; same-amount payment-method correction changes settlement interpretation without mutating recognized revenue.</li>
+<li>Service lifecycle: deposit and partial payment remain settlement; standalone completion recognizes service revenue once; cancellation after refund creates no revenue; POS-linked service remains evidence only.</li>
+<li>Sale cost basis: direct POS and storefront merchandise facts attach costed/uncosted quantity and immutable U2 basis per line; later receipts and catalog-cost edits leave those facts unchanged.</li>
+</ul>
+<p><strong>Verification:</strong></p>
+<ul>
+<li>Every commerce lane emits one canonical financial interpretation per source business event.</li>
+<li>Revenue, settlement, physical stock, and valuation reconcile independently without duplication.</li>
+</ul>
+<h3 id="phase-3-cutover-and-projection-authority">Phase 3 — Cutover and Projection Authority</h3>
+<ul>
+<h3 class="unit" id="u5"><span>U5</span>Implement cutover baselines, resumable processing, and historical backfill</h3>
+</ul>
+<p><strong>Goal:</strong> Establish per-store/SKU trust boundaries, preview and accept inventory baselines, canonicalize eligible history through the live contracts, and quarantine unsupported evidence without inventing values.</p>
+<p><strong>Requirements:</strong> P-R7, P-R8, P-R9; <code>F-R60</code>, <code>F-R64</code>-<code>F-R80</code>, <code>F-R83</code>, <code>F-R87</code>; <code>F-AE10</code>.</p>
+<p><strong>Dependencies:</strong> U3, U4.</p>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Create: <code>packages/athena-webapp/convex/reporting/maintenance/cutover.ts</code></li>
+<li>Create: <code>packages/athena-webapp/convex/reporting/maintenance/backfill.ts</code></li>
+<li>Create: <code>packages/athena-webapp/convex/reporting/maintenance/processing.ts</code></li>
+<li>Create: <code>packages/athena-webapp/convex/reporting/maintenance/runLedger.ts</code></li>
+<li>Modify: <code>packages/athena-webapp/convex/schema.ts</code></li>
+<li>Modify: <code>packages/athena-webapp/convex/schemas/storeFront/onlineOrder/onlineOrder.ts</code></li>
+<li>Modify: <code>packages/athena-webapp/convex/schemas/serviceOps/serviceCase.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/reporting/maintenance/cutover.test.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/reporting/maintenance/backfill.test.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/reporting/maintenance/processing.test.ts</code></li>
+</ul>
+<p><strong>Approach:</strong></p>
+<ul>
+<li>Add only the completion/event indexes required for bounded historical source reads before any backfill runs.</li>
+<li>Backfill bounded purchase-order/line identity and lifecycle evidence for commitment, expected-arrival, cancellation, partial/short receipt, and completion without changing procurement source records.</li>
+<li>Preview baseline candidates by store/SKU with on-hand, sellable, currency, known/unknown cost, source coverage, conflicts, exclusions, and expected impact.</li>
+<li>Accept baselines as append-only versioned evidence; corrections supersede rather than mutate accepted positions.</li>
+<li>Use Athena-owned run records with actor/automation identity, contract versions, cursor, frozen cutoff, counts, failures, pause/resume/cancel state, and reconciliation outcome.</li>
+<li>Process dynamically bounded internal mutation batches, scheduling the next batch transactionally; actions are not the consistency boundary.</li>
+<li>Reuse pure recognition, valuation-classification, identity, and conflict policies for backfill, but never call the operational commit adapter. Pre-cutover history writes isolated canonical facts and candidate valuation projections only; it never patches <code>productSku</code>, active valuation positions, inventory movements, or source records. Historical unknowns remain unknown.</li>
+<li>Freeze each accepted baseline at a source watermark, apply only shadow effects after that watermark to the candidate position, and catch up the tail. Activation requires candidate on-hand and sellable components to match legacy operational balances while every signed-book difference is fully explained by explicit unresolved deficit or named reconciliation evidence. Pre-cutover source commands remain in compatibility-shadow mode throughout.</li>
+<li>Keep activation separate from successful processing; a completed backfill is only a candidate until projections reconcile.</li>
+</ul>
+<p><strong>Execution note:</strong> Implement preview/apply parity and restart behavior test-first. Run no production apply until shadow writers have proven stable.</p>
+<p><strong>Patterns to follow:</strong></p>
+<ul>
+<li><code>packages/athena-webapp/convex/migrations/backfillStoreSchedules.ts</code></li>
+<li><code>packages/athena-webapp/convex/automation/runLedger.ts</code></li>
+<li><code>packages/athena-webapp/convex/contextTracking/historicalStorefrontContextImport.ts</code></li>
+</ul>
+<p><strong>Test scenarios:</strong></p>
+<ul>
+<li>Covers <code>F-AE10</code>. Baseline with 12 null-cost units remains explicitly uncosted; current cost is not applied backward.</li>
+<li>Happy path: dry-run and apply select the same candidates, exclusions, conflicts, and expected fact counts.</li>
+<li>Edge case: partial batch failure resumes from durable progress without duplicating facts or effects.</li>
+<li>Error path: missing currency, source identity, original occurrence, or trustworthy cost quarantines only affected evidence and reduces coverage.</li>
+<li>Edge case: new live facts arrive after a frozen backfill cutoff and are processed through the live tail rather than missed or duplicated.</li>
+<li>Error path: pause/cancel stops future batches but preserves facts, progress, and diagnostics; resume continues compatibly.</li>
+<li>Integration: accepted baseline plus post-cutover physical deltas equals signed book position for every included SKU.</li>
+<li>Safety: historical commerce, receipt, and expense replay leaves operational SKU balances, active valuation positions, movements, and source records unchanged.</li>
+<li>Handoff: activity before, during, and after the frozen baseline watermark appears exactly once in the candidate position, with no gap, duplicate, fabricated cost, or blocked trade.</li>
+<li>Deficit handoff: a legacy-clamped oversell reconciles as zero on-hand plus explicit unresolved deficit and can activate without erasing that deficit.</li>
+<li>Procurement backfill: existing open, cancelled, partially received, short, late, and complete PO lines produce deterministic lifecycle evidence without duplicating receipts.</li>
+</ul>
+<p><strong>Verification:</strong></p>
+<ul>
+<li><p>Every store/SKU has an explicit earliest trustworthy boundary or remains unactivated.</p>
+</li>
+<li><p>Backfill is deterministic, restartable, auditable, and uses the same contracts as live processing.</p>
+</li>
+<li class="unit-wrap" id="u6"><p class="unit-title"><span>U6</span><strong>Build versioned projections and closed-day reconciliation</strong></p>
+</li>
+</ul>
+<p><strong>Goal:</strong> Derive bounded store-day, SKU-day, current-valuation, and custom-range generations from canonical facts, then prove exact reconciliation and immutable close/post-close behavior.</p>
+<p><strong>Requirements:</strong> P-R5, P-R6, P-R7, P-R9; <code>F-R43</code>-<code>F-R70</code>, <code>F-R84</code>-<code>F-R86</code>; <code>F-AE8</code>-<code>F-AE11</code>; parent <code>R17</code>-<code>R38</code>, <code>AE3</code>, <code>AE4</code>, <code>AE8</code>, <code>AE10</code>.</p>
+<p><strong>Dependencies:</strong> U5.</p>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Create: <code>packages/athena-webapp/convex/reporting/projections/daily.ts</code></li>
+<li>Create: <code>packages/athena-webapp/convex/reporting/projections/skuDay.ts</code></li>
+<li>Create: <code>packages/athena-webapp/convex/reporting/projections/currentInventory.ts</code></li>
+<li>Create: <code>packages/athena-webapp/convex/reporting/projections/customRange.ts</code></li>
+<li>Create: <code>packages/athena-webapp/convex/reporting/projections/reconciliation.ts</code></li>
+<li>Create: <code>packages/athena-webapp/convex/reporting/projections/dailyClose.ts</code></li>
+<li>Create: <code>packages/athena-webapp/convex/reporting/projections/attention.ts</code></li>
+<li>Create: <code>packages/athena-webapp/convex/reporting/attentionRules.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/reporting/projections/daily.test.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/reporting/projections/skuDay.test.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/reporting/projections/currentInventory.test.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/reporting/projections/customRange.test.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/reporting/projections/reconciliation.test.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/reporting/projections/dailyClose.test.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/reporting/projections/attention.test.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/reporting/attentionRules.test.ts</code></li>
+</ul>
+<p><strong>Approach:</strong></p>
+<ul>
+<li>Persist generation, metric/fact versions, operating date/schedule version, source watermark, currency, completeness, cost coverage, and known/unknown components on projection rows.</li>
+<li>Build through a frozen watermark, catch up facts created during rebuild, and reconcile at a stable boundary.</li>
+<li>Require zero unexplained difference for minor-unit money, integer quantity, channel-to-unified, SKU-to-product/category, fact-to-projection, balance-to-movement, and incremental-to-rebuild invariants.</li>
+<li>Treat expected candidate-version differences as quantified, definition-attributed review evidence rather than drift.</li>
+<li>Preserve accepted Daily Close snapshot independently; current historical projection includes valid late facts and exposes the post-close delta and lineage.</li>
+<li>Materialize arbitrary custom ranges from verified daily/SKU projections through a resumable generation; never scan raw commerce history in a request.</li>
+<li>Give custom-range generations deterministic identity by store, range, metric versions, and source watermark; reuse matching work, cap concurrent candidates, expose pending/reused status, and clean up only disposable superseded generations that are not active, referenced, or under review.</li>
+<li>Project the parent workspace contract explicitly: merchandise eligible revenue, uncovered revenue, known COGS, gross profit/margin, units and returns, velocity sufficiency/window, days of cover, purchase commitments/inbound cover, and deterministic attention inputs with typed destination ownership.</li>
+<li>Define the initial attention registry and primary-display precedence explicitly:<ul>
+<li>delayed/incomplete POS when accepted-cloud freshness exceeds five minutes, failed/review activity exists, or required source coverage is incomplete;</li>
+<li>missing cost when a SKU has uncosted on-hand quantity or eligible uncosted merchandise revenue;</li>
+<li>cash variance for any unresolved nonzero register/close variance;</li>
+<li>refund/void/correction attention when adjusted value reaches 5% of current-period gross recognized sales or at least three events;</li>
+<li>low cover only with at least seven active days and three net sold units, when estimated cover is at most seven active days;</li>
+<li>missing inbound cover when a low-cover SKU has no confirmed inbound quantity sufficient to reach fourteen active days;</li>
+<li>late inbound when expected arrival has passed with outstanding quantity;</li>
+<li>short receipt when a completed receiving line closes below confirmed expected quantity.</li>
+</ul>
+</li>
+<li>For one SKU, retain all applicable reasons but select the primary in this order: source integrity, missing cost, refund/void/correction, late inbound, short receipt, missing inbound cover, then low cover. Cash variance remains a store-level signal. Every rule carries input values, threshold/version, completeness limitation, and one typed route.</li>
+<li>Keep Reports&#39; velocity/cover attention policy inside the reporting domain. Reuse PO lifecycle classifications and route evidence into Procurement without changing Procurement&#39;s existing reorder thresholds; recommendation-policy convergence requires separate product requirements.</li>
+<li>Project linked deficit-resolution valuation adjustments into adjusted/historical COGS and expose a post-close delta when the costed inbound arrives after the original outbound&#39;s accepted close.</li>
+<li>Keep storefront engagement in a separate projection family.</li>
+</ul>
+<p><strong>Execution note:</strong> Implement projection math and reconciliation test-first. Use fixed fact fixtures before connecting processors.</p>
+<p><strong>Patterns to follow:</strong></p>
+<ul>
+<li><code>packages/athena-webapp/convex/operations/dailyClose.ts</code></li>
+<li><code>packages/athena-webapp/convex/inventory/catalogSummary.ts</code></li>
+<li><code>packages/athena-webapp/convex/pos/application/queries/storePulse.ts</code> only as behavioral comparison, not a query implementation pattern</li>
+</ul>
+<p><strong>Test scenarios:</strong></p>
+<ul>
+<li>Covers <code>F-AE8</code>. Late sale into a closed operating day preserves accepted close and creates a linked post-close delta in the current interpretation.</li>
+<li>Covers <code>F-AE9</code>. POS current/storefront stale leaves valid POS lanes current while unified net sales is stale or partial with source lag.</li>
+<li>Covers <code>F-AE11</code>. Canonical trusted and attributed provisional lines roll into one SKU while preserving original evidence.</li>
+<li>Happy path: incremental and complete rebuild produce identical rows for the same watermark and versions.</li>
+<li>Edge case: facts arrive during rebuild and catch-up; none are skipped or counted twice.</li>
+<li>Error path: any nonzero unexplained stored-unit drift prevents candidate verification.</li>
+<li>Edge case: DST, cross-midnight, exception day, partial day, and same-elapsed comparison use effective schedule assignment.</li>
+<li>Error path: mixed currency is segmented or withheld; no aggregate sums unlike currencies.</li>
+<li>Integration: reopened/reclosed Daily Close creates superseding lineage without deleting the earlier accepted snapshot.</li>
+<li>Range lifecycle: duplicate requests reuse one generation; concurrency cap rejects or queues excess work; stale-version work cannot activate; cleanup preserves active/referenced generations.</li>
+<li>Covers parent <code>AE3</code>, <code>AE4</code>, <code>AE8</code>, and <code>AE10</code>: profit eligibility/coverage, SKU rollup/velocity, procurement attention, and inventory-consumed labeling derive from the same canonical facts and remain explicitly non-accounting.</li>
+<li>Attention precedence: a SKU with missing cost, late inbound, and low cover keeps all reasons, presents missing cost as primary, and routes each reason to its owning evidence without duplicating work.</li>
+<li>Deficit close: a costed receipt after the original sale&#39;s Daily Close creates adjusted COGS and a post-close delta linked to both effects; an uncosted receipt resolves quantity without COGS.</li>
+</ul>
+<p><strong>Verification:</strong></p>
+<ul>
+<li>Verified generations are complete, reproducible derivatives of canonical facts.</li>
+<li>Closed-day, late-event, and comparison semantics match both origin documents.</li>
+</ul>
+<h3 id="phase-4-read-authority-and-safe-rollout">Phase 4 — Read Authority and Safe Rollout</h3>
+<ul>
+<h3 class="unit" id="u7"><span>U7</span>Add activation, bounded public reads, evidence, and projection health</h3>
+</ul>
+<p><strong>Goal:</strong> Promote only compatible verified generations, retain rollback authority, and expose store-scoped full-admin overview/SKU/evidence/health contracts without raw-history scans or generic source hydration.</p>
+<p><strong>Requirements:</strong> P-R1, P-R6, P-R7, P-R8, P-R9; <code>F-R1</code>-<code>F-R5</code>, <code>F-R55</code>-<code>F-R70</code>, <code>F-R77</code>-<code>F-R88</code>; <code>F-AE9</code>, <code>F-AE11</code>, <code>F-AE12</code>; parent <code>R17</code>-<code>R42</code>, <code>AE3</code>-<code>AE5</code>, <code>AE8</code>-<code>AE10</code>.</p>
+<p><strong>Dependencies:</strong> U6.</p>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Create: <code>packages/athena-webapp/convex/reporting/activation.ts</code></li>
+<li>Create: <code>packages/athena-webapp/convex/reporting/public.ts</code></li>
+<li>Create: <code>packages/athena-webapp/convex/reporting/evidence.ts</code></li>
+<li>Create: <code>packages/athena-webapp/convex/reporting/health.ts</code></li>
+<li>Create: <code>packages/athena-webapp/convex/reporting/export.ts</code></li>
+<li>Create: <code>packages/athena-webapp/convex/reporting/customRangeRequests.ts</code></li>
+<li>Create: <code>packages/athena-webapp/convex/reporting/sourceAdapters/evidence.ts</code></li>
+<li>Create: <code>packages/athena-webapp/convex/reporting/sourceAdapters/operationalRoutes.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/reporting/activation.test.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/reporting/public.test.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/reporting/evidence.test.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/reporting/health.test.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/reporting/export.test.ts</code></li>
+<li>Test: <code>packages/athena-webapp/convex/reporting/customRangeRequests.test.ts</code></li>
+</ul>
+<p><strong>Approach:</strong></p>
+<ul>
+<li>Promote with compare-and-swap against the expected current generation, contract compatibility, stable watermark, required coverage, and reconciliation result.</li>
+<li>Retain the last compatible verified generation through rebuild and rollback; never delete facts, run evidence, or failed candidates during switching.</li>
+<li>Expose separate bounded queries for overview, SKU aggregates, current valuation, health/coverage, and stable paginated evidence.</li>
+<li>Expose merchandise profit/coverage, velocity/cover, purchase commitment, deterministic attention, and typed Procurement/Cash Controls/Transactions/Terminal Health route evidence required by the parent workspace contract.</li>
+<li>Bind evidence cursors to store, filter, versions, and stable recognition-time/fact-ID ordering; validate every source reference with an allowlisted store-aware adapter.</li>
+<li>Return explicit pending, partial, stale, failed, pre-cutover, uncosted, incompatible, rebuilding, and truncated states rather than zero.</li>
+<li>Keep repair, backfill, activation, and reconciliation mutations internal for the foundation release. The only human-facing reporting mutations are narrow full-admin export and custom-range initiation; each creates or reuses reporting run state and transactionally schedules bounded internal continuation without mutating operational records.</li>
+<li>Make custom-range initiation store scoped and idempotent over range, metric versions, and requested watermark. Expose status through safe queries, enforce per-store concurrency caps, and recheck membership on every status/read request.</li>
+<li>Build exports as authenticated store-scoped asynchronous runs over verified generations with bounded pages, actor/run evidence, version/cutover metadata, store-bound status/download queries, expiry state, and the same field minimization as public reads.</li>
+</ul>
+<p><strong>Execution note:</strong> Write authorization, cursor isolation, activation race, rollback, and read-boundedness tests before public function registration.</p>
+<p><strong>Patterns to follow:</strong></p>
+<ul>
+<li><code>packages/athena-webapp/convex/operations/dailyOperations.ts</code> posture/detail separation</li>
+<li><code>packages/athena-webapp/convex/operations/skuActivity.ts</code> source evidence and occurrence ordering</li>
+<li><code>packages/athena-webapp/convex/pos/application/queries/listRegisterCatalog.ts</code> bounded projection reads</li>
+</ul>
+<p><strong>Test scenarios:</strong></p>
+<ul>
+<li>Happy path: full admin reads a verified overview, paginates SKU evidence, and follows safe source references without extra per-row queries.</li>
+<li>Covers <code>F-AE12</code>. Error path: foreign store ID, source ID, cursor, or activation generation discloses nothing and records safe integrity evidence.</li>
+<li>Error path: <code>pos_only</code>, manager elevation, unauthenticated, or membership-revoked caller is denied on every public read.</li>
+<li>Edge case: candidate finishes after a newer candidate; compare-and-swap prevents stale activation.</li>
+<li>Error path: rebuild fails halfway and readers retain the prior verified generation with explicit stale/failed health.</li>
+<li>Happy path: rollback selects the prior compatible generation without deleting facts or progress.</li>
+<li>Edge case: archived/missing source record still yields sanitized canonical evidence without unrelated PII.</li>
+<li>Performance: overview and SKU reads use fixed indexed query counts independent of raw transaction history; evidence continues through stable pagination.</li>
+<li>Export: foreign-store/admin requests fail without disclosure; retry reuses the run identity; export rows match the verified generation and contain no unnecessary customer or payment data.</li>
+<li>Export lifecycle: initiation schedules once; membership revocation denies later status/download; scheduler failure remains retryable; expired or cleaned artifacts cannot be retrieved and cleanup never removes an active run.</li>
+<li>Routing: cash variance, delayed terminal sync, low inbound cover, refunds/voids, and missing cost expose one safe typed destination without granting mutation capability.</li>
+<li>Custom range: unauthenticated and cross-store initiation fails; duplicate request reuses one run; concurrency cap is explicit; stale versions cannot publish; membership revocation denies polling and result reads.</li>
+</ul>
+<p><strong>Verification:</strong></p>
+<ul>
+<li><p>The future Reports UI can consume a complete, versioned, full-admin read contract without implementing metric logic.</p>
+</li>
+<li><p>Activation, failure, and rollback preserve a trustworthy read authority.</p>
+</li>
+<li class="unit-wrap" id="u8"><p class="unit-title"><span>U8</span><strong>Prove shadow rollout, scale, observability, and merge-grade coverage</strong></p>
+</li>
+</ul>
+<p><strong>Goal:</strong> Run facts and projections in shadow, measure freshness and drift, validate 10x production scale, complete source-writer enforcement, and gate store activation and repository merge on the declared contracts.</p>
+<p><strong>Requirements:</strong> P-R7, P-R8, P-R9; <code>F-R57</code>, <code>F-R68</code>-<code>F-R70</code>, <code>F-R77</code>-<code>F-R88</code>.</p>
+<p><strong>Dependencies:</strong> U7. Validation-map work begins in U1 and expands with each unit; activation proof completes here.</p>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Create: <code>packages/athena-webapp/convex/reporting/reportingScale.test.ts</code></li>
+<li>Create: <code>packages/athena-webapp/convex/reporting/reportingDeployment.test.ts</code></li>
+<li>Modify: <code>packages/athena-webapp/docs/agent/architecture.md</code></li>
+<li>Modify: <code>packages/athena-webapp/docs/agent/testing.md</code></li>
+<li>Modify: <code>scripts/harness-app-registry.ts</code></li>
+<li>Test: <code>scripts/harness-generate.test.ts</code></li>
+<li>Create: <code>docs/solutions/architecture/athena-reporting-fact-projection-boundary-2026-07-09.md</code></li>
+</ul>
+<p><strong>Approach:</strong></p>
+<ul>
+<li>Run source adapters and candidate projections in shadow for each store while existing operational/read behavior remains authoritative.</li>
+<li>Measure accepted-source-to-fact and fact-to-projection lag, source/domain coverage, quarantine, reconciliation drift, rebuild progress, and version compatibility.</li>
+<li>Use at least the production-derived fixture sizes in this plan and re-measure before activation; prove two-second p95 overview and three-second p95 SKU aggregates under supported cardinality.</li>
+<li>Complete the direct stock-writer allowlist census and fail the architecture gate for any bypass.</li>
+<li>Exercise preview, pause, resume, retry, failed build, catch-up, candidate comparison, activation, rollback, and mixed-version rejection.</li>
+<li>Add reporting ownership to Athena&#39;s validation map and merge-grade harness so new source adapters or contract changes cannot bypass focused tests.</li>
+<li>Treat <code>scripts/harness-app-registry.ts</code> as the source of truth; regenerate <code>packages/athena-webapp/docs/agent/validation-map.json</code> and the generated guide through the existing harness generator rather than editing generated files directly.</li>
+<li>Activate one store only after required source coverage, zero unexplained drift, five-minute freshness, and rollback evidence pass; expand store by store.</li>
+</ul>
+<p><strong>Execution note:</strong> Treat shadow evidence and scale results as release gates, not observational polish.</p>
+<p><strong>Patterns to follow:</strong></p>
+<ul>
+<li><code>packages/athena-webapp/convex/pos/application/queries/listRegisterCatalog.test.ts</code></li>
+<li><code>scripts/harness-app-registry.ts</code></li>
+<li><code>scripts/harness-generate.test.ts</code></li>
+<li><code>docs/solutions/architecture/athena-historic-eod-auto-close-2026-06-29.md</code></li>
+</ul>
+<p><strong>Test scenarios:</strong></p>
+<ul>
+<li>Scale: use at least 17,880 SKUs, 6,540 POS transactions, 16,180 POS lines, 1,000 online orders/lines/service cases, 9,830 movements, 6,640 allocations, and 11,210 SKU events.</li>
+<li>Performance: overview and SKU aggregate reads satisfy p95 targets without uncapped scans, rare-result overreads, or per-parent fan-out.</li>
+<li>Deployment: dual-write/shadow run changes no checkout, ordering, service, receiving, refund, stock-continuity, or Daily Close success result.</li>
+<li>Recovery: failed/paused backfill resumes; failed candidate preserves prior reads; rollback restores compatible generation.</li>
+<li>Versioning: mixed writer/reader versions cannot publish; expected version deltas are quantified and approved.</li>
+<li>Operations: lag, repeated failure, drift, duplicate conflict, stalled run, and coverage regression cross thresholds and produce an owned signal.</li>
+<li>Architecture: every stock writer and public reporting function is mapped to required focused coverage.</li>
+</ul>
+<p><strong>Verification:</strong></p>
+<ul>
+<li>At least one store completes shadow, reconcile, activation, and rollback proof with no unexplained drift.</li>
+<li>Athena&#39;s merge-grade gates enforce the new domain and no operational workflow regression is introduced.</li>
+</ul>
+<hr>
+<h2 id="phased-delivery">Phased Delivery</h2>
+<table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Units</th>
+<th>Activation posture</th>
+<th>Exit condition</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1. Contracts and truth</td>
+<td>U1-U2</td>
+<td>Additive only; no source reads switch</td>
+<td>Contracts, auth, periods, and valuation kernel pass direct tests.</td>
+</tr>
+<tr>
+<td>2. Source integration</td>
+<td>U3-U4</td>
+<td>Dual-write/shadow ingress; operational behavior unchanged</td>
+<td>Complete writer census and all source adapters emit/replay correctly.</td>
+</tr>
+<tr>
+<td>3. Historical authority</td>
+<td>U5</td>
+<td>Preview and backfill candidates only</td>
+<td>Baselines and historical facts reconcile or disclose exclusions.</td>
+</tr>
+<tr>
+<td>4. Projection authority</td>
+<td>U6</td>
+<td>Candidate generations only</td>
+<td>Rebuild/incremental parity and closed-day deltas pass.</td>
+</tr>
+<tr>
+<td>5. Read authority</td>
+<td>U7</td>
+<td>Store-scoped activation available, off by default</td>
+<td>Public read, evidence, health, rollback, and access contracts pass.</td>
+</tr>
+<tr>
+<td>6. Production proof</td>
+<td>U8</td>
+<td>Shadow, one-store activation, measured expansion</td>
+<td>Scale, freshness, reconciliation, rollback, and merge gates pass.</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="system-wide-impact">System-Wide Impact</h2>
+<ul>
+<li><strong>Interaction graph:</strong> POS, storefront, service, stock, import, adjustment, and Daily Close commands gain reporting/valuation side effects inside existing mutations; scheduled internal processors handle bounded continuation.</li>
+<li><strong>Error propagation:</strong> Authoritative inventory-effect failure rolls back its owning stock mutation. Reporting canonicalization/projection failure does not roll back an accepted commerce command; it marks health stale/failed and retains repair evidence.</li>
+<li><strong>State lifecycle risks:</strong> Partial source writes are prevented transactionally; duplicate/conflicting ingress is quarantined; candidate generations never replace active reads until verified; superseded evidence remains inspectable.</li>
+<li><strong>API surface parity:</strong> Public reporting summary, SKU, evidence, and health reads share one full-admin/store authorizer and contract versions. Existing Analytics receives the same backend boundary.</li>
+<li><strong>Integration coverage:</strong> Source command -&gt; ingress/effect -&gt; canonical fact -&gt; projection -&gt; health -&gt; public read must be exercised across cloud POS, offline POS, storefront, service, receiving, expenses, returns, and close reconciliation.</li>
+<li><strong>Unchanged invariants:</strong> Selling continues when cost is missing; local POS accepted-sale continuity remains; existing workflow owners retain mutations; Daily Close accepted snapshots remain immutable; report queries remain read-only.</li>
+</ul>
+<hr>
+<h2 id="alternative-approaches-considered">Alternative Approaches Considered</h2>
+<ul>
+<li><strong>Extend Store Pulse or Daily Operations:</strong> Rejected because each is POS-centric, request-time, and already owns a different operational cadence and completeness contract.</li>
+<li><strong>Use storefront Analytics events as the fact stream:</strong> Rejected because engagement payloads are open-ended, capped, and not transactional financial evidence.</li>
+<li><strong>Reconstruct facts from current table state:</strong> Rejected because mutable statuses, embedded refund arrays, missing occurrence/cost fields, and same-value events cannot be recovered reliably.</li>
+<li><strong>Make all projection updates synchronous with commands:</strong> Rejected because complex rebuild/custom-range work would expand checkout and receiving transaction limits and success boundaries.</li>
+<li><strong>Make inventory effects asynchronous:</strong> Rejected because stock balance, movement, availability, and valuation could diverge after source success.</li>
+<li><strong>Use workflow traces as the reporting ledger:</strong> Rejected because traces are intentionally best-effort and post-primary-mutation.</li>
+<li><strong>Rely only on a generic aggregate component:</strong> Rejected because Athena needs versioned dimensions, completeness, cost coverage, close lineage, evidence, and disposable generations beyond narrow sums/counts.</li>
+</ul>
+<hr>
+<h2 id="risks-amp-mitigations">Risks &amp; Mitigations</h2>
+<table>
+<thead>
+<tr>
+<th>Risk</th>
+<th>Likelihood</th>
+<th>Impact</th>
+<th>Mitigation</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Missing a stock writer leaves reconciliation false</td>
+<td>High</td>
+<td>High</td>
+<td>Writer census, shrinking allowlist, architecture gate, phased source migration.</td>
+</tr>
+<tr>
+<td>Novel valuation arithmetic causes value drift</td>
+<td>Medium</td>
+<td>High</td>
+<td>Test-first state machine, integer pool invariants, property tests, shadow reconciliation.</td>
+</tr>
+<tr>
+<td>Commerce recognition double counts mixed service/payment evidence</td>
+<td>Medium</td>
+<td>High</td>
+<td>Typed source adapters, one business identity, revenue/settlement separation, cross-lane fixtures.</td>
+</tr>
+<tr>
+<td>Offline ordering changes cost attribution</td>
+<td>Medium</td>
+<td>High</td>
+<td>Preserve occurrence time, reconstruct as-of basis only when safe, otherwise explicit unknown/reconciliation.</td>
+</tr>
+<tr>
+<td>Backfill exceeds Convex transaction limits</td>
+<td>Medium</td>
+<td>Medium</td>
+<td>Dynamic bounded batches, persisted cursor/cutoff, transactional self-scheduling, pause/resume.</td>
+</tr>
+<tr>
+<td>Rebuild activates stale generation under live writes</td>
+<td>Medium</td>
+<td>High</td>
+<td>Frozen watermark, tail catch-up, stable reconciliation, compare-and-swap activation.</td>
+</tr>
+<tr>
+<td>Historical coverage is incomplete</td>
+<td>High</td>
+<td>Medium</td>
+<td>Per-store/SKU cutover, per-domain coverage, quarantine, no inferred values.</td>
+</tr>
+<tr>
+<td>Auth or cursor leaks cross-store evidence</td>
+<td>Low</td>
+<td>High</td>
+<td>One backend authorizer, store-bound cursor contracts, allowlisted hydration, negative direct-ID tests.</td>
+</tr>
+<tr>
+<td>Dual writes disrupt operational commands</td>
+<td>Medium</td>
+<td>High</td>
+<td>Additive widening, characterization-first adapters, shadow-only reads, operational regression gates.</td>
+</tr>
+<tr>
+<td>Projections become a new graph hotspot</td>
+<td>Medium</td>
+<td>Medium</td>
+<td>Narrow public facade, cohesive domain modules, direct tests, Graphify review after every batch.</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="documentation-and-operational-notes">Documentation and Operational Notes</h2>
+<ul>
+<li>Update <code>packages/athena-webapp/docs/agent/architecture.md</code> with fact, inventory-effect, projection, and activation ownership.</li>
+<li>Update <code>packages/athena-webapp/docs/agent/testing.md</code> with replay, valuation, projection, migration, access, scale, and shadow gates.</li>
+<li>Add the new domain to validation-map ownership as soon as U1 lands; do not wait until U8.</li>
+<li>Record a reusable solution note for the atomic source-effect versus asynchronous projection boundary.</li>
+<li>Define operational owners before activation for quarantine, drift, stalled backfill, failed build, incompatible version, and rollback.</li>
+<li>Keep sanitized diagnostics free of credentials, payment instrument data, raw customer PII, and copied source payloads.</li>
+<li>Regenerate Graphify after each code batch per <code>AGENTS.md</code>.</li>
+</ul>
+<hr>
+<h2 id="success-metrics">Success Metrics</h2>
+<ul>
+<li>Every in-scope source lane writes idempotent facts/effects with no direct stock bypass.</li>
+<li>All integer quantities and minor-unit money reconcile with zero unexplained difference.</li>
+<li>Complete rebuild and incremental processing match for identical facts and versions.</li>
+<li>Accepted cloud activity appears in verified projections within five minutes under normal operation.</li>
+<li>Overview and SKU aggregate reads meet the two/three-second p95 targets at or above the declared fixtures.</li>
+<li>Missing cost, pre-cutover history, stale source, and failed projection remain explicit states, never zero.</li>
+<li>One store proves shadow, activation, and rollback before expansion.</li>
+<li>Existing checkout, storefront, service, receiving, refund, stock continuity, and Daily Close behavior remains green.</li>
+</ul>
+<hr>
+<h2 id="reviewer-alignment">Reviewer Alignment</h2>
+<p>All reviewers returned <code>ALIGNED</code> against the same final revision after four review rounds.</p>
+<ul>
+<li>Reporting architecture, Convex boundaries, and sequencing: <code>ALIGNED</code>.</li>
+<li>Commerce, inventory, valuation, and migration correctness: <code>ALIGNED</code>.</li>
+<li>Security, operability, performance, scope, and verification: <code>ALIGNED</code>.</li>
+</ul>
+<p>Material issues resolved during review included pre-cutover authority handoff, historical replay isolation, complete stock/payment/procurement caller coverage, normalized-identity migration, receipt-cost confirmation, copy-images safety, deficit revaluation, custom-range/export lifecycle, parent metric contracts, deterministic attention precedence, and generated harness ownership.</p>
+<hr>
+<h2 id="sources-amp-references">Sources &amp; References</h2>
+<ul>
+<li><strong>Primary origin:</strong> <a href="../brainstorms/2026-07-09-reports-foundation-requirements.md">Reports Foundation Requirements</a></li>
+<li><strong>Parent origin:</strong> <a href="../brainstorms/2026-07-09-reports-workspace-requirements.md">Reports Workspace Requirements</a></li>
+<li><code>AGENTS.md</code></li>
+<li><code>packages/athena-webapp/convex/_generated/ai/guidelines.md</code></li>
+<li><code>graphify-out/GRAPH_REPORT.md</code></li>
+<li><a href="https://docs.convex.dev/database/advanced/occ">Convex OCC and Atomicity</a></li>
+<li><a href="https://docs.convex.dev/scheduling/scheduled-functions">Convex Scheduled Functions</a></li>
+<li><a href="https://docs.convex.dev/database/pagination">Convex Pagination</a></li>
+<li><a href="https://docs.convex.dev/production/state/limits">Convex Production Limits</a></li>
+</ul>
+<a class="source" href="2026-07-09-002-feat-reports-foundation-plan.md">Open Markdown source</a></main>
+      </div>
+      <footer class="footer">Canonical source: docs/plans/2026-07-09-002-feat-reports-foundation-plan.md</footer>
+    </div>
+  </body>
+</html>

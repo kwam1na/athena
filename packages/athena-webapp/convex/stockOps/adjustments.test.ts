@@ -9,9 +9,20 @@ import { assertConformsToExportedReturns } from "../lib/returnValidatorContract"
 const mockedAuthServer = vi.hoisted(() => ({
   getAuthUserId: vi.fn(),
 }));
+const reportingMocks = vi.hoisted(() => ({
+  applyInventoryEffectWithCtx: vi.fn(),
+  resolveReportingOperatingPeriodWithCtx: vi.fn(),
+}));
 
 vi.mock("@convex-dev/auth/server", () => ({
   getAuthUserId: mockedAuthServer.getAuthUserId,
+}));
+vi.mock("../reporting/inventory/effects", () => ({
+  applyInventoryEffectWithCtx: reportingMocks.applyInventoryEffectWithCtx,
+}));
+vi.mock("../reporting/operatingPeriods", () => ({
+  resolveReportingOperatingPeriodWithCtx:
+    reportingMocks.resolveReportingOperatingPeriodWithCtx,
 }));
 
 import {
@@ -259,6 +270,34 @@ function createInventorySnapshotQueryCtx() {
 
 beforeEach(() => {
   mockedAuthServer.getAuthUserId.mockResolvedValue("auth-user-1");
+  reportingMocks.resolveReportingOperatingPeriodWithCtx.mockResolvedValue({
+    kind: "missing_schedule",
+  });
+  reportingMocks.applyInventoryEffectWithCtx.mockImplementation(
+    async (ctx: MutationCtx, args: Record<string, any>) => {
+      await ctx.db.patch("productSku", args.productSkuId, {
+        inventoryCount: args.compatibilityBalance.onHandQuantity,
+        quantityAvailable: args.compatibilityBalance.sellableQuantity,
+      });
+      const movementId = await ctx.db.insert("inventoryMovement", {
+        actorUserId: args.actorUserId,
+        createdAt: args.recordedAt,
+        movementType: args.movementType,
+        organizationId: args.organizationId,
+        productId: args.productId,
+        productSkuId: args.productSkuId,
+        quantityDelta: args.physicalQuantityDelta,
+        reasonCode: args.reasonCode,
+        sourceId: args.sourceId,
+        sourceType: args.sourceType,
+        storeId: args.storeId,
+        workItemId: args.workItemId,
+      });
+      return {
+        movement: await ctx.db.get("inventoryMovement", movementId),
+      };
+    },
+  );
 });
 
 function createApprovalDecisionMutationCtx() {
@@ -333,6 +372,9 @@ function createApprovalDecisionMutationCtx() {
       ],
     ]),
     skuActivityEvent: new Map<string, Record<string, unknown>>(),
+    store: new Map<string, Record<string, unknown>>([
+      ["store-1", { _id: "store-1", organizationId: "org-1" }],
+    ]),
     stockAdjustmentBatch: new Map<string, Record<string, unknown>>([
       [
         "batch-1",
@@ -474,7 +516,13 @@ function createSubmissionMutationCtx(args: {
             email: "operator@example.com",
           },
         ]
-      ).map((athenaUser) => [athenaUser._id, athenaUser]),
+      ).map((athenaUser) => [
+        athenaUser._id,
+        {
+          ...athenaUser,
+          normalizedEmail: athenaUser.email.trim().toLowerCase(),
+        },
+      ]),
     ),
     catalogSummary: new Map<string, Record<string, unknown>>(),
     category: new Map<string, Record<string, unknown>>([
@@ -682,6 +730,35 @@ function createSubmissionMutationCtx(args: {
         if (table === "athenaUser") {
           return {
             collect: async () => Array.from(tables.athenaUser.values()),
+            withIndex(
+              _index: string,
+              applyIndex: (queryBuilder: {
+                eq: (field: string, value: unknown) => unknown;
+              }) => unknown,
+            ) {
+              const filters: Array<[string, unknown]> = [];
+              const queryBuilder = {
+                eq(field: string, value: unknown) {
+                  filters.push([field, value]);
+                  return queryBuilder;
+                },
+              };
+              applyIndex(queryBuilder);
+              return {
+                first: async () =>
+                  Array.from(tables.athenaUser.values()).find((record) =>
+                    filters.every(([field, value]) => record[field] === value),
+                  ) ?? null,
+                take: async (limit: number) =>
+                  Array.from(tables.athenaUser.values())
+                    .filter((record) =>
+                      filters.every(
+                        ([field, value]) => record[field] === value,
+                      ),
+                    )
+                    .slice(0, limit),
+              };
+            },
           };
         }
 
@@ -1447,7 +1524,8 @@ describe("stock ops adjustments", () => {
       'withIndex("by_storeId_adjustmentType_submissionKey"',
     );
     expect(source).toContain("buildApprovalRequest");
-    expect(source).toContain("recordInventoryMovementWithCtx");
+    expect(source).toContain("applyInventoryEffectWithCtx");
+    expect(source).not.toContain('ctx.db.patch("productSku"');
   });
 
   it("keeps the temporary stock-scope SKU deletion guarded", () => {
@@ -1642,6 +1720,23 @@ describe("stock ops adjustments", () => {
         quantityDelta: 1,
       }),
     ]);
+    expect(reportingMocks.applyInventoryEffectWithCtx).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        businessEventKey:
+          "stock_adjustment_batch:stockAdjustmentBatch-1:sku:sku-1",
+        compatibilityBalance: {
+          onHandQuantity: 9,
+          sellableQuantity: 7,
+        },
+        reasonCode: "correction",
+        valuation: {
+          costBasis: { kind: "uncosted" },
+          kind: "inbound",
+          quantity: 1,
+        },
+      }),
+    );
     expect(ctx.scheduler.runAfter).toHaveBeenCalledWith(
       0,
       internal.inventory.catalogSummary.markCatalogSummaryNeedsRefreshInternal,
@@ -2245,6 +2340,19 @@ describe("stock ops adjustments", () => {
         workItemId: "work-item-1",
       }),
     ]);
+    expect(reportingMocks.applyInventoryEffectWithCtx).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        actorUserId: "manager-1",
+        businessEventKey: "stock_adjustment_batch:batch-1:sku:sku-1",
+        valuation: {
+          disposition: "stock_correction",
+          kind: "outbound",
+          quantity: 6,
+        },
+        workItemId: "work-item-1",
+      }),
+    );
     expect(ctx.scheduler.runAfter).toHaveBeenCalledWith(
       0,
       internal.inventory.catalogSummary.markCatalogSummaryNeedsRefreshInternal,

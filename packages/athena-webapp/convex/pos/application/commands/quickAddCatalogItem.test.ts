@@ -5,7 +5,12 @@ import type { MutationCtx } from "../../../_generated/server";
 import { quickAddCatalogItem } from "./quickAddCatalogItem";
 
 const mocks = vi.hoisted(() => ({
+  applyInventoryEffectWithCtx: vi.fn(),
   upsertProductSkuSearchProjection: vi.fn(),
+}));
+
+vi.mock("../../../reporting/inventory/effects", () => ({
+  applyInventoryEffectWithCtx: mocks.applyInventoryEffectWithCtx,
 }));
 
 vi.mock("../../../inventory/skuSearch", () => ({
@@ -76,7 +81,11 @@ function createQuickAddCtx(seed?: Partial<Record<TableName, Row[]>>) {
         tables[table].set(id, { _id: id, ...value });
         return id;
       },
-      async patch(table: TableName, id: string, value: Record<string, unknown>) {
+      async patch(
+        table: TableName,
+        id: string,
+        value: Record<string, unknown>,
+      ) {
         const existing = tables[table].get(id);
         if (!existing) {
           throw new Error(`Missing ${table}: ${id}`);
@@ -153,6 +162,14 @@ const baseSeed = {
 
 describe("quickAddCatalogItem", () => {
   beforeEach(() => {
+    mocks.applyInventoryEffectWithCtx.mockReset();
+    mocks.applyInventoryEffectWithCtx.mockImplementation(async (ctx, args) => {
+      await ctx.db.patch("productSku", args.productSkuId, {
+        inventoryCount: args.compatibilityBalance.onHandQuantity,
+        quantityAvailable: args.compatibilityBalance.sellableQuantity,
+      });
+      return { disposition: "inserted", mode: "compatibility_shadow" };
+    });
     mocks.upsertProductSkuSearchProjection.mockReset();
   });
 
@@ -196,6 +213,20 @@ describe("quickAddCatalogItem", () => {
     expect(mocks.upsertProductSkuSearchProjection).toHaveBeenCalledWith(
       ctx,
       sku._id,
+    );
+    expect(mocks.applyInventoryEffectWithCtx).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        businessEventKey: `pos_quick_add:${sku._id}:opening_stock`,
+        completeness: "partial",
+        physicalQuantityDelta: 2,
+        sellableQuantityDelta: 2,
+        valuation: expect.objectContaining({
+          costBasis: { kind: "uncosted" },
+          kind: "inbound",
+          quantity: 2,
+        }),
+      }),
     );
 
     expect(Array.from(tables.operationalEvent.values())).toEqual([
@@ -253,7 +284,12 @@ describe("quickAddCatalogItem", () => {
     const { ctx } = createQuickAddCtx({
       ...baseSeed,
       category: [
-        { _id: "category001", storeId: "storezzzz", slug: "wigs", name: "Wigs" },
+        {
+          _id: "category001",
+          storeId: "storezzzz",
+          slug: "wigs",
+          name: "Wigs",
+        },
       ],
       product: [
         {
@@ -290,10 +326,7 @@ describe("quickAddCatalogItem", () => {
       quantityAvailable: 1,
     });
 
-    expect(insertSpy).not.toHaveBeenCalledWith(
-      "product",
-      expect.any(Object),
-    );
+    expect(insertSpy).not.toHaveBeenCalledWith("product", expect.any(Object));
     expect(insertSpy).not.toHaveBeenCalledWith(
       "productSku",
       expect.any(Object),
@@ -309,7 +342,12 @@ describe("quickAddCatalogItem", () => {
     const { ctx, tables } = createQuickAddCtx({
       ...baseSeed,
       category: [
-        { _id: "category001", storeId: "storezzzz", slug: "wigs", name: "Wigs" },
+        {
+          _id: "category001",
+          storeId: "storezzzz",
+          slug: "wigs",
+          name: "Wigs",
+        },
       ],
       product: [
         {
@@ -346,10 +384,7 @@ describe("quickAddCatalogItem", () => {
       productSkuId: "productSku001" as Id<"productSku">,
     });
 
-    expect(insertSpy).not.toHaveBeenCalledWith(
-      "product",
-      expect.any(Object),
-    );
+    expect(insertSpy).not.toHaveBeenCalledWith("product", expect.any(Object));
     expect(insertSpy).not.toHaveBeenCalledWith(
       "productSku",
       expect.any(Object),
@@ -376,8 +411,7 @@ describe("quickAddCatalogItem", () => {
         subjectId: "productSku001",
         subjectLabel: "Existing wig",
         subjectType: "product_sku",
-        message:
-          "Kwamina Nuh attached barcode 111122223333 to Existing wig.",
+        message: "Kwamina Nuh attached barcode 111122223333 to Existing wig.",
         metadata: expect.objectContaining({
           barcode: "111122223333",
           productId: "product001",
@@ -392,7 +426,12 @@ describe("quickAddCatalogItem", () => {
     const { ctx } = createQuickAddCtx({
       ...baseSeed,
       category: [
-        { _id: "category001", storeId: "storezzzz", slug: "wigs", name: "Wigs" },
+        {
+          _id: "category001",
+          storeId: "storezzzz",
+          slug: "wigs",
+          name: "Wigs",
+        },
       ],
       product: [
         {
@@ -446,7 +485,12 @@ describe("quickAddCatalogItem", () => {
     const { ctx, tables } = createQuickAddCtx({
       ...baseSeed,
       category: [
-        { _id: "category001", storeId: "storezzzz", slug: "wigs", name: "Wigs" },
+        {
+          _id: "category001",
+          storeId: "storezzzz",
+          slug: "wigs",
+          name: "Wigs",
+        },
       ],
       product: [
         {

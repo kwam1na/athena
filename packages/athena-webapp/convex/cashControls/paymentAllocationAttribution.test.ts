@@ -44,6 +44,7 @@ describe("cash-control payment allocation attribution", () => {
   it("builds one retained allocation per payment with register-session metadata", () => {
     const allocations = buildInStorePaymentAllocations({
       allocationType: "retail_sale",
+      businessEventKeyPrefix: "pos:transaction_1:sale",
       changeGiven: 1000,
       externalReferencePrefix: "tx-123",
       payments: [
@@ -60,6 +61,7 @@ describe("cash-control payment allocation attribution", () => {
       expect.objectContaining({
         allocationType: "retail_sale",
         amount: 8000,
+        businessEventKey: "pos:transaction_1:sale:0",
         collectedInStore: true,
         externalReference: "tx-123:0",
         method: "cash",
@@ -71,6 +73,7 @@ describe("cash-control payment allocation attribution", () => {
       expect.objectContaining({
         allocationType: "retail_sale",
         amount: 3000,
+        businessEventKey: "pos:transaction_1:sale:1",
         collectedInStore: true,
         externalReference: "tx-123:1",
         method: "card",

@@ -4,10 +4,7 @@ import { mutation, query, MutationCtx, QueryCtx } from "../_generated/server";
 import { Id } from "../_generated/dataModel";
 import { v } from "convex/values";
 import { resolveRegisterSessionForInStoreCollectionWithCtx } from "../cashControls/paymentAllocationAttribution";
-import {
-  recordInventoryMovementWithCtx,
-  summarizeInventoryMovements,
-} from "../operations/inventoryMovements";
+import { summarizeInventoryMovements } from "../operations/inventoryMovements";
 import {
   createOperationalWorkItemWithCtx,
   updateOperationalWorkItemStatusWithCtx,
@@ -24,6 +21,14 @@ import {
   SERVICE_CASE_LOOKUP_TYPE,
   SERVICE_CASE_WORKFLOW_TYPE,
 } from "../workflowTraces/adapters/serviceCase";
+import { applyInventoryEffectWithCtx } from "../reporting/inventory/effects";
+import type { OutboundValuationBasisSnapshot } from "../reporting/inventory/types";
+import { resolveReportingOperatingPeriodWithCtx } from "../reporting/operatingPeriods";
+import {
+  appendReportingIngressWithCtx,
+  type ReportingIngressLineInput,
+} from "../reporting/ingress";
+import { canonicalReportingBusinessEventKey } from "../reporting/factIdentity";
 
 export const SERVICE_CASE_STATUSES = [
   "intake",
@@ -134,6 +139,126 @@ async function listServiceInventoryUsageWithCtx(
     .query("serviceInventoryUsage")
     .withIndex("by_serviceCaseId", (q) => q.eq("serviceCaseId", serviceCaseId))
     .collect();
+}
+
+function uncostedServiceReturnBasis(
+  quantity: number,
+): OutboundValuationBasisSnapshot {
+  return {
+    allocatedKnownCost: 0,
+    basisVersion: 0,
+    costedQuantity: 0,
+    currency: null,
+    knownCostPoolBefore: 0,
+    roundedWeightedAverageUnitCost: null,
+    uncostedQuantity: quantity,
+    unresolvedDeficitQuantity: 0,
+  };
+}
+
+function roundServiceReturnCost(
+  total: number,
+  part: number,
+  whole: number,
+): number {
+  if (part === 0 || total === 0) return 0;
+  if (part === whole) return total;
+  const numerator = BigInt(total) * BigInt(part);
+  const denominator = BigInt(whole);
+  return Number((numerator * 2n + denominator) / (denominator * 2n));
+}
+
+async function resolveServiceReturnBasisWithCtx(
+  ctx: MutationCtx,
+  args: {
+    productSkuId: Id<"productSku">;
+    quantity: number;
+    serviceCaseId: Id<"serviceCase">;
+  },
+): Promise<OutboundValuationBasisSnapshot> {
+  const priorUsage = (await listServiceInventoryUsageWithCtx(
+    ctx,
+    args.serviceCaseId,
+  )).filter((usage) => usage.productSkuId === args.productSkuId);
+  const consumed = priorUsage.filter((usage) => usage.usageType === "consumed");
+  const alreadyReturned = priorUsage
+    .filter((usage) => usage.usageType === "returned")
+    .reduce((sum, usage) => sum + usage.quantity, 0);
+
+  // Without a source-consumption selector, more than one consumption is
+  // ambiguous. Keep the return explicitly uncosted instead of guessing.
+  if (
+    consumed.length !== 1 ||
+    alreadyReturned + args.quantity > consumed[0].quantity ||
+    !consumed[0].inventoryMovementId
+  ) {
+    return uncostedServiceReturnBasis(args.quantity);
+  }
+
+  const movement = await ctx.db.get(
+    "inventoryMovement",
+    consumed[0].inventoryMovementId,
+  );
+  if (!movement?.reportingInventoryEffectId) {
+    return uncostedServiceReturnBasis(args.quantity);
+  }
+  const effect = await ctx.db.get(
+    "reportingInventoryEffect",
+    movement.reportingInventoryEffectId,
+  );
+  if (!effect || effect.businessEventKey !== movement.businessEventKey) {
+    return uncostedServiceReturnBasis(args.quantity);
+  }
+
+  const originalCostedQuantity = Math.max(0, -effect.costedQuantityDelta);
+  const originalUncostedQuantity =
+    Math.max(0, -effect.uncostedQuantityDelta) +
+    Math.max(0, effect.unresolvedDeficitDelta);
+  if (
+    originalCostedQuantity + originalUncostedQuantity !== consumed[0].quantity
+  ) {
+    return uncostedServiceReturnBasis(args.quantity);
+  }
+
+  const remainingUncostedQuantity = Math.max(
+    0,
+    originalUncostedQuantity - alreadyReturned,
+  );
+  const returnedFromCosted = Math.max(
+    0,
+    alreadyReturned - originalUncostedQuantity,
+  );
+  const remainingCostedQuantity = Math.max(
+    0,
+    originalCostedQuantity - returnedFromCosted,
+  );
+  const originalKnownCost = effect.outboundBasisMinor ?? 0;
+  if (originalCostedQuantity > 0 && !effect.currencyCode) {
+    return uncostedServiceReturnBasis(args.quantity);
+  }
+  const remainingKnownCost = roundServiceReturnCost(
+    originalKnownCost,
+    remainingCostedQuantity,
+    originalCostedQuantity || 1,
+  );
+
+  return {
+    allocatedKnownCost: remainingKnownCost,
+    basisVersion: 0,
+    costedQuantity: remainingCostedQuantity,
+    currency: remainingCostedQuantity > 0 ? effect.currencyCode ?? null : null,
+    knownCostPoolBefore: remainingKnownCost,
+    roundedWeightedAverageUnitCost:
+      remainingCostedQuantity > 0
+        ? roundServiceReturnCost(
+            remainingKnownCost,
+            1,
+            remainingCostedQuantity,
+          )
+        : null,
+    uncostedQuantity: remainingUncostedQuantity,
+    unresolvedDeficitQuantity: 0,
+  };
 }
 
 async function listServiceCaseAllocationsWithCtx(
@@ -611,10 +736,26 @@ export const recordServiceInventoryUsage = mutation({
       return serviceCaseContext;
     }
 
-    const { serviceCase, workItem } = serviceCaseContext.data;
+    const { serviceCase, store, workItem } = serviceCaseContext.data;
     const usageType = args.usageType ?? "consumed";
+    const now = Date.now();
+    const productSku = await ctx.db.get("productSku", args.productSkuId);
+    if (!productSku || productSku.storeId !== serviceCase.storeId) {
+      return userError({
+        code: "not_found",
+        message: "Selected inventory item could not be found for this store.",
+      });
+    }
+    const returnBasis =
+      usageType === "returned"
+        ? await resolveServiceReturnBasisWithCtx(ctx, {
+            productSkuId: args.productSkuId,
+            quantity: args.quantity,
+            serviceCaseId: args.serviceCaseId,
+          })
+        : null;
     const usageId = await ctx.db.insert("serviceInventoryUsage", {
-      createdAt: Date.now(),
+      createdAt: now,
       notes: args.notes,
       productSkuId: args.productSkuId,
       quantity: args.quantity,
@@ -624,30 +765,98 @@ export const recordServiceInventoryUsage = mutation({
       usageType,
     });
 
-    const inventoryMovement =
-      usageType === "planned"
-        ? null
-        : await recordInventoryMovementWithCtx(ctx, {
-            actorStaffProfileId: args.recordedByStaffProfileId,
-            actorUserId: args.recordedByUserId,
-            customerProfileId: serviceCase.customerProfileId,
-            movementType:
+    let inventoryMovement = null;
+    if (usageType !== "planned") {
+      const reportingPeriod = await resolveReportingOperatingPeriodWithCtx(ctx, {
+        occurrenceAt: now,
+        storeId: serviceCase.storeId,
+      });
+      const quantityDelta =
+        usageType === "returned" ? args.quantity : -args.quantity;
+      const nextOnHand = Math.max(
+        0,
+        productSku.inventoryCount + quantityDelta,
+      );
+      const nextSellable =
+        usageType === "returned"
+          ? Math.min(
+              nextOnHand,
+              productSku.quantityAvailable + args.quantity,
+            )
+          : Math.min(nextOnHand, productSku.quantityAvailable);
+      const businessEventKey = `service_inventory_usage:${usageId}:${usageType}`;
+      const inventoryEffect = await applyInventoryEffectWithCtx(ctx, {
+        activityStatus: "committed",
+        activityType:
+          usageType === "returned"
+            ? "stock_service_material_returned"
+            : "stock_service_material_consumed",
+        actorStaffProfileId: args.recordedByStaffProfileId,
+        actorUserId: args.recordedByUserId,
+        businessEventKey,
+        compatibilityBalance: {
+          onHandQuantity: nextOnHand,
+          sellableQuantity: nextSellable,
+        },
+        completeness:
+          reportingPeriod.kind === "resolved" ? "complete" : "partial",
+        contentFingerprint: [
+          "service-material:v1",
+          String(args.serviceCaseId),
+          String(usageId),
+          String(args.productSkuId),
+          usageType,
+          String(args.quantity),
+        ].join(":"),
+        effectType: usageType === "returned" ? "return" : "adjustment",
+        movementType:
+          usageType === "returned"
+            ? "service_material_returned"
+            : "service_material_consumed",
+        notes: args.notes,
+        occurrenceAt: now,
+        ...(reportingPeriod.kind === "resolved"
+          ? {
+              operatingDate: reportingPeriod.operatingDate,
+              scheduleVersionId:
+                reportingPeriod.scheduleVersionId as Id<"storeSchedule">,
+            }
+          : {}),
+        organizationId: serviceCase.organizationId ?? store.organizationId,
+        physicalQuantityDelta: quantityDelta,
+        productId: productSku.productId,
+        productSkuId: args.productSkuId,
+        reasonCode:
+          usageType === "returned"
+            ? "service_case_material_return"
+            : "service_case_material_consumption",
+        recordedAt: now,
+        sellableQuantityDelta:
+          nextSellable - productSku.quantityAvailable,
+        sourceDomain: "service",
+        sourceId: String(usageId),
+        sourceLineId: String(args.productSkuId),
+        sourceType: "service_inventory_usage",
+        storeId: serviceCase.storeId,
+        valuation:
               usageType === "returned"
-                ? "service_material_returned"
-                : "service_material_consumed",
-            notes: args.notes,
-            organizationId: serviceCase.organizationId,
-            productSkuId: args.productSkuId,
-            quantityDelta: usageType === "returned" ? args.quantity : -args.quantity,
-            reasonCode:
-              usageType === "returned"
-                ? "service_case_material_return"
-                : "service_case_material_consumption",
-            sourceId: usageId,
-            sourceType: "service_inventory_usage",
-            storeId: serviceCase.storeId,
-            workItemId: workItem._id,
-          });
+            ? {
+                disposition: "sellable",
+                financialContribution: "reverse_original_lane",
+                kind: "return",
+                originalBasis: returnBasis!,
+                originalCostLane: "inventory_consumed",
+                quantity: args.quantity,
+              }
+            : {
+                disposition: "service_consumption",
+                kind: "outbound",
+                quantity: args.quantity,
+              },
+        workItemId: workItem._id,
+      });
+      inventoryMovement = inventoryEffect.movement;
+    }
 
     if (inventoryMovement) {
       await ctx.db.patch("serviceInventoryUsage", usageId, {
@@ -688,6 +897,7 @@ export const recordServicePayment = mutation({
     actorStaffProfileId: v.optional(v.id("staffProfile")),
     actorUserId: v.optional(v.id("athenaUser")),
     amount: v.number(),
+    businessEventKey: v.optional(v.string()),
     collectedInStore: v.optional(v.boolean()),
     direction: v.optional(v.union(v.literal("in"), v.literal("out"))),
     method: v.string(),
@@ -717,6 +927,9 @@ export const recordServicePayment = mutation({
       actorUserId: args.actorUserId,
       allocationType: args.direction === "out" ? "service_refund" : "service_payment",
       amount: args.amount,
+      businessEventKey:
+        args.businessEventKey ??
+        `service:${serviceCase._id}:payment:${crypto.randomUUID()}`,
       collectedInStore,
       customerProfileId: serviceCase.customerProfileId,
       direction: args.direction,
@@ -782,7 +995,7 @@ export const updateServiceCaseStatus = mutation({
       return serviceCaseContext;
     }
 
-    const { serviceCase, workItem } = serviceCaseContext.data;
+    const { serviceCase, store, workItem } = serviceCaseContext.data;
 
     const statusTransitionResult = assertValidServiceCaseStatusTransition(
       serviceCase.status,
@@ -828,13 +1041,14 @@ export const updateServiceCaseStatus = mutation({
 
     await syncServiceCaseFinancialsWithCtx(ctx, serviceCase);
 
+    const now = Date.now();
     await ctx.db.patch("serviceCase", serviceCase._id, {
-      cancelledAt: args.status === "cancelled" ? Date.now() : undefined,
-      completedAt: args.status === "completed" ? Date.now() : undefined,
-      lastStatusChangedAt: Date.now(),
+      cancelledAt: args.status === "cancelled" ? now : undefined,
+      completedAt: args.status === "completed" ? now : undefined,
+      lastStatusChangedAt: now,
       notes: args.notes ?? serviceCase.notes,
       status: args.status,
-      updatedAt: Date.now(),
+      updatedAt: now,
     });
 
     await updateOperationalWorkItemStatusWithCtx(ctx, {
@@ -858,6 +1072,85 @@ export const updateServiceCaseStatus = mutation({
       subjectType: "service_case",
       workItemId: workItem._id,
     });
+
+    if (args.status === "completed") {
+      const posServiceLine = await ctx.db
+        .query("posTransactionServiceLine")
+        .withIndex("by_serviceCaseId", (q) =>
+          q.eq("serviceCaseId", serviceCase._id),
+        )
+        .first();
+      if (!posServiceLine) {
+        const lines: ReportingIngressLineInput[] =
+          lineItems.length > 0
+            ? lineItems.map((lineItem) => ({
+                costStatus: "not_applicable",
+                discountAmountMinor: 0,
+                grossAmountMinor: lineItem.amount,
+                lineKey: String(lineItem._id),
+                lineKind: "service",
+                netAmountMinor: lineItem.amount,
+                quantity: lineItem.quantity,
+                serviceCaseId: serviceCase._id,
+              }))
+            : [
+                {
+                  costStatus: "not_applicable",
+                  discountAmountMinor: 0,
+                  grossAmountMinor: totalAmount,
+                  lineKey: "service",
+                  lineKind: "service",
+                  netAmountMinor: totalAmount,
+                  quantity: 1,
+                  serviceCaseId: serviceCase._id,
+                },
+              ];
+        const currencyCode = store.currency?.trim().toUpperCase();
+        await appendReportingIngressWithCtx(ctx, {
+          acceptedAt: now,
+          adapterVersion: 1,
+          businessEventKey: canonicalReportingBusinessEventKey({
+            kind: "service_completion",
+            serviceCaseId: String(serviceCase._id),
+          }),
+          contentFingerprint: [
+            "service-complete-v1",
+            String(serviceCase._id),
+            String(totalAmount),
+            ...lines.flatMap((line) => [
+              line.lineKey,
+              String(line.quantity),
+              String(line.netAmountMinor),
+            ]),
+          ].join(":"),
+          ...(currencyCode
+            ? { currencyCode, currencyMinorUnitScale: 2 }
+            : {}),
+          grossAmountMinor: totalAmount,
+          lines,
+          materialFields: [
+            "amountMinor",
+            "occurrenceAt",
+            "quantity",
+            "storeId",
+          ],
+          netAmountMinor: totalAmount,
+          occurredAt: now,
+          organizationId: serviceCase.organizationId ?? store.organizationId,
+          quantity: lines.reduce((sum, line) => sum + line.quantity, 0),
+          sourceDomain: "service",
+          sourceEventType: "service_completed",
+          sourceReferences: [
+            {
+              relation: "owns",
+              sourceId: String(serviceCase._id),
+              sourceType: "service_case",
+            },
+          ],
+          storeId: serviceCase.storeId,
+        });
+      }
+    }
 
     const updatedServiceCase = await ctx.db.get("serviceCase", serviceCase._id);
 

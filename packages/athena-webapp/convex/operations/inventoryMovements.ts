@@ -16,7 +16,19 @@ export type RecordInventoryMovementArgs = {
   movementType: string;
   sourceType: string;
   sourceId: string;
+  sourceLineId?: string;
+  businessEventKey?: string;
+  contentFingerprint?: string;
   quantityDelta: number;
+  occurrenceAt?: number;
+  recordedAt?: number;
+  sellableQuantityDelta?: number;
+  beforeOnHandQuantity?: number;
+  afterOnHandQuantity?: number;
+  beforeSellableQuantity?: number;
+  afterSellableQuantity?: number;
+  disposition?: string;
+  reportingInventoryEffectId?: Id<"reportingInventoryEffect">;
   productId?: Id<"product">;
   productSkuId?: Id<"productSku">;
   actorUserId?: Id<"athenaUser">;
@@ -66,11 +78,20 @@ export function buildSkuActivityForInventoryMovement(
     idempotencyKey: `inventoryMovement:${args.inventoryMovementId}`,
     inventoryMovementId: args.inventoryMovementId,
     metadata: {
+      afterOnHandQuantity: args.afterOnHandQuantity,
+      afterSellableQuantity: args.afterSellableQuantity,
+      beforeOnHandQuantity: args.beforeOnHandQuantity,
+      beforeSellableQuantity: args.beforeSellableQuantity,
+      businessEventKey: args.businessEventKey,
+      contentFingerprint: args.contentFingerprint,
+      disposition: args.disposition,
       movementType: args.movementType,
       notes: args.notes,
       reasonCode: args.reasonCode,
+      reportingInventoryEffectId: args.reportingInventoryEffectId,
+      sellableQuantityDelta: args.sellableQuantityDelta,
     },
-    occurredAt: Date.now(),
+    occurredAt: args.occurrenceAt ?? Date.now(),
     onlineOrderId: args.onlineOrderId,
     organizationId: args.organizationId,
     posTransactionId: args.posTransactionId,
@@ -78,6 +99,7 @@ export function buildSkuActivityForInventoryMovement(
     productSkuId: args.productSkuId,
     registerSessionId: args.registerSessionId,
     sourceId: args.sourceId,
+    sourceLineId: args.sourceLineId,
     sourceType: args.sourceType,
     status: "committed",
     stockQuantityDelta: args.quantityDelta,
@@ -106,7 +128,7 @@ export function buildInventoryMovement(args: RecordInventoryMovementArgs) {
 
   return {
     ...args,
-    createdAt: Date.now(),
+    createdAt: args.recordedAt ?? Date.now(),
   };
 }
 
@@ -127,6 +149,8 @@ export function summarizeInventoryMovements(
 
 function matchesExistingMovement(
   existingMovement: {
+    businessEventKey?: string;
+    contentFingerprint?: string;
     movementType: string;
     quantityDelta: number;
     productId?: Id<"product">;
@@ -135,6 +159,13 @@ function matchesExistingMovement(
   },
   args: RecordInventoryMovementArgs,
 ) {
+  if (args.businessEventKey) {
+    return (
+      existingMovement.businessEventKey === args.businessEventKey &&
+      existingMovement.contentFingerprint === args.contentFingerprint
+    );
+  }
+
   return (
     existingMovement.movementType === args.movementType &&
     existingMovement.quantityDelta === args.quantityDelta &&
@@ -142,6 +173,28 @@ function matchesExistingMovement(
     existingMovement.productSkuId === args.productSkuId &&
     existingMovement.reasonCode === args.reasonCode
   );
+}
+
+function assertNoBusinessEventConflict(
+  existingMovements: Array<{
+    businessEventKey?: string;
+    contentFingerprint?: string;
+  }>,
+  args: RecordInventoryMovementArgs,
+) {
+  if (!args.businessEventKey) return;
+
+  const existing = existingMovements.find(
+    (movement) => movement.businessEventKey === args.businessEventKey,
+  );
+  if (
+    existing &&
+    existing.contentFingerprint !== args.contentFingerprint
+  ) {
+    throw new Error(
+      "Inventory movement business event key conflicts with existing content.",
+    );
+  }
 }
 
 export async function recordInventoryMovementWithCtx(
@@ -158,6 +211,8 @@ export async function recordInventoryMovementWithCtx(
         .eq("sourceId", args.sourceId),
     )
     .collect();
+
+  assertNoBusinessEventConflict(existingMovements, args);
 
   const existingMovement = existingMovements.find((movement) =>
     matchesExistingMovement(movement, args),
@@ -202,6 +257,8 @@ export async function recordInventoryMovementWithDispositionWithCtx(
     )
     .collect();
 
+  assertNoBusinessEventConflict(existingMovements, args);
+
   const existingMovement = existingMovements.find((movement) =>
     matchesExistingMovement(movement, args),
   );
@@ -237,7 +294,19 @@ export const recordInventoryMovement = internalMutation({
     movementType: v.string(),
     sourceType: v.string(),
     sourceId: v.string(),
+    sourceLineId: v.optional(v.string()),
+    businessEventKey: v.optional(v.string()),
+    contentFingerprint: v.optional(v.string()),
     quantityDelta: v.number(),
+    occurrenceAt: v.optional(v.number()),
+    recordedAt: v.optional(v.number()),
+    sellableQuantityDelta: v.optional(v.number()),
+    beforeOnHandQuantity: v.optional(v.number()),
+    afterOnHandQuantity: v.optional(v.number()),
+    beforeSellableQuantity: v.optional(v.number()),
+    afterSellableQuantity: v.optional(v.number()),
+    disposition: v.optional(v.string()),
+    reportingInventoryEffectId: v.optional(v.id("reportingInventoryEffect")),
     productId: v.optional(v.id("product")),
     productSkuId: v.optional(v.id("productSku")),
     actorUserId: v.optional(v.id("athenaUser")),

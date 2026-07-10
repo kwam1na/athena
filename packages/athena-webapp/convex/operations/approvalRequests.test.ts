@@ -15,9 +15,23 @@ import { resolveTransactionVoidApprovalDecisionWithCtx } from "../pos/applicatio
 const mockedAuthServer = vi.hoisted(() => ({
   getAuthUserId: vi.fn(),
 }));
+const reportingMocks = vi.hoisted(() => ({
+  applyInventoryEffectWithCtx: vi.fn(async () => ({ movement: null })),
+}));
 
 vi.mock("@convex-dev/auth/server", () => ({
   getAuthUserId: mockedAuthServer.getAuthUserId,
+}));
+
+vi.mock("../reporting/inventory/effects", () => ({
+  applyInventoryEffectWithCtx: reportingMocks.applyInventoryEffectWithCtx,
+}));
+
+vi.mock("../reporting/operatingPeriods", () => ({
+  resolveReportingOperatingPeriodWithCtx: vi.fn(async () => ({
+    kind: "missing_schedule",
+    occurrenceAt: 1,
+  })),
 }));
 
 vi.mock("../pos/application/commands/adjustTransactionItems", () => ({
@@ -75,7 +89,10 @@ function createApprovalRequestMutationCtx(args: {
             email: "manager@example.com",
           },
         ]
-      ).map((athenaUser) => [athenaUser._id, athenaUser]),
+      ).map((athenaUser) => [
+        athenaUser._id,
+        { ...athenaUser, normalizedEmail: athenaUser.email.trim().toLowerCase() },
+      ]),
     ),
     inventoryMovement: new Map<string, Record<string, unknown>>(),
     operationalEvent: new Map<string, Record<string, unknown>>(),
@@ -150,6 +167,15 @@ function createApprovalRequestMutationCtx(args: {
         },
       ],
     ]),
+    store: new Map<string, Record<string, unknown>>([
+      [
+        "store-1",
+        {
+          _id: "store-1",
+          organizationId: "org-1",
+        },
+      ],
+    ]),
     users: new Map<string, Record<string, unknown>>([
       [
         "auth-user-1",
@@ -173,8 +199,31 @@ function createApprovalRequestMutationCtx(args: {
 
   const query = (table: keyof typeof tables) => {
     if (table === "athenaUser") {
+      const rows = Array.from(tables.athenaUser.values());
       return {
-        collect: async () => Array.from(tables.athenaUser.values()),
+        collect: async () => rows,
+        withIndex(
+          _index: string,
+          applyIndex: (queryBuilder: {
+            eq: (field: string, value: unknown) => unknown;
+          }) => unknown,
+        ) {
+          const filters: Array<[string, unknown]> = [];
+          const queryBuilder = {
+            eq(field: string, value: unknown) {
+              filters.push([field, value]);
+              return queryBuilder;
+            },
+          };
+          applyIndex(queryBuilder);
+          const matches = rows.filter((record) =>
+            filters.every(([field, value]) => record[field] === value),
+          );
+          return {
+            first: async () => matches[0] ?? null,
+            take: async (limit: number) => matches.slice(0, limit),
+          };
+        },
       };
     }
 

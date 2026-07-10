@@ -372,14 +372,6 @@ export async function createPosTransactionItem(
   return ctx.db.insert("posTransactionItem", input);
 }
 
-export async function patchProductSku(
-  ctx: MutationCtx,
-  skuId: Id<"productSku">,
-  patch: Partial<Omit<Doc<"productSku">, "_id" | "_creationTime">>,
-) {
-  await ctx.db.patch("productSku", skuId, patch);
-}
-
 export async function patchPosTransaction(
   ctx: MutationCtx,
   transactionId: Id<"posTransaction">,

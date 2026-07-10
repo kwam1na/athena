@@ -1081,16 +1081,18 @@ export function ServiceCasesView() {
           ),
         )
       }
-      onRecordPayment={(args) =>
-        withSaveState(() =>
+      onRecordPayment={(args) => {
+        const businessEventKey = `service:${args.serviceCaseId}:payment:${crypto.randomUUID()}`;
+        return withSaveState(() =>
           runCommand(() =>
             recordServicePayment({
               ...args,
+              businessEventKey,
               serviceCaseId: args.serviceCaseId as Id<"serviceCase">,
             }),
           ),
-        )
-      }
+        );
+      }}
       onUpdateStatus={(args) =>
         withSaveState(() =>
           runCommand(() =>

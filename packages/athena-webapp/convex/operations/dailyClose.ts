@@ -52,6 +52,7 @@ import {
 } from "../lib/athenaUserAuth";
 import { buildPaymentTotals, transactionCashDelta } from "./paymentTotals";
 import type { AutomationDecisionEvidence } from "../automation/runLedger";
+import { appendReportingIngressWithCtx } from "../reporting/ingress";
 
 export {
   buildAdjustmentReportTotals,
@@ -3411,6 +3412,106 @@ async function recordDailyCloseCompletedEvent(
   });
 }
 
+async function appendDailyCloseCompletedReportingIngress(
+  ctx: MutationCtx,
+  args: {
+    dailyClose: Doc<"dailyClose">;
+    store: Doc<"store">;
+  },
+) {
+  const { dailyClose, store } = args;
+  const salesTotal =
+    typeof dailyClose.summary.salesTotal === "number"
+      ? dailyClose.summary.salesTotal
+      : 0;
+  const sourceCompleteness = dailyClose.sourceCompleteness ?? {
+    complete: false,
+    entries: [],
+  };
+  const closeVersion =
+    dailyClose.reportingCloseVersion ??
+    (dailyClose.supersedesDailyCloseId ? 2 : 1);
+  const completedAt = dailyClose.completedAt ?? dailyClose.updatedAt;
+  const rangeEndAt = dailyClose.reportSnapshot?.closeMetadata.endAt;
+  const rangeStartAt = dailyClose.reportSnapshot?.closeMetadata.startAt;
+  const occurredAt =
+    typeof rangeEndAt === "number" && typeof rangeStartAt === "number"
+      ? Math.max(rangeStartAt, rangeEndAt - 1)
+      : completedAt;
+  const sourceReferences = [
+    {
+      relation: "owns" as const,
+      sourceId: String(dailyClose._id),
+      sourceType: "daily_close",
+    },
+    ...(dailyClose.supersedesDailyCloseId
+      ? [
+          {
+            relation: "supersedes" as const,
+            sourceId: String(dailyClose.supersedesDailyCloseId),
+            sourceType: "daily_close",
+          },
+        ]
+      : []),
+  ];
+  const closeSnapshot = {
+    acceptedDeficitAdjustmentMinor: 0,
+    acceptedNetSalesMinor:
+      typeof dailyClose.summary.adjustedSalesTotal === "number"
+        ? dailyClose.summary.adjustedSalesTotal
+        : salesTotal,
+    acceptedRefundsMinor:
+      typeof dailyClose.summary.adjustmentRefundTotal === "number"
+        ? dailyClose.summary.adjustmentRefundTotal
+        : 0,
+    completeness: sourceCompleteness.complete
+      ? ("complete" as const)
+      : ("partial" as const),
+    snapshotVersion: closeVersion,
+    ...(dailyClose.supersedesDailyCloseId
+      ? { supersedesCloseId: String(dailyClose.supersedesDailyCloseId) }
+      : {}),
+  };
+  const immutableSnapshot = {
+    closeId: String(dailyClose._id),
+    closeSnapshot,
+    closeVersion,
+    currencyCode: store.currency,
+    operatingDate: dailyClose.operatingDate,
+    salesTotal,
+    sourceCompleteness,
+    supersedesCloseId: dailyClose.supersedesDailyCloseId
+      ? String(dailyClose.supersedesDailyCloseId)
+      : null,
+  };
+
+  return appendReportingIngressWithCtx(ctx, {
+    acceptedAt: completedAt,
+    adapterVersion: closeVersion,
+    businessEventKey: `daily_close:${dailyClose._id}:completed:v${closeVersion}`,
+    closeSnapshot,
+    contentFingerprint: `daily-close:v${closeVersion}:${JSON.stringify(immutableSnapshot)}`,
+    currencyCode: store.currency,
+    currencyMinorUnitScale: 2,
+    materialFields: [
+      "closeId",
+      "closeVersion",
+      "currencyCode",
+      "operatingDate",
+      "salesTotal",
+      "sourceCompleteness",
+      "supersedesCloseId",
+    ],
+    netAmountMinor: salesTotal,
+    occurredAt,
+    organizationId: dailyClose.organizationId,
+    sourceDomain: "daily_close",
+    sourceEventType: "daily_close_completed",
+    sourceReferences,
+    storeId: dailyClose.storeId,
+  });
+}
+
 export async function completeDailyCloseWithCtx(
   ctx: MutationCtx,
   args: CompleteDailyCloseArgs,
@@ -3644,6 +3745,11 @@ export async function completeDailyCloseWithCtx(
       updatedAt: now,
     });
   }
+
+  await appendDailyCloseCompletedReportingIngress(ctx, {
+    dailyClose,
+    store,
+  });
 
   await patchDailyCloseCarryForwardWorkItemMetadata(ctx, {
     dailyCloseId: dailyClose._id,
@@ -3961,6 +4067,11 @@ export async function completeDailyCloseForAutomationWithCtx(
       updatedAt: now,
     });
   }
+
+  await appendDailyCloseCompletedReportingIngress(ctx, {
+    dailyClose,
+    store,
+  });
 
   await patchDailyCloseCarryForwardWorkItemMetadata(ctx, {
     dailyCloseId: dailyClose._id,
@@ -4433,6 +4544,8 @@ export async function reopenDailyCloseWithCtx(
     reopenReason: reason,
     reopenedFromDailyCloseId: originalDailyClose._id,
     supersedesDailyCloseId: originalDailyClose._id,
+    reportingCloseVersion:
+      (originalDailyClose.reportingCloseVersion ?? 1) + 1,
   });
 
   await ctx.db.patch("dailyClose", originalDailyClose._id, {

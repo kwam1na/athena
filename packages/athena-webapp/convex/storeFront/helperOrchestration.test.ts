@@ -117,9 +117,11 @@ describe("shared helper orchestration", () => {
     expect(helper).toContain("export async function recordOnlineOrderRestockMovement");
     expect(orderHelper).toContain('from "./orderOperations"');
     expect(onlineOrder).toContain('from "./helpers/orderOperations"');
-    expect(onlineOrderItem).toContain('from "./helpers/orderOperations"');
+    expect(onlineOrderItem).toContain(
+      'from "../reporting/inventory/commerceEffects"',
+    );
     expect(payment).toContain(
-      "internal.operations.paymentAllocations.recordPaymentAllocation"
+      "internal.storeFront.onlineOrder.finalizeRefundInternal",
     );
   });
 });

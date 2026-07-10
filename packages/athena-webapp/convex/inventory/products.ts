@@ -33,6 +33,11 @@ import {
   completeCatalogTaxonomySetupWorkForProductWithCtx,
   completeFinalizedLegacyImportRowsForProductTaxonomyWithCtx,
 } from "./catalogImport";
+import { applyInventoryEffectWithCtx } from "../reporting/inventory/effects";
+import {
+  knownUnitCostBasis,
+  uncostedBasis,
+} from "../reporting/inventory/valuation";
 
 const entity = "product";
 const LEGACY_IMPORT_CATEGORY_SLUG = "legacy-import";
@@ -55,11 +60,11 @@ async function hasAthenaTaxonomyWithCtx(
 
   return Boolean(
     category &&
-      subcategory &&
-      category.storeId === args.storeId &&
-      subcategory.storeId === args.storeId &&
-      subcategory.categoryId === category._id &&
-      category.slug !== LEGACY_IMPORT_CATEGORY_SLUG,
+    subcategory &&
+    category.storeId === args.storeId &&
+    subcategory.storeId === args.storeId &&
+    subcategory.categoryId === category._id &&
+    category.slug !== LEGACY_IMPORT_CATEGORY_SLUG,
   );
 }
 
@@ -499,7 +504,9 @@ export const getById = query({
       }))
       .filter(
         (sku) =>
-          args.includeHiddenSkus || sku.isVisible || sku.isVisible === undefined,
+          args.includeHiddenSkus ||
+          sku.isVisible ||
+          sku.isVisible === undefined,
       );
 
     return {
@@ -846,7 +853,10 @@ export const createSku = mutation({
     // Insert a temporary SKU with "TEMP_SKU"
     const tempSkuData = {
       ...args,
+      inventoryCount: 0,
+      quantityAvailable: 0,
       sku: "TEMP_SKU",
+      unitCost: args.unitCost,
     };
 
     const tempSkuId = await ctx.db.insert("productSku", tempSkuData);
@@ -863,6 +873,46 @@ export const createSku = mutation({
 
     // Update the temporary SKU with the generated or provided SKU
     await ctx.db.patch("productSku", tempSkuId, { sku });
+    if (args.inventoryCount > 0) {
+      const unitCost = args.unitCost;
+      await applyInventoryEffectWithCtx(ctx, {
+        activityType: "product_sku_opening_stock",
+        businessEventKey: `product_sku:${tempSkuId}:opening_stock`,
+        compatibilityBalance: {
+          onHandQuantity: args.inventoryCount,
+          sellableQuantity: args.quantityAvailable,
+        },
+        completeness: "partial",
+        contentFingerprint: `quantity:${args.inventoryCount}:available:${args.quantityAvailable}:cost:${unitCost ?? "unknown"}`,
+        effectType: "baseline",
+        movementType: "opening_stock",
+        notes: "Opening stock recorded when the SKU was created.",
+        occurrenceAt: Date.now(),
+        organizationId: product.organizationId,
+        physicalQuantityDelta: args.inventoryCount,
+        productId: product._id,
+        productSkuId: tempSkuId,
+        reasonCode: "product_sku_created",
+        sellableQuantityDelta: args.quantityAvailable,
+        sourceDomain: "inventory",
+        sourceId: String(tempSkuId),
+        sourceType: "product_sku",
+        storeId: product.storeId,
+        valuation: {
+          costBasis:
+            unitCost === undefined
+              ? uncostedBasis()
+              : knownUnitCostBasis({
+                  currency: product.currency,
+                  quantity: args.inventoryCount,
+                  unitCost,
+                }),
+          deficitLots: [],
+          kind: "inbound",
+          quantity: args.inventoryCount,
+        },
+      });
+    }
     await upsertProductSkuSearchProjection(ctx, tempSkuId);
     await refreshCatalogSummaryWithCtx(ctx, product.storeId);
 
@@ -973,24 +1023,6 @@ export const updateSku = mutation({
     const currentSku = await ctx.db.get("productSku", args.id);
     if (!currentSku) throw new Error("SKU not found");
 
-    // Determine final values for validation
-    const finalQuantityAvailable =
-      args.quantityAvailable ?? currentSku.quantityAvailable;
-    const finalInventoryCount =
-      args.inventoryCount ?? currentSku.inventoryCount;
-
-    // Validate quantityAvailable doesn't exceed stock
-    if (
-      finalQuantityAvailable !== undefined &&
-      finalInventoryCount !== undefined &&
-      finalQuantityAvailable > finalInventoryCount
-    ) {
-      return {
-        success: false,
-        error: "Quantity available cannot exceed stock",
-      };
-    }
-
     if (args.barcode) {
       const skuWithBarcode = await ctx.db
         .query("productSku")
@@ -1016,19 +1048,27 @@ export const updateSku = mutation({
           })
         : undefined;
 
-    // Build patch object with only explicitly provided fields (not undefined)
-    // This automatically handles all fields without needing to list each one
-    const patch = Object.fromEntries(
-      Object.entries(args).filter(
-        ([key, value]) => key !== "id" && value !== undefined,
-      ),
-    );
-
-    if (generatedSku) {
-      patch.sku = generatedSku;
-    }
-
-    await ctx.db.patch("productSku", args.id, patch);
+    await ctx.db.patch("productSku", args.id, {
+      ...(args.images !== undefined ? { images: args.images } : {}),
+      ...(args.isVisible !== undefined ? { isVisible: args.isVisible } : {}),
+      ...(args.posVisible !== undefined ? { posVisible: args.posVisible } : {}),
+      ...(args.length !== undefined ? { length: args.length } : {}),
+      ...(args.size !== undefined ? { size: args.size } : {}),
+      ...(args.color !== undefined ? { color: args.color } : {}),
+      ...(args.weight !== undefined ? { weight: args.weight } : {}),
+      ...(args.barcode !== undefined ? { barcode: args.barcode } : {}),
+      ...(args.barcodeAutoGenerated !== undefined
+        ? { barcodeAutoGenerated: args.barcodeAutoGenerated }
+        : {}),
+      ...(args.price !== undefined ? { price: args.price } : {}),
+      ...(args.netPrice !== undefined ? { netPrice: args.netPrice } : {}),
+      ...(args.attributes !== undefined ? { attributes: args.attributes } : {}),
+      ...(generatedSku !== undefined
+        ? { sku: generatedSku }
+        : args.sku !== undefined
+          ? { sku: args.sku }
+          : {}),
+    });
     await upsertProductSkuSearchProjection(ctx, args.id);
     await refreshCatalogSummaryWithCtx(ctx, currentSku.storeId);
 
@@ -1103,10 +1143,13 @@ export const update = mutation({
       const productAfterPatch = await ctx.db.get("product", args.id);
       if (productAfterPatch) {
         const completedLegacyImportRows =
-          await completeFinalizedLegacyImportRowsForProductTaxonomyWithCtx(ctx, {
-            productId: productAfterPatch._id,
-            storeId: productAfterPatch.storeId,
-          });
+          await completeFinalizedLegacyImportRowsForProductTaxonomyWithCtx(
+            ctx,
+            {
+              productId: productAfterPatch._id,
+              storeId: productAfterPatch.storeId,
+            },
+          );
         if (
           completedLegacyImportRows > 0 &&
           args.isVisible !== false &&

@@ -158,8 +158,12 @@ function assertIdempotentReplayMatches(
   existingEvent: {
     activityType: string;
     productSkuId: Id<"productSku">;
+    quantityDelta?: number;
+    reservationQuantity?: number;
     sourceId: string;
+    sourceLineId?: string;
     sourceType: string;
+    stockQuantityDelta?: number;
     storeId: Id<"store">;
   },
   args: RecordSkuActivityEventArgs
@@ -169,7 +173,11 @@ function assertIdempotentReplayMatches(
     existingEvent.productSkuId !== args.productSkuId ||
     existingEvent.activityType !== args.activityType.trim() ||
     existingEvent.sourceType !== args.sourceType.trim() ||
-    existingEvent.sourceId !== args.sourceId.trim()
+    existingEvent.sourceId !== args.sourceId.trim() ||
+    existingEvent.sourceLineId !== (args.sourceLineId?.trim() || undefined) ||
+    existingEvent.quantityDelta !== args.quantityDelta ||
+    existingEvent.reservationQuantity !== args.reservationQuantity ||
+    existingEvent.stockQuantityDelta !== args.stockQuantityDelta
   ) {
     throw new Error(
       "SKU activity idempotency key conflicts with an existing event."
