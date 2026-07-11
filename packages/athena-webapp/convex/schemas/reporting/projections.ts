@@ -117,14 +117,22 @@ const projectionValueFields = {
 export const reportingStoreDayProjectionSchema = v.object({
   ...projectionValueFields,
   operatingDate: v.string(),
-  scheduleVersionId: v.id("storeSchedule"),
+  scheduleVersionId: v.optional(v.id("storeSchedule")),
+  historicalInterpretationPolicyId: v.optional(
+    v.id("reportingHistoricalInterpretationPolicy"),
+  ),
+  historicalInterpretationPolicyHash: v.optional(v.string()),
 });
 
 export const reportingSkuDayProjectionSchema = v.object({
   ...projectionValueFields,
   productSkuId: v.id("productSku"),
   operatingDate: v.string(),
-  scheduleVersionId: v.id("storeSchedule"),
+  scheduleVersionId: v.optional(v.id("storeSchedule")),
+  historicalInterpretationPolicyId: v.optional(
+    v.id("reportingHistoricalInterpretationPolicy"),
+  ),
+  historicalInterpretationPolicyHash: v.optional(v.string()),
 });
 
 export const reportingCurrentValuationProjectionSchema = v.object({
@@ -164,9 +172,14 @@ export const reportingDailyCloseProjectionSchema = v.object({
   organizationId: v.id("organization"),
   storeId: v.id("store"),
   operatingDate: v.string(),
-  scheduleVersionId: v.id("storeSchedule"),
+  scheduleVersionId: v.optional(v.id("storeSchedule")),
+  historicalInterpretationPolicyId: v.optional(
+    v.id("reportingHistoricalInterpretationPolicy"),
+  ),
+  historicalInterpretationPolicyHash: v.optional(v.string()),
   acceptedCloseFactId: v.id("reportingFact"),
   acceptedCloseBusinessEventKey: v.string(),
+  acceptedCloseSourceId: v.optional(v.string()),
   acceptedAt: v.number(),
   acceptedCloseVersion: v.number(),
   supersedesDailyCloseProjectionId: v.optional(
@@ -263,6 +276,7 @@ export const reportingMetricCoverageSchema = v.object({
   periodEnd: v.number(),
   latestOccurrenceAt: v.optional(v.number()),
   projectedAt: v.optional(v.number()),
+  processingWatermark: v.optional(v.number()),
   knownLagMs: v.optional(v.number()),
   omittedCount: v.number(),
   quarantinedCount: v.number(),
@@ -274,6 +288,9 @@ export const reportingMetricCoverageSchema = v.object({
 });
 
 export const reportingProjectionEvidenceSchema = v.object({
+  disposition: v.optional(
+    v.union(v.literal("projected"), v.literal("omitted_missing_currency")),
+  ),
   generationId: v.id("reportingProjectionGeneration"),
   organizationId: v.id("organization"),
   storeId: v.id("store"),
@@ -310,6 +327,11 @@ export const reportingProjectionEvidenceSchema = v.object({
   sourceDomain: reportingSourceDomainSchema,
   businessEventKey: v.string(),
   operatingDate: v.optional(v.string()),
+  scheduleVersionId: v.optional(v.id("storeSchedule")),
+  historicalInterpretationPolicyId: v.optional(
+    v.id("reportingHistoricalInterpretationPolicy"),
+  ),
+  historicalInterpretationPolicyHash: v.optional(v.string()),
   occurrenceAt: v.number(),
   recognitionAt: v.number(),
   sourceWatermark: v.optional(v.number()),

@@ -94,4 +94,40 @@ describe("daily reporting projection", () => {
       expect.objectContaining({ currency: "USD", netRevenueMinor: 200 }),
     ]);
   });
+
+  it("supports historical policy lineage without a Store Schedule row", () => {
+    const projection = buildDailyProjection({
+      factVersion: 1,
+      facts: [],
+      generationId: "generation-1",
+      historicalInterpretationPolicyHash: "hash-1",
+      historicalInterpretationPolicyId: "policy-1",
+      metricVersion: 1,
+      operatingDate: "2026-06-01",
+      scheduleVersionId: null,
+      sourceWatermark: 100,
+      storeId: "store-1",
+    });
+    expect(projection).toMatchObject({
+      historicalInterpretationPolicyId: "policy-1",
+      scheduleVersionId: null,
+    });
+  });
+
+  it("rejects mixed period lineage", () => {
+    expect(() =>
+      buildDailyProjection({
+        factVersion: 1,
+        facts: [],
+        generationId: "generation-1",
+        historicalInterpretationPolicyHash: "hash-1",
+        historicalInterpretationPolicyId: "policy-1",
+        metricVersion: 1,
+        operatingDate: "2026-06-01",
+        scheduleVersionId: "schedule-1",
+        sourceWatermark: 100,
+        storeId: "store-1",
+      }),
+    ).toThrow("exactly one");
+  });
 });

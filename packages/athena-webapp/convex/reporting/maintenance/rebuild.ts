@@ -14,11 +14,13 @@ import {
 import {
   applyFactToGenerationWithCtx,
   currencyForFactMetric,
+  factContributionProjectionEligibility,
   minorUnitScaleForFactMetric,
 } from "../projections/processor";
 import { deriveFactMetricContributions } from "../projections/factContributions";
 import { materializeGenerationCoverageWithCtx } from "../coverage";
 import { upsertProjectionHealthWithCtx } from "../health";
+import { reportingPeriodLineage } from "../factFingerprint";
 import { assertReportingRunTransition } from "./runLedger";
 
 const reportingRebuildInternal = (internal as any).reporting.maintenance
@@ -294,13 +296,20 @@ function isQuantityMetric(metric: string) {
   );
 }
 
-function reconciliationLogicalKey(input: {
+export function reconciliationLogicalKey(input: {
   metric: string;
   operatingDate: string;
   productSkuId?: Id<"productSku">;
+  scheduleVersionId?: string | null;
+  historicalInterpretationPolicyId?: string | null;
+  historicalInterpretationPolicyHash?: string | null;
 }) {
+  const lineage = reportingPeriodLineage(input);
   return JSON.stringify([
     input.operatingDate,
+    lineage.kind,
+    lineage.id,
+    lineage.kind === "historical_policy" ? lineage.hash : null,
     input.productSkuId ? String(input.productSkuId) : null,
     input.metric,
   ]);
@@ -936,15 +945,26 @@ export const processProjectionReconciliationBatchMutation = internalMutation({
         }
         const contributions = deriveFactMetricContributions(fact);
         for (const contribution of contributions) {
-          if (generation.projectionKind === "sku_day" && !fact.productSkuId) {
+          if (
+            factContributionProjectionEligibility({
+              fact,
+              metric: contribution.metric,
+              projectionKind: generation.projectionKind,
+            }) !== "project"
+          ) {
             continue;
           }
           const logicalKey = reconciliationLogicalKey({
             metric: contribution.metric,
             operatingDate: fact.operatingDate,
+            scheduleVersionId: fact.scheduleVersionId,
+            historicalInterpretationPolicyId:
+              fact.historicalInterpretationPolicyId,
+            historicalInterpretationPolicyHash:
+              fact.historicalInterpretationPolicyHash,
             productSkuId:
               generation.projectionKind === "sku_day"
-                ? fact.productSkuId
+                ? (fact.canonicalProductSkuId ?? fact.productSkuId)
                 : undefined,
           });
           const contributionCurrency = currencyForFactMetric(
@@ -953,25 +973,6 @@ export const processProjectionReconciliationBatchMutation = internalMutation({
           );
           const contributionCurrencyMinorUnitScale =
             minorUnitScaleForFactMetric(fact, contribution.metric);
-          if (
-            !isQuantityMetric(contribution.metric) &&
-            (contributionCurrency === undefined ||
-              contributionCurrencyMinorUnitScale === undefined)
-          ) {
-            await recordDiscrepancy(ctx, {
-              actual: 0,
-              expected: 1,
-              generationId: generation._id,
-              invariant: "currency_missing",
-              logicalKey: `${fact._id}:${contribution.metric}`,
-              metric: contribution.metric,
-              operatingDate: fact.operatingDate,
-              organizationId: generation.organizationId,
-              productSkuId: fact.productSkuId,
-              runId: run._id,
-              storeId: run.storeId,
-            });
-          }
           await addAccumulator(ctx, {
             currencyCode: isQuantityMetric(contribution.metric)
               ? undefined
@@ -985,7 +986,7 @@ export const processProjectionReconciliationBatchMutation = internalMutation({
             operatingDate: fact.operatingDate,
             productSkuId:
               generation.projectionKind === "sku_day"
-                ? fact.productSkuId
+                ? (fact.canonicalProductSkuId ?? fact.productSkuId)
                 : undefined,
             runId: run._id,
             source: "expected",
@@ -999,7 +1000,7 @@ export const processProjectionReconciliationBatchMutation = internalMutation({
             operatingDate: fact.operatingDate,
             productSkuId:
               generation.projectionKind === "sku_day"
-                ? fact.productSkuId
+                ? (fact.canonicalProductSkuId ?? fact.productSkuId)
                 : undefined,
             runId: run._id,
             source: "expected_evidence",
@@ -1027,6 +1028,11 @@ export const processProjectionReconciliationBatchMutation = internalMutation({
         const logicalKey = reconciliationLogicalKey({
           metric: row.metric,
           operatingDate: row.operatingDate,
+          scheduleVersionId: row.scheduleVersionId,
+          historicalInterpretationPolicyId:
+            row.historicalInterpretationPolicyId,
+          historicalInterpretationPolicyHash:
+            row.historicalInterpretationPolicyHash,
           productSkuId,
         });
         if (row.metricContractVersion !== generation.metricContractVersion) {
@@ -1086,6 +1092,11 @@ export const processProjectionReconciliationBatchMutation = internalMutation({
             logicalKey: reconciliationLogicalKey({
               metric: `${row.metric}__unknown_quantity`,
               operatingDate: row.operatingDate,
+              scheduleVersionId: row.scheduleVersionId,
+              historicalInterpretationPolicyId:
+                row.historicalInterpretationPolicyId,
+              historicalInterpretationPolicyHash:
+                row.historicalInterpretationPolicyHash,
               productSkuId,
             }),
             metric: `${row.metric}__unknown_quantity`,
@@ -1114,6 +1125,7 @@ export const processProjectionReconciliationBatchMutation = internalMutation({
         generationId: generation._id,
       });
       for (const evidence of page.page) {
+        if (evidence.disposition === "omitted_missing_currency") continue;
         if (!evidence.factId) {
           await recordDiscrepancy(ctx, {
             actual: 1,
@@ -1261,6 +1273,11 @@ export const processProjectionReconciliationBatchMutation = internalMutation({
           logicalKey: reconciliationLogicalKey({
             metric: row.metric,
             operatingDate: row.operatingDate,
+            scheduleVersionId: row.scheduleVersionId,
+            historicalInterpretationPolicyId:
+              row.historicalInterpretationPolicyId,
+            historicalInterpretationPolicyHash:
+              row.historicalInterpretationPolicyHash,
             productSkuId,
           }),
           metric: row.metric,
@@ -1277,6 +1294,11 @@ export const processProjectionReconciliationBatchMutation = internalMutation({
             logicalKey: reconciliationLogicalKey({
               metric: `${row.metric}__unknown_quantity`,
               operatingDate: row.operatingDate,
+              scheduleVersionId: row.scheduleVersionId,
+              historicalInterpretationPolicyId:
+                row.historicalInterpretationPolicyId,
+              historicalInterpretationPolicyHash:
+                row.historicalInterpretationPolicyHash,
               productSkuId,
             }),
             metric: `${row.metric}__unknown_quantity`,
@@ -1546,6 +1568,7 @@ export const processProjectionReconciliationBatchMutation = internalMutation({
         versionDiscrepancy || currencyDiscrepancy ? limitingReason : undefined,
       periodEnd: run.frozenWatermark,
       periodStart: run.createdAt,
+      processingWatermark: run.frozenWatermark,
       omittedSources: omittedCounts,
       quarantinedSources: quarantineCounts,
       truncated: quarantines.length === 100,

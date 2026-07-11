@@ -12,19 +12,280 @@ import {
   fingerprintPersistedHistoricalFact,
   historicalBackfillAuditForOutcome,
   historicalBackfillCoverageBasisPoints,
+  historicalManifestCandidateJson,
+  historicalManifestEntryDigest,
   historicalFactMatchesExistingCanonical,
+  historicalPolicyExcludesClosedFact,
   historicalPosCommerceLine,
   HISTORICAL_BACKFILL_SCANNED_SOURCE_DOMAINS,
   mergeHistoricalBackfillAuditCounts,
+  normalizeHistoricalFactWithPolicy,
   EMPTY_HISTORICAL_BACKFILL_AUDIT,
   planPaymentAllocationFact,
   planHistoricalProcurementFacts,
   planHistoricalReversalFacts,
+  parseHistoricalManifestCandidate,
+  recordHistoricalInterpretationEvidenceWithCtx,
   reconcileHistoricalBackfillCounts,
 } from "./backfill";
 import { deriveFactMetricContributions } from "../projections/factContributions";
 
 describe("reporting historical backfill", () => {
+  const approvedPolicy = {
+    _id: "policy-1",
+    approvalHash: "approval-hash-1",
+    contentHash: "content-hash-1",
+    intervalEnd: 1_000,
+    intervalStart: 0,
+    revenueCurrencyCode: "GHS",
+    status: "approved",
+  } as never;
+
+  it("excludes approved closed-day history without treating missing periods as policy exclusions", () => {
+    const sundayAtNoon = Date.UTC(2026, 6, 5, 12);
+    const policy = {
+      _id: "policy-closed-sunday",
+      approvalHash: "approval-hash-closed-sunday",
+      contentHash: "content-hash-closed-sunday",
+      dateExceptionsJson: "[]",
+      intervalEnd: Date.UTC(2026, 6, 10),
+      intervalStart: Date.UTC(2026, 6, 1),
+      organizationId: "org-1",
+      status: "approved",
+      storeId: "store-1",
+      timezone: "Africa/Accra",
+      weeklyWindowsJson: JSON.stringify(
+        [1, 2, 3, 4, 5, 6].map((dayOfWeek) => ({
+          dayOfWeek,
+          endMinute: 23 * 60,
+          startMinute: 9 * 60,
+        })),
+      ),
+    } as never;
+
+    expect(
+      historicalPolicyExcludesClosedFact({
+        fact: { occurredAt: sundayAtNoon },
+        policy,
+      }),
+    ).toBe(true);
+    expect(
+      historicalPolicyExcludesClosedFact({
+        fact: { occurredAt: sundayAtNoon },
+        policy: null,
+      }),
+    ).toBe(false);
+    expect(
+      historicalPolicyExcludesClosedFact({
+        fact: { occurredAt: Date.UTC(2026, 6, 4, 12) },
+        policy,
+      }),
+    ).toBe(false);
+  });
+
+  it("seals immutable candidate semantics independently of later source mutation", () => {
+    const sourceFact = {
+      amountMinor: 5_000,
+      businessEventKey: "pos:tx-1:complete:line-1",
+      completeness: "partial" as const,
+      costStatus: "unknown" as const,
+      currency: "GHS",
+      factType: "sale" as const,
+      occurredAt: 100,
+      sourceDomain: "pos" as const,
+      sourceId: "tx-1",
+      sourceType: "pos_transaction",
+    };
+    const sealedPeriod = {
+      historicalInterpretationPolicyHash: "approval-hash-1",
+      historicalInterpretationPolicyId: "policy-1",
+      operatingDate: "2026-06-29",
+    };
+    const snapshot = historicalManifestCandidateJson(sourceFact, sealedPeriod);
+    const digest = historicalManifestEntryDigest("historical-manifest-v1:empty", {
+      businessEventKey: sourceFact.businessEventKey,
+      candidateFingerprint: "fingerprint-1",
+      inferredFields: ["currency"],
+      originallyMissingFields: ["currency"],
+      outcome: "created",
+      sanitizedCandidateJson: snapshot,
+      sequence: 1,
+      sourceDomain: "pos",
+    });
+
+    sourceFact.amountMinor = 9_999;
+
+    const candidate = parseHistoricalManifestCandidate(snapshot);
+    expect(candidate.fact.amountMinor).toBe(5_000);
+    expect(candidate.resolvedPeriod).toEqual(sealedPeriod);
+    expect(digest).toBe(
+      historicalManifestEntryDigest("historical-manifest-v1:empty", {
+        businessEventKey: sourceFact.businessEventKey,
+        candidateFingerprint: "fingerprint-1",
+        inferredFields: ["currency"],
+        originallyMissingFields: ["currency"],
+        outcome: "created",
+        sanitizedCandidateJson: snapshot,
+        sequence: 1,
+        sourceDomain: "pos",
+      }),
+    );
+  });
+
+  it("keeps sealed period lineage after current schedule resolution changes", () => {
+    const fact = {
+      amountMinor: 5_000,
+      businessEventKey: "pos:tx-1:complete:line-1",
+      completeness: "complete" as const,
+      costStatus: "not_applicable" as const,
+      currency: "GHS",
+      factType: "sale" as const,
+      occurredAt: 100,
+      sourceDomain: "pos" as const,
+      sourceId: "tx-1",
+      sourceType: "pos_transaction",
+    };
+    const snapshot = historicalManifestCandidateJson(fact, {
+      historicalInterpretationPolicyHash: "approval-hash-1",
+      historicalInterpretationPolicyId: "policy-1",
+      operatingDate: "2026-06-29",
+    });
+    const laterScheduleResolution = {
+      operatingDate: "2026-06-30",
+      scheduleVersionId: "schedule-added-after-seal",
+    };
+
+    expect(parseHistoricalManifestCandidate(snapshot).resolvedPeriod).toEqual({
+      historicalInterpretationPolicyHash: "approval-hash-1",
+      historicalInterpretationPolicyId: "policy-1",
+      operatingDate: "2026-06-29",
+    });
+    expect(parseHistoricalManifestCandidate(snapshot).resolvedPeriod).not.toEqual(
+      laterScheduleResolution,
+    );
+  });
+
+  it("rejects a tampered manifest period with mixed lineage", () => {
+    expect(() =>
+      parseHistoricalManifestCandidate(
+        historicalManifestCandidateJson(
+          {
+            businessEventKey: "pos:tx-1:complete:line-1",
+            completeness: "complete",
+            costStatus: "not_applicable",
+            currency: "GHS",
+            factType: "sale",
+            occurredAt: 100,
+            sourceDomain: "pos",
+            sourceId: "tx-1",
+            sourceType: "pos_transaction",
+          },
+          {
+            historicalInterpretationPolicyHash: "approval-hash-1",
+            historicalInterpretationPolicyId: "policy-1",
+            operatingDate: "2026-06-29",
+            scheduleVersionId: "tampered-schedule",
+          },
+        ),
+      ),
+    ).toThrow("Reporting period lineage requires exactly one source");
+  });
+
+  it("makes manifest digests order-sensitive and tamper-evident", () => {
+    const item = {
+      businessEventKey: "expense:e-1:posted",
+      candidateFingerprint: "fingerprint-1",
+      inferredFields: ["currency"],
+      originallyMissingFields: ["currency"],
+      outcome: "created" as const,
+      sanitizedCandidateJson: JSON.stringify({
+        sourceDomain: "payments",
+        sourceId: "e-1",
+        sourceType: "expense_transaction",
+      }),
+      sequence: 1,
+      sourceDomain: "payments" as const,
+    };
+    const digest = historicalManifestEntryDigest("seed", item);
+    expect(
+      historicalManifestEntryDigest("seed", { ...item, sequence: 2 }),
+    ).not.toBe(digest);
+    expect(
+      historicalManifestEntryDigest("seed", {
+        ...item,
+        sanitizedCandidateJson: `${item.sanitizedCandidateJson} `,
+      }),
+    ).not.toBe(digest);
+  });
+
+  it("infers only approved missing revenue currency and records original absence", () => {
+    const normalized = normalizeHistoricalFactWithPolicy({
+      fact: {
+        amountMinor: 5_000,
+        businessEventKey: "payment_allocation:a-1:recorded:payment",
+        completeness: "complete",
+        costStatus: "not_applicable",
+        currency: null,
+        factType: "payment",
+        occurredAt: 100,
+        sourceDomain: "payments",
+        sourceId: "a-1",
+        sourceType: "payment_allocation",
+      },
+      policy: approvedPolicy,
+    });
+    expect(normalized).toMatchObject({
+      fact: { currency: "GHS" },
+      inferredFields: ["revenueCurrency"],
+      originallyMissingFields: ["revenueCurrency"],
+    });
+  });
+
+  it("does not apply Wigclub currency outside policy or to procurement valuation", () => {
+    const outside = normalizeHistoricalFactWithPolicy({
+      fact: {
+        amountMinor: 5_000,
+        businessEventKey: "payment_allocation:a-1:recorded:payment",
+        completeness: "complete",
+        costStatus: "not_applicable",
+        currency: null,
+        factType: "payment",
+        occurredAt: 1_001,
+        sourceDomain: "payments",
+        sourceId: "a-1",
+        sourceType: "payment_allocation",
+      },
+      policy: approvedPolicy,
+    });
+    expect(outside.fact.currency).toBeNull();
+    expect(outside.inferredFields).toEqual([]);
+
+    const procurement = normalizeHistoricalFactWithPolicy({
+      fact: {
+        businessEventKey: "purchase_order:po-1:receipt:r-1",
+        cogsKnownMinor: 2_000,
+        completeness: "complete",
+        costStatus: "known",
+        currency: null,
+        factType: "procurement_receipt",
+        occurredAt: 100,
+        sourceDomain: "procurement",
+        sourceId: "r-1",
+        sourceType: "purchase_order",
+      },
+      policy: approvedPolicy,
+    });
+    expect(procurement.fact).toMatchObject({
+      completeness: "partial",
+      costStatus: "unknown",
+      currency: null,
+      limitingReason: "uncosted",
+    });
+    expect(procurement.fact.cogsKnownMinor).toBeUndefined();
+    expect(procurement.inferredFields).toEqual([]);
+    expect(procurement.originallyMissingFields).toEqual(["valuationCurrency"]);
+  });
+
   it("quarantines missing occurrence, currency, or identity without invention", () => {
     expect(
       classifyHistoricalCommerce({
@@ -271,6 +532,47 @@ describe("reporting historical backfill", () => {
     ).toBe(false);
   });
 
+  it("rejects a canonical payment currency that differs from policy-resolved GHS", () => {
+    const normalized = normalizeHistoricalFactWithPolicy({
+      fact: planPaymentAllocationFact({
+        _id: "allocation-1",
+        amount: 5_000,
+        direction: "in",
+        recordedAt: 100,
+        status: "recorded",
+      } as never)[0]!,
+      policy: approvedPolicy,
+    }).fact;
+    const period = {
+      operatingDate: "2026-07-09",
+      scheduleVersionId: "schedule-1",
+    };
+    const scope = { organizationId: "org-1", storeId: "store-1" };
+    const existing = {
+      amountMinor: 5_000,
+      businessEventKey: normalized.businessEventKey,
+      completeness: "complete",
+      costStatus: "not_applicable",
+      currencyCode: "USD",
+      currencyMinorUnitScale: 2,
+      factType: "payment",
+      occurrenceAt: 100,
+      operatingDate: period.operatingDate,
+      organizationId: scope.organizationId,
+      scheduleVersionId: period.scheduleVersionId,
+      sourceDomain: "payments",
+      storeId: scope.storeId,
+    };
+    expect(
+      historicalFactMatchesExistingCanonical({
+        existing: existing as never,
+        fact: normalized,
+        period,
+        scope,
+      }),
+    ).toBe(false);
+  });
+
   it("matches live and historical commerce on all source-known material", () => {
     const fact = {
       allocatedDiscountMinor: 500,
@@ -343,8 +645,8 @@ describe("reporting historical backfill", () => {
       quantity: 2,
       totalPrice: 5_000,
       unitPrice: 2_750,
-    } as never;
-    expect(historicalPosCommerceLine(item)).toMatchObject({
+    };
+    expect(historicalPosCommerceLine(item as never)).toMatchObject({
       allocatedDiscountMinor: 500,
       canonicalSkuId: undefined,
       originalSkuId: "sku-provisional",
@@ -354,7 +656,7 @@ describe("reporting historical backfill", () => {
       skuId: "sku-provisional",
     });
     expect(
-      historicalPosCommerceLine(item, {
+      historicalPosCommerceLine(item as never, {
         canonicalProductSkuId: "sku-canonical",
         pendingCheckoutItemId: "pending-1",
       } as never),
@@ -379,13 +681,13 @@ describe("reporting historical backfill", () => {
       runType: "backfill",
       status: "completed",
       storeId: "store-1",
-    } as never;
+    };
     expect(
       assertHistoricalBackfillPreviewCompatible({
         organizationId: "org-1" as never,
         periodEnd: 200,
         periodStart: 100,
-        preview,
+        preview: preview as never,
         storeId: "store-1" as never,
       }),
     ).toBe(preview);
@@ -393,7 +695,7 @@ describe("reporting historical backfill", () => {
       assertHistoricalBackfillPreviewCompatible({
         organizationId: "org-1" as never,
         periodEnd: 201,
-        preview,
+        preview: preview as never,
         storeId: "store-1" as never,
       }),
     ).toThrow("compatible completed preview");
@@ -401,7 +703,7 @@ describe("reporting historical backfill", () => {
 
   it("keeps preview and apply audit accounting in deterministic parity", () => {
     const audit = [
-      { outcome: "created" as const, unknownFieldCount: 0 },
+      { outcome: "created" as const, unknownFieldCount: 0, inferredCount: 1 },
       { outcome: "existing" as const, unknownFieldCount: 1 },
       { outcome: "excluded" as const, unknownFieldCount: 0 },
       { outcome: "conflict" as const, unknownFieldCount: 1 },
@@ -425,6 +727,7 @@ describe("reporting historical backfill", () => {
       plannedCount: 4,
       unknownCount: 2,
       unknownFieldCount: 2,
+      inferredCount: 1,
     });
     expect(historicalBackfillCoverageBasisPoints(audit)).toBe(5_000);
     expect(
@@ -433,6 +736,56 @@ describe("reporting historical backfill", () => {
         audit,
       ),
     ).toEqual(audit);
+  });
+
+  it("replays identical interpretation evidence idempotently and rejects drift", async () => {
+    const rows: Array<Record<string, unknown>> = [];
+    let insertCount = 0;
+    const ctx = {
+      db: {
+        insert: async (_table: string, value: Record<string, unknown>) => {
+          insertCount += 1;
+          const row = { _id: `evidence-${insertCount}`, ...value };
+          rows.push(row);
+          return row._id;
+        },
+        query: () => ({
+          withIndex: () => ({
+            take: async () => rows,
+          }),
+        }),
+      },
+    } as never;
+    const input = {
+      businessEventKey: "payment_allocation:a-1:recorded:payment",
+      factId: "fact-1",
+      inferredFields: ["revenueCurrency"],
+      originallyMissingFields: ["revenueCurrency"],
+      policy: {
+        _id: "policy-1",
+        approvalHash: "approval-hash-1",
+      },
+      run: {
+        organizationId: "org-1",
+        storeId: "store-1",
+      },
+      sourceDomain: "payments" as const,
+    };
+
+    await expect(
+      recordHistoricalInterpretationEvidenceWithCtx(ctx, input as never),
+    ).resolves.toBe("evidence-1");
+    await expect(
+      recordHistoricalInterpretationEvidenceWithCtx(ctx, input as never),
+    ).resolves.toBe("evidence-1");
+    expect(insertCount).toBe(1);
+
+    await expect(
+      recordHistoricalInterpretationEvidenceWithCtx(ctx, {
+        ...input,
+        inferredFields: [],
+      } as never),
+    ).rejects.toThrow("Historical interpretation evidence conflicts");
   });
 
   it("replays payment allocations with the same settlement-only canonical identity", () => {
@@ -822,5 +1175,29 @@ describe("reporting historical backfill", () => {
     expect(schema).toContain(
       '.index("by_storeId_receivedAt", ["storeId", "receivedAt"])',
     );
+  });
+
+  it("writes apply facts only from bounded sealed manifest pages", () => {
+    const source = readFileSync(
+      "convex/reporting/maintenance/backfill.ts",
+      "utf8",
+    );
+    const start = source.indexOf(
+      'run.operation === "historical_backfill_manifest_apply"',
+    );
+    const end = source.indexOf(
+      "const cursor = decodeHistoricalBackfillCursor",
+      start,
+    );
+    const writePass = source.slice(start, end);
+    expect(writePass).toContain(
+      '.query("reportingBackfillApplyManifestItem")',
+    );
+    expect(writePass).toContain(".paginate({ cursor: run.cursor ?? null");
+    expect(writePass).toContain("parseHistoricalManifestCandidate(");
+    expect(writePass).toContain("apply: true");
+    expect(writePass).not.toContain("loadPosPage(");
+    expect(writePass).not.toContain("loadStorefrontPage(");
+    expect(writePass).not.toContain("loadPaymentAllocationPage(");
   });
 });

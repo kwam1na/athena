@@ -48,6 +48,7 @@ function createPublicScaleContext() {
         metric: "net_sales",
         operatingDate: "2026-07-09",
         productSkuId: `sku-${storeNumber}-${skuIndex}`,
+        scheduleVersionId: `schedule-${storeNumber}`,
         storeId: `store-${storeNumber}`,
       };
     },

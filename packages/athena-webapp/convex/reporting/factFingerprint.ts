@@ -48,7 +48,9 @@ export type ReportingFactSemanticInput = {
   recognitionProductId?: string;
   recognitionProductSkuId?: string;
   revenueKind?: string;
-  scheduleVersionId: string;
+  scheduleVersionId?: string;
+  historicalInterpretationPolicyId?: string;
+  historicalInterpretationPolicyHash?: string;
   serviceCaseId?: string;
   sourceDomain: string;
   sourceLineKey?: string;
@@ -84,6 +86,7 @@ function normalizedCloseSnapshot(
 export function normalizeReportingFactSemantics(
   input: ReportingFactSemanticInput,
 ) {
+  const lineage = reportingPeriodLineage(input);
   return {
     amountMinor: input.amountMinor ?? null,
     allocatedDiscountMinor: input.allocatedDiscountMinor ?? null,
@@ -135,7 +138,10 @@ export function normalizeReportingFactSemantics(
       input.recognitionProductSkuId,
     ),
     revenueKind: input.revenueKind ?? null,
-    scheduleVersionId: String(input.scheduleVersionId),
+    periodLineageKind: lineage.kind,
+    periodLineageId: lineage.id,
+    periodLineageHash:
+      lineage.kind === "historical_policy" ? lineage.hash : null,
     serviceCaseId: normalizedOptionalString(input.serviceCaseId),
     sourceDomain: input.sourceDomain,
     sourceLineKey: input.sourceLineKey ?? null,
@@ -175,7 +181,9 @@ const REPORTING_FACT_SEMANTIC_FIELD_ORDER = [
   "valuationCurrencyMinorUnitScale",
   "occurrenceAt",
   "operatingDate",
-  "scheduleVersionId",
+  "periodLineageKind",
+  "periodLineageId",
+  "periodLineageHash",
   "productId",
   "productSkuId",
   "recognitionProductId",
@@ -207,9 +215,40 @@ export function canonicalReportingFactSemanticFingerprint(
 ) {
   const normalized = normalizeReportingFactSemantics(input);
   return JSON.stringify([
-    "reporting-fact-semantic-v2",
+    "reporting-fact-semantic-v3",
     ...REPORTING_FACT_SEMANTIC_FIELD_ORDER.map((field) => normalized[field]),
   ]);
+}
+
+export function reportingPeriodLineage(input: {
+  scheduleVersionId?: string | null;
+  historicalInterpretationPolicyId?: string | null;
+  historicalInterpretationPolicyHash?: string | null;
+}) {
+  const hasSchedule = input.scheduleVersionId !== undefined && input.scheduleVersionId !== null;
+  const hasPolicy =
+    input.historicalInterpretationPolicyId !== undefined &&
+    input.historicalInterpretationPolicyId !== null;
+  if (hasSchedule === hasPolicy) {
+    throw new Error("Reporting period lineage requires exactly one source");
+  }
+  if (hasSchedule) {
+    if (input.historicalInterpretationPolicyHash) {
+      throw new Error("Store Schedule lineage cannot carry a policy hash");
+    }
+    return {
+      kind: "store_schedule" as const,
+      id: String(input.scheduleVersionId),
+    };
+  }
+  if (!input.historicalInterpretationPolicyHash) {
+    throw new Error("Historical policy lineage requires its immutable hash");
+  }
+  return {
+    kind: "historical_policy" as const,
+    id: String(input.historicalInterpretationPolicyId),
+    hash: input.historicalInterpretationPolicyHash,
+  };
 }
 
 export function reportingFactKnownMaterialMatches(input: {

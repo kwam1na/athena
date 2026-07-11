@@ -18,6 +18,8 @@ export type DailyProjectionInput = {
   metricVersion: number;
   operatingDate: string;
   scheduleVersionId: string | null;
+  historicalInterpretationPolicyId?: string | null;
+  historicalInterpretationPolicyHash?: string | null;
   sourceWatermark: number;
   storeId: string;
 };
@@ -39,6 +41,14 @@ function integer(value: number, name: string) {
 }
 
 export function buildDailyProjection(input: DailyProjectionInput) {
+  const hasSchedule = input.scheduleVersionId !== null;
+  const hasPolicy = input.historicalInterpretationPolicyId != null;
+  if (hasSchedule === hasPolicy) {
+    throw new Error("Daily projection requires exactly one period lineage");
+  }
+  if (hasPolicy && !input.historicalInterpretationPolicyHash) {
+    throw new Error("Historical policy lineage requires its immutable hash");
+  }
   const segments = new Map<string, CurrencySegment>();
   let unitsSold = 0;
   let unitsReturned = 0;
@@ -117,6 +127,10 @@ export function buildDailyProjection(input: DailyProjectionInput) {
     netRevenueMinor: oneCurrency ? (segment?.netRevenueMinor ?? 0) : null,
     operatingDate: input.operatingDate,
     scheduleVersionId: input.scheduleVersionId,
+    historicalInterpretationPolicyId:
+      input.historicalInterpretationPolicyId ?? null,
+    historicalInterpretationPolicyHash:
+      input.historicalInterpretationPolicyHash ?? null,
     sourceWatermark: input.sourceWatermark,
     status: !oneCurrency
       ? ("incompatible" as const)

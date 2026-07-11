@@ -92,6 +92,69 @@ function closeSourceId(businessEventKey: string) {
   return /^daily_close:([^:]+):/.exec(businessEventKey)?.[1] ?? null;
 }
 
+function predecessorBusinessEventKey(sourceId: string, version: number) {
+  return `daily_close:${sourceId}:completed:v${version}:close_snapshot`;
+}
+
+const MAX_DAILY_CLOSE_DEPENDENCY_DEPTH = 32;
+
+async function findDailyCloseProjectionBySourceWithCtx(
+  ctx: MutationCtx,
+  input: {
+    businessEventKey?: string;
+    generationId: Id<"reportingProjectionGeneration">;
+    operatingDate?: string;
+    sourceId: string;
+    version?: number;
+  },
+) {
+  const matches = await ctx.db
+    .query("reportingDailyCloseProjection")
+    .withIndex("by_gen_close_source", (q) =>
+      q
+        .eq("generationId", input.generationId)
+        .eq("acceptedCloseSourceId", input.sourceId),
+    )
+    .take(2);
+  if (matches.length > 1) {
+    throw new Error("Daily Close projection identity is duplicated");
+  }
+  if (matches[0]) return matches[0];
+  if (
+    input.businessEventKey === undefined ||
+    input.operatingDate === undefined ||
+    input.version === undefined
+  ) {
+    return null;
+  }
+  const operatingDate = input.operatingDate;
+  const version = input.version;
+  const legacyMatches = await ctx.db
+    .query("reportingDailyCloseProjection")
+    .withIndex(
+      "by_gen_date_close_version_source",
+      (q) =>
+        q
+          .eq("generationId", input.generationId)
+          .eq("operatingDate", operatingDate)
+          .eq("acceptedCloseVersion", version)
+          .eq("acceptedCloseSourceId", undefined),
+    )
+    .take(2);
+  if (legacyMatches.length > 1) {
+    throw new Error("Daily Close legacy projection identity is ambiguous");
+  }
+  const legacy = legacyMatches[0];
+  if (!legacy) return null;
+  if (legacy.acceptedCloseBusinessEventKey !== input.businessEventKey) {
+    throw new Error("Daily Close legacy projection identity conflicts");
+  }
+  await ctx.db.patch("reportingDailyCloseProjection", legacy._id, {
+    acceptedCloseSourceId: input.sourceId,
+  });
+  return { ...legacy, acceptedCloseSourceId: input.sourceId };
+}
+
 export function decideDailyCloseLineage(input: {
   incomingSnapshotVersion: number;
   incomingSupersedesCloseId?: string;
@@ -102,7 +165,10 @@ export function decideDailyCloseLineage(input: {
     throw new Error("Daily Close snapshot version must be a positive safe integer");
   }
   if (input.latestSnapshotVersion === undefined) {
-    if (input.incomingSnapshotVersion !== 1) {
+    if (
+      input.incomingSnapshotVersion !== 1 ||
+      input.incomingSupersedesCloseId !== undefined
+    ) {
       throw new Error("Daily Close predecessor is unavailable");
     }
     return { action: "insert" as const };
@@ -126,25 +192,143 @@ export async function applyDailyCloseFactWithCtx(
   ctx: MutationCtx,
   generation: Doc<"reportingProjectionGeneration">,
   fact: Doc<"reportingFact">,
+  dependencyDepth = 0,
 ) {
   if (generation.projectionKind !== "store_day") return null;
-  const latest = await ctx.db
-    .query("reportingDailyCloseProjection")
-    .withIndex("by_generationId_operatingDate_acceptedCloseVersion", (q) =>
-      q.eq("generationId", generation._id).eq("operatingDate", fact.operatingDate),
-    )
-    .order("desc")
-    .first();
+  reportingPeriodLineage(fact);
+  const latest = fact.scheduleVersionId
+    ? await ctx.db
+        .query("reportingDailyCloseProjection")
+        .withIndex(
+          "by_gen_date_schedule_close",
+          (q) =>
+            q
+              .eq("generationId", generation._id)
+              .eq("operatingDate", fact.operatingDate)
+              .eq("scheduleVersionId", fact.scheduleVersionId),
+        )
+        .order("desc")
+        .first()
+    : await ctx.db
+        .query("reportingDailyCloseProjection")
+        .withIndex(
+          "by_gen_date_policy_close",
+          (q) =>
+            q
+              .eq("generationId", generation._id)
+              .eq("operatingDate", fact.operatingDate)
+              .eq(
+                "historicalInterpretationPolicyId",
+                fact.historicalInterpretationPolicyId,
+              ),
+        )
+        .order("desc")
+        .first();
+  if (
+    latest &&
+    (latest.scheduleVersionId !== fact.scheduleVersionId ||
+      latest.historicalInterpretationPolicyId !==
+        fact.historicalInterpretationPolicyId ||
+      latest.historicalInterpretationPolicyHash !==
+        fact.historicalInterpretationPolicyHash)
+  ) {
+    throw new Error("Daily Close projection lineage is incompatible");
+  }
   const now = Date.now();
   if (fact.factType === "close_snapshot") {
     if (!fact.closeSnapshot) {
       throw new Error("Daily Close canonical snapshot payload is unavailable");
     }
+    const incomingSourceId = closeSourceId(fact.businessEventKey);
+    if (!incomingSourceId) {
+      throw new Error("Daily Close source identity is unavailable");
+    }
+    const existingIncoming = await findDailyCloseProjectionBySourceWithCtx(
+      ctx,
+      {
+        businessEventKey: fact.businessEventKey,
+        generationId: generation._id,
+        operatingDate: fact.operatingDate,
+        sourceId: incomingSourceId,
+        version: fact.closeSnapshot.snapshotVersion,
+      },
+    );
+    if (existingIncoming) {
+      if (
+        existingIncoming.acceptedCloseBusinessEventKey !==
+          fact.businessEventKey ||
+        existingIncoming.acceptedCloseVersion !==
+          fact.closeSnapshot.snapshotVersion
+      ) {
+        throw new Error("Daily Close projection identity conflicts");
+      }
+      return null;
+    }
+    let predecessor: Doc<"reportingDailyCloseProjection"> | null = null;
+    if (fact.closeSnapshot.snapshotVersion > 1) {
+      const predecessorSourceId = fact.closeSnapshot.supersedesCloseId;
+      if (!predecessorSourceId) {
+        throw new Error("Daily Close predecessor identity is unavailable");
+      }
+      predecessor = await findDailyCloseProjectionBySourceWithCtx(ctx, {
+        generationId: generation._id,
+        sourceId: predecessorSourceId,
+      });
+      if (!predecessor) {
+        if (dependencyDepth >= MAX_DAILY_CLOSE_DEPENDENCY_DEPTH) {
+          throw new Error("Daily Close predecessor chain exceeds safe depth");
+        }
+        const expectedVersion = fact.closeSnapshot.snapshotVersion - 1;
+        const expectedKey = predecessorBusinessEventKey(
+          predecessorSourceId,
+          expectedVersion,
+        );
+        const predecessorFacts = await ctx.db
+          .query("reportingFact")
+          .withIndex("by_storeId_sourceDomain_businessEventKey", (q) =>
+            q
+              .eq("storeId", fact.storeId)
+              .eq("sourceDomain", "daily_close")
+              .eq("businessEventKey", expectedKey),
+          )
+          .take(2);
+        const predecessorFact = predecessorFacts[0];
+        if (
+          predecessorFacts.length !== 1 ||
+          !predecessorFact ||
+          (predecessorFact.status !== "canonical" &&
+            predecessorFact.status !== "superseded") ||
+          predecessorFact.factType !== "close_snapshot" ||
+          predecessorFact.closeSnapshot?.snapshotVersion !== expectedVersion
+        ) {
+          throw new Error("Daily Close predecessor is unavailable");
+        }
+        predecessor = await findDailyCloseProjectionBySourceWithCtx(ctx, {
+          businessEventKey: predecessorFact.businessEventKey,
+          generationId: generation._id,
+          operatingDate: predecessorFact.operatingDate,
+          sourceId: predecessorSourceId,
+          version: expectedVersion,
+        });
+        if (!predecessor) {
+          await applyDailyCloseFactWithCtx(
+            ctx,
+            generation,
+            predecessorFact,
+            dependencyDepth + 1,
+          );
+          predecessor = await findDailyCloseProjectionBySourceWithCtx(ctx, {
+            generationId: generation._id,
+            sourceId: predecessorSourceId,
+          });
+        }
+      }
+    }
     const lineage = decideDailyCloseLineage({
       incomingSnapshotVersion: fact.closeSnapshot.snapshotVersion,
       incomingSupersedesCloseId: fact.closeSnapshot.supersedesCloseId,
-      latestBusinessEventKey: latest?.acceptedCloseBusinessEventKey,
-      latestSnapshotVersion: latest?.acceptedCloseVersion,
+      latestBusinessEventKey: predecessor?.acceptedCloseBusinessEventKey,
+      latestSnapshotVersion: predecessor?.acceptedCloseVersion,
     });
     if (lineage.action === "ignore_older_or_replayed") return null;
     const acceptedNetSalesMinor = fact.closeSnapshot.acceptedNetSalesMinor;
@@ -167,6 +351,7 @@ export async function applyDailyCloseFactWithCtx(
       acceptedAt: fact.acceptedAt,
       acceptedCloseBusinessEventKey: fact.businessEventKey,
       acceptedCloseFactId: fact._id,
+      acceptedCloseSourceId: incomingSourceId,
       acceptedCloseVersion: snapshot.acceptedCloseVersion,
       acceptedDeficitAdjustmentMinor: snapshot.acceptedDeficitAdjustmentMinor,
       acceptedNetSalesMinor: snapshot.acceptedNetSalesMinor,
@@ -192,9 +377,13 @@ export async function applyDailyCloseFactWithCtx(
       projectedAt: now,
       projectionContractVersion: generation.projectionContractVersion,
       scheduleVersionId: fact.scheduleVersionId,
+      historicalInterpretationPolicyId:
+        fact.historicalInterpretationPolicyId,
+      historicalInterpretationPolicyHash:
+        fact.historicalInterpretationPolicyHash,
       sourceWatermark: fact.acceptedAt,
       storeId: fact.storeId,
-      supersedesDailyCloseProjectionId: latest?._id,
+      supersedesDailyCloseProjectionId: predecessor?._id,
     });
   }
   if (!latest || fact.acceptedAt <= latest.acceptedAt) return null;
@@ -258,5 +447,7 @@ export async function applyDailyCloseFactWithCtx(
   return latest._id;
 }
 import type { Doc } from "../../_generated/dataModel";
+import type { Id } from "../../_generated/dataModel";
 import type { MutationCtx } from "../../_generated/server";
 import { deriveFactMetricContributions } from "./factContributions";
+import { reportingPeriodLineage } from "../factFingerprint";

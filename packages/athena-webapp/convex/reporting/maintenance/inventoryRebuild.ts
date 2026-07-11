@@ -11,7 +11,10 @@ import {
   REPORTING_PROJECTION_CONTRACT_VERSION,
 } from "../../../shared/reportingContract";
 import { projectInventoryPositionWithCtx } from "../projections/inventory";
-import { materializeGenerationCoverageWithCtx } from "../coverage";
+import {
+  materializeGenerationCoverageWithCtx,
+  recordUncostedCurrentInventoryCoverageWithCtx,
+} from "../coverage";
 import { upsertProjectionHealthWithCtx } from "../health";
 import { startOrResumeOccurrenceReplayWithCtx } from "../inventory/occurrenceReplay";
 import { assertReportingRunTransition } from "./runLedger";
@@ -374,6 +377,14 @@ export const processCurrentInventoryRebuildBatchMutation = internalMutation({
         position,
         sourceWatermark: run.frozenWatermark,
       });
+      if (position.uncostedQuantity > 0) {
+        await recordUncostedCurrentInventoryCoverageWithCtx(ctx, {
+          generation,
+          periodEnd: position.lastEffectAt,
+          periodStart: position.lastEffectAt,
+          processingWatermark: run.frozenWatermark,
+        });
+      }
     }
     const processedCount = run.processedCount + page.page.length;
     const failedCount = run.failedCount + batchFailed;
@@ -471,6 +482,7 @@ export const processCurrentInventoryRebuildBatchMutation = internalMutation({
       generation,
       periodEnd: run.frozenWatermark,
       periodStart: run.createdAt,
+      processingWatermark: run.frozenWatermark,
     });
     await ctx.db.patch("reportingProjectionGeneration", generation._id, {
       completeness: "complete",

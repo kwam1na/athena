@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="edf512b9092649516fc1dae747efc2fbbdc152d64c409f73ab7d24baf7ae23ef">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Wigclub reporting history — dev readiness report</title>
+  <style>
+    :root { color-scheme: light; --ink:#17201b; --muted:#617068; --line:#dce3de; --paper:#fbfcfb; --panel:#fff; --accent:#176c49; --warn:#8a5b14; --bad:#9a3333; }
+    * { box-sizing:border-box } body { margin:0; background:var(--paper); color:var(--ink); font:15px/1.55 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif }
+    main { width:min(960px,calc(100% - 32px)); margin:48px auto 80px } h1 { font-size:clamp(30px,5vw,52px); line-height:1.05; letter-spacing:-.035em; margin:.25em 0 } h2 { margin:2.4em 0 .6em; font-size:22px } h3 { margin:1.5em 0 .4em; font-size:16px } p,li { max-width:78ch } .eyebrow { color:var(--accent); font-weight:700; text-transform:uppercase; letter-spacing:.08em; font-size:12px }
+    .pills { display:flex; flex-wrap:wrap; gap:8px; margin:20px 0 30px }.pill { border:1px solid var(--line); border-radius:999px; padding:5px 10px; background:var(--panel); font-size:13px }.pill.good{color:var(--accent)}.pill.warn{color:var(--warn)}
+    .card { border:1px solid var(--line); background:var(--panel); border-radius:12px; padding:20px; margin:14px 0 }.grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:14px }.flow { display:grid; gap:8px; counter-reset:step }.flow div { border-left:3px solid var(--accent); padding:8px 12px; background:#f4f8f5 }.flow div:before { counter-increment:step; content:counter(step) ". "; font-weight:700 }
+    code { background:#eef2ef; padding:.1em .35em; border-radius:4px; font-size:.92em } table { width:100%; border-collapse:collapse } th,td { text-align:left; vertical-align:top; padding:10px; border-bottom:1px solid var(--line) } th { font-size:12px; text-transform:uppercase; letter-spacing:.05em;color:var(--muted) }
+    .callout { border-left:4px solid var(--warn); padding:14px 18px; background:#fff8ec }.quiz fieldset { border:0; padding:0; margin:22px 0 }.quiz legend { font-weight:700; margin-bottom:8px }.quiz label { display:block; padding:5px 0 }.actions { display:flex; gap:10px } button { border:1px solid var(--ink); background:var(--ink); color:#fff; border-radius:7px; padding:9px 14px; font:inherit; cursor:pointer } button.secondary { background:#fff;color:var(--ink) } button:active { transform:translateY(1px) }.result { margin-top:16px; padding:14px; border:1px solid var(--line); border-radius:8px; display:none }.explanations { display:none } a { color:var(--accent) }
+    @media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+  </style>
+</head>
+<body><main>
+  <div class="eyebrow">Landed-change evidence · 11 July 2026</div>
+  <h1>Wigclub reporting history is safely backfilled in dev</h1>
+  <p>The branch adds a governed path for reconstructing legacy reporting facts without weakening reporting semantics or rewriting commerce data. The dual-approved policy, idempotent historical apply, and metric-aware activation have run in Convex dev; production remains unchanged.</p>
+  <div class="pills"><span class="pill good">Implementation: dev deployed</span><span class="pill good">Backfill: 1,083 existing facts</span><span class="pill good">Sunday: 50 policy exclusions</span><span class="pill good">Activation: live in dev</span><span class="pill">Production: unchanged</span></div>
+
+  <section><h2>Executive summary</h2><div class="grid">
+    <div class="card"><h3>Problem</h3><p>Most pre-schedule Wigclub revenue could not become reporting facts because period and currency evidence was absent. A prior preview found 1,726 candidates, only 3 eligible, 1,691 quarantined, and 32 payment conflicts.</p></div>
+    <div class="card"><h3>Resolution</h3><p>One authenticated full admin drafts a scoped historical interpretation policy and a different authenticated full admin approves it. A complete read-only preflight then seals exact candidate semantics into a reporting-owned manifest; apply consumes only that manifest.</p></div>
+    <div class="card"><h3>Current boundary</h3><p>The approved Mon–Sat 09:00–23:00, Sunday-closed policy produced 1,083 canonical facts. Fifty Sunday events are policy-excluded, not quarantined. Disposable prototype procurement records were removed from dev. Revenue and quantity coverage is complete; cost-limited metrics publish known components with explicit uncosted coverage.</p></div>
+  </div></section>
+
+  <section><h2>Mental model</h2><div class="flow">
+    <div>Admin A drafts store- and interval-scoped historical periods plus GHS revenue evidence.</div>
+    <div>A different full admin approves immutable content; server identities and an approval hash prove dual control.</div>
+    <div>Preview and preflight scan every bounded source lane and fail closed on conflicts or drift.</div>
+    <div>Exact parity seals an ordered manifest containing sanitized, resolved candidate semantics.</div>
+    <div>Apply reads manifest pages only, producing idempotent facts with immutable provenance and policy lineage.</div>
+    <div>Projections, reconciliation, and public reads preserve that lineage; only a verified generation may activate.</div>
+  </div></section>
+
+  <section><h2>Before and after</h2><table><thead><tr><th>Concern</th><th>Before</th><th>After</th></tr></thead><tbody>
+    <tr><td>Missing historical period</td><td>Candidate quarantined.</td><td>May use only a dual-approved, interval-scoped compatibility period.</td></tr>
+    <tr><td>Missing revenue currency</td><td>Candidate quarantined; reconstructions could conflict with exact GHS payments.</td><td>GHS may be inferred only for approved historical revenue evidence.</td></tr>
+    <tr><td>Preview-to-apply safety</td><td>Live rows were rescanned while writes progressed.</td><td>All lanes must match before a sealed manifest exists; apply never reinterprets live rows.</td></tr>
+    <tr><td>Lineage</td><td>Only ordinary Store Schedule lineage.</td><td>Exactly one of Store Schedule or historical-policy lineage, through facts and projections.</td></tr>
+    <tr><td>Closed Sunday events</td><td>Missing periods were quarantined even when the approved policy intentionally closed the day.</td><td>Approved closed-day history is policy-excluded; genuinely unresolved periods still quarantine.</td></tr>
+    <tr><td>Activation</td><td>Valid reconciliation-finalize terminal operations were rejected.</td><td>Verified <code>projection_reconciliation_finalize</code> lineage is accepted for store-day and SKU-day.</td></tr>
+  </tbody></table></section>
+
+  <section><h2>Safety and unchanged behavior</h2><ul>
+    <li>Present-but-conflicting currency, amount, sign, occurrence, reversal, store, organization, or lineage still fails.</li>
+    <li>Cost, valuation currency, COGS, and profit are never inferred; unknown cost remains partial coverage.</li>
+    <li>The compatibility implementation does not rewrite POS, payments, expenses, storefront, service, inventory, SKU, or Store Schedule rows. A separate one-time dev-only cleanup discarded disposable prototype procurement source/reporting rows.</li>
+    <li>Live ingress and ordinary schedule consumers do not read the compatibility policy.</li>
+    <li>Current-inventory authority and cutover remain unchanged.</li>
+    <li>Failed/cancelled manifests are cleanup-eligible after 7 days and completed manifests after 90 days; durable fact evidence remains.</li>
+    <li>Only projection selection supports rollback; accepted historical facts are incremental and idempotent, not transactionally undone.</li>
+  </ul></section>
+
+  <section><h2>Key files</h2><ul>
+    <li><code>convex/reporting/maintenance/legacyCompatibility.ts</code> — policy draft, distinct-admin approval, hashes, period resolution, retention.</li>
+    <li><code>convex/reporting/maintenance/backfill.ts</code> — normalization, provenance, preflight parity, sealed manifest, manifest-only apply.</li>
+    <li><code>convex/reporting/factFingerprint.ts</code> — lineage as canonical fact semantics.</li>
+    <li><code>convex/reporting/projections/</code>, <code>maintenance/rebuild.ts</code>, and <code>public.ts</code> — lineage-safe aggregation, reconciliation, and reads.</li>
+    <li><code>convex/reporting/activation.ts</code> and <code>coverage.ts</code> — fail-closed activation with metric-aware unknown-cost coverage and processing freshness.</li>
+    <li><code>convex/schema.ts</code> and reporting schemas — reporting-owned policy, evidence, manifest, and bounded indexes.</li>
+  </ul></section>
+
+  <section><h2>Validation and environment state</h2><div class="card"><ul>
+    <li>Focused activation regression set: 26 tests passed; full TypeScript passed.</li><li>Three independent reviewer lenses reached unanimous approval after adversarial accounting and rollout review.</li><li>Convex functions deployed successfully to dev deployment <code>jovial-wildebeest-179</code>; temporary cleanup functions were removed after use.</li><li>Preview <code>mn7na8543ccxmeb82vvh35atzh8abehd</code>: 1,133 planned, 1,083 eligible/existing, 50 excluded, 0 quarantined, 0 conflicts.</li><li>Apply <code>mn7nxd80knwr3vhww9vyvnwjvh8aaj0z</code>: 0 created, 1,083 existing, 50 excluded, 0 quarantined, 0 conflicts.</li><li>Prototype procurement cleanup left 0 purchase orders, PO lines, receiving batches, procurement facts, procurement ingress, and reporting quarantines in Wigclub dev.</li><li>Baseline store-day <code>m17h7qr4z34kg146t3e4h9bjmd8aa2x5</code> and SKU-day <code>m17p3y87jckc3gmya9byjgeqg18aaj81</code> generations verified 1,047 facts with zero failures and activated successfully.</li><li>Replacement store-day <code>m17r3f11yphd09mtdf03s67vy18aamss</code> and SKU-day <code>m17nnygnf5sapbhvtfacm9tadh8ab6hm</code> generations activated, rolled back to the baselines, and were reactivated through the same expected-current rollback authority.</li><li>The authenticated operations workspace remained healthy after activation. The dedicated Reports/product consumer is follow-up UI integration; backend public-read contracts remain covered by the test suite.</li>
+  </ul></div><div class="callout"><strong>Delivery state:</strong> this is a staged, uncommitted diff on <code>codex/reports-dev-activation-fix</code>; no PR or merge exists yet. Functions and historical reporting facts are deployed and active in dev only; production is unchanged.</div><div class="callout"><strong>Safe activation boundary:</strong> only explicit <code>partial/uncosted</code> observations on publish-known-component metrics may activate. Revenue and quantity are no longer contaminated by missing cost. Missing sources, unsafe reasons, provisional or stale data, failures, omissions, quarantines, and truncation still fail closed.</div></section>
+
+  <section><h2>Subagent Evidence</h2><ul><li><code>/root/financial_semantics</code> verified that unknown cost creates no invented COGS or profit and remains explicit coverage.</li><li><code>/root/rollout_testing</code> verified preview/apply parity, activation integration, and schema rollout.</li><li><code>/root/repo_architecture</code> verified fail-closed source gating, monotonic processing freshness, lineage integrity, and current-inventory cost coverage.</li></ul><p>All three lenses approved the final implementation. They converged on the same boundary: intentionally closed history is excluded, cost-independent metrics remain trustworthy, known cost components may publish with coverage, and every unsafe state blocks activation.</p></section>
+
+  <section><h2>Next-time guidance</h2><ol><li>Capture the historical schedule from a dated source; do not infer it from today’s schedule.</li><li>Have Admin A draft and Admin B approve.</li><li>Run preview and inspect counts, conflicts, policy/hash, and provenance.</li><li>Run preflight; require exact preview parity and a sealed digest.</li><li>Apply from the manifest, rebuild projections, reconcile, and activate only the verified generation.</li><li>Exercise immediate prior-generation projection rollback in dev and retain the evidence before considering production.</li></ol></section>
+
+  <section class="quiz" id="changeQuiz"><h2>Quiz: Pass Required</h2><p>Score at least 8/10. Answers explain the operational boundary.</p>
+    <form id="quizForm"></form><div class="actions"><button type="submit" form="quizForm">Grade quiz</button><button type="button" class="secondary" id="resetQuiz">Reset</button></div><div class="result" id="quizResult" aria-live="polite"></div><div class="explanations" id="quizExplanations"></div>
+  </section>
+  <script>
+  const questions=[
+    ["Who may approve a historical compatibility policy?",["The same admin who drafted it","A different authenticated full admin","Any reporting reader"],1,"Dual control requires two distinct full admins."],
+    ["What does apply read after preflight seals?",["Live operational rows","The sealed reporting manifest","The current Store Schedule"],1,"Apply consumes only sealed manifest pages."],
+    ["Which missing value may policy normalize?",["Approved historical revenue currency to GHS","Unknown cost to zero","Any conflicting currency"],0,"Only missing approved revenue currency is normalized; cost and conflicts are not."],
+    ["What happens to unknown cost?",["It becomes zero","It remains partial/unknown","It blocks all revenue"],1,"Unknown valuation remains visible as partial coverage."],
+    ["Does this change current inventory authority?",["Yes","No","Only in production"],1,"Inventory authority and cutover are out of scope."],
+    ["What proves a fact's historical interpretation?",["A UI label","Immutable policy lineage and approval hash","The current date"],1,"Lineage is carried as canonical semantics."],
+    ["Can current store hours be silently used as historical truth?",["Yes","No","Only on Sunday"],1,"Historical hours require explicit dated evidence and approval."],
+    ["When can a generation activate?",["After any rebuild starts","After a verified reconciliation-finalize candidate passes every activation gate","Immediately after policy draft"],1,"Activation additionally requires compatible contracts and metrics, complete coverage, a stable watermark, zero unexplained differences, identity readiness, and compare-and-swap lineage."],
+    ["What rollback is supported?",["Delete operational sales","Undo all facts transactionally","Select the immediately prior compatible projection generation"],2,"Rollback is projection selection, not commerce or fact erasure."],
+    ["Where is the implementation currently deployed?",["Production","Dev only","Nowhere"],1,"The functions are deployed to the named Convex dev deployment only."]
+  ];
+  const form=document.getElementById('quizForm');
+  questions.forEach((q,i)=>{const f=document.createElement('fieldset');f.innerHTML=`<legend>${i+1}. ${q[0]}</legend>`+q[1].map((a,j)=>`<label><input type="radio" name="q${i}" value="${j}"> ${a}</label>`).join('');form.appendChild(f)});
+  form.addEventListener('submit',e=>{e.preventDefault();let score=0;const notes=[];questions.forEach((q,i)=>{const v=form.elements[`q${i}`].value;const correct=Number(v)===q[2];if(correct)score++;notes.push(`<li><strong>${i+1}. ${correct?'Correct':'Review'}.</strong> ${q[3]}</li>`)});const pass=score>=8;const result=document.getElementById('quizResult');result.style.display='block';result.innerHTML=`<strong>${score}/10 — ${pass?'Pass':'Review and retry'}</strong>`;const ex=document.getElementById('quizExplanations');ex.style.display='block';ex.innerHTML=`<h3>Answer explanations</h3><ul>${notes.join('')}</ul>`});
+  document.getElementById('resetQuiz').addEventListener('click',()=>{form.reset();document.getElementById('quizResult').style.display='none';document.getElementById('quizExplanations').style.display='none'});
+  </script>
+</main></body></html>

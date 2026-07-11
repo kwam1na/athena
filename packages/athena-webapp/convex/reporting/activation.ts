@@ -199,7 +199,10 @@ export function activationOperationMatchesProjectionKind(
   projectionKind: Doc<"reportingProjectionGeneration">["projectionKind"],
 ) {
   if (projectionKind === "store_day" || projectionKind === "sku_day") {
-    return operation.startsWith("projection_rebuild_");
+    return (
+      operation.startsWith("projection_rebuild_") ||
+      operation === "projection_reconciliation_finalize"
+    );
   }
   if (projectionKind === "current_inventory") {
     return operation.startsWith("current_inventory_rebuild_");

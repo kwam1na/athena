@@ -16,7 +16,18 @@ export function buildSkuDayProjection(input: {
   operatingDate: string;
   skuId: string;
   storeId: string;
+  scheduleVersionId?: string | null;
+  historicalInterpretationPolicyId?: string | null;
+  historicalInterpretationPolicyHash?: string | null;
 }) {
+  const hasSchedule = input.scheduleVersionId != null;
+  const hasPolicy = input.historicalInterpretationPolicyId != null;
+  if (hasSchedule !== hasPolicy && hasPolicy && !input.historicalInterpretationPolicyHash) {
+    throw new Error("Historical policy lineage requires its immutable hash");
+  }
+  if ((hasSchedule || hasPolicy) && hasSchedule === hasPolicy) {
+    throw new Error("SKU-day projection requires exactly one period lineage");
+  }
   let netRevenueMinor = 0;
   let knownCogsMinor = 0;
   let netSoldUnits = 0;
@@ -63,6 +74,11 @@ export function buildSkuDayProjection(input: {
     netSoldUnits,
     onHandQuantity: input.onHandQuantity,
     operatingDate: input.operatingDate,
+    scheduleVersionId: input.scheduleVersionId ?? null,
+    historicalInterpretationPolicyId:
+      input.historicalInterpretationPolicyId ?? null,
+    historicalInterpretationPolicyHash:
+      input.historicalInterpretationPolicyHash ?? null,
     originalSkuReferences: Array.from(
       new Set(input.facts.map((fact) => fact.originalSkuReference)),
     ).sort(),

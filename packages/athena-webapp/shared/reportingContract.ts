@@ -80,9 +80,15 @@ export type SafeReportingSourceReference = {
 export type ReportingPeriodAssignment = {
   operatingDate: string;
   recognitionAt: number;
-  scheduleVersionId: string;
+  scheduleVersionId?: string;
+  historicalInterpretationPolicyId?: string;
+  historicalInterpretationPolicyHash?: string;
   timezone: string;
 };
+
+export type ReportingPeriodLineage =
+  | { kind: "store_schedule"; id: string }
+  | { kind: "historical_policy"; id: string; hash: string };
 
 export type ReportingRecognitionChannel = "pos" | "storefront" | "service";
 

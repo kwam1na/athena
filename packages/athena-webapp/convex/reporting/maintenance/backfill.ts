@@ -14,6 +14,7 @@ import {
 import {
   canonicalReportingFactSemanticFingerprint,
   reportingFactKnownMaterialMatches,
+  reportingPeriodLineage,
   type ReportingFactSemanticField,
   type ReportingFactSemanticInput,
 } from "../factFingerprint";
@@ -27,6 +28,11 @@ import {
   assertReportingRunTransition,
   createReportingRunWithCtx,
 } from "./runLedger";
+import {
+  manifestCleanupEligibleAt,
+  requireApprovedHistoricalPolicyWithCtx,
+  resolveHistoricalPolicyOperatingPeriod,
+} from "./legacyCompatibility";
 
 export function classifyHistoricalCommerce(input: {
   currency: string | null;
@@ -105,6 +111,7 @@ export type HistoricalBackfillAuditCounts = {
   quarantinedCount: number;
   unknownCount: number;
   unknownFieldCount: number;
+  inferredCount: number;
 };
 
 export const EMPTY_HISTORICAL_BACKFILL_AUDIT: HistoricalBackfillAuditCounts = {
@@ -119,6 +126,7 @@ export const EMPTY_HISTORICAL_BACKFILL_AUDIT: HistoricalBackfillAuditCounts = {
   quarantinedCount: 0,
   unknownCount: 0,
   unknownFieldCount: 0,
+  inferredCount: 0,
 };
 
 export function historicalBackfillCoverageBasisPoints(
@@ -144,6 +152,7 @@ export function mergeHistoricalBackfillAuditCounts(
     quarantinedCount: left.quarantinedCount + right.quarantinedCount,
     unknownCount: left.unknownCount + right.unknownCount,
     unknownFieldCount: left.unknownFieldCount + right.unknownFieldCount,
+    inferredCount: left.inferredCount + right.inferredCount,
   };
 }
 
@@ -168,6 +177,7 @@ export function historicalFactUnknownFields(fact: HistoricalPlannedFact) {
 export function historicalBackfillAuditForOutcome(input: {
   outcome: "conflict" | "created" | "excluded" | "existing" | "quarantined";
   unknownFieldCount: number;
+  inferredCount?: number;
 }): HistoricalBackfillAuditCounts {
   const createdCount = input.outcome === "created" ? 1 : 0;
   const existingCount = input.outcome === "existing" ? 1 : 0;
@@ -186,6 +196,7 @@ export function historicalBackfillAuditForOutcome(input: {
     quarantinedCount,
     unknownCount: input.unknownFieldCount > 0 ? 1 : 0,
     unknownFieldCount: input.unknownFieldCount,
+    inferredCount: input.inferredCount ?? 0,
   };
 }
 
@@ -219,6 +230,7 @@ function historicalBackfillAuditFromRun(
     | "quarantinedCount"
     | "unknownCount"
     | "unknownFieldCount"
+    | "inferredCount"
   >,
 ): HistoricalBackfillAuditCounts {
   return {
@@ -233,6 +245,7 @@ function historicalBackfillAuditFromRun(
     quarantinedCount: run.quarantinedCount ?? 0,
     unknownCount: run.unknownCount ?? 0,
     unknownFieldCount: run.unknownFieldCount ?? 0,
+    inferredCount: run.inferredCount ?? 0,
   };
 }
 
@@ -263,7 +276,9 @@ async function upsertHistoricalBackfillSourceAudit(
   }
   const prior = matches[0];
   const merged = mergeHistoricalBackfillAuditCounts(
-    prior ?? EMPTY_HISTORICAL_BACKFILL_AUDIT,
+    prior
+      ? { ...prior, inferredCount: prior.inferredCount ?? 0 }
+      : EMPTY_HISTORICAL_BACKFILL_AUDIT,
     input.counts,
   );
   const value = {
@@ -273,6 +288,8 @@ async function upsertHistoricalBackfillSourceAudit(
       : ("apply" as const),
     organizationId: input.run.organizationId,
     outcome: historicalBackfillAuditOutcome(merged),
+    policyId: input.run.historicalInterpretationPolicyId,
+    policyHash: input.run.historicalInterpretationPolicyHash,
     runId: input.run._id,
     sourceDomain: input.sourceDomain,
     storeId: input.run.storeId,
@@ -419,6 +436,60 @@ export type HistoricalPlannedFact = {
   unitPriceMinor?: number;
   valuationCurrency?: string;
 };
+
+type HistoricalPolicy = Doc<"reportingHistoricalInterpretationPolicy">;
+
+const POLICY_REVENUE_DOMAINS = new Set<HistoricalPlannedFact["sourceDomain"]>([
+  "pos",
+  "storefront",
+  "service",
+  "payments",
+]);
+
+export function normalizeHistoricalFactWithPolicy(input: {
+  fact: HistoricalPlannedFact;
+  policy: HistoricalPolicy | null;
+}) {
+  const fact = { ...input.fact };
+  const inferredFields: string[] = [];
+  const originallyMissingFields: string[] = [];
+  const inPolicy = Boolean(
+    input.policy &&
+      fact.occurredAt !== null &&
+      fact.occurredAt >= input.policy.intervalStart &&
+      fact.occurredAt < input.policy.intervalEnd,
+  );
+  if (!fact.currency && POLICY_REVENUE_DOMAINS.has(fact.sourceDomain)) {
+    originallyMissingFields.push("revenueCurrency");
+    if (inPolicy) {
+      fact.currency = input.policy!.revenueCurrencyCode;
+      inferredFields.push("revenueCurrency");
+    }
+  }
+  if (fact.cogsKnownMinor !== undefined && !fact.valuationCurrency) {
+    originallyMissingFields.push("valuationCurrency");
+    fact.cogsKnownMinor = undefined;
+    fact.cogsKnownQuantity = undefined;
+    fact.coveredRevenueMinor = undefined;
+    fact.costStatus = "unknown";
+    fact.completeness = "partial";
+    fact.limitingReason = "uncosted";
+  }
+  return { fact, inferredFields, originallyMissingFields };
+}
+
+export function historicalPolicyExcludesClosedFact(input: {
+  fact: Pick<HistoricalPlannedFact, "occurredAt">;
+  policy: HistoricalPolicy | null;
+}) {
+  if (input.fact.occurredAt === null || !input.policy) return false;
+  return (
+    resolveHistoricalPolicyOperatingPeriod({
+      occurrenceAt: input.fact.occurredAt,
+      policy: input.policy,
+    }).kind === "closed"
+  );
+}
 
 export function planHistoricalReversalFacts(input: {
   currency: string | null;
@@ -728,7 +799,9 @@ function safeFingerprintChecksum(value: string) {
 
 type HistoricalPeriodIdentity = {
   operatingDate: string;
-  scheduleVersionId: string;
+  scheduleVersionId?: string;
+  historicalInterpretationPolicyId?: string;
+  historicalInterpretationPolicyHash?: string;
 };
 
 type HistoricalFactScope = {
@@ -785,6 +858,10 @@ function historicalPlannedFactSemantics(
     recognitionProductId: fact.recognitionProductId,
     recognitionProductSkuId: fact.recognitionProductSkuId,
     scheduleVersionId: period.scheduleVersionId,
+    historicalInterpretationPolicyId:
+      period.historicalInterpretationPolicyId,
+    historicalInterpretationPolicyHash:
+      period.historicalInterpretationPolicyHash,
     serviceCaseId: fact.serviceCaseId,
     sourceDomain: fact.sourceDomain,
     sourceLineKey: fact.sourceLineKey,
@@ -839,6 +916,8 @@ function persistedHistoricalFactSemantics(
     | "recognitionProductId"
     | "recognitionProductSkuId"
     | "scheduleVersionId"
+    | "historicalInterpretationPolicyId"
+    | "historicalInterpretationPolicyHash"
     | "serviceCaseId"
     | "sourceDomain"
     | "sourceLineKey"
@@ -882,7 +961,15 @@ function persistedHistoricalFactSemantics(
     recognitionProductSkuId: fact.recognitionProductSkuId
       ? String(fact.recognitionProductSkuId)
       : undefined,
-    scheduleVersionId: String(fact.scheduleVersionId),
+    scheduleVersionId: fact.scheduleVersionId
+      ? String(fact.scheduleVersionId)
+      : undefined,
+    historicalInterpretationPolicyId:
+      fact.historicalInterpretationPolicyId
+        ? String(fact.historicalInterpretationPolicyId)
+        : undefined,
+    historicalInterpretationPolicyHash:
+      fact.historicalInterpretationPolicyHash,
     serviceCaseId: fact.serviceCaseId ? String(fact.serviceCaseId) : undefined,
     storeId: String(fact.storeId),
   };
@@ -1088,12 +1175,63 @@ async function quarantineHistoricalFact(
   });
 }
 
+export async function recordHistoricalInterpretationEvidenceWithCtx(
+  ctx: MutationCtx,
+  input: {
+    businessEventKey: string;
+    factId: Id<"reportingFact">;
+    inferredFields: string[];
+    originallyMissingFields: string[];
+    policy: HistoricalPolicy;
+    run: Doc<"reportingRun">;
+    sourceDomain: HistoricalPlannedFact["sourceDomain"];
+  },
+) {
+  const existing = await ctx.db
+    .query("reportingHistoricalInterpretationEvidence")
+    .withIndex("by_policyId_sourceDomain_businessEventKey", (q) =>
+      q
+        .eq("policyId", input.policy._id)
+        .eq("sourceDomain", input.sourceDomain)
+        .eq("businessEventKey", input.businessEventKey),
+    )
+    .take(2);
+  if (existing.length > 1) throw new Error("Historical interpretation evidence is not unique");
+  if (existing[0]) {
+    if (
+      existing[0].factId !== input.factId ||
+      JSON.stringify(existing[0].inferredFields) !== JSON.stringify(input.inferredFields) ||
+      JSON.stringify(existing[0].originallyMissingFields) !==
+        JSON.stringify(input.originallyMissingFields)
+    ) {
+      throw new Error("Historical interpretation evidence conflicts");
+    }
+    return existing[0]._id;
+  }
+  return ctx.db.insert("reportingHistoricalInterpretationEvidence", {
+    businessEventKey: input.businessEventKey,
+    createdAt: Date.now(),
+    factId: input.factId,
+    inferredFields: input.inferredFields,
+    organizationId: input.run.organizationId,
+    originallyMissingFields: input.originallyMissingFields,
+    policyHash: input.policy.approvalHash!,
+    policyId: input.policy._id,
+    sourceDomain: input.sourceDomain,
+    storeId: input.run.storeId,
+  });
+}
+
 async function persistHistoricalFact(
   ctx: MutationCtx,
   args: {
     apply: boolean;
     fact: HistoricalPlannedFact;
+    inferredFields: string[];
     now: number;
+    originallyMissingFields: string[];
+    policy: HistoricalPolicy | null;
+    resolvedPeriod?: HistoricalPeriodIdentity | null;
     run: Doc<"reportingRun">;
   },
 ): Promise<"conflict" | "created" | "excluded" | "existing" | "quarantined"> {
@@ -1164,11 +1302,24 @@ async function persistHistoricalFact(
       return "quarantined";
     }
   }
-  const period = await resolveReportingOperatingPeriodWithCtx(ctx, {
-    occurrenceAt: args.fact.occurredAt!,
-    storeId: args.run.storeId,
-  });
-  if (period.kind !== "resolved") {
+  const period =
+    args.resolvedPeriod !== undefined
+      ? args.resolvedPeriod
+      : await resolveHistoricalFactPeriodWithCtx(
+          ctx,
+          args.fact,
+          args.run,
+          args.policy,
+        );
+  if (!period) {
+    if (
+      historicalPolicyExcludesClosedFact({
+        fact: args.fact,
+        policy: args.policy,
+      })
+    ) {
+      return "excluded";
+    }
     await quarantineHistoricalFact(ctx, {
       apply: args.apply,
       fact: args.fact,
@@ -1183,7 +1334,9 @@ async function persistHistoricalFact(
     args.fact,
     {
       operatingDate: period.operatingDate,
-      scheduleVersionId: String(period.scheduleVersionId),
+      scheduleVersionId: period.scheduleVersionId,
+      historicalInterpretationPolicyId: period.historicalInterpretationPolicyId,
+      historicalInterpretationPolicyHash: period.historicalInterpretationPolicyHash,
     },
     {
       organizationId: String(args.run.organizationId),
@@ -1208,7 +1361,11 @@ async function persistHistoricalFact(
         fact: args.fact,
         period: {
           operatingDate: period.operatingDate,
-          scheduleVersionId: String(period.scheduleVersionId),
+          scheduleVersionId: period.scheduleVersionId,
+          historicalInterpretationPolicyId:
+            period.historicalInterpretationPolicyId,
+          historicalInterpretationPolicyHash:
+            period.historicalInterpretationPolicyHash,
         },
         scope: {
           organizationId: String(args.run.organizationId),
@@ -1231,7 +1388,20 @@ async function persistHistoricalFact(
       });
       return "conflict";
     }
-    if (args.apply) await recordFactSkuEvidenceWithCtx(ctx, existing[0]);
+    if (args.apply) {
+      await recordFactSkuEvidenceWithCtx(ctx, existing[0]);
+      if (args.policy && args.originallyMissingFields.length > 0) {
+        await recordHistoricalInterpretationEvidenceWithCtx(ctx, {
+          businessEventKey: args.fact.businessEventKey,
+          factId: existing[0]._id,
+          inferredFields: args.inferredFields,
+          originallyMissingFields: args.originallyMissingFields,
+          policy: args.policy,
+          run: args.run,
+          sourceDomain: args.fact.sourceDomain,
+        });
+      }
+    }
     return "existing";
   }
   const classification = classifyHistoricalCommerce({
@@ -1239,8 +1409,9 @@ async function persistHistoricalFact(
     eventKey: args.fact.businessEventKey,
     occurredAt: args.fact.occurredAt,
     requiresCurrency:
-      (args.fact.amountMinor !== undefined && args.fact.amountMinor !== 0) ||
-      args.fact.cogsKnownMinor !== undefined,
+      args.fact.amountMinor !== undefined &&
+      args.fact.amountMinor !== 0 &&
+      POLICY_REVENUE_DOMAINS.has(args.fact.sourceDomain),
     sourceId: args.fact.sourceId,
   });
   if (classification.status === "quarantined") {
@@ -1322,7 +1493,14 @@ async function persistHistoricalFact(
     recognitionProductSkuId: args.fact.recognitionProductSkuId as
       Id<"productSku"> | undefined,
     revenueKind: args.fact.revenueKind,
-    scheduleVersionId: period.scheduleVersionId as Id<"storeSchedule">,
+    scheduleVersionId: period.scheduleVersionId as
+      | Id<"storeSchedule">
+      | undefined,
+    historicalInterpretationPolicyId: period.historicalInterpretationPolicyId as
+      | Id<"reportingHistoricalInterpretationPolicy">
+      | undefined,
+    historicalInterpretationPolicyHash:
+      period.historicalInterpretationPolicyHash,
     serviceCaseId: args.fact.serviceCaseId as Id<"serviceCase"> | undefined,
     sourceDomain: args.fact.sourceDomain,
     sourceLineKey: args.fact.sourceLineKey,
@@ -1330,6 +1508,17 @@ async function persistHistoricalFact(
     storeId: args.run.storeId,
     unitPriceMinor: args.fact.unitPriceMinor,
   });
+  if (args.policy && args.originallyMissingFields.length > 0) {
+    await recordHistoricalInterpretationEvidenceWithCtx(ctx, {
+      businessEventKey: args.fact.businessEventKey,
+      factId,
+      inferredFields: args.inferredFields,
+      originallyMissingFields: args.originallyMissingFields,
+      policy: args.policy,
+      run: args.run,
+      sourceDomain: args.fact.sourceDomain,
+    });
+  }
   await ctx.db.insert("reportingFactSourceReference", {
     createdAt: args.now,
     factId,
@@ -2362,29 +2551,58 @@ function historicalBackfillAuditCountsMatch(
   ).every((field) => preview[field] === apply[field]);
 }
 
-async function fingerprintHistoricalCandidateWithCtx(
+async function resolveHistoricalFactPeriodWithCtx(
   ctx: MutationCtx,
   fact: HistoricalPlannedFact,
   run: Doc<"reportingRun">,
-) {
+  policy: HistoricalPolicy | null,
+): Promise<HistoricalPeriodIdentity | null> {
   if (fact.occurredAt !== null) {
     const period = await resolveReportingOperatingPeriodWithCtx(ctx, {
       occurrenceAt: fact.occurredAt,
       storeId: run.storeId,
     });
     if (period.kind === "resolved") {
-      return fingerprintHistoricalPlannedFact(
-        fact,
-        {
-          operatingDate: period.operatingDate,
-          scheduleVersionId: String(period.scheduleVersionId),
-        },
-        {
-          organizationId: String(run.organizationId),
-          storeId: String(run.storeId),
-        },
-      );
+      return {
+        operatingDate: period.operatingDate,
+        scheduleVersionId: String(period.scheduleVersionId),
+      };
     }
+    if (policy) {
+      const policyPeriod = resolveHistoricalPolicyOperatingPeriod({
+        occurrenceAt: fact.occurredAt,
+        policy,
+      });
+      if (policyPeriod.kind === "resolved") {
+        return {
+          operatingDate: policyPeriod.operatingDate,
+          historicalInterpretationPolicyId:
+            policyPeriod.historicalInterpretationPolicyId,
+          historicalInterpretationPolicyHash:
+            policyPeriod.historicalInterpretationPolicyHash,
+        };
+      }
+    }
+  }
+  return null;
+}
+
+async function fingerprintHistoricalCandidateWithCtx(
+  ctx: MutationCtx,
+  fact: HistoricalPlannedFact,
+  run: Doc<"reportingRun">,
+  policy: HistoricalPolicy | null,
+  resolvedPeriod?: HistoricalPeriodIdentity | null,
+) {
+  const period =
+    resolvedPeriod !== undefined
+      ? resolvedPeriod
+      : await resolveHistoricalFactPeriodWithCtx(ctx, fact, run, policy);
+  if (period) {
+    return fingerprintHistoricalPlannedFact(fact, period, {
+      organizationId: String(run.organizationId),
+      storeId: String(run.storeId),
+    });
   }
   return JSON.stringify(["historical-backfill-candidate-v1", fact]);
 }
@@ -2426,7 +2644,10 @@ async function recordHistoricalPreviewItem(
   input: {
     candidateFingerprint: string;
     fact: HistoricalPlannedFact;
+    inferredFields: string[];
+    originallyMissingFields: string[];
     outcome: Doc<"reportingBackfillPreviewItem">["outcome"];
+    policy: HistoricalPolicy | null;
     run: Doc<"reportingRun">;
   },
 ) {
@@ -2455,7 +2676,99 @@ async function recordHistoricalPreviewItem(
     runId: input.run._id,
     sourceDomain: input.fact.sourceDomain,
     storeId: input.run.storeId,
+    policyId: input.policy?._id,
+    policyHash: input.policy?.approvalHash,
+    inferredFields: input.inferredFields,
+    originallyMissingFields: input.originallyMissingFields,
   });
+}
+
+type HistoricalManifestItemInput = {
+  businessEventKey: string;
+  candidateFingerprint: string;
+  inferredFields: string[];
+  originallyMissingFields: string[];
+  outcome: Doc<"reportingBackfillApplyManifestItem">["outcome"];
+  sanitizedCandidateJson: string;
+  sequence: number;
+  sourceDomain: HistoricalPlannedFact["sourceDomain"];
+};
+
+export function historicalManifestEntryDigest(
+  priorDigest: string,
+  item: HistoricalManifestItemInput,
+) {
+  return `historical-manifest-v1:${safeFingerprintChecksum(
+    JSON.stringify([
+      priorDigest,
+      item.sequence,
+      item.sourceDomain,
+      item.businessEventKey,
+      item.candidateFingerprint,
+      item.outcome,
+      item.inferredFields,
+      item.originallyMissingFields,
+      item.sanitizedCandidateJson,
+    ]),
+  )}`;
+}
+
+type HistoricalManifestCandidate = {
+  fact: HistoricalPlannedFact;
+  resolvedPeriod: HistoricalPeriodIdentity | null;
+};
+
+export function historicalManifestCandidateJson(
+  fact: HistoricalPlannedFact,
+  resolvedPeriod: HistoricalPeriodIdentity | null,
+) {
+  return JSON.stringify({ fact, resolvedPeriod });
+}
+
+export function parseHistoricalManifestCandidate(value: string) {
+  const parsed = JSON.parse(value) as HistoricalManifestCandidate;
+  if (
+    !parsed ||
+    typeof parsed !== "object" ||
+    !parsed.fact ||
+    typeof parsed.fact.sourceDomain !== "string" ||
+    typeof parsed.fact.sourceType !== "string" ||
+    typeof parsed.fact.sourceId !== "string" ||
+    (parsed.resolvedPeriod !== null &&
+      (typeof parsed.resolvedPeriod !== "object" ||
+        typeof parsed.resolvedPeriod.operatingDate !== "string"))
+  ) {
+    throw new Error("Historical backfill manifest candidate is invalid");
+  }
+  if (parsed.resolvedPeriod) {
+    reportingPeriodLineage(parsed.resolvedPeriod);
+  }
+  return parsed;
+}
+
+async function requireBackfillManifestWithCtx(
+  ctx: MutationCtx,
+  run: Doc<"reportingRun">,
+) {
+  if (!run.backfillApplyManifestId) {
+    throw new Error("Historical backfill apply manifest is unavailable");
+  }
+  const manifest = await ctx.db.get(
+    "reportingBackfillApplyManifest",
+    run.backfillApplyManifestId,
+  );
+  if (
+    !manifest ||
+    manifest.runId !== run._id ||
+    manifest.storeId !== run.storeId ||
+    manifest.organizationId !== run.organizationId ||
+    manifest.previewRunId !== run.previewRunId ||
+    manifest.policyId !== run.historicalInterpretationPolicyId ||
+    manifest.policyHash !== run.historicalInterpretationPolicyHash
+  ) {
+    throw new Error("Historical backfill apply manifest lineage is incompatible");
+  }
+  return manifest;
 }
 
 export const startHistoricalBackfill = internalMutation({
@@ -2464,6 +2777,8 @@ export const startHistoricalBackfill = internalMutation({
     mode: v.union(v.literal("preview"), v.literal("apply")),
     periodEnd: v.optional(v.number()),
     periodStart: v.optional(v.number()),
+    policyId: v.optional(v.id("reportingHistoricalInterpretationPolicy")),
+    policyHash: v.optional(v.string()),
     previewRunId: v.optional(v.id("reportingRun")),
     requestKey: v.string(),
     storeId: v.id("store"),
@@ -2492,6 +2807,25 @@ export const startHistoricalBackfill = internalMutation({
         periodEnd: args.periodEnd,
         periodStart: args.periodStart,
         preview,
+        storeId: store._id,
+      });
+    }
+    const policyId = preview?.historicalInterpretationPolicyId ?? args.policyId;
+    const policyHash = preview?.historicalInterpretationPolicyHash ?? args.policyHash;
+    if ((policyId === undefined) !== (policyHash === undefined)) {
+      throw new Error("Historical backfill policy identity is incomplete");
+    }
+    if (
+      preview &&
+      (args.policyId !== undefined || args.policyHash !== undefined) &&
+      (args.policyId !== policyId || args.policyHash !== policyHash)
+    ) {
+      throw new Error("Historical backfill apply policy differs from preview");
+    }
+    if (policyId && policyHash) {
+      await requireApprovedHistoricalPolicyWithCtx(ctx, {
+        policyId,
+        policyHash,
         storeId: store._id,
       });
     }
@@ -2524,7 +2858,22 @@ export const startHistoricalBackfill = internalMutation({
       storeId: store._id,
     });
     if (!result.created) return { created: false, runId: result.run._id };
+    const manifestId = preview
+      ? await ctx.db.insert("reportingBackfillApplyManifest", {
+          createdAt: now,
+          entryCount: 0,
+          organizationId: store.organizationId,
+          policyHash,
+          policyId,
+          previewRunId: preview._id,
+          runId: result.run._id,
+          status: "building",
+          storeId: store._id,
+          updatedAt: now,
+        })
+      : undefined;
     await ctx.db.patch("reportingRun", result.run._id, {
+      backfillApplyManifestId: manifestId,
       conflictCount: 0,
       coverageBasisPoints: 10_000,
       createdCount: 0,
@@ -2537,6 +2886,9 @@ export const startHistoricalBackfill = internalMutation({
       excludedCount: 0,
       existingCount: 0,
       frozenWatermark: periodEnd,
+      historicalInterpretationPolicyId: policyId,
+      historicalInterpretationPolicyHash: policyHash,
+      inferredCount: 0,
       omittedCount: 0,
       periodEnd,
       periodStart,
@@ -2578,6 +2930,144 @@ export const processHistoricalBackfillBatch = internalMutation({
     if (!store || store.organizationId !== run.organizationId) {
       throw new Error("Backfill store ownership changed");
     }
+    const policy = run.historicalInterpretationPolicyId
+      ? await requireApprovedHistoricalPolicyWithCtx(ctx, {
+          policyId: run.historicalInterpretationPolicyId,
+          policyHash: run.historicalInterpretationPolicyHash!,
+          storeId: run.storeId,
+        })
+      : null;
+    if (run.operation === "historical_backfill_manifest_apply") {
+      try {
+      const manifest = await requireBackfillManifestWithCtx(ctx, run);
+      if (
+        (manifest.status !== "sealed" && manifest.status !== "consuming") ||
+        !manifest.digest ||
+        manifest.entryCount !== (run.plannedCount ?? 0)
+      ) {
+        throw new Error("Historical backfill manifest is not sealed");
+      }
+      const page = await ctx.db
+        .query("reportingBackfillApplyManifestItem")
+        .withIndex("by_manifestId_sequence", (q) =>
+          q.eq("manifestId", manifest._id),
+        )
+        .paginate({ cursor: run.cursor ?? null, numItems: PAGE_SIZE });
+      for (const item of page.page) {
+        if (
+          item.storeId !== run.storeId ||
+          item.organizationId !== run.organizationId
+        ) {
+          throw new Error("Historical backfill manifest item scope changed");
+        }
+        const candidate = parseHistoricalManifestCandidate(
+          item.sanitizedCandidateJson,
+        );
+        const fact = candidate.fact;
+        const fingerprint = await fingerprintHistoricalCandidateWithCtx(
+          ctx,
+          fact,
+          run,
+          policy,
+          candidate.resolvedPeriod,
+        );
+        if (fingerprint !== item.candidateFingerprint) {
+          throw new Error("Historical backfill manifest item changed");
+        }
+        const outcome = await persistHistoricalFact(ctx, {
+          apply: true,
+          fact,
+          inferredFields: item.inferredFields,
+          now: Date.now(),
+          originallyMissingFields: item.originallyMissingFields,
+          policy,
+          resolvedPeriod: candidate.resolvedPeriod,
+          run,
+        });
+        if (outcome !== item.outcome) {
+          throw new Error("Historical backfill manifest outcome changed");
+        }
+      }
+      const now = Date.now();
+      if (!page.isDone) {
+        await ctx.db.patch("reportingBackfillApplyManifest", manifest._id, {
+          status: "consuming",
+          updatedAt: now,
+        });
+        await ctx.db.patch("reportingRun", run._id, {
+          cursor: page.continueCursor,
+          processedCount: run.processedCount + page.page.length,
+        });
+      } else {
+        await ctx.db.patch("reportingBackfillApplyManifest", manifest._id, {
+          cleanupEligibleAt: manifestCleanupEligibleAt({
+            completedAt: now,
+            status: "completed",
+          }),
+          completedAt: now,
+          status: "completed",
+          updatedAt: now,
+        });
+        await ctx.db.patch("reportingRun", run._id, {
+          cursor: encodeHistoricalBackfillCursor({
+            pageCursor: null,
+            phase: "done",
+          }),
+          operation: "historical_backfill_apply",
+          processedCount: run.processedCount + page.page.length,
+        });
+      }
+      await ctx.scheduler.runAfter(
+        0,
+        historicalBackfillInternal.processHistoricalBackfillBatch,
+        { runId: run._id },
+      );
+      return;
+      } catch (error) {
+        const failedAt = Date.now();
+        if (run.backfillApplyManifestId) {
+          const manifest = await ctx.db.get(
+            "reportingBackfillApplyManifest",
+            run.backfillApplyManifestId,
+          );
+          if (
+            manifest &&
+            !["completed", "failed", "cancelled"].includes(manifest.status)
+          ) {
+            await ctx.db.patch("reportingBackfillApplyManifest", manifest._id, {
+              cleanupEligibleAt: manifestCleanupEligibleAt({
+                completedAt: failedAt,
+                status: "failed",
+              }),
+              completedAt: failedAt,
+              status: "failed",
+              updatedAt: failedAt,
+            });
+          }
+        }
+        await ctx.db.patch("reportingRun", run._id, {
+          completedAt: failedAt,
+          failedCount: run.failedCount + 1,
+          status: "failed",
+        });
+        await ctx.db.insert("reportingRunEvent", {
+          cursor: run.cursor,
+          eventType: "historical_backfill_manifest_apply_failed",
+          failedCount: run.failedCount + 1,
+          occurredAt: failedAt,
+          outcome: "failed",
+          processedCount: run.processedCount,
+          runId: run._id,
+          safeReason:
+            error instanceof Error
+              ? error.message.slice(0, 200)
+              : "unknown_failure",
+          sequence: run.processedCount + run.failedCount + 3,
+          storeId: run.storeId,
+        });
+        return;
+      }
+    }
     const cursor = decodeHistoricalBackfillCursor(run.cursor);
     if (cursor.phase === "done") {
       const now = Date.now();
@@ -2618,7 +3108,119 @@ export const processHistoricalBackfillBatch = internalMutation({
             sequence: finalAudit.plannedCount + 100,
             storeId: run.storeId,
           });
+          if (run.backfillApplyManifestId) {
+            const manifest = await ctx.db.get(
+              "reportingBackfillApplyManifest",
+              run.backfillApplyManifestId,
+            );
+            if (manifest && manifest.status === "building") {
+              await ctx.db.patch(
+                "reportingBackfillApplyManifest",
+                manifest._id,
+                {
+                  cleanupEligibleAt: manifestCleanupEligibleAt({
+                    completedAt: now,
+                    status: "failed",
+                  }),
+                  completedAt: now,
+                  status: "failed",
+                  updatedAt: now,
+                },
+              );
+            }
+          }
           return;
+        }
+        for (const sourceDomain of HISTORICAL_BACKFILL_SCANNED_SOURCE_DOMAINS) {
+          const [previewAudits, preflightAudits] = await Promise.all([
+            ctx.db
+              .query("reportingBackfillSourceAudit")
+              .withIndex("by_runId_sourceDomain", (q) =>
+                q.eq("runId", preview._id).eq("sourceDomain", sourceDomain),
+              )
+              .take(2),
+            ctx.db
+              .query("reportingBackfillSourceAudit")
+              .withIndex("by_runId_sourceDomain", (q) =>
+                q.eq("runId", run._id).eq("sourceDomain", sourceDomain),
+              )
+              .take(2),
+          ]);
+          if (
+            previewAudits.length !== 1 ||
+            preflightAudits.length !== 1 ||
+            !historicalBackfillAuditCountsMatch(
+              historicalBackfillAuditFromRun(previewAudits[0]!),
+              historicalBackfillAuditFromRun(preflightAudits[0]!),
+            )
+          ) {
+            const manifest = await requireBackfillManifestWithCtx(ctx, run);
+            await ctx.db.patch("reportingBackfillApplyManifest", manifest._id, {
+              cleanupEligibleAt: manifestCleanupEligibleAt({
+                completedAt: now,
+                status: "failed",
+              }),
+              completedAt: now,
+              status: "failed",
+              updatedAt: now,
+            });
+            await ctx.db.patch("reportingRun", run._id, {
+              completedAt: now,
+              failedCount: run.failedCount + 1,
+              status: "failed",
+            });
+            await ctx.db.insert("reportingRunEvent", {
+              eventType: "historical_backfill_source_audit_parity_failed",
+              failedCount: run.failedCount + 1,
+              occurredAt: now,
+              outcome: "failed",
+              processedCount: run.processedCount,
+              runId: run._id,
+              safeReason: `source_audit_changed:${sourceDomain}`,
+              sequence: finalAudit.plannedCount + 100,
+              sourceDomain,
+              storeId: run.storeId,
+            });
+            return;
+          }
+        }
+        const manifest = await requireBackfillManifestWithCtx(ctx, run);
+        if (manifest.status === "building") {
+          if (
+            manifest.entryCount !== finalAudit.plannedCount ||
+            !manifest.digest
+          ) {
+            throw new Error("Historical backfill manifest audit is incomplete");
+          }
+          await ctx.db.patch("reportingBackfillApplyManifest", manifest._id, {
+            sealedAt: now,
+            status: "sealed",
+            updatedAt: now,
+          });
+          await ctx.db.patch("reportingRun", run._id, {
+            cursor: undefined,
+            operation: "historical_backfill_manifest_apply",
+            processedCount: 0,
+          });
+          await ctx.db.insert("reportingRunEvent", {
+            ...historicalBackfillAuditPatch(finalAudit),
+            eventType: "historical_backfill_manifest_sealed",
+            occurredAt: now,
+            outcome: "sealed",
+            processedCount: 0,
+            runId: run._id,
+            sequence: finalAudit.plannedCount + 99,
+            storeId: run.storeId,
+          });
+          await ctx.scheduler.runAfter(
+            0,
+            historicalBackfillInternal.processHistoricalBackfillBatch,
+            { runId: run._id },
+          );
+          return;
+        }
+        if (manifest.status !== "completed") {
+          throw new Error("Historical backfill manifest lifecycle is invalid");
         }
       }
       const quarantines = await ctx.db
@@ -2672,8 +3274,17 @@ export const processHistoricalBackfillBatch = internalMutation({
       }
       return;
     }
-    const apply = run.operation.endsWith("apply");
+    const preflight = run.operation === "historical_backfill_apply";
+    const apply = false;
     try {
+      const manifest = preflight
+        ? await requireBackfillManifestWithCtx(ctx, run)
+        : null;
+      if (manifest && manifest.status !== "building") {
+        throw new Error("Historical backfill manifest is not building");
+      }
+      let manifestDigest = manifest?.digest ?? "historical-manifest-v1:empty";
+      let manifestEntryCount = manifest?.entryCount ?? 0;
       let page: { continueCursor: string; isDone: boolean; page: unknown[] };
       if (cursor.phase === "pos") {
         page = await loadPosPage(ctx, {
@@ -2817,10 +3428,27 @@ export const processHistoricalBackfillBatch = internalMutation({
         } else {
           facts = planPaymentAllocationFact(row as Doc<"paymentAllocation">);
         }
-        for (const fact of facts) {
+        for (const sourceFact of facts) {
+          const normalized = normalizeHistoricalFactWithPolicy({
+            fact: sourceFact,
+            policy,
+          });
+          const fact = normalized.fact;
+          const resolvedPeriod = await resolveHistoricalFactPeriodWithCtx(
+            ctx,
+            fact,
+            run,
+            policy,
+          );
           const candidateFingerprint =
-            await fingerprintHistoricalCandidateWithCtx(ctx, fact, run);
-          const previewItem = apply
+            await fingerprintHistoricalCandidateWithCtx(
+              ctx,
+              fact,
+              run,
+              policy,
+              resolvedPeriod,
+            );
+          const previewItem = preflight
             ? await findHistoricalPreviewItem(ctx, {
                 businessEventKey: historicalPreviewBusinessEventKey(fact),
                 runId: run.previewRunId!,
@@ -2828,9 +3456,15 @@ export const processHistoricalBackfillBatch = internalMutation({
               })
             : null;
           if (
-            apply &&
+            preflight &&
             (!previewItem ||
-              previewItem.candidateFingerprint !== candidateFingerprint)
+              previewItem.candidateFingerprint !== candidateFingerprint ||
+              previewItem.policyId !== policy?._id ||
+              previewItem.policyHash !== policy?.approvalHash ||
+              JSON.stringify(previewItem.inferredFields ?? []) !==
+                JSON.stringify(normalized.inferredFields) ||
+              JSON.stringify(previewItem.originallyMissingFields ?? []) !==
+                JSON.stringify(normalized.originallyMissingFields))
           ) {
             throw new Error(
               "Historical backfill candidate does not match the completed preview",
@@ -2839,26 +3473,59 @@ export const processHistoricalBackfillBatch = internalMutation({
           const outcome = await persistHistoricalFact(ctx, {
             apply,
             fact,
+            inferredFields: normalized.inferredFields,
             now: Date.now(),
+            originallyMissingFields: normalized.originallyMissingFields,
+            policy,
+            resolvedPeriod,
             run,
           });
-          if (apply) {
+          if (preflight) {
             if (previewItem!.outcome !== outcome) {
               throw new Error(
                 "Historical backfill candidate outcome changed after preview",
               );
             }
+            const manifestItem = {
+              businessEventKey: historicalPreviewBusinessEventKey(fact),
+              candidateFingerprint,
+              inferredFields: normalized.inferredFields,
+              originallyMissingFields: normalized.originallyMissingFields,
+              outcome,
+              sanitizedCandidateJson: historicalManifestCandidateJson(
+                fact,
+                resolvedPeriod,
+              ),
+              sequence: manifestEntryCount + 1,
+              sourceDomain: fact.sourceDomain,
+            };
+            await ctx.db.insert("reportingBackfillApplyManifestItem", {
+              ...manifestItem,
+              createdAt: Date.now(),
+              manifestId: manifest!._id,
+              organizationId: run.organizationId,
+              storeId: run.storeId,
+            });
+            manifestDigest = historicalManifestEntryDigest(
+              manifestDigest,
+              manifestItem,
+            );
+            manifestEntryCount += 1;
           } else {
             await recordHistoricalPreviewItem(ctx, {
               candidateFingerprint,
               fact,
+              inferredFields: normalized.inferredFields,
+              originallyMissingFields: normalized.originallyMissingFields,
               outcome,
+              policy,
               run,
             });
           }
           const delta = historicalBackfillAuditForOutcome({
             outcome,
             unknownFieldCount: historicalFactUnknownFields(fact).length,
+            inferredCount: normalized.inferredFields.length,
           });
           batchAudit = mergeHistoricalBackfillAuditCounts(batchAudit, delta);
           auditBySource.set(
@@ -2880,6 +3547,13 @@ export const processHistoricalBackfillBatch = internalMutation({
         quarantined: batchAudit.quarantinedCount,
       });
       const now = Date.now();
+      if (manifest) {
+        await ctx.db.patch("reportingBackfillApplyManifest", manifest._id, {
+          digest: manifestDigest,
+          entryCount: manifestEntryCount,
+          updatedAt: now,
+        });
+      }
       for (const [sourceDomain, counts] of auditBySource) {
         await upsertHistoricalBackfillSourceAudit(ctx, {
           counts,
@@ -2912,7 +3586,7 @@ export const processHistoricalBackfillBatch = internalMutation({
         eventType: "historical_backfill_batch_audited",
         failedCount: batchAudit.conflictCount + batchAudit.quarantinedCount,
         occurredAt: now,
-        outcome: apply ? "applied" : "previewed",
+        outcome: preflight ? "preflighted" : "previewed",
         processedCount: batchAudit.eligibleCount,
         runId: run._id,
         sequence:
@@ -2929,6 +3603,26 @@ export const processHistoricalBackfillBatch = internalMutation({
       );
     } catch (error) {
       const now = Date.now();
+      if (run.backfillApplyManifestId) {
+        const manifest = await ctx.db.get(
+          "reportingBackfillApplyManifest",
+          run.backfillApplyManifestId,
+        );
+        if (
+          manifest &&
+          !["completed", "failed", "cancelled"].includes(manifest.status)
+        ) {
+          await ctx.db.patch("reportingBackfillApplyManifest", manifest._id, {
+            cleanupEligibleAt: manifestCleanupEligibleAt({
+              completedAt: now,
+              status: "failed",
+            }),
+            completedAt: now,
+            status: "failed",
+            updatedAt: now,
+          });
+        }
+      }
       await ctx.db.patch("reportingRun", run._id, {
         completedAt: now,
         failedCount: run.failedCount + 1,
@@ -2980,6 +3674,26 @@ export const controlHistoricalBackfill = internalMutation({
       completedAt: nextStatus === "cancelled" ? now : undefined,
       status: nextStatus,
     });
+    if (nextStatus === "cancelled" && run.backfillApplyManifestId) {
+      const manifest = await ctx.db.get(
+        "reportingBackfillApplyManifest",
+        run.backfillApplyManifestId,
+      );
+      if (
+        manifest &&
+        !["completed", "failed", "cancelled"].includes(manifest.status)
+      ) {
+        await ctx.db.patch("reportingBackfillApplyManifest", manifest._id, {
+          cleanupEligibleAt: manifestCleanupEligibleAt({
+            completedAt: now,
+            status: "cancelled",
+          }),
+          completedAt: now,
+          status: "cancelled",
+          updatedAt: now,
+        });
+      }
+    }
     await ctx.db.insert("reportingRunEvent", {
       cursor: run.cursor,
       eventType: `historical_backfill_${args.action}`,
