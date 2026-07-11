@@ -87,6 +87,10 @@ import type {
   PosTerminalIntegrityState,
 } from "./posLocalStore";
 import {
+  createMemoryPosLocalStorageAdapter,
+  createPosLocalStore,
+} from "./posLocalStore";
+import {
   RUNTIME_STATUS_FRESHNESS_PUBLISH_INTERVAL_MS,
   RUNTIME_STATUS_FRESHNESS_WAKEUP_INTERVAL_MS,
   getRuntimeStatusPublishMaterialSignature,
@@ -401,12 +405,16 @@ describe("usePosLocalSyncRuntimeStatus", () => {
       localId: "local-session-1",
       cloudId: "session-1",
       mappedAt: 10,
+      storeId: "store-1",
+      terminalId: "local-terminal-1",
     });
     expect(store.writeLocalCloudMapping).toHaveBeenCalledWith({
       entity: "posTransaction",
       localId: "local-txn-1",
       cloudId: "transaction-1",
       mappedAt: 11,
+      storeId: "store-1",
+      terminalId: "local-terminal-1",
     });
     expect(store.writeLocalCloudMapping).toHaveBeenCalledWith({
       entity: "registerSession",
@@ -1978,6 +1986,53 @@ describe("usePosLocalSyncRuntimeStatus", () => {
       localId: "local-expense-event-1",
       cloudId: "expense-transaction-1",
       mappedAt: 11,
+    });
+  });
+
+  it("keeps sync-written transaction mappings visible to scoped readers", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+    });
+
+    await expect(
+      writeReturnedLocalCloudMappings(
+        store,
+        [
+          {
+            cloudId: "cloud-transaction-1",
+            createdAt: 10,
+            localId: "local-transaction-1",
+            localIdKind: "transaction",
+          },
+        ],
+        {
+          events: [],
+          storeId: "store-1",
+          terminalId: "terminal-1",
+        },
+      ),
+    ).resolves.toEqual({ ok: true });
+
+    await expect(
+      store.readMappingPage({
+        limit: 10,
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    ).resolves.toEqual({
+      ok: true,
+      value: {
+        items: [
+          {
+            cloudId: "cloud-transaction-1",
+            entity: "posTransaction",
+            localId: "local-transaction-1",
+            mappedAt: 10,
+            storeId: "store-1",
+            terminalId: "terminal-1",
+          },
+        ],
+      },
     });
   });
 

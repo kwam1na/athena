@@ -2986,6 +2986,9 @@ export async function writeReturnedLocalCloudMappings(
       localId: mapping.localId,
       cloudId: mapping.cloudId,
       mappedAt: mapping.createdAt,
+      ...(scope
+        ? { storeId: scope.storeId, terminalId: scope.terminalId }
+        : {}),
       ...registerScope,
     });
     if (!result.ok)
