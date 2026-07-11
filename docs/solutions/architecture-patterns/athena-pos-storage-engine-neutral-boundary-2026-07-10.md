@@ -7,7 +7,7 @@ problem_type: architecture_pattern
 component: database
 resolution_type: code_fix
 severity: high
-delivery_diff_fingerprint: c85d9852b4e5c2fa6a02a2d788f5463c32f4cd280181ec94e218987657019adb
+delivery_diff_fingerprint: d0f04eeea37bcecb441d939bf41743883bbcfb34201b9188d4b10d546f2db473
 applies_when:
   - "Adding or replacing a POS local persistence engine"
   - "Changing local-first POS commands, projections, sync, or authority persistence"

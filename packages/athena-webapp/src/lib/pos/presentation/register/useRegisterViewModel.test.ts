@@ -48,6 +48,7 @@ const mockWriteCashierPresence = vi.fn();
 const mockMarkLocalEventsSynced = vi.fn();
 const mockWriteLocalCloudMapping = vi.fn();
 const mockListLocalCloudMappings = vi.fn();
+const mockReadLocalCloudMapping = vi.fn();
 const mockReadDrawerAuthorityState = vi.fn();
 const mockReadTerminalIntegrityState = vi.fn();
 const mockWriteDrawerAuthorityState = vi.fn();
@@ -361,6 +362,7 @@ function buildMockLocalStore() {
     listEvents: mockListLocalEvents,
     listEventsForUpload: mockListLocalEvents,
     listLocalCloudMappings: mockListLocalCloudMappings,
+    readLocalCloudMapping: mockReadLocalCloudMapping,
     readActiveCashierPresence: mockReadCashierPresence,
     readCashierPresence: mockReadCashierPresence,
     readDrawerAuthorityState: mockReadDrawerAuthorityState,
@@ -781,6 +783,8 @@ describe("useRegisterViewModel", () => {
         ],
       };
     });
+    mockReadLocalCloudMapping.mockReset();
+    mockReadLocalCloudMapping.mockResolvedValue({ ok: true, value: null });
     mockReadDrawerAuthorityState.mockReset();
     mockReadDrawerAuthorityState.mockResolvedValue({ ok: true, value: null });
     mockReadTerminalIntegrityState.mockReset();
@@ -13366,6 +13370,52 @@ describe("useRegisterViewModel", () => {
     ).toBe(completedEvent?.localTransactionId);
     expect(mockMarkLocalEventsSynced).not.toHaveBeenCalled();
     expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it("recovers a completed sale cloud id from an exact legacy mapping", async () => {
+    mockReadLocalCloudMapping.mockImplementation(async (input) => ({
+      ok: true,
+      value:
+        input.entity === "posTransaction"
+          ? {
+              cloudId: "cloud-transaction-1",
+              entity: "posTransaction",
+              localId: input.localId,
+              mappedAt: 10,
+            }
+          : null,
+    }));
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+    await act(async () => {
+      await result.current.checkout.onAddPayment("cash", 120);
+    });
+    await act(async () => {
+      await result.current.checkout.onCompleteTransaction();
+    });
+
+    await waitFor(() =>
+      expect(
+        result.current.checkout.completedTransactionData?.localTransactionId,
+      ).toBeDefined(),
+    );
+    await waitFor(() =>
+      expect(
+        result.current.checkout.completedTransactionData?.transactionId,
+      ).toBe("cloud-transaction-1"),
+    );
+    expect(mockReadLocalCloudMapping).toHaveBeenCalledWith({
+      entity: "posTransaction",
+      localId:
+        result.current.checkout.completedTransactionData?.localTransactionId,
+    });
   });
 
   it("marks local sale events as app-session-unverified while recovery waits for network", async () => {
