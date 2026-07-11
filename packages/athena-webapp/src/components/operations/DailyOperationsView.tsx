@@ -27,6 +27,7 @@ import {
   History,
   PackageSearch,
   RefreshCw,
+  WalletCards,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -77,6 +78,7 @@ import {
 type DailyOperationsApi = {
   getDailyOperationsAutomationSnapshot?: unknown;
   getDailyOperationsDetailSnapshot?: unknown;
+  getDailyOperationsOpenRegisterSessionsSnapshot?: unknown;
   getDailyOperationsSnapshot?: unknown;
   getDailyOperationsStorePulseSnapshot?: unknown;
   getDailyOperationsStoreRequestsSnapshot?: unknown;
@@ -206,6 +208,10 @@ export type DailyOperationsSnapshot = {
     params?: Record<string, string>;
     search?: Record<string, string>;
     severity: "critical" | "warning" | "info";
+    registerSession?: {
+      displayLabel: string;
+      isOpenedForOperatingDate: boolean;
+    };
     source: {
       id: string;
       label?: string;
@@ -349,6 +355,7 @@ type DailyOperationsViewContentProps = {
   onRequestTimelineSnapshot?: () => void;
   onTimelineSheetOpenChange?: (open: boolean) => void;
   onOperatingDateChange?: (date: Date) => void;
+  openRegisterSessionsSnapshot?: DailyOperationsOpenRegisterSessionsSnapshot;
   orgUrlSlug: string;
   snapshot?: DailyOperationsSnapshot;
   storePulseWindow: StorePulseWindow;
@@ -358,6 +365,14 @@ type DailyOperationsViewContentProps = {
   todayRefreshedAt?: number;
   timelinePreviewSnapshot?: DailyOperationsTimelinePreviewSnapshot;
   timelineSnapshot?: DailyOperationsTimelineSnapshot;
+};
+
+type DailyOperationsOpenRegisterSessionsSnapshot = {
+  operatingDate: string;
+  sessions: Array<{
+    displayLabel: string;
+    id: string;
+  }>;
 };
 
 type CachedWeekAnalytics = {
@@ -1392,6 +1407,72 @@ function LaneCard({
   );
 }
 
+function OpenRegisterSessionsPanel({
+  operatingDate,
+  orgUrlSlug,
+  sessions,
+  storeUrlSlug,
+}: {
+  operatingDate: string;
+  orgUrlSlug: string;
+  sessions: DailyOperationsSnapshot["attentionItems"];
+  storeUrlSlug: string;
+}) {
+  if (sessions.length === 0) return null;
+
+  return (
+    <section
+      aria-labelledby="open-register-sessions-heading"
+      className="border-t border-border/70 pt-layout-md"
+    >
+      <div className="flex items-baseline gap-layout-sm">
+        <WalletCards
+          aria-hidden="true"
+          className="h-4 w-4 shrink-0 self-center text-muted-foreground"
+        />
+        <h2
+          className="text-sm font-medium text-foreground"
+          id="open-register-sessions-heading"
+        >
+          Open register sessions
+        </h2>
+        <p className="font-numeric text-xs tabular-nums text-muted-foreground">
+          {sessions.length} open
+        </p>
+      </div>
+      <div className="mt-layout-sm flex min-w-0 flex-col divide-y divide-border/70">
+        {sessions.map((session) => {
+          const sessionLabel =
+            session.registerSession?.displayLabel ??
+            session.source.label ??
+            session.label;
+
+          return (
+            <article className="py-layout-sm first:pt-0 last:pb-0" key={session.id}>
+              <Link
+                aria-label={`Open register session ${sessionLabel}`}
+                className="inline-flex min-w-0 items-center gap-layout-xs rounded-sm text-sm font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                params={buildParams(orgUrlSlug, storeUrlSlug, session.params)}
+                search={{
+                  ...(session.search ?? {}),
+                  ...getWorkflowSearch(session.to ?? "", operatingDate),
+                } as never}
+                to={
+                  session.to ??
+                  "/$orgUrlSlug/store/$storeUrlSlug/cash-controls"
+                }
+              >
+                <span className="truncate">{sessionLabel}</span>
+                <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
+              </Link>
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function isActionableLane(lane: DailyOperationsSnapshot["lanes"][number]) {
   return !["ready", "closed"].includes(lane.status);
 }
@@ -1530,12 +1611,16 @@ function DailyOperationsTopBandShell({
 }
 
 function AutomationStatusPanel({
+  operatingDate,
   orgUrlSlug,
+  openRegisterSessions = [],
   snapshot,
   storeUrlSlug,
   variant = "default",
 }: {
+  operatingDate: string;
   orgUrlSlug: string;
+  openRegisterSessions?: DailyOperationsSnapshot["attentionItems"];
   snapshot: DailyOperationsSnapshot;
   storeUrlSlug: string;
   variant?: "compact" | "default";
@@ -1608,6 +1693,12 @@ function AutomationStatusPanel({
             );
           })}
         </div>
+        <OpenRegisterSessionsPanel
+          operatingDate={operatingDate}
+          orgUrlSlug={orgUrlSlug}
+          sessions={openRegisterSessions}
+          storeUrlSlug={storeUrlSlug}
+        />
       </DailyOperationsTopBandShell>
     );
   }
@@ -3115,6 +3206,7 @@ export function DailyOperationsViewContent({
   onRequestTimelineSnapshot,
   onTimelineSheetOpenChange,
   onOperatingDateChange,
+  openRegisterSessionsSnapshot,
   orgUrlSlug,
   snapshot,
   storePulseWindow,
@@ -3208,6 +3300,38 @@ export function DailyOperationsViewContent({
     ? replaceApprovalsLane(snapshot.lanes, storeRequestsApprovalsLane)
     : [];
   const pendingApprovalsLane = getPendingApprovalsLaneFromLanes(operationLanes);
+  const snapshotOpenRegisterSessions = !isHistoricalDate
+    ? snapshot?.attentionItems.filter(
+        (item) =>
+          item.source.type === "register_session" &&
+          item.registerSession?.isOpenedForOperatingDate === true &&
+          item.params?.sessionId !== undefined &&
+          item.to !== undefined,
+      ) ?? []
+    : [];
+  const openRegisterSessions =
+    openRegisterSessionsSnapshot &&
+    snapshot &&
+    Array.isArray(openRegisterSessionsSnapshot.sessions) &&
+    openRegisterSessionsSnapshot.operatingDate === snapshot.operatingDate
+      ? openRegisterSessionsSnapshot.sessions.map((session) => ({
+          id: session.id,
+          label: "Register session is still open",
+          message: "",
+          owner: "daily_close" as const,
+          params: { sessionId: session.id },
+          registerSession: {
+            displayLabel: session.displayLabel,
+            isOpenedForOperatingDate: true,
+          },
+          severity: "critical" as const,
+          source: { id: session.id, type: "register_session" },
+          to: "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId",
+        }))
+      : snapshotOpenRegisterSessions;
+  const hasVisibleAutomationStatuses = snapshot
+    ? getVisibleAutomationStatuses(snapshot).length > 0
+    : false;
   const actionableLanes = operationLanes.filter(isActionableLane);
   const weekMetricsForDisplay =
     snapshot && (hasDetailSnapshot || !cachedWeekMetrics)
@@ -3376,7 +3500,9 @@ export function DailyOperationsViewContent({
                 {!isHistoricalDate && shouldShowAutomationStatuses ? (
                   <>
                     <AutomationStatusPanel
+                      operatingDate={snapshot.operatingDate}
                       orgUrlSlug={orgUrlSlug}
+                      openRegisterSessions={openRegisterSessions}
                       snapshot={snapshot}
                       storeUrlSlug={storeUrlSlug}
                       variant="compact"
@@ -3402,6 +3528,16 @@ export function DailyOperationsViewContent({
                       completedClose={snapshot.completedClose}
                     />
                   </section>
+                ) : null}
+
+                {!shouldShowAutomationStatuses ||
+                !hasVisibleAutomationStatuses ? (
+                  <OpenRegisterSessionsPanel
+                    operatingDate={snapshot.operatingDate}
+                    orgUrlSlug={orgUrlSlug}
+                    sessions={openRegisterSessions}
+                    storeUrlSlug={storeUrlSlug}
+                  />
                 ) : null}
 
                 <div className="grid gap-layout-md [grid-template-columns:repeat(auto-fit,minmax(min(14rem,100%),1fr))] md:gap-layout-lg">
@@ -3814,6 +3950,7 @@ function DailyOperationsApiPendingView() {
 function DailyOperationsConnectedView({
   getDailyOperationsAutomationSnapshot,
   getDailyOperationsDetailSnapshot,
+  getDailyOperationsOpenRegisterSessionsSnapshot,
   getDailyOperationsSnapshot,
   getDailyOperationsStorePulseSnapshot,
   getDailyOperationsStoreRequestsSnapshot,
@@ -3823,6 +3960,7 @@ function DailyOperationsConnectedView({
 }: {
   getDailyOperationsAutomationSnapshot?: unknown;
   getDailyOperationsDetailSnapshot?: unknown;
+  getDailyOperationsOpenRegisterSessionsSnapshot?: unknown;
   getDailyOperationsSnapshot: unknown;
   getDailyOperationsStorePulseSnapshot?: unknown;
   getDailyOperationsStoreRequestsSnapshot?: unknown;
@@ -3985,6 +4123,12 @@ function DailyOperationsConnectedView({
       ? snapshotArgs
       : "skip",
   ) as DailyOperationsAutomationSnapshot | undefined;
+  const openRegisterSessionsSnapshot = useExpectedDailyOperationsQuery(
+    getDailyOperationsOpenRegisterSessionsSnapshot ?? getDailyOperationsSnapshot,
+    getDailyOperationsOpenRegisterSessionsSnapshot && canQueryProtectedData
+      ? snapshotArgs
+      : "skip",
+  ) as DailyOperationsOpenRegisterSessionsSnapshot | undefined;
   const queriedTodayRefreshSnapshot = useExpectedDailyOperationsQuery(
     getDailyOperationsTodayRefreshSnapshot ?? getDailyOperationsSnapshot,
     todayRefreshArgs,
@@ -4291,6 +4435,7 @@ function DailyOperationsConnectedView({
       }
       onTimelineSheetOpenChange={handleTimelineSheetOpenChange}
       onOperatingDateChange={handleOperatingDateChange}
+      openRegisterSessionsSnapshot={openRegisterSessionsSnapshot}
       onRefreshToday={canRefreshToday ? requestTodayRefresh : undefined}
       orgUrlSlug={params?.orgUrlSlug ?? ""}
       snapshot={snapshot}
@@ -4319,6 +4464,9 @@ export function DailyOperationsView() {
       }
       getDailyOperationsDetailSnapshot={
         dailyOperationsApi.getDailyOperationsDetailSnapshot
+      }
+      getDailyOperationsOpenRegisterSessionsSnapshot={
+        dailyOperationsApi.getDailyOperationsOpenRegisterSessionsSnapshot
       }
       getDailyOperationsSnapshot={dailyOperationsApi.getDailyOperationsSnapshot}
       getDailyOperationsStorePulseSnapshot={

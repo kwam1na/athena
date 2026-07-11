@@ -68,6 +68,13 @@ import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
 import { LoadingButton } from "../ui/loading-button";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
+import {
   OperationReviewItemCard,
   type OperationReviewMetadataEntry,
 } from "./OperationReviewItemCard";
@@ -142,6 +149,11 @@ type QueueWorkItemMixEntry = {
   label: string;
   percent: number;
   type: string;
+};
+
+type QueueWorkItemDisplayGroup = {
+  items: QueueWorkItem[];
+  key: string;
 };
 
 type QueueOverflow = {
@@ -222,6 +234,7 @@ type QueueApprovalRequest = {
 export type OperationsWorkflow = "stock" | "queue" | "approvals";
 export type OpenWorkSearchState = {
   page?: number;
+  workType?: string;
 };
 export type OpenWorkSearchPatch = Partial<OpenWorkSearchState>;
 
@@ -286,7 +299,9 @@ function formatCatalogSetupProductName(item: QueueWorkItem) {
     return preserveOperationalAcronyms(capitalizeWords(productName));
   }
 
-  return getQueueWorkItemStringDetail(item, "productId") ?? "Product not recorded";
+  return (
+    getQueueWorkItemStringDetail(item, "productId") ?? "Product not recorded"
+  );
 }
 
 function getQueueWorkItemTypeLabel(type: string) {
@@ -336,17 +351,19 @@ function getQueueWorkItemTypeLabel(type: string) {
 function getOpenWorkMixEntries(
   workItems: QueueWorkItem[],
 ): QueueWorkItemMixEntry[] {
+  const displayGroups = groupOpenWorkItems(workItems);
   const countsByType = new Map<string, number>();
 
-  for (const item of workItems) {
-    countsByType.set(item.type, (countsByType.get(item.type) ?? 0) + 1);
+  for (const group of displayGroups) {
+    const type = group.items[0].type;
+    countsByType.set(type, (countsByType.get(type) ?? 0) + 1);
   }
 
   return Array.from(countsByType.entries())
     .map(([type, count]) => ({
       count,
       label: getQueueWorkItemTypeLabel(type),
-      percent: Math.round((count / workItems.length) * 100),
+      percent: Math.round((count / displayGroups.length) * 100),
       type,
     }))
     .sort((left, right) => {
@@ -356,12 +373,33 @@ function getOpenWorkMixEntries(
     });
 }
 
-function formatOpenWorkMixHeadline(entries: QueueWorkItemMixEntry[]) {
-  if (entries.length === 1) {
-    return `All ${entries[0].label}`;
+function groupOpenWorkItems(workItems: QueueWorkItem[]) {
+  const groups: QueueWorkItemDisplayGroup[] = [];
+  const syncedSaleGroupsBySkuId = new Map<string, QueueWorkItemDisplayGroup>();
+
+  for (const item of workItems) {
+    const productSkuId = getQueueWorkItemStockAdjustmentSkuId(item);
+
+    if (item.type !== "synced_sale_inventory_review" || !productSkuId) {
+      groups.push({ items: [item], key: item._id });
+      continue;
+    }
+
+    const existingGroup = syncedSaleGroupsBySkuId.get(productSkuId);
+    if (existingGroup) {
+      existingGroup.items.push(item);
+      continue;
+    }
+
+    const group = {
+      items: [item],
+      key: `synced-sale-inventory-${productSkuId}`,
+    };
+    syncedSaleGroupsBySkuId.set(productSkuId, group);
+    groups.push(group);
   }
 
-  return `${entries.length} work types`;
+  return groups;
 }
 
 function formatOpenWorkMixCount(count: number) {
@@ -510,8 +548,7 @@ function getQueueWorkItemInventoryReviewLineCount(item: QueueWorkItem) {
 function getQueueWorkItemStockAdjustmentSkuId(item: QueueWorkItem) {
   if (item.type === "synced_sale_inventory_review") {
     return getQueueWorkItemStringDetail(item, "primaryProductSkuId") as
-      | Id<"productSku">
-      | undefined;
+      Id<"productSku"> | undefined;
   }
 
   return undefined;
@@ -818,7 +855,10 @@ function QueueWorkItemActionSlot({
 
 function OpenWorkMixSummary({ workItems }: { workItems: QueueWorkItem[] }) {
   const mixEntries = getOpenWorkMixEntries(workItems);
-  const headline = formatOpenWorkMixHeadline(mixEntries);
+  const headline =
+    mixEntries.length === 1
+      ? `All ${mixEntries[0].label}`
+      : `${mixEntries.length} work types`;
 
   return (
     <section
@@ -862,6 +902,51 @@ function OpenWorkMixSummary({ workItems }: { workItems: QueueWorkItem[] }) {
         ))}
       </div>
     </section>
+  );
+}
+
+function OpenWorkTypeFilter({
+  onWorkTypeChange,
+  selectedWorkType,
+  workItems,
+}: {
+  onWorkTypeChange: (workType?: string) => void;
+  selectedWorkType?: string;
+  workItems: QueueWorkItem[];
+}) {
+  const mixEntries = getOpenWorkMixEntries(workItems);
+
+  return (
+    <div className="w-full sm:w-56">
+      <label
+        className="mb-1.5 block text-xs font-medium text-muted-foreground"
+        htmlFor="open-work-type-filter"
+      >
+        Work type
+      </label>
+      <Select
+        onValueChange={(value) =>
+          onWorkTypeChange(value === "all" ? undefined : value)
+        }
+        value={selectedWorkType ?? "all"}
+      >
+        <SelectTrigger
+          aria-label="Filter work queue by work type"
+          className="w-full bg-background active:scale-[0.98]"
+          id="open-work-type-filter"
+        >
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">All work types</SelectItem>
+          {mixEntries.map((entry) => (
+            <SelectItem key={entry.type} value={entry.type}>
+              {entry.label} · {entry.count.toLocaleString()}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
   );
 }
 
@@ -1201,6 +1286,150 @@ function QueueWorkItemCard({
         ) : (
           title
         )
+      }
+    />
+  );
+}
+
+function SyncedSaleInventoryReviewGroupCard({
+  isResolutionDisabled,
+  isResolving,
+  items,
+  onResolve,
+  orgUrlSlug,
+  storeUrlSlug,
+}: {
+  isResolutionDisabled?: boolean;
+  isResolving?: boolean;
+  items: QueueWorkItem[];
+  onResolve?: (items: QueueWorkItem[]) => void;
+  orgUrlSlug?: string;
+  storeUrlSlug?: string;
+}) {
+  const representative = items[0];
+  const productSkuId = getQueueWorkItemStockAdjustmentSkuId(representative);
+  const titleSubject =
+    getWorkItemTitleSubject(representative.title, "Review inventory for ") ??
+    "Affected SKU";
+  const contextPresentation = getQueueWorkItemContextPresentation(
+    representative.type,
+  );
+  const oldestCreatedAt = Math.min(...items.map((item) => item.createdAt));
+  const collapsedMetadataEntries: OperationReviewMetadataEntry[] = [
+    {
+      label: "Affected sales",
+      value: `${items.length.toLocaleString()} ${items.length === 1 ? "sale" : "sales"}`,
+    },
+    {
+      label: "Needs action",
+      value: "Check stock count",
+    },
+    {
+      label: "Oldest",
+      value: getRelativeTime(oldestCreatedAt),
+    },
+  ];
+  const highestPriority = items.some((item) => item.priority === "high")
+    ? "High"
+    : "Normal";
+
+  return (
+    <OperationReviewItemCard
+      actionSlot={
+        <QueueWorkItemActionSlot
+          item={representative}
+          orgUrlSlug={orgUrlSlug}
+          stockAdjustmentSkuId={productSkuId}
+          storeUrlSlug={storeUrlSlug}
+        />
+      }
+      badgeSlot={
+        <Badge
+          className="border-border bg-surface text-muted-foreground shadow-sm"
+          variant="outline"
+        >
+          {highestPriority}
+        </Badge>
+      }
+      className={contextPresentation.cardClassName}
+      collapsedMetadataEntries={collapsedMetadataEntries}
+      contextIcon={
+        <WorkItemContextIcon
+          className={contextPresentation.iconClassName}
+          Icon={contextPresentation.Icon}
+        />
+      }
+      contextLabel="Synced sale inventory"
+      contextLabelClassName={contextPresentation.contextLabelClassName}
+      detailsSlot={
+        <div>
+          <div className="flex items-baseline justify-between gap-layout-md">
+            <h3 className="text-sm font-medium text-foreground">
+              Affected sales
+            </h3>
+            <span className="text-xs tabular-nums text-muted-foreground">
+              {items.length.toLocaleString()} total
+            </span>
+          </div>
+          <ul className="mt-layout-sm divide-y divide-border/70 overflow-hidden rounded-md border border-border/70">
+            {items.map((item) => {
+              const lineCount = getQueueWorkItemInventoryReviewLineCount(item);
+
+              return (
+                <li
+                  className="flex flex-col gap-1 px-layout-sm py-layout-sm sm:flex-row sm:items-center sm:justify-between"
+                  key={item._id}
+                >
+                  <ReceiptReferenceLink
+                    orgUrlSlug={orgUrlSlug}
+                    receiptNumber={getQueueWorkItemStringDetail(
+                      item,
+                      "receiptNumber",
+                    )}
+                    storeUrlSlug={storeUrlSlug}
+                    transactionId={getQueueWorkItemTransactionId(item)}
+                  />
+                  <span className="flex flex-wrap items-center gap-x-layout-md gap-y-1 text-xs text-muted-foreground">
+                    {lineCount !== undefined ? (
+                      <span>{formatOptionalLineCount(lineCount)} affected</span>
+                    ) : null}
+                    <span>{getRelativeTime(item.createdAt)}</span>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      }
+      headerActionSlot={
+        onResolve && productSkuId ? (
+          <LoadingButton
+            className="h-8 px-3 text-xs"
+            disabled={Boolean(isResolutionDisabled)}
+            isLoading={Boolean(isResolving)}
+            onClick={() => onResolve(items)}
+            size="sm"
+            type="button"
+            variant="ghost"
+          >
+            {items.length === 1
+              ? "Mark reviewed"
+              : `Mark ${items.length.toLocaleString()} reviewed`}
+          </LoadingButton>
+        ) : null
+      }
+      itemId={`synced-sale-inventory-${productSkuId ?? representative._id}`}
+      title={
+        <>
+          Review inventory for{" "}
+          <StockAdjustmentReferenceLink
+            orgUrlSlug={orgUrlSlug}
+            skuId={productSkuId}
+            storeUrlSlug={storeUrlSlug}
+          >
+            {titleSubject}
+          </StockAdjustmentReferenceLink>
+        </>
       }
     />
   );
@@ -1611,7 +1840,7 @@ type OperationsQueueViewContentProps = {
   isLoadingPermissions: boolean;
   isLoadingQueue: boolean;
   isLoadingStock?: boolean;
-  isResolvingSyncedSaleInventoryReviewId?: Id<"operationalWorkItem"> | null;
+  isResolvingSyncedSaleInventoryReviewSkuId?: Id<"productSku"> | null;
   isSubmittingStockBatch: boolean;
   onDecideApprovalRequest: (args: {
     approvalRequestId: string;
@@ -1623,7 +1852,7 @@ type OperationsQueueViewContentProps = {
   onLoadMoreInventoryItems?: () => void;
   onRequestApprovalDecisionUnlock?: () => void;
   onOpenWorkSearchChange?: (patch: OpenWorkSearchPatch) => void;
-  onResolveSyncedSaleInventoryReview?: (item: QueueWorkItem) => void;
+  onResolveSyncedSaleInventoryReview?: (items: QueueWorkItem[]) => void;
   onDiscardCycleCountDraft?: () => Promise<NormalizedCommandResult<unknown>>;
   onRefreshCycleCountDraftLineBaseline?: (args: {
     productSkuId: Id<"productSku">;
@@ -1667,7 +1896,7 @@ export function OperationsQueueViewContent({
   isLoadingPermissions,
   isLoadingQueue,
   isLoadingStock = isLoadingQueue,
-  isResolvingSyncedSaleInventoryReviewId,
+  isResolvingSyncedSaleInventoryReviewSkuId,
   isSubmittingStockBatch,
   onDecideApprovalRequest,
   onDiscardCycleCountDraft,
@@ -1691,21 +1920,33 @@ export function OperationsQueueViewContent({
   workItems,
 }: OperationsQueueViewContentProps) {
   const requestedOpenWorkPage = openWorkSearch?.page ?? 1;
+  const selectedOpenWorkType = openWorkSearch?.workType;
   const [openWorkPage, setOpenWorkPage] = useState(requestedOpenWorkPage);
   const resolvedWorkflow =
     activeWorkflow ?? getDefaultWorkflow({ approvalRequests, workItems });
+  const filteredWorkItems = useMemo(
+    () =>
+      selectedOpenWorkType
+        ? workItems.filter((item) => item.type === selectedOpenWorkType)
+        : workItems,
+    [selectedOpenWorkType, workItems],
+  );
+  const displayGroups = useMemo(
+    () => groupOpenWorkItems(filteredWorkItems),
+    [filteredWorkItems],
+  );
   const openWorkPageCount = Math.max(
     1,
-    Math.ceil(workItems.length / OPEN_WORK_ITEMS_PER_PAGE),
+    Math.ceil(displayGroups.length / OPEN_WORK_ITEMS_PER_PAGE),
   );
   const clampedOpenWorkPage = Math.min(openWorkPage, openWorkPageCount);
   const openWorkPageStart =
     (clampedOpenWorkPage - 1) * OPEN_WORK_ITEMS_PER_PAGE;
-  const visibleWorkItems = workItems.slice(
+  const visibleWorkItemGroups = displayGroups.slice(
     openWorkPageStart,
     openWorkPageStart + OPEN_WORK_ITEMS_PER_PAGE,
   );
-  const openWorkCount = workItems.length;
+  const openWorkCount = displayGroups.length;
   const openWorkHeaderTitle = isLoadingQueue
     ? "Open work"
     : formatOpenWorkHeaderTitle(openWorkCount);
@@ -1756,6 +1997,14 @@ export function OperationsQueueViewContent({
       });
     },
     [onOpenWorkSearchChange, openWorkPageCount],
+  );
+
+  const handleOpenWorkTypeChange = useCallback(
+    (workType?: string) => {
+      setOpenWorkPage(1);
+      onOpenWorkSearchChange?.({ page: undefined, workType });
+    },
+    [onOpenWorkSearchChange],
   );
 
   useEffect(() => {
@@ -1862,7 +2111,7 @@ export function OperationsQueueViewContent({
                   className="space-y-0 rounded-lg border border-border bg-surface-raised shadow-surface"
                 >
                   <div className="border-b border-border px-layout-md py-layout-md">
-                    <div className="flex flex-col gap-layout-xs">
+                    <div className="flex flex-col gap-layout-md sm:flex-row sm:items-end sm:justify-between">
                       <div>
                         <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
                           Work queue
@@ -1871,38 +2120,56 @@ export function OperationsQueueViewContent({
                           Open items
                         </h2>
                       </div>
+                      <OpenWorkTypeFilter
+                        onWorkTypeChange={handleOpenWorkTypeChange}
+                        selectedWorkType={selectedOpenWorkType}
+                        workItems={workItems}
+                      />
                     </div>
                   </div>
 
                   <div className="p-layout-md">
                     <div className="space-y-layout-2xl">
-                      {visibleWorkItems.map((item) => (
-                        <QueueWorkItemCard
-                          isSyncedSaleInventoryReviewResolutionDisabled={Boolean(
-                            isResolvingSyncedSaleInventoryReviewId,
-                          )}
-                          isResolvingSyncedSaleInventoryReview={
-                            isResolvingSyncedSaleInventoryReviewId === item._id
-                          }
-                          item={item}
-                          key={item._id}
-                          onResolveSyncedSaleInventoryReview={
-                            onResolveSyncedSaleInventoryReview
-                          }
-                          orgUrlSlug={orgUrlSlug}
-                          storeUrlSlug={storeUrlSlug}
-                        />
-                      ))}
+                      {visibleWorkItemGroups.map((group) => {
+                        const representative = group.items[0];
+                        const productSkuId =
+                          getQueueWorkItemStockAdjustmentSkuId(representative);
+
+                        return representative.type ===
+                          "synced_sale_inventory_review" && productSkuId ? (
+                          <SyncedSaleInventoryReviewGroupCard
+                            isResolutionDisabled={Boolean(
+                              isResolvingSyncedSaleInventoryReviewSkuId,
+                            )}
+                            isResolving={
+                              isResolvingSyncedSaleInventoryReviewSkuId ===
+                              productSkuId
+                            }
+                            items={group.items}
+                            key={group.key}
+                            onResolve={onResolveSyncedSaleInventoryReview}
+                            orgUrlSlug={orgUrlSlug}
+                            storeUrlSlug={storeUrlSlug}
+                          />
+                        ) : (
+                          <QueueWorkItemCard
+                            item={representative}
+                            key={group.key}
+                            orgUrlSlug={orgUrlSlug}
+                            storeUrlSlug={storeUrlSlug}
+                          />
+                        );
+                      })}
                     </div>
                   </div>
 
-                  {workItems.length > OPEN_WORK_ITEMS_PER_PAGE ? (
+                  {displayGroups.length > OPEN_WORK_ITEMS_PER_PAGE ? (
                     <ListPagination
                       onPageChange={handleOpenWorkPageChange}
                       page={clampedOpenWorkPage}
                       pageCount={openWorkPageCount}
                       pageSize={OPEN_WORK_ITEMS_PER_PAGE}
-                      totalItems={workItems.length}
+                      totalItems={displayGroups.length}
                     />
                   ) : null}
                 </PageWorkspaceMain>
@@ -3030,9 +3297,9 @@ export function OperationsQueueView({
   const [decisioningApprovalRequestId, setDecisioningApprovalRequestId] =
     useState<string | null>(null);
   const [
-    resolvingSyncedSaleInventoryReviewId,
-    setResolvingSyncedSaleInventoryReviewId,
-  ] = useState<Id<"operationalWorkItem"> | null>(null);
+    resolvingSyncedSaleInventoryReviewSkuId,
+    setResolvingSyncedSaleInventoryReviewSkuId,
+  ] = useState<Id<"productSku"> | null>(null);
   const [isApprovalUnlockOpen, setIsApprovalUnlockOpen] = useState(false);
   const [approvalDecisionUnlock, setApprovalDecisionUnlock] =
     useState<ApprovalDecisionUnlock | null>(null);
@@ -3524,9 +3791,9 @@ export function OperationsQueueView({
   };
 
   const handleResolveSyncedSaleInventoryReview = async (
-    item: QueueWorkItem,
+    items: QueueWorkItem[],
   ) => {
-    if (resolvingSyncedSaleInventoryReviewId) return;
+    if (resolvingSyncedSaleInventoryReviewSkuId) return;
 
     if (!activeStore?._id) {
       presentCommandToast({
@@ -3539,52 +3806,52 @@ export function OperationsQueueView({
       return;
     }
 
-    const localRegisterSessionId = getQueueWorkItemStringDetail(
-      item,
-      "localRegisterSessionId",
-    );
-    const localTransactionId = getQueueWorkItemStringDetail(
-      item,
-      "localTransactionId",
-    );
-    const receiptNumber = getQueueWorkItemStringDetail(item, "receiptNumber");
-    const registerSessionId = getQueueWorkItemStringDetail(
-      item,
-      "registerSessionId",
-    ) as Id<"registerSession"> | undefined;
-    const sourceId = getQueueWorkItemStringDetail(item, "sourceId") as
-      | Id<"posTransaction">
-      | undefined;
-    const terminalId = getQueueWorkItemStringDetail(item, "terminalId") as
-      | Id<"posTerminal">
-      | undefined;
+    const productSkuId = getQueueWorkItemStockAdjustmentSkuId(items[0]);
+    if (!productSkuId) return;
 
-    setResolvingSyncedSaleInventoryReviewId(item._id);
+    setResolvingSyncedSaleInventoryReviewSkuId(productSkuId);
 
     try {
-      const result = await runCommand(() =>
-        resolveSyncedSaleInventoryReview({
-          localRegisterSessionId,
-          localTransactionId,
-          outcome: "completed",
-          reason: "Inventory review handled from Open Work.",
-          receiptNumber,
-          registerSessionId,
-          sourceId,
-          storeId: activeStore._id,
-          terminalId,
-          workItemId: item._id,
-        }),
-      );
+      for (const item of items) {
+        const result = await runCommand(() =>
+          resolveSyncedSaleInventoryReview({
+            localRegisterSessionId: getQueueWorkItemStringDetail(
+              item,
+              "localRegisterSessionId",
+            ),
+            localTransactionId: getQueueWorkItemStringDetail(
+              item,
+              "localTransactionId",
+            ),
+            outcome: "completed",
+            reason: "Inventory review handled from Open Work.",
+            receiptNumber: getQueueWorkItemStringDetail(item, "receiptNumber"),
+            registerSessionId: getQueueWorkItemStringDetail(
+              item,
+              "registerSessionId",
+            ) as Id<"registerSession"> | undefined,
+            sourceId: getQueueWorkItemStringDetail(item, "sourceId") as
+              Id<"posTransaction"> | undefined,
+            storeId: activeStore._id,
+            terminalId: getQueueWorkItemStringDetail(item, "terminalId") as
+              Id<"posTerminal"> | undefined,
+            workItemId: item._id,
+          }),
+        );
 
-      if (result.kind !== "ok") {
-        presentCommandToast(result);
-        return;
+        if (result.kind !== "ok") {
+          presentCommandToast(result);
+          return;
+        }
       }
 
-      toast.success("Inventory review marked complete");
+      toast.success(
+        items.length === 1
+          ? "Inventory review marked complete"
+          : `${items.length.toLocaleString()} inventory reviews marked complete`,
+      );
     } finally {
-      setResolvingSyncedSaleInventoryReviewId(null);
+      setResolvingSyncedSaleInventoryReviewSkuId(null);
     }
   };
 
@@ -3661,8 +3928,8 @@ export function OperationsQueueView({
           queue === undefined || isInventorySnapshotLoadingFirstPage
         }
         isLoadingStock={isInventorySnapshotLoadingFirstPage}
-        isResolvingSyncedSaleInventoryReviewId={
-          resolvingSyncedSaleInventoryReviewId
+        isResolvingSyncedSaleInventoryReviewSkuId={
+          resolvingSyncedSaleInventoryReviewSkuId
         }
         onDiscardCycleCountDraft={handleDiscardCycleCountDraft}
         onDecideApprovalRequest={handleDecideApprovalRequest}

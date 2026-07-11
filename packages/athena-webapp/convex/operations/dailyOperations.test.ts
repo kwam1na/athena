@@ -2723,6 +2723,9 @@ describe("daily operations overview read model", () => {
     });
     expect(snapshot.attentionItems[0]).toMatchObject({
       owner: "daily_close",
+      registerSession: {
+        isOpenedForOperatingDate: true,
+      },
       source: {
         type: "register_session",
         id: "register-1",

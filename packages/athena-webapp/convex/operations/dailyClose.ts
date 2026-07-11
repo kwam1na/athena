@@ -2340,6 +2340,7 @@ export async function buildDailyCloseSnapshotWithCtx(
       metadata: {
         ...(terminalLabel ? { terminal: terminalLabel } : {}),
         ...(registerMetadata ? { register: registerMetadata } : {}),
+        openedForOperatingDate: !isCarriedOver,
         operatingScope: isCarriedOver
           ? "Carried over from prior day"
           : "Opened today",
@@ -2411,6 +2412,7 @@ export async function buildDailyCloseSnapshotWithCtx(
       metadata: {
         ...(terminalLabel ? { terminal: terminalLabel } : {}),
         ...(registerMetadata ? { register: registerMetadata } : {}),
+        openedForOperatingDate: !isCarriedOver,
         operatingScope: isCarriedOver
           ? "Carried over from prior day"
           : "Opened today",
@@ -2591,6 +2593,7 @@ export async function buildDailyCloseSnapshotWithCtx(
       metadata: {
         ...(terminalLabel ? { terminal: terminalLabel } : {}),
         ...(registerMetadata ? { register: registerMetadata } : {}),
+        openedForOperatingDate: !isCarriedOver,
         operatingScope: isCarriedOver
           ? "Carried over from prior day"
           : "Opened today",
@@ -2630,6 +2633,7 @@ export async function buildDailyCloseSnapshotWithCtx(
         metadata: {
           ...(terminalLabel ? { terminal: terminalLabel } : {}),
           ...(registerMetadata ? { register: registerMetadata } : {}),
+          openedForOperatingDate: !isCarriedOver,
           operatingScope: isCarriedOver
             ? "Carried over from prior day"
             : "Opened today",

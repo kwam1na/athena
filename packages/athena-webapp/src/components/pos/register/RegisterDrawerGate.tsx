@@ -89,8 +89,7 @@ function RegisterSessionCode({
 
   return (
     <p className="text-xs leading-5 text-muted-foreground/80">
-      {label}{" "}
-      <span className="font-mono text-foreground/65">{code}</span>
+      {label} <span className="font-mono text-foreground/65">{code}</span>
     </p>
   );
 }
@@ -636,9 +635,9 @@ export function RegisterDrawerGate({
                         {drawerGate.closeoutDraftVariance === undefined
                           ? "Pending count"
                           : formatCurrency(
-                            currency,
-                            drawerGate.closeoutDraftVariance,
-                          )}
+                              currency,
+                              drawerGate.closeoutDraftVariance,
+                            )}
                       </dd>
                     </div>
                   </dl>
@@ -706,11 +705,14 @@ export function RegisterDrawerGate({
                       drawerGate.isReopeningCloseout,
                     )}
                     isLoading={Boolean(drawerGate.isReopeningCloseout)}
-                    onClick={() => void drawerGate.onCloseoutSecondaryAction?.()}
+                    onClick={() =>
+                      void drawerGate.onCloseoutSecondaryAction?.()
+                    }
                     type="button"
                     variant="outline"
                   >
-                    {drawerGate.closeoutSecondaryActionLabel ?? "Reopen register"}
+                    {drawerGate.closeoutSecondaryActionLabel ??
+                      "Reopen register"}
                   </LoadingButton>
                 ) : null}
 
@@ -756,7 +758,10 @@ export function RegisterDrawerGate({
       <div className="space-y-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <p className="text-sm font-medium uppercase tracking-[0.2em] text-muted-foreground">
-            Register {drawerGate.registerNumber}
+            {formatRegisterGateLabel({
+              registerLabel: drawerGate.registerLabel,
+              registerNumber: drawerGate.registerNumber,
+            })}
           </p>
           <span className="rounded-full border border-border bg-surface px-2.5 py-1 text-xs font-medium text-muted-foreground">
             Drawer closed
@@ -828,6 +833,7 @@ export function RegisterDrawerGate({
               drawerGate.isSubmitting || drawerGate.canOpenDrawer === false
             }
             type="submit"
+            variant={drawerGate.isReplacement ? "workflow" : undefined}
           >
             {drawerGate.isSubmitting
               ? "Opening drawer"

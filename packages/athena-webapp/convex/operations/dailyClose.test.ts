@@ -1390,6 +1390,7 @@ describe("end-of-day review backend foundation", () => {
     );
     expect(snapshot.blockers[2].metadata).toMatchObject({
       openedAt: Date.UTC(2026, 4, 6, 20),
+      openedForOperatingDate: false,
       operatingScope: "Carried over from prior day",
       register: "Register A1",
       terminal: "Front counter terminal",
@@ -1399,6 +1400,7 @@ describe("end-of-day review backend foundation", () => {
       expectedCash: 10000,
       openedAt: Date.UTC(2026, 4, 7, 10),
       openedBy: "Kofi Mensah",
+      openedForOperatingDate: true,
       operatingScope: "Opened today",
       register: "Register A2",
       status: "closing",

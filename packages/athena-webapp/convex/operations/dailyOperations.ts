@@ -64,6 +64,7 @@ type SourceItem = {
   key: string;
   link?: LinkTarget;
   message: string;
+  metadata?: Record<string, unknown>;
   severity?: string;
   subject: SourceSubject;
   title: string;
@@ -92,8 +93,20 @@ type DailyOperationsAttentionItem = {
   params?: Record<string, string>;
   search?: Record<string, string>;
   severity: AttentionSeverity;
+  registerSession?: {
+    displayLabel: string;
+    isOpenedForOperatingDate: boolean;
+  };
   source: SourceSubject;
   to?: string;
+};
+
+type DailyOperationsOpenRegisterSessionsSnapshot = {
+  operatingDate: string;
+  sessions: Array<{
+    displayLabel: string;
+    id: Id<"registerSession">;
+  }>;
 };
 
 type DailyOperationsLane = {
@@ -524,6 +537,19 @@ function sourceAttentionItem(
   owner: DailyOperationsAttentionItem["owner"],
   item: SourceItem,
 ): DailyOperationsAttentionItem {
+  const registerSessionStatus = item.metadata?.status;
+  const isOpenRegisterSession =
+    item.subject.type === "register_session" &&
+    (registerSessionStatus === "open" ||
+      registerSessionStatus === "active" ||
+      registerSessionStatus === "closing");
+  const terminalLabel = item.metadata?.terminal;
+  const registerLabel = item.subject.label ?? "Register";
+  const registerSessionDisplayLabel =
+    typeof terminalLabel === "string" && terminalLabel.trim()
+      ? `${terminalLabel} / ${registerLabel}`
+      : registerLabel;
+
   return {
     id: item.key,
     label: item.title,
@@ -532,6 +558,15 @@ function sourceAttentionItem(
     params: item.link?.params,
     search: item.link?.search,
     severity: attentionSeverity(item),
+    ...(isOpenRegisterSession
+      ? {
+          registerSession: {
+            displayLabel: registerSessionDisplayLabel,
+            isOpenedForOperatingDate:
+              item.metadata?.openedForOperatingDate === true,
+          },
+        }
+      : {}),
     source: item.subject,
     to: item.link?.to,
   };
@@ -2048,6 +2083,14 @@ function getCloseItemCounts(items: SourceItem[]) {
   };
 }
 
+function registerSessionLabel(
+  session: Pick<Doc<"registerSession">, "registerNumber">,
+) {
+  return session.registerNumber
+    ? `Register ${session.registerNumber}`
+    : "Register";
+}
+
 function queueAttentionItems(args: {
   approvalRequests: Array<Doc<"approvalRequest">>;
   openWorkItems: Array<Doc<"operationalWorkItem">>;
@@ -2732,6 +2775,50 @@ export const getDailyOperationsStoreRequestsSnapshot = query({
         approvalCountLabel: approvals.approvalRequestsCountLabel,
       }),
       operatingDate: args.operatingDate,
+    };
+  },
+});
+
+export const getDailyOperationsOpenRegisterSessionsSnapshot = query({
+  args: dailyOperationsSnapshotArgsValidator,
+  handler: async (ctx, args): Promise<DailyOperationsOpenRegisterSessionsSnapshot> => {
+    await authorizeDailyOperationsSnapshot(ctx, args);
+    const statuses = ["open", "active", "closing"] as const;
+    const [sessionPages, terminalNamesById] = await Promise.all([
+      Promise.all(
+        statuses.map((status) =>
+          ctx.db
+            .query("registerSession")
+            .withIndex("by_storeId_status_openedOperatingDate", (q) =>
+              q
+                .eq("storeId", args.storeId)
+                .eq("status", status)
+                .eq("openedOperatingDate", args.operatingDate),
+            )
+            .order("asc")
+            .take(MAX_OPERATIONS_QUERY_LIMIT),
+        ),
+      ),
+      listTerminalNames(ctx, args.storeId),
+    ]);
+
+    return {
+      operatingDate: args.operatingDate,
+      sessions: sessionPages
+        .flat()
+        .map((session) => {
+          const registerLabel = registerSessionLabel(session);
+          const terminalLabel = session.terminalId
+            ? terminalNamesById.get(session.terminalId)
+            : undefined;
+
+          return {
+            displayLabel: terminalLabel
+              ? `${terminalLabel} / ${registerLabel}`
+              : registerLabel,
+            id: session._id,
+          };
+        }),
     };
   },
 });

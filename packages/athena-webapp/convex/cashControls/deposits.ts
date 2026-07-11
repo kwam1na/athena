@@ -54,6 +54,7 @@ import {
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
 import { isRegisterSessionSaleUsable } from "../../shared/registerSessionLifecyclePolicy";
 import { formatStaffDisplayName } from "../../shared/staffDisplayName";
+import { buildPaymentTotals } from "../operations/paymentTotals";
 
 export { listOpenLocalSyncConflictsByRegisterSession } from "../pos/application/sync/registerSessionSyncReview";
 
@@ -177,9 +178,7 @@ type CashControlSyncConflict = RegisterSessionSyncConflict;
 
 type StoredLocalSyncEvent = NonNullable<
   Awaited<
-    ReturnType<
-      ReturnType<typeof createConvexLocalSyncRepository>["findEvent"]
-    >
+    ReturnType<ReturnType<typeof createConvexLocalSyncRepository>["findEvent"]>
   >
 >;
 
@@ -901,6 +900,58 @@ async function listRegisterSessionTransactions(
   });
 }
 
+async function buildRegisterSessionFinancialPosition(
+  ctx: QueryCtx,
+  args: {
+    registerSessionId: Id<"registerSession">;
+    storeId: Id<"store">;
+  },
+) {
+  const completedTransactions: Doc<"posTransaction">[] = [];
+  const query = ctx.db
+    .query("posTransaction")
+    .withIndex("by_storeId_status_registerSessionId_completedAt", (q) =>
+      q
+        .eq("storeId", args.storeId)
+        .eq("status", "completed")
+        .eq("registerSessionId", args.registerSessionId),
+    );
+
+  for await (const transaction of query) {
+    completedTransactions.push(transaction);
+  }
+
+  const totalSales = completedTransactions.reduce(
+    (sum, transaction) => sum + transaction.total,
+    0,
+  );
+  const paymentTotals = buildPaymentTotals(
+    completedTransactions.map((transaction) => ({
+      ...transaction,
+      payments: transaction.payments ?? [],
+      totalPaid: transaction.totalPaid ?? transaction.total,
+    })),
+  );
+
+  return {
+    averageTransaction:
+      completedTransactions.length > 0
+        ? totalSales / completedTransactions.length
+        : 0,
+    paymentMix: paymentTotals
+      .map((payment) => ({
+        method: payment.method,
+        share:
+          totalSales > 0 ? Math.round((payment.amount / totalSales) * 100) : 0,
+        total: payment.amount,
+        transactionCount: payment.transactionCount,
+      }))
+      .sort((left, right) => right.total - left.total),
+    totalSales,
+    transactionCount: completedTransactions.length,
+  };
+}
+
 async function listPendingVoidApprovalSummariesBySessionId(
   ctx: Pick<QueryCtx, "db">,
   args: {
@@ -1100,6 +1151,7 @@ export const getRegisterSessionSnapshot = query({
       pendingVoidApprovals,
       syncConflictsBySessionId,
       workflowTraceId,
+      financialPosition,
     ] = await Promise.all([
       listSessionDeposits(ctx, args.registerSessionId),
       listRegisterSessionTimeline(ctx, args.registerSessionId),
@@ -1122,6 +1174,10 @@ export const getRegisterSessionSnapshot = query({
         registerSessionIds: [args.registerSessionId],
       }),
       resolveRegisterSessionWorkflowTraceId(ctx, registerSession),
+      buildRegisterSessionFinancialPosition(ctx, {
+        registerSessionId: args.registerSessionId,
+        storeId: args.storeId,
+      }),
     ]);
     const registerSessionWithTraceId = {
       ...registerSession,
@@ -1189,6 +1245,7 @@ export const getRegisterSessionSnapshot = query({
 
     return {
       closeoutReview,
+      financialPosition,
       deposits: deposits
         .sort((left, right) => right.recordedAt - left.recordedAt)
         .map((deposit) => ({
@@ -1547,11 +1604,14 @@ export const resolveRegisterSessionSyncReview = mutation({
       reviewActorStaffProfileId = approvalProof.data.approvedByStaffProfileId;
     } else if (args.actorStaffProfileId) {
       try {
-        reviewActorStaffProfileId = await resolveDepositActorStaffProfileId(ctx, {
-          athenaUserId: athenaUser._id,
-          staffProfileId: args.actorStaffProfileId,
-          storeId: args.storeId,
-        });
+        reviewActorStaffProfileId = await resolveDepositActorStaffProfileId(
+          ctx,
+          {
+            athenaUserId: athenaUser._id,
+            staffProfileId: args.actorStaffProfileId,
+            storeId: args.storeId,
+          },
+        );
       } catch {
         return userError({
           code: "authorization_failed",
@@ -1584,9 +1644,10 @@ export const resolveRegisterSessionSyncReview = mutation({
     const requestedConflictIds = new Set(args.reviewConflictIds ?? []);
     const conflicts =
       requestedConflictIds.size > 0
-        ? allConflicts.filter((conflict) =>
-            requestedConflictIds.has(conflict._id) ||
-            requestedConflictIds.has(conflict.localEventId),
+        ? allConflicts.filter(
+            (conflict) =>
+              requestedConflictIds.has(conflict._id) ||
+              requestedConflictIds.has(conflict.localEventId),
           )
         : allConflicts;
     if (
@@ -1636,7 +1697,9 @@ export const resolveRegisterSessionSyncReview = mutation({
         "localRegisterSessionId",
       ];
 
-      return identityKeys.every((key) => leftDetails[key] === rightDetails[key]);
+      return identityKeys.every(
+        (key) => leftDetails[key] === rightDetails[key],
+      );
     }
 
     function addResolvedMatchingLoadedConflicts(
@@ -1733,8 +1796,9 @@ export const resolveRegisterSessionSyncReview = mutation({
             "This register review can no longer be applied because the synced activity was not found.",
         });
       }
-      const hasConflictRecord =
-        !(conflict.status === "rejected" && conflict._id === syncEvent._id);
+      const hasConflictRecord = !(
+        conflict.status === "rejected" && conflict._id === syncEvent._id
+      );
       localEventIds.push(syncEvent.localEventId);
       originalStatuses.push(syncEvent.status);
       sequences.push(syncEvent.sequence);
@@ -1757,12 +1821,14 @@ export const resolveRegisterSessionSyncReview = mutation({
           typeof syncEvent.projectedAt === "number" &&
           (review.reviewKind === "duplicate_register_open" ||
             (review.reviewKind === "duplicate_pos_session_sale" &&
-              (await hasProjectedSaleTransactionMapping(syncEvent, terminalId))));
+              (await hasProjectedSaleTransactionMapping(
+                syncEvent,
+                terminalId,
+              ))));
         if (
           !hasUnselectedOpenConflictForEvent &&
           !shouldPreserveProjectedSaleEvent &&
-          (syncEvent.status === "conflicted" ||
-            syncEvent.status === "rejected")
+          (syncEvent.status === "conflicted" || syncEvent.status === "rejected")
         ) {
           if (
             syncEvent.eventType === "register_closed" &&
@@ -1914,7 +1980,8 @@ export const resolveRegisterSessionSyncReview = mutation({
         shouldApplyReviewedSale &&
         selectedEventReviewKinds.has("duplicate_pos_session_sale");
       const shouldApplyReviewedInventorySale =
-        shouldApplyReviewedSale && selectedEventReviewKinds.has("inventory_review");
+        shouldApplyReviewedSale &&
+        selectedEventReviewKinds.has("inventory_review");
       const shouldApplyReviewedSaleCashOverride =
         shouldApplyReviewedSale &&
         (selectedEventReviewKinds.has("register_not_open_sale") ||
@@ -1955,7 +2022,8 @@ export const resolveRegisterSessionSyncReview = mutation({
           });
           const hasMappingRepairHold = closeoutHolds.some(
             (hold) =>
-              hold.kind === "repairable_missing_register_session_mapping_sales" &&
+              hold.kind ===
+                "repairable_missing_register_session_mapping_sales" &&
               hold.count > 0,
           );
           const salePrecedesCloseout = await salePrecedesLocalCloseoutIfPresent(
@@ -1995,16 +2063,21 @@ export const resolveRegisterSessionSyncReview = mutation({
         }
 
         try {
-          const mappingResult =
-            await createOrReuseRegisterSessionRepairMapping(localSyncRepository, {
+          const mappingResult = await createOrReuseRegisterSessionRepairMapping(
+            localSyncRepository,
+            {
               localEventId: syncEvent.localEventId,
               localRegisterSessionId: syncEvent.localRegisterSessionId,
               now: resolvedAt,
               registerSessionId: args.registerSessionId,
               storeId: args.storeId,
               terminalId,
-            });
-          if ("status" in mappingResult && mappingResult.status === "conflict") {
+            },
+          );
+          if (
+            "status" in mappingResult &&
+            mappingResult.status === "conflict"
+          ) {
             return userError({
               code: "precondition_failed",
               message:
@@ -2161,7 +2234,9 @@ export const resolveRegisterSessionSyncReview = mutation({
           allowRegisterCloseoutVarianceProjection: shouldApplyReviewedCloseout,
           reviewedConflictIds:
             shouldApplyReviewedSale && selectedEventConflicts.length > 0
-              ? selectedEventConflicts.map((reviewConflict) => reviewConflict._id)
+              ? selectedEventConflicts.map(
+                  (reviewConflict) => reviewConflict._id,
+                )
               : requestedConflictIds.size > 0
                 ? Array.from(requestedConflictIds)
                 : conflicts.map((reviewConflict) => reviewConflict._id),
@@ -2214,17 +2289,13 @@ export const resolveRegisterSessionSyncReview = mutation({
 
     await Promise.all(
       Array.from(resolvedConflictIds).map((conflictId) =>
-        ctx.db.patch(
-          "posLocalSyncConflict",
-          conflictId,
-          {
-            resolvedAt,
-            ...(reviewActorStaffProfileId
-              ? { resolvedByStaffProfileId: reviewActorStaffProfileId }
-              : {}),
-            status: "resolved",
-          },
-        ),
+        ctx.db.patch("posLocalSyncConflict", conflictId, {
+          resolvedAt,
+          ...(reviewActorStaffProfileId
+            ? { resolvedByStaffProfileId: reviewActorStaffProfileId }
+            : {}),
+          status: "resolved",
+        }),
       ),
     );
 
@@ -2247,23 +2318,23 @@ export const resolveRegisterSessionSyncReview = mutation({
               : projectedTransactionIds.length === 1
                 ? "Automatically applied proofless synced register sale."
                 : `Automatically applied ${projectedTransactionIds.length} proofless synced register sales.`
-          : managerOverrideCount > 0
-            ? managerOverrideCount === 1
-              ? projectedTransactionIds.length === 1
-                ? "Manager override applied rejected synced register sale."
-                : "Manager override applied rejected synced register activity."
-              : `Manager override applied ${managerOverrideCount} rejected synced register events.`
-          : projectedCloseoutCount > 0
-            ? projectedCloseoutCount === 1
-              ? "Applied reviewed synced register closeout."
-              : `Applied ${projectedCloseoutCount} reviewed synced register closeouts.`
-            : projectedTransactionIds.length === 0
-              ? conflicts.length === 1
-                ? "Resolved synced register review."
-                : `Resolved ${conflicts.length} synced register reviews.`
-              : projectedTransactionIds.length === 1
-                ? "Applied reviewed synced register sale."
-                : `Applied ${projectedTransactionIds.length} reviewed synced register sales.`,
+            : managerOverrideCount > 0
+              ? managerOverrideCount === 1
+                ? projectedTransactionIds.length === 1
+                  ? "Manager override applied rejected synced register sale."
+                  : "Manager override applied rejected synced register activity."
+                : `Manager override applied ${managerOverrideCount} rejected synced register events.`
+              : projectedCloseoutCount > 0
+                ? projectedCloseoutCount === 1
+                  ? "Applied reviewed synced register closeout."
+                  : `Applied ${projectedCloseoutCount} reviewed synced register closeouts.`
+                : projectedTransactionIds.length === 0
+                  ? conflicts.length === 1
+                    ? "Resolved synced register review."
+                    : `Resolved ${conflicts.length} synced register reviews.`
+                  : projectedTransactionIds.length === 1
+                    ? "Applied reviewed synced register sale."
+                    : `Applied ${projectedTransactionIds.length} reviewed synced register sales.`,
       metadata: {
         ...(args.approvalProofId
           ? { approvalProofId: args.approvalProofId }
