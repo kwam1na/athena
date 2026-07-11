@@ -1,0 +1,6 @@
+import { v } from "convex/values";
+import { internal } from "../_generated/api";
+import { internalMutation } from "../_generated/server";
+const DAY = 86_400_000;
+export function shouldExpireFunnelRecord(kind: "raw" | "aggregate", timestamp: number, now: number) { return timestamp <= now - (kind === "raw" ? 30 : 395) * DAY; }
+export const cleanupBatch = internalMutation({ args: { now: v.optional(v.number()), limit: v.optional(v.number()) }, handler: async (ctx, args) => { const now = args.now ?? Date.now(); const limit = Math.min(200, Math.max(1, args.limit ?? 100)); const raw = await ctx.db.query("landingFunnelEvent").withIndex("by_occurredAt", (q) => q.lte("occurredAt", now - 30 * DAY)).take(limit); for (const row of raw) await ctx.db.delete("landingFunnelEvent", row._id); const aggregates = await ctx.db.query("landingFunnelDailyBucket").withIndex("by_updatedAt", (q) => q.lte("updatedAt", now - 395 * DAY)).take(limit); for (const row of aggregates) await ctx.db.delete("landingFunnelDailyBucket", row._id); const hasMore = raw.length === limit || aggregates.length === limit; if (hasMore) await ctx.scheduler.runAfter(0, internal.marketing.landingFunnelRetention.cleanupBatch, { now, limit }); return { deletedRaw: raw.length, deletedAggregates: aggregates.length, hasMore }; } });

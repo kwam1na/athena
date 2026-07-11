@@ -2,6 +2,15 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 describe("Convex cron registration", () => {
+  it("registers bounded marketing retention jobs", () => {
+    const source = readFileSync("convex/crons.ts", "utf8");
+    expect(source).toContain('"walkthrough-retention-cleanup"');
+    expect(source).toContain("internal.marketing.walkthroughRequestRetention.cleanupBatch");
+    expect(source).toContain('"landing-funnel-retention-cleanup"');
+    expect(source).toContain("internal.marketing.landingFunnelRetention.cleanupBatch");
+    expect(source).toContain('"walkthrough-notification-recovery"');
+    expect(source).toContain("internal.marketing.walkthroughRequestNotifications.scheduleEligibleBatch");
+  });
   it("registers the guarded Daily Operations automation runner", () => {
     const source = readFileSync("convex/crons.ts", "utf8");
 

@@ -3,6 +3,10 @@ import { internal } from "./_generated/api";
 
 const crons = cronJobs();
 
+crons.interval("walkthrough-retention-cleanup", { hours: 24 }, internal.marketing.walkthroughRequestRetention.cleanupBatch, {});
+crons.interval("landing-funnel-retention-cleanup", { hours: 24 }, internal.marketing.landingFunnelRetention.cleanupBatch, {});
+crons.interval("walkthrough-notification-recovery", { minutes: 10 }, internal.marketing.walkthroughRequestNotifications.scheduleEligibleBatch, {});
+
 crons.interval(
   "resume Reports workspace materialization",
   { hours: 1 },
