@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Plan Review: Athena Public Product Page</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --canvas: #f4f2ed;
+        --surface: #fffdf8;
+        --ink: #1c211f;
+        --muted: #626a65;
+        --border: #d8d5cd;
+        --shell: #17211d;
+        --signal: #d6853c;
+        --soft: #f3e5d7;
+      }
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      body {
+        margin: 0;
+        background: var(--canvas);
+        color: var(--ink);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        line-height: 1.6;
+      }
+      a { color: inherit; text-decoration-color: var(--signal); text-underline-offset: 0.2em; }
+      header {
+        background: var(--shell);
+        color: #f7f5ef;
+        padding: 4rem max(1.5rem, calc((100vw - 72rem) / 2));
+      }
+      header p { max-width: 50rem; color: #cbd2cd; }
+      h1, h2, h3 { line-height: 1.12; letter-spacing: -0.025em; }
+      h1 { margin: 0.4rem 0 1rem; max-width: 55rem; font-size: clamp(2.5rem, 6vw, 5.5rem); }
+      h2 { margin-top: 0; font-size: clamp(1.65rem, 3vw, 2.4rem); }
+      h3 { margin-bottom: 0.35rem; }
+      .eyebrow { color: #f2ad6d; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; }
+      .meta { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 1.5rem; }
+      .pill { border: 1px solid #46514c; border-radius: 999px; padding: 0.35rem 0.7rem; color: #dce2de; font-size: 0.82rem; }
+      nav {
+        position: sticky;
+        top: 0;
+        z-index: 3;
+        display: flex;
+        gap: 1rem;
+        overflow-x: auto;
+        padding: 0.85rem max(1.5rem, calc((100vw - 72rem) / 2));
+        border-bottom: 1px solid var(--border);
+        background: color-mix(in srgb, var(--surface) 92%, transparent);
+        backdrop-filter: blur(12px);
+        font-size: 0.88rem;
+        white-space: nowrap;
+      }
+      main { max-width: 72rem; margin: 0 auto; padding: 2rem 1.5rem 5rem; }
+      section { padding: 2rem 0; border-bottom: 1px solid var(--border); }
+      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 1rem; }
+      .card { border: 1px solid var(--border); border-radius: 0.8rem; background: var(--surface); padding: 1.2rem; }
+      .card p, .muted { color: var(--muted); }
+      .decision { border-left: 0.25rem solid var(--signal); background: var(--soft); padding: 0.9rem 1rem; margin: 0.75rem 0; }
+      ol.units { padding-left: 1.5rem; }
+      ol.units > li { margin: 1.4rem 0; padding-left: 0.35rem; }
+      .deps { color: var(--muted); font-size: 0.9rem; }
+      table { width: 100%; border-collapse: collapse; display: block; overflow-x: auto; }
+      th, td { border-bottom: 1px solid var(--border); padding: 0.8rem; text-align: left; vertical-align: top; }
+      th { background: var(--surface); }
+      code { background: color-mix(in srgb, var(--border) 42%, transparent); border-radius: 0.25rem; padding: 0.12rem 0.3rem; }
+      .flow { display: grid; gap: 0.55rem; max-width: 42rem; }
+      .flow div { border: 1px solid var(--border); border-radius: 0.6rem; background: var(--surface); padding: 0.75rem 1rem; }
+      .flow div + div::before { content: "↓"; display: block; margin: -1.25rem 0 0.25rem; color: var(--signal); }
+      footer { color: var(--muted); font-size: 0.85rem; padding-top: 2rem; }
+      @media (prefers-color-scheme: dark) {
+        :root { --canvas: #111714; --surface: #18201c; --ink: #f0eee8; --muted: #b2bbb5; --border: #354039; --soft: #392a20; }
+      }
+      @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="eyebrow">Athena implementation plan</div>
+      <h1>Build Athena's public product page</h1>
+      <p>Replace the isolated landing prototype with a public-first entry, truthful Athena product proof, and a durable walkthrough workflow while preserving authenticated operations.</p>
+      <div class="meta">
+        <span class="pill">Created 2026-07-11</span>
+        <span class="pill">Type: feat</span>
+        <span class="pill">Status: active</span>
+        <span class="pill">Deepened 2026-07-11</span>
+        <span class="pill">7 implementation units</span>
+      </div>
+      <p><a href="2026-07-11-001-feat-athena-product-page-plan.md">Open canonical Markdown plan</a></p>
+    </header>
+
+    <nav aria-label="Plan sections">
+      <a href="#scope">Scope</a>
+      <a href="#decisions">Decisions</a>
+      <a href="#flow">System shape</a>
+      <a href="#units">Units</a>
+      <a href="#phases">Phases</a>
+      <a href="#risks">Risks</a>
+      <a href="#verification">Verification</a>
+    </nav>
+
+    <main>
+      <section id="scope">
+        <h2>Outcome and scope</h2>
+        <div class="grid">
+          <article class="card">
+            <h3>Public acquisition</h3>
+            <p><code>/</code> becomes Athena's prospect-first product page. Existing customers keep a secondary sign-in path, and authenticated workspace dispatch moves to <code>/app</code>.</p>
+          </article>
+          <article class="card">
+            <h3>Truthful product proof</h3>
+            <p>Store Pulse semantics, sanitized fixtures, and audited static media communicate sales standing, Athena-recorded history that compounds through use, product movement, and stock pressure without protected reads.</p>
+          </article>
+          <article class="card">
+            <h3>Durable conversion</h3>
+            <p>A route-backed walkthrough form uses Athena's owned HTTP ingress to store prospect intent before notification, with idempotent retry, retained corrections, bounded abuse controls, and a PII lifecycle.</p>
+          </article>
+          <article class="card">
+            <h3>Evidence gate</h3>
+            <p>Exactly five representative owners evaluate the positioning. Four must explain the problem, Athena's role, and its connected-record difference before final approval.</p>
+          </article>
+        </div>
+        <p class="muted">Excluded: protected public queries, live customer metrics, CRM or scheduler integration, pricing, self-service onboarding, automated replenishment, forecasting changes, and broad authenticated-shell refactors.</p>
+      </section>
+
+      <section id="decisions">
+        <h2>Key technical decisions</h2>
+        <div class="decision"><strong>Public and operational entry are separate.</strong> Public rendering does not wait for auth or organization resolution; authenticated dispatch remains explicit at <code>/app</code>.</div>
+        <div class="decision"><strong>Real product, public-safe evidence.</strong> Reuse Store Pulse semantics through sanitized fixtures and audited fallbacks rather than exposing store-scoped queries.</div>
+        <div class="decision"><strong>Persistence defines success.</strong> A walkthrough is accepted when its Convex record is durable; notification failure stays observable and retryable behind the boundary.</div>
+        <div class="decision"><strong>Anonymous writes use owned ingress.</strong> Origin, content type, and body size are checked before an internal Convex mutation; persistence and recovery functions are never public.</div>
+        <div class="decision"><strong>Retries are idempotent without losing corrections.</strong> The same key and payload dedupe; conflicting key reuse has no side effect; materially changed same-email requests persist as linked follow-ups.</div>
+        <div class="decision"><strong>PII has an owner and expiry.</strong> Internal-only open/resolved/abandoned operations, bounded notification attempts, stored-email proof for redaction, MailerSend field allowlists, and versioned server-keyed replay tombstones keep durable leads from becoming durable orphans.</div>
+        <div class="decision"><strong>Mobile stages evidence.</strong> Dense product surfaces become ordered, legible details rather than scaled-down dashboards.</div>
+      </section>
+
+      <section id="flow">
+        <h2>System shape</h2>
+        <div class="flow" aria-label="High-level system flow">
+          <div>Public visitor enters the public route shell</div>
+          <div>Product page shows sanitized Athena proof</div>
+          <div>Prospect requests a walkthrough or customer signs in</div>
+          <div>Owned HTTP ingress validates the anonymous request</div>
+          <div>Internal Convex command creates a durable lead</div>
+          <div>Leased notification workflow runs as a secondary side effect</div>
+        </div>
+        <p class="muted">The hero and conversion actions remain usable when rich media fails. The browser emits page view, CTA selection, and form start through the bounded funnel ingress; durable acceptance is appended only by the internal walkthrough transaction. Walkthrough success reflects persistence, not notification delivery.</p>
+      </section>
+
+      <section id="units">
+        <h2>Implementation-unit digest</h2>
+        <ol class="units">
+          <li><strong>Positioning and proof gate</strong><div class="deps">External dependency: five eligible owner-operators and product-owner review.</div>Pre-register the comprehension rubric, record every eligible response, map the core sequence plus one cross-channel and one small-team-control proof, maintain a freshness manifest, and pre-register the launch-review rubric.</li>
+          <li><strong>Public and app route separation</strong><div class="deps">Runs in parallel with units 1 and 3.</div>Make <code>/</code> public, move authenticated dispatch to <code>/app</code>, redirect <code>/landing</code>, suppress public operational chrome, and keep process-root providers stable.</li>
+          <li><strong>Walkthrough persistence</strong><div class="deps">Deployment requires an accountable recipient and operational owner.</div>Add owned HTTP ingress, immutable records/follow-ups, canonical idempotency, evidence-based budgets, ambiguity-safe notification attempts, internal-only resolution, and retention/redaction.</li>
+          <li><strong>Walkthrough experience</strong><div class="deps">Depends on units 2 and 3.</div>Build the accessible <code>/walkthrough</code> form, retained failure state, retry identity, confirmation, and secondary sign-in.</li>
+          <li><strong>Product-proof system</strong><div class="deps">Depends on unit 1.</div>Create sanitized fixtures, audited assets, staged responsive evidence, static poster fallback, and reduced-motion parity.</li>
+          <li><strong>Product-page narrative</strong><div class="deps">Depends on units 1, 2, 4, and 5.</div>Compose the approved sales-to-stock story, two evidenced breadth moments, fixed crawler metadata, dedicated privacy-safe funnel ingress, and prospect-first conversion hierarchy.</li>
+          <li><strong>Integration and launch verification</strong><div class="deps">Depends on units 3 through 6.</div>Exercise anonymous, authenticated, backend, media, accessibility, mobile, and deep-link paths, then refresh generated artifacts and run merge-grade validation.</li>
+        </ol>
+      </section>
+
+      <section id="phases">
+        <h2>Phased delivery</h2>
+        <table>
+          <thead><tr><th>Phase</th><th>Work</th><th>Gate</th></tr></thead>
+          <tbody>
+            <tr><td>0</td><td>Pre-registered positioning validation and proof audit</td><td>Four of five comprehension pass; every retained connection has credible evidence. Market effectiveness remains a post-launch question.</td></tr>
+            <tr><td>1</td><td>Public/app routing and walkthrough persistence in parallel</td><td>Route ownership and durable command contracts are green.</td></tr>
+            <tr><td>2</td><td>Walkthrough UI and sanitized proof system in parallel</td><td>All form and media states are covered.</td></tr>
+            <tr><td>3</td><td>Page composition and integrated release proof</td><td>Browser, accessibility, authenticated continuity, Graphify, and <code>pr:athena</code> pass.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="risks">
+        <h2>Principal risks</h2>
+        <table>
+          <thead><tr><th>Risk</th><th>Mitigation</th></tr></thead>
+          <tbody>
+            <tr><td>Research disproves the hero</td><td>Reopen the positioning requirements before product-media or copy approval.</td></tr>
+            <tr><td>Real surfaces do not prove a transition</td><td>Narrow the story; never fabricate connective evidence.</td></tr>
+            <tr><td>Media leaks protected data</td><td>Use a field-level proof audit and production-owned fixtures/assets.</td></tr>
+            <tr><td>Root migration breaks app navigation</td><td>Centralize route destinations and cover public, app, login, legacy, and deep-link paths.</td></tr>
+            <tr><td>Low-friction spam or duplicate leads</td><td>Bound inputs, origin/body checks, honeypot, per-email ceilings, indexed idempotency, and non-enumerating outcomes.</td></tr>
+            <tr><td>Distributed abuse rotates identities</td><td>Origin/body controls, global persistence and notification budgets, monitoring, emergency disable, and an explicit challenge-provider escalation threshold.</td></tr>
+            <tr><td>Notification fails or times out ambiguously</td><td>Preserve durable lead success, lease attempts, record outcome unknown, and require deliberate authorized resolution instead of blind resend.</td></tr>
+            <tr><td>Lead PII becomes orphaned or over-retained</td><td>Name an owner, expose bounded internal lifecycle commands, apply retention/redaction, and preserve only non-PII replay evidence.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="verification">
+        <h2>Verification strategy</h2>
+        <ul>
+          <li>Focused Vitest coverage for route ownership, provider composition, landing semantics, media fallbacks, form states, and Convex persistence/notification.</li>
+          <li>Unauthenticated Playwright coverage at desktop and mobile sizes, including keyboard, reduced motion, media failure, and walkthrough acceptance.</li>
+          <li>Authenticated route and POS deep-link characterization before and after migration.</li>
+          <li>Public bundle inspection for protected query references, sensitive fixture content, metadata, and asset weight.</li>
+          <li>Ingress checks for origin, body size, content type, collisions, concurrency, abuse budgets, emergency disable, and generic public errors.</li>
+          <li>Operational verification for lead ownership, notification ambiguity, PII retention/redaction, privacy disclosure, and authorized recovery.</li>
+          <li>Privacy-safe funnel reconciliation for page view, CTA selection, form start, durable acceptance, and qualified owner follow-up.</li>
+          <li>A pre-registered first-week rubric separates message evidence from traffic quality, form/ingress incidents, notification failures, and owner follow-up latency; inconclusive evidence stays inconclusive.</li>
+          <li>Raw-response verification for canonical/Open Graph metadata and the product-specific walkthrough noindex rule; broad security-header hardening is tracked separately.</li>
+          <li>Generated route/API artifacts and Graphify refreshed before the full Athena PR gate.</li>
+        </ul>
+      </section>
+
+      <footer>
+        Canonical source: <a href="2026-07-11-001-feat-athena-product-page-plan.md">2026-07-11-001-feat-athena-product-page-plan.md</a>. Origin requirements: <a href="../brainstorms/2026-07-11-athena-landing-product-page-requirements.md">Athena landing and product page requirements</a>.
+      </footer>
+    </main>
+  </body>
+</html>
