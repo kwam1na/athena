@@ -68,4 +68,22 @@ describe("JoinTeam", () => {
     );
     expect(mocks.navigate).not.toHaveBeenCalled();
   });
+
+  it("returns successful invite redemption to the authenticated app entry", async () => {
+    mocks.redeemCode.mockResolvedValue({
+      success: true,
+      inviteCode: { recipientUserId: "athena-user-1" },
+    });
+    const user = userEvent.setup();
+
+    render(<JoinTeam />);
+
+    await user.type(screen.getByPlaceholderText(/email/i), "ama@example.com");
+    await user.type(screen.getByPlaceholderText("XXXXXX"), "ABC123");
+    await user.click(screen.getByRole("button", { name: /continue/i }));
+
+    await waitFor(() =>
+      expect(mocks.navigate).toHaveBeenCalledWith({ to: "/app" }),
+    );
+  });
 });

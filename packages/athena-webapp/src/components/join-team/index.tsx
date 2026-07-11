@@ -8,6 +8,7 @@ import { LOGGED_IN_USER_ID_KEY } from "~/src/lib/constants";
 import { useNavigate } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import { presentUnexpectedErrorToast } from "~/src/lib/errors/presentUnexpectedErrorToast";
+import { APP_ENTRY_PATH } from "~/src/lib/navigation/appEntryRoutes";
 
 export const JoinTeam = () => {
   const redeemCode = useMutation(api.inventory.inviteCode.redeem);
@@ -33,12 +34,12 @@ export const JoinTeam = () => {
         if (recipientUserId) {
           localStorage.setItem(LOGGED_IN_USER_ID_KEY, recipientUserId);
 
-          navigate({ to: "/" });
+          navigate({ to: APP_ENTRY_PATH });
         }
       } else {
         toast.error(res.message);
       }
-    } catch (e) {
+    } catch {
       presentUnexpectedErrorToast("An error occurred");
     } finally {
       setIsRedeeming(false);

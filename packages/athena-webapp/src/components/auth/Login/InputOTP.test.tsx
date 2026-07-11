@@ -74,7 +74,7 @@ describe("InputOTPForm", () => {
     );
     expect(window.sessionStorage.setItem).toHaveBeenCalledWith(
       PENDING_ATHENA_AUTH_SYNC_KEY,
-      expect.stringMatching(/"startedAt":\d+/),
+      expect.stringMatching(/"redirectTo":"\/app".*"startedAt":\d+/),
     );
     expect(mocked.navigate).not.toHaveBeenCalled();
   });

@@ -7,6 +7,7 @@ import { api } from "~/convex/_generated/api";
 import { useEffect } from "react";
 import { toast } from "sonner";
 import { currencyFormatter } from "../lib/utils";
+import { APP_ENTRY_PATH } from "@/lib/navigation/appEntryRoutes";
 
 export const AppHeader = () => {
   const organizations = useGetOrganizations();
@@ -14,7 +15,10 @@ export const AppHeader = () => {
 
   return (
     <div className="flex min-w-0 flex-1 items-center gap-2">
-      <Link to="/" className="hidden shrink-0 items-center min-[430px]:flex">
+      <Link
+        to={APP_ENTRY_PATH}
+        className="hidden shrink-0 items-center min-[430px]:flex"
+      >
         <p className="font-medium">athena</p>
       </Link>
       {showDevIndicator ? (
@@ -41,7 +45,7 @@ export const Header = () => {
   return (
     <div className="flex items-center justify-between h-[56px]">
       <div className="flex items-center gap-2">
-        <Link to={"/"} className="flex items-center">
+        <Link to={APP_ENTRY_PATH} className="flex items-center">
           <p className="font-medium">athena</p>
         </Link>
         <p className="text-muted-foreground">/</p>

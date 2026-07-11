@@ -9,7 +9,10 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as WalkthroughRouteImport } from './routes/walkthrough'
+import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as LandingRouteImport } from './routes/landing'
+import { Route as AppRouteImport } from './routes/app'
 import { Route as AuthedRouteImport } from './routes/_authed'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as JoinTeamIndexRouteImport } from './routes/join-team.index'
@@ -97,9 +100,24 @@ import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOperationsInventoryImportRevi
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersSessionIdRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersSessionIdActivityRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers.$sessionId.activity'
 
+const WalkthroughRoute = WalkthroughRouteImport.update({
+  id: '/walkthrough',
+  path: '/walkthrough',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LandingRoute = LandingRouteImport.update({
   id: '/landing',
   path: '/landing',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AppRoute = AppRouteImport.update({
+  id: '/app',
+  path: '/app',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthedRoute = AuthedRouteImport.update({
@@ -634,7 +652,10 @@ const AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersSessionIdActivityRou
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/app': typeof AppRoute
   '/landing': typeof LandingRoute
+  '/privacy': typeof PrivacyRoute
+  '/walkthrough': typeof WalkthroughRoute
   '/login': typeof LoginLayoutRouteWithChildren
   '/join-team/': typeof JoinTeamIndexRoute
   '/$orgUrlSlug/': typeof AuthedOrgUrlSlugIndexRoute
@@ -722,7 +743,10 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/app': typeof AppRoute
   '/landing': typeof LandingRoute
+  '/privacy': typeof PrivacyRoute
+  '/walkthrough': typeof WalkthroughRoute
   '/join-team': typeof JoinTeamIndexRoute
   '/$orgUrlSlug': typeof AuthedOrgUrlSlugIndexRoute
   '/login': typeof LoginLayoutIndexRoute
@@ -809,7 +833,10 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_authed': typeof AuthedRouteWithChildren
+  '/app': typeof AppRoute
   '/landing': typeof LandingRoute
+  '/privacy': typeof PrivacyRoute
+  '/walkthrough': typeof WalkthroughRoute
   '/login/_layout': typeof LoginLayoutRouteWithChildren
   '/join-team/': typeof JoinTeamIndexRoute
   '/_authed/$orgUrlSlug/': typeof AuthedOrgUrlSlugIndexRoute
@@ -899,7 +926,10 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/app'
     | '/landing'
+    | '/privacy'
+    | '/walkthrough'
     | '/login'
     | '/join-team/'
     | '/$orgUrlSlug/'
@@ -987,7 +1017,10 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/app'
     | '/landing'
+    | '/privacy'
+    | '/walkthrough'
     | '/join-team'
     | '/$orgUrlSlug'
     | '/login'
@@ -1073,7 +1106,10 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/_authed'
+    | '/app'
     | '/landing'
+    | '/privacy'
+    | '/walkthrough'
     | '/login/_layout'
     | '/join-team/'
     | '/_authed/$orgUrlSlug/'
@@ -1163,18 +1199,42 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthedRoute: typeof AuthedRouteWithChildren
+  AppRoute: typeof AppRoute
   LandingRoute: typeof LandingRoute
+  PrivacyRoute: typeof PrivacyRoute
+  WalkthroughRoute: typeof WalkthroughRoute
   LoginLayoutRoute: typeof LoginLayoutRouteWithChildren
   JoinTeamIndexRoute: typeof JoinTeamIndexRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/walkthrough': {
+      id: '/walkthrough'
+      path: '/walkthrough'
+      fullPath: '/walkthrough'
+      preLoaderRoute: typeof WalkthroughRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/landing': {
       id: '/landing'
       path: '/landing'
       fullPath: '/landing'
       preLoaderRoute: typeof LandingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/app': {
+      id: '/app'
+      path: '/app'
+      fullPath: '/app'
+      preLoaderRoute: typeof AppRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authed': {
@@ -2094,7 +2154,10 @@ const LoginLayoutRouteWithChildren = LoginLayoutRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthedRoute: AuthedRouteWithChildren,
+  AppRoute: AppRoute,
   LandingRoute: LandingRoute,
+  PrivacyRoute: PrivacyRoute,
+  WalkthroughRoute: WalkthroughRoute,
   LoginLayoutRoute: LoginLayoutRouteWithChildren,
   JoinTeamIndexRoute: JoinTeamIndexRoute,
 }

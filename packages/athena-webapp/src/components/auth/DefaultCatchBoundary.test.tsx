@@ -7,6 +7,7 @@ import { DefaultCatchBoundary } from "./DefaultCatchBoundary";
 const mocked = vi.hoisted(() => ({
   invalidate: vi.fn(),
   useMatch: vi.fn(),
+  useRouterState: vi.fn(),
 }));
 
 vi.mock("@tanstack/react-router", () => ({
@@ -26,6 +27,7 @@ vi.mock("@tanstack/react-router", () => ({
   ),
   rootRouteId: "__root__",
   useMatch: mocked.useMatch,
+  useRouterState: mocked.useRouterState,
   useRouter: () => ({
     invalidate: mocked.invalidate,
   }),
@@ -36,6 +38,10 @@ describe("DefaultCatchBoundary", () => {
     mocked.invalidate.mockReset();
     mocked.useMatch.mockReset();
     mocked.useMatch.mockReturnValue(true);
+    mocked.useRouterState.mockImplementation(
+      ({ select }: { select: (state: unknown) => unknown }) =>
+        select({ location: { pathname: "/wigclub/store/wigclub/products" } }),
+    );
     window.history.back = vi.fn();
     vi.spyOn(console, "error").mockImplementation(() => {});
   });
@@ -67,6 +73,29 @@ describe("DefaultCatchBoundary", () => {
       screen.getByRole("button", { name: /try again/i }),
     ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /home/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /home/i })).toHaveAttribute(
+      "href",
+      "/app",
+    );
+  });
+
+  it("keeps public route recovery on the product page", () => {
+    mocked.useRouterState.mockImplementation(
+      ({ select }: { select: (state: unknown) => unknown }) =>
+        select({ location: { pathname: "/" } }),
+    );
+
+    render(
+      <DefaultCatchBoundary
+        error={new Error("temporary public render failure")}
+        reset={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("link", { name: /home/i })).toHaveAttribute(
+      "href",
+      "/",
+    );
   });
 
   it("keeps the retry action wired to router invalidation", () => {

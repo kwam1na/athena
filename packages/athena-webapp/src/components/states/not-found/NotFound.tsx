@@ -2,13 +2,16 @@ import { Button } from "@/components/ui/button";
 import { capitalizeFirstLetter } from "@/lib/utils";
 import { Link } from "@tanstack/react-router";
 import { ArrowLeft, InfoIcon } from "lucide-react";
+import { APP_ENTRY_PATH } from "@/lib/navigation/appEntryRoutes";
 
 export default function NotFound({
   entity,
   entityIdentifier,
+  homePath = APP_ENTRY_PATH,
 }: {
   entity: string;
   entityIdentifier: string;
+  homePath?: "/" | "/app";
 }) {
   return (
     <div className="h-full flex items-center justify-center min-h-[60vh]">
@@ -23,7 +26,10 @@ export default function NotFound({
           <p>{`${entityIdentifier}.`}</p>
         </div>
 
-        <Link to="/" className="flex justify-center text-muted-foreground pt-4">
+        <Link
+          to={homePath}
+          className="flex justify-center text-muted-foreground pt-4"
+        >
           <Button variant={"outline"}>
             <ArrowLeft className="w-4 h-4 mr-2" />
             Take me home

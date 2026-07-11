@@ -18,8 +18,10 @@ import {
   failAthenaAuthSyncHandoff,
   getAthenaAuthSyncHandoffStatus,
 } from "~/src/components/auth/Login/authSyncHandoff";
-
-const HOME_PATH = "/";
+import {
+  APP_ENTRY_PATH,
+  PUBLIC_HOME_PATH,
+} from "~/src/lib/navigation/appEntryRoutes";
 
 const AUTH_SYNC_RETRY_DELAY_MS = 250;
 const AUTH_SYNC_MAX_ATTEMPTS = 60;
@@ -189,7 +191,9 @@ export function LoginLayout() {
         }
 
         const redirectTo =
-          handoffStatus.kind === "active" ? handoffStatus.handoff.redirectTo : "/";
+          handoffStatus.kind === "active"
+            ? handoffStatus.handoff.redirectTo
+            : APP_ENTRY_PATH;
         clearAthenaAuthSyncHandoff();
         localStorage.setItem(LOGGED_IN_USER_ID_KEY, userId);
         localStorage.setItem(POS_APP_ACCOUNT_ID_KEY, userId);
@@ -235,7 +239,7 @@ export function LoginLayout() {
 
       <div className="absolute left-layout-xl top-layout-xl z-20">
         <Link
-          to={HOME_PATH}
+          to={PUBLIC_HOME_PATH}
           className="flex h-10 items-center justify-center rounded-md px-layout-sm font-display text-base font-light tracking-[0.18em] text-foreground transition-colors duration-standard ease-standard hover:text-signal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
           athena

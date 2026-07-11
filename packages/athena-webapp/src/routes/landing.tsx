@@ -1,7 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-
-import { AthenaLandingPage } from "@/components/landing/AthenaLandingPage";
+import { redirectLegacyLanding } from "./-legacy-landing-redirect";
 
 export const Route = createFileRoute("/landing")({
-  component: AthenaLandingPage,
+  beforeLoad: redirectLegacyLanding,
 });

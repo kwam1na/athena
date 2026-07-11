@@ -3,6 +3,7 @@ import {
   ATHENA_PENDING_AUTH_SYNC_EVENT,
   PENDING_ATHENA_AUTH_SYNC_KEY,
 } from "~/src/lib/constants";
+import { APP_ENTRY_PATH } from "~/src/lib/navigation/appEntryRoutes";
 
 export const ATHENA_AUTH_SYNC_HANDOFF_TTL_MS = 60_000;
 
@@ -23,7 +24,7 @@ export type AthenaAuthSyncHandoffStatus =
 
 function normalizeAuthSyncRedirect(redirectTo?: string | null) {
   if (!redirectTo?.startsWith("/") || redirectTo.startsWith("//")) {
-    return "/";
+    return APP_ENTRY_PATH;
   }
 
   return redirectTo;
