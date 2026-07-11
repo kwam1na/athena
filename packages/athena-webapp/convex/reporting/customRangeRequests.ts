@@ -630,7 +630,7 @@ async function addCustomRangeResultWithCtx(
       q.eq("generationId", input.generationId).eq("resultFamily", input.family).eq("resultKey", input.resultKey),
     ).first();
   if (existing) {
-    await ctx.db.patch(existing._id, {
+    await ctx.db.patch("reportingRangeProjection", existing._id, {
       knownValue: input.setIfPresent
         ? existing.knownValue
         : (existing.knownValue ?? 0) + input.knownValue,
@@ -657,6 +657,38 @@ async function addCustomRangeResultWithCtx(
     storeId: input.storeId,
     unknownQuantity: 0,
   });
+}
+
+async function paginateCustomRangeStoreDaySource(
+  ctx: MutationCtx,
+  args: {
+    cursor: string | null;
+    generationId: Id<"reportingProjectionGeneration">;
+    operatingDate: string;
+  },
+) {
+  return ctx.db
+    .query("reportingStoreDayProjection")
+    .withIndex("by_generationId_operatingDate_metric", (q) =>
+      q.eq("generationId", args.generationId).eq("operatingDate", args.operatingDate),
+    )
+    .paginate({ cursor: args.cursor, numItems: CUSTOM_RANGE_FACT_PAGE_SIZE });
+}
+
+async function paginateCustomRangeSkuDaySource(
+  ctx: MutationCtx,
+  args: {
+    cursor: string | null;
+    generationId: Id<"reportingProjectionGeneration">;
+    operatingDate: string;
+  },
+) {
+  return ctx.db
+    .query("reportingSkuDayProjection")
+    .withIndex("by_generationId_operatingDate_productSkuId_metric", (q) =>
+      q.eq("generationId", args.generationId).eq("operatingDate", args.operatingDate),
+    )
+    .paginate({ cursor: args.cursor, numItems: CUSTOM_RANGE_FACT_PAGE_SIZE });
 }
 
 export const processCustomRangeRequestMutation = internalMutation({
@@ -757,12 +789,16 @@ export const processCustomRangeRequestMutation = internalMutation({
       return;
     }
     const page = progress.phase === "store"
-      ? await ctx.db.query("reportingStoreDayProjection")
-          .withIndex("by_generationId_operatingDate_metric", (q) => q.eq("generationId", sourceGeneration._id).eq("operatingDate", progress.operatingDate))
-          .paginate({ cursor: progress.projectionCursor, numItems: CUSTOM_RANGE_FACT_PAGE_SIZE })
-      : await ctx.db.query("reportingSkuDayProjection")
-          .withIndex("by_generationId_operatingDate_productSkuId_metric", (q) => q.eq("generationId", skuSourceGeneration._id).eq("operatingDate", progress.operatingDate))
-          .paginate({ cursor: progress.projectionCursor, numItems: CUSTOM_RANGE_FACT_PAGE_SIZE });
+      ? await paginateCustomRangeStoreDaySource(ctx, {
+          cursor: progress.projectionCursor,
+          generationId: sourceGeneration._id,
+          operatingDate: progress.operatingDate,
+        })
+      : await paginateCustomRangeSkuDaySource(ctx, {
+          cursor: progress.projectionCursor,
+          generationId: skuSourceGeneration._id,
+          operatingDate: progress.operatingDate,
+        });
     let limitationCount = 0;
     let projectedContributionCount = 0;
     for (const sourceRow of page.page) {

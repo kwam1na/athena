@@ -57,7 +57,7 @@ async function scheduleNext(ctx: MutationCtx, args: { cursor: string | null; epo
   const state = await ctx.db.get("reportingWorkspaceMaterializationEpoch", args.epochId);
   if (state?.status !== "building") return;
   const sequence = state.sequence + 1;
-  await ctx.db.patch(state._id, { cursor: args.cursor ?? undefined, leaseToken: undefined, phase: args.phase, presetIndex: args.presetIndex, sequence, updatedAt: Date.now() });
+  await ctx.db.patch("reportingWorkspaceMaterializationEpoch", state._id, { cursor: args.cursor ?? undefined, leaseToken: undefined, phase: args.phase, presetIndex: args.presetIndex, sequence, updatedAt: Date.now() });
   await ctx.scheduler.runAfter(0, (internal as any).reporting.readModels.materialize.materializeActiveReportsWorkspace, { ...args, sequence });
 }
 
@@ -65,20 +65,20 @@ async function completeMaterialization(ctx: MutationCtx, epochId: Id<"reportingW
   const state = await ctx.db.get("reportingWorkspaceMaterializationEpoch", epochId);
   if (!state || state.status !== "building") return;
   const now = Date.now();
-  await ctx.db.patch(state._id, { cursor: undefined, status: "verified", updatedAt: now, verifiedAt: now });
+  await ctx.db.patch("reportingWorkspaceMaterializationEpoch", state._id, { cursor: undefined, status: "verified", updatedAt: now, verifiedAt: now });
   await ctx.scheduler.runAfter(0, (internal as any).reporting.readModels.materialize.activateVerifiedReportsWorkspaceEpoch, { epochId });
 }
 
 async function addFacet(ctx: MutationCtx, generation: WorkspaceGeneration, periodKey: string, range: { startDate: string; endDate: string }, value: string) {
   const existing = await ctx.db.query("reportingPeriodFacet").withIndex("by_epoch_period_facet_value", (q) => q.eq("workspaceEpochId", generation.workspaceEpochId).eq("periodKey", periodKey).eq("facet", "classification").eq("value", value)).first();
   const row = { completeness: "complete" as const, count: (existing?.count ?? 0) + 1, facet: "classification", generationId: generation._id, workspaceEpochId: generation.workspaceEpochId, organizationId: generation.organizationId, periodKey, projectedAt: Date.now(), rangeEndDate: range.endDate, rangeStartDate: range.startDate, sourceGenerationIds: [generation._id], sourceWatermark: generation.stableWatermark, storeId: generation.storeId, value };
-  if (existing) await ctx.db.replace(existing._id, row); else await ctx.db.insert("reportingPeriodFacet", row);
+  if (existing) await ctx.db.replace("reportingPeriodFacet", existing._id, row); else await ctx.db.insert("reportingPeriodFacet", row);
 }
 
 async function upsertClassificationMembership(ctx: MutationCtx, row: Doc<"reportingSkuPeriodSummary">, classification: string) {
   const existing = await ctx.db.query("reportingSkuPeriodClassification").withIndex("by_epoch_period_class_sku", (q) => q.eq("workspaceEpochId", row.workspaceEpochId).eq("periodKey", row.periodKey).eq("classification", classification).eq("productSkuId", row.productSkuId)).first();
   const value = { attentionSort: row.attentionSort, classification, coverSort: row.coverSort, generationId: row.generationId, inventoryValueSort: row.inventoryValueSort, marginSort: row.marginSort, periodKey: row.periodKey, productSkuId: row.productSkuId, revenueSort: row.revenueSort, unitsSort: row.unitsSort, workspaceEpochId: row.workspaceEpochId };
-  if (existing) await ctx.db.replace(existing._id, value); else await ctx.db.insert("reportingSkuPeriodClassification", value);
+  if (existing) await ctx.db.replace("reportingSkuPeriodClassification", existing._id, value); else await ctx.db.insert("reportingSkuPeriodClassification", value);
 }
 
 async function materializeStoreRow(ctx: MutationCtx, generation: WorkspaceGeneration, periodKey: string, range: { startDate: string; endDate: string }, row: Doc<"reportingStoreDayProjection">) {
@@ -96,13 +96,13 @@ async function materializeStoreRow(ctx: MutationCtx, generation: WorkspaceGenera
     revenueCurrencyMinorUnitScale: mixedCurrency ? undefined : existing?.revenueCurrencyMinorUnitScale ?? row.currencyMinorUnitScale,
     sourceGenerationIds: [generation._id], sourceWatermark: generation.stableWatermark, storeId: generation.storeId,
   };
-  if (existing) await ctx.db.replace(existing._id, summary); else await ctx.db.insert("reportingStorePeriodSummary", summary);
+  if (existing) await ctx.db.replace("reportingStorePeriodSummary", existing._id, summary); else await ctx.db.insert("reportingStorePeriodSummary", summary);
 }
 
 async function upsertRollup(ctx: MutationCtx, generation: WorkspaceGeneration, periodKey: string, range: { startDate: string; endDate: string }, dimension: "product" | "category", dimensionId: string, row: Doc<"reportingSkuDayProjection">) {
   const existing = await ctx.db.query("reportingPeriodRollup").withIndex("by_epoch_period_dimension_id", (q) => q.eq("workspaceEpochId", generation.workspaceEpochId).eq("periodKey", periodKey).eq("dimension", dimension).eq("dimensionId", dimensionId)).first();
   const result = { completeness: completeness(existing?.completeness, row.completeness), dimension, dimensionId, generationId: generation._id, workspaceEpochId: generation.workspaceEpochId, identityBasis: "recognition" as const, limitingReason: existing?.limitingReason ?? row.limitingReason, metrics: addMetric(existing?.metrics ?? {}, row.metric, row.knownValue), organizationId: generation.organizationId, periodKey, projectedAt: Date.now(), rangeEndDate: range.endDate, rangeStartDate: range.startDate, sourceGenerationIds: [generation._id], sourceWatermark: generation.stableWatermark, storeId: generation.storeId };
-  if (existing) await ctx.db.replace(existing._id, result); else await ctx.db.insert("reportingPeriodRollup", result);
+  if (existing) await ctx.db.replace("reportingPeriodRollup", existing._id, result); else await ctx.db.insert("reportingPeriodRollup", result);
 }
 
 async function materializeSkuRow(ctx: MutationCtx, generation: WorkspaceGeneration, periodKey: string, range: { startDate: string; endDate: string }, row: Doc<"reportingSkuDayProjection">) {
@@ -117,7 +117,7 @@ async function materializeSkuRow(ctx: MutationCtx, generation: WorkspaceGenerati
   const sku = await ctx.db.get("productSku", row.productSkuId);
   const product = sku ? await ctx.db.get("product", sku.productId) : null;
   const result = { activeDays, attentionSort: classifications.length, classificationKey: classifications[0] ?? "all", classifications, completeness: completeness(existing?.completeness, row.completeness), coverSort: metrics.projected_days_of_cover ?? Number.NEGATIVE_INFINITY, generationId: generation._id, workspaceEpochId: generation.workspaceEpochId, inventoryValueSort: metrics.inventory_value ?? Number.NEGATIVE_INFINITY, latestActiveOperatingDate: row.operatingDate, limitingReason: existing?.limitingReason ?? row.limitingReason, marginSort: marginBasisPoints ?? Number.NEGATIVE_INFINITY, metrics, organizationId: generation.organizationId, periodKey, productSkuId: row.productSkuId, projectedAt: Date.now(), rangeEndDate: range.endDate, rangeStartDate: range.startDate, recognitionCategoryId: existing?.recognitionCategoryId ?? product?.categoryId, recognitionProductId: existing?.recognitionProductId ?? product?._id, revenueCurrencyCode: existing?.revenueCurrencyCode ?? row.currencyCode, revenueCurrencyMinorUnitScale: existing?.revenueCurrencyMinorUnitScale ?? row.currencyMinorUnitScale, revenueSort: metrics.net_sales ?? Number.NEGATIVE_INFINITY, sourceGenerationIds: [generation._id], sourceWatermark: generation.stableWatermark, storeId: generation.storeId, unitsSort: metrics.units_sold ?? Number.NEGATIVE_INFINITY };
-  if (existing) await ctx.db.replace(existing._id, result); else await ctx.db.insert("reportingSkuPeriodSummary", result);
+  if (existing) await ctx.db.replace("reportingSkuPeriodSummary", existing._id, result); else await ctx.db.insert("reportingSkuPeriodSummary", result);
   if (product) await upsertRollup(ctx, generation, periodKey, range, "product", String(product._id), row);
   if (product?.categoryId) await upsertRollup(ctx, generation, periodKey, range, "category", String(product.categoryId), row);
   if (["units_sold", "units_returned", "inventory_consumed_units", "purchase_commitment_units", "inventory_adjustment_units", "inventory_received_units"].includes(row.metric)) {
@@ -126,10 +126,10 @@ async function materializeSkuRow(ctx: MutationCtx, generation: WorkspaceGenerati
     const base = { adjustmentsQuantity: movement?.adjustmentsQuantity ?? 0, commitmentQuantity: movement?.commitmentQuantity ?? 0, consumedQuantity: movement?.consumedQuantity ?? 0, receiptsQuantity: movement?.receiptsQuantity ?? 0, returnsQuantity: movement?.returnsQuantity ?? 0, salesQuantity: movement?.salesQuantity ?? 0 };
     base[field] += row.knownValue ?? 0;
     const movementRow = { ...base, completeness: completeness(movement?.completeness, row.completeness), generationId: generation._id, workspaceEpochId: generation.workspaceEpochId, limitingReason: movement?.limitingReason ?? row.limitingReason, organizationId: generation.organizationId, periodKey, productSkuId: row.productSkuId, projectedAt: Date.now(), rangeEndDate: range.endDate, rangeStartDate: range.startDate, sourceGenerationIds: [generation._id], sourceWatermark: generation.stableWatermark, storeId: generation.storeId };
-    if (movement) await ctx.db.replace(movement._id, movementRow); else await ctx.db.insert("reportingInventoryMovementSummary", movementRow);
+    if (movement) await ctx.db.replace("reportingInventoryMovementSummary", movement._id, movementRow); else await ctx.db.insert("reportingInventoryMovementSummary", movementRow);
     const total = await ctx.db.query("reportingInventoryPeriodSummary").withIndex("by_workspaceEpochId_periodKey", (q) => q.eq("workspaceEpochId", generation.workspaceEpochId).eq("periodKey", periodKey)).first();
     const totalRow = { completeness: completeness(total?.completeness, row.completeness), generationId: generation._id, workspaceEpochId: generation.workspaceEpochId, limitingReason: total?.limitingReason ?? row.limitingReason, metrics: addMetric(total?.metrics ?? {}, row.metric, row.knownValue), organizationId: generation.organizationId, periodKey, projectedAt: Date.now(), rangeEndDate: range.endDate, rangeStartDate: range.startDate, sourceGenerationIds: [generation._id], sourceWatermark: generation.stableWatermark, storeId: generation.storeId };
-    if (total) await ctx.db.replace(total._id, totalRow); else await ctx.db.insert("reportingInventoryPeriodSummary", totalRow);
+    if (total) await ctx.db.replace("reportingInventoryPeriodSummary", total._id, totalRow); else await ctx.db.insert("reportingInventoryPeriodSummary", totalRow);
   }
 }
 
@@ -137,7 +137,37 @@ async function materializeInventoryRow(ctx: MutationCtx, generation: WorkspaceGe
   const existing = await ctx.db.query("reportingInventoryExposureSummary").withIndex("by_workspaceEpochId_productSkuId", (q) => q.eq("workspaceEpochId", generation.workspaceEpochId).eq("productSkuId", row.productSkuId)).first();
   const metrics = addMetric(existing?.metrics ?? {}, row.metric, row.knownValue);
   const result = { asOf: Math.max(existing?.asOf ?? 0, row.asOf), completeness: completeness(existing?.completeness, row.completeness), exposureSort: metrics.inventory_value ?? Number.NEGATIVE_INFINITY, generationId: generation._id, workspaceEpochId: generation.workspaceEpochId, limitingReason: existing?.limitingReason ?? row.limitingReason, metrics, organizationId: generation.organizationId, productSkuId: row.productSkuId, projectedAt: Date.now(), sourceWatermark: generation.stableWatermark, storeId: generation.storeId, valuationCurrencyCode: existing?.valuationCurrencyCode ?? row.currencyCode, valuationCurrencyMinorUnitScale: existing?.valuationCurrencyMinorUnitScale ?? row.currencyMinorUnitScale };
-  if (existing) await ctx.db.replace(existing._id, result); else await ctx.db.insert("reportingInventoryExposureSummary", result);
+  if (existing) await ctx.db.replace("reportingInventoryExposureSummary", existing._id, result); else await ctx.db.insert("reportingInventoryExposureSummary", result);
+}
+
+async function paginateSkuPeriodFacets(ctx: MutationCtx, args: { cursor: string | null; periodKey: string; workspaceEpochId: Id<"reportingWorkspaceMaterializationEpoch"> }) {
+  return ctx.db.query("reportingSkuPeriodSummary")
+    .withIndex("by_epoch_period_revenue_sku", (q) => q.eq("workspaceEpochId", args.workspaceEpochId).eq("periodKey", args.periodKey))
+    .paginate({ cursor: args.cursor, numItems: PAGE_SIZE });
+}
+
+async function paginateCustomRangeSkuResults(ctx: MutationCtx, args: { cursor: string | null; generationId: Id<"reportingProjectionGeneration"> }) {
+  return ctx.db.query("reportingRangeProjection")
+    .withIndex("by_generationId_resultFamily_resultKey", (q) => q.eq("generationId", args.generationId).eq("resultFamily", "sku"))
+    .paginate({ cursor: args.cursor, numItems: PAGE_SIZE });
+}
+
+async function paginateCurrentInventorySource(ctx: MutationCtx, args: { cursor: string | null; generationId: Id<"reportingProjectionGeneration"> }) {
+  return ctx.db.query("reportingCurrentValuationProjection")
+    .withIndex("by_generationId_productSkuId_metric", (q) => q.eq("generationId", args.generationId))
+    .paginate({ cursor: args.cursor, numItems: PAGE_SIZE });
+}
+
+async function paginateStoreDaySource(ctx: MutationCtx, args: { cursor: string | null; generationId: Id<"reportingProjectionGeneration"> }) {
+  return ctx.db.query("reportingStoreDayProjection")
+    .withIndex("by_generationId_operatingDate_metric", (q) => q.eq("generationId", args.generationId))
+    .paginate({ cursor: args.cursor, numItems: PAGE_SIZE });
+}
+
+async function paginateSkuDaySource(ctx: MutationCtx, args: { cursor: string | null; generationId: Id<"reportingProjectionGeneration"> }) {
+  return ctx.db.query("reportingSkuDayProjection")
+    .withIndex("by_generationId_operatingDate_productSkuId_metric", (q) => q.eq("generationId", args.generationId))
+    .paginate({ cursor: args.cursor, numItems: PAGE_SIZE });
 }
 
 export const materializeActiveReportsWorkspace = internalMutation({
@@ -147,7 +177,7 @@ export const materializeActiveReportsWorkspace = internalMutation({
     if (materializationState?.status !== "building") return { status: materializationState?.status ?? "unavailable" };
     const expectedCursor = materializationState.cursor ?? null;
     if (!materializationPageMatchesEpoch(materializationState, args)) return { status: "stale_page" as const };
-    await ctx.db.patch(materializationState._id, { leaseToken: `${args.sequence}:${expectedCursor ?? "start"}`, updatedAt: Date.now() });
+    await ctx.db.patch("reportingWorkspaceMaterializationEpoch", materializationState._id, { leaseToken: `${args.sequence}:${expectedCursor ?? "start"}`, updatedAt: Date.now() });
     if (!sourceGeneration || materializationState.sourceGenerationId !== sourceGeneration._id || materializationState.sourceWatermark !== sourceGeneration.stableWatermark) return { status: "authority_changed" as const };
     const generation = { ...sourceGeneration, workspaceEpochId: materializationState._id };
     if (!generation || generation.stableWatermark === undefined ||
@@ -158,7 +188,7 @@ export const materializeActiveReportsWorkspace = internalMutation({
       const periodKey = `${generation.rangeStartDate}:${generation.rangeEndDate}`;
       const customRange = { endDate: generation.rangeEndDate, startDate: generation.rangeStartDate };
       if (args.phase === "facets") {
-        const facetPage = await ctx.db.query("reportingSkuPeriodSummary").withIndex("by_epoch_period_revenue_sku", (q) => q.eq("workspaceEpochId", generation.workspaceEpochId).eq("periodKey", periodKey)).paginate({ cursor: args.cursor ?? null, numItems: PAGE_SIZE });
+        const facetPage = await paginateSkuPeriodFacets(ctx, { cursor: args.cursor ?? null, periodKey, workspaceEpochId: generation.workspaceEpochId });
         for (const row of facetPage.page) {
           await addFacet(ctx, generation as WorkspaceGeneration, periodKey, customRange, "all");
           for (const classification of row.classifications) { await addFacet(ctx, generation as WorkspaceGeneration, periodKey, customRange, classification); await upsertClassificationMembership(ctx, row, classification); }
@@ -167,7 +197,7 @@ export const materializeActiveReportsWorkspace = internalMutation({
         if (facetPage.isDone) await completeMaterialization(ctx, args.epochId);
         return { processed: facetPage.page.length, status: facetPage.isDone ? "completed" as const : "running" as const };
       }
-      const page = await ctx.db.query("reportingRangeProjection").withIndex("by_generationId_resultFamily_resultKey", (q) => q.eq("generationId", generation._id).eq("resultFamily", "sku")).paginate({ cursor: args.cursor ?? null, numItems: PAGE_SIZE });
+      const page = await paginateCustomRangeSkuResults(ctx, { cursor: args.cursor ?? null, generationId: generation._id });
       for (const row of page.page) {
         if (!row.productSkuId) continue;
         const existing = await ctx.db.query("reportingSkuPeriodSummary").withIndex("by_epoch_period_sku", (q) => q.eq("workspaceEpochId", generation.workspaceEpochId).eq("periodKey", periodKey).eq("productSkuId", row.productSkuId!)).first();
@@ -182,11 +212,11 @@ export const materializeActiveReportsWorkspace = internalMutation({
         const sku = await ctx.db.get("productSku", row.productSkuId);
         const product = sku ? await ctx.db.get("product", sku.productId) : null;
         const summary = { activeDays, activeOperatingDates, attentionSort: classifications.length, classificationKey: classifications[0] ?? "all", classifications, completeness: completeness(existing?.completeness, row.completeness), coverSort: metrics.projected_days_of_cover ?? Number.NEGATIVE_INFINITY, generationId: generation._id, workspaceEpochId: generation.workspaceEpochId, inventoryValueSort: metrics.inventory_value ?? Number.NEGATIVE_INFINITY, limitingReason: existing?.limitingReason ?? row.limitingReason, marginSort: marginBasisPoints ?? Number.NEGATIVE_INFINITY, metrics, organizationId: generation.organizationId, periodKey, productSkuId: row.productSkuId, projectedAt: Date.now(), rangeEndDate: generation.rangeEndDate, rangeStartDate: generation.rangeStartDate, recognitionCategoryId: product?.categoryId, recognitionProductId: product?._id, revenueCurrencyCode: existing?.revenueCurrencyCode ?? row.currencyCode, revenueCurrencyMinorUnitScale: existing?.revenueCurrencyMinorUnitScale ?? row.currencyMinorUnitScale, revenueSort: metrics.net_sales ?? Number.NEGATIVE_INFINITY, sourceGenerationIds: generation.sourceGenerationIds ?? [], sourceWatermark: generation.stableWatermark, storeId: generation.storeId, unitsSort: metrics.units_sold ?? Number.NEGATIVE_INFINITY };
-        if (existing) await ctx.db.replace(existing._id, summary); else await ctx.db.insert("reportingSkuPeriodSummary", summary);
+        if (existing) await ctx.db.replace("reportingSkuPeriodSummary", existing._id, summary); else await ctx.db.insert("reportingSkuPeriodSummary", summary);
         if (["units_sold", "units_returned", "inventory_consumed_units", "purchase_commitment_units", "inventory_adjustment_units", "inventory_received_units"].includes(row.metric)) {
           const total = await ctx.db.query("reportingInventoryPeriodSummary").withIndex("by_workspaceEpochId_periodKey", (q) => q.eq("workspaceEpochId", generation.workspaceEpochId).eq("periodKey", periodKey)).first();
           const totalRow = { completeness: completeness(total?.completeness, row.completeness), generationId: generation._id, workspaceEpochId: generation.workspaceEpochId, limitingReason: total?.limitingReason ?? row.limitingReason, metrics: addMetric(total?.metrics ?? {}, row.metric, row.knownValue), organizationId: generation.organizationId, periodKey, projectedAt: Date.now(), rangeEndDate: generation.rangeEndDate, rangeStartDate: generation.rangeStartDate, sourceGenerationIds: generation.sourceGenerationIds ?? [], sourceWatermark: generation.stableWatermark, storeId: generation.storeId };
-          if (total) await ctx.db.replace(total._id, totalRow); else await ctx.db.insert("reportingInventoryPeriodSummary", totalRow);
+          if (total) await ctx.db.replace("reportingInventoryPeriodSummary", total._id, totalRow); else await ctx.db.insert("reportingInventoryPeriodSummary", totalRow);
         }
       }
       if (!page.isDone) await scheduleNext(ctx, { cursor: page.continueCursor, epochId: args.epochId, generationId: generation._id, phase: "source", presetIndex: 0 });
@@ -194,7 +224,7 @@ export const materializeActiveReportsWorkspace = internalMutation({
       return { processed: page.page.length, status: "running" as const };
     }
     if (generation.projectionKind === "current_inventory") {
-      const page = await ctx.db.query("reportingCurrentValuationProjection").withIndex("by_generationId_productSkuId_metric", (q) => q.eq("generationId", generation._id)).paginate({ cursor: args.cursor ?? null, numItems: PAGE_SIZE });
+      const page = await paginateCurrentInventorySource(ctx, { cursor: args.cursor ?? null, generationId: generation._id });
       for (const row of page.page) await materializeInventoryRow(ctx, generation as WorkspaceGeneration, row);
       if (!page.isDone) await scheduleNext(ctx, { cursor: page.continueCursor, epochId: args.epochId, generationId: generation._id, presetIndex });
       else await completeMaterialization(ctx, args.epochId);
@@ -206,7 +236,7 @@ export const materializeActiveReportsWorkspace = internalMutation({
     const [periodKey, preset] = PRESETS[presetIndex];
     const range = resolveReportPeriod({ asOf: Date.now(), operatingDate: operating.operatingDate, operatingDayStartsAt: operating.startsAt, preset, scheduleVersionId: String(operating.scheduleVersionId), timezone: operating.timezone }).current;
     if (generation.projectionKind === "sku_day" && args.phase === "facets") {
-      const facetPage = await ctx.db.query("reportingSkuPeriodSummary").withIndex("by_epoch_period_revenue_sku", (q) => q.eq("workspaceEpochId", generation.workspaceEpochId).eq("periodKey", periodKey)).paginate({ cursor: args.cursor ?? null, numItems: PAGE_SIZE });
+      const facetPage = await paginateSkuPeriodFacets(ctx, { cursor: args.cursor ?? null, periodKey, workspaceEpochId: generation.workspaceEpochId });
       for (const row of facetPage.page) {
         await addFacet(ctx, generation as WorkspaceGeneration, periodKey, range, "all");
         for (const classification of row.classifications) {
@@ -220,8 +250,8 @@ export const materializeActiveReportsWorkspace = internalMutation({
       return { processed: facetPage.page.length, status: facetPage.isDone && presetIndex === 3 ? "completed" as const : "running" as const };
     }
     const page = generation.projectionKind === "store_day"
-      ? await ctx.db.query("reportingStoreDayProjection").withIndex("by_generationId_operatingDate_metric", (q) => q.eq("generationId", generation._id)).paginate({ cursor: args.cursor ?? null, numItems: PAGE_SIZE })
-      : await ctx.db.query("reportingSkuDayProjection").withIndex("by_generationId_operatingDate_productSkuId_metric", (q) => q.eq("generationId", generation._id)).paginate({ cursor: args.cursor ?? null, numItems: PAGE_SIZE });
+      ? await paginateStoreDaySource(ctx, { cursor: args.cursor ?? null, generationId: generation._id })
+      : await paginateSkuDaySource(ctx, { cursor: args.cursor ?? null, generationId: generation._id });
     for (const row of page.page) {
       if (generation.projectionKind === "store_day") await materializeStoreRow(ctx, generation as WorkspaceGeneration, periodKey, range, row as Doc<"reportingStoreDayProjection">);
       else await materializeSkuRow(ctx, generation as WorkspaceGeneration, periodKey, range, row as Doc<"reportingSkuDayProjection">);
@@ -262,18 +292,18 @@ export const activateVerifiedReportsWorkspaceEpoch = internalMutation({
     if (source.projectionKind === "store_day") {
       const readiness: { ready: boolean; sourceGenerationId: string; sourceWatermark: number } = await ctx.runQuery((internal as any).reporting.projections.storeIntraday.getHistoricalStoreIntradayReadiness, { sourceGenerationId: source._id, sourceWatermark: epoch.sourceWatermark });
       if (!readiness.ready || readiness.sourceGenerationId !== String(source._id) || readiness.sourceWatermark !== epoch.sourceWatermark) {
-        await ctx.db.patch(epoch._id, { activationBlockedReason: "historical_intraday_not_ready", updatedAt: Date.now() });
+        await ctx.db.patch("reportingWorkspaceMaterializationEpoch", epoch._id, { activationBlockedReason: "historical_intraday_not_ready", updatedAt: Date.now() });
         return { reason: "historical_intraday_not_ready" as const, status: "blocked" as const };
       }
     }
     const current = await ctx.db.query("reportingWorkspaceReadModelActivation").withIndex("by_storeId_projectionKind_activatedAt", (q) => q.eq("storeId", epoch.storeId).eq("projectionKind", epoch.projectionKind)).order("desc").first();
     const now = Date.now();
     if (current && current.supersededAt === undefined) {
-      await ctx.db.patch(current._id, { supersededAt: now });
+      await ctx.db.patch("reportingWorkspaceReadModelActivation", current._id, { supersededAt: now });
       await ctx.scheduler.runAfter(0, (internal as any).reporting.readModels.materialize.retireWorkspaceEpoch, { epochId: current.workspaceEpochId });
     }
     await ctx.db.insert("reportingWorkspaceReadModelActivation", { activatedAt: now, projectionKind: epoch.projectionKind, sourceGenerationId: epoch.sourceGenerationId, sourceWatermark: epoch.sourceWatermark, storeId: epoch.storeId, workspaceEpochId: epoch._id });
-    await ctx.db.patch(epoch._id, { activatedAt: now, activationBlockedReason: undefined, status: "active", updatedAt: now });
+    await ctx.db.patch("reportingWorkspaceMaterializationEpoch", epoch._id, { activatedAt: now, activationBlockedReason: undefined, status: "active", updatedAt: now });
     return { status: "active" as const, workspaceEpochId: epoch._id };
   },
 });
@@ -282,7 +312,7 @@ export const retireWorkspaceEpoch = internalMutation({
   args: { epochId: v.id("reportingWorkspaceMaterializationEpoch") },
   handler: async (ctx, args) => {
     const epoch = await ctx.db.get("reportingWorkspaceMaterializationEpoch", args.epochId);
-    if (epoch?.status === "active") await ctx.db.patch(epoch._id, { retiredAt: Date.now(), status: "retired", updatedAt: Date.now() });
+    if (epoch?.status === "active") await ctx.db.patch("reportingWorkspaceMaterializationEpoch", epoch._id, { retiredAt: Date.now(), status: "retired", updatedAt: Date.now() });
   },
 });
 

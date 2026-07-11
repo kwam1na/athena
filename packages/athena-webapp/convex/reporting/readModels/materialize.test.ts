@@ -8,7 +8,7 @@ describe("Reports workspace production materialization", () => {
     let scheduled = 0;
     const patched: any[] = [];
     const handler = (activateVerifiedReportsWorkspaceEpoch as unknown as { _handler: Function })._handler;
-    const result = await handler({ db: { get: async (table: string) => table === "reportingWorkspaceMaterializationEpoch" ? epoch : source, patch: async (_id: string, value: any) => patched.push(value) }, runQuery: async () => ({ ready: false, sourceGenerationId: source._id, sourceWatermark: 10 }), scheduler: { runAfter: async () => { scheduled += 1; } } }, { epochId: epoch._id });
+    const result = await handler({ db: { get: async (table: string) => table === "reportingWorkspaceMaterializationEpoch" ? epoch : source, patch: async (_table: string, _id: string, value: any) => patched.push(value) }, runQuery: async () => ({ ready: false, sourceGenerationId: source._id, sourceWatermark: 10 }), scheduler: { runAfter: async () => { scheduled += 1; } } }, { epochId: epoch._id });
     expect(result).toEqual({ reason: "historical_intraday_not_ready", status: "blocked" });
     expect(patched).toContainEqual(expect.objectContaining({ activationBlockedReason: "historical_intraday_not_ready" }));
     expect(scheduled).toBe(0);
@@ -19,7 +19,7 @@ describe("Reports workspace production materialization", () => {
     const inserted: any[] = []; const patched: any[] = [];
     const chain: any = { first: async () => null, order: () => chain, withIndex: (_name: string, apply: Function) => { const q: any = { eq: () => q }; apply(q); return chain; } };
     const handler = (activateVerifiedReportsWorkspaceEpoch as unknown as { _handler: Function })._handler;
-    const result = await handler({ db: { get: async (table: string) => table === "reportingWorkspaceMaterializationEpoch" ? epoch : source, insert: async (_table: string, value: any) => inserted.push(value), patch: async (_id: string, value: any) => patched.push(value), query: () => chain }, runQuery: async () => ({ ready: true, sourceGenerationId: source._id, sourceWatermark: 10 }), scheduler: { runAfter: async () => undefined } }, { epochId: epoch._id });
+    const result = await handler({ db: { get: async (table: string) => table === "reportingWorkspaceMaterializationEpoch" ? epoch : source, insert: async (_table: string, value: any) => inserted.push(value), patch: async (_table: string, _id: string, value: any) => patched.push(value), query: () => chain }, runQuery: async () => ({ ready: true, sourceGenerationId: source._id, sourceWatermark: 10 }), scheduler: { runAfter: async () => undefined } }, { epochId: epoch._id });
     expect(result).toEqual({ status: "active", workspaceEpochId: epoch._id });
     expect(inserted).toHaveLength(1);
     expect(patched).toContainEqual(expect.objectContaining({ activationBlockedReason: undefined, status: "active" }));
@@ -83,9 +83,9 @@ describe("Reports workspace production materialization", () => {
       db: {
         get: async (table: string, id: string) => table === "reportingProjectionGeneration" && id === generation._id ? generation : table === "reportingWorkspaceMaterializationEpoch" && id === epoch._id ? epoch : null,
         insert: async (_table: string, row: any) => { summaries.push({ ...row, _id: `summary-${summaries.length}` }); },
-        patch: async (id: string, value: any) => { if (id === epoch._id) Object.assign(epoch, value); },
+        patch: async (_table: string, id: string, value: any) => { if (id === epoch._id) Object.assign(epoch, value); },
         query,
-        replace: async (id: string, row: any) => { const index = summaries.findIndex((item) => item._id === id); summaries[index] = { ...row, _id: id }; },
+        replace: async (_table: string, id: string, row: any) => { const index = summaries.findIndex((item) => item._id === id); summaries[index] = { ...row, _id: id }; },
       },
       scheduler: { runAfter: async (_delay: number, _reference: unknown, args: unknown) => { scheduled.push(args); } },
     };

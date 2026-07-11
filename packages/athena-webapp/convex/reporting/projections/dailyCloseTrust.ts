@@ -46,7 +46,7 @@ export async function materializeDailyCloseTrustWithCtx(
     sourceWatermark: input.close.sourceWatermark,
     storeId: input.close.storeId,
   };
-  if (existing) await ctx.db.replace(existing._id, value);
+  if (existing) await ctx.db.replace("reportingDailyCloseTrust", existing._id, value);
   else await ctx.db.insert("reportingDailyCloseTrust", value);
 }
 import type { Doc } from "../../_generated/dataModel";

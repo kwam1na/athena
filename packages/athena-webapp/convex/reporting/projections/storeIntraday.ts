@@ -294,7 +294,7 @@ export const materializeStoreIntradayCheckpoint = internalMutation({
       uncoveredRevenueMinor: (prior?.uncoveredRevenueMinor ?? 0) + (totals.get("uncosted_revenue") ?? 0),
       unitsSold: result.unitsSold,
     };
-    if (existing) await ctx.db.replace(existing._id, row);
+    if (existing) await ctx.db.replace("reportingStoreIntradayProjection", existing._id, row);
     else await ctx.db.insert("reportingStoreIntradayProjection", row);
     if (args.scheduleStateId) {
       const state = scheduleState;
