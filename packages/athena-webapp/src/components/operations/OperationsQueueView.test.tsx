@@ -376,8 +376,10 @@ describe("OperationsQueueViewContent", () => {
     expect(
       screen.getByRole("region", { name: "Work type breakdown" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Work type")).toBeInTheDocument();
     expect(screen.getByText("2 work types")).toBeInTheDocument();
+    expect(
+      screen.getByRole("combobox", { name: "Filter work queue by work type" }),
+    ).toBeInTheDocument();
     expect(screen.getAllByText("POS pending checkout").length).toBeGreaterThan(
       0,
     );
@@ -395,6 +397,87 @@ describe("OperationsQueueViewContent", () => {
     expect(screen.getByText("Follow Up Service Intake")).toBeInTheDocument();
     expect(screen.getByText("Owner")).toBeInTheDocument();
     expect(screen.getByText("Customer")).toBeInTheDocument();
+  });
+
+  it("filters open work by type and reports the filter in route search state", async () => {
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+    const onOpenWorkSearchChange = vi.fn();
+    const workItems = [
+      {
+        _id: "work-item-1" as Id<"operationalWorkItem">,
+        approvalState: "not_required",
+        createdAt: Date.now(),
+        priority: "normal",
+        status: "open",
+        title: "Follow up service intake",
+        type: "service_case",
+      },
+      {
+        _id: "work-item-2" as Id<"operationalWorkItem">,
+        approvalState: "not_required",
+        createdAt: Date.now(),
+        priority: "normal",
+        status: "open",
+        title: "Assign Catalog Category: Adore Dye",
+        type: "catalog_taxonomy_setup",
+      },
+    ];
+
+    const { rerender } = render(
+      <OperationsQueueViewContent
+        {...baseProps}
+        activeWorkflow="queue"
+        onOpenWorkSearchChange={onOpenWorkSearchChange}
+        workItems={workItems}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("combobox", {
+        name: "Filter work queue by work type",
+      }),
+    );
+    await user.click(screen.getByRole("option", { name: "Catalog setup · 1" }));
+
+    expect(onOpenWorkSearchChange).toHaveBeenCalledWith({
+      page: undefined,
+      workType: "catalog_taxonomy_setup",
+    });
+
+    rerender(
+      <OperationsQueueViewContent
+        {...baseProps}
+        activeWorkflow="queue"
+        onOpenWorkSearchChange={onOpenWorkSearchChange}
+        openWorkSearch={{ workType: "catalog_taxonomy_setup" }}
+        workItems={workItems}
+      />,
+    );
+
+    expect(
+      screen.getByRole("combobox", {
+        name: "Filter work queue by work type",
+      }),
+    ).toHaveTextContent("Catalog setup · 1");
+    expect(
+      screen.getByText("Assign Catalog Category: Adore Dye"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("Follow Up Service Intake"),
+    ).not.toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("combobox", {
+        name: "Filter work queue by work type",
+      }),
+    );
+    await user.click(screen.getByRole("option", { name: "All work types" }));
+
+    expect(onOpenWorkSearchChange).toHaveBeenLastCalledWith({
+      page: undefined,
+      workType: undefined,
+    });
   });
 
   it("shows when the open work queue is capped by the server", () => {
@@ -949,10 +1032,7 @@ describe("OperationsQueueViewContent", () => {
     expect(screen.getAllByText("Purchase order").length).toBeGreaterThan(0);
     expect(
       screen.getByRole("link", { name: "Open purchase order" }),
-    ).toHaveAttribute(
-      "href",
-      "/wigclub/store/wigclub/procurement?o=%252F",
-    );
+    ).toHaveAttribute("href", "/wigclub/store/wigclub/procurement?o=%252F");
     expect(screen.getByText("PO-103")).toBeInTheDocument();
     expect(screen.getByText("Salon Supply Co.")).toBeInTheDocument();
     expect(screen.getByText("4 items")).toBeInTheDocument();
@@ -1170,15 +1250,6 @@ describe("OperationsQueueViewContent", () => {
     );
     expect(titleHref.searchParams.get("mode")).toBe("manual");
     expect(titleHref.searchParams.get("sku")).toBe("product-sku-1");
-    expect(screen.getByText("Receipt")).toBeInTheDocument();
-    const receiptLink = screen.getByRole("link", {
-      name: "Open transaction #939540",
-    });
-    expect(receiptLink).toBeInTheDocument();
-    expect(receiptLink).toHaveAttribute(
-      "href",
-      "/wigclub/store/wigclub/pos/transactions/transaction-1?o=%252F",
-    );
     expect(screen.queryByText("Primary SKU")).not.toBeInTheDocument();
     expect(screen.queryByText("product-sku-1")).not.toBeInTheDocument();
     expect(screen.getByText("Needs action")).toBeInTheDocument();
@@ -1187,8 +1258,7 @@ describe("OperationsQueueViewContent", () => {
     expect(
       screen.queryByText("Sale synced without reducing stock"),
     ).not.toBeInTheDocument();
-    expect(screen.queryByText("Affected sale lines")).not.toBeInTheDocument();
-    expect(screen.queryByText("1 line")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Affected sales")).toHaveLength(1);
     expect(screen.getByText("High")).toHaveClass(
       "bg-surface",
       "text-muted-foreground",
@@ -1196,8 +1266,14 @@ describe("OperationsQueueViewContent", () => {
 
     await user.click(screen.getByRole("button", { name: "Show details" }));
 
-    expect(screen.getByText("Affected sale lines")).toBeInTheDocument();
-    expect(screen.getByText("1 line")).toBeInTheDocument();
+    expect(screen.getAllByText("Affected sales")).toHaveLength(1);
+    const receiptLink = screen.getByRole("link", {
+      name: "Open transaction #939540",
+    });
+    expect(receiptLink).toHaveAttribute(
+      "href",
+      "/wigclub/store/wigclub/pos/transactions/transaction-1?o=%252F",
+    );
 
     const stockAdjustmentsHref = new URL(
       screen
@@ -1214,19 +1290,92 @@ describe("OperationsQueueViewContent", () => {
     await user.click(screen.getByRole("button", { name: "Mark reviewed" }));
 
     expect(onResolveSyncedSaleInventoryReview).toHaveBeenCalledWith(
-      expect.objectContaining({
-        _id: "work-item-1",
-        details: expect.objectContaining({
-          localRegisterSessionId: "local-register-session-1",
-          localTransactionId: "local-transaction-1",
-          receiptNumber: "939540",
-          registerSessionId: "register-session-1",
-          sourceId: "transaction-1",
-          terminalId: "terminal-1",
+      expect.arrayContaining([
+        expect.objectContaining({
+          _id: "work-item-1",
+          details: expect.objectContaining({
+            localRegisterSessionId: "local-register-session-1",
+            localTransactionId: "local-transaction-1",
+            receiptNumber: "939540",
+            registerSessionId: "register-session-1",
+            sourceId: "transaction-1",
+            terminalId: "terminal-1",
+          }),
+          type: "synced_sale_inventory_review",
         }),
-        type: "synced_sale_inventory_review",
+      ]),
+    );
+  });
+
+  it("groups synced sale inventory reviews for the same affected SKU", async () => {
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+    const onResolveSyncedSaleInventoryReview = vi.fn();
+    const sharedDetails = {
+      primaryProductSkuId: "product-sku-1" as Id<"productSku">,
+    };
+
+    render(
+      <OperationsQueueViewContent
+        {...baseProps}
+        activeWorkflow="queue"
+        onResolveSyncedSaleInventoryReview={onResolveSyncedSaleInventoryReview}
+        workItems={[
+          {
+            _id: "work-item-1" as Id<"operationalWorkItem">,
+            approvalState: "not_required",
+            createdAt: Date.now() - 10 * 60 * 1000,
+            details: { ...sharedDetails, receiptNumber: "100001" },
+            priority: "high",
+            status: "open",
+            title: "Review inventory for ADORE DYE",
+            type: "synced_sale_inventory_review",
+          },
+          {
+            _id: "work-item-2" as Id<"operationalWorkItem">,
+            approvalState: "not_required",
+            createdAt: Date.now() - 5 * 60 * 1000,
+            details: { ...sharedDetails, receiptNumber: "100002" },
+            priority: "normal",
+            status: "open",
+            title: "Review inventory for ADORE DYE",
+            type: "synced_sale_inventory_review",
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getAllByRole("article")).toHaveLength(1);
+    expect(screen.getByText("1 open work item")).toBeInTheDocument();
+    expect(
+      within(
+        screen.getByRole("region", { name: "Work type breakdown" }),
+      ).getByText("1 item"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("2 sales")).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("combobox", {
+        name: "Filter work queue by work type",
       }),
     );
+    expect(
+      screen.getByRole("option", { name: "Synced sale inventory · 1" }),
+    ).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+
+    await user.click(screen.getByRole("button", { name: "Show details" }));
+
+    expect(screen.getByText("2 total")).toBeInTheDocument();
+    expect(screen.getByText("#100001")).toBeInTheDocument();
+    expect(screen.getByText("#100002")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Mark 2 reviewed" }));
+
+    expect(onResolveSyncedSaleInventoryReview).toHaveBeenCalledWith([
+      expect.objectContaining({ _id: "work-item-1" }),
+      expect.objectContaining({ _id: "work-item-2" }),
+    ]);
   });
 
   it("renders synced sale resolution when the affected SKU is available", () => {
@@ -1309,8 +1458,8 @@ describe("OperationsQueueViewContent", () => {
       <OperationsQueueViewContent
         {...baseProps}
         activeWorkflow="queue"
-        isResolvingSyncedSaleInventoryReviewId={
-          "work-item-active" as Id<"operationalWorkItem">
+        isResolvingSyncedSaleInventoryReviewSkuId={
+          "product-sku-active" as Id<"productSku">
         }
         orgUrlSlug="wigclub"
         onResolveSyncedSaleInventoryReview={vi.fn()}
@@ -1587,7 +1736,9 @@ describe("OperationsQueueViewContent", () => {
 
     expect(screen.getByText("Yuhh")).toBeInTheDocument();
     expect(screen.getByText("1 on hand before adjustment")).toBeInTheDocument();
-    expect(screen.queryByText("- counted against 1 on hand")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("- counted against 1 on hand"),
+    ).not.toBeInTheDocument();
   });
 
   it("renders unsupported approval rows as retire-only actions", async () => {

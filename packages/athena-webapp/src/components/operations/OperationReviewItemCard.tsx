@@ -18,6 +18,7 @@ type OperationReviewItemCardProps = {
   contextLabel: string;
   contextLabelClassName?: string;
   description?: string | null;
+  detailsSlot?: ReactNode;
   headerActionSlot?: ReactNode;
   itemId: string;
   metadataEntries?: OperationReviewMetadataEntry[];
@@ -35,6 +36,7 @@ export function OperationReviewItemCard({
   contextLabel,
   contextLabelClassName,
   description,
+  detailsSlot,
   headerActionSlot,
   itemId,
   metadataEntries = [],
@@ -43,14 +45,14 @@ export function OperationReviewItemCard({
   title,
 }: OperationReviewItemCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const hasMetadata = metadataEntries.length > 0;
+  const hasDetails = metadataEntries.length > 0 || Boolean(detailsSlot);
   const summaryEntries =
     collapsedMetadataEntries ?? metadataEntries.slice(0, 4);
   const detailsId = `operation-review-item-details-${itemId.replace(
     /[^a-zA-Z0-9_-]/g,
     "-",
   )}`;
-  const detailsToggle = hasMetadata ? (
+  const detailsToggle = hasDetails ? (
     <Button
       aria-controls={detailsId}
       aria-expanded={isExpanded}
@@ -131,7 +133,7 @@ export function OperationReviewItemCard({
         </p>
       ) : null}
 
-      {hasMetadata && isExpanded ? (
+      {metadataEntries.length > 0 && isExpanded ? (
         <dl
           className={cn(
             "grid gap-layout-md border-t border-border/70 pt-layout-md text-sm md:grid-cols-3",
@@ -150,6 +152,12 @@ export function OperationReviewItemCard({
             </div>
           ))}
         </dl>
+      ) : null}
+
+      {detailsSlot && isExpanded ? (
+        <div className="mt-layout-md border-t border-border/70 pt-layout-md">
+          {detailsSlot}
+        </div>
       ) : null}
     </article>
   );

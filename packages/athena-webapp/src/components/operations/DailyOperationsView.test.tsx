@@ -442,6 +442,10 @@ const blockedSnapshot: DailyOperationsSnapshot = {
       },
       to: "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId",
       params: { sessionId: "register-1" },
+      registerSession: {
+        displayLabel: "Codex / Register 1",
+        isOpenedForOperatingDate: true,
+      },
     },
   ],
   lanes: [
@@ -2422,6 +2426,29 @@ describe("DailyOperationsViewContent", () => {
   it("passes origin context to current-day blocker review actions", () => {
     renderContent({
       ...blockedSnapshot,
+      automationStatuses: automationSnapshot.automationStatuses,
+      attentionItems: [
+        ...blockedSnapshot.attentionItems,
+        {
+          id: "register_session:register-2:open",
+          label: "Register session is still open",
+          message:
+            "Close the register session carried over from a prior operating day before completing the end of day review.",
+          owner: "daily_close",
+          params: { sessionId: "register-2" },
+          registerSession: {
+            displayLabel: "Codex / Register 2",
+            isOpenedForOperatingDate: false,
+          },
+          severity: "critical",
+          source: {
+            id: "register-2",
+            label: "Register 2",
+            type: "register_session",
+          },
+          to: "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId",
+        },
+      ],
       operatingDate: getCurrentLocalOperatingDate(),
     });
 
@@ -2439,6 +2466,47 @@ describe("DailyOperationsViewContent", () => {
       "hover:text-danger",
       "active:scale-[0.98]",
     );
+    const registerSessionLink = screen.getByRole("link", {
+      name: "Open register session Codex / Register 1",
+    });
+    expect(registerSessionLink).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/cash-controls/registers/register-1?o=%252Fwigclub%252Fstore%252Fosu%252Foperations",
+    );
+    const registerSessionsPanel = screen
+      .getByRole("heading", { name: "Open register sessions" })
+      .closest("section");
+    expect(registerSessionsPanel).not.toBeNull();
+    expect(registerSessionsPanel?.querySelector("svg")).toHaveClass(
+      "h-4",
+      "w-4",
+      "text-muted-foreground",
+    );
+    expect(registerSessionsPanel).toHaveClass("border-t", "pt-layout-md");
+    expect(registerSessionsPanel).not.toHaveClass(
+      "rounded-lg",
+      "bg-background/60",
+    );
+    expect(registerSessionLink).not.toHaveClass("border", "bg-background");
+    expect(registerSessionLink).toHaveClass(
+      "inline-flex",
+      "items-center",
+      "font-medium",
+      "text-sm",
+      "text-foreground",
+      "underline-offset-4",
+      "hover:underline",
+    );
+    expect(registerSessionLink).not.toHaveClass("hover:text-primary");
+    const automationBand = screen
+      .getByRole("heading", { name: "Athena automation" })
+      .closest("section");
+    expect(automationBand).toContainElement(registerSessionsPanel);
+    expect(
+      screen.queryByRole("link", {
+        name: "Open register session Codex / Register 2",
+      }),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "Open Registers" }),
     ).toHaveAttribute(

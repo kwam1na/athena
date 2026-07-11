@@ -315,6 +315,19 @@ describe("RegisterSessionViewContent", () => {
             requiresApproval: true,
             variance: -500,
           },
+          financialPosition: {
+            averageTransaction: 15200,
+            paymentMix: [
+              {
+                method: "cash",
+                share: 100,
+                total: 15200,
+                transactionCount: 1,
+              },
+            ],
+            totalSales: 15200,
+            transactionCount: 1,
+          },
           deposits: [
             {
               _id: "deposit-1",
@@ -361,6 +374,22 @@ describe("RegisterSessionViewContent", () => {
     expect(screen.getByText("Code")).toBeInTheDocument();
     expect(screen.getAllByText("SION-1").length).toBeGreaterThan(0);
     expect(screen.getByText("Cash position")).toBeInTheDocument();
+    expect(screen.getByText("Sales summary")).toBeInTheDocument();
+    expect(screen.getByText("Total sales")).toBeInTheDocument();
+    expect(screen.getByText("Completed sales")).toBeInTheDocument();
+    expect(screen.getByText("Average sale")).toBeInTheDocument();
+    expect(screen.getByText("Completed sales")).toHaveClass(
+      "text-[10px]",
+      "text-muted-foreground/80",
+    );
+    expect(screen.getByText("Average sale")).toHaveClass(
+      "text-[10px]",
+      "text-muted-foreground/80",
+    );
+    expect(screen.getByText("Payment mix")).toBeInTheDocument();
+    expect(
+      screen.getByRole("img", { name: "Cash: 100% of session sales" }),
+    ).toBeInTheDocument();
     expect(screen.getByText("Opened")).toBeInTheDocument();
     expect(
       screen.getByText((_, element) =>
@@ -462,9 +491,7 @@ describe("RegisterSessionViewContent", () => {
     expect(screen.getByText("Closeout workflow")).toBeInTheDocument();
     expect(screen.getByText("Count and close drawer")).toBeInTheDocument();
     expect(screen.getByLabelText("Closeout counted cash")).toBeInTheDocument();
-    expect(
-      screen.queryByText("Draft variance"),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Draft variance")).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Submit closeout" }),
     ).toBeInTheDocument();
@@ -573,8 +600,10 @@ describe("RegisterSessionViewContent", () => {
               label: index === 8 ? "Later cart activity" : "Cart item added",
               localEventId: `local-extra-${index + 1}`,
               localRegisterSessionId: "local-session-1",
-              occurredAt: new Date("2026-04-21T18:05:00.000Z").getTime() + index,
-              reportedAt: new Date("2026-04-21T18:06:00.000Z").getTime() + index,
+              occurredAt:
+                new Date("2026-04-21T18:05:00.000Z").getTime() + index,
+              reportedAt:
+                new Date("2026-04-21T18:06:00.000Z").getTime() + index,
               sequence: 14 + index,
               source: "pos_sync_evidence" as const,
               status: {
@@ -633,7 +662,9 @@ describe("RegisterSessionViewContent", () => {
     ).toBeInTheDocument();
     expect(screen.queryByText("1 sale")).not.toBeInTheDocument();
     expect(screen.queryByText("0 cart")).not.toBeInTheDocument();
-    expect(screen.getByText("Terminal reporting uncertain")).toBeInTheDocument();
+    expect(
+      screen.getByText("Terminal reporting uncertain"),
+    ).toBeInTheDocument();
     expect(screen.getByText("Sequence 12")).toBeInTheDocument();
     expect(screen.getByText("1 need attention")).toBeInTheDocument();
     expect(screen.getByText("Sale completed")).toBeInTheDocument();
@@ -1689,7 +1720,9 @@ describe("RegisterSessionViewContent", () => {
       ),
     ).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Repair sale mapping" }));
+    await user.click(
+      screen.getByRole("button", { name: "Repair sale mapping" }),
+    );
     await user.click(
       screen.getByRole("button", {
         name: "Confirm staff for Repair sale mapping",
@@ -1868,9 +1901,7 @@ describe("RegisterSessionViewContent", () => {
     expect(
       screen.getByText("Inventory review and Synced sale preservation."),
     ).toBeInTheDocument();
-    expect(
-      screen.getByText("Synced sale preservation"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Synced sale preservation")).toBeInTheDocument();
 
     await user.click(
       screen.getByRole("button", {
@@ -2203,9 +2234,7 @@ describe("RegisterSessionViewContent", () => {
         "Reject the duplicate register-opening evidence to keep the current register session. Any sale details shown below are evidence only.",
       ),
     ).toBeInTheDocument();
-    expect(
-      screen.getByText("Duplicate register opening."),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Duplicate register opening.")).toBeInTheDocument();
     expect(
       screen.queryByRole("button", {
         name: "Apply duplicate register openings",
@@ -3062,7 +3091,9 @@ describe("RegisterSessionViewContent", () => {
       />,
     );
 
-    expect(screen.getByText("Register corrections pending")).toBeInTheDocument();
+    expect(
+      screen.getByText("Register corrections pending"),
+    ).toBeInTheDocument();
     expect(
       screen.getByText("Register corrections block final closeout"),
     ).toBeInTheDocument();
@@ -3085,7 +3116,9 @@ describe("RegisterSessionViewContent", () => {
       screen.queryByRole("button", { name: "Finalize closeout" }),
     ).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Deposit amount")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Deposit reference")).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Deposit reference"),
+    ).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Deposit notes")).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Record deposit" }),
@@ -3124,7 +3157,9 @@ describe("RegisterSessionViewContent", () => {
       />,
     );
 
-    expect(screen.getByText("Register corrections pending")).toBeInTheDocument();
+    expect(
+      screen.getByText("Register corrections pending"),
+    ).toBeInTheDocument();
     expect(
       screen.getByText("Register corrections block final closeout"),
     ).toBeInTheDocument();
@@ -3184,12 +3219,18 @@ describe("RegisterSessionViewContent", () => {
     const metrics = submittedCloseout?.querySelector("dl");
 
     expect(metrics).toHaveClass("flex", "flex-wrap");
-    expect(within(metrics as HTMLElement).getByText("Expected now")).toBeInTheDocument();
+    expect(
+      within(metrics as HTMLElement).getByText("Expected now"),
+    ).toBeInTheDocument();
     expect(
       within(metrics as HTMLElement).getByText("After adjustments"),
     ).toBeInTheDocument();
-    expect(within(metrics as HTMLElement).getByText("Counted")).toBeInTheDocument();
-    expect(within(metrics as HTMLElement).getByText("Variance")).toBeInTheDocument();
+    expect(
+      within(metrics as HTMLElement).getByText("Counted"),
+    ).toBeInTheDocument();
+    expect(
+      within(metrics as HTMLElement).getByText("Variance"),
+    ).toBeInTheDocument();
   });
 
   it("uses manager approval to submit a reopened closeout correction", async () => {
@@ -3814,7 +3855,9 @@ describe("RegisterSessionViewContent", () => {
     expect(
       screen.getByRole("button", { name: "Submit closeout" }),
     ).toBeInTheDocument();
-    expect(screen.queryByText("Ready for final closeout")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Ready for final closeout"),
+    ).not.toBeInTheDocument();
   });
 
   it("labels closeout rejection history as closeout follow-up", () => {
@@ -4260,5 +4303,4 @@ describe("RegisterSessionViewContent", () => {
     expect(screen.getAllByText("$176").length).toBeGreaterThan(0);
     expect(screen.queryByText("Manager only")).not.toBeInTheDocument();
   });
-
 });

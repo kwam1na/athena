@@ -1,4 +1,9 @@
-import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router";
+import {
+  Link,
+  useNavigate,
+  useParams,
+  useSearch,
+} from "@tanstack/react-router";
 import * as AccordionPrimitive from "@radix-ui/react-accordion";
 import type { FunctionReference } from "convex/server";
 import { useMutation, useQuery } from "convex/react";
@@ -219,6 +224,17 @@ type RegisterSessionTimelineEvent = {
 export type RegisterSessionSnapshot = {
   closeoutReview: RegisterSessionCloseoutReview | null;
   deposits: RegisterSessionDeposit[];
+  financialPosition?: {
+    averageTransaction: number;
+    paymentMix: Array<{
+      method: string;
+      share: number;
+      total: number;
+      transactionCount: number;
+    }>;
+    totalSales: number;
+    transactionCount: number;
+  };
   registerSession: RegisterSessionDetail;
   timeline?: RegisterSessionTimelineEvent[];
   transactions?: RegisterSessionTransaction[];
@@ -681,7 +697,9 @@ function getActivityBadgeClass(
 function getActivityAttentionCount(activity: RegisterSessionActivity | null) {
   if (!activity) return 0;
   const counts = activity.summary.attentionCounts;
-  return counts.mapping_pending + counts.held + counts.conflicted + counts.rejected;
+  return (
+    counts.mapping_pending + counts.held + counts.conflicted + counts.rejected
+  );
 }
 
 function getActivityRowKey(
@@ -863,7 +881,9 @@ export function RegisterSessionActivitySection({
             Last report
           </p>
           <p className="mt-1 text-sm text-foreground">
-            {lastReportedAt === null ? "Not available" : formatTimestamp(lastReportedAt)}
+            {lastReportedAt === null
+              ? "Not available"
+              : formatTimestamp(lastReportedAt)}
           </p>
         </div>
         <div className="rounded-md border border-border/70 bg-muted/20 px-3 py-2">
@@ -1119,7 +1139,9 @@ function formatRegisterCloseoutSubjectLabel(registerNumber?: string | null) {
   return `${formatRegisterHeaderName(registerNumber)} closeout correction`;
 }
 
-function formatRegisterOpeningFloatSubjectLabel(registerNumber?: string | null) {
+function formatRegisterOpeningFloatSubjectLabel(
+  registerNumber?: string | null,
+) {
   return `${formatRegisterHeaderName(registerNumber)} opening float correction`;
 }
 
@@ -1493,7 +1515,11 @@ function getSyncReviewSaleSummaries(items: PosReconciliationItem[]) {
     const isRegisterOpeningReview =
       isDuplicateLocalIdRegisterSyncReviewItem(item);
 
-    if (!isRegisterOpeningReview && summary && !nextSale.reasons.includes(summary)) {
+    if (
+      !isRegisterOpeningReview &&
+      summary &&
+      !nextSale.reasons.includes(summary)
+    ) {
       nextSale.reasons.push(summary);
     }
 
@@ -2023,9 +2049,7 @@ function RegisterSyncReviewItemDecisionList({
         <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
           Review decisions
         </p>
-        <p className="text-xs leading-5 text-muted-foreground">
-          {description}
-        </p>
+        <p className="text-xs leading-5 text-muted-foreground">{description}</p>
       </div>
       <div className="grid gap-layout-xs">
         {actionableItems.map((item, index) => {
@@ -2264,7 +2288,8 @@ function isMissingRegisterSessionMappingReviewItem(
 ) {
   return (
     item.reviewKind === "missing_register_session_mapping" ||
-    item.summary?.trim() === MISSING_REGISTER_SESSION_MAPPING_SYNC_REVIEW_SUMMARY
+    item.summary?.trim() ===
+      MISSING_REGISTER_SESSION_MAPPING_SYNC_REVIEW_SUMMARY
   );
 }
 
@@ -3188,8 +3213,7 @@ export function RegisterSessionViewContent({
     latestCloseoutRecord?.type === "reopened" ? latestCloseoutRecord : null;
   const requiresReopenedCloseoutSubmitApproval =
     registerSession?.status === "closing" && Boolean(reopenedCloseoutRecord);
-  const isReopenedCloseoutCorrection =
-    requiresReopenedCloseoutSubmitApproval;
+  const isReopenedCloseoutCorrection = requiresReopenedCloseoutSubmitApproval;
 
   const reopenedCloseoutSubmitApproval =
     useMemo<ApprovalRequirement | null>(() => {
@@ -3532,18 +3556,18 @@ export function RegisterSessionViewContent({
                   message:
                     "Closeout finalization is not available yet. Try again after the register tools refresh.",
                 })
-          : result.approvalProofId
-            ? await onReviewCloseout({
-                approvalProofId: result.approvalProofId,
-                decision: intent.decision,
-                decisionNotes: intent.decisionNotes,
-                registerSessionId: intent.registerSessionId,
-              })
-            : userError({
-                code: "authentication_failed",
-                message:
-                  "Manager approval could not be verified. Confirm manager credentials again.",
-              });
+            : result.approvalProofId
+              ? await onReviewCloseout({
+                  approvalProofId: result.approvalProofId,
+                  decision: intent.decision,
+                  decisionNotes: intent.decisionNotes,
+                  registerSessionId: intent.registerSessionId,
+                })
+              : userError({
+                  code: "authentication_failed",
+                  message:
+                    "Manager approval could not be verified. Confirm manager credentials again.",
+                });
 
       if (!applyCloseoutCommandResult(commandResult)) {
         return;
@@ -3709,6 +3733,7 @@ export function RegisterSessionViewContent({
   }
 
   const transactions = registerSessionSnapshot?.transactions ?? [];
+  const financialPosition = registerSessionSnapshot?.financialPosition;
   const previewTransactions = transactions.slice(
     0,
     LINKED_TRANSACTIONS_PREVIEW_LIMIT,
@@ -3855,11 +3880,11 @@ export function RegisterSessionViewContent({
               description: "Authenticate to finalize closeout",
               submitLabel: "Finalize closeout",
             }
-        : {
-            title: "Closeout sign-in required",
-            description: "Authenticate to submit closeout",
-            submitLabel: "Submit closeout",
-          };
+          : {
+              title: "Closeout sign-in required",
+              description: "Authenticate to submit closeout",
+              submitLabel: "Submit closeout",
+            };
   const canResolveSyncReview =
     syncStatus.status === "needs_review" && Boolean(onResolveSyncReview);
   const headerTerminalName = registerSession?.terminalName?.trim();
@@ -3902,9 +3927,9 @@ export function RegisterSessionViewContent({
           ? [pendingCloseoutReviewItem.id]
           : saleReviewConflictIds.length > 0
             ? saleReviewConflictIds
-          : visibleReviewConflictIds.length > 0
-            ? visibleReviewConflictIds
-            : undefined),
+            : visibleReviewConflictIds.length > 0
+              ? visibleReviewConflictIds
+              : undefined),
     });
   }
   const sessionCode = registerSession
@@ -3923,13 +3948,13 @@ export function RegisterSessionViewContent({
       ? "Closed"
       : registerSession?.status === "closeout_rejected"
         ? "Closeout rejected"
-      : registerSession?.status === "closing"
-        ? needsCloseoutCorrection
-          ? "Closeout rejected"
-          : hasPendingCloseoutApproval
-            ? "Manager approval pending"
-            : "Closeout in progress"
-        : undefined;
+        : registerSession?.status === "closing"
+          ? needsCloseoutCorrection
+            ? "Closeout rejected"
+            : hasPendingCloseoutApproval
+              ? "Manager approval pending"
+              : "Closeout in progress"
+          : undefined;
   const shouldShowCloseoutSummary = Boolean(closeoutState);
   const closeoutTimestamp =
     registerSession?.status === "closed" && registerSession.closedAt
@@ -4072,7 +4097,10 @@ export function RegisterSessionViewContent({
                   After adjustments
                 </p>
                 <p className="font-numeric tabular-nums text-base text-foreground">
-                  {formatCurrency(currency, pendingCashVoidApprovedExpectedCash)}
+                  {formatCurrency(
+                    currency,
+                    pendingCashVoidApprovedExpectedCash,
+                  )}
                 </p>
               </div>
             ) : null}
@@ -4306,8 +4334,7 @@ export function RegisterSessionViewContent({
               pinHash: args.pinHash,
               requiredRole: "manager",
               requestedByStaffProfileId: actorStaffProfileId as
-                | Id<"staffProfile">
-                | undefined,
+                Id<"staffProfile"> | undefined,
               storeId: storeId as Id<"store">,
               subject: {
                 id: closeoutStaffAuthIntent.registerSessionId,
@@ -4456,6 +4483,114 @@ export function RegisterSessionViewContent({
               <div className="grid gap-0 xl:grid-cols-[380px_minmax(0,1fr)]">
                 <aside className="border-b border-border/80 bg-muted/20 px-layout-md py-layout-md md:px-layout-lg md:py-layout-lg xl:border-b-0 xl:border-r">
                   <dl className="space-y-layout-md">
+                    {financialPosition ? (
+                      <div className="rounded-lg border border-border bg-surface-raised p-layout-md">
+                        <dt className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                          Sales summary
+                        </dt>
+                        <dd className="mt-layout-sm space-y-1 border-b border-border/70 pb-layout-sm">
+                          <span className="block text-xs text-muted-foreground">
+                            Total sales
+                          </span>
+                          <span className="block font-numeric text-2xl tabular-nums text-foreground sm:text-3xl">
+                            <CashControlsFinancialValue
+                              amount={financialPosition.totalSales}
+                              canView={canViewFinancialDetails}
+                              currency={currency}
+                              label="Total register sales"
+                            />
+                          </span>
+                        </dd>
+
+                        <div className="mt-layout-lg grid grid-cols-2 gap-layout-md">
+                          <div>
+                            <p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground/80">
+                              Completed sales
+                            </p>
+                            <p className="mt-1 font-numeric text-lg tabular-nums text-foreground">
+                              {financialPosition.transactionCount.toLocaleString()}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground/80">
+                              Average sale
+                            </p>
+                            <p className="mt-1 font-numeric text-lg tabular-nums text-foreground">
+                              <CashControlsFinancialValue
+                                amount={financialPosition.averageTransaction}
+                                canView={canViewFinancialDetails}
+                                currency={currency}
+                                label="Average register sale"
+                              />
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="mt-layout-lg border-t border-border/70 pt-layout-md">
+                          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                            Payment mix
+                          </p>
+                          <div className="mt-layout-md space-y-layout-md">
+                            {financialPosition.paymentMix.length === 0 ? (
+                              <p className="text-sm text-muted-foreground">
+                                No completed payments
+                              </p>
+                            ) : null}
+                            {financialPosition.paymentMix.map((payment) => {
+                              const PaymentIcon = getPaymentMethodIcon({
+                                hasMultiplePaymentMethods: false,
+                                paymentMethod: payment.method,
+                              });
+
+                              return (
+                                <div key={payment.method}>
+                                  <div className="flex items-center justify-between gap-layout-md text-sm">
+                                    <span className="flex min-w-0 items-center gap-2 text-foreground">
+                                      <PaymentIcon
+                                        aria-hidden="true"
+                                        className="h-3.5 w-3.5 shrink-0 self-center text-muted-foreground"
+                                      />
+                                      <span className="flex min-w-0 items-baseline gap-2">
+                                        <span className="truncate">
+                                          {formatPaymentMethod(payment.method)}
+                                        </span>
+                                        <span className="text-xs tabular-nums text-muted-foreground">
+                                          {payment.transactionCount.toLocaleString()}{" "}
+                                          {payment.transactionCount === 1
+                                            ? "sale"
+                                            : "sales"}
+                                        </span>
+                                      </span>
+                                    </span>
+                                    <span className="font-numeric shrink-0 tabular-nums text-foreground">
+                                      <CashControlsFinancialValue
+                                        amount={payment.total}
+                                        canView={canViewFinancialDetails}
+                                        currency={currency}
+                                        label={`${formatPaymentMethod(payment.method)} total`}
+                                      />
+                                    </span>
+                                  </div>
+                                  {canViewFinancialDetails ? (
+                                    <div
+                                      aria-label={`${formatPaymentMethod(payment.method)}: ${payment.share}% of session sales`}
+                                      className="mt-2 h-1 overflow-hidden rounded-full bg-action-workflow-soft"
+                                      role="img"
+                                    >
+                                      <div
+                                        className="h-full rounded-full bg-action-workflow"
+                                        style={{ width: `${payment.share}%` }}
+                                      />
+                                    </div>
+                                  ) : null}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
+
                     <div className="rounded-lg border border-border bg-surface-raised p-layout-md">
                       <dt className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
                         Cash position
@@ -4600,7 +4735,10 @@ export function RegisterSessionViewContent({
                                   Expected
                                 </dt>
                                 <dd className="font-numeric tabular-nums text-foreground">
-                                  {formatCurrency(currency, displayedExpectedCash)}
+                                  {formatCurrency(
+                                    currency,
+                                    displayedExpectedCash,
+                                  )}
                                 </dd>
                               </div>
                               <div className="space-y-1">
@@ -4608,7 +4746,10 @@ export function RegisterSessionViewContent({
                                   Counted
                                 </dt>
                                 <dd className="font-numeric tabular-nums text-foreground">
-                                  {formatCurrency(currency, displayedCountedCash)}
+                                  {formatCurrency(
+                                    currency,
+                                    displayedCountedCash,
+                                  )}
                                 </dd>
                               </div>
                               <div className="space-y-1">
@@ -4618,7 +4759,10 @@ export function RegisterSessionViewContent({
                                 <dd
                                   className={`font-numeric tabular-nums ${getVarianceTone(displayedVariance ?? undefined)}`}
                                 >
-                                  {formatCurrency(currency, displayedVariance ?? 0)}
+                                  {formatCurrency(
+                                    currency,
+                                    displayedVariance ?? 0,
+                                  )}
                                 </dd>
                               </div>
                             </dl>
@@ -4717,7 +4861,9 @@ export function RegisterSessionViewContent({
                                 className="w-full justify-center"
                                 disabled={pendingCloseoutAction === "reopen"}
                                 isLoading={pendingCloseoutAction === "reopen"}
-                                onClick={() => void handleReopenClosedCloseout()}
+                                onClick={() =>
+                                  void handleReopenClosedCloseout()
+                                }
                                 type="button"
                                 variant="outline"
                               >
@@ -4822,7 +4968,9 @@ export function RegisterSessionViewContent({
                                 <LoadingButton
                                   className="w-full"
                                   disabled={Boolean(pendingCloseoutAction)}
-                                  isLoading={pendingCloseoutAction === "finalize"}
+                                  isLoading={
+                                    pendingCloseoutAction === "finalize"
+                                  }
                                   onClick={() => void handleFinalizeCloseout()}
                                   type="button"
                                   variant="workflow"
@@ -4869,7 +5017,10 @@ export function RegisterSessionViewContent({
                                             : "Expected"}
                                         </dt>
                                         <dd className="font-numeric tabular-nums text-foreground">
-                                          {formatCurrency(currency, expectedCash)}
+                                          {formatCurrency(
+                                            currency,
+                                            expectedCash,
+                                          )}
                                         </dd>
                                       </div>
                                       {pendingCashVoidApprovedExpectedCash !==
@@ -5020,7 +5171,9 @@ export function RegisterSessionViewContent({
 
                 <div className="flex flex-col gap-layout-md px-layout-md py-layout-md md:gap-layout-lg md:px-layout-lg md:py-layout-lg">
                   {pendingVoidApprovalPanel}
-                  {canViewFinancialDetails ? pendingCloseoutApprovalPanel : null}
+                  {canViewFinancialDetails
+                    ? pendingCloseoutApprovalPanel
+                    : null}
 
                   {shouldShowProminentCorrectionPanel ? (
                     <section
@@ -5293,8 +5446,6 @@ export function RegisterSessionViewContent({
                     </section>
                   ) : null}
 
-
-
                   <div
                     className={`order-2 flex flex-col items-start gap-layout-sm sm:flex-row sm:justify-between ${hasPendingCloseoutApproval ? "pt-4" : ""}`}
                   >
@@ -5544,7 +5695,6 @@ export function RegisterSessionViewContent({
               </div>
             )}
           </section>
-
         </div>
       </FadeIn>
     </View>
@@ -5691,8 +5841,7 @@ export function RegisterSessionView() {
     const result = await runCommand(() =>
       recordRegisterSessionDeposit({
         actorStaffProfileId: args.actorStaffProfileId as
-          | Id<"staffProfile">
-          | undefined,
+          Id<"staffProfile"> | undefined,
         actorUserId: args.actorUserId as Id<"athenaUser"> | undefined,
         amount: args.amount,
         notes: args.notes,
@@ -5725,12 +5874,12 @@ export function RegisterSessionView() {
     const result = await runCommand(() =>
       resolveRegisterSessionSyncReview({
         actorStaffProfileId: args.actorStaffProfileId as Id<"staffProfile">,
-        approvalProofId: args.approvalProofId as Id<"approvalProof"> | undefined,
+        approvalProofId: args.approvalProofId as
+          Id<"approvalProof"> | undefined,
         decision: args.decision,
         registerSessionId: args.registerSessionId as Id<"registerSession">,
         requestedByStaffProfileId: args.requestedByStaffProfileId as
-          | Id<"staffProfile">
-          | undefined,
+          Id<"staffProfile"> | undefined,
         reviewConflictIds: args.reviewConflictIds,
         storeId: activeStore._id,
       }),
@@ -5752,18 +5901,15 @@ export function RegisterSessionView() {
         actorStaffProfileId: args.actorStaffProfileId as Id<"staffProfile">,
         actorUserId: user._id,
         approvalProofId: args.approvalProofId as
-          | Id<"approvalProof">
-          | undefined,
+          Id<"approvalProof"> | undefined,
         closeoutModificationApprovalProofId:
           args.closeoutModificationApprovalProofId as
-            | Id<"approvalProof">
-            | undefined,
+            Id<"approvalProof"> | undefined,
         countedCash: args.countedCash,
         notes: args.notes,
         registerSessionId: args.registerSessionId as Id<"registerSession">,
         requestedByStaffProfileId: args.requestedByStaffProfileId as
-          | Id<"staffProfile">
-          | undefined,
+          Id<"staffProfile"> | undefined,
         staffPinHash: args.staffPinHash,
         staffUsername: args.staffUsername,
         storeId: activeStore._id,
@@ -5794,12 +5940,10 @@ export function RegisterSessionView() {
         actorStaffProfileId: args.actorStaffProfileId as Id<"staffProfile">,
         actorUserId: user._id,
         approvalProofId: args.approvalProofId as
-          | Id<"approvalProof">
-          | undefined,
+          Id<"approvalProof"> | undefined,
         registerSessionId: args.registerSessionId as Id<"registerSession">,
         requestedByStaffProfileId: args.requestedByStaffProfileId as
-          | Id<"staffProfile">
-          | undefined,
+          Id<"staffProfile"> | undefined,
         staffPinHash: args.staffPinHash,
         staffUsername: args.staffUsername,
         storeId: activeStore._id,
@@ -5966,8 +6110,7 @@ export function RegisterSessionView() {
         approvalProofId: args.approvalProofId as Id<"approvalProof">,
         registerSessionId: args.registerSessionId as Id<"registerSession">,
         requestedByStaffProfileId: args.requestedByStaffProfileId as
-          | Id<"staffProfile">
-          | undefined,
+          Id<"staffProfile"> | undefined,
         storeId: activeStore._id,
       }),
     );
@@ -6007,8 +6150,7 @@ export function RegisterSessionView() {
         actorStaffProfileId: args.actorStaffProfileId as Id<"staffProfile">,
         actorUserId: user._id,
         approvalProofId: args.approvalProofId as
-          | Id<"approvalProof">
-          | undefined,
+          Id<"approvalProof"> | undefined,
         correctedOpeningFloat: args.correctedOpeningFloat,
         reason: args.reason,
         registerSessionId: args.registerSessionId as Id<"registerSession">,
@@ -6133,7 +6275,10 @@ export function RegisterSessionActivityView() {
 
   const registerSessionActivity = useQuery(
     registerSessionActivityQuery,
-    canQueryProtectedData && hasFullAdminAccess && activeStore && params?.sessionId
+    canQueryProtectedData &&
+      hasFullAdminAccess &&
+      activeStore &&
+      params?.sessionId
       ? {
           paginationOpts: { cursor: null, numItems: 100 },
           registerSessionId: params.sessionId as Id<"registerSession">,

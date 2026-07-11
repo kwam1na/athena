@@ -66,7 +66,9 @@ describe("RegisterDrawerGate", () => {
     });
 
     expect(
-      screen.getByText("Cashier or manager sign-in required to open this drawer."),
+      screen.getByText(
+        "Cashier or manager sign-in required to open this drawer.",
+      ),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Open drawer" })).toBeDisabled();
 
@@ -169,9 +171,7 @@ describe("RegisterDrawerGate", () => {
     expect(
       screen.queryByRole("button", { name: "Submit closeout" }),
     ).not.toBeInTheDocument();
-    expect(
-      screen.queryByLabelText(/Counted cash/i),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Counted cash/i)).not.toBeInTheDocument();
   });
 
   it("shows pesewa-level draft closeout variances while whole cedi expected cash stays compact", () => {
@@ -240,9 +240,7 @@ describe("RegisterDrawerGate", () => {
     expect(
       screen.getByText(/1 pending cash item adjustment reducing cash/),
     ).toHaveTextContent("GH₵20");
-    expect(
-      screen.queryByText(/expected cash becomes/),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/expected cash becomes/)).not.toBeInTheDocument();
   });
 
   it("runs the closeout secondary action for return-to-sale states", async () => {
@@ -284,9 +282,7 @@ describe("RegisterDrawerGate", () => {
 
     expect(screen.getByText("Local session")).toBeInTheDocument();
     expect(screen.getByText("F48D56")).toBeInTheDocument();
-    expect(
-      screen.queryByText(/local-register-/i),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/local-register-/i)).not.toBeInTheDocument();
   });
 
   it("shows terminal repair copy and sign-out action", async () => {
@@ -298,9 +294,7 @@ describe("RegisterDrawerGate", () => {
     });
 
     expect(screen.getByText("Setup needed")).toBeInTheDocument();
-    expect(
-      screen.getByText("Terminal setup needs repair"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Terminal setup needs repair")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Sign out" }));
 
@@ -339,9 +333,7 @@ describe("RegisterDrawerGate", () => {
     });
 
     expect(screen.getByText("Setup needed")).toBeInTheDocument();
-    expect(
-      screen.getByText("Drawer needs repair"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Drawer needs repair")).toBeInTheDocument();
 
     await user.click(
       screen.getByRole("button", { name: "Retry drawer check" }),
@@ -374,7 +366,9 @@ describe("RegisterDrawerGate", () => {
       "Sale paused. This sale belongs to the previous drawer.",
     );
     await waitFor(() =>
-      expect(screen.getByRole("heading", { name: "Drawer changed" })).toHaveFocus(),
+      expect(
+        screen.getByRole("heading", { name: "Drawer changed" }),
+      ).toHaveFocus(),
     );
 
     await user.click(screen.getByRole("button", { name: "Clear sale" }));
@@ -396,6 +390,7 @@ describe("RegisterDrawerGate", () => {
   it("labels the opening form as a replacement after a durable clear", () => {
     renderGate({ isReplacement: true });
 
+    expect(screen.getByText("Codex / Register 3")).toBeInTheDocument();
     expect(screen.getByText("Open a replacement drawer")).toBeInTheDocument();
     expect(
       screen.getByText(
@@ -404,7 +399,7 @@ describe("RegisterDrawerGate", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Open replacement drawer" }),
-    ).toBeInTheDocument();
+    ).toHaveClass("bg-action-workflow");
   });
 
   it("gives authority persistence failures a dedicated retry action", async () => {

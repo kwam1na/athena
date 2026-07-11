@@ -354,7 +354,7 @@ function createMissingMappingRepairSeed(
             createdAt: 2,
           },
         ]
-        : []),
+      : []),
   ];
   if (options.existingRegisterMappingCloudId) {
     mappings.push({
@@ -757,7 +757,8 @@ describe("cash control deposits", () => {
             },
             sequence: 12,
             status: "needs_review",
-            summary: "Inventory needs manager review for a synced offline sale.",
+            summary:
+              "Inventory needs manager review for a synced offline sale.",
           },
           {
             _id: "sync_conflict_duplicate_open",
@@ -1154,7 +1155,8 @@ describe("cash control deposits", () => {
           sequence: 3,
           conflictType: "permission",
           status: "needs_review",
-          summary: "Register session mapping is missing for synced POS history.",
+          summary:
+            "Register session mapping is missing for synced POS history.",
           details: {
             localTransactionId: "local-transaction-1",
           },
@@ -1247,7 +1249,8 @@ describe("cash control deposits", () => {
           sequence: 4,
           conflictType: "permission",
           status: "needs_review",
-          summary: "Register session mapping is missing for synced POS history.",
+          summary:
+            "Register session mapping is missing for synced POS history.",
           details: {
             localRegisterSessionId: "local-register-1",
           },
@@ -1810,7 +1813,8 @@ describe("cash control deposits", () => {
           sequence: 3,
           conflictType: "permission",
           status: "needs_review",
-          summary: "Register session mapping is missing for synced POS history.",
+          summary:
+            "Register session mapping is missing for synced POS history.",
           details: {
             localTransactionId: "local-transaction-1",
           },
@@ -3740,8 +3744,7 @@ describe("cash control deposits", () => {
       ]),
     );
     expect(
-      ctx
-        .tables
+      ctx.tables
         .get("posLocalSyncMapping")
         ?.filter((row) => row.localIdKind === "posSession"),
     ).toHaveLength(1);
@@ -7080,6 +7083,77 @@ describe("cash control deposits", () => {
     );
   });
 
+  it("summarizes the complete register-session sales and payment mix", async () => {
+    const ctx = createAuthorizedRegisterDepositCtx({
+      posTransaction: [
+        {
+          _id: "transaction_split",
+          completedAt: 20,
+          paymentMethod: "cash",
+          payments: [
+            { amount: 6000, method: "cash", timestamp: 20 },
+            { amount: 4000, method: "card", timestamp: 20 },
+          ],
+          registerSessionId: "session_open",
+          status: "completed",
+          storeId: "store_1",
+          total: 10000,
+          totalPaid: 10000,
+          transactionNumber: "100001",
+        },
+        {
+          _id: "transaction_mobile",
+          completedAt: 30,
+          paymentMethod: "mobile_money",
+          payments: [{ amount: 5000, method: "mobile_money", timestamp: 30 }],
+          registerSessionId: "session_open",
+          status: "completed",
+          storeId: "store_1",
+          total: 5000,
+          totalPaid: 5000,
+          transactionNumber: "100002",
+        },
+        {
+          _id: "transaction_void",
+          completedAt: 40,
+          paymentMethod: "cash",
+          payments: [{ amount: 9000, method: "cash", timestamp: 40 }],
+          registerSessionId: "session_open",
+          status: "void",
+          storeId: "store_1",
+          total: 9000,
+          totalPaid: 9000,
+          transactionNumber: "100003",
+        },
+      ],
+    });
+
+    await expect(
+      getHandler(getRegisterSessionSnapshot)(ctx as never, {
+        registerSessionId: "session_open" as Id<"registerSession">,
+        storeId: "store_1" as Id<"store">,
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        financialPosition: {
+          averageTransaction: 7500,
+          paymentMix: [
+            { method: "cash", share: 40, total: 6000, transactionCount: 1 },
+            {
+              method: "mobile_money",
+              share: 33,
+              total: 5000,
+              transactionCount: 1,
+            },
+            { method: "card", share: 27, total: 4000, transactionCount: 1 },
+          ],
+          totalSales: 15000,
+          transactionCount: 2,
+        },
+      }),
+    );
+  });
+
   it("rejects register-session deposits when the caller is unauthenticated", async () => {
     mockedAuthServer.getAuthUserId.mockResolvedValue(null);
     const ctx = createQueryCtx({
@@ -7389,7 +7463,8 @@ describe("cash control deposits", () => {
           sequence: 3,
           conflictType: "permission",
           status: "needs_review",
-          summary: "Register session mapping is missing for synced POS history.",
+          summary:
+            "Register session mapping is missing for synced POS history.",
           details: {
             localTransactionId: "local-transaction-1",
           },
@@ -7468,7 +7543,8 @@ describe("cash control deposits", () => {
       kind: "user_error",
       error: {
         code: "precondition_failed",
-        message: "Resolve pending register corrections before recording a deposit.",
+        message:
+          "Resolve pending register corrections before recording a deposit.",
       },
     });
 
