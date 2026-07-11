@@ -25,7 +25,7 @@ tags:
   - cursor-coherence
   - tanstack-router
   - server-shaped-ui
-delivery_diff_fingerprint: 2a910a79cdd09ef63a28d8e40bf952d51c9915dc9e5dfd4ae1f8b66d53e7c1cd
+delivery_diff_fingerprint: 60c26ecaa39517ee16e5d009968d7e48f25c8fa1a5a91141e3c15f6e3ab9c709
 ---
 
 # Athena Reports Workspace Uses Generation-Coherent Server-Shaped Read Models
