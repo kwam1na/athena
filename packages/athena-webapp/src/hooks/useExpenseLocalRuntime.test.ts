@@ -12,6 +12,7 @@ const runtimeMocks = vi.hoisted(() => {
     createIndexedDbPosLocalStorageAdapter: vi.fn(() => indexedDbAdapter),
     createMemoryPosLocalStorageAdapter: vi.fn(() => memoryAdapter),
     createPosLocalStore: vi.fn(() => localStore),
+    getDefaultPosLocalStore: vi.fn(() => localStore),
     indexedDbAdapter,
     localStore,
     memoryAdapter,
@@ -30,6 +31,10 @@ vi.mock("@/lib/pos/infrastructure/local/posLocalStore", () => ({
   createMemoryPosLocalStorageAdapter:
     runtimeMocks.createMemoryPosLocalStorageAdapter,
   createPosLocalStore: runtimeMocks.createPosLocalStore,
+}));
+
+vi.mock("@/lib/pos/infrastructure/local/posLocalStorageRuntime", () => ({
+  getDefaultPosLocalStore: runtimeMocks.getDefaultPosLocalStore,
 }));
 
 vi.mock("@/lib/pos/infrastructure/local/usePosLocalSyncRuntime", () => ({
@@ -86,18 +91,14 @@ describe("useExpenseLocalRuntime", () => {
 
     renderRuntime(useExpenseLocalRuntime);
 
-    expect(
-      runtimeMocks.createIndexedDbPosLocalStorageAdapter,
-    ).toHaveBeenCalled();
+    expect(runtimeMocks.getDefaultPosLocalStore).toHaveBeenCalled();
     expect(
       runtimeMocks.createMemoryPosLocalStorageAdapter,
     ).not.toHaveBeenCalled();
-    expect(runtimeMocks.createPosLocalStore).toHaveBeenCalledWith({
-      adapter: runtimeMocks.indexedDbAdapter,
-    });
+    expect(runtimeMocks.createPosLocalStore).not.toHaveBeenCalled();
   });
 
-  it("falls back to an in-memory local store when IndexedDB is unavailable", async () => {
+  it("never selects an in-memory store when IndexedDB is unavailable", async () => {
     Object.defineProperty(globalThis, "indexedDB", {
       configurable: true,
       value: undefined,
@@ -106,13 +107,11 @@ describe("useExpenseLocalRuntime", () => {
 
     renderRuntime(useExpenseLocalRuntime);
 
-    expect(runtimeMocks.createMemoryPosLocalStorageAdapter).toHaveBeenCalled();
+    expect(runtimeMocks.getDefaultPosLocalStore).toHaveBeenCalled();
     expect(
-      runtimeMocks.createIndexedDbPosLocalStorageAdapter,
+      runtimeMocks.createMemoryPosLocalStorageAdapter,
     ).not.toHaveBeenCalled();
-    expect(runtimeMocks.createPosLocalStore).toHaveBeenCalledWith({
-      adapter: runtimeMocks.memoryAdapter,
-    });
+    expect(runtimeMocks.createPosLocalStore).not.toHaveBeenCalled();
   });
 
   it("can provide the local gateway without owning sync draining", async () => {

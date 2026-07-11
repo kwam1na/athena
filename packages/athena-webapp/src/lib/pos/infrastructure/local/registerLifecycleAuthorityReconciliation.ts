@@ -1,24 +1,13 @@
-export type PosRegisterAuthorityCursor = {
-  lifecycleRevision: number;
-  mappingAuthorityRevision: number;
-};
+import type {
+  PosRegisterAuthorityCursor,
+  PosRegisterLifecycleServerAuthority,
+} from "@/lib/pos/application/posLocalStoreTypes";
 
-export type PosRegisterLifecycleServerAuthority = {
-  classification: "sale_usable" | "sale_blocked" | "repair_required";
-  cloudRegisterSessionId?: string;
-  cursor?: PosRegisterAuthorityCursor;
-  message?: string;
-  observedAt: number;
-  reason?: "cloud_closed" | "authority_unknown";
-  source: "dedicated_snapshot" | "legacy_runtime_directive";
-  status: "healthy" | "blocked";
-};
-
-export type PosRegisterLifecycleAuthorityObservation =
-  PosRegisterLifecycleServerAuthority & {
-    localRegisterSessionId: string;
-    registerNumber?: string;
-  };
+export type {
+  PosRegisterAuthorityCursor,
+  PosRegisterLifecycleAuthorityObservation,
+  PosRegisterLifecycleServerAuthority,
+} from "@/lib/pos/application/posLocalStoreTypes";
 
 export type PosRegisterLifecycleAuthorityReconciliation =
   | {

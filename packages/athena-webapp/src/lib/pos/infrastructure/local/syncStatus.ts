@@ -1,4 +1,4 @@
-import type { PosLocalEventRecord } from "./posLocalStore";
+import type { PosLocalEventRecord } from "@/lib/pos/application/posLocalStoreTypes";
 
 export type PosLocalDerivedSyncState =
   | "synced"

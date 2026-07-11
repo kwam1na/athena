@@ -1,345 +1,62 @@
 import type {
-  LocalPinVerifierMetadata,
-  WrappedLocalStaffProof,
-} from "@/lib/security/localPinVerifier";
+  PosDrawerAuthorityState,
+  PosDrawerLocalReviewAuthority,
+  PosLocalActiveCashierPresenceRecord,
+  PosLocalActivityReportReasonCode,
+  PosLocalActivityReportState,
+  PosLocalActivityReportStatus,
+  PosLocalAppendEventInput,
+  PosLocalCashierPresenceDiagnostic,
+  PosLocalCashierPresenceScope,
+  PosLocalCloudMapping,
+  PosLocalEntityKind,
+  PosLocalEventRecord,
+  PosLocalEventType,
+  PosLocalEventValidationFlag,
+  PosLocalEventValidationMetadata,
+  PosLocalOpaqueContinuation,
+  PosLocalLedgerSummary,
+  PosLocalRegisterAvailabilitySnapshot,
+  PosLocalRegisterCatalogSnapshot,
+  PosLocalRegisterServiceCatalogSnapshot,
+  PosLocalReviewResolutionReason,
+  PosLocalStaffAuthorityReadiness,
+  PosLocalStaffAuthorityRecord,
+  PosLocalStoreDayReadiness,
+  PosLocalStoreErrorCode,
+  PosLocalStoreResult,
+  PosLocalSyncEventStatus,
+  PosProvisionedTerminalSeed,
+  PosRegisterLifecycleAuthorityApplyResult,
+  PosRegisterLifecycleAuthorityObservation,
+  PosRegisterLifecycleServerAuthority,
+  PosRegisterOperationalStateResetResult,
+  PosTerminalIntegrityReason,
+  PosTerminalIntegrityState,
+} from "@/lib/pos/application/posLocalStoreTypes";
 import type {
   PosRegisterCatalogAvailabilityRowDto,
   PosRegisterCatalogRowDto,
   PosServiceCatalogRowDto,
 } from "@/lib/pos/application/dto";
-import type { PosTerminalLoginMode } from "~/shared/posTerminalLoginMode";
-import type { PosTerminalTransactionCapability } from "~/shared/posTerminalCapability";
+import {
+  canUploadPosLocalEventType,
+  POS_LOCAL_LOGICAL_RECORD_VERSION,
+} from "@/lib/pos/application/posLocalStoreTypes";
 import type {
   PosLocalSyncPendingCheckoutItemDefinedPayload,
   PosLocalSyncPendingCheckoutItemLocalMetadata,
   PosLocalSyncPendingCheckoutItemSearchContext,
 } from "../../../../../shared/posLocalSyncContract";
-import { canUploadPosLocalSyncLocalEventType } from "../../../../../shared/posLocalSyncContract";
-import {
-  canReportPosRegisterSessionLocalActivityType,
-  type PosRegisterSessionActivitySkipReasonCode,
-} from "../../../../../shared/posRegisterSessionActivityContract";
-import {
-  reconcileRegisterLifecycleServerAuthority,
-  type PosRegisterLifecycleAuthorityObservation,
-  type PosRegisterLifecycleServerAuthority,
-} from "./registerLifecycleAuthorityReconciliation";
+import { canReportPosRegisterSessionLocalActivityType } from "../../../../../shared/posRegisterSessionActivityContract";
+import { reconcileRegisterLifecycleServerAuthority } from "./registerLifecycleAuthorityReconciliation";
 
-export const POS_LOCAL_STORE_SCHEMA_VERSION = 9;
+// Temporary compatibility for tests and migration utilities. Production
+// consumers import semantic contracts from the application boundary directly.
+export * from "@/lib/pos/application/posLocalStoreTypes";
 
-export type PosLocalEntityKind =
-  | "registerSession"
-  | "posSession"
-  | "posTransaction"
-  | "expenseSession"
-  | "expenseTransaction"
-  | "pendingCheckoutItem";
-
-export type PosLocalEventType =
-  | "terminal.seeded"
-  | "register.opened"
-  | "session.started"
-  | "session.payments_updated"
-  | "cart.cleared"
-  | "cart.item_added"
-  | "pending_checkout_item.defined"
-  | "cart.service_added"
-  | "cart.service_removed"
-  | "transaction.completed"
-  | "expense.session_started"
-  | "expense.item_added"
-  | "expense.item_updated"
-  | "expense.item_removed"
-  | "expense.cart_cleared"
-  | "expense.held"
-  | "expense.resumed"
-  | "expense.voided"
-  | "expense.canceled"
-  | "expense.completed"
-  | "register.closeout_started"
-  | "register.reopened"
-  | "cash.movement_recorded";
-
-export type PosLocalSyncEventStatus =
-  | "pending"
-  | "syncing"
-  | "synced"
-  | "locally_resolved"
-  | "needs_review"
-  | "failed";
-
-export type PosLocalActivityReportStatus =
-  "pending" | "reported" | "mapping_pending" | "failed";
-
-export type PosLocalActivityReportReasonCode =
-  | PosRegisterSessionActivitySkipReasonCode
-  | "mapping_missing"
-  | "network_error"
-  | "server_rejected"
-  | "unknown";
-
-export interface PosLocalActivityReportState {
-  attemptedAt?: number;
-  reasonCode?: PosLocalActivityReportReasonCode;
-  reportedAt?: number;
-  status: PosLocalActivityReportStatus;
-}
-
-export type PosLocalReviewResolutionReason = "terminal_recovery_command";
-
-export interface PosLocalReviewResolutionMetadata {
-  reason: PosLocalReviewResolutionReason;
-  resolvedAt: number;
-  status: "local_review_cleared";
-}
-
-export type PosLocalEventValidationFlag =
-  "app-session-unverified" | "cloud-validation-uncertain";
-
-export type PosLocalEventUploadDeferral = "app-session-validated";
-
-export interface PosLocalEventValidationMetadata {
-  flags: PosLocalEventValidationFlag[];
-  observedAt?: number;
-  uploadDeferredUntil?: PosLocalEventUploadDeferral;
-}
-
-export function canUploadPosLocalEventType(type: PosLocalEventType): boolean {
-  return canUploadPosLocalSyncLocalEventType(type);
-}
-
-export interface PosProvisionedTerminalSeed {
-  terminalId: string;
-  cloudTerminalId: string;
-  syncSecretHash: string;
-  storeId: string;
-  orgUrlSlug?: string;
-  registerNumber?: string;
-  loginMode?: PosTerminalLoginMode;
-  transactionCapability?: PosTerminalTransactionCapability;
-  displayName: string;
-  provisionedAt: number;
-  schemaVersion: number;
-  storeUrlSlug?: string;
-}
-
-export interface PosLocalEventRecord {
-  localEventId: string;
-  schemaVersion: number;
-  sequence: number;
-  uploadSequence?: number;
-  type: PosLocalEventType;
-  terminalId: string;
-  storeId: string;
-  registerNumber?: string;
-  localRegisterSessionId?: string;
-  localExpenseSessionId?: string;
-  localPosSessionId?: string;
-  localTransactionId?: string;
-  staffProfileId?: string;
-  staffProofToken?: string;
-  validationMetadata?: PosLocalEventValidationMetadata;
-  payload: unknown;
-  createdAt: number;
-  activity?: PosLocalActivityReportState;
-  sync: {
-    status: PosLocalSyncEventStatus;
-    cloudEventId?: string;
-    error?: string;
-    localResolution?: PosLocalReviewResolutionMetadata;
-    uploaded?: boolean;
-  };
-}
-
-export interface PosLocalCloudMapping {
-  entity: PosLocalEntityKind;
-  localId: string;
-  cloudId: string;
-  mappedAt: number;
-  mappingAuthorityRevision?: number;
-  registerCandidateState?: "current" | "historical";
-  registerNumber?: string;
-  storeId?: string;
-  terminalId?: string;
-}
-
-export type PosTerminalIntegrityStatus =
-  "healthy" | "repairing" | "requires_reprovision" | "reset_required";
-
-export type PosTerminalIntegrityReason =
-  | "authorization_failed"
-  | "repair_rejected"
-  | "seed_write_failed"
-  | "terminal_revoked"
-  | "ownership_conflict"
-  | "store_access_missing"
-  | "unknown";
-
-export interface PosTerminalIntegrityState {
-  cloudTerminalId?: string;
-  message?: string;
-  observedAt: number;
-  reason?: PosTerminalIntegrityReason;
-  registerNumber?: string;
-  status: PosTerminalIntegrityStatus;
-  storeId: string;
-  terminalId: string;
-}
-
-export type PosDrawerAuthorityStatus = "healthy" | "blocked";
-
-export type PosDrawerAuthorityBlockReason =
-  "cloud_closed" | "lifecycle_rejected" | "authority_unknown";
-
-export interface PosDrawerAuthorityState {
-  cloudRegisterSessionId?: string;
-  localRegisterSessionId: string;
-  message?: string;
-  observedAt: number;
-  reason?: PosDrawerAuthorityBlockReason;
-  registerNumber?: string;
-  status: PosDrawerAuthorityStatus;
-  storeId: string;
-  terminalId: string;
-  localReviewAuthority?: PosDrawerLocalReviewAuthority;
-  serverAuthority?: PosRegisterLifecycleServerAuthority;
-}
-
-export type PosDrawerLocalReviewAuthority = {
-  message?: string;
-  observedAt: number;
-  reason: "lifecycle_rejected" | "authority_unknown";
-  status: "blocked";
-};
-
-export type PosRegisterLifecycleAuthorityApplyResult =
-  | {
-      disposition: "applied";
-      reason: "committed";
-      value: PosDrawerAuthorityState;
-    }
-  | {
-      disposition: "noop";
-      reason: "duplicate" | "lower_confidence" | "stale";
-    }
-  | {
-      disposition: "rejected";
-      reason: "cursor_conflict" | "mapping_invalidated";
-    };
-
-export type PosLocalStoreDayReadinessStatus =
-  "started" | "not_started" | "closed" | "reopened" | "unknown";
-
-export interface PosLocalStoreDayReadiness {
-  storeId: string;
-  operatingDate: string;
-  status: PosLocalStoreDayReadinessStatus;
-  source: "daily_opening" | "daily_close" | "local";
-  updatedAt: number;
-  closeLifecycleStatus?: "active" | "reopened" | "superseded";
-}
-
-export type PosLocalStaffAuthorityRecord = {
-  activeRoles: Array<"cashier" | "manager">;
-  credentialId: string;
-  credentialVersion: number;
-  displayName?: string | null;
-  expiresAt: number;
-  issuedAt: number;
-  organizationId: string;
-  refreshedAt: number;
-  staffProfileId: string;
-  status: "active" | "revoked";
-  storeId: string;
-  terminalId: string;
-  username: string;
-  verifier: LocalPinVerifierMetadata;
-  wrappedPosLocalStaffProof?: WrappedLocalStaffProof;
-};
-
-export type PosLocalStaffAuthorityReadiness = "missing" | "expired" | "ready";
-
-export type PosLocalActiveCashierPresenceRecord = {
-  activeRoles: Array<"cashier" | "manager">;
-  credentialId: string;
-  credentialVersion: number;
-  displayName?: string | null;
-  expiresAt: number;
-  lastValidatedAt: number;
-  offlineFreshUntil: number;
-  operatingDate: string;
-  organizationId: string;
-  signedInAt: number;
-  staffProfileId: string;
-  storeId: string;
-  terminalId: string;
-  username: string;
-  wrappedPosLocalStaffProof: WrappedLocalStaffProof;
-};
-
-export type PosLocalCashierPresenceScope = {
-  operatingDate: string;
-  organizationId: string;
-  storeId: string;
-  terminalId: string;
-};
-
-export type PosLocalCashierPresenceDiagnostic = Omit<
-  PosLocalActiveCashierPresenceRecord,
-  "wrappedPosLocalStaffProof"
-> & {
-  proof: {
-    expiresAt: number;
-    status: "present";
-  };
-};
-
-export interface PosLocalRegisterCatalogSnapshot {
-  refreshedAt: number;
-  rows: PosRegisterCatalogRowDto[];
-  schemaVersion: number;
-  storeId: string;
-}
-
-export interface PosLocalRegisterServiceCatalogSnapshot {
-  refreshedAt: number;
-  rows: PosServiceCatalogRowDto[];
-  schemaVersion: number;
-  storeId: string;
-}
-
-export interface PosLocalRegisterAvailabilitySnapshot {
-  refreshedAt: number;
-  rows: PosRegisterCatalogAvailabilityRowDto[];
-  schemaVersion: number;
-  storeId: string;
-}
-
-export type PosLocalStoreErrorCode =
-  "missing_object_stores" | "unsupported_schema_version" | "write_failed";
-
-export type PosLocalStoreResult<T> =
-  | { ok: true; value: T }
-  | {
-      ok: false;
-      error: {
-        code: PosLocalStoreErrorCode;
-        message: string;
-      };
-    };
-
-export type PosRegisterOperationalStateResetResult =
-  | {
-      status: "applied";
-      deletedAuthorityCount: number;
-      deletedEventCount: number;
-      deletedMappingCount: number;
-      resetAt: number;
-    }
-  | {
-      status: "already_applied";
-      resetAt: number;
-    };
+// IndexedDB owns its physical layout version. Other engines choose independently.
+export const POS_LOCAL_STORE_SCHEMA_VERSION = 10;
 
 export type PosLocalObjectStoreName =
   | "authority"
@@ -361,6 +78,22 @@ export interface PosLocalStoreTransaction {
   ): Promise<T | undefined>;
   getAll<T>(storeName: PosLocalObjectStoreName): Promise<T[]>;
   getAllKeys(storeName: PosLocalObjectStoreName): Promise<string[]>;
+  getFromIndex<T>(
+    storeName: PosLocalObjectStoreName,
+    indexName: string,
+    key: IDBValidKey,
+  ): Promise<T | undefined>;
+  getAllFromIndex<T>(
+    storeName: PosLocalObjectStoreName,
+    indexName: string,
+    range: { lower: IDBValidKey; upper: IDBValidKey },
+    limit?: number,
+  ): Promise<T[]>;
+  countFromIndex(
+    storeName: PosLocalObjectStoreName,
+    indexName: string,
+    range: { lower: IDBValidKey; upper: IDBValidKey },
+  ): Promise<number>;
   put<T>(
     storeName: PosLocalObjectStoreName,
     key: string,
@@ -383,23 +116,8 @@ type PosLocalStoreOptions = {
   createLocalId?: (kind: string) => string;
 };
 
-export type PosLocalAppendEventInput = {
-  type: PosLocalEventType;
-  terminalId: string;
-  storeId: string;
-  registerNumber?: string;
-  localRegisterSessionId?: string;
-  localExpenseSessionId?: string;
-  localPosSessionId?: string;
-  localTransactionId?: string;
-  staffProfileId?: string;
-  staffProofToken?: string;
-  validationMetadata?: PosLocalEventValidationMetadata;
-  initialSyncStatus?: PosLocalSyncEventStatus;
-  payload: unknown;
-};
-
 const META_SCHEMA_VERSION_KEY = "schemaVersion";
+const META_LOGICAL_RECORD_VERSION_KEY = "logicalRecordVersion";
 const META_SEQUENCE_KEY = "sequence";
 const META_UPLOAD_SEQUENCE_PREFIX = "uploadSequence:";
 const META_REGISTER_OPERATIONAL_STATE_RESET_KEY =
@@ -431,6 +149,16 @@ class PosLocalStoreSchemaError extends Error {
   }
 }
 
+class PosLocalStoreLogicalRecordVersionError extends Error {
+  readonly code = "unsupported_logical_record_version" as const;
+
+  constructor(version: number) {
+    super(
+      `POS local record version ${version} is newer than this build supports.`,
+    );
+  }
+}
+
 class PosLocalStoreMissingObjectStoresError extends Error {
   readonly code = "missing_object_stores" as const;
 
@@ -438,6 +166,15 @@ class PosLocalStoreMissingObjectStoresError extends Error {
     super(
       `POS local store is missing required IndexedDB object stores: ${storeNames.join(", ")}.`,
     );
+  }
+}
+
+class PosLocalStoreOperationError extends Error {
+  constructor(
+    readonly mode: "readonly" | "readwrite",
+    readonly cause: unknown,
+  ) {
+    super("POS local storage operation failed.");
   }
 }
 
@@ -461,12 +198,26 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
       throw new PosLocalStoreSchemaError(schemaVersion);
     }
 
-    if (!schemaVersion && mode === "readwrite") {
+    if (
+      mode === "readwrite" &&
+      (!schemaVersion || schemaVersion < POS_LOCAL_STORE_SCHEMA_VERSION)
+    ) {
       await transaction.put(
         "meta",
         META_SCHEMA_VERSION_KEY,
         POS_LOCAL_STORE_SCHEMA_VERSION,
       );
+    }
+
+    const logicalRecordVersion = await transaction.get<number>(
+      "meta",
+      META_LOGICAL_RECORD_VERSION_KEY,
+    );
+    if (
+      logicalRecordVersion &&
+      logicalRecordVersion > POS_LOCAL_LOGICAL_RECORD_VERSION
+    ) {
+      throw new PosLocalStoreLogicalRecordVersionError(logicalRecordVersion);
     }
   }
 
@@ -481,6 +232,13 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
       };
     }
 
+    if (error instanceof PosLocalStoreLogicalRecordVersionError) {
+      return {
+        ok: false,
+        error: { code: error.code, message: error.message },
+      };
+    }
+
     if (error instanceof PosLocalStoreMissingObjectStoresError) {
       return {
         ok: false,
@@ -491,11 +249,23 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
       };
     }
 
+    const operationError =
+      error instanceof PosLocalStoreOperationError ? error : undefined;
+    const nativeError = operationError?.cause ?? error;
+    const nativeName =
+      nativeError && typeof nativeError === "object" && "name" in nativeError
+        ? String(nativeError.name)
+        : "";
+    const classified = classifyPosLocalStoreErrorCode(
+      nativeName,
+      operationError?.mode,
+    );
+
     return {
       ok: false,
       error: {
-        code: "write_failed",
-        message: "POS local store could not write the local event.",
+        code: classified,
+        message: safePosLocalStoreFailureMessage(classified),
       },
     };
   }
@@ -517,7 +287,7 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
     const activity = getInitialActivityState(input.type);
     const event: PosLocalEventRecord = {
       localEventId: createLocalId("event"),
-      schemaVersion: POS_LOCAL_STORE_SCHEMA_VERSION,
+      schemaVersion: POS_LOCAL_LOGICAL_RECORD_VERSION,
       sequence: nextSequence,
       ...(uploadSequence ? { uploadSequence } : {}),
       type: input.type,
@@ -606,6 +376,36 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
   }
 
   return {
+    async initializeStorage(): Promise<
+      PosLocalStoreResult<{ logicalRecordVersion: number }>
+    > {
+      try {
+        const value = await options.adapter.transaction(
+          "readwrite",
+          [...POS_LOCAL_OBJECT_STORE_NAMES],
+          async (transaction) => {
+            await ensureSupportedSchema(transaction, "readwrite");
+            const logicalRecordVersion = await transaction.get<number>(
+              "meta",
+              META_LOGICAL_RECORD_VERSION_KEY,
+            );
+            if (!logicalRecordVersion) {
+              await migrateLegacyLogicalRecords(transaction);
+              await transaction.put(
+                "meta",
+                META_LOGICAL_RECORD_VERSION_KEY,
+                POS_LOCAL_LOGICAL_RECORD_VERSION,
+              );
+            }
+            return { logicalRecordVersion: POS_LOCAL_LOGICAL_RECORD_VERSION };
+          },
+        );
+        return { ok: true, value };
+      } catch (error) {
+        return toFailure(error);
+      }
+    },
+
     async resetRegisterOperationalStateForAuthorityCutover(): Promise<
       PosLocalStoreResult<PosRegisterOperationalStateResetResult>
     > {
@@ -626,24 +426,20 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
               };
             }
 
-            const events = await transaction.getAll<PosLocalEventRecord>(
-              "events",
-            );
+            const events =
+              await transaction.getAll<PosLocalEventRecord>("events");
             const registerOperationalEvents = events.filter((event) =>
               isBusinessOperationalEvent(event.type),
             );
 
-            const mappings = await transaction.getAll<PosLocalCloudMapping>(
-              "mappings",
-            );
+            const mappings =
+              await transaction.getAll<PosLocalCloudMapping>("mappings");
             const registerSessionMappings = mappings.filter(
               (mapping) => mapping.entity === "registerSession",
             );
             const drawerAuthorityKeys = (
               await transaction.getAllKeys("authority")
-            ).filter(
-              (key) => !key.startsWith(TERMINAL_INTEGRITY_PREFIX),
-            );
+            ).filter((key) => !key.startsWith(TERMINAL_INTEGRITY_PREFIX));
 
             for (const event of registerOperationalEvents) {
               await transaction.delete("events", String(event.sequence));
@@ -1514,7 +1310,7 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
             const snapshot: PosLocalRegisterCatalogSnapshot = {
               refreshedAt: clock(),
               rows: input.rows,
-              schemaVersion: POS_LOCAL_STORE_SCHEMA_VERSION,
+              schemaVersion: POS_LOCAL_LOGICAL_RECORD_VERSION,
               storeId: input.storeId,
             };
             await transaction.put("registerCatalog", input.storeId, snapshot);
@@ -1565,7 +1361,7 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
             const snapshot: PosLocalRegisterServiceCatalogSnapshot = {
               refreshedAt: clock(),
               rows: input.rows.filter((row) => row.status === "active"),
-              schemaVersion: POS_LOCAL_STORE_SCHEMA_VERSION,
+              schemaVersion: POS_LOCAL_LOGICAL_RECORD_VERSION,
               storeId: input.storeId,
             };
             await transaction.put(
@@ -1622,7 +1418,7 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
             const snapshot: PosLocalRegisterAvailabilitySnapshot = {
               refreshedAt: clock(),
               rows: input.rows,
-              schemaVersion: POS_LOCAL_STORE_SCHEMA_VERSION,
+              schemaVersion: POS_LOCAL_LOGICAL_RECORD_VERSION,
               storeId: input.storeId,
             };
             await transaction.put(
@@ -1704,10 +1500,234 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
       }
     },
 
-    async listEventsForUpload(): Promise<
-      PosLocalStoreResult<PosLocalEventRecord[]>
+    async readEventHistoryPage(input: {
+      continuation?: PosLocalOpaqueContinuation;
+      limit: number;
+      storeId: string;
+      terminalId: string;
+    }): Promise<
+      PosLocalStoreResult<{
+        continuation?: PosLocalOpaqueContinuation;
+        items: PosLocalEventRecord[];
+      }>
     > {
-      return this.listEvents();
+      const afterSequence = decodeSequenceContinuation(
+        "history",
+        input.continuation,
+      );
+      if (afterSequence === null) return invalidContinuationFailure();
+      try {
+        const limit = Math.max(1, Math.min(input.limit, 500));
+        const items = await options.adapter.transaction(
+          "readonly",
+          ["meta", "events"],
+          async (transaction) => {
+            await ensureSupportedSchema(transaction, "readonly");
+            return transaction.getAllFromIndex<PosLocalEventRecord>(
+              "events",
+              "by_terminal_sequence",
+              {
+                lower: [input.storeId, input.terminalId, afterSequence + 1],
+                upper: [
+                  input.storeId,
+                  input.terminalId,
+                  Number.MAX_SAFE_INTEGER,
+                ],
+              },
+              limit,
+            );
+          },
+        );
+        const last = items.at(-1);
+        return {
+          ok: true,
+          value: {
+            items,
+            ...(last && items.length === limit
+              ? {
+                  continuation: encodeSequenceContinuation(
+                    "history",
+                    last.sequence,
+                  ),
+                }
+              : {}),
+          },
+        };
+      } catch (error) {
+        return toFailure(error);
+      }
+    },
+
+    async readLedgerSummary(input: {
+      storeId: string;
+      terminalId: string;
+    }): Promise<PosLocalStoreResult<PosLocalLedgerSummary>> {
+      try {
+        const value = await options.adapter.transaction(
+          "readonly",
+          ["meta", "events"],
+          async (transaction) => {
+            await ensureSupportedSchema(transaction, "readonly");
+            const range = {
+              lower: [input.storeId, input.terminalId, 0],
+              upper: [input.storeId, input.terminalId, Number.MAX_SAFE_INTEGER],
+            };
+            const [eventCount, oldest] = await Promise.all([
+              transaction.countFromIndex(
+                "events",
+                "by_terminal_sequence",
+                range,
+              ),
+              transaction.getAllFromIndex<PosLocalEventRecord>(
+                "events",
+                "by_terminal_sequence",
+                range,
+                1,
+              ),
+            ]);
+            return {
+              eventCount,
+              ...(oldest[0] ? { oldestEventAt: oldest[0].createdAt } : {}),
+            };
+          },
+        );
+        return { ok: true as const, value };
+      } catch (error) {
+        return toFailure(error);
+      }
+    },
+
+    async listEventsForUpload(input?: {
+      afterSequence?: number;
+      includeReviewEvents?: boolean;
+      limit?: number;
+      storeId?: string;
+      terminalId?: string;
+    }): Promise<PosLocalStoreResult<PosLocalEventRecord[]>> {
+      if (!input?.storeId || !input.terminalId) return this.listEvents();
+      try {
+        const limit = Math.max(1, Math.min(input.limit ?? 250, 500));
+        const value = await options.adapter.transaction(
+          "readonly",
+          ["meta", "events"],
+          async (transaction) => {
+            await ensureSupportedSchema(transaction, "readonly");
+            const syncStatuses: PosLocalSyncEventStatus[] = [
+              "pending",
+              "syncing",
+              "failed",
+              ...(input.includeReviewEvents ? (["needs_review"] as const) : []),
+            ];
+            const activityStatuses: PosLocalActivityReportStatus[] = [
+              "pending",
+              "failed",
+            ];
+            const syncPages = await Promise.all(
+              syncStatuses.map((status) =>
+                transaction.getAllFromIndex<PosLocalEventRecord>(
+                  "events",
+                  "by_terminal_sync_status_sequence",
+                  {
+                    lower: [
+                      input.storeId!,
+                      input.terminalId!,
+                      status,
+                      (input.afterSequence ?? -1) + 1,
+                    ],
+                    upper: [
+                      input.storeId!,
+                      input.terminalId!,
+                      status,
+                      Number.MAX_SAFE_INTEGER,
+                    ],
+                  },
+                  limit,
+                ),
+              ),
+            );
+            const activityPages = await Promise.all(
+              activityStatuses.map((status) =>
+                transaction.getAllFromIndex<PosLocalEventRecord>(
+                  "events",
+                  "by_terminal_activity_status_sequence",
+                  {
+                    lower: [
+                      input.storeId!,
+                      input.terminalId!,
+                      status,
+                      (input.afterSequence ?? -1) + 1,
+                    ],
+                    upper: [
+                      input.storeId!,
+                      input.terminalId!,
+                      status,
+                      Number.MAX_SAFE_INTEGER,
+                    ],
+                  },
+                  limit,
+                ),
+              ),
+            );
+            return [...syncPages.flat(), ...activityPages.flat()]
+              .filter(
+                (event, index, events) =>
+                  events.findIndex(
+                    (candidate) =>
+                      candidate.localEventId === event.localEventId,
+                  ) === index,
+              )
+              .sort(comparePosLocalUploadOrder)
+              .slice(0, limit);
+          },
+        );
+        return { ok: true, value };
+      } catch (error) {
+        return toFailure(error);
+      }
+    },
+
+    async readUploadCandidatePage(input: {
+      continuation?: PosLocalOpaqueContinuation;
+      limit: number;
+      storeId: string;
+      terminalId: string;
+    }): Promise<
+      PosLocalStoreResult<{
+        continuation?: PosLocalOpaqueContinuation;
+        items: PosLocalEventRecord[];
+      }>
+    > {
+      const afterSequence = decodeSequenceContinuation(
+        "upload",
+        input.continuation,
+      );
+      if (afterSequence === null) {
+        return invalidContinuationFailure();
+      }
+      const page = await this.listEventsForUpload({
+        afterSequence,
+        includeReviewEvents: true,
+        limit: input.limit,
+        storeId: input.storeId,
+        terminalId: input.terminalId,
+      });
+      if (!page.ok) return page;
+      const last = page.value.at(-1);
+      return {
+        ok: true,
+        value: {
+          items: page.value,
+          ...(last &&
+          page.value.length === Math.max(1, Math.min(input.limit, 500))
+            ? {
+                continuation: encodeSequenceContinuation(
+                  "upload",
+                  last.sequence,
+                ),
+              }
+            : {}),
+        },
+      };
     },
 
     async attachStaffProofTokenToPendingEvents(input: {
@@ -1769,8 +1789,27 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
               mapping.storeId &&
               mapping.terminalId
             ) {
-              const mappings =
-                await transaction.getAll<PosLocalCloudMapping>("mappings");
+              const scopeKey: IDBValidKey = [
+                "registerSession",
+                mapping.storeId,
+                mapping.terminalId,
+                ...(mapping.registerNumber !== undefined
+                  ? [mapping.registerNumber]
+                  : []),
+                "current",
+              ];
+              const mappings = (
+                await transaction.getAllFromIndex<PosLocalCloudMapping>(
+                  "mappings",
+                  mapping.registerNumber !== undefined
+                    ? "by_register_full_scope_state"
+                    : "by_register_scope_state",
+                  { lower: scopeKey, upper: scopeKey },
+                )
+              ).filter(
+                (candidate) =>
+                  candidate.registerNumber === mapping.registerNumber,
+              );
               for (const existing of mappings) {
                 if (
                   existing.entity === "registerSession" &&
@@ -1817,13 +1856,10 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
           ["meta", "events"],
           async (transaction) => {
             await ensureSupportedSchema(transaction, "readwrite");
-            const eventIdSet = new Set(eventIds);
-            const events =
-              await transaction.getAll<PosLocalEventRecord>("events");
+            const events = await readEventsByLocalIds(transaction, eventIds);
             const updated: PosLocalEventRecord[] = [];
 
             for (const event of events) {
-              if (!eventIdSet.has(event.localEventId)) continue;
               const eventWithoutProof = omitStaffProofToken(event);
               const nextEvent = {
                 ...eventWithoutProof,
@@ -1871,14 +1907,11 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
           ["meta", "events"],
           async (transaction) => {
             await ensureSupportedSchema(transaction, "readwrite");
-            const eventIdSet = new Set(eventIds);
-            const events =
-              await transaction.getAll<PosLocalEventRecord>("events");
+            const events = await readEventsByLocalIds(transaction, eventIds);
             const updated: PosLocalEventRecord[] = [];
             const reportedAt = reportOptions?.reportedAt ?? clock();
 
             for (const event of events) {
-              if (!eventIdSet.has(event.localEventId)) continue;
               const nextEvent = {
                 ...event,
                 activity: normalizeActivityReportState({
@@ -1920,14 +1953,11 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
           ["meta", "events"],
           async (transaction) => {
             await ensureSupportedSchema(transaction, "readwrite");
-            const eventIdSet = new Set(eventIds);
-            const events =
-              await transaction.getAll<PosLocalEventRecord>("events");
+            const events = await readEventsByLocalIds(transaction, eventIds);
             const updated: PosLocalEventRecord[] = [];
             const attemptedAt = failOptions.attemptedAt ?? clock();
 
             for (const event of events) {
-              if (!eventIdSet.has(event.localEventId)) continue;
               const nextEvent = {
                 ...event,
                 activity: normalizeActivityReportState({
@@ -1981,6 +2011,56 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
       }
     },
 
+    async readMappingPage(input: {
+      continuation?: PosLocalOpaqueContinuation;
+      limit: number;
+      storeId: string;
+      terminalId: string;
+    }): Promise<
+      PosLocalStoreResult<{
+        continuation?: PosLocalOpaqueContinuation;
+        items: PosLocalCloudMapping[];
+      }>
+    > {
+      const afterLocalId = decodeMappingContinuation(input.continuation);
+      if (afterLocalId === null) return invalidContinuationFailure();
+      try {
+        const limit = Math.max(1, Math.min(input.limit, 500));
+        const items = await options.adapter.transaction(
+          "readonly",
+          ["meta", "mappings"],
+          async (transaction) => {
+            await ensureSupportedSchema(transaction, "readonly");
+            return transaction.getAllFromIndex<PosLocalCloudMapping>(
+              "mappings",
+              "by_terminal_mapping_local_id",
+              {
+                lower: [
+                  input.storeId,
+                  input.terminalId,
+                  afterLocalId ? `${afterLocalId}\u0000` : "",
+                ],
+                upper: [input.storeId, input.terminalId, "\uffff"],
+              },
+              limit,
+            );
+          },
+        );
+        const last = items.at(-1);
+        return {
+          ok: true,
+          value: {
+            items,
+            ...(last && items.length === limit
+              ? { continuation: encodeMappingContinuation(last.localId) }
+              : {}),
+          },
+        };
+      } catch (error) {
+        return toFailure(error);
+      }
+    },
+
     async markEventsNeedsReview(
       eventIds: string[],
       error?: string,
@@ -1992,13 +2072,10 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
           ["meta", "events"],
           async (transaction) => {
             await ensureSupportedSchema(transaction, "readwrite");
-            const eventIdSet = new Set(eventIds);
-            const events =
-              await transaction.getAll<PosLocalEventRecord>("events");
+            const events = await readEventsByLocalIds(transaction, eventIds);
             const updated: PosLocalEventRecord[] = [];
 
             for (const event of events) {
-              if (!eventIdSet.has(event.localEventId)) continue;
               const eventWithoutProof = omitStaffProofToken(event);
               const nextEvent = {
                 ...eventWithoutProof,
@@ -2039,14 +2116,11 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
           ["meta", "events"],
           async (transaction) => {
             await ensureSupportedSchema(transaction, "readwrite");
-            const eventIdSet = new Set(eventIds);
-            const events =
-              await transaction.getAll<PosLocalEventRecord>("events");
+            const events = await readEventsByLocalIds(transaction, eventIds);
             const updated: PosLocalEventRecord[] = [];
             const resolvedAt = clock();
 
             for (const event of events) {
-              if (!eventIdSet.has(event.localEventId)) continue;
               if (event.sync.status !== "needs_review") continue;
               const eventWithoutProof = omitStaffProofToken(event);
               const nextEvent = {
@@ -2107,6 +2181,108 @@ function omitStaffProofToken(event: PosLocalEventRecord) {
   const next = { ...event };
   delete next.staffProofToken;
   return next;
+}
+
+async function readEventsByLocalIds(
+  transaction: PosLocalStoreTransaction,
+  eventIds: readonly string[],
+) {
+  const events = await Promise.all(
+    [...new Set(eventIds)].map((eventId) =>
+      transaction.getFromIndex<PosLocalEventRecord>(
+        "events",
+        "by_local_event_id",
+        eventId,
+      ),
+    ),
+  );
+  return events.filter((event): event is PosLocalEventRecord => Boolean(event));
+}
+
+function comparePosLocalUploadOrder(
+  left: PosLocalEventRecord,
+  right: PosLocalEventRecord,
+) {
+  return (
+    left.sequence - right.sequence ||
+    left.localEventId.localeCompare(right.localEventId)
+  );
+}
+
+function encodeSequenceContinuation(
+  kind: "history" | "upload",
+  sequence: number,
+): PosLocalOpaqueContinuation {
+  return `idb10:${kind}:${sequence}` as PosLocalOpaqueContinuation;
+}
+
+function decodeSequenceContinuation(
+  kind: "history" | "upload",
+  continuation: PosLocalOpaqueContinuation | undefined,
+): number | null {
+  if (!continuation) return -1;
+  const match = new RegExp(`^idb10:${kind}:(\\d+)$`).exec(continuation);
+  if (!match) return null;
+  const sequence = Number(match[1]);
+  return Number.isSafeInteger(sequence) && sequence >= 0 ? sequence : null;
+}
+
+function encodeMappingContinuation(
+  localId: string,
+): PosLocalOpaqueContinuation {
+  return `idb10:mapping:${encodeURIComponent(localId)}` as PosLocalOpaqueContinuation;
+}
+
+function decodeMappingContinuation(
+  continuation: PosLocalOpaqueContinuation | undefined,
+) {
+  if (!continuation) return "";
+  const match = /^idb10:mapping:(.+)$/.exec(continuation);
+  if (!match) return null;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return null;
+  }
+}
+
+function invalidContinuationFailure(): PosLocalStoreResult<never> {
+  return {
+    ok: false,
+    error: {
+      code: "read_failed",
+      message: "POS local storage continuation is invalid.",
+    },
+  };
+}
+
+async function migrateLegacyLogicalRecords(
+  transaction: PosLocalStoreTransaction,
+) {
+  const recordStores = POS_LOCAL_OBJECT_STORE_NAMES.filter(
+    (storeName) => storeName !== "meta",
+  );
+  for (const storeName of recordStores) {
+    const [keys, records] = await Promise.all([
+      transaction.getAllKeys(storeName),
+      transaction.getAll<unknown>(storeName),
+    ]);
+    if (keys.length !== records.length) {
+      throw new Error("POS local logical migration inspection was incomplete.");
+    }
+    for (let index = 0; index < records.length; index += 1) {
+      const record = records[index];
+      if (!record || typeof record !== "object") continue;
+      const current = record as Record<string, unknown>;
+      await transaction.put(storeName, keys[index], {
+        ...current,
+        ...(Object.hasOwn(current, "schemaVersion")
+          ? { schemaVersion: POS_LOCAL_LOGICAL_RECORD_VERSION }
+          : {}),
+        logicalRecordVersion: POS_LOCAL_LOGICAL_RECORD_VERSION,
+      });
+    }
+  }
 }
 
 function normalizeActivityReportState(
@@ -2886,48 +3062,80 @@ export function toSafePosLocalCashierPresenceDiagnostic(
 }
 export function createIndexedDbPosLocalStorageAdapter(options?: {
   databaseName?: string;
+  openBlockedTimeoutMs?: number;
 }): PosLocalStorageAdapter {
   const databaseName = options?.databaseName ?? "athena-pos-local";
+  const openBlockedTimeoutMs = options?.openBlockedTimeoutMs ?? 5_000;
 
   async function openDatabase(): Promise<IDBDatabase> {
     return new Promise((resolve, reject) => {
+      let settled = false;
       const request = indexedDB.open(
         databaseName,
         POS_LOCAL_STORE_SCHEMA_VERSION,
       );
+      let blockedTimeout: ReturnType<typeof setTimeout> | undefined;
+
+      const rejectOnce = (error: unknown) => {
+        if (settled) return;
+        settled = true;
+        if (blockedTimeout) globalThis.clearTimeout(blockedTimeout);
+        reject(error);
+      };
 
       request.onupgradeneeded = () => {
-        const database = request.result;
-        for (const storeName of POS_LOCAL_OBJECT_STORE_NAMES) {
-          if (!database.objectStoreNames.contains(storeName)) {
-            database.createObjectStore(storeName);
-          }
-        }
+        upgradeIndexedDbPosLocalStore(request);
       };
-      request.onerror = () => reject(request.error);
+      request.onblocked = () => {
+        blockedTimeout ??= globalThis.setTimeout(
+          () => rejectOnce(openBlockedError()),
+          openBlockedTimeoutMs,
+        );
+      };
+      request.onerror = () => rejectOnce(request.error);
       request.onsuccess = () => {
         const database = request.result;
+        // An IDB open request cannot be cancelled. If a blocked request later
+        // succeeds after this attempt settled, close its connection so a retry
+        // can select a fresh generation without leaking an upgrade blocker.
+        if (settled) {
+          database.close();
+          return;
+        }
         const missingStoreNames = POS_LOCAL_OBJECT_STORE_NAMES.filter(
           (storeName) => !database.objectStoreNames.contains(storeName),
         );
 
         if (missingStoreNames.length > 0) {
           database.close();
-          reject(new PosLocalStoreMissingObjectStoresError(missingStoreNames));
+          rejectOnce(
+            new PosLocalStoreMissingObjectStoresError(missingStoreNames),
+          );
           return;
         }
 
+        settled = true;
+        globalThis.clearTimeout(blockedTimeout);
         resolve(database);
       };
     });
   }
 
   return {
-    async transaction(mode, storeNames, callback) {
-      const database = await openDatabase();
+    async transaction<T>(
+      mode: "readonly" | "readwrite",
+      storeNames: PosLocalObjectStoreName[],
+      callback: (transaction: PosLocalStoreTransaction) => Promise<T>,
+    ): Promise<T> {
+      let database: IDBDatabase;
+      try {
+        database = await openDatabase();
+      } catch (error) {
+        throw wrapPosLocalStoreOperationError(mode, error);
+      }
 
       try {
-        return await new Promise((resolve, reject) => {
+        return await new Promise<T>((resolve, reject) => {
           const transaction = database.transaction(storeNames, mode);
           let settled = false;
           let callbackCompleted = false;
@@ -2966,6 +3174,42 @@ export function createIndexedDbPosLocalStorageAdapter(options?: {
                 request.onerror = () => innerReject(request.error);
                 request.onsuccess = () =>
                   innerResolve(request.result.map(String));
+              });
+            },
+            getFromIndex(storeName, indexName, key) {
+              return new Promise((innerResolve, innerReject) => {
+                const request = transaction
+                  .objectStore(storeName)
+                  .index(indexName)
+                  .get(key);
+                request.onerror = () => innerReject(request.error);
+                request.onsuccess = () => innerResolve(request.result);
+              });
+            },
+            getAllFromIndex(storeName, indexName, range, limit) {
+              return new Promise((innerResolve, innerReject) => {
+                const index = transaction
+                  .objectStore(storeName)
+                  .index(indexName);
+                const keyRange = IDBKeyRange.bound(range.lower, range.upper);
+                const request =
+                  limit === undefined
+                    ? index.getAll(keyRange)
+                    : index.getAll(keyRange, limit);
+                request.onerror = () => innerReject(request.error);
+                request.onsuccess = () => innerResolve(request.result);
+              });
+            },
+            countFromIndex(storeName, indexName, range) {
+              return new Promise((innerResolve, innerReject) => {
+                const index = transaction
+                  .objectStore(storeName)
+                  .index(indexName);
+                const request = index.count(
+                  IDBKeyRange.bound(range.lower, range.upper),
+                );
+                request.onerror = () => innerReject(request.error);
+                request.onsuccess = () => innerResolve(request.result);
               });
             },
             put(storeName, key, value) {
@@ -3008,11 +3252,88 @@ export function createIndexedDbPosLocalStorageAdapter(options?: {
               rejectOnce(error);
             });
         });
+      } catch (error) {
+        throw wrapPosLocalStoreOperationError(mode, error);
       } finally {
         database.close();
       }
     },
   };
+}
+
+function openBlockedError() {
+  return new DOMException(
+    "POS local storage is open in another tab. Close other Athena POS tabs and retry.",
+    "AbortError",
+  );
+}
+
+function upgradeIndexedDbPosLocalStore(request: IDBOpenDBRequest) {
+  const database = request.result;
+  for (const storeName of POS_LOCAL_OBJECT_STORE_NAMES) {
+    if (!database.objectStoreNames.contains(storeName)) {
+      database.createObjectStore(storeName);
+    }
+  }
+  const events = request.transaction?.objectStore("events");
+  if (!events) return;
+  if (!events.indexNames.contains("by_local_event_id")) {
+    events.createIndex("by_local_event_id", "localEventId", { unique: true });
+  }
+  if (!events.indexNames.contains("by_terminal_sequence")) {
+    events.createIndex("by_terminal_sequence", [
+      "storeId",
+      "terminalId",
+      "sequence",
+    ]);
+  }
+  if (!events.indexNames.contains("by_terminal_sync_status_sequence")) {
+    events.createIndex("by_terminal_sync_status_sequence", [
+      "storeId",
+      "terminalId",
+      "sync.status",
+      "sequence",
+    ]);
+  }
+  if (!events.indexNames.contains("by_terminal_activity_status_sequence")) {
+    events.createIndex("by_terminal_activity_status_sequence", [
+      "storeId",
+      "terminalId",
+      "activity.status",
+      "sequence",
+    ]);
+  }
+  const mappings = request.transaction?.objectStore("mappings");
+  if (mappings && !mappings.indexNames.contains("by_register_scope_state")) {
+    mappings.createIndex("by_register_scope_state", [
+      "entity",
+      "storeId",
+      "terminalId",
+      "registerCandidateState",
+    ]);
+  }
+  if (
+    mappings &&
+    !mappings.indexNames.contains("by_register_full_scope_state")
+  ) {
+    mappings.createIndex("by_register_full_scope_state", [
+      "entity",
+      "storeId",
+      "terminalId",
+      "registerNumber",
+      "registerCandidateState",
+    ]);
+  }
+  if (
+    mappings &&
+    !mappings.indexNames.contains("by_terminal_mapping_local_id")
+  ) {
+    mappings.createIndex("by_terminal_mapping_local_id", [
+      "storeId",
+      "terminalId",
+      "localId",
+    ]);
+  }
 }
 
 export function clearIndexedDbPosLocalStore(options?: {
@@ -3045,27 +3366,40 @@ function assertCanClearIndexedDbPosLocalStore(options: {
   databaseName: string;
 }): Promise<PosLocalStoreResult<null>> {
   return inspectIndexedDbStoresForClear(options.databaseName)
-    .then(({ authorityRecords, cashierPresenceRecords, events }) => {
-      if (events.length > 0) {
-        return blockedLocalClear(
-          "POS local state has sale or register records that may not be synced. Use terminal health or support recovery before clearing this terminal.",
-        );
-      }
+    .then(
+      ({
+        authorityRecords,
+        cashierPresenceRecords,
+        events,
+        protectedRecords,
+      }) => {
+        if (events.length > 0) {
+          return blockedLocalClear(
+            "POS local state has sale or register records that may not be synced. Use terminal health or support recovery before clearing this terminal.",
+          );
+        }
 
-      if (authorityRecords.length > 0) {
-        return blockedLocalClear(
-          "POS local state has drawer or terminal authority records. Use terminal health or support recovery before clearing this terminal.",
-        );
-      }
+        if (authorityRecords.length > 0) {
+          return blockedLocalClear(
+            "POS local state has drawer or terminal authority records. Use terminal health or support recovery before clearing this terminal.",
+          );
+        }
 
-      if (cashierPresenceRecords.some(isCashierPresenceRecord)) {
-        return blockedLocalClear(
-          "POS local state has an active cashier sign-in. Sign out or use terminal health before clearing this terminal.",
-        );
-      }
+        if (cashierPresenceRecords.some(isCashierPresenceRecord)) {
+          return blockedLocalClear(
+            "POS local state has an active cashier sign-in. Sign out or use terminal health before clearing this terminal.",
+          );
+        }
 
-      return { ok: true as const, value: null };
-    })
+        if (protectedRecords.length > 0) {
+          return blockedLocalClear(
+            "POS local state contains terminal, authority, readiness, mapping, or snapshot evidence. Use terminal health or support recovery before clearing this terminal.",
+          );
+        }
+
+        return { ok: true as const, value: null };
+      },
+    )
     .catch(() =>
       blockedLocalClear(
         "POS local state could not be inspected. Use terminal health or support recovery before clearing this terminal.",
@@ -3077,6 +3411,7 @@ function inspectIndexedDbStoresForClear(databaseName: string): Promise<{
   authorityRecords: unknown[];
   cashierPresenceRecords: unknown[];
   events: unknown[];
+  protectedRecords: unknown[];
 }> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(
@@ -3085,19 +3420,14 @@ function inspectIndexedDbStoresForClear(databaseName: string): Promise<{
     );
 
     request.onupgradeneeded = () => {
-      const database = request.result;
-      for (const storeName of POS_LOCAL_OBJECT_STORE_NAMES) {
-        if (!database.objectStoreNames.contains(storeName)) {
-          database.createObjectStore(storeName);
-        }
-      }
+      upgradeIndexedDbPosLocalStore(request);
     };
     request.onerror = () => reject(request.error);
     request.onsuccess = () => {
       const database = request.result;
-      const storeNames = ["events", "authority", "cashierPresence"].filter(
-        (storeName): storeName is "events" | "authority" | "cashierPresence" =>
-          database.objectStoreNames.contains(storeName),
+      const storeNames = POS_LOCAL_OBJECT_STORE_NAMES.filter(
+        (storeName) =>
+          storeName !== "meta" && database.objectStoreNames.contains(storeName),
       );
 
       if (storeNames.length === 0) {
@@ -3106,6 +3436,7 @@ function inspectIndexedDbStoresForClear(databaseName: string): Promise<{
           authorityRecords: [],
           cashierPresenceRecords: [],
           events: [],
+          protectedRecords: [],
         });
         return;
       }
@@ -3123,6 +3454,14 @@ function inspectIndexedDbStoresForClear(databaseName: string): Promise<{
             authorityRecords: records.get("authority") ?? [],
             cashierPresenceRecords: records.get("cashierPresence") ?? [],
             events: records.get("events") ?? [],
+            protectedRecords: storeNames
+              .filter(
+                (storeName) =>
+                  storeName !== "authority" &&
+                  storeName !== "cashierPresence" &&
+                  storeName !== "events",
+              )
+              .flatMap((storeName) => records.get(storeName) ?? []),
           });
         }
       };
@@ -3191,6 +3530,7 @@ function deleteIndexedDbPosLocalStore(databaseName: string) {
 
 export function createMemoryPosLocalStorageAdapter(options?: {
   schemaVersion?: number;
+  logicalRecordVersion?: number;
   failNextPutForStore?: PosLocalObjectStoreName;
 }): PosLocalStorageAdapter {
   let failNextPutForStore = options?.failNextPutForStore;
@@ -3199,6 +3539,12 @@ export function createMemoryPosLocalStorageAdapter(options?: {
 
   if (options?.schemaVersion !== undefined) {
     data.meta.set(META_SCHEMA_VERSION_KEY, options.schemaVersion);
+  }
+  if (options?.logicalRecordVersion !== undefined) {
+    data.meta.set(
+      META_LOGICAL_RECORD_VERSION_KEY,
+      options.logicalRecordVersion,
+    );
   }
 
   return {
@@ -3218,6 +3564,39 @@ export function createMemoryPosLocalStorageAdapter(options?: {
           async getAllKeys(storeName: PosLocalObjectStoreName) {
             return Array.from(transactionData[storeName].keys());
           },
+          async getFromIndex<T>(
+            storeName: PosLocalObjectStoreName,
+            indexName: string,
+            key: IDBValidKey,
+          ) {
+            return findMemoryIndexValues(
+              transactionData[storeName],
+              indexName,
+              key,
+            )[0] as T | undefined;
+          },
+          async getAllFromIndex<T>(
+            storeName: PosLocalObjectStoreName,
+            indexName: string,
+            range: { lower: IDBValidKey; upper: IDBValidKey },
+            limit?: number,
+          ) {
+            const values = findMemoryIndexValues(
+              transactionData[storeName],
+              indexName,
+              range,
+            );
+            return (
+              limit === undefined ? values : values.slice(0, limit)
+            ) as T[];
+          },
+          async countFromIndex(storeName, indexName, range) {
+            return findMemoryIndexValues(
+              transactionData[storeName],
+              indexName,
+              range,
+            ).length;
+          },
           async put(storeName, key, value) {
             if (failNextPutForStore === storeName) {
               failNextPutForStore = undefined;
@@ -3230,7 +3609,9 @@ export function createMemoryPosLocalStorageAdapter(options?: {
           },
         };
 
-        const result = await callback(transaction);
+        const result = await callback(transaction).catch((error) => {
+          throw wrapPosLocalStoreOperationError(_mode, error);
+        });
         replaceMemoryStore(data, transactionData);
         return result;
       };
@@ -3292,4 +3673,169 @@ function replaceMemoryStore(target: MemoryStore, source: MemoryStore) {
 function cloneValue<T>(value: T): T {
   if (value === undefined) return value;
   return structuredClone(value);
+}
+
+function findMemoryIndexValues(
+  values: Map<string, unknown>,
+  indexName: string,
+  query: IDBValidKey | { lower: IDBValidKey; upper: IDBValidKey },
+) {
+  return [...values.values()]
+    .map((value) => ({ key: memoryIndexKey(value, indexName), value }))
+    .filter(
+      (entry): entry is { key: IDBValidKey; value: unknown } =>
+        entry.key !== undefined && indexQueryIncludes(query, entry.key),
+    )
+    .sort((left, right) => compareIndexKeys(left.key, right.key))
+    .map((entry) => cloneValue(entry.value));
+}
+
+function memoryIndexKey(
+  value: unknown,
+  indexName: string,
+): IDBValidKey | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const record = value as PosLocalEventRecord;
+  switch (indexName) {
+    case "by_local_event_id":
+      return record.localEventId;
+    case "by_terminal_sequence":
+      return [record.storeId, record.terminalId, record.sequence];
+    case "by_terminal_sync_status_sequence":
+      return [
+        record.storeId,
+        record.terminalId,
+        record.sync?.status,
+        record.sequence,
+      ];
+    case "by_terminal_activity_status_sequence":
+      return record.activity
+        ? [
+            record.storeId,
+            record.terminalId,
+            record.activity.status,
+            record.sequence,
+          ]
+        : undefined;
+    case "by_register_scope_state": {
+      const mapping = value as PosLocalCloudMapping;
+      return [
+        mapping.entity,
+        mapping.storeId ?? "",
+        mapping.terminalId ?? "",
+        mapping.registerCandidateState ?? "",
+      ];
+    }
+    case "by_register_full_scope_state": {
+      const mapping = value as PosLocalCloudMapping;
+      return mapping.registerNumber === undefined
+        ? undefined
+        : [
+            mapping.entity,
+            mapping.storeId ?? "",
+            mapping.terminalId ?? "",
+            mapping.registerNumber,
+            mapping.registerCandidateState ?? "",
+          ];
+    }
+    case "by_terminal_mapping_local_id": {
+      const mapping = value as PosLocalCloudMapping;
+      return mapping.storeId && mapping.terminalId
+        ? [mapping.storeId, mapping.terminalId, mapping.localId]
+        : undefined;
+    }
+    default:
+      return undefined;
+  }
+}
+
+function indexQueryIncludes(
+  query: IDBValidKey | { lower: IDBValidKey; upper: IDBValidKey },
+  key: IDBValidKey,
+) {
+  if (query && typeof query === "object" && "lower" in query) {
+    return (
+      compareIndexKeys(query.lower, key) <= 0 &&
+      compareIndexKeys(key, query.upper) <= 0
+    );
+  }
+  return compareIndexKeys(query as IDBValidKey, key) === 0;
+}
+
+function compareIndexKeys(left: IDBValidKey, right: IDBValidKey): number {
+  if (Array.isArray(left) && Array.isArray(right)) {
+    for (
+      let index = 0;
+      index < Math.max(left.length, right.length);
+      index += 1
+    ) {
+      const compared = compareIndexKeys(left[index] ?? "", right[index] ?? "");
+      if (compared !== 0) return compared;
+    }
+    return 0;
+  }
+  if (typeof left === "number" && typeof right === "number")
+    return left - right;
+  return String(left).localeCompare(String(right));
+}
+
+function wrapPosLocalStoreOperationError(
+  mode: "readonly" | "readwrite",
+  error: unknown,
+) {
+  if (
+    error instanceof PosLocalStoreSchemaError ||
+    error instanceof PosLocalStoreLogicalRecordVersionError ||
+    error instanceof PosLocalStoreMissingObjectStoresError ||
+    error instanceof PosLocalStoreOperationError
+  ) {
+    return error;
+  }
+  return new PosLocalStoreOperationError(mode, error);
+}
+
+function classifyPosLocalStoreErrorCode(
+  nativeName: string,
+  mode?: "readonly" | "readwrite",
+): PosLocalStoreErrorCode {
+  switch (nativeName) {
+    case "QuotaExceededError":
+      return "quota_exceeded";
+    case "ConstraintError":
+    case "DataCloneError":
+      return "corruption";
+    case "AbortError":
+    case "TransactionInactiveError":
+      return "contention";
+    case "InvalidStateError":
+    case "NotFoundError":
+    case "SecurityError":
+      return "unavailable";
+    case "VersionError":
+      return "unsupported_schema_version";
+    default:
+      return mode === "readonly" ? "read_failed" : "write_failed";
+  }
+}
+
+function safePosLocalStoreFailureMessage(code: PosLocalStoreErrorCode) {
+  switch (code) {
+    case "quota_exceeded":
+      return "POS local storage is full. Free device storage and retry.";
+    case "contention":
+      return "POS local storage is busy. Retry the operation.";
+    case "corruption":
+      return "POS local storage needs support attention.";
+    case "maintenance":
+      return "POS local storage maintenance is in progress.";
+    case "unavailable":
+      return "POS local storage is unavailable.";
+    case "read_failed":
+      return "POS local storage could not be read.";
+    case "missing_object_stores":
+    case "unsupported_logical_record_version":
+    case "unsupported_schema_version":
+    case "write_failed":
+      return "POS local storage could not save this operation.";
+  }
 }

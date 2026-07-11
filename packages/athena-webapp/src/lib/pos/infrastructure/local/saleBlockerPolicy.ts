@@ -1,7 +1,7 @@
 import type {
   PosDrawerAuthorityState,
   PosTerminalIntegrityState,
-} from "./posLocalStore";
+} from "@/lib/pos/application/posLocalStoreTypes";
 
 export type PosLocalSaleBlockReason =
   | "terminal_integrity"

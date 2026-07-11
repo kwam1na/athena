@@ -39,9 +39,8 @@ vi.mock("convex/react", () => ({
   useQuery: convexMocks.useQuery,
 }));
 
-vi.mock("@/lib/pos/infrastructure/local/posLocalStore", () => ({
-  createIndexedDbPosLocalStorageAdapter: vi.fn(() => ({})),
-  createPosLocalStore: vi.fn(() => catalogStoreMocks),
+vi.mock("@/lib/pos/infrastructure/local/posLocalStorageRuntime", () => ({
+  getDefaultPosLocalStore: vi.fn(() => catalogStoreMocks),
 }));
 
 function buildRegisterCatalogRow(
@@ -107,8 +106,7 @@ function buildServiceCatalogRow(
 describe("catalogGateway", () => {
   let liveAvailabilityRows: PosRegisterCatalogAvailabilityRowDto[] | undefined;
   let fullAvailabilitySnapshotRows:
-    | PosRegisterCatalogAvailabilityRowDto[]
-    | undefined;
+    PosRegisterCatalogAvailabilityRowDto[] | undefined;
 
   beforeEach(() => {
     liveAvailabilityRows = undefined;
@@ -143,7 +141,10 @@ describe("catalogGateway", () => {
       value: null,
     });
     catalogStoreMocks.writeRegisterAvailabilitySnapshot.mockImplementation(
-      async (input: { rows: PosRegisterCatalogAvailabilityRowDto[]; storeId: string }) => ({
+      async (input: {
+        rows: PosRegisterCatalogAvailabilityRowDto[];
+        storeId: string;
+      }) => ({
         ok: true,
         value: {
           refreshedAt: Date.now(),
@@ -196,7 +197,9 @@ describe("catalogGateway", () => {
     expect(catalogStoreMocks.readRegisterCatalogSnapshot).toHaveBeenCalledWith({
       storeId: "store-1",
     });
-    expect(catalogStoreMocks.writeRegisterCatalogSnapshot).not.toHaveBeenCalled();
+    expect(
+      catalogStoreMocks.writeRegisterCatalogSnapshot,
+    ).not.toHaveBeenCalled();
   });
 
   it("keeps the register catalog loading when neither live data nor a local snapshot is available", async () => {
@@ -263,14 +266,11 @@ describe("catalogGateway", () => {
     );
 
     expect(result.current?.map((row) => row.sku)).toEqual(["ONLINE-HIDDEN"]);
-    expect(convexMocks.useQuery).toHaveBeenCalledWith(
-      expect.anything(),
-      {
-        id: "ks7ab1h23h38zjz2pw1wpdfr5d88d2h8",
-        includeHiddenSkus: true,
-        storeId: "store-1",
-      },
-    );
+    expect(convexMocks.useQuery).toHaveBeenCalledWith(expect.anything(), {
+      id: "ks7ab1h23h38zjz2pw1wpdfr5d88d2h8",
+      includeHiddenSkus: true,
+      storeId: "store-1",
+    });
   });
 
   it("persists explicitly refreshed register catalog rows for the next offline lookup", async () => {
@@ -290,7 +290,9 @@ describe("catalogGateway", () => {
       storeId: "store-1",
     });
     await waitFor(() =>
-      expect(catalogStoreMocks.writeRegisterCatalogSnapshot).toHaveBeenCalledWith({
+      expect(
+        catalogStoreMocks.writeRegisterCatalogSnapshot,
+      ).toHaveBeenCalledWith({
         storeId: "store-1",
         rows: refreshedRows,
       }),
@@ -341,7 +343,9 @@ describe("catalogGateway", () => {
       ),
     ).toBe(true);
     await waitFor(() =>
-      expect(catalogStoreMocks.writeRegisterCatalogSnapshot).toHaveBeenCalledWith({
+      expect(
+        catalogStoreMocks.writeRegisterCatalogSnapshot,
+      ).toHaveBeenCalledWith({
         rows: refreshedRows,
         storeId: "store-1",
       }),
@@ -360,7 +364,9 @@ describe("catalogGateway", () => {
     );
 
     await waitFor(() =>
-      expect(catalogStoreMocks.writeRegisterCatalogSnapshot).toHaveBeenCalledWith({
+      expect(
+        catalogStoreMocks.writeRegisterCatalogSnapshot,
+      ).toHaveBeenCalledWith({
         rows: refreshedRows,
         storeId: "store-1",
       }),
@@ -413,7 +419,9 @@ describe("catalogGateway", () => {
     liveServiceRows.current = liveRows;
     rerender();
     await waitFor(() =>
-      expect(catalogStoreMocks.writeRegisterServiceCatalogSnapshot).toHaveBeenCalledWith({
+      expect(
+        catalogStoreMocks.writeRegisterServiceCatalogSnapshot,
+      ).toHaveBeenCalledWith({
         storeId: "store-1",
         rows: liveRows,
       }),
@@ -474,7 +482,9 @@ describe("catalogGateway", () => {
       }),
     ];
     rerender();
-    expect(catalogStoreMocks.writeRegisterAvailabilitySnapshot).not.toHaveBeenCalled();
+    expect(
+      catalogStoreMocks.writeRegisterAvailabilitySnapshot,
+    ).not.toHaveBeenCalled();
   });
 
   it("stops the full snapshot refresh when local persistence fails", async () => {
@@ -524,7 +534,9 @@ describe("catalogGateway", () => {
     catalogStoreMocks.writeRegisterAvailabilitySnapshot.mockClear();
     rerender();
 
-    expect(catalogStoreMocks.writeRegisterAvailabilitySnapshot).not.toHaveBeenCalled();
+    expect(
+      catalogStoreMocks.writeRegisterAvailabilitySnapshot,
+    ).not.toHaveBeenCalled();
   });
 
   it("retries local full snapshot persistence without refetching unchanged live rows", async () => {
@@ -618,7 +630,9 @@ describe("catalogGateway", () => {
         productSkuId: "sku-1",
       }),
     ]);
-    expect(catalogStoreMocks.writeRegisterAvailabilitySnapshot).not.toHaveBeenCalled();
+    expect(
+      catalogStoreMocks.writeRegisterAvailabilitySnapshot,
+    ).not.toHaveBeenCalled();
   });
 
   it("does not request trusted availability for local pending checkout SKUs", () => {
@@ -632,13 +646,10 @@ describe("catalogGateway", () => {
       }),
     );
 
-    expect(convexMocks.useQuery).toHaveBeenCalledWith(
-      expect.anything(),
-      {
-        storeId: "store-1",
-        productSkuIds: ["sku-1"],
-      },
-    );
+    expect(convexMocks.useQuery).toHaveBeenCalledWith(expect.anything(), {
+      storeId: "store-1",
+      productSkuIds: ["sku-1"],
+    });
   });
 
   it("refreshes the full local availability snapshot even when no SKU availability is requested", async () => {
@@ -691,7 +702,9 @@ describe("catalogGateway", () => {
     );
 
     await waitFor(() =>
-      expect(catalogStoreMocks.writeRegisterAvailabilitySnapshot).toHaveBeenCalled(),
+      expect(
+        catalogStoreMocks.writeRegisterAvailabilitySnapshot,
+      ).toHaveBeenCalled(),
     );
     await waitFor(() => expect(result.current.status).toBe("ready"));
     expect(result.current).toEqual({
@@ -825,5 +838,4 @@ describe("catalogGateway", () => {
       source: "live",
     });
   });
-
 });

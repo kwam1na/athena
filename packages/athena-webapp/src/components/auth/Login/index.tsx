@@ -3,11 +3,8 @@ import { LoginForm } from "./LoginForm";
 import { InputOTPForm } from "./InputOTP";
 import { PosRecoveryCodeForm } from "./PosRecoveryCodeForm";
 import { useSearch } from "@tanstack/react-router";
-import {
-  createIndexedDbPosLocalStorageAdapter,
-  createPosLocalStore,
-  type PosProvisionedTerminalSeed,
-} from "@/lib/pos/infrastructure/local/posLocalStore";
+import type { PosProvisionedTerminalSeed } from "@/lib/pos/application/posLocalStoreTypes";
+import { getDefaultPosLocalStore } from "@/lib/pos/infrastructure/local/posLocalStorageRuntime";
 import { isPosOnlyTerminalLoginMode } from "~/shared/posTerminalLoginMode";
 
 const POS_ROUTE_PATTERN =
@@ -33,14 +30,13 @@ function getPosRedirectFromSeed(seed: PosProvisionedTerminalSeed | null) {
 }
 
 export function Login() {
-  const [step, setStep] = useState<"signIn" | "posRecovery" | { email: string }>(
-    "signIn",
-  );
+  const [step, setStep] = useState<
+    "signIn" | "posRecovery" | { email: string }
+  >("signIn");
   const [localTerminalSeed, setLocalTerminalSeed] =
     useState<PosProvisionedTerminalSeed | null>(null);
   const search = useSearch({ strict: false }) as
-    | { redirectTo?: string; storeId?: string }
-    | undefined;
+    { redirectTo?: string; storeId?: string } | undefined;
   const posRouteScope = getPosRouteScope(search?.redirectTo);
   const localPosRedirect = useMemo(
     () => getPosRedirectFromSeed(localTerminalSeed),
@@ -50,14 +46,9 @@ export function Login() {
   useEffect(() => {
     let cancelled = false;
 
-    if (typeof indexedDB === "undefined") {
-      return;
-    }
-
     void (async () => {
-      const result = await createPosLocalStore({
-        adapter: createIndexedDbPosLocalStorageAdapter(),
-      }).readProvisionedTerminalSeed();
+      const result =
+        await getDefaultPosLocalStore().readProvisionedTerminalSeed();
 
       if (!cancelled && result.ok) {
         setLocalTerminalSeed(result.value);
@@ -97,7 +88,5 @@ export function Login() {
       />
     );
   }
-  return (
-    <InputOTPForm email={step.email} onBack={() => setStep("signIn")} />
-  );
+  return <InputOTPForm email={step.email} onBack={() => setStep("signIn")} />;
 }

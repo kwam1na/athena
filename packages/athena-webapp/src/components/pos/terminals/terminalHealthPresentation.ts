@@ -100,21 +100,16 @@ export type TerminalOperationalExplanationPresentation = {
 type TerminalHealthClassificationInput = {
   attentionReasons?: TerminalHealthAttentionReason[];
   health?:
-  | "needs_attention"
-  | "offline"
-  | "online"
-  | "stale"
-  | "unknown"
-  | string;
+    "needs_attention" | "offline" | "online" | "stale" | "unknown" | string;
   operationalExplanation?: TerminalOperationalExplanation | null;
   recovery?: TerminalRecoveryPreview | null;
   recoveryPreview?: TerminalRecoveryPreview | null;
   runtimeStatus:
-  | (Omit<Partial<TerminalRuntimeStatus>, "localStore" | "sync"> & {
-    localStore?: Partial<TerminalRuntimeStatus["localStore"]>;
-    sync?: Partial<TerminalRuntimeStatus["sync"]>;
-  })
-  | null;
+    | (Omit<Partial<TerminalRuntimeStatus>, "localStore" | "sync"> & {
+        localStore?: Partial<TerminalRuntimeStatus["localStore"]>;
+        sync?: Partial<TerminalRuntimeStatus["sync"]>;
+      })
+    | null;
   syncEvidence: Partial<TerminalSyncEvidence>;
   terminal: Pick<TerminalRecord, "status"> & Partial<TerminalRecord>;
 };
@@ -552,7 +547,11 @@ function normalizeOperationalLane(lane: TerminalOperationalExplanationLane) {
 function normalizeOperationalSeverity(
   severity: TerminalOperationalExplanationSeverity,
 ) {
-  if (severity === "critical" || severity === "danger" || severity === "warning") {
+  if (
+    severity === "critical" ||
+    severity === "danger" ||
+    severity === "warning"
+  ) {
     return severity;
   }
   return "info";
@@ -903,12 +902,69 @@ export function classifyTerminalHealth(
     };
   }
 
-  if (runtimeStatus.localStore?.available === false) {
+  if (
+    runtimeStatus.localStore?.available === false ||
+    runtimeStatus.localStore?.engineReadiness === "unavailable"
+  ) {
     return {
       description:
         primaryReason?.summary ?? "Local terminal storage is not available.",
       label: "Local store issue",
       toneClassName: "border-danger/30 bg-danger/10 text-danger",
+    };
+  }
+
+  if (
+    runtimeStatus.localStore?.maintenance === "active" ||
+    runtimeStatus.localStore?.migration === "running"
+  ) {
+    return {
+      description:
+        "Terminal storage maintenance is in progress. Wait for completion or contact support.",
+      label: "Maintenance in progress",
+      toneClassName: "border-warning/30 bg-warning/15 text-warning",
+    };
+  }
+
+  if (
+    runtimeStatus.localStore?.maintenance === "blocked" ||
+    runtimeStatus.localStore?.migration === "failed"
+  ) {
+    return {
+      description:
+        "Local storage maintenance needs support before this terminal can continue safely.",
+      label: "Storage support needed",
+      toneClassName: "border-danger/30 bg-danger/10 text-danger",
+    };
+  }
+
+  if (
+    runtimeStatus.localStore?.healthFreshness === "stale" ||
+    runtimeStatus.localStore?.healthFreshness === "unknown"
+  ) {
+    return {
+      description:
+        "Local storage status is unavailable. Keep this terminal online and refresh or contact support.",
+      label: "Storage status unavailable",
+      toneClassName: "border-warning/30 bg-warning/15 text-warning",
+    };
+  }
+
+  if (
+    runtimeStatus.localStore?.pressure === "critical" ||
+    runtimeStatus.localStore?.pressure === "warning" ||
+    runtimeStatus.localStore?.ledgerPressure === "critical" ||
+    runtimeStatus.localStore?.ledgerPressure === "warning" ||
+    runtimeStatus.localStore?.persistence === "denied" ||
+    runtimeStatus.localStore?.persistence === "unsupported"
+  ) {
+    return {
+      description:
+        runtimeStatus.localStore.pressure === "critical"
+          ? "Local storage space is critically low. Keep this terminal online and contact support."
+          : "Local storage needs attention. Keep this terminal online when possible and contact support.",
+      label: "Storage needs attention",
+      toneClassName: "border-warning/30 bg-warning/15 text-warning",
     };
   }
 
@@ -1048,8 +1104,8 @@ export function buildTerminalRecoveryPresentation(
       status: formatStatusLabel(recovery?.commandStatus?.status ?? "idle"),
       verificationStatus: formatStatusLabel(
         recovery?.commandStatus?.verificationStatus ??
-        recovery?.verification?.status ??
-        "not_started",
+          recovery?.verification?.status ??
+          "not_started",
       ),
     },
     groups,
@@ -1058,8 +1114,8 @@ export function buildTerminalRecoveryPresentation(
     verification: {
       status: formatStatusLabel(
         recovery?.verification?.status ??
-        recovery?.commandStatus?.verificationStatus ??
-        "not_started",
+          recovery?.commandStatus?.verificationStatus ??
+          "not_started",
       ),
       summary:
         normalizeSupportCopy(recovery?.verification?.summary) ??
@@ -1074,9 +1130,9 @@ export function buildTerminalRecoveryPresentation(
 function buildRecoveryBlockers(
   summary: TerminalHealthClassificationInput,
   recovery:
-    | TerminalRecoveryPreview
-    | null
-    | undefined = getTerminalRecoveryPreview(summary),
+    TerminalRecoveryPreview | null | undefined = getTerminalRecoveryPreview(
+    summary,
+  ),
 ): RecoveryBlockerWithCategory[] {
   if (recovery?.blockers && !hasStructuredRecoveryPreview(recovery)) {
     return recovery.blockers.map((blocker, index) =>
@@ -1127,8 +1183,8 @@ function getTerminalAppUpdatePreview(
 
   const runtimeStatus = summary.runtimeStatus as
     | (TerminalHealthClassificationInput["runtimeStatus"] & {
-      appUpdate?: unknown;
-    })
+        appUpdate?: unknown;
+      })
     | null;
   return normalizeTerminalAppUpdatePreview(runtimeStatus?.appUpdate);
 }
@@ -1486,8 +1542,9 @@ function buildRecoveryBlockersFromPreview(
         status: commandStatus ?? "available",
       },
       category: "cloud_repair",
-      detail: `${preview.cloudRepair?.safeConflictIds.length ?? 0} safe conflict${preview.cloudRepair?.safeConflictIds.length === 1 ? "" : "s"
-        } matched.`,
+      detail: `${preview.cloudRepair?.safeConflictIds.length ?? 0} safe conflict${
+        preview.cloudRepair?.safeConflictIds.length === 1 ? "" : "s"
+      } matched.`,
       id: "cloud-repair-preview",
       status: commandStatus ?? "available",
       summary:
@@ -1580,7 +1637,8 @@ function latestRuntimeStillNeedsLocalReviewDrain(
 ) {
   const sync = summary.runtimeStatus?.sync;
   return Boolean(
-    sync && (sync.status === "needs_review" || (sync.reviewEventCount ?? 0) > 0),
+    sync &&
+    (sync.status === "needs_review" || (sync.reviewEventCount ?? 0) > 0),
   );
 }
 
@@ -1638,7 +1696,7 @@ function buildRecoveryReadiness(
           : "healthy_idle";
   const status =
     explicitStatus &&
-      explicitReadinessMatchesVisibleEvidence(explicitStatus, groups)
+    explicitReadinessMatchesVisibleEvidence(explicitStatus, groups)
       ? explicitStatus
       : derivedStatus;
 
@@ -1733,13 +1791,13 @@ function normalizeBackendRecoveryBlocker(
   const category = normalizeRecoveryCategory(blocker.category);
   const safeAction =
     blocker.action &&
-      ["cloud_repair", "terminal_command"].includes(blocker.action.kind)
+    ["cloud_repair", "terminal_command"].includes(blocker.action.kind)
       ? {
-        ...blocker.action,
-        label:
-          normalizeSupportCopy(blocker.action.label) ?? blocker.action.label,
-        status: normalizeActionStatus(blocker.action.status),
-      }
+          ...blocker.action,
+          label:
+            normalizeSupportCopy(blocker.action.label) ?? blocker.action.label,
+          status: normalizeActionStatus(blocker.action.status),
+        }
       : undefined;
 
   return {

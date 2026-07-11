@@ -81,9 +81,7 @@ describe("terminal health presentation", () => {
         type: "synced_sale_inventory_review",
       }),
     ]);
-    expect(renderedCopy).not.toMatch(
-      /conflict-raw-001|payment payload/i,
-    );
+    expect(renderedCopy).not.toMatch(/conflict-raw-001|payment payload/i);
   });
 
   it("recognizes healthy server lanes and critical severity from the public contract", () => {
@@ -115,7 +113,8 @@ describe("terminal health presentation", () => {
       health: "needs_attention",
       operationalExplanation: {
         blockingDomain: "manual_review",
-        detail: "Manual review must finish before support repairs this terminal.",
+        detail:
+          "Manual review must finish before support repairs this terminal.",
         evidenceReferences: [
           {
             source: "cloud_repair",
@@ -126,7 +125,8 @@ describe("terminal health presentation", () => {
         ],
         headline: "Manager review needed",
         lane: "needs_manual_review",
-        nextStep: "Use the linked review workspace before running support repair.",
+        nextStep:
+          "Use the linked review workspace before running support repair.",
         primaryOwner: "manager",
         saleImpact: "not_ready",
         secondaryActions: [],
@@ -738,13 +738,15 @@ describe("terminal health presentation", () => {
           {
             commandContext: {
               expectedBlockerType: "local_review",
-              reason: "Local review items need terminal-local evidence collection.",
+              reason:
+                "Local review items need terminal-local evidence collection.",
             },
             commandType: "collect_local_review",
             expectedEvidence: {
               localReviewDetailsCollected: true,
             },
-            reason: "Local review items need terminal-local evidence collection.",
+            reason:
+              "Local review items need terminal-local evidence collection.",
           },
         ],
       },
@@ -902,13 +904,15 @@ describe("terminal health presentation", () => {
           {
             commandContext: {
               expectedBlockerType: "local_review",
-              reason: "Local review items need terminal-local evidence collection.",
+              reason:
+                "Local review items need terminal-local evidence collection.",
             },
             commandType: "collect_local_review",
             expectedEvidence: {
               localReviewDetailsCollected: true,
             },
-            reason: "Local review items need terminal-local evidence collection.",
+            reason:
+              "Local review items need terminal-local evidence collection.",
           },
         ],
       },
@@ -945,13 +949,15 @@ describe("terminal health presentation", () => {
           {
             commandContext: {
               expectedBlockerType: "local_review",
-              reason: "Local review items need terminal-local evidence collection.",
+              reason:
+                "Local review items need terminal-local evidence collection.",
             },
             commandType: "collect_local_review",
             expectedEvidence: {
               localReviewDetailsCollected: true,
             },
-            reason: "Local review items need terminal-local evidence collection.",
+            reason:
+              "Local review items need terminal-local evidence collection.",
           },
         ],
       },
@@ -997,13 +1003,15 @@ describe("terminal health presentation", () => {
             commandContext: {
               expectedBlockerType: "local_review",
               localReviewEventIds: ["event-review-1"],
-              reason: "Uploaded local review items can be cleared from this terminal.",
+              reason:
+                "Uploaded local review items can be cleared from this terminal.",
             },
             commandType: "clear_local_review_items",
             expectedEvidence: {
               localReviewEventCount: 0,
             },
-            reason: "Uploaded local review items can be cleared from this terminal.",
+            reason:
+              "Uploaded local review items can be cleared from this terminal.",
           },
         ],
       },
@@ -1041,7 +1049,8 @@ describe("terminal health presentation", () => {
           status: "available",
         }),
         detail: "Expected after check-in: 0 local review items remaining.",
-        summary: "Uploaded local review items can be cleared from this terminal.",
+        summary:
+          "Uploaded local review items can be cleared from this terminal.",
         title: "Local review cleanup",
       }),
     );
@@ -1601,6 +1610,102 @@ describe("terminal health presentation", () => {
         description:
           "App session unverified; local sales stay on this terminal until cloud validation returns.",
         label: "Local continuation",
+      }),
+    );
+  });
+
+  it("presents storage pressure as an actionable warning without changing authority", () => {
+    expect(
+      classifyTerminalHealth({
+        health: "online",
+        runtimeStatus: {
+          localStore: {
+            available: true,
+            persistence: "denied",
+            pressure: "warning",
+            terminalSeedReady: true,
+          },
+          receivedAt: Date.now(),
+          sync: {
+            failedEventCount: 0,
+            localOnlyEventCount: 0,
+            pendingEventCount: 0,
+            reviewEventCount: 0,
+            status: "synced",
+            uploadableEventCount: 0,
+          },
+        },
+        syncEvidence: { unresolvedConflictCount: 0 },
+        terminal: { status: "active" },
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        label: "Storage needs attention",
+      }),
+    );
+  });
+
+  it.each([
+    ["maintenance", "active", "Maintenance in progress"],
+    ["migration", "running", "Maintenance in progress"],
+    ["maintenance", "blocked", "Storage support needed"],
+    ["migration", "failed", "Storage support needed"],
+  ] as const)(
+    "presents %s %s with an operational action",
+    (field, value, label) => {
+      expect(
+        classifyTerminalHealth({
+          health: "online",
+          runtimeStatus: {
+            localStore: {
+              available: true,
+              [field]: value,
+              terminalSeedReady: true,
+            },
+            receivedAt: Date.now(),
+            sync: {
+              failedEventCount: 0,
+              localOnlyEventCount: 0,
+              pendingEventCount: 0,
+              reviewEventCount: 0,
+              status: "synced",
+              uploadableEventCount: 0,
+            },
+          },
+          syncEvidence: { unresolvedConflictCount: 0 },
+          terminal: { status: "active" },
+        }),
+      ).toEqual(expect.objectContaining({ label }));
+    },
+  );
+
+  it("does not present stale storage evidence as current", () => {
+    expect(
+      classifyTerminalHealth({
+        health: "online",
+        runtimeStatus: {
+          localStore: {
+            available: true,
+            healthFreshness: "stale",
+            pressure: "normal",
+            terminalSeedReady: true,
+          },
+          receivedAt: Date.now(),
+          sync: {
+            failedEventCount: 0,
+            localOnlyEventCount: 0,
+            pendingEventCount: 0,
+            reviewEventCount: 0,
+            status: "synced",
+            uploadableEventCount: 0,
+          },
+        },
+        syncEvidence: { unresolvedConflictCount: 0 },
+        terminal: { status: "active" },
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        label: "Storage status unavailable",
       }),
     );
   });

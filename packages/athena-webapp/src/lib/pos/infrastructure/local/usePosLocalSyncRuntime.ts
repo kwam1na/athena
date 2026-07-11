@@ -11,8 +11,18 @@ import {
 import { isLocalPinVerifierMetadata } from "@/lib/security/localPinVerifier";
 import { isNonBlockingRegisterLifecycleReviewEvent } from "~/shared/registerSessionLifecyclePolicy";
 import {
-  createIndexedDbPosLocalStorageAdapter,
-  createPosLocalStore,
+  getDefaultPosLocalStore,
+  getDefaultPosLocalStorageLifecycleHealth,
+  getDefaultPosLocalStorageRuntime,
+  subscribeDefaultPosLocalStorageLifecycleHealth,
+} from "./posLocalStorageRuntime";
+import type { PosLocalStorePort } from "@/lib/pos/application/posLocalStorePort";
+import {
+  classifyPosLocalLedgerPressure,
+  observePosLocalStorageHealth,
+  type PosLocalStorageHealth,
+} from "./posLocalStorageHealth";
+import {
   type PosDrawerAuthorityState,
   type PosLocalCloudMapping,
   type PosLocalEventRecord,
@@ -21,7 +31,7 @@ import {
   type PosLocalStoreResult,
   type PosTerminalIntegrityState,
   type PosProvisionedTerminalSeed,
-} from "./posLocalStore";
+} from "@/lib/pos/application/posLocalStoreTypes";
 import { createLocalCommandGateway } from "./localCommandGateway";
 import {
   clearRecoverableDrawerAuthorityForSyncedEvents,
@@ -188,7 +198,7 @@ export type PosLocalRuntimeSyncDebug = {
 
 export type PosLocalSyncRuntimeMode = "drain-enabled" | "status-only";
 
-type PosLocalRuntimeStore = ReturnType<typeof createPosLocalStore>;
+type PosLocalRuntimeStore = PosLocalStorePort;
 
 type RuntimeDrawerAuthorityDirective = Omit<
   PosDrawerAuthorityState,
@@ -268,9 +278,16 @@ export function usePosLocalSyncRuntimeStatus(input: {
   const [isOnline, setIsOnline] = useState(() =>
     typeof navigator === "undefined" ? true : navigator.onLine,
   );
+  const [storageHealth, setStorageHealth] =
+    useState<PosLocalStorageHealth | null>(null);
   const lastEventAppendTokenRef = useRef(0);
   const lastManualRetryTokenRef = useRef(0);
   const { storeFactory, storeId, terminalId } = input;
+  const hasInjectedStore = Boolean(storeFactory);
+  const storageHealthStoreFactoryRef = useRef(storeFactory);
+  useEffect(() => {
+    storageHealthStoreFactoryRef.current = storeFactory;
+  }, [storeFactory]);
   const drainOnAppend = input.drainOnAppend ?? false;
   const eventAppendToken = input.eventAppendToken ?? 0;
   const mode = input.mode ?? "drain-enabled";
@@ -338,18 +355,72 @@ export function usePosLocalSyncRuntimeStatus(input: {
   }, []);
 
   useEffect(() => {
-    if (!storeId || (!storeFactory && typeof indexedDB === "undefined")) {
+    let cancelled = false;
+    const refreshHealth = () => {
+      const store =
+        storageHealthStoreFactoryRef.current?.() ?? getDefaultPosLocalStore();
+      const summary =
+        storeId && terminalId && typeof store.readLedgerSummary === "function"
+          ? store.readLedgerSummary({ storeId, terminalId })
+          : Promise.resolve(null);
+      void Promise.all([
+        observePosLocalStorageHealth({
+          storage: globalThis.navigator?.storage,
+        }),
+        summary,
+      ]).then(([health, ledgerSummary]) => {
+        if (!cancelled) {
+          const lifecycle = hasInjectedStore
+            ? undefined
+            : getDefaultPosLocalStorageLifecycleHealth();
+          setStorageHealth({
+            ...health,
+            engineReadiness: readError
+              ? "unavailable"
+              : hasInjectedStore
+                ? "unknown"
+                : (lifecycle?.engineReadiness ?? "unknown"),
+            ledgerPressure:
+              ledgerSummary?.ok === true
+                ? classifyPosLocalLedgerPressure(ledgerSummary.value)
+                : "unknown",
+            ...(lifecycle?.lastSuccessfulDurableCommitAt
+              ? {
+                  lastSuccessfulDurableCommitAt:
+                    lifecycle.lastSuccessfulDurableCommitAt,
+                }
+              : {}),
+            maintenance: lifecycle?.maintenance ?? "unknown",
+            migration: lifecycle?.migration ?? "unknown",
+          });
+        }
+      });
+    };
+    refreshHealth();
+    const interval = globalThis.setInterval(refreshHealth, 60_000);
+    const unsubscribeRuntime = hasInjectedStore
+      ? undefined
+      : getDefaultPosLocalStorageRuntime().subscribe(refreshHealth);
+    const unsubscribeLifecycle = hasInjectedStore
+      ? undefined
+      : subscribeDefaultPosLocalStorageLifecycleHealth(refreshHealth);
+    return () => {
+      cancelled = true;
+      globalThis.clearInterval(interval);
+      unsubscribeRuntime?.();
+      unsubscribeLifecycle?.();
+    };
+  }, [hasInjectedStore, isOnline, readError, storeId, terminalId]);
+
+  useEffect(() => {
+    if (!storeId) {
       setEvents([]);
       setReadError(null);
       return;
     }
 
     let cancelled = false;
-    const store =
-      storeFactory?.() ??
-      createPosLocalStore({
-        adapter: createIndexedDbPosLocalStorageAdapter(),
-      });
+    const store = storeFactory?.() ?? getDefaultPosLocalStore();
     const stopSchedulers: Array<() => void> = [];
 
     void (async () => {
@@ -486,6 +557,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
             }
 
             const pending = await readScopedPosLocalUploadEvents({
+              includeReviewEvents: drainIncludesReviewEvents(options),
               store,
               storeId,
               terminalId,
@@ -561,6 +633,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
           },
           uploadBatch: async (pendingEvents) => {
             const latestEvents = await readScopedPosLocalUploadEvents({
+              includeReviewEvents: drainIncludesReviewEvents(options),
               store,
               storeId,
               terminalId,
@@ -955,6 +1028,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
       browserInfo: getRuntimeBrowserInfo(isOnline),
       events,
       localStoreFailureMessage: readError,
+      storageHealth,
       snapshots: runtimeReadiness.snapshots,
       source,
       drawerAuthority: runtimeReadiness.drawerAuthority,
@@ -984,6 +1058,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
       runtimeStatusSyncDebug,
       source,
       staffProfileId,
+      storageHealth,
     ],
   );
   const runtimeStatus = useMemo(
@@ -1233,12 +1308,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
           }
           if (runtimeReadiness.terminalSeed) {
             const authorityStore =
-              storeFactory?.() ??
-              (typeof indexedDB === "undefined"
-                ? null
-                : createPosLocalStore({
-                    adapter: createIndexedDbPosLocalStorageAdapter(),
-                  }));
+              storeFactory?.() ?? getDefaultPosLocalStore();
 
             if (authorityStore) {
               const drawerAuthorityUpdated =
@@ -1324,13 +1394,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
         const terminalAuthorizationRejected =
           isTerminalAuthorizationUserError(error);
         if (terminalAuthorizationRejected) {
-          const authorityStore =
-            storeFactory?.() ??
-            (typeof indexedDB === "undefined"
-              ? null
-              : createPosLocalStore({
-                  adapter: createIndexedDbPosLocalStorageAdapter(),
-                }));
+          const authorityStore = storeFactory?.() ?? getDefaultPosLocalStore();
           if (
             authorityStore &&
             runtimeReadiness.terminalSeed &&
@@ -1467,14 +1531,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
       return;
     }
 
-    const store =
-      storeFactory?.() ??
-      (typeof indexedDB === "undefined"
-        ? null
-        : createPosLocalStore({
-            adapter: createIndexedDbPosLocalStorageAdapter(),
-          }));
-    if (!store) return;
+    const store = storeFactory?.() ?? getDefaultPosLocalStore();
 
     let isStale = false;
     const command = recoveryCommands.data.find(
@@ -2348,17 +2405,12 @@ export function assertPosLocalStoreOk<T>(
 }
 
 async function readScopedPosLocalUploadEvents(input: {
+  includeReviewEvents?: boolean;
   store: PosLocalRuntimeStore;
   storeId?: string | null;
   terminalId?: string | null;
 }) {
-  const [events, terminalSeed] = await Promise.all([
-    input.store.listEventsForUpload
-      ? input.store.listEventsForUpload()
-      : input.store.listEvents(),
-    input.store.readProvisionedTerminalSeed(),
-  ]);
-  if (!events.ok) return events;
+  const terminalSeed = await input.store.readProvisionedTerminalSeed();
   if (!terminalSeed.ok) return terminalSeed;
 
   const scope = resolvePosLocalTerminalScope({
@@ -2366,16 +2418,54 @@ async function readScopedPosLocalUploadEvents(input: {
     terminalId: input.terminalId,
     terminalSeed: terminalSeed.value,
   });
+  const terminalIds = [...scope.terminalIds];
+  const listEventsForUpload = (input.store as Partial<PosLocalStorePort>)
+    .listEventsForUpload;
+  const eventPages =
+    listEventsForUpload && scope.storeId && terminalIds.length > 0
+      ? await Promise.all(
+          terminalIds.map((scopedTerminalId) =>
+            listEventsForUpload.call(input.store, {
+              includeReviewEvents: input.includeReviewEvents,
+              limit: 250,
+              storeId: scope.storeId,
+              terminalId: scopedTerminalId,
+            }),
+          ),
+        )
+      : [
+          listEventsForUpload
+            ? await listEventsForUpload.call(input.store)
+            : await input.store.listEvents(),
+        ];
+  const failedPage = eventPages.find((page) => !page.ok);
+  if (failedPage && !failedPage.ok) return failedPage;
+  const events = eventPages.flatMap((page) => (page.ok ? page.value : []));
 
   return {
     ok: true as const,
     value: {
-      events: events.value.filter((event) =>
-        isPosLocalEventInTerminalScope(event, scope),
-      ),
+      events: events
+        .filter(
+          (event, index, values) =>
+            values.findIndex(
+              (candidate) => candidate.localEventId === event.localEventId,
+            ) === index,
+        )
+        .filter((event) => isPosLocalEventInTerminalScope(event, scope)),
       terminalSeed: scope.provisionedSeed,
     },
   };
+}
+
+function drainIncludesReviewEvents(options: PosLocalRuntimeDrainOptions) {
+  return Boolean(
+    options.includeReviewEvents ||
+    options.includeUploadedReviewEvents ||
+    options.onlyReviewEvents ||
+    options.onlyUploadedReviewEvents ||
+    options.onlyUploadedRegisterOpenReviewEvents,
+  );
 }
 
 function toLocalRuntimeDiagnosticsEvent(
@@ -2896,6 +2986,9 @@ export async function writeReturnedLocalCloudMappings(
       localId: mapping.localId,
       cloudId: mapping.cloudId,
       mappedAt: mapping.createdAt,
+      ...(scope
+        ? { storeId: scope.storeId, terminalId: scope.terminalId }
+        : {}),
       ...registerScope,
     });
     if (!result.ok)

@@ -4,7 +4,7 @@ import {
   type PosLocalSyncUploadSupport,
 } from "./syncContract";
 import type { PosLocalSyncTrigger } from "./syncScheduler";
-import type { PosLocalEventRecord } from "./posLocalStore";
+import type { PosLocalEventRecord } from "@/lib/pos/application/posLocalStoreTypes";
 import type { PosTerminalRuntimeDiagnosticsEvent } from "./terminalRuntimeStatus";
 
 export type PosLocalRuntimeSyncDebugSnapshot = {

@@ -5,8 +5,8 @@ import type {
   PosLocalStaffAuthorityReadiness,
   PosProvisionedTerminalSeed,
   PosTerminalIntegrityState,
-} from "./posLocalStore";
-import { createPosLocalStore } from "./posLocalStore";
+} from "@/lib/pos/application/posLocalStoreTypes";
+import type { PosLocalStorePort } from "@/lib/pos/application/posLocalStorePort";
 import { readProjectedLocalRegisterModel } from "./localRegisterReader";
 import {
   hasSettledRegisterCloseout,
@@ -24,7 +24,7 @@ import {
   readLatestRuntimeDrawerAuthorityState,
 } from "./drawerAuthorityReconciliation";
 
-type PosLocalRuntimeStore = ReturnType<typeof createPosLocalStore>;
+type PosLocalRuntimeStore = PosLocalStorePort;
 
 export type PosTerminalRuntimeReadiness = {
   activeRegisterSession: PosTerminalRuntimeActiveRegisterSessionInput | null;
@@ -109,14 +109,12 @@ export async function refreshTerminalRuntimeReadiness(input: {
           store,
           storeId: input.storeId,
           terminalId: input.terminalId,
-          isOnline:
-            typeof navigator === "undefined" ? true : navigator.onLine,
+          isOnline: typeof navigator === "undefined" ? true : navigator.onLine,
         })
       : ({ ok: true, value: null } as const);
-  const activeLocalRegisterSessionId =
-    localRegisterModel.ok
-      ? localRegisterModel.value?.activeRegisterSession?.localRegisterSessionId
-      : undefined;
+  const activeLocalRegisterSessionId = localRegisterModel.ok
+    ? localRegisterModel.value?.activeRegisterSession?.localRegisterSessionId
+    : undefined;
   let drawerAuthority =
     activeLocalRegisterSessionId && readDrawerAuthorityState
       ? await readLatestRuntimeDrawerAuthorityState({
@@ -187,7 +185,9 @@ function toRuntimeActiveRegisterSession(
       : {}),
     localRegisterSessionId: session.localRegisterSessionId,
     openedAt: session.openedAt,
-    ...(session.registerNumber ? { registerNumber: session.registerNumber } : {}),
+    ...(session.registerNumber
+      ? { registerNumber: session.registerNumber }
+      : {}),
     status: session.status,
   };
 }

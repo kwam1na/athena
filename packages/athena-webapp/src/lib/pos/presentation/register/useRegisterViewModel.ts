@@ -36,7 +36,7 @@ import type { StaffAuthenticationResult } from "@/components/staff-auth/StaffAut
 import { useApprovedCommand } from "@/components/operations/useApprovedCommand";
 import { logger } from "@/lib/logger";
 import { useConvexCommandGateway } from "@/lib/pos/infrastructure/convex/commandGateway";
-import { type PosLocalEventRecord } from "@/lib/pos/infrastructure/local/posLocalStore";
+import type { PosLocalEventRecord } from "@/lib/pos/application/posLocalStoreTypes";
 import {
   type PosLocalActiveSaleReadModel,
   type PosLocalRegisterReadModel,
@@ -631,32 +631,47 @@ export function useRegisterViewModel(): RegisterViewModel {
       return;
     }
 
-    const completedSale = localRegisterReadModel.completedSales.find(
-      (sale) => sale.localTransactionId === localTransactionId,
-    );
-    const cloudTransactionId = completedSale?.cloudTransactionId;
-    if (!cloudTransactionId) {
-      return;
-    }
-
-    setCompletedTransactionData((current) => {
-      if (
-        !current ||
-        current.localTransactionId !== localTransactionId ||
-        current.transactionId
-      ) {
-        return current;
+    let cancelled = false;
+    const resolveCloudTransactionId = async () => {
+      const completedSale = localRegisterReadModel.completedSales.find(
+        (sale) => sale.localTransactionId === localTransactionId,
+      );
+      let cloudTransactionId = completedSale?.cloudTransactionId;
+      if (!cloudTransactionId) {
+        const mapping = await localStore.readLocalCloudMapping({
+          entity: "posTransaction",
+          localId: localTransactionId,
+        });
+        if (!mapping.ok || cancelled) return;
+        cloudTransactionId = mapping.value?.cloudId;
       }
+      if (!cloudTransactionId || cancelled) return;
 
-      return {
-        ...current,
-        transactionId: cloudTransactionId as Id<"posTransaction">,
-      };
-    });
+      setCompletedTransactionData((current) => {
+        if (
+          !current ||
+          current.localTransactionId !== localTransactionId ||
+          current.transactionId
+        ) {
+          return current;
+        }
+
+        return {
+          ...current,
+          transactionId: cloudTransactionId as Id<"posTransaction">,
+        };
+      });
+    };
+
+    void resolveCloudTransactionId();
+    return () => {
+      cancelled = true;
+    };
   }, [
     completedTransactionData?.localTransactionId,
     completedTransactionData?.transactionId,
     localRegisterReadModel,
+    localStore,
   ]);
 
   const registerState = useConvexRegisterState({
@@ -944,15 +959,6 @@ export function useRegisterViewModel(): RegisterViewModel {
 
       if (staffProfileIdRef.current) {
         setCashierPresenceRestore({ status: "restored" });
-        return;
-      }
-
-      if (typeof indexedDB === "undefined") {
-        setCashierPresenceRestore({
-          message:
-            "Cashier sign-in could not be restored. Sign in to continue.",
-          status: "failed",
-        });
         return;
       }
 
@@ -1841,7 +1847,7 @@ export function useRegisterViewModel(): RegisterViewModel {
                     ? "recovery"
                     : "initialSetup";
   const handleRepairTerminalSetup = useCallback(async () => {
-    if (!activeStoreId || !terminal?._id || typeof indexedDB === "undefined") {
+    if (!activeStoreId || !terminal?._id) {
       setDrawerErrorMessage(
         "Terminal setup repair is not available on this browser.",
       );

@@ -40,9 +40,10 @@ import {
 } from "@/offline/posOfflineReadiness";
 import { readPosAppShellReadiness } from "@/offline/posAppShellReadiness";
 import {
-  createIndexedDbPosLocalStorageAdapter,
-  createPosLocalStore,
-} from "@/lib/pos/infrastructure/local/posLocalStore";
+  getDefaultPosLocalStore,
+  requestDefaultPosLocalPersistentStorage,
+} from "@/lib/pos/infrastructure/local/posLocalStorageRuntime";
+import type { PosLocalStorePort } from "@/lib/pos/application/posLocalStorePort";
 import {
   DEFAULT_POS_TERMINAL_TRANSACTION_CAPABILITY,
   normalizePosTerminalTransactionCapability,
@@ -357,8 +358,8 @@ function FingerprintRegistrationCard({
               </p>
             </div>
             <span className="inline-flex rounded-full border border-border bg-background px-layout-sm py-layout-2xs text-sm text-muted-foreground">
-              {offlineReadiness.readyCount} of{" "}
-              {offlineReadiness.signals.length} reporting
+              {offlineReadiness.readyCount} of {offlineReadiness.signals.length}{" "}
+              reporting
             </span>
           </div>
 
@@ -397,7 +398,8 @@ function formatRecoveryTimestamp(value?: number | null) {
 type StoreDayAutomationPolicy = {
   localStartMinutes?: number | null;
   mode?: AutomationPolicyMode | null;
-  openingBlockerHandling?: "skip_when_blocked" | "start_with_manager_review" | null;
+  openingBlockerHandling?:
+    "skip_when_blocked" | "start_with_manager_review" | null;
   operatingTimezoneOffsetMinutes?: number | null;
 };
 
@@ -603,20 +605,18 @@ function StoreHoursTimingReadout({
   const scheduleContext = scheduleSummary?.context;
   const currentOrNextWindow =
     scheduleContext?.currentWindow ?? scheduleContext?.nextWindow ?? null;
-  const openingTiming =
-    currentOrNextWindow?.localStartLabel
-      ? `Opening at ${formatStoreHoursTimeLabel(
-          currentOrNextWindow.localStartLabel,
-        )}`
-      : scheduleContext?.phase === "closed"
-        ? "Store is closed today."
-        : "Opening timing is waiting for Store Hours.";
-  const eodTiming =
-    currentOrNextWindow?.localEndLabel
-      ? `EOD after ${formatStoreHoursTimeLabel(
-          currentOrNextWindow.localEndLabel,
-        )}`
-      : "EOD timing is waiting for Store Hours.";
+  const openingTiming = currentOrNextWindow?.localStartLabel
+    ? `Opening at ${formatStoreHoursTimeLabel(
+        currentOrNextWindow.localStartLabel,
+      )}`
+    : scheduleContext?.phase === "closed"
+      ? "Store is closed today."
+      : "Opening timing is waiting for Store Hours.";
+  const eodTiming = currentOrNextWindow?.localEndLabel
+    ? `EOD after ${formatStoreHoursTimeLabel(
+        currentOrNextWindow.localEndLabel,
+      )}`
+    : "EOD timing is waiting for Store Hours.";
   const timezone =
     scheduleContext?.timezone ??
     scheduleSummary?.schedule?.timezone ??
@@ -652,9 +652,7 @@ function StoreHoursTimingReadout({
           </div>
           <div>
             <dt className="font-medium text-foreground">EOD</dt>
-            <dd className="mt-layout-2xs text-muted-foreground">
-              {eodTiming}
-            </dd>
+            <dd className="mt-layout-2xs text-muted-foreground">{eodTiming}</dd>
           </div>
         </dl>
 
@@ -685,12 +683,11 @@ function RegisterCloseoutApprovalPolicyAdminPanel({
   const { hasFullAdminAccess, isLoading } = usePermissions();
   const policy = useQuery(
     api.operations.dailyOperationsAutomation.getRegisterCloseoutApprovalPolicy,
-    !isLoading && hasFullAdminAccess && storeId
-      ? { storeId }
-      : "skip",
+    !isLoading && hasFullAdminAccess && storeId ? { storeId } : "skip",
   ) as RegisterCloseoutApprovalPolicy | null | undefined;
   const updateRegisterCloseoutApprovalPolicy = useMutation(
-    api.operations.dailyOperationsAutomation.updateRegisterCloseoutApprovalPolicy,
+    api.operations.dailyOperationsAutomation
+      .updateRegisterCloseoutApprovalPolicy,
   ) as unknown as UpdateRegisterCloseoutApprovalPolicy;
   const [varianceApprovalThreshold, setVarianceApprovalThreshold] =
     useState("50");
@@ -704,9 +701,7 @@ function RegisterCloseoutApprovalPolicyAdminPanel({
     varianceApprovalThreshold,
   );
   const canSave =
-    Boolean(storeId) &&
-    parsedVarianceApprovalThreshold !== null &&
-    !isSaving;
+    Boolean(storeId) && parsedVarianceApprovalThreshold !== null && !isSaving;
 
   useEffect(() => {
     if (policy?.varianceApprovalThreshold == null) {
@@ -854,15 +849,11 @@ function EodCompletionAutomationAdminPanel({
   const { hasFullAdminAccess, isLoading } = usePermissions();
   const policy = useQuery(
     api.operations.dailyOperationsAutomation.getEodAutoCompletePolicy,
-    !isLoading && hasFullAdminAccess && storeId
-      ? { storeId }
-      : "skip",
+    !isLoading && hasFullAdminAccess && storeId ? { storeId } : "skip",
   ) as EodAutoCompletePolicy | null | undefined;
   const scheduleSummary = useQuery(
     storeScheduleApi.getStoreScheduleSummary,
-    !isLoading && hasFullAdminAccess && storeId
-      ? { storeId }
-      : "skip",
+    !isLoading && hasFullAdminAccess && storeId ? { storeId } : "skip",
   ) as StoreScheduleSummary | null | undefined;
   const updateEodAutoCompletePolicy = useMutation(
     api.operations.dailyOperationsAutomation.updateEodAutoCompletePolicy,
@@ -880,8 +871,7 @@ function EodCompletionAutomationAdminPanel({
     text: string;
   } | null>(null);
   const policyMode = policy?.mode;
-  const policyCleanDayAutoCompleteEnabled =
-    policy?.cleanDayAutoCompleteEnabled;
+  const policyCleanDayAutoCompleteEnabled = policy?.cleanDayAutoCompleteEnabled;
   const policyMaxAbsoluteCashVariance = policy?.maxAbsoluteCashVariance;
   const policyMaxVoidedSaleCount = policy?.maxVoidedSaleCount;
   const policyMaxVoidedSaleTotal = policy?.maxVoidedSaleTotal;
@@ -919,7 +909,10 @@ function EodCompletionAutomationAdminPanel({
   );
 
   useEffect(() => {
-    if (policy?.localCompletionWindowMinutes == null || storeCloseMinute === null) {
+    if (
+      policy?.localCompletionWindowMinutes == null ||
+      storeCloseMinute === null
+    ) {
       setCompletionOffsetMinutes(0);
       return;
     }
@@ -946,9 +939,7 @@ function EodCompletionAutomationAdminPanel({
     }
 
     setMode(normalizeAutomationPolicyMode(policyMode));
-    setCleanDayAutoCompleteEnabled(
-      Boolean(policyCleanDayAutoCompleteEnabled),
-    );
+    setCleanDayAutoCompleteEnabled(Boolean(policyCleanDayAutoCompleteEnabled));
     setMaxAbsoluteCashVariance(
       formatMinorUnitInputValue(policyMaxAbsoluteCashVariance),
     );
@@ -969,12 +960,10 @@ function EodCompletionAutomationAdminPanel({
   const parsedMaxAbsoluteCashVariance = parseNonNegativeMoneyInput(
     maxAbsoluteCashVariance,
   );
-  const parsedMaxVoidedSaleCount = parseNonNegativeIntegerInput(
-    maxVoidedSaleCount,
-  );
-  const parsedMaxVoidedSaleTotal = parseNonNegativeMoneyInput(
-    maxVoidedSaleTotal,
-  );
+  const parsedMaxVoidedSaleCount =
+    parseNonNegativeIntegerInput(maxVoidedSaleCount);
+  const parsedMaxVoidedSaleTotal =
+    parseNonNegativeMoneyInput(maxVoidedSaleTotal);
   const canSave =
     Boolean(storeId) &&
     parsedMaxAbsoluteCashVariance !== null &&
@@ -1063,7 +1052,9 @@ function EodCompletionAutomationAdminPanel({
           className="grid gap-layout-sm sm:grid-cols-[repeat(3,minmax(10rem,18rem))]"
           value={mode}
           onValueChange={(value) =>
-            setMode(normalizeAutomationPolicyMode(value as AutomationPolicyMode))
+            setMode(
+              normalizeAutomationPolicyMode(value as AutomationPolicyMode),
+            )
           }
         >
           {[
@@ -1080,7 +1071,8 @@ function EodCompletionAutomationAdminPanel({
             {
               value: "enabled",
               label: "Enable EOD completion",
-              description: "Athena completes eligible EOD Reviews under policy.",
+              description:
+                "Athena completes eligible EOD Reviews under policy.",
             },
           ].map((option) => (
             <label
@@ -1091,9 +1083,7 @@ function EodCompletionAutomationAdminPanel({
               <span className="flex items-start gap-layout-xs">
                 <RadioGroupItem
                   aria-label={option.label}
-                  onClick={() =>
-                    setMode(option.value as AutomationPolicyMode)
-                  }
+                  onClick={() => setMode(option.value as AutomationPolicyMode)}
                   value={option.value}
                 />
                 <span className="font-medium text-foreground">
@@ -1109,9 +1099,7 @@ function EodCompletionAutomationAdminPanel({
 
         <div className="grid gap-layout-md">
           <div className="max-w-[18rem] space-y-layout-xs">
-            <Label htmlFor="eod-completion-offset">
-              EOD completion offset
-            </Label>
+            <Label htmlFor="eod-completion-offset">EOD completion offset</Label>
             <Select
               onValueChange={(value) =>
                 setCompletionOffsetMinutes(Number(value))
@@ -1154,12 +1142,11 @@ function EodCompletionAutomationAdminPanel({
                 Enable blocker-free completion
               </span>
               <span className="mt-1 block leading-5 text-muted-foreground">
-                Athena can complete blocker-free days and preserve
-                carry-forward work for Opening when automation is enabled.
+                Athena can complete blocker-free days and preserve carry-forward
+                work for Opening when automation is enabled.
               </span>
             </span>
           </label>
-
         </div>
 
         <div className="grid gap-layout-md sm:grid-cols-[repeat(3,minmax(10rem,14rem))]">
@@ -1268,9 +1255,8 @@ function StoreDayAutomationAdminPanel({
     storeOpeningMinute === null
       ? (policy?.localStartMinutes ?? DEFAULT_OPENING_LOCAL_START_MINUTES)
       : normalizeMinuteOfDay(storeOpeningMinute + startOffsetMinutes);
-  const selectedStartOffsetLabel = formatOffsetFromStoreHours(
-    startOffsetMinutes,
-  );
+  const selectedStartOffsetLabel =
+    formatOffsetFromStoreHours(startOffsetMinutes);
   const startOffsetOptions = AUTOMATION_START_OFFSET_OPTIONS.some(
     (option) => Number(option.value) === startOffsetMinutes,
   )
@@ -1279,8 +1265,9 @@ function StoreDayAutomationAdminPanel({
         ...AUTOMATION_START_OFFSET_OPTIONS,
         { value: String(startOffsetMinutes), label: selectedStartOffsetLabel },
       ].sort((left, right) => Number(left.value) - Number(right.value));
-  const storeOpeningLabel =
-    formatStoreHoursTimeLabel(currentOrNextWindow?.localStartLabel);
+  const storeOpeningLabel = formatStoreHoursTimeLabel(
+    currentOrNextWindow?.localStartLabel,
+  );
   const selectedStartTimeLabel = formatMinuteOfDayLabel(selectedStartMinute);
 
   useEffect(() => {
@@ -1448,11 +1435,7 @@ function StoreDayAutomationAdminPanel({
   );
 }
 
-function POSRecoveryCodeAdminPanel({
-  storeId,
-}: {
-  storeId?: string | null;
-}) {
+function POSRecoveryCodeAdminPanel({ storeId }: { storeId?: string | null }) {
   const { hasFullAdminAccess, isLoading } = usePermissions();
   const status = useQuery(
     api.pos.public.posRecoveryCodes.getRecoveryCodeStatus,
@@ -1620,7 +1603,9 @@ function POSRecoveryCodeAdminPanel({
           </LoadingButton>
           <LoadingButton
             isLoading={isRevoking}
-            disabled={!storeId || !status || status.status === "revoked" || isRevoking}
+            disabled={
+              !storeId || !status || status.status === "revoked" || isRevoking
+            }
             onClick={handleRevoke}
             variant="outline"
           >
@@ -1632,17 +1617,13 @@ function POSRecoveryCodeAdminPanel({
   );
 }
 
-type PosSettingsLocalReadinessStore = ReturnType<typeof createPosLocalStore>;
+type PosSettingsLocalReadinessStore = PosLocalStorePort;
 
 function createDefaultLocalReadinessStore() {
-  if (typeof indexedDB === "undefined") {
-    return null;
-  }
-
-  return createPosLocalStore({
-    adapter: createIndexedDbPosLocalStorageAdapter(),
-  });
+  return getDefaultPosLocalStore();
 }
+
+const defaultPosSettingsStoreFactory = () => getDefaultPosLocalStore();
 
 function signalFromSnapshot(
   snapshot:
@@ -1695,7 +1676,9 @@ function signalFromAppSession(input: {
 function usePosSettingsOfflineReadiness(input: {
   appSessionRecovery?: PosTerminalRuntimeAppSessionRecoveryInput | null;
   existingTerminal: ProvisionedTerminalRecord | null;
-  storeFactory?: Parameters<typeof registerAndProvisionPosTerminal>[0]["storeFactory"];
+  storeFactory?: Parameters<
+    typeof registerAndProvisionPosTerminal
+  >[0]["storeFactory"];
   hasUser: boolean;
   isAuthLoading: boolean;
   storeId?: string;
@@ -1783,17 +1766,28 @@ function usePosSettingsOfflineReadiness(input: {
         serviceCatalog,
         availabilitySnapshot,
       ] = await Promise.all([
-        store.readProvisionedTerminalSeed?.() ??
+        store
+          .readProvisionedTerminalSeed?.()
+          .catch(() => ({ ok: false as const })) ??
           Promise.resolve({ ok: true as const, value: null }),
-        store.getStaffAuthorityReadiness?.({
-          storeId,
-          terminalId: existingTerminal._id,
-        }) ?? Promise.resolve({ ok: true as const, value: "missing" as const }),
-        store.readRegisterCatalogSnapshot?.({ storeId }) ??
+        store
+          .getStaffAuthorityReadiness?.({
+            storeId,
+            terminalId: existingTerminal._id,
+          })
+          .catch(() => ({ ok: false as const })) ??
+          Promise.resolve({ ok: true as const, value: "missing" as const }),
+        store
+          .readRegisterCatalogSnapshot?.({ storeId })
+          .catch(() => ({ ok: false as const })) ??
           Promise.resolve({ ok: true as const, value: null }),
-        store.readRegisterServiceCatalogSnapshot?.({ storeId }) ??
+        store
+          .readRegisterServiceCatalogSnapshot?.({ storeId })
+          .catch(() => ({ ok: false as const })) ??
           Promise.resolve({ ok: true as const, value: null }),
-        store.readRegisterAvailabilitySnapshot?.({ storeId }) ??
+        store
+          .readRegisterAvailabilitySnapshot?.({ storeId })
+          .catch(() => ({ ok: false as const })) ??
           Promise.resolve({ ok: true as const, value: null }),
       ]);
 
@@ -1842,9 +1836,11 @@ function usePosSettingsOfflineReadiness(input: {
 }
 
 export function POSSettingsView({
-  storeFactory,
+  storeFactory = defaultPosSettingsStoreFactory,
 }: {
-  storeFactory?: Parameters<typeof registerAndProvisionPosTerminal>[0]["storeFactory"];
+  storeFactory?: Parameters<
+    typeof registerAndProvisionPosTerminal
+  >[0]["storeFactory"];
 } = {}) {
   const { activeStore } = useGetActiveStore();
   const { isLoading: isAuthLoading, user } = useAuth();
@@ -2071,6 +2067,7 @@ export function POSSettingsView({
         fingerprintHash: fingerprintResult.fingerprintHash,
         orgUrlSlug: routeParams?.orgUrlSlug,
         registerNumber: registrationState.trimmedRegisterNumber,
+        requestPersistentStorage: requestDefaultPosLocalPersistentStorage,
         registerTerminalMutation,
         storeFactory,
         storeUrlSlug: routeParams?.storeUrlSlug,
@@ -2120,6 +2117,7 @@ export function POSSettingsView({
         fingerprintHash: fingerprintResult.fingerprintHash,
         orgUrlSlug: routeParams?.orgUrlSlug,
         registerNumber: existingTerminal.registerNumber ?? "",
+        requestPersistentStorage: requestDefaultPosLocalPersistentStorage,
         registerTerminalMutation,
         storeFactory,
         storeUrlSlug: routeParams?.storeUrlSlug,

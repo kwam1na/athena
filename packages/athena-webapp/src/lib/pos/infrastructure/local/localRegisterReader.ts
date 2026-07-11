@@ -9,16 +9,46 @@ import type {
   PosLocalStoreResult,
   PosTerminalIntegrityState,
   PosProvisionedTerminalSeed,
-} from "./posLocalStore";
+} from "@/lib/pos/application/posLocalStoreTypes";
+import type { PosLocalOpaqueContinuation } from "@/lib/pos/application/posLocalStoreTypes";
 import {
   isPosLocalEventInTerminalScope,
   resolvePosLocalTerminalScope,
+  type PosLocalTerminalScope,
   type PosLocalTerminalDescriptor,
 } from "./terminalScope";
 
 export type PosLocalRegisterReaderStore = {
   listEvents(): Promise<PosLocalStoreResult<PosLocalEventRecord[]>>;
-  listLocalCloudMappings?(): Promise<PosLocalStoreResult<PosLocalCloudMapping[]>>;
+  listLocalCloudMappings?(): Promise<
+    PosLocalStoreResult<PosLocalCloudMapping[]>
+  >;
+  readLocalCloudMapping?(input: {
+    entity: PosLocalCloudMapping["entity"];
+    localId: string;
+  }): Promise<PosLocalStoreResult<PosLocalCloudMapping | null>>;
+  readEventHistoryPage?(input: {
+    continuation?: PosLocalOpaqueContinuation;
+    limit: number;
+    storeId: string;
+    terminalId: string;
+  }): Promise<
+    PosLocalStoreResult<{
+      continuation?: PosLocalOpaqueContinuation;
+      items: PosLocalEventRecord[];
+    }>
+  >;
+  readMappingPage?(input: {
+    continuation?: PosLocalOpaqueContinuation;
+    limit: number;
+    storeId: string;
+    terminalId: string;
+  }): Promise<
+    PosLocalStoreResult<{
+      continuation?: PosLocalOpaqueContinuation;
+      items: PosLocalCloudMapping[];
+    }>
+  >;
   readDrawerAuthorityState?(input: {
     cloudRegisterSessionId?: string;
     localRegisterSessionId: string;
@@ -45,13 +75,9 @@ export async function readScopedPosLocalEvents(input: {
     terminalSeed: PosProvisionedTerminalSeed | null;
   }>
 > {
-  const [events, terminalSeed] = await Promise.all([
-    input.store.listEvents(),
-    input.store.readProvisionedTerminalSeed
-      ? input.store.readProvisionedTerminalSeed()
-      : ({ ok: true, value: null } as const),
-  ]);
-  if (!events.ok) return events;
+  const terminalSeed = input.store.readProvisionedTerminalSeed
+    ? await input.store.readProvisionedTerminalSeed()
+    : ({ ok: true, value: null } as const);
   if (!terminalSeed.ok) return terminalSeed;
 
   const scope = resolvePosLocalTerminalScope({
@@ -60,6 +86,15 @@ export async function readScopedPosLocalEvents(input: {
     terminalId: input.terminalId,
     terminalSeed: terminalSeed.value,
   });
+  const events = await readScopedPagesOrFallback({
+    fallback: () => input.store.listEvents(),
+    identity: (event) => event.localEventId,
+    page: input.store.readEventHistoryPage
+      ? (pageInput) => input.store.readEventHistoryPage!(pageInput)
+      : undefined,
+    scope,
+  });
+  if (!events.ok) return events;
 
   return {
     ok: true,
@@ -82,19 +117,26 @@ export async function readProjectedLocalRegisterModel(input: {
   const scoped = await readScopedPosLocalEvents(input);
   if (!scoped.ok) return scoped;
 
-  const mappings = input.store.listLocalCloudMappings
-    ? await input.store.listLocalCloudMappings()
-    : ({
-        ok: true,
-        value: [] as PosLocalCloudMapping[],
-      } as const);
-  if (!mappings.ok) return mappings;
   const scope = resolvePosLocalTerminalScope({
     storeId: input.storeId,
     terminal: input.terminal,
     terminalId: input.terminalId,
     terminalSeed: scoped.value.terminalSeed,
   });
+  const mappings = await readScopedPagesOrFallback({
+    fallback: input.store.listLocalCloudMappings
+      ? () => input.store.listLocalCloudMappings!()
+      : async () => ({
+          ok: true as const,
+          value: [] as PosLocalCloudMapping[],
+        }),
+    identity: (mapping) => `${mapping.entity}:${mapping.localId}`,
+    page: input.store.readMappingPage
+      ? (pageInput) => input.store.readMappingPage!(pageInput)
+      : undefined,
+    scope,
+  });
+  if (!mappings.ok) return mappings;
   const scopedTerminalId =
     scoped.value.terminalSeed?.terminalId ??
     input.terminal?.localTerminalId ??
@@ -110,15 +152,41 @@ export async function readProjectedLocalRegisterModel(input: {
       : ({ ok: true, value: null } as const);
   if (!terminalIntegrity.ok) return terminalIntegrity;
 
-  const baseModel = projectLocalRegisterReadModel({
+  let projectionMappings = mappings.value;
+  let baseModel = projectLocalRegisterReadModel({
     events: scoped.value.events,
     terminalSeed: scoped.value.terminalSeed,
-    mappings: mappings.value,
+    mappings: projectionMappings,
     isOnline: input.isOnline,
     terminalIntegrity: terminalIntegrity.value,
   });
   const activeLocalRegisterSessionId =
     baseModel.activeRegisterSession?.localRegisterSessionId;
+  if (
+    activeLocalRegisterSessionId &&
+    input.store.readLocalCloudMapping &&
+    !projectionMappings.some(
+      (mapping) =>
+        mapping.entity === "registerSession" &&
+        mapping.localId === activeLocalRegisterSessionId,
+    )
+  ) {
+    const legacyMapping = await input.store.readLocalCloudMapping({
+      entity: "registerSession",
+      localId: activeLocalRegisterSessionId,
+    });
+    if (!legacyMapping.ok) return legacyMapping;
+    if (legacyMapping.value) {
+      projectionMappings = [...projectionMappings, legacyMapping.value];
+      baseModel = projectLocalRegisterReadModel({
+        events: scoped.value.events,
+        terminalSeed: scoped.value.terminalSeed,
+        mappings: projectionMappings,
+        isOnline: input.isOnline,
+        terminalIntegrity: terminalIntegrity.value,
+      });
+    }
+  }
   const activeCloudRegisterSessionId =
     baseModel.activeRegisterSession?.cloudRegisterSessionId;
   const drawerAuthority =
@@ -140,12 +208,71 @@ export async function readProjectedLocalRegisterModel(input: {
     value: projectLocalRegisterReadModel({
       events: scoped.value.events,
       terminalSeed: scoped.value.terminalSeed,
-      mappings: mappings.value,
+      mappings: projectionMappings,
       isOnline: input.isOnline,
       drawerAuthority: drawerAuthority.value,
       terminalIntegrity: terminalIntegrity.value,
     }),
   };
+}
+
+async function readScopedPagesOrFallback<T>(input: {
+  fallback: () => Promise<PosLocalStoreResult<T[]>>;
+  identity: (item: T) => string;
+  page?: (pageInput: {
+    continuation?: PosLocalOpaqueContinuation;
+    limit: number;
+    storeId: string;
+    terminalId: string;
+  }) => Promise<
+    PosLocalStoreResult<{
+      continuation?: PosLocalOpaqueContinuation;
+      items: T[];
+    }>
+  >;
+  scope: PosLocalTerminalScope;
+}): Promise<PosLocalStoreResult<T[]>> {
+  if (
+    !input.page ||
+    !input.scope.storeId ||
+    input.scope.terminalIds.size === 0
+  ) {
+    return input.fallback();
+  }
+
+  const items = new Map<string, T>();
+  for (const terminalId of input.scope.terminalIds) {
+    let continuation: PosLocalOpaqueContinuation | undefined;
+    const visitedContinuations = new Set<string>();
+    do {
+      const result = await input.page({
+        ...(continuation ? { continuation } : {}),
+        limit: 250,
+        storeId: input.scope.storeId,
+        terminalId,
+      });
+      if (!result.ok) return result;
+      for (const item of result.value.items) {
+        items.set(input.identity(item), item);
+      }
+
+      continuation = result.value.continuation;
+      if (continuation) {
+        if (visitedContinuations.has(continuation)) {
+          return {
+            ok: false,
+            error: {
+              code: "read_failed",
+              message: "POS local storage returned a repeated continuation.",
+            },
+          };
+        }
+        visitedContinuations.add(continuation);
+      }
+    } while (continuation);
+  }
+
+  return { ok: true, value: [...items.values()] };
 }
 
 async function readLatestDrawerAuthorityState(input: {

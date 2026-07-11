@@ -8,16 +8,14 @@ import {
 } from "@/lib/pos/infrastructure/convex/registerLifecycleAuthorityGateway";
 import { getInitialRuntimeBuildMetadata } from "@/lib/runtimeBuildMetadata";
 import type { Id } from "~/convex/_generated/dataModel";
+import type { PosLocalRegisterAuthorityPort } from "@/lib/pos/application/posLocalStorePort";
 
 import {
   deriveRegisterLifecycleAuthorityCandidates,
   type RegisterLifecycleAuthorityCandidateState,
 } from "./registerLifecycleAuthorityCandidates";
 import type { PosLocalRegisterReadModel } from "./registerReadModel";
-import type {
-  createPosLocalStore,
-  PosProvisionedTerminalSeed,
-} from "./posLocalStore";
+import type { PosProvisionedTerminalSeed } from "@/lib/pos/application/posLocalStoreTypes";
 import {
   getRegisterLifecycleAuthorityRolloutPolicy,
   resolveRegisterLifecycleAuthorityRolloutCohort,
@@ -26,10 +24,7 @@ import {
   type RegisterLifecycleAuthorityRolloutPolicy,
 } from "./registerLifecycleAuthorityRollout";
 
-type RegisterLifecycleAuthorityStore = Pick<
-  ReturnType<typeof createPosLocalStore>,
-  "applyRegisterLifecycleAuthority" | "readProvisionedTerminalSeed"
->;
+type RegisterLifecycleAuthorityStore = PosLocalRegisterAuthorityPort;
 
 export type RegisterLifecycleAuthorityAuthorizationState =
   | { status: "not_ready" | "loading" | "offline" }

@@ -27,8 +27,7 @@ const localRegisterReaderMocks = vi.hoisted(() => ({
 }));
 
 vi.mock("./posLocalStore", async (importActual) => {
-  const actual =
-    await importActual<typeof import("./posLocalStore")>();
+  const actual = await importActual<typeof import("./posLocalStore")>();
 
   return {
     ...actual,
@@ -38,9 +37,12 @@ vi.mock("./posLocalStore", async (importActual) => {
   };
 });
 
+vi.mock("./posLocalStorageRuntime", () => ({
+  getDefaultPosLocalStore: posLocalStoreMocks.createPosLocalStore,
+}));
+
 vi.mock("./localRegisterReader", async (importActual) => {
-  const actual =
-    await importActual<typeof import("./localRegisterReader")>();
+  const actual = await importActual<typeof import("./localRegisterReader")>();
 
   return {
     ...actual,
@@ -381,7 +383,7 @@ describe("localPosReadiness", () => {
       canStartLocally: true,
       message:
         "Store day not started. Complete Opening Handoff before starting sales.",
-      });
+    });
   });
 
   it("keeps live Opening Handoff review arrears locally startable after caching not-started readiness", () => {
@@ -598,11 +600,12 @@ describe("localPosReadiness", () => {
         updatedAt: 1_100,
       },
     } as PosLocalRegisterReadModel;
-    const registerRead = new Promise<{ ok: true; value: PosLocalRegisterReadModel }>(
-      (resolve) => {
-        resolveRegisterRead = resolve;
-      },
-    );
+    const registerRead = new Promise<{
+      ok: true;
+      value: PosLocalRegisterReadModel;
+    }>((resolve) => {
+      resolveRegisterRead = resolve;
+    });
     localRegisterReaderMocks.readProjectedLocalRegisterModel
       .mockReturnValueOnce(registerRead)
       .mockResolvedValue({ ok: true, value: closedLocalRegisterReadModel });
@@ -663,9 +666,7 @@ describe("localPosReadiness", () => {
       value: {},
     });
     posLocalStoreMocks.state.currentStore = {
-      readStoreDayReadiness: vi.fn(
-        () => new Promise<never>(() => undefined),
-      ),
+      readStoreDayReadiness: vi.fn(() => new Promise<never>(() => undefined)),
       writeStoreDayReadiness: vi.fn().mockResolvedValue({
         ok: true,
         value: null,
@@ -818,7 +819,6 @@ describe("localPosReadiness", () => {
       });
     });
   });
-
 
   it("converts live daily-operation snapshots into local store-day readiness records", () => {
     expect(

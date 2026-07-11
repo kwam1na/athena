@@ -117,9 +117,59 @@ export const posTerminalRuntimeBrowserInfoValidator = v.object({
 
 export const posTerminalRuntimeLocalStoreValidator = v.object({
   available: v.boolean(),
+  engineReadiness: v.optional(
+    v.union(v.literal("ready"), v.literal("unavailable"), v.literal("unknown")),
+  ),
+  healthFreshness: v.optional(
+    v.union(v.literal("fresh"), v.literal("stale"), v.literal("unknown")),
+  ),
+  healthObservedAt: v.optional(v.number()),
+  lastSuccessfulDurableCommitAt: v.optional(v.number()),
+  ledgerPressure: v.optional(
+    v.union(
+      v.literal("normal"),
+      v.literal("warning"),
+      v.literal("critical"),
+      v.literal("unknown"),
+    ),
+  ),
+  maintenance: v.optional(
+    v.union(
+      v.literal("idle"),
+      v.literal("active"),
+      v.literal("blocked"),
+      v.literal("unknown"),
+    ),
+  ),
+  migration: v.optional(
+    v.union(
+      v.literal("idle"),
+      v.literal("running"),
+      v.literal("failed"),
+      v.literal("unknown"),
+    ),
+  ),
+  persistence: v.optional(
+    v.union(
+      v.literal("granted"),
+      v.literal("denied"),
+      v.literal("unsupported"),
+      v.literal("unknown"),
+    ),
+  ),
+  pressure: v.optional(
+    v.union(
+      v.literal("normal"),
+      v.literal("warning"),
+      v.literal("critical"),
+      v.literal("unknown"),
+    ),
+  ),
+  quotaBytes: v.optional(v.number()),
   schemaVersion: v.optional(v.number()),
   terminalSeedReady: v.boolean(),
   failureMessage: v.optional(v.string()),
+  usageBytes: v.optional(v.number()),
 });
 
 export const posTerminalRuntimeSyncValidator = v.object({
@@ -129,21 +179,25 @@ export const posTerminalRuntimeSyncValidator = v.object({
   failedEventCount: v.number(),
   reviewEventCount: v.number(),
   localOnlyEventCount: v.number(),
-  reviewEvents: v.optional(v.array(v.object({
-    createdAt: v.number(),
-    localEventId: v.string(),
-    localPosSessionId: v.optional(v.string()),
-    localRegisterSessionId: v.optional(v.string()),
-    // Legacy fields are accepted for existing runtime rows but are stripped
-    // before new check-ins are persisted or terminal health reads are returned.
-    localTransactionId: v.optional(v.string()),
-    sequence: v.number(),
-    staffProfileId: v.optional(v.string()),
-    status: v.string(),
-    type: v.string(),
-    uploaded: v.optional(v.boolean()),
-    uploadSequence: v.optional(v.number()),
-  }))),
+  reviewEvents: v.optional(
+    v.array(
+      v.object({
+        createdAt: v.number(),
+        localEventId: v.string(),
+        localPosSessionId: v.optional(v.string()),
+        localRegisterSessionId: v.optional(v.string()),
+        // Legacy fields are accepted for existing runtime rows but are stripped
+        // before new check-ins are persisted or terminal health reads are returned.
+        localTransactionId: v.optional(v.string()),
+        sequence: v.number(),
+        staffProfileId: v.optional(v.string()),
+        status: v.string(),
+        type: v.string(),
+        uploaded: v.optional(v.boolean()),
+        uploadSequence: v.optional(v.number()),
+      }),
+    ),
+  ),
   oldestPendingEventAt: v.optional(v.number()),
   nextPendingUploadSequence: v.optional(v.number()),
   lastSyncedSequence: v.optional(v.number()),
@@ -243,9 +297,7 @@ export const posTerminalRuntimeStatusSchema = v.object({
   appVersion: v.optional(v.string()),
   buildSha: v.optional(v.string()),
   browserInfo: v.optional(posTerminalRuntimeBrowserInfoValidator),
-  appSessionRecovery: v.optional(
-    posTerminalRuntimeAppSessionRecoveryValidator,
-  ),
+  appSessionRecovery: v.optional(posTerminalRuntimeAppSessionRecoveryValidator),
   appShell: v.optional(posTerminalRuntimeAppShellValidator),
   appUpdate: v.optional(posTerminalRuntimeAppUpdateValidator),
   localStore: posTerminalRuntimeLocalStoreValidator,

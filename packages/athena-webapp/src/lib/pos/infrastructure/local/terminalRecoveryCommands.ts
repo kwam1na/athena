@@ -5,8 +5,8 @@ import type {
   PosLocalStoreResult,
   PosLocalSyncEventStatus,
   PosProvisionedTerminalSeed,
-  createPosLocalStore,
-} from "./posLocalStore";
+} from "@/lib/pos/application/posLocalStoreTypes";
+import type { PosLocalStorePort } from "@/lib/pos/application/posLocalStorePort";
 import type {
   UpdateApplyOptions,
   UpdateCoordinatorSnapshot,
@@ -78,7 +78,7 @@ export type PosTerminalRecoveryCommandCallbackResult = {
   status?: string;
 };
 
-type PosLocalRuntimeStore = ReturnType<typeof createPosLocalStore>;
+type PosLocalRuntimeStore = PosLocalStorePort;
 
 export type PosAppUpdateCoordinatorAdapter = {
   applyUpdate: (options?: UpdateApplyOptions) => boolean;
@@ -173,7 +173,10 @@ export async function executeTerminalRecoveryCommand(
       type: commandType,
     };
   }
-  if (typeof command.executionId !== "string" || command.executionId.length === 0) {
+  if (
+    typeof command.executionId !== "string" ||
+    command.executionId.length === 0
+  ) {
     return preconditionFailed(command);
   }
 
@@ -258,7 +261,10 @@ async function executeUpdateApp(
       ? { appUpdateStagingFailedAssetCount: snapshot.staging.failedAssetCount }
       : {}),
     ...(typeof snapshot.staging?.rejectedAssetCount === "number"
-      ? { appUpdateStagingRejectedAssetCount: snapshot.staging.rejectedAssetCount }
+      ? {
+          appUpdateStagingRejectedAssetCount:
+            snapshot.staging.rejectedAssetCount,
+        }
       : {}),
     ...(snapshot.currentBuildId
       ? { currentBuildId: snapshot.currentBuildId }
@@ -282,7 +288,8 @@ async function executeUpdateApp(
       ...baseDiagnostics,
       appUpdateStatus: "applying",
     },
-    message: "App update accepted and will apply when the terminal is safe to refresh.",
+    message:
+      "App update accepted and will apply when the terminal is safe to refresh.",
     onAcknowledgeFailed: releaseLock,
     postAcknowledge: () => {
       try {
@@ -399,7 +406,9 @@ async function executeClearLocalReviewItems(
     return preconditionFailed(context.command);
   }
 
-  const clear = await context.store.clearLocalReviewEvents(selection.idsToClear);
+  const clear = await context.store.clearLocalReviewEvents(
+    selection.idsToClear,
+  );
   if (!clear.ok) {
     return failed(context.command, "local_store_failure", {
       message: clear.error.message,
@@ -414,10 +423,11 @@ async function executeClearLocalReviewItems(
   }
 
   const clearedReviewEventCount = clear.value.length;
-  const remainingReviewEventCount = (request.clearAll
-    ? getScopedLocalReviewEvents
-    : getScopedUploadedLocalReviewEvents)(remainingEvents.value, context)
-    .length;
+  const remainingReviewEventCount = (
+    request.clearAll
+      ? getScopedLocalReviewEvents
+      : getScopedUploadedLocalReviewEvents
+  )(remainingEvents.value, context).length;
 
   return completed(context.command, {
     clearedLocalReviewEventIds: selection.idsForAcknowledgement,
@@ -436,7 +446,9 @@ async function executeClearLocalReviewItems(
 async function executeRepairTerminalSeed(
   context: PosTerminalRecoveryCommandContext,
 ): Promise<PosTerminalRecoveryCommandResult> {
-  const payload = toRepairTerminalSeedPayload(getCommandPayload(context.command));
+  const payload = toRepairTerminalSeedPayload(
+    getCommandPayload(context.command),
+  );
   const seed = payload?.seed ?? context.terminalSeed;
   if (!seed) {
     return failed(context.command, "missing_payload");
@@ -444,7 +456,9 @@ async function executeRepairTerminalSeed(
   if (!matchesSeedScope(seed, context)) {
     return preconditionFailed(context.command);
   }
-  const repairContext = toRepairTerminalSeedContext(context.command.commandContext);
+  const repairContext = toRepairTerminalSeedContext(
+    context.command.commandContext,
+  );
   if (
     repairContext?.expectedTerminalSeedIdentity &&
     !terminalScopeIds(context).has(repairContext.expectedTerminalSeedIdentity)
@@ -756,9 +770,10 @@ function selectLocalReviewEventIdsForClear(
             scopedReviewIds.has(localEventId) ||
             scopedPreviouslyClearedIds.has(localEventId),
         ) &&
-        reviewEvents.every((event) =>
-          request.localEventIds.includes(event.localEventId) &&
-          isClearableLocalReviewEvent(event),
+        reviewEvents.every(
+          (event) =>
+            request.localEventIds.includes(event.localEventId) &&
+            isClearableLocalReviewEvent(event),
         ),
       idsForAcknowledgement: request.localEventIds,
       idsToClear,
@@ -1057,7 +1072,8 @@ function failed(
 
 function preconditionFailed(
   command: PosTerminalRecoveryCommand,
-  reason: "precondition_failed" | "unsafe_authority_state" = "precondition_failed",
+  reason:
+    "precondition_failed" | "unsafe_authority_state" = "precondition_failed",
 ): PosTerminalRecoveryCommandResult {
   const commandType = getCommandType(command) ?? "unknown_command";
 

@@ -8,11 +8,10 @@ import {
   type PosLocalRegisterReadModel,
 } from "./registerReadModel";
 import {
-  createIndexedDbPosLocalStorageAdapter,
-  createPosLocalStore,
   type PosLocalStoreDayReadiness,
   type PosLocalStoreResult,
-} from "./posLocalStore";
+} from "@/lib/pos/application/posLocalStoreTypes";
+import { getDefaultPosLocalStore } from "./posLocalStorageRuntime";
 
 const LOCAL_POS_READINESS_READ_TIMEOUT_MS = 3_000;
 
@@ -104,10 +103,7 @@ export function localReadinessRecordFromSnapshots(input: {
     };
   }
 
-  if (
-    input.openingSnapshot?.status === "started" &&
-    !input.closeSnapshot
-  ) {
+  if (input.openingSnapshot?.status === "started" && !input.closeSnapshot) {
     return null;
   }
 
@@ -116,9 +112,7 @@ export function localReadinessRecordFromSnapshots(input: {
       storeId: input.storeId,
       operatingDate: input.operatingDate,
       status:
-        input.openingSnapshot.status === "started"
-          ? "started"
-          : "not_started",
+        input.openingSnapshot.status === "started" ? "started" : "not_started",
       source: "daily_opening",
       updatedAt,
     };
@@ -436,11 +430,6 @@ export function useLocalPosReadiness(input: {
       return;
     }
 
-    if (typeof indexedDB === "undefined") {
-      setLocalState({ status: "failed", reason: "local_store_error" });
-      return;
-    }
-
     const stateKey = readinessStateKey(input.entryContext, input.operatingDate);
     const timeout = setTimeout(() => {
       if (!cancelled) {
@@ -458,9 +447,7 @@ export function useLocalPosReadiness(input: {
     });
 
     void (async () => {
-      const store = createPosLocalStore({
-        adapter: createIndexedDbPosLocalStorageAdapter(),
-      });
+      const store = getDefaultPosLocalStore();
       const result = await readLocalPosReadiness({
         entryContext: input.entryContext,
         operatingDate: input.operatingDate,
@@ -496,8 +483,6 @@ export function useLocalPosReadiness(input: {
 
   useEffect(() => {
     if (input.entryContext.status !== "ready") return;
-    if (typeof indexedDB === "undefined") return;
-
     let cancelled = false;
 
     void (async () => {
@@ -517,9 +502,7 @@ export function useLocalPosReadiness(input: {
         openingSnapshot:
           openingStatus === null ? undefined : { status: openingStatus },
         operatingDate: input.operatingDate,
-        store: createPosLocalStore({
-          adapter: createIndexedDbPosLocalStorageAdapter(),
-        }),
+        store: getDefaultPosLocalStore(),
       });
 
       if (!cancelled && result.ok && result.value) {

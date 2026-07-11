@@ -174,13 +174,20 @@ vi.mock("@/lib/navigationUtils", () => ({
 }));
 
 vi.mock("@/lib/pos/infrastructure/local/posLocalStore", () => ({
-  clearIndexedDbPosLocalStore: (...args: unknown[]) =>
-    clearIndexedDbPosLocalStoreMock(...args),
   createIndexedDbPosLocalStorageAdapter: vi.fn(() => ({})),
   createPosLocalStore: vi.fn(() => ({
     replaceStaffAuthoritySnapshot: replaceStaffAuthoritySnapshotMock,
     writeStoreDayReadiness: writeStoreDayReadinessMock,
   })),
+}));
+
+vi.mock("@/lib/pos/infrastructure/local/posLocalStorageRuntime", () => ({
+  clearDefaultPosLocalStore: (...args: unknown[]) =>
+    clearIndexedDbPosLocalStoreMock(...args),
+  getDefaultPosLocalStore: () => ({
+    replaceStaffAuthoritySnapshot: replaceStaffAuthoritySnapshotMock,
+    writeStoreDayReadiness: writeStoreDayReadinessMock,
+  }),
 }));
 
 vi.mock("~/convex/_generated/api", () => ({
@@ -416,10 +423,7 @@ describe("POSRegisterOpeningGuard", () => {
     expect(screen.getByRole("button", { name: /Start day/i })).toBeEnabled();
     expect(
       screen.getByRole("link", { name: /Opening Handoff/i }),
-    ).toHaveAttribute(
-      "href",
-      "/wigclub/store/wigclub/operations/opening",
-    );
+    ).toHaveAttribute("href", "/wigclub/store/wigclub/operations/opening");
   });
 
   it("refreshes terminal staff authority while online so credentials are available offline", async () => {
@@ -649,9 +653,7 @@ describe("POSRegisterOpeningGuard", () => {
         "The end of day review has already closed this operating day. Reopen the day from the end of day review before entering POS.",
       ),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("link", { name: /EOD Review/i }),
-    ).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /EOD Review/i })).toHaveAttribute(
       "href",
       "/wigclub/store/wigclub/operations/daily-close",
     );
@@ -789,7 +791,8 @@ describe("POSRegisterOpeningGuard", () => {
     useLocalPosReadinessMock.mockReturnValue({
       status: "blocked",
       reason: "missing_seed",
-      message: "POS setup required. Connect this terminal before starting sales.",
+      message:
+        "POS setup required. Connect this terminal before starting sales.",
     });
 
     render(
@@ -801,7 +804,9 @@ describe("POSRegisterOpeningGuard", () => {
     expect(screen.queryByText("Register workspace")).not.toBeInTheDocument();
     expect(screen.getByText("POS setup required")).toBeInTheDocument();
     expect(
-      screen.getByText("POS setup required. Connect this terminal before starting sales."),
+      screen.getByText(
+        "POS setup required. Connect this terminal before starting sales.",
+      ),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Clear and reprovision terminal" }),
@@ -831,7 +836,8 @@ describe("POSRegisterOpeningGuard", () => {
     useLocalPosReadinessMock.mockReturnValue({
       status: "blocked",
       reason: "missing_seed",
-      message: "POS setup required. Connect this terminal before starting sales.",
+      message:
+        "POS setup required. Connect this terminal before starting sales.",
     });
 
     render(

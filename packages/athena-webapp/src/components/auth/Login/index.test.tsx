@@ -36,9 +36,8 @@ vi.mock("@tanstack/react-router", () => ({
   useSearch: mocked.useSearch,
 }));
 
-vi.mock("@/lib/pos/infrastructure/local/posLocalStore", () => ({
-  createIndexedDbPosLocalStorageAdapter: () => ({}),
-  createPosLocalStore: () => ({
+vi.mock("@/lib/pos/infrastructure/local/posLocalStorageRuntime", () => ({
+  getDefaultPosLocalStore: () => ({
     readProvisionedTerminalSeed: mocked.readProvisionedTerminalSeed,
   }),
 }));
@@ -47,7 +46,10 @@ describe("Login", () => {
   beforeEach(() => {
     mocked.navigate.mockReset();
     mocked.readProvisionedTerminalSeed.mockReset();
-    mocked.readProvisionedTerminalSeed.mockResolvedValue({ ok: true, value: null });
+    mocked.readProvisionedTerminalSeed.mockResolvedValue({
+      ok: true,
+      value: null,
+    });
     mocked.signIn.mockReset();
     mocked.useSearch.mockReset();
     vi.stubGlobal("indexedDB", {});
@@ -64,9 +66,7 @@ describe("Login", () => {
 
     render(<Login />);
 
-    await user.click(
-      screen.getByRole("button", { name: /pos sign in/i }),
-    );
+    await user.click(screen.getByRole("button", { name: /pos sign in/i }));
     await user.type(screen.getByLabelText(/recovery code/i), "abc-123");
     await user.click(screen.getByRole("button", { name: /continue/i }));
 
@@ -106,9 +106,7 @@ describe("Login", () => {
 
     render(<Login />);
 
-    await user.click(
-      screen.getByRole("button", { name: /pos sign in/i }),
-    );
+    await user.click(screen.getByRole("button", { name: /pos sign in/i }));
     await waitFor(() =>
       expect(
         screen.queryByText("Open recovery from the store login route."),
@@ -156,8 +154,9 @@ describe("Login", () => {
     expect(
       await screen.findByRole("heading", { name: /pos recovery/i }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /use email code/i }))
-      .toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /use email code/i }),
+    ).toBeInTheDocument();
   });
 
   it("uses an existing provisioned terminal seed without slugs for store-scoped recovery", async () => {
@@ -179,9 +178,7 @@ describe("Login", () => {
 
     render(<Login />);
 
-    await user.click(
-      screen.getByRole("button", { name: /pos sign in/i }),
-    );
+    await user.click(screen.getByRole("button", { name: /pos sign in/i }));
     await waitFor(() =>
       expect(
         screen.queryByText("Open recovery from the store login route."),
@@ -210,9 +207,7 @@ describe("Login", () => {
 
     render(<Login />);
 
-    await user.click(
-      screen.getByRole("button", { name: /pos sign in/i }),
-    );
+    await user.click(screen.getByRole("button", { name: /pos sign in/i }));
     await user.type(screen.getByLabelText(/recovery code/i), "abc-123");
 
     expect(

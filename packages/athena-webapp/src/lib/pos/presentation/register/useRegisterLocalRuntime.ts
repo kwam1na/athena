@@ -4,11 +4,9 @@ import type { MutableRefObject } from "react";
 import type { Id } from "~/convex/_generated/dataModel";
 
 import { useOptionalUpdateCoordinator } from "@/lib/app-update";
-import {
-  createIndexedDbPosLocalStorageAdapter,
-  createPosLocalStore,
-  type PosLocalEventValidationMetadata,
-} from "@/lib/pos/infrastructure/local/posLocalStore";
+import { getDefaultPosLocalStore } from "@/lib/pos/infrastructure/local/posLocalStorageRuntime";
+import type { PosLocalStorePort } from "@/lib/pos/application/posLocalStorePort";
+import type { PosLocalEventValidationMetadata } from "@/lib/pos/application/posLocalStoreTypes";
 import { createLocalCommandGateway } from "@/lib/pos/infrastructure/local/localCommandGateway";
 import { readProjectedLocalRegisterModel } from "@/lib/pos/infrastructure/local/localRegisterReader";
 import type { PosLocalRegisterReadModel } from "@/lib/pos/infrastructure/local/registerReadModel";
@@ -20,7 +18,7 @@ type RegisterLocalRuntimeTerminal = Parameters<
   typeof readProjectedLocalRegisterModel
 >[0]["terminal"];
 
-type RegisterLocalStore = ReturnType<typeof createPosLocalStore>;
+type RegisterLocalStore = PosLocalStorePort;
 type RegisterLocalCommandGateway = ReturnType<typeof createLocalCommandGateway>;
 
 function buildLocalSaleValidationMetadata(
@@ -92,13 +90,7 @@ export function useRegisterLocalRuntime(input: {
   const authorityPersistenceFailedRef = useRef(false);
   const registerOperationalResetReadyRef = useRef(false);
 
-  const localStore = useMemo(
-    () =>
-      createPosLocalStore({
-        adapter: createIndexedDbPosLocalStorageAdapter(),
-      }),
-    [],
-  );
+  const localStore = useMemo(() => getDefaultPosLocalStore(), []);
 
   const noteLocalRegisterEventChanged = useCallback(() => {
     setLocalRegisterReadModelVersion((current) => current + 1);
@@ -162,11 +154,7 @@ export function useRegisterLocalRuntime(input: {
     let cancelled = false;
 
     async function refreshLocalStaffAuthorityStatus() {
-      if (
-        !activeStoreId ||
-        !terminal?._id ||
-        typeof indexedDB === "undefined"
-      ) {
+      if (!activeStoreId || !terminal?._id) {
         setLocalStaffAuthorityStatus("unavailable");
         return;
       }
@@ -196,7 +184,7 @@ export function useRegisterLocalRuntime(input: {
   }, [activeStoreId, localStore, terminal?._id, staffProfileId]);
 
   const hasProvisionedLocalSyncSeed = useCallback(async () => {
-    if (!activeStoreId || !terminal?._id || typeof indexedDB === "undefined") {
+    if (!activeStoreId || !terminal?._id) {
       return false;
     }
 
@@ -204,19 +192,15 @@ export function useRegisterLocalRuntime(input: {
 
     return Boolean(
       result.ok &&
-        result.value &&
-        result.value.storeId === activeStoreId &&
-        result.value.cloudTerminalId === terminal._id &&
-        result.value.syncSecretHash,
+      result.value &&
+      result.value.storeId === activeStoreId &&
+      result.value.cloudTerminalId === terminal._id &&
+      result.value.syncSecretHash,
     );
   }, [activeStoreId, localStore, terminal?._id]);
 
   const readCurrentLocalRegisterModel = useCallback(async () => {
-    if (
-      !activeStoreId ||
-      !terminalDescriptor?._id ||
-      typeof indexedDB === "undefined"
-    ) {
+    if (!activeStoreId || !terminalDescriptor?._id) {
       setRegisterOperationalResetStatus("failed");
       return null;
     }

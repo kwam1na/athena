@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { POS_LOCAL_LOGICAL_RECORD_VERSION } from "@/lib/pos/application/posLocalStoreTypes";
 
 import type {
   PosRegisterCatalogAvailabilityRowDto,
@@ -110,9 +111,7 @@ function buildServiceCatalogRow(
 }
 
 function installClearableIndexedDbMock(
-  stores: Partial<
-    Record<"authority" | "cashierPresence" | "events", unknown[]>
-  >,
+  stores: Partial<Record<string, unknown[]>>,
   options?: { existingStoreNames?: string[] },
 ) {
   const existingStoreNames = options?.existingStoreNames ?? [
@@ -142,9 +141,7 @@ function installClearableIndexedDbMock(
     },
     transaction: vi.fn(() => {
       const transaction = {
-        objectStore: (
-          storeName: "authority" | "cashierPresence" | "events",
-        ) => ({
+        objectStore: (storeName: string) => ({
           getAll: () => createSuccessfulRequest(stores[storeName] ?? []),
         }),
         onabort: null,
@@ -246,13 +243,10 @@ describe("posLocalStore", () => {
       storeId: "store-1",
       terminalId: "terminal-1",
     });
-    await adapter.transaction(
-      "readwrite",
-      ["authority"],
-      (transaction) =>
-        transaction.put("authority", "legacyDrawer:unparseable", {
-          legacyDrawer: true,
-        }),
+    await adapter.transaction("readwrite", ["authority"], (transaction) =>
+      transaction.put("authority", "legacyDrawer:unparseable", {
+        legacyDrawer: true,
+      }),
     );
     await adapter.transaction(
       "readwrite",
@@ -267,11 +261,7 @@ describe("posLocalStore", () => {
         "registerAvailability",
       ],
       async (transaction) => {
-        await transaction.put(
-          "meta",
-          "uploadSequence:local-register-1",
-          20,
-        );
+        await transaction.put("meta", "uploadSequence:local-register-1", 20);
         await transaction.put("terminalSeed", "current", {
           marker: "terminal-seed",
         });
@@ -360,9 +350,7 @@ describe("posLocalStore", () => {
     expect(preserved.cashier).toHaveLength(1);
     expect(preserved.staff).toHaveLength(1);
     expect(preserved.catalog).toEqual([{ marker: "preserved" }]);
-    expect(preserved.serviceCatalog).toEqual([
-      { marker: "service-catalog" },
-    ]);
+    expect(preserved.serviceCatalog).toEqual([{ marker: "service-catalog" }]);
     expect(preserved.availability).toEqual([{ marker: "availability" }]);
     expect(preserved.readiness).toEqual([{ marker: "readiness" }]);
     expect(preserved.terminalSeed).toEqual([{ marker: "terminal-seed" }]);
@@ -551,7 +539,7 @@ describe("posLocalStore", () => {
       registerNumber: "1",
       displayName: "Front register",
       provisionedAt: 1_000,
-      schemaVersion: POS_LOCAL_STORE_SCHEMA_VERSION,
+      schemaVersion: POS_LOCAL_LOGICAL_RECORD_VERSION,
     });
 
     expect(write.ok).toBe(true);
@@ -565,7 +553,7 @@ describe("posLocalStore", () => {
         registerNumber: "1",
         displayName: "Front register",
         provisionedAt: 1_000,
-        schemaVersion: POS_LOCAL_STORE_SCHEMA_VERSION,
+        schemaVersion: POS_LOCAL_LOGICAL_RECORD_VERSION,
       },
     });
   });
@@ -1426,7 +1414,7 @@ describe("posLocalStore", () => {
             sku: "DW-18",
           }),
         ],
-        schemaVersion: POS_LOCAL_STORE_SCHEMA_VERSION,
+        schemaVersion: POS_LOCAL_LOGICAL_RECORD_VERSION,
         storeId: "store-1",
       },
     });
@@ -1463,7 +1451,7 @@ describe("posLocalStore", () => {
             status: "active",
           }),
         ],
-        schemaVersion: POS_LOCAL_STORE_SCHEMA_VERSION,
+        schemaVersion: POS_LOCAL_LOGICAL_RECORD_VERSION,
         storeId: "store-1",
       },
     });
@@ -1505,7 +1493,7 @@ describe("posLocalStore", () => {
             quantityAvailable: 0,
           }),
         ],
-        schemaVersion: POS_LOCAL_STORE_SCHEMA_VERSION,
+        schemaVersion: POS_LOCAL_LOGICAL_RECORD_VERSION,
         storeId: "store-1",
       },
     });
@@ -2624,6 +2612,29 @@ describe("posLocalStore", () => {
           message:
             "POS local state has an active cashier sign-in. Sign out or use terminal health before clearing this terminal.",
         },
+      });
+      expect(deleteDatabaseMock).not.toHaveBeenCalled();
+    } finally {
+      Object.defineProperty(globalThis, "indexedDB", {
+        configurable: true,
+        value: originalIndexedDb,
+      });
+    }
+  });
+
+  it("does not clear IndexedDB POS local state while any protected section remains", async () => {
+    const originalIndexedDb = globalThis.indexedDB;
+    const { deleteDatabaseMock } = installClearableIndexedDbMock(
+      {
+        terminalSeed: [{ terminalId: "terminal-1" }],
+      },
+      { existingStoreNames: ["terminalSeed"] },
+    );
+
+    try {
+      await expect(clearIndexedDbPosLocalStore()).resolves.toMatchObject({
+        ok: false,
+        error: { code: "write_failed" },
       });
       expect(deleteDatabaseMock).not.toHaveBeenCalled();
     } finally {

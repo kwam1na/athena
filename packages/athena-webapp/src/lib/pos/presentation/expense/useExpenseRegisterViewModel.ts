@@ -37,7 +37,7 @@ import {
   projectExpenseLocalReadModel,
   type ExpenseLocalSessionReadModel,
 } from "@/lib/pos/infrastructure/local/expenseReadModel";
-import type { PosLocalEventRecord } from "@/lib/pos/infrastructure/local/posLocalStore";
+import type { PosLocalEventRecord } from "@/lib/pos/application/posLocalStoreTypes";
 import { calculateCartTotals } from "@/lib/pos/services/calculationService";
 
 function getCashierDisplayName(staffProfile?: {
@@ -91,11 +91,9 @@ function localExpenseSessionToStoreSession(
       productId: item.productId as Id<"product">,
       productSkuId: item.productSkuId as Id<"productSku">,
       pendingCheckoutItemId: item.pendingCheckoutItemId as
-        | Id<"posPendingCheckoutItem">
-        | undefined,
+        Id<"posPendingCheckoutItem"> | undefined,
       inventoryImportProvisionalSkuId: item.inventoryImportProvisionalSkuId as
-        | Id<"inventoryImportProvisionalSku">
-        | undefined,
+        Id<"inventoryImportProvisionalSku"> | undefined,
     })),
   };
 }

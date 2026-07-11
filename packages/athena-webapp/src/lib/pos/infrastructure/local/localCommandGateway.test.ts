@@ -1992,7 +1992,7 @@ describe("createLocalCommandGateway", () => {
       kind: "user_error",
       error: expect.objectContaining({
         code: "unavailable",
-        message: "POS local store could not write the local event.",
+        message: "POS local storage could not save this operation.",
         retryable: true,
       }),
     });

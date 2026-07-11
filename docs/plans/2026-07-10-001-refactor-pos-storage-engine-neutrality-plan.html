@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Refactor: Make POS Local Storage Engine-Neutral</title>
+  <style>
+    :root { color-scheme: light; --ink:#172033; --muted:#5d687a; --line:#d9dee8; --panel:#f6f8fb; --accent:#3658a7; --good:#216e4e; --warn:#8a5700; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:#eef1f6; color:var(--ink); font:15px/1.55 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    main { max-width:1080px; margin:0 auto; background:white; min-height:100vh; padding:48px 56px 72px; }
+    h1,h2,h3 { line-height:1.2; letter-spacing:-.015em; }
+    h1 { margin:8px 0 12px; font-size:34px; }
+    h2 { margin-top:44px; padding-top:10px; border-top:1px solid var(--line); font-size:23px; }
+    h3 { margin-top:26px; font-size:17px; }
+    p,li { max-width:86ch; }
+    a { color:var(--accent); }
+    header .meta { color:var(--muted); text-transform:uppercase; letter-spacing:.08em; font-size:12px; }
+    .lede { font-size:18px; color:#303b50; max-width:78ch; }
+    nav { margin:28px 0; padding:18px 22px; border:1px solid var(--line); border-radius:10px; background:var(--panel); }
+    nav ul { columns:2; margin:8px 0 0; padding-left:20px; }
+    .callout { border-left:4px solid var(--accent); background:#f2f5fc; padding:14px 18px; margin:22px 0; }
+    .guard { border-left-color:var(--good); background:#eff8f3; }
+    .warning { border-left-color:var(--warn); background:#fff7e8; }
+    table { width:100%; border-collapse:collapse; margin:18px 0 28px; font-size:14px; }
+    th,td { text-align:left; vertical-align:top; border:1px solid var(--line); padding:10px 12px; }
+    th { background:var(--panel); }
+    .units { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+    article { border:1px solid var(--line); border-radius:10px; padding:16px 18px; }
+    article h3 { margin:0 0 8px; }
+    article p { margin:6px 0; }
+    code { background:#eef1f6; border-radius:4px; padding:1px 4px; }
+    .flow { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:18px 0; }
+    .node { border:1px solid #b8c3d8; background:#f7f9fc; border-radius:8px; padding:9px 12px; }
+    .arrow { color:var(--muted); font-weight:700; }
+    footer { margin-top:54px; padding-top:18px; border-top:1px solid var(--line); color:var(--muted); }
+    @media (max-width:760px) { main{padding:28px 22px 48px} nav ul{columns:1}.units{grid-template-columns:1fr} }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="meta">Refactor plan · Active · 10 July 2026</div>
+    <h1>Make POS Local Storage Engine-Neutral</h1>
+    <p class="lede">Move Athena POS and expense flows behind a high-level storage contract and one asynchronous runtime. IndexedDB remains the production engine, while future engines retain freedom over their schema, indexes, transactions, concurrency, and execution topology.</p>
+    <p>The refreshed plan assumes <code>#642</code> is the terminal architecture going forward. Within #642, only its enduring IndexedDB-facing contracts and consumers are in scope—durable authority apply, mapping and authority record types, local coordinator composition, scoped access, and portable migration semantics—while the broader engine-neutral foundation remains unchanged.</p>
+    <p>Canonical source: <a href="2026-07-10-001-refactor-pos-storage-engine-neutrality-plan.md">Markdown plan</a></p>
+  </header>
+
+  <nav aria-label="Plan contents">
+    <strong>Contents</strong>
+    <ul>
+      <li><a href="#problem">Problem and scope</a></li>
+      <li><a href="#outcomes">Outcomes by audience</a></li>
+      <li><a href="#decisions">Key decisions</a></li>
+      <li><a href="#design">Design shape</a></li>
+      <li><a href="#units">Implementation units</a></li>
+      <li><a href="#verification">Verification</a></li>
+      <li><a href="#risks">Risks</a></li>
+    </ul>
+  </nav>
+
+  <section id="outcomes">
+    <h2>Outcomes by audience</h2>
+    <table>
+      <thead><tr><th>Audience</th><th>What changes</th><th>What stays true</th><th>Visible recovery</th></tr></thead>
+      <tbody>
+        <tr><td>Cashier</td><td>Sales and expenses cannot silently succeed in volatile memory; storage warnings use calm operational language.</td><td>A local durable commit remains the success boundary, online or offline.</td><td>Only affected POS work blocks; read, sync, and safe recovery remain available where possible.</td></tr>
+        <tr><td>Store manager</td><td>Partial terminal setup survives reload and offers one authenticated Retry setup action.</td><td>Terminal identity and offline readiness are never claimed before the matching seed commits.</td><td>A newer completed setup is adopted; stale retries cannot rotate it away.</td></tr>
+        <tr><td>Support</td><td>Restricted detail shows redacted persistence, pressure, schema, and maintenance posture.</td><td>Diagnostics never become authority and never expose secrets, proofs, or payloads.</td><td>Actionable storage states distinguish warning, block, maintenance, and corruption.</td></tr>
+        <tr><td>Implementer</td><td>Application capabilities describe POS outcomes; IndexedDB is composed through one runtime.</td><td>Each engine owns schema, indexes, transactions, queries, coordination, migration mechanics, and execution topology.</td><td>A shared conformance suite verifies behavior without requiring a universal storage mechanism.</td></tr>
+        <tr><td>Register authority</td><td>Exact versioned cloud evidence commits through a narrow atomic capability before projection refresh.</td><td>UI and commands use only durable local drawer authority; #642 is the required architecture for every new client.</td><td>Offline keeps last durable truth; invalid/mapping/persistence failures enter owned repair without guessing.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="problem">
+    <h2>Problem and scope</h2>
+    <p>The event ledger is already the first durable cashier record, but IndexedDB selection and availability leak through register, expense, catalog, login, provisioning, readiness, sync, recovery, settings, and terminal lookup. Storage health, schema evolution, bounded operations, maintenance, and cross-engine migration are incomplete.</p>
+    <div class="callout guard"><strong>Invariant:</strong> A sale or expense succeeds only after the selected durable engine commits. Convex remains downstream of cashier success.</div>
+    <div class="callout"><strong>Engine freedom:</strong> The contract defines POS outcomes. It does not define object stores, SQL tables, indexes, transactions, workers, RPC, VFS, batching, or lock primitives.</div>
+    <div class="callout guard"><strong>Failure isolation:</strong> Storage initialization never blocks login or unrelated routes; only POS operations that require durable state fail when the selected engine is unavailable.</div>
+    <div class="callout warning"><strong>Deliberate deferral:</strong> This delivery does not ship SQLite and adds no retention-driven event deletion. Compaction still waits for an approved offline history contract.</div>
+  </section>
+
+  <section id="decisions">
+    <h2>Key decisions</h2>
+    <table>
+      <thead><tr><th>Decision</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>Application-layer POS capability ports</td><td>Each engine can use native storage strengths, while consumers depend only on the operations they need.</td></tr>
+        <tr><td>One asynchronous runtime</td><td>Centralizes engine selection, readiness, retry, lifecycle, and test injection.</td></tr>
+        <tr><td>Separate lifecycle ports</td><td>Health, migration, maintenance, activation, and destruction do not become cashier-facing store methods.</td></tr>
+        <tr><td>No implicit memory fallback</td><td>Production success must survive reload.</td></tr>
+        <tr><td>Separate version domains</td><td>Physical layouts, logical records, and migration envelopes evolve independently.</td></tr>
+        <tr><td>Outcome-based migration</td><td>Completeness, semantic verification, fencing, restart, and rollback are shared; mechanics are not.</td></tr>
+        <tr><td>Bounded domain operations</td><td>IndexedDB can use indexes/cursors and SQL engines can use indexed queries.</td></tr>
+        <tr><td>Existing Terminal Health rail</td><td>Storage posture remains redacted diagnostics rather than a second authority system.</td></tr>
+        <tr><td>Separate authority coordinator</td><td>The storage runtime selects and readies an engine; the heartbeat-independent register coordinator consumes its narrow capability and commits before refreshing the local projection.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="design">
+    <h2>Design shape</h2>
+    <div class="flow" aria-label="High-level component flow">
+      <span class="node">POS and expense flows</span><span class="arrow">→</span>
+      <span class="node">Storage runtime</span><span class="arrow">→</span>
+      <span class="node">Application capability ports</span><span class="arrow">→</span>
+      <span class="node">IndexedDB now / future engine later</span>
+    </div>
+    <p>Health and maintenance sit beside the store contract. They publish redacted evidence, coordinate exclusive lifecycle work, and verify logical migration without deciding engine-internal representation.</p>
+  </section>
+
+  <section id="units">
+    <h2>Implementation units</h2>
+    <div class="flow" aria-label="Delivery dependency flow">
+      <span class="node">U1 Contract</span><span class="arrow">→</span>
+      <span class="node">U2 Runtime</span><span class="arrow">→</span>
+      <span class="node">U3 Critical paths + U4 Consumers</span><span class="arrow">→</span>
+      <span class="node">U5 Health + U6 Versions + U7 Bounded operations</span><span class="arrow">→</span>
+      <span class="node">U8 Lifecycle proof</span>
+    </div>
+    <div class="units">
+      <article><h3>U1 · Contract and conformance</h3><p>Name narrow POS-domain capabilities and separate lifecycle ports. Prove storage semantics with IndexedDB and an independent high-level memory test engine.</p></article>
+      <article><h3>U2 · Shared runtime</h3><p>Provide one app-root asynchronous runtime for login and authenticated routes while keeping pure application functions explicitly injected.</p></article>
+      <article><h3>U3 · Critical command paths</h3><p>Move register, expense, authentication, and provisioning writes; remove volatile fallback and preflight durability.</p></article>
+      <article><h3>U4 · Remaining consumers</h3><p>Move catalog, entry, login, settings, terminal lookup, sync/recovery, and the dedicated authority coordinator onto narrow runtime capabilities.</p></article>
+      <article><h3>U5 · Durability health</h3><p>Add persistence posture, quota pressure, structured failures, restricted support detail, and calm operator states. Diagnostics warn; actual commit outcomes retain authority.</p></article>
+      <article><h3>U6 · Version evolution</h3><p>Separate version domains and characterize the current #642 logical records stored in IndexedDB layout v9.</p></article>
+      <article><h3>U7 · Bounded ledger policy</h3><p>Replace hot full scans with scoped operations and define retention pressure while keeping deletion disabled.</p></article>
+      <article><h3>U8 · Maintenance and cutover</h3><p>Fence authority apply as well as commands/sync, and migrate exact authority subjects, two-part revisions, and channel separation. Engine mechanics remain native.</p></article>
+    </div>
+  </section>
+
+  <section id="verification">
+    <h2>Verification strategy</h2>
+    <ul>
+      <li>Run one conformance suite against IndexedDB and an independently implemented high-level memory test engine; defer worker/RPC topology proof.</li>
+      <li>Characterize every register and expense success boundary before replacing construction.</li>
+      <li>Prove offline seed, catalog, availability, staff authority, drawer lifecycle, closeout, receipt, sync, activity, and recovery parity.</li>
+      <li>Inject quota, corruption, schema, migration, maintenance, partial-provision, and transaction failures.</li>
+      <li>Prove cross-engine logical completeness and equivalent register/expense projections before activation.</li>
+      <li>Keep migration data, secrets, proofs, and raw payloads absent from diagnostics at every layer.</li>
+      <li>Keep migration inside the maintenance runtime: no downloadable export, no production activation or source-destruction capability, and attempt-scoped cleanup of any protected staging.</li>
+      <li>Treat integrity as corruption detection only; existing trusted terminal, staff-authority, proof, and cloud-validation boundaries remain authoritative.</li>
+      <li>Prove denied persistence and estimated pressure remain diagnostic, actual commit/quota failures block only the affected command, and operator copy hides engine internals.</li>
+      <li>Prove both authority revision orders, exact mapping races, offline continuity, readiness timeout, persistence retry, old-cart replacement behavior, and semantic effect stability.</li>
+      <li>Verify cloud closure with an old cart remains read-only/clear-only and opens a distinct replacement only after durable clear.</li>
+      <li>Finish with focused Vitest, offline browser coverage, production-backend POS smoke, typecheck/build, Convex audit, harness review, Graphify rebuild, and <code>pr:athena</code>.</li>
+    </ul>
+  </section>
+
+  <section id="risks">
+    <h2>Primary risks</h2>
+    <table>
+      <thead><tr><th>Risk</th><th>Control</th></tr></thead>
+      <tbody>
+        <tr><td>Lowest-common-denominator contract</td><td>Domain operations and outcomes only; no storage vocabulary above engines.</td></tr>
+        <tr><td>Behavior regression during broad wiring change</td><td>Characterization-first migration split across critical commands and remaining consumers.</td></tr>
+        <tr><td>Cloud-only partial terminal</td><td>Local durability preflight; authenticated retry rotates the server credential before writing a new matching seed.</td></tr>
+        <tr><td>Split writes during migration</td><td>Engine-native exclusive maintenance must serialize owners, recover after owner failure, reject stale writes/activation, verify the target, and pass restart-state tests.</td></tr>
+        <tr><td>Insufficient cutover headroom</td><td>Engine-native capacity assessment refuses unknown/insufficient headroom and cleans incomplete target state before activation.</td></tr>
+        <tr><td>Migration broadens data access</td><td>No general export surface; lifecycle capabilities are segregated, production activation/destruction is absent, and staging remains protected and generation-scoped.</td></tr>
+        <tr><td>Integrity confused with trust</td><td>The manifest detects corruption and completeness drift only; existing authority and proof validation remains mandatory.</td></tr>
+        <tr><td>Authority lane regresses during rewiring</td><td>Treat #642 as baseline and preserve atomic mapping revalidation, two-part revision ordering, persistence-before-refresh, and local-projection authority.</td></tr>
+        <tr><td>Sensitive diagnostic leakage</td><td>Positive allowlists and negative redaction tests across browser, Convex, repository, and UI.</td></tr>
+        <tr><td>Unsafe event deletion</td><td>No deletion path in this foundation; approved retention and checkpoint design required later.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <footer>
+    <p>Origin: <code>docs/brainstorms/2026-05-13-pos-local-first-register-requirements.md</code></p>
+  </footer>
+</main>
+</body>
+</html>

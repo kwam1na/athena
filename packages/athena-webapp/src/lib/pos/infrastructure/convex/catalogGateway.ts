@@ -14,10 +14,7 @@ import type {
   PosServiceCatalogRowDto,
 } from "@/lib/pos/application/dto";
 import type { PosCatalogReader } from "@/lib/pos/application/ports";
-import {
-  createIndexedDbPosLocalStorageAdapter,
-  createPosLocalStore,
-} from "@/lib/pos/infrastructure/local/posLocalStore";
+import { getDefaultPosLocalStore } from "@/lib/pos/infrastructure/local/posLocalStorageRuntime";
 import {
   type RegisterAvailabilitySnapshotState,
   readRegisterAvailabilitySnapshotState,
@@ -139,8 +136,8 @@ function mapProductByIdResult(
     return [];
   }
 
-  const availableSkus = productData.skus.filter(
-    (sku) => isPosCatalogVisible(sku),
+  const availableSkus = productData.skus.filter((sku) =>
+    isPosCatalogVisible(sku),
   );
 
   return availableSkus.map((sku) => ({
@@ -202,7 +199,8 @@ export function useConvexRegisterCatalogState(
     setState((current) => {
       if (shouldRefresh) {
         return {
-          refreshedAt: "refreshedAt" in current ? current.refreshedAt : undefined,
+          refreshedAt:
+            "refreshedAt" in current ? current.refreshedAt : undefined,
           rows: "rows" in current ? current.rows : undefined,
           source: "rows" in current && current.rows ? "local" : "none",
           status: "refreshing",
@@ -217,26 +215,11 @@ export function useConvexRegisterCatalogState(
       return;
     }
 
-    if (typeof indexedDB === "undefined") {
-      setState(
-        shouldRefresh
-          ? {
-              error: {
-                code: "write_failed",
-                message: "POS local store is unavailable in this browser context.",
-              },
-              source: "none",
-              status: "local-store-failure",
-            }
-          : { source: "none", status: "missing" },
-      );
-      return;
-    }
-
     void (async () => {
-      const result = await createPosLocalStore({
-        adapter: createIndexedDbPosLocalStorageAdapter(),
-      }).readRegisterCatalogSnapshot({ storeId });
+      const result =
+        await getDefaultPosLocalStore().readRegisterCatalogSnapshot({
+          storeId,
+        });
 
       if (cancelled) return;
       if (result.ok && result.value) {
@@ -305,7 +288,7 @@ export function useConvexRegisterCatalogState(
   }, [shouldRefresh, storeId]);
 
   useEffect(() => {
-    if (!storeId || !shouldRefresh || typeof indexedDB === "undefined") {
+    if (!storeId || !shouldRefresh) {
       return;
     }
 
@@ -327,9 +310,11 @@ export function useConvexRegisterCatalogState(
 
         if (cancelled) return;
 
-        const writeResult = await createPosLocalStore({
-          adapter: createIndexedDbPosLocalStorageAdapter(),
-        }).writeRegisterCatalogSnapshot({ storeId, rows });
+        const writeResult =
+          await getDefaultPosLocalStore().writeRegisterCatalogSnapshot({
+            storeId,
+            rows,
+          });
 
         if (cancelled) return;
 
@@ -354,7 +339,8 @@ export function useConvexRegisterCatalogState(
 
         setState((current) => ({
           error,
-          refreshedAt: "refreshedAt" in current ? current.refreshedAt : undefined,
+          refreshedAt:
+            "refreshedAt" in current ? current.refreshedAt : undefined,
           rows: "rows" in current ? current.rows : undefined,
           source: "rows" in current && current.rows ? "local" : "none",
           status: "refresh-failed",
@@ -388,15 +374,16 @@ export function useConvexRegisterServiceCatalog(input: {
     setLocalRows(undefined);
     setLocalReadComplete(false);
 
-    if (!storeId || typeof indexedDB === "undefined") {
+    if (!storeId) {
       setLocalReadComplete(true);
       return;
     }
 
     void (async () => {
-      const result = await createPosLocalStore({
-        adapter: createIndexedDbPosLocalStorageAdapter(),
-      }).readRegisterServiceCatalogSnapshot({ storeId });
+      const result =
+        await getDefaultPosLocalStore().readRegisterServiceCatalogSnapshot({
+          storeId,
+        });
 
       if (cancelled) return;
       if (result.ok && result.value) {
@@ -411,19 +398,16 @@ export function useConvexRegisterServiceCatalog(input: {
   }, [storeId]);
 
   useEffect(() => {
-    if (
-      !storeId ||
-      !localReadComplete ||
-      liveRows === undefined ||
-      typeof indexedDB === "undefined"
-    ) {
+    if (!storeId || !localReadComplete || liveRows === undefined) {
       return;
     }
 
     void (async () => {
-      const writeResult = await createPosLocalStore({
-        adapter: createIndexedDbPosLocalStorageAdapter(),
-      }).writeRegisterServiceCatalogSnapshot({ storeId, rows: liveRows });
+      const writeResult =
+        await getDefaultPosLocalStore().writeRegisterServiceCatalogSnapshot({
+          storeId,
+          rows: liveRows,
+        });
 
       if (writeResult.ok) {
         setLocalRows(writeResult.value.rows);
@@ -476,15 +460,16 @@ export function useConvexRegisterCatalogAvailabilityState(
     [productSkuIdKey],
   );
   const boundedProductSkuIds = useMemo(
-    () =>
-      requestedProductSkuIds.slice(0, REGISTER_CATALOG_AVAILABILITY_LIMIT),
+    () => requestedProductSkuIds.slice(0, REGISTER_CATALOG_AVAILABILITY_LIMIT),
     [requestedProductSkuIds],
   );
   const storeId = input.storeId;
   const [localState, setLocalState] =
     useState<RegisterAvailabilitySnapshotState | null>(null);
-  const [pendingFullSnapshotRefreshStoreId, setPendingFullSnapshotRefreshStoreId] =
-    useState<string | null>(null);
+  const [
+    pendingFullSnapshotRefreshStoreId,
+    setPendingFullSnapshotRefreshStoreId,
+  ] = useState<string | null>(null);
   const [pendingFullSnapshotPersistence, setPendingFullSnapshotPersistence] =
     useState<{
       retryAttempt: number;
@@ -501,8 +486,8 @@ export function useConvexRegisterCatalogAvailabilityState(
   );
   const shouldRefreshFullSnapshot = Boolean(
     input.refreshFullAvailabilitySnapshot &&
-      storeId &&
-      pendingFullSnapshotRefreshStoreId === storeId,
+    storeId &&
+    pendingFullSnapshotRefreshStoreId === storeId,
   );
   const fullSnapshotRows = useQuery(
     api.pos.public.catalog.listRegisterCatalogAvailabilitySnapshot,
@@ -538,23 +523,9 @@ export function useConvexRegisterCatalogAvailabilityState(
 
     setPendingFullSnapshotRefreshStoreId(storeId);
 
-    if (typeof indexedDB === "undefined") {
-      setLocalState({
-        error: {
-          code: "write_failed",
-          message: "POS local store is unavailable in this browser context.",
-        },
-        status: "local-store-failure",
-        snapshot: null,
-      });
-      return;
-    }
-
     void (async () => {
       const state = await readRegisterAvailabilitySnapshotState({
-        store: createPosLocalStore({
-          adapter: createIndexedDbPosLocalStorageAdapter(),
-        }),
+        store: getDefaultPosLocalStore(),
         storeId,
       });
 
@@ -575,15 +546,14 @@ export function useConvexRegisterCatalogAvailabilityState(
   }, [input.refreshFullAvailabilitySnapshot, storeId]);
 
   useEffect(() => {
-    if (
-      !storeId ||
-      fullSnapshotRows === undefined ||
-      typeof indexedDB === "undefined"
-    ) {
+    if (!storeId || fullSnapshotRows === undefined) {
       return;
     }
 
-    const nextSignature = signatureForAvailabilityRows(storeId, fullSnapshotRows);
+    const nextSignature = signatureForAvailabilityRows(
+      storeId,
+      fullSnapshotRows,
+    );
     setPendingFullSnapshotRefreshStoreId((current) =>
       current === storeId ? null : current,
     );
@@ -600,7 +570,7 @@ export function useConvexRegisterCatalogAvailabilityState(
   }, [fullSnapshotRows, storeId]);
 
   useEffect(() => {
-    if (!pendingFullSnapshotPersistence || typeof indexedDB === "undefined") {
+    if (!pendingFullSnapshotPersistence) {
       return;
     }
 
@@ -609,12 +579,11 @@ export function useConvexRegisterCatalogAvailabilityState(
     const snapshot = pendingFullSnapshotPersistence;
 
     void (async () => {
-      const writeResult = await createPosLocalStore({
-        adapter: createIndexedDbPosLocalStorageAdapter(),
-      }).writeRegisterAvailabilitySnapshot({
-        storeId: snapshot.storeId,
-        rows: snapshot.rows,
-      });
+      const writeResult =
+        await getDefaultPosLocalStore().writeRegisterAvailabilitySnapshot({
+          storeId: snapshot.storeId,
+          rows: snapshot.rows,
+        });
 
       if (cancelled) return;
 
@@ -821,7 +790,12 @@ export type PendingCheckoutReviewItem = {
   name: string;
   lookupCode?: string;
   provisionalPrice: number;
-  status: "pending_review" | "approved" | "linked_to_catalog" | "rejected" | "flagged";
+  status:
+    | "pending_review"
+    | "approved"
+    | "linked_to_catalog"
+    | "rejected"
+    | "flagged";
   reviewPriority: "normal" | "elevated" | "high";
   evidence: {
     totalQuantitySold?: number;

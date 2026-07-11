@@ -1,10 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { useConvexTerminalByFingerprint } from "@/lib/pos/infrastructure/convex/registerGateway";
-import {
-  createIndexedDbPosLocalStorageAdapter,
-  createPosLocalStore,
-} from "@/lib/pos/infrastructure/local/posLocalStore";
+import { getDefaultPosLocalStore } from "@/lib/pos/infrastructure/local/posLocalStorageRuntime";
 import { readStoredTerminalFingerprintHash } from "@/lib/pos/infrastructure/terminal/fingerprint";
 import type { Id } from "~/convex/_generated/dataModel";
 import type { PosTerminalLoginMode } from "~/shared/posTerminalLoginMode";
@@ -41,15 +38,9 @@ export const useGetTerminal = () => {
       return;
     }
 
-    if (typeof indexedDB === "undefined") {
-      setLocalTerminal(null);
-      return;
-    }
-
     void (async () => {
-      const result = await createPosLocalStore({
-        adapter: createIndexedDbPosLocalStorageAdapter(),
-      }).readProvisionedTerminalSeed();
+      const result =
+        await getDefaultPosLocalStore().readProvisionedTerminalSeed();
 
       if (cancelled) return;
 

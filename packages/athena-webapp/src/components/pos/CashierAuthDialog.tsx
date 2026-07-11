@@ -8,11 +8,8 @@ import {
 } from "@/components/staff-auth/StaffAuthenticationDialog";
 import { runCommand } from "@/lib/errors/runCommand";
 import { logger } from "@/lib/logger";
-import {
-  createIndexedDbPosLocalStorageAdapter,
-  createPosLocalStore,
-  type PosLocalStaffAuthorityRecord,
-} from "@/lib/pos/infrastructure/local/posLocalStore";
+import { type PosLocalStaffAuthorityRecord } from "@/lib/pos/application/posLocalStoreTypes";
+import { getDefaultPosLocalStore } from "@/lib/pos/infrastructure/local/posLocalStorageRuntime";
 import { refreshAndStoreTerminalStaffAuthority } from "@/lib/pos/infrastructure/local/terminalStaffAuthorityRefresh";
 import {
   unwrapLocalStaffProofToken,
@@ -75,22 +72,16 @@ export function CashierAuthDialog({
   const expireAllSessionsForStaff = useMutation(
     api.inventory.posSessions.expireAllSessionsForStaff,
   );
-  const localStore = useMemo(
-    () =>
-      createPosLocalStore({
-        adapter: createIndexedDbPosLocalStorageAdapter(),
-      }),
-    [],
-  );
+  const localStore = useMemo(() => getDefaultPosLocalStore(), []);
   const isExpenseWorkflow = workflowMode === "expense";
 
   const persistAuthenticatedStaffAuthority = useCallback(
     async (result: StaffAuthenticationResult, pin: string) => {
-      const localAuthority = (
-        result as StaffAuthenticationResultWithLocalAuthority
-      ).localStaffAuthority ?? (
-        result as StaffAuthenticationResultWithLocalAuthority
-      ).posLocalStaffAuthority;
+      const localAuthority =
+        (result as StaffAuthenticationResultWithLocalAuthority)
+          .localStaffAuthority ??
+        (result as StaffAuthenticationResultWithLocalAuthority)
+          .posLocalStaffAuthority;
       const proof = result.posLocalStaffProof;
       if (
         !localAuthority ||
@@ -135,82 +126,89 @@ export function CashierAuthDialog({
     [localStore, storeId, terminalId],
   );
 
-  const refreshLocalAuthority = useCallback(async (unlock?: {
-    pin: string;
-    posLocalStaffProof?: { expiresAt: number; token: string };
-    staffProfileId: Id<"staffProfile">;
-  }): Promise<PosLocalStaffAuthorityRecord | null> => {
-    if (isBrowserOffline()) {
-      return null;
-    }
+  const refreshLocalAuthority = useCallback(
+    async (unlock?: {
+      pin: string;
+      posLocalStaffProof?: { expiresAt: number; token: string };
+      staffProfileId: Id<"staffProfile">;
+    }): Promise<PosLocalStaffAuthorityRecord | null> => {
+      if (isBrowserOffline()) {
+        return null;
+      }
 
-    const refreshOutcome = await refreshAndStoreTerminalStaffAuthority({
-      localStore,
-      refreshTerminalStaffAuthority: refreshTerminalStaffAuthority as Parameters<
-        typeof refreshAndStoreTerminalStaffAuthority
-      >[0]["refreshTerminalStaffAuthority"],
-      storeId,
-      terminalId,
-      mapRecords: async (records) =>
-        Promise.all(
-          records.map(async (record) => {
-            if (
-              !unlock?.posLocalStaffProof ||
-              record.staffProfileId !== unlock.staffProfileId
-            ) {
-              return record;
-            }
-
-            const wrappedProof = await wrapLocalStaffProofToken(
-              record.verifier,
-              unlock.pin,
-              unlock.posLocalStaffProof,
-            );
-            if (!wrappedProof) {
-              logger.warn("[POS] Staff authority proof could not be wrapped", {
-                staffProfileId: record.staffProfileId,
-                storeId,
-                terminalId,
-              });
-              return record;
-            }
-
-            return {
-              ...record,
-              wrappedPosLocalStaffProof: wrappedProof,
-            };
-          }),
-        ),
-    });
-
-    if (refreshOutcome.status === "preserved") {
-      logger.warn("[POS] Staff authority refresh skipped", {
-        code: refreshOutcome.code,
-        message: refreshOutcome.message,
+      const refreshOutcome = await refreshAndStoreTerminalStaffAuthority({
+        localStore,
+        refreshTerminalStaffAuthority:
+          refreshTerminalStaffAuthority as Parameters<
+            typeof refreshAndStoreTerminalStaffAuthority
+          >[0]["refreshTerminalStaffAuthority"],
         storeId,
         terminalId,
-      });
-      return null;
-    }
+        mapRecords: async (records) =>
+          Promise.all(
+            records.map(async (record) => {
+              if (
+                !unlock?.posLocalStaffProof ||
+                record.staffProfileId !== unlock.staffProfileId
+              ) {
+                return record;
+              }
 
-    if (refreshOutcome.status === "write_failed") {
-      logger.warn("[POS] Staff authority refresh could not be stored", {
-        message: refreshOutcome.message,
-        storeId,
-        terminalId,
-      });
-      return null;
-    }
+              const wrappedProof = await wrapLocalStaffProofToken(
+                record.verifier,
+                unlock.pin,
+                unlock.posLocalStaffProof,
+              );
+              if (!wrappedProof) {
+                logger.warn(
+                  "[POS] Staff authority proof could not be wrapped",
+                  {
+                    staffProfileId: record.staffProfileId,
+                    storeId,
+                    terminalId,
+                  },
+                );
+                return record;
+              }
 
-    const records = refreshOutcome.records;
-    return (
-      records.find(
-        (record) =>
-          unlock?.staffProfileId === record.staffProfileId &&
-          Boolean(record.wrappedPosLocalStaffProof),
-      ) ?? null
-    );
-  }, [localStore, refreshTerminalStaffAuthority, storeId, terminalId]);
+              return {
+                ...record,
+                wrappedPosLocalStaffProof: wrappedProof,
+              };
+            }),
+          ),
+      });
+
+      if (refreshOutcome.status === "preserved") {
+        logger.warn("[POS] Staff authority refresh skipped", {
+          code: refreshOutcome.code,
+          message: refreshOutcome.message,
+          storeId,
+          terminalId,
+        });
+        return null;
+      }
+
+      if (refreshOutcome.status === "write_failed") {
+        logger.warn("[POS] Staff authority refresh could not be stored", {
+          message: refreshOutcome.message,
+          storeId,
+          terminalId,
+        });
+        return null;
+      }
+
+      const records = refreshOutcome.records;
+      return (
+        records.find(
+          (record) =>
+            unlock?.staffProfileId === record.staffProfileId &&
+            Boolean(record.wrappedPosLocalStaffProof),
+        ) ?? null
+      );
+    },
+    [localStore, refreshTerminalStaffAuthority, storeId, terminalId],
+  );
 
   useEffect(() => {
     if (!open || isBrowserOffline()) {
@@ -238,7 +236,8 @@ export function CashierAuthDialog({
       });
       return userError({
         code: "precondition_failed",
-        message: "Offline staff sign-in is unavailable. Reconnect, then try again.",
+        message:
+          "Offline staff sign-in is unavailable. Reconnect, then try again.",
       });
     }
 
@@ -256,13 +255,15 @@ export function CashierAuthDialog({
       if (verification.reason === "invalid_pin") {
         return userError({
           code: "authentication_failed",
-          message: "Sign-in details not recognized. Enter the username and PIN again.",
+          message:
+            "Sign-in details not recognized. Enter the username and PIN again.",
         });
       }
 
       return userError({
         code: "precondition_failed",
-        message: "Offline staff sign-in needs a refresh. Reconnect, then try again.",
+        message:
+          "Offline staff sign-in needs a refresh. Reconnect, then try again.",
       });
     }
 
@@ -276,11 +277,14 @@ export function CashierAuthDialog({
     };
 
     if (!authority.wrappedPosLocalStaffProof) {
-      logger.info("[POS] Offline staff sign-in continuing without staff proof", {
-        staffProfileId: authority.staffProfileId,
-        storeId,
-        terminalId,
-      });
+      logger.info(
+        "[POS] Offline staff sign-in continuing without staff proof",
+        {
+          staffProfileId: authority.staffProfileId,
+          storeId,
+          terminalId,
+        },
+      );
       return ok(authenticationResult);
     }
 
@@ -290,11 +294,14 @@ export function CashierAuthDialog({
       authority.wrappedPosLocalStaffProof,
     );
     if (!posLocalStaffProof || posLocalStaffProof.expiresAt <= Date.now()) {
-      logger.info("[POS] Offline staff sign-in continuing with proof refresh due", {
-        staffProfileId: authority.staffProfileId,
-        storeId,
-        terminalId,
-      });
+      logger.info(
+        "[POS] Offline staff sign-in continuing with proof refresh due",
+        {
+          staffProfileId: authority.staffProfileId,
+          storeId,
+          terminalId,
+        },
+      );
       return ok(authenticationResult);
     }
 
@@ -345,7 +352,10 @@ export function CashierAuthDialog({
       return authenticationResult;
     }
 
-    void persistAuthenticatedStaffAuthority(authenticationResult.data, args.pin);
+    void persistAuthenticatedStaffAuthority(
+      authenticationResult.data,
+      args.pin,
+    );
     const localStaffAuthority = await refreshLocalAuthority({
       pin: args.pin,
       posLocalStaffProof: authenticationResult.data.posLocalStaffProof,

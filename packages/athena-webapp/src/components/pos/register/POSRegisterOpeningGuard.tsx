@@ -1,4 +1,10 @@
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { Link, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
 import {
@@ -35,11 +41,9 @@ import {
   type LocalPosReadiness,
   useLocalPosReadiness,
 } from "@/lib/pos/infrastructure/local/localPosReadiness";
-import {
-  clearIndexedDbPosLocalStore,
-  createIndexedDbPosLocalStorageAdapter,
-  createPosLocalStore,
-} from "@/lib/pos/infrastructure/local/posLocalStore";
+import { clearDefaultPosLocalStore } from "@/lib/pos/infrastructure/local/posLocalStorageRuntime";
+import { getDefaultPosLocalStore } from "@/lib/pos/infrastructure/local/posLocalStorageRuntime";
+import type { PosLocalStorePort } from "@/lib/pos/application/posLocalStorePort";
 import { refreshAndStoreTerminalStaffAuthority } from "@/lib/pos/infrastructure/local/terminalStaffAuthorityRefresh";
 import { logger } from "@/lib/logger";
 import { reloadWindow } from "@/lib/navigationUtils";
@@ -93,11 +97,7 @@ function isBrowserOffline() {
   return typeof navigator !== "undefined" && navigator.onLine === false;
 }
 
-export function POSRegisterOpeningGuard({
-  children,
-}: {
-  children: ReactNode;
-}) {
+export function POSRegisterOpeningGuard({ children }: { children: ReactNode }) {
   const { activeStore, isLoadingStores } = useGetActiveStore();
   const routeParams = useParams({ strict: false }) as
     | {
@@ -111,9 +111,8 @@ export function POSRegisterOpeningGuard({
   });
   const operatingDateRange = useMemo(() => getLocalOperatingDateRange(), []);
   const storeId = (activeStore?._id ??
-    (entryContext.status === "ready"
-      ? entryContext.storeId
-      : undefined)) as Id<"store"> | undefined;
+    (entryContext.status === "ready" ? entryContext.storeId : undefined)) as
+    Id<"store"> | undefined;
   const snapshot = useQuery(
     api.operations.dailyOpening.getDailyOpeningSnapshot,
     storeId
@@ -141,15 +140,8 @@ export function POSRegisterOpeningGuard({
   const [locallyStartedDayKey, setLocallyStartedDayKey] = useState<
     string | null
   >(null);
-  const localStore = useMemo(
-    () =>
-      createPosLocalStore({
-        adapter: createIndexedDbPosLocalStorageAdapter(),
-      }),
-    [],
-  );
-  const [isClearingLocalPosState, setIsClearingLocalPosState] =
-    useState(false);
+  const localStore = useMemo(() => getDefaultPosLocalStore(), []);
+  const [isClearingLocalPosState, setIsClearingLocalPosState] = useState(false);
   const handleClearLocalPosState = useCallback(async () => {
     if (isClearingLocalPosState) {
       return;
@@ -157,7 +149,7 @@ export function POSRegisterOpeningGuard({
 
     setIsClearingLocalPosState(true);
     try {
-      const result = await clearIndexedDbPosLocalStore();
+      const result = await clearDefaultPosLocalStore();
 
       if (!result.ok) {
         toast.error(result.error.message);
@@ -176,8 +168,7 @@ export function POSRegisterOpeningGuard({
   const terminalId =
     entryContext.status === "ready"
       ? (entryContext.terminalSeed?.cloudTerminalId as
-          | Id<"posTerminal">
-          | undefined)
+          Id<"posTerminal"> | undefined)
       : undefined;
   useEffect(() => {
     if (!storeId || !terminalId || isBrowserOffline()) {
@@ -187,9 +178,10 @@ export function POSRegisterOpeningGuard({
     void (async () => {
       const result = await refreshAndStoreTerminalStaffAuthority({
         localStore,
-        refreshTerminalStaffAuthority: refreshTerminalStaffAuthority as Parameters<
-          typeof refreshAndStoreTerminalStaffAuthority
-        >[0]["refreshTerminalStaffAuthority"],
+        refreshTerminalStaffAuthority:
+          refreshTerminalStaffAuthority as Parameters<
+            typeof refreshAndStoreTerminalStaffAuthority
+          >[0]["refreshTerminalStaffAuthority"],
         storeId,
         terminalId,
       });
@@ -205,11 +197,14 @@ export function POSRegisterOpeningGuard({
       }
 
       if (result.status === "write_failed") {
-        logger.warn("[POS] Staff authority background refresh could not be stored", {
-          message: result.message,
-          storeId,
-          terminalId,
-        });
+        logger.warn(
+          "[POS] Staff authority background refresh could not be stored",
+          {
+            message: result.message,
+            storeId,
+            terminalId,
+          },
+        );
       }
     })();
   }, [localStore, refreshTerminalStaffAuthority, storeId, terminalId]);
@@ -222,7 +217,7 @@ export function POSRegisterOpeningGuard({
           status: "ready",
           source: "local_readiness",
           storeDayStatus: "started",
-      } satisfies LocalPosReadiness)
+        } satisfies LocalPosReadiness)
       : localReadiness;
 
   if (isLoadingStores && entryContext.status === "loading") {
@@ -402,10 +397,7 @@ function POSReadinessLoadingState({
                         aria-hidden="true"
                       />
                     ) : item.state === "attention" ? (
-                      <AlertCircle
-                        className="h-3.5 w-3.5"
-                        aria-hidden="true"
-                      />
+                      <AlertCircle className="h-3.5 w-3.5" aria-hidden="true" />
                     ) : (
                       <Loader2
                         className="h-3.5 w-3.5 animate-spin"
@@ -548,15 +540,14 @@ function getReadinessChecklistItems({
               closeSnapshot.existingClose?.lifecycleStatus !== "reopened"
             ? "attention"
             : "ready",
-      value:
-        !storeId
-          ? "Waiting for store details."
-          : openingSnapshot?.status === "started" && !closeSnapshot
-            ? "Checking whether the day is already closed."
-            : closeSnapshot?.status === "completed" &&
-                closeSnapshot.existingClose?.lifecycleStatus !== "reopened"
-              ? "Store day is closed."
-              : "No closed day is blocking this register.",
+      value: !storeId
+        ? "Waiting for store details."
+        : openingSnapshot?.status === "started" && !closeSnapshot
+          ? "Checking whether the day is already closed."
+          : closeSnapshot?.status === "completed" &&
+              closeSnapshot.existingClose?.lifecycleStatus !== "reopened"
+            ? "Store day is closed."
+            : "No closed day is blocking this register.",
     },
     {
       label: "Local register state",
@@ -580,9 +571,7 @@ function getReadinessChecklistItems({
       items.push({
         label: "Started checking",
         state: "checking",
-        value: new Date(
-          localLoadingDiagnostics.startedAt,
-        ).toLocaleTimeString(),
+        value: new Date(localLoadingDiagnostics.startedAt).toLocaleTimeString(),
       });
     }
   }
@@ -634,7 +623,7 @@ function StoreDayNotStartedState({
 }: {
   entryContext: ReturnType<typeof useLocalPosEntryContext>;
   localReadiness: Extract<LocalPosReadiness, { status: "blocked" }>;
-  localStore: ReturnType<typeof createPosLocalStore>;
+  localStore: PosLocalStorePort;
   onStarted: () => void;
   operatingDateRange: ReturnType<typeof getLocalOperatingDateRange>;
   snapshot?: DailyOpeningSnapshot;
@@ -656,12 +645,10 @@ function StoreDayNotStartedState({
   const terminalId =
     entryContext.status === "ready"
       ? (entryContext.terminalSeed?.cloudTerminalId as
-          | Id<"posTerminal">
-          | undefined)
+          Id<"posTerminal"> | undefined)
       : undefined;
   const canStartFromGate = Boolean(
-    storeId &&
-      (snapshot?.status === "ready" || localReadiness.canStartLocally),
+    storeId && (snapshot?.status === "ready" || localReadiness.canStartLocally),
   );
   const shouldStartLocally =
     Boolean(localReadiness.canStartLocally) && snapshot?.status !== "ready";
@@ -694,12 +681,13 @@ function StoreDayNotStartedState({
         return;
       }
 
-      const result = await runCommand(() =>
-        startStoreDay({
-          ...operatingDateRange,
-          actorStaffProfileId: staff.staffProfileId,
-          storeId,
-        }) as Promise<CommandResult<unknown>>,
+      const result = await runCommand(
+        () =>
+          startStoreDay({
+            ...operatingDateRange,
+            actorStaffProfileId: staff.staffProfileId,
+            storeId,
+          }) as Promise<CommandResult<unknown>>,
       );
 
       if (result.kind === "ok") {
@@ -728,13 +716,14 @@ function StoreDayNotStartedState({
       };
     }
 
-    return runCommand(() =>
-      authenticateStaffCredential({
-        allowedRoles: ["cashier", "manager"],
-        pinHash: args.pinHash,
-        storeId,
-        username: args.username,
-      }) as Promise<CommandResult<StaffAuthenticationResult>>,
+    return runCommand(
+      () =>
+        authenticateStaffCredential({
+          allowedRoles: ["cashier", "manager"],
+          pinHash: args.pinHash,
+          storeId,
+          username: args.username,
+        }) as Promise<CommandResult<StaffAuthenticationResult>>,
     );
   };
 
@@ -846,7 +835,9 @@ function StoreDayClosedState() {
         storeUrlSlug?: string;
       }
     | undefined;
-  const canLinkToDailyClose = Boolean(params?.orgUrlSlug && params.storeUrlSlug);
+  const canLinkToDailyClose = Boolean(
+    params?.orgUrlSlug && params.storeUrlSlug,
+  );
 
   return (
     <View
@@ -878,8 +869,8 @@ function StoreDayClosedState() {
             Store day closed
           </h2>
           <p className="mt-3 max-w-lg text-base leading-7 text-muted-foreground">
-            The end of day review has already closed this operating day. Reopen the
-            day from the end of day review before entering POS.
+            The end of day review has already closed this operating day. Reopen
+            the day from the end of day review before entering POS.
           </p>
           {canLinkToDailyClose ? (
             <Button

@@ -48,6 +48,7 @@ const mockWriteCashierPresence = vi.fn();
 const mockMarkLocalEventsSynced = vi.fn();
 const mockWriteLocalCloudMapping = vi.fn();
 const mockListLocalCloudMappings = vi.fn();
+const mockReadLocalCloudMapping = vi.fn();
 const mockReadDrawerAuthorityState = vi.fn();
 const mockReadTerminalIntegrityState = vi.fn();
 const mockWriteDrawerAuthorityState = vi.fn();
@@ -352,16 +353,8 @@ vi.mock(
   }),
 );
 
-vi.mock("@/lib/pos/infrastructure/local/posLocalStore", () => ({
-  POS_LOCAL_STORE_SCHEMA_VERSION: 1,
-  canUploadPosLocalEventType: (type: string) =>
-    type === "register.opened" ||
-    type === "transaction.completed" ||
-    type === "cart.cleared" ||
-    type === "register.closeout_started" ||
-    type === "register.reopened",
-  createIndexedDbPosLocalStorageAdapter: vi.fn(() => ({})),
-  createPosLocalStore: vi.fn(() => ({
+function buildMockLocalStore() {
+  return {
     appendEvent: mockAppendLocalEvent,
     attachStaffProofTokenToPendingEvents:
       mockAttachStaffProofTokenToPendingEvents,
@@ -369,14 +362,17 @@ vi.mock("@/lib/pos/infrastructure/local/posLocalStore", () => ({
     listEvents: mockListLocalEvents,
     listEventsForUpload: mockListLocalEvents,
     listLocalCloudMappings: mockListLocalCloudMappings,
+    readLocalCloudMapping: mockReadLocalCloudMapping,
     readActiveCashierPresence: mockReadCashierPresence,
     readCashierPresence: mockReadCashierPresence,
     readDrawerAuthorityState: mockReadDrawerAuthorityState,
     readProvisionedTerminalSeed: mockReadProvisionedTerminalSeed,
-    resetRegisterOperationalStateForAuthorityCutover: vi.fn().mockResolvedValue({
-      ok: true,
-      value: { resetAt: 1_000, status: "already_applied" },
-    }),
+    resetRegisterOperationalStateForAuthorityCutover: vi
+      .fn()
+      .mockResolvedValue({
+        ok: true,
+        value: { resetAt: 1_000, status: "already_applied" },
+      }),
     readStoreDayReadiness: mockReadStoreDayReadiness,
     readTerminalIntegrityState: mockReadTerminalIntegrityState,
     clearActiveCashierPresence: mockClearCashierPresence,
@@ -390,7 +386,23 @@ vi.mock("@/lib/pos/infrastructure/local/posLocalStore", () => ({
       mockWriteProvisionedTerminalSeedAndClearTerminalIntegrity,
     writeDrawerAuthorityState: mockWriteDrawerAuthorityState,
     writeLocalCloudMapping: mockWriteLocalCloudMapping,
-  })),
+  };
+}
+
+vi.mock("@/lib/pos/infrastructure/local/posLocalStore", () => ({
+  POS_LOCAL_STORE_SCHEMA_VERSION: 1,
+  canUploadPosLocalEventType: (type: string) =>
+    type === "register.opened" ||
+    type === "transaction.completed" ||
+    type === "cart.cleared" ||
+    type === "register.closeout_started" ||
+    type === "register.reopened",
+  createIndexedDbPosLocalStorageAdapter: vi.fn(() => ({})),
+  createPosLocalStore: vi.fn(() => buildMockLocalStore()),
+}));
+
+vi.mock("@/lib/pos/infrastructure/local/posLocalStorageRuntime", () => ({
+  getDefaultPosLocalStore: () => buildMockLocalStore(),
 }));
 
 function deferred<T>() {
@@ -771,6 +783,8 @@ describe("useRegisterViewModel", () => {
         ],
       };
     });
+    mockReadLocalCloudMapping.mockReset();
+    mockReadLocalCloudMapping.mockResolvedValue({ ok: true, value: null });
     mockReadDrawerAuthorityState.mockReset();
     mockReadDrawerAuthorityState.mockResolvedValue({ ok: true, value: null });
     mockReadTerminalIntegrityState.mockReset();
@@ -13356,6 +13370,52 @@ describe("useRegisterViewModel", () => {
     ).toBe(completedEvent?.localTransactionId);
     expect(mockMarkLocalEventsSynced).not.toHaveBeenCalled();
     expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it("recovers a completed sale cloud id from an exact legacy mapping", async () => {
+    mockReadLocalCloudMapping.mockImplementation(async (input) => ({
+      ok: true,
+      value:
+        input.entity === "posTransaction"
+          ? {
+              cloudId: "cloud-transaction-1",
+              entity: "posTransaction",
+              localId: input.localId,
+              mappedAt: 10,
+            }
+          : null,
+    }));
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+    await act(async () => {
+      await result.current.checkout.onAddPayment("cash", 120);
+    });
+    await act(async () => {
+      await result.current.checkout.onCompleteTransaction();
+    });
+
+    await waitFor(() =>
+      expect(
+        result.current.checkout.completedTransactionData?.localTransactionId,
+      ).toBeDefined(),
+    );
+    await waitFor(() =>
+      expect(
+        result.current.checkout.completedTransactionData?.transactionId,
+      ).toBe("cloud-transaction-1"),
+    );
+    expect(mockReadLocalCloudMapping).toHaveBeenCalledWith({
+      entity: "posTransaction",
+      localId:
+        result.current.checkout.completedTransactionData?.localTransactionId,
+    });
   });
 
   it("marks local sale events as app-session-unverified while recovery waits for network", async () => {

@@ -15,7 +15,7 @@ import { type NormalizedCommandResult } from "@/lib/errors/runCommand";
 import { presentCommandToast } from "@/lib/errors/presentCommandToast";
 import { hashPin } from "@/lib/security/pinHash";
 import type { Id } from "~/convex/_generated/dataModel";
-import type { PosLocalStaffAuthorityRecord } from "@/lib/pos/infrastructure/local/posLocalStore";
+import type { PosLocalStaffAuthorityRecord } from "@/lib/pos/application/posLocalStoreTypes";
 import {
   GENERIC_UNEXPECTED_ERROR_MESSAGE,
   GENERIC_UNEXPECTED_ERROR_TITLE,
@@ -106,7 +106,9 @@ export function StaffAuthenticationDialog({
   const usernameInputRef = useRef<HTMLInputElement>(null);
   const pinInputWrapperRef = useRef<HTMLDivElement>(null);
 
-  const isUsernameLocked = Boolean(lockedUsername?.username && useLockedUsername);
+  const isUsernameLocked = Boolean(
+    lockedUsername?.username && useLockedUsername,
+  );
   const activeCopy =
     isUsernameLocked && lockedUsernameCopy
       ? lockedUsernameCopy
@@ -133,7 +135,6 @@ export function StaffAuthenticationDialog({
       setUsername(lockedUsername.username);
       setUseLockedUsername(true);
     }
-
   }, [lockedUsername?.username, open]);
 
   useEffect(() => {
@@ -317,9 +318,9 @@ export function StaffAuthenticationDialog({
             Sign in as a different cashier
           </button>
         ) : alternateCopy &&
-        alternateTriggerLabel &&
-        !hideAlternateAction &&
-        !isUsernameLocked ? (
+          alternateTriggerLabel &&
+          !hideAlternateAction &&
+          !isUsernameLocked ? (
           <button
             type="button"
             className="text-left text-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
@@ -333,7 +334,7 @@ export function StaffAuthenticationDialog({
           >
             {mode === "authenticate"
               ? alternateTriggerLabel
-              : returnTriggerLabel ?? copy.title}
+              : (returnTriggerLabel ?? copy.title)}
           </button>
         ) : (
           <span />
