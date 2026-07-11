@@ -908,7 +908,11 @@ export function TransactionView() {
       };
     }
 
-    if (pendingCorrection === "line_items" || pendingCorrection === "void") {
+    if (
+      pendingCorrection === "payment_method" ||
+      pendingCorrection === "line_items" ||
+      pendingCorrection === "void"
+    ) {
       if (!transaction?.terminalId) {
         return {
           kind: "user_error" as const,
