@@ -1782,7 +1782,8 @@ describe("TransactionView", () => {
 
   it("queues async manager approval for payment corrections", async () => {
     const user = userEvent.setup();
-    const authMutation = vi.fn().mockResolvedValue({
+    const authMutation = vi.fn();
+    const terminalAuthMutation = vi.fn().mockResolvedValue({
       kind: "ok",
       data: {
         activeRoles: ["cashier"],
@@ -1832,6 +1833,8 @@ describe("TransactionView", () => {
       customerMutation,
       paymentMutation,
       approvalMutation,
+      vi.fn(),
+      terminalAuthMutation,
     );
     useParamsMock.mockReturnValue({ transactionId: "txn_13" });
     useQueryMock.mockReturnValue(baseTransaction);
@@ -1862,10 +1865,13 @@ describe("TransactionView", () => {
       ),
     ).not.toBeInTheDocument();
     expect(approvalMutation).not.toHaveBeenCalled();
-    expect(authMutation).toHaveBeenCalledWith({
+    expect(authMutation).not.toHaveBeenCalled();
+    expect(terminalAuthMutation).toHaveBeenCalledWith({
       allowedRoles: ["cashier", "manager"],
+      allowActiveSessionsOnOtherTerminals: true,
       pinHash: "hashed:1234",
       storeId: "store_1",
+      terminalId: "terminal_1",
       username: "manager",
     });
     expect(paymentMutation).toHaveBeenCalledWith({
