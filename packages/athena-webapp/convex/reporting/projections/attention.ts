@@ -23,6 +23,7 @@ type ReportingCompleteness =
 
 type SourceProjectionKind =
   | "store_day"
+  | "store_intraday"
   | "sku_day"
   | "current_inventory"
   | "custom_range";

@@ -195,6 +195,17 @@ import {
   reportingSkuEvidenceSchema,
   reportingSkuInsightProjectionSchema,
   reportingStoreDayProjectionSchema,
+  reportingStoreIntradayProjectionSchema,
+  reportingStoreIntradayScheduleStateSchema,
+  reportingStorePeriodSummarySchema,
+  reportingSkuPeriodSummarySchema,
+  reportingPeriodRollupSchema,
+  reportingPeriodFacetSchema,
+  reportingInventoryExposureSummarySchema,
+  reportingInventoryMovementSummarySchema,
+  reportingInventoryPeriodSummarySchema,
+  reportingDailyCloseTrustSchema,
+  reportingReadCursorContextSchema,
 } from "./schemas/reporting";
 
 const schema = defineSchema({
@@ -1516,6 +1527,30 @@ const schema = defineSchema({
         "historicalInterpretationPolicyId",
       ],
     ),
+  reportingStoreIntradayProjection: defineTable(
+    reportingStoreIntradayProjectionSchema,
+  )
+    .index("by_generationId_operatingDate_checkpointAt", [
+      "generationId",
+      "operatingDate",
+      "checkpointAt",
+    ])
+    .index("by_sourceGenerationId_operatingDate_checkpointAt", [
+      "sourceGenerationId",
+      "operatingDate",
+      "checkpointAt",
+    ])
+    .index("by_storeId_operatingDate_checkpointAt", [
+      "storeId",
+      "operatingDate",
+      "checkpointAt",
+    ]),
+  reportingStoreIntradayScheduleState: defineTable(
+    reportingStoreIntradayScheduleStateSchema,
+  )
+    .index("by_generationId_operatingDate", ["generationId", "operatingDate"])
+    .index("by_generationId_status", ["generationId", "status"])
+    .index("by_generationId_status_mode", ["generationId", "status", "mode"]),
   reportingSkuDayProjection: defineTable(reportingSkuDayProjectionSchema)
     .index("by_generationId_productSkuId_operatingDate_metric", [
       "generationId",
@@ -1579,6 +1614,11 @@ const schema = defineSchema({
       "storeId",
       "rangeStartDate",
       "rangeEndDate",
+    ])
+    .index("by_generationId_resultFamily_resultKey", [
+      "generationId",
+      "resultFamily",
+      "resultKey",
     ]),
   reportingAttentionProjection: defineTable(reportingAttentionProjectionSchema)
     .index("by_generationId_scope_productSkuId", [
@@ -1652,6 +1692,84 @@ const schema = defineSchema({
       "metric",
       "sourceDomain",
     ]),
+  reportingStorePeriodSummary: defineTable(reportingStorePeriodSummarySchema)
+    .index("by_generationId_periodKey", ["generationId", "periodKey"])
+    .index("by_workspaceEpochId_periodKey", ["workspaceEpochId", "periodKey"]),
+  reportingSkuPeriodSummary: defineTable(reportingSkuPeriodSummarySchema)
+    .index("by_generationId_periodKey_productSkuId", ["generationId", "periodKey", "productSkuId"])
+    .index("by_generationId_periodKey_revenueSort_productSkuId", ["generationId", "periodKey", "revenueSort", "productSkuId"])
+    .index("by_generationId_periodKey_marginSort_productSkuId", ["generationId", "periodKey", "marginSort", "productSkuId"])
+    .index("by_generationId_periodKey_unitsSort_productSkuId", ["generationId", "periodKey", "unitsSort", "productSkuId"])
+    .index("by_generationId_periodKey_coverSort_productSkuId", ["generationId", "periodKey", "coverSort", "productSkuId"])
+    .index("by_generationId_periodKey_inventoryValueSort_productSkuId", ["generationId", "periodKey", "inventoryValueSort", "productSkuId"])
+    .index("by_generationId_periodKey_attentionSort_productSkuId", ["generationId", "periodKey", "attentionSort", "productSkuId"])
+    .index("by_gen_period_class_revenue_sku", ["generationId", "periodKey", "classificationKey", "revenueSort", "productSkuId"])
+    .index("by_gen_period_class_margin_sku", ["generationId", "periodKey", "classificationKey", "marginSort", "productSkuId"])
+    .index("by_gen_period_class_units_sku", ["generationId", "periodKey", "classificationKey", "unitsSort", "productSkuId"])
+    .index("by_gen_period_class_cover_sku", ["generationId", "periodKey", "classificationKey", "coverSort", "productSkuId"])
+    .index("by_gen_period_class_inventory_value_sku", ["generationId", "periodKey", "classificationKey", "inventoryValueSort", "productSkuId"])
+    .index("by_gen_period_class_attention_sku", ["generationId", "periodKey", "classificationKey", "attentionSort", "productSkuId"])
+    .index("by_epoch_period_sku", ["workspaceEpochId", "periodKey", "productSkuId"])
+    .index("by_epoch_period_revenue_sku", ["workspaceEpochId", "periodKey", "revenueSort", "productSkuId"])
+    .index("by_epoch_period_margin_sku", ["workspaceEpochId", "periodKey", "marginSort", "productSkuId"])
+    .index("by_epoch_period_units_sku", ["workspaceEpochId", "periodKey", "unitsSort", "productSkuId"])
+    .index("by_epoch_period_cover_sku", ["workspaceEpochId", "periodKey", "coverSort", "productSkuId"])
+    .index("by_epoch_period_inventory_value_sku", ["workspaceEpochId", "periodKey", "inventoryValueSort", "productSkuId"])
+    .index("by_epoch_period_attention_sku", ["workspaceEpochId", "periodKey", "attentionSort", "productSkuId"]),
+  reportingSkuPeriodClassification: defineTable({
+    generationId: v.id("reportingProjectionGeneration"), periodKey: v.string(),
+    workspaceEpochId: v.optional(v.id("reportingWorkspaceMaterializationEpoch")),
+    classification: v.string(), productSkuId: v.id("productSku"),
+    revenueSort: v.number(), marginSort: v.number(), unitsSort: v.number(),
+    coverSort: v.number(), inventoryValueSort: v.number(), attentionSort: v.number(),
+  })
+    .index("by_gen_period_class_sku", ["generationId", "periodKey", "classification", "productSkuId"])
+    .index("by_gen_period_class_revenue_sku", ["generationId", "periodKey", "classification", "revenueSort", "productSkuId"])
+    .index("by_gen_period_class_margin_sku", ["generationId", "periodKey", "classification", "marginSort", "productSkuId"])
+    .index("by_gen_period_class_units_sku", ["generationId", "periodKey", "classification", "unitsSort", "productSkuId"])
+    .index("by_gen_period_class_cover_sku", ["generationId", "periodKey", "classification", "coverSort", "productSkuId"])
+    .index("by_gen_period_class_inventory_value_sku", ["generationId", "periodKey", "classification", "inventoryValueSort", "productSkuId"])
+    .index("by_gen_period_class_attention_sku", ["generationId", "periodKey", "classification", "attentionSort", "productSkuId"])
+    .index("by_epoch_period_class_revenue_sku", ["workspaceEpochId", "periodKey", "classification", "revenueSort", "productSkuId"])
+    .index("by_epoch_period_class_sku", ["workspaceEpochId", "periodKey", "classification", "productSkuId"])
+    .index("by_epoch_period_class_margin_sku", ["workspaceEpochId", "periodKey", "classification", "marginSort", "productSkuId"])
+    .index("by_epoch_period_class_units_sku", ["workspaceEpochId", "periodKey", "classification", "unitsSort", "productSkuId"])
+    .index("by_epoch_period_class_cover_sku", ["workspaceEpochId", "periodKey", "classification", "coverSort", "productSkuId"])
+    .index("by_epoch_period_class_inventory_value_sku", ["workspaceEpochId", "periodKey", "classification", "inventoryValueSort", "productSkuId"])
+    .index("by_epoch_period_class_attention_sku", ["workspaceEpochId", "periodKey", "classification", "attentionSort", "productSkuId"]),
+  reportingPeriodRollup: defineTable(reportingPeriodRollupSchema)
+    .index("by_generationId_periodKey_dimension_dimensionId", ["generationId", "periodKey", "dimension", "dimensionId"])
+    .index("by_epoch_period_dimension_id", ["workspaceEpochId", "periodKey", "dimension", "dimensionId"]),
+  reportingPeriodFacet: defineTable(reportingPeriodFacetSchema)
+    .index("by_generationId_periodKey_facet_value", ["generationId", "periodKey", "facet", "value"])
+    .index("by_epoch_period_facet_value", ["workspaceEpochId", "periodKey", "facet", "value"]),
+  reportingInventoryExposureSummary: defineTable(reportingInventoryExposureSummarySchema)
+    .index("by_generationId_exposureSort_productSkuId", ["generationId", "exposureSort", "productSkuId"])
+    .index("by_generationId_productSkuId", ["generationId", "productSkuId"])
+    .index("by_workspaceEpochId_productSkuId", ["workspaceEpochId", "productSkuId"])
+    .index("by_workspaceEpochId_exposureSort_productSkuId", ["workspaceEpochId", "exposureSort", "productSkuId"]),
+  reportingInventoryMovementSummary: defineTable(reportingInventoryMovementSummarySchema)
+    .index("by_generationId_periodKey_productSkuId", ["generationId", "periodKey", "productSkuId"])
+    .index("by_epoch_period_sku", ["workspaceEpochId", "periodKey", "productSkuId"]),
+  reportingInventoryPeriodSummary: defineTable(reportingInventoryPeriodSummarySchema)
+    .index("by_generationId_periodKey", ["generationId", "periodKey"])
+    .index("by_workspaceEpochId_periodKey", ["workspaceEpochId", "periodKey"]),
+  reportingDailyCloseTrust: defineTable(reportingDailyCloseTrustSchema)
+    .index("by_generationId_operatingDate", ["generationId", "operatingDate"]),
+  reportingReadCursorContext: defineTable(reportingReadCursorContextSchema)
+    .index("by_token", ["token"])
+    .index("by_storeId_athenaUserId_expiresAt", ["storeId", "athenaUserId", "expiresAt"]),
+  reportingWorkspaceMaterializationEpoch: defineTable({
+    sourceGenerationId: v.id("reportingProjectionGeneration"), storeId: v.id("store"),
+    projectionKind: v.string(), sourceWatermark: v.number(), status: v.union(v.literal("building"), v.literal("verified"), v.literal("active"), v.literal("retired")),
+    cursor: v.optional(v.string()), phase: v.optional(v.string()), presetIndex: v.number(),
+    sequence: v.number(), leaseToken: v.optional(v.string()),
+    activationBlockedReason: v.optional(v.string()),
+    startedAt: v.number(), updatedAt: v.number(), verifiedAt: v.optional(v.number()), activatedAt: v.optional(v.number()), retiredAt: v.optional(v.number()),
+  }).index("by_sourceGenerationId_sourceWatermark", ["sourceGenerationId", "sourceWatermark"]),
+  reportingWorkspaceReadModelActivation: defineTable({
+    storeId: v.id("store"), projectionKind: v.string(), workspaceEpochId: v.id("reportingWorkspaceMaterializationEpoch"), sourceGenerationId: v.id("reportingProjectionGeneration"), sourceWatermark: v.number(), activatedAt: v.number(), supersededAt: v.optional(v.number()),
+  }).index("by_storeId_projectionKind_activatedAt", ["storeId", "projectionKind", "activatedAt"]),
   reportingProjectionEvidence: defineTable(reportingProjectionEvidenceSchema)
     .index("by_generationId_productSkuId_operatingDate_metric", [
       "generationId",
@@ -1673,6 +1791,13 @@ const schema = defineSchema({
     .index("by_storeId_factId", ["storeId", "factId"])
     .index("by_generationId_recognitionAt_factId_metric", [
       "generationId",
+      "recognitionAt",
+      "factId",
+      "metric",
+    ])
+    .index("by_generationId_operatingDate_recognitionAt_factId_metric", [
+      "generationId",
+      "operatingDate",
       "recognitionAt",
       "factId",
       "metric",

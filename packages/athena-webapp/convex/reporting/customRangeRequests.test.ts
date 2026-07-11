@@ -8,7 +8,10 @@ import {
   CUSTOM_RANGE_MAX_DAYS,
   CUSTOM_RANGE_RESULT_PAGE_SIZE_MAX,
   customRangeResultBelongsToStore,
+  customRangeSourcesAreAuthoritative,
   decideCustomRangeRequest,
+  customRangeResultIdentity,
+  nextCustomRangeWork,
 } from "./customRangeRequests";
 
 const request = {
@@ -21,6 +24,26 @@ const request = {
 };
 
 describe("custom reporting range requests", () => {
+  it("uses one full source-authority predicate across store and SKU generations", () => {
+    const authority = { factContractVersion: 1, metricContractVersion: 1, organizationId: "org-1", projectionContractVersion: 1, stableWatermark: 100, storeId: "store-1" };
+    const activation = { ...authority, generationId: "store-generation" };
+    const generation = { ...authority, generationId: "store-generation", projectionKind: "store_day", sourceWatermark: 100, status: "active" };
+    const input = { authority, skuActivation: { ...activation, generationId: "sku-generation" }, skuGeneration: { ...generation, generationId: "sku-generation", projectionKind: "sku_day" }, storeActivation: activation, storeGeneration: generation };
+    expect(customRangeSourcesAreAuthoritative(input)).toBe(true);
+    expect(customRangeSourcesAreAuthoritative({ ...input, skuGeneration: { ...input.skuGeneration, stableWatermark: 99 } })).toBe(false);
+    expect(customRangeSourcesAreAuthoritative({ ...input, skuActivation: { ...input.skuActivation, supersededAt: 101 } })).toBe(false);
+    expect(customRangeSourcesAreAuthoritative({ ...input, storeGeneration: { ...input.storeGeneration, organizationId: "foreign" } })).toBe(false);
+  });
+  it("uses idempotent identities for every persisted result family", () => {
+    expect(customRangeResultIdentity({ family: "sku", metric: "net_sales", productSkuId: "sku-1" })).toBe("sku:sku-1:net_sales");
+    expect(customRangeResultIdentity({ dimensionId: "category-1", family: "category_rollup", metric: "units_sold" })).toBe("category_rollup:category-1:units_sold");
+  });
+
+  it("resumes store, SKU, and derivation phases without skipping work", () => {
+    expect(nextCustomRangeWork({ date: "2026-07-01", endDate: "2026-07-02", pageDone: true, phase: "store" })).toEqual({ date: "2026-07-01", phase: "sku" });
+    expect(nextCustomRangeWork({ date: "2026-07-01", endDate: "2026-07-02", pageDone: true, phase: "sku" })).toEqual({ date: "2026-07-02", phase: "store" });
+    expect(nextCustomRangeWork({ date: "2026-07-02", endDate: "2026-07-02", pageDone: true, phase: "sku" })).toEqual({ date: "2026-07-02", phase: "derive" });
+  });
   it("uses one deterministic identity for matching work", () => {
     expect(buildCustomRangeRequestKey(request)).toBe(
       "store-1:2026-07-01:2026-07-09:v1:w500:ggeneration-1",
@@ -185,5 +208,16 @@ describe("custom reporting range requests", () => {
     expect(source).toContain("processCustomRangeRequestMutation");
     expect(source).toContain("recordCustomRangeFailure");
     expect(source).not.toContain('.query("reportingFact")');
+    expect(source).toContain('.query("reportingSkuDayProjection")');
+    expect(source).toContain('family: "sku"');
+    expect(source).toContain('family: "product_rollup"');
+    expect(source).toContain('family: "category_rollup"');
+    expect(source).toContain('family: "facet"');
+    expect(source).toContain('family: "movement"');
+    expect(source).toContain("run.sourceGenerationIds");
+    expect(source).toContain("skuSourceGeneration.storeId !== run.storeId");
+    expect(source).toContain("skuSourceGeneration.stableWatermark !== run.frozenWatermark");
+    expect(source).toContain("Custom range SKU source generation is no longer active");
+    expect(source).toContain("resultFamily: v.optional(customRangeResultFamilyValidator)");
   });
 });

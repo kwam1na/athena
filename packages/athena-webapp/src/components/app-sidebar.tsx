@@ -522,11 +522,11 @@ export function AppSidebar({
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
-              {/* Analytics section */}
+              {/* Reports section */}
               <SidebarMenuItem>
                 <SidebarMenuButton disabled={!hasFullAdminAccess} asChild>
                   <Link
-                    to="/$orgUrlSlug/store/$storeUrlSlug/analytics"
+                    to="/$orgUrlSlug/store/$storeUrlSlug/reports"
                     params={(p) => ({
                       ...p,
                       orgUrlSlug: activeOrganization?.slug,
@@ -535,7 +535,7 @@ export function AppSidebar({
                     className="flex items-center"
                   >
                     <ChartNoAxesColumn className="w-4 h-4" />
-                    <p className="font-medium">Analytics</p>
+                    <p className="font-medium">Reports</p>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

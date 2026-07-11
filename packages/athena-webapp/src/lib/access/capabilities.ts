@@ -15,7 +15,7 @@ export type StoreDaySurface =
 
 export type FullAdminSurface =
   | "procurement"
-  | "analytics"
+  | "reports"
   | "configuration"
   | "members"
   | "storefront_admin"

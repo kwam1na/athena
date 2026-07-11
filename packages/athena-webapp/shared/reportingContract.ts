@@ -123,3 +123,40 @@ export type ReportingMetricVersion = {
   metric: ReportingMetricName;
   version: number;
 };
+
+export type ReportPeriodPreset =
+  | "today"
+  | "week_to_date"
+  | "prior_week"
+  | "trailing_30_days"
+  | "custom";
+
+export type ReportDateRange = { startDate: string; endDate: string };
+
+export type ReportPeriodDescriptor = {
+  preset: ReportPeriodPreset;
+  timezone: string;
+  evaluatedAt: number;
+  current: ReportDateRange;
+  comparison: ReportDateRange | null;
+  partialOperatingDates: string[];
+  operatingDate: string;
+  scheduleVersionId?: string;
+  sameElapsed: {
+    comparisonOperatingDate: string | null;
+    currentCutoffAt: number;
+    elapsedOperatingMs: number | null;
+  };
+};
+
+export type ReportingDestination =
+  | { kind: "transaction"; targetId: string }
+  | { kind: "online_order"; targetId: string }
+  | { kind: "service_case"; targetId: string }
+  | { kind: "payment_allocation"; targetId: string }
+  | { kind: "product_edit"; targetId: string }
+  | { kind: "sku_activity"; targetId: string }
+  | { kind: "procurement"; targetId?: string }
+  | { kind: "cash_controls"; targetId?: string }
+  | { kind: "terminal_health"; targetId?: string }
+  | { kind: "unavailable" };

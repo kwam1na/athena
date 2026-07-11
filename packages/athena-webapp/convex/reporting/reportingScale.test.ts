@@ -73,15 +73,23 @@ function createPublicScaleContext() {
       {
         _id: "activation-1",
         activatedAt: 100,
+        factContractVersion: 1,
         generationId: "generation-1",
+        metricContractVersion: 1,
+        organizationId: "org-1",
         projectionKind: "sku_day",
+        projectionContractVersion: 1,
         storeId: "store-1",
       },
       {
         _id: "activation-2",
         activatedAt: 100,
+        factContractVersion: 1,
         generationId: "generation-2",
+        metricContractVersion: 1,
+        organizationId: "org-2",
         projectionKind: "sku_day",
+        projectionContractVersion: 1,
         storeId: "store-2",
       },
     ],
@@ -90,8 +98,11 @@ function createPublicScaleContext() {
         _id: "generation-1",
         factContractVersion: 1,
         metricContractVersion: 1,
+        organizationId: "org-1",
+        projectionKind: "sku_day",
         projectionContractVersion: 1,
         sourceWatermark: 100,
+        stableWatermark: 100,
         status: "active",
         storeId: "store-1",
       },
@@ -99,8 +110,11 @@ function createPublicScaleContext() {
         _id: "generation-2",
         factContractVersion: 1,
         metricContractVersion: 1,
+        organizationId: "org-2",
+        projectionKind: "sku_day",
         projectionContractVersion: 1,
         sourceWatermark: 100,
+        stableWatermark: 100,
         status: "active",
         storeId: "store-2",
       },
@@ -325,6 +339,17 @@ function buildSkuFactMap(facts: CommerceFacts) {
 }
 
 describe("reporting production-derived 10x scale", () => {
+  it("keeps classification membership identity exact across the full SKU scale", () => {
+    const memberships = new Map<string, number>();
+    for (let index = 0; index < SCALE.skus; index += 1) {
+      for (const classification of ["fast_mover", "low_cover", "high_revenue_low_margin"]) {
+        const key = ["epoch-1", "wtd", classification, `sku-${index}`].join("|");
+        memberships.set(key, (memberships.get(key) ?? 0) + 1);
+      }
+    }
+    expect(memberships.size).toBe(SCALE.skus * 3);
+    expect(memberships.get("epoch-1|wtd|low_cover|sku-17879")).toBe(1);
+  });
   it("recognizes every declared commerce lane without treating allocations as revenue", () => {
     const { facts, settlements } = buildCommerceFixture();
 

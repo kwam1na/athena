@@ -249,6 +249,21 @@ describe("RemoteAssistLiveViewer", () => {
     expect(screen.getByText("Cash Controls")).toBeTruthy();
     expect(screen.queryByText("Point of Sale")).toBeNull();
   });
+
+  it("names the Reports workspace from its route", () => {
+    render(
+      <RemoteAssistLiveViewer
+        canControl
+        frame={buildFrame({
+          route: "/wigclub/store/wigclub/reports/items",
+          title: "Athena",
+        })}
+        onControl={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Reports")).toBeTruthy();
+  });
 });
 
 function getFixtureSurfaceId(

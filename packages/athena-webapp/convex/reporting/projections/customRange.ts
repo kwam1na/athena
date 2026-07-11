@@ -67,3 +67,36 @@ export function buildCustomRangeProjection(input: {
     ...totals,
   };
 }
+
+export function buildCustomRangeResultFamilies(input: {
+  skuRows: Array<{
+    categoryId?: string;
+    metric: string;
+    productId?: string;
+    productSkuId: string;
+    value: number;
+  }>;
+}) {
+  const overview = new Map<string, number>();
+  const sku = new Map<string, number>();
+  const rollups = new Map<string, number>();
+  for (const row of input.skuRows) {
+    overview.set(row.metric, (overview.get(row.metric) ?? 0) + row.value);
+    sku.set(`${row.productSkuId}|${row.metric}`, (sku.get(`${row.productSkuId}|${row.metric}`) ?? 0) + row.value);
+    for (const [family, id] of [["product_rollup", row.productId], ["category_rollup", row.categoryId]] as const) {
+      if (!id) continue;
+      const key = `${family}|${id}|${row.metric}`;
+      rollups.set(key, (rollups.get(key) ?? 0) + row.value);
+    }
+  }
+  const present = (family: string, values: Map<string, number>) =>
+    [...values].map(([resultKey, value]) => ({ family, resultKey, value }));
+  return {
+    overview: present("overview", overview),
+    sku: present("sku", sku),
+    rollups: [...rollups].map(([key, value]) => {
+      const [family, id, metric] = key.split("|");
+      return { family, resultKey: `${id}|${metric}`, value };
+    }),
+  };
+}

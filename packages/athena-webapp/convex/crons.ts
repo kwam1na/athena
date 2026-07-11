@@ -4,6 +4,13 @@ import { internal } from "./_generated/api";
 const crons = cronJobs();
 
 crons.interval(
+  "resume Reports workspace materialization",
+  { hours: 1 },
+  internal.reporting.readModels.materialize.resumeReportsWorkspaceMaterialization,
+  {},
+);
+
+crons.interval(
   "release-checkout-items",
   { minutes: process.env.STAGE == "prod" ? 10 : 1440 },
   internal.storeFront.checkoutSession.releaseCheckoutItems,

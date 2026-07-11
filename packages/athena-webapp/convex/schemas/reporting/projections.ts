@@ -8,6 +8,7 @@ import {
 
 export const reportingProjectionKindSchema = v.union(
   v.literal("store_day"),
+  v.literal("store_intraday"),
   v.literal("sku_day"),
   v.literal("current_inventory"),
   v.literal("custom_range"),
@@ -61,6 +62,9 @@ export const reportingProjectionGenerationSchema = v.object({
   factContractVersion: v.number(),
   metricContractVersion: v.number(),
   sourceWatermark: v.number(),
+  sourceGenerationIds: v.optional(
+    v.array(v.id("reportingProjectionGeneration")),
+  ),
   stableWatermark: v.optional(v.number()),
   rangeStartDate: v.optional(v.string()),
   rangeEndDate: v.optional(v.string()),
@@ -124,6 +128,48 @@ export const reportingStoreDayProjectionSchema = v.object({
   historicalInterpretationPolicyHash: v.optional(v.string()),
 });
 
+export const reportingStoreIntradayProjectionSchema = v.object({
+  generationId: v.id("reportingProjectionGeneration"),
+  sourceGenerationId: v.id("reportingProjectionGeneration"),
+  organizationId: v.id("organization"),
+  storeId: v.id("store"),
+  operatingDate: v.string(),
+  checkpointAt: v.number(),
+  cutoffAt: v.number(),
+  currencyCode: v.string(),
+  currencyMinorUnitScale: v.number(),
+  discountMinor: v.number(),
+  grossRevenueMinor: v.number(),
+  netRevenueMinor: v.number(),
+  refundMinor: v.number(),
+  knownCogsMinor: v.number(),
+  uncoveredRevenueMinor: v.number(),
+  unitsSold: v.number(),
+  factCount: v.number(),
+  factContractVersion: v.number(),
+  metricContractVersion: v.number(),
+  projectionContractVersion: v.number(),
+  sourceWatermark: v.number(),
+  completeness: reportingCompletenessSchema,
+  limitingReason: v.optional(reportingLimitingReasonSchema),
+  projectedAt: v.number(),
+});
+
+export const reportingStoreIntradayScheduleStateSchema = v.object({
+  generationId: v.id("reportingProjectionGeneration"),
+  organizationId: v.id("organization"),
+  storeId: v.id("store"),
+  operatingDate: v.string(),
+  nextCheckpointAt: v.optional(v.number()),
+  checkpointIntervalMs: v.number(),
+  operatingStartAt: v.number(),
+  operatingEndAt: v.number(),
+  status: v.union(v.literal("scheduled"), v.literal("complete"), v.literal("superseded"), v.literal("blocked")),
+  blockingReason: v.optional(v.literal("evidence_truncated")),
+  mode: v.union(v.literal("active"), v.literal("historical")),
+  updatedAt: v.number(),
+});
+
 export const reportingSkuDayProjectionSchema = v.object({
   ...projectionValueFields,
   productSkuId: v.id("productSku"),
@@ -146,6 +192,18 @@ export const reportingRangeProjectionSchema = v.object({
   rangeStartDate: v.string(),
   rangeEndDate: v.string(),
   productSkuId: v.optional(v.id("productSku")),
+  resultFamily: v.optional(
+    v.union(
+      v.literal("overview"),
+      v.literal("sku"),
+      v.literal("product_rollup"),
+      v.literal("category_rollup"),
+      v.literal("facet"),
+      v.literal("movement"),
+      v.literal("daily_close_trust"),
+    ),
+  ),
+  resultKey: v.optional(v.string()),
 });
 
 export const reportingAttentionProjectionSchema = v.object({
@@ -462,5 +520,131 @@ export const reportingSkuEvidenceSchema = v.object({
       relation: v.string(),
     }),
   ),
+  createdAt: v.number(),
+});
+
+const reportingPeriodResultFields = {
+  workspaceEpochId: v.optional(v.id("reportingWorkspaceMaterializationEpoch")),
+  generationId: v.id("reportingProjectionGeneration"),
+  organizationId: v.id("organization"),
+  storeId: v.id("store"),
+  periodKey: v.string(),
+  rangeStartDate: v.string(),
+  rangeEndDate: v.string(),
+  sourceGenerationIds: v.array(v.id("reportingProjectionGeneration")),
+  sourceWatermark: v.number(),
+  completeness: reportingCompletenessSchema,
+  limitingReason: v.optional(reportingLimitingReasonSchema),
+  projectedAt: v.number(),
+};
+
+export const reportingStorePeriodSummarySchema = v.object({
+  ...reportingPeriodResultFields,
+  metrics: v.record(v.string(), v.union(v.number(), v.null())),
+  revenueCurrencyCode: v.optional(v.string()),
+  revenueCurrencyMinorUnitScale: v.optional(v.number()),
+  valuationCurrencyCode: v.optional(v.string()),
+  valuationCurrencyMinorUnitScale: v.optional(v.number()),
+});
+
+export const reportingSkuPeriodSummarySchema = v.object({
+  ...reportingPeriodResultFields,
+  productSkuId: v.id("productSku"),
+  recognitionProductId: v.optional(v.id("product")),
+  recognitionCategoryId: v.optional(v.id("category")),
+  classifications: v.array(v.string()),
+  activeDays: v.optional(v.number()),
+  activeOperatingDates: v.optional(v.array(v.string())),
+  latestActiveOperatingDate: v.optional(v.string()),
+  classificationKey: v.string(),
+  metrics: v.record(v.string(), v.union(v.number(), v.null())),
+  revenueCurrencyCode: v.optional(v.string()),
+  revenueCurrencyMinorUnitScale: v.optional(v.number()),
+  valuationCurrencyCode: v.optional(v.string()),
+  valuationCurrencyMinorUnitScale: v.optional(v.number()),
+  revenueSort: v.number(),
+  marginSort: v.number(),
+  unitsSort: v.number(),
+  coverSort: v.number(),
+  inventoryValueSort: v.number(),
+  attentionSort: v.number(),
+});
+
+export const reportingPeriodRollupSchema = v.object({
+  ...reportingPeriodResultFields,
+  dimension: v.union(v.literal("product"), v.literal("category")),
+  dimensionId: v.string(),
+  metrics: v.record(v.string(), v.union(v.number(), v.null())),
+  identityBasis: v.union(v.literal("recognition"), v.literal("current_fallback")),
+});
+
+export const reportingPeriodFacetSchema = v.object({
+  ...reportingPeriodResultFields,
+  facet: v.string(),
+  value: v.string(),
+  count: v.number(),
+});
+
+export const reportingInventoryExposureSummarySchema = v.object({
+  workspaceEpochId: v.optional(v.id("reportingWorkspaceMaterializationEpoch")),
+  generationId: v.id("reportingProjectionGeneration"),
+  organizationId: v.id("organization"),
+  storeId: v.id("store"),
+  productSkuId: v.id("productSku"),
+  sourceWatermark: v.number(),
+  asOf: v.number(),
+  metrics: v.record(v.string(), v.union(v.number(), v.null())),
+  valuationCurrencyCode: v.optional(v.string()),
+  valuationCurrencyMinorUnitScale: v.optional(v.number()),
+  exposureSort: v.number(),
+  completeness: reportingCompletenessSchema,
+  limitingReason: v.optional(reportingLimitingReasonSchema),
+  projectedAt: v.number(),
+});
+
+export const reportingInventoryMovementSummarySchema = v.object({
+  ...reportingPeriodResultFields,
+  productSkuId: v.id("productSku"),
+  receiptsQuantity: v.number(),
+  salesQuantity: v.number(),
+  returnsQuantity: v.number(),
+  consumedQuantity: v.number(),
+  adjustmentsQuantity: v.number(),
+  commitmentQuantity: v.number(),
+  revenueCurrencyCode: v.optional(v.string()),
+  revenueCurrencyMinorUnitScale: v.optional(v.number()),
+  valuationCurrencyCode: v.optional(v.string()),
+  valuationCurrencyMinorUnitScale: v.optional(v.number()),
+});
+
+export const reportingInventoryPeriodSummarySchema = v.object({
+  ...reportingPeriodResultFields,
+  metrics: v.record(v.string(), v.union(v.number(), v.null())),
+  revenueCurrencyCode: v.optional(v.string()),
+  revenueCurrencyMinorUnitScale: v.optional(v.number()),
+  valuationCurrencyCode: v.optional(v.string()),
+  valuationCurrencyMinorUnitScale: v.optional(v.number()),
+});
+
+export const reportingDailyCloseTrustSchema = v.object({
+  ...reportingPeriodResultFields,
+  operatingDate: v.string(),
+  acceptedCloseVersion: v.number(),
+  acceptedCloseProjectionId: v.id("reportingDailyCloseProjection"),
+  hasPostCloseActivity: v.boolean(),
+  postCloseNetSalesDeltaMinor: v.number(),
+  postCloseRefundsDeltaMinor: v.number(),
+  postCloseDeficitAdjustmentDeltaMinor: v.number(),
+});
+
+export const reportingReadCursorContextSchema = v.object({
+  token: v.string(),
+  organizationId: v.id("organization"),
+  storeId: v.id("store"),
+  athenaUserId: v.id("athenaUser"),
+  contextKey: v.string(),
+  pageKind: v.string(),
+  continuation: v.union(v.string(), v.null()),
+  expiresAt: v.number(),
   createdAt: v.number(),
 });

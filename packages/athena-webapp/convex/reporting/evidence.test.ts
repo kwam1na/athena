@@ -6,12 +6,28 @@ import {
   decodeEvidenceCursor,
   encodeEvidenceCursor,
   materializePendingCheckoutSkuAttribution,
+  presentSkuEvidenceRow,
   recordInventoryEffectSkuEvidenceWithCtx,
   recordPaymentAllocationSkuEvidenceWithCtx,
   sanitizeSourceReference,
 } from "./evidence";
 
 describe("reporting evidence", () => {
+  it("presents safe typed destinations without exposing unsupported source ids", () => {
+    expect(
+      presentSkuEvidenceRow({
+        sourceRoutes: [
+          { sourceId: "tx-1", sourceType: "pos_transaction" },
+          { sourceId: "internal-secret", sourceType: "unsupported" },
+        ],
+      }),
+    ).toMatchObject({
+      destinations: [
+        { kind: "transaction", targetId: "tx-1" },
+        { kind: "unavailable" },
+      ],
+    });
+  });
   it("binds cursors to store, filter, and contract versions", () => {
     const cursor = encodeEvidenceCursor({
       factId: "fact-10",

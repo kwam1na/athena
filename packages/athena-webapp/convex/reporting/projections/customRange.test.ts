@@ -1,8 +1,18 @@
 import { describe, expect, it } from "vitest";
 
-import { buildCustomRangeProjection } from "./customRange";
+import { buildCustomRangeProjection, buildCustomRangeResultFamilies } from "./customRange";
 
 describe("custom range reporting projection", () => {
+  it("materializes overview, SKU, product, and category result families", () => {
+    const result = buildCustomRangeResultFamilies({ skuRows: [
+      { categoryId: "c1", metric: "net_sales", productId: "p1", productSkuId: "s1", value: 10 },
+      { categoryId: "c1", metric: "net_sales", productId: "p1", productSkuId: "s2", value: 20 },
+    ] });
+    expect(result.overview).toEqual([{ family: "overview", resultKey: "net_sales", value: 30 }]);
+    expect(result.rollups).toContainEqual({ family: "product_rollup", resultKey: "p1|net_sales", value: 30 });
+    expect(result.rollups).toContainEqual({ family: "category_rollup", resultKey: "c1|net_sales", value: 30 });
+    expect(result.sku).toHaveLength(2);
+  });
   it("combines verified daily projections without raw history", () => {
     expect(
       buildCustomRangeProjection({

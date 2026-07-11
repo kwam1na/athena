@@ -19,7 +19,7 @@ describe("Athena admin shell patterns", () => {
       screen.getByRole("heading", { name: /^northwind atelier$/i }),
     ).toBeInTheDocument();
     expect(screen.getByText(/^store$/i)).toBeInTheDocument();
-    expect(screen.getByText(/^analytics$/i)).toBeInTheDocument();
+    expect(screen.getByText(/^reports$/i)).toBeInTheDocument();
     expect(screen.getByText(/bulk operations/i)).toBeInTheDocument();
     expect(screen.getByText(/open orders/i)).toBeInTheDocument();
     expect(screen.getByText(/pending reviews/i)).toBeInTheDocument();
@@ -30,7 +30,7 @@ describe("Athena admin shell patterns", () => {
     render(<AthenaSidebarPattern />);
 
     expect(screen.getByText(/^store$/i)).toBeInTheDocument();
-    expect(screen.getByText(/^analytics$/i)).toBeInTheDocument();
+    expect(screen.getByText(/^reports$/i)).toBeInTheDocument();
     expect(screen.getByText(/bulk operations/i)).toBeInTheDocument();
     expect(screen.getByText(/reviews/i)).toBeInTheDocument();
   });

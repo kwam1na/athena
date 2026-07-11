@@ -28,6 +28,41 @@ type CustomRangeRun = {
   storeId?: string;
 };
 
+type CustomRangeSourceAuthority = {
+  factContractVersion: number;
+  metricContractVersion: number;
+  organizationId: string;
+  projectionContractVersion: number;
+  stableWatermark: number;
+  storeId: string;
+};
+
+export function customRangeSourcesAreAuthoritative(input: {
+  authority: CustomRangeSourceAuthority;
+  skuActivation: null | { factContractVersion: number; generationId: string; metricContractVersion: number; organizationId: string; projectionContractVersion: number; storeId: string; supersededAt?: number };
+  skuGeneration: null | { factContractVersion: number; metricContractVersion: number; organizationId: string; projectionContractVersion: number; projectionKind: string; sourceWatermark: number; stableWatermark?: number; status: string; storeId: string; generationId: string };
+  storeActivation: null | { factContractVersion: number; generationId: string; metricContractVersion: number; organizationId: string; projectionContractVersion: number; storeId: string; supersededAt?: number };
+  storeGeneration: null | { factContractVersion: number; metricContractVersion: number; organizationId: string; projectionContractVersion: number; projectionKind: string; sourceWatermark: number; stableWatermark?: number; status: string; storeId: string; generationId: string };
+}) {
+  const { authority, skuActivation, skuGeneration, storeActivation, storeGeneration } = input;
+  const generationMatches = (generation: NonNullable<typeof storeGeneration>, kind: "store_day" | "sku_day") =>
+    generation.projectionKind === kind && generation.status === "active" &&
+    generation.storeId === authority.storeId && generation.organizationId === authority.organizationId &&
+    generation.sourceWatermark === authority.stableWatermark && generation.stableWatermark === authority.stableWatermark &&
+    generation.factContractVersion === authority.factContractVersion &&
+    generation.metricContractVersion === authority.metricContractVersion &&
+    generation.projectionContractVersion === authority.projectionContractVersion;
+  const activationMatches = (activation: NonNullable<typeof storeActivation>, generationId: string) =>
+    activation.supersededAt === undefined && activation.generationId === generationId &&
+    activation.storeId === authority.storeId && activation.organizationId === authority.organizationId &&
+    activation.factContractVersion === authority.factContractVersion &&
+    activation.metricContractVersion === authority.metricContractVersion &&
+    activation.projectionContractVersion === authority.projectionContractVersion;
+  return Boolean(storeGeneration && skuGeneration && storeActivation && skuActivation &&
+    generationMatches(storeGeneration, "store_day") && generationMatches(skuGeneration, "sku_day") &&
+    activationMatches(storeActivation, storeGeneration.generationId) && activationMatches(skuActivation, skuGeneration.generationId));
+}
+
 export function classifyCustomRangeSourceRow(
   row: {
     completeness: string;
@@ -53,6 +88,15 @@ export function classifyCustomRangeSourceRow(
 }
 
 const OPERATING_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const customRangeResultFamilyValidator = v.union(
+  v.literal("overview"),
+  v.literal("sku"),
+  v.literal("product_rollup"),
+  v.literal("category_rollup"),
+  v.literal("facet"),
+  v.literal("movement"),
+  v.literal("daily_close_trust"),
+);
 export const CUSTOM_RANGE_CONCURRENCY_LIMIT = 2;
 export const CUSTOM_RANGE_FACT_PAGE_SIZE = 20;
 export const CUSTOM_RANGE_MAX_DAYS = 3_660;
@@ -181,19 +225,47 @@ function addOperatingDateDay(operatingDate: string) {
 type CustomRangeCursor = {
   projectionCursor: string | null;
   operatingDate: string;
+  phase: "store" | "sku" | "derive";
 };
+
+export function customRangeResultIdentity(input: {
+  dimensionId?: string;
+  family: string;
+  metric: string;
+  productSkuId?: string;
+}) {
+  return [input.family, input.productSkuId ?? input.dimensionId, input.metric]
+    .filter(Boolean)
+    .join(":");
+}
+
+export function nextCustomRangeWork(input: {
+  date: string;
+  endDate: string;
+  pageDone: boolean;
+  phase: CustomRangeCursor["phase"];
+}) {
+  if (!input.pageDone) return { date: input.date, phase: input.phase };
+  if (input.phase === "store") return { date: input.date, phase: "sku" as const };
+  if (input.phase === "sku") {
+    if (input.date === input.endDate) return { date: input.date, phase: "derive" as const };
+    return { date: addOperatingDateDay(input.date), phase: "store" as const };
+  }
+  return { date: input.date, phase: "derive" as const };
+}
 
 function parseCustomRangeCursor(
   cursor: string | undefined,
   rangeStartDate: string,
 ): CustomRangeCursor {
   if (!cursor) {
-    return { projectionCursor: null, operatingDate: rangeStartDate };
+    return { projectionCursor: null, operatingDate: rangeStartDate, phase: "store" };
   }
   try {
     const parsed = JSON.parse(cursor) as Partial<CustomRangeCursor>;
     if (
       typeof parsed.operatingDate !== "string" ||
+      (parsed.phase !== undefined && !["store", "sku", "derive"].includes(parsed.phase)) ||
       (parsed.projectionCursor !== null &&
         typeof parsed.projectionCursor !== "string")
     ) {
@@ -202,6 +274,7 @@ function parseCustomRangeCursor(
     return {
       projectionCursor: parsed.projectionCursor ?? null,
       operatingDate: parsed.operatingDate,
+      phase: parsed.phase ?? "store",
     };
   } catch {
     throw new Error("Custom range cursor is invalid");
@@ -270,11 +343,40 @@ export const requestCustomRange = mutation({
       );
     }
     const requestedWatermark = sourceGeneration.stableWatermark;
+    const skuActivation = await ctx.db
+      .query("reportingProjectionActivation")
+      .withIndex("by_storeId_projectionKind_activatedAt", (q) =>
+        q.eq("storeId", args.storeId).eq("projectionKind", "sku_day"),
+      )
+      .order("desc")
+      .first();
+    const skuSourceGeneration = skuActivation
+      ? await ctx.db.get("reportingProjectionGeneration", skuActivation.generationId)
+      : null;
+    if (!customRangeSourcesAreAuthoritative({
+      authority: {
+        factContractVersion: sourceGeneration.factContractVersion,
+        metricContractVersion: sourceGeneration.metricContractVersion,
+        organizationId: String(store.organizationId),
+        projectionContractVersion: sourceGeneration.projectionContractVersion,
+        stableWatermark: requestedWatermark,
+        storeId: String(args.storeId),
+      },
+      skuActivation: skuActivation ? { ...skuActivation, generationId: String(skuActivation.generationId), organizationId: String(skuActivation.organizationId), storeId: String(skuActivation.storeId) } : null,
+      skuGeneration: skuSourceGeneration ? { ...skuSourceGeneration, generationId: String(skuSourceGeneration._id), organizationId: String(skuSourceGeneration.organizationId), storeId: String(skuSourceGeneration.storeId) } : null,
+      storeActivation: { ...activation, generationId: String(activation.generationId), organizationId: String(activation.organizationId), storeId: String(activation.storeId) },
+      storeGeneration: { ...sourceGeneration, generationId: String(sourceGeneration._id), organizationId: String(sourceGeneration.organizationId), storeId: String(sourceGeneration.storeId) },
+    })) {
+      throw new Error("Verified SKU reporting data is not available for this store.");
+    }
+    if (!skuSourceGeneration) {
+      throw new Error("Verified SKU reporting data is not available for this store.");
+    }
     const request = {
       endOperatingDate: args.endOperatingDate,
       metricVersion: sourceGeneration.metricContractVersion,
       requestedWatermark,
-      sourceGenerationId: String(sourceGeneration._id),
+      sourceGenerationId: `${String(sourceGeneration._id)}+${String(skuSourceGeneration._id)}`,
       startOperatingDate: args.startOperatingDate,
       storeId: String(args.storeId),
     };
@@ -367,6 +469,7 @@ export const requestCustomRange = mutation({
       requestKey,
       runType: "custom_range",
       sourceGenerationId: sourceGeneration._id,
+      sourceGenerationIds: [sourceGeneration._id, skuSourceGeneration._id],
       status: "pending",
       storeId: args.storeId,
     });
@@ -382,6 +485,7 @@ export const requestCustomRange = mutation({
       rangeStartDate: args.startOperatingDate,
       runId,
       sourceWatermark: requestedWatermark,
+      sourceGenerationIds: [sourceGeneration._id, skuSourceGeneration._id],
       status: "building",
       storeId: args.storeId,
     });
@@ -411,9 +515,15 @@ async function completeCustomRangeRequest(
   },
 ) {
   const completedAt = Date.now();
-  const [sourceGeneration, activation] = await Promise.all([
+  const skuSourceGenerationId = run.sourceGenerationIds?.find(
+    (id) => id !== run.sourceGenerationId,
+  );
+  const [sourceGeneration, skuSourceGeneration, activation, skuActivation] = await Promise.all([
     run.sourceGenerationId
       ? ctx.db.get("reportingProjectionGeneration", run.sourceGenerationId)
+      : null,
+    skuSourceGenerationId
+      ? ctx.db.get("reportingProjectionGeneration", skuSourceGenerationId)
       : null,
     ctx.db
       .query("reportingProjectionActivation")
@@ -422,21 +532,18 @@ async function completeCustomRangeRequest(
       )
       .order("desc")
       .first(),
+    ctx.db.query("reportingProjectionActivation")
+      .withIndex("by_storeId_projectionKind_activatedAt", (q) =>
+        q.eq("storeId", run.storeId).eq("projectionKind", "sku_day"),
+      ).order("desc").first(),
   ]);
-  const sourceStillAuthoritative = Boolean(
-    sourceGeneration &&
-      activation &&
-      activation.supersededAt === undefined &&
-      activation.generationId === sourceGeneration._id &&
-      sourceGeneration.status === "active" &&
-      sourceGeneration.storeId === run.storeId &&
-      sourceGeneration.sourceWatermark === run.frozenWatermark &&
-      sourceGeneration.stableWatermark === run.frozenWatermark &&
-      sourceGeneration.factContractVersion === run.factContractVersion &&
-      sourceGeneration.metricContractVersion === run.metricContractVersion &&
-      sourceGeneration.projectionContractVersion ===
-        run.projectionContractVersion,
-  );
+  const sourceStillAuthoritative = customRangeSourcesAreAuthoritative({
+    authority: { factContractVersion: run.factContractVersion, metricContractVersion: run.metricContractVersion, organizationId: String(run.organizationId), projectionContractVersion: run.projectionContractVersion, stableWatermark: run.frozenWatermark, storeId: String(run.storeId) },
+    skuActivation: skuActivation ? { ...skuActivation, generationId: String(skuActivation.generationId), organizationId: String(skuActivation.organizationId), storeId: String(skuActivation.storeId) } : null,
+    skuGeneration: skuSourceGeneration ? { ...skuSourceGeneration, generationId: String(skuSourceGeneration._id), organizationId: String(skuSourceGeneration.organizationId), storeId: String(skuSourceGeneration.storeId) } : null,
+    storeActivation: activation ? { ...activation, generationId: String(activation.generationId), organizationId: String(activation.organizationId), storeId: String(activation.storeId) } : null,
+    storeGeneration: sourceGeneration ? { ...sourceGeneration, generationId: String(sourceGeneration._id), organizationId: String(sourceGeneration.organizationId), storeId: String(sourceGeneration.storeId) } : null,
+  });
   const incompleteSourceCount = run.omittedCount ?? 0;
   if (!sourceStillAuthoritative || incompleteSourceCount > 0) {
     await ctx.db.patch("reportingProjectionGeneration", run.generationId, {
@@ -482,6 +589,11 @@ async function completeCustomRangeRequest(
     processedCount: run.processedCount,
     status: "completed",
   });
+  await ctx.scheduler.runAfter(
+    0,
+    (internal as any).reporting.readModels.materialize.startReportsWorkspaceMaterialization,
+    { generationId: run.generationId },
+  );
   await ctx.db.insert("reportingRunEvent", {
     eventType: "completed",
     occurredAt: completedAt,
@@ -490,6 +602,60 @@ async function completeCustomRangeRequest(
     runId: run._id,
     sequence: await nextCustomRangeEventSequence(ctx, run._id),
     storeId: run.storeId,
+  });
+}
+
+async function addCustomRangeResultWithCtx(
+  ctx: MutationCtx,
+  input: {
+    currencyCode?: string;
+    currencyMinorUnitScale?: number;
+    family: "sku" | "product_rollup" | "category_rollup" | "facet" | "movement";
+    generationId: Id<"reportingProjectionGeneration">;
+    knownValue: number;
+    metric: string;
+    metricContractVersion: number;
+    organizationId: Id<"organization">;
+    productSkuId?: Id<"productSku">;
+    rangeEndDate: string;
+    rangeStartDate: string;
+    resultKey: string;
+    setIfPresent?: boolean;
+    sourceWatermark: number;
+    storeId: Id<"store">;
+  },
+) {
+  const existing = await ctx.db.query("reportingRangeProjection")
+    .withIndex("by_generationId_resultFamily_resultKey", (q) =>
+      q.eq("generationId", input.generationId).eq("resultFamily", input.family).eq("resultKey", input.resultKey),
+    ).first();
+  if (existing) {
+    await ctx.db.patch(existing._id, {
+      knownValue: input.setIfPresent
+        ? existing.knownValue
+        : (existing.knownValue ?? 0) + input.knownValue,
+      projectedAt: Date.now(),
+    });
+    return;
+  }
+  await ctx.db.insert("reportingRangeProjection", {
+    completeness: "complete",
+    currencyCode: input.currencyCode,
+    currencyMinorUnitScale: input.currencyMinorUnitScale,
+    generationId: input.generationId,
+    knownValue: input.knownValue,
+    metric: input.metric,
+    metricContractVersion: input.metricContractVersion,
+    organizationId: input.organizationId,
+    productSkuId: input.productSkuId,
+    projectedAt: Date.now(),
+    rangeEndDate: input.rangeEndDate,
+    rangeStartDate: input.rangeStartDate,
+    resultFamily: input.family,
+    resultKey: input.resultKey,
+    sourceWatermark: input.sourceWatermark,
+    storeId: input.storeId,
+    unknownQuantity: 0,
   });
 }
 
@@ -520,6 +686,12 @@ export const processCustomRangeRequestMutation = internalMutation({
       "reportingProjectionGeneration",
       run.sourceGenerationId,
     );
+    const skuSourceGenerationId = run.sourceGenerationIds?.find(
+      (id) => id !== run.sourceGenerationId,
+    );
+    const skuSourceGeneration = skuSourceGenerationId
+      ? await ctx.db.get("reportingProjectionGeneration", skuSourceGenerationId)
+      : null;
     if (
       !sourceGeneration ||
       sourceGeneration.storeId !== run.storeId ||
@@ -529,7 +701,17 @@ export const processCustomRangeRequestMutation = internalMutation({
       sourceGeneration.factContractVersion !== run.factContractVersion ||
       sourceGeneration.metricContractVersion !== run.metricContractVersion ||
       sourceGeneration.projectionContractVersion !==
-        run.projectionContractVersion
+        run.projectionContractVersion ||
+      !skuSourceGeneration ||
+      skuSourceGeneration.projectionKind !== "sku_day" ||
+      skuSourceGeneration.storeId !== run.storeId ||
+      skuSourceGeneration.organizationId !== run.organizationId ||
+      skuSourceGeneration.status !== "active" ||
+      skuSourceGeneration.sourceWatermark !== run.frozenWatermark ||
+      skuSourceGeneration.stableWatermark !== run.frozenWatermark ||
+      skuSourceGeneration.factContractVersion !== run.factContractVersion ||
+      skuSourceGeneration.metricContractVersion !== run.metricContractVersion ||
+      skuSourceGeneration.projectionContractVersion !== run.projectionContractVersion
     ) {
       throw new Error("Custom range source generation changed");
     }
@@ -547,17 +729,40 @@ export const processCustomRangeRequestMutation = internalMutation({
     ) {
       throw new Error("Custom range source generation is no longer active");
     }
-    const page = await ctx.db
-      .query("reportingStoreDayProjection")
-      .withIndex("by_generationId_operatingDate_metric", (q) =>
-        q
-          .eq("generationId", sourceGeneration._id)
-          .eq("operatingDate", progress.operatingDate),
+    const skuActivation = await ctx.db
+      .query("reportingProjectionActivation")
+      .withIndex("by_storeId_projectionKind_activatedAt", (q) =>
+        q.eq("storeId", run.storeId).eq("projectionKind", "sku_day"),
       )
-      .paginate({
-        cursor: progress.projectionCursor,
-        numItems: CUSTOM_RANGE_FACT_PAGE_SIZE,
-      });
+      .order("desc")
+      .first();
+    if (
+      !skuActivation ||
+      skuActivation.supersededAt !== undefined ||
+      skuActivation.generationId !== skuSourceGeneration._id
+    ) {
+      throw new Error("Custom range SKU source generation is no longer active");
+    }
+    if (!customRangeSourcesAreAuthoritative({
+      authority: { factContractVersion: run.factContractVersion, metricContractVersion: run.metricContractVersion, organizationId: String(run.organizationId), projectionContractVersion: run.projectionContractVersion, stableWatermark: run.frozenWatermark, storeId: String(run.storeId) },
+      skuActivation: { ...skuActivation, generationId: String(skuActivation.generationId), organizationId: String(skuActivation.organizationId), storeId: String(skuActivation.storeId) },
+      skuGeneration: { ...skuSourceGeneration, generationId: String(skuSourceGeneration._id), organizationId: String(skuSourceGeneration.organizationId), storeId: String(skuSourceGeneration.storeId) },
+      storeActivation: { ...activation, generationId: String(activation.generationId), organizationId: String(activation.organizationId), storeId: String(activation.storeId) },
+      storeGeneration: { ...sourceGeneration, generationId: String(sourceGeneration._id), organizationId: String(sourceGeneration.organizationId), storeId: String(sourceGeneration.storeId) },
+    })) {
+      throw new Error("Custom range source authority changed");
+    }
+    if (progress.phase === "derive") {
+      await completeCustomRangeRequest(ctx, { ...run, frozenWatermark: run.frozenWatermark, generationId: run.generationId });
+      return;
+    }
+    const page = progress.phase === "store"
+      ? await ctx.db.query("reportingStoreDayProjection")
+          .withIndex("by_generationId_operatingDate_metric", (q) => q.eq("generationId", sourceGeneration._id).eq("operatingDate", progress.operatingDate))
+          .paginate({ cursor: progress.projectionCursor, numItems: CUSTOM_RANGE_FACT_PAGE_SIZE })
+      : await ctx.db.query("reportingSkuDayProjection")
+          .withIndex("by_generationId_operatingDate_productSkuId_metric", (q) => q.eq("generationId", skuSourceGeneration._id).eq("operatingDate", progress.operatingDate))
+          .paginate({ cursor: progress.projectionCursor, numItems: CUSTOM_RANGE_FACT_PAGE_SIZE });
     let limitationCount = 0;
     let projectedContributionCount = 0;
     for (const sourceRow of page.page) {
@@ -569,6 +774,36 @@ export const processCustomRangeRequestMutation = internalMutation({
         limitationCount += 1;
       }
       if (!classification.eligible) continue;
+      if (progress.phase === "sku") {
+        const skuRow = sourceRow as Doc<"reportingSkuDayProjection">;
+        if (skuRow.knownValue === undefined) { limitationCount += 1; continue; }
+        const sku = await ctx.db.get("productSku", skuRow.productSkuId);
+        const product = sku ? await ctx.db.get("product", sku.productId) : null;
+        const common = {
+          currencyCode: skuRow.currencyCode,
+          currencyMinorUnitScale: skuRow.currencyMinorUnitScale,
+          generationId: run.generationId,
+          knownValue: skuRow.knownValue,
+          metric: skuRow.metric,
+          metricContractVersion: run.metricContractVersion,
+          organizationId: run.organizationId,
+          rangeEndDate: run.rangeEndDate,
+          rangeStartDate: run.rangeStartDate,
+          sourceWatermark: skuSourceGeneration.stableWatermark!,
+          storeId: run.storeId,
+        };
+        await addCustomRangeResultWithCtx(ctx, { ...common, family: "sku", productSkuId: skuRow.productSkuId, resultKey: customRangeResultIdentity({ family: "sku", metric: skuRow.metric, productSkuId: String(skuRow.productSkuId) }) });
+        if (product) await addCustomRangeResultWithCtx(ctx, { ...common, family: "product_rollup", resultKey: customRangeResultIdentity({ dimensionId: String(product._id), family: "product_rollup", metric: skuRow.metric }) });
+        if (product?.categoryId) await addCustomRangeResultWithCtx(ctx, { ...common, family: "category_rollup", resultKey: customRangeResultIdentity({ dimensionId: String(product.categoryId), family: "category_rollup", metric: skuRow.metric }) });
+        if (["units_sold", "units_returned", "inventory_consumed_units", "purchase_commitment_units"].includes(skuRow.metric)) {
+          await addCustomRangeResultWithCtx(ctx, { ...common, family: "movement", productSkuId: skuRow.productSkuId, resultKey: customRangeResultIdentity({ family: "movement", metric: skuRow.metric, productSkuId: String(skuRow.productSkuId) }) });
+        }
+        await addCustomRangeResultWithCtx(ctx, { ...common, currencyCode: undefined, currencyMinorUnitScale: undefined, family: "facet", knownValue: 1, metric: "active_sku", productSkuId: skuRow.productSkuId, resultKey: customRangeResultIdentity({ family: "facet", metric: "active_sku", productSkuId: String(skuRow.productSkuId) }), setIfPresent: true });
+        const activeDayMetric = `__active_day:${progress.operatingDate}`;
+        await addCustomRangeResultWithCtx(ctx, { ...common, currencyCode: undefined, currencyMinorUnitScale: undefined, family: "sku", knownValue: 1, metric: activeDayMetric, productSkuId: skuRow.productSkuId, resultKey: customRangeResultIdentity({ family: "sku", metric: activeDayMetric, productSkuId: String(skuRow.productSkuId) }), setIfPresent: true });
+        projectedContributionCount += 1;
+        continue;
+      }
       {
         const currencyCode = sourceRow.currencyCode;
         const currencyMinorUnitScale = sourceRow.currencyMinorUnitScale;
@@ -635,6 +870,8 @@ export const processCustomRangeRequestMutation = internalMutation({
                 : "mixed_currency"
               : undefined,
             metric: sourceRow.metric,
+            resultFamily: "overview",
+            resultKey: sourceRow.metric,
             metricContractVersion: run.metricContractVersion,
             organizationId: run.organizationId,
             projectedAt: Date.now(),
@@ -651,22 +888,12 @@ export const processCustomRangeRequestMutation = internalMutation({
     const omittedCount = (run.omittedCount ?? 0) + limitationCount;
     const processedCount = run.processedCount + page.page.length;
     if (page.isDone) {
-      const nextDate = addOperatingDateDay(progress.operatingDate);
-      if (nextDate > run.rangeEndDate) {
-        await completeCustomRangeRequest(ctx, {
-          ...run,
-          failedCount: run.failedCount,
-          frozenWatermark: run.frozenWatermark,
-          generationId: run.generationId,
-          omittedCount,
-          processedCount,
-        });
-        return;
-      }
+      const next = nextCustomRangeWork({ date: progress.operatingDate, endDate: run.rangeEndDate, pageDone: true, phase: progress.phase });
       await ctx.db.patch("reportingRun", run._id, {
         cursor: serializeCustomRangeCursor({
           projectionCursor: null,
-          operatingDate: nextDate,
+          operatingDate: next.date,
+          phase: next.phase,
         }),
         omittedCount,
         processedCount,
@@ -678,6 +905,7 @@ export const processCustomRangeRequestMutation = internalMutation({
         cursor: serializeCustomRangeCursor({
           projectionCursor: page.continueCursor,
           operatingDate: progress.operatingDate,
+          phase: progress.phase,
         }),
         omittedCount,
         processedCount,
@@ -831,13 +1059,15 @@ export const readCustomRangeStatus = internalQuery({
     ) {
       throw new Error(REPORTING_DIRECT_ACCESS_UNAVAILABLE);
     }
+    const workspaceActivation = run.generationId ? await ctx.db.query("reportingWorkspaceReadModelActivation").withIndex("by_storeId_projectionKind_activatedAt", (q) => q.eq("storeId", run.storeId).eq("projectionKind", "custom_range")).order("desc").first() : null;
+    const materializationReady = Boolean(workspaceActivation && workspaceActivation.supersededAt === undefined && workspaceActivation.sourceGenerationId === run.generationId);
     return {
       failedCount: run.failedCount,
       generationId: run.generationId ?? null,
       processedCount: run.processedCount,
       rangeEndDate: run.rangeEndDate ?? null,
       rangeStartDate: run.rangeStartDate ?? null,
-      status: run.status,
+      status: run.status === "completed" && !materializationReady ? "materializing" : run.status,
     };
   },
 });
@@ -873,6 +1103,7 @@ export const getCustomRangeStatus = action({
 export const readCustomRangeResult = internalQuery({
   args: {
     paginationOpts: paginationOptsValidator,
+    resultFamily: v.optional(customRangeResultFamilyValidator),
     runId: v.id("reportingRun"),
     storeId: v.id("store"),
   },
@@ -889,6 +1120,8 @@ export const readCustomRangeResult = internalQuery({
     if (run.status !== "completed" || !run.generationId) {
       return null;
     }
+    const workspaceActivation = await ctx.db.query("reportingWorkspaceReadModelActivation").withIndex("by_storeId_projectionKind_activatedAt", (q) => q.eq("storeId", run.storeId).eq("projectionKind", "custom_range")).order("desc").first();
+    if (!workspaceActivation || workspaceActivation.supersededAt !== undefined || workspaceActivation.sourceGenerationId !== run.generationId) return null;
     const generation = await ctx.db.get(
       "reportingProjectionGeneration",
       run.generationId,
@@ -919,10 +1152,11 @@ export const readCustomRangeResult = internalQuery({
     ) {
       throw new Error(REPORTING_DIRECT_ACCESS_UNAVAILABLE);
     }
+    const resultFamily = args.resultFamily ?? "overview";
     const result = await ctx.db
       .query("reportingRangeProjection")
-      .withIndex("by_generationId_metric_currencyCode_productSkuId", (q) =>
-        q.eq("generationId", generation._id),
+      .withIndex("by_generationId_resultFamily_resultKey", (q) =>
+        q.eq("generationId", generation._id).eq("resultFamily", resultFamily),
       )
       .paginate(boundCustomRangePagination(args.paginationOpts));
     return {
@@ -939,6 +1173,7 @@ export const readCustomRangeResult = internalQuery({
       })),
       rangeEndDate: generation.rangeEndDate,
       rangeStartDate: generation.rangeStartDate,
+      resultFamily,
       sourceWatermark: generation.stableWatermark,
     };
   },
@@ -947,6 +1182,7 @@ export const readCustomRangeResult = internalQuery({
 export const getCustomRangeResult = action({
   args: {
     paginationOpts: paginationOptsValidator,
+    resultFamily: v.optional(customRangeResultFamilyValidator),
     runId: v.id("reportingRun"),
     storeId: v.id("store"),
   },

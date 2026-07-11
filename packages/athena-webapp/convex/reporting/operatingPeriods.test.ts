@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import type { StoreScheduleDraft } from "../lib/storeScheduleTime";
 import {
@@ -29,6 +31,13 @@ function schedule(
 }
 
 describe("reporting operating periods", () => {
+  it("owns historical operating-date range resolution on the server", () => {
+    const source = readFileSync(join(import.meta.dirname, "operatingPeriods.ts"), "utf8");
+    expect(source).toContain("resolveReportingOperatingDateRangeWithCtx");
+    expect(source).toContain('(["active", "superseded"] as const)');
+    expect(source).toContain("resolveStoreOperatingRangeForDate");
+    expect(source).toContain(".take(100)");
+  });
   it("pins a cross-midnight occurrence to its historical schedule version", () => {
     expect(
       resolveReportingOperatingPeriod({

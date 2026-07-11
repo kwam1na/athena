@@ -44,7 +44,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Store",
     items: [
       { label: "Dashboard", icon: Layers3, active: true },
-      { label: "Analytics", icon: BarChart3, meta: "14 insights" },
+      { label: "Reports", icon: BarChart3, meta: "14 insights" },
       { label: "Point of sale", icon: Store, meta: "Live" },
       { label: "Orders", icon: ClipboardList, meta: "12 open" },
       { label: "Products", icon: PackageSearch, meta: "8 unresolved" },

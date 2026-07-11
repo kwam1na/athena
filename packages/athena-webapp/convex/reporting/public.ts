@@ -2,10 +2,21 @@ import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import type { Doc, Id } from "../_generated/dataModel";
 import { query, type QueryCtx } from "../_generated/server";
-import type { ReportingSourceDomain } from "../../shared/reportingContract";
+import {
+  REPORTING_FACT_CONTRACT_VERSION,
+  REPORTING_PROJECTION_CONTRACT_VERSION,
+  type ReportingSourceDomain,
+} from "../../shared/reportingContract";
 import { requireReportingStoreAccess } from "./access";
 import { summarizeProjectionHealthRead } from "./health";
 import { presentAttentionReason } from "./projections/attention";
+import { resolveReportingOperatingDateRangeWithCtx, resolveReportingOperatingPeriodWithCtx } from "./operatingPeriods";
+import { resolveReportPeriod } from "./periods";
+import {
+  buildCursorContextKey,
+  decodeReportingCursor,
+  encodeReportingCursor,
+} from "./readModels/reportingReadModels";
 
 export function buildReportingOverview(input: {
   generation: null | {
@@ -77,6 +88,7 @@ const REPORTING_SOURCE_DOMAINS = [
 ] as const satisfies readonly ReportingSourceDomain[];
 
 export const REPORTING_PUBLIC_PAGE_SIZE_MAX = 100;
+export const REPORTING_WORKSPACE_PAGE_SIZE_MAX = 25;
 
 export function boundReportingPagination(input: {
   cursor: string | null;
@@ -88,6 +100,17 @@ export function boundReportingPagination(input: {
   return {
     cursor: input.cursor,
     numItems: Math.min(REPORTING_PUBLIC_PAGE_SIZE_MAX, Math.max(1, requested)),
+  };
+}
+
+export function boundReportingWorkspacePagination(input: {
+  cursor: string | null;
+  numItems: number;
+}) {
+  const bounded = boundReportingPagination(input);
+  return {
+    ...bounded,
+    numItems: Math.min(REPORTING_WORKSPACE_PAGE_SIZE_MAX, bounded.numItems),
   };
 }
 
@@ -234,17 +257,51 @@ async function getActiveGeneration(
     )
     .order("desc")
     .first();
-  if (!activation) {
+  if (!activation || activation.supersededAt !== undefined) {
     return null;
   }
   const generation = await ctx.db.get(
     "reportingProjectionGeneration",
     activation.generationId,
   );
-  if (!generation || generation.storeId !== storeId) {
+  if (
+    !generation ||
+    generation.storeId !== storeId ||
+    generation.organizationId !== activation.organizationId ||
+    generation.projectionKind !== projectionKind ||
+    generation.status !== "active" ||
+    generation.supersededAt !== undefined ||
+    generation.stableWatermark === undefined ||
+    generation.stableWatermark !== generation.sourceWatermark ||
+    generation.factContractVersion !== REPORTING_FACT_CONTRACT_VERSION ||
+    generation.projectionContractVersion !== REPORTING_PROJECTION_CONTRACT_VERSION ||
+    generation.metricContractVersion !== 1 ||
+    activation.factContractVersion !== generation.factContractVersion ||
+    activation.metricContractVersion !== generation.metricContractVersion ||
+    activation.projectionContractVersion !== generation.projectionContractVersion
+  ) {
     return null;
   }
   return generation;
+}
+
+async function getActiveWorkspaceEpoch(ctx: QueryCtx, generation: Doc<"reportingProjectionGeneration">) {
+  const activation = await ctx.db.query("reportingWorkspaceReadModelActivation").withIndex("by_storeId_projectionKind_activatedAt", (q) => q.eq("storeId", generation.storeId).eq("projectionKind", generation.projectionKind)).order("desc").first();
+  if (!activation || activation.supersededAt !== undefined || activation.sourceGenerationId !== generation._id || activation.sourceWatermark !== generation.stableWatermark) return null;
+  const epoch = await ctx.db.get("reportingWorkspaceMaterializationEpoch", activation.workspaceEpochId);
+  return epoch && epoch.status === "active" && epoch.sourceGenerationId === generation._id && epoch.sourceWatermark === generation.stableWatermark ? epoch : null;
+}
+
+export function reportingGenerationsAreCompatible(
+  left: Pick<Doc<"reportingProjectionGeneration">, "factContractVersion" | "metricContractVersion" | "organizationId" | "projectionContractVersion" | "stableWatermark" | "storeId">,
+  right: Pick<Doc<"reportingProjectionGeneration">, "factContractVersion" | "metricContractVersion" | "organizationId" | "projectionContractVersion" | "stableWatermark" | "storeId">,
+) {
+  return left.storeId === right.storeId &&
+    left.organizationId === right.organizationId &&
+    left.factContractVersion === right.factContractVersion &&
+    left.metricContractVersion === right.metricContractVersion &&
+    left.projectionContractVersion === right.projectionContractVersion &&
+    left.stableWatermark === right.stableWatermark;
 }
 
 export const getOverview = query({
@@ -612,6 +669,588 @@ export const listMetricCoverage = query({
       ...page,
       generationId: generation._id,
       status: generation.status,
+    };
+  },
+});
+
+const reportPeriodKeyValidator = v.union(
+  v.literal("today"),
+  v.literal("wtd"),
+  v.literal("prior_week"),
+  v.literal("trailing_30"),
+);
+
+const reportPeriodArgs = {
+  periodKey: reportPeriodKeyValidator,
+  storeId: v.id("store"),
+};
+
+async function resolveRequestedReportsPeriod(
+  ctx: QueryCtx,
+  storeId: Id<"store">,
+  periodKey: "today" | "wtd" | "prior_week" | "trailing_30",
+) {
+  const asOf = Date.now();
+  const operatingPeriod = await resolveReportingOperatingPeriodWithCtx(ctx, { occurrenceAt: asOf, storeId });
+  if (operatingPeriod.kind !== "resolved") return null;
+  const preset = periodKey === "wtd" ? "week_to_date" : periodKey === "trailing_30" ? "trailing_30_days" : periodKey;
+  return resolveReportPeriod({
+    asOf,
+    operatingDate: operatingPeriod.operatingDate,
+    operatingDayStartsAt: operatingPeriod.startsAt,
+    preset,
+    scheduleVersionId: String(operatingPeriod.scheduleVersionId),
+    timezone: operatingPeriod.timezone,
+  });
+}
+
+function rowMatchesResolvedPeriod(
+  row: { rangeEndDate: string; rangeStartDate: string },
+  descriptor: { current: { endDate: string; startDate: string } },
+) {
+  return row.rangeStartDate === descriptor.current.startDate && row.rangeEndDate === descriptor.current.endDate;
+}
+
+export const resolveReportsPeriod = query({
+  args: {
+    asOf: v.optional(v.number()),
+    customEndDate: v.optional(v.string()),
+    customStartDate: v.optional(v.string()),
+    preset: v.union(reportPeriodKeyValidator, v.literal("custom")),
+    storeId: v.id("store"),
+  },
+  handler: async (ctx, args) => {
+    await requireReportingStoreAccess(ctx, args.storeId);
+    const asOf = args.asOf ?? Date.now();
+    const operatingPeriod = await resolveReportingOperatingPeriodWithCtx(ctx, { occurrenceAt: asOf, storeId: args.storeId });
+    if (operatingPeriod.kind !== "resolved") return { descriptor: null, status: "schedule_unavailable" as const };
+    const preset = args.preset === "wtd" ? "week_to_date" : args.preset === "trailing_30" ? "trailing_30_days" : args.preset;
+    const descriptor = resolveReportPeriod({
+      asOf,
+      customRange: preset === "custom" && args.customStartDate && args.customEndDate
+        ? { endDate: args.customEndDate, startDate: args.customStartDate }
+        : undefined,
+      preset,
+      operatingDate: operatingPeriod.operatingDate,
+      operatingDayStartsAt: operatingPeriod.startsAt,
+      scheduleVersionId: String(operatingPeriod.scheduleVersionId),
+      timezone: operatingPeriod.timezone,
+    });
+    return {
+      descriptor,
+      periodKey: args.preset === "custom" ? `${descriptor.current.startDate}:${descriptor.current.endDate}` : args.preset,
+      scheduleVersionId: operatingPeriod.scheduleVersionId,
+      status: "resolved" as const,
+    };
+  },
+});
+
+export const getReportsOverview = query({
+  args: reportPeriodArgs,
+  handler: async (ctx, args) => {
+    await requireReportingStoreAccess(ctx, args.storeId);
+    const descriptor = await resolveRequestedReportsPeriod(ctx, args.storeId, args.periodKey);
+    if (!descriptor) return { data: null, status: "schedule_unavailable" as const };
+    const generation = await getActiveGeneration(ctx, args.storeId, "store_day");
+    if (!generation) return { data: null, status: "pre_cutover" as const };
+    const workspaceEpoch = await getActiveWorkspaceEpoch(ctx, generation);
+    if (!workspaceEpoch) return { data: null, status: "materializing" as const };
+    const summary = await ctx.db.query("reportingStorePeriodSummary")
+        .withIndex("by_workspaceEpochId_periodKey", (q) => q.eq("workspaceEpochId", workspaceEpoch._id).eq("periodKey", args.periodKey))
+        .first();
+    if (!summary || summary.storeId !== args.storeId || !rowMatchesResolvedPeriod(summary, descriptor)) {
+      return { data: null, generationId: generation._id, status: "unavailable" as const };
+    }
+    const currentIntraday = await ctx.db.query("reportingStoreIntradayProjection")
+      .withIndex("by_generationId_operatingDate_checkpointAt", (q) => q
+        .eq("generationId", generation._id)
+        .eq("operatingDate", descriptor.operatingDate)
+        .lte("checkpointAt", descriptor.sameElapsed.currentCutoffAt))
+      .filter((q) => q.lte(q.field("cutoffAt"), descriptor.sameElapsed.currentCutoffAt))
+      .order("desc").first();
+    let comparisonIntraday: Doc<"reportingStoreIntradayProjection"> | null = null;
+    if (descriptor.sameElapsed.comparisonOperatingDate && descriptor.sameElapsed.elapsedOperatingMs !== null) {
+      const comparisonRange = await resolveReportingOperatingDateRangeWithCtx(ctx, { operatingDate: descriptor.sameElapsed.comparisonOperatingDate, storeId: args.storeId });
+      // A single operating window has an exact elapsed-time cutoff. Split
+      // windows require slice mapping; fail closed until that mapping resolves.
+      if (comparisonRange.kind === "resolved" && comparisonRange.windowCount === 1) {
+        const comparisonCutoffAt = comparisonRange.startAt + descriptor.sameElapsed.elapsedOperatingMs;
+        comparisonIntraday = await ctx.db.query("reportingStoreIntradayProjection")
+          .withIndex("by_generationId_operatingDate_checkpointAt", (q) => q
+            .eq("generationId", generation._id)
+            .eq("operatingDate", descriptor.sameElapsed.comparisonOperatingDate!)
+            .lte("checkpointAt", comparisonCutoffAt))
+          .filter((q) => q.lte(q.field("cutoffAt"), comparisonCutoffAt))
+          .order("desc").first();
+      }
+    }
+    const intradayCompatible = (row: Doc<"reportingStoreIntradayProjection"> | null) => Boolean(row && row.sourceGenerationId === generation._id && row.sourceWatermark === generation.stableWatermark && row.factContractVersion === generation.factContractVersion && row.metricContractVersion === generation.metricContractVersion && row.projectionContractVersion === generation.projectionContractVersion);
+    const sameElapsedComparison = intradayCompatible(currentIntraday) && intradayCompatible(comparisonIntraday)
+      ? { comparison: comparisonIntraday!, current: currentIntraday!, status: "available" as const }
+      : { reason: "intraday_evidence_unavailable" as const, status: "unavailable" as const };
+    const trustRows = await ctx.db.query("reportingDailyCloseTrust")
+      .withIndex("by_generationId_operatingDate", (q) => q
+        .eq("generationId", generation._id)
+        .gte("operatingDate", summary.rangeStartDate)
+        .lte("operatingDate", summary.rangeEndDate))
+      .order("desc")
+      .take(100);
+    const newestTrustByDate = new Map<string, Doc<"reportingDailyCloseTrust">>();
+    for (const row of trustRows) {
+      const current = newestTrustByDate.get(row.operatingDate);
+      if (!current || row.acceptedCloseVersion > current.acceptedCloseVersion ||
+        (row.acceptedCloseVersion === current.acceptedCloseVersion && row.projectedAt > current.projectedAt)) {
+        newestTrustByDate.set(row.operatingDate, row);
+      }
+    }
+    const trust = [...newestTrustByDate.values()]
+      .sort((left, right) => right.operatingDate.localeCompare(left.operatingDate))
+      .slice(0, 30);
+    return {
+      data: { ...summary, dailyCloseTrust: trust.slice(0, 30), period: descriptor, sameElapsedComparison },
+      generationId: generation._id,
+      sourceWatermark: generation.stableWatermark ?? generation.sourceWatermark,
+      status: generation.status,
+    };
+  },
+});
+
+const reportListArgs = {
+  classification: v.union(
+    v.literal("all"),
+    v.literal("fast_mover"),
+    v.literal("slow_mover"),
+    v.literal("nonmoving"),
+    v.literal("low_cover"),
+    v.literal("high_revenue_low_margin"),
+  ),
+  paginationOpts: paginationOptsValidator,
+  periodKey: reportPeriodKeyValidator,
+  sort: v.union(
+    v.literal("revenue"), v.literal("margin"), v.literal("units"),
+    v.literal("cover"), v.literal("inventory_value"), v.literal("attention"),
+  ),
+  storeId: v.id("store"),
+};
+
+export const listReportItems = query({
+  args: reportListArgs,
+  handler: async (ctx, args) => {
+    await requireReportingStoreAccess(ctx, args.storeId);
+    const descriptor = await resolveRequestedReportsPeriod(ctx, args.storeId, args.periodKey);
+    if (!descriptor) return { continueCursor: "", isDone: true, page: [], status: "schedule_unavailable" as const };
+    const generation = await getActiveGeneration(ctx, args.storeId, "sku_day");
+    if (!generation) return { continueCursor: "", isDone: true, page: [], status: "pre_cutover" as const };
+    const workspaceEpoch = await getActiveWorkspaceEpoch(ctx, generation);
+    if (!workspaceEpoch) return { continueCursor: "", isDone: true, page: [], status: "materializing" as const };
+    const cursorContextKey = buildCursorContextKey({
+      contractVersions: `${generation.factContractVersion}:${generation.metricContractVersion}:${generation.projectionContractVersion}`,
+      filter: args.classification,
+      generationIds: [String(generation._id)],
+      pageKind: "items",
+      period: args.periodKey,
+      sort: args.sort,
+      stableWatermarks: [generation.stableWatermark!],
+      storeId: String(args.storeId),
+    });
+    const paginationOpts = {
+      ...args.paginationOpts,
+      cursor: args.paginationOpts.cursor
+        ? decodeReportingCursor(args.paginationOpts.cursor, cursorContextKey)
+        : null,
+    };
+    const index = {
+      attention: "by_epoch_period_attention_sku", cover: "by_epoch_period_cover_sku", inventory_value: "by_epoch_period_inventory_value_sku", margin: "by_epoch_period_margin_sku", revenue: "by_epoch_period_revenue_sku", units: "by_epoch_period_units_sku",
+    }[args.sort] as any;
+    const filteredIndex = {
+      attention: "by_epoch_period_class_attention_sku", cover: "by_epoch_period_class_cover_sku", inventory_value: "by_epoch_period_class_inventory_value_sku", margin: "by_epoch_period_class_margin_sku", revenue: "by_epoch_period_class_revenue_sku", units: "by_epoch_period_class_units_sku",
+    }[args.sort] as any;
+    const pageQuery = args.classification === "all"
+      ? ctx.db.query("reportingSkuPeriodSummary").withIndex(index, (q: any) => q.eq("workspaceEpochId", workspaceEpoch._id).eq("periodKey", args.periodKey))
+      : ctx.db.query("reportingSkuPeriodClassification").withIndex(filteredIndex, (q: any) => q.eq("workspaceEpochId", workspaceEpoch._id).eq("periodKey", args.periodKey).eq("classification", args.classification));
+    const [page, rollups, facets] = await Promise.all([
+      pageQuery.order("desc").paginate(boundReportingWorkspacePagination(paginationOpts)),
+      ctx.db.query("reportingPeriodRollup").withIndex("by_epoch_period_dimension_id", (q) => q.eq("workspaceEpochId", workspaceEpoch._id).eq("periodKey", args.periodKey)).take(101),
+      ctx.db.query("reportingPeriodFacet").withIndex("by_epoch_period_facet_value", (q) => q.eq("workspaceEpochId", workspaceEpoch._id).eq("periodKey", args.periodKey)).take(101),
+    ]);
+    const summaryRows = args.classification === "all" ? page.page as Doc<"reportingSkuPeriodSummary">[] : (await Promise.all(page.page.map((membership) => ctx.db.query("reportingSkuPeriodSummary").withIndex("by_epoch_period_sku", (q) => q.eq("workspaceEpochId", workspaceEpoch._id).eq("periodKey", args.periodKey).eq("productSkuId", membership.productSkuId)).first()))).filter((row): row is Doc<"reportingSkuPeriodSummary"> => row !== null);
+    const hydrated = await Promise.all(summaryRows.map(async (row) => {
+      if (!rowMatchesResolvedPeriod(row, descriptor)) throw new Error("Reports period summary is stale");
+      const sku = await ctx.db.get("productSku", row.productSkuId);
+      const product = sku ? await ctx.db.get("product", sku.productId) : null;
+      const category = product?.categoryId ? await ctx.db.get("category", product.categoryId) : null;
+      return {
+        ...row,
+        identity: { category, product, sku },
+        revenueCurrencyCode: row.revenueCurrencyCode ?? null,
+        revenueCurrencyMinorUnitScale: row.revenueCurrencyMinorUnitScale ?? null,
+        valuationCurrencyCode: row.valuationCurrencyCode ?? null,
+        valuationCurrencyMinorUnitScale: row.valuationCurrencyMinorUnitScale ?? null,
+      };
+    }));
+    return {
+      ...page,
+      continueCursor: page.isDone ? "" : encodeReportingCursor({ contextKey: cursorContextKey, cursor: page.continueCursor, version: 1 }),
+      cursorContextKey,
+      facets: facets.slice(0, 100),
+      facetsTruncated: facets.length > 100,
+      generationId: generation._id,
+      page: hydrated,
+      rollups: rollups.slice(0, 100),
+      rollupsTruncated: rollups.length > 100,
+      status: generation.status,
+    };
+  },
+});
+
+export const listReportInventory = query({
+  args: { paginationOpts: paginationOptsValidator, periodKey: reportPeriodKeyValidator, storeId: v.id("store") },
+  handler: async (ctx, args) => {
+    await requireReportingStoreAccess(ctx, args.storeId);
+    const descriptor = await resolveRequestedReportsPeriod(ctx, args.storeId, args.periodKey);
+    if (!descriptor) return { continueCursor: "", isDone: true, page: [], status: "schedule_unavailable" as const };
+    const [generation, movementGeneration] = await Promise.all([
+      getActiveGeneration(ctx, args.storeId, "current_inventory"),
+      getActiveGeneration(ctx, args.storeId, "sku_day"),
+    ]);
+    if (!generation) return { continueCursor: "", isDone: true, page: [], status: "pre_cutover" as const };
+    const compatibleMovementGeneration = movementGeneration &&
+      reportingGenerationsAreCompatible(generation, movementGeneration)
+      ? movementGeneration
+      : null;
+    const [inventoryEpoch, movementEpoch] = await Promise.all([getActiveWorkspaceEpoch(ctx, generation), compatibleMovementGeneration ? getActiveWorkspaceEpoch(ctx, compatibleMovementGeneration) : null]);
+    if (!inventoryEpoch) return { continueCursor: "", isDone: true, page: [], status: "materializing" as const };
+    const cursorContextKey = buildCursorContextKey({
+      contractVersions: `${generation.factContractVersion}:${generation.metricContractVersion}:${generation.projectionContractVersion}`,
+      filter: "all",
+      generationIds: [String(generation._id), ...(compatibleMovementGeneration ? [String(compatibleMovementGeneration._id)] : [])],
+      pageKind: "inventory",
+      period: args.periodKey,
+      sort: "exposure",
+      stableWatermarks: [generation.stableWatermark!, ...(compatibleMovementGeneration ? [compatibleMovementGeneration.stableWatermark!] : [])],
+      storeId: String(args.storeId),
+    });
+    const paginationOpts = {
+      ...args.paginationOpts,
+      cursor: args.paginationOpts.cursor
+        ? decodeReportingCursor(args.paginationOpts.cursor, cursorContextKey)
+        : null,
+    };
+    const [page, movementSummary] = await Promise.all([
+      ctx.db.query("reportingInventoryExposureSummary")
+        .withIndex("by_workspaceEpochId_exposureSort_productSkuId", (q) => q.eq("workspaceEpochId", inventoryEpoch._id))
+        .order("desc").paginate(boundReportingWorkspacePagination(paginationOpts)),
+      compatibleMovementGeneration && movementEpoch ? ctx.db.query("reportingInventoryPeriodSummary")
+        .withIndex("by_workspaceEpochId_periodKey", (q) => q.eq("workspaceEpochId", movementEpoch._id).eq("periodKey", args.periodKey))
+        .first() : null,
+    ]);
+    const resolvedMovementSummary = movementSummary && rowMatchesResolvedPeriod(movementSummary, descriptor)
+      ? movementSummary
+      : null;
+    const hydrated = await Promise.all(page.page.map(async (row) => {
+      const [sku, movement] = await Promise.all([
+        ctx.db.get("productSku", row.productSkuId),
+        compatibleMovementGeneration && movementEpoch ? ctx.db.query("reportingInventoryMovementSummary")
+          .withIndex("by_epoch_period_sku", (q) => q.eq("workspaceEpochId", movementEpoch._id).eq("periodKey", args.periodKey).eq("productSkuId", row.productSkuId))
+          .first() : null,
+      ]);
+      const product = sku ? await ctx.db.get("product", sku.productId) : null;
+      return {
+        ...row,
+        identity: { product, sku },
+        movement: movement && rowMatchesResolvedPeriod(movement, descriptor) ? movement : null,
+        valuationCurrencyCode: row.valuationCurrencyCode ?? null,
+        valuationCurrencyMinorUnitScale: row.valuationCurrencyMinorUnitScale ?? null,
+      };
+    }));
+    return {
+      ...page,
+      continueCursor: page.isDone ? "" : encodeReportingCursor({ contextKey: cursorContextKey, cursor: page.continueCursor, version: 1 }),
+      cursorContextKey,
+      generationId: generation._id,
+      movementGenerationId: compatibleMovementGeneration?._id ?? null,
+      movementLimitingReason: movementGeneration && !compatibleMovementGeneration ? "generation_incompatible" : null,
+      movementSummary: resolvedMovementSummary,
+      page: hydrated,
+      status: generation.status,
+    };
+  },
+});
+
+export const getReportItemDetail = query({
+  args: {
+    periodKey: reportPeriodKeyValidator,
+    productSkuId: v.id("productSku"),
+    storeId: v.id("store"),
+  },
+  handler: async (ctx, args) => {
+    await requireReportingStoreAccess(ctx, args.storeId);
+    const descriptor = await resolveRequestedReportsPeriod(ctx, args.storeId, args.periodKey);
+    if (!descriptor) return { data: null, status: "schedule_unavailable" as const };
+    const [skuGeneration, inventoryGeneration, periodStartRange, periodEndRange] = await Promise.all([
+      getActiveGeneration(ctx, args.storeId, "sku_day"),
+      getActiveGeneration(ctx, args.storeId, "current_inventory"),
+      resolveReportingOperatingDateRangeWithCtx(ctx, { operatingDate: descriptor.current.startDate, storeId: args.storeId }),
+      resolveReportingOperatingDateRangeWithCtx(ctx, { operatingDate: descriptor.current.endDate, storeId: args.storeId }),
+    ]);
+    if (periodStartRange.kind !== "resolved" || periodEndRange.kind !== "resolved") return { data: null, status: "schedule_unavailable" as const };
+    if (!skuGeneration) return { data: null, status: "pre_cutover" as const };
+    const [skuEpoch, inventoryEpoch] = await Promise.all([getActiveWorkspaceEpoch(ctx, skuGeneration), inventoryGeneration ? getActiveWorkspaceEpoch(ctx, inventoryGeneration) : null]);
+    if (!skuEpoch) return { data: null, status: "materializing" as const };
+    const compatibleInventoryGeneration = inventoryGeneration &&
+      reportingGenerationsAreCompatible(skuGeneration, inventoryGeneration)
+      ? inventoryGeneration
+      : null;
+    const [sku, periodSummary, movement, inventory] = await Promise.all([
+      ctx.db.get("productSku", args.productSkuId),
+      ctx.db.query("reportingSkuPeriodSummary")
+        .withIndex("by_epoch_period_sku", (q) =>
+          q.eq("workspaceEpochId", skuEpoch._id)
+            .eq("periodKey", args.periodKey)
+            .eq("productSkuId", args.productSkuId),
+        ).first(),
+      ctx.db.query("reportingInventoryMovementSummary")
+        .withIndex("by_epoch_period_sku", (q) =>
+          q.eq("workspaceEpochId", skuEpoch._id)
+            .eq("periodKey", args.periodKey)
+            .eq("productSkuId", args.productSkuId),
+        ).first(),
+      compatibleInventoryGeneration && inventoryEpoch
+        ? ctx.db.query("reportingInventoryExposureSummary")
+            .withIndex("by_workspaceEpochId_productSkuId", (q) =>
+              q.eq("workspaceEpochId", inventoryEpoch._id)
+                .eq("productSkuId", args.productSkuId),
+            ).first()
+        : null,
+    ]);
+    const product = sku ? await ctx.db.get("product", sku.productId) : null;
+    if (!sku || !product || !periodSummary || periodSummary.storeId !== args.storeId || !rowMatchesResolvedPeriod(periodSummary, descriptor)) {
+      return {
+        data: null,
+        generationId: skuGeneration._id,
+        status: "unavailable" as const,
+      };
+    }
+    return {
+      data: {
+        comparison: null,
+        identity: { product, sku },
+        inventory,
+        movement,
+        periodEnd: periodEndRange.endAt,
+        periodStart: periodStartRange.startAt,
+        periodSummary,
+        trust: {
+          completeness: periodSummary.completeness,
+          limitingReason: periodSummary.limitingReason ?? null,
+          sourceGenerationIds: periodSummary.sourceGenerationIds,
+          sourceWatermark: periodSummary.sourceWatermark,
+        },
+      },
+      generationId: skuGeneration._id,
+      inventoryGenerationId: compatibleInventoryGeneration?._id ?? null,
+      inventoryLimitingReason:
+        inventoryGeneration && !compatibleInventoryGeneration
+          ? "generation_incompatible"
+          : null,
+      status: skuGeneration.status,
+    };
+  },
+});
+
+const reportsCustomResultFamilyValidator = v.union(
+  v.literal("overview"),
+  v.literal("sku"),
+  v.literal("product_rollup"),
+  v.literal("category_rollup"),
+  v.literal("facet"),
+  v.literal("movement"),
+);
+
+/**
+ * One authenticated, generation-bound read contract for every Reports custom
+ * range surface. Callers select the persisted family needed by Overview,
+ * Items, or Inventory; no browser aggregation over daily projections occurs.
+ */
+export const getReportsCustomRange = query({
+  args: {
+    family: reportsCustomResultFamilyValidator,
+    paginationOpts: paginationOptsValidator,
+    runId: v.id("reportingRun"),
+    storeId: v.id("store"),
+  },
+  handler: async (ctx, args) => {
+    await requireReportingStoreAccess(ctx, args.storeId);
+    const run = await ctx.db.get("reportingRun", args.runId);
+    if (
+      !run ||
+      run.storeId !== args.storeId ||
+      run.runType !== "custom_range" ||
+      run.status !== "completed" ||
+      !run.generationId ||
+      !run.rangeStartDate ||
+      !run.rangeEndDate
+    ) {
+      return { continueCursor: "", data: null, isDone: true, page: [], status: "unavailable" as const };
+    }
+    const generation = await ctx.db.get("reportingProjectionGeneration", run.generationId);
+    if (
+      !generation ||
+      generation.storeId !== args.storeId ||
+      generation.runId !== run._id ||
+      generation.projectionKind !== "custom_range" ||
+      generation.status !== "verified" ||
+      generation.stableWatermark === undefined ||
+      generation.stableWatermark !== run.frozenWatermark ||
+      generation.factContractVersion !== run.factContractVersion ||
+      generation.metricContractVersion !== run.metricContractVersion ||
+      generation.projectionContractVersion !== run.projectionContractVersion
+    ) {
+      return { continueCursor: "", data: null, isDone: true, page: [], status: "unavailable" as const };
+    }
+    const workspaceEpoch = await getActiveWorkspaceEpoch(ctx, generation);
+    if (!workspaceEpoch) return { continueCursor: "", data: null, isDone: true, page: [], status: "materializing" as const };
+    const cursorContextKey = buildCursorContextKey({
+      contractVersions: `${generation.factContractVersion}:${generation.metricContractVersion}:${generation.projectionContractVersion}`,
+      filter: args.family,
+      generationIds: [String(generation._id)],
+      pageKind: "custom_range",
+      period: `${run.rangeStartDate}:${run.rangeEndDate}`,
+      sort: "result_key",
+      stableWatermarks: [generation.stableWatermark],
+      storeId: String(args.storeId),
+    });
+    const page = await ctx.db.query("reportingRangeProjection")
+      .withIndex("by_generationId_resultFamily_resultKey", (q) =>
+        q.eq("generationId", generation._id).eq("resultFamily", args.family),
+      )
+      .paginate(boundReportingWorkspacePagination({
+        ...args.paginationOpts,
+        cursor: args.paginationOpts.cursor
+          ? decodeReportingCursor(args.paginationOpts.cursor, cursorContextKey)
+          : null,
+      }));
+    return {
+      ...page,
+      continueCursor: page.isDone ? "" : encodeReportingCursor({ contextKey: cursorContextKey, cursor: page.continueCursor, version: 1 }),
+      cursorContextKey,
+      data: {
+        family: args.family,
+        generationId: generation._id,
+        range: { endDate: run.rangeEndDate, startDate: run.rangeStartDate },
+        sourceGenerationIds: run.sourceGenerationIds ?? [],
+        sourceWatermark: generation.stableWatermark,
+      },
+      status: "verified" as const,
+    };
+  },
+});
+
+const customPresentationSurfaceValidator = v.union(
+  v.literal("overview"),
+  v.literal("items"),
+  v.literal("inventory"),
+  v.literal("item_detail"),
+);
+
+export const getReportsCustomRangePresentation = query({
+  args: {
+    classification: v.optional(v.union(v.literal("all"), v.literal("fast_mover"), v.literal("slow_mover"), v.literal("nonmoving"), v.literal("low_cover"), v.literal("high_revenue_low_margin"))),
+    paginationOpts: paginationOptsValidator,
+    productSkuId: v.optional(v.id("productSku")),
+    runId: v.id("reportingRun"),
+    sort: v.optional(v.union(v.literal("revenue"), v.literal("margin"), v.literal("units"), v.literal("cover"), v.literal("inventory_value"), v.literal("attention"))),
+    storeId: v.id("store"),
+    surface: customPresentationSurfaceValidator,
+  },
+  handler: async (ctx, args) => {
+    await requireReportingStoreAccess(ctx, args.storeId);
+    const run = await ctx.db.get("reportingRun", args.runId);
+    const generation = run?.generationId
+      ? await ctx.db.get("reportingProjectionGeneration", run.generationId)
+      : null;
+    if (!run || run.storeId !== args.storeId || run.runType !== "custom_range" ||
+      run.status !== "completed" || !run.rangeStartDate || !run.rangeEndDate ||
+      !generation || generation.runId !== run._id || generation.status !== "verified" ||
+      generation.projectionKind !== "custom_range" || generation.stableWatermark !== run.frozenWatermark) {
+      return { continueCursor: "", data: null, isDone: true, page: [], status: "unavailable" as const };
+    }
+    const workspaceEpoch = await getActiveWorkspaceEpoch(ctx, generation);
+    if (!workspaceEpoch) return { continueCursor: "", data: null, isDone: true, page: [], status: "materializing" as const };
+    const [startPeriod, endPeriod] = await Promise.all([
+      resolveReportingOperatingDateRangeWithCtx(ctx, { operatingDate: run.rangeStartDate, storeId: args.storeId }),
+      resolveReportingOperatingDateRangeWithCtx(ctx, { operatingDate: run.rangeEndDate, storeId: args.storeId }),
+    ]);
+    if (startPeriod.kind !== "resolved" || endPeriod.kind !== "resolved") {
+      return { continueCursor: "", data: null, isDone: true, page: [], status: "schedule_unavailable" as const };
+    }
+    const customPeriodKey = `${run.rangeStartDate}:${run.rangeEndDate}`;
+    const movementSummary = await ctx.db.query("reportingInventoryPeriodSummary")
+      .withIndex("by_workspaceEpochId_periodKey", (q) => q.eq("workspaceEpochId", workspaceEpoch._id).eq("periodKey", customPeriodKey)).first();
+    const authority = {
+      completeness: generation.completeness,
+      generationId: generation._id,
+      limitingReason: generation.limitingReason ?? null,
+      periodEnd: endPeriod.endAt,
+      periodStart: startPeriod.startAt,
+      period: { endOperatingDate: run.rangeEndDate, startOperatingDate: run.rangeStartDate },
+      range: { endDate: run.rangeEndDate, startDate: run.rangeStartDate },
+      sourceGenerationIds: run.sourceGenerationIds ?? [],
+      sourceWatermark: generation.stableWatermark!,
+      movementSummary,
+    };
+    if (args.surface === "overview") {
+      const rows = await ctx.db.query("reportingRangeProjection")
+        .withIndex("by_generationId_resultFamily_resultKey", (q) => q.eq("generationId", generation._id).eq("resultFamily", "overview")).take(100);
+      const currency = rows.find((row) => row.currencyCode && row.currencyMinorUnitScale !== undefined);
+      const currencyCodes = new Set(rows.map((row) => row.currencyCode).filter((value): value is string => Boolean(value)));
+      const mixedCurrency = currencyCodes.size > 1 || rows.some((row) => row.limitingReason === "mixed_currency");
+      const metrics = Object.fromEntries(rows.map((row) => [row.metric, mixedCurrency && row.currencyCode ? null : row.knownValue ?? null]));
+      return {
+        continueCursor: "", isDone: true, page: [], status: "verified" as const,
+        data: { ...authority, currencyCode: mixedCurrency ? null : currency?.currencyCode ?? null, currencyMinorUnitScale: mixedCurrency ? null : currency?.currencyMinorUnitScale ?? null, metrics, trust: { completeness: !mixedCurrency && rows.every((row) => row.completeness === "complete") ? "complete" : "partial", limitingReason: mixedCurrency ? "mixed_currency" : rows.find((row) => row.limitingReason)?.limitingReason ?? generation.limitingReason ?? null } },
+      };
+    }
+    const periodKey = customPeriodKey;
+    const classification = args.classification ?? "all";
+    const sort = args.sort ?? "revenue";
+    const contextKey = buildCursorContextKey({
+      contractVersions: `${generation.factContractVersion}:${generation.metricContractVersion}:${generation.projectionContractVersion}`,
+      filter: `${classification}:${args.productSkuId ? String(args.productSkuId) : "all"}`,
+      generationIds: [String(generation._id)], pageKind: args.surface,
+      period: periodKey, sort, stableWatermarks: [generation.stableWatermark!], storeId: String(args.storeId),
+    });
+    const paginationOpts = boundReportingWorkspacePagination({ cursor: args.paginationOpts.cursor ? decodeReportingCursor(args.paginationOpts.cursor, contextKey) : null, numItems: args.paginationOpts.numItems });
+    const index = ({ attention: "by_epoch_period_attention_sku", cover: "by_epoch_period_cover_sku", inventory_value: "by_epoch_period_inventory_value_sku", margin: "by_epoch_period_margin_sku", revenue: "by_epoch_period_revenue_sku", units: "by_epoch_period_units_sku" } as const)[sort];
+    const filteredIndex = ({ attention: "by_epoch_period_class_attention_sku", cover: "by_epoch_period_class_cover_sku", inventory_value: "by_epoch_period_class_inventory_value_sku", margin: "by_epoch_period_class_margin_sku", revenue: "by_epoch_period_class_revenue_sku", units: "by_epoch_period_class_units_sku" } as const)[sort];
+    const summaryQuery = classification === "all"
+      ? ctx.db.query("reportingSkuPeriodSummary").withIndex(index as any, (q: any) => q.eq("workspaceEpochId", workspaceEpoch._id).eq("periodKey", periodKey))
+      : ctx.db.query("reportingSkuPeriodClassification").withIndex(filteredIndex as any, (q: any) => q.eq("workspaceEpochId", workspaceEpoch._id).eq("periodKey", periodKey).eq("classification", classification));
+    const rawSummaryPage = args.productSkuId
+      ? { continueCursor: "", isDone: true, page: [await ctx.db.query("reportingSkuPeriodSummary").withIndex("by_epoch_period_sku", (q) => q.eq("workspaceEpochId", workspaceEpoch._id).eq("periodKey", periodKey).eq("productSkuId", args.productSkuId!)).first()].filter(Boolean) as Doc<"reportingSkuPeriodSummary">[] }
+      : await summaryQuery.order("desc").paginate(paginationOpts);
+    const summaryPage = classification === "all" || args.productSkuId
+      ? rawSummaryPage as { continueCursor: string; isDone: boolean; page: Doc<"reportingSkuPeriodSummary">[] }
+      : { ...rawSummaryPage, page: (await Promise.all(rawSummaryPage.page.map((membership) => ctx.db.query("reportingSkuPeriodSummary").withIndex("by_epoch_period_sku", (q) => q.eq("workspaceEpochId", workspaceEpoch._id).eq("periodKey", periodKey).eq("productSkuId", membership.productSkuId)).first()))).filter((row): row is Doc<"reportingSkuPeriodSummary"> => row !== null) };
+    const currentInventory = await getActiveGeneration(ctx, args.storeId, "current_inventory");
+    const currentInventoryEpoch = currentInventory ? await getActiveWorkspaceEpoch(ctx, currentInventory) : null;
+    const inventoryCompatible = currentInventory && currentInventory.stableWatermark === generation.stableWatermark &&
+      currentInventory.factContractVersion === generation.factContractVersion &&
+      currentInventory.metricContractVersion === generation.metricContractVersion &&
+      currentInventory.projectionContractVersion === generation.projectionContractVersion;
+    const page = await Promise.all(summaryPage.page.map(async (summary) => {
+      const productSkuId = summary.productSkuId;
+      const sku = await ctx.db.get("productSku", productSkuId);
+      const product = sku ? await ctx.db.get("product", sku.productId) : null;
+      const inventory = inventoryCompatible && currentInventoryEpoch ? await ctx.db.query("reportingInventoryExposureSummary")
+        .withIndex("by_workspaceEpochId_productSkuId", (q) => q.eq("workspaceEpochId", currentInventoryEpoch._id).eq("productSkuId", productSkuId)).first() : null;
+      return { classifications: summary.classifications, currencyCode: summary.revenueCurrencyCode ?? null, currencyMinorUnitScale: summary.revenueCurrencyMinorUnitScale ?? null, identity: { product, sku }, inventory, metrics: summary.metrics, period: authority.period, productSkuId, trust: { completeness: summary.completeness, limitingReason: summary.limitingReason ?? null, sourceGenerationIds: authority.sourceGenerationIds, sourceWatermark: authority.sourceWatermark } };
+    }));
+    const isDone = summaryPage.isDone;
+    return {
+      continueCursor: isDone ? "" : encodeReportingCursor({ contextKey, cursor: summaryPage.continueCursor, version: 1 }),
+      data: { ...authority, classification, inventoryLimitingReason: currentInventory && !inventoryCompatible ? "generation_incompatible" : null, sort, trust: { completeness: page.every((row) => row.trust.completeness === "complete") ? "complete" : "partial", limitingReason: page.find((row) => row.trust.limitingReason)?.trust.limitingReason ?? generation.limitingReason ?? null } },
+      isDone, page, status: "verified" as const,
     };
   },
 });

@@ -18,6 +18,7 @@ function createDailyCloseCtx(input: {
 }) {
   const tables: Record<string, FakeRow[]> = {
     reportingDailyCloseProjection: [...(input.projections ?? [])],
+    reportingDailyCloseTrust: [],
     reportingFact: [...(input.facts ?? [])],
   };
   let nextId = 1;
@@ -35,6 +36,16 @@ function createDailyCloseCtx(input: {
       const row = tables[table]!.find((candidate) => candidate._id === id);
       if (!row) throw new Error(`Missing fake row ${table}:${id}`);
       Object.assign(row, value);
+    },
+    replace: async (id: string, value: Record<string, unknown>) => {
+      for (const rows of Object.values(tables)) {
+        const index = rows.findIndex((candidate) => candidate._id === id);
+        if (index >= 0) {
+          rows[index] = { _id: id, ...value };
+          return;
+        }
+      }
+      throw new Error(`Missing fake row ${id}`);
     },
     query: (table: string) => {
       const filters: Array<[string, unknown]> = [];

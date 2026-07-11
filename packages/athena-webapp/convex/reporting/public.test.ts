@@ -4,6 +4,7 @@ import { join } from "node:path";
 
 import {
   boundReportingPagination,
+  boundReportingWorkspacePagination,
   buildReportingOverview,
   REPORTING_PUBLIC_PAGE_SIZE_MAX,
   publicPeriodLineage,
@@ -33,6 +34,44 @@ describe("public reporting overview contract", () => {
       cursor: null,
       numItems: 1,
     });
+  });
+
+  it("keeps hydrated workspace pages within the 350-document transition budget", () => {
+    expect(boundReportingWorkspacePagination({ cursor: null, numItems: 10_000 })).toEqual({
+      cursor: null,
+      numItems: 25,
+    });
+  });
+
+  it("uses persisted indexed classification filters and store-wide movement totals", () => {
+    const source = readFileSync(join(process.cwd(), "convex", "reporting", "public.ts"), "utf8");
+    expect(source).toContain("classification: v.union(");
+    expect(source).toContain("by_epoch_period_class_revenue_sku");
+    expect(source).toContain('.eq("classification", args.classification)');
+    expect(source).toContain('.query("reportingSkuPeriodClassification")');
+    expect(source).toContain("filter: args.classification");
+    expect(source).toContain("cursorContextKey");
+    expect(source).toContain('.query("reportingInventoryPeriodSummary")');
+    expect(source).toContain("movementSummary");
+    expect(source).not.toContain("movementSummary: hydrated.reduce");
+  });
+
+  it("binds workspace reads to active authority and serves custom presentation DTOs", () => {
+    const source = readFileSync(join(process.cwd(), "convex", "reporting", "public.ts"), "utf8");
+    expect(source).toContain('generation.status !== "active"');
+    expect(source).toContain("generation.stableWatermark !== generation.sourceWatermark");
+    expect(source).toContain("decodeReportingCursor(args.paginationOpts.cursor, cursorContextKey)");
+    expect(source).toContain("getReportsCustomRangePresentation = query");
+    expect(source).toContain('v.literal("item_detail")');
+    expect(source).toContain('inventoryLimitingReason: currentInventory && !inventoryCompatible');
+  });
+
+  it("returns persisted currency code and minor-unit scale on item and inventory money DTOs", () => {
+    const schemaSource = readFileSync(join(process.cwd(), "convex", "schemas", "reporting", "projections.ts"), "utf8");
+    expect(schemaSource).toContain("revenueCurrencyCode: v.optional(v.string())");
+    expect(schemaSource).toContain("revenueCurrencyMinorUnitScale: v.optional(v.number())");
+    expect(schemaSource).toContain("valuationCurrencyCode: v.optional(v.string())");
+    expect(schemaSource).toContain("valuationCurrencyMinorUnitScale: v.optional(v.number())");
   });
 
   it("returns explicit partial state instead of false zeroes", () => {

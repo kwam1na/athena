@@ -273,7 +273,7 @@ describe("AppSidebar capability gates", () => {
       "aria-disabled",
       "true",
     );
-    expect(screen.getByRole("link", { name: /analytics/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /reports/i })).toHaveAttribute(
       "aria-disabled",
       "true",
     );
