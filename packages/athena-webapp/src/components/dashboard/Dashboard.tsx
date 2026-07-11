@@ -310,7 +310,7 @@ const Dashboard = () => {
     return {
       activePromoCodes: promoCodes.filter((p) => p.active).length,
       promoCodeUsage: promoCodes.reduce((sum, p) => {
-        const promoCode = p as any;
+        const promoCode = p as { usageCount?: number };
         return sum + (promoCode.usageCount || 0);
       }, 0),
     };
