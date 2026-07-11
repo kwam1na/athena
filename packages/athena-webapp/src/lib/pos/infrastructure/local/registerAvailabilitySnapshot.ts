@@ -1,7 +1,7 @@
 import type {
   PosLocalRegisterAvailabilitySnapshot,
   PosLocalStoreResult,
-} from "./posLocalStore";
+} from "@/lib/pos/application/posLocalStoreTypes";
 
 export const REGISTER_AVAILABILITY_SNAPSHOT_MAX_AGE_MS = 24 * 60 * 60 * 1_000;
 

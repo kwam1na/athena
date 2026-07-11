@@ -12,6 +12,8 @@ import {
   type UpdateStagingDiagnostics,
 } from "./lib/app-update";
 import { createUpdateDetectionSequencer } from "./lib/app-update/updateDetectionSequencer";
+import { getDefaultPosLocalStorageRuntime } from "./lib/pos/infrastructure/local/posLocalStorageRuntime";
+import { PosLocalStorageRuntimeProvider } from "./lib/pos/infrastructure/local/posLocalStorageRuntimeContext";
 import {
   createVersionChecker,
   type VersionCheckerUpdateDetectedEvent,
@@ -19,16 +21,20 @@ import {
 
 export function App() {
   return (
-    <AppMessagesProvider>
-      <UpdateCoordinatorProvider>
-        <VersionCheckerBridge />
-        <ConvexAuthProvider client={convex}>
-          <QueryClientProvider client={queryClient}>
-            <RouterProvider router={router} />
-          </QueryClientProvider>
-        </ConvexAuthProvider>
-      </UpdateCoordinatorProvider>
-    </AppMessagesProvider>
+    <PosLocalStorageRuntimeProvider
+      runtime={getDefaultPosLocalStorageRuntime()}
+    >
+      <AppMessagesProvider>
+        <UpdateCoordinatorProvider>
+          <VersionCheckerBridge />
+          <ConvexAuthProvider client={convex}>
+            <QueryClientProvider client={queryClient}>
+              <RouterProvider router={router} />
+            </QueryClientProvider>
+          </ConvexAuthProvider>
+        </UpdateCoordinatorProvider>
+      </AppMessagesProvider>
+    </PosLocalStorageRuntimeProvider>
   );
 }
 
@@ -88,7 +94,9 @@ export function VersionCheckerBridge() {
         assetCount: stagingResult.assetUrls?.length ?? 0,
         failedAssetCount: stagingResult.failedAssetUrls?.length ?? 0,
         reason:
-          stagingResult.status === "unstaged" ? stagingResult.reason : undefined,
+          stagingResult.status === "unstaged"
+            ? stagingResult.reason
+            : undefined,
         rejectedAssetCount: stagingResult.rejectedAssetUrls?.length ?? 0,
         status: stagingResult.status,
       };

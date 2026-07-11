@@ -1,11 +1,11 @@
 import {
-  createPosLocalStore,
   type PosDrawerAuthorityState,
   type PosLocalEventRecord,
   type PosLocalStoreResult,
-} from "./posLocalStore";
+} from "@/lib/pos/application/posLocalStoreTypes";
+import type { PosLocalStorePort } from "@/lib/pos/application/posLocalStorePort";
 
-type PosLocalRuntimeStore = ReturnType<typeof createPosLocalStore>;
+type PosLocalRuntimeStore = PosLocalStorePort;
 
 type ReviewConflict = {
   localEventId?: string | null;
@@ -90,7 +90,9 @@ function findDrawerAuthorityBlockForReview(input: {
     );
     if (event?.localRegisterSessionId) {
       return {
-        event: event as PosLocalEventRecord & { localRegisterSessionId: string },
+        event: event as PosLocalEventRecord & {
+          localRegisterSessionId: string;
+        },
         message:
           "The mapped cloud register is closed. Open a register before selling.",
         reason: "cloud_closed",
@@ -259,7 +261,9 @@ export async function clearSupersededRecoverableDrawerAuthorityBlocks(input: {
         : null;
     })
     .filter(
-      (entry): entry is {
+      (
+        entry,
+      ): entry is {
         cloudRegisterSessionId: string;
         event: PosLocalEventRecord;
       } => Boolean(entry),
@@ -315,11 +319,12 @@ export async function clearSupersededRecoverableDrawerAuthorityBlocks(input: {
           continue;
         }
 
-        const result: PosLocalStoreResult<null> = await clearDrawerAuthorityState({
-          localRegisterSessionId,
-          storeId: replacement.event.storeId,
-          terminalId,
-        });
+        const result: PosLocalStoreResult<null> =
+          await clearDrawerAuthorityState({
+            localRegisterSessionId,
+            storeId: replacement.event.storeId,
+            terminalId,
+          });
         assertPosLocalStoreOk(result);
       }
     }

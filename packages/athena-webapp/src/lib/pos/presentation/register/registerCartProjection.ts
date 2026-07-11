@@ -5,7 +5,7 @@ import type {
   PosLocalCartItemReadModel,
   PosLocalRegisterReadModel,
 } from "@/lib/pos/infrastructure/local/registerReadModel";
-import type { PosLocalEventRecord } from "@/lib/pos/infrastructure/local/posLocalStore";
+import type { PosLocalEventRecord } from "@/lib/pos/application/posLocalStoreTypes";
 
 export function mapProductToOptimisticCartItem(
   product: Product,
@@ -80,11 +80,9 @@ export function buildCatalogRepresentedPendingCheckoutItemIds(
   rows: readonly {
     pendingCheckoutItemId?: string | null;
     linkedPendingCheckoutItemIds?:
-      | readonly (string | null | undefined)[]
-      | null;
+      readonly (string | null | undefined)[] | null;
     suppressedPendingCheckoutItemIds?:
-      | readonly (string | null | undefined)[]
-      | null;
+      readonly (string | null | undefined)[] | null;
   }[],
 ) {
   const ids = new Set<string>();
@@ -111,11 +109,9 @@ export function buildCatalogRepresentedPendingCheckoutItemIds(
 export function buildCatalogRepresentedPendingCheckoutLocalEventIds(
   rows: readonly {
     linkedPendingCheckoutLocalEventIds?:
-      | readonly (string | null | undefined)[]
-      | null;
+      readonly (string | null | undefined)[] | null;
     suppressedPendingCheckoutLocalEventIds?:
-      | readonly (string | null | undefined)[]
-      | null;
+      readonly (string | null | undefined)[] | null;
   }[],
 ) {
   const ids = new Set<string>();
@@ -298,12 +294,10 @@ export function mapLocalCartItemToCartItem(
     productId: item.productId as Id<"product">,
     skuId: item.productSkuId as Id<"productSku">,
     pendingCheckoutItemId: item.pendingCheckoutItemId as
-      | Id<"posPendingCheckoutItem">
-      | undefined,
+      Id<"posPendingCheckoutItem"> | undefined,
     pendingCheckoutAliasState: item.pendingCheckoutAliasState,
     inventoryImportProvisionalSkuId: item.inventoryImportProvisionalSkuId as
-      | Id<"inventoryImportProvisionalSku">
-      | undefined,
+      Id<"inventoryImportProvisionalSku"> | undefined,
     areProcessingFeesAbsorbed: item.areProcessingFeesAbsorbed,
   };
 }
@@ -379,8 +373,7 @@ export function mapPendingCheckoutCartItemToProduct(item: CartItem): Product {
     pendingCheckoutItemId:
       "pendingCheckoutItemId" in item
         ? (item.pendingCheckoutItemId as
-            | Id<"posPendingCheckoutItem">
-            | undefined)
+            Id<"posPendingCheckoutItem"> | undefined)
         : undefined,
     pendingCheckoutAliasState:
       "pendingCheckoutAliasState" in item

@@ -6,7 +6,13 @@ import type {
   ReactElement,
   ReactNode,
 } from "react";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 const mocks = vi.hoisted(() => ({
@@ -59,9 +65,7 @@ vi.mock("@tanstack/react-router", () => ({
         ?.replace("$orgUrlSlug", params?.orgUrlSlug ?? "")
         .replace("$storeUrlSlug", params?.storeUrlSlug ?? "")
         .replace("$terminalId", params?.terminalId ?? "") ?? "#";
-    const query = search
-      ? `?${new URLSearchParams(search).toString()}`
-      : "";
+    const query = search ? `?${new URLSearchParams(search).toString()}` : "";
 
     return (
       <a href={`${path}${query}`} {...props}>
@@ -88,7 +92,8 @@ vi.mock("~/convex/_generated/api", () => ({
         getEodAutoCompletePolicy: "getEodAutoCompletePolicy",
         getOpeningAutoStartPolicy: "getOpeningAutoStartPolicy",
         getRegisterCloseoutApprovalPolicy: "getRegisterCloseoutApprovalPolicy",
-        updateRegisterCloseoutApprovalPolicy: "updateRegisterCloseoutApprovalPolicy",
+        updateRegisterCloseoutApprovalPolicy:
+          "updateRegisterCloseoutApprovalPolicy",
         updateEodAutoCompletePolicy: "updateEodAutoCompletePolicy",
         updateOpeningAutoStartPolicy: "updateOpeningAutoStartPolicy",
       },
@@ -107,15 +112,11 @@ vi.mock("~/convex/_generated/api", () => ({
 }));
 
 vi.mock("@/components/ui/input", () => ({
-  Input: (props: InputHTMLAttributes<HTMLInputElement>) => (
-    <input {...props} />
-  ),
+  Input: (props: InputHTMLAttributes<HTMLInputElement>) => <input {...props} />,
 }));
 
 vi.mock("@/components/ui/label", () => ({
-  Label: (props: LabelHTMLAttributes<HTMLLabelElement>) => (
-    <label {...props} />
-  ),
+  Label: (props: LabelHTMLAttributes<HTMLLabelElement>) => <label {...props} />,
 }));
 
 vi.mock("@/components/ui/loading-button", () => ({
@@ -156,9 +157,9 @@ vi.mock("@/components/ui/select", async () => {
   const SelectValue = () => null;
   const SelectTrigger = ({ children }: SelectTriggerProps) => <>{children}</>;
 
-  function collectItems(children?: ReactNode): Array<
-    React.ReactElement<SelectItemProps>
-  > {
+  function collectItems(
+    children?: ReactNode,
+  ): Array<React.ReactElement<SelectItemProps>> {
     const items: Array<React.ReactElement<SelectItemProps>> = [];
 
     React.Children.forEach(children, (child) => {
@@ -336,40 +337,40 @@ describe("registerAndProvisionPosTerminal", () => {
               openingBlockerHandling: "start_with_manager_review",
               operatingTimezoneOffsetMinutes: -120,
             }
-        : ref === "getEodAutoCompletePolicy"
-          ? {
-              cleanDayAutoCompleteEnabled: true,
-              localCompletionWindowMinutes: 1110,
-              maxAbsoluteCashVariance: 500,
-              maxVoidedSaleCount: 1,
-              maxVoidedSaleTotal: 2500,
-              mode: "dry_run",
-              operatingTimezoneOffsetMinutes: -120,
-            }
-        : ref === "getRegisterCloseoutApprovalPolicy"
-          ? {
-              requireManagerSignoffForAnyVariance: false,
-              requireManagerSignoffForOvers: false,
-              requireManagerSignoffForShorts: false,
-              varianceApprovalThreshold: 5000,
-            }
-        : ref === "getStoreScheduleSummary"
-          ? {
-              context: {
-                currentWindow: {
-                  localEndLabel: "6:30 PM",
-                  localStartLabel: "8:30 AM",
-                },
-                isOpen: true,
-                nextWindow: null,
-                phase: "during_window",
-                timezone: "America/New_York",
-              },
-              schedule: {
-                timezone: "America/New_York",
-              },
-            }
-        : null,
+          : ref === "getEodAutoCompletePolicy"
+            ? {
+                cleanDayAutoCompleteEnabled: true,
+                localCompletionWindowMinutes: 1110,
+                maxAbsoluteCashVariance: 500,
+                maxVoidedSaleCount: 1,
+                maxVoidedSaleTotal: 2500,
+                mode: "dry_run",
+                operatingTimezoneOffsetMinutes: -120,
+              }
+            : ref === "getRegisterCloseoutApprovalPolicy"
+              ? {
+                  requireManagerSignoffForAnyVariance: false,
+                  requireManagerSignoffForOvers: false,
+                  requireManagerSignoffForShorts: false,
+                  varianceApprovalThreshold: 5000,
+                }
+              : ref === "getStoreScheduleSummary"
+                ? {
+                    context: {
+                      currentWindow: {
+                        localEndLabel: "6:30 PM",
+                        localStartLabel: "8:30 AM",
+                      },
+                      isOpen: true,
+                      nextWindow: null,
+                      phase: "during_window",
+                      timezone: "America/New_York",
+                    },
+                    schedule: {
+                      timezone: "America/New_York",
+                    },
+                  }
+                : null,
     );
     mocks.generateBrowserFingerprint.mockResolvedValue({
       browserInfo: { userAgent: "test" },
@@ -427,7 +428,10 @@ describe("registerAndProvisionPosTerminal", () => {
     );
 
     await screen.findByLabelText("Terminal name");
-    await user.type(screen.getByLabelText("Terminal name"), "  Front counter  ");
+    await user.type(
+      screen.getByLabelText("Terminal name"),
+      "  Front counter  ",
+    );
     await user.type(screen.getByLabelText("Register number"), "  7  ");
     await user.click(screen.getByText("Services only"));
     await user.click(screen.getByText("POS only"));
@@ -545,9 +549,7 @@ describe("registerAndProvisionPosTerminal", () => {
     await renderPOSSettingsView();
 
     expect(await screen.findByText("mintlamp42")).toBeInTheDocument();
-    expect(
-      screen.getByText("Current recovery code"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Current recovery code")).toBeInTheDocument();
   });
 
   it("lets full admins rotate the POS recovery code and keeps plaintext visible", async () => {
@@ -620,9 +622,7 @@ describe("registerAndProvisionPosTerminal", () => {
       screen.getByRole("combobox", { name: "Store day auto-start offset" }),
     ).toHaveTextContent("At opening");
     expect(
-      screen.getByText(
-        "Opening 08:30 AM. Runs 08:30 AM.",
-      ),
+      screen.getByText("Opening 08:30 AM. Runs 08:30 AM."),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("combobox", { name: "Store day start hour" }),
@@ -668,9 +668,7 @@ describe("registerAndProvisionPosTerminal", () => {
 
     expect(await screen.findByText("Store day automation")).toBeInTheDocument();
     expect(
-      screen.getByText(
-        "Opening 09:00 AM. Runs 08:00 AM.",
-      ),
+      screen.getByText("Opening 09:00 AM. Runs 08:00 AM."),
     ).toBeInTheDocument();
   });
 
@@ -686,7 +684,9 @@ describe("registerAndProvisionPosTerminal", () => {
       ),
     ).toBeInTheDocument();
     expect(screen.getByLabelText("Dry run EOD completion")).toBeChecked();
-    expect(screen.getByLabelText("Enable blocker-free completion")).toBeChecked();
+    expect(
+      screen.getByLabelText("Enable blocker-free completion"),
+    ).toBeChecked();
     expect(
       screen.queryByRole("combobox", { name: "EOD completion hour" }),
     ).not.toBeInTheDocument();
@@ -694,13 +694,15 @@ describe("registerAndProvisionPosTerminal", () => {
       screen.getByRole("combobox", { name: "EOD completion offset" }),
     ).toHaveTextContent("At close");
     expect(
-      screen.getByText(
-        "Close 06:30 PM. Runs 06:30 PM.",
-      ),
+      screen.getByText("Close 06:30 PM. Runs 06:30 PM."),
     ).toBeInTheDocument();
-    expect(screen.getByLabelText("Cash variance threshold (GH₵)")).toHaveValue(5);
+    expect(screen.getByLabelText("Cash variance threshold (GH₵)")).toHaveValue(
+      5,
+    );
     expect(screen.getByLabelText("Voided sale count threshold")).toHaveValue(1);
-    expect(screen.getByLabelText("Voided sale total threshold (GH₵)")).toHaveValue(25);
+    expect(
+      screen.getByLabelText("Voided sale total threshold (GH₵)"),
+    ).toHaveValue(25);
     expect(mocks.useQuery).toHaveBeenCalledWith("getEodAutoCompletePolicy", {
       storeId: "store-1",
     });
@@ -764,23 +766,30 @@ describe("registerAndProvisionPosTerminal", () => {
     fireEvent.change(screen.getByLabelText("Voided sale count threshold"), {
       target: { value: "2" },
     });
-    fireEvent.change(screen.getByLabelText("Voided sale total threshold (GH₵)"), {
-      target: { value: "9000" },
-    });
+    fireEvent.change(
+      screen.getByLabelText("Voided sale total threshold (GH₵)"),
+      {
+        target: { value: "9000" },
+      },
+    );
     await user.selectOptions(
       screen.getByRole("combobox", { name: "EOD completion offset" }),
       "60",
     );
     expect(
-      screen.getByText(
-        "Close 06:30 PM. Runs 07:30 PM.",
-      ),
+      screen.getByText("Close 06:30 PM. Runs 07:30 PM."),
     ).toBeInTheDocument();
     expect(screen.getByLabelText("Enable EOD completion")).toBeChecked();
-    expect(screen.getByLabelText("Enable blocker-free completion")).not.toBeChecked();
-    expect(screen.getByLabelText("Cash variance threshold (GH₵)")).toHaveValue(750);
+    expect(
+      screen.getByLabelText("Enable blocker-free completion"),
+    ).not.toBeChecked();
+    expect(screen.getByLabelText("Cash variance threshold (GH₵)")).toHaveValue(
+      750,
+    );
     expect(screen.getByLabelText("Voided sale count threshold")).toHaveValue(2);
-    expect(screen.getByLabelText("Voided sale total threshold (GH₵)")).toHaveValue(9000);
+    expect(
+      screen.getByLabelText("Voided sale total threshold (GH₵)"),
+    ).toHaveValue(9000);
     await user.click(
       screen.getByRole("button", { name: "Save EOD completion automation" }),
     );
@@ -804,7 +813,9 @@ describe("registerAndProvisionPosTerminal", () => {
 
     await renderPOSSettingsView();
 
-    await user.click(await screen.findByLabelText("Enable store-day auto-start"));
+    await user.click(
+      await screen.findByLabelText("Enable store-day auto-start"),
+    );
     await user.selectOptions(
       screen.getByRole("combobox", { name: "Store day auto-start offset" }),
       "-30",
@@ -857,12 +868,14 @@ describe("registerAndProvisionPosTerminal", () => {
                   timezone: "America/New_York",
                 },
               }
-          : null,
+            : null,
     );
 
     await renderPOSSettingsView();
 
-    await user.click(await screen.findByLabelText("Enable store-day auto-start"));
+    await user.click(
+      await screen.findByLabelText("Enable store-day auto-start"),
+    );
     await user.click(
       screen.getByRole("button", { name: "Save store-day automation" }),
     );
@@ -882,14 +895,19 @@ describe("registerAndProvisionPosTerminal", () => {
     await renderPOSSettingsView();
 
     expect(await screen.findByText("Store Hours timing")).toBeInTheDocument();
-    expect(screen.getByText("Timing comes from Store Hours")).toBeInTheDocument();
     expect(
-      screen.getByText("Athena uses Store Hours to time Opening and EOD automation."),
+      screen.getByText("Timing comes from Store Hours"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Athena uses Store Hours to time Opening and EOD automation.",
+      ),
     ).toBeInTheDocument();
     expect(screen.getByText("Opening at 08:30 AM")).toBeInTheDocument();
     expect(screen.getByText("EOD after 06:30 PM")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Open Store Hours" }))
-      .toHaveAttribute("href", "/acme/store/downtown/configuration");
+    expect(
+      screen.getByRole("link", { name: "Open Store Hours" }),
+    ).toHaveAttribute("href", "/acme/store/downtown/configuration");
     expect(mocks.useQuery).toHaveBeenCalledWith("getStoreScheduleSummary", {
       storeId: "store-1",
     });
@@ -961,7 +979,9 @@ describe("registerAndProvisionPosTerminal", () => {
 
     expect(screen.queryByText("POS recovery code")).not.toBeInTheDocument();
     expect(screen.queryByText("Store day automation")).not.toBeInTheDocument();
-    expect(screen.queryByText("EOD completion automation")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("EOD completion automation"),
+    ).not.toBeInTheDocument();
     expect(screen.getByText("Store Hours timing")).toBeInTheDocument();
     expect(
       screen.queryByRole("link", { name: "Open Store Hours" }),
@@ -1032,7 +1052,9 @@ describe("registerAndProvisionPosTerminal", () => {
       expect(mocks.updateEodAutoCompletePolicy).toHaveBeenCalled(),
     );
     expect(
-      await screen.findByText("EOD completion automation settings were not saved."),
+      await screen.findByText(
+        "EOD completion automation settings were not saved.",
+      ),
     ).toBeInTheDocument();
     expect(consoleError).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -1213,6 +1235,9 @@ describe("registerAndProvisionPosTerminal", () => {
   });
 
   it("sends an independent sync secret and writes it into the local terminal seed", async () => {
+    const requestPersistentStorage = vi.fn(async () => {
+      throw new Error("permission denied");
+    });
     const registerTerminalMutation = vi.fn(async (args) => ({
       kind: "ok" as const,
       data: {
@@ -1241,6 +1266,7 @@ describe("registerAndProvisionPosTerminal", () => {
       fingerprintHash: "fingerprint-1",
       now: () => 123,
       registerNumber: "1",
+      requestPersistentStorage,
       registerTerminalMutation,
       storeFactory: () =>
         ({
@@ -1254,6 +1280,7 @@ describe("registerAndProvisionPosTerminal", () => {
         syncSecretHash: "01020304",
       }),
     );
+    expect(requestPersistentStorage).toHaveBeenCalledOnce();
     expect(registerTerminalMutation.mock.calls[0]?.[0]).not.toHaveProperty(
       "loginMode",
     );
@@ -1363,7 +1390,9 @@ describe("registerAndProvisionPosTerminal", () => {
         }) as never,
     });
 
-    expect(writeProvisionedTerminalSeedAndClearTerminalIntegrity).toHaveBeenCalledWith({
+    expect(
+      writeProvisionedTerminalSeedAndClearTerminalIntegrity,
+    ).toHaveBeenCalledWith({
       seed: expect.objectContaining({
         cloudTerminalId: "terminal-1",
         syncSecretHash: "01020304",

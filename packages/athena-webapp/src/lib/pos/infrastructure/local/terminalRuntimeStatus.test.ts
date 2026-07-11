@@ -9,6 +9,35 @@ import {
 import type { PosLocalEventRecord } from "./posLocalStore";
 
 describe("terminalRuntimeStatus", () => {
+  it("lets engine readiness block availability while advisory persistence does not", () => {
+    const baseHealth = {
+      ledgerPressure: "normal" as const,
+      maintenance: "idle" as const,
+      migration: "idle" as const,
+      observedAt: 1_000,
+      persistence: "denied" as const,
+      pressure: "warning" as const,
+    };
+    const input = {
+      clock: () => 1_000,
+      events: [],
+      source: "register" as const,
+    };
+
+    expect(
+      buildPosTerminalRuntimeStatus({
+        ...input,
+        storageHealth: { ...baseHealth, engineReadiness: "ready" },
+      }).localStore.available,
+    ).toBe(true);
+    expect(
+      buildPosTerminalRuntimeStatus({
+        ...input,
+        storageHealth: { ...baseHealth, engineReadiness: "unavailable" },
+      }).localStore.available,
+    ).toBe(false);
+  });
+
   it("builds a server check-in payload from local sync state without sensitive fields", () => {
     const status = buildPosTerminalRuntimeStatus({
       browserInfo: {
@@ -57,6 +86,18 @@ describe("terminalRuntimeStatus", () => {
       ],
       localStoreFailureMessage:
         "syncSecretHash abcdef1234567890abcdef1234567890 failed",
+      storageHealth: {
+        engineReadiness: "ready",
+        ledgerPressure: "normal",
+        maintenance: "idle",
+        migration: "idle",
+        observedAt: 1_900,
+        persistence: "denied",
+        pressure: "warning",
+        lastSuccessfulDurableCommitAt: 1_800,
+        quotaBytes: 1_000,
+        usageBytes: 850,
+      },
       snapshots: {
         availabilityRefreshedAt: 1_880,
         catalogRefreshedAt: 1_760,
@@ -115,9 +156,20 @@ describe("terminalRuntimeStatus", () => {
       buildSha: "b463caa2d36dabcdef",
       localStore: {
         available: false,
+        engineReadiness: "ready",
         failureMessage: "syncSecretHash [redacted]",
+        healthFreshness: "fresh",
+        healthObservedAt: 1_900,
+        lastSuccessfulDurableCommitAt: 1_800,
+        ledgerPressure: "normal",
+        maintenance: "idle",
+        migration: "idle",
+        persistence: "denied",
+        pressure: "warning",
+        quotaBytes: 1_000,
         schemaVersion: 5,
         terminalSeedReady: true,
+        usageBytes: 850,
       },
       reportedAt: 2_000,
       snapshots: {

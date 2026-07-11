@@ -53,7 +53,7 @@ import {
   type RegisterWorkflowMode,
 } from "@/lib/pos/presentation/register/registerUiState";
 import { usePosTerminalAppSessionRecoveryRuntimeInput } from "@/lib/pos/infrastructure/terminal/posTerminalAppSessionRecoveryContext";
-import { clearIndexedDbPosLocalStore } from "@/lib/pos/infrastructure/local/posLocalStore";
+import { clearDefaultPosLocalStore } from "@/lib/pos/infrastructure/local/posLocalStorageRuntime";
 import { useRegisterViewModel } from "@/lib/pos/presentation/register/useRegisterViewModel";
 import { useAppActionBlocker } from "@/lib/app-messages";
 import { APP_UPDATE_APPLY_ACTION_ID } from "@/lib/app-update";
@@ -1295,12 +1295,7 @@ type DebugRuntimeState = NonNullable<
 >;
 type DebugEventRecord = NonNullable<DebugRuntimeState["events"]>[number];
 type DebugEventFilter =
-  | "all"
-  | "review"
-  | "uploadable"
-  | "pending"
-  | "failed"
-  | "synced";
+  "all" | "review" | "uploadable" | "pending" | "failed" | "synced";
 
 const DEBUG_EVENT_FILTERS: Array<{
   label: string;
@@ -1952,7 +1947,7 @@ function POSRegisterViewContent({
 
     setIsClearingLocalPosState(true);
     try {
-      const result = await clearIndexedDbPosLocalStore();
+      const result = await clearDefaultPosLocalStore();
 
       if (!result.ok) {
         toast.error(result.error.message);

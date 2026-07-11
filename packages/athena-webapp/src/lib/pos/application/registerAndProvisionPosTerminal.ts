@@ -11,11 +11,11 @@ import {
 } from "~/shared/posTerminalLoginMode";
 
 import type { BrowserInfo } from "@/lib/browserFingerprint";
-import {
-  createIndexedDbPosLocalStorageAdapter,
-  createPosLocalStore,
-  POS_LOCAL_STORE_SCHEMA_VERSION,
-} from "@/lib/pos/infrastructure/local/posLocalStore";
+import { POS_LOCAL_LOGICAL_RECORD_VERSION } from "./posLocalStoreTypes";
+import type {
+  PosLocalIntegrityPort,
+  PosLocalSeedPort,
+} from "./posLocalStorePort";
 
 type TerminalStatus = "active" | "revoked" | "lost";
 
@@ -52,6 +52,7 @@ export async function registerAndProvisionPosTerminal(input: {
   fingerprintHash: string;
   orgUrlSlug?: string;
   registerNumber: string;
+  requestPersistentStorage?: () => Promise<unknown>;
   loginMode?: PosTerminalLoginMode;
   transactionCapability?: PosTerminalTransactionCapability;
   registerTerminalMutation: (args: {
@@ -67,10 +68,16 @@ export async function registerAndProvisionPosTerminal(input: {
     | { kind: "ok"; data: ProvisionedTerminalRecord }
     | { kind: "user_error"; error: { message: string } }
   >;
-  storeFactory?: () => ReturnType<typeof createPosLocalStore>;
+  storeFactory: () => PosLocalSeedPort & PosLocalIntegrityPort;
   storeUrlSlug?: string;
   now?: () => number;
 }) {
+  // Advisory only: denial must not block provisioning or local POS operation.
+  try {
+    await input.requestPersistentStorage?.();
+  } catch {
+    // Persistence capability is reflected through storage health after setup.
+  }
   const syncSecretToken = await createTerminalSyncSecretToken();
   const result = await input.registerTerminalMutation({
     storeId: input.activeStoreId,
@@ -92,11 +99,7 @@ export async function registerAndProvisionPosTerminal(input: {
   });
   if (result.kind === "user_error") return result;
 
-  const store =
-    input.storeFactory?.() ??
-    createPosLocalStore({
-      adapter: createIndexedDbPosLocalStorageAdapter(),
-    });
+  const store = input.storeFactory();
   const seed = {
     terminalId: input.fingerprintHash,
     cloudTerminalId: result.data._id,
@@ -114,7 +117,7 @@ export async function registerAndProvisionPosTerminal(input: {
       DEFAULT_POS_TERMINAL_TRANSACTION_CAPABILITY,
     displayName: result.data.displayName,
     provisionedAt: input.now?.() ?? Date.now(),
-    schemaVersion: POS_LOCAL_STORE_SCHEMA_VERSION,
+    schemaVersion: POS_LOCAL_LOGICAL_RECORD_VERSION,
     storeUrlSlug: input.storeUrlSlug,
   };
   const seedWrite = store.writeProvisionedTerminalSeedAndClearTerminalIntegrity

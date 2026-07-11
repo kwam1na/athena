@@ -19,7 +19,7 @@ import type {
   PosDrawerAuthorityState,
   PosTerminalIntegrityState,
   PosProvisionedTerminalSeed,
-} from "./posLocalStore";
+} from "@/lib/pos/application/posLocalStoreTypes";
 
 export type PosLocalRegisterReadModelErrorCode =
   | "malformed_payload"

@@ -24,7 +24,7 @@ import type {
   PosLocalStoreResult,
   PosTerminalIntegrityState,
   PosProvisionedTerminalSeed,
-} from "./posLocalStore";
+} from "@/lib/pos/application/posLocalStoreTypes";
 
 type PosLocalCommandStore = {
   appendEvent(

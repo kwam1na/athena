@@ -1,4 +1,4 @@
-import type { PosLocalEventRecord, PosProvisionedTerminalSeed } from "./posLocalStore";
+import type { PosLocalEventRecord, PosProvisionedTerminalSeed } from "@/lib/pos/application/posLocalStoreTypes";
 
 export type PosLocalTerminalDescriptor = {
   _id?: string | null;

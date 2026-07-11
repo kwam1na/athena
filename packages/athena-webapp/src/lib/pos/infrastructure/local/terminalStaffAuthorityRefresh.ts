@@ -1,12 +1,10 @@
 import type { Id } from "~/convex/_generated/dataModel";
 import type { CommandResult } from "~/shared/commandResult";
 
-import {
-  createPosLocalStore,
-  type PosLocalStaffAuthorityRecord,
-} from "./posLocalStore";
+import type { PosLocalStaffAuthorityRecord } from "@/lib/pos/application/posLocalStoreTypes";
+import type { PosLocalStorePort } from "@/lib/pos/application/posLocalStorePort";
 
-type PosLocalRuntimeStore = ReturnType<typeof createPosLocalStore>;
+type PosLocalRuntimeStore = PosLocalStorePort;
 
 type RefreshTerminalStaffAuthority = (args: {
   storeId: Id<"store">;

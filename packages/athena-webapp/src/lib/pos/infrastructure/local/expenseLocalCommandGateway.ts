@@ -6,7 +6,7 @@ import type {
   PosLocalEventRecord,
   PosLocalEventValidationMetadata,
   PosLocalStoreResult,
-} from "./posLocalStore";
+} from "@/lib/pos/application/posLocalStoreTypes";
 
 type ExpenseLocalCommandStore = {
   appendEvent(

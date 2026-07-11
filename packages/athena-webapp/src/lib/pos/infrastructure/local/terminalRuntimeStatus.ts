@@ -5,13 +5,17 @@ import type { Id } from "~/convex/_generated/dataModel";
 import { isNonBlockingRegisterLifecycleReviewEvent } from "~/shared/registerSessionLifecyclePolicy";
 
 import {
-  POS_LOCAL_STORE_SCHEMA_VERSION,
   type PosDrawerAuthorityState,
   type PosLocalEventRecord,
   type PosLocalStaffAuthorityReadiness,
   type PosTerminalIntegrityState,
   type PosProvisionedTerminalSeed,
-} from "./posLocalStore";
+} from "@/lib/pos/application/posLocalStoreTypes";
+import { POS_LOCAL_LOGICAL_RECORD_VERSION } from "@/lib/pos/application/posLocalStoreTypes";
+import {
+  toSafePosLocalStorageHealthDiagnostic,
+  type PosLocalStorageHealth,
+} from "./posLocalStorageHealth";
 import {
   derivePosLocalSyncStatus,
   isLocallySettledSyncStatus,
@@ -140,9 +144,7 @@ export type PosTerminalRuntimeAppUpdateStatus =
   | "unknown";
 
 export type PosTerminalRuntimeAppUpdateStagingStatus =
-  | "staged"
-  | "unstaged"
-  | "unknown";
+  "staged" | "unstaged" | "unknown";
 
 export type PosTerminalRuntimeAppUpdateStagingReason =
   | "asset-staging-failed"
@@ -155,15 +157,10 @@ export type PosTerminalRuntimeAppUpdateStagingReason =
   | "unknown";
 
 export type PosTerminalRuntimeAppUpdateDetectorStatus =
-  | "ok"
-  | "failed"
-  | "unknown";
+  "ok" | "failed" | "unknown";
 
 export type PosTerminalRuntimeAppUpdateBlockerCode =
-  | "active_sale"
-  | "active_command"
-  | "resume_required"
-  | "unknown";
+  "active_sale" | "active_command" | "resume_required" | "unknown";
 
 export type PosTerminalRuntimeAppUpdateCommandCorrelation = {
   executionId?: string;
@@ -207,6 +204,7 @@ export type PosTerminalRuntimeStatusInput = {
   clock?: () => number;
   events: PosLocalEventRecord[];
   localStoreFailureMessage?: string | null;
+  storageHealth?: PosLocalStorageHealth | null;
   drawerAuthority?: PosDrawerAuthorityState | null;
   snapshots?: PosTerminalRuntimeSnapshotReadiness;
   source: PosTerminalRuntimeStatusSource;
@@ -364,6 +362,9 @@ export function buildPosTerminalRuntimeStatus(
     input.appSessionRecovery,
   );
   const appUpdate = toSafeAppUpdateDiagnostics(input.appUpdate, now);
+  const safeStorageHealth = input.storageHealth
+    ? toSafePosLocalStorageHealthDiagnostic(input.storageHealth, now)
+    : null;
 
   return {
     ...(input.appVersion ? { appVersion: input.appVersion } : {}),
@@ -402,10 +403,35 @@ export function buildPosTerminalRuntimeStatus(
         }
       : {}),
     localStore: {
-      available: !failureMessage,
+      available:
+        !failureMessage && safeStorageHealth?.engineReadiness !== "unavailable",
       schemaVersion:
-        input.terminalSeed?.schemaVersion ?? POS_LOCAL_STORE_SCHEMA_VERSION,
+        input.terminalSeed?.schemaVersion ?? POS_LOCAL_LOGICAL_RECORD_VERSION,
       terminalSeedReady: Boolean(input.terminalSeed),
+      ...(safeStorageHealth
+        ? {
+            engineReadiness: safeStorageHealth.engineReadiness,
+            healthFreshness: safeStorageHealth.freshness,
+            healthObservedAt: safeStorageHealth.observedAt,
+            ledgerPressure: safeStorageHealth.ledgerPressure,
+            maintenance: safeStorageHealth.maintenance,
+            migration: safeStorageHealth.migration,
+            persistence: safeStorageHealth.persistence,
+            pressure: safeStorageHealth.pressure,
+            ...(safeStorageHealth.lastSuccessfulDurableCommitAt !== undefined
+              ? {
+                  lastSuccessfulDurableCommitAt:
+                    safeStorageHealth.lastSuccessfulDurableCommitAt,
+                }
+              : {}),
+            ...(safeStorageHealth.quotaBytes !== undefined
+              ? { quotaBytes: safeStorageHealth.quotaBytes }
+              : {}),
+            ...(safeStorageHealth.usageBytes !== undefined
+              ? { usageBytes: safeStorageHealth.usageBytes }
+              : {}),
+          }
+        : {}),
       ...(failureMessage ? { failureMessage } : {}),
     },
     reportedAt: now,
@@ -496,8 +522,8 @@ function isSaleAuthorityReady(input: {
 }) {
   return Boolean(
     !input.failureMessage &&
-      input.terminalSeed &&
-      input.staffAuthorityStatus === "ready",
+    input.terminalSeed &&
+    input.staffAuthorityStatus === "ready",
   );
 }
 

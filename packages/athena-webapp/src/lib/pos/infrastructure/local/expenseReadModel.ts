@@ -1,5 +1,5 @@
 import { derivePosLocalSyncStatus } from "./syncStatus";
-import type { PosLocalEventRecord } from "./posLocalStore";
+import type { PosLocalEventRecord } from "@/lib/pos/application/posLocalStoreTypes";
 
 export type ExpenseLocalSessionStatus =
   | "active"

@@ -8,6 +8,8 @@ const mocks = vi.hoisted(() => ({
   reportDetectorFailed: vi.fn(),
   reportUpdateDetected: vi.fn(),
   stageUpdateStaticAssets: vi.fn(),
+  storageRuntime: {},
+  storageRuntimeProvider: vi.fn(),
 }));
 
 vi.mock("./appRouter", () => ({
@@ -29,7 +31,24 @@ vi.mock("@tanstack/react-query", () => ({
 }));
 
 vi.mock("@tanstack/react-router", () => ({
-  RouterProvider: () => null,
+  RouterProvider: () => <div>router rendered</div>,
+}));
+
+vi.mock("./lib/pos/infrastructure/local/posLocalStorageRuntime", () => ({
+  getDefaultPosLocalStorageRuntime: () => mocks.storageRuntime,
+}));
+
+vi.mock("./lib/pos/infrastructure/local/posLocalStorageRuntimeContext", () => ({
+  PosLocalStorageRuntimeProvider: ({
+    children,
+    runtime,
+  }: {
+    children?: React.ReactNode;
+    runtime: unknown;
+  }) => {
+    mocks.storageRuntimeProvider(runtime);
+    return <>{children}</>;
+  },
 }));
 
 vi.mock("./utils/versionChecker", () => ({
@@ -53,11 +72,9 @@ vi.mock("./lib/app-update/updateDetectionSequencer", () => ({
 
 vi.mock("./lib/app-update", () => ({
   stageUpdateStaticAssets: mocks.stageUpdateStaticAssets,
-  UpdateCoordinatorProvider: ({
-    children,
-  }: {
-    children?: React.ReactNode;
-  }) => <>{children}</>,
+  UpdateCoordinatorProvider: ({ children }: { children?: React.ReactNode }) => (
+    <>{children}</>
+  ),
   useUpdateCoordinator: () => ({
     getSnapshot: mocks.getSnapshot,
     reportDetectorFailed: mocks.reportDetectorFailed,
@@ -65,7 +82,7 @@ vi.mock("./lib/app-update", () => ({
   }),
 }));
 
-import { VersionCheckerBridge } from "./App";
+import { App, VersionCheckerBridge } from "./App";
 import type { VersionCheckerUpdateDetectedEvent } from "./utils/versionChecker";
 
 describe("VersionCheckerBridge", () => {
@@ -86,7 +103,7 @@ describe("VersionCheckerBridge", () => {
       detectionSource: "html",
       pendingBuildId: "build-next",
       staging: {
-        entryHtml: "<script src=\"/assets/app.js\"></script>",
+        entryHtml: '<script src="/assets/app.js"></script>',
         entryUrl: "/index.html",
       },
     });
@@ -130,7 +147,9 @@ describe("VersionCheckerBridge", () => {
   });
 
   it("reports service worker staging failures as unstaged updates", async () => {
-    mocks.stageUpdateStaticAssets.mockRejectedValue(new Error("sw unavailable"));
+    mocks.stageUpdateStaticAssets.mockRejectedValue(
+      new Error("sw unavailable"),
+    );
     mocks.createVersionChecker.mockReturnValue({ stop: vi.fn() });
 
     render(<VersionCheckerBridge />);
@@ -141,7 +160,7 @@ describe("VersionCheckerBridge", () => {
       detectionSource: "html",
       pendingBuildId: "build-next",
       staging: {
-        entryHtml: "<script src=\"/assets/app.js\"></script>",
+        entryHtml: '<script src="/assets/app.js"></script>',
         entryUrl: "/index.html",
       },
     });
@@ -157,6 +176,19 @@ describe("VersionCheckerBridge", () => {
         }),
       ),
     );
+  });
+});
+
+describe("App", () => {
+  it("provides one process-level POS storage runtime without blocking routes", () => {
+    mocks.createVersionChecker.mockReturnValue({ stop: vi.fn() });
+
+    const view = render(<App />);
+
+    expect(mocks.storageRuntimeProvider).toHaveBeenCalledWith(
+      mocks.storageRuntime,
+    );
+    expect(view.getByText("router rendered")).toBeTruthy();
   });
 });
 

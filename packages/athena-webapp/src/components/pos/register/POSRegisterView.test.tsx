@@ -50,8 +50,8 @@ vi.mock("sonner", () => ({
   },
 }));
 
-vi.mock("@/lib/pos/infrastructure/local/posLocalStore", () => ({
-  clearIndexedDbPosLocalStore: (...args: unknown[]) =>
+vi.mock("@/lib/pos/infrastructure/local/posLocalStorageRuntime", () => ({
+  clearDefaultPosLocalStore: (...args: unknown[]) =>
     clearIndexedDbPosLocalStoreMock(...args),
 }));
 
@@ -269,7 +269,10 @@ vi.mock("@/components/pos/CartItems", () => ({
     readOnly?: boolean;
     serviceItems?: Array<{ quantity: number }>;
   }) => (
-    <div className={className} data-testid={`cart-items-${density ?? "default"}`}>
+    <div
+      className={className}
+      data-testid={`cart-items-${density ?? "default"}`}
+    >
       <span>cart-items</span>
       <span>
         {`cart-items-count-${
@@ -1190,7 +1193,9 @@ describe("POSRegisterView", () => {
     expect(screen.getByText("Runtime state")).toBeInTheDocument();
     expect(screen.getByText("heartbeat drawer")).toBeInTheDocument();
     expect(screen.getByText("local read model")).toBeInTheDocument();
-    expect(screen.getByText("can sell Pending Sync events 4")).toBeInTheDocument();
+    expect(
+      screen.getByText("can sell Pending Sync events 4"),
+    ).toBeInTheDocument();
     expect(screen.getByText("repair seed result")).toBeInTheDocument();
     expect(screen.getByText("repair Seeded")).toBeInTheDocument();
     expect(screen.getByText("repair directive drawer")).toBeInTheDocument();
@@ -1234,7 +1239,9 @@ describe("POSRegisterView", () => {
     expect(
       eventsScope.queryByText(/proof-token|payments|customer/i),
     ).not.toBeInTheDocument();
-    await userEvent.click(eventsScope.getByRole("button", { name: "Review 2" }));
+    await userEvent.click(
+      eventsScope.getByRole("button", { name: "Review 2" }),
+    );
     expect(eventsScope.getByText("#4")).toBeInTheDocument();
     expect(eventsScope.getByText("#3")).toBeInTheDocument();
     expect(eventsScope.queryByText("#1")).not.toBeInTheDocument();
@@ -1244,7 +1251,9 @@ describe("POSRegisterView", () => {
     expect(eventsScope.getByText("#3")).toBeInTheDocument();
     expect(eventsScope.queryByText("#4")).not.toBeInTheDocument();
     expect(eventsScope.queryByText("#1")).not.toBeInTheDocument();
-    await userEvent.click(eventsScope.getByRole("button", { name: "Synced 1" }));
+    await userEvent.click(
+      eventsScope.getByRole("button", { name: "Synced 1" }),
+    );
     expect(eventsScope.getByText("#1")).toBeInTheDocument();
     expect(eventsScope.queryByText("#4")).not.toBeInTheDocument();
 
@@ -3012,7 +3021,9 @@ describe("POSRegisterView", () => {
     expect(screen.getByText("cart-items")).toBeInTheDocument();
     expect(screen.getByText("cart-items-count-2")).toBeInTheDocument();
     expect(screen.getByText("cart-items-readonly-yes")).toBeInTheDocument();
-    expect(screen.getByText("cart-items-density-comfortable")).toBeInTheDocument();
+    expect(
+      screen.getByText("cart-items-density-comfortable"),
+    ).toBeInTheDocument();
     expect(screen.getByText("Wigclub Scarf")).toBeInTheDocument();
     expect(screen.getByText("expense-completion-panel")).toBeInTheDocument();
     expect(screen.getByText("Cashier")).toBeInTheDocument();

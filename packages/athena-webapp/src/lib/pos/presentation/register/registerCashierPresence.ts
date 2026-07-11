@@ -1,5 +1,5 @@
 import type { StaffAuthenticationResult } from "@/components/staff-auth/StaffAuthenticationDialog";
-import type { PosLocalActiveCashierPresenceRecord } from "@/lib/pos/infrastructure/local/posLocalStore";
+import type { PosLocalActiveCashierPresenceRecord } from "@/lib/pos/application/posLocalStoreTypes";
 
 import type { CashierPresenceRestoreStatus } from "./registerUiState";
 
@@ -78,12 +78,7 @@ export type CashierPresenceStore = {
 export type StaffProfileRosterRow = {
   credentialStatus?: "pending" | "active" | "suspended" | "revoked" | null;
   primaryRole?:
-    | "manager"
-    | "front_desk"
-    | "stylist"
-    | "technician"
-    | "cashier"
-    | null;
+    "manager" | "front_desk" | "stylist" | "technician" | "cashier" | null;
   roles?: Array<
     "manager" | "front_desk" | "stylist" | "technician" | "cashier"
   >;

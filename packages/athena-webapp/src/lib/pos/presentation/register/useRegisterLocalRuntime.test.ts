@@ -22,16 +22,17 @@ const mocks = vi.hoisted(() => {
       args,
     })),
     createPosLocalStore: vi.fn(() => localStore),
+    getDefaultPosLocalStore: vi.fn(() => localStore),
     localStore,
     readProjectedLocalRegisterModel: vi.fn(),
     useRegisterLifecycleAuthorityRuntime: vi.fn<
       (input: unknown) => RegisterLifecycleAuthorityRuntimeState
     >(() => ({
-        authorization: { status: "authorized" },
-        candidates: { candidates: [], status: "empty" },
-        persistence: { status: "ready" },
-        retry: vi.fn(),
-      })),
+      authorization: { status: "authorized" },
+      candidates: { candidates: [], status: "empty" },
+      persistence: { status: "ready" },
+      retry: vi.fn(),
+    })),
     usePosLocalSyncRuntimeStatus: vi.fn(() => ({
       pendingEventCount: 0,
       status: "synced",
@@ -47,6 +48,10 @@ vi.mock("@/lib/pos/infrastructure/local/posLocalStore", () => ({
   createIndexedDbPosLocalStorageAdapter:
     mocks.createIndexedDbPosLocalStorageAdapter,
   createPosLocalStore: mocks.createPosLocalStore,
+}));
+
+vi.mock("@/lib/pos/infrastructure/local/posLocalStorageRuntime", () => ({
+  getDefaultPosLocalStore: mocks.getDefaultPosLocalStore,
 }));
 
 vi.mock("@/lib/pos/infrastructure/local/localCommandGateway", () => ({
@@ -171,7 +176,7 @@ describe("useRegisterLocalRuntime", () => {
 
     expect(result.current.localStore).toBe(firstStore);
     expect(result.current.localCommandGateway).toBe(firstGateway);
-    expect(mocks.createPosLocalStore).toHaveBeenCalledTimes(1);
+    expect(mocks.getDefaultPosLocalStore).toHaveBeenCalledTimes(1);
     expect(mocks.createLocalCommandGateway).toHaveBeenCalledTimes(1);
   });
 
@@ -180,22 +185,18 @@ describe("useRegisterLocalRuntime", () => {
     await waitFor(() => {
       expect(result.current.localStaffAuthorityStatus).toBe("ready");
     });
-    const initialInput = mocks.useRegisterLifecycleAuthorityRuntime.mock.calls.at(
-      -1,
-    )?.[0] as
-      | { refreshLocalRegisterReadModel: () => Promise<void> }
-      | undefined;
+    const initialInput =
+      mocks.useRegisterLifecycleAuthorityRuntime.mock.calls.at(-1)?.[0] as
+        { refreshLocalRegisterReadModel: () => Promise<void> } | undefined;
 
     act(() =>
       rerender({
         terminal: { ...terminal },
       }),
     );
-    const rerenderedInput = mocks.useRegisterLifecycleAuthorityRuntime.mock.calls.at(
-      -1,
-    )?.[0] as
-      | { refreshLocalRegisterReadModel: () => Promise<void> }
-      | undefined;
+    const rerenderedInput =
+      mocks.useRegisterLifecycleAuthorityRuntime.mock.calls.at(-1)?.[0] as
+        { refreshLocalRegisterReadModel: () => Promise<void> } | undefined;
 
     expect(rerenderedInput?.refreshLocalRegisterReadModel).toBe(
       initialInput?.refreshLocalRegisterReadModel,
@@ -372,9 +373,7 @@ describe("useRegisterLocalRuntime", () => {
     mocks.useRegisterLifecycleAuthorityRuntime.mockReturnValue({
       authorization: { status: "authorized" },
       candidates: {
-        candidates: [
-          { localRegisterSessionId: "local-register-1" },
-        ],
+        candidates: [{ localRegisterSessionId: "local-register-1" }],
         status: "ready",
       },
       persistence: { reason: "write_failed", status: "failed" },

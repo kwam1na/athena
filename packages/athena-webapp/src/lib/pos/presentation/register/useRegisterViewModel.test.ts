@@ -352,16 +352,8 @@ vi.mock(
   }),
 );
 
-vi.mock("@/lib/pos/infrastructure/local/posLocalStore", () => ({
-  POS_LOCAL_STORE_SCHEMA_VERSION: 1,
-  canUploadPosLocalEventType: (type: string) =>
-    type === "register.opened" ||
-    type === "transaction.completed" ||
-    type === "cart.cleared" ||
-    type === "register.closeout_started" ||
-    type === "register.reopened",
-  createIndexedDbPosLocalStorageAdapter: vi.fn(() => ({})),
-  createPosLocalStore: vi.fn(() => ({
+function buildMockLocalStore() {
+  return {
     appendEvent: mockAppendLocalEvent,
     attachStaffProofTokenToPendingEvents:
       mockAttachStaffProofTokenToPendingEvents,
@@ -373,10 +365,12 @@ vi.mock("@/lib/pos/infrastructure/local/posLocalStore", () => ({
     readCashierPresence: mockReadCashierPresence,
     readDrawerAuthorityState: mockReadDrawerAuthorityState,
     readProvisionedTerminalSeed: mockReadProvisionedTerminalSeed,
-    resetRegisterOperationalStateForAuthorityCutover: vi.fn().mockResolvedValue({
-      ok: true,
-      value: { resetAt: 1_000, status: "already_applied" },
-    }),
+    resetRegisterOperationalStateForAuthorityCutover: vi
+      .fn()
+      .mockResolvedValue({
+        ok: true,
+        value: { resetAt: 1_000, status: "already_applied" },
+      }),
     readStoreDayReadiness: mockReadStoreDayReadiness,
     readTerminalIntegrityState: mockReadTerminalIntegrityState,
     clearActiveCashierPresence: mockClearCashierPresence,
@@ -390,7 +384,23 @@ vi.mock("@/lib/pos/infrastructure/local/posLocalStore", () => ({
       mockWriteProvisionedTerminalSeedAndClearTerminalIntegrity,
     writeDrawerAuthorityState: mockWriteDrawerAuthorityState,
     writeLocalCloudMapping: mockWriteLocalCloudMapping,
-  })),
+  };
+}
+
+vi.mock("@/lib/pos/infrastructure/local/posLocalStore", () => ({
+  POS_LOCAL_STORE_SCHEMA_VERSION: 1,
+  canUploadPosLocalEventType: (type: string) =>
+    type === "register.opened" ||
+    type === "transaction.completed" ||
+    type === "cart.cleared" ||
+    type === "register.closeout_started" ||
+    type === "register.reopened",
+  createIndexedDbPosLocalStorageAdapter: vi.fn(() => ({})),
+  createPosLocalStore: vi.fn(() => buildMockLocalStore()),
+}));
+
+vi.mock("@/lib/pos/infrastructure/local/posLocalStorageRuntime", () => ({
+  getDefaultPosLocalStore: () => buildMockLocalStore(),
 }));
 
 function deferred<T>() {

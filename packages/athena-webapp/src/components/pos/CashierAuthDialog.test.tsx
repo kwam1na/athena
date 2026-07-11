@@ -66,6 +66,10 @@ vi.mock("@/lib/pos/infrastructure/local/posLocalStore", () => ({
   createPosLocalStore: mocks.createPosLocalStore,
 }));
 
+vi.mock("@/lib/pos/infrastructure/local/posLocalStorageRuntime", () => ({
+  getDefaultPosLocalStore: mocks.createPosLocalStore,
+}));
+
 vi.mock("@/components/pos/PinInput", () => ({
   PinInput: ({
     disabled,
@@ -358,9 +362,7 @@ describe("CashierAuthDialog", () => {
     expect(authenticateMutation).not.toHaveBeenCalled();
     expect(onAuthenticated).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.getByLabelText(/pin/i)).toHaveValue(""));
-    expect(
-      screen.getByRole("button", { name: "Sign in" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument();
   });
 
   it("stores the current cashier offline proof immediately after online sign-in", async () => {

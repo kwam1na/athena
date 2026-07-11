@@ -51,9 +51,20 @@ export type TerminalRuntimeStatus = {
   buildSha?: string;
   localStore: {
     available: boolean;
+    engineReadiness?: "ready" | "unavailable" | "unknown";
     failureMessage?: string;
+    healthFreshness?: "fresh" | "stale" | "unknown";
+    healthObservedAt?: number;
+    lastSuccessfulDurableCommitAt?: number;
+    ledgerPressure?: "normal" | "warning" | "critical" | "unknown";
+    maintenance?: "idle" | "active" | "blocked" | "unknown";
+    migration?: "idle" | "running" | "failed" | "unknown";
+    persistence?: "granted" | "denied" | "unsupported" | "unknown";
+    pressure?: "normal" | "warning" | "critical" | "unknown";
+    quotaBytes?: number;
     schemaVersion?: number;
     terminalSeedReady: boolean;
+    usageBytes?: number;
   };
   receivedAt: number;
   reportedAt: number;
@@ -64,11 +75,7 @@ export type TerminalRuntimeStatus = {
     registerReadModelAgeMs?: number;
   };
   source:
-    | "pos-hub"
-    | "register"
-    | "support-diagnostics"
-    | "sync-runtime"
-    | string;
+    "pos-hub" | "register" | "support-diagnostics" | "sync-runtime" | string;
   staffAuthority: {
     expiresAt?: number;
     staffProfileId?: Id<"staffProfile"> | string;
@@ -143,11 +150,7 @@ export type TerminalRuntimeAppUpdateEvidence = {
   observedAt?: number;
   pendingBuildId?: string;
   selectedBlockerCode?:
-    | "active_command"
-    | "active_sale"
-    | "resume_required"
-    | "unknown"
-    | string;
+    "active_command" | "active_sale" | "resume_required" | "unknown" | string;
   stagingAssetCount?: number;
   stagingFailedAssetCount?: number;
   stagingReason?: string;
@@ -273,10 +276,7 @@ export type TerminalRecoveryReadinessStatus =
   | string;
 
 export type TerminalRecoveryActionKind =
-  | "cloud_repair"
-  | "manual_review"
-  | "terminal_command"
-  | string;
+  "cloud_repair" | "manual_review" | "terminal_command" | string;
 
 export type TerminalRecoveryActionStatus =
   | "available"
@@ -353,18 +353,12 @@ export type TerminalRecoveryExpectedEvidence = {
     | "unavailable"
     | "unknown";
   terminalIntegrityStatus?:
-    | "healthy"
-    | "repairing"
-    | "requires_reprovision"
-    | "reset_required";
+    "healthy" | "repairing" | "requires_reprovision" | "reset_required";
   terminalSeedReady?: boolean;
 };
 
 export type TerminalRecoveryBlockerCategory =
-  | "cloud_repair"
-  | "manual_review"
-  | "terminal_required"
-  | string;
+  "cloud_repair" | "manual_review" | "terminal_required" | string;
 
 export type TerminalRecoveryBlocker = {
   action?: TerminalRecoveryAction | null;
@@ -473,18 +467,13 @@ export type TerminalOperationalExplanationServerLane =
   | "unknown";
 
 export type TerminalOperationalExplanationLane =
-  | TerminalOperationalExplanationServerLane
-  | "healthy"
-  | "sync_failed";
+  TerminalOperationalExplanationServerLane | "healthy" | "sync_failed";
 
 export type TerminalOperationalExplanationServerSeverity =
-  | "info"
-  | "warning"
-  | "critical";
+  "info" | "warning" | "critical";
 
 export type TerminalOperationalExplanationSeverity =
-  | TerminalOperationalExplanationServerSeverity
-  | "danger";
+  TerminalOperationalExplanationServerSeverity | "danger";
 
 export type TerminalOperationalExplanationBlockingDomain =
   | "cloud_repair"
@@ -494,9 +483,7 @@ export type TerminalOperationalExplanationBlockingDomain =
   | "terminal_runtime";
 
 export type TerminalOperationalExplanationServerSaleImpact =
-  | "can_transact_now"
-  | "not_ready"
-  | "unknown";
+  "can_transact_now" | "not_ready" | "unknown";
 
 export type TerminalOperationalExplanationSaleImpact =
   | TerminalOperationalExplanationServerSaleImpact
@@ -522,16 +509,10 @@ export type TerminalOperationalExplanationSupportAction =
   | "diagnostic_only";
 
 export type TerminalOperationalExplanationServerPrimaryOwner =
-  | "none"
-  | "cash_controls"
-  | "manager"
-  | "operations"
-  | "terminal"
-  | "support";
+  "none" | "cash_controls" | "manager" | "operations" | "terminal" | "support";
 
 export type TerminalOperationalExplanationPrimaryOwner =
-  | TerminalOperationalExplanationServerPrimaryOwner
-  | "system";
+  TerminalOperationalExplanationServerPrimaryOwner | "system";
 
 export type TerminalOperationalExplanationEvidenceReference = {
   count?: number;
@@ -543,7 +524,10 @@ export type TerminalOperationalExplanationEvidenceReference = {
 export type TerminalOperationalExplanationSecondaryAction = {
   actionTarget?: TerminalHealthAttentionActionTarget;
   label: string;
-  primaryOwner: Exclude<TerminalOperationalExplanationServerPrimaryOwner, "none">;
+  primaryOwner: Exclude<
+    TerminalOperationalExplanationServerPrimaryOwner,
+    "none"
+  >;
   supportAction: Exclude<
     TerminalOperationalExplanationServerSupportAction,
     "none" | "wait_for_check_in"
@@ -572,12 +556,7 @@ export type TerminalOperationalExplanation = {
 export type TerminalHealthSummary = {
   attentionReasons?: TerminalHealthAttentionReason[];
   health?:
-    | "needs_attention"
-    | "offline"
-    | "online"
-    | "stale"
-    | "unknown"
-    | string;
+    "needs_attention" | "offline" | "online" | "stale" | "unknown" | string;
   operationalExplanation?: TerminalOperationalExplanation | null;
   registerSessionLink?: {
     registerSessionId: Id<"registerSession"> | string;

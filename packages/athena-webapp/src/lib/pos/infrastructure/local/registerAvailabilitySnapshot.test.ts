@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { POS_LOCAL_LOGICAL_RECORD_VERSION } from "@/lib/pos/application/posLocalStoreTypes";
 
 import type { PosRegisterCatalogAvailabilityRowDto } from "@/lib/pos/application/dto";
 import {
@@ -42,7 +43,7 @@ describe("registerAvailabilitySnapshot", () => {
       snapshot: {
         refreshedAt: 1_000,
         rows: [],
-        schemaVersion: POS_LOCAL_STORE_SCHEMA_VERSION,
+        schemaVersion: POS_LOCAL_LOGICAL_RECORD_VERSION,
         storeId: "store-1",
       },
     });

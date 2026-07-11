@@ -1,26 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { Id } from "../../convex/_generated/dataModel";
-import {
-  createIndexedDbPosLocalStorageAdapter,
-  createMemoryPosLocalStorageAdapter,
-  createPosLocalStore,
-} from "@/lib/pos/infrastructure/local/posLocalStore";
+import type { PosLocalStorePort } from "@/lib/pos/application/posLocalStorePort";
+import { getDefaultPosLocalStore } from "@/lib/pos/infrastructure/local/posLocalStorageRuntime";
 import { createExpenseLocalCommandGateway } from "@/lib/pos/infrastructure/local/expenseLocalCommandGateway";
 import { usePosLocalSyncRuntimeStatus } from "@/lib/pos/infrastructure/local/usePosLocalSyncRuntime";
 
-type ExpenseLocalStore = ReturnType<typeof createPosLocalStore>;
-
-let sharedExpenseLocalStore: ExpenseLocalStore | null = null;
+let sharedExpenseLocalStore: PosLocalStorePort | null = null;
 const expenseLocalEventListeners = new Set<() => void>();
 
 function getExpenseLocalStore() {
-  sharedExpenseLocalStore ??= createPosLocalStore({
-    adapter:
-      typeof indexedDB === "undefined"
-        ? createMemoryPosLocalStorageAdapter()
-        : createIndexedDbPosLocalStorageAdapter(),
-  });
+  sharedExpenseLocalStore ??= getDefaultPosLocalStore();
   return sharedExpenseLocalStore;
 }
 

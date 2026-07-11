@@ -1,7 +1,7 @@
 import {
   canUploadPosLocalEventType,
   type PosLocalEventRecord,
-} from "./posLocalStore";
+} from "@/lib/pos/application/posLocalStoreTypes";
 import type {
   PosLocalSyncPaymentPayload,
   PosLocalSyncExpenseRecordedPayload,

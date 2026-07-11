@@ -1,4 +1,4 @@
-import type { PosLocalCloudMapping } from "./posLocalStore";
+import type { PosLocalCloudMapping } from "@/lib/pos/application/posLocalStoreTypes";
 
 export const MAX_REGISTER_LIFECYCLE_AUTHORITY_CANDIDATES = 16;
 export const MAX_REGISTER_LIFECYCLE_AUTHORITY_ID_LENGTH = 120;
@@ -132,8 +132,8 @@ export function deriveRegisterLifecycleAuthorityCandidates(input: {
       (mapping) => mapping.registerCandidateState === undefined,
     );
     if (legacyMappings.length > 0) {
-      const activeSessionMappings = legacyMappings.filter(
-        (mapping) => legacyMappingMatchesActiveSession(mapping, active),
+      const activeSessionMappings = legacyMappings.filter((mapping) =>
+        legacyMappingMatchesActiveSession(mapping, active),
       );
       const exactScopedMappings = legacyMappings.filter(
         (mapping) =>

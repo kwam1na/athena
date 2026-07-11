@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 
 import {
-  createIndexedDbPosLocalStorageAdapter,
-  createPosLocalStore,
   type PosLocalStoreResult,
   type PosProvisionedTerminalSeed,
-} from "./posLocalStore";
+} from "@/lib/pos/application/posLocalStoreTypes";
+import { getDefaultPosLocalStore } from "./posLocalStorageRuntime";
 
 export type PosLocalEntryRouteParams = {
   orgUrlSlug?: string;
@@ -146,15 +145,9 @@ export function useLocalPosEntryContext(input: {
   useEffect(() => {
     let cancelled = false;
 
-    if (typeof indexedDB === "undefined") {
-      setSeedRead({ ok: true, value: null });
-      return;
-    }
-
     void (async () => {
-      const result = await createPosLocalStore({
-        adapter: createIndexedDbPosLocalStorageAdapter(),
-      }).readProvisionedTerminalSeed();
+      const result =
+        await getDefaultPosLocalStore().readProvisionedTerminalSeed();
 
       if (!cancelled) {
         setSeedRead(result);

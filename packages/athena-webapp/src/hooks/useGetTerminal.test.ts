@@ -18,9 +18,8 @@ vi.mock("@/lib/pos/infrastructure/terminal/fingerprint", () => ({
     mockReadStoredTerminalFingerprintHash(),
 }));
 
-vi.mock("@/lib/pos/infrastructure/local/posLocalStore", () => ({
-  createIndexedDbPosLocalStorageAdapter: vi.fn(() => ({})),
-  createPosLocalStore: vi.fn(() => ({
+vi.mock("@/lib/pos/infrastructure/local/posLocalStorageRuntime", () => ({
+  getDefaultPosLocalStore: vi.fn(() => ({
     readProvisionedTerminalSeed: mockReadProvisionedTerminalSeed,
   })),
 }));
@@ -123,7 +122,9 @@ describe("useGetTerminal", () => {
 
     const { result } = renderHook(() => useGetTerminal());
 
-    await waitFor(() => expect(mockReadProvisionedTerminalSeed).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(mockReadProvisionedTerminalSeed).toHaveBeenCalled(),
+    );
     expect(result.current).toBeNull();
   });
 
@@ -144,7 +145,9 @@ describe("useGetTerminal", () => {
 
     const { result } = renderHook(() => useGetTerminal());
 
-    await waitFor(() => expect(mockReadProvisionedTerminalSeed).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(mockReadProvisionedTerminalSeed).toHaveBeenCalled(),
+    );
     expect(result.current).toBeNull();
   });
 });
