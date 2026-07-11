@@ -14,6 +14,7 @@ export type MetricCoverageObservation = {
   completeness: ReportingCompleteness;
   failedCount: number;
   knownLagMs?: number;
+  processingWatermark?: number;
   limitingReason: ReportingLimitingReason | null;
   omittedCount: number;
   quarantinedCount: number;
@@ -124,6 +125,72 @@ export function summarizeRequiredMetricCoverage(input: {
   };
 }
 
+const COST_LIMITED_METRICS = new Set<ReportingMetricName>([
+  "known_cogs",
+  "gross_profit",
+  "uncosted_revenue",
+  "inventory_consumed_value",
+  "inventory_value",
+]);
+
+export function coverageForFactContribution(input: {
+  completeness: ReportingCompleteness;
+  limitingReason?: ReportingLimitingReason;
+  metric: ReportingMetricName;
+}) {
+  if (
+    input.limitingReason === "uncosted" &&
+    !COST_LIMITED_METRICS.has(input.metric)
+  ) {
+    return { completeness: "complete" as const, limitingReason: undefined };
+  }
+  return {
+    completeness: input.completeness,
+    limitingReason: input.limitingReason,
+  };
+}
+
+export function metricCoverageIsActivatable(input: {
+  metric: ReportingMetricName;
+  observations: MetricCoverageObservation[];
+}) {
+  const summary = summarizeRequiredMetricCoverage(input);
+  const allowsUncostedKnownComponent =
+    METRIC_CONTRACTS[input.metric].unknownData ===
+    "publish_known_component_with_coverage";
+  return summary.sources.every(
+    (source) =>
+      source.failedCount === 0 &&
+      source.omittedCount === 0 &&
+      source.quarantinedCount === 0 &&
+      source.truncated === false &&
+      (source.knownLagMs ?? 0) <= REPORTING_FRESHNESS_TARGET_MS &&
+      ((source.completeness === "complete" &&
+        source.limitingReason == null) ||
+        (allowsUncostedKnownComponent &&
+          source.completeness === "partial" &&
+          source.limitingReason === "uncosted")),
+  );
+}
+
+export function coverageOnlyMetricsForFact(
+  fact: Pick<
+    Doc<"reportingFact">,
+    "costStatus" | "inventoryContributionKind" | "revenueKind"
+  >,
+): ReportingMetricName[] {
+  if (fact.costStatus !== "unknown") return [];
+  return [
+    ...(fact.revenueKind === "merchandise"
+      ? (["known_cogs", "gross_profit"] as const)
+      : []),
+    ...(fact.inventoryContributionKind === "inventory_consumed" ||
+    fact.inventoryContributionKind === "inventory_consumed_reversal"
+      ? (["inventory_consumed_value"] as const)
+      : []),
+  ];
+}
+
 function coverageSource(
   metric: ReportingMetricName,
   factSource: ReportingSourceDomain,
@@ -149,6 +216,7 @@ async function upsertCoverage(
     periodEnd: number;
     periodStart: number;
     projectedAt?: number;
+    processingWatermark?: number;
     quarantinedDelta?: number;
     sourceDomain: string;
     truncated?: boolean;
@@ -167,8 +235,8 @@ async function upsertCoverage(
     throw new Error("Metric coverage identity is not unique");
   const current = rows[0];
   const incomingIsLatest =
-    input.latestOccurrenceAt !== undefined &&
-    input.latestOccurrenceAt >= (current?.latestOccurrenceAt ?? -1);
+    input.processingWatermark !== undefined &&
+    input.processingWatermark >= (current?.processingWatermark ?? -1);
   const value = {
     completeness:
       current?.completeness === "partial" || input.completeness === "partial"
@@ -195,6 +263,11 @@ async function upsertCoverage(
     ),
     projectedAt:
       Math.max(current?.projectedAt ?? 0, input.projectedAt ?? 0) || undefined,
+    processingWatermark:
+      Math.max(
+        current?.processingWatermark ?? 0,
+        input.processingWatermark ?? 0,
+      ) || undefined,
     quarantinedCount:
       (current?.quarantinedCount ?? 0) + (input.quarantinedDelta ?? 0),
     sourceDomain: input.sourceDomain,
@@ -215,26 +288,80 @@ export async function updateMetricCoverageForFactWithCtx(
     contributions: FactMetricContribution[];
     fact: Doc<"reportingFact">;
     generation: Doc<"reportingProjectionGeneration">;
+    omittedContributions?: FactMetricContribution[];
     projectedAt: number;
   },
 ) {
-  for (const contribution of input.contributions) {
-    await upsertCoverage(ctx, {
+  const contributionMetrics = new Set(
+    input.contributions.map((contribution) => contribution.metric),
+  );
+  const contributionsAndCoverageOnly = [
+    ...input.contributions.map((contribution) => contribution.metric),
+    ...coverageOnlyMetricsForFact(input.fact).filter(
+      (metric) => !contributionMetrics.has(metric),
+    ),
+  ];
+  for (const metric of contributionsAndCoverageOnly) {
+    const coverage = coverageForFactContribution({
       completeness: input.fact.completeness,
+      limitingReason: input.fact.limitingReason,
+      metric,
+    });
+    await upsertCoverage(ctx, {
+      completeness: coverage.completeness,
       generation: input.generation,
       knownLagMs: Math.max(0, input.projectedAt - input.fact.acceptedAt),
       latestOccurrenceAt: input.fact.occurrenceAt,
-      limitingReason: input.fact.limitingReason,
-      metric: contribution.metric,
+      limitingReason: coverage.limitingReason,
+      metric,
       periodEnd: input.fact.occurrenceAt,
       periodStart: input.fact.occurrenceAt,
       projectedAt: input.projectedAt,
+      processingWatermark: input.fact.acceptedAt,
+      sourceDomain: coverageSource(metric, input.fact.sourceDomain),
+    });
+  }
+  for (const contribution of input.omittedContributions ?? []) {
+    await upsertCoverage(ctx, {
+      completeness: "partial",
+      generation: input.generation,
+      knownLagMs: Math.max(0, input.projectedAt - input.fact.acceptedAt),
+      latestOccurrenceAt: input.fact.occurrenceAt,
+      limitingReason: "source_incomplete",
+      metric: contribution.metric,
+      omittedDelta: 1,
+      periodEnd: input.fact.occurrenceAt,
+      periodStart: input.fact.occurrenceAt,
+      projectedAt: input.projectedAt,
+      processingWatermark: input.fact.acceptedAt,
       sourceDomain: coverageSource(
         contribution.metric,
         input.fact.sourceDomain,
       ),
     });
   }
+}
+
+export async function recordUncostedCurrentInventoryCoverageWithCtx(
+  ctx: MutationCtx,
+  input: {
+    generation: Doc<"reportingProjectionGeneration">;
+    periodEnd: number;
+    periodStart: number;
+    processingWatermark: number;
+  },
+) {
+  await upsertCoverage(ctx, {
+    completeness: "partial",
+    generation: input.generation,
+    knownLagMs: 0,
+    limitingReason: "uncosted",
+    metric: "inventory_value",
+    periodEnd: input.periodEnd,
+    periodStart: input.periodStart,
+    processingWatermark: input.processingWatermark,
+    sourceDomain: "inventory",
+  });
 }
 
 export async function materializeGenerationCoverageWithCtx(
@@ -247,6 +374,7 @@ export async function materializeGenerationCoverageWithCtx(
     omittedSources?: Partial<Record<ReportingSourceDomain, number>>;
     periodEnd: number;
     periodStart: number;
+    processingWatermark?: number;
     quarantinedSources?: Partial<Record<ReportingSourceDomain, number>>;
     truncated?: boolean;
   },
@@ -287,6 +415,8 @@ export async function materializeGenerationCoverageWithCtx(
         omittedDelta: omitted,
         periodEnd: input.periodEnd,
         periodStart: input.periodStart,
+        processingWatermark: input.processingWatermark,
+        knownLagMs: input.processingWatermark === undefined ? undefined : 0,
         quarantinedDelta: quarantined,
         sourceDomain,
         truncated: input.truncated,
@@ -301,9 +431,6 @@ export function generationCoverageIsActivatable(input: {
 }) {
   return metricsForProjectionKind(input.projectionKind).every((metric) => {
     const observations = input.coverage.filter((row) => row.metric === metric);
-    return (
-      summarizeRequiredMetricCoverage({ metric, observations }).completeness ===
-      "complete"
-    );
+    return metricCoverageIsActivatable({ metric, observations });
   });
 }

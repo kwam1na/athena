@@ -268,7 +268,11 @@ export const reportingFactSchema = v.object({
   synchronizedAt: v.optional(v.number()),
   recognitionAt: v.number(),
   operatingDate: v.string(),
-  scheduleVersionId: v.id("storeSchedule"),
+  scheduleVersionId: v.optional(v.id("storeSchedule")),
+  historicalInterpretationPolicyId: v.optional(
+    v.id("reportingHistoricalInterpretationPolicy"),
+  ),
+  historicalInterpretationPolicyHash: v.optional(v.string()),
   currencyCode: v.optional(v.string()),
   currencyMinorUnitScale: v.optional(v.number()),
   revenueCurrencyCode: v.optional(v.string()),

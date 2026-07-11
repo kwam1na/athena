@@ -34,6 +34,30 @@ export function buildReportingOverview(input: {
   };
 }
 
+export function publicPeriodLineage(
+  row: Pick<
+    Doc<"reportingStoreDayProjection">,
+    | "scheduleVersionId"
+    | "historicalInterpretationPolicyId"
+    | "historicalInterpretationPolicyHash"
+  >,
+) {
+  if (row.historicalInterpretationPolicyId !== undefined) {
+    if (row.scheduleVersionId !== undefined || !row.historicalInterpretationPolicyHash) {
+      throw new Error("Reporting projection period lineage is invalid");
+    }
+    return {
+      kind: "historical_policy" as const,
+      id: row.historicalInterpretationPolicyId,
+      hash: row.historicalInterpretationPolicyHash,
+    };
+  }
+  if (!row.scheduleVersionId || row.historicalInterpretationPolicyHash) {
+    throw new Error("Reporting projection period lineage is invalid");
+  }
+  return { kind: "store_schedule" as const, id: row.scheduleVersionId };
+}
+
 type ProjectionKind =
   | "store_day"
   | "sku_day"
@@ -258,6 +282,7 @@ export const getOverview = query({
           knownValue: row.knownValue ?? null,
           limitingReason: row.limitingReason ?? null,
           metric: row.metric,
+          periodLineage: publicPeriodLineage(row),
           unknownQuantity: row.unknownQuantity ?? null,
         })),
       },
@@ -302,7 +327,15 @@ export const listSkuDay = query({
     if (page.page.some((row) => row.storeId !== args.storeId)) {
       throw new Error("Reporting SKU detail is unavailable.");
     }
-    return { ...page, generationId: generation._id, status: generation.status };
+    return {
+      ...page,
+      page: page.page.map((row) => ({
+        ...row,
+        periodLineage: publicPeriodLineage(row),
+      })),
+      generationId: generation._id,
+      status: generation.status,
+    };
   },
 });
 
@@ -350,11 +383,17 @@ export const getDailyClose = query({
     if (historyPage.page.some((row) => row.storeId !== args.storeId)) {
       throw new Error("Reporting Daily Close is unavailable.");
     }
+    const presentDailyClose = (
+      row: Doc<"reportingDailyCloseProjection">,
+    ) => ({ ...row, periodLineage: publicPeriodLineage(row) });
     return {
-      current,
+      current: current ? presentDailyClose(current) : null,
       factContractVersion: generation.factContractVersion,
       generationId: generation._id,
-      historyPage,
+      historyPage: {
+        ...historyPage,
+        page: historyPage.page.map(presentDailyClose),
+      },
       metricContractVersion: generation.metricContractVersion,
       projectionContractVersion: generation.projectionContractVersion,
       sourceWatermark: generation.sourceWatermark,

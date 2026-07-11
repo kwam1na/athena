@@ -141,6 +141,81 @@ describe("reporting schema indexes", () => {
       indexDescriptor: "by_generationId_operatingDate_productSkuId_metric",
       fields: ["generationId", "operatingDate", "productSkuId", "metric"],
     });
+    expect(indexes("reportingStoreDayProjection")).toContainEqual({
+      indexDescriptor:
+        "by_gen_date_metric_schedule",
+      fields: [
+        "generationId",
+        "operatingDate",
+        "metric",
+        "scheduleVersionId",
+      ],
+    });
+    expect(indexes("reportingStoreDayProjection")).toContainEqual({
+      indexDescriptor:
+        "by_gen_date_metric_policy",
+      fields: [
+        "generationId",
+        "operatingDate",
+        "metric",
+        "historicalInterpretationPolicyId",
+      ],
+    });
+    expect(indexes("reportingSkuDayProjection")).toContainEqual({
+      indexDescriptor:
+        "by_gen_sku_date_metric_schedule",
+      fields: [
+        "generationId",
+        "productSkuId",
+        "operatingDate",
+        "metric",
+        "scheduleVersionId",
+      ],
+    });
+    expect(indexes("reportingSkuDayProjection")).toContainEqual({
+      indexDescriptor:
+        "by_gen_sku_date_metric_policy",
+      fields: [
+        "generationId",
+        "productSkuId",
+        "operatingDate",
+        "metric",
+        "historicalInterpretationPolicyId",
+      ],
+    });
+    expect(indexes("reportingDailyCloseProjection")).toContainEqual({
+      indexDescriptor: "by_gen_close_source",
+      fields: ["generationId", "acceptedCloseSourceId"],
+    });
+    expect(indexes("reportingDailyCloseProjection")).toContainEqual({
+      indexDescriptor: "by_gen_date_close_version_source",
+      fields: [
+        "generationId",
+        "operatingDate",
+        "acceptedCloseVersion",
+        "acceptedCloseSourceId",
+      ],
+    });
+    expect(indexes("reportingDailyCloseProjection")).toContainEqual({
+      indexDescriptor:
+        "by_gen_date_schedule_close",
+      fields: [
+        "generationId",
+        "operatingDate",
+        "scheduleVersionId",
+        "acceptedCloseVersion",
+      ],
+    });
+    expect(indexes("reportingDailyCloseProjection")).toContainEqual({
+      indexDescriptor:
+        "by_gen_date_policy_close",
+      fields: [
+        "generationId",
+        "operatingDate",
+        "historicalInterpretationPolicyId",
+        "acceptedCloseVersion",
+      ],
+    });
     expect(indexes("reportingProjectionEvidence")).toContainEqual({
       indexDescriptor: "by_generationId_productSkuId_recognitionAt_factId",
       fields: ["generationId", "productSkuId", "recognitionAt", "factId"],
@@ -256,5 +331,28 @@ describe("reporting schema indexes", () => {
     expect(source).toContain("effectType: v.optional(");
     expect(source).toContain("revenueCurrencyCode: v.optional(v.string())");
     expect(source).toContain("valuationCurrencyCode: v.optional(v.string())");
+  });
+
+  it("indexes historical policy, durable provenance, and bounded manifests", () => {
+    expect(indexes("reportingHistoricalInterpretationPolicy")).toContainEqual({
+      indexDescriptor: "by_storeId_status_intervalStart",
+      fields: ["storeId", "status", "intervalStart"],
+    });
+    expect(indexes("reportingHistoricalInterpretationPolicy")).toContainEqual({
+      indexDescriptor: "by_storeId_version",
+      fields: ["storeId", "version"],
+    });
+    expect(indexes("reportingHistoricalInterpretationEvidence")).toContainEqual({
+      indexDescriptor: "by_storeId_factId",
+      fields: ["storeId", "factId"],
+    });
+    expect(indexes("reportingBackfillApplyManifest")).toContainEqual({
+      indexDescriptor: "by_storeId_status_cleanupEligibleAt",
+      fields: ["storeId", "status", "cleanupEligibleAt"],
+    });
+    expect(indexes("reportingBackfillApplyManifestItem")).toContainEqual({
+      indexDescriptor: "by_manifestId_sequence",
+      fields: ["manifestId", "sequence"],
+    });
   });
 });

@@ -6,9 +6,22 @@ import {
   boundReportingPagination,
   buildReportingOverview,
   REPORTING_PUBLIC_PAGE_SIZE_MAX,
+  publicPeriodLineage,
 } from "./public";
 
 describe("public reporting overview contract", () => {
+  it("serializes schedule and policy lineage as distinguishable browser-safe segments", () => {
+    expect(publicPeriodLineage({ scheduleVersionId: "schedule-1" as never })).toEqual({
+      kind: "store_schedule",
+      id: "schedule-1",
+    });
+    expect(
+      publicPeriodLineage({
+        historicalInterpretationPolicyId: "policy-1" as never,
+        historicalInterpretationPolicyHash: "hash-1",
+      }),
+    ).toEqual({ kind: "historical_policy", id: "policy-1", hash: "hash-1" });
+  });
   it("clamps caller page sizes to the public read budget", () => {
     expect(
       boundReportingPagination({ cursor: "cursor-1", numItems: 10_000 }),
@@ -103,6 +116,8 @@ describe("public reporting overview contract", () => {
     expect(source).toContain(
       ".paginate(boundReportingPagination(args.paginationOpts))",
     );
+    expect(source).toContain("periodLineage: publicPeriodLineage(row)");
+    expect(source).toContain("page: historyPage.page.map(presentDailyClose)");
   });
 
   it("ages health at read time and probes unprojected ingress through bounded indexes", () => {

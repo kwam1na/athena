@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Plan: Make Wigclub reporting history safely backfillable</title>
+  <style>
+    :root { color-scheme: light; --ink:#172033; --muted:#5a6475; --line:#d9dee8; --panel:#f6f8fb; --accent:#3157a4; --warn:#8a4b08; }
+    * { box-sizing:border-box; } body { margin:0; font:15px/1.55 ui-sans-serif,system-ui,-apple-system,sans-serif; color:var(--ink); background:#fff; }
+    main { max-width:1040px; margin:auto; padding:48px 28px 80px; } header { border-bottom:1px solid var(--line); padding-bottom:24px; }
+    h1 { font-size:2.1rem; line-height:1.15; margin:.3rem 0 1rem; } h2 { margin-top:2.4rem; border-bottom:1px solid var(--line); padding-bottom:.35rem; }
+    h3 { margin-top:1.5rem; } p,li { max-width:88ch; } a { color:var(--accent); } code { background:#eef1f6; padding:.1rem .3rem; border-radius:4px; }
+    .meta,.callout,.unit { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px 18px; }
+    .meta { display:flex; gap:18px; flex-wrap:wrap; color:var(--muted); } .callout { border-left:4px solid var(--warn); }
+    nav ul { columns:2; padding-left:20px; } table { width:100%; border-collapse:collapse; margin:1rem 0; } th,td { border:1px solid var(--line); padding:9px; text-align:left; vertical-align:top; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:14px; } .unit { margin:.8rem 0; }
+    .gate { font-weight:650; } @media (max-width:650px){ nav ul{columns:1} main{padding:28px 18px 60px} }
+  </style>
+</head>
+<body><main>
+  <header>
+    <p><strong>Implementation plan</strong></p>
+    <h1>Make Wigclub reporting history safely backfillable</h1>
+    <div class="meta"><span>Date: 2026-07-11</span><span>Type: fix</span><span>Status: active</span><span>Canonical source: <a href="2026-07-11-001-fix-wigclub-reporting-history-plan.md">Markdown plan</a></span></div>
+  </header>
+  <nav><h2>Contents</h2><ul><li><a href="#summary">Summary</a></li><li><a href="#scope">Scope</a></li><li><a href="#decisions">Decisions</a></li><li><a href="#units">Implementation units</a></li><li><a href="#gates">Signoff gates</a></li><li><a href="#risks">Risks</a></li></ul></nav>
+  <section id="summary"><h2>Summary</h2><p>Add a versioned, store-scoped interpretation policy used only by historical reporting maintenance. It allows approved Wigclub pre-schedule and currency-absent records to become auditable facts while preserving operational sources, unknown cost, strict matching, and preview/apply parity.</p>
+    <div class="callout"><strong>Release boundary:</strong> dev only. No production deploy, current-inventory activation, operational-source rewrite, inferred cost, or claim of transaction-wide fact rollback.</div>
+  </section>
+  <section id="scope"><h2>Problem and scope</h2><p>The Wigclub preview produced 1,726 candidate facts: three eligible, 1,691 quarantined, and 32 payment conflicts. The plan addresses missing historical operating-period and currency evidence without treating today's configuration as historical truth.</p>
+    <div class="grid"><article class="unit"><h3>Included</h3><ul><li>Dual-controlled immutable Wigclub policy</li><li>Reporting-owned historical period lineage</li><li>Policy-authorized GHS revenue currency</li><li>Exact canonical overlap</li><li>Sealed internal candidate manifest</li><li>Dev rebuild, activation, rollback proof</li></ul></article><article class="unit"><h3>Excluded</h3><ul><li>Operational or Store Schedule mutation</li><li>Cost amount, valuation denomination, COGS, or profit inference</li><li>Global fingerprint weakening</li><li>Inventory authority cutover</li><li>Production deployment</li></ul></article></div>
+  </section>
+  <section id="decisions"><h2>Key decisions</h2><ul><li><strong>Backfill-only policy:</strong> reporting-owned periods and GHS revenue inference never enter ordinary Store Schedule or live-ingress behavior.</li><li><strong>End-to-end lineage:</strong> exactly-one Store Schedule or reporting-policy lineage is material in facts, fingerprints, projections, reconciliation, aggregation, and public contracts.</li><li><strong>Dual control:</strong> distinct authenticated full admins create and approve immutable versions; trusted automation executes them.</li><li><strong>Candidate and fact provenance:</strong> policy hash, inferred-field markers, original absence, period lineage, and audits survive independently of the run.</li><li><strong>Sealed two-pass apply:</strong> bounded preflight stores immutable sanitized candidate semantics; write batches consume only the sealed manifest.</li><li><strong>Strict matching:</strong> absent source currency is tolerated only under policy and exact candidate-known canonical semantic equality.</li><li><strong>Unknown stays unknown:</strong> no cost amount, valuation denomination, COGS, or profit is inferred.</li><li><strong>Internal lifecycle:</strong> transient manifests have terminal states and bounded retention; durable fact evidence survives cleanup.</li><li><strong>Honest rollback:</strong> compare-and-swap baseline and replacement projections can switch and roll back; applied facts are not globally transactional.</li></ul></section>
+  <section id="units"><h2>Implementation units</h2><div class="grid">
+    <article class="unit"><h3>U1 Policy and provenance</h3><p>Persist authorized immutable policy, candidate markers, fact-linked evidence, approval, hashes, and inference counts.</p></article>
+    <article class="unit"><h3>U2 End-to-end period lineage</h3><p>Carry reviewed reporting-owned lineage through facts, fingerprints, projections, reconciliation, and public contracts without changing shared Store Schedule behavior.</p></article>
+    <article class="unit"><h3>U3 Backfill normalization</h3><p>Resolve only absent approved period/currency evidence across all source lanes with strict cost and identity boundaries.</p></article>
+    <article class="unit"><h3>U4 Sealed preview/apply</h3><p>Materialize and seal immutable candidate semantics before writes, then apply only from the manifest with exact parity.</p></article>
+    <article class="unit"><h3>U5 Activation guard</h3><p>Land the verified reconciliation-finalize compatibility fix without relaxing other activation checks.</p></article>
+    <article class="unit"><h3>U6 Dev proof</h3><p>Preview, apply, establish baselines, activate replacements, smoke, roll back, reactivate, and record sanitized evidence.</p></article>
+  </div></section>
+  <section id="gates"><h2>Dev signoff gates</h2><ol><li class="gate">Dual-control approved policy; zero unresolved reporting-period or revenue-currency blockers.</li><li class="gate">Zero semantic conflicts; undenominated cost remains explicitly unknown.</li><li>Late-page drift prevents manifest sealing with zero fact writes.</li><li>Post-seal source changes cannot alter approved candidate semantics.</li><li>Exact preview/manifest/apply outcomes by source domain.</li><li>Candidate and fact-linked policy provenance survives independently; transient cleanup cannot delete it.</li><li>Verified <code>store_day</code> and <code>sku_day</code> baseline and replacement generations with clean health.</li><li>Compare-and-swap public reads switch across activation, rollback, and reactivation.</li><li>No operational, Store Schedule, or inventory-authority change.</li></ol></section>
+  <section id="risks"><h2>Principal risks</h2><table><thead><tr><th>Risk</th><th>Control</th></tr></thead><tbody><tr><td>Guessed business time becomes canonical</td><td>Explicit reviewed schedule inputs, immutable lineage, boundary tests.</td></tr><tr><td>Today's GHS setting is treated as historical evidence</td><td>Approved bounded evidence policy; never dynamic store fallback.</td></tr><tr><td>Policy drift creates partial mixed apply</td><td>Full preflight before first write plus per-domain parity.</td></tr><tr><td>Loose overlap hides payment discrepancies</td><td>Global strict matcher and adversarial one-field mismatch coverage.</td></tr><tr><td>Rollback is overstated</td><td>Separate projection rollback from fact compensation in evidence and signoff.</td></tr></tbody></table></section>
+</main></body></html>

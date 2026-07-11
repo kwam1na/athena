@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   decideStableCatchUp,
   reconciliationCurrencySegmentKey,
+  reconciliationLogicalKey,
   reconcileRebuildSnapshot,
   stableRebuildWatermark,
 } from "./rebuild";
@@ -14,6 +15,27 @@ describe("reporting projection rebuild", () => {
     resolve(import.meta.dirname, "rebuild.ts"),
     "utf8",
   );
+
+  it("segments reconciliation keys by immutable period lineage", () => {
+    const ordinary = reconciliationLogicalKey({
+      metric: "net_sales",
+      operatingDate: "2026-07-01",
+      scheduleVersionId: "schedule-1",
+    });
+    const historical = reconciliationLogicalKey({
+      metric: "net_sales",
+      operatingDate: "2026-07-01",
+      historicalInterpretationPolicyId: "policy-1",
+      historicalInterpretationPolicyHash: "hash-1",
+    });
+    const revisedHistorical = reconciliationLogicalKey({
+      metric: "net_sales",
+      operatingDate: "2026-07-01",
+      historicalInterpretationPolicyId: "policy-1",
+      historicalInterpretationPolicyHash: "hash-2",
+    });
+    expect(new Set([ordinary, historical, revisedHistorical]).size).toBe(3);
+  });
 
   it("uses mutation-time frozen watermarks and bounded continuation", () => {
     expect(source).toContain('withIndex("by_storeId"');
@@ -28,7 +50,31 @@ describe("reporting projection rebuild", () => {
     expect(stableRebuildWatermark(500)).toBe(499);
     expect(source).toContain('invariant: "source_watermark_advanced"');
     expect(source).toContain("currencyForFactMetric(");
+    expect(source).toContain("factContributionProjectionEligibility({");
     expect(source).toContain("recordProjectionRebuildFailure");
+  });
+
+  it("only plans projection values and evidence for eligible contributions", () => {
+    const eligibilityGate = source.indexOf(
+      "factContributionProjectionEligibility({",
+    );
+    const expectedValue = source.indexOf('source: "expected"', eligibilityGate);
+    const expectedEvidence = source.indexOf(
+      'source: "expected_evidence"',
+      eligibilityGate,
+    );
+    expect(eligibilityGate).toBeGreaterThan(-1);
+    expect(expectedValue).toBeGreaterThan(eligibilityGate);
+    expect(expectedEvidence).toBeGreaterThan(expectedValue);
+    expect(source.slice(eligibilityGate, expectedValue)).toContain(
+      ') !== "project"',
+    );
+  });
+
+  it("ignores omission markers when reconciling materialized evidence", () => {
+    expect(source).toContain(
+      'if (evidence.disposition === "omitted_missing_currency") continue;',
+    );
   });
 
   it("never activates a candidate from the rebuild processor", () => {

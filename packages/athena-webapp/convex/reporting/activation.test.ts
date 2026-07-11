@@ -154,6 +154,30 @@ describe("reporting generation activation", () => {
         "current_inventory",
       ),
     ).toBe(true);
+    expect(
+      activationOperationMatchesProjectionKind(
+        "projection_reconciliation_finalize",
+        "store_day",
+      ),
+    ).toBe(true);
+    expect(
+      activationOperationMatchesProjectionKind(
+        "projection_reconciliation_finalize",
+        "sku_day",
+      ),
+    ).toBe(true);
+    for (const operation of [
+      "projection_reconciliation_expected",
+      "projection_reconciliation_candidate",
+      "projection_reconciliation_unrelated",
+    ]) {
+      expect(
+        activationOperationMatchesProjectionKind(operation, "store_day"),
+      ).toBe(false);
+      expect(
+        activationOperationMatchesProjectionKind(operation, "sku_day"),
+      ).toBe(false);
+    }
   });
 
   it("requires a completed conflict-free identity migration before activation", () => {

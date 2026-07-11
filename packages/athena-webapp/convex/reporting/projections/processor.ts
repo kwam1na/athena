@@ -10,8 +10,30 @@ import {
   metricsForProjectionKind,
   updateMetricCoverageForFactWithCtx,
 } from "../coverage";
+import { reportingPeriodLineage } from "../factFingerprint";
+import type { ReportingMetricName } from "../../../shared/reportingContract";
 
 type ProjectionKind = "store_day" | "sku_day";
+
+function lineageFields(fact: Doc<"reportingFact">) {
+  reportingPeriodLineage(fact);
+  return {
+    scheduleVersionId: fact.scheduleVersionId,
+    historicalInterpretationPolicyId: fact.historicalInterpretationPolicyId,
+    historicalInterpretationPolicyHash: fact.historicalInterpretationPolicyHash,
+  };
+}
+
+function sameLineage(
+  row: Pick<Doc<"reportingStoreDayProjection">, "scheduleVersionId" | "historicalInterpretationPolicyId" | "historicalInterpretationPolicyHash">,
+  fact: Doc<"reportingFact">,
+) {
+  return (
+    row.scheduleVersionId === fact.scheduleVersionId &&
+    row.historicalInterpretationPolicyId === fact.historicalInterpretationPolicyId &&
+    row.historicalInterpretationPolicyHash === fact.historicalInterpretationPolicyHash
+  );
+}
 
 const QUANTITY_METRICS = new Set([
   "units_sold",
@@ -21,6 +43,12 @@ const QUANTITY_METRICS = new Set([
 ]);
 
 const VALUATION_METRICS = new Set(["known_cogs", "inventory_consumed_value"]);
+
+export type FactContributionProjectionDisposition =
+  | "project"
+  | "unsupported_metric"
+  | "missing_sku"
+  | "missing_currency";
 
 export function currencyForFactMetric(
   fact: Pick<
@@ -51,6 +79,30 @@ export function minorUnitScaleForFactMetric(
     return fact.valuationCurrencyMinorUnitScale;
   }
   return fact.revenueCurrencyMinorUnitScale ?? fact.currencyMinorUnitScale;
+}
+
+export function factContributionProjectionEligibility(input: {
+  fact: Doc<"reportingFact">;
+  metric: ReportingMetricName;
+  projectionKind: Doc<"reportingProjectionGeneration">["projectionKind"];
+}): FactContributionProjectionDisposition {
+  if (!metricsForProjectionKind(input.projectionKind).includes(input.metric)) {
+    return "unsupported_metric";
+  }
+  if (
+    input.projectionKind === "sku_day" &&
+    !(input.fact.canonicalProductSkuId ?? input.fact.productSkuId)
+  ) {
+    return "missing_sku";
+  }
+  if (QUANTITY_METRICS.has(input.metric)) return "project";
+  if (
+    currencyForFactMetric(input.fact, input.metric) === undefined ||
+    minorUnitScaleForFactMetric(input.fact, input.metric) === undefined
+  ) {
+    return "missing_currency";
+  }
+  return "project";
 }
 
 export function mergeProjectionValue(input: {
@@ -102,7 +154,7 @@ async function alreadyProjected(
   factId: Id<"reportingFact">,
   metric: string,
 ) {
-  return ctx.db
+  const rows = await ctx.db
     .query("reportingProjectionEvidence")
     .withIndex("by_generationId_factId_metric", (q) =>
       q
@@ -110,7 +162,11 @@ async function alreadyProjected(
         .eq("factId", factId)
         .eq("metric", metric),
     )
-    .first();
+    .take(2);
+  if (rows.length > 1) {
+    throw new Error("Projection evidence identity is duplicated");
+  }
+  return rows[0] ?? null;
 }
 
 async function insertEvidence(
@@ -119,12 +175,14 @@ async function insertEvidence(
   fact: Doc<"reportingFact">,
   metric: string,
   now: number,
+  disposition: "projected" | "omitted_missing_currency" = "projected",
 ) {
   await ctx.db.insert("reportingProjectionEvidence", {
     amountMinor: fact.amountMinor,
     businessEventKey: fact.businessEventKey,
     completeness: fact.completeness,
     createdAt: now,
+    disposition,
     currencyCode: fact.currencyCode,
     revenueCurrencyCode: fact.revenueCurrencyCode ?? fact.currencyCode,
     valuationCurrencyCode: fact.valuationCurrencyCode,
@@ -136,6 +194,7 @@ async function insertEvidence(
     metric,
     occurrenceAt: fact.occurrenceAt,
     operatingDate: fact.operatingDate,
+    ...lineageFields(fact),
     organizationId: fact.organizationId,
     productSkuId: fact.canonicalProductSkuId ?? fact.productSkuId,
     recognitionProductSkuId: fact.recognitionProductSkuId ?? fact.productSkuId,
@@ -156,6 +215,29 @@ async function insertEvidence(
   });
 }
 
+export async function recordOmittedProjectionEvidenceWithCtx(
+  ctx: MutationCtx,
+  input: {
+    fact: Doc<"reportingFact">;
+    generationId: Id<"reportingProjectionGeneration">;
+    metric: string;
+    now: number;
+  },
+) {
+  if (await alreadyProjected(ctx, input.generationId, input.fact._id, input.metric)) {
+    return false;
+  }
+  await insertEvidence(
+    ctx,
+    input.generationId,
+    input.fact,
+    input.metric,
+    input.now,
+    "omitted_missing_currency",
+  );
+  return true;
+}
+
 async function applyStoreDayContribution(
   ctx: MutationCtx,
   generation: Doc<"reportingProjectionGeneration">,
@@ -169,34 +251,60 @@ async function applyStoreDayContribution(
   if (!QUANTITY_METRICS.has(metric) && contributionCurrency === undefined) {
     return;
   }
-  const row = await ctx.db
-    .query("reportingStoreDayProjection")
-    .withIndex("by_generationId_operatingDate_metric", (q) =>
-      q
-        .eq("generationId", generation._id)
-        .eq("operatingDate", fact.operatingDate)
-        .eq("metric", metric),
-    )
-    .first();
-  if (row) {
+  const rows = fact.scheduleVersionId
+    ? await ctx.db
+        .query("reportingStoreDayProjection")
+        .withIndex(
+          "by_gen_date_metric_schedule",
+          (q) =>
+            q
+              .eq("generationId", generation._id)
+              .eq("operatingDate", fact.operatingDate)
+              .eq("metric", metric)
+              .eq("scheduleVersionId", fact.scheduleVersionId),
+        )
+        .take(2)
+    : await ctx.db
+        .query("reportingStoreDayProjection")
+        .withIndex(
+          "by_gen_date_metric_policy",
+          (q) =>
+            q
+              .eq("generationId", generation._id)
+              .eq("operatingDate", fact.operatingDate)
+              .eq("metric", metric)
+              .eq(
+                "historicalInterpretationPolicyId",
+                fact.historicalInterpretationPolicyId,
+              ),
+        )
+        .take(2);
+  if (rows.length > 1) {
+    throw new Error("Store-day projection lineage identity is not unique");
+  }
+  const matchingRow = rows[0];
+  if (matchingRow && !sameLineage(matchingRow, fact)) {
+    throw new Error("Store-day projection lineage hash is incompatible");
+  }
+  if (matchingRow) {
     const mergedValue = mergeProjectionValue({
-      currentCurrencyCode: row.currencyCode,
-      currentKnownValue: row.knownValue,
-      currentLimitingReason: row.limitingReason,
+      currentCurrencyCode: matchingRow.currencyCode,
+      currentKnownValue: matchingRow.knownValue,
+      currentLimitingReason: matchingRow.limitingReason,
       incomingCurrencyCode: contributionCurrency,
       incomingValue: value,
     });
-    await ctx.db.patch("reportingStoreDayProjection", row._id, {
+    await ctx.db.patch("reportingStoreDayProjection", matchingRow._id, {
       completeness:
         mergedValue.completeness ??
-        (row.completeness === "complete" && fact.completeness === "complete"
+        (matchingRow.completeness === "complete" && fact.completeness === "complete"
           ? "complete"
           : "partial"),
       knownValue: mergedValue.knownValue,
       limitingReason:
-        mergedValue.limitingReason ?? fact.limitingReason ?? row.limitingReason,
+        mergedValue.limitingReason ?? fact.limitingReason ?? matchingRow.limitingReason,
       projectedAt: now,
-      sourceWatermark: Math.max(row.sourceWatermark, fact._creationTime),
+      sourceWatermark: Math.max(matchingRow.sourceWatermark, fact._creationTime),
     });
   } else {
     await ctx.db.insert("reportingStoreDayProjection", {
@@ -211,7 +319,7 @@ async function applyStoreDayContribution(
       operatingDate: fact.operatingDate,
       organizationId: fact.organizationId,
       projectedAt: now,
-      scheduleVersionId: fact.scheduleVersionId,
+      ...lineageFields(fact),
       sourceWatermark: fact._creationTime,
       storeId: fact.storeId,
     });
@@ -235,35 +343,62 @@ async function applySkuDayContribution(
   if (!QUANTITY_METRICS.has(metric) && contributionCurrency === undefined) {
     return;
   }
-  const row = await ctx.db
-    .query("reportingSkuDayProjection")
-    .withIndex("by_generationId_productSkuId_operatingDate_metric", (q) =>
-      q
-        .eq("generationId", generation._id)
-        .eq("productSkuId", attributedProductSkuId)
-        .eq("operatingDate", fact.operatingDate)
-        .eq("metric", metric),
-    )
-    .first();
-  if (row) {
+  const rows = fact.scheduleVersionId
+    ? await ctx.db
+        .query("reportingSkuDayProjection")
+        .withIndex(
+          "by_gen_sku_date_metric_schedule",
+          (q) =>
+            q
+              .eq("generationId", generation._id)
+              .eq("productSkuId", attributedProductSkuId)
+              .eq("operatingDate", fact.operatingDate)
+              .eq("metric", metric)
+              .eq("scheduleVersionId", fact.scheduleVersionId),
+        )
+        .take(2)
+    : await ctx.db
+        .query("reportingSkuDayProjection")
+        .withIndex(
+          "by_gen_sku_date_metric_policy",
+          (q) =>
+            q
+              .eq("generationId", generation._id)
+              .eq("productSkuId", attributedProductSkuId)
+              .eq("operatingDate", fact.operatingDate)
+              .eq("metric", metric)
+              .eq(
+                "historicalInterpretationPolicyId",
+                fact.historicalInterpretationPolicyId,
+              ),
+        )
+        .take(2);
+  if (rows.length > 1) {
+    throw new Error("SKU-day projection lineage identity is not unique");
+  }
+  const matchingRow = rows[0];
+  if (matchingRow && !sameLineage(matchingRow, fact)) {
+    throw new Error("SKU-day projection lineage hash is incompatible");
+  }
+  if (matchingRow) {
     const mergedValue = mergeProjectionValue({
-      currentCurrencyCode: row.currencyCode,
-      currentKnownValue: row.knownValue,
-      currentLimitingReason: row.limitingReason,
+      currentCurrencyCode: matchingRow.currencyCode,
+      currentKnownValue: matchingRow.knownValue,
+      currentLimitingReason: matchingRow.limitingReason,
       incomingCurrencyCode: contributionCurrency,
       incomingValue: value,
     });
-    await ctx.db.patch("reportingSkuDayProjection", row._id, {
+    await ctx.db.patch("reportingSkuDayProjection", matchingRow._id, {
       completeness:
         mergedValue.completeness ??
-        (row.completeness === "complete" && fact.completeness === "complete"
+        (matchingRow.completeness === "complete" && fact.completeness === "complete"
           ? "complete"
           : "partial"),
       knownValue: mergedValue.knownValue,
       limitingReason:
-        mergedValue.limitingReason ?? fact.limitingReason ?? row.limitingReason,
+        mergedValue.limitingReason ?? fact.limitingReason ?? matchingRow.limitingReason,
       projectedAt: now,
-      sourceWatermark: Math.max(row.sourceWatermark, fact._creationTime),
+      sourceWatermark: Math.max(matchingRow.sourceWatermark, fact._creationTime),
     });
   } else {
     await ctx.db.insert("reportingSkuDayProjection", {
@@ -279,7 +414,7 @@ async function applySkuDayContribution(
       organizationId: fact.organizationId,
       productSkuId: attributedProductSkuId,
       projectedAt: now,
-      scheduleVersionId: fact.scheduleVersionId,
+      ...lineageFields(fact),
       sourceWatermark: fact._creationTime,
       storeId: fact.storeId,
     });
@@ -305,6 +440,9 @@ async function refreshPreviousSkuProjectionMetadataWithCtx(
         .eq("productSkuId", input.previousProductSkuId)
         .eq("operatingDate", input.fact.operatingDate)
         .eq("metric", input.metric),
+    )
+    .filter((q) =>
+      q.neq(q.field("disposition"), "omitted_missing_currency"),
     )
     .take(101);
   if (remainingEvidence.length === 0) {
@@ -380,6 +518,9 @@ export async function reattributeFactInActiveSkuProjectionWithCtx(
     .query("reportingProjectionEvidence")
     .withIndex("by_generationId_factId_metric", (q) =>
       q.eq("generationId", generation._id).eq("factId", input.fact._id),
+    )
+    .filter((q) =>
+      q.neq(q.field("disposition"), "omitted_missing_currency"),
     )
     .take(50);
   const contributionByMetric = new Map(
@@ -467,7 +608,7 @@ export async function reattributeFactInActiveSkuProjectionWithCtx(
         organizationId: input.fact.organizationId,
         productSkuId: input.canonicalProductSkuId,
         projectedAt: now,
-        scheduleVersionId: input.fact.scheduleVersionId,
+        ...lineageFields(input.fact),
         sourceWatermark: input.fact._creationTime,
         storeId: input.fact.storeId,
       });
@@ -518,12 +659,33 @@ export async function applyFactToGenerationWithCtx(
   }
   const contributions = deriveFactMetricContributions(fact);
   const now = Date.now();
-  const supportedMetrics = new Set(
-    metricsForProjectionKind(generation.projectionKind),
-  );
-  const projectedContributions = contributions.filter((contribution) =>
-    supportedMetrics.has(contribution.metric),
-  );
+  const contributionEligibility = contributions.map((contribution) => ({
+    contribution,
+    disposition: factContributionProjectionEligibility({
+      fact,
+      metric: contribution.metric,
+      projectionKind: generation.projectionKind,
+    }),
+  }));
+  const projectedContributions = contributionEligibility
+    .filter(({ disposition }) => disposition === "project")
+    .map(({ contribution }) => contribution);
+  const omittedCandidates = contributionEligibility
+    .filter(({ disposition }) => disposition === "missing_currency")
+    .map(({ contribution }) => contribution);
+  const omittedContributions: typeof projectedContributions = [];
+  for (const contribution of omittedCandidates) {
+    if (
+      await recordOmittedProjectionEvidenceWithCtx(ctx, {
+        fact,
+        generationId: generation._id,
+        metric: contribution.metric,
+        now,
+      })
+    ) {
+      omittedContributions.push(contribution);
+    }
+  }
   for (const contribution of projectedContributions) {
     if (generation.projectionKind === "store_day") {
       await applyStoreDayContribution(
@@ -549,6 +711,7 @@ export async function applyFactToGenerationWithCtx(
     contributions: projectedContributions,
     fact,
     generation,
+    omittedContributions,
     projectedAt: now,
   });
   if (generation.projectionKind === "store_day") {

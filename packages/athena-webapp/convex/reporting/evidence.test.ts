@@ -263,6 +263,7 @@ describe("reporting evidence", () => {
                 filters.every(([field, value]) => row[field] === value),
               );
             const chain = {
+              filter: () => chain,
               first: async () => matches()[0] ?? null,
               order: () => chain,
               paginate: async () => ({

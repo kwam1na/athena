@@ -148,6 +148,10 @@ import {
   reportingAttentionProjectionSchema,
   reportingBackfillSourceAuditSchema,
   reportingBackfillPreviewItemSchema,
+  reportingHistoricalInterpretationPolicySchema,
+  reportingHistoricalInterpretationEvidenceSchema,
+  reportingBackfillApplyManifestSchema,
+  reportingBackfillApplyManifestItemSchema,
   reportingCurrentValuationProjectionSchema,
   reportingCutoverPreviewItemSchema,
   reportingDailyCloseProjectionSchema,
@@ -1496,7 +1500,22 @@ const schema = defineSchema({
       "storeId",
       "operatingDate",
       "metric",
-    ]),
+    ])
+    .index("by_gen_date_metric_schedule", [
+      "generationId",
+      "operatingDate",
+      "metric",
+      "scheduleVersionId",
+    ])
+    .index(
+      "by_gen_date_metric_policy",
+      [
+        "generationId",
+        "operatingDate",
+        "metric",
+        "historicalInterpretationPolicyId",
+      ],
+    ),
   reportingSkuDayProjection: defineTable(reportingSkuDayProjectionSchema)
     .index("by_generationId_productSkuId_operatingDate_metric", [
       "generationId",
@@ -1514,7 +1533,27 @@ const schema = defineSchema({
       "operatingDate",
       "productSkuId",
       "metric",
-    ]),
+    ])
+    .index(
+      "by_gen_sku_date_metric_schedule",
+      [
+        "generationId",
+        "productSkuId",
+        "operatingDate",
+        "metric",
+        "scheduleVersionId",
+      ],
+    )
+    .index(
+      "by_gen_sku_date_metric_policy",
+      [
+        "generationId",
+        "productSkuId",
+        "operatingDate",
+        "metric",
+        "historicalInterpretationPolicyId",
+      ],
+    ),
   reportingCurrentValuationProjection: defineTable(
     reportingCurrentValuationProjectionSchema,
   )
@@ -1555,16 +1594,44 @@ const schema = defineSchema({
   reportingDailyCloseProjection: defineTable(
     reportingDailyCloseProjectionSchema,
   )
+    .index("by_gen_close_source", [
+      "generationId",
+      "acceptedCloseSourceId",
+    ])
     .index("by_generationId_operatingDate_acceptedCloseVersion", [
       "generationId",
       "operatingDate",
       "acceptedCloseVersion",
     ])
+    .index("by_gen_date_close_version_source", [
+      "generationId",
+      "operatingDate",
+      "acceptedCloseVersion",
+      "acceptedCloseSourceId",
+    ])
     .index("by_storeId_operatingDate_acceptedCloseVersion", [
       "storeId",
       "operatingDate",
       "acceptedCloseVersion",
-    ]),
+    ])
+    .index(
+      "by_gen_date_schedule_close",
+      [
+        "generationId",
+        "operatingDate",
+        "scheduleVersionId",
+        "acceptedCloseVersion",
+      ],
+    )
+    .index(
+      "by_gen_date_policy_close",
+      [
+        "generationId",
+        "operatingDate",
+        "historicalInterpretationPolicyId",
+        "acceptedCloseVersion",
+      ],
+    ),
   reportingSkuInsightProjection: defineTable(
     reportingSkuInsightProjectionSchema,
   )
@@ -1649,6 +1716,43 @@ const schema = defineSchema({
     .index("by_storeId_runId_sourceDomain_businessEventKey", [
       "storeId",
       "runId",
+      "sourceDomain",
+      "businessEventKey",
+    ]),
+  reportingHistoricalInterpretationPolicy: defineTable(
+    reportingHistoricalInterpretationPolicySchema,
+  )
+    .index("by_storeId_status_intervalStart", [
+      "storeId",
+      "status",
+      "intervalStart",
+    ])
+    .index("by_storeId_version", ["storeId", "version"])
+    .index("by_storeId_contentHash", ["storeId", "contentHash"]),
+  reportingHistoricalInterpretationEvidence: defineTable(
+    reportingHistoricalInterpretationEvidenceSchema,
+  )
+    .index("by_storeId_factId", ["storeId", "factId"])
+    .index("by_policyId_sourceDomain_businessEventKey", [
+      "policyId",
+      "sourceDomain",
+      "businessEventKey",
+    ]),
+  reportingBackfillApplyManifest: defineTable(
+    reportingBackfillApplyManifestSchema,
+  )
+    .index("by_runId", ["runId"])
+    .index("by_storeId_status_cleanupEligibleAt", [
+      "storeId",
+      "status",
+      "cleanupEligibleAt",
+    ]),
+  reportingBackfillApplyManifestItem: defineTable(
+    reportingBackfillApplyManifestItemSchema,
+  )
+    .index("by_manifestId_sequence", ["manifestId", "sequence"])
+    .index("by_manifestId_sourceDomain_businessEventKey", [
+      "manifestId",
       "sourceDomain",
       "businessEventKey",
     ]),

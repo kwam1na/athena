@@ -55,6 +55,20 @@ describe("reporting shadow deployment architecture", () => {
     );
   });
 
+  it("keeps legacy compatibility writes inside reporting-owned tables", () => {
+    const backfill = source("./maintenance/backfill.ts");
+    const compatibility = source("./maintenance/legacyCompatibility.ts");
+    const targets = [
+      ...reportingWriteTargets(backfill),
+      ...reportingWriteTargets(compatibility),
+    ];
+    expect(targets.length).toBeGreaterThan(0);
+    expect(targets.every((table) => table.startsWith("reporting"))).toBe(true);
+    expect(backfill).not.toMatch(
+      /ctx\.db\.(?:patch|replace|delete)\(\s*"(?:posTransaction|paymentAllocation|expenseTransaction|purchaseOrder|onlineOrder|serviceCase|productSku)"/,
+    );
+  });
+
   it("defaults inventory migration to provisional compatibility shadow", () => {
     const effects = source("./inventory/effects.ts");
 

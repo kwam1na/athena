@@ -309,6 +309,7 @@ import type * as reporting_inventory_valuation from "../reporting/inventory/valu
 import type * as reporting_maintenance_backfill from "../reporting/maintenance/backfill.js";
 import type * as reporting_maintenance_cutover from "../reporting/maintenance/cutover.js";
 import type * as reporting_maintenance_inventoryRebuild from "../reporting/maintenance/inventoryRebuild.js";
+import type * as reporting_maintenance_legacyCompatibility from "../reporting/maintenance/legacyCompatibility.js";
 import type * as reporting_maintenance_processing from "../reporting/maintenance/processing.js";
 import type * as reporting_maintenance_rebuild from "../reporting/maintenance/rebuild.js";
 import type * as reporting_maintenance_runLedger from "../reporting/maintenance/runLedger.js";
@@ -819,6 +820,7 @@ declare const fullApi: ApiFromModules<{
   "reporting/maintenance/backfill": typeof reporting_maintenance_backfill;
   "reporting/maintenance/cutover": typeof reporting_maintenance_cutover;
   "reporting/maintenance/inventoryRebuild": typeof reporting_maintenance_inventoryRebuild;
+  "reporting/maintenance/legacyCompatibility": typeof reporting_maintenance_legacyCompatibility;
   "reporting/maintenance/processing": typeof reporting_maintenance_processing;
   "reporting/maintenance/rebuild": typeof reporting_maintenance_rebuild;
   "reporting/maintenance/runLedger": typeof reporting_maintenance_runLedger;
