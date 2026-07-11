@@ -37,15 +37,17 @@ function createDailyCloseCtx(input: {
       if (!row) throw new Error(`Missing fake row ${table}:${id}`);
       Object.assign(row, value);
     },
-    replace: async (id: string, value: Record<string, unknown>) => {
-      for (const rows of Object.values(tables)) {
-        const index = rows.findIndex((candidate) => candidate._id === id);
-        if (index >= 0) {
-          rows[index] = { _id: id, ...value };
-          return;
-        }
+    replace: async (
+      table: string,
+      id: string,
+      value: Record<string, unknown>,
+    ) => {
+      const index = tables[table]!.findIndex((candidate) => candidate._id === id);
+      if (index >= 0) {
+        tables[table]![index] = { _id: id, ...value };
+        return;
       }
-      throw new Error(`Missing fake row ${id}`);
+      throw new Error(`Missing fake row ${table}:${id}`);
     },
     query: (table: string) => {
       const filters: Array<[string, unknown]> = [];
