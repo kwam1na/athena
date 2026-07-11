@@ -9,6 +9,35 @@ async function readRepoFile(filePath: string) {
 }
 
 describe("VPS QA deploy contract", () => {
+  it("noindexes only the walkthrough route family in production and QA", async () => {
+    const setupScript = await readRepoFile("scripts/setup-production-vps.sh");
+
+    expect(
+      setupScript.match(/location ~ \^\/walkthrough\(\?:\/\|\\\$\) \{/g),
+    ).toHaveLength(2);
+    expect(
+      setupScript.match(/add_header X-Robots-Tag "noindex" always;/g),
+    ).toHaveLength(2);
+    expect(setupScript).toContain(String.raw`location ~ ^/walkthrough(?:/|\$) {
+        add_header X-Robots-Tag "noindex" always;
+        # Keep the SPA fallback inside this location. Making /index.html the
+        # terminal try_files argument would internally redirect into location /
+        # and drop the route-specific response header.
+        try_files \$uri /index.html =404;
+    }`);
+    expect(setupScript).not.toContain(
+      String.raw`add_header X-Robots-Tag "noindex" always;
+        try_files \$uri /index.html;`,
+    );
+    expect(setupScript).toContain(String.raw`location ~ ^/walkthrough(?:/|\$) {
+        add_header X-Robots-Tag "noindex" always;
+
+        proxy_pass http://127.0.0.1:$ATHENA_QA_PORT;`);
+    expect(setupScript).not.toContain(
+      'add_header X-Robots-Tag "noindex" always;\n\n    location / {',
+    );
+  });
+
   it("configures distinct nginx proxies for Athena QA and storefront QA", async () => {
     const setupScript = await readRepoFile("scripts/setup-production-vps.sh");
 

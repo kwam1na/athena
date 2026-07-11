@@ -66,6 +66,16 @@ server {
     root $ATHENA_ROOT/athena-webapp/current;
     index index.html;
 
+    # Nginx matches locations against the URI path, so query strings inherit
+    # this rule. The path boundary also covers trailing-slash and nested SPA URLs.
+    location ~ ^/walkthrough(?:/|\$) {
+        add_header X-Robots-Tag "noindex" always;
+        # Keep the SPA fallback inside this location. Making /index.html the
+        # terminal try_files argument would internally redirect into location /
+        # and drop the route-specific response header.
+        try_files \$uri /index.html =404;
+    }
+
     location / {
         try_files \$uri /index.html;
     }
@@ -92,6 +102,23 @@ server {
 server {
     listen 80;
     server_name $ATHENA_QA_HOST;
+
+    # Keep QA walkthrough responses out of search results under the same path
+    # boundary as production, including query strings and nested SPA URLs.
+    location ~ ^/walkthrough(?:/|\$) {
+        add_header X-Robots-Tag "noindex" always;
+
+        proxy_pass http://127.0.0.1:$ATHENA_QA_PORT;
+        proxy_http_version 1.1;
+
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
 
     location / {
         proxy_pass http://127.0.0.1:$ATHENA_QA_PORT;
