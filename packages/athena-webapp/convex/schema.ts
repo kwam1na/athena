@@ -207,9 +207,50 @@ import {
   reportingDailyCloseTrustSchema,
   reportingReadCursorContextSchema,
 } from "./schemas/reporting";
+import {
+  walkthroughBudgetCounterSchema,
+  walkthroughNotificationAttemptSchema,
+  walkthroughOperationsAuditSchema,
+  walkthroughPrivacyChallengeSchema,
+  walkthroughRequestSchema,
+  walkthroughRequestTombstoneSchema,
+} from "./schemas/marketing/walkthroughRequest";
+import {
+  landingFunnelDailyBucketSchema,
+  landingFunnelEventSchema,
+} from "./schemas/marketing/landingFunnelEvent";
 
 const schema = defineSchema({
   ...authTables,
+  walkthroughRequest: defineTable(walkthroughRequestSchema)
+    .index("by_submissionKey", ["submissionKey"])
+    .index("by_normalizedEmail_and_submittedAt", ["normalizedEmail", "submittedAt"])
+    .index("by_status_and_lastActivityAt", ["status", "lastActivityAt"])
+    .index("by_status_and_terminalAt", ["status", "terminalAt"])
+    .index("by_status_and_redactedAt_and_lastActivityAt", ["status", "redactedAt", "lastActivityAt"])
+    .index("by_status_and_redactedAt_and_terminalAt", ["status", "redactedAt", "terminalAt"]),
+  walkthroughNotificationAttempt: defineTable(walkthroughNotificationAttemptSchema)
+    .index("by_requestId", ["requestId"])
+    .index("by_state_and_nextAttemptAt", ["state", "nextAttemptAt"])
+    .index("by_state_and_leaseExpiresAt", ["state", "leaseExpiresAt"])
+    .index("by_state_and_terminalAt", ["state", "terminalAt"]),
+  walkthroughRequestTombstone: defineTable(walkthroughRequestTombstoneSchema)
+    .index("by_submissionKey", ["submissionKey"])
+    .index("by_keyVersion_and_dedupeHmac_and_expiresAt", ["keyVersion", "dedupeHmac", "expiresAt"])
+    .index("by_expiresAt", ["expiresAt"]),
+  walkthroughOperationsAudit: defineTable(walkthroughOperationsAuditSchema)
+    .index("by_requestId_and_occurredAt", ["requestId", "occurredAt"]),
+  walkthroughBudgetCounter: defineTable(walkthroughBudgetCounterSchema)
+    .index("by_partition_and_windowStart", ["partition", "windowStart"])
+    .index("by_windowStart", ["windowStart"]),
+  walkthroughPrivacyChallenge: defineTable(walkthroughPrivacyChallengeSchema)
+    .index("by_requestId_and_createdAt", ["requestId", "createdAt"])
+    .index("by_expiresAt", ["expiresAt"]),
+  landingFunnelEvent: defineTable(landingFunnelEventSchema)
+    .index("by_occurredAt", ["occurredAt"]),
+  landingFunnelDailyBucket: defineTable(landingFunnelDailyBucketSchema)
+    .index("by_day_and_event_and_device_and_source", ["day", "event", "device", "source"])
+    .index("by_updatedAt", ["updatedAt"]),
   analytics: defineTable(analyticsSchema)
     .index("by_storeId", ["storeId"])
     .index("by_storeFrontUserId", ["storeFrontUserId"])

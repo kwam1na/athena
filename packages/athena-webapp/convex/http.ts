@@ -13,6 +13,8 @@ import {
   storeRoutes,
   subcategoryRoutes,
   trackingEventRoutes,
+  walkthroughRequestRoutes,
+  landingFunnelEventRoutes,
 } from "./http/domains/core/routes";
 import {
   onlineOrderRoutes,
@@ -75,6 +77,8 @@ app.route("/webhooks/whatsapp", whatsappMessagingRoutes);
 app.route("/analytics", analyticsRoutes);
 
 app.route("/tracking-events", trackingEventRoutes);
+app.route("/marketing/walkthrough-requests", walkthroughRequestRoutes);
+app.route("/marketing/funnel-events", landingFunnelEventRoutes);
 
 app.route("/auth", authRoutes);
 

@@ -4,6 +4,7 @@ import {
   rootRouteId,
   useMatch,
   useRouter,
+  useRouterState,
 } from "@tanstack/react-router";
 import { ArrowLeft, Home } from "lucide-react";
 
@@ -12,6 +13,7 @@ import {
   GENERIC_UNEXPECTED_ERROR_MESSAGE,
   GENERIC_UNEXPECTED_ERROR_TITLE,
 } from "~/shared/commandResult";
+import { getRecoveryHomePath } from "@/lib/navigation/appEntryRoutes";
 
 export function DefaultCatchBoundary({ error }: ErrorComponentProps) {
   const router = useRouter();
@@ -19,6 +21,10 @@ export function DefaultCatchBoundary({ error }: ErrorComponentProps) {
     strict: false,
     select: (state) => state.id === rootRouteId,
   });
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  });
+  const recoveryHomePath = getRecoveryHomePath(pathname);
   const actionClassName =
     "transition-transform duration-150 ease-emphasized active:scale-[0.98]";
 
@@ -48,7 +54,7 @@ export function DefaultCatchBoundary({ error }: ErrorComponentProps) {
         <div className="flex flex-col items-start gap-2 sm:flex-row sm:flex-wrap">
           {isRoot ? (
             <Button asChild className={actionClassName} variant="outline">
-              <Link to="/">
+              <Link to={recoveryHomePath}>
                 <Home aria-hidden="true" className="h-4 w-4" />
                 Home
               </Link>
@@ -56,7 +62,7 @@ export function DefaultCatchBoundary({ error }: ErrorComponentProps) {
           ) : (
             <Button asChild className={actionClassName} variant="outline">
               <Link
-                to="/"
+                to={recoveryHomePath}
                 onClick={(event) => {
                   event.preventDefault();
                   window.history.back();

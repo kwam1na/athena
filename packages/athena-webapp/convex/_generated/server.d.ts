@@ -22,6 +22,28 @@ import {
 import type { DataModel } from "./dataModel.js";
 
 /**
+ * Typesafe environment variables declared in `convex.config.ts`.
+ */
+type Env = {
+  readonly LANDING_FUNNEL_HOURLY_LIMIT: string | undefined;
+  readonly LANDING_FUNNEL_INGRESS_DISABLED: string | undefined;
+  readonly MAILERSEND_API_KEY: string | undefined;
+  readonly WALKTHROUGH_ALLOWED_ORIGINS: string | undefined;
+  readonly WALKTHROUGH_ALLOW_LOCAL_ORIGINS: string | undefined;
+  readonly WALKTHROUGH_DAILY_PER_EMAIL_LIMIT: string | undefined;
+  readonly WALKTHROUGH_HMAC_ACTIVE_SECRET: string | undefined;
+  readonly WALKTHROUGH_HMAC_ACTIVE_VERSION: string | undefined;
+  readonly WALKTHROUGH_HMAC_PRIOR_KEYRING: string | undefined;
+  readonly WALKTHROUGH_HOURLY_GLOBAL_LIMIT: string | undefined;
+  readonly WALKTHROUGH_HOURLY_NOTIFICATION_LIMIT: string | undefined;
+  readonly WALKTHROUGH_INGRESS_DISABLED: string | undefined;
+  readonly WALKTHROUGH_MAX_BODY_BYTES: string | undefined;
+  readonly WALKTHROUGH_NOTIFICATIONS_DISABLED: string | undefined;
+  readonly WALKTHROUGH_NOTIFICATION_RECIPIENT: string | undefined;
+  readonly WALKTHROUGH_PRIVACY_CONTACT: string | undefined;
+};
+
+/**
  * Define a query in this Convex app's public API.
  *
  * This function will be allowed to read your Convex database and will be accessible from the client.
@@ -94,6 +116,11 @@ export declare const internalAction: ActionBuilder<DataModel, "internal">;
  * @returns The wrapped function. Import this function from `convex/http.js` and route it to hook it up.
  */
 export declare const httpAction: HttpActionBuilder;
+
+/**
+ * Typesafe environment variables declared in `convex.config.ts`.
+ */
+export declare const env: Env;
 
 /**
  * A set of services for use within Convex query functions.

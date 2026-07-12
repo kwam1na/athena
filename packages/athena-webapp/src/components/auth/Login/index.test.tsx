@@ -197,7 +197,7 @@ describe("Login", () => {
         },
       ),
     );
-    expectPendingAuthSyncRedirect("/");
+    expectPendingAuthSyncRedirect("/app");
     expect(mocked.navigate).not.toHaveBeenCalled();
   });
 

@@ -1,46 +1,29 @@
-import { useNavigate } from "@tanstack/react-router";
-import OrganizationsView from "@/components/OrganizationsView";
-import { OrganizationModal } from "@/components/ui/modals/organization-modal";
-import { useQuery } from "convex/react";
 import { useEffect } from "react";
-import { useAuth } from "../hooks/useAuth";
-import { api } from "~/convex/_generated/api";
+
+import { emitLandingFunnelEvent } from "@/lib/marketing/landingFunnelClient";
+import { PublicLayout } from "./-public-layout";
 
 export function Index() {
-  const { isLoading, user } = useAuth();
-
-  const userOrgs = useQuery(
-    api.inventory.organizations.getAll,
-    user?._id ? { userId: user._id } : "skip"
-  );
-
-  const navigate = useNavigate();
-
   useEffect(() => {
-    if (userOrgs && userOrgs.length > 0) {
-      const org = userOrgs[0];
-      navigate({ to: "/$orgUrlSlug", params: { orgUrlSlug: org.slug } });
-    }
-  }, [navigate, userOrgs]);
-
-  useEffect(() => {
-    if (!isLoading && user === null) {
-      navigate({ to: "/login" });
-    }
-  }, [isLoading, navigate, user]);
-
-  if (isLoading || user === undefined || (user && userOrgs === undefined)) {
-    return null;
-  }
-
-  if (user === null) {
-    return null;
-  }
+    emitLandingFunnelEvent("page_view");
+  }, []);
 
   return (
-    <>
-      <OrganizationModal />
-      <OrganizationsView />
-    </>
+    <PublicLayout trackWalkthroughCta>
+      <main className="mx-auto flex min-h-[calc(100svh-4rem)] w-full max-w-7xl items-center px-layout-md py-layout-3xl sm:px-layout-xl">
+        <div className="max-w-3xl space-y-layout-lg">
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-signal">
+            Athena for owner-led retail
+          </p>
+          <h1 className="font-display text-5xl font-light leading-[0.98] text-foreground sm:text-7xl">
+            See how the business is doing today.
+          </h1>
+          <p className="max-w-2xl text-lg leading-8 text-muted-foreground">
+            Athena brings sales history and the products behind each day into
+            one clear operating view.
+          </p>
+        </div>
+      </main>
+    </PublicLayout>
   );
 }

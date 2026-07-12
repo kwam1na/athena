@@ -11,7 +11,7 @@ import {
 } from "~/src/lib/constants";
 import { ok, userError } from "~/shared/commandResult";
 
-function activeHandoff(redirectTo = "/") {
+function activeHandoff(redirectTo = "/app") {
   return JSON.stringify({ startedAt: Date.now(), redirectTo });
 }
 
@@ -112,7 +112,7 @@ describe("LoginLayout", () => {
       POS_APP_ACCOUNT_ID_KEY,
       "user-1"
     );
-    expect(mocked.navigate).toHaveBeenCalledWith({ to: "/" });
+    expect(mocked.navigate).toHaveBeenCalledWith({ to: "/app" });
   });
 
   it("recovers an authenticated Convex session even when the pending sync flag is missing", async () => {
@@ -137,7 +137,7 @@ describe("LoginLayout", () => {
       POS_APP_ACCOUNT_ID_KEY,
       "user-2"
     );
-    expect(mocked.navigate).toHaveBeenCalledWith({ to: "/" });
+    expect(mocked.navigate).toHaveBeenCalledWith({ to: "/app" });
   });
 
   it("uses the pending auth-sync redirect after the Athena user sync succeeds", async () => {

@@ -10,6 +10,10 @@ const mocks = vi.hoisted(() => ({
   stageUpdateStaticAssets: vi.fn(),
   storageRuntime: {},
   storageRuntimeProvider: vi.fn(),
+  appMessagesProvider: vi.fn(),
+  convexAuthProvider: vi.fn(),
+  queryClientProvider: vi.fn(),
+  updateCoordinatorProvider: vi.fn(),
 }));
 
 vi.mock("./appRouter", () => ({
@@ -19,15 +23,24 @@ vi.mock("./appRouter", () => ({
 }));
 
 vi.mock("@convex-dev/auth/react", () => ({
-  ConvexAuthProvider: ({ children }: { children?: React.ReactNode }) => (
-    <>{children}</>
-  ),
+  ConvexAuthProvider: ({ children }: { children?: React.ReactNode }) => {
+    mocks.convexAuthProvider();
+    return <>{children}</>;
+  },
 }));
 
 vi.mock("@tanstack/react-query", () => ({
-  QueryClientProvider: ({ children }: { children?: React.ReactNode }) => (
-    <>{children}</>
-  ),
+  QueryClientProvider: ({ children }: { children?: React.ReactNode }) => {
+    mocks.queryClientProvider();
+    return <>{children}</>;
+  },
+}));
+
+vi.mock("./lib/app-messages", () => ({
+  AppMessagesProvider: ({ children }: { children?: React.ReactNode }) => {
+    mocks.appMessagesProvider();
+    return <>{children}</>;
+  },
 }));
 
 vi.mock("@tanstack/react-router", () => ({
@@ -72,9 +85,10 @@ vi.mock("./lib/app-update/updateDetectionSequencer", () => ({
 
 vi.mock("./lib/app-update", () => ({
   stageUpdateStaticAssets: mocks.stageUpdateStaticAssets,
-  UpdateCoordinatorProvider: ({ children }: { children?: React.ReactNode }) => (
-    <>{children}</>
-  ),
+  UpdateCoordinatorProvider: ({ children }: { children?: React.ReactNode }) => {
+    mocks.updateCoordinatorProvider();
+    return <>{children}</>;
+  },
   useUpdateCoordinator: () => ({
     getSnapshot: mocks.getSnapshot,
     reportDetectorFailed: mocks.reportDetectorFailed,
@@ -188,6 +202,11 @@ describe("App", () => {
     expect(mocks.storageRuntimeProvider).toHaveBeenCalledWith(
       mocks.storageRuntime,
     );
+    expect(mocks.storageRuntimeProvider).toHaveBeenCalledTimes(1);
+    expect(mocks.appMessagesProvider).toHaveBeenCalledTimes(1);
+    expect(mocks.updateCoordinatorProvider).toHaveBeenCalledTimes(1);
+    expect(mocks.convexAuthProvider).toHaveBeenCalledTimes(1);
+    expect(mocks.queryClientProvider).toHaveBeenCalledTimes(1);
     expect(view.getByText("router rendered")).toBeTruthy();
   });
 });

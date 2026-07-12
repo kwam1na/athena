@@ -45,6 +45,10 @@ describe("AppHeader", () => {
       "min-[430px]:flex",
       "shrink-0",
     );
+    expect(screen.getByRole("link", { name: "athena" })).toHaveAttribute(
+      "href",
+      "/app",
+    );
     expect(screen.getByLabelText("Development environment")).toHaveClass(
       "border-action-workflow-border",
       "bg-action-workflow-soft",

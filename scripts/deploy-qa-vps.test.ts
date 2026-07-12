@@ -1,4 +1,6 @@
+import { existsSync, rmSync } from "node:fs";
 import { readFile } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -9,6 +11,35 @@ async function readRepoFile(filePath: string) {
 }
 
 describe("VPS QA deploy contract", () => {
+  it("noindexes only the walkthrough route family in production and QA", async () => {
+    const setupScript = await readRepoFile("scripts/setup-production-vps.sh");
+
+    expect(
+      setupScript.match(/location ~ \^\/walkthrough\(\?:\/\|\\\$\) \{/g),
+    ).toHaveLength(2);
+    expect(
+      setupScript.match(/add_header X-Robots-Tag "noindex" always;/g),
+    ).toHaveLength(2);
+    expect(setupScript).toContain(String.raw`location ~ ^/walkthrough(?:/|\$) {
+        add_header X-Robots-Tag "noindex" always;
+        # Keep the SPA fallback inside this location. Making /index.html the
+        # terminal try_files argument would internally redirect into location /
+        # and drop the route-specific response header.
+        try_files \$uri /index.html =404;
+    }`);
+    expect(setupScript).not.toContain(
+      String.raw`add_header X-Robots-Tag "noindex" always;
+        try_files \$uri /index.html;`,
+    );
+    expect(setupScript).toContain(String.raw`location ~ ^/walkthrough(?:/|\$) {
+        add_header X-Robots-Tag "noindex" always;
+
+        proxy_pass http://127.0.0.1:$ATHENA_QA_PORT;`);
+    expect(setupScript).not.toContain(
+      'add_header X-Robots-Tag "noindex" always;\n\n    location / {',
+    );
+  });
+
   it("configures distinct nginx proxies for Athena QA and storefront QA", async () => {
     const setupScript = await readRepoFile("scripts/setup-production-vps.sh");
 
@@ -74,6 +105,43 @@ describe("VPS QA deploy contract", () => {
     expect(deployScript).not.toContain('VITE_API_URL="$DEV_CONVEX_SITE"');
     expect(deployScript).toContain('STOREFRONT_QA_HOST="$STOREFRONT_QA_HOST"');
     expect(deployScript).not.toContain('VITE_STOREFRONT_URL="$STOREFRONT_URL"');
+    expect(deployScript).toContain(
+      'VITE_WALKTHROUGH_PRIVACY_CONTACT="$VITE_WALKTHROUGH_PRIVACY_CONTACT"',
+    );
+  });
+
+  it("validates and propagates the optional walkthrough privacy contact", async () => {
+    const deployScript = await readRepoFile("scripts/deploy-vps.sh");
+
+    expect(deployScript).toContain("validate_walkthrough_privacy_contact()");
+    expect(deployScript).toContain(
+      "VITE_WALKTHROUGH_PRIVACY_CONTACT must be empty or a valid email address.",
+    );
+    expect(deployScript.match(/VITE_WALKTHROUGH_PRIVACY_CONTACT=\$VITE_WALKTHROUGH_PRIVACY_CONTACT/g))
+      .toHaveLength(2);
+    expect(deployScript).toContain(
+      'remote_script "$REMOTE_SOURCE_DIR" "$ATHENA_QA_PORT" "$DEV_CONVEX_CLOUD" "$DEV_CONVEX_SITE" "$ATHENA_QA_HOST" "$VITE_WALKTHROUGH_PRIVACY_CONTACT"',
+    );
+  });
+
+  it("rejects shell metacharacters before any deployment command can run", () => {
+    const marker = `/tmp/athena-deploy-injection-${process.pid}`;
+    rmSync(marker, { force: true });
+
+    const result = spawnSync("bash", ["scripts/deploy-vps.sh", "status"], {
+      cwd: ROOT_DIR,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        VITE_WALKTHROUGH_PRIVACY_CONTACT: `owner@example.com;touch${marker}`,
+      },
+    });
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      "VITE_WALKTHROUGH_PRIVACY_CONTACT must be empty or a valid email address.",
+    );
+    expect(existsSync(marker)).toBe(false);
   });
 
   it("can build production static apps locally before uploading to the VPS", async () => {
@@ -88,15 +156,16 @@ describe("VPS QA deploy contract", () => {
     expect(deployScript).toContain("full-prod-local");
     expect(deployScript).toContain("build_static_app_locally()");
     expect(deployScript).toContain("deploy_static_app_local()");
-    expect(deployScript).toContain('eval "$env_script bun run build"');
+    expect(deployScript).not.toContain("eval ");
+    expect(deployScript).toContain('env "${BUILD_ENV[@]}" bun run build');
+    expect(deployScript).toContain('env "${build_env[@]}" bun run build');
     expect(deployScript).toContain(
       'export VITE_ATHENA_WEBAPP_VERSION="$fun_name ($timestamp)"',
     );
     expect(deployScript).toContain('export VITE_ATHENA_WEBAPP_BUILD_SHA="$git_sha"');
     expect(deployScript).toContain(
-      'VITE_ATHENA_WEBAPP_VERSION=\\"$fun_name ($version)\\"',
+      'build_static_app_locally "$package_dir" "$env_script" "$fun_name ($version)" "$git_sha"',
     );
-    expect(deployScript).toContain('VITE_ATHENA_WEBAPP_BUILD_SHA=\\"$git_sha\\"');
     expect(deployScript).toContain(
       'rsync -a --delete "$package_dir/dist/" "$REMOTE:$version_path/"',
     );

@@ -40,6 +40,7 @@ const CONVEX_GENERATED_API_PATH = path.join(
 );
 const CONVEX_API_MODULE_EXCEPTIONS = new Set([
   "auth.config",
+  "convex.config",
   "schema",
   "storeFront/customer",
 ]);

@@ -8,13 +8,25 @@ This route index enumerates the current files under `src/routes` so agents can o
 
 - [`src/routes/-authed-layout.tsx`](../../src/routes/-authed-layout.tsx)
 - [`src/routes/-index-route-view.tsx`](../../src/routes/-index-route-view.tsx)
+- [`src/routes/-legacy-landing-redirect.ts`](../../src/routes/-legacy-landing-redirect.ts)
+- [`src/routes/-public-layout.tsx`](../../src/routes/-public-layout.tsx)
+- [`src/routes/-root-page-search.ts`](../../src/routes/-root-page-search.ts)
+- [`src/routes/__root.test.ts`](../../src/routes/__root.test.ts)
 - [`src/routes/__root.tsx`](../../src/routes/__root.tsx)
+- [`src/routes/_authed-shell.test.tsx`](../../src/routes/_authed-shell.test.tsx)
 - [`src/routes/_authed.test.tsx`](../../src/routes/_authed.test.tsx)
 - [`src/routes/_authed.tsx`](../../src/routes/_authed.tsx)
+- [`src/routes/app.test.tsx`](../../src/routes/app.test.tsx)
+- [`src/routes/app.tsx`](../../src/routes/app.tsx)
 - [`src/routes/index.test.tsx`](../../src/routes/index.test.tsx)
 - [`src/routes/index.tsx`](../../src/routes/index.tsx)
 - [`src/routes/join-team.index.tsx`](../../src/routes/join-team.index.tsx)
+- [`src/routes/landing.test.tsx`](../../src/routes/landing.test.tsx)
 - [`src/routes/landing.tsx`](../../src/routes/landing.tsx)
+- [`src/routes/privacy.test.tsx`](../../src/routes/privacy.test.tsx)
+- [`src/routes/privacy.tsx`](../../src/routes/privacy.tsx)
+- [`src/routes/walkthrough.test.tsx`](../../src/routes/walkthrough.test.tsx)
+- [`src/routes/walkthrough.tsx`](../../src/routes/walkthrough.tsx)
 
 ## Section `_authed`
 

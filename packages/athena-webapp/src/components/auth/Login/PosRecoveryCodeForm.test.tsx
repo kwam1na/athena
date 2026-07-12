@@ -121,7 +121,7 @@ describe("PosRecoveryCodeForm", () => {
     );
   });
 
-  it("falls back to home when the redirect target is external", async () => {
+  it("falls back to the authenticated app entry when the redirect target is external", async () => {
     const user = userEvent.setup();
     mocked.signIn.mockResolvedValue({ signingIn: true });
 
@@ -140,7 +140,7 @@ describe("PosRecoveryCodeForm", () => {
     await waitFor(() =>
       expect(window.sessionStorage.setItem).toHaveBeenCalledWith(
         PENDING_ATHENA_AUTH_SYNC_KEY,
-        expect.stringMatching(/"redirectTo":"\/"/),
+        expect.stringMatching(/"redirectTo":"\/app"/),
       ),
     );
     expect(mocked.navigate).not.toHaveBeenCalled();
