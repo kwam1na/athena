@@ -190,6 +190,10 @@ flowchart TB
 
 The prose dependency fields below are authoritative if this diagram and the unit details ever diverge.
 
+## MVP release decision — 2026-07-12
+
+The product owner approved a restrained claims-only MVP before the five positioning sessions. For this MVP, U1 is a post-release learning gate rather than a prerequisite for U6: publish only claims grounded in current Athena behavior, use non-numeric product-shaped illustrations instead of unapproved screenshots or synthetic performance proof, keep the owner as the restocking decision-maker, and keep the walkthrough path fail-closed until production privacy and recipient configuration is complete. The five sessions still use the frozen 4-of-5 rule to decide what copy to retain, revise, or narrow after release. They do not retroactively establish demand or validate unapproved product proof.
+
 - U1. **Complete positioning validation and the product-proof audit**
 
 **Goal:** Establish the evidence gate that approves or redirects the lead message and maps every narrative stage and transition to truthful, publishable Athena proof.
@@ -449,7 +453,7 @@ The prose dependency fields below are authoritative if this diagram and the unit
 
 **Requirements:** R3, R5, R6, R7, R9, R10, R14, R16; F1, F2; AE2, AE4, AE6.
 
-**Dependencies:** U1.
+**Dependencies:** U1 for audited screenshots or numeric product proof. The claims-only MVP may use the approved non-numeric product-shaped illustration before U1 completes.
 
 **Files:**
 - Create: `packages/athena-webapp/src/components/landing/landingProductProofData.ts`
@@ -497,7 +501,7 @@ The prose dependency fields below are authoritative if this diagram and the unit
 
 **Requirements:** R1-R16; F1-F3; AE1-AE6.
 
-**Dependencies:** U1, U2, U4, U5.
+**Dependencies:** U2 and U4 for the claims-only MVP; U1 and the full U5 proof audit are required before adding final validated copy, screenshots, or numeric product proof.
 
 **Files:**
 - Modify: `packages/athena-webapp/src/components/landing/AthenaLandingPage.tsx`
@@ -515,7 +519,7 @@ The prose dependency fields below are authoritative if this diagram and the unit
 - Define the trust boundary as a short note adjacent to product proof: showcased data is sanitized or illustrative, and the public page does not load a business's protected operating records. Do not add generic compliance badges or unverified security assurances.
 - Keep “Request a walkthrough” primary and sign-in secondary in the hero and closing conversion without duplicating competing actions in every section.
 - Reuse Athena semantic tokens, display/numeric type roles, dark structural shell, quiet surfaces, and restrained motion; avoid decorative card grids and generic SaaS visual motifs.
-- Carry only copy approved by U1. Keep product captions operational and specific; avoid forecasting, profit, automation, and all-in-one overclaims.
+- For the claims-only MVP, carry only behavior-grounded copy approved by the product owner. After the sessions, U1 governs final validated copy and audited product media. Keep product captions operational and specific; avoid forecasting, profit, automation, and all-in-one overclaims.
 - Put crawler-visible product-page title, description, fixed-production-origin canonical, and audited Open Graph tags in the static HTML response; keep client route titles for browser navigation. `/landing` redirects and canonicalizes to `/`; `/walkthrough` receives a product-specific server `noindex` header and never reflects form values.
 - Use U3's dedicated global marketing-funnel HTTP ingress for browser-side page view, walkthrough CTA selection, and form start. Forbid form payloads, email, phone, business text, submission key, or another stable person identifier. Durable acceptance is appended server-side in the walkthrough transaction; document event meanings so aggregate review reconciles with stored requests.
 - Lazy-load below-fold media while preserving document order and semantic text equivalents.
@@ -542,7 +546,7 @@ The prose dependency fields below are authoritative if this diagram and the unit
 **Verification:**
 - A reviewer can explain the page as “see today's sales, compare history, understand what moved, review stock pressure, decide what to restock.”
 - The page feels broader than a POS without losing the sales-and-inventory entry promise.
-- Every product claim traces to U1 evidence or the origin requirements.
+- Every MVP claim traces to current product behavior and the origin requirements; final validated copy and audited media additionally trace to U1 evidence.
 
 - U7. **Verify the integrated public journey and launch boundary**
 
@@ -633,9 +637,9 @@ flowchart TB
 
 ## Phased Delivery
 
-### Phase 0 — Evidence gates
+### Phase 0 — MVP release boundary and post-release evidence gate
 
-- Complete U1 and obtain the positioning/proof decision before final copy or product media is approved.
+- Release the claims-only MVP from current product behavior without screenshots or synthetic metrics. Complete U1 before approving post-MVP final copy or audited product media.
 
 ### Phase 1 — Independent foundations
 
@@ -643,7 +647,7 @@ flowchart TB
 
 ### Phase 2 — Prospect surfaces
 
-- Implement U4 after U2/U3 and U5 after U1.
+- Implement U4 after U2/U3. Use the non-numeric MVP illustration immediately; complete the audited U5 media system after U1.
 
 ### Phase 3 — Narrative integration and release proof
 
@@ -653,7 +657,7 @@ flowchart TB
 
 ## Success Metrics
 
-- Four of five representative owner-operators explain the problem, Athena's role, and the connected-record difference without prompting before final copy approval.
+- After MVP release, four of five representative owner-operators explain the problem, Athena's role, and the connected-record difference without prompting before post-MVP final copy approval.
 - The five-person result is recorded as a comprehension gate, not market validation.
 - Anonymous `/` renders a useful hero, product proof, and conversion path without authentication, protected store data, rich media, or motion.
 - Every retained narrative stage and transition has audited product evidence.
@@ -669,7 +673,7 @@ flowchart TB
 
 | Risk | Mitigation |
 |------|------------|
-| Positioning research disproves the chosen hero | U1 reopens R2, R5, R7, and key decisions before U5/U6 continue. |
+| Positioning research disproves the released hero | U1 reopens R2, R5, R7, and key decisions; revise or narrow the next page version without treating the original MVP as validated. |
 | Current product surfaces do not visibly prove a narrative transition | Narrow the story in U1 rather than fabricating connective evidence. |
 | Sanitized media leaks account or customer details | Use a field-by-field media audit, production-owned fixtures, and no direct reuse of pitch screenshots without review. |
 | Root-route migration breaks post-login or internal home links | Centralize public/app entry paths, characterize current redirects first, and cover `/`, `/app`, `/login`, `/landing`, and deep links. |

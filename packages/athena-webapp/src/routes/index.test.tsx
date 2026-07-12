@@ -44,12 +44,25 @@ describe("Index route", () => {
 
     expect(
       screen.getByRole("heading", {
-        name: /see how the business is doing today/i,
+        name: /see today's sales\. know what needs attention\./i,
       }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: /request a walkthrough/i }),
-    ).toHaveAttribute("href", "/walkthrough");
+      screen.getByRole("heading", { name: /today is only the beginning/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: /see which products shaped the day/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: /decide what needs your attention next/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/in-person and online sales stay connected/i)).toBeInTheDocument();
+    expect(screen.getByText(/give your team room to work/i)).toBeInTheDocument();
+    const walkthroughLinks = screen.getAllByRole("link", {
+      name: /request a walkthrough/i,
+    });
+    expect(walkthroughLinks).toHaveLength(3);
+    expect(walkthroughLinks[0]).toHaveAttribute("href", "/walkthrough");
     expect(screen.getByRole("link", { name: /sign in/i })).toHaveAttribute(
       "href",
       "/login",
@@ -60,11 +73,12 @@ describe("Index route", () => {
     });
     expect(primaryNavigation.querySelectorAll("a")).toHaveLength(3);
 
-    await user.click(
-      screen.getByRole("link", { name: /request a walkthrough/i }),
-    );
+    await user.click(walkthroughLinks[0]);
     expect(mocked.emitLandingFunnelEvent).toHaveBeenCalledWith(
       "walkthrough_cta",
     );
+
+    expect(document.body).not.toHaveTextContent(/automatically reorder/i);
+    expect(document.body).not.toHaveTextContent(/recover.*paper history/i);
   });
 });

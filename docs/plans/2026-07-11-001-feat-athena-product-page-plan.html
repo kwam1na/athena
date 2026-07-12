@@ -127,6 +127,7 @@
 
       <section id="decisions">
         <h2>Key technical decisions</h2>
+        <div class="decision"><strong>MVP release precedes positioning sessions.</strong> The 2026-07-12 owner decision releases a restrained claims-only page with non-numeric product-shaped illustration. The five owner-operator sessions become a post-release learning gate; their frozen four-of-five rule decides what copy to retain, revise, or narrow without retroactively validating demand or unapproved proof.</div>
         <div class="decision"><strong>Public and operational entry are separate.</strong> Public rendering does not wait for auth or organization resolution; authenticated dispatch remains explicit at <code>/app</code>.</div>
         <div class="decision"><strong>Real product, public-safe evidence.</strong> Reuse Store Pulse semantics through sanitized fixtures and audited fallbacks rather than exposing store-scoped queries.</div>
         <div class="decision"><strong>Persistence defines success.</strong> A walkthrough is accepted when its Convex record is durable or the unchanged submission key is safely deduplicated; notification failure stays observable and retryable behind the boundary.</div>
@@ -153,12 +154,12 @@
       <section id="units">
         <h2>Implementation-unit digest</h2>
         <ol class="units">
-          <li><strong>Positioning and proof gate</strong><div class="deps">External dependency: five eligible owner-operators and product-owner review.</div>Pre-register the comprehension rubric, record every eligible response, map the core sequence plus one cross-channel and one small-team-control proof, maintain a freshness manifest, and pre-register the launch-review rubric.</li>
+          <li><strong>Post-MVP positioning and proof gate</strong><div class="deps">External dependency: five eligible owner-operators and product-owner review; not a prerequisite for the claims-only MVP.</div>Pre-register the comprehension rubric, record every eligible response, map the core sequence plus one cross-channel and one small-team-control proof, maintain a freshness manifest, and use the frozen result to retain, revise, or narrow the released copy.</li>
           <li><strong>Public and app route separation</strong><div class="deps">Runs in parallel with units 1 and 3.</div>Make <code>/</code> public, move authenticated dispatch to <code>/app</code>, redirect <code>/landing</code>, suppress public operational chrome, and keep process-root providers stable.</li>
           <li><strong>Walkthrough persistence</strong><div class="deps">Deployment requires an accountable recipient and operational owner.</div>Add owned HTTP ingress, immutable records/follow-ups, canonical same-key idempotency, budget-bounded fresh-key replay aliases, evidence-based budgets, ambiguity-safe notification attempts, internal-only resolution, and retention/redaction.</li>
           <li><strong>Walkthrough experience</strong><div class="deps">Depends on units 2 and 3.</div>Build the accessible <code>/walkthrough</code> form, retained failure state, retry identity, confirmation, and secondary sign-in.</li>
-          <li><strong>Product-proof system</strong><div class="deps">Depends on unit 1.</div>Create sanitized fixtures, audited assets, staged responsive evidence, static poster fallback, and reduced-motion parity.</li>
-          <li><strong>Product-page narrative</strong><div class="deps">Depends on units 1, 2, 4, and 5.</div>Compose the approved sales-to-stock story, two evidenced breadth moments, fixed crawler metadata, dedicated privacy-safe funnel ingress, and prospect-first conversion hierarchy.</li>
+          <li><strong>Product-proof system</strong><div class="deps">Audited screenshots or numeric proof depend on unit 1; the claims-only MVP uses non-numeric product-shaped illustration.</div>Create sanitized fixtures, audited assets, staged responsive evidence, static poster fallback, and reduced-motion parity.</li>
+          <li><strong>Product-page narrative</strong><div class="deps">The claims-only MVP depends on units 2 and 4; final validated copy and audited media also depend on units 1 and 5.</div>Compose the behavior-grounded sales-to-stock story, two evidenced breadth moments, fixed crawler metadata, dedicated privacy-safe funnel ingress, and prospect-first conversion hierarchy.</li>
           <li><strong>Integration and launch verification</strong><div class="deps">Depends on units 3 through 6.</div>Exercise anonymous, authenticated, backend, media, accessibility, mobile, and deep-link paths, then refresh generated artifacts and run merge-grade validation.</li>
         </ol>
       </section>
@@ -168,7 +169,7 @@
         <table>
           <thead><tr><th>Phase</th><th>Work</th><th>Gate</th></tr></thead>
           <tbody>
-            <tr><td>0</td><td>Pre-registered positioning validation and proof audit</td><td>Four of five comprehension pass; every retained connection has credible evidence. Market effectiveness remains a post-launch question.</td></tr>
+            <tr><td>0</td><td>Claims-only MVP release, followed by pre-registered positioning validation and proof audit</td><td>The release contains no synthetic metrics or unapproved screenshots; afterward, four of five comprehension pass governs which claims survive.</td></tr>
             <tr><td>1</td><td>Public/app routing and walkthrough persistence in parallel</td><td>Route ownership and durable command contracts are green.</td></tr>
             <tr><td>2</td><td>Walkthrough UI and sanitized proof system in parallel</td><td>All form and media states are covered.</td></tr>
             <tr><td>3</td><td>Page composition and integrated release proof</td><td>Browser, accessibility, authenticated continuity, Graphify, and <code>pr:athena</code> pass.</td></tr>

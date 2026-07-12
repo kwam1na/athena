@@ -1,6 +1,6 @@
 # Athena landing positioning validation
 
-Status: **blocked — research not yet run**
+Status: **post-MVP validation — research not yet run**
 
 Gate owner: **unassigned; product owner must be named before recruitment**
 
@@ -10,7 +10,7 @@ Research revision: `draft-1`
 
 Decision threshold: **at least four of exactly five valid sessions must pass**
 
-This record is the pre-registration and results ledger for Athena's landing-page comprehension gate. It is not customer research already performed, evidence of demand, or approval of final copy. No participant has been recruited or scored in this draft.
+This record is the pre-registration and results ledger for Athena's post-MVP landing-page comprehension study. On 2026-07-12 the product owner approved a restrained claims-only MVP before the five sessions. The sessions now decide which message to retain, revise, or narrow; they do not block the initial MVP release. No participant has been recruited or scored in this draft.
 
 ## Gate rules
 
@@ -112,9 +112,9 @@ Do not store participant names, contact details, business names, or other direct
 | Threshold met | `no — research has not run` |
 | Product-owner decision | `blocked` |
 
-Final copy and product-media approval remain blocked until this ledger contains exactly five valid completed sessions, the pass count is mechanically derived, and the named product owner records the decision below.
+Post-MVP final copy and audited product-media approval remain blocked until this ledger contains exactly five valid completed sessions, the pass count is mechanically derived, and the named product owner records the decision below. This does not block the released claims-only MVP, which contains no audited screenshots or synthetic performance proof.
 
-Product-owner decision: `[blocked — do not sign before the five-session gate is complete]`
+Product-owner decision: `[blocked for post-MVP copy/media approval — do not sign before the five-session gate is complete]`
 
 Decision date: `[blank]`
 
