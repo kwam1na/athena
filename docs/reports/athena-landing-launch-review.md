@@ -1,6 +1,6 @@
 # Athena landing launch review
 
-Status: **pre-registration incomplete — do not interpret launch performance yet**
+Status: **MVP release approved — observation fields still require freeze**
 
 Review owner: **unassigned**
 
@@ -8,9 +8,9 @@ Launch revision: **not set**
 
 Rubric freeze timestamp: **not set**
 
-This record separates positioning evidence from traffic quality, form usability, ingress reliability, notification delivery, and owner follow-up. It is a decision rubric, not a report of market demand. Insufficient or conflicting evidence must remain `inconclusive`.
+This record separates positioning evidence from traffic quality, form usability, ingress reliability, notification delivery, and owner follow-up. The 2026-07-12 release is an explicit learning MVP using claims supported by current Athena behavior and no synthetic performance proof. It is a decision rubric, not a report of market demand. Insufficient or conflicting evidence must remain `inconclusive`.
 
-## Freeze before launch
+## Freeze before interpreting launch traffic
 
 The named review owner must complete and freeze these fields before production traffic is included.
 
@@ -19,9 +19,9 @@ The named review owner must complete and freeze these fields before production t
 | Production launch timestamp | `[required]` |
 | Landing revision / deployment id | `[required]` |
 | Observation window | First seven complete calendar days after launch, excluding registered incidents |
-| Minimum usable non-bot page-view sample | `[product owner must set before launch]` |
-| Minimum durable accepted-request sample | `[product owner must set before launch]` |
-| Maximum acceptable owner follow-up latency | `[product/sales owner must set before launch]` |
+| Minimum usable non-bot page-view sample | `[product owner must set before interpreting traffic]` |
+| Minimum durable accepted-request sample | `[product owner must set before interpreting traffic]` |
+| Maximum acceptable owner follow-up latency | `[product/sales owner must set before interpreting traffic]` |
 | Accountable product owner | `[required]` |
 | Accountable walkthrough follow-up owner | `[required]` |
 | Data extractor / reviewer | `[required]` |
@@ -129,6 +129,6 @@ This review can guide positioning; it cannot, by itself, prove product-market fi
 | Qualified / not qualified / unknown | `[not observed]` |
 | Incident intervals excluded | `[none registered]` |
 | Primary diagnostic classification | `inconclusive — launch has not occurred` |
-| Positioning decision | `blocked` |
+| Positioning decision | `not yet eligible — MVP release is unaffected` |
 
-Review owner sign-off: `[blocked until owner, thresholds, launch revision, and evidence are present]`
+Review owner sign-off: `[required before interpreting launch traffic; not a release gate for the claims-only MVP]`

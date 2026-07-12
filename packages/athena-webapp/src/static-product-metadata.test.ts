@@ -19,7 +19,7 @@ describe("static product-page metadata", () => {
     expect(
       document.querySelector('meta[name="description"]')?.getAttribute("content"),
     ).toBe(
-      "See today's sales, sales history, product movement, and stock context in one clear operating view.",
+      "See today's sales, understand what moved, and keep the history behind your business close.",
     );
     expect(document.querySelectorAll('link[rel="canonical"]')).toHaveLength(1);
     expect(

@@ -10,7 +10,7 @@ export const Route = createFileRoute("/")({
       },
       {
         name: "description",
-        content: "See today's sales and the history behind the business.",
+        content: "See today's sales, understand what moved, and keep the history behind your business close.",
       },
     ],
   }),
