@@ -21,6 +21,14 @@ const verified = {
 };
 
 describe("reporting generation activation", () => {
+  it("recognizes intraday projection rebuild lineage", () => {
+    expect(
+      activationOperationMatchesProjectionKind(
+        "projection_rebuild_catching_up",
+        "store_intraday",
+      ),
+    ).toBe(true);
+  });
   it("promotes a compatible verified generation with compare-and-swap", () => {
     expect(
       activateGeneration({

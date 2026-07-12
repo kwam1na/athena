@@ -10,6 +10,11 @@ import {
 } from "./processor";
 
 describe("reporting incremental projection processor", () => {
+  it("does not fan out one intraday scheduling chain per canonical fact", () => {
+    const source = readFileSync(join(import.meta.dirname, "processor.ts"), "utf8");
+    expect(source).not.toContain("scheduleStoreIntradayRefresh");
+    expect(source).not.toContain("materializeStoreIntradayCheckpoint");
+  });
   it("adds compatible currency values", () => {
     expect(
       mergeProjectionValue({

@@ -68,7 +68,7 @@ describe("surface capability access", () => {
     expect(getSurfaceAccess("stock_adjustments", posOnly)).toBe(false);
 
     expect(getSurfaceAccess("procurement", posOnly)).toBe(false);
-    expect(getSurfaceAccess("analytics", posOnly)).toBe(false);
+    expect(getSurfaceAccess("reports", posOnly)).toBe(false);
     expect(getSurfaceAccess("configuration", posOnly)).toBe(false);
     expect(getSurfaceAccess("members", posOnly)).toBe(false);
     expect(getSurfaceAccess("storefront_admin", posOnly)).toBe(false);

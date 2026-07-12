@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils";
 const CONTROL_RESPONSE_TIMEOUT_MS = 8_000;
 const APP_NAVIGATION_CONTROL_LABELS = new Set([
   "Active Cases",
-  "Analytics",
+  "Reports",
   "Appointments",
   "Bulk Operations",
   "Cash Controls",
@@ -48,7 +48,7 @@ const POS_SURFACE_LABELS: Record<string, string> = {
   transactions: "Transactions",
 };
 const STORE_WORKSPACE_LABELS: Record<string, string> = {
-  analytics: "Analytics",
+  reports: "Reports",
   "bulk-operations": "Bulk Operations",
   "cash-controls": "Cash Controls",
   homepage: "Homepage",

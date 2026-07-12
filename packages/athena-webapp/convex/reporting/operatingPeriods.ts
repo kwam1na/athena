@@ -196,3 +196,41 @@ export async function resolveReportingOperatingPeriodWithCtx(
     schedule: schedule ?? null,
   });
 }
+
+/** Resolve an operating-date evidence window from the schedule version that
+ * actually governed that date. This is intentionally server-owned: callers
+ * must not manufacture UTC-midnight boundaries for store-local evidence. */
+export async function resolveReportingOperatingDateRangeWithCtx(
+  ctx: PeriodCtx,
+  args: { operatingDate: string; storeId: Id<"store"> },
+) {
+  const schedules = (await Promise.all(
+    (["active", "superseded"] as const).map((status) =>
+      ctx.db.query("storeSchedule")
+        .withIndex("by_storeId_status_effectiveFrom", (q) =>
+          q.eq("storeId", args.storeId).eq("status", status),
+        )
+        .order("desc")
+        .take(100),
+    ),
+  )).flat().sort((left, right) => right.effectiveFrom - left.effectiveFrom);
+  for (const schedule of schedules) {
+    const range = resolveStoreOperatingRangeForDate({
+      operatingDate: args.operatingDate,
+      schedule,
+    });
+    if (range.kind !== "resolved") continue;
+    if (schedule.effectiveFrom > range.startAt ||
+      (schedule.effectiveTo !== undefined && range.startAt >= schedule.effectiveTo)) continue;
+    return {
+      endAt: range.endAt,
+      kind: "resolved" as const,
+      operatingDate: args.operatingDate,
+      scheduleVersionId: schedule._id,
+      startAt: range.startAt,
+      timezone: schedule.timezone,
+      windowCount: range.windowCount,
+    };
+  }
+  return { kind: "missing_schedule" as const, operatingDate: args.operatingDate };
+}

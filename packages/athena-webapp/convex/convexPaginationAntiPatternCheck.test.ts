@@ -66,6 +66,39 @@ export const getSessionItems = query({
     );
   });
 
+  it("passes when one coordinator delegates distinct pages to single-source helpers", () => {
+    const { root, convexDir } = createTempRoot();
+
+    writeConvexFile(
+      convexDir,
+      "delegated.ts",
+      `
+async function paginateSessions(ctx, cursor) {
+  return ctx.db.query("posSession").paginate({ cursor, numItems: 10 });
+}
+
+async function paginateItems(ctx, cursor) {
+  return ctx.db.query("posSessionItem").paginate({ cursor, numItems: 10 });
+}
+
+export const cleanup = mutation({
+  args: {},
+  handler: async (ctx, args) => {
+    return args.phase === "sessions"
+      ? paginateSessions(ctx, args.cursor)
+      : paginateItems(ctx, args.cursor);
+  },
+});
+`,
+    );
+
+    const result = runPaginationCheck(root, ["convex/delegated.ts"]);
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain(
+      "Convex pagination anti-pattern check passed for changed files",
+    );
+  });
+
   it("fails when a function contains multiple paginate calls", () => {
     const { root, convexDir } = createTempRoot();
     writeConvexFile(

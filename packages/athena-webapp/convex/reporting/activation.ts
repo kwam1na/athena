@@ -198,7 +198,11 @@ export function activationOperationMatchesProjectionKind(
   operation: string,
   projectionKind: Doc<"reportingProjectionGeneration">["projectionKind"],
 ) {
-  if (projectionKind === "store_day" || projectionKind === "sku_day") {
+  if (
+    projectionKind === "store_day" ||
+    projectionKind === "store_intraday" ||
+    projectionKind === "sku_day"
+  ) {
     return (
       operation.startsWith("projection_rebuild_") ||
       operation === "projection_reconciliation_finalize"
@@ -490,6 +494,17 @@ export const activateVerifiedGeneration = internalMutation({
       status: "active",
     });
     await scheduleDerivedRefreshes(ctx, candidate);
+    if (candidate.projectionKind === "store_day") {
+      await ctx.scheduler.runAfter(0, (internal as any).reporting.projections.storeIntraday.startActiveStoreIntradaySchedule, { sourceGenerationId: candidate._id });
+      await ctx.scheduler.runAfter(0, (internal as any).reporting.projections.storeIntraday.rebuildHistoricalStoreIntradayPage, { sourceGenerationId: candidate._id });
+    }
+    if (candidate.projectionKind === "store_day" || candidate.projectionKind === "sku_day" || candidate.projectionKind === "current_inventory") {
+      await ctx.scheduler.runAfter(
+        0,
+        (internal as any).reporting.readModels.materialize.startReportsWorkspaceMaterialization,
+        { generationId: candidate._id },
+      );
+    }
     return activationId;
   },
 });

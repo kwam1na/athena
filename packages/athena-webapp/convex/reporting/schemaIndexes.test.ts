@@ -37,6 +37,34 @@ describe("reporting schema indexes", () => {
   });
 
   it("owns ingress identity, fact ordering, generation, and child evidence indexes", () => {
+    expect(indexes("reportingStorePeriodSummary")).toContainEqual({
+      indexDescriptor: "by_generationId_periodKey",
+      fields: ["generationId", "periodKey"],
+    });
+    expect(indexes("reportingSkuPeriodSummary")).toContainEqual({
+      indexDescriptor: "by_generationId_periodKey_revenueSort_productSkuId",
+      fields: ["generationId", "periodKey", "revenueSort", "productSkuId"],
+    });
+    expect(indexes("reportingSkuPeriodClassification")).toContainEqual({
+      indexDescriptor: "by_epoch_period_class_sku",
+      fields: ["workspaceEpochId", "periodKey", "classification", "productSkuId"],
+    });
+    expect(indexes("reportingSkuPeriodSummary")).toContainEqual({
+      indexDescriptor: "by_gen_period_class_revenue_sku",
+      fields: ["generationId", "periodKey", "classificationKey", "revenueSort", "productSkuId"],
+    });
+    expect(indexes("reportingInventoryPeriodSummary")).toContainEqual({
+      indexDescriptor: "by_generationId_periodKey",
+      fields: ["generationId", "periodKey"],
+    });
+    expect(indexes("reportingDailyCloseTrust")).toContainEqual({
+      indexDescriptor: "by_generationId_operatingDate",
+      fields: ["generationId", "operatingDate"],
+    });
+    expect(indexes("reportingReadCursorContext")).toContainEqual({
+      indexDescriptor: "by_token",
+      fields: ["token"],
+    });
     expect(indexes("reportingIngress")).toContainEqual({
       indexDescriptor: "by_storeId_sourceDomain_businessEventKey",
       fields: ["storeId", "sourceDomain", "businessEventKey"],
@@ -151,6 +179,10 @@ describe("reporting schema indexes", () => {
         "scheduleVersionId",
       ],
     });
+    expect(indexes("reportingStoreIntradayProjection")).toContainEqual({
+      indexDescriptor: "by_generationId_operatingDate_checkpointAt",
+      fields: ["generationId", "operatingDate", "checkpointAt"],
+    });
     expect(indexes("reportingStoreDayProjection")).toContainEqual({
       indexDescriptor:
         "by_gen_date_metric_policy",
@@ -219,6 +251,22 @@ describe("reporting schema indexes", () => {
     expect(indexes("reportingProjectionEvidence")).toContainEqual({
       indexDescriptor: "by_generationId_productSkuId_recognitionAt_factId",
       fields: ["generationId", "productSkuId", "recognitionAt", "factId"],
+    });
+    expect(indexes("reportingProjectionEvidence")).toContainEqual({
+      indexDescriptor: "by_generationId_operatingDate_recognitionAt_factId_metric",
+      fields: ["generationId", "operatingDate", "recognitionAt", "factId", "metric"],
+    });
+    expect(indexes("reportingStoreIntradayScheduleState")).toContainEqual({
+      indexDescriptor: "by_generationId_operatingDate",
+      fields: ["generationId", "operatingDate"],
+    });
+    expect(indexes("reportingStoreIntradayScheduleState")).toContainEqual({
+      indexDescriptor: "by_generationId_status",
+      fields: ["generationId", "status"],
+    });
+    expect(indexes("reportingStoreIntradayScheduleState")).toContainEqual({
+      indexDescriptor: "by_generationId_status_mode",
+      fields: ["generationId", "status", "mode"],
     });
     expect(indexes("reportingSkuEvidence")).toContainEqual({
       indexDescriptor: "by_storeId_productSkuId_recognitionAt_identityKey",

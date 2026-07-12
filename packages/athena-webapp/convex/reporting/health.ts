@@ -224,6 +224,7 @@ export async function upsertProjectionHealthWithCtx(
     projectionContractVersion: number;
     projectionKind:
       | "store_day"
+      | "store_intraday"
       | "sku_day"
       | "current_inventory"
       | "custom_range"

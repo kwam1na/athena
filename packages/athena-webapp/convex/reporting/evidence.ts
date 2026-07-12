@@ -13,6 +13,7 @@ import {
 import { requireAuthenticatedAthenaUserWithCtx } from "../lib/athenaUserAuth";
 import { requireReportingStoreAccess } from "./access";
 import { upsertProjectionHealthWithCtx } from "./health";
+import { reportingDestination } from "./readModels/destinations";
 import { scheduleReportingWorkBestEffort } from "./scheduling";
 import { reattributeFactInActiveSkuProjectionWithCtx } from "./projections/processor";
 
@@ -894,13 +895,28 @@ export const readSkuEvidencePage = internalQuery({
         return args.periodStart !== undefined && args.periodEnd !== undefined
           ? scoped
               .gte("recognitionAt", args.periodStart)
-              .lte("recognitionAt", args.periodEnd)
+              .lt("recognitionAt", args.periodEnd)
           : scoped;
       })
       .order("desc")
       .paginate({ cursor: args.databaseCursor, numItems: args.numItems });
   },
 });
+
+export function presentSkuEvidenceRow<
+  T extends { sourceRoutes: Array<{ sourceType: string; sourceId: string }> },
+>(row: T) {
+  return {
+    ...row,
+    destinations: row.sourceRoutes.map((route) =>
+      reportingDestination({
+        authorized: true,
+        sourceId: route.sourceId,
+        sourceType: route.sourceType,
+      }),
+    ),
+  };
+}
 
 export const listSkuEvidence = action({
   args: {
@@ -938,6 +954,7 @@ export const listSkuEvidence = action({
       );
       return {
         ...result,
+        page: result.page.map(presentSkuEvidenceRow),
         continueCursor: result.isDone
           ? ""
           : encodeSkuEvidencePageCursor({

@@ -310,7 +310,7 @@ const Dashboard = () => {
     return {
       activePromoCodes: promoCodes.filter((p) => p.active).length,
       promoCodeUsage: promoCodes.reduce((sum, p) => {
-        const promoCode = p as any;
+        const promoCode = p as { usageCount?: number };
         return sum + (promoCode.usageCount || 0);
       }, 0),
     };
@@ -573,7 +573,7 @@ const Dashboard = () => {
         <TabsContent value="analytics">
           <div className="flex justify-end mb-2">
             <Link
-              to="/$orgUrlSlug/store/$storeUrlSlug/analytics"
+              to="/$orgUrlSlug/store/$storeUrlSlug/reports/storefront"
               params={(p) => ({
                 ...p,
                 orgUrlSlug: p.orgUrlSlug!,
@@ -583,7 +583,7 @@ const Dashboard = () => {
                 o: getOrigin(),
               }}
             >
-              View full analytics
+              View storefront report
             </Link>
           </div>
           <div className="mb-8 p-4 rounded-lg border bg-card">

@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Plan review — Build the Reports workspace</title>
+  <style>
+    :root { color-scheme: light dark; --bg:#f5f4ef; --surface:#fff; --ink:#20201d; --muted:#68675f; --line:#d8d5cb; --accent:#9b4d27; --soft:#f3e8df; --good:#2f6b4f; --warn:#8a5b16; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.55 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    main { max-width:1120px; margin:auto; padding:48px 28px 80px; }
+    header { border-bottom:1px solid var(--line); padding-bottom:28px; }
+    .eyebrow { color:var(--accent); font-size:12px; font-weight:750; letter-spacing:.14em; text-transform:uppercase; }
+    h1 { font-size:clamp(34px,6vw,62px); line-height:1.02; letter-spacing:-.035em; margin:10px 0 16px; max-width:850px; }
+    h2 { font-size:26px; margin:0 0 14px; }
+    h3 { font-size:17px; margin:0 0 8px; }
+    p { margin:0 0 12px; }
+    a { color:var(--accent); }
+    code { font:13px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; background:var(--soft); padding:2px 5px; border-radius:4px; }
+    nav { display:flex; flex-wrap:wrap; gap:8px; margin:24px 0 0; }
+    nav a,.pill { border:1px solid var(--line); border-radius:999px; padding:6px 10px; background:var(--surface); text-decoration:none; font-size:13px; }
+    section { padding:34px 0; border-bottom:1px solid var(--line); }
+    .lede { max-width:820px; font-size:19px; color:var(--muted); }
+    .meta,.grid,.units,.risks { display:grid; gap:14px; }
+    .meta { grid-template-columns:repeat(4,minmax(0,1fr)); margin-top:24px; }
+    .grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
+    .units { grid-template-columns:repeat(3,minmax(0,1fr)); }
+    .card { background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:18px; }
+    .card p,.card li { color:var(--muted); }
+    .card strong { color:var(--ink); }
+    ul { margin:8px 0 0; padding-left:20px; }
+    li { margin:5px 0; }
+    .callout { border-left:4px solid var(--accent); background:var(--soft); padding:16px 18px; border-radius:0 10px 10px 0; }
+    .phase { display:grid; grid-template-columns:120px 1fr; gap:16px; align-items:start; margin:16px 0; }
+    .phase b { color:var(--accent); }
+    table { width:100%; border-collapse:collapse; background:var(--surface); display:block; overflow-x:auto; overscroll-behavior-inline:contain; }
+    caption { text-align:left; font-weight:700; padding:0 0 10px; color:var(--muted); }
+    th,td { text-align:left; vertical-align:top; padding:12px; border:1px solid var(--line); }
+    th { font-size:12px; letter-spacing:.08em; text-transform:uppercase; }
+    .good { color:var(--good); }
+    .warn { color:var(--warn); }
+    footer { padding-top:28px; color:var(--muted); }
+    @media (max-width:800px) { .meta,.grid,.units { grid-template-columns:1fr; } .phase { grid-template-columns:1fr; } main { padding:28px 18px 60px; } }
+    @media (prefers-color-scheme:dark) { :root { --bg:#171714; --surface:#22221e; --ink:#f0efe8; --muted:#b5b2a6; --line:#414038; --soft:#36271f; --accent:#e89a70; --good:#81c9a7; --warn:#e6bd73; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">Athena implementation plan · 2026-07-11</div>
+    <h1>Build the Reports workspace</h1>
+    <p class="lede">Replace the early Analytics route with Athena's canonical, full-admin Reports workspace—backed by generation-coherent server read models rather than client-side reconstruction.</p>
+    <div class="meta">
+      <div class="card"><strong>Type</strong><br>Feature</div>
+      <div class="card"><strong>Status</strong><br><span class="good">Active plan</span></div>
+      <div class="card"><strong>Units</strong><br>11 implementation units</div>
+      <div class="card"><strong>Origin</strong><br>Reports requirements</div>
+    </div>
+    <nav aria-label="Plan sections">
+      <a href="#shape">Delivery shape</a><a href="#decisions">Decisions</a><a href="#units">Units</a><a href="#states">Trust states</a><a href="#risks">Risks</a><a href="#verification">Verification</a>
+    </nav>
+  </header>
+
+  <section id="shape">
+    <h2>Delivery shape</h2>
+    <div class="callout"><strong>Contract first.</strong> Store-owned period and comparison semantics, generation coherence, trust-state reduction, hydrated SKU/inventory DTOs, and typed evidence destinations land before the React workspace consumes them.</div>
+    <div class="grid" style="margin-top:16px">
+      <article class="card"><h3>Reporting contracts</h3><p>Exact intraday comparison authority, server-resolved periods, metric-specific completeness, compatible active-generation metadata, and verified custom ranges.</p></article>
+      <article class="card"><h3>Workspace surfaces</h3><p>Overview, Items, SKU detail, Inventory, and Storefront at directly addressable <code>/reports</code> routes.</p></article>
+      <article class="card"><h3>Evidence and action</h3><p>Lazy, bounded source evidence plus typed routes into existing operational workflows. Reports remains read-only.</p></article>
+    </div>
+  </section>
+
+  <section id="decisions">
+    <h2>Key decisions</h2>
+    <table>
+      <caption>Implementation boundary decisions</caption>
+      <thead><tr><th>Boundary</th><th>Decision</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>Authority</td><td>Read compatible active reporting projections only.</td><td>Prevents mutable-source or React recomputation.</td></tr>
+        <tr><td>Periods</td><td>Resolve WTD, exact same-elapsed comparison, presets, and partial days through server-owned day and intraday projections.</td><td>Store Schedule—not browser time or full-day approximation—owns reporting dates.</td></tr>
+        <tr><td>Coherence</td><td>Capture activations once and apply an explicit contracts, lineage, watermark, and as-of compatibility matrix.</td><td>Projection kinds activate independently.</td></tr>
+        <tr><td>Ranges</td><td>Presets are bounded synchronous reads; arbitrary ranges materialize verified Overview, SKU, rollup, and movement results through async jobs.</td><td>Keeps common navigation immediate and gives custom ranges an authoritative lifecycle.</td></tr>
+        <tr><td>Navigation</td><td>Remove <code>/analytics</code>; make <code>/reports</code> canonical with nested routes.</td><td>Early product development permits the cleaner breaking design.</td></tr>
+        <tr><td>Storefront</td><td>Move engagement analytics to <code>/reports/storefront</code>.</td><td>Preserves engagement context without treating it as financial truth.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Compatibility outcomes</h2>
+    <table>
+      <caption>Projection compatibility outcomes</caption>
+      <thead><tr><th>Projection relationship</th><th>Accepted</th><th>Limited</th></tr></thead>
+      <tbody>
+        <tr><td>Store-day + intraday</td><td>Exact captured store-day source generation.</td><td>Mismatch withholds comparison, not safe day totals.</td></tr>
+        <tr><td>Store-day + SKU-day</td><td>Equal contracts/watermark permit reconciliation.</td><td>Unequal watermark keeps timestamped sections but withholds cross-section deltas; contract mismatch removes Items.</td></tr>
+        <tr><td>Current inventory</td><td>Displays independently as current-as-of.</td><td>Stale may show last-good; failed inventory never fails period money.</td></tr>
+        <tr><td>Insights + attention</td><td>Must name exact captured source generations.</td><td>Lineage mismatch withholds the derived section only.</td></tr>
+        <tr><td>Custom range</td><td>Verified frozen snapshot remains valid and labeled.</td><td>Newer activations require a new matching request; no silent refresh.</td></tr>
+        <tr><td>Activation during read</td><td>Query continues using activation IDs captured at start.</td><td>Pages on different activations fail cursor validation and restart.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="units">
+    <h2>Implementation units</h2>
+    <div class="units">
+      <article class="card"><h3>U10 · Intraday authority</h3><p>Materialize exact same-elapsed current/prior comparison checkpoints and bounded remainder reads.</p></article>
+      <article class="card"><h3>U1 · Period and trust</h3><p>Define store-time period descriptors, comparison, generation coherence, and presentation-state precedence.</p></article>
+      <article class="card"><h3>U4 · Evidence destinations</h3><p>Define typed aggregate/detail destinations, then present trusted-SKU evidence with safe unavailable fallbacks.</p></article>
+      <article class="card"><h3>U2 · Overview DTO</h3><p>Compose money, inventory, coverage, Daily Close trust, and ranked attention in one bounded read model.</p></article>
+      <article class="card"><h3>U3 · Items and inventory DTOs</h3><p>Hydrate identities, selected-period performance, exact rollups, movement, valuation, cover, and comparisons.</p></article>
+      <article class="card"><h3>U11 · Custom ranges</h3><p>Complete request, reuse, progress, failure/retry, verified range result, pagination, and authorization behavior.</p></article>
+      <article class="card"><h3>U5 · Reports shell</h3><p>After U2/U3/U11, atomically create nested routes, mount Storefront, rename the Reports capability, add async range/status/accessibility behavior, and remove Analytics.</p></article>
+      <article class="card"><h3>U6 · Overview UI</h3><p>Render the balanced WTD pulse, comparison, revenue/profit lanes, inventory position, and attention.</p></article>
+      <article class="card"><h3>U7 · Items and SKU detail</h3><p>Build classifications, sortable performance, evidence pagination, and full operational drill-down.</p></article>
+      <article class="card"><h3>U8 · Inventory UI</h3><p>Separate current position from period movement, commitments, inbound cover, and cost limitations.</p></article>
+      <article class="card"><h3>U9 · Integrated proof</h3><p>Verify the atomic cutover, AE1–AE10 allocation, access, routing, state, and scale without a brittle mega-test.</p></article>
+    </div>
+  </section>
+
+  <section>
+    <h2>Phased sequence</h2>
+    <div class="phase"><b>Phase 1</b><div><strong>Contracts</strong><br>U10, U1–U4, and U11 establish exact comparison, stable semantics, bounded DTOs, authorized evidence, and custom ranges.</div></div>
+    <div class="phase"><b>Phase 2</b><div><strong>Workspace foundation</strong><br>U5 atomically creates Reports, mounts Storefront, removes Analytics, and adds shared period/state/accessibility behavior.</div></div>
+    <div class="phase"><b>Phase 3</b><div><strong>Operator surfaces</strong><br>U6–U8 deliver Overview, Items/SKU detail, and Inventory.</div></div>
+    <div class="phase"><b>Phase 4</b><div><strong>Integrated proof</strong><br>U9 verifies the U5 cutover, removes late-discovered Analytics references, regenerates derived artifacts, and confirms the complete workspace.</div></div>
+  </section>
+
+  <section id="states">
+    <h2>Trust states the UI must preserve</h2>
+    <div class="grid">
+      <article class="card"><h3 class="good">Complete or valid zero</h3><p>Known values are usable; zero activity is not confused with missing data.</p></article>
+      <article class="card"><h3 class="warn">Cost-partial</h3><p>Revenue and units remain visible while unsupported profit or valuation is withheld.</p></article>
+      <article class="card"><h3 class="warn">Stale or unsynchronized</h3><p>Last-good data carries refresh context and names affected sources, dates, or metrics.</p></article>
+      <article class="card"><h3>Pre-cutover</h3><p>Historical reporting is unavailable; Athena does not present an empty business period.</p></article>
+      <article class="card"><h3>Processing or rebuilding</h3><p>Last verified generation remains readable while replacement work proceeds.</p></article>
+      <article class="card"><h3>Failed or unavailable</h3><p>Failure is explicit and scoped; safe metrics or prior data remain only when contracts permit.</p></article>
+    </div>
+  </section>
+
+  <section id="risks">
+    <h2>Primary risks and controls</h2>
+    <table>
+      <caption>Primary delivery risks and controls</caption>
+      <thead><tr><th>Risk</th><th>Control</th></tr></thead>
+      <tbody>
+        <tr><td>Mixed active generations</td><td>Pin compatible inputs or degrade the affected section with lineage metadata.</td></tr>
+        <tr><td>Timezone/comparison drift</td><td>Server-resolve operating periods and elapsed cutoffs from Store Schedule.</td></tr>
+        <tr><td>SKU-scale read amplification</td><td>Bounded indexed pages, batched identity hydration, lazy evidence, and high-cardinality tests.</td></tr>
+        <tr><td>False precision from missing cost</td><td>Known/unknown lanes and metric-specific availability; never substitute current cost.</td></tr>
+        <tr><td>Refund double counting</td><td>Separate refund-period money from original-sale adjusted SKU performance.</td></tr>
+        <tr><td>Breaking route residue</td><td>Move all callers, tests, generated routes, harness docs, and graph artifacts atomically.</td></tr>
+        <tr><td>Cross-store evidence leak</td><td>Resolve destinations server-side after authorization and retain cursor/store scoping.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="verification">
+    <h2>Verification strategy</h2>
+    <div class="grid">
+      <article class="card"><h3>Requirements proof</h3><p>Every origin acceptance example AE1–AE10 maps to named backend, component, or integrated scenarios.</p></article>
+      <article class="card"><h3>Access proof</h3><p>Full-admin success and denial for pos-only, manager elevation, unauthenticated access, cursors, detail, and store switch.</p></article>
+      <article class="card"><h3>Performance proof</h3><p>Numeric gates: 500-document Overview, 350-document Items/Inventory pages, 100-row pages, 100-document custom-range batches, and a 200-document intraday remainder.</p></article>
+    </div>
+    <div class="callout" style="margin-top:18px"><strong>Accessibility and responsive proof.</strong> Sort direction, coverage, limitations, progress, and attention state use text and accessible names—not color alone. Dense tables retain a clear narrow-screen information hierarchy, keyboard semantics, live async status, and focus restoration after detail navigation.</div>
+    <p style="margin-top:18px"><strong>Storefront timing:</strong> financial period state is preserved for return navigation, but period controls are hidden on Storefront and the page announces its independent live-engagement window.</p>
+    <p style="margin-top:18px">The canonical implementation detail, file list, test matrix, system impact, and origin traceability live in <a href="2026-07-11-002-feat-reports-workspace-plan.md">the Markdown plan</a>.</p>
+  </section>
+
+  <footer>
+    <p><strong>Scope boundary:</strong> no organization rollups, accounting system, service profitability, speculative forecasting, configurable thresholds, or operational mutations inside Reports.</p>
+    <p>Canonical source: <code>docs/plans/2026-07-11-002-feat-reports-workspace-plan.md</code></p>
+  </footer>
+</main>
+</body>
+</html>

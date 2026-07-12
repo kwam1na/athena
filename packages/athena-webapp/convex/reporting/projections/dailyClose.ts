@@ -32,6 +32,25 @@ export function reconcileDailyClose(input: {
       input.currentNetRevenueMinor - input.acceptedNetRevenueMinor,
   };
 }
+import { materializeDailyCloseTrustWithCtx } from "./dailyCloseTrust";
+
+async function refreshDailyCloseTrust(
+  ctx: MutationCtx,
+  generation: Doc<"reportingProjectionGeneration">,
+  closeSourceId: string,
+) {
+  const close = await findDailyCloseProjectionBySourceWithCtx(ctx, {
+    generationId: generation._id,
+    sourceId: closeSourceId,
+  });
+  if (!close) throw new Error("Daily Close trust source is unavailable");
+  await materializeDailyCloseTrustWithCtx(ctx, {
+    close,
+    generation,
+    periodKey: close.operatingDate,
+    sourceGenerationIds: [generation._id],
+  });
+}
 
 export function buildDailyCloseSnapshot(input: {
   acceptedCloseId: string;
@@ -347,7 +366,7 @@ export async function applyDailyCloseFactWithCtx(
       currentRefundsMinor: acceptedRefundsMinor,
       supersedesCloseId: fact.closeSnapshot.supersedesCloseId ?? null,
     });
-    return ctx.db.insert("reportingDailyCloseProjection", {
+    const projectionId = await ctx.db.insert("reportingDailyCloseProjection", {
       acceptedAt: fact.acceptedAt,
       acceptedCloseBusinessEventKey: fact.businessEventKey,
       acceptedCloseFactId: fact._id,
@@ -385,6 +404,8 @@ export async function applyDailyCloseFactWithCtx(
       storeId: fact.storeId,
       supersedesDailyCloseProjectionId: predecessor?._id,
     });
+    await refreshDailyCloseTrust(ctx, generation, incomingSourceId);
+    return projectionId;
   }
   if (!latest || fact.acceptedAt <= latest.acceptedAt) return null;
   const contributions = deriveFactMetricContributions(fact);
@@ -412,6 +433,9 @@ export async function applyDailyCloseFactWithCtx(
       projectedAt: now,
       sourceWatermark: Math.max(latest.sourceWatermark, fact.acceptedAt),
     });
+    const latestSourceId = latest.acceptedCloseSourceId ?? closeSourceId(latest.acceptedCloseBusinessEventKey);
+    if (!latestSourceId) throw new Error("Daily Close source identity is unavailable");
+    await refreshDailyCloseTrust(ctx, generation, latestSourceId);
     return latest._id;
   }
   const snapshot = buildDailyCloseSnapshot({
@@ -444,6 +468,9 @@ export async function applyDailyCloseFactWithCtx(
     projectedAt: now,
     sourceWatermark: Math.max(latest.sourceWatermark, fact.acceptedAt),
   });
+  const latestSourceId = latest.acceptedCloseSourceId ?? closeSourceId(latest.acceptedCloseBusinessEventKey);
+  if (!latestSourceId) throw new Error("Daily Close source identity is unavailable");
+  await refreshDailyCloseTrust(ctx, generation, latestSourceId);
   return latest._id;
 }
 import type { Doc } from "../../_generated/dataModel";
