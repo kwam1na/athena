@@ -137,7 +137,7 @@ describe("LoginLayout", () => {
       POS_APP_ACCOUNT_ID_KEY,
       "user-2"
     );
-    expect(mocked.navigate).toHaveBeenCalledWith({ to: "/app" });
+    expect(mocked.navigate).toHaveBeenCalledWith({ to: "/" });
   });
 
   it("uses the pending auth-sync redirect after the Athena user sync succeeds", async () => {

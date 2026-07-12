@@ -8,7 +8,6 @@ This route index enumerates the current files under `src/routes` so agents can o
 
 - [`src/routes/-authed-layout.tsx`](../../src/routes/-authed-layout.tsx)
 - [`src/routes/-index-route-view.tsx`](../../src/routes/-index-route-view.tsx)
-- [`src/routes/-legacy-landing-redirect.ts`](../../src/routes/-legacy-landing-redirect.ts)
 - [`src/routes/-public-layout.tsx`](../../src/routes/-public-layout.tsx)
 - [`src/routes/-root-page-search.ts`](../../src/routes/-root-page-search.ts)
 - [`src/routes/__root.test.ts`](../../src/routes/__root.test.ts)

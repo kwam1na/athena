@@ -75,14 +75,14 @@ describe("DefaultCatchBoundary", () => {
     expect(screen.getByRole("link", { name: /home/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /home/i })).toHaveAttribute(
       "href",
-      "/app",
+      "/",
     );
   });
 
   it("keeps public route recovery on the product page", () => {
     mocked.useRouterState.mockImplementation(
       ({ select }: { select: (state: unknown) => unknown }) =>
-        select({ location: { pathname: "/" } }),
+        select({ location: { pathname: "/landing" } }),
     );
 
     render(
@@ -94,7 +94,7 @@ describe("DefaultCatchBoundary", () => {
 
     expect(screen.getByRole("link", { name: /home/i })).toHaveAttribute(
       "href",
-      "/",
+      "/landing",
     );
   });
 

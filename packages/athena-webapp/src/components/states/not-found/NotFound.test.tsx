@@ -25,18 +25,18 @@ describe("NotFound", () => {
 
     expect(screen.getByRole("link", { name: /take me home/i })).toHaveAttribute(
       "href",
-      "/app",
+      "/",
     );
   });
 
   it("allows the public shell to recover to the product page", () => {
     render(
-      <NotFound entity="page" entityIdentifier="provided" homePath="/" />,
+      <NotFound entity="page" entityIdentifier="provided" homePath="/landing" />,
     );
 
     expect(screen.getByRole("link", { name: /take me home/i })).toHaveAttribute(
       "href",
-      "/",
+      "/landing",
     );
   });
 });

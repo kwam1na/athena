@@ -83,7 +83,7 @@ describe("JoinTeam", () => {
     await user.click(screen.getByRole("button", { name: /continue/i }));
 
     await waitFor(() =>
-      expect(mocks.navigate).toHaveBeenCalledWith({ to: "/app" }),
+      expect(mocks.navigate).toHaveBeenCalledWith({ to: "/" }),
     );
   });
 });

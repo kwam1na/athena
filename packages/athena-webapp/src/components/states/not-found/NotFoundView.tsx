@@ -8,7 +8,7 @@ export function NotFoundView({
 }: {
   entity: string;
   entityIdentifier: string;
-  homePath?: "/" | "/app";
+  homePath?: "/" | "/app" | "/landing";
 }) {
   return (
     <View>
