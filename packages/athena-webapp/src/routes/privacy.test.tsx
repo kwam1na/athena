@@ -27,6 +27,7 @@ describe("walkthrough privacy route", () => {
   it("documents collection, access, retention, provider processing, and subject requests", () => {
     render(<PrivacyPage />);
 
+    expect(screen.queryByText(/pre-launch notice/i)).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 1, name: "Privacy and retention details" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "Information collected" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "How the information is used" })).toBeVisible();

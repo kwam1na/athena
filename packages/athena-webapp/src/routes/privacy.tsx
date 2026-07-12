@@ -30,7 +30,7 @@ export function PrivacyPage() {
             Privacy and retention details
           </h1>
           <p className="mt-layout-md max-w-2xl text-base leading-7 text-muted-foreground">
-            This pre-launch notice explains how Athena handles the information collected through the walkthrough form.
+            This notice explains how Athena handles the information collected through the walkthrough form.
           </p>
         </header>
 
