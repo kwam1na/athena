@@ -33,6 +33,10 @@ async function writeConvexApiFixture(
   );
   await mkdir(path.join(convexDir, "catalog"), { recursive: true });
   await mkdir(path.join(convexDir, "_generated"), { recursive: true });
+  await writeFile(
+    path.join(convexDir, "convex.config.ts"),
+    'import { defineApp } from "convex/server";\nexport default defineApp();\n'
+  );
   await writeFile(path.join(convexDir, "catalog", "items.ts"), "export {};\n");
   await writeFile(
     path.join(convexDir, "catalog", "items.test.ts"),

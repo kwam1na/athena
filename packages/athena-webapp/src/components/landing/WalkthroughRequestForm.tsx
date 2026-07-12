@@ -14,6 +14,7 @@ import {
   submitWalkthroughRequest,
 } from "@/lib/marketing/walkthroughRequestClient";
 import { WALKTHROUGH_SUBMISSION_ENABLED } from "@/lib/marketing/walkthroughPrivacy";
+import { emitLandingFunnelEvent } from "@/lib/marketing/landingFunnelClient";
 
 type FieldName = keyof WalkthroughRequestPayload;
 type FormValues = Required<WalkthroughRequestPayload> & { website: string };
@@ -77,6 +78,7 @@ export function WalkthroughRequestForm({
   const isPending = status === "pending";
 
   function updateValue(field: keyof FormValues, value: string) {
+    if (field !== "website") emitLandingFunnelEvent("form_start");
     const next = { ...values, [field]: value };
     setValues(next);
     setSubmissionError(null);

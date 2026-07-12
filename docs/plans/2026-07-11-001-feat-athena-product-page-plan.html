@@ -129,7 +129,8 @@
         <h2>Key technical decisions</h2>
         <div class="decision"><strong>Public and operational entry are separate.</strong> Public rendering does not wait for auth or organization resolution; authenticated dispatch remains explicit at <code>/app</code>.</div>
         <div class="decision"><strong>Real product, public-safe evidence.</strong> Reuse Store Pulse semantics through sanitized fixtures and audited fallbacks rather than exposing store-scoped queries.</div>
-        <div class="decision"><strong>Persistence defines success.</strong> A walkthrough is accepted when its Convex record is durable; notification failure stays observable and retryable behind the boundary.</div>
+        <div class="decision"><strong>Persistence defines success.</strong> A walkthrough is accepted when its Convex record is durable or the unchanged submission key is safely deduplicated; notification failure stays observable and retryable behind the boundary.</div>
+        <div class="decision"><strong>Replay memory stays bounded.</strong> Same-key equivalents remain idempotently accepted. Equivalent content under a fresh key receives a minimal HMAC replay alias while per-email and global capacity remains; exhaustion returns generic recoverable unavailable without persistence.</div>
         <div class="decision"><strong>Anonymous writes use owned ingress.</strong> Origin, content type, and body size are checked before an internal Convex mutation; persistence and recovery functions are never public.</div>
         <div class="decision"><strong>Retries are idempotent without losing corrections.</strong> The same key and payload dedupe; conflicting key reuse has no side effect; materially changed same-email requests persist as linked follow-ups.</div>
         <div class="decision"><strong>PII has an owner and expiry.</strong> Internal-only open/resolved/abandoned operations, bounded notification attempts, stored-email proof for redaction, MailerSend field allowlists, and versioned server-keyed replay tombstones keep durable leads from becoming durable orphans.</div>
@@ -154,7 +155,7 @@
         <ol class="units">
           <li><strong>Positioning and proof gate</strong><div class="deps">External dependency: five eligible owner-operators and product-owner review.</div>Pre-register the comprehension rubric, record every eligible response, map the core sequence plus one cross-channel and one small-team-control proof, maintain a freshness manifest, and pre-register the launch-review rubric.</li>
           <li><strong>Public and app route separation</strong><div class="deps">Runs in parallel with units 1 and 3.</div>Make <code>/</code> public, move authenticated dispatch to <code>/app</code>, redirect <code>/landing</code>, suppress public operational chrome, and keep process-root providers stable.</li>
-          <li><strong>Walkthrough persistence</strong><div class="deps">Deployment requires an accountable recipient and operational owner.</div>Add owned HTTP ingress, immutable records/follow-ups, canonical idempotency, evidence-based budgets, ambiguity-safe notification attempts, internal-only resolution, and retention/redaction.</li>
+          <li><strong>Walkthrough persistence</strong><div class="deps">Deployment requires an accountable recipient and operational owner.</div>Add owned HTTP ingress, immutable records/follow-ups, canonical same-key idempotency, budget-bounded fresh-key replay aliases, evidence-based budgets, ambiguity-safe notification attempts, internal-only resolution, and retention/redaction.</li>
           <li><strong>Walkthrough experience</strong><div class="deps">Depends on units 2 and 3.</div>Build the accessible <code>/walkthrough</code> form, retained failure state, retry identity, confirmation, and secondary sign-in.</li>
           <li><strong>Product-proof system</strong><div class="deps">Depends on unit 1.</div>Create sanitized fixtures, audited assets, staged responsive evidence, static poster fallback, and reduced-motion parity.</li>
           <li><strong>Product-page narrative</strong><div class="deps">Depends on units 1, 2, 4, and 5.</div>Compose the approved sales-to-stock story, two evidenced breadth moments, fixed crawler metadata, dedicated privacy-safe funnel ingress, and prospect-first conversion hierarchy.</li>
@@ -184,7 +185,7 @@
             <tr><td>Real surfaces do not prove a transition</td><td>Narrow the story; never fabricate connective evidence.</td></tr>
             <tr><td>Media leaks protected data</td><td>Use a field-level proof audit and production-owned fixtures/assets.</td></tr>
             <tr><td>Root migration breaks app navigation</td><td>Centralize route destinations and cover public, app, login, legacy, and deep-link paths.</td></tr>
-            <tr><td>Low-friction spam or duplicate leads</td><td>Bound inputs, origin/body checks, honeypot, per-email ceilings, indexed idempotency, and non-enumerating outcomes.</td></tr>
+            <tr><td>Low-friction spam or duplicate leads</td><td>Bound inputs, origin/body checks, honeypot, per-email ceilings, indexed same-key idempotency, budget-bounded fresh-key aliases, and non-enumerating outcomes. Alias exhaustion is recoverable unavailable without persistence.</td></tr>
             <tr><td>Distributed abuse rotates identities</td><td>Origin/body controls, global persistence and notification budgets, monitoring, emergency disable, and an explicit challenge-provider escalation threshold.</td></tr>
             <tr><td>Notification fails or times out ambiguously</td><td>Preserve durable lead success, lease attempts, record outcome unknown, and require deliberate authorized resolution instead of blind resend.</td></tr>
             <tr><td>Lead PII becomes orphaned or over-retained</td><td>Name an owner, expose bounded internal lifecycle commands, apply retention/redaction, and preserve only non-PII replay evidence.</td></tr>
@@ -199,7 +200,7 @@
           <li>Unauthenticated Playwright coverage at desktop and mobile sizes, including keyboard, reduced motion, media failure, and walkthrough acceptance.</li>
           <li>Authenticated route and POS deep-link characterization before and after migration.</li>
           <li>Public bundle inspection for protected query references, sensitive fixture content, metadata, and asset weight.</li>
-          <li>Ingress checks for origin, body size, content type, collisions, concurrency, abuse budgets, emergency disable, and generic public errors.</li>
+          <li>Ingress checks for origin, body size, content type, same-key collisions, concurrent retries, bounded fresh-key alias exhaustion, abuse budgets, emergency disable, and generic public errors.</li>
           <li>Operational verification for lead ownership, notification ambiguity, PII retention/redaction, privacy disclosure, and authorized recovery.</li>
           <li>Privacy-safe funnel reconciliation for page view, CTA selection, form start, durable acceptance, and qualified owner follow-up.</li>
           <li>A pre-registered first-week rubric separates message evidence from traffic quality, form/ingress incidents, notification failures, and owner follow-up latency; inconclusive evidence stays inconclusive.</li>

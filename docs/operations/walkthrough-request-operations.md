@@ -8,7 +8,13 @@ access: restricted-convex-deployment-operators
 
 Athena's `walkthroughRequest` table is the system of record. A `202 {"accepted":true}` means the request was durably stored (or safely deduplicated); notification delivery is secondary. There is no public or tenant-admin lead read, retry, lifecycle, aggregate-read, export, or redaction API.
 
+Retry the same submission key only with the same canonical payload; that path remains idempotently accepted without spending fresh-key capacity. When equivalent content arrives under a newly observed key, Athena stores a minimal HMAC replay alias so the accepted key cannot later be reused with changed content. Fresh-key aliases consume the configured per-email and global admission budgets. Once either ceiling is exhausted, another fresh-key equivalent returns generic recoverable `temporarily_unavailable` without persistence; the prospect retains the form and can retry later with the unchanged key. This deliberate bound prevents duplicate suppression from becoming unbounded storage.
+
 Before production, configure an exact production and QA origin allowlist, the owner-approved `WALKTHROUGH_PRIVACY_CONTACT`, one accountable recipient, approved limits from the abuse-budget report, and a distinct environment-specific HMAC key ring. The HTTP ingress remains closed when the privacy contact is absent or invalid. `WALKTHROUGH_ALLOW_LOCAL_ORIGINS=true` is local-development-only and must be absent from QA and production. Keep one active HMAC version plus every prior verification key until all tombstones signed by it have expired. Never paste key material, lead payloads, or provider response bodies into logs or tickets.
+
+The public build has a separate compile-time setting: `VITE_WALKTHROUGH_PRIVACY_CONTACT`. Set it to the same owner-approved address as the Convex runtime `WALKTHROUGH_PRIVACY_CONTACT`; the values must not diverge. Changing the Vite value requires rebuilding and redeploying Athena—it cannot be changed by updating Convex environment variables alone. Leaving it empty intentionally keeps the browser form disabled.
+
+Before opening submissions, verify the deployed `/privacy` page publishes the approved address, `/walkthrough` has an enabled submit action, and a controlled request from an allowed origin reaches durable acceptance. Confirm the Convex runtime uses the same address and that a missing or mismatched launch setting is corrected before accepting production traffic.
 
 ## Restricted commands
 

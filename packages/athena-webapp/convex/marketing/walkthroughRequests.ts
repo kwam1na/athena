@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
 import { env, internalMutation, internalQuery, type MutationCtx } from "../_generated/server";
-import { appendFunnelEventWithCtx } from "./landingFunnelEvents";
+import { appendFunnelAggregateWithCtx, appendFunnelEventWithCtx } from "./landingFunnelEvents";
 import {
   createWalkthroughDedupeHmac,
   getActiveWalkthroughHmacKey,
@@ -10,6 +10,7 @@ import {
   matchesWalkthroughTombstone,
 } from "./walkthroughHmac";
 import { consumeWalkthroughBudget } from "./walkthroughBudgets";
+import { normalizeWalkthroughEmail, normalizeWalkthroughText } from "./walkthroughNormalization";
 import {
   walkthroughDailyPerEmailLimit,
   walkthroughHourlyGlobalLimit,
@@ -19,7 +20,7 @@ const DAY = 86_400_000;
 const qualificationValidator = v.union(v.literal("qualified"), v.literal("not_qualified"), v.literal("unknown"));
 
 function boundedText(value: string, min: number, max: number, label: string) {
-  const normalized = value.replace(/[\u0000-\u001F\u007F]/g, " ").replace(/\s+/g, " ").trim();
+  const normalized = normalizeWalkthroughText(value);
   if (normalized.length < min || normalized.length > max) throw new Error(`Invalid ${label}`);
   return normalized;
 }
@@ -46,7 +47,8 @@ export const accept = internalMutation({
       : { accepted: false as const, inserted: false as const, reason: "retry" as const };
 
     const name = boundedText(args.name, 2, 100, "name");
-    const normalizedEmail = boundedText(args.workEmail, 5, 254, "email").toLowerCase();
+    const normalizedEmail = normalizeWalkthroughEmail(args.workEmail);
+    if (normalizedEmail.length < 5 || normalizedEmail.length > 254) throw new Error("Invalid email");
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) throw new Error("Invalid email");
     const businessName = boundedText(args.businessName, 2, 160, "business name");
     const businessNeed = boundedText(args.businessNeed, 10, 1_500, "business need");
@@ -71,55 +73,8 @@ export const accept = internalMutation({
       });
     }
 
-    for (const key of getWalkthroughHmacVerificationKeys()) {
-      const dedupeHmac = await createWalkthroughDedupeHmac(
-        normalizedEmail,
-        args.payloadDigest,
-        key.secret,
-      );
-      const equivalentTombstone = await ctx.db
-        .query("walkthroughRequestTombstone")
-        .withIndex("by_keyVersion_and_dedupeHmac_and_expiresAt", (q) =>
-          q
-            .eq("keyVersion", key.version)
-            .eq("dedupeHmac", dedupeHmac)
-            .gt("expiresAt", args.submittedAt),
-        )
-        .first();
-      if (equivalentTombstone) {
-        await ctx.db.insert("walkthroughRequestTombstone", {
-          submissionKey: args.submissionKey,
-          dedupeHmac,
-          keyVersion: key.version,
-          createdAt: args.submittedAt,
-          expiresAt: Math.min(
-            equivalentTombstone.expiresAt,
-            args.submittedAt + 365 * DAY,
-          ),
-        });
-        return { accepted: true as const, inserted: false as const, followUp: false };
-      }
-    }
-    const recent = await ctx.db.query("walkthroughRequest")
-      .withIndex("by_normalizedEmail_and_submittedAt", (q) => q.eq("normalizedEmail", normalizedEmail).gte("submittedAt", args.submittedAt - DAY))
-      .order("desc").take(10);
-    const equivalent = recent.find((row) => row.payloadDigest === args.payloadDigest);
-    if (equivalent) {
-      const { secret, version } = getActiveWalkthroughHmacKey();
-      await ctx.db.insert("walkthroughRequestTombstone", {
-        submissionKey: args.submissionKey,
-        dedupeHmac: await createWalkthroughDedupeHmac(
-          normalizedEmail,
-          args.payloadDigest,
-          secret,
-        ),
-        keyVersion: version,
-        createdAt: args.submittedAt,
-        expiresAt: args.submittedAt + 365 * DAY,
-      });
-      return { accepted: true as const, inserted: false as const, followUp: Boolean(equivalent.parentRequestId) };
-    }
-
+    // Every newly observed key consumes the same bounded admission budget,
+    // including equivalent aliases, so replay memory cannot grow without limit.
     const emailWindow = Math.floor(args.submittedAt / DAY) * DAY;
     const perEmailOk = await consumeWalkthroughBudget(
       ctx,
@@ -137,6 +92,49 @@ export const accept = internalMutation({
       walkthroughHourlyGlobalLimit(),
     );
     if (!globalOk) return { accepted: false as const, inserted: false as const, reason: "unavailable" as const };
+
+    for (const key of getWalkthroughHmacVerificationKeys()) {
+      const dedupeHmac = await createWalkthroughDedupeHmac(
+        normalizedEmail,
+        args.payloadDigest,
+        key.secret,
+      );
+      const equivalentTombstone = await ctx.db
+        .query("walkthroughRequestTombstone")
+        .withIndex("by_keyVersion_and_dedupeHmac_and_expiresAt", (q) =>
+          q
+            .eq("keyVersion", key.version)
+            .eq("dedupeHmac", dedupeHmac)
+            .gt("expiresAt", args.submittedAt),
+        )
+        .first();
+      if (equivalentTombstone) {
+        const active = getActiveWalkthroughHmacKey();
+        await ctx.db.insert("walkthroughRequestTombstone", {
+          submissionKey: args.submissionKey,
+          dedupeHmac: await createWalkthroughDedupeHmac(normalizedEmail, args.payloadDigest, active.secret),
+          keyVersion: active.version,
+          createdAt: args.submittedAt,
+          expiresAt: Math.min(equivalentTombstone.expiresAt, args.submittedAt + 365 * DAY),
+        });
+        return { accepted: true as const, inserted: false as const, followUp: false };
+      }
+    }
+    const recent = await ctx.db.query("walkthroughRequest")
+      .withIndex("by_normalizedEmail_and_submittedAt", (q) => q.eq("normalizedEmail", normalizedEmail).gte("submittedAt", args.submittedAt - DAY))
+      .order("desc").take(10);
+    const equivalent = recent.find((row) => row.payloadDigest === args.payloadDigest);
+    if (equivalent) {
+      const active = getActiveWalkthroughHmacKey();
+      await ctx.db.insert("walkthroughRequestTombstone", {
+        submissionKey: args.submissionKey,
+        dedupeHmac: await createWalkthroughDedupeHmac(normalizedEmail, args.payloadDigest, active.secret),
+        keyVersion: active.version,
+        createdAt: args.submittedAt,
+        expiresAt: args.submittedAt + 365 * DAY,
+      });
+      return { accepted: true as const, inserted: false as const, followUp: Boolean(equivalent.parentRequestId) };
+    }
 
     const parent = await ctx.db
       .query("walkthroughRequest")
@@ -168,5 +166,5 @@ async function audit(ctx: MutationCtx, requestId: Id<"walkthroughRequest">, oper
   await ctx.db.insert("walkthroughOperationsAudit", { requestId, operatorReference: boundedText(operatorReference, 3, 100, "operator reference"), action, priorState, resultingState, reasonCode: boundedText(reasonCode, 2, 80, "reason code"), occurredAt });
 }
 
-export const resolve = internalMutation({ args: { requestId: v.id("walkthroughRequest"), qualification: qualificationValidator, operatorReference: v.string(), reasonCode: v.string(), occurredAt: v.number() }, handler: async (ctx, args) => { const row = await ctx.db.get("walkthroughRequest", args.requestId); if (!row) throw new Error("Request not found"); if (row.status !== "open" || row.redactedAt) throw new Error("Only an open request can be resolved"); await ctx.db.patch("walkthroughRequest", row._id, { status: "resolved", qualification: args.qualification, terminalAt: args.occurredAt, lastActivityAt: args.occurredAt }); await audit(ctx, row._id, args.operatorReference, "resolve", row.status, "resolved", args.reasonCode, args.occurredAt); return null; } });
+export const resolve = internalMutation({ args: { requestId: v.id("walkthroughRequest"), qualification: qualificationValidator, operatorReference: v.string(), reasonCode: v.string(), occurredAt: v.number() }, handler: async (ctx, args) => { const row = await ctx.db.get("walkthroughRequest", args.requestId); if (!row) throw new Error("Request not found"); if (row.status !== "open" || row.redactedAt) throw new Error("Only an open request can be resolved"); await ctx.db.patch("walkthroughRequest", row._id, { status: "resolved", qualification: args.qualification, terminalAt: args.occurredAt, lastActivityAt: args.occurredAt }); await appendFunnelAggregateWithCtx(ctx, { event: args.qualification, occurredAt: args.occurredAt }); await audit(ctx, row._id, args.operatorReference, "resolve", row.status, "resolved", args.reasonCode, args.occurredAt); return null; } });
 export const abandon = internalMutation({ args: { requestId: v.id("walkthroughRequest"), operatorReference: v.string(), reasonCode: v.string(), occurredAt: v.number() }, handler: async (ctx, args) => { const row = await ctx.db.get("walkthroughRequest", args.requestId); if (!row) throw new Error("Request not found"); if (row.status !== "open" || row.redactedAt) throw new Error("Only an open request can be abandoned"); await ctx.db.patch("walkthroughRequest", row._id, { status: "abandoned", terminalAt: args.occurredAt, lastActivityAt: args.occurredAt }); await audit(ctx, row._id, args.operatorReference, "abandon", row.status, "abandoned", args.reasonCode, args.occurredAt); return null; } });

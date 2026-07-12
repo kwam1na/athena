@@ -1,8 +1,15 @@
+import { useEffect } from "react";
+
+import { emitLandingFunnelEvent } from "@/lib/marketing/landingFunnelClient";
 import { PublicLayout } from "./-public-layout";
 
 export function Index() {
+  useEffect(() => {
+    emitLandingFunnelEvent("page_view");
+  }, []);
+
   return (
-    <PublicLayout>
+    <PublicLayout trackWalkthroughCta>
       <main className="mx-auto flex min-h-[calc(100svh-4rem)] w-full max-w-7xl items-center px-layout-md py-layout-3xl sm:px-layout-xl">
         <div className="max-w-3xl space-y-layout-lg">
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-signal">

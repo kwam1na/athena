@@ -1,6 +1,15 @@
 import { v } from "convex/values";
 
 export const landingFunnelEventName = v.union(v.literal("page_view"), v.literal("walkthrough_cta"), v.literal("form_start"), v.literal("durable_acceptance"));
+export const landingFunnelAggregateEventName = v.union(
+  v.literal("page_view"),
+  v.literal("walkthrough_cta"),
+  v.literal("form_start"),
+  v.literal("durable_acceptance"),
+  v.literal("qualified"),
+  v.literal("not_qualified"),
+  v.literal("unknown"),
+);
 export const landingFunnelEventSchema = v.object({
   event: landingFunnelEventName,
   occurredAt: v.number(),
@@ -10,7 +19,7 @@ export const landingFunnelEventSchema = v.object({
 });
 export const landingFunnelDailyBucketSchema = v.object({
   day: v.string(),
-  event: landingFunnelEventName,
+  event: landingFunnelAggregateEventName,
   device: v.string(),
   source: v.string(),
   count: v.number(),

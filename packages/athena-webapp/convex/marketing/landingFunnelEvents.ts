@@ -13,10 +13,19 @@ export async function appendFunnelEventWithCtx(ctx: MutationCtx, args: {
   device?: "mobile" | "desktop" | "tablet" | "unknown";
   source?: "direct" | "search" | "social" | "referral" | "unknown";
 }) {
+  await ctx.db.insert("landingFunnelEvent", { ...args, day: new Date(args.occurredAt).toISOString().slice(0, 10) });
+  await appendFunnelAggregateWithCtx(ctx, args);
+}
+
+export async function appendFunnelAggregateWithCtx(ctx: MutationCtx, args: {
+  event: "page_view" | "walkthrough_cta" | "form_start" | "durable_acceptance" | "qualified" | "not_qualified" | "unknown";
+  occurredAt: number;
+  device?: "mobile" | "desktop" | "tablet" | "unknown";
+  source?: "direct" | "search" | "social" | "referral" | "unknown";
+}) {
   const day = new Date(args.occurredAt).toISOString().slice(0, 10);
   const device = args.device ?? "unknown";
   const source = args.source ?? "unknown";
-  await ctx.db.insert("landingFunnelEvent", { ...args, day });
   const bucket = await ctx.db.query("landingFunnelDailyBucket")
     .withIndex("by_day_and_event_and_device_and_source", (q) => q.eq("day", day).eq("event", args.event).eq("device", device).eq("source", source))
     .unique();

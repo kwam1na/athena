@@ -62,3 +62,25 @@ it("self-continues bounded funnel cleanup batches", async () => {
     await t.run((ctx) => ctx.db.query("landingFunnelDailyBucket").take(10)),
   ).toHaveLength(0);
 });
+
+it("expires identity-free qualification aggregates on the aggregate schedule", async () => {
+  const t = convexTest(schema, modules);
+  const now = 396 * 86_400_000;
+  await t.run((ctx) =>
+    ctx.db.insert("landingFunnelDailyBucket", {
+      day: "2025-01-01",
+      event: "not_qualified",
+      device: "unknown",
+      source: "unknown",
+      count: 2,
+      updatedAt: 0,
+    }),
+  );
+
+  await t.mutation(internal.marketing.landingFunnelRetention.cleanupBatch, {
+    now,
+  });
+  expect(
+    await t.run((ctx) => ctx.db.query("landingFunnelDailyBucket").take(10)),
+  ).toHaveLength(0);
+});

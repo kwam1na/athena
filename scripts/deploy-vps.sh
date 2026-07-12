@@ -18,10 +18,21 @@ DEV_CONVEX_CLOUD="${DEV_CONVEX_CLOUD:-https://jovial-wildebeest-179.convex.cloud
 DEV_CONVEX_SITE="${DEV_CONVEX_SITE:-https://jovial-wildebeest-179.convex.site}"
 DEV_API_URL="${DEV_API_URL:-https://dev.wigclub.store}"
 STOREFRONT_URL="${STOREFRONT_URL:-https://wigclub.store}"
+VITE_WALKTHROUGH_PRIVACY_CONTACT="${VITE_WALKTHROUGH_PRIVACY_CONTACT:-}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 source "$SCRIPT_DIR/convex-node-env.sh"
+
+validate_walkthrough_privacy_contact() {
+  if [ -n "$VITE_WALKTHROUGH_PRIVACY_CONTACT" ] &&
+    [[ ! "$VITE_WALKTHROUGH_PRIVACY_CONTACT" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,63}$ ]]; then
+    printf 'VITE_WALKTHROUGH_PRIVACY_CONTACT must be empty or a valid email address.\n' >&2
+    return 1
+  fi
+}
+
+validate_walkthrough_privacy_contact
 
 usage() {
   cat <<USAGE
@@ -68,6 +79,9 @@ Environment:
   ATHENA_CONVEX_ESBUILD_BIN
                     Absolute path to a working esbuild binary for Convex deploy.
                     Defaults to the repo-level esbuild binary on Apple Silicon.
+  VITE_WALKTHROUGH_PRIVACY_CONTACT
+                    Approved public privacy contact. Empty keeps walkthrough
+                    submission disabled; a non-empty value must be a valid email.
 USAGE
 }
 
@@ -180,6 +194,7 @@ APP_NAME="$3"
 PACKAGE_DIR="$4"
 ENV_SCRIPT="$5"
 DEPLOY_REF="$6"
+read -r -a BUILD_ENV <<< "$ENV_SCRIPT"
 
 export BUN_INSTALL="${BUN_INSTALL:-/root/.bun}"
 export PATH="$BUN_INSTALL/bin:$PATH"
@@ -201,7 +216,7 @@ cd "$REMOTE_SOURCE_DIR/$PACKAGE_DIR"
 rm -rf dist
 export VITE_ATHENA_WEBAPP_VERSION="$fun_name ($timestamp)"
 export VITE_ATHENA_WEBAPP_BUILD_SHA="$git_sha"
-eval "$ENV_SCRIPT bun run build"
+env "${BUILD_ENV[@]}" bun run build
 
 mkdir -p "$version_path"
 printf '%s\n' "$fun_name" > "$version_path/fun-name.txt"
@@ -226,11 +241,17 @@ REMOTE_SCRIPT
 build_static_app_locally() {
   local package_dir="$1"
   local env_script="$2"
+  local app_version="$3"
+  local build_sha="$4"
+  local -a build_env
+  read -r -a build_env <<< "$env_script"
 
   (
     cd "$package_dir"
     rm -rf dist
-    eval "$env_script bun run build"
+    VITE_ATHENA_WEBAPP_VERSION="$app_version" \
+    VITE_ATHENA_WEBAPP_BUILD_SHA="$build_sha" \
+      env "${build_env[@]}" bun run build
   )
 }
 
@@ -316,7 +337,7 @@ deploy_static_app_local() {
   git_sha="$(git rev-parse HEAD)"
   deployed_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
-  build_static_app_locally "$package_dir" "VITE_ATHENA_WEBAPP_VERSION=\"$fun_name ($version)\" VITE_ATHENA_WEBAPP_BUILD_SHA=\"$git_sha\" $env_script"
+  build_static_app_locally "$package_dir" "$env_script" "$fun_name ($version)" "$git_sha"
   upload_static_app_build "$app_name" "$package_dir" "$version" "$fun_name" "$git_sha" "$deployed_at"
 }
 
@@ -324,14 +345,14 @@ deploy_athena() {
   deploy_static_app \
     "athena-webapp" \
     "packages/athena-webapp" \
-    "VITE_CONVEX_URL=$PROD_CONVEX_CLOUD VITE_API_GATEWAY_URL=$PROD_CONVEX_SITE VITE_STOREFRONT_URL=$STOREFRONT_URL"
+    "VITE_CONVEX_URL=$PROD_CONVEX_CLOUD VITE_API_GATEWAY_URL=$PROD_CONVEX_SITE VITE_STOREFRONT_URL=$STOREFRONT_URL VITE_WALKTHROUGH_PRIVACY_CONTACT=$VITE_WALKTHROUGH_PRIVACY_CONTACT"
 }
 
 deploy_athena_local() {
   deploy_static_app_local \
     "athena-webapp" \
     "packages/athena-webapp" \
-    "VITE_CONVEX_URL=$PROD_CONVEX_CLOUD VITE_API_GATEWAY_URL=$PROD_CONVEX_SITE VITE_STOREFRONT_URL=$STOREFRONT_URL"
+    "VITE_CONVEX_URL=$PROD_CONVEX_CLOUD VITE_API_GATEWAY_URL=$PROD_CONVEX_SITE VITE_STOREFRONT_URL=$STOREFRONT_URL VITE_WALKTHROUGH_PRIVACY_CONTACT=$VITE_WALKTHROUGH_PRIVACY_CONTACT"
 }
 
 deploy_storefront() {
@@ -375,7 +396,7 @@ REMOTE_SCRIPT
 }
 
 deploy_athena_qa() {
-  remote_script "$REMOTE_SOURCE_DIR" "$ATHENA_QA_PORT" "$DEV_CONVEX_CLOUD" "$DEV_CONVEX_SITE" "$ATHENA_QA_HOST" <<'REMOTE_SCRIPT'
+  remote_script "$REMOTE_SOURCE_DIR" "$ATHENA_QA_PORT" "$DEV_CONVEX_CLOUD" "$DEV_CONVEX_SITE" "$ATHENA_QA_HOST" "$VITE_WALKTHROUGH_PRIVACY_CONTACT" <<'REMOTE_SCRIPT'
 set -euo pipefail
 
 REMOTE_SOURCE_DIR="$1"
@@ -383,6 +404,7 @@ ATHENA_QA_PORT="$2"
 DEV_CONVEX_CLOUD="$3"
 DEV_CONVEX_SITE="$4"
 ATHENA_QA_HOST="$5"
+VITE_WALKTHROUGH_PRIVACY_CONTACT="$6"
 
 export BUN_INSTALL="${BUN_INSTALL:-/root/.bun}"
 export PATH="$BUN_INSTALL/bin:$PATH"
@@ -395,6 +417,7 @@ fi
 
 VITE_CONVEX_URL="$DEV_CONVEX_CLOUD" \
 VITE_API_GATEWAY_URL="$DEV_CONVEX_SITE" \
+VITE_WALKTHROUGH_PRIVACY_CONTACT="$VITE_WALKTHROUGH_PRIVACY_CONTACT" \
   pm2 start bun --name athena-qa -- run dev -- --host 127.0.0.1 --port "$ATHENA_QA_PORT" --strictPort
 
 pm2 save

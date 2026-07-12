@@ -72,6 +72,62 @@ describe("walkthrough persistence contract", () => {
     expect(await t.run((ctx) => ctx.db.query("walkthroughRequest").take(10))).toHaveLength(2);
   });
 
+  it("bounds replay aliases for equivalent repeats with fresh keys", async () => {
+    const t = convexTest(schema, modules);
+    await t.mutation(internal.marketing.walkthroughRequests.accept, valid);
+
+    const results = [];
+    for (let index = 0; index < 12; index += 1) {
+      results.push(
+        await t.mutation(internal.marketing.walkthroughRequests.accept, {
+          ...valid,
+          submissionKey: `01JFRESHRETRY${String(index).padStart(12, "0")}`,
+        }),
+      );
+    }
+
+    expect(results.filter((result) => result.accepted)).toHaveLength(3);
+    expect(results.filter((result) => !result.accepted)).toHaveLength(9);
+    expect(
+      results
+        .filter((result) => !result.accepted)
+        .every(
+          (result) =>
+            !result.inserted && result.reason === "unavailable",
+        ),
+    ).toBe(true);
+    expect(
+      await t.run((ctx) => ctx.db.query("walkthroughRequestTombstone").take(20)),
+    ).toHaveLength(3);
+    expect(
+      await t.run((ctx) => ctx.db.query("walkthroughRequest").take(20)),
+    ).toHaveLength(1);
+  });
+
+  it("rejects changed content when an accepted equivalent fresh key is reused", async () => {
+    const t = convexTest(schema, modules);
+    await t.mutation(internal.marketing.walkthroughRequests.accept, valid);
+    const aliasKey = "01JBOUNDALIASBOUNDALIASBOUND";
+    await expect(
+      t.mutation(internal.marketing.walkthroughRequests.accept, {
+        ...valid,
+        submissionKey: aliasKey,
+      }),
+    ).resolves.toMatchObject({ accepted: true, inserted: false });
+
+    await expect(
+      t.mutation(internal.marketing.walkthroughRequests.accept, {
+        ...valid,
+        submissionKey: aliasKey,
+        payloadDigest: `sha256:${"e".repeat(64)}`,
+        businessNeed: "Changed content cannot reuse an accepted alias key.",
+      }),
+    ).resolves.toMatchObject({ accepted: false, reason: "retry" });
+    expect(
+      await t.run((ctx) => ctx.db.query("walkthroughRequest").take(10)),
+    ).toHaveLength(1);
+  });
+
   it("links a materially changed follow-up after the rapid-dedupe window", async () => {
     const t = convexTest(schema, modules);
     const first = await t.mutation(
@@ -121,6 +177,21 @@ describe("walkthrough persistence contract", () => {
       }),
     ).resolves.toMatchObject({ accepted: true, inserted: false });
     expect(await t.run((ctx) => ctx.db.query("walkthroughRequest").take(10))).toHaveLength(0);
+    const tombstones = await t.run((ctx) =>
+      ctx.db.query("walkthroughRequestTombstone").take(10),
+    );
+    expect(tombstones).toHaveLength(2);
+    expect(tombstones.find((row) => row.submissionKey === "01JNEWKEYNEWKEYNEWKEYNEWKEY"))
+      .toMatchObject({ keyVersion: "v2" });
+
+    await expect(
+      t.mutation(internal.marketing.walkthroughRequests.accept, {
+        ...valid,
+        submissionKey: "01JNEWKEYNEWKEYNEWKEYNEWKEY",
+        payloadDigest: `sha256:${"f".repeat(64)}`,
+        businessNeed: "Rotated alias keys still reject changed replay content.",
+      }),
+    ).resolves.toMatchObject({ accepted: false, reason: "retry" });
   });
 
   it("returns retry guidance when a redacted key is reused for changed content", async () => {
@@ -173,6 +244,24 @@ describe("walkthrough persistence contract", () => {
       occurredAt: 2_000,
     });
 
+    expect(
+      await t.run((ctx) =>
+        ctx.db
+          .query("landingFunnelDailyBucket")
+          .withIndex("by_day_and_event_and_device_and_source", (q) =>
+            q
+              .eq("day", "1970-01-01")
+              .eq("event", "qualified")
+              .eq("device", "unknown")
+              .eq("source", "unknown"),
+          )
+          .unique(),
+      ),
+    ).toMatchObject({ count: 1 });
+    expect(
+      await t.run((ctx) => ctx.db.query("landingFunnelEvent").take(10)),
+    ).toHaveLength(0);
+
     await expect(
       t.mutation(internal.marketing.walkthroughRequests.abandon, {
         requestId,
@@ -181,5 +270,29 @@ describe("walkthrough persistence contract", () => {
         occurredAt: 3_000,
       }),
     ).rejects.toThrow("Only an open request can be abandoned");
+
+    await expect(
+      t.mutation(internal.marketing.walkthroughRequests.resolve, {
+        requestId,
+        qualification: "qualified",
+        operatorReference: "restricted-operator",
+        reasonCode: "duplicate_resolution",
+        occurredAt: 4_000,
+      }),
+    ).rejects.toThrow("Only an open request can be resolved");
+    expect(
+      await t.run((ctx) =>
+        ctx.db
+          .query("landingFunnelDailyBucket")
+          .withIndex("by_day_and_event_and_device_and_source", (q) =>
+            q
+              .eq("day", "1970-01-01")
+              .eq("event", "qualified")
+              .eq("device", "unknown")
+              .eq("source", "unknown"),
+          )
+          .unique(),
+      ),
+    ).toMatchObject({ count: 1 });
   });
 });

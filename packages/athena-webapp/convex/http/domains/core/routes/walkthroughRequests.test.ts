@@ -4,6 +4,7 @@ import {
   evaluateWalkthroughIngress,
   walkthroughRequestRoutes,
 } from "./walkthroughRequests";
+import { readBoundedBody } from "./boundedBody";
 
 const validBody = {
   submissionKey: "01JABCDEFGHIJKLMNOPQRSTUVWX",
@@ -182,7 +183,7 @@ describe("walkthrough HTTP ingress", () => {
     },
   );
 
-  it("collapses an internal mutation failure to request rejection", async () => {
+  it("keeps an internal mutation failure recoverable", async () => {
     const response = await walkthroughRequestRoutes.request(
       "/",
       {
@@ -198,9 +199,71 @@ describe("walkthrough HTTP ingress", () => {
       } as never,
     );
 
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(503);
     await expect(response.json()).resolves.toEqual({
-      error: { code: "request_rejected" },
+      error: { code: "temporarily_unavailable" },
     });
+  });
+
+  it("rejects invalid fields before invoking persistence", async () => {
+    const runMutation = vi.fn();
+    const response = await walkthroughRequestRoutes.request(
+      "/",
+      {
+        method: "POST",
+        headers: {
+          origin: "https://athena.example",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ ...validBody, businessNeed: "short" }),
+      },
+      { runMutation } as never,
+    );
+
+    expect(response.status).toBe(400);
+    expect(runMutation).not.toHaveBeenCalled();
+  });
+
+  it("hashes the same canonical payload that persistence normalizes", async () => {
+    const runMutation = vi.fn().mockResolvedValue({ accepted: true });
+    for (const businessName of ["Ada\u0000 Goods", "Ada Goods"]) {
+      const response = await walkthroughRequestRoutes.request(
+        "/",
+        {
+          method: "POST",
+          headers: {
+            origin: "https://athena.example",
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({ ...validBody, businessName }),
+        },
+        { runMutation } as never,
+      );
+      expect(response.status).toBe(202);
+    }
+
+    expect(runMutation.mock.calls[0][1].payloadDigest)
+      .toBe(runMutation.mock.calls[1][1].payloadDigest);
+  });
+
+  it("stops reading a body as soon as the streaming limit is exceeded", async () => {
+    let cancelled = false;
+    const request = new Request("https://athena.example", {
+      method: "POST",
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(new Uint8Array(700));
+          controller.enqueue(new Uint8Array(700));
+        },
+        cancel() {
+          cancelled = true;
+        },
+      }),
+      // Required by Node's Request implementation for a streaming body.
+      duplex: "half",
+    } as RequestInit);
+
+    await expect(readBoundedBody(request, 1_024)).resolves.toBeNull();
+    expect(cancelled).toBe(true);
   });
 });

@@ -6,6 +6,7 @@ import {
   landingFunnelHourlyLimit,
   walkthroughAllowedOrigins,
 } from "../../../../marketing/walkthroughConfig";
+import { readBoundedBody } from "./boundedBody";
 
 const events = new Set(["page_view", "walkthrough_cta", "form_start"]);
 const devices = new Set(["mobile", "desktop", "tablet", "unknown"]);
@@ -24,8 +25,8 @@ landingFunnelEventRoutes.post("/", async (c) => {
   const contentLengthHeader = c.req.header("content-length");
   const contentLength = contentLengthHeader === undefined ? undefined : Number(contentLengthHeader);
   if (contentLength !== undefined && (!Number.isSafeInteger(contentLength) || contentLength < 0 || contentLength > 1_024)) return c.json({ error: { code: "request_rejected" } }, 413);
-  const bytes = new Uint8Array(await c.req.raw.arrayBuffer());
-  if (bytes.byteLength > 1_024) return c.json({ error: { code: "request_rejected" } }, 413);
+  const bytes = await readBoundedBody(c.req.raw, 1_024);
+  if (!bytes) return c.json({ error: { code: "request_rejected" } }, 413);
   let body: Record<string, unknown>;
   try { const parsed: unknown = JSON.parse(new TextDecoder().decode(bytes)); if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error(); body = parsed as Record<string, unknown>; } catch { return c.json({ error: { code: "request_rejected" } }, 400); }
   const event = typeof body.event === "string" && events.has(body.event) ? body.event as "page_view" | "walkthrough_cta" | "form_start" : null;

@@ -63,6 +63,7 @@ import type * as http from "../http.js";
 import type * as http_domains_core_routes_analytics from "../http/domains/core/routes/analytics.js";
 import type * as http_domains_core_routes_auth from "../http/domains/core/routes/auth.js";
 import type * as http_domains_core_routes_bannerMessage from "../http/domains/core/routes/bannerMessage.js";
+import type * as http_domains_core_routes_boundedBody from "../http/domains/core/routes/boundedBody.js";
 import type * as http_domains_core_routes_categories from "../http/domains/core/routes/categories.js";
 import type * as http_domains_core_routes_colors from "../http/domains/core/routes/colors.js";
 import type * as http_domains_core_routes_index from "../http/domains/core/routes/index.js";
@@ -160,6 +161,7 @@ import type * as marketing_landingFunnelRetention from "../marketing/landingFunn
 import type * as marketing_walkthroughBudgets from "../marketing/walkthroughBudgets.js";
 import type * as marketing_walkthroughConfig from "../marketing/walkthroughConfig.js";
 import type * as marketing_walkthroughHmac from "../marketing/walkthroughHmac.js";
+import type * as marketing_walkthroughNormalization from "../marketing/walkthroughNormalization.js";
 import type * as marketing_walkthroughRequestNotifications from "../marketing/walkthroughRequestNotifications.js";
 import type * as marketing_walkthroughRequestRetention from "../marketing/walkthroughRequestRetention.js";
 import type * as marketing_walkthroughRequests from "../marketing/walkthroughRequests.js";
@@ -596,6 +598,7 @@ declare const fullApi: ApiFromModules<{
   "http/domains/core/routes/analytics": typeof http_domains_core_routes_analytics;
   "http/domains/core/routes/auth": typeof http_domains_core_routes_auth;
   "http/domains/core/routes/bannerMessage": typeof http_domains_core_routes_bannerMessage;
+  "http/domains/core/routes/boundedBody": typeof http_domains_core_routes_boundedBody;
   "http/domains/core/routes/categories": typeof http_domains_core_routes_categories;
   "http/domains/core/routes/colors": typeof http_domains_core_routes_colors;
   "http/domains/core/routes/index": typeof http_domains_core_routes_index;
@@ -693,6 +696,7 @@ declare const fullApi: ApiFromModules<{
   "marketing/walkthroughBudgets": typeof marketing_walkthroughBudgets;
   "marketing/walkthroughConfig": typeof marketing_walkthroughConfig;
   "marketing/walkthroughHmac": typeof marketing_walkthroughHmac;
+  "marketing/walkthroughNormalization": typeof marketing_walkthroughNormalization;
   "marketing/walkthroughRequestNotifications": typeof marketing_walkthroughRequestNotifications;
   "marketing/walkthroughRequestRetention": typeof marketing_walkthroughRequestRetention;
   "marketing/walkthroughRequests": typeof marketing_walkthroughRequests;

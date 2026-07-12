@@ -40,6 +40,7 @@ type Env = {
   readonly WALKTHROUGH_MAX_BODY_BYTES: string | undefined;
   readonly WALKTHROUGH_NOTIFICATIONS_DISABLED: string | undefined;
   readonly WALKTHROUGH_NOTIFICATION_RECIPIENT: string | undefined;
+  readonly WALKTHROUGH_PRIVACY_CONTACT: string | undefined;
 };
 
 /**
