@@ -140,7 +140,7 @@ describe("PosRecoveryCodeForm", () => {
     await waitFor(() =>
       expect(window.sessionStorage.setItem).toHaveBeenCalledWith(
         PENDING_ATHENA_AUTH_SYNC_KEY,
-        expect.stringMatching(/"redirectTo":"\/app"/),
+        expect.stringMatching(/"redirectTo":"\/"/),
       ),
     );
     expect(mocked.navigate).not.toHaveBeenCalled();

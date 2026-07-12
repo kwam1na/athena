@@ -1,12 +1,10 @@
-export const PUBLIC_HOME_PATH = "/" as const;
-export const APP_ENTRY_PATH = "/app" as const;
+export const APP_ENTRY_PATH = "/" as const;
+export const PUBLIC_HOME_PATH = "/landing" as const;
 export const LOGIN_PATH = "/login" as const;
-export const LEGACY_LANDING_PATH = "/landing" as const;
 export const WALKTHROUGH_PATH = "/walkthrough" as const;
 
 const PUBLIC_ROUTE_PATHS = new Set<string>([
   PUBLIC_HOME_PATH,
-  LEGACY_LANDING_PATH,
   LOGIN_PATH,
   WALKTHROUGH_PATH,
   "/privacy",
@@ -21,7 +19,7 @@ export function getRecoveryHomePath(pathname: string) {
 }
 
 function normalizePathname(pathname: string) {
-  if (pathname === PUBLIC_HOME_PATH) {
+  if (pathname === APP_ENTRY_PATH) {
     return pathname;
   }
 

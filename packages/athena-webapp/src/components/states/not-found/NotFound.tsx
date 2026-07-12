@@ -11,7 +11,7 @@ export default function NotFound({
 }: {
   entity: string;
   entityIdentifier: string;
-  homePath?: "/" | "/app";
+  homePath?: "/" | "/app" | "/landing";
 }) {
   return (
     <div className="h-full flex items-center justify-center min-h-[60vh]">

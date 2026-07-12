@@ -47,7 +47,7 @@ describe("AppHeader", () => {
     );
     expect(screen.getByRole("link", { name: "athena" })).toHaveAttribute(
       "href",
-      "/app",
+      "/",
     );
     expect(screen.getByLabelText("Development environment")).toHaveClass(
       "border-action-workflow-border",
