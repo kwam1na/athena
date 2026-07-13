@@ -122,6 +122,9 @@ describe("VPS QA deploy contract", () => {
     expect(deployScript).toContain(
       'remote_script "$REMOTE_SOURCE_DIR" "$ATHENA_QA_PORT" "$DEV_CONVEX_CLOUD" "$DEV_CONVEX_SITE" "$ATHENA_QA_HOST" "$VITE_WALKTHROUGH_PRIVACY_CONTACT"',
     );
+    expect(deployScript).toContain(
+      'VITE_WALKTHROUGH_PRIVACY_CONTACT="${6:-}"',
+    );
   });
 
   it("rejects shell metacharacters before any deployment command can run", () => {
