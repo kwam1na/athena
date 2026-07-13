@@ -20,6 +20,7 @@ const mockedHooks = vi.hoisted(() => ({
 const mockedApi = vi.hoisted(() => ({
   authenticateStaffCredentialForApproval:
     "authenticateStaffCredentialForApproval",
+  getSharedDemoContext: "getSharedDemoContext",
   getDailyOpeningSnapshot: "getDailyOpeningSnapshot",
   startStoreDay: "startStoreDay",
 }));
@@ -153,10 +154,7 @@ vi.mock("../staff-auth/StaffAuthenticationDialog", () => ({
     onDismiss,
     open,
   }: {
-    onAuthenticate: (args: {
-      pinHash: string;
-      username: string;
-    }) => Promise<{
+    onAuthenticate: (args: { pinHash: string; username: string }) => Promise<{
       data?: {
         staffProfileId: Id<"staffProfile">;
         staffProfile: { fullName?: string | null };
@@ -202,6 +200,11 @@ vi.mock("~/convex/_generated/api", () => ({
       staffCredentials: {
         authenticateStaffCredentialForApproval:
           mockedApi.authenticateStaffCredentialForApproval,
+      },
+    },
+    sharedDemo: {
+      public: {
+        getContext: mockedApi.getSharedDemoContext,
       },
     },
   },
@@ -637,7 +640,9 @@ describe("DailyOpeningViewContent", () => {
     expect(
       within(carryForwardRegion).queryByText("Carry-forward item 6"),
     ).not.toBeInTheDocument();
-    expect(within(carryForwardRegion).getByText("Showing 1-5 of 7")).toBeInTheDocument();
+    expect(
+      within(carryForwardRegion).getByText("Showing 1-5 of 7"),
+    ).toBeInTheDocument();
 
     const nextPageButton = within(carryForwardRegion).getByRole("button", {
       name: "Go to next page",
@@ -830,7 +835,9 @@ describe("DailyOpeningViewContent", () => {
     });
 
     expect(screen.getByText("Store day started")).toBeInTheDocument();
-    expect(screen.getByText("Athena started Opening Handoff.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Athena started Opening Handoff."),
+    ).toBeInTheDocument();
     const automationPanel = screen
       .getByRole("heading", { name: "Athena automation" })
       .closest("section");
@@ -843,13 +850,16 @@ describe("DailyOpeningViewContent", () => {
     );
     expect(automationPanel).not.toBeNull();
     expect(
-      automationPanel!.compareDocumentPosition(screen.getByText("Prior close")) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
+      automationPanel!.compareDocumentPosition(
+        screen.getByText("Prior close"),
+      ) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(screen.getByText("Started by")).toBeInTheDocument();
     expect(screen.getByText("Athena")).toBeInTheDocument();
     expect(screen.queryByText("Staff unavailable")).not.toBeInTheDocument();
-    expect(screen.queryByText("Athena checked Opening Handoff. No change was made.")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Athena checked Opening Handoff. No change was made."),
+    ).not.toBeInTheDocument();
   });
 
   it("shows manager review evidence when automation starts Opening with review items", () => {
@@ -946,7 +956,9 @@ describe("DailyOpeningViewContent", () => {
       .getByRole("heading", { name: "Opening review" })
       .closest("section")!;
 
-    expect(within(openingReview).getByText("Showing 1-5 of 12")).toBeInTheDocument();
+    expect(
+      within(openingReview).getByText("Showing 1-5 of 12"),
+    ).toBeInTheDocument();
     expect(within(openingReview).getByText("Page 1 of 3")).toBeInTheDocument();
     expect(
       within(openingReview).getByText("Carry-forward review 5"),
@@ -961,7 +973,9 @@ describe("DailyOpeningViewContent", () => {
       }),
     );
 
-    expect(within(openingReview).getByText("Showing 6-10 of 12")).toBeInTheDocument();
+    expect(
+      within(openingReview).getByText("Showing 6-10 of 12"),
+    ).toBeInTheDocument();
     expect(within(openingReview).getByText("Page 2 of 3")).toBeInTheDocument();
     expect(
       within(openingReview).getByText("Carry-forward review 6"),
@@ -976,7 +990,9 @@ describe("DailyOpeningViewContent", () => {
       }),
     );
 
-    expect(within(openingReview).getByText("Showing 11-12 of 12")).toBeInTheDocument();
+    expect(
+      within(openingReview).getByText("Showing 11-12 of 12"),
+    ).toBeInTheDocument();
     expect(within(openingReview).getByText("Page 3 of 3")).toBeInTheDocument();
     expect(
       within(openingReview).getByText("Carry-forward review 12"),
@@ -1068,9 +1084,12 @@ describe("DailyOpeningViewContent", () => {
     const firstCard = screen.getByText("Tokin").closest("article");
     expect(firstCard).not.toBeNull();
 
-    const viewOpenWorkLink = within(firstCard as HTMLElement).getByRole("link", {
-      name: /view open work/i,
-    });
+    const viewOpenWorkLink = within(firstCard as HTMLElement).getByRole(
+      "link",
+      {
+        name: /view open work/i,
+      },
+    );
     expect(viewOpenWorkLink).toBeInTheDocument();
     expect(
       within(firstCard as HTMLElement).queryByRole("button", {
@@ -1123,7 +1142,9 @@ describe("DailyOpeningView", () => {
       isLoadingAccess: false,
     });
     mockedHooks.useMutation.mockReturnValue(vi.fn(async () => ok({})));
-    mockedHooks.useQuery.mockReturnValue(readySnapshot);
+    mockedHooks.useQuery.mockImplementation((query) =>
+      query === mockedApi.getSharedDemoContext ? null : readySnapshot,
+    );
   });
 
   it("queries Opening Handoff with the active store and route params", () => {
@@ -1153,5 +1174,31 @@ describe("DailyOpeningView", () => {
         storeId: "store-1",
       }),
     );
+  });
+
+  it("starts the shared demo day without exposing staff credentials", async () => {
+    const startStoreDayMutation = vi.fn(async () =>
+      ok({ openingId: "opening-1" }),
+    );
+    mockedHooks.useMutation.mockImplementation((mutation) =>
+      mutation === mockedApi.startStoreDay
+        ? startStoreDayMutation
+        : vi.fn(async () => ok({})),
+    );
+    mockedHooks.useQuery.mockImplementation((query) =>
+      query === mockedApi.getSharedDemoContext
+        ? { kind: "shared_demo" }
+        : readySnapshot,
+    );
+
+    render(<DailyOpeningView />);
+    await userEvent
+      .setup()
+      .click(screen.getByRole("button", { name: /start day/i }));
+
+    expect(
+      screen.queryByRole("dialog", { name: "Confirm staff credentials" }),
+    ).not.toBeInTheDocument();
+    await waitFor(() => expect(startStoreDayMutation).toHaveBeenCalledOnce());
   });
 });

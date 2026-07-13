@@ -18,6 +18,7 @@ import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
+import { requireSharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
 import { buildPaymentTotals, transactionCashDelta } from "./paymentTotals";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -72,11 +73,7 @@ type SourceItem = {
 
 type AttentionSeverity = "critical" | "warning" | "info";
 type LaneStatus =
-  | "blocked"
-  | "needs_attention"
-  | "ready"
-  | "closed"
-  | "unknown";
+  "blocked" | "needs_attention" | "ready" | "closed" | "unknown";
 type LifecycleStatus =
   | "not_opened"
   | "operating"
@@ -438,9 +435,7 @@ async function buildWeekMetricForDate(
       0,
     ),
     expenseTransactionCount: expenseTransactions.length,
-    isClosed:
-      currentDailyClose?.status === "completed" &&
-      !isReopened,
+    isClosed: currentDailyClose?.status === "completed" && !isReopened,
     isReopened,
     isSelected: args.isSelected,
     operatingDate: args.operatingDate,
@@ -494,9 +489,7 @@ function dailyCloseSortTime(close: {
   );
 }
 
-function latestDailyClose<T extends { _creationTime?: number }>(
-  closes: T[],
-) {
+function latestDailyClose<T extends { _creationTime?: number }>(closes: T[]) {
   return closes
     .slice()
     .sort((left, right) => dailyCloseSortTime(right) - dailyCloseSortTime(left))
@@ -983,18 +976,18 @@ async function mapOperationalTimelineEvent(
       ? metadata.productId
       : linkedPendingCheckoutProductId
         ? linkedPendingCheckoutProductId
-      : typeof metadata.provisionalProductId === "string"
-        ? metadata.provisionalProductId
-        : pendingCheckoutItem?.provisionalProductId);
+        : typeof metadata.provisionalProductId === "string"
+          ? metadata.provisionalProductId
+          : pendingCheckoutItem?.provisionalProductId);
   const productSkuId =
     pendingCheckoutReviewProductSkuId ??
     (typeof metadata.productSkuId === "string"
       ? (metadata.productSkuId as Id<"productSku">)
       : linkedPendingCheckoutProductSkuId
         ? linkedPendingCheckoutProductSkuId
-      : typeof metadata.provisionalProductSkuId === "string"
-        ? (metadata.provisionalProductSkuId as Id<"productSku">)
-        : pendingCheckoutItem?.provisionalProductSkuId);
+        : typeof metadata.provisionalProductSkuId === "string"
+          ? (metadata.provisionalProductSkuId as Id<"productSku">)
+          : pendingCheckoutItem?.provisionalProductSkuId);
   const productSku = productSkuId
     ? await ctx.db.get("productSku", productSkuId)
     : null;
@@ -1026,7 +1019,7 @@ async function mapOperationalTimelineEvent(
   const productName =
     typeof metadata.productName === "string"
       ? metadata.productName
-      : pendingCheckoutItem?.name ?? event.subjectLabel;
+      : (pendingCheckoutItem?.name ?? event.subjectLabel);
   const productSkuLabel =
     typeof metadata.productSkuLabel === "string"
       ? metadata.productSkuLabel
@@ -2629,12 +2622,19 @@ async function authorizeDailyOperationsSnapshot(
   ctx: QueryCtx,
   args: { storeId: Id<"store"> },
 ) {
+  await requireSharedDemoStoreCapabilityIfApplicable(
+    ctx,
+    "daily_operations.write",
+    args.storeId,
+  );
   const store = await ctx.db.get("store", args.storeId);
   if (!store) {
     throw new Error("Store not found.");
   }
 
-  const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+  const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx, {
+    sharedDemoCapability: "daily_operations.write",
+  });
   const membership = await requireOrganizationMemberRoleWithCtx(ctx, {
     allowedRoles: ["full_admin", "pos_only"],
     failureMessage: "You cannot view daily operations for this store.",
@@ -2760,7 +2760,10 @@ export const getDailyOperationsStoreRequestsSnapshot = query({
 
 export const getDailyOperationsOpenRegisterSessionsSnapshot = query({
   args: dailyOperationsSnapshotArgsValidator,
-  handler: async (ctx, args): Promise<DailyOperationsOpenRegisterSessionsSnapshot> => {
+  handler: async (
+    ctx,
+    args,
+  ): Promise<DailyOperationsOpenRegisterSessionsSnapshot> => {
     await authorizeDailyOperationsSnapshot(ctx, args);
     const statuses = ["open", "active", "closing"] as const;
     const [sessionPages, terminalNamesById] = await Promise.all([
@@ -2783,21 +2786,19 @@ export const getDailyOperationsOpenRegisterSessionsSnapshot = query({
 
     return {
       operatingDate: args.operatingDate,
-      sessions: sessionPages
-        .flat()
-        .map((session) => {
-          const registerLabel = registerSessionLabel(session);
-          const terminalLabel = session.terminalId
-            ? terminalNamesById.get(session.terminalId)
-            : undefined;
+      sessions: sessionPages.flat().map((session) => {
+        const registerLabel = registerSessionLabel(session);
+        const terminalLabel = session.terminalId
+          ? terminalNamesById.get(session.terminalId)
+          : undefined;
 
-          return {
-            displayLabel: terminalLabel
-              ? `${terminalLabel} / ${registerLabel}`
-              : registerLabel,
-            id: session._id,
-          };
-        }),
+        return {
+          displayLabel: terminalLabel
+            ? `${terminalLabel} / ${registerLabel}`
+            : registerLabel,
+          id: session._id,
+        };
+      }),
     };
   },
 });

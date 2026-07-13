@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Id } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
 import * as athenaUserAuth from "../lib/athenaUserAuth";
+import * as sharedDemoActor from "../sharedDemo/actor";
 import {
   buildDailyOperationsSnapshotWithCtx,
   getDailyOperationsAutomationSnapshot,
@@ -18,6 +19,10 @@ import {
 vi.mock("../lib/athenaUserAuth", () => ({
   requireAuthenticatedAthenaUserWithCtx: vi.fn(),
   requireOrganizationMemberRoleWithCtx: vi.fn(),
+}));
+
+vi.mock("../sharedDemo/actor", () => ({
+  requireSharedDemoStoreCapabilityIfApplicable: vi.fn(),
 }));
 
 type TableName =
@@ -2056,6 +2061,18 @@ describe("daily operations overview read model", () => {
         },
       ),
     ).rejects.toThrow("You cannot view daily operations for this store.");
+    expect(
+      sharedDemoActor.requireSharedDemoStoreCapabilityIfApplicable,
+    ).toHaveBeenCalledWith(
+      expect.anything(),
+      "daily_operations.write",
+      "store-1",
+    );
+    expect(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).toHaveBeenCalledWith(expect.anything(), {
+      sharedDemoCapability: "daily_operations.write",
+    });
   });
 
   it("returns a redacted daily operations snapshot for POS-only store members", async () => {
@@ -3352,8 +3369,9 @@ describe("daily operations overview read model", () => {
       to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId",
     });
     expect(
-      snapshot.timeline.find((event) => event.id === "event-online-order-created")
-        ?.onlineOrderLink,
+      snapshot.timeline.find(
+        (event) => event.id === "event-online-order-created",
+      )?.onlineOrderLink,
     ).toEqual({
       label: "#273912",
       matchLabel: "273912",
@@ -4225,7 +4243,8 @@ describe("daily operations overview read model", () => {
             _id: "event-pending-checkout-reviewed",
             createdAt: Date.UTC(2026, 4, 8, 15, 9),
             eventType: "pos_pending_checkout_item_reviewed",
-            message: "Pending checkout item got 2b gel was marked linked to catalog.",
+            message:
+              "Pending checkout item got 2b gel was marked linked to catalog.",
             metadata: {
               pendingCheckoutItemId: "pending-got2b",
             },

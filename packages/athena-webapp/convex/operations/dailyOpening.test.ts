@@ -5,6 +5,7 @@ import type { Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import {
   buildDailyOpeningSnapshotWithCtx,
+  resolveSharedDemoOpeningActorWithCtx,
   startStoreDay,
   startStoreDayWithCtx,
 } from "./dailyOpening";
@@ -99,6 +100,11 @@ function createDb(seed: Partial<Record<TableName, Row[]>> = {}) {
         return chain;
       },
       take: async (limit: number) => filteredRows().slice(0, limit),
+      unique: async () => {
+        const rows = filteredRows();
+        if (rows.length > 1) throw new Error("Expected a unique row");
+        return rows[0] ?? null;
+      },
       withIndex(
         _index: string,
         applyIndex: (builder: {
@@ -261,6 +267,35 @@ function completedDailyClose(overrides: Partial<Row> = {}): Row {
 describe("daily opening backend foundation", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it("resolves the seeded shared demo owner as the Opening actor", async () => {
+    const { db } = createDb({
+      staffProfile: [
+        {
+          _id: "staff-owner",
+          linkedUserId: "demo-owner",
+          status: "active",
+          storeId: "store-1",
+        },
+      ],
+    });
+
+    await expect(
+      resolveSharedDemoOpeningActorWithCtx(
+        { db } as unknown as Pick<MutationCtx, "db">,
+        {
+          athenaUserId: "demo-owner" as Id<"athenaUser">,
+          storeId: "store-1" as Id<"store">,
+        },
+      ),
+    ).resolves.toEqual({
+      kind: "ok",
+      data: {
+        actorStaffProfileId: "staff-owner",
+        actorUserId: "demo-owner",
+      },
+    });
   });
 
   it("keeps daily opening command results aligned with exported return validators", () => {
