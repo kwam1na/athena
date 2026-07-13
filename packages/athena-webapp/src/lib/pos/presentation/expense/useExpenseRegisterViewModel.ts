@@ -789,7 +789,6 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
   return {
     workflowMode: "expense",
     hasActiveStore: Boolean(activeStore),
-    catalogRefreshStatus: "current",
     debug: {
       activeStoreSource: activeStore ? "live" : "missing",
       authDialogOpen: Boolean(activeStore && terminal && !isCashierSignedIn),

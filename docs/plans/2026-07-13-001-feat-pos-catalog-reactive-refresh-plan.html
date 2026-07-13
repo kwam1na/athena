@@ -65,7 +65,7 @@
       </article>
       <article class="card">
         <h3>Included</h3>
-        <ul><li>Store revision and atomic snapshot envelope</li><li>Monotonic IndexedDB persistence</li><li>Idle-gated single-flight coordinator</li><li>One stable bottom-left app-message toast</li></ul>
+        <ul><li>Store revision and atomic snapshot envelope</li><li>Monotonic IndexedDB persistence</li><li>Idle-gated single-flight coordinator</li><li>Silent background retry and recovery</li></ul>
       </article>
       <article class="card">
         <h3>Excluded</h3>
@@ -105,7 +105,7 @@
         <tr><td>Immediate and command-atomic runtime pins</td><td>Every transient blocker pins revision and rows in memory; durable upgrade verifies or re-materializes the version before committing restorable busy state.</td></tr>
         <tr><td>Shared idle authority with repeated checks</td><td>A sale can begin during fetch or persistence; activation must still wait.</td></tr>
         <tr><td>Register-specific orchestration</td><td>Expense, prewarm, and generic consumers keep their current one-shot lifecycle.</td></tr>
-        <tr><td>One stable normal-priority app message</td><td>Reuses the existing toast host, avoids duplicates, and yields to app-update priority.</td></tr>
+        <tr><td>Background-only coordination</td><td>Waiting and automatic recovery do not require cashier decisions or compete with actionable register messages.</td></tr>
       </tbody>
     </table>
   </section>
@@ -118,7 +118,7 @@
       <article class="card unit"><span class="tag">U3</span><h3>Revisioned snapshot envelope</h3><p>Add tiny authenticated revision and revisioned-snapshot queries while preserving the legacy row-array endpoint.</p><p><strong>Depends on:</strong> U1</p></article>
       <article class="card unit"><span class="tag">U4</span><h3>Durable local snapshot</h3><p>Retain revisioned versions, distinguish legacy state, commit pins with durable busy commands, and transactionally mirror the promoted default for rollback readers.</p><p><strong>Depends on:</strong> U3</p></article>
       <article class="card unit"><span class="tag">U5</span><h3>Refresh coordinator</h3><p>Implement latest-observed/applied state, single flight, refresh-budget coalescing, idle/network gates, guarded promotion, retry, and stale-scope suppression.</p><p><strong>Depends on:</strong> U2, U3, U4</p></article>
-      <article class="card unit"><span class="tag">U6</span><h3>Register and message integration</h3><p>Share the operational-idle authority, consolidate ProductEntry catalog ownership, and publish one persistent toast with truthful busy/offline/retry/auth reasons.</p><p><strong>Depends on:</strong> U5</p></article>
+      <article class="card unit"><span class="tag">U6</span><h3>Register integration</h3><p>Share the operational-idle authority, consolidate ProductEntry catalog ownership, and keep waiting/retry/auth states inside the coordinator.</p><p><strong>Depends on:</strong> U5</p></article>
     </div>
   </section>
 
@@ -146,7 +146,7 @@
       <article class="card"><h3>Backend contract</h3><ul><li>Eligible metadata changes advance exactly when effective output changes.</li><li>Availability-only changes never advance.</li><li>Snapshot rows and revision correspond atomically.</li><li>High-cardinality projection read counts stay bounded.</li></ul></article>
       <article class="card"><h3>Durability and races</h3><ul><li>Write failure exposes only previous trusted rows.</li><li>Transient pins carry rows; durable upgrade re-materializes a concurrently pruned version.</li><li>Busy transitions, other tabs, and remounts select the runtime-pinned revision.</li><li>Previous readers can load the mirrored default offline.</li></ul></article>
       <article class="card"><h3>Register behavior</h3><ul><li>Every agreed blocker independently prevents refresh.</li><li>Burst during a sale causes zero full reads until idle and one after.</li><li>Remote create becomes searchable without reload.</li><li>ProductEntry cannot trigger a parallel register refresh.</li></ul></article>
-      <article class="card"><h3>Recovery and communication</h3><ul><li>Offline pauses; reconnect resumes.</li><li>Auth failure does not hot-loop or promise a timer retry.</li><li>One stable toast truthfully distinguishes busy, offline, running, delayed, and auth-paused states.</li><li>Message clears only after this runtime releases its pin and adopts the latest promoted revision.</li></ul></article>
+      <article class="card"><h3>Background recovery</h3><ul><li>Offline pauses; reconnect resumes.</li><li>Auth failure does not hot-loop.</li><li>Busy, offline, running, delayed, and auth-paused states remain internal.</li><li>No catalog-refresh app message or cashier control is registered.</li></ul></article>
     </div>
   </section>
 

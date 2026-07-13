@@ -11,7 +11,7 @@ deepened: 2026-07-13
 
 ## Summary
 
-Add a lightweight, store-scoped catalog revision that an open POS register can subscribe to without live-subscribing to the full catalog. A register-owned refresh coordinator will coalesce newer revisions, wait for the shared operational-idle boundary, fetch one revisioned catalog snapshot, durably persist it, and only then expose it to local search while communicating pending work through the existing bottom-left app-message toast.
+Add a lightweight, store-scoped catalog revision that an open POS register can subscribe to without live-subscribing to the full catalog. A register-owned refresh coordinator coalesces newer revisions, waits for the shared operational-idle boundary, fetches one revisioned catalog snapshot, durably persists it, and only then exposes it to local search. All waiting and recovery coordination remains in the background.
 
 ---
 
@@ -31,8 +31,8 @@ The register intentionally searches a local metadata snapshot, but its current o
 - R6. Preserve the active sale and current searchable catalog while refresh is unsafe.
 - R7. Start or resume refresh automatically when the register is online and every idle blocker is clear.
 - R8. Return rows with their revision from one Convex query snapshot, stage both atomically, and ensure every non-idle runtime remains pinned to its prior retained revision until it safely adopts the promoted default.
-- R9. Publish waiting and running refresh state through one persistent bottom-left app-message toast.
-- R10. Keep a stable message identity across waiting, refreshing, and retry states; clear it only after durable activation and allow higher-priority messages to supersede it.
+- R9. Keep waiting, refreshing, offline, retry-delayed, and authorization-paused states internal; do not publish catalog-refresh app messages or cashier controls.
+- R10. Preserve autonomous recovery and trusted-row fallback without requiring cashier action.
 - R11. Preserve the last trusted active catalog after server-read or local-write failure.
 - R12. Retry transient failures safely, without route reload or cashier action, while avoiding offline and authorization hot loops.
 
@@ -50,15 +50,14 @@ The register intentionally searches a local metadata snapshot, but its current o
 - Do not implement per-SKU delta synchronization, a retained event feed, or cross-tab leader election.
 - Do not change the bounded live-availability or full offline-availability contracts.
 - Do not reprice, remove, or otherwise mutate lines already present in active sale state.
-- Do not add cashier apply, retry, or dismiss controls for catalog refresh.
-- Do not make the generic app-message foundation execute catalog commands or own catalog state.
+- Do not expose catalog-refresh app messages or add cashier apply, retry, or dismiss controls.
 - Scope reactive orchestration to the POS register; expense-register, POS-hub prewarm, and generic catalog consumers retain their current lifecycle.
 - Repair snapshot-affecting mutation paths that bypass projection maintenance only to establish complete revision coverage; unrelated inventory or catalog cleanup remains out of scope.
 
 ### Deferred to Follow-Up Work
 
 - Cross-tab refresh leadership or `BroadcastChannel` deduplication: correctness will come from monotonic store-scoped persistence and stale-completion guards; add coordination only if measured duplicate client calls justify it.
-- Rich freshness telemetry or a cashier-facing catalog diagnostics surface: keep this delivery focused on automatic convergence and restrained operational messaging.
+- Rich freshness telemetry or a cashier-facing catalog diagnostics surface: keep this delivery focused on silent automatic convergence.
 
 ---
 
@@ -71,7 +70,6 @@ The register intentionally searches a local metadata snapshot, but its current o
 - `packages/athena-webapp/convex/pos/application/sync/registerMappingAuthorityRevision.ts` provides a store-scoped monotonic revision pattern.
 - `packages/athena-webapp/src/lib/pos/infrastructure/convex/catalogGateway.ts` owns local hydration, imperative snapshot reads, and catalog persistence; it is the natural coordinator seam, but its current local-write failure path exposes unpersisted server rows and must be corrected.
 - `packages/athena-webapp/src/lib/pos/presentation/register/registerUiState.ts` and `useRegisterViewModel.ts` already aggregate the safety inputs used to block app-update application.
-- `packages/athena-webapp/src/lib/app-messages/appMessages.ts`, `packages/athena-webapp/src/components/app-messages/AppMessageHost.tsx`, and the POS register route already support priority-ordered, persistent bottom-left toast presentation.
 
 ### Institutional Learnings
 
@@ -79,11 +77,10 @@ The register intentionally searches a local metadata snapshot, but its current o
 - `docs/solutions/logic-errors/athena-pos-register-local-catalog-search-2026-05-04.md` establishes local-first metadata search and durable snapshot replacement.
 - `docs/solutions/architecture/athena-pos-offline-inventory-snapshot-2026-05-15.md` keeps stable metadata, bounded live availability, and full offline availability as separate contracts.
 - `docs/solutions/architecture/athena-app-update-apply-safety-2026-06-17.md` defines the operational-idle posture to share with catalog refresh.
-- `docs/solutions/architecture/athena-app-wide-message-action-foundation-2026-06-20.md` keeps domain state in adapters while the app-message foundation handles selection and presentation.
 
 ### Research Decision
 
-- External research is intentionally omitted. Athena has several recent, direct patterns for Convex revision signals, imperative catalog snapshots, local POS persistence, register safety, and app messages; additional generic guidance would not materially sharpen the implementation plan.
+- External research is intentionally omitted. Athena has several recent, direct patterns for Convex revision signals, imperative catalog snapshots, local POS persistence, and register safety; additional generic guidance would not materially sharpen the implementation plan.
 
 ---
 
@@ -96,9 +93,9 @@ The register intentionally searches a local metadata snapshot, but its current o
 | Return `{revision, rows}` as one authenticated snapshot envelope | Reading the revision and catalog separately can acknowledge a revision whose rows were not part of the same database snapshot. One query transaction preserves correspondence. |
 | Keep monotonic durable active and staged snapshots plus a runtime revision pin | Durability is the acknowledgment boundary, but persistence alone cannot mean activation. Staging and promotion manage the default idle catalog; a non-idle register runtime pins its current revision and continues selecting that retained version across races, tabs, and remounts until every blocker clears. |
 | Share one operational-idle authority and recheck it around persistence/activation | A sale can start after a refresh begins. A shared decision prevents drift from app-update safety; a pre-persist check avoids unnecessary writes, and an activation check keeps newly persisted metadata out of an active runtime until safe. |
-| Keep revision orchestration register-specific | The shared gateway also serves expense and prewarm consumers. Register-specific enablement prevents surprise subscriptions or messages outside the confirmed surface. |
+| Keep revision orchestration register-specific | The shared gateway also serves expense and prewarm consumers. Register-specific enablement prevents surprise subscriptions outside the confirmed surface. |
 | Use bounded, network-aware retry without terminal exhaustion | Transient query or IndexedDB failures must recover without a later revision. Offline and authorization states pause retries; current revision, store, and auth epochs suppress stale work and hot loops. |
-| Reuse one stable normal-priority app message | The existing host already supplies non-dismissible bottom-left toast placement. A stable identity avoids duplicates and naturally yields to the higher-priority app-update message. |
+| Keep refresh coordination in the background | Waiting and automatic recovery do not require cashier decisions, so they should not compete with actionable register messages. |
 
 ---
 
@@ -115,7 +112,7 @@ The register intentionally searches a local metadata snapshot, but its current o
 ### Deferred to Implementation
 
 - **Exact helper and state type names:** Choose names that fit the existing catalog gateway and revision modules after tests establish the behavior; the lifecycle and ownership boundaries in this plan are authoritative.
-- **Exact backoff durations and final operator copy:** Match the existing POS recovery cadence and `docs/product-copy-tone.md`; tune constants and wording during implementation without changing the automatic retry or stable-message contract.
+- **Exact backoff durations:** Match the existing POS recovery cadence without changing the automatic retry contract.
 - **Mutation inventory details:** Confirm every provisional/pending transition and raw product/SKU deletion path while implementing U2. Any newly discovered snapshot-affecting path belongs in U2; unrelated cleanup remains deferred.
 
 ---
@@ -405,9 +402,9 @@ flowchart TB
 **Verification:**
 - The coordinator's observable states and side effects prove single-flight, latest-state convergence, durable-only activation, idle safety, and autonomous recovery.
 
-- U6. **Integrate one idle authority, one catalog source, and one app message**
+- U6. **Integrate one idle authority and one catalog source**
 
-**Goal:** Wire the coordinator into the POS register, prevent duplicate catalog refresh sources, and translate refresh state into restrained bottom-left toast communication.
+**Goal:** Wire the coordinator into the POS register, prevent duplicate catalog refresh sources, and keep its waiting and recovery states in the background.
 
 **Requirements:** R5, R6, R7, R9, R10; F1, F2; AE1, AE2, AE3, AE6
 
@@ -430,18 +427,13 @@ flowchart TB
 - Capture the selected revision and current rows immediately in runtime memory for every transient idle blocker, then use that snapshot to verify or re-materialize the U4 durable version if the operation creates restorable busy state.
 - Reorder view-model computation as needed so the complete idle signal is available before the register-specific catalog coordinator is invoked; do not duplicate a partial cart-only predicate.
 - Ensure local runtime persistence risk remains a blocker even when visible sale content has just been held, cleared, or completed.
-- Project coordinator state and its blocking reason through the view model and register one stable app message from `POSRegisterView`; rely on the POS route's existing toast communication preference and host placement.
-- Use normal priority below app update priority 100, no action/dismiss control, and one stable message/toast ID across states. Copy must distinguish busy, offline, transient-retry-delayed, and authorization-paused reasons truthfully: sale work explains the safe boundary, offline explains reconnection, transient failure says Athena will retry, and authorization pause avoids promising a timer-driven retry before scope is valid.
-- Clear the catalog message for the current runtime only after it has released any prior pin and durably selected the latest promoted revision. A global default promotion in another context does not clear a busy runtime's pending message.
+- Keep coordinator status inside the catalog gateway. Do not project catalog-refresh state through the register view model or register it with app messages.
 - Pass the view model's shared trusted catalog rows into `ProductEntry` or otherwise disable its independent register-route catalog refresh so it cannot bypass the idle gate.
 
-**Execution note:** Characterize the existing update blocker and ProductEntry catalog call sites before moving ownership, then add integration tests for every idle blocker and message transition.
+**Execution note:** Characterize the existing update blocker and ProductEntry catalog call sites before moving ownership, then add integration tests for every idle blocker and a regression test proving catalog coordination does not publish app messages.
 
 **Patterns to follow:**
 - `buildRegisterUpdateApplyBlockerState` in `packages/athena-webapp/src/lib/pos/presentation/register/registerUiState.ts`
-- Update-ready app-message adapter registration in `packages/athena-webapp/src/components/app-update/UpdateReadyBanner.tsx`
-- POS toast preference in `packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/register.index.tsx`
-- Operator copy guidance in `docs/product-copy-tone.md`
 
 **Test scenarios:**
 - Covers AE3. Edge case: product line, service line, customer-only draft, payment, checkout mutation, each drawer/register transition, and local persistence risk independently make the register non-idle.
@@ -449,18 +441,14 @@ flowchart TB
 - Concurrency: the first transition into any non-idle state pins the current revision; later blockers reuse it, and the pin releases only after the last blocker and its local save risk clear.
 - Concurrency: another tab promotes while the runtime has only a transient checkout/drawer/save blocker; the runtime remains on its immediate pin and requires no durable recovery if the blocker disappears without committing sale state.
 - Concurrency: another tab prunes the transient pin's revision before a sale-affecting command commits; the command transaction restores that version from the captured rows before creating durable busy state.
-- Covers AE2. Happy path: a pending revision during sale work registers one normal-priority message with the existing toast variant and performs no catalog swap.
-- Happy path: waiting, refreshing, and delayed retry reuse one message ID; durable activation removes it.
-- Concurrency: a global default promotion while the runtime remains pinned keeps that runtime's pending message active; releasing the pin and selecting the promoted revision clears it.
-- Interaction states: busy, offline, transient-retry-delayed, and authorization-paused states each render their matching restrained guidance under the same message ID.
-- Edge case: a higher-priority app-update message supersedes the catalog toast; when it clears, the current catalog message state can reappear without duplication.
-- Error path: route teardown or store change unregisters the old scoped message.
+- Covers AE2. Happy path: a pending revision during sale work performs no catalog swap and publishes no catalog-refresh app message.
+- Interaction states: busy, offline, transient-retry-delayed, and authorization-paused states remain internal while automatic recovery continues.
 - Integration: ProductEntry searches the view model's trusted catalog source and does not trigger a second register-route full snapshot refresh.
 - Covers AE1. Integration: a remotely created eligible SKU becomes searchable on an already-open idle register without reload.
 - Covers AE2. Integration: remote edits during active sale work do not change current cart prices, customer details, payments, or search rows and apply once every blocker clears.
 
 **Verification:**
-- The register has exactly one catalog refresh owner, one authoritative idle decision, and one stable operational toast whose lifecycle matches durable catalog activation.
+- The register has exactly one catalog refresh owner, one authoritative idle decision, and no catalog-refresh app-message adapter.
 
 ---
 
@@ -473,17 +461,16 @@ flowchart TB
     Register --> Snapshot["Revisioned full snapshot"]
     Snapshot --> Local["Monotonic IndexedDB snapshot"]
     Local --> Search["Register local search"]
-    Register --> Message["App-message adapter"]
     Idle["Shared operational-idle authority"] --> Register
     Availability["Live and offline availability"] -. unchanged .-> Search
 ```
 
-- **Interaction graph:** Product/taxonomy/import/pending mutation paths feed the revision; the register subscribes to that constant-size signal, coordinates an imperative snapshot, persists it locally, and exposes state to search and app messaging.
+- **Interaction graph:** Product/taxonomy/import/pending mutation paths feed the revision; the register subscribes to that constant-size signal, coordinates an imperative snapshot, persists it locally, and exposes only trusted rows to search.
 - **Error propagation:** Query, auth, network, and IndexedDB failures become coordinator states. They do not replace trusted rows, mutate sale state, or escape as generic app-message commands.
 - **State lifecycle risks:** Revision, store/auth epoch, in-flight target, staged/default revisions, runtime catalog pin, and row selection are deliberately separate so late completions and busy-state transitions cannot lose or prematurely apply work.
 - **API surface parity:** Only the POS register opts into reactive orchestration. Existing catalog consumers retain current behavior; the shared snapshot envelope and local revision remain backward-compatible at their boundaries.
 - **Integration coverage:** Backend mutation-to-revision-to-envelope tests and frontend revision-to-durability-to-search tests are both required; mocks at only one layer cannot prove convergence.
-- **Unchanged invariants:** Full catalog data remains one-shot, product search remains local-first, availability remains separate, active sale lines retain captured values, and app-message priority/placement stays generic.
+- **Unchanged invariants:** Full catalog data remains one-shot, product search remains local-first, availability remains separate, active sale lines retain captured values, and unrelated app-message behavior stays generic.
 
 ---
 
@@ -529,7 +516,7 @@ flowchart TB
 - An eligible remote product becomes searchable on an already-open idle register without route reload.
 - A busy register performs zero full catalog reads until all idle blockers clear; bursty or sustained revisions then remain bounded by the event-driven refresh budget and converge by its maximum deadline.
 - Availability-only changes produce no metadata revision and no full catalog refresh.
-- Server-read and local-write failures preserve the last trusted catalog; a later autonomous retry converges and clears the message.
+- Server-read and local-write failures preserve the last trusted catalog; a later autonomous retry converges silently.
 - Existing high-cardinality tests continue to show projection-bounded catalog reads without per-row product, SKU, or taxonomy hydration.
 - No register flow can expose fetched-but-unpersisted rows; no durable busy runtime can exist without a catalog pin; a busy runtime cannot select a newer default than that pin across tabs or remounts; and a legacy snapshot cannot compare equal to canonical server revision zero.
 
@@ -549,10 +536,7 @@ flowchart TB
 - `packages/athena-webapp/src/lib/pos/presentation/register/registerUiState.ts`
 - `packages/athena-webapp/src/lib/pos/presentation/register/useRegisterViewModel.ts`
 - `packages/athena-webapp/src/components/pos/register/POSRegisterView.tsx`
-- `packages/athena-webapp/src/components/app-messages/AppMessageHost.tsx`
-- `docs/product-copy-tone.md`
 - `docs/solutions/performance/athena-pos-register-catalog-snapshot-and-closeout-gate-2026-06-30.md`
 - `docs/solutions/logic-errors/athena-pos-register-local-catalog-search-2026-05-04.md`
 - `docs/solutions/architecture/athena-pos-offline-inventory-snapshot-2026-05-15.md`
 - `docs/solutions/architecture/athena-app-update-apply-safety-2026-06-17.md`
-- `docs/solutions/architecture/athena-app-wide-message-action-foundation-2026-06-20.md`

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="004b0e55017228b47e424a73ca05b0c03a9e21ac8dc55531ef6af7e7075e81c7" data-athena-report-base="origin/main" data-athena-report-head="working-tree">
+<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="c54b140b1a1db54fd429e963e60daad6f6660a90b75447ae06fb511f6897ade3" data-athena-report-base="origin/main" data-athena-report-head="working-tree">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -77,17 +77,17 @@
       <header>
         <h1>POS Catalog Refreshes at Safe Idle Boundaries</h1>
         <p class="lede">How Athena closes remote product freshness gaps without making the full register catalog reactive or changing data beneath active work.</p>
-        <div class="meta"><span class="pill">Delivery candidate</span><span class="pill">Branch codex/V26-1049-pos-catalog-reactive-refresh</span><span class="pill">Linear V26-1049 to V26-1054</span><span class="pill">Base 264f33d0</span><span class="pill">Diff 004b0e55017228b4</span><span class="pill">PR pending</span><span class="pill">No merge</span><span class="pill">No production deploy</span></div>
+        <div class="meta"><span class="pill">Delivery candidate</span><span class="pill">Branch codex/V26-1049-pos-catalog-reactive-refresh</span><span class="pill">Linear V26-1049 to V26-1054</span><span class="pill">Base 264f33d0</span><span class="pill">PR #658</span><span class="pill">No merge</span><span class="pill">No production deploy</span></div>
       </header>
       <section class="panel"><h2>Executive Summary</h2>
 <p>An already-open POS register can now discover remote product and metadata changes without a route reload. The register subscribes to one small store revision, waits until operational work is idle, then performs one imperative full-snapshot read and adopts it only after durable local persistence.</p>
-<p>Active sale, payment, drawer, checkout, and local-save work continues using the exact catalog revision it started with. One restrained bottom-left app-message toast communicates waiting, offline, refreshing, retry, and authorization-paused states.</p>
+<p>Active sale, payment, drawer, checkout, and local-save work continues using the exact catalog revision it started with. Waiting, offline, refreshing, retry, and authorization-paused states remain inside the coordinator, so the maintenance cycle adds no catalog-refresh app messaging or catalog-specific cashier action. Connectivity and valid register access remain external prerequisites.</p>
 </section>
 <section class="panel"><h2>Delivery Status</h2>
 <p>This report describes a delivery candidate rebased onto current origin/main. The finish line is an open, mergeable PR; merging and production deployment are explicitly outside this delivery.</p>
-<p>The work is tracked by V26-1049 through V26-1054. At report generation time the branch had not yet been pushed and no PR existed, so GitHub checks and the final PR URL must be recorded in the delivery handoff rather than inferred here.</p>
+<p>The work is tracked by V26-1049 through V26-1054 in <a href="https://github.com/kwam1na/athena/pull/658">PR #658</a>. The original candidate passed all GitHub checks; the final handoff must use the newer head and rerun checks after this background-only presentation change is pushed.</p>
 <ul>
-<li>Local root alignment: not applicable before merge; no root checkout update is claimed.</li>
+<li>Local root alignment: the feature branch is active at <code>/Users/kwamina/athena</code> for operator testing; this does not claim a merge into local <code>main</code>.</li>
 <li>Production state: unchanged; no deploy command has run.</li>
 <li>Current source of truth: the branch diff, the approved plan, the durable solution note, and the final validation output.</li>
 </ul>
@@ -114,7 +114,7 @@
 <p>After: snapshot-affecting mutations advance one monotonic store revision. The POS view model alone observes that tiny signal, coalesces newer revisions, and supplies one trusted row set to ProductEntry. Expense, prewarm, and generic consumers keep their existing one-shot lifecycle and do not mount the POS coordinator.</p>
 <ul>
 <li>Idle register: fetches and adopts the latest durable snapshot automatically.</li>
-<li>Busy or offline register: retains the prior catalog, performs no full read, and keeps one pending message.</li>
+<li>Busy or offline register: retains the prior catalog, performs no full read, and keeps pending state internal.</li>
 <li>Availability-only churn: does not advance metadata revision.</li>
 <li>Multiple tabs: monotonically share staged/active versions while owner-scoped pins prevent one tab from releasing another tab&#x27;s active revision.</li>
 </ul>
@@ -123,13 +123,14 @@
 <p>Convex owns the metadata truth. Effective product, SKU, taxonomy, import, provisional, pending-checkout, repair, and deletion paths advance exactly once when their register-visible projection changes. Sales evidence, quantities, stock, holds, and availability overlays stay outside the metadata signal.</p>
 <p>The register coordinator owns orchestration. It observes only the revision, checks online and operational-idle state, runs one scope-owned attempt, stages the revisioned envelope, promotes monotonically, and reselects the owner&#x27;s durable pin before exposing rows.</p>
 <p>The local store owns durability. It retains active, staged, legacy-compatible, and pinned versions. Command entry synchronously captures the selected version; the first durable operational event stores its owner pin atomically. Leases, heartbeats, per-command guard reference counts, unique request identity, and BFCache-aware document claims cover remount and multi-tab races.</p>
-<p>Presentation remains quiet. A stable priority-50 app message uses the existing bottom-left toast host with no cashier action. It clears only when the current runtime adopts the latest durable catalog.</p>
+<p>Presentation is silent. The register does not project catalog-refresh status into its view model or app-message host. The coordinator still tracks all states internally and adopts the latest durable catalog automatically when safe.</p>
 </section>
 <section class="panel"><h2>Failure and Concurrency Boundaries</h2>
 
 <ul>
 <li>Server or IndexedDB failure keeps the last trusted rows; fetched but unpersisted rows never reach search.</li>
 <li>Transient retries use 1, 2, 4, and 8 second attempts, then 60 second quiet periods. Offline and authorization states do not hot-loop.</li>
+<li>Reconnect and normal register-access restoration remain external prerequisites; once restored, catalog retry and adoption continue automatically without a catalog-specific action.</li>
 <li>Store, terminal, auth, owner, and unique attempt identity reject stale completions, including A to B to A navigation.</li>
 <li>A command beginning during promotion synchronously guards exposure and then persists the prior owner pin with its event.</li>
 <li>Overlapping commands use reference-counted, idempotent guard settlement; one command cannot clear another&#x27;s guard.</li>
@@ -146,15 +147,15 @@
 <li>Active cart lines are not repriced, removed, or rewritten by catalog refresh.</li>
 <li>The legacy row-array endpoint and local compatibility snapshot remain available.</li>
 <li>Expense and generic catalog consumers retain one-shot behavior.</li>
-<li>There is no cashier apply, retry, dismiss, or refresh action and no cross-tab refresh leader election.</li>
+<li>There is no catalog-refresh message, cashier apply/retry/dismiss action, or cross-tab refresh leader election.</li>
 </ul>
 </section>
 <section class="panel"><h2>Validation and Review Evidence</h2>
-<p>The delivery used repeated correctness, Convex/read-cost, and frontend/operational UX review loops. Findings materially changed indexed authorization, revision exclusions, multi-store mutation coverage, deletion coverage, retry bounds, runtime pin ownership, action-start races, stale attempt identity, lease reclamation, duplicated-tab claims, BFCache handling, and injected expense isolation. The final candidate received zero-finding approval from all three lenses before the branch was rebased.</p>
+<p>The delivery used repeated correctness, Convex/read-cost, and frontend/operational UX review loops. Findings materially changed indexed authorization, revision exclusions, multi-store mutation coverage, deletion coverage, retry bounds, runtime pin ownership, action-start races, stale attempt identity, lease reclamation, duplicated-tab claims, BFCache handling, and injected expense isolation. The original candidate received zero-finding approval from all three lenses before the branch was rebased; the newer background-only presentation delta received a separate report/diff review and must complete its final code review after validation.</p>
 <p>After rebasing onto current origin/main at 264f33d0, the integrated catalog gateway suite passed 37 tests and TypeScript passed. The full Athena PR gate will be rerun after this required report is added; the final handoff must use that newer result and GitHub check state as authoritative.</p>
-<p>No manual browser or end-to-end register-flow QA has run on this local branch. Automated coordinator, view-model, message, persistence, and backend suites cover the delivery contract; visual behavior is not claimed as browser-proven in this report.</p>
+<p>No manual browser or end-to-end register-flow QA is claimed in this report. Automated coordinator, view-model, register-view, persistence, and backend suites cover the delivery contract, including a regression assertion that catalog coordination does not register an app message.</p>
 <ul>
-<li>Pre-rebase focused evidence included 159 coordinator/local tests, 69 Convex deletion/revision tests, 38 expense view-model tests, and additional product/view/message suites.</li>
+<li>The messaging-removal slice was developed test-first: the new no-message assertion failed against the prior adapter, then passed after the presentation wiring was removed. Coordinator and UI-state focused suites also passed.</li>
 <li>Generated Convex API, Graphify graph/report/wiki, and agent indices are refreshed by repository sensors.</li>
 <li>Durable solution note: docs/solutions/architecture-patterns/pos-catalog-revisioned-idle-refresh-2026-07-13.md.</li>
 </ul>
@@ -182,17 +183,17 @@
 <tr><td><code>packages/athena-webapp/src/lib/pos/infrastructure/local/localCommandGateway.ts</code></td><td>Captures action-start catalog ownership and pins it atomically with durable operational events.</td></tr>
 <tr><td><code>packages/athena-webapp/src/lib/pos/infrastructure/local/registerCatalogPinRuntime.ts</code></td><td>Provides per-command guards and per-document owner identity across tabs and BFCache.</td></tr>
 <tr><td><code>packages/athena-webapp/src/lib/pos/presentation/register/useRegisterViewModel.ts</code></td><td>Defines the authoritative operational-idle boundary and trusted POS catalog rows.</td></tr>
-<tr><td><code>packages/athena-webapp/src/lib/pos/presentation/register/registerUiState.ts</code></td><td>Maps coordinator state to restrained operator-facing catalog update copy.</td></tr>
-<tr><td><code>packages/athena-webapp/src/components/pos/register/POSRegisterView.tsx</code></td><td>Publishes one stable app message and isolates injected expense view models from the POS hook.</td></tr></tbody>
+<tr><td><code>packages/athena-webapp/src/lib/pos/presentation/register/registerUiState.ts</code></td><td>Defines the shared operational-idle and register presentation contracts without catalog-refresh messaging.</td></tr>
+<tr><td><code>packages/athena-webapp/src/components/pos/register/POSRegisterView.tsx</code></td><td>Keeps catalog maintenance out of app messaging and isolates injected expense view models from the POS hook.</td></tr></tbody>
   </table>
 </section>
 
 
 <section class="panel">
   <h2>Subagent Evidence</h2>
-  <ul><li><strong>session context reviewer:</strong> Sourced requirements, ticket decomposition, finish-line constraints, reviewer-loop decisions, durable lessons, and validation history.</li>
-<li><strong>delivered diff reviewer:</strong> Mapped the 59-file change by layer and verified the before/after flow, intentional non-changes, failure boundaries, generated artifacts, and key files.</li>
-<li><strong>quiz and coherence reviewer:</strong> Checked source grounding, candidate status, failure and validation caveats, reader comprehension, and the 10-question quiz; required immutable identifiers and an explicit browser-QA caveat.</li></ul>
+  <ul><li><strong>session context reviewer:</strong> Sourced requirements, ticket decomposition, finish-line constraints, reviewer-loop decisions, durable lessons, and validation history; then identified every stale message-contract claim after the background-only decision.</li>
+<li><strong>delivered diff reviewer:</strong> Mapped the delivered layers and confirmed the messaging-removal diff leaves revision detection, idle gating, durable promotion, trusted-row fallback, and retries unchanged.</li>
+<li><strong>quiz and coherence reviewer:</strong> Reviewed source grounding, candidate status, failure prerequisites, root-alignment accuracy, reader comprehension, and the 10-question quiz; required the background-only wording and current fingerprint to be explicit.</li></ul>
 </section>
 
 
@@ -291,13 +292,13 @@
 
 <div class="quiz-question" data-answer="1">
   <fieldset>
-    <legend>9. Why does the injected expense view avoid mounting useRegisterViewModel?</legend>
-    <label><input type="radio" name="q9" value="0" /> Expense has no products</label>
-<label><input type="radio" name="q9" value="1" /> To avoid a hidden second POS revision coordinator and duplicate reads</label>
-<label><input type="radio" name="q9" value="2" /> To disable authentication</label>
-<label><input type="radio" name="q9" value="3" /> To force a route reload</label>
+    <legend>9. What does the cashier see when catalog refresh is waiting or retrying?</legend>
+    <label><input type="radio" name="q9" value="0" /> A persistent bottom-left toast</label>
+<label><input type="radio" name="q9" value="1" /> Nothing catalog-specific; coordination remains in the background</label>
+<label><input type="radio" name="q9" value="2" /> A confirmation modal</label>
+<label><input type="radio" name="q9" value="3" /> A manual retry button</label>
   </fieldset>
-  <div class="answer-detail">Expense retains its one-shot consumer lifecycle and must not silently mount the POS-only coordinator.</div>
+  <div class="answer-detail">Waiting, retry, offline, and authorization states stay internal. Reconnect or normal access restoration may still be required, but there is no catalog-specific cashier action.</div>
 </div>
 
 <div class="quiz-question" data-answer="1">

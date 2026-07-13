@@ -514,7 +514,7 @@ describe("POSRegisterView", () => {
     });
   });
 
-  it("registers one passive catalog refresh message from the view model status", async () => {
+  it("keeps catalog refresh coordination out of app messaging", async () => {
     mockUseRegisterViewModel.mockReturnValue({
       hasActiveStore: true,
       catalogRefreshStatus: "waiting-busy",
@@ -549,57 +549,7 @@ describe("POSRegisterView", () => {
     const { POSRegisterView } = await import("./POSRegisterView");
     render(<POSRegisterView />);
 
-    expect(mockUseAppMessage).toHaveBeenCalledTimes(1);
-    expect(mockUseAppMessage).toHaveBeenCalledWith({
-      active: true,
-      id: "pos-register.catalog-refresh",
-      label: "Product catalog update",
-      message:
-        "Product updates waiting. Athena will update the catalog when register work is complete.",
-      priority: 50,
-      toastId: "pos-register-catalog-refresh-toast",
-    });
-  });
-
-  it("clears the catalog refresh message when the view model is current", async () => {
-    mockUseRegisterViewModel.mockReturnValue({
-      hasActiveStore: true,
-      catalogRefreshStatus: "current",
-      header: {
-        title: "POS",
-        isSessionActive: true,
-      },
-      registerInfo: {
-        registerLabel: "Front Counter",
-        hasTerminal: true,
-      },
-      customerPanel: {},
-      productEntry: {
-        catalogRows: [],
-      },
-      cart: { items: [] },
-      checkout: { isTransactionCompleted: false },
-      sessionPanel: {},
-      cashierCard: null,
-      closeoutControl: null,
-      drawerGate: null,
-      syncStatus: null,
-      authDialog: null,
-      commandApprovalDialog: null,
-      onNavigateBack: vi.fn(),
-    });
-
-    const { POSRegisterView } = await import("./POSRegisterView");
-    render(<POSRegisterView />);
-
-    expect(mockUseAppMessage).toHaveBeenCalledWith({
-      active: false,
-      id: "pos-register.catalog-refresh",
-      label: "Product catalog update",
-      message: "Product catalog is current.",
-      priority: 50,
-      toastId: "pos-register-catalog-refresh-toast",
-    });
+    expect(mockUseAppMessage).not.toHaveBeenCalled();
   });
 
   it("renders the thin register shell around the view model state", async () => {
@@ -1393,7 +1343,6 @@ describe("POSRegisterView", () => {
         viewModel={{
           workflowMode: "expense",
           hasActiveStore: true,
-          catalogRefreshStatus: "current",
           debug: {
             activeStoreSource: "live",
             authDialogOpen: false,

@@ -12,7 +12,7 @@ applies_when:
   - Active workflow state must keep using the exact data version it started with
   - Full reactive subscriptions would create excessive backend reads
 tags: [pos, catalog, convex, local-first, indexeddb, revision, snapshot, concurrency]
-delivery_diff_fingerprint: 004b0e55017228b47e424a73ca05b0c03a9e21ac8dc55531ef6af7e7075e81c7
+delivery_diff_fingerprint: c54b140b1a1db54fd429e963e60daad6f6660a90b75447ae06fb511f6897ade3
 ---
 
 # POS Catalog Refreshes Use Revisions, Durable Versions, and Runtime Pins
@@ -60,9 +60,11 @@ catalog on storage failure, while runtime pins preserve price and search
 consistency throughout an active sale even if another tab promotes a newer
 default.
 
-The pattern also keeps failure communication truthful: busy, offline, retry,
-and authorization-paused states can share one stable app message, which clears
-only after the current runtime has adopted the latest durable version.
+Catalog refresh is background maintenance. Busy, offline, retry, and
+authorization-paused states remain inside the coordinator rather than becoming
+app messages or cashier controls. Transient failures retry automatically, while
+the last trusted catalog stays active until a newer durable version is safe to
+adopt.
 
 ## Prevention
 
@@ -79,6 +81,9 @@ only after the current runtime has adopted the latest durable version.
   no pointer or runtime reference.
 - Ensure every catalog consumer on the register route receives the same trusted
   view-model rows.
+- Keep refresh status internal unless a future operator decision is genuinely
+  required; autonomous waiting and retry should not compete with actionable
+  register messages.
 
 ## Examples
 

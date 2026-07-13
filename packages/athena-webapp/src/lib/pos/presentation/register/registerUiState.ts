@@ -316,57 +316,6 @@ export interface RegisterOperationalIdleInput {
   hasLocalRuntimeApplyRisk: boolean;
 }
 
-export type RegisterCatalogRefreshStatus =
-  | "current"
-  | "waiting-busy"
-  | "waiting-offline"
-  | "refreshing"
-  | "retry-delayed"
-  | "authorization-paused";
-
-export function buildRegisterCatalogRefreshMessage(
-  status: RegisterCatalogRefreshStatus,
-): { active: boolean; label: string; message: string } {
-  const label = "Product catalog update";
-
-  switch (status) {
-    case "waiting-busy":
-      return {
-        active: true,
-        label,
-        message:
-          "Product updates waiting. Athena will update the catalog when register work is complete.",
-      };
-    case "waiting-offline":
-      return {
-        active: true,
-        label,
-        message: "Product updates waiting. Reconnect to update the catalog.",
-      };
-    case "refreshing":
-      return { active: true, label, message: "Updating product catalog." };
-    case "retry-delayed":
-      return {
-        active: true,
-        label,
-        message: "Product catalog update delayed. Athena will retry.",
-      };
-    case "authorization-paused":
-      return {
-        active: true,
-        label,
-        message:
-          "Product catalog update paused. Restore register access to continue.",
-      };
-    case "current":
-      return {
-        active: false,
-        label,
-        message: "Product catalog is current.",
-      };
-  }
-}
-
 export function buildRegisterOperationalIdleState({
   hasActiveSaleWork,
   hasCheckoutMutationInFlight,
@@ -500,7 +449,6 @@ export interface RegisterCashierPresenceRestoreState {
 export interface RegisterViewModel {
   workflowMode?: RegisterWorkflowMode;
   hasActiveStore: boolean;
-  catalogRefreshStatus: RegisterCatalogRefreshStatus;
   debug?: {
     activeStoreSource: "live" | "local" | "missing";
     appSessionRecovery?: string | null;

@@ -5552,8 +5552,6 @@ export function useRegisterViewModel(): RegisterViewModel {
 
   return {
     hasActiveStore: Boolean(activeStoreId),
-    catalogRefreshStatus:
-      registerCatalogState.catalogRefreshStatus ?? "current",
     debug: {
       activeStoreSource: activeStore
         ? "live"
