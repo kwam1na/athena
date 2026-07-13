@@ -17,7 +17,7 @@ tags:
   - preflight
   - pr-validation
   - diagnostics
-delivery_diff_fingerprint: 8cb155a2db0bcae069990177345dbfd21393cde481703f1dc7c15639dbc3c0f2
+delivery_diff_fingerprint: 23f2cf9c5523be0e32b5b6e1ce626dbfecdd67886d6d2d0197af1d67bc8059fd
 ---
 
 # Static Harness Contracts Must Fail Before Provider Validation
