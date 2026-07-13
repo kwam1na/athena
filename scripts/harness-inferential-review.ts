@@ -380,6 +380,7 @@ function expandPackageScriptChain(
     childScripts.push(
       ...[
         "pr:athena:prepare",
+        "pr:athena:preflight",
         "pr:athena:validate",
         "pr:athena:record-proof",
         "pr:athena:scorecard",
@@ -535,6 +536,24 @@ async function collectHarnessScriptTestUpdateFindings(
   }
 
   return findings;
+}
+
+export async function collectHarnessSiblingTestPolicyFindings(
+  rootDir: string,
+  options: {
+    baseRef?: string;
+    getChangedFiles?: (
+      rootDir: string,
+      baseRef: string,
+    ) => Promise<string[]>;
+  } = {},
+) {
+  const baseRef = options.baseRef ?? DEFAULT_BASE_REF;
+  const changedFiles = await (
+    options.getChangedFiles ?? getChangedFilesForInferentialReview
+  )(rootDir, baseRef);
+
+  return collectHarnessScriptTestUpdateFindings(rootDir, changedFiles);
 }
 
 async function collectHarnessSafetySignalFindings(
@@ -2226,6 +2245,33 @@ function buildHumanReport(output: InferentialMachineOutput) {
   return lines.join("\n");
 }
 
+export function formatInferentialFailureDiagnostic(
+  output: InferentialMachineOutput,
+  machineOutputPath: string,
+) {
+  const lines = [
+    `[harness:inferential-review] BLOCKED: ${output.findings.length} finding(s), ${output.errors.length} runtime error(s).`,
+  ];
+
+  for (const finding of output.findings) {
+    lines.push(
+      `- [${finding.severity.toUpperCase()}] ${finding.filePath}: ${finding.title}`,
+      `  Why: ${finding.rationale}`,
+      `  Fix: ${finding.remediation}`,
+    );
+  }
+
+  for (const error of output.errors) {
+    lines.push(
+      `- [ERROR] ${error.code}: ${error.message}`,
+      `  Fix: ${error.remediation}`,
+    );
+  }
+
+  lines.push(`Machine details: ${machineOutputPath}`);
+  return lines.join("\n");
+}
+
 async function writeMachineOutput(
   rootDir: string,
   machineOutputPath: string,
@@ -2692,6 +2738,12 @@ if (import.meta.main) {
     console.log(`Machine output: ${result.machineOutputPath}`);
 
     if (result.exitCode !== 0) {
+      console.error(
+        formatInferentialFailureDiagnostic(
+          result.machine,
+          result.machineOutputPath,
+        ),
+      );
       process.exit(result.exitCode);
     }
   } catch (error) {

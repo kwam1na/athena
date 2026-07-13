@@ -32,7 +32,7 @@ function gitFixtureEnv() {
 }
 
 describe("pr-athena delivery run wrapper", () => {
-  it("runs prepare, validate, and record-proof phases while recording spans", async () => {
+  it("runs prepare, static preflight, validate, and record-proof phases while recording spans", async () => {
     const commands: string[][] = [];
     let tick = 0;
 
@@ -49,6 +49,7 @@ describe("pr-athena delivery run wrapper", () => {
     expect(result.exitCode).toBe(0);
     expect(commands).toEqual([
       ["bun", "run", "pr:athena:prepare"],
+      ["bun", "run", "pr:athena:preflight"],
       ["bun", "run", "pr:athena:validate"],
       ["bun", "run", "pr:athena:record-proof"],
       ["bun", "run", "pr:athena:scorecard"],
@@ -57,15 +58,47 @@ describe("pr-athena delivery run wrapper", () => {
       status: "pass",
       proofState: "proof_recorded",
       summary: {
-        commandCount: 4,
+        commandCount: 5,
         failedCommandCount: 0,
       },
       commandSpans: [
         { phase: "prepare", status: "pass", exitCode: 0 },
+        { phase: "preflight", status: "pass", exitCode: 0 },
         { phase: "validate", status: "pass", exitCode: 0 },
         { phase: "record-proof", status: "pass", exitCode: 0 },
         { phase: "scorecard", status: "pass", exitCode: 0 },
       ],
+    });
+  });
+
+  it("records a preflight failure before provider validation or proof recording", async () => {
+    const commands: string[][] = [];
+    let tick = 0;
+
+    const result = await runPrAthenaDeliveryRun("/repo", {
+      nowIso: () => `2026-06-18T12:00:0${tick}.000Z`,
+      monotonicMs: () => tick++ * 1000,
+      writeLedger: false,
+      runCommand: async (command) => {
+        commands.push(command);
+        return { exitCode: command.includes("pr:athena:preflight") ? 23 : 0 };
+      },
+    });
+
+    expect(result.exitCode).toBe(23);
+    expect(commands).toEqual([
+      ["bun", "run", "pr:athena:prepare"],
+      ["bun", "run", "pr:athena:preflight"],
+    ]);
+    expect(result.ledger).toMatchObject({
+      status: "blocked",
+      proofState: "proof_not_recorded",
+      blockedReason: "pr:athena:preflight exited with code 23",
+      commandSpans: [
+        { phase: "prepare", status: "pass", exitCode: 0 },
+        { phase: "preflight", status: "fail", exitCode: 23 },
+      ],
+      providerSkippedEvents: [],
     });
   });
 
@@ -142,6 +175,7 @@ describe("pr-athena delivery run wrapper", () => {
     expect(result.exitCode).toBe(42);
     expect(commands).toEqual([
       ["bun", "run", "pr:athena:prepare"],
+      ["bun", "run", "pr:athena:preflight"],
       ["bun", "run", "pr:athena:validate"],
     ]);
     expect(result.ledger).toMatchObject({
@@ -150,6 +184,7 @@ describe("pr-athena delivery run wrapper", () => {
       blockedReason: "pr:athena:validate exited with code 42",
       commandSpans: [
         { phase: "prepare", status: "pass", exitCode: 0 },
+        { phase: "preflight", status: "pass", exitCode: 0 },
         { phase: "validate", status: "fail", exitCode: 42 },
       ],
     });
@@ -172,6 +207,7 @@ describe("pr-athena delivery run wrapper", () => {
     expect(result.exitCode).toBe(1);
     expect(commands).toEqual([
       ["bun", "run", "pr:athena:prepare"],
+      ["bun", "run", "pr:athena:preflight"],
       ["bun", "run", "pr:athena:validate"],
       ["bun", "run", "pr:athena:record-proof"],
     ]);
@@ -181,6 +217,7 @@ describe("pr-athena delivery run wrapper", () => {
       blockedReason: "pr:athena:record-proof exited with code 1",
       commandSpans: [
         { phase: "prepare", status: "pass", exitCode: 0 },
+        { phase: "preflight", status: "pass", exitCode: 0 },
         { phase: "validate", status: "pass", exitCode: 0 },
         { phase: "record-proof", status: "fail", exitCode: 1 },
       ],
@@ -235,7 +272,7 @@ describe("pr-athena delivery run wrapper", () => {
       expect(latest).toMatchObject({
         status: "pass",
         proofState: "proof_recorded",
-        summary: { commandCount: 4 },
+        summary: { commandCount: 5 },
       });
     } finally {
       await rm(rootDir, { recursive: true, force: true });
@@ -320,6 +357,7 @@ describe("pr-athena delivery run wrapper", () => {
         blockedReason: "pr:athena:scorecard exited with code 7",
         commandSpans: [
           { phase: "prepare", status: "pass", exitCode: 0 },
+          { phase: "preflight", status: "pass", exitCode: 0 },
           { phase: "validate", status: "pass", exitCode: 0 },
           { phase: "record-proof", status: "pass", exitCode: 0 },
           { phase: "scorecard", status: "fail", exitCode: 7 },

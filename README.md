@@ -211,6 +211,7 @@ The repo pins Bun via `package.json` (`bun@1.1.29` today), and GitHub Actions re
 
 `pre-commit:generated-artifacts` automatically runs `bun run harness:generate` and `bun run graphify:rebuild`, then stages the tracked generated harness docs and graphify outputs before the commit is finalized, so the pushed ref includes refreshed generated artifacts.
 `bun run pr:athena:prepare` starts with that same generated-artifact repair step, then blocks before the heavy validation ladder if unstaged or untracked files would prevent a reusable proof. Stage intended new files explicitly, or remove unrelated local files, before running the full gate.
+`bun run pr:athena:preflight` then aggregates validation-map coverage, live harness audit, audit-fixture consistency, and harness-script sibling-test policy before provider validation starts. Its failure report names the registry source, generated-doc repair, fixture and sibling-test files, and focused verification command.
 `bun run pr:athena:validate` runs the heavy validation ladder without recording proof, and `bun run pr:athena:record-proof` records the reusable pre-push proof for the current clean or staged-only tree.
 The default `bun run pr:athena` command runs the delivery-run wrapper, which composes those steps in order, writes same-tree provider evidence after the provider commands pass, writes the current local run ledger, and runs the scorecard against that ledger.
 `pre-push:review` starts with `bun run graphify:check`, then runs `bun run compound:check` and `bun run landed-report:check`, before the rest of the local validation suite. If tracked graphify artifacts are stale, the hook runs `bun run graphify:rebuild` once, reruns `bun run graphify:check`, and then stops so you can review and commit the repaired graphify artifacts before pushing again. `compound:check` is intentionally early so solution-doc policy failures are caught locally before the branch reaches CI. `landed-report:check` is equally early so stale report fingerprints from review-loop edits are caught before merge.
@@ -323,6 +324,7 @@ Local-only graphify artifacts:
 
 - `graphify-out/cache/`
 - `artifacts/harness-inferential-review/`
+- `artifacts/harness-contract-preflight/`
 - `artifacts/harness-scorecard/`
 - `artifacts/harness-behavior/trends/`
 - `artifacts/harness-behavior/videos/`

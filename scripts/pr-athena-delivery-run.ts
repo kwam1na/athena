@@ -30,12 +30,13 @@ type PrAthenaDeliveryRunOptions = {
 };
 
 type PrAthenaPhase = {
-  phase: "prepare" | "validate" | "record-proof" | "scorecard";
+  phase: "prepare" | "preflight" | "validate" | "record-proof" | "scorecard";
   command: string[];
 };
 
 const PR_ATHENA_PHASES: PrAthenaPhase[] = [
   { phase: "prepare", command: ["bun", "run", "pr:athena:prepare"] },
+  { phase: "preflight", command: ["bun", "run", "pr:athena:preflight"] },
   { phase: "validate", command: ["bun", "run", "pr:athena:validate"] },
   { phase: "record-proof", command: ["bun", "run", "pr:athena:record-proof"] },
 ];
