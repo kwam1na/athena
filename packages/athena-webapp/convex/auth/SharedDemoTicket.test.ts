@@ -9,7 +9,7 @@ describe("SharedDemoTicket provider", () => {
   it("uses the stable frontend provider id and returns only the configured auth user", async () => {
     const runMutation = vi.fn().mockResolvedValue({ authUserId: "auth-user" });
     await expect(
-      authorizeSharedDemoTicket({ ticket: "opaque-ticket" }, { runMutation }),
+      authorizeSharedDemoTicket({ ticket: "opaque-ticket" }, { runMutation } as never),
     ).resolves.toEqual({ userId: "auth-user" });
     expect(SHARED_DEMO_AUTH_PROVIDER_ID).toBe("shared-demo");
     expect(runMutation).toHaveBeenCalledWith(
@@ -27,7 +27,7 @@ describe("SharedDemoTicket provider", () => {
     async (credentials) => {
       const runMutation = vi.fn();
       await expect(
-        authorizeSharedDemoTicket(credentials, { runMutation }),
+        authorizeSharedDemoTicket(credentials, { runMutation } as never),
       ).resolves.toBeNull();
       expect(runMutation).not.toHaveBeenCalled();
     },
@@ -38,7 +38,7 @@ describe("SharedDemoTicket provider", () => {
       .mockResolvedValueOnce(null)
       .mockRejectedValueOnce(new Error("internal detail"));
     await expect(
-      authorizeSharedDemoTicket({ ticket: "opaque-ticket" }, { runMutation }),
+      authorizeSharedDemoTicket({ ticket: "opaque-ticket" }, { runMutation } as never),
     ).resolves.toBeNull();
     expect(runMutation).toHaveBeenCalledTimes(2);
   });
