@@ -5,7 +5,7 @@ import {
   ArrowUpRight,
   Banknote,
   CreditCardIcon,
-  Receipt,
+  SearchX,
   Smartphone,
   WalletCards,
 } from "lucide-react";
@@ -27,8 +27,10 @@ import {
   CompletedTransactionRow,
 } from "./transactionColumns";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
 import { getOrigin } from "~/src/lib/navigationUtils";
+import { formatRegisterSessionCode } from "~/src/lib/pos/presentation/registerSessionCode";
 import { getRelativeTime } from "~/src/lib/utils";
 import type { Id } from "~/convex/_generated/dataModel";
 
@@ -37,21 +39,55 @@ function formatPaymentMethod(method: string | null) {
   return capitalizeWords(method.replace(/_/g, " "));
 }
 
-function formatRegisterFilterLabel(registerNumber?: string | null) {
+function formatRegisterFilterLabel(
+  registerNumber?: string | null,
+  terminalName?: string | null,
+  registerSessionId?: string,
+) {
   const trimmedRegisterNumber = registerNumber?.trim();
+  const trimmedTerminalName = terminalName?.trim();
+  const sessionCode = formatRegisterSessionCode(registerSessionId);
 
   if (!trimmedRegisterNumber) {
-    return "this register";
+    if (trimmedTerminalName) {
+      return sessionCode
+        ? `${trimmedTerminalName} / ${sessionCode}`
+        : trimmedTerminalName;
+    }
+    return sessionCode ? `Session ${sessionCode}` : "this register session";
   }
 
-  return /^register\b/i.test(trimmedRegisterNumber)
+  const registerLabel = /^register\b/i.test(trimmedRegisterNumber)
     ? trimmedRegisterNumber
     : `Register ${trimmedRegisterNumber}`;
+
+  const registerSessionLabel = sessionCode
+    ? `${registerLabel} / ${sessionCode}`
+    : registerLabel;
+
+  return trimmedTerminalName
+    ? `${trimmedTerminalName} / ${registerSessionLabel}`
+    : registerSessionLabel;
 }
 
 const completedTransactionBatchSize = 100;
 const completedTransactionPageSize = 10;
 type TransactionTimeFilter = "today" | "fromDate" | "all";
+type TransactionPaymentFilter = "all" | "cash" | "card" | "mobile_money";
+const transactionPaymentFilters = [
+  { value: "all", label: "All payments", Icon: WalletCards },
+  { value: "cash", label: "Cash payments", Icon: Banknote },
+  { value: "card", label: "Card payments", Icon: CreditCardIcon },
+  {
+    value: "mobile_money",
+    label: "Mobile money payments",
+    Icon: Smartphone,
+  },
+] satisfies ReadonlyArray<{
+  value: TransactionPaymentFilter;
+  label: string;
+  Icon: typeof Banknote;
+}>;
 
 // Helper to check if timestamp is today
 const isToday = (timestamp: number) => {
@@ -147,6 +183,21 @@ function getNextTransactionTimeFilterSearch(
   };
 }
 
+function getNextTransactionPaymentFilterSearch(
+  current: Record<string, unknown>,
+  paymentMethod: TransactionPaymentFilter,
+) {
+  const next = getNextTransactionPageSearch(current, 0);
+
+  if (paymentMethod === "all") {
+    delete next.paymentMethod;
+  } else {
+    next.paymentMethod = paymentMethod;
+  }
+
+  return next;
+}
+
 type CompletedTransaction = {
   _id: Id<"posTransaction">;
   transactionNumber: string;
@@ -169,22 +220,65 @@ type CompletedTransaction = {
 function getPaymentMethodIcon({
   paymentMethod,
   hasMultipleMethods,
+  className = "h-4 w-4",
 }: {
   paymentMethod: string;
   hasMultipleMethods?: boolean;
+  className?: string;
 }) {
-  if (hasMultipleMethods) return <WalletCards className="h-4 w-4" />;
+  if (hasMultipleMethods) return <WalletCards className={className} />;
 
   switch (paymentMethod) {
     case "cash":
-      return <Banknote className="h-4 w-4" />;
+      return <Banknote className={className} />;
     case "card":
-      return <CreditCardIcon className="h-4 w-4" />;
+      return <CreditCardIcon className={className} />;
     case "mobile_money":
-      return <Smartphone className="h-4 w-4" />;
+      return <Smartphone className={className} />;
     default:
       return null;
   }
+}
+
+function getEmptyTransactionTitle({
+  filter,
+  operatingDate,
+  paymentMethod,
+  registerFilterLabel,
+  registerSessionId,
+}: {
+  filter: TransactionTimeFilter;
+  operatingDate?: string;
+  paymentMethod?: string;
+  registerFilterLabel: string;
+  registerSessionId?: string;
+}) {
+  const paymentLabel = paymentMethod
+    ? formatPaymentMethod(paymentMethod).toLocaleLowerCase()
+    : null;
+
+  if (filter === "today") {
+    return paymentLabel
+      ? `No ${paymentLabel} transactions today`
+      : "No completed transactions today";
+  }
+
+  if (filter === "fromDate" && operatingDate) {
+    const dateLabel = formatOperatingDateFilterLabel(operatingDate);
+    return paymentLabel
+      ? `No ${paymentLabel} transactions from ${dateLabel}`
+      : `No completed transactions from ${dateLabel}`;
+  }
+
+  if (registerSessionId) {
+    return paymentLabel
+      ? `No ${paymentLabel} transactions for ${registerFilterLabel}`
+      : `No transactions for ${registerFilterLabel}`;
+  }
+
+  return paymentLabel
+    ? `No ${paymentLabel} transactions`
+    : "No completed transactions";
 }
 
 function TransactionMobileCard({
@@ -301,6 +395,12 @@ export function TransactionsView() {
   const minimumLoadedLimit = getCompletedTransactionLimitForPage(tablePageIndex);
   const [loadedLimit, setLoadedLimit] = useState(minimumLoadedLimit);
   const paymentMethodFilter = paymentMethod?.trim();
+  const selectedPaymentMethodFilter: TransactionPaymentFilter =
+    paymentMethodFilter === "cash" ||
+    paymentMethodFilter === "card" ||
+    paymentMethodFilter === "mobile_money"
+      ? paymentMethodFilter
+      : "all";
   const isOperatingDateFilterActive =
     filter === "fromDate" && operatingDateStartAt !== null;
   const todayStartAt = useMemo(() => {
@@ -349,12 +449,11 @@ export function TransactionsView() {
   );
   const registerFilterLabel = formatRegisterFilterLabel(
     registerSessionSnapshot?.registerSession?.registerNumber,
-  );
-  const hasActiveFilter = Boolean(
-    registerSessionId || paymentMethodFilter || isOperatingDateFilterActive,
+    registerSessionSnapshot?.registerSession?.terminalName,
+    registerSessionId,
   );
   const isTransactionBatchFull = (transactions?.length ?? 0) >= loadedLimit;
-  const activeFilterSummary = hasActiveFilter
+  const activeFilterSummary = registerSessionId
     ? [
         paymentMethodFilter
           ? `${formatPaymentMethod(paymentMethodFilter)} transactions`
@@ -464,6 +563,22 @@ export function TransactionsView() {
     [navigate],
   );
 
+  const handlePaymentMethodFilterChange = useCallback(
+    (value: string) => {
+      if (!value) return;
+
+      void navigate({
+        replace: true,
+        search: ((current: Record<string, unknown>) =>
+          getNextTransactionPaymentFilterSearch(
+            current,
+            value as TransactionPaymentFilter,
+          )) as never,
+      });
+    },
+    [navigate],
+  );
+
   useEffect(() => {
     if (!transactions || isTransactionBatchFull || tablePageIndex === 0) {
       return;
@@ -531,17 +646,38 @@ export function TransactionsView() {
               </div>
             ) : null}
 
-            <Tabs value={filter} onValueChange={handleFilterChange}>
-              <TabsList>
-                <TabsTrigger value="today">Today</TabsTrigger>
-                {operatingDate && operatingDateStartAt !== null ? (
-                  <TabsTrigger value="fromDate">
-                    From {formatOperatingDateFilterLabel(operatingDate)}
-                  </TabsTrigger>
-                ) : null}
-                <TabsTrigger value="all">All Time</TabsTrigger>
-              </TabsList>
-            </Tabs>
+            <div className="flex flex-wrap items-center gap-layout-sm">
+              <Tabs value={filter} onValueChange={handleFilterChange}>
+                <TabsList>
+                  <TabsTrigger value="today">Today</TabsTrigger>
+                  {operatingDate && operatingDateStartAt !== null ? (
+                    <TabsTrigger value="fromDate">
+                      From {formatOperatingDateFilterLabel(operatingDate)}
+                    </TabsTrigger>
+                  ) : null}
+                  <TabsTrigger value="all">All Time</TabsTrigger>
+                </TabsList>
+              </Tabs>
+
+              <ToggleGroup
+                aria-label="Filter by payment method"
+                className="inline-flex gap-0 rounded-md bg-muted p-1 text-muted-foreground"
+                type="single"
+                value={selectedPaymentMethodFilter}
+                onValueChange={handlePaymentMethodFilterChange}
+              >
+                {transactionPaymentFilters.map(({ Icon, label, value }) => (
+                  <ToggleGroupItem
+                    aria-label={label}
+                    className="h-8 w-8 rounded-sm px-0 data-[state=on]:!bg-background data-[state=on]:!text-foreground data-[state=on]:shadow-sm data-[state=on]:ring-1 data-[state=on]:ring-border"
+                    key={value}
+                    value={value}
+                  >
+                    <Icon aria-hidden="true" className="h-4 w-4" />
+                  </ToggleGroupItem>
+                ))}
+              </ToggleGroup>
+            </div>
 
             {isLoadingTransactions ? null : hasTransactions ? (
               <GenericDataTable
@@ -558,17 +694,22 @@ export function TransactionsView() {
               <div className="flex min-h-[50vh] items-center justify-center">
                 <EmptyState
                   icon={
-                    <Receipt className="h-16 w-16 text-muted-foreground" />
+                    getPaymentMethodIcon({
+                      paymentMethod: selectedPaymentMethodFilter,
+                      className: "h-16 w-16 text-muted-foreground",
+                    }) ?? (
+                      <SearchX className="h-16 w-16 text-muted-foreground" />
+                    )
                   }
                   title={
                     <p className="text-muted-foreground">
-                      {filter === "today"
-                        ? "No completed transactions today"
-                        : filter === "fromDate" && operatingDate
-                          ? `No completed transactions from ${formatOperatingDateFilterLabel(operatingDate)}`
-                          : registerSessionId
-                            ? `No transactions for ${registerFilterLabel}`
-                            : "No completed transactions"}
+                      {getEmptyTransactionTitle({
+                        filter,
+                        operatingDate,
+                        paymentMethod: paymentMethodFilter,
+                        registerFilterLabel,
+                        registerSessionId,
+                      })}
                     </p>
                   }
                 />

@@ -194,6 +194,7 @@ describe("CashControlsDashboardContent", () => {
               openingFloat: 5000,
               registerNumber: "Register 1",
               status: "active",
+              totalSales: 66400,
               totalDeposited: 8000,
               variance: 0,
               workflowTraceId: "register_session:reg-1",
@@ -274,6 +275,7 @@ describe("CashControlsDashboardContent", () => {
               openingFloat: 5000,
               registerNumber: "Register 1",
               status: "active",
+              totalSales: 66400,
               totalDeposited: 8000,
               variance: 0,
               workflowTraceId: "register_session:reg-1",
@@ -407,6 +409,14 @@ describe("CashControlsDashboardContent", () => {
     const activeDrawerCard = screen
       .getAllByRole("link", { name: /Register 1/i })
       .find((link) => within(link).queryByText("Open drawer detail"));
+    const activeDrawerMetrics = within(activeDrawerCard as HTMLElement);
+    const totalSalesLabel = activeDrawerMetrics.getByText("Total sales");
+    const expectedCashLabel = activeDrawerMetrics.getByText("Expected cash");
+    expect(activeDrawerMetrics.getByText("$664")).toBeInTheDocument();
+    expect(
+      totalSalesLabel.compareDocumentPosition(expectedCashLabel) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     expect(activeDrawerCard).not.toHaveTextContent("Variance");
     expect(screen.getByText("Register 4")).toBeInTheDocument();
     expect(screen.getByText(expectedClosedAt)).toBeInTheDocument();

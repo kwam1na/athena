@@ -31,6 +31,7 @@
 
     --app-canvas: 252 252 251;
     --workspace-panel: 248 248 247;
+    --overlay-scrim: 15 23 42;
     --background: 0 0% 100%;
     --foreground: 222 28% 16%;
     --card: 40 42% 99%;
@@ -137,6 +138,7 @@
     color-scheme: dark;
     --app-canvas: 22 22 22;
     --workspace-panel: 30 30 30;
+    --overlay-scrim: 0 0 0;
     --background: 0 0% 9%;
     --foreground: 36 24% 94%;
     --card: 0 0% 12%;
@@ -224,6 +226,7 @@
   .dark[data-theme-variant="classic"] {
     --app-canvas: 17 19 28;
     --workspace-panel: 31 34 44;
+    --overlay-scrim: 2 6 23;
     --background: 224 24% 9%;
     --foreground: 36 34% 95%;
     --card: 223 18% 13%;

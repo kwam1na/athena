@@ -1659,7 +1659,7 @@ function StockAdjustmentBarcodeScannerDialog({
   return createPortal(
     <div
       aria-modal="true"
-      className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/60 p-layout-md sm:flex sm:items-center sm:justify-center"
+      className="fixed inset-0 z-50 overflow-y-auto bg-overlay-scrim/60 p-layout-md sm:flex sm:items-center sm:justify-center"
       role="dialog"
     >
       <section className="relative mx-auto grid w-full max-w-md gap-4 rounded-lg border border-border bg-background p-6 shadow-lg">
