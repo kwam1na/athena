@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
+  formatInferentialFailureDiagnostic,
   parseHarnessInferentialReviewArgs,
   runHarnessInferentialReview,
 } from "./harness-inferential-review";
@@ -208,6 +209,26 @@ describe("runHarnessInferentialReview", () => {
       filePath: "package.json",
     });
     expect(result.humanReport).toContain("Remediation:");
+    expect(
+      formatInferentialFailureDiagnostic(
+        result.machine,
+        result.machineOutputPath,
+      ),
+    ).toContain(
+      "[harness:inferential-review] BLOCKED: 1 finding(s), 0 runtime error(s).",
+    );
+    expect(
+      formatInferentialFailureDiagnostic(
+        result.machine,
+        result.machineOutputPath,
+      ),
+    ).toContain("Fix:");
+    expect(
+      formatInferentialFailureDiagnostic(
+        result.machine,
+        result.machineOutputPath,
+      ),
+    ).toContain("Machine details: artifacts/harness-inferential-review/latest.json");
   });
 
   it("fails when pr:athena omits harness review", async () => {
@@ -371,8 +392,9 @@ describe("runHarnessInferentialReview", () => {
         {
           scripts: {
             "pr:athena":
-              "bun run pr:athena:prepare && bun run pr:athena:validate && bun run pr:athena:record-proof",
+              "bun run pr:athena:prepare && bun run pr:athena:preflight && bun run pr:athena:validate && bun run pr:athena:record-proof",
             "pr:athena:prepare": "bun run pre-commit:generated-artifacts",
+            "pr:athena:preflight": "bun scripts/harness-contract-preflight.ts",
             "pr:athena:validate":
               "bun run harness:check && bun run harness:review --base origin/main --repo-validation-provided-by pr:athena && bun run harness:inferential-review && bun run harness:audit && bun run graphify:check",
             "pr:athena:record-proof":
@@ -405,6 +427,7 @@ describe("runHarnessInferentialReview", () => {
             "pr:athena": "bun run pr:athena:delivery-run",
             "pr:athena:delivery-run": "bun scripts/pr-athena-delivery-run.ts",
             "pr:athena:prepare": "bun run pre-commit:generated-artifacts",
+            "pr:athena:preflight": "bun scripts/harness-contract-preflight.ts",
             "pr:athena:validate":
               "bun run pr:athena:validate-provider && bun scripts/pr-athena-delivery-run.ts write-provider-evidence && bun run pr:athena:validate-review",
             "pr:athena:validate-provider": "bun run test:coverage",
@@ -821,6 +844,20 @@ describe("runHarnessInferentialReview", () => {
     expect(result.humanReport).toContain(
       "Confirm provider configuration and connectivity",
     );
+    expect(
+      formatInferentialFailureDiagnostic(
+        result.machine,
+        result.machineOutputPath,
+      ),
+    ).toContain(
+      "[harness:inferential-review] BLOCKED: 0 finding(s), 1 runtime error(s).",
+    );
+    expect(
+      formatInferentialFailureDiagnostic(
+        result.machine,
+        result.machineOutputPath,
+      ),
+    ).toContain("provider timeout");
   });
 
   it("records semantic shadow errors without making the command blocking", async () => {

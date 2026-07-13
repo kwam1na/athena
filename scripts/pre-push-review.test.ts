@@ -959,6 +959,9 @@ describe("repo harness ergonomics", () => {
     expect(packageJson.scripts?.["pr:athena:prepare"]).toContain(
       "bun scripts/pre-push-validation-proof.ts prepare-pr-athena",
     );
+    expect(packageJson.scripts?.["pr:athena:preflight"]).toBe(
+      "bun scripts/harness-contract-preflight.ts",
+    );
     expect(packageJson.scripts?.["pr:athena:validate"]).toContain(
       "bun run pr:athena:validate-provider && bun scripts/pr-athena-delivery-run.ts write-provider-evidence && bun run pr:athena:validate-review",
     );
