@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="325098e551da6eb93c667bf2e4941938aaab49a33701384a81fcfd8f941370b1" data-athena-report-base="origin/main" data-athena-report-head="codex/root-ops-cash-controls-delivery">
+<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="dc61e75c9bca94a5fece01f5176195768095d7e1701acabe857c0592ecab8fae" data-athena-report-base="origin/main" data-athena-report-head="codex/root-ops-cash-controls-delivery">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -77,7 +77,7 @@
       <header>
         <h1>Register-session operations context delivery candidate</h1>
         <p class="lede">Cash Controls, Daily Operations, and POS transaction history now retain the same operational context while improving closeout and review visibility.</p>
-        <div class="meta"><span class="pill">Delivery candidate</span><span class="pill">Branch: codex/root-ops-cash-controls-delivery</span><span class="pill">Base: origin/main</span><span class="pill">PR: pending</span><span class="pill">Merge: pending</span><span class="pill">Deploy: not requested</span><span class="pill">Root alignment: pending</span></div>
+        <div class="meta"><span class="pill">Delivery candidate</span><span class="pill">Branch: codex/root-ops-cash-controls-delivery</span><span class="pill">Base: origin/main</span><span class="pill">PR: #659</span><span class="pill">Merge: pending</span><span class="pill">Deploy: not requested</span><span class="pill">Root alignment: pending</span></div>
       </header>
       <section class="panel"><h2>Executive Summary</h2>
 <p>This candidate combines the dirty root delivery into one reviewable branch. It improves the operational trail from a register session to its transactions, exposes bounded sales and item context in Cash Controls, and gives Daily Operations a single status band for automation completion and live automation updates.</p>
@@ -122,7 +122,8 @@ Daily Operations -&gt; automation completion + active statuses -&gt; one ordered
 <li>Focused Vitest run passed 267 tests across deposits, Cash Controls, register-session detail, Daily Operations, POS transactions, and design-system configuration.</li>
 <li>git diff --check passed after the transfer.</li>
 <li>Graphify was rebuilt after the code and documentation changes.</li>
-<li>The full pr:athena gate is pending its final rerun after this report is added; this report does not claim final gate, PR, merge, deploy, or root alignment success.</li>
+<li>CI caught a timezone-dependent Daily Operations test assertion after linting and both webapp builds passed. The assertion now uses the same runtime local-time formatter as the UI; its focused regression passes locally and the full PR rerun is pending.</li>
+<li>This report does not claim final gate, merge, deploy, or root alignment success.</li>
 </ul>
 </section>
 <section class="panel"><h2>Next-Time Guidance</h2>

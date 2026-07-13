@@ -1463,8 +1463,14 @@ describe("DailyOperationsViewContent", () => {
       "Athena started Opening Handoff.",
     );
 
-    expect(within(completedUpdate.closest("article")!).getByText("6:00 PM"))
-      .toBeInTheDocument();
+    expect(
+      within(completedUpdate.closest("article")!).getByText(
+        new Intl.DateTimeFormat([], {
+          hour: "numeric",
+          minute: "2-digit",
+        }).format(new Date(Date.UTC(2026, 4, 10, 22))),
+      ),
+    ).toBeInTheDocument();
     expect(
       completedUpdate.compareDocumentPosition(preparedUpdate) &
         Node.DOCUMENT_POSITION_FOLLOWING,
