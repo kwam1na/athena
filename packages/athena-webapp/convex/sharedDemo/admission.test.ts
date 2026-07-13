@@ -37,8 +37,10 @@ describe("shared demo ticket consumption", () => {
     await expect(
       consumeSharedDemoTicketWithCtx(ctx, { now: 10_000, ticketHash: "hash" }),
     ).resolves.toEqual({ authUserId: "user-1" });
-    expect(patch).toHaveBeenNthCalledWith(1, "ticket-1", { consumedAt: 10_000 });
-    expect(patch).toHaveBeenNthCalledWith(2, "principal-1", {
+    expect(patch).toHaveBeenNthCalledWith(1, "sharedDemoAdmissionTicket", "ticket-1", {
+      consumedAt: 10_000,
+    });
+    expect(patch).toHaveBeenNthCalledWith(2, "sharedDemoPrincipal", "principal-1", {
       admissionExpiresAt: 3_610_000,
       updatedAt: 10_000,
     });

@@ -43,8 +43,10 @@ export async function consumeSharedDemoTicketWithCtx(
     throw new Error("Demo sign-in link is no longer valid. Open the demo again.");
   }
 
-  await ctx.db.patch(ticket._id, { consumedAt: args.now });
-  await ctx.db.patch(ticket.principalId, {
+  await ctx.db.patch("sharedDemoAdmissionTicket", ticket._id, {
+    consumedAt: args.now,
+  });
+  await ctx.db.patch("sharedDemoPrincipal", ticket.principalId, {
     admissionExpiresAt: args.now + SHARED_DEMO_ADMISSION_DURATION_MS,
     updatedAt: args.now,
   });

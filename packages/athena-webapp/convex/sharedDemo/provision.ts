@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 
 import { internalMutation } from "../_generated/server";
+import { insertRegisterSessionWithAuthority } from "../operations/registerSessionAuthorityRevision";
 import { hashPosTerminalSyncSecret } from "../pos/application/sync/terminalSyncSecret";
 import { captureBaselineDocumentsWithCtx } from "./domainRestore";
 
@@ -96,7 +97,7 @@ export const provisionSharedDemo = internalMutation({
       registeredAt: now, registeredByUserId: ownerUserId, status: "active", storeId,
       syncSecretHash: await hashPosTerminalSyncSecret("shared-demo-non-secret-terminal-seed"), transactionCapability: "products_and_services",
     });
-    const registerSessionId = await ctx.db.insert("registerSession", {
+    const registerSessionId = await insertRegisterSessionWithAuthority(ctx, {
       expectedCash: 32500, openedAt: now - 14_400_000, openedByStaffProfileId: cashierStaffId,
       openedByUserId: ownerUserId, openedOperatingDate: operatingDate(now), openingFloat: 30000,
       organizationId, registerNumber: "DEMO-01", status: "active", storeId, terminalId,
