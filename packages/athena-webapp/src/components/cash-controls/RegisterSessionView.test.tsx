@@ -2706,9 +2706,9 @@ describe("RegisterSessionViewContent", () => {
       .getByText("Closeout complete")
       .closest("div.rounded-lg");
 
-    expect(completedCloseoutPanel).not.toBeNull();
+    expect(completedCloseoutPanel).toBeInstanceOf(HTMLElement);
     expect(
-      within(completedCloseoutPanel!).queryByText("Closed"),
+      within(completedCloseoutPanel as HTMLElement).queryByText("Closed"),
     ).not.toBeInTheDocument();
     expect(screen.getByText(expectedClosedAt)).toBeInTheDocument();
     expect(screen.getByText("By Kojo M.")).toBeInTheDocument();

@@ -8,7 +8,7 @@ problem_type: missing_handoff_guardrail
 component: landed-change-report-check
 resolution_type: guardrail
 severity: medium
-delivery_diff_fingerprint: a9a17fe3bebe44c4765fa5d86174c3c0f928fd67d4eb6f44d03900679e96c1de
+delivery_diff_fingerprint: 325098e551da6eb93c667bf2e4941938aaab49a33701384a81fcfd8f941370b1
 tags:
   - delivery-handoff
   - reports
