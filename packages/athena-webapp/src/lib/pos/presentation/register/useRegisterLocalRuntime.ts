@@ -122,17 +122,19 @@ export function useRegisterLocalRuntime(input: {
     () => buildLocalSaleValidationMetadata(appSessionRecovery?.status),
     [appSessionRecovery?.status],
   );
+  const terminalId = terminal?._id;
+  const cloudTerminalId = terminal?.cloudTerminalId;
+  const localTerminalId = terminal?.localTerminalId;
   const terminalDescriptor = useMemo<RegisterLocalRuntimeTerminal | null>(
     () =>
-      terminal
+      terminalId
         ? {
-            _id: terminal._id,
-            cloudTerminalId: terminal.cloudTerminalId,
-            localTerminalId: terminal.localTerminalId,
+            _id: terminalId,
+            cloudTerminalId,
+            localTerminalId,
           }
         : null,
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- preserve bridge identity across equivalent terminal objects.
-    [terminal?._id, terminal?.cloudTerminalId, terminal?.localTerminalId],
+    [cloudTerminalId, localTerminalId, terminalId],
   );
 
   useEffect(() => {
