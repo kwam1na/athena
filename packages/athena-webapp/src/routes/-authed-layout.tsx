@@ -68,6 +68,7 @@ import {
   setAthenaThemeModeWithTransition,
   useAthenaTheme,
 } from "@/lib/theme";
+import { SharedDemoRuntime } from "@/components/shared-demo/SharedDemoRuntime";
 
 const POS_TERMINAL_FULLSCREEN_PATH_PATTERN =
   /^\/(?<orgUrlSlug>[^/]+)\/store\/(?<storeUrlSlug>[^/]+)\/pos\/(?:register|expense)\/?$/;
@@ -768,6 +769,7 @@ export default function Layout() {
         isFullscreenActive={isFullscreenActive}
         setFullscreenOverride={setFullscreenOverride}
       >
+        <SharedDemoRuntime />
         {shouldMountRemoteAssistRuntime ? (
           <PosRemoteAssistRuntimeHost
             appSessionRecovery={posAppSessionRecoveryRuntimeInput}
@@ -813,10 +815,11 @@ export default function Layout() {
                 userEmail={userEmail}
               />
             )}
+            {isFullscreenActive ? null : <SharedDemoRuntime />}
             <div
               className={cn(
                 "flex !min-h-0 flex-1",
-                isFullscreenActive ? "h-svh" : "h-[calc(100svh-4rem)]",
+                isFullscreenActive && "h-svh",
               )}
             >
               {isFullscreenActive ? null : (

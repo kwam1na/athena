@@ -471,8 +471,12 @@ async function requireRegisterCatalogStoreAccess(
   }
 
   const athenaUser = options?.indexedIdentityOnly
-    ? await requireAuthenticatedAthenaUserIndexedWithCtx(ctx)
-    : await requireAuthenticatedAthenaUserWithCtx(ctx);
+    ? await requireAuthenticatedAthenaUserIndexedWithCtx(ctx, {
+        sharedDemoCapability: "pos.sale.complete",
+      })
+    : await requireAuthenticatedAthenaUserWithCtx(ctx, {
+        sharedDemoCapability: "pos.sale.complete",
+      });
   await requireOrganizationMemberRoleWithCtx(ctx, {
     allowedRoles: ["full_admin", "pos_only"],
     failureMessage:

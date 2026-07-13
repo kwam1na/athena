@@ -28,6 +28,7 @@ import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
+import { requireSharedDemoCapabilityIfApplicable } from "../sharedDemo/actor";
 
 export const STAFF_CREDENTIAL_STATUS = v.union(
   v.literal("pending"),
@@ -1141,6 +1142,7 @@ export const createStaffCredential = mutation({
   returns: commandResultValidator(v.any()),
   handler: async (ctx, args) => {
     try {
+      await requireSharedDemoCapabilityIfApplicable(ctx, "identity.manage");
       await requireStaffCredentialManagementAccessWithCtx(
         ctx,
         args.organizationId,

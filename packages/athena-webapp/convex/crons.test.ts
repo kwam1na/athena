@@ -2,6 +2,12 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 describe("Convex cron registration", () => {
+  it("registers the shared demo hourly restore", () => {
+    const source = readFileSync("convex/crons.ts", "utf8");
+    expect(source).toContain('"shared-demo-hourly-restore"');
+    expect(source).toContain("sharedDemo.scheduledRestore.runHourlyRestore");
+    expect(source).toContain("{ minuteUTC: 0 }");
+  });
   it("registers bounded marketing retention jobs", () => {
     const source = readFileSync("convex/crons.ts", "utf8");
     expect(source).toContain('"walkthrough-retention-cleanup"');

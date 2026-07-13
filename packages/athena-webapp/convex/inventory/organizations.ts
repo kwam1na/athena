@@ -1,6 +1,8 @@
 import { mutation, query } from "../_generated/server";
 import { v } from "convex/values";
 import { organizationSchema } from "../schemas/inventory";
+import { getSharedDemoActorWithCtx } from "../sharedDemo/actor";
+import { requireNonDemoFoundationMutation } from "../sharedDemo/foundation";
 
 const entity = "organization";
 
@@ -9,6 +11,8 @@ export const getAll = query({
     userId: v.id("athenaUser"),
   },
   handler: async (ctx, args) => {
+    const demoActor = await getSharedDemoActorWithCtx(ctx);
+    if (demoActor && args.userId !== demoActor.athenaUserId) return [];
     const memberOrgs = await ctx.db
       .query("organizationMember")
       .filter((q) => q.eq(q.field("userId"), args.userId))
@@ -41,6 +45,7 @@ export const getByIdOrSlug = query({
     identifier: v.union(v.id(entity), v.string()),
   },
   handler: async (ctx, args) => {
+    const demoActor = await getSharedDemoActorWithCtx(ctx);
     const organization = await ctx.db
       .query(entity)
       .filter((q) =>
@@ -54,6 +59,7 @@ export const getByIdOrSlug = query({
     if (!organization) {
       return null;
     }
+    if (demoActor && organization._id !== demoActor.organizationId) return null;
 
     return organization;
   },
@@ -62,6 +68,7 @@ export const getByIdOrSlug = query({
 export const create = mutation({
   args: organizationSchema,
   handler: async (ctx, args) => {
+    requireNonDemoFoundationMutation({ athenaUserId: args.createdByUserId });
     const id = await ctx.db.insert(entity, args);
 
     await ctx.db.insert("organizationMember", {
@@ -80,6 +87,7 @@ export const update = mutation({
     name: v.string(),
   },
   handler: async (ctx, args) => {
+    requireNonDemoFoundationMutation({ organizationId: args.id });
     await ctx.db.patch(args.id, { name: args.name });
 
     return await ctx.db.get(args.id);
@@ -91,6 +99,7 @@ export const remove = mutation({
     id: v.id(entity),
   },
   handler: async (ctx, args) => {
+    requireNonDemoFoundationMutation({ organizationId: args.id });
     await ctx.db.delete(args.id);
 
     return { message: "OK" };

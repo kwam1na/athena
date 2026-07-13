@@ -27,6 +27,8 @@ import {
   EMPTY_CATALOG_SUMMARY,
   refreshCatalogSummaryWithCtx,
 } from "./catalogSummary";
+import { requireNonDemoFoundationMutation } from "../sharedDemo/foundation";
+import { requireAuthenticatedAthenaUserWithCtx } from "../lib/athenaUserAuth";
 import {
   ensurePendingCheckoutReviewWorkForUnarchivedProduct,
   retirePendingCheckoutReviewWorkForArchivedProduct,
@@ -848,6 +850,8 @@ export const getByIdOrSlug = query({
 export const create = mutation({
   args: productSchema,
   handler: async (ctx, args) => {
+    await requireAuthenticatedAthenaUserWithCtx(ctx);
+    requireNonDemoFoundationMutation({ storeId: args.storeId });
     const id = await ctx.db.insert(entity, args);
 
     const product = await ctx.db.get("product", id);
@@ -870,6 +874,7 @@ export const create = mutation({
 export const createSku = mutation({
   args: productSkuSchema,
   handler: async (ctx, args) => {
+    await requireAuthenticatedAthenaUserWithCtx(ctx);
     // Validate quantityAvailable doesn't exceed stock
     if (
       args.quantityAvailable !== undefined &&
@@ -891,6 +896,7 @@ export const createSku = mutation({
       .query("product")
       .filter((q) => q.eq(q.field("_id"), args.productId))
       .first();
+    if (product) requireNonDemoFoundationMutation({ storeId: product.storeId });
 
     if (!product) {
       throw new Error(`Product with id ${args.productId} not found`);
@@ -1080,8 +1086,10 @@ export const updateSku = mutation({
     attributes: v.optional(v.record(v.string(), v.any())),
   },
   handler: async (ctx, args) => {
+    await requireAuthenticatedAthenaUserWithCtx(ctx);
     // Get current SKU data for validation
     const currentSku = await ctx.db.get("productSku", args.id);
+    if (currentSku) requireNonDemoFoundationMutation({ storeId: currentSku.storeId });
     if (!currentSku) throw new Error("SKU not found");
 
     if (args.barcode) {
@@ -1156,8 +1164,10 @@ export const update = mutation({
     posVisible: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
+    await requireAuthenticatedAthenaUserWithCtx(ctx);
     const { id, ...rest } = args;
     const productBefore = await ctx.db.get("product", args.id);
+    if (productBefore) requireNonDemoFoundationMutation({ storeId: productBefore.storeId });
     const taxonomyChanged =
       productBefore &&
       ((args.categoryId !== undefined &&
@@ -1268,6 +1278,7 @@ export const archive = mutation({
     storeId: v.id("store"),
   },
   handler: async (ctx, args) => {
+    requireNonDemoFoundationMutation({ storeId: args.storeId });
     await requireStoreFullAdminAccess(ctx, args.storeId);
 
     const product = await ctx.db.get("product", args.id);
@@ -1302,6 +1313,7 @@ export const unarchive = mutation({
     storeId: v.id("store"),
   },
   handler: async (ctx, args) => {
+    requireNonDemoFoundationMutation({ storeId: args.storeId });
     await requireStoreFullAdminAccess(ctx, args.storeId);
 
     const product = await ctx.db.get("product", args.id);
@@ -1386,12 +1398,14 @@ export const removeSku = mutation({
     id: v.id("productSku"),
   },
   handler: async (ctx, args) => {
+    await requireAuthenticatedAthenaUserWithCtx(ctx);
     const sku = await ctx.db.get("productSku", args.id);
     if (!sku) {
       await removeProductSkuSearchProjection(ctx, args.id);
       await ctx.db.delete("productSku", args.id);
       return { message: "OK" };
     }
+    requireNonDemoFoundationMutation({ storeId: sku.storeId });
 
     const hasPendingCheckoutDependency =
       await hasPendingCheckoutRegisterCatalogDependency(ctx, sku);
@@ -1416,6 +1430,8 @@ export const removeAllProductsForStore = mutation({
     storeId: v.id("store"),
   },
   handler: async (ctx, args) => {
+    await requireAuthenticatedAthenaUserWithCtx(ctx);
+    requireNonDemoFoundationMutation({ storeId: args.storeId });
     const products = await ctx.db
       .query("product")
       .filter((q) => q.eq(q.field("storeId"), args.storeId))
@@ -1462,8 +1478,15 @@ export const batchUpdateSkuPrices = mutation({
     ),
   },
   handler: async (ctx, args) => {
+    await requireAuthenticatedAthenaUserWithCtx(ctx);
     if (args.updates.length === 0) {
       return { success: true, updatedCount: 0 };
+    }
+    const targetSkus = await Promise.all(
+      args.updates.map((update) => ctx.db.get("productSku", update.id)),
+    );
+    for (const sku of targetSkus) {
+      if (sku) requireNonDemoFoundationMutation({ storeId: sku.storeId });
     }
 
     const results = await Promise.allSettled(

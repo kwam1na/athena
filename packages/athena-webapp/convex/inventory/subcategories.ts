@@ -3,6 +3,8 @@ import { v } from "convex/values";
 import { subcategorySchema } from "../schemas/inventory";
 import { toSlug } from "../utils";
 import { refreshProductSkuSearchForSubcategory } from "./skuSearch";
+import { requireNonDemoFoundationMutation } from "../sharedDemo/foundation";
+import { requireAuthenticatedAthenaUserWithCtx } from "../lib/athenaUserAuth";
 
 export const getAll = query({
   args: {
@@ -41,6 +43,8 @@ export const getById = query({
 export const create = mutation({
   args: subcategorySchema,
   handler: async (ctx, args) => {
+    await requireAuthenticatedAthenaUserWithCtx(ctx);
+    requireNonDemoFoundationMutation({ storeId: args.storeId });
     const id = await ctx.db.insert("subcategory", args);
 
     return await ctx.db.get("subcategory", id);
@@ -54,6 +58,9 @@ export const update = mutation({
     categoryId: v.optional(v.id("category")),
   },
   handler: async (ctx, args) => {
+    await requireAuthenticatedAthenaUserWithCtx(ctx);
+    const existing = await ctx.db.get("subcategory", args.id);
+    if (existing) requireNonDemoFoundationMutation({ storeId: existing.storeId });
     const updates: Record<string, any> = {};
 
     if (args.name) {
@@ -79,6 +86,9 @@ export const remove = mutation({
     id: v.id("subcategory"),
   },
   handler: async (ctx, args) => {
+    await requireAuthenticatedAthenaUserWithCtx(ctx);
+    const existing = await ctx.db.get("subcategory", args.id);
+    if (existing) requireNonDemoFoundationMutation({ storeId: existing.storeId });
     await ctx.db.delete("subcategory", args.id);
     await refreshProductSkuSearchForSubcategory(ctx, args.id);
 

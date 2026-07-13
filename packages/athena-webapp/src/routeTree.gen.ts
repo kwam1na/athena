@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as WalkthroughRouteImport } from './routes/walkthrough'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as LandingRouteImport } from './routes/landing'
+import { Route as DemoRouteImport } from './routes/demo'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as AuthedRouteImport } from './routes/_authed'
 import { Route as IndexRouteImport } from './routes/index'
@@ -23,6 +24,7 @@ import { Route as AuthedOrgUrlSlugStoreIndexRouteImport } from './routes/_authed
 import { Route as AuthedOrgUrlSlugSettingsIndexRouteImport } from './routes/_authed/$orgUrlSlug/settings/index'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/index'
 import { Route as AuthedOrgUrlSlugSettingsOrganizationIndexRouteImport } from './routes/_authed/$orgUrlSlug/settings/organization/index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugSharedDemoRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/shared-demo'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugReportsRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/reports'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugHomeRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/home'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugAppSettingsRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/app-settings'
@@ -115,6 +117,11 @@ const LandingRoute = LandingRouteImport.update({
   path: '/landing',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DemoRoute = DemoRouteImport.update({
+  id: '/demo',
+  path: '/demo',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppRoute = AppRouteImport.update({
   id: '/app',
   path: '/app',
@@ -171,6 +178,12 @@ const AuthedOrgUrlSlugSettingsOrganizationIndexRoute =
   AuthedOrgUrlSlugSettingsOrganizationIndexRouteImport.update({
     id: '/$orgUrlSlug/settings/organization/',
     path: '/$orgUrlSlug/settings/organization/',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+const AuthedOrgUrlSlugStoreStoreUrlSlugSharedDemoRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugSharedDemoRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/shared-demo',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/shared-demo',
     getParentRoute: () => AuthedRoute,
   } as any)
 const AuthedOrgUrlSlugStoreStoreUrlSlugReportsRoute =
@@ -653,6 +666,7 @@ const AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersSessionIdActivityRou
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRoute
+  '/demo': typeof DemoRoute
   '/landing': typeof LandingRoute
   '/privacy': typeof PrivacyRoute
   '/walkthrough': typeof WalkthroughRoute
@@ -666,6 +680,7 @@ export interface FileRoutesByFullPath {
   '/$orgUrlSlug/store/$storeUrlSlug/app-settings': typeof AuthedOrgUrlSlugStoreStoreUrlSlugAppSettingsRoute
   '/$orgUrlSlug/store/$storeUrlSlug/home': typeof AuthedOrgUrlSlugStoreStoreUrlSlugHomeRoute
   '/$orgUrlSlug/store/$storeUrlSlug/reports': typeof AuthedOrgUrlSlugStoreStoreUrlSlugReportsRouteWithChildren
+  '/$orgUrlSlug/store/$storeUrlSlug/shared-demo': typeof AuthedOrgUrlSlugStoreStoreUrlSlugSharedDemoRoute
   '/$orgUrlSlug/settings/organization/': typeof AuthedOrgUrlSlugSettingsOrganizationIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/bags/$bagId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugBagsBagIdRoute
@@ -744,6 +759,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/app': typeof AppRoute
+  '/demo': typeof DemoRoute
   '/landing': typeof LandingRoute
   '/privacy': typeof PrivacyRoute
   '/walkthrough': typeof WalkthroughRoute
@@ -755,6 +771,7 @@ export interface FileRoutesByTo {
   '/$orgUrlSlug/settings/stores/$storeUrlSlug': typeof AuthedOrgUrlSlugSettingsStoresStoreUrlSlugRoute
   '/$orgUrlSlug/store/$storeUrlSlug/app-settings': typeof AuthedOrgUrlSlugStoreStoreUrlSlugAppSettingsRoute
   '/$orgUrlSlug/store/$storeUrlSlug/home': typeof AuthedOrgUrlSlugStoreStoreUrlSlugHomeRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/shared-demo': typeof AuthedOrgUrlSlugStoreStoreUrlSlugSharedDemoRoute
   '/$orgUrlSlug/settings/organization': typeof AuthedOrgUrlSlugSettingsOrganizationIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug': typeof AuthedOrgUrlSlugStoreStoreUrlSlugIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/bags/$bagId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugBagsBagIdRoute
@@ -834,6 +851,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authed': typeof AuthedRouteWithChildren
   '/app': typeof AppRoute
+  '/demo': typeof DemoRoute
   '/landing': typeof LandingRoute
   '/privacy': typeof PrivacyRoute
   '/walkthrough': typeof WalkthroughRoute
@@ -847,6 +865,7 @@ export interface FileRoutesById {
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/app-settings': typeof AuthedOrgUrlSlugStoreStoreUrlSlugAppSettingsRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/home': typeof AuthedOrgUrlSlugStoreStoreUrlSlugHomeRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/reports': typeof AuthedOrgUrlSlugStoreStoreUrlSlugReportsRouteWithChildren
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/shared-demo': typeof AuthedOrgUrlSlugStoreStoreUrlSlugSharedDemoRoute
   '/_authed/$orgUrlSlug/settings/organization/': typeof AuthedOrgUrlSlugSettingsOrganizationIndexRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugIndexRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/bags/$bagId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugBagsBagIdRoute
@@ -927,6 +946,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/app'
+    | '/demo'
     | '/landing'
     | '/privacy'
     | '/walkthrough'
@@ -940,6 +960,7 @@ export interface FileRouteTypes {
     | '/$orgUrlSlug/store/$storeUrlSlug/app-settings'
     | '/$orgUrlSlug/store/$storeUrlSlug/home'
     | '/$orgUrlSlug/store/$storeUrlSlug/reports'
+    | '/$orgUrlSlug/store/$storeUrlSlug/shared-demo'
     | '/$orgUrlSlug/settings/organization/'
     | '/$orgUrlSlug/store/$storeUrlSlug/'
     | '/$orgUrlSlug/store/$storeUrlSlug/bags/$bagId'
@@ -1018,6 +1039,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/app'
+    | '/demo'
     | '/landing'
     | '/privacy'
     | '/walkthrough'
@@ -1029,6 +1051,7 @@ export interface FileRouteTypes {
     | '/$orgUrlSlug/settings/stores/$storeUrlSlug'
     | '/$orgUrlSlug/store/$storeUrlSlug/app-settings'
     | '/$orgUrlSlug/store/$storeUrlSlug/home'
+    | '/$orgUrlSlug/store/$storeUrlSlug/shared-demo'
     | '/$orgUrlSlug/settings/organization'
     | '/$orgUrlSlug/store/$storeUrlSlug'
     | '/$orgUrlSlug/store/$storeUrlSlug/bags/$bagId'
@@ -1107,6 +1130,7 @@ export interface FileRouteTypes {
     | '/'
     | '/_authed'
     | '/app'
+    | '/demo'
     | '/landing'
     | '/privacy'
     | '/walkthrough'
@@ -1120,6 +1144,7 @@ export interface FileRouteTypes {
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/app-settings'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/home'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/reports'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/shared-demo'
     | '/_authed/$orgUrlSlug/settings/organization/'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/bags/$bagId'
@@ -1200,6 +1225,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthedRoute: typeof AuthedRouteWithChildren
   AppRoute: typeof AppRoute
+  DemoRoute: typeof DemoRoute
   LandingRoute: typeof LandingRoute
   PrivacyRoute: typeof PrivacyRoute
   WalkthroughRoute: typeof WalkthroughRoute
@@ -1228,6 +1254,13 @@ declare module '@tanstack/react-router' {
       path: '/landing'
       fullPath: '/landing'
       preLoaderRoute: typeof LandingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/demo': {
+      id: '/demo'
+      path: '/demo'
+      fullPath: '/demo'
+      preLoaderRoute: typeof DemoRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/app': {
@@ -1305,6 +1338,13 @@ declare module '@tanstack/react-router' {
       path: '/$orgUrlSlug/settings/organization'
       fullPath: '/$orgUrlSlug/settings/organization/'
       preLoaderRoute: typeof AuthedOrgUrlSlugSettingsOrganizationIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/shared-demo': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/shared-demo'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/shared-demo'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/shared-demo'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugSharedDemoRouteImport
       parentRoute: typeof AuthedRoute
     }
     '/_authed/$orgUrlSlug/store/$storeUrlSlug/reports': {
@@ -1922,6 +1962,7 @@ interface AuthedRouteChildren {
   AuthedOrgUrlSlugStoreStoreUrlSlugAppSettingsRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugAppSettingsRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugHomeRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugHomeRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugReportsRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugReportsRouteWithChildren
+  AuthedOrgUrlSlugStoreStoreUrlSlugSharedDemoRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugSharedDemoRoute
   AuthedOrgUrlSlugSettingsOrganizationIndexRoute: typeof AuthedOrgUrlSlugSettingsOrganizationIndexRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugIndexRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugBagsBagIdRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugBagsBagIdRoute
@@ -2002,6 +2043,8 @@ const AuthedRouteChildren: AuthedRouteChildren = {
     AuthedOrgUrlSlugStoreStoreUrlSlugHomeRoute,
   AuthedOrgUrlSlugStoreStoreUrlSlugReportsRoute:
     AuthedOrgUrlSlugStoreStoreUrlSlugReportsRouteWithChildren,
+  AuthedOrgUrlSlugStoreStoreUrlSlugSharedDemoRoute:
+    AuthedOrgUrlSlugStoreStoreUrlSlugSharedDemoRoute,
   AuthedOrgUrlSlugSettingsOrganizationIndexRoute:
     AuthedOrgUrlSlugSettingsOrganizationIndexRoute,
   AuthedOrgUrlSlugStoreStoreUrlSlugIndexRoute:
@@ -2155,6 +2198,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthedRoute: AuthedRouteWithChildren,
   AppRoute: AppRoute,
+  DemoRoute: DemoRoute,
   LandingRoute: LandingRoute,
   PrivacyRoute: PrivacyRoute,
   WalkthroughRoute: WalkthroughRoute,

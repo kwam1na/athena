@@ -1,5 +1,7 @@
 /* eslint-disable @convex-dev/no-collect-in-query -- Query refactors are tracked in V26-168, V26-169, and V26-170; this PR only hardens API boundaries. */
 import { v } from "convex/values";
+import { requireNonDemoFoundationMutation } from "../sharedDemo/foundation";
+import { requireAuthenticatedAthenaUserWithCtx } from "../lib/athenaUserAuth";
 import {
   internalMutation,
   internalQuery,
@@ -285,6 +287,11 @@ export const create = mutation({
     createdByUserId: v.id("athenaUser"),
   },
   handler: async (ctx, args) => {
+    await requireAuthenticatedAthenaUserWithCtx(ctx);
+    requireNonDemoFoundationMutation({
+      athenaUserId: args.createdByUserId,
+      storeId: args.storeId,
+    });
     const id = await ctx.db.insert(entity, {
       code: args.code,
       storeId: args.storeId,
@@ -485,6 +492,9 @@ export const remove = mutation({
   args: { id: v.id(entity) },
   returns: v.object({ success: v.boolean() }),
   handler: async (ctx, args) => {
+    await requireAuthenticatedAthenaUserWithCtx(ctx);
+    const promoCode = await ctx.db.get("promoCode", args.id);
+    if (promoCode) requireNonDemoFoundationMutation({ storeId: promoCode.storeId });
     const promoCodeItems = await ctx.db
       .query("promoCodeItem")
       .filter((q) => q.eq(q.field("promoCodeId"), args.id))
@@ -526,6 +536,11 @@ export const update = mutation({
   },
   returns: v.object({ success: v.boolean() }),
   handler: async (ctx, args) => {
+    await requireAuthenticatedAthenaUserWithCtx(ctx);
+    const existingPromoCode = await ctx.db.get("promoCode", args.id);
+    if (existingPromoCode) {
+      requireNonDemoFoundationMutation({ storeId: existingPromoCode.storeId });
+    }
     const promoCode = await ctx.db.get("promoCode", args.id);
     if (!promoCode) {
       throw new Error("Promo code not found");

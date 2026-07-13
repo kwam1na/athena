@@ -20,8 +20,11 @@ import {
   removeLegacyRootKeysFromConfig,
   toV2Config,
 } from "./storeConfigV2";
+import { getSharedDemoActorWithCtx, requireSharedDemoCapabilityIfApplicable } from "../sharedDemo/actor";
 import { ok, userError } from "../../shared/commandResult";
+import { requireNonDemoFoundationMutation } from "../sharedDemo/foundation";
 import { commandResultValidator } from "../lib/commandResultValidators";
+import { requireAuthenticatedAthenaUserWithCtx } from "../lib/athenaUserAuth";
 
 const entity = "store";
 const CONFIG_MIGRATION_PAGE_SIZE = 50;
@@ -46,6 +49,8 @@ export const getAll = query({
     organizationId: v.id("organization"),
   },
   handler: async (ctx, args) => {
+    const demoActor = await getSharedDemoActorWithCtx(ctx);
+    if (demoActor && args.organizationId !== demoActor.organizationId) return [];
     const stores = await ctx.db
       .query(entity)
       .filter((q) => q.eq(q.field("organizationId"), args.organizationId))
@@ -78,6 +83,11 @@ export const getAllByOrganization = action({
     organizationId: v.id("organization"),
   },
   handler: async (ctx, args) => {
+    await ctx.runQuery(
+      (internal as any).sharedDemo.actor.requireAuthenticatedNonDemoEffect,
+      {},
+    );
+    requireNonDemoFoundationMutation({ organizationId: args.organizationId });
     const stores: Doc<"store">[] = await ctx.runQuery(
       internal.inventory.stores.getAllInternal,
       {
@@ -187,6 +197,7 @@ export const getByIdOrSlug = internalQuery({
 export const create = mutation({
   args: storeSchema,
   handler: async (ctx, args) => {
+    requireNonDemoFoundationMutation({ organizationId: args.organizationId });
     const id = await ctx.db.insert(entity, args);
 
     return await ctx.db.get("store", id);
@@ -199,6 +210,7 @@ export const update = mutation({
     name: v.string(),
   },
   handler: async (ctx, args) => {
+    requireNonDemoFoundationMutation({ storeId: args.id });
     await ctx.db.patch("store", args.id, { name: args.name });
 
     return await ctx.db.get("store", args.id);
@@ -210,6 +222,8 @@ export const remove = mutation({
     id: v.id(entity),
   },
   handler: async (ctx, args) => {
+    requireNonDemoFoundationMutation({ storeId: args.id });
+    await requireSharedDemoCapabilityIfApplicable(ctx, "administration.destructive");
     await ctx.db.delete("store", args.id);
 
     return { message: "OK" };
@@ -238,6 +252,7 @@ export const patchConfigV2 = mutation({
     mirrorLegacy: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
+    requireNonDemoFoundationMutation({ storeId: args.id });
     const store = await ctx.db.get("store", args.id);
     if (!store) {
       throw new Error("Store not found");
@@ -263,6 +278,8 @@ export const patchConfigV2Command = mutation({
   },
   returns: commandResultValidator(v.any()),
   handler: async (ctx, args) => {
+    requireNonDemoFoundationMutation({ storeId: args.id });
+    await requireSharedDemoCapabilityIfApplicable(ctx, "integrations.manage");
     const store = await ctx.db.get("store", args.id);
     if (!store) {
       return userError({
@@ -358,6 +375,7 @@ export const migrateConfigToV2Page = mutation({
     cursor: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await requireAuthenticatedAthenaUserWithCtx(ctx);
     const page = await ctx.db.query(entity).paginate({
       numItems: CONFIG_MIGRATION_PAGE_SIZE,
       cursor: args.cursor ?? null,
@@ -392,6 +410,7 @@ export const cleanupLegacyConfigKeysPage = mutation({
     cursor: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await requireAuthenticatedAthenaUserWithCtx(ctx);
     const page = await ctx.db.query(entity).paginate({
       numItems: CONFIG_MIGRATION_PAGE_SIZE,
       cursor: args.cursor ?? null,
@@ -511,6 +530,11 @@ export const uploadImageAssets = action({
     storeId: v.id("store"),
   },
   handler: async (ctx, args) => {
+    await ctx.runQuery(
+      (internal as any).sharedDemo.actor.requireAuthenticatedNonDemoEffect,
+      {},
+    );
+    requireNonDemoFoundationMutation({ storeId: args.storeId });
     const uploadPromises = args.images.map(async (imgBuffer) => {
       return uploadFileToR2(
         imgBuffer,
@@ -543,6 +567,11 @@ export const updateLandingPageReel = action({
     config: v.record(v.string(), v.any()),
   },
   handler: async (ctx, args) => {
+    await ctx.runQuery(
+      (internal as any).sharedDemo.actor.requireAuthenticatedNonDemoEffect,
+      {},
+    );
+    requireNonDemoFoundationMutation({ storeId: args.storeId });
     const versions = await listItemsInR2Directory({
       directory: `stores/${args.storeId}/assets/hero`,
       firstLevelOnly: true,
@@ -573,6 +602,11 @@ export const getReelVersions = action({
     storeId: v.id(entity),
   },
   handler: async (ctx, args) => {
+    await ctx.runQuery(
+      (internal as any).sharedDemo.actor.requireAuthenticatedNonDemoEffect,
+      {},
+    );
+    requireNonDemoFoundationMutation({ storeId: args.storeId });
     const versions = await listItemsInR2Directory({
       directory: `stores/${args.storeId}/assets/hero`,
       firstLevelOnly: true,

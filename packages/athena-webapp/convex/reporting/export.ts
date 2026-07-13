@@ -11,6 +11,7 @@ import {
 import { v } from "convex/values";
 
 import { requireReportingStoreAccess } from "./access";
+import { requireSharedDemoCapabilityIfApplicable } from "../sharedDemo/actor";
 
 export const EXPORT_PAGE_SIZE = 100;
 export const EXPORT_MAX_CHUNKS = 500;
@@ -148,6 +149,7 @@ export const requestExport = mutation({
   args: { storeId: v.id("store") },
   returns: exportRequestResult,
   handler: async (ctx, args) => {
+    await requireSharedDemoCapabilityIfApplicable(ctx, "exports.generate");
     const { athenaUser, store } = await requireReportingStoreAccess(
       ctx,
       args.storeId,

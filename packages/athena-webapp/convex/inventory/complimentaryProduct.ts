@@ -3,6 +3,8 @@ import { ComplimentaryProduct } from "../../types";
 import { internal } from "../_generated/api";
 import { mutation, query } from "../_generated/server";
 import { v } from "convex/values";
+import { requireNonDemoFoundationMutation } from "../sharedDemo/foundation";
+import { requireAuthenticatedAthenaUserWithCtx } from "../lib/athenaUserAuth";
 
 // Create a new complimentary products collection
 export const createCollection = mutation({
@@ -16,6 +18,12 @@ export const createCollection = mutation({
     createdByUserId: v.id("athenaUser"),
   },
   handler: async (ctx, args) => {
+    await requireAuthenticatedAthenaUserWithCtx(ctx);
+    requireNonDemoFoundationMutation({
+      athenaUserId: args.createdByUserId,
+      organizationId: args.organizationId,
+      storeId: args.storeId,
+    });
     return await ctx.db.insert("complimentaryProductsCollection", args);
   },
 });
@@ -31,6 +39,12 @@ export const createComplimentaryProduct = mutation({
     createdByUserId: v.id("athenaUser"),
   },
   handler: async (ctx, args) => {
+    await requireAuthenticatedAthenaUserWithCtx(ctx);
+    requireNonDemoFoundationMutation({
+      athenaUserId: args.createdByUserId,
+      organizationId: args.organizationId,
+      storeId: args.storeId,
+    });
     // Check if the SKU already exists as a complimentary product
     const existingProduct = await ctx.db
       .query("complimentaryProduct")
@@ -82,6 +96,9 @@ export const toggleComplimentaryProductActive = mutation({
     isActive: v.boolean(),
   },
   handler: async (ctx, args) => {
+    await requireAuthenticatedAthenaUserWithCtx(ctx);
+    const product = await ctx.db.get("complimentaryProduct", args.complimentaryProductId);
+    if (product) requireNonDemoFoundationMutation({ storeId: product.storeId });
     return await ctx.db.patch("complimentaryProduct", args.complimentaryProductId, {
       isActive: args.isActive,
     });
@@ -95,6 +112,9 @@ export const toggleCollectionActive = mutation({
     isActive: v.boolean(),
   },
   handler: async (ctx, args) => {
+    await requireAuthenticatedAthenaUserWithCtx(ctx);
+    const collection = await ctx.db.get("complimentaryProductsCollection", args.collectionId);
+    if (collection) requireNonDemoFoundationMutation({ storeId: collection.storeId });
     return await ctx.db.patch("complimentaryProductsCollection", args.collectionId, {
       isActive: args.isActive,
     });
@@ -152,6 +172,12 @@ export const batchCreateComplimentaryProducts = mutation({
     createdByUserId: v.id("athenaUser"),
   },
   handler: async (ctx, args) => {
+    await requireAuthenticatedAthenaUserWithCtx(ctx);
+    requireNonDemoFoundationMutation({
+      athenaUserId: args.createdByUserId,
+      organizationId: args.organizationId,
+      storeId: args.storeId,
+    });
     const { productSkuIds, ...commonArgs } = args;
 
     // Check for existing complimentary products with these SKUs

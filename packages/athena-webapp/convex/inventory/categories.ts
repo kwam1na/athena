@@ -5,6 +5,8 @@ import { categorySchema } from "../schemas/inventory";
 import { Id } from "../_generated/dataModel";
 import { refreshProductSkuSearchForCategory } from "./skuSearch";
 import { markCatalogSummaryNeedsRefresh } from "./catalogSummary";
+import { requireNonDemoFoundationMutation } from "../sharedDemo/foundation";
+import { requireAuthenticatedAthenaUserWithCtx } from "../lib/athenaUserAuth";
 
 const entity = "category";
 
@@ -77,6 +79,8 @@ export const getById = query({
 export const create = mutation({
   args: categorySchema,
   handler: async (ctx, args) => {
+    await requireAuthenticatedAthenaUserWithCtx(ctx);
+    requireNonDemoFoundationMutation({ storeId: args.storeId });
     const id = await ctx.db.insert(entity, args);
     await markCatalogSummaryNeedsRefresh(ctx, args.storeId);
 
@@ -92,7 +96,9 @@ export const update = mutation({
     slug: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await requireAuthenticatedAthenaUserWithCtx(ctx);
     const category = await ctx.db.get("category", args.id);
+    if (category) requireNonDemoFoundationMutation({ storeId: category.storeId });
     const patch: Partial<{
       name: string;
       showOnStorefront: boolean;
@@ -126,7 +132,9 @@ export const remove = mutation({
     id: v.id(entity),
   },
   handler: async (ctx, args) => {
+    await requireAuthenticatedAthenaUserWithCtx(ctx);
     const category = await ctx.db.get("category", args.id);
+    if (category) requireNonDemoFoundationMutation({ storeId: category.storeId });
     await ctx.db.delete("category", args.id);
     await refreshProductSkuSearchForCategory(ctx, args.id);
     if (category) {

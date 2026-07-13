@@ -6,6 +6,8 @@ import {
 } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { v } from "convex/values";
+import { requireSharedDemoCapabilityIfApplicable } from "../sharedDemo/actor";
+import { requireReadySharedDemoWriteWithCtx } from "../sharedDemo/restore";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import { recordOperationalEventWithCtx } from "./operationalEvents";
 import { getDailyCloseOpeningContextWithCtx } from "./dailyClose";
@@ -1234,5 +1236,9 @@ export const startStoreDay = mutation({
     storeId: v.id("store"),
   },
   returns: commandResultValidator(v.any()),
-  handler: (ctx, args) => startStoreDayWithCtx(ctx, args),
+  handler: async (ctx, args) => {
+    const demoActor = await requireSharedDemoCapabilityIfApplicable(ctx, "daily_operations.write");
+    if (demoActor) await requireReadySharedDemoWriteWithCtx(ctx, { storeId: args.storeId });
+    return startStoreDayWithCtx(ctx, args);
+  },
 });

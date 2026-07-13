@@ -2,6 +2,8 @@ import { v } from "convex/values";
 
 import { mutation, query, type MutationCtx, type QueryCtx } from "../../_generated/server";
 import type { Id } from "../../_generated/dataModel";
+import { requireSharedDemoCapabilityIfApplicable } from "../../sharedDemo/actor";
+import { requireReadySharedDemoWriteWithCtx } from "../../sharedDemo/restore";
 import { commandResultValidator } from "../../lib/commandResultValidators";
 import {
   requireAuthenticatedAthenaUserWithCtx,
@@ -429,6 +431,8 @@ export const completeTransaction = mutation({
     }),
   ),
   handler: async (ctx, args) => {
+    const demoActor = await requireSharedDemoCapabilityIfApplicable(ctx, "pos.sale.complete");
+    if (demoActor) await requireReadySharedDemoWriteWithCtx(ctx, { storeId: args.storeId });
     const store = await ctx.db.get("store", args.storeId);
     if (!store) {
       return userError({
@@ -437,7 +441,10 @@ export const completeTransaction = mutation({
       });
     }
 
-    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+    const athenaUser = demoActor
+      ? await ctx.db.get("athenaUser", demoActor.athenaUserId)
+      : await requireAuthenticatedAthenaUserWithCtx(ctx);
+    if (!athenaUser) throw new Error("Sign in again to continue.");
     await requireOrganizationMemberRoleWithCtx(ctx, {
       allowedRoles: ["full_admin"],
       failureMessage: "You cannot complete this POS sale.",

@@ -8,6 +8,8 @@ import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
 import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
+import { requireSharedDemoCapabilityIfApplicable } from "../sharedDemo/actor";
+import { requireReadySharedDemoWriteWithCtx } from "../sharedDemo/restore";
 import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
@@ -1256,7 +1258,9 @@ async function requireInventorySnapshotForProductSkusAccess(
     throw new Error("Store not found.");
   }
 
-  const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+  const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx, {
+    sharedDemoCapability: "inventory.adjust",
+  });
   await requireOrganizationMemberRoleWithCtx(ctx, {
     allowedRoles: ["full_admin", "pos_only"],
     failureMessage: "You do not have access to view stock inventory.",
@@ -1434,7 +1438,9 @@ export async function submitStockAdjustmentBatchWithCtx(
     throw new Error("Store not found.");
   }
 
-  const createdByUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+  const createdByUser = await requireAuthenticatedAthenaUserWithCtx(ctx, {
+    sharedDemoCapability: "inventory.adjust",
+  });
 
   await requireOrganizationMemberRoleWithCtx(ctx, {
     allowedRoles: ["full_admin", "pos_only"],
@@ -1716,6 +1722,9 @@ export const submitStockAdjustmentBatch = mutation({
     submissionKey: v.string(),
   },
   returns: commandResultValidator(v.any()),
-  handler: async (ctx, args) =>
-    submitStockAdjustmentBatchCommandWithCtx(ctx, args),
+  handler: async (ctx, args) => {
+    const demoActor = await requireSharedDemoCapabilityIfApplicable(ctx, "inventory.adjust");
+    if (demoActor) await requireReadySharedDemoWriteWithCtx(ctx, { storeId: args.storeId });
+    return submitStockAdjustmentBatchCommandWithCtx(ctx, args);
+  },
 });

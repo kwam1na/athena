@@ -1,5 +1,8 @@
 /* eslint-disable @convex-dev/no-collect-in-query -- V26-168 converts the primary commerce access paths to indexed or bounded reads first; remaining legacy scans in this large module will be reduced in follow-up passes. */
 import { v } from "convex/values";
+import { getSharedDemoActorWithCtx, requireSharedDemoCapabilityIfApplicable } from "../sharedDemo/actor";
+import { decideSharedDemoEffect, requireSharedDemoOrderFulfillmentUpdate } from "../sharedDemo/policy";
+import { requireReadySharedDemoWriteWithCtx } from "../sharedDemo/restore";
 import {
   internalMutation,
   internalQuery,
@@ -383,14 +386,14 @@ async function applyOnlineOrderUpdate(
     ].includes(nextStatus!);
 
   if (shouldSendOrderUpdateEmail) {
-    await ctx.scheduler.runAfter(
-      0,
-      internal.storeFront.onlineOrderUtilFns.sendOrderUpdateEmailInternal,
-      {
-        orderId: order._id,
-        newStatus: nextStatus!,
-      }
-    );
+    const demoActor = await getSharedDemoActorWithCtx(ctx);
+    if (demoActor) {
+      await decideSharedDemoEffect("order_notification.send", {
+        live: async () => ctx.scheduler.runAfter(0, internal.storeFront.onlineOrderUtilFns.sendOrderUpdateEmailInternal, { orderId: order._id, newStatus: nextStatus! }),
+      });
+    } else {
+      await ctx.scheduler.runAfter(0, internal.storeFront.onlineOrderUtilFns.sendOrderUpdateEmailInternal, { orderId: order._id, newStatus: nextStatus! });
+    }
   }
 
   await ctx.db.patch("onlineOrder", order._id, updates);
@@ -947,6 +950,8 @@ export const getByCheckoutSessionId = query({
 export const getAllOnlineOrders = query({
   args: { storeId: v.id("store") },
   handler: async (ctx, args) => {
+    const demoActor = await getSharedDemoActorWithCtx(ctx);
+    if (demoActor && args.storeId !== demoActor.storeId) return [];
     const orders = await ctx.db
       .query(entity)
       .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
@@ -998,6 +1003,14 @@ export const update = mutation({
   returns: commandResultValidator(v.null()),
   handler: async (ctx, args) => {
     try {
+      const demoActor = await requireSharedDemoCapabilityIfApplicable(
+        ctx,
+        "orders.fulfill",
+      );
+      if (demoActor) {
+        requireSharedDemoOrderFulfillmentUpdate(args.update);
+        await requireReadySharedDemoWriteWithCtx(ctx, { storeId: demoActor.storeId });
+      }
       if (args.orderId) {
         const order = await ctx.db.get("onlineOrder", args.orderId);
 
@@ -1006,6 +1019,9 @@ export const update = mutation({
             code: "not_found",
             message: "Order not found.",
           });
+        }
+        if (demoActor && order.storeId !== demoActor.storeId) {
+          throw new Error("This action is unavailable in the shared demo.");
         }
 
         await applyOnlineOrderUpdate(ctx, order, args);
@@ -1024,6 +1040,9 @@ export const update = mutation({
             code: "not_found",
             message: "Order not found.",
           });
+        }
+        if (demoActor && order.storeId !== demoActor.storeId) {
+          throw new Error("This action is unavailable in the shared demo.");
         }
 
         const { refund_id, refund_amount, ...rest } = args.update;
@@ -1565,6 +1584,7 @@ export const processReturnExchange = mutation({
   ),
   handler: async (ctx, args) => {
     try {
+      await requireSharedDemoCapabilityIfApplicable(ctx, "payments.refund");
       const order = await ctx.db.get("onlineOrder", args.orderId);
 
       if (!order) {

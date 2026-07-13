@@ -6,7 +6,9 @@ import { getAuthenticatedAthenaUserWithCtx } from "../lib/athenaUserAuth";
 export const getAuthenticatedUser = query({
   args: {},
   handler: async (ctx) => {
-    return getAuthenticatedAthenaUserWithCtx(ctx);
+    return getAuthenticatedAthenaUserWithCtx(ctx, {
+      sharedDemoCapability: "reports.read",
+    });
   },
 });
 

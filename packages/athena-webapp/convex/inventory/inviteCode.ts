@@ -4,6 +4,8 @@ import {
   findAthenaUserByEmailWithCtx,
   normalizeAthenaUserEmail,
 } from "../lib/athenaUserAuth";
+import { requireSharedDemoCapabilityIfApplicable } from "../sharedDemo/actor";
+import { requireNonDemoFoundationMutation } from "../sharedDemo/foundation";
 
 const MAX_INVITE_CODES = 500;
 
@@ -66,6 +68,11 @@ export const create = mutation({
     inviteCode: v.optional(v.id("inviteCode")),
   }),
   handler: async (ctx, args) => {
+    requireNonDemoFoundationMutation({
+      athenaUserId: args.createdByUserId,
+      organizationId: args.organizationId,
+    });
+    await requireSharedDemoCapabilityIfApplicable(ctx, "permissions.manage");
     // check if the email is associated with an existing user
     const user = await findAthenaUserByEmailWithCtx(ctx, args.recipientEmail);
 

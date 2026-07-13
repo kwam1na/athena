@@ -833,6 +833,10 @@ export const getActiveCheckoutSessionsForStore = query({
 export const cancelOrder = action({
   args: { id: v.id("checkoutSession") },
   handler: async (ctx, args) => {
+    await ctx.runQuery(
+      (internal as any).sharedDemo.actor.requireAuthenticatedNonDemoEffect,
+      {},
+    );
     const session = await ctx.runQuery(
       internal.storeFront.checkoutSession.getByIdInternal,
       {

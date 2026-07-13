@@ -359,6 +359,7 @@ describe("POS public catalog queries", () => {
     ]);
     expect(mocks.requireAuthenticatedAthenaUserWithCtx).toHaveBeenCalledWith(
       ctx,
+      { sharedDemoCapability: "pos.sale.complete" },
     );
     expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
       ctx,
@@ -416,6 +417,7 @@ describe("POS public catalog queries", () => {
     assertConformsToExportedReturns(listRegisterCatalogSnapshot, rows);
     expect(mocks.requireAuthenticatedAthenaUserWithCtx).toHaveBeenCalledWith(
       ctx,
+      { sharedDemoCapability: "pos.sale.complete" },
     );
     expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
       ctx,

@@ -6,6 +6,8 @@ import {
 } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { v } from "convex/values";
+import { requireSharedDemoCapabilityIfApplicable } from "../sharedDemo/actor";
+import { requireReadySharedDemoWriteWithCtx } from "../sharedDemo/restore";
 import {
   buildRegisterSessionCloseoutReview,
   getCashControlsConfig,
@@ -214,13 +216,19 @@ type ResolveRegisterSessionSyncReviewResult = {
 async function requireCashControlsStoreAccess(
   ctx: QueryCtx | MutationCtx,
   storeId: Id<"store">,
+  options?: { allowSharedDemoDeposit?: boolean },
 ) {
   const store = await ctx.db.get("store", storeId);
   if (!store) {
     throw new Error("Store not found.");
   }
 
-  const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+  const athenaUser = await requireAuthenticatedAthenaUserWithCtx(
+    ctx,
+    options?.allowSharedDemoDeposit
+      ? { sharedDemoCapability: "cash.control.write" }
+      : undefined,
+  );
   await requireOrganizationMemberRoleWithCtx(ctx, {
     allowedRoles: ["full_admin", "pos_only"],
     failureMessage: "You do not have access to cash controls.",
@@ -1084,7 +1092,9 @@ export const getDashboardSnapshot = query({
     storeId: v.id("store"),
   },
   handler: async (ctx, args) => {
-    await requireCashControlsStoreAccess(ctx, args.storeId);
+    await requireCashControlsStoreAccess(ctx, args.storeId, {
+      allowSharedDemoDeposit: true,
+    });
 
     const [
       registerSessions,
@@ -1175,7 +1185,9 @@ export const getRegisterSessionSnapshot = query({
     storeId: v.id("store"),
   },
   handler: async (ctx, args) => {
-    const { store } = await requireCashControlsStoreAccess(ctx, args.storeId);
+    const { store } = await requireCashControlsStoreAccess(ctx, args.storeId, {
+      allowSharedDemoDeposit: true,
+    });
     const registerSession = await ctx.db.get(
       "registerSession",
       args.registerSessionId,
@@ -1423,11 +1435,14 @@ export const recordRegisterSessionDeposit = mutation({
     ctx,
     args,
   ): Promise<CommandResult<RecordRegisterSessionDepositResult>> => {
+    const demoActor = await requireSharedDemoCapabilityIfApplicable(ctx, "cash.control.write");
+    if (demoActor) await requireReadySharedDemoWriteWithCtx(ctx, { storeId: args.storeId });
     let athenaUserId: Id<"athenaUser">;
     try {
       const { athenaUser } = await requireCashControlsStoreAccess(
         ctx,
         args.storeId,
+        { allowSharedDemoDeposit: true },
       );
       athenaUserId = athenaUser._id;
     } catch {
