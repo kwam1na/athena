@@ -17,7 +17,7 @@ tags:
   - effect-policy
   - convex
   - restore-fence
-delivery_diff_fingerprint: 3e8a4873e500f1e5fa556413849995a2f1c2a106bd7cbbbd26a81e16b480c9a7
+delivery_diff_fingerprint: 2c535662ac66e08585621d1c60713e2302d41366a1a0f578bb20f03ffa2ed329
 ---
 
 # Shared demo principal policy and atomic restore boundary

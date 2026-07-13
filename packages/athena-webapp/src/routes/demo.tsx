@@ -10,6 +10,7 @@ import {
   useSharedDemoContext,
 } from "@/hooks/useSharedDemoContext";
 import { api } from "~/convex/_generated/api";
+import { getSharedDemoEntryPresentation } from "./demoPresentation";
 
 export const Route = createFileRoute("/demo")({
   component: SharedDemoEntry,
@@ -26,6 +27,10 @@ export function SharedDemoEntry() {
   const navigate = useNavigate();
   const started = useRef(false);
   const [failed, setFailed] = useState(false);
+  const presentation = getSharedDemoEntryPresentation({
+    enabled: isSharedDemoUiEnabled,
+    failed,
+  });
 
   const enter = useCallback(async () => {
     setFailed(false);
@@ -73,10 +78,10 @@ export function SharedDemoEntry() {
       <section aria-labelledby="demo-entry-title" className="w-full max-w-lg border-y border-border bg-background py-layout-xl text-center sm:px-layout-lg">
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-signal">Athena shared demo</p>
         <h1 id="demo-entry-title" className="mt-layout-md font-display text-4xl font-light text-foreground">
-          {failed || !isSharedDemoUiEnabled ? "The shared demo is not available right now." : "Opening the shared demo store…"}
+          {presentation.title}
         </h1>
         <p className="mx-auto mt-layout-md max-w-md leading-7 text-muted-foreground">
-          {failed || !isSharedDemoUiEnabled ? "Athena could not open the synthetic store. Try again in a moment." : "No account or credentials are needed. This may take a few seconds."}
+          {presentation.detail}
         </p>
         {failed && isSharedDemoUiEnabled ? <Button type="button" size="lg" className="mt-layout-lg" onClick={() => { started.current = true; void enter(); }}>Try again</Button> : null}
         {!failed && isSharedDemoUiEnabled ? <span className="sr-only" role="status">Signing in to the shared demo</span> : null}

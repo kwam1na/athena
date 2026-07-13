@@ -19,6 +19,7 @@ This route index enumerates the current files under `src/routes` so agents can o
 - [`src/routes/app.tsx`](../../src/routes/app.tsx)
 - [`src/routes/demo.test.tsx`](../../src/routes/demo.test.tsx)
 - [`src/routes/demo.tsx`](../../src/routes/demo.tsx)
+- [`src/routes/demoPresentation.ts`](../../src/routes/demoPresentation.ts)
 - [`src/routes/index.test.tsx`](../../src/routes/index.test.tsx)
 - [`src/routes/index.tsx`](../../src/routes/index.tsx)
 - [`src/routes/join-team.index.tsx`](../../src/routes/join-team.index.tsx)

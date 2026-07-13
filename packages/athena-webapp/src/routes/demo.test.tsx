@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SharedDemoEntry } from "./demo";
+import { getSharedDemoEntryPresentation } from "./demoPresentation";
 
 const mocked = vi.hoisted(() => ({
   issueTicket: vi.fn(),
@@ -50,5 +51,14 @@ describe("SharedDemoEntry", () => {
     mocked.issueTicket.mockResolvedValue({ ticket: "next-ticket", expiresAt: Date.now() + 60_000 });
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     await waitFor(() => expect(mocked.issueTicket).toHaveBeenCalledTimes(2));
+  });
+
+  it("describes the permanent environment boundary without promising a retry", () => {
+    expect(
+      getSharedDemoEntryPresentation({ enabled: false, failed: false }),
+    ).toEqual({
+      detail: "Open the shared demo from an approved development or QA environment.",
+      title: "The shared demo is not available here.",
+    });
   });
 });
