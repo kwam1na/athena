@@ -7,7 +7,7 @@ import {
   activationOperationMatchesProjectionKind,
   assertActivationRunLineage,
   identityMigrationRunIsActivationReady,
-  rollbackGeneration,
+  unavailableCurrentInventoryCoverageIsActivatable,
 } from "./activation";
 
 const verified = {
@@ -21,6 +21,67 @@ const verified = {
 };
 
 describe("reporting generation activation", () => {
+  it("accepts only an empty, discrepancy-free current inventory unavailable certificate", () => {
+    const coverage = ["on_hand_units", "sellable_units", "inventory_value"].map(
+      (metric) => ({
+        completeness: "unavailable" as const,
+        failedCount: 0,
+        limitingReason: "source_incomplete" as const,
+        metric,
+        omittedCount: 0,
+        quarantinedCount: 0,
+        sourceDomain: "inventory",
+        truncated: false,
+      }),
+    );
+    const candidate = {
+      completeness: "unavailable",
+      limitingReason: "source_incomplete",
+      projectionKind: "current_inventory",
+    } as const;
+
+    expect(
+      unavailableCurrentInventoryCoverageIsActivatable({
+        candidate,
+        coverage,
+        discrepancyCount: 0,
+        hasProjectionRows: false,
+      }),
+    ).toBe(true);
+    expect(
+      unavailableCurrentInventoryCoverageIsActivatable({
+        candidate,
+        coverage,
+        discrepancyCount: 0,
+        hasProjectionRows: true,
+      }),
+    ).toBe(false);
+    expect(
+      unavailableCurrentInventoryCoverageIsActivatable({
+        candidate,
+        coverage: coverage.slice(1),
+        discrepancyCount: 0,
+        hasProjectionRows: false,
+      }),
+    ).toBe(false);
+    expect(
+      unavailableCurrentInventoryCoverageIsActivatable({
+        candidate: { ...candidate, projectionKind: "store_day" },
+        coverage,
+        discrepancyCount: 0,
+        hasProjectionRows: false,
+      }),
+    ).toBe(false);
+    expect(
+      unavailableCurrentInventoryCoverageIsActivatable({
+        candidate,
+        coverage,
+        discrepancyCount: 1,
+        hasProjectionRows: false,
+      }),
+    ).toBe(false);
+  });
+
   it("recognizes intraday projection rebuild lineage", () => {
     expect(
       activationOperationMatchesProjectionKind(
@@ -69,41 +130,6 @@ describe("reporting generation activation", () => {
         requiredMetricVersion: 1,
       }),
     ).toThrow(message);
-  });
-
-  it("rolls back only to a compatible retained generation", () => {
-    expect(
-      rollbackGeneration({
-        currentGenerationId: "generation-2",
-        expectedCurrentGenerationId: "generation-2",
-        requiredContractVersion: 1,
-        requiredMetricVersion: 1,
-        target: {
-          ...verified,
-          generationId: "generation-1",
-          status: "superseded",
-        },
-      }),
-    ).toEqual({
-      activatedGenerationId: "generation-1",
-      supersededGenerationId: "generation-2",
-    });
-  });
-
-  it("rejects rollback when the active pointer changed", () => {
-    expect(() =>
-      rollbackGeneration({
-        currentGenerationId: "generation-3",
-        expectedCurrentGenerationId: "generation-2",
-        requiredContractVersion: 1,
-        requiredMetricVersion: 1,
-        target: {
-          ...verified,
-          generationId: "generation-1",
-          status: "superseded",
-        },
-      }),
-    ).toThrow("active generation changed");
   });
 
   it("requires exact completed run ownership and versions", () => {
@@ -188,6 +214,14 @@ describe("reporting generation activation", () => {
     }
   });
 
+  it("requires verified POS source reconciliation for new reset/backfill lineage", () => {
+    const source = readFileSync("convex/reporting/activation.ts", "utf8");
+    expect(source).toContain("requirePosSourceReconciliationReadinessWithCtx");
+    expect(source).toMatch(
+      /await requirePosSourceReconciliationReadinessWithCtx\(ctx, \{\s+candidate,\s+run,\s+\}\)/,
+    );
+  });
+
   it("requires a completed conflict-free identity migration before activation", () => {
     expect(
       identityMigrationRunIsActivationReady({
@@ -219,18 +253,15 @@ describe("reporting generation activation", () => {
     );
   });
 
-  it("persists rollback as an internal deployment-owned run and activation event", () => {
-    const source = readFileSync("convex/reporting/activation.ts", "utf8");
-    expect(source).toContain("rollbackToVerifiedGeneration = internalMutation");
-    expect(source).not.toContain("requireReportingStoreAccess");
-    expect(source).toContain("automationIdentity: v.string()");
-    expect(source).toContain(
-      "rollback target is not the prior active generation",
+  it("keeps rollback authority exclusively at the atomic read-bundle boundary", () => {
+    const activationSource = readFileSync("convex/reporting/activation.ts", "utf8");
+    const bundleSource = readFileSync(
+      "convex/reporting/readModels/readBundle.ts",
+      "utf8",
     );
-    expect(source).toContain("rollback target has no prior activation lineage");
-    expect(source).toContain('runType: "rollback"');
-    expect(source).toContain('eventType: "rollback_started"');
-    expect(source).toContain('eventType: "rollback_completed"');
-    expect(source).toContain("expectedCurrentGenerationId");
+    expect(activationSource).not.toContain("rollbackToVerifiedGeneration");
+    expect(activationSource).not.toContain("rollbackGeneration");
+    expect(bundleSource).toContain("rollbackReportsReadBundle = internalMutation");
+    expect(bundleSource).toContain("expectedCurrentBundleId");
   });
 });

@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="8f0b81d6dcaff204b644404cf2a31b4a027041fc8521e94b45e7e296073ef3c9">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reports financial truth redesign</title>
+  <style>
+    :root { color-scheme: light dark; --bg:#f5f5f2; --paper:#fff; --ink:#18202b; --muted:#657080; --line:#dfe3e8; --accent:#184e77; --soft:#edf4f8; --good:#17643a; --warn:#8a5a00; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.6 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    main { width:min(1080px,calc(100% - 32px)); margin:32px auto 72px; }
+    article { background:var(--paper); border:1px solid var(--line); border-radius:18px; overflow:hidden; }
+    header,section { padding:32px clamp(22px,5vw,56px); }
+    section { border-top:1px solid var(--line); }
+    h1 { max-width:780px; margin:8px 0 12px; font-size:clamp(32px,5vw,58px); line-height:1.02; letter-spacing:-.045em; }
+    h2 { margin:0 0 16px; font-size:24px; letter-spacing:-.02em; }
+    h3 { margin:24px 0 8px; font-size:17px; }
+    p { max-width:78ch; }
+    .eyebrow { margin:0; color:var(--accent); font-size:12px; font-weight:700; letter-spacing:.16em; text-transform:uppercase; }
+    .lede { color:var(--muted); font-size:18px; max-width:70ch; }
+    .pills { display:flex; flex-wrap:wrap; gap:8px; margin-top:22px; }
+    .pill { border:1px solid var(--line); border-radius:999px; padding:5px 10px; color:var(--muted); font-size:12px; }
+    .pill.good { color:var(--good); border-color:#9ac9ad; background:#f0faf3; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; }
+    .card { padding:18px; border:1px solid var(--line); border-radius:12px; background:color-mix(in srgb,var(--paper) 92%,var(--soft)); }
+    .card strong { display:block; font-size:22px; letter-spacing:-.02em; }
+    .card span { color:var(--muted); font-size:13px; }
+    .flow { display:grid; grid-template-columns:repeat(5,1fr); gap:8px; margin:20px 0; }
+    .flow div { min-height:92px; padding:13px; border:1px solid var(--line); border-radius:10px; background:var(--soft); }
+    .flow b { display:block; margin-bottom:5px; }
+    table { width:100%; border-collapse:collapse; }
+    th,td { padding:12px 10px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
+    th { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.08em; }
+    code { font:13px ui-monospace,SFMono-Regular,Menlo,monospace; background:var(--soft); padding:2px 5px; border-radius:5px; }
+    ul { padding-left:20px; }
+    .callout { border-left:3px solid var(--accent); padding:4px 0 4px 18px; }
+    .quiz-question { margin:0 0 16px; padding:18px; border:1px solid var(--line); border-radius:12px; }
+    .quiz-question legend { padding:0 4px; font-weight:650; }
+    label { display:block; margin:8px 0; cursor:pointer; }
+    .explanation { display:none; margin:10px 0 0; color:var(--muted); font-size:13px; }
+    button { border:1px solid var(--ink); border-radius:9px; padding:10px 15px; background:var(--ink); color:var(--paper); font:inherit; font-weight:650; cursor:pointer; }
+    button.secondary { background:transparent; color:var(--ink); }
+    button:active { transform:translateY(1px); }
+    .quiz-actions { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    #quizResult { font-weight:700; }
+    footer { padding:22px 32px; color:var(--muted); font-size:12px; border-top:1px solid var(--line); }
+    @media (max-width:780px) { .flow { grid-template-columns:1fr; } table { display:block; overflow:auto; } }
+    @media (prefers-reduced-motion:reduce) { * { scroll-behavior:auto!important; transition:none!important; } }
+  </style>
+</head>
+<body>
+<main>
+<article>
+  <header>
+    <p class="eyebrow">Athena engineering report · 12 July 2026</p>
+    <h1>Reports now follow financial truth, not store hours.</h1>
+    <p class="lede">Completed POS activity is backfilled across the store’s full history, dated by effective store timezone, reconciled before activation, and served through one atomic read bundle. Missing inventory authority remains explicit without hiding trustworthy sales.</p>
+    <div class="pills">
+      <span class="pill good">Dev cutover active</span><span class="pill good">Reconciliation verified</span><span class="pill good">Browser validated</span><span class="pill">Branch: codex/reports-financial-truth-redesign</span><span class="pill">Linear V26-1033–V26-1038: In Progress at render time</span><span class="pill">Production not deployed</span><span class="pill">PR pending at report generation</span>
+    </div>
+  </header>
+
+  <section>
+    <h2>Executive summary</h2>
+    <div class="grid">
+      <div class="card"><strong>983</strong><span>canonical reportable POS facts</span></div>
+      <div class="card"><strong>GHS 1,298,833.38</strong><span>source and fact totals, exactly equal</span></div>
+      <div class="card"><strong>1,920</strong><span>source and fact quantity, exactly equal</span></div>
+      <div class="card"><strong>0</strong><span>unexplained reconciliation differences</span></div>
+      <div class="card"><strong>42</strong><span>sealed orphan payment-correction exclusions</span></div>
+      <div class="card"><strong>May 8–July 11</strong><span>51 operating dates represented</span></div>
+    </div>
+    <p>July 6–9 now contains 145 facts totaling GHS 138,921.99. The previous absence was not a lack of completed sales; it was a reporting pipeline that required schedule authority and had not canonically recognized those source records.</p>
+  </section>
+
+  <section>
+    <h2>The mental model</h2>
+    <p>Store Schedule answers “when did we expect to operate?” It does not answer “did a sale financially happen?” The new model keeps those questions separate.</p>
+    <div class="flow" aria-label="Reporting data flow">
+      <div><b>1 · Source</b>POS transaction and lifecycle mutation</div>
+      <div><b>2 · Calendar</b>Occurrence plus effective store timezone</div>
+      <div><b>3 · Facts</b>Immutable money, units, item, and lineage semantics</div>
+      <div><b>4 · Proof</b>Independent census and exact reconciliation</div>
+      <div><b>5 · Read</b>Compatible projections and one active bundle</div>
+    </div>
+    <div class="callout"><p><strong>Schedule context is descriptive.</strong> Closed-day, outside-hours, and missing-hours states may affect comparisons or operational context, but never invalidate a completed sale.</p></div>
+  </section>
+
+  <section>
+    <h2>Before and after</h2>
+    <table>
+      <thead><tr><th>Boundary</th><th>Before</th><th>After</th></tr></thead>
+      <tbody>
+        <tr><td>Financial date</td><td>Materialization required an active Store Schedule.</td><td>Effective store timezone resolves the local date; schedule is optional context.</td></tr>
+        <tr><td>History</td><td>Only previously recognized reporting rows appeared.</td><td>All completed POS lifecycle evidence is scanned and sealed.</td></tr>
+        <tr><td>Mutation evidence</td><td>Mutable status could obscure later lifecycle changes.</td><td>Completion, void, refund, adjustment, correction, and local sync append journal evidence atomically.</td></tr>
+        <tr><td>Migration</td><td>Legacy compatibility increased ambiguity.</td><td>Dev-only reporting tables are purged, then rebuilt under the new-only contract.</td></tr>
+        <tr><td>Authorization</td><td>Backfill required dual administration.</td><td>One current <code>full_admin</code> creates an immutable scoped grant.</td></tr>
+        <tr><td>Activation</td><td>Individual surfaces could drift.</td><td>Store-day, SKU-day, and inventory members activate as one compatible bundle.</td></tr>
+        <tr><td>Inventory absence</td><td>Missing authority blocked all Reports.</td><td>Inventory is certified unavailable with zero invented rows; money and units remain visible.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Important mechanics</h2>
+    <h3>Source identity stays honest</h3>
+    <p>Resolved pending-checkout lines may retain either their original provisional tuple or their approved catalog tuple. Both are accepted only with store, organization, pending-lineage, and catalog ownership evidence. No canonical SKU is invented when attribution evidence is absent.</p>
+    <h3>Reconciliation is the activation certificate</h3>
+    <p>The independent census compares identity, lifecycle, amount, quantity, date, currency, and lineage. A persisted <code>verified</code> certificate—not a locally recomputed subset—controls downstream completion. Convex fractional creation timestamps are valid watermarks.</p>
+    <p>The 42 orphan payment-correction events point to deleted or missing parent transactions, so their amount, currency, ownership, and settlement lineage cannot be proven. They are sealed as explicit non-facts and counted in the census hash. A correction with a present but cross-store, misbound, or temporally invalid parent remains a blocking discrepancy.</p>
+    <h3>Unavailable is not zero</h3>
+    <p>Legacy compatibility-shadow inventory does not count as new authority. With no authoritative inventory footprint, Athena activates an empty inventory member marked <code>unavailable/source_incomplete</code>. Empty sales periods, by contrast, receive explicit zero summaries only after complete POS coverage proves the range is trustworthy.</p>
+  </section>
+
+  <section>
+    <h2>Key files</h2>
+    <table>
+      <thead><tr><th>File or area</th><th>Why it matters</th></tr></thead>
+      <tbody>
+        <tr><td><code>reporting/storeTimeAuthority.ts</code><br><code>reporting/operatingPeriods.ts</code></td><td>Effective-dated timezone authority and schedule-independent local dates.</td></tr>
+        <tr><td><code>pos/infrastructure/posLifecycleJournal.ts</code></td><td>Append-only, store-sequenced lifecycle evidence written with POS mutations.</td></tr>
+        <tr><td><code>reporting/maintenance/authorizedPosBackfill.ts</code><br><code>posCensusBackfill.ts</code></td><td>Single-admin authorization, sealed full-history scan, apply, and independent census.</td></tr>
+        <tr><td><code>reporting/maintenance/backfill.ts</code></td><td>Source semantics for line identity, refunds, adjustments, corrections, and catalog evolution.</td></tr>
+        <tr><td><code>posSourceReconciliationGate.ts</code></td><td>Exact certificate and lineage rules used by every derived generation.</td></tr>
+        <tr><td><code>inventoryRebuild.ts</code></td><td>Strict authoritative inventory reconciliation plus the narrow unavailable certificate.</td></tr>
+        <tr><td><code>reporting/readModels/readBundle.ts</code><br><code>materialize.ts</code></td><td>Atomic compatible read bundle and durable summaries, including empty periods.</td></tr>
+        <tr><td><code>scripts/purge-reporting-dev.sh</code></td><td>Dev/local-only destructive replacement of enumerated reporting-owned tables.</td></tr>
+        <tr><td><code>ReportsLayout.tsx</code></td><td>Removes the Reports background override so the workspace matches the app canvas.</td></tr>
+        <tr><td><code>docs/solutions/architecture/athena-reporting-fact-projection-boundary-2026-07-09.md</code><br><code>athena-store-schedule-foundation-2026-06-27.md</code><br><code>architecture-patterns/athena-reports-workspace-read-model-boundary-2026-07-11.md</code></td><td>Refreshes the durable team guidance for financial eligibility, schedule context, reconciliation, atomic bundles, unavailable inventory, and proven empty periods.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Intentional boundaries</h2>
+    <ul>
+      <li>Operational POS, payment, product, inventory, store, and schedule records are never purged by the reporting reset.</li>
+      <li>The purge script refuses production and accepts only <code>dev</code> or <code>local</code>.</li>
+      <li>Legacy v1 reporting facts are not preserved; this early-development migration is intentionally new-only.</li>
+      <li>Missing cost does not block sales. Profit and valuation remain withheld with explicit coverage.</li>
+      <li>Mixed or inconsistent authoritative inventory still fails closed. Only globally absent new authority can certify unavailable.</li>
+      <li>Production deployment, merge, and local-main alignment had not occurred when this report was rendered.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Validation and review</h2>
+    <ul>
+      <li>Repeated focused Vitest suites, typecheck, changed-file lint, Convex pagination/return checks, Graphify rebuild, and <code>git diff --check</code> passed throughout the review loops.</li>
+      <li>Dev source-to-fact proof: 983 = 983 facts; GHS 1,298,833.38 = GHS 1,298,833.38; quantity 1,920 = 1,920; unexplained 0.</li>
+      <li>Browser: WTD renders GHS 0.00 and 0 units for the new empty week; trailing 30 renders GHS 705,658.99 and 785 units; Items renders 150 SKU rows.</li>
+      <li>Inventory remains visibly unavailable and cost coverage remains explicit.</li>
+      <li>Reviewer lenses covered store time, POS lifecycle/source semantics, authorization/reset, reconciliation, inventory authority, read-bundle coherence, and empty-period materialization. Each final loop reached APPROVE.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Subagent Evidence</h2>
+    <table>
+      <thead><tr><th>Subagent</th><th>Contribution</th></tr></thead>
+      <tbody>
+        <tr><td>implement_pos_journal and reviewers</td><td>Lifecycle journal, source semantics, resolved SKU aliases, census parity, fractional watermark, persisted certificate, and derived orphan lineage.</td></tr>
+        <tr><td>implement_store_time and reviewers</td><td>Timezone authority, schedule separation, and zero-safe empty preset summaries.</td></tr>
+        <tr><td>implement_reset_core and reviewers</td><td>Dev purge boundary, single-admin flow, unavailable inventory certificate, and legacy shadow isolation.</td></tr>
+        <tr><td>report context/diff researchers</td><td>Decision history, changed-file map, architectural narrative, validation evidence, and quiz concepts.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Next-time operational guidance</h2>
+    <ol>
+      <li>Confirm the deployment is dev/local before any destructive reporting purge.</li>
+      <li>Deploy the schema/functions first, purge the enumerated reporting tables, then trigger once with a current full admin.</li>
+      <li>Treat <code>reportingPosSourceReconciliation.status=verified</code> and zero unexplained differences as the financial gate.</li>
+      <li>Do not manually repair a sealed cursor. Restart cleanly if replay semantics are uncertain.</li>
+      <li>Inspect all 3 generation members and the active read bundle before browser validation.</li>
+      <li>When a metric is absent, distinguish a proven zero from unavailable authority.</li>
+    </ol>
+  </section>
+
+  <section id="changeQuiz">
+    <h2>Quiz: Pass Required</h2>
+    <p>Score at least 8/10. Grade to reveal explanations.</p>
+    <form id="quizForm">
+      <fieldset class="quiz-question" data-answer="b"><legend>1. What determines a completed sale’s reporting date?</legend><label><input type="radio" name="q1" value="a"> The active Store Schedule window</label><label><input type="radio" name="q1" value="b"> Occurrence time plus effective store timezone</label><label><input type="radio" name="q1" value="c"> The time the report was opened</label><p class="explanation">Financial calendar attribution is independent of operating hours.</p></fieldset>
+      <fieldset class="quiz-question" data-answer="c"><legend>2. What does Store Schedule do now?</legend><label><input type="radio" name="q2" value="a"> Reject after-hours sales</label><label><input type="radio" name="q2" value="b"> Define canonical currency</label><label><input type="radio" name="q2" value="c"> Add optional expected-hours context</label><p class="explanation">Schedule state may affect context or comparisons, not eligibility.</p></fieldset>
+      <fieldset class="quiz-question" data-answer="a"><legend>3. Why is a POS lifecycle journal needed?</legend><label><input type="radio" name="q3" value="a"> To preserve durable transition evidence separately from mutable status</label><label><input type="radio" name="q3" value="b"> To replace POS transactions</label><label><input type="radio" name="q3" value="c"> To calculate product cost</label><p class="explanation">The journal makes completion, void, refund, adjustment, and correction replayable and auditable.</p></fieldset>
+      <fieldset class="quiz-question" data-answer="b"><legend>4. Who may trigger the backfill?</legend><label><input type="radio" name="q4" value="a"> Two admins together</label><label><input type="radio" name="q4" value="b"> One authenticated current full admin</label><label><input type="radio" name="q4" value="c"> Any cashier</label><p class="explanation">One full admin creates an immutable, store-scoped authorization grant.</p></fieldset>
+      <fieldset class="quiz-question" data-answer="c"><legend>5. When can source facts activate projections?</legend><label><input type="radio" name="q5" value="a"> When net totals look plausible</label><label><input type="radio" name="q5" value="b"> When an admin overrides discrepancies</label><label><input type="radio" name="q5" value="c"> When the persisted reconciliation is verified with zero unexplained differences</label><p class="explanation">The persisted certificate is the activation authority.</p></fieldset>
+      <fieldset class="quiz-question" data-answer="a"><legend>6. What happens when new inventory authority is entirely absent?</legend><label><input type="radio" name="q6" value="a"> An empty unavailable member activates with no invented values</label><label><input type="radio" name="q6" value="b"> Inventory counts are copied from catalog fields</label><label><input type="radio" name="q6" value="c"> All sales reports remain blocked</label><p class="explanation">Unavailable authority is explicit and does not suppress trusted sales.</p></fieldset>
+      <fieldset class="quiz-question" data-answer="b"><legend>7. Can compatibility-shadow inventory establish new authority?</legend><label><input type="radio" name="q7" value="a"> Yes, always</label><label><input type="radio" name="q7" value="b"> No; only authoritative positions or accepted baselines count</label><label><input type="radio" name="q7" value="c"> Only on weekends</label><p class="explanation">The new-only design ignores legacy shadows while failing closed on real authoritative drift.</p></fieldset>
+      <fieldset class="quiz-question" data-answer="c"><legend>8. Why does empty WTD show zero rather than unavailable?</legend><label><input type="radio" name="q8" value="a"> The UI assumes zero</label><label><input type="radio" name="q8" value="b"> Missing summaries are treated as zero</label><label><input type="radio" name="q8" value="c"> Materialization writes an explicit empty summary after complete POS coverage</label><p class="explanation">A proven zero is durable evidence; missing evidence remains an error.</p></fieldset>
+      <fieldset class="quiz-question" data-answer="a"><legend>9. What should happen after an uncertain sealed-cursor replay?</legend><label><input type="radio" name="q9" value="a"> Restart cleanly from purged reporting state</label><label><input type="radio" name="q9" value="b"> Patch fact totals manually</label><label><input type="radio" name="q9" value="c"> Disable reconciliation</label><p class="explanation">The migration is dev-only; clean reconstruction is safer than certificate repair.</p></fieldset>
+      <fieldset class="quiz-question" data-answer="b"><legend>10. What was the delivery state when this report was generated?</legend><label><input type="radio" name="q10" value="a"> Deployed to production and merged</label><label><input type="radio" name="q10" value="b"> Dev-validated on a feature branch; production not deployed</label><label><input type="radio" name="q10" value="c"> Design-only, no code</label><p class="explanation">The report precedes the requested mergeable PR handoff.</p></fieldset>
+      <div class="quiz-actions"><button type="submit">Grade quiz</button><button class="secondary" type="button" id="resetQuiz">Reset</button><span id="quizResult" aria-live="polite"></span></div>
+    </form>
+  </section>
+  <footer>Generated from the active feature branch and dev evidence. Contains no customer, payment-instrument, credential, or secret payloads.</footer>
+</article>
+</main>
+<script>
+  (() => {
+    const form = document.getElementById('quizForm');
+    const result = document.getElementById('quizResult');
+    const questions = [...document.querySelectorAll('.quiz-question')];
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      let score = 0;
+      questions.forEach((question, index) => {
+        const chosen = form.querySelector(`input[name="q${index + 1}"]:checked`);
+        if (chosen && chosen.value === question.dataset.answer) score += 1;
+        question.querySelector('.explanation').style.display = 'block';
+      });
+      result.textContent = `${score}/10 · ${score >= 8 ? 'Pass' : 'Review and retry'}`;
+      result.style.color = score >= 8 ? 'var(--good)' : 'var(--warn)';
+    });
+    document.getElementById('resetQuiz').addEventListener('click', () => {
+      form.reset();
+      result.textContent = '';
+      questions.forEach((question) => { question.querySelector('.explanation').style.display = 'none'; });
+    });
+  })();
+</script>
+</body>
+</html>

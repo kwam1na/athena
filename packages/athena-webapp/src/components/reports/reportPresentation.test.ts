@@ -29,8 +29,11 @@ describe("report presentation", () => {
       "Reports are current",
     );
     expect(getReportStatusPresentation({ kind: "pre_cutover" }).title).toBe(
-      "Reporting starts here",
+      "Rebuilding reports",
     );
+    expect(
+      getReportStatusPresentation({ kind: "pre_cutover" }).description,
+    ).toMatch(/completed sales.*rebuild/i);
     expect(getReportStatusPresentation({ kind: "failed" }).title).toBe(
       "Reports are temporarily unavailable",
     );
@@ -63,6 +66,13 @@ describe("report presentation", () => {
       getReportStatusKind({
         completeness: "complete",
         inventoryLimitingReason: "generation_incompatible",
+        status: "verified",
+      }),
+    ).toBe("unsynchronized");
+    expect(
+      getReportStatusKind({
+        completeness: "complete",
+        inventoryLimitingReason: "source_incomplete",
         status: "verified",
       }),
     ).toBe("unsynchronized");

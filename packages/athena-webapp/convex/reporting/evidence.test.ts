@@ -3,16 +3,116 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import {
+  assertSkuAttributionRecertificationLineage,
+  assertSkuAttributionConflictResolutionSource,
+  assertSkuAttributionConflictResolutionCatalog,
   decodeEvidenceCursor,
   encodeEvidenceCursor,
   materializePendingCheckoutSkuAttribution,
   presentSkuEvidenceRow,
   recordInventoryEffectSkuEvidenceWithCtx,
+  recordPendingCheckoutSkuAttributionWithCtx,
+  resolvePendingCheckoutSkuAttributionConflictWithCtx,
   recordPaymentAllocationSkuEvidenceWithCtx,
   sanitizeSourceReference,
 } from "./evidence";
 
 describe("reporting evidence", () => {
+  it("validates approved catalog records before conflict resolution mutation", () => {
+    const valid = {
+      approvedCategory: { _id: "category-1", slug: "retail" },
+      approvedProduct: {
+        _id: "product-approved",
+        availability: "live",
+        organizationId: "org-1",
+        posVisible: true,
+        storeId: "store-1",
+      },
+      approvedSku: {
+        _id: "sku-approved",
+        posVisible: true,
+        productId: "product-approved",
+        storeId: "store-1",
+      },
+      organizationId: "org-1",
+      pendingItem: {
+        provisionalProductId: "product-provisional",
+        provisionalProductSkuId: "sku-provisional",
+      },
+      provisionalSku: {
+        _id: "sku-provisional",
+        productId: "product-provisional",
+        storeId: "store-1",
+      },
+      storeId: "store-1",
+    };
+    expect(() =>
+      assertSkuAttributionConflictResolutionCatalog(valid as never),
+    ).not.toThrow();
+    for (const changed of [
+      { approvedSku: null },
+      { approvedSku: { ...valid.approvedSku, storeId: "store-foreign" } },
+      { approvedSku: { ...valid.approvedSku, productId: "product-other" } },
+      {
+        approvedProduct: {
+          ...valid.approvedProduct,
+          availability: "archived",
+        },
+      },
+    ]) {
+      expect(() =>
+        assertSkuAttributionConflictResolutionCatalog({
+          ...valid,
+          ...changed,
+        } as never),
+      ).toThrow("lacks trusted catalog state");
+    }
+  });
+  it("accepts only same-store current authoritative conflict resolution evidence", () => {
+    const valid = {
+      attribution: {
+        organizationId: "org-1",
+        originalProductSkuId: "sku-provisional",
+        status: "conflict" as const,
+        storeId: "store-1",
+      },
+      organizationId: "org-1",
+      pendingItem: {
+        approvedProductId: "product-canonical",
+        approvedProductSkuId: "sku-canonical",
+        organizationId: "org-1",
+        provisionalProductSkuId: "sku-provisional",
+        status: "approved" as const,
+        storeId: "store-1",
+      },
+      storeId: "store-1",
+    };
+    expect(
+      assertSkuAttributionConflictResolutionSource(valid as never),
+    ).toEqual({
+      canonicalProductId: "product-canonical",
+      canonicalProductSkuId: "sku-canonical",
+    });
+    expect(() =>
+      assertSkuAttributionConflictResolutionSource({
+        ...valid,
+        pendingItem: { ...valid.pendingItem, storeId: "store-other" },
+      } as never),
+    ).toThrow("lacks trusted source state");
+    expect(() =>
+      assertSkuAttributionConflictResolutionSource({
+        ...valid,
+        pendingItem: { ...valid.pendingItem, status: "pending_review" },
+      } as never),
+    ).toThrow("lacks trusted source state");
+    const source = readFileSync(
+      join(process.cwd(), "convex", "reporting", "evidence.ts"),
+      "utf8",
+    );
+    expect(source).toMatch(
+      /resolvePendingCheckoutSkuAttributionConflictForStore[\s\S]*requireReportingStoreAccess\(ctx, args\.storeId\)/,
+    );
+  });
   it("presents safe typed destinations without exposing unsupported source ids", () => {
     expect(
       presentSkuEvidenceRow({
@@ -102,6 +202,51 @@ describe("reporting evidence", () => {
     expect(source).toContain("SKU_ATTRIBUTION_PAGE_SIZE");
   });
 
+  it("rejects cross-tenant cold-start recertification before destructive mutation", () => {
+    const valid = {
+      attribution: { organizationId: "org-1", storeId: "store-1" },
+      reconciliation: {
+        grantId: "grant-1",
+        organizationId: "org-1",
+        runId: "run-1",
+        status: "verified" as const,
+        storeId: "store-1",
+      },
+      sourceRun: {
+        _id: "run-1",
+        backfillAuthorizationGrantId: "grant-1",
+        organizationId: "org-1",
+        status: "completed" as const,
+        storeId: "store-1",
+      },
+    };
+    expect(() =>
+      assertSkuAttributionRecertificationLineage(valid as never),
+    ).not.toThrow();
+    expect(() =>
+      assertSkuAttributionRecertificationLineage({
+        ...valid,
+        reconciliation: {
+          ...valid.reconciliation,
+          organizationId: "org-other",
+        },
+      } as never),
+    ).toThrow("recertification lineage is invalid");
+
+    const source = readFileSync(
+      join(process.cwd(), "convex", "reporting", "evidence.ts"),
+      "utf8",
+    );
+    const authorization = source.indexOf(
+      "await requireAuthorizedLineageWithCtx(ctx",
+    );
+    const certificateDelete = source.indexOf(
+      'await ctx.db.delete(\n            "reportingPosSourceReconciliation"',
+    );
+    expect(authorization).toBeGreaterThan(0);
+    expect(certificateDelete).toBeGreaterThan(authorization);
+  });
+
   it("attributes paginated provisional facts to a canonical SKU without losing recognition lineage", async () => {
     const tables = new Map<string, Map<string, Record<string, unknown>>>([
       [
@@ -114,10 +259,78 @@ describe("reporting evidence", () => {
               attemptCount: 0,
               attributionVersion: 1,
               canonicalProductSkuId: "sku-canonical",
+              materialSequence: 1,
+              organizationId: "organization-1",
               originalProductSkuId: "sku-provisional",
               pendingCheckoutItemId: "pending-1",
               status: "pending",
               storeId: "store-1",
+            },
+          ],
+        ]),
+      ],
+      [
+        "reportingSkuAttributionCursor",
+        new Map([
+          [
+            "cursor-1",
+            {
+              _id: "cursor-1",
+              latestMaterialSequence: 1,
+              nextSequence: 2,
+              storeId: "store-1",
+            },
+          ],
+        ]),
+      ],
+      ["reportingSkuAttributionAppliedSequence", new Map()],
+      [
+        "posPendingCheckoutItem",
+        new Map([
+          [
+            "pending-1",
+            {
+              _id: "pending-1",
+              approvedProductSkuId: "sku-conflicting",
+              organizationId: "organization-1",
+              provisionalProductSkuId: "sku-provisional",
+              status: "approved",
+              storeId: "store-1",
+            },
+          ],
+        ]),
+      ],
+      [
+        "reportingReadBundleActivation",
+        new Map([
+          ["activation-1", { _id: "activation-1", bundleId: "bundle-1", storeId: "store-1" }],
+        ]),
+      ],
+      [
+        "reportingReadBundle",
+        new Map([
+          ["bundle-1", { _id: "bundle-1", reconciliationId: "reconciliation-1" }],
+        ]),
+      ],
+      [
+        "reportingPosSourceReconciliation",
+        new Map([
+          ["reconciliation-1", { _id: "reconciliation-1", runId: "run-1" }],
+        ]),
+      ],
+      [
+        "reportingRun",
+        new Map([
+          [
+            "run-1",
+            {
+              _id: "run-1",
+              backfillAuthorizationGrantId: "grant-1",
+              censusToken: "census-1",
+              factSnapshotWatermark: 100,
+              financialDateContractVersion: 2,
+              frozenWatermark: 100,
+              sourceCensusHash: "hash-1",
             },
           ],
         ]),
@@ -248,6 +461,8 @@ describe("reporting evidence", () => {
       ],
     ]);
     const rows = (table: string) => [...(tables.get(table)?.values() ?? [])];
+    const scheduled: Array<Record<string, unknown>> = [];
+    let schedulingFailuresRemaining = 0;
     const ctx = {
       db: {
         delete: async (table: string, id: string) => {
@@ -255,6 +470,12 @@ describe("reporting evidence", () => {
         },
         get: async (table: string, id: string) =>
           tables.get(table)?.get(id) ?? null,
+        insert: async (table: string, value: Record<string, unknown>) => {
+          const id = `${table}-${(tables.get(table)?.size ?? 0) + 1}`;
+          if (!tables.has(table)) tables.set(table, new Map());
+          tables.get(table)!.set(id, { _id: id, ...value });
+          return id;
+        },
         patch: async (
           table: string,
           id: string,
@@ -295,7 +516,15 @@ describe("reporting evidence", () => {
           },
         }),
       },
-      scheduler: { runAfter: async () => undefined },
+      scheduler: {
+        runAfter: async (_delay: number, _fn: unknown, args: Record<string, unknown>) => {
+          if (schedulingFailuresRemaining > 0) {
+            schedulingFailuresRemaining -= 1;
+            throw new Error("scheduler unavailable");
+          }
+          scheduled.push(args);
+        },
+      },
     };
     const handler = (
       materializePendingCheckoutSkuAttribution as unknown as {
@@ -320,17 +549,159 @@ describe("reporting evidence", () => {
     );
     expect(
       tables.get("reportingSkuDayProjection")?.get("projection-provisional"),
-    ).toBeUndefined();
+    ).toMatchObject({ knownValue: 5_000 });
     expect(
       tables.get("reportingSkuDayProjection")?.get("projection-canonical"),
-    ).toMatchObject({ knownValue: 6_000 });
+    ).toMatchObject({ knownValue: 1_000 });
     expect(
       tables.get("reportingProjectionEvidence")?.get("projection-evidence-1"),
     ).toMatchObject({
-      attributionKind: "pending_checkout",
-      productSkuId: "sku-canonical",
-      provisionalProductSkuId: "sku-provisional",
+      productSkuId: "sku-provisional",
     });
+    expect(
+      tables.get("reportingSkuAttributionCursor")?.get("cursor-1"),
+    ).toMatchObject({ latestAppliedSequence: 1 });
+    expect(scheduled).toContainEqual(
+      expect.objectContaining({
+        projectionKind: "sku_day",
+        skuAttributionTerminalSequence: 1,
+      }),
+    );
+
+    scheduled.length = 0;
+    await expect(
+      recordPendingCheckoutSkuAttributionWithCtx(ctx as never, {
+        canonicalProductSkuId: "sku-conflicting" as never,
+        organizationId: "organization-1" as never,
+        originalProductSkuId: "sku-provisional" as never,
+        pendingCheckoutItemId: "pending-1" as never,
+        storeId: "store-1" as never,
+      }),
+    ).resolves.toMatchObject({ kind: "conflict", scheduled: true });
+    expect(
+      tables.get("reportingSkuAttributionCursor")?.get("cursor-1"),
+    ).toMatchObject({ latestMaterialSequence: 2, nextSequence: 3 });
+    expect(tables.get("reportingSkuAttribution")?.get("attribution-1"))
+      .toMatchObject({
+        materialSequence: 2,
+        status: "conflict",
+      });
+
+    await expect(
+      handler(ctx, { attributionId: "attribution-1", cursor: null }),
+    ).resolves.toEqual({ completed: true, processedCount: 1 });
+    expect(tables.get("reportingFact")?.get("fact-1")).toMatchObject({
+      amountMinor: 5_000,
+      canonicalProductSkuId: undefined,
+      completeness: "partial",
+      limitingReason: "source_incomplete",
+      productSkuId: "sku-provisional",
+    });
+    expect(tables.get("reportingSkuEvidence")?.get("evidence-1"))
+      .toMatchObject({
+        productSkuId: "sku-provisional",
+        recognitionProductSkuId: "sku-provisional",
+      });
+    expect(
+      tables.get("reportingSkuAttributionCursor")?.get("cursor-1"),
+    ).toMatchObject({ latestAppliedSequence: 2 });
+    expect(scheduled).toContainEqual(
+      expect.objectContaining({
+        projectionKind: "sku_day",
+        skuAttributionTerminalSequence: 2,
+      }),
+    );
+
+    scheduled.length = 0;
+    await expect(
+      recordPendingCheckoutSkuAttributionWithCtx(ctx as never, {
+        canonicalProductSkuId: "sku-conflicting" as never,
+        organizationId: "organization-1" as never,
+        originalProductSkuId: "sku-provisional" as never,
+        pendingCheckoutItemId: "pending-1" as never,
+        storeId: "store-1" as never,
+      }),
+    ).resolves.toEqual({
+      attributionId: "attribution-1",
+      kind: "conflict",
+      scheduled: false,
+    });
+    expect(
+      tables.get("reportingSkuAttributionCursor")?.get("cursor-1"),
+    ).toMatchObject({ latestMaterialSequence: 2, nextSequence: 3 });
+    expect(scheduled).toEqual([]);
+
+    await expect(
+      resolvePendingCheckoutSkuAttributionConflictWithCtx(ctx as never, {
+        attributionId: "attribution-1" as never,
+        canonicalProductSkuId: "sku-conflicting" as never,
+      }),
+    ).resolves.toMatchObject({
+      kind: "resolved",
+      materialSequence: 3,
+      scheduled: true,
+    });
+    await expect(
+      handler(ctx, { attributionId: "attribution-1", cursor: null }),
+    ).resolves.toEqual({ completed: true, processedCount: 1 });
+    expect(tables.get("reportingFact")?.get("fact-1")).toMatchObject({
+      amountMinor: 5_000,
+      canonicalProductSkuId: "sku-conflicting",
+      completeness: "partial",
+      limitingReason: "uncosted",
+      productSkuId: "sku-provisional",
+    });
+    expect(
+      tables.get("reportingSkuAttributionCursor")?.get("cursor-1"),
+    ).toMatchObject({
+      latestAppliedSequence: 3,
+      latestMaterialSequence: 3,
+      nextSequence: 4,
+    });
+    await expect(
+      resolvePendingCheckoutSkuAttributionConflictWithCtx(ctx as never, {
+        attributionId: "attribution-1" as never,
+        canonicalProductSkuId: "sku-conflicting" as never,
+      }),
+    ).resolves.toMatchObject({
+      kind: "resolved",
+      materialSequence: 3,
+      scheduled: false,
+    });
+
+    schedulingFailuresRemaining = 1;
+    await expect(
+      recordPendingCheckoutSkuAttributionWithCtx(ctx as never, {
+        canonicalProductSkuId: "sku-conflicting-again" as never,
+        organizationId: "organization-1" as never,
+        originalProductSkuId: "sku-provisional" as never,
+        pendingCheckoutItemId: "pending-1" as never,
+        storeId: "store-1" as never,
+      }),
+    ).resolves.toMatchObject({ kind: "conflict", scheduled: false });
+    expect(
+      tables.get("reportingSkuAttributionCursor")?.get("cursor-1"),
+    ).toMatchObject({ latestMaterialSequence: 4, nextSequence: 5 });
+    expect(tables.get("reportingSkuAttribution")?.get("attribution-1"))
+      .toMatchObject({
+        materialSequence: 4,
+        recoveryDisposition: "retry_pending",
+        status: "conflict",
+      });
+    expect(scheduled).toContainEqual({ storeId: "store-1" });
+
+    await expect(
+      recordPendingCheckoutSkuAttributionWithCtx(ctx as never, {
+        canonicalProductSkuId: "sku-conflicting-again" as never,
+        organizationId: "organization-1" as never,
+        originalProductSkuId: "sku-provisional" as never,
+        pendingCheckoutItemId: "pending-1" as never,
+        storeId: "store-1" as never,
+      }),
+    ).resolves.toMatchObject({ kind: "conflict", scheduled: true });
+    expect(
+      tables.get("reportingSkuAttributionCursor")?.get("cursor-1"),
+    ).toMatchObject({ latestMaterialSequence: 4, nextSequence: 5 });
   });
 
   it("preserves return disposition and quantity in SKU evidence", async () => {

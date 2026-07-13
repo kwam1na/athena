@@ -246,6 +246,12 @@ export const reportingFactSchema = v.object({
     ),
   ),
   attributionVersion: v.optional(v.number()),
+  attributionConflictPriorCompleteness: v.optional(
+    reportingCompletenessSchema,
+  ),
+  attributionConflictPriorLimitingReason: v.optional(
+    reportingLimitingReasonSchema,
+  ),
   channel: v.optional(
     v.union(v.literal("pos"), v.literal("storefront"), v.literal("service")),
   ),
@@ -268,6 +274,16 @@ export const reportingFactSchema = v.object({
   synchronizedAt: v.optional(v.number()),
   recognitionAt: v.number(),
   operatingDate: v.string(),
+  timezoneVersionId: v.optional(v.id("storeTimezoneVersion")),
+  timezoneVersionHash: v.optional(v.string()),
+  scheduleContext: v.optional(
+    v.union(
+      v.literal("within_hours"),
+      v.literal("outside_hours"),
+      v.literal("closed"),
+      v.literal("unavailable"),
+    ),
+  ),
   scheduleVersionId: v.optional(v.id("storeSchedule")),
   historicalInterpretationPolicyId: v.optional(
     v.id("reportingHistoricalInterpretationPolicy"),
@@ -400,6 +416,8 @@ export const reportingSkuAttributionSchema = v.object({
   canonicalProductSkuId: v.id("productSku"),
   attributionKind: v.literal("pending_checkout"),
   attributionVersion: v.number(),
+  materialSequence: v.optional(v.number()),
+  conflictFingerprint: v.optional(v.string()),
   status: v.union(
     v.literal("pending"),
     v.literal("completed"),

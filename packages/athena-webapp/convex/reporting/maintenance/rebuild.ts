@@ -22,6 +22,12 @@ import { materializeGenerationCoverageWithCtx } from "../coverage";
 import { upsertProjectionHealthWithCtx } from "../health";
 import { reportingPeriodLineage } from "../factFingerprint";
 import { assertReportingRunTransition } from "./runLedger";
+import {
+  projectionRebuildLineage,
+  requireVerifiedPosBackfillLineageWithCtx,
+} from "./posSourceReconciliationGate";
+
+export { projectionRebuildLineage } from "./posSourceReconciliationGate";
 
 const reportingRebuildInternal = (internal as any).reporting.maintenance
   .rebuild;
@@ -303,13 +309,15 @@ export function reconciliationLogicalKey(input: {
   scheduleVersionId?: string | null;
   historicalInterpretationPolicyId?: string | null;
   historicalInterpretationPolicyHash?: string | null;
+  timezoneVersionId?: string | null;
+  timezoneVersionHash?: string | null;
 }) {
   const lineage = reportingPeriodLineage(input);
   return JSON.stringify([
     input.operatingDate,
     lineage.kind,
     lineage.id,
-    lineage.kind === "historical_policy" ? lineage.hash : null,
+    "hash" in lineage ? lineage.hash : null,
     input.productSkuId ? String(input.productSkuId) : null,
     input.metric,
   ]);
@@ -659,12 +667,40 @@ async function accumulatorGroup(
 export const startProjectionRebuild = internalMutation({
   args: {
     automationIdentity: v.string(),
+    backfillAuthorizationGrantId: v.optional(
+      v.id("reportingBackfillAuthorizationGrant"),
+    ),
+    censusToken: v.optional(v.string()),
+    factSnapshotWatermark: v.optional(v.number()),
+    financialDateContractVersion: v.optional(v.number()),
+    frozenWatermark: v.optional(v.number()),
     projectionKind: projectionKindValidator,
+    sourceCensusHash: v.optional(v.string()),
+    sourceScope: v.optional(v.literal("pos")),
+    skuAttributionTerminalSequence: v.optional(v.number()),
     storeId: v.id("store"),
   },
   handler: async (ctx, args) => {
     const store = await ctx.db.get("store", args.storeId);
     if (!store) throw new Error("Store not found");
+    const lineage = projectionRebuildLineage({
+      backfillAuthorizationGrantId: args.backfillAuthorizationGrantId,
+      censusToken: args.censusToken,
+      factSnapshotWatermark: args.factSnapshotWatermark,
+      financialDateContractVersion: args.financialDateContractVersion,
+      frozenWatermark: args.frozenWatermark,
+      sourceCensusHash: args.sourceCensusHash,
+      sourceScope: args.sourceScope,
+      skuAttributionTerminalSequence:
+        args.skuAttributionTerminalSequence,
+    });
+    const certifiedPosLineage = lineage
+      ? await requireVerifiedPosBackfillLineageWithCtx(ctx, {
+          lineage,
+          organizationId: store.organizationId,
+          storeId: args.storeId,
+        })
+      : null;
     const currentActivation = await ctx.db
       .query("reportingProjectionActivation")
       .withIndex("by_storeId_projectionKind_activatedAt", (q) =>
@@ -673,22 +709,36 @@ export const startProjectionRebuild = internalMutation({
       .order("desc")
       .first();
     const now = Date.now();
-    const frozenWatermark = stableRebuildWatermark(now);
+    const frozenWatermark =
+      lineage?.factSnapshotWatermark ?? stableRebuildWatermark(now);
     const runId = await ctx.db.insert("reportingRun", {
       actorKind: "automation",
       automationIdentity: args.automationIdentity,
+      backfillAuthorizationGrantId: lineage?.backfillAuthorizationGrantId as
+        | Id<"reportingBackfillAuthorizationGrant">
+        | undefined,
+      censusToken: lineage?.censusToken,
       createdAt: now,
       domain: "reporting",
       factContractVersion: REPORTING_FACT_CONTRACT_VERSION,
+      financialDateContractVersion:
+        lineage?.financialDateContractVersion,
+      factSnapshotWatermark: lineage?.factSnapshotWatermark,
       failedCount: 0,
       frozenWatermark,
       expectedPriorGenerationId: currentActivation?.generationId,
       metricContractVersion: 1,
       operation: "projection_rebuild_building",
       organizationId: store.organizationId,
+      orphanPaymentCorrectionCount:
+        certifiedPosLineage?.orphanPaymentCorrectionCount,
       processedCount: 0,
       projectionContractVersion: REPORTING_PROJECTION_CONTRACT_VERSION,
       runType: "rebuild",
+      sourceScope: lineage?.sourceScope,
+      sourceCensusHash: lineage?.sourceCensusHash,
+      skuAttributionTerminalSequence:
+        lineage?.skuAttributionTerminalSequence,
       status: "pending",
       storeId: args.storeId,
     });
@@ -702,6 +752,8 @@ export const startProjectionRebuild = internalMutation({
       projectionKind: args.projectionKind,
       runId,
       sourceWatermark: frozenWatermark,
+      skuAttributionTerminalSequence:
+        lineage?.skuAttributionTerminalSequence,
       status: "building",
       storeId: args.storeId,
     });
@@ -777,7 +829,7 @@ export const processProjectionRebuildBatchMutation = internalMutation({
       );
       return;
     }
-    if (!catchingUp) {
+    if (!catchingUp && !run.backfillAuthorizationGrantId) {
       const nextWatermark = Math.max(
         run.frozenWatermark,
         stableRebuildWatermark(Date.now()),
@@ -800,15 +852,17 @@ export const processProjectionRebuildBatchMutation = internalMutation({
       );
       return;
     }
-    const laterFact = await ctx.db
-      .query("reportingFact")
-      .withIndex("by_storeId", (q) =>
-        q
-          .eq("storeId", run.storeId)
-          .gt("_creationTime", run.frozenWatermark!),
-      )
-      .first();
-    if (laterFact) {
+    const laterFact = catchingUp
+      ? await ctx.db
+          .query("reportingFact")
+          .withIndex("by_storeId", (q) =>
+            q
+              .eq("storeId", run.storeId)
+              .gt("_creationTime", run.frozenWatermark!),
+          )
+          .first()
+      : null;
+    if (catchingUp && laterFact) {
       const nextWatermark = Math.max(
         run.frozenWatermark,
         stableRebuildWatermark(Date.now()),
@@ -962,6 +1016,8 @@ export const processProjectionReconciliationBatchMutation = internalMutation({
               fact.historicalInterpretationPolicyId,
             historicalInterpretationPolicyHash:
               fact.historicalInterpretationPolicyHash,
+            timezoneVersionHash: fact.timezoneVersionHash,
+            timezoneVersionId: fact.timezoneVersionId,
             productSkuId:
               generation.projectionKind === "sku_day"
                 ? (fact.canonicalProductSkuId ?? fact.productSkuId)
@@ -1033,6 +1089,8 @@ export const processProjectionReconciliationBatchMutation = internalMutation({
             row.historicalInterpretationPolicyId,
           historicalInterpretationPolicyHash:
             row.historicalInterpretationPolicyHash,
+          timezoneVersionHash: row.timezoneVersionHash,
+          timezoneVersionId: row.timezoneVersionId,
           productSkuId,
         });
         if (row.metricContractVersion !== generation.metricContractVersion) {
@@ -1097,6 +1155,8 @@ export const processProjectionReconciliationBatchMutation = internalMutation({
                 row.historicalInterpretationPolicyId,
               historicalInterpretationPolicyHash:
                 row.historicalInterpretationPolicyHash,
+              timezoneVersionHash: row.timezoneVersionHash,
+              timezoneVersionId: row.timezoneVersionId,
               productSkuId,
             }),
             metric: `${row.metric}__unknown_quantity`,
@@ -1278,6 +1338,8 @@ export const processProjectionReconciliationBatchMutation = internalMutation({
               row.historicalInterpretationPolicyId,
             historicalInterpretationPolicyHash:
               row.historicalInterpretationPolicyHash,
+            timezoneVersionHash: row.timezoneVersionHash,
+            timezoneVersionId: row.timezoneVersionId,
             productSkuId,
           }),
           metric: row.metric,
@@ -1299,6 +1361,8 @@ export const processProjectionReconciliationBatchMutation = internalMutation({
                 row.historicalInterpretationPolicyId,
               historicalInterpretationPolicyHash:
                 row.historicalInterpretationPolicyHash,
+              timezoneVersionHash: row.timezoneVersionHash,
+              timezoneVersionId: row.timezoneVersionId,
               productSkuId,
             }),
             metric: `${row.metric}__unknown_quantity`,
@@ -1467,14 +1531,16 @@ export const processProjectionReconciliationBatchMutation = internalMutation({
         q.eq("storeId", run.storeId),
       )
       .take(100);
-    const laterFact = await ctx.db
-      .query("reportingFact")
-      .withIndex("by_storeId", (q) =>
-        q
-          .eq("storeId", run.storeId)
-          .gt("_creationTime", run.frozenWatermark!),
-      )
-      .first();
+    const laterFact = run.backfillAuthorizationGrantId
+      ? null
+      : await ctx.db
+          .query("reportingFact")
+          .withIndex("by_storeId", (q) =>
+            q
+              .eq("storeId", run.storeId)
+              .gt("_creationTime", run.frozenWatermark!),
+          )
+          .first();
     if (laterFact) {
       await recordDiscrepancy(ctx, {
         actual: laterFact._creationTime,
@@ -1616,6 +1682,17 @@ export const processProjectionReconciliationBatchMutation = internalMutation({
         storeId: run.storeId,
         updatedAt: completedAt,
       });
+    }
+    if (!failed && run.backfillAuthorizationGrantId) {
+      await ctx.scheduler.runAfter(
+        0,
+        (internal as any).reporting.activation.activateVerifiedGeneration,
+        {
+          candidateGenerationId: generation._id,
+          expectedPriorGenerationId: run.expectedPriorGenerationId,
+          runId: run._id,
+        },
+      );
     }
   },
 });

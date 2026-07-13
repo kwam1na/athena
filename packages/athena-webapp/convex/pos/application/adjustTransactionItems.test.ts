@@ -23,6 +23,11 @@ import {
   outboundBasisFromEffect,
   reportingLineCostFromEffect,
 } from "../../reporting/inventory/commerceEffects";
+import { appendPosLifecycleJournalWithCtx } from "../infrastructure/posLifecycleJournal";
+
+vi.mock("../infrastructure/posLifecycleJournal", () => ({
+  appendPosLifecycleJournalWithCtx: vi.fn(),
+}));
 
 vi.mock("../../operations/approvalActions", () => ({
   APPROVAL_ACTIONS: {
@@ -583,6 +588,28 @@ describe("adjustTransactionItems", () => {
         productSkuId: "sku-1",
         quantity: 1,
         sourceType: "pos_transaction_item_adjustment",
+      }),
+    );
+    expect(appendPosLifecycleJournalWithCtx).toHaveBeenCalledWith(
+      ctx as never,
+      expect.objectContaining({
+        adjustmentId: "posTransactionAdjustment-1",
+        eventKind: "adjustment_applied",
+        eventKey: "pos:txn-1:adjustment:posTransactionAdjustment-1",
+        organizationId: "org-1",
+        storeId: "store-1",
+        transactionId: "txn-1",
+      }),
+    );
+    expect(appendPosLifecycleJournalWithCtx).toHaveBeenCalledWith(
+      ctx as never,
+      expect.objectContaining({
+        adjustmentId: "posTransactionAdjustment-1",
+        eventKind: "refunded",
+        eventKey: "pos:txn-1:refund-adjustment:posTransactionAdjustment-1",
+        organizationId: "org-1",
+        storeId: "store-1",
+        transactionId: "txn-1",
       }),
     );
     expect(outboundBasisFromEffect).toHaveBeenCalledWith(

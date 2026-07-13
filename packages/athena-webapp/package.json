@@ -19,6 +19,7 @@
     "test:coverage": "vitest run --coverage",
     "test:ui": "vitest --ui",
     "email:dev": "email dev --dir convex/emails",
+    "reporting:purge-dev": "bash scripts/purge-reporting-dev.sh",
     "storybook": "storybook dev -p 6006 --config-dir ../../.storybook-athena",
     "storybook:build": "storybook build --config-dir ../../.storybook-athena",
     "build-storybook": "bun run storybook:build",

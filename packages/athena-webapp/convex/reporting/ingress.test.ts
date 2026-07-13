@@ -2,15 +2,19 @@ import { describe, expect, it, vi } from "vitest";
 import type { Id } from "../_generated/dataModel";
 
 vi.mock("./operatingPeriods", () => ({
-  resolveReportingOperatingPeriodWithCtx: vi.fn(async () => ({
-    endsAt: 200,
+  resolveReportingFinancialPeriodWithCtx: vi.fn(async () => ({
     kind: "resolved",
     occurrenceAt: 100,
-    operatingDate: "2026-07-09",
-    scheduleVersionId: "schedule-1",
-    startsAt: 0,
+    recognitionAt: 100,
+    reportingDate: "2026-07-09",
+    scheduleContext: {
+      kind: "within_hours",
+      operatingDate: "2026-07-09",
+      scheduleVersionId: "schedule-1",
+    },
     timezone: "Africa/Accra",
-    windowCount: 1,
+    timezoneVersionHash: "timezone-hash-1",
+    timezoneVersionId: "timezone-1",
   })),
 }));
 
@@ -90,7 +94,7 @@ function canonicalContext() {
     contentFingerprint: "fingerprint-1",
     currencyCode: "GHS",
     currencyMinorUnitScale: 2,
-    factContractVersion: 1,
+    factContractVersion: 2,
     occurredAt: 100,
     organizationId: "org-1",
     sourceDomain: "pos",
@@ -187,7 +191,7 @@ const baseArgs = {
   sourceEventType: "sale_completed",
   businessEventKey: "sale:tx-1:completed",
   adapterVersion: 1,
-  factContractVersion: 1,
+  factContractVersion: 2,
   occurredAt: 100,
   acceptedAt: 110,
   contentFingerprint: "sha256:one",
@@ -282,10 +286,10 @@ describe("reporting ingress", () => {
       value: expect.objectContaining({
         adapterVersion: 1,
         attempt: 1,
-        factContractVersion: 1,
+        factContractVersion: 2,
         metricContractVersion: 1,
         outcome: "failed",
-        projectionContractVersion: 1,
+        projectionContractVersion: 2,
         recoveryDisposition: "retry_pending",
         safeCode: "initial_processing_schedule_failed",
       }),
@@ -643,6 +647,39 @@ describe("reporting ingress", () => {
     expect(table("reportingIngress").get("ingress-other")).not.toHaveProperty(
       "lastRecoveryAttemptAt",
     );
+  });
+
+  it("recovers a bounded retry-pending conflict without a repeated observation", async () => {
+    const { ctx, table } = canonicalContext();
+    table("reportingIngress").get("ingress-1")!.status = "processed";
+    table("reportingSkuAttribution").set("attribution-conflict", {
+      _id: "attribution-conflict",
+      attemptCount: 1,
+      recoveryDisposition: "retry_pending",
+      status: "conflict",
+      storeId: "store-1",
+      updatedAt: 90,
+    });
+    const handler = (
+      resumePendingIngressForStore as unknown as { _handler: Function }
+    )._handler;
+
+    await expect(
+      handler(ctx, { limit: 1, storeId: "store-1" }),
+    ).resolves.toMatchObject({
+      attributionScheduledCount: 1,
+      inspectedCount: 1,
+    });
+    expect(ctx.scheduler.runAfter).toHaveBeenCalledWith(
+      0,
+      expect.anything(),
+      { attributionId: "attribution-conflict", cursor: null },
+    );
+    expect(table("reportingSkuAttribution").get("attribution-conflict"))
+      .toMatchObject({
+        recoveryDisposition: "retry_scheduled",
+        status: "conflict",
+      });
   });
 
   it("persists partial known COGS and proportional revenue coverage", async () => {

@@ -37,6 +37,7 @@ export const storeScheduleSchema = v.object({
   organizationId: v.id("organization"),
   storeId: v.id("store"),
   timezone: v.string(),
+  timezoneVersionId: v.optional(v.id("storeTimezoneVersion")),
   weeklyWindows: v.array(storeScheduleWindowSchema),
   weeklyClosedDays: v.array(v.number()),
   dateExceptions: v.array(storeScheduleDateExceptionSchema),

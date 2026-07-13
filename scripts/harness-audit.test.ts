@@ -1477,6 +1477,16 @@ async function createFixtureRepo() {
     rootDir
   );
   await write(
+    "packages/athena-webapp/scripts/purge-reporting-dev.sh",
+    "#!/usr/bin/env bash\nexit 0\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/scripts/empty-table.json",
+    "[]\n",
+    rootDir
+  );
+  await write(
     "packages/athena-webapp/scripts/convexPaginationAntiPatternCheck.py",
     "print('ok')\n",
     rootDir

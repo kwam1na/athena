@@ -507,6 +507,7 @@ export type SyncProjectionRepository = {
   }): Promise<Id<"serviceCaseLineItem">>;
   syncServiceCaseFinancials(serviceCaseId: Id<"serviceCase">): Promise<void>;
   createTransaction(input: {
+    localSyncEventId: Id<"posLocalSyncEvent">;
     transactionNumber: string;
     storeId: Id<"store">;
     sessionId?: Id<"posSession">;

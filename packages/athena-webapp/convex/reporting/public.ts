@@ -10,8 +10,14 @@ import {
 import { requireReportingStoreAccess } from "./access";
 import { summarizeProjectionHealthRead } from "./health";
 import { presentAttentionReason } from "./projections/attention";
-import { resolveReportingOperatingDateRangeWithCtx, resolveReportingOperatingPeriodWithCtx } from "./operatingPeriods";
+import { resolveReportingCalendarDateRangeWithCtx, resolveReportingCalendarReferenceWithCtx, resolveReportingOperatingDateRangeWithCtx } from "./operatingPeriods";
 import { resolveReportPeriod } from "./periods";
+import {
+  getActiveReadBundleWithCtx,
+  skuAttributionTerminalIsCurrent,
+} from "./readModels/readBundle";
+import { getExactActiveWorkspaceEpochWithCtx } from "./readModels/materialize";
+import { currentSkuAttributionCursorWithCtx } from "./skuAttributionSequence";
 import {
   buildCursorContextKey,
   decodeReportingCursor,
@@ -51,8 +57,20 @@ export function publicPeriodLineage(
     | "scheduleVersionId"
     | "historicalInterpretationPolicyId"
     | "historicalInterpretationPolicyHash"
+    | "timezoneVersionId"
+    | "timezoneVersionHash"
   >,
 ) {
+  if (row.timezoneVersionId !== undefined) {
+    if (!row.timezoneVersionHash || row.historicalInterpretationPolicyId !== undefined) {
+      throw new Error("Reporting projection period lineage is invalid");
+    }
+    return {
+      kind: "store_timezone" as const,
+      id: row.timezoneVersionId,
+      hash: row.timezoneVersionHash,
+    };
+  }
   if (row.historicalInterpretationPolicyId !== undefined) {
     if (row.scheduleVersionId !== undefined || !row.historicalInterpretationPolicyHash) {
       throw new Error("Reporting projection period lineage is invalid");
@@ -245,40 +263,105 @@ function presentAttentionRow(row: Doc<"reportingAttentionProjection">) {
   };
 }
 
+export function reportingGenerationHasReadableStableWatermark(input: {
+  sourceWatermark: number;
+  stableWatermark?: number;
+}) {
+  return input.stableWatermark !== undefined &&
+    input.stableWatermark <= input.sourceWatermark;
+}
+
+export function presentReportItemMetrics(
+  metrics: Record<string, number | null>,
+) {
+  const sold = metrics.units_sold;
+  const returned = metrics.units_returned;
+  return {
+    costCoverageBasisPoints: metrics.cost_coverage_basis_points ?? null,
+    inventoryValueMinor: metrics.inventory_value ?? null,
+    knownGrossProfitMinor: metrics.merchandise_profit ?? null,
+    netRevenueMinor: metrics.net_sales ?? null,
+    netSoldUnits:
+      sold === null
+        ? null
+        : sold === undefined && returned === undefined
+          ? null
+          : (sold ?? 0) - (returned ?? 0),
+    onHandQuantity: metrics.on_hand_units ?? null,
+    projectedDaysOfCover: metrics.projected_days_of_cover ?? null,
+  };
+}
+
+export function presentCurrentValuationResult(input: {
+  generation: {
+    _id: unknown;
+    completeness: string;
+    limitingReason?: string;
+    status: string;
+  };
+  rows: unknown[];
+}) {
+  return {
+    completeness: input.generation.completeness,
+    generationId: input.generation._id,
+    limitingReason: input.generation.limitingReason ?? null,
+    rows: input.rows,
+    status:
+      input.generation.completeness === "unavailable"
+        ? ("unavailable" as const)
+        : input.generation.status,
+  };
+}
+
+export function reportingGenerationAttributionTerminalIsCurrent(input: {
+  cursor: Parameters<typeof skuAttributionTerminalIsCurrent>[0]["cursor"];
+  projectionKind: ProjectionKind;
+  terminal?: number;
+}) {
+  return input.projectionKind !== "sku_day" ||
+    skuAttributionTerminalIsCurrent({
+      cursor: input.cursor,
+      terminal: input.terminal,
+    });
+}
+
 async function getActiveGeneration(
   ctx: QueryCtx,
   storeId: Id<"store">,
   projectionKind: ProjectionKind,
 ) {
-  const activation = await ctx.db
-    .query("reportingProjectionActivation")
-    .withIndex("by_storeId_projectionKind_activatedAt", (q) =>
-      q.eq("storeId", storeId).eq("projectionKind", projectionKind),
-    )
-    .order("desc")
-    .first();
-  if (!activation || activation.supersededAt !== undefined) {
-    return null;
-  }
+  const bundle = await getActiveReadBundleWithCtx(ctx, storeId);
+  const member = bundle?.members.find(
+    (candidate: { projectionKind: string }) =>
+      candidate.projectionKind === projectionKind,
+  );
+  if (!bundle || !member) return null;
   const generation = await ctx.db.get(
     "reportingProjectionGeneration",
-    activation.generationId,
+    member.generationId,
   );
+  const attributionCursor = projectionKind === "sku_day"
+    ? await currentSkuAttributionCursorWithCtx(ctx, storeId)
+    : null;
   if (
     !generation ||
     generation.storeId !== storeId ||
-    generation.organizationId !== activation.organizationId ||
+    generation.organizationId !== bundle.organizationId ||
     generation.projectionKind !== projectionKind ||
-    generation.status !== "active" ||
-    generation.supersededAt !== undefined ||
-    generation.stableWatermark === undefined ||
-    generation.stableWatermark !== generation.sourceWatermark ||
+    (generation.status !== "active" && generation.status !== "superseded") ||
+    !reportingGenerationHasReadableStableWatermark(generation) ||
     generation.factContractVersion !== REPORTING_FACT_CONTRACT_VERSION ||
     generation.projectionContractVersion !== REPORTING_PROJECTION_CONTRACT_VERSION ||
     generation.metricContractVersion !== 1 ||
-    activation.factContractVersion !== generation.factContractVersion ||
-    activation.metricContractVersion !== generation.metricContractVersion ||
-    activation.projectionContractVersion !== generation.projectionContractVersion
+    bundle.factContractVersion !== generation.factContractVersion ||
+    bundle.metricContractVersion !== generation.metricContractVersion ||
+    bundle.projectionContractVersion !== generation.projectionContractVersion ||
+    bundle.sourceWatermark !== generation.stableWatermark ||
+    !reportingGenerationAttributionTerminalIsCurrent({
+        cursor: attributionCursor,
+        projectionKind,
+        terminal: generation.skuAttributionTerminalSequence,
+      })
   ) {
     return null;
   }
@@ -286,9 +369,18 @@ async function getActiveGeneration(
 }
 
 async function getActiveWorkspaceEpoch(ctx: QueryCtx, generation: Doc<"reportingProjectionGeneration">) {
-  const activation = await ctx.db.query("reportingWorkspaceReadModelActivation").withIndex("by_storeId_projectionKind_activatedAt", (q) => q.eq("storeId", generation.storeId).eq("projectionKind", generation.projectionKind)).order("desc").first();
-  if (!activation || activation.supersededAt !== undefined || activation.sourceGenerationId !== generation._id || activation.sourceWatermark !== generation.stableWatermark) return null;
-  const epoch = await ctx.db.get("reportingWorkspaceMaterializationEpoch", activation.workspaceEpochId);
+  if (generation.projectionKind === "custom_range") {
+    return generation.stableWatermark === undefined
+      ? null
+      : await getExactActiveWorkspaceEpochWithCtx(ctx, {
+          generationId: generation._id,
+          sourceWatermark: generation.stableWatermark,
+        });
+  }
+  const bundle = await getActiveReadBundleWithCtx(ctx, generation.storeId);
+  const member = bundle?.members.find((candidate: { generationId: string; projectionKind: string }) => candidate.generationId === generation._id && candidate.projectionKind === generation.projectionKind);
+  if (!bundle || !member || bundle.sourceWatermark !== generation.stableWatermark) return null;
+  const epoch = await ctx.db.get("reportingWorkspaceMaterializationEpoch", member.workspaceEpochId);
   return epoch && epoch.status === "active" && epoch.sourceGenerationId === generation._id && epoch.sourceWatermark === generation.stableWatermark ? epoch : null;
 }
 
@@ -525,7 +617,7 @@ export const getCurrentValuation = query({
           .eq("productSkuId", args.productSkuId),
       )
       .take(50);
-    return { generationId: generation._id, rows, status: generation.status };
+    return presentCurrentValuationResult({ generation, rows });
   },
 });
 
@@ -691,15 +783,13 @@ async function resolveRequestedReportsPeriod(
   periodKey: "today" | "wtd" | "prior_week" | "trailing_30",
 ) {
   const asOf = Date.now();
-  const operatingPeriod = await resolveReportingOperatingPeriodWithCtx(ctx, { occurrenceAt: asOf, storeId });
+  const operatingPeriod = await resolveReportingCalendarReferenceWithCtx(ctx, { occurrenceAt: asOf, storeId });
   if (operatingPeriod.kind !== "resolved") return null;
   const preset = periodKey === "wtd" ? "week_to_date" : periodKey === "trailing_30" ? "trailing_30_days" : periodKey;
   return resolveReportPeriod({
-    asOf,
+    asOf: operatingPeriod.referenceAt,
     operatingDate: operatingPeriod.operatingDate,
-    operatingDayStartsAt: operatingPeriod.startsAt,
     preset,
-    scheduleVersionId: String(operatingPeriod.scheduleVersionId),
     timezone: operatingPeriod.timezone,
   });
 }
@@ -722,24 +812,29 @@ export const resolveReportsPeriod = query({
   handler: async (ctx, args) => {
     await requireReportingStoreAccess(ctx, args.storeId);
     const asOf = args.asOf ?? Date.now();
-    const operatingPeriod = await resolveReportingOperatingPeriodWithCtx(ctx, { occurrenceAt: asOf, storeId: args.storeId });
-    if (operatingPeriod.kind !== "resolved") return { descriptor: null, status: "schedule_unavailable" as const };
+    let descriptorAsOf = asOf;
+    const operatingPeriod = await resolveReportingCalendarReferenceWithCtx(ctx, {
+      occurrenceAt: asOf,
+      storeId: args.storeId,
+    });
+    if (operatingPeriod.kind === "resolved") {
+      descriptorAsOf = operatingPeriod.referenceAt;
+    }
+    if (operatingPeriod.kind !== "resolved") return { descriptor: null, status: "timezone_unavailable" as const };
     const preset = args.preset === "wtd" ? "week_to_date" : args.preset === "trailing_30" ? "trailing_30_days" : args.preset;
     const descriptor = resolveReportPeriod({
-      asOf,
+      asOf: descriptorAsOf,
       customRange: preset === "custom" && args.customStartDate && args.customEndDate
         ? { endDate: args.customEndDate, startDate: args.customStartDate }
         : undefined,
       preset,
       operatingDate: operatingPeriod.operatingDate,
-      operatingDayStartsAt: operatingPeriod.startsAt,
-      scheduleVersionId: String(operatingPeriod.scheduleVersionId),
       timezone: operatingPeriod.timezone,
     });
     return {
       descriptor,
       periodKey: args.preset === "custom" ? `${descriptor.current.startDate}:${descriptor.current.endDate}` : args.preset,
-      scheduleVersionId: operatingPeriod.scheduleVersionId,
+      timezoneVersionId: operatingPeriod.timezoneVersionId,
       status: "resolved" as const,
     };
   },
@@ -882,6 +977,7 @@ export const listReportItems = query({
       return {
         ...row,
         identity: { category, product, sku },
+        metrics: presentReportItemMetrics(row.metrics),
         revenueCurrencyCode: row.revenueCurrencyCode ?? null,
         revenueCurrencyMinorUnitScale: row.revenueCurrencyMinorUnitScale ?? null,
         valuationCurrencyCode: row.valuationCurrencyCode ?? null,
@@ -968,6 +1064,7 @@ export const listReportInventory = query({
       continueCursor: page.isDone ? "" : encodeReportingCursor({ contextKey: cursorContextKey, cursor: page.continueCursor, version: 1 }),
       cursorContextKey,
       generationId: generation._id,
+      inventoryLimitingReason: generation.limitingReason ?? null,
       movementGenerationId: compatibleMovementGeneration?._id ?? null,
       movementLimitingReason: movementGeneration && !compatibleMovementGeneration ? "generation_incompatible" : null,
       movementSummary: resolvedMovementSummary,
@@ -990,10 +1087,10 @@ export const getReportItemDetail = query({
     const [skuGeneration, inventoryGeneration, periodStartRange, periodEndRange] = await Promise.all([
       getActiveGeneration(ctx, args.storeId, "sku_day"),
       getActiveGeneration(ctx, args.storeId, "current_inventory"),
-      resolveReportingOperatingDateRangeWithCtx(ctx, { operatingDate: descriptor.current.startDate, storeId: args.storeId }),
-      resolveReportingOperatingDateRangeWithCtx(ctx, { operatingDate: descriptor.current.endDate, storeId: args.storeId }),
+      resolveReportingCalendarDateRangeWithCtx(ctx, { reportingDate: descriptor.current.startDate, storeId: args.storeId }),
+      resolveReportingCalendarDateRangeWithCtx(ctx, { reportingDate: descriptor.current.endDate, storeId: args.storeId }),
     ]);
-    if (periodStartRange.kind !== "resolved" || periodEndRange.kind !== "resolved") return { data: null, status: "schedule_unavailable" as const };
+    if (periodStartRange.kind !== "resolved" || periodEndRange.kind !== "resolved") return { data: null, status: "timezone_unavailable" as const };
     if (!skuGeneration) return { data: null, status: "pre_cutover" as const };
     const [skuEpoch, inventoryEpoch] = await Promise.all([getActiveWorkspaceEpoch(ctx, skuGeneration), inventoryGeneration ? getActiveWorkspaceEpoch(ctx, inventoryGeneration) : null]);
     if (!skuEpoch) return { data: null, status: "materializing" as const };
@@ -1052,7 +1149,7 @@ export const getReportItemDetail = query({
       inventoryLimitingReason:
         inventoryGeneration && !compatibleInventoryGeneration
           ? "generation_incompatible"
-          : null,
+          : compatibleInventoryGeneration?.limitingReason ?? null,
       status: skuGeneration.status,
     };
   },
@@ -1066,6 +1163,24 @@ const reportsCustomResultFamilyValidator = v.union(
   v.literal("facet"),
   v.literal("movement"),
 );
+
+export function customRangeSkuTerminalIsReadable(input: {
+  cursor: Parameters<typeof skuAttributionTerminalIsCurrent>[0]["cursor"];
+  generationTerminal?: number;
+  requestedSurface: "overview" | "sku_dependent";
+  runTerminal?: number;
+  workspaceTerminal?: number;
+}) {
+  if (
+    input.runTerminal !== input.generationTerminal ||
+    input.runTerminal !== input.workspaceTerminal
+  ) return false;
+  return input.requestedSurface === "overview" ||
+    skuAttributionTerminalIsCurrent({
+      cursor: input.cursor,
+      terminal: input.runTerminal,
+    });
+}
 
 /**
  * One authenticated, generation-bound read contract for every Reports custom
@@ -1110,6 +1225,18 @@ export const getReportsCustomRange = query({
     }
     const workspaceEpoch = await getActiveWorkspaceEpoch(ctx, generation);
     if (!workspaceEpoch) return { continueCursor: "", data: null, isDone: true, page: [], status: "materializing" as const };
+    const attributionCursor = args.family === "overview"
+      ? null
+      : await currentSkuAttributionCursorWithCtx(ctx, args.storeId);
+    if (!customRangeSkuTerminalIsReadable({
+      cursor: attributionCursor,
+      generationTerminal: generation.skuAttributionTerminalSequence,
+      requestedSurface: args.family === "overview" ? "overview" : "sku_dependent",
+      runTerminal: run.skuAttributionTerminalSequence,
+      workspaceTerminal: workspaceEpoch.skuAttributionTerminalSequence,
+    })) {
+      return { continueCursor: "", data: null, isDone: true, page: [], status: "unavailable" as const };
+    }
     const cursorContextKey = buildCursorContextKey({
       contractVersions: `${generation.factContractVersion}:${generation.metricContractVersion}:${generation.projectionContractVersion}`,
       filter: args.family,
@@ -1177,12 +1304,24 @@ export const getReportsCustomRangePresentation = query({
     }
     const workspaceEpoch = await getActiveWorkspaceEpoch(ctx, generation);
     if (!workspaceEpoch) return { continueCursor: "", data: null, isDone: true, page: [], status: "materializing" as const };
+    const attributionCursor = args.surface === "overview"
+      ? null
+      : await currentSkuAttributionCursorWithCtx(ctx, args.storeId);
+    if (!customRangeSkuTerminalIsReadable({
+      cursor: attributionCursor,
+      generationTerminal: generation.skuAttributionTerminalSequence,
+      requestedSurface: args.surface === "overview" ? "overview" : "sku_dependent",
+      runTerminal: run.skuAttributionTerminalSequence,
+      workspaceTerminal: workspaceEpoch.skuAttributionTerminalSequence,
+    })) {
+      return { continueCursor: "", data: null, isDone: true, page: [], status: "unavailable" as const };
+    }
     const [startPeriod, endPeriod] = await Promise.all([
-      resolveReportingOperatingDateRangeWithCtx(ctx, { operatingDate: run.rangeStartDate, storeId: args.storeId }),
-      resolveReportingOperatingDateRangeWithCtx(ctx, { operatingDate: run.rangeEndDate, storeId: args.storeId }),
+      resolveReportingCalendarDateRangeWithCtx(ctx, { reportingDate: run.rangeStartDate, storeId: args.storeId }),
+      resolveReportingCalendarDateRangeWithCtx(ctx, { reportingDate: run.rangeEndDate, storeId: args.storeId }),
     ]);
     if (startPeriod.kind !== "resolved" || endPeriod.kind !== "resolved") {
-      return { continueCursor: "", data: null, isDone: true, page: [], status: "schedule_unavailable" as const };
+      return { continueCursor: "", data: null, isDone: true, page: [], status: "timezone_unavailable" as const };
     }
     const customPeriodKey = `${run.rangeStartDate}:${run.rangeEndDate}`;
     const movementSummary = await ctx.db.query("reportingInventoryPeriodSummary")
@@ -1249,7 +1388,7 @@ export const getReportsCustomRangePresentation = query({
     const isDone = summaryPage.isDone;
     return {
       continueCursor: isDone ? "" : encodeReportingCursor({ contextKey, cursor: summaryPage.continueCursor, version: 1 }),
-      data: { ...authority, classification, inventoryLimitingReason: currentInventory && !inventoryCompatible ? "generation_incompatible" : null, sort, trust: { completeness: page.every((row) => row.trust.completeness === "complete") ? "complete" : "partial", limitingReason: page.find((row) => row.trust.limitingReason)?.trust.limitingReason ?? generation.limitingReason ?? null } },
+      data: { ...authority, classification, inventoryLimitingReason: currentInventory && !inventoryCompatible ? "generation_incompatible" : currentInventory?.limitingReason ?? null, sort, trust: { completeness: page.every((row) => row.trust.completeness === "complete") ? "complete" : "partial", limitingReason: page.find((row) => row.trust.limitingReason)?.trust.limitingReason ?? generation.limitingReason ?? null } },
       isDone, page, status: "verified" as const,
     };
   },

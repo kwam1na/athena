@@ -12,6 +12,12 @@ import { v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
 import { requireReportingStoreAccess } from "./access";
 import { assertReportingRunTransition } from "./maintenance/runLedger";
+import {
+  getActiveReadBundleWithCtx,
+  skuAttributionTerminalIsCurrent,
+} from "./readModels/readBundle";
+import { getExactActiveWorkspaceEpochWithCtx } from "./readModels/materialize";
+import { currentSkuAttributionCursorWithCtx } from "./skuAttributionSequence";
 
 export type CustomRangeRequest = {
   endOperatingDate: string;
@@ -21,6 +27,20 @@ export type CustomRangeRequest = {
   startOperatingDate: string;
   storeId: string;
 };
+
+export function customRangeSkuSourceTerminalIsCurrent(input: {
+  cursor: Parameters<typeof skuAttributionTerminalIsCurrent>[0]["cursor"];
+  runTerminal?: number;
+  skuGenerationTerminal?: number;
+}) {
+  return (
+    input.runTerminal === input.skuGenerationTerminal &&
+    skuAttributionTerminalIsCurrent({
+      cursor: input.cursor,
+      terminal: input.skuGenerationTerminal,
+    })
+  );
+}
 
 type CustomRangeRun = {
   requestKey: string;
@@ -39,28 +59,25 @@ type CustomRangeSourceAuthority = {
 
 export function customRangeSourcesAreAuthoritative(input: {
   authority: CustomRangeSourceAuthority;
-  skuActivation: null | { factContractVersion: number; generationId: string; metricContractVersion: number; organizationId: string; projectionContractVersion: number; storeId: string; supersededAt?: number };
+  skuMember: null | { generationId: string; projectionKind: string };
   skuGeneration: null | { factContractVersion: number; metricContractVersion: number; organizationId: string; projectionContractVersion: number; projectionKind: string; sourceWatermark: number; stableWatermark?: number; status: string; storeId: string; generationId: string };
-  storeActivation: null | { factContractVersion: number; generationId: string; metricContractVersion: number; organizationId: string; projectionContractVersion: number; storeId: string; supersededAt?: number };
+  storeMember: null | { generationId: string; projectionKind: string };
   storeGeneration: null | { factContractVersion: number; metricContractVersion: number; organizationId: string; projectionContractVersion: number; projectionKind: string; sourceWatermark: number; stableWatermark?: number; status: string; storeId: string; generationId: string };
 }) {
-  const { authority, skuActivation, skuGeneration, storeActivation, storeGeneration } = input;
+  const { authority, skuGeneration, skuMember, storeGeneration, storeMember } = input;
   const generationMatches = (generation: NonNullable<typeof storeGeneration>, kind: "store_day" | "sku_day") =>
-    generation.projectionKind === kind && generation.status === "active" &&
+    generation.projectionKind === kind &&
+    (generation.status === "active" || generation.status === "superseded") &&
     generation.storeId === authority.storeId && generation.organizationId === authority.organizationId &&
     generation.sourceWatermark === authority.stableWatermark && generation.stableWatermark === authority.stableWatermark &&
     generation.factContractVersion === authority.factContractVersion &&
     generation.metricContractVersion === authority.metricContractVersion &&
     generation.projectionContractVersion === authority.projectionContractVersion;
-  const activationMatches = (activation: NonNullable<typeof storeActivation>, generationId: string) =>
-    activation.supersededAt === undefined && activation.generationId === generationId &&
-    activation.storeId === authority.storeId && activation.organizationId === authority.organizationId &&
-    activation.factContractVersion === authority.factContractVersion &&
-    activation.metricContractVersion === authority.metricContractVersion &&
-    activation.projectionContractVersion === authority.projectionContractVersion;
-  return Boolean(storeGeneration && skuGeneration && storeActivation && skuActivation &&
+  const memberMatches = (member: NonNullable<typeof storeMember>, generationId: string, kind: "store_day" | "sku_day") =>
+    member.generationId === generationId && member.projectionKind === kind;
+  return Boolean(storeGeneration && skuGeneration && storeMember && skuMember &&
     generationMatches(storeGeneration, "store_day") && generationMatches(skuGeneration, "sku_day") &&
-    activationMatches(storeActivation, storeGeneration.generationId) && activationMatches(skuActivation, skuGeneration.generationId));
+    memberMatches(storeMember, storeGeneration.generationId, "store_day") && memberMatches(skuMember, skuGeneration.generationId, "sku_day"));
 }
 
 export function classifyCustomRangeSourceRow(
@@ -309,50 +326,37 @@ export const requestCustomRange = mutation({
       ctx,
       args.storeId,
     );
-    const activation = await ctx.db
-      .query("reportingProjectionActivation")
-      .withIndex("by_storeId_projectionKind_activatedAt", (q) =>
-        q.eq("storeId", args.storeId).eq("projectionKind", "store_day"),
-      )
-      .order("desc")
-      .first();
-    if (!activation || activation.supersededAt !== undefined) {
+    const bundle = await getActiveReadBundleWithCtx(ctx, args.storeId);
+    const storeMember = bundle?.members.find(
+      (member) => member.projectionKind === "store_day",
+    );
+    const skuMember = bundle?.members.find(
+      (member) => member.projectionKind === "sku_day",
+    );
+    if (!bundle || !storeMember || !skuMember) {
       throw new Error(
         "Verified reporting data is not available for this store.",
       );
     }
-    const sourceGeneration = await ctx.db.get(
-      "reportingProjectionGeneration",
-      activation.generationId,
-    );
+    const [sourceGeneration, skuSourceGeneration] = await Promise.all([
+      ctx.db.get("reportingProjectionGeneration", storeMember.generationId),
+      ctx.db.get("reportingProjectionGeneration", skuMember.generationId),
+    ]);
     if (
       !sourceGeneration ||
       sourceGeneration.storeId !== args.storeId ||
       sourceGeneration.organizationId !== store.organizationId ||
-      sourceGeneration.status !== "active" ||
+      (sourceGeneration.status !== "active" &&
+        sourceGeneration.status !== "superseded") ||
       sourceGeneration.stableWatermark === undefined ||
       sourceGeneration.sourceWatermark !== sourceGeneration.stableWatermark ||
-      sourceGeneration.factContractVersion !== activation.factContractVersion ||
-      sourceGeneration.metricContractVersion !==
-        activation.metricContractVersion ||
-      sourceGeneration.projectionContractVersion !==
-        activation.projectionContractVersion
+      sourceGeneration.stableWatermark !== bundle.sourceWatermark
     ) {
       throw new Error(
         "Verified reporting data is not available for this store.",
       );
     }
     const requestedWatermark = sourceGeneration.stableWatermark;
-    const skuActivation = await ctx.db
-      .query("reportingProjectionActivation")
-      .withIndex("by_storeId_projectionKind_activatedAt", (q) =>
-        q.eq("storeId", args.storeId).eq("projectionKind", "sku_day"),
-      )
-      .order("desc")
-      .first();
-    const skuSourceGeneration = skuActivation
-      ? await ctx.db.get("reportingProjectionGeneration", skuActivation.generationId)
-      : null;
     if (!customRangeSourcesAreAuthoritative({
       authority: {
         factContractVersion: sourceGeneration.factContractVersion,
@@ -362,14 +366,25 @@ export const requestCustomRange = mutation({
         stableWatermark: requestedWatermark,
         storeId: String(args.storeId),
       },
-      skuActivation: skuActivation ? { ...skuActivation, generationId: String(skuActivation.generationId), organizationId: String(skuActivation.organizationId), storeId: String(skuActivation.storeId) } : null,
+      skuMember: { generationId: String(skuMember.generationId), projectionKind: skuMember.projectionKind },
       skuGeneration: skuSourceGeneration ? { ...skuSourceGeneration, generationId: String(skuSourceGeneration._id), organizationId: String(skuSourceGeneration.organizationId), storeId: String(skuSourceGeneration.storeId) } : null,
-      storeActivation: { ...activation, generationId: String(activation.generationId), organizationId: String(activation.organizationId), storeId: String(activation.storeId) },
+      storeMember: { generationId: String(storeMember.generationId), projectionKind: storeMember.projectionKind },
       storeGeneration: { ...sourceGeneration, generationId: String(sourceGeneration._id), organizationId: String(sourceGeneration.organizationId), storeId: String(sourceGeneration.storeId) },
     })) {
       throw new Error("Verified SKU reporting data is not available for this store.");
     }
     if (!skuSourceGeneration) {
+      throw new Error("Verified SKU reporting data is not available for this store.");
+    }
+    const attributionCursor = await currentSkuAttributionCursorWithCtx(
+      ctx,
+      args.storeId,
+    );
+    if (!skuAttributionTerminalIsCurrent({
+      cursor: attributionCursor,
+      terminal:
+        skuSourceGeneration.skuAttributionTerminalSequence,
+    })) {
       throw new Error("Verified SKU reporting data is not available for this store.");
     }
     const request = {
@@ -470,6 +485,8 @@ export const requestCustomRange = mutation({
       runType: "custom_range",
       sourceGenerationId: sourceGeneration._id,
       sourceGenerationIds: [sourceGeneration._id, skuSourceGeneration._id],
+      skuAttributionTerminalSequence:
+        skuSourceGeneration.skuAttributionTerminalSequence,
       status: "pending",
       storeId: args.storeId,
     });
@@ -486,6 +503,8 @@ export const requestCustomRange = mutation({
       runId,
       sourceWatermark: requestedWatermark,
       sourceGenerationIds: [sourceGeneration._id, skuSourceGeneration._id],
+      skuAttributionTerminalSequence:
+        skuSourceGeneration.skuAttributionTerminalSequence,
       status: "building",
       storeId: args.storeId,
     });
@@ -518,32 +537,35 @@ async function completeCustomRangeRequest(
   const skuSourceGenerationId = run.sourceGenerationIds?.find(
     (id) => id !== run.sourceGenerationId,
   );
-  const [sourceGeneration, skuSourceGeneration, activation, skuActivation] = await Promise.all([
+  const [sourceGeneration, skuSourceGeneration] = await Promise.all([
     run.sourceGenerationId
       ? ctx.db.get("reportingProjectionGeneration", run.sourceGenerationId)
       : null,
     skuSourceGenerationId
       ? ctx.db.get("reportingProjectionGeneration", skuSourceGenerationId)
       : null,
-    ctx.db
-      .query("reportingProjectionActivation")
-      .withIndex("by_storeId_projectionKind_activatedAt", (q) =>
-        q.eq("storeId", run.storeId).eq("projectionKind", "store_day"),
-      )
-      .order("desc")
-      .first(),
-    ctx.db.query("reportingProjectionActivation")
-      .withIndex("by_storeId_projectionKind_activatedAt", (q) =>
-        q.eq("storeId", run.storeId).eq("projectionKind", "sku_day"),
-      ).order("desc").first(),
   ]);
+  const attributionCursor = await currentSkuAttributionCursorWithCtx(
+    ctx,
+    run.storeId,
+  );
   const sourceStillAuthoritative = customRangeSourcesAreAuthoritative({
     authority: { factContractVersion: run.factContractVersion, metricContractVersion: run.metricContractVersion, organizationId: String(run.organizationId), projectionContractVersion: run.projectionContractVersion, stableWatermark: run.frozenWatermark, storeId: String(run.storeId) },
-    skuActivation: skuActivation ? { ...skuActivation, generationId: String(skuActivation.generationId), organizationId: String(skuActivation.organizationId), storeId: String(skuActivation.storeId) } : null,
+    skuMember: skuSourceGenerationId
+      ? { generationId: String(skuSourceGenerationId), projectionKind: "sku_day" }
+      : null,
     skuGeneration: skuSourceGeneration ? { ...skuSourceGeneration, generationId: String(skuSourceGeneration._id), organizationId: String(skuSourceGeneration.organizationId), storeId: String(skuSourceGeneration.storeId) } : null,
-    storeActivation: activation ? { ...activation, generationId: String(activation.generationId), organizationId: String(activation.organizationId), storeId: String(activation.storeId) } : null,
+    storeMember: run.sourceGenerationId
+      ? { generationId: String(run.sourceGenerationId), projectionKind: "store_day" }
+      : null,
     storeGeneration: sourceGeneration ? { ...sourceGeneration, generationId: String(sourceGeneration._id), organizationId: String(sourceGeneration.organizationId), storeId: String(sourceGeneration.storeId) } : null,
-  });
+  }) &&
+    customRangeSkuSourceTerminalIsCurrent({
+      cursor: attributionCursor,
+      runTerminal: run.skuAttributionTerminalSequence,
+      skuGenerationTerminal:
+        skuSourceGeneration?.skuAttributionTerminalSequence,
+    });
   const incompleteSourceCount = run.omittedCount ?? 0;
   if (!sourceStillAuthoritative || incompleteSourceCount > 0) {
     await ctx.db.patch("reportingProjectionGeneration", run.generationId, {
@@ -724,10 +746,15 @@ export const processCustomRangeRequestMutation = internalMutation({
     const skuSourceGeneration = skuSourceGenerationId
       ? await ctx.db.get("reportingProjectionGeneration", skuSourceGenerationId)
       : null;
+    const attributionCursor = await currentSkuAttributionCursorWithCtx(
+      ctx,
+      run.storeId,
+    );
     if (
       !sourceGeneration ||
       sourceGeneration.storeId !== run.storeId ||
-      sourceGeneration.status !== "active" ||
+      (sourceGeneration.status !== "active" &&
+        sourceGeneration.status !== "superseded") ||
       sourceGeneration.sourceWatermark !== run.frozenWatermark ||
       sourceGeneration.stableWatermark !== run.frozenWatermark ||
       sourceGeneration.factContractVersion !== run.factContractVersion ||
@@ -738,48 +765,27 @@ export const processCustomRangeRequestMutation = internalMutation({
       skuSourceGeneration.projectionKind !== "sku_day" ||
       skuSourceGeneration.storeId !== run.storeId ||
       skuSourceGeneration.organizationId !== run.organizationId ||
-      skuSourceGeneration.status !== "active" ||
+      (skuSourceGeneration.status !== "active" &&
+        skuSourceGeneration.status !== "superseded") ||
       skuSourceGeneration.sourceWatermark !== run.frozenWatermark ||
       skuSourceGeneration.stableWatermark !== run.frozenWatermark ||
       skuSourceGeneration.factContractVersion !== run.factContractVersion ||
       skuSourceGeneration.metricContractVersion !== run.metricContractVersion ||
       skuSourceGeneration.projectionContractVersion !== run.projectionContractVersion
+      || !customRangeSkuSourceTerminalIsCurrent({
+        cursor: attributionCursor,
+        runTerminal: run.skuAttributionTerminalSequence,
+        skuGenerationTerminal:
+          skuSourceGeneration.skuAttributionTerminalSequence,
+      })
     ) {
       throw new Error("Custom range source generation changed");
     }
-    const activation = await ctx.db
-      .query("reportingProjectionActivation")
-      .withIndex("by_storeId_projectionKind_activatedAt", (q) =>
-        q.eq("storeId", run.storeId).eq("projectionKind", "store_day"),
-      )
-      .order("desc")
-      .first();
-    if (
-      !activation ||
-      activation.supersededAt !== undefined ||
-      activation.generationId !== sourceGeneration._id
-    ) {
-      throw new Error("Custom range source generation is no longer active");
-    }
-    const skuActivation = await ctx.db
-      .query("reportingProjectionActivation")
-      .withIndex("by_storeId_projectionKind_activatedAt", (q) =>
-        q.eq("storeId", run.storeId).eq("projectionKind", "sku_day"),
-      )
-      .order("desc")
-      .first();
-    if (
-      !skuActivation ||
-      skuActivation.supersededAt !== undefined ||
-      skuActivation.generationId !== skuSourceGeneration._id
-    ) {
-      throw new Error("Custom range SKU source generation is no longer active");
-    }
     if (!customRangeSourcesAreAuthoritative({
       authority: { factContractVersion: run.factContractVersion, metricContractVersion: run.metricContractVersion, organizationId: String(run.organizationId), projectionContractVersion: run.projectionContractVersion, stableWatermark: run.frozenWatermark, storeId: String(run.storeId) },
-      skuActivation: { ...skuActivation, generationId: String(skuActivation.generationId), organizationId: String(skuActivation.organizationId), storeId: String(skuActivation.storeId) },
+      skuMember: { generationId: String(skuSourceGeneration._id), projectionKind: "sku_day" },
       skuGeneration: { ...skuSourceGeneration, generationId: String(skuSourceGeneration._id), organizationId: String(skuSourceGeneration.organizationId), storeId: String(skuSourceGeneration.storeId) },
-      storeActivation: { ...activation, generationId: String(activation.generationId), organizationId: String(activation.organizationId), storeId: String(activation.storeId) },
+      storeMember: { generationId: String(sourceGeneration._id), projectionKind: "store_day" },
       storeGeneration: { ...sourceGeneration, generationId: String(sourceGeneration._id), organizationId: String(sourceGeneration.organizationId), storeId: String(sourceGeneration.storeId) },
     })) {
       throw new Error("Custom range source authority changed");
@@ -1095,8 +1101,13 @@ export const readCustomRangeStatus = internalQuery({
     ) {
       throw new Error(REPORTING_DIRECT_ACCESS_UNAVAILABLE);
     }
-    const workspaceActivation = run.generationId ? await ctx.db.query("reportingWorkspaceReadModelActivation").withIndex("by_storeId_projectionKind_activatedAt", (q) => q.eq("storeId", run.storeId).eq("projectionKind", "custom_range")).order("desc").first() : null;
-    const materializationReady = Boolean(workspaceActivation && workspaceActivation.supersededAt === undefined && workspaceActivation.sourceGenerationId === run.generationId);
+    const workspaceEpoch = run.generationId && run.frozenWatermark !== undefined
+      ? await getExactActiveWorkspaceEpochWithCtx(ctx, {
+          generationId: run.generationId,
+          sourceWatermark: run.frozenWatermark,
+        })
+      : null;
+    const materializationReady = workspaceEpoch !== null;
     return {
       failedCount: run.failedCount,
       generationId: run.generationId ?? null,
@@ -1156,8 +1167,6 @@ export const readCustomRangeResult = internalQuery({
     if (run.status !== "completed" || !run.generationId) {
       return null;
     }
-    const workspaceActivation = await ctx.db.query("reportingWorkspaceReadModelActivation").withIndex("by_storeId_projectionKind_activatedAt", (q) => q.eq("storeId", run.storeId).eq("projectionKind", "custom_range")).order("desc").first();
-    if (!workspaceActivation || workspaceActivation.supersededAt !== undefined || workspaceActivation.sourceGenerationId !== run.generationId) return null;
     const generation = await ctx.db.get(
       "reportingProjectionGeneration",
       run.generationId,
@@ -1188,6 +1197,12 @@ export const readCustomRangeResult = internalQuery({
     ) {
       throw new Error(REPORTING_DIRECT_ACCESS_UNAVAILABLE);
     }
+    if (generation.stableWatermark === undefined) return null;
+    const workspaceEpoch = await getExactActiveWorkspaceEpochWithCtx(ctx, {
+      generationId: generation._id,
+      sourceWatermark: generation.stableWatermark,
+    });
+    if (!workspaceEpoch) return null;
     const resultFamily = args.resultFamily ?? "overview";
     const result = await ctx.db
       .query("reportingRangeProjection")

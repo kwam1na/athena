@@ -18,6 +18,8 @@ type ProjectionKind = "store_day" | "sku_day";
 function lineageFields(fact: Doc<"reportingFact">) {
   reportingPeriodLineage(fact);
   return {
+    timezoneVersionId: fact.timezoneVersionId,
+    timezoneVersionHash: fact.timezoneVersionHash,
     scheduleVersionId: fact.scheduleVersionId,
     historicalInterpretationPolicyId: fact.historicalInterpretationPolicyId,
     historicalInterpretationPolicyHash: fact.historicalInterpretationPolicyHash,
@@ -25,13 +27,12 @@ function lineageFields(fact: Doc<"reportingFact">) {
 }
 
 function sameLineage(
-  row: Pick<Doc<"reportingStoreDayProjection">, "scheduleVersionId" | "historicalInterpretationPolicyId" | "historicalInterpretationPolicyHash">,
+  row: Pick<Doc<"reportingStoreDayProjection">, "timezoneVersionId" | "timezoneVersionHash">,
   fact: Doc<"reportingFact">,
 ) {
   return (
-    row.scheduleVersionId === fact.scheduleVersionId &&
-    row.historicalInterpretationPolicyId === fact.historicalInterpretationPolicyId &&
-    row.historicalInterpretationPolicyHash === fact.historicalInterpretationPolicyHash
+    row.timezoneVersionId === fact.timezoneVersionId &&
+    row.timezoneVersionHash === fact.timezoneVersionHash
   );
 }
 
@@ -81,6 +82,12 @@ export function minorUnitScaleForFactMetric(
   return fact.revenueCurrencyMinorUnitScale ?? fact.currencyMinorUnitScale;
 }
 
+export function attributedProjectionProductSkuId(
+  fact: Pick<Doc<"reportingFact">, "canonicalProductSkuId" | "productSkuId">,
+) {
+  return fact.canonicalProductSkuId ?? fact.productSkuId;
+}
+
 export function factContributionProjectionEligibility(input: {
   fact: Doc<"reportingFact">;
   metric: ReportingMetricName;
@@ -91,7 +98,7 @@ export function factContributionProjectionEligibility(input: {
   }
   if (
     input.projectionKind === "sku_day" &&
-    !(input.fact.canonicalProductSkuId ?? input.fact.productSkuId)
+    !attributedProjectionProductSkuId(input.fact)
   ) {
     return "missing_sku";
   }
@@ -196,7 +203,7 @@ async function insertEvidence(
     operatingDate: fact.operatingDate,
     ...lineageFields(fact),
     organizationId: fact.organizationId,
-    productSkuId: fact.canonicalProductSkuId ?? fact.productSkuId,
+    productSkuId: attributedProjectionProductSkuId(fact),
     recognitionProductSkuId: fact.recognitionProductSkuId ?? fact.productSkuId,
     originalProductSkuId: fact.originalProductSkuId,
     provisionalProductSkuId: fact.provisionalProductSkuId,
@@ -251,34 +258,18 @@ async function applyStoreDayContribution(
   if (!QUANTITY_METRICS.has(metric) && contributionCurrency === undefined) {
     return;
   }
-  const rows = fact.scheduleVersionId
-    ? await ctx.db
-        .query("reportingStoreDayProjection")
-        .withIndex(
-          "by_gen_date_metric_schedule",
-          (q) =>
-            q
-              .eq("generationId", generation._id)
-              .eq("operatingDate", fact.operatingDate)
-              .eq("metric", metric)
-              .eq("scheduleVersionId", fact.scheduleVersionId),
-        )
-        .take(2)
-    : await ctx.db
-        .query("reportingStoreDayProjection")
-        .withIndex(
-          "by_gen_date_metric_policy",
-          (q) =>
-            q
-              .eq("generationId", generation._id)
-              .eq("operatingDate", fact.operatingDate)
-              .eq("metric", metric)
-              .eq(
-                "historicalInterpretationPolicyId",
-                fact.historicalInterpretationPolicyId,
-              ),
-        )
-        .take(2);
+  if (!fact.timezoneVersionId || !fact.timezoneVersionHash) {
+    throw new Error("Reporting fact requires timezone lineage");
+  }
+  const rows = await ctx.db
+    .query("reportingStoreDayProjection")
+    .withIndex("by_gen_date_metric_timezone", (q) =>
+      q.eq("generationId", generation._id)
+        .eq("operatingDate", fact.operatingDate)
+        .eq("metric", metric)
+        .eq("timezoneVersionId", fact.timezoneVersionId),
+    )
+    .take(2);
   if (rows.length > 1) {
     throw new Error("Store-day projection lineage identity is not unique");
   }
@@ -335,44 +326,26 @@ async function applySkuDayContribution(
   value: number,
   now: number,
 ) {
-  const attributedProductSkuId =
-    fact.canonicalProductSkuId ?? fact.productSkuId;
+  const attributedProductSkuId = attributedProjectionProductSkuId(fact);
   if (!attributedProductSkuId) return;
   if (await alreadyProjected(ctx, generation._id, fact._id, metric)) return;
   const contributionCurrency = currencyForFactMetric(fact, metric);
   if (!QUANTITY_METRICS.has(metric) && contributionCurrency === undefined) {
     return;
   }
-  const rows = fact.scheduleVersionId
-    ? await ctx.db
-        .query("reportingSkuDayProjection")
-        .withIndex(
-          "by_gen_sku_date_metric_schedule",
-          (q) =>
-            q
-              .eq("generationId", generation._id)
-              .eq("productSkuId", attributedProductSkuId)
-              .eq("operatingDate", fact.operatingDate)
-              .eq("metric", metric)
-              .eq("scheduleVersionId", fact.scheduleVersionId),
-        )
-        .take(2)
-    : await ctx.db
-        .query("reportingSkuDayProjection")
-        .withIndex(
-          "by_gen_sku_date_metric_policy",
-          (q) =>
-            q
-              .eq("generationId", generation._id)
-              .eq("productSkuId", attributedProductSkuId)
-              .eq("operatingDate", fact.operatingDate)
-              .eq("metric", metric)
-              .eq(
-                "historicalInterpretationPolicyId",
-                fact.historicalInterpretationPolicyId,
-              ),
-        )
-        .take(2);
+  if (!fact.timezoneVersionId || !fact.timezoneVersionHash) {
+    throw new Error("Reporting fact requires timezone lineage");
+  }
+  const rows = await ctx.db
+    .query("reportingSkuDayProjection")
+    .withIndex("by_gen_sku_date_metric_timezone", (q) =>
+      q.eq("generationId", generation._id)
+        .eq("productSkuId", attributedProductSkuId)
+        .eq("operatingDate", fact.operatingDate)
+        .eq("metric", metric)
+        .eq("timezoneVersionId", fact.timezoneVersionId),
+    )
+    .take(2);
   if (rows.length > 1) {
     throw new Error("SKU-day projection lineage identity is not unique");
   }
@@ -505,8 +478,7 @@ export async function reattributeFactInActiveSkuProjectionWithCtx(
   },
 ) {
   const generation = await activeGeneration(ctx, input.fact.storeId, "sku_day");
-  const previousProductSkuId =
-    input.fact.canonicalProductSkuId ?? input.fact.productSkuId;
+  const previousProductSkuId = attributedProjectionProductSkuId(input.fact);
   if (
     !generation ||
     !previousProductSkuId ||
@@ -758,8 +730,7 @@ export const processCanonicalFacts = internalMutation({
       if (skuGeneration) {
         await applyFactToGenerationWithCtx(ctx, skuGeneration, fact);
       }
-      const attributedProductSkuId =
-        fact.canonicalProductSkuId ?? fact.productSkuId;
+      const attributedProductSkuId = attributedProjectionProductSkuId(fact);
       if (attributedProductSkuId && skuGeneration?.status === "active") {
         await scheduleActiveSkuInsightRefreshWithCtx(ctx, {
           operatingDate: fact.operatingDate,

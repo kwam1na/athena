@@ -67,6 +67,7 @@ import {
   reportingLineCostFromEffect,
   uncostedOutboundBasis,
 } from "../../../reporting/inventory/commerceEffects";
+import { appendPosLifecycleJournalWithCtx } from "../../infrastructure/posLifecycleJournal";
 
 type InventoryImportProvisionalSkuId = Id<"inventoryImportProvisionalSku">;
 
@@ -105,6 +106,38 @@ type TransactionTotals = {
   tax: number;
   total: number;
 };
+
+async function appendCompletedPosLifecycleJournal(
+  ctx: MutationCtx,
+  args: {
+    completedAt: number;
+    organizationId?: Id<"organization">;
+    storeId: Id<"store">;
+    totals: TransactionTotals;
+    transactionId: Id<"posTransaction">;
+  },
+) {
+  if (!args.organizationId) {
+    throw new Error("Completed POS sale organization could not be resolved.");
+  }
+  return appendPosLifecycleJournalWithCtx(ctx, {
+    organizationId: args.organizationId,
+    storeId: args.storeId,
+    transactionId: args.transactionId,
+    eventKind: "completed",
+    eventKey: `pos:${args.transactionId}:completed`,
+    contentFingerprint: [
+      "pos-lifecycle-completed-v1",
+      args.transactionId,
+      args.completedAt,
+      args.totals.subtotal,
+      args.totals.tax,
+      args.totals.total,
+    ].join(":"),
+    occurredAt: args.completedAt,
+    origin: "cloud",
+  });
+}
 
 function reportingCurrency(currency: string | undefined) {
   const currencyCode = currency?.trim().toUpperCase();
@@ -1145,6 +1178,13 @@ export async function completeTransaction(
     receiptPrinted: false,
   });
   const store = await getStoreById(ctx, args.storeId);
+  await appendCompletedPosLifecycleJournal(ctx, {
+    completedAt,
+    organizationId: store?.organizationId,
+    storeId: args.storeId,
+    totals: canonicalTotals,
+    transactionId,
+  });
 
   if (args.registerSessionId) {
     const sessionTerminalId = args.terminalId;
@@ -2021,6 +2061,27 @@ async function applyApprovedTransactionVoid(
     voidOperationalEventId: event?._id,
   });
 
+  if (!store?.organizationId) {
+    throw new Error("Voided POS sale organization could not be resolved.");
+  }
+  await appendPosLifecycleJournalWithCtx(ctx, {
+    organizationId: store.organizationId,
+    storeId: args.transaction.storeId,
+    transactionId: args.transaction._id,
+    eventKind: "voided",
+    eventKey: `pos:${args.transaction._id}:void`,
+    contentFingerprint: [
+      "pos-lifecycle-void-v1",
+      args.transaction._id,
+      voidedAt,
+      args.transaction.subtotal,
+      args.transaction.tax,
+      args.transaction.total,
+    ].join(":"),
+    occurredAt: voidedAt,
+    origin: "cloud",
+  });
+
   await appendPosVoidIngress(ctx, {
     acceptedAt: voidedAt,
     items: args.items,
@@ -2550,6 +2611,13 @@ export async function createTransactionFromSessionHandler(
     notes: args.notes,
   });
   const store = await getStoreById(ctx, session.storeId);
+  await appendCompletedPosLifecycleJournal(ctx, {
+    completedAt,
+    organizationId: store?.organizationId,
+    storeId: session.storeId,
+    totals: canonicalTotals,
+    transactionId,
+  });
 
   if (args.recordRegisterSale !== false) {
     await recordRegisterSessionSale(ctx, {

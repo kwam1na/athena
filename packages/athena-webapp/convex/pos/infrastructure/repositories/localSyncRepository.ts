@@ -42,6 +42,7 @@ import type {
 import { listRegisterSessionCloseoutHolds } from "../../application/sync/registerSessionCloseoutHolds";
 import { validatePosLocalStaffProofWithCtx } from "../../application/sync/staffProofValidation";
 import { appendReportingIngressWithCtx } from "../../../reporting/ingress";
+import { appendPosLifecycleJournalWithCtx } from "../posLifecycleJournal";
 import { applyCommerceInventoryEffectWithCtx } from "../../../reporting/inventory/commerceEffects";
 import {
   createPosLocalSyncMappingWithAuthority,
@@ -951,7 +952,7 @@ export function createConvexLocalSyncRepository(
       });
     },
     async createTransaction(input) {
-      return ctx.db.insert("posTransaction", {
+      const transactionId = await ctx.db.insert("posTransaction", {
         transactionNumber: input.transactionNumber,
         storeId: input.storeId,
         sessionId: input.sessionId,
@@ -972,6 +973,29 @@ export function createConvexLocalSyncRepository(
         customerInfo: input.customerInfo,
         receiptPrinted: false,
       });
+      const store = await ctx.db.get("store", input.storeId);
+      if (!store?.organizationId) {
+        throw new Error("Offline POS sale organization could not be resolved.");
+      }
+      await appendPosLifecycleJournalWithCtx(ctx, {
+        organizationId: store.organizationId,
+        storeId: input.storeId,
+        transactionId,
+        localSyncEventId: input.localSyncEventId,
+        eventKind: "completed",
+        eventKey: `pos:${transactionId}:completed`,
+        contentFingerprint: [
+          "pos-lifecycle-completed-v1",
+          transactionId,
+          input.completedAt,
+          input.subtotal,
+          input.tax,
+          input.total,
+        ].join(":"),
+        occurredAt: input.completedAt,
+        origin: "local_sync",
+      });
+      return transactionId;
     },
     async createTransactionItem(input) {
       return ctx.db.insert("posTransactionItem", input as never);

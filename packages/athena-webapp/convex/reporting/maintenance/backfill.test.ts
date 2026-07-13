@@ -2,6 +2,11 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import {
+  classifyPosRefundEvidence,
+  posAdjustmentSourceIsCoherent,
+  posOriginalSaleIdentityMode,
+  posOriginalSaleSourceIsCoherent,
+  posSkuAttributionMatchesSourceItem,
   advanceHistoricalBackfillCursor,
   assertHistoricalBackfillPreviewCompatible,
   classifyHistoricalCommerce,
@@ -15,13 +20,15 @@ import {
   historicalManifestCandidateJson,
   historicalManifestEntryDigest,
   historicalFactMatchesExistingCanonical,
-  historicalPolicyExcludesClosedFact,
   historicalPosCommerceLine,
   HISTORICAL_BACKFILL_SCANNED_SOURCE_DOMAINS,
   mergeHistoricalBackfillAuditCounts,
   normalizeHistoricalFactWithPolicy,
   EMPTY_HISTORICAL_BACKFILL_AUDIT,
   planPaymentAllocationFact,
+  planPosAdjustmentRow,
+  planPosPaymentCorrectionRow,
+  planPosRow,
   planHistoricalProcurementFacts,
   planHistoricalReversalFacts,
   parseHistoricalManifestCandidate,
@@ -31,6 +38,1160 @@ import {
 import { deriveFactMetricContributions } from "../projections/factContributions";
 
 describe("reporting historical backfill", () => {
+  function posPlanningCtx(input: {
+    attributions?: unknown[];
+    items?: unknown[];
+    originalItems?: Array<Record<string, unknown>>;
+    pendingItems?: Array<Record<string, unknown>>;
+    productSkus?: Array<Record<string, unknown>>;
+    services?: unknown[];
+    adjustmentLines?: unknown[];
+    transactions?: Array<Record<string, unknown>>;
+  }) {
+    return {
+      db: {
+        get: async (table: string, id: unknown) => {
+          if (table === "posTransactionItem") {
+            return input.originalItems?.find((row) => row._id === id) ?? null;
+          }
+          if (table === "posTransaction") {
+            return input.transactions?.find((row) => row._id === id) ?? null;
+          }
+          if (table === "productSku") {
+            const configured = input.productSkus?.find(
+              (row) => row._id === id,
+            );
+            if (configured) return configured;
+            const sourceItem = input.items?.find(
+              (row) =>
+                (row as { productSkuId?: unknown }).productSkuId === id,
+            ) as { productId?: unknown } | undefined;
+            return sourceItem
+              ? {
+                  _id: id,
+                  productId: sourceItem.productId,
+                  storeId: "store-1",
+                }
+              : null;
+          }
+          if (table === "product") {
+            return { _id: id, organizationId: "org-1", storeId: "store-1" };
+          }
+          if (table === "serviceCase") {
+            return { _id: id, organizationId: "org-1", storeId: "store-1" };
+          }
+          if (table === "posPendingCheckoutItem") {
+            return (
+              input.pendingItems?.find((row) => row._id === id) ??
+              { _id: id, organizationId: "org-1", storeId: "store-1" }
+            );
+          }
+          if (table === "inventoryImportProvisionalSku") {
+            return { _id: id, organizationId: "org-1", storeId: "store-1" };
+          }
+          return null;
+        },
+        query: (table: string) => ({
+          withIndex: () => ({
+            first: async () =>
+              table === "reportingSkuAttribution"
+                ? (input.attributions?.[0] ?? null)
+                : null,
+            take: async () =>
+              table === "posTransactionItem"
+                ? (input.items ?? [])
+                : table === "posTransactionServiceLine"
+                  ? (input.services ?? [])
+                  : table === "posTransactionAdjustmentLine"
+                    ? (input.adjustmentLines ?? [])
+                    : table === "reportingSkuAttribution"
+                      ? (input.attributions ?? [])
+                      : [],
+          }),
+        }),
+      },
+    } as never;
+  }
+
+  it("plans partial merchandise and service refunds from completed transactions", async () => {
+    const transaction = {
+      _creationTime: 90,
+      _id: "txn-1",
+      completedAt: 100,
+      status: "completed",
+      tax: 0,
+      total: 1_500,
+    } as never;
+    const facts = await planPosRow(
+      posPlanningCtx({
+        items: [
+          {
+            _id: "item-1",
+            isRefunded: true,
+            productId: "product-1",
+            productSkuId: "sku-1",
+            quantity: 2,
+            refundedAt: 120,
+            refundedQuantity: 1,
+            totalPrice: 1_000,
+            unitPrice: 500,
+          },
+        ],
+        services: [
+          {
+            _id: "service-1",
+            isRefunded: true,
+            quantity: 1,
+            refundedAt: 121,
+            refundedQuantity: 1,
+            serviceCaseId: "case-1",
+            totalPrice: 500,
+            unitPrice: 500,
+          },
+        ],
+      }),
+      transaction,
+      { _id: "store-1", currency: "GHS", organizationId: "org-1" } as never,
+      "refund",
+      200,
+    );
+
+    expect(facts).toHaveLength(2);
+    expect(facts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          amountMinor: -500,
+          factType: "refund",
+          productSkuId: "sku-1",
+          quantity: -1,
+        }),
+        expect.objectContaining({
+          amountMinor: -500,
+          factType: "refund",
+          serviceCaseId: "case-1",
+          quantity: -1,
+        }),
+      ]),
+    );
+  });
+
+  it("defers a post-watermark void while preserving the completed sale", async () => {
+    const facts = await planPosRow(
+      posPlanningCtx({
+        items: [
+          {
+            _id: "item-1",
+            productId: "product-1",
+            productSkuId: "sku-1",
+            quantity: 1,
+            totalPrice: 500,
+            unitPrice: 500,
+          },
+        ],
+      }),
+      {
+        _creationTime: 90,
+        _id: "txn-1",
+        completedAt: 100,
+        status: "void",
+        storeId: "store-1",
+        tax: 0,
+        total: 500,
+        voidedAt: 201,
+      } as never,
+      { _id: "store-1", currency: "GHS", organizationId: "org-1" } as never,
+      "void",
+      200,
+    );
+
+    expect(facts).toHaveLength(1);
+    expect(facts[0]).toEqual(
+      expect.objectContaining({ factType: "sale", occurredAt: 100 }),
+    );
+  });
+
+  it("binds pending-checkout attribution into the planned SKU fact", async () => {
+    const facts = await planPosRow(
+      posPlanningCtx({
+        attributions: [
+          {
+            canonicalProductId: "product-canonical",
+            canonicalProductSkuId: "sku-canonical",
+            organizationId: "org-1",
+            originalProductId: "product-1",
+            originalProductSkuId: "sku-provisional",
+            pendingCheckoutItemId: "pending-1",
+            status: "completed",
+            storeId: "store-1",
+          },
+        ],
+        pendingItems: [
+          {
+            _id: "pending-1",
+            organizationId: "org-1",
+            provisionalProductId: "product-1",
+            provisionalProductSkuId: "sku-provisional",
+            status: "flagged",
+            storeId: "store-1",
+          },
+        ],
+        productSkus: [
+          {
+            _id: "sku-canonical",
+            productId: "product-canonical",
+            storeId: "store-1",
+          },
+        ],
+        items: [
+          {
+            _id: "item-1",
+            pendingCheckoutItemId: "pending-1",
+            productId: "product-1",
+            productSkuId: "sku-provisional",
+            quantity: 1,
+            totalPrice: 500,
+            unitPrice: 500,
+          },
+        ],
+      }),
+      {
+        _creationTime: 90,
+        _id: "txn-1",
+        completedAt: 100,
+        status: "completed",
+        storeId: "store-1",
+        tax: 0,
+        total: 500,
+      } as never,
+      { _id: "store-1", currency: "GHS", organizationId: "org-1" } as never,
+    );
+
+    expect(facts[0]).toEqual(
+      expect.objectContaining({
+        attributionKind: "pending_checkout",
+        canonicalProductSkuId: "sku-canonical",
+        pendingCheckoutItemId: "pending-1",
+        provisionalProductSkuId: "sku-provisional",
+      }),
+    );
+  });
+
+  it("classifies malformed partial-refund evidence as blocking", () => {
+    for (const input of [
+      {
+        isRefunded: true,
+        quantity: 2,
+        refundedQuantity: 1,
+      },
+      {
+        isRefunded: true,
+        quantity: 2,
+        refundedAt: 120,
+        refundedQuantity: 0,
+      },
+      {
+        isRefunded: true,
+        quantity: 2,
+        refundedAt: 120,
+        refundedQuantity: 3,
+      },
+      {
+        isRefunded: false,
+        quantity: 2,
+        refundedAt: 120,
+        refundedQuantity: 1,
+      },
+      {
+        isRefunded: true,
+        quantity: 2,
+        refundedAt: 99,
+        refundedQuantity: 1,
+      },
+    ]) {
+      expect(
+        classifyPosRefundEvidence({
+          ...input,
+          completedAt: 100,
+          frozenWatermark: 200,
+        }),
+      ).toEqual({ status: "malformed" });
+    }
+  });
+
+  it("quarantines malformed partial refunds instead of silently skipping them", async () => {
+    const facts = await planPosRow(
+      posPlanningCtx({
+        items: [
+          {
+            _id: "missing-time",
+            isRefunded: true,
+            productId: "product-1",
+            productSkuId: "sku-1",
+            quantity: 2,
+            refundedQuantity: 1,
+            totalPrice: 1_000,
+            unitPrice: 500,
+          },
+          {
+            _id: "too-many",
+            isRefunded: true,
+            productId: "product-2",
+            productSkuId: "sku-2",
+            quantity: 2,
+            refundedAt: 120,
+            refundedQuantity: 3,
+            totalPrice: 1_000,
+            unitPrice: 500,
+          },
+        ],
+      }),
+      {
+        _creationTime: 90,
+        _id: "txn-malformed-refunds",
+        completedAt: 100,
+        status: "completed",
+        tax: 0,
+        total: 2_000,
+      } as never,
+      { _id: "store-1", currency: "GHS", organizationId: "org-1" } as never,
+      "refund",
+      200,
+    );
+
+    expect(facts).toHaveLength(2);
+    expect(facts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          businessEventKey:
+            "pos:txn-malformed-refunds:refund:missing-time:source_incomplete",
+          limitingReason: "source_incomplete",
+        }),
+        expect.objectContaining({
+          businessEventKey:
+            "pos:txn-malformed-refunds:refund:too-many:source_incomplete",
+          limitingReason: "source_incomplete",
+        }),
+      ]),
+    );
+  });
+
+  it("does not invent refund quarantine for an ordinary non-refunded sale", async () => {
+    const facts = await planPosRow(
+      posPlanningCtx({
+        items: [
+          {
+            _id: "item-1",
+            productId: "product-1",
+            productSkuId: "sku-1",
+            quantity: 1,
+            totalPrice: 500,
+            unitPrice: 500,
+          },
+        ],
+      }),
+      {
+        _creationTime: 90,
+        _id: "txn-1",
+        completedAt: 100,
+        status: "completed",
+        tax: 0,
+        total: 500,
+      } as never,
+      { _id: "store-1", currency: "GHS", organizationId: "org-1" } as never,
+      "refund",
+      200,
+    );
+
+    expect(facts).toEqual([]);
+  });
+
+  it("preserves trustworthy transaction money when line identity is unusable", async () => {
+    const facts = await planPosRow(
+      posPlanningCtx({
+        items: Array.from({ length: 101 }, (_, index) => ({ _id: `item-${index}` })),
+      }),
+      {
+        _creationTime: 90,
+        _id: "txn-1",
+        completedAt: 100,
+        status: "completed",
+        tax: 0,
+        total: 12_345,
+      } as never,
+      { _id: "store-1", currency: "GHS", organizationId: "org-1" } as never,
+    );
+
+    expect(facts).toEqual([
+      expect.objectContaining({
+        amountMinor: 12_345,
+        businessEventKey: "pos:txn-1:complete:transaction_summary",
+        completeness: "partial",
+        currency: "GHS",
+        limitingReason: "source_incomplete",
+        quantity: undefined,
+      }),
+    ]);
+  });
+
+  it("classifies negative applied adjustment lines as refund lifecycle facts", async () => {
+    const facts = await planPosAdjustmentRow(
+      posPlanningCtx({
+        adjustmentLines: [
+          {
+            _id: "line-1",
+            adjustmentId: "adjustment-1",
+            correctedQuantity: 1,
+            correctedTotal: 500,
+            inventoryDelta: 1,
+            lineType: "existing",
+            originalQuantity: 2,
+            originalTotal: 1_000,
+            originalTransactionItemId: "item-1",
+            productId: "product-1",
+            productSkuId: "sku-1",
+            quantityDelta: -1,
+            storeId: "store-1",
+            transactionId: "txn-1",
+            unitPrice: 500,
+          },
+          {
+            _id: "line-unchanged",
+            adjustmentId: "adjustment-1",
+            correctedQuantity: 1,
+            correctedTotal: 500,
+            inventoryDelta: 0,
+            lineType: "existing",
+            originalQuantity: 1,
+            originalTotal: 500,
+            originalTransactionItemId: "item-unchanged",
+            productId: "product-2",
+            productSkuId: "sku-2",
+            quantityDelta: 0,
+            storeId: "store-1",
+            transactionId: "txn-1",
+            unitPrice: 500,
+          },
+        ],
+        originalItems: [
+          {
+            _id: "item-1",
+            productId: "product-1",
+            productSkuId: "sku-1",
+            quantity: 2,
+            totalPrice: 1_000,
+            transactionId: "txn-1",
+            unitPrice: 500,
+          },
+          {
+            _id: "item-unchanged",
+            productId: "product-2",
+            productSkuId: "sku-2",
+            quantity: 1,
+            totalPrice: 500,
+            transactionId: "txn-1",
+            unitPrice: 500,
+          },
+        ],
+        transactions: [
+          {
+            _id: "txn-1",
+            completedAt: 100,
+            storeId: "store-1",
+            subtotal: 1_500,
+            tax: 0,
+            total: 1_500,
+          },
+        ],
+      }),
+      {
+        _id: "adjustment-1",
+        appliedAt: 200,
+        currency: "GHS",
+        correctedSubtotal: 1_000,
+        correctedTax: 0,
+        correctedTotal: 1_000,
+        deltaTotal: -500,
+        originalSubtotal: 1_500,
+        originalTax: 0,
+        originalTotal: 1_500,
+        storeId: "store-1",
+        transactionId: "txn-1",
+      } as never,
+      { _id: "store-1", organizationId: "org-1" } as never,
+    );
+
+    expect(facts).toEqual([
+      expect.objectContaining({
+        amountMinor: -500,
+        factType: "refund",
+        quantity: -1,
+      }),
+    ]);
+    expect(deriveFactMetricContributions(facts[0]!)).toEqual(
+      expect.arrayContaining([
+        { metric: "refunds", value: 500 },
+        { metric: "units_returned", value: 1 },
+      ]),
+    );
+  });
+
+  it("excludes a structurally bound payment correction whose parent is absent", async () => {
+    const facts = await planPosPaymentCorrectionRow(
+      posPlanningCtx({ transactions: [] }),
+      {
+        _id: "event-1",
+        createdAt: 200,
+        eventType: "pos_transaction_payment_method_corrected",
+        metadata: {
+          paymentMethod: "card",
+          previousPaymentMethod: "cash",
+        },
+        posTransactionId: "txn-missing",
+        storeId: "store-1",
+        subjectId: "txn-missing",
+        subjectType: "pos_transaction",
+      } as never,
+      { _id: "store-1", currency: "GHS" } as never,
+    );
+
+    expect(facts).toEqual([
+      expect.objectContaining({
+        currency: null,
+        exclusionReason: "orphan_payment_correction",
+        sourceId: "event-1",
+      }),
+    ]);
+    expect(
+      normalizeHistoricalFactWithPolicy({
+        fact: facts[0]!,
+        policy: {
+          intervalEnd: 300,
+          intervalStart: 100,
+          revenueCurrencyCode: "GHS",
+        } as never,
+      }),
+    ).toMatchObject({ inferredFields: [], originallyMissingFields: [] });
+  });
+
+  it("quarantines a payment correction bound to an existing cross-store parent", async () => {
+    const facts = await planPosPaymentCorrectionRow(
+      posPlanningCtx({
+        transactions: [
+          {
+            _id: "txn-1",
+            completedAt: 100,
+            storeId: "store-2",
+          },
+        ],
+      }),
+      {
+        _id: "event-1",
+        createdAt: 200,
+        eventType: "pos_transaction_payment_method_corrected",
+        posTransactionId: "txn-1",
+        storeId: "store-1",
+        subjectId: "txn-1",
+        subjectType: "pos_transaction",
+      } as never,
+      { _id: "store-1", currency: "GHS" } as never,
+    );
+
+    expect(facts[0]).toMatchObject({
+      businessEventKey: expect.stringContaining("source_incomplete"),
+      limitingReason: "source_incomplete",
+    });
+    expect(facts[0]).not.toHaveProperty("exclusionReason");
+  });
+
+  it("seals canonical pending-checkout attribution on adjustment facts", async () => {
+    const originalItem = {
+      _id: "item-1",
+      pendingCheckoutItemId: "pending-1",
+      productId: "product-1",
+      productSkuId: "sku-provisional",
+      quantity: 2,
+      totalPrice: 1_000,
+      transactionId: "txn-1",
+      unitPrice: 500,
+    };
+    const facts = await planPosAdjustmentRow(
+      posPlanningCtx({
+        adjustmentLines: [
+          {
+            _id: "line-1",
+            adjustmentId: "adjustment-1",
+            correctedQuantity: 1,
+            correctedTotal: 500,
+            inventoryDelta: 1,
+            lineType: "existing",
+            originalQuantity: 2,
+            originalTransactionItemId: "item-1",
+            originalTotal: 1_000,
+            pendingCheckoutItemId: "pending-1",
+            productId: "product-1",
+            productSkuId: "sku-provisional",
+            quantityDelta: -1,
+            storeId: "store-1",
+            transactionId: "txn-1",
+            unitPrice: 500,
+          },
+        ],
+        attributions: [
+          {
+            canonicalProductId: "product-canonical",
+            canonicalProductSkuId: "sku-canonical",
+            organizationId: "org-1",
+            originalProductId: "product-1",
+            originalProductSkuId: "sku-provisional",
+            pendingCheckoutItemId: "pending-1",
+            status: "completed",
+            storeId: "store-1",
+          },
+        ],
+        pendingItems: [
+          {
+            _id: "pending-1",
+            organizationId: "org-1",
+            provisionalProductId: "product-1",
+            provisionalProductSkuId: "sku-provisional",
+            status: "flagged",
+            storeId: "store-1",
+          },
+        ],
+        productSkus: [
+          {
+            _id: "sku-canonical",
+            productId: "product-canonical",
+            storeId: "store-1",
+          },
+        ],
+        originalItems: [originalItem],
+        transactions: [
+          {
+            _id: "txn-1",
+            completedAt: 100,
+            storeId: "store-1",
+            subtotal: 1_000,
+            tax: 0,
+            total: 1_000,
+          },
+        ],
+      }),
+      {
+        _id: "adjustment-1",
+        appliedAt: 200,
+        correctedSubtotal: 500,
+        correctedTax: 0,
+        correctedTotal: 500,
+        currency: "GHS",
+        deltaTotal: -500,
+        originalSubtotal: 1_000,
+        originalTax: 0,
+        originalTotal: 1_000,
+        storeId: "store-1",
+        transactionId: "txn-1",
+      } as never,
+      { _id: "store-1", organizationId: "org-1" } as never,
+    );
+
+    expect(facts[0]).toEqual(
+      expect.objectContaining({
+        attributionKind: "pending_checkout",
+        canonicalProductSkuId: "sku-canonical",
+        originalProductSkuId: "sku-provisional",
+        pendingCheckoutItemId: "pending-1",
+        provisionalProductSkuId: "sku-provisional",
+      }),
+    );
+  });
+
+  it("rejects contradictory adjustment headers and cross-boundary lines", () => {
+    const adjustment = {
+      _id: "adjustment-1",
+      appliedAt: 200,
+      correctedSubtotal: 500,
+      correctedTax: 50,
+      correctedTotal: 550,
+      deltaTotal: -550,
+      originalSubtotal: 1_000,
+      originalTax: 100,
+      originalTotal: 1_100,
+      storeId: "store-1",
+      transactionId: "txn-1",
+    };
+    const line = {
+      adjustmentId: "adjustment-1",
+      correctedQuantity: 1,
+      correctedTotal: 500,
+      inventoryDelta: 1,
+      lineType: "existing" as const,
+      originalQuantity: 2,
+      originalTransactionItemId: "item-1",
+      originalTotal: 1_000,
+      productId: "product-1",
+      productSkuId: "sku-1",
+      quantityDelta: -1,
+      storeId: "store-1",
+      transactionId: "txn-1",
+      unitPrice: 500,
+    };
+    const originalItems = [
+      {
+        _id: "item-1",
+        productId: "product-1",
+        productSkuId: "sku-1",
+        quantity: 2,
+        totalPrice: 1_000,
+        transactionId: "txn-1",
+        unitPrice: 500,
+      },
+    ];
+    const parentTransaction = {
+      _id: "txn-1",
+      completedAt: 100,
+      storeId: "store-1",
+      subtotal: 1_000,
+      tax: 100,
+      total: 1_100,
+    };
+    expect(
+      posAdjustmentSourceIsCoherent({
+        adjustment,
+        lines: [line],
+        originalItems,
+        parentTransaction,
+        productSkus: [],
+      }),
+    ).toBe(true);
+    expect(
+      posAdjustmentSourceIsCoherent({
+        adjustment,
+        lines: [
+          line,
+          {
+            ...line,
+            correctedQuantity: 1,
+            correctedTotal: 500,
+            inventoryDelta: 0,
+            originalQuantity: 1,
+            originalTransactionItemId: "item-2",
+            originalTotal: 500,
+            quantityDelta: 0,
+          },
+        ],
+        originalItems: [
+          ...originalItems,
+          {
+            ...originalItems[0]!,
+            _id: "item-2",
+            quantity: 1,
+            totalPrice: 500,
+          },
+        ],
+        parentTransaction,
+        productSkus: [],
+      }),
+    ).toBe(true);
+    expect(
+      posAdjustmentSourceIsCoherent({
+        adjustment: { ...adjustment, correctedTax: 0 },
+        lines: [line],
+        originalItems,
+        parentTransaction,
+        productSkus: [],
+      }),
+    ).toBe(false);
+    expect(
+      posAdjustmentSourceIsCoherent({
+        adjustment: { ...adjustment, appliedAt: 99 },
+        lines: [line],
+        originalItems,
+        parentTransaction,
+        productSkus: [],
+      }),
+    ).toBe(false);
+    expect(
+      posAdjustmentSourceIsCoherent({
+        adjustment,
+        lines: [{ ...line, storeId: "store-2" }],
+        originalItems,
+        parentTransaction,
+        productSkus: [],
+      }),
+    ).toBe(false);
+    expect(
+      posAdjustmentSourceIsCoherent({
+        adjustment,
+        lines: [{ ...line, quantityDelta: 99 }],
+        originalItems,
+        parentTransaction,
+        productSkus: [],
+      }),
+    ).toBe(false);
+    expect(
+      posAdjustmentSourceIsCoherent({
+        adjustment,
+        lines: [{ ...line, productSkuId: "sku-wrong" }],
+        originalItems,
+        parentTransaction,
+        productSkus: [],
+      }),
+    ).toBe(false);
+    expect(
+      posAdjustmentSourceIsCoherent({
+        adjustment,
+        lines: [line],
+        originalItems,
+        parentTransaction: { ...parentTransaction, subtotal: 999 },
+        productSkus: [],
+      }),
+    ).toBe(false);
+  });
+
+  it("requires complete owned SKU attribution evidence", () => {
+    const attribution = {
+      canonicalProductId: "product-1",
+      canonicalProductSkuId: "sku-1",
+      organizationId: "org-1",
+      originalProductId: "product-1",
+      originalProductSkuId: "sku-1",
+      pendingCheckoutItemId: "pending-1",
+      storeId: "store-1",
+    };
+    const item = {
+      pendingCheckoutItemId: "pending-1",
+      productId: "product-1",
+      productSkuId: "sku-1",
+    };
+    const input = {
+      attribution,
+      canonicalProduct: {
+        _id: "product-1",
+        organizationId: "org-1",
+        storeId: "store-1",
+      },
+      canonicalSku: {
+        _id: "sku-1",
+        productId: "product-1",
+        storeId: "store-1",
+      },
+      item,
+      organizationId: "org-1",
+      pendingItem: {
+        _id: "pending-1",
+        organizationId: "org-1",
+        provisionalProductId: "product-1",
+        provisionalProductSkuId: "sku-1",
+        status: "flagged",
+        storeId: "store-1",
+      },
+      storeId: "store-1",
+    };
+    expect(
+      posSkuAttributionMatchesSourceItem(input),
+    ).toBe(true);
+    expect(
+      posSkuAttributionMatchesSourceItem({
+        ...input,
+        attribution: { ...attribution, originalProductSkuId: "sku-stale" },
+      }),
+    ).toBe(false);
+    expect(
+      posSkuAttributionMatchesSourceItem({ ...input, pendingItem: null }),
+    ).toBe(false);
+  });
+
+  it("rejects malformed primary sale units and cross-store attribution", () => {
+    const item = {
+      productId: "product-1",
+      productSkuId: "sku-1",
+      quantity: 2,
+      totalPrice: 1_000,
+      unitPrice: 500,
+    };
+    const evidence = {
+      pending: null,
+      product: { organizationId: "org-1", storeId: "store-1" },
+      provisional: null,
+      sku: { productId: "product-1", storeId: "store-1" },
+    };
+    const input = {
+      itemEvidence: [evidence],
+      items: [item],
+      organizationId: "org-1",
+      serviceCases: [],
+      services: [],
+      storeId: "store-1",
+    };
+    expect(posOriginalSaleSourceIsCoherent(input)).toBe(true);
+    expect(
+      posOriginalSaleSourceIsCoherent({
+        ...input,
+        items: [{ ...item, quantity: 99 }],
+      }),
+    ).toBe(false);
+    expect(
+      posOriginalSaleSourceIsCoherent({
+        ...input,
+        itemEvidence: [
+          { ...evidence, sku: { ...evidence.sku, storeId: "store-2" } },
+        ],
+      }),
+    ).toBe(false);
+  });
+
+  it("accepts either source tuple for a resolved pending-checkout alias", async () => {
+    const item = {
+      _id: "item-1",
+      pendingCheckoutItemId: "pending-1",
+      productId: "product-approved",
+      productSkuId: "sku-approved",
+      quantity: 2,
+      totalPrice: 1_000,
+      unitPrice: 500,
+    };
+    const pending = {
+      _id: "pending-1",
+      approvedProductId: "product-approved",
+      approvedProductSkuId: "sku-approved",
+      organizationId: "org-1",
+      provisionalProductId: "product-provisional",
+      provisionalProductSkuId: "sku-provisional",
+      status: "linked_to_catalog",
+      storeId: "store-1",
+    };
+    const evidence = {
+      pending,
+      product: { organizationId: "org-1", storeId: "store-1" },
+      provisional: null,
+      sku: { productId: "product-approved", storeId: "store-1" },
+    };
+
+    expect(
+      posOriginalSaleSourceIsCoherent({
+        itemEvidence: [evidence],
+        items: [item],
+        organizationId: "org-1",
+        serviceCases: [],
+        services: [],
+        storeId: "store-1",
+      }),
+    ).toBe(true);
+    expect(
+      posOriginalSaleSourceIsCoherent({
+        itemEvidence: [
+          {
+            ...evidence,
+            pending: { ...pending, approvedProductSkuId: "sku-other" },
+          },
+        ],
+        items: [item],
+        organizationId: "org-1",
+        serviceCases: [],
+        services: [],
+        storeId: "store-1",
+      }),
+    ).toBe(false);
+    const provisionalItem = {
+      ...item,
+      productId: "product-provisional",
+      productSkuId: "sku-provisional",
+    };
+    const provisionalEvidence = {
+      ...evidence,
+      product: { organizationId: "org-1", storeId: "store-1" },
+      sku: { productId: "product-provisional", storeId: "store-1" },
+    };
+    expect(
+      posOriginalSaleSourceIsCoherent({
+        itemEvidence: [provisionalEvidence],
+        items: [provisionalItem],
+        organizationId: "org-1",
+        serviceCases: [],
+        services: [],
+        storeId: "store-1",
+      }),
+    ).toBe(true);
+    expect(
+      posOriginalSaleSourceIsCoherent({
+        itemEvidence: [
+          {
+            ...provisionalEvidence,
+            pending: {
+              ...pending,
+              provisionalProductSkuId: "sku-other",
+            },
+          },
+        ],
+        items: [provisionalItem],
+        organizationId: "org-1",
+        serviceCases: [],
+        services: [],
+        storeId: "store-1",
+      }),
+    ).toBe(false);
+    const richAttributionInput = {
+      attribution: {
+        canonicalProductId: "product-approved",
+        canonicalProductSkuId: "sku-approved",
+        organizationId: "org-1",
+        originalProductId: "product-provisional",
+        originalProductSkuId: "sku-provisional",
+        pendingCheckoutItemId: "pending-1",
+        storeId: "store-1",
+      },
+      canonicalProduct: {
+        _id: "product-approved",
+        organizationId: "org-1",
+        storeId: "store-1",
+      },
+      canonicalSku: {
+        _id: "sku-approved",
+        productId: "product-approved",
+        storeId: "store-1",
+      },
+      item,
+      organizationId: "org-1",
+      pendingItem: pending,
+      storeId: "store-1",
+    };
+    expect(posSkuAttributionMatchesSourceItem(richAttributionInput)).toBe(true);
+    const originalSourceInput = {
+      ...richAttributionInput,
+      item: {
+        ...item,
+        productId: "product-provisional",
+        productSkuId: "sku-provisional",
+      },
+    };
+    expect(posSkuAttributionMatchesSourceItem(originalSourceInput)).toBe(true);
+    expect(
+      posSkuAttributionMatchesSourceItem({
+        ...originalSourceInput,
+        pendingItem: {
+          ...pending,
+          approvedProductSkuId: "sku-other",
+        },
+      }),
+    ).toBe(false);
+    expect(
+      posSkuAttributionMatchesSourceItem({
+        ...richAttributionInput,
+        attribution: {
+          ...richAttributionInput.attribution,
+          organizationId: "org-2",
+        },
+      }),
+    ).toBe(false);
+    expect(
+      posSkuAttributionMatchesSourceItem({
+        ...richAttributionInput,
+        canonicalSku: {
+          ...richAttributionInput.canonicalSku,
+          storeId: "store-2",
+        },
+      }),
+    ).toBe(false);
+    expect(
+      posOriginalSaleIdentityMode({
+        sourceLineCount: 1,
+        sourceLinesAreCoherent: true,
+        total: 1_000,
+      }),
+    ).toBe("line");
+    expect(
+      posOriginalSaleIdentityMode({
+        sourceLineCount: 1,
+        sourceLinesAreCoherent: false,
+        total: 1_000,
+      }),
+    ).toBe("transaction_summary");
+    expect(
+      posOriginalSaleIdentityMode({
+        sourceLineCount: 100,
+        sourceLinesAreCoherent: true,
+        total: 1_000,
+      }),
+    ).toBe("line");
+    expect(
+      posOriginalSaleIdentityMode({
+        sourceLineCount: 101,
+        sourceLinesAreCoherent: true,
+        total: 1_000,
+      }),
+    ).toBe("transaction_summary");
+
+    const facts = await planPosRow(
+      posPlanningCtx({
+        attributions: [
+          {
+            canonicalProductId: "product-approved",
+            canonicalProductSkuId: "sku-approved",
+            organizationId: "org-1",
+            originalProductId: "product-provisional",
+            originalProductSkuId: "sku-provisional",
+            pendingCheckoutItemId: "pending-1",
+            status: "completed",
+            storeId: "store-1",
+          },
+        ],
+        items: [item],
+        pendingItems: [pending],
+      }),
+      {
+        _id: "txn-1",
+        completedAt: 100,
+        status: "completed",
+        storeId: "store-1",
+        tax: 0,
+        total: 1_000,
+      } as never,
+      {
+        _id: "store-1",
+        currency: "GHS",
+        organizationId: "org-1",
+      } as never,
+    );
+    expect(facts).toHaveLength(1);
+    expect(facts[0]).toMatchObject({
+      businessEventKey: "pos:txn-1:complete:line:item-1:sale",
+      canonicalProductSkuId: "sku-approved",
+      originalProductSkuId: "sku-provisional",
+      productSkuId: "sku-approved",
+      provisionalProductSkuId: "sku-provisional",
+      quantity: 2,
+    });
+    const unattributedFacts = await planPosRow(
+      posPlanningCtx({
+        items: [provisionalItem],
+        pendingItems: [pending],
+      }),
+      {
+        _id: "txn-provisional",
+        completedAt: 100,
+        status: "completed",
+        storeId: "store-1",
+        tax: 0,
+        total: 1_000,
+      } as never,
+      {
+        _id: "store-1",
+        currency: "GHS",
+        organizationId: "org-1",
+      } as never,
+    );
+    expect(unattributedFacts).toHaveLength(1);
+    expect(unattributedFacts[0]).toMatchObject({
+      businessEventKey:
+        "pos:txn-provisional:complete:line:item-1:sale",
+      originalProductSkuId: "sku-provisional",
+      pendingCheckoutItemId: "pending-1",
+      productSkuId: "sku-provisional",
+      provisionalProductSkuId: "sku-provisional",
+      quantity: 2,
+    });
+    expect(unattributedFacts[0]?.canonicalProductSkuId).toBeUndefined();
+  });
   const approvedPolicy = {
     _id: "policy-1",
     approvalHash: "approval-hash-1",
@@ -40,48 +1201,6 @@ describe("reporting historical backfill", () => {
     revenueCurrencyCode: "GHS",
     status: "approved",
   } as never;
-
-  it("excludes approved closed-day history without treating missing periods as policy exclusions", () => {
-    const sundayAtNoon = Date.UTC(2026, 6, 5, 12);
-    const policy = {
-      _id: "policy-closed-sunday",
-      approvalHash: "approval-hash-closed-sunday",
-      contentHash: "content-hash-closed-sunday",
-      dateExceptionsJson: "[]",
-      intervalEnd: Date.UTC(2026, 6, 10),
-      intervalStart: Date.UTC(2026, 6, 1),
-      organizationId: "org-1",
-      status: "approved",
-      storeId: "store-1",
-      timezone: "Africa/Accra",
-      weeklyWindowsJson: JSON.stringify(
-        [1, 2, 3, 4, 5, 6].map((dayOfWeek) => ({
-          dayOfWeek,
-          endMinute: 23 * 60,
-          startMinute: 9 * 60,
-        })),
-      ),
-    } as never;
-
-    expect(
-      historicalPolicyExcludesClosedFact({
-        fact: { occurredAt: sundayAtNoon },
-        policy,
-      }),
-    ).toBe(true);
-    expect(
-      historicalPolicyExcludesClosedFact({
-        fact: { occurredAt: sundayAtNoon },
-        policy: null,
-      }),
-    ).toBe(false);
-    expect(
-      historicalPolicyExcludesClosedFact({
-        fact: { occurredAt: Date.UTC(2026, 6, 4, 12) },
-        policy,
-      }),
-    ).toBe(false);
-  });
 
   it("seals immutable candidate semantics independently of later source mutation", () => {
     const sourceFact = {
@@ -670,14 +1789,14 @@ describe("reporting historical backfill", () => {
 
   it("requires apply to bind to an exact completed compatible preview", () => {
     const preview = {
-      factContractVersion: 1,
+      factContractVersion: 2,
       frozenWatermark: 200,
       metricContractVersion: 1,
       operation: "historical_backfill_preview",
       organizationId: "org-1",
       periodEnd: 200,
       periodStart: 100,
-      projectionContractVersion: 1,
+      projectionContractVersion: 2,
       runType: "backfill",
       status: "completed",
       storeId: "store-1",

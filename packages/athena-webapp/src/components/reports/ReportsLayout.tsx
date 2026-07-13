@@ -72,7 +72,6 @@ export function ReportsLayout() {
     <View
       hideBorder
       hideHeaderBottomBorder
-      className="bg-background"
       scrollMode="page"
     >
       <FadeIn className="container mx-auto py-layout-xl">

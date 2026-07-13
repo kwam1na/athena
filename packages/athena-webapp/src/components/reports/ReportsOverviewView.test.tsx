@@ -45,7 +45,10 @@ describe("ReportsOverviewView", () => {
 
     useQuery.mockReturnValueOnce({ data: null, status: "pre_cutover" });
     rerender(<ReportsOverviewView periodKey="wtd" />);
-    expect(screen.getByText("Reporting starts here")).toBeInTheDocument();
+    expect(screen.getByText("Rebuilding reports")).toBeInTheDocument();
+    expect(
+      screen.getByText(/completed sales will appear.*rebuild/i),
+    ).toBeInTheDocument();
     expect(screen.queryByText("$0.00")).not.toBeInTheDocument();
   });
 

@@ -172,6 +172,8 @@ describe("HARNESS_APP_REGISTRY", () => {
         "scripts/convex-audit.sh",
         "scripts/convex-lint-changed.sh",
         "scripts/convexPaginationAntiPatternCheck.py",
+        "scripts/empty-table.json",
+        "scripts/purge-reporting-dev.sh",
         "src/routes/_authed",
         "src/main.tsx",
       ],

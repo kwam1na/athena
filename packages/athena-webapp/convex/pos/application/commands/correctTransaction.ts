@@ -16,6 +16,7 @@ import {
   patchPosTransaction,
 } from "../../infrastructure/repositories/transactionRepository";
 import { appendReportingIngressWithCtx } from "../../../reporting/ingress";
+import { appendPosLifecycleJournalWithCtx } from "../../infrastructure/posLifecycleJournal";
 import { patchRegisterSessionWithAuthority } from "../../../operations/registerSessionAuthorityRevision";
 
 type CorrectionActor = {
@@ -400,6 +401,28 @@ async function applyPaymentMethodCorrection(
   });
 
   const store = await getStoreById(ctx, args.transaction.storeId);
+  if (!store?.organizationId || !event?._id) {
+    throw new Error(
+      "Payment correction lifecycle evidence could not be attributed.",
+    );
+  }
+  await appendPosLifecycleJournalWithCtx(ctx, {
+    organizationId: store.organizationId,
+    storeId: args.transaction.storeId,
+    transactionId: args.transaction._id,
+    eventKind: "payment_method_corrected",
+    eventKey: `pos:${args.transaction._id}:payment-correction:${event._id}`,
+    contentFingerprint: [
+      "pos-lifecycle-payment-correction-v1",
+      args.transaction._id,
+      event._id,
+      payment.method,
+      args.paymentMethod,
+      payment.amount,
+    ].join(":"),
+    occurredAt: event.createdAt,
+    origin: "cloud",
+  });
   if (store?.organizationId && event?._id) {
     const currencyCode = store.currency?.trim().toUpperCase();
     await appendReportingIngressWithCtx(ctx, {
