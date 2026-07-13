@@ -1,5 +1,6 @@
-export const REPORTING_FACT_CONTRACT_VERSION = 1 as const;
-export const REPORTING_PROJECTION_CONTRACT_VERSION = 1 as const;
+export const REPORTING_FACT_CONTRACT_VERSION = 2 as const;
+export const REPORTING_PROJECTION_CONTRACT_VERSION = 2 as const;
+export const REPORTING_FINANCIAL_DATE_CONTRACT_VERSION = 2 as const;
 export const REPORTING_LINE_ATTRIBUTION_VERSION = 1 as const;
 
 export const REPORTING_SOURCE_DOMAINS = [
@@ -79,15 +80,38 @@ export type SafeReportingSourceReference = {
 
 export type ReportingPeriodAssignment = {
   operatingDate: string;
+  reportingDate: string;
   recognitionAt: number;
+  timezoneVersionId: string;
+  timezoneVersionHash: string;
   scheduleVersionId?: string;
   historicalInterpretationPolicyId?: string;
   historicalInterpretationPolicyHash?: string;
   timezone: string;
 };
 
+export type ReportingScheduleContext =
+  | { kind: "unavailable" }
+  | {
+      kind: "closed";
+      operatingDate: string;
+      scheduleVersionId: string | null;
+    }
+  | {
+      kind: "within_hours";
+      operatingDate: string;
+      scheduleVersionId: string | null;
+    }
+  | {
+      kind: "outside_hours";
+      operatingDate: string;
+      phase: "before_first_window" | "between_windows" | "after_last_window";
+      scheduleVersionId: string | null;
+    };
+
 export type ReportingPeriodLineage =
   | { kind: "store_schedule"; id: string }
+  | { kind: "store_timezone"; id: string; hash: string }
   | { kind: "historical_policy"; id: string; hash: string };
 
 export type ReportingRecognitionChannel = "pos" | "storefront" | "service";

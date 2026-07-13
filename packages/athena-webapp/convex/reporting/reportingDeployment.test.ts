@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-import { activateGeneration, rollbackGeneration } from "./activation";
+import { activateGeneration } from "./activation";
 import { summarizeReportingHealth } from "./health";
 import { processBoundedBatch } from "./maintenance/processing";
 import { buildReportingOverview } from "./public";
@@ -143,10 +143,10 @@ describe("reporting shadow deployment architecture", () => {
     ).toBe(1);
     expect(
       countMatches(evidenceModule, /export const \w+ = internalMutation\(/g),
-    ).toBe(3);
+    ).toBe(5);
     expect(
       countMatches(evidenceModule, /await requireReportingStoreAccess\(/g),
-    ).toBe(2);
+    ).toBe(3);
     const evidenceQueryCount = countMatches(
       evidenceModule,
       /ctx\.db\s*\.query\(/g,
@@ -226,20 +226,10 @@ describe("reporting shadow deployment architecture", () => {
         requiredCoverageComplete: true,
       }).status,
     ).toBe("failed");
-    expect(
-      rollbackGeneration({
-        currentGenerationId: "generation-candidate",
-        expectedCurrentGenerationId: "generation-candidate",
-        requiredContractVersion: 1,
-        requiredMetricVersion: 1,
-        target: {
-          ...verifiedGeneration,
-          generationId: "generation-active",
-        },
-      }),
-    ).toEqual({
-      activatedGenerationId: "generation-active",
-      supersededGenerationId: "generation-candidate",
-    });
+    const activationSource = source("./activation.ts");
+    const bundleSource = source("./readModels/readBundle.ts");
+    expect(activationSource).not.toContain("rollbackToVerifiedGeneration");
+    expect(bundleSource).toContain("rollbackReportsReadBundle");
+    expect(bundleSource).toContain("expectedCurrentBundleId");
   });
 });

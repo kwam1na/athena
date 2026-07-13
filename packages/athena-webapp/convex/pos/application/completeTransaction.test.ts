@@ -46,6 +46,11 @@ import { createApprovalRequesterChallengeWithCtx } from "../../operations/approv
 import { recordOperationalEventWithCtx } from "../../operations/operationalEvents";
 import { appendReportingIngressWithCtx } from "../../reporting/ingress";
 import { applyCommerceInventoryEffectWithCtx } from "../../reporting/inventory/commerceEffects";
+import { appendPosLifecycleJournalWithCtx } from "../infrastructure/posLifecycleJournal";
+
+vi.mock("../infrastructure/posLifecycleJournal", () => ({
+  appendPosLifecycleJournalWithCtx: vi.fn(),
+}));
 
 vi.mock("../../reporting/ingress", () => ({
   appendReportingIngressWithCtx: vi.fn(),
@@ -711,6 +716,17 @@ describe("voidTransaction", () => {
         voidOperationalEventId: "void-event-1",
         voidReason: "Duplicate sale",
         voidedByStaffProfileId: "staff-1",
+      }),
+    );
+    expect(appendPosLifecycleJournalWithCtx).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        eventKind: "voided",
+        eventKey: "pos:txn-1:void",
+        organizationId: "org-1",
+        storeId: "store-1",
+        transactionId: "txn-1",
+        origin: "cloud",
       }),
     );
   });
@@ -1577,6 +1593,17 @@ describe("completeTransaction checkout side effects", () => {
         posTransactionId: "txn-1",
         registerSessionId: "register-1",
         storeId: "store-1",
+      }),
+    );
+    expect(appendPosLifecycleJournalWithCtx).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        organizationId: "org-1",
+        storeId: "store-1",
+        transactionId: "txn-1",
+        eventKind: "completed",
+        eventKey: "pos:txn-1:completed",
+        origin: "cloud",
       }),
     );
     expect(recordOperationalEventWithCtx).toHaveBeenCalledWith(

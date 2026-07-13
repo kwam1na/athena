@@ -15,6 +15,11 @@ import {
   patchPosTransaction,
 } from "../infrastructure/repositories/transactionRepository";
 import { appendReportingIngressWithCtx } from "../../reporting/ingress";
+import { appendPosLifecycleJournalWithCtx } from "../infrastructure/posLifecycleJournal";
+
+vi.mock("../infrastructure/posLifecycleJournal", () => ({
+  appendPosLifecycleJournalWithCtx: vi.fn(),
+}));
 
 vi.mock("../../operations/operationalEvents", () => ({
   recordOperationalEventWithCtx: vi.fn(),
@@ -261,6 +266,16 @@ describe("correctTransactionPaymentMethod", () => {
       paymentMethod: "card",
       payments: [{ method: "card", amount: 1000, timestamp: 1 }],
     });
+    expect(appendPosLifecycleJournalWithCtx).toHaveBeenCalledWith(
+      ctx as never,
+      expect.objectContaining({
+        eventKind: "payment_method_corrected",
+        eventKey: "pos:txn-1:payment-correction:event-1",
+        organizationId: "org-1",
+        storeId: "store-1",
+        transactionId: "txn-1",
+      }),
+    );
     expect(recordOperationalEventWithCtx).toHaveBeenNthCalledWith(
       2,
       ctx as never,

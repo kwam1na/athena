@@ -20,7 +20,7 @@ import {
 } from "../factFingerprint";
 import { recordFactSkuEvidenceWithCtx } from "../evidence";
 import { upsertProjectionHealthWithCtx } from "../health";
-import { resolveReportingOperatingPeriodWithCtx } from "../operatingPeriods";
+import { resolveReportingFinancialPeriodWithCtx } from "../operatingPeriods";
 import { adaptPosCompleted } from "../sourceAdapters/pos";
 import { adaptStorefrontStatus } from "../sourceAdapters/storefront";
 import type { CommerceLine } from "../sourceAdapters/types";
@@ -33,6 +33,12 @@ import {
   requireApprovedHistoricalPolicyWithCtx,
   resolveHistoricalPolicyOperatingPeriod,
 } from "./legacyCompatibility";
+import { requireAuthorizedLineageWithCtx } from "./authorizedPosBackfill";
+import {
+  POS_CENSUS_BACKFILL_PHASES,
+  advancePosCensusCursor,
+  assertSealedJournalTerminal,
+} from "./posCensusContract";
 
 export function classifyHistoricalCommerce(input: {
   currency: string | null;
@@ -107,6 +113,7 @@ export type HistoricalBackfillAuditCounts = {
   excludedCount: number;
   existingCount: number;
   omittedCount: number;
+  orphanPaymentCorrectionCount: number;
   plannedCount: number;
   quarantinedCount: number;
   unknownCount: number;
@@ -122,6 +129,7 @@ export const EMPTY_HISTORICAL_BACKFILL_AUDIT: HistoricalBackfillAuditCounts = {
   excludedCount: 0,
   existingCount: 0,
   omittedCount: 0,
+  orphanPaymentCorrectionCount: 0,
   plannedCount: 0,
   quarantinedCount: 0,
   unknownCount: 0,
@@ -148,6 +156,8 @@ export function mergeHistoricalBackfillAuditCounts(
     excludedCount: left.excludedCount + right.excludedCount,
     existingCount: left.existingCount + right.existingCount,
     omittedCount: left.omittedCount + right.omittedCount,
+    orphanPaymentCorrectionCount:
+      left.orphanPaymentCorrectionCount + right.orphanPaymentCorrectionCount,
     plannedCount: left.plannedCount + right.plannedCount,
     quarantinedCount: left.quarantinedCount + right.quarantinedCount,
     unknownCount: left.unknownCount + right.unknownCount,
@@ -175,6 +185,7 @@ export function historicalFactUnknownFields(fact: HistoricalPlannedFact) {
 }
 
 export function historicalBackfillAuditForOutcome(input: {
+  exclusionReason?: HistoricalPlannedFact["exclusionReason"];
   outcome: "conflict" | "created" | "excluded" | "existing" | "quarantined";
   unknownFieldCount: number;
   inferredCount?: number;
@@ -192,6 +203,8 @@ export function historicalBackfillAuditForOutcome(input: {
     excludedCount,
     existingCount,
     omittedCount: excludedCount + conflictCount + quarantinedCount,
+    orphanPaymentCorrectionCount:
+      input.exclusionReason === "orphan_payment_correction" ? 1 : 0,
     plannedCount: 1,
     quarantinedCount,
     unknownCount: input.unknownFieldCount > 0 ? 1 : 0,
@@ -226,6 +239,7 @@ function historicalBackfillAuditFromRun(
     | "excludedCount"
     | "existingCount"
     | "omittedCount"
+    | "orphanPaymentCorrectionCount"
     | "plannedCount"
     | "quarantinedCount"
     | "unknownCount"
@@ -241,6 +255,7 @@ function historicalBackfillAuditFromRun(
     excludedCount: run.excludedCount ?? 0,
     existingCount: run.existingCount ?? 0,
     omittedCount: run.omittedCount ?? 0,
+    orphanPaymentCorrectionCount: run.orphanPaymentCorrectionCount ?? 0,
     plannedCount: run.plannedCount ?? 0,
     quarantinedCount: run.quarantinedCount ?? 0,
     unknownCount: run.unknownCount ?? 0,
@@ -277,7 +292,12 @@ async function upsertHistoricalBackfillSourceAudit(
   const prior = matches[0];
   const merged = mergeHistoricalBackfillAuditCounts(
     prior
-      ? { ...prior, inferredCount: prior.inferredCount ?? 0 }
+      ? {
+          ...prior,
+          inferredCount: prior.inferredCount ?? 0,
+          orphanPaymentCorrectionCount:
+            prior.orphanPaymentCorrectionCount ?? 0,
+        }
       : EMPTY_HISTORICAL_BACKFILL_AUDIT,
     input.counts,
   );
@@ -327,6 +347,12 @@ export const HISTORICAL_BACKFILL_SCANNED_SOURCE_DOMAINS = [
   "procurement",
   "payments",
 ] as const;
+
+function scannedSourceDomains(run: Pick<Doc<"reportingRun">, "sourceScope">) {
+  return run.sourceScope === "pos"
+    ? (["pos"] as const)
+    : HISTORICAL_BACKFILL_SCANNED_SOURCE_DOMAINS;
+}
 
 export type HistoricalBackfillPhase =
   (typeof HISTORICAL_BACKFILL_PHASES)[number];
@@ -417,6 +443,7 @@ export type HistoricalPlannedFact = {
   sourceType: string;
   forceQuarantineReason?: string;
   expectedInboundAt?: number;
+  exclusionReason?: "orphan_payment_correction";
   procurementSignal?: "commitment" | "receipt" | "short_receipt";
   priorSettlementMethod?: string;
   correctedSettlementMethod?: string;
@@ -459,7 +486,11 @@ export function normalizeHistoricalFactWithPolicy(input: {
       fact.occurredAt >= input.policy.intervalStart &&
       fact.occurredAt < input.policy.intervalEnd,
   );
-  if (!fact.currency && POLICY_REVENUE_DOMAINS.has(fact.sourceDomain)) {
+  if (
+    !fact.exclusionReason &&
+    !fact.currency &&
+    POLICY_REVENUE_DOMAINS.has(fact.sourceDomain)
+  ) {
     originallyMissingFields.push("revenueCurrency");
     if (inPolicy) {
       fact.currency = input.policy!.revenueCurrencyCode;
@@ -476,19 +507,6 @@ export function normalizeHistoricalFactWithPolicy(input: {
     fact.limitingReason = "uncosted";
   }
   return { fact, inferredFields, originallyMissingFields };
-}
-
-export function historicalPolicyExcludesClosedFact(input: {
-  fact: Pick<HistoricalPlannedFact, "occurredAt">;
-  policy: HistoricalPolicy | null;
-}) {
-  if (input.fact.occurredAt === null || !input.policy) return false;
-  return (
-    resolveHistoricalPolicyOperatingPeriod({
-      occurrenceAt: input.fact.occurredAt,
-      policy: input.policy,
-    }).kind === "closed"
-  );
 }
 
 export function planHistoricalReversalFacts(input: {
@@ -799,6 +817,9 @@ function safeFingerprintChecksum(value: string) {
 
 type HistoricalPeriodIdentity = {
   operatingDate: string;
+  timezoneVersionId?: string;
+  timezoneVersionHash?: string;
+  scheduleContext?: "within_hours" | "outside_hours" | "closed" | "unavailable";
   scheduleVersionId?: string;
   historicalInterpretationPolicyId?: string;
   historicalInterpretationPolicyHash?: string;
@@ -857,6 +878,8 @@ function historicalPlannedFactSemantics(
     recognitionCategoryId: fact.recognitionCategoryId,
     recognitionProductId: fact.recognitionProductId,
     recognitionProductSkuId: fact.recognitionProductSkuId,
+    timezoneVersionId: period.timezoneVersionId,
+    timezoneVersionHash: period.timezoneVersionHash,
     scheduleVersionId: period.scheduleVersionId,
     historicalInterpretationPolicyId:
       period.historicalInterpretationPolicyId,
@@ -915,6 +938,8 @@ function persistedHistoricalFactSemantics(
     | "recognitionCategoryId"
     | "recognitionProductId"
     | "recognitionProductSkuId"
+    | "timezoneVersionId"
+    | "timezoneVersionHash"
     | "scheduleVersionId"
     | "historicalInterpretationPolicyId"
     | "historicalInterpretationPolicyHash"
@@ -961,6 +986,10 @@ function persistedHistoricalFactSemantics(
     recognitionProductSkuId: fact.recognitionProductSkuId
       ? String(fact.recognitionProductSkuId)
       : undefined,
+    timezoneVersionId: fact.timezoneVersionId
+      ? String(fact.timezoneVersionId)
+      : undefined,
+    timezoneVersionHash: fact.timezoneVersionHash,
     scheduleVersionId: fact.scheduleVersionId
       ? String(fact.scheduleVersionId)
       : undefined,
@@ -1235,6 +1264,7 @@ async function persistHistoricalFact(
     run: Doc<"reportingRun">;
   },
 ): Promise<"conflict" | "created" | "excluded" | "existing" | "quarantined"> {
+  if (args.fact.exclusionReason) return "excluded";
   if (args.fact.forceQuarantineReason) {
     await quarantineHistoricalFact(ctx, {
       apply: args.apply,
@@ -1312,19 +1342,11 @@ async function persistHistoricalFact(
           args.policy,
         );
   if (!period) {
-    if (
-      historicalPolicyExcludesClosedFact({
-        fact: args.fact,
-        policy: args.policy,
-      })
-    ) {
-      return "excluded";
-    }
     await quarantineHistoricalFact(ctx, {
       apply: args.apply,
       fact: args.fact,
       organizationId: args.run.organizationId,
-      reason: "missing_reporting_period",
+      reason: "missing_timezone_authority",
       runId: args.run._id,
       storeId: args.run.storeId,
     });
@@ -1334,6 +1356,8 @@ async function persistHistoricalFact(
     args.fact,
     {
       operatingDate: period.operatingDate,
+      timezoneVersionId: period.timezoneVersionId,
+      timezoneVersionHash: period.timezoneVersionHash,
       scheduleVersionId: period.scheduleVersionId,
       historicalInterpretationPolicyId: period.historicalInterpretationPolicyId,
       historicalInterpretationPolicyHash: period.historicalInterpretationPolicyHash,
@@ -1361,6 +1385,8 @@ async function persistHistoricalFact(
         fact: args.fact,
         period: {
           operatingDate: period.operatingDate,
+          timezoneVersionId: period.timezoneVersionId,
+          timezoneVersionHash: period.timezoneVersionHash,
           scheduleVersionId: period.scheduleVersionId,
           historicalInterpretationPolicyId:
             period.historicalInterpretationPolicyId,
@@ -1493,6 +1519,11 @@ async function persistHistoricalFact(
     recognitionProductSkuId: args.fact.recognitionProductSkuId as
       Id<"productSku"> | undefined,
     revenueKind: args.fact.revenueKind,
+    timezoneVersionId: period.timezoneVersionId as
+      | Id<"storeTimezoneVersion">
+      | undefined,
+    timezoneVersionHash: period.timezoneVersionHash,
+    scheduleContext: period.scheduleContext,
     scheduleVersionId: period.scheduleVersionId as
       | Id<"storeSchedule">
       | undefined,
@@ -1556,7 +1587,9 @@ export function historicalPosCommerceLine(
   >,
   attribution?: Pick<
     Doc<"reportingSkuAttribution">,
-    "canonicalProductSkuId" | "pendingCheckoutItemId"
+    | "canonicalProductSkuId"
+    | "originalProductSkuId"
+    | "pendingCheckoutItemId"
   >,
 ): CommerceLine {
   const isProvisional =
@@ -1578,19 +1611,460 @@ export function historicalPosCommerceLine(
     kind: "merchandise",
     lineId: String(item._id),
     netRevenueMinor: item.totalPrice,
-    originalSkuId: String(item.productSkuId),
+    originalSkuId: String(
+      attribution?.originalProductSkuId ?? item.productSkuId,
+    ),
     pendingCheckoutItemId: item.pendingCheckoutItemId
       ? String(item.pendingCheckoutItemId)
       : undefined,
     productId: String(item.productId),
-    provisionalSkuId: isProvisional ? String(item.productSkuId) : undefined,
+    provisionalSkuId: isProvisional
+      ? String(attribution?.originalProductSkuId ?? item.productSkuId)
+      : undefined,
     quantity: item.quantity,
     skuId: String(item.productSkuId),
     unitPriceMinor: item.unitPrice,
   };
 }
 
-async function planPosRow(
+export function classifyPosRefundEvidence(input: {
+  completedAt: number;
+  isRefunded?: boolean;
+  quantity: number;
+  refundedAt?: number;
+  refundedQuantity?: number;
+  frozenWatermark: number;
+}) {
+  const hasRefundEvidence =
+    input.isRefunded === true ||
+    input.refundedAt !== undefined ||
+    input.refundedQuantity !== undefined;
+  if (!hasRefundEvidence) return { status: "none" as const };
+
+  const refundedQuantity =
+    input.refundedQuantity ?? (input.isRefunded ? input.quantity : 0);
+  if (
+    input.isRefunded === false ||
+    input.refundedAt === undefined ||
+    input.refundedAt < input.completedAt ||
+    input.quantity <= 0 ||
+    refundedQuantity <= 0 ||
+    refundedQuantity > input.quantity
+  ) {
+    return { status: "malformed" as const };
+  }
+  if (input.refundedAt > input.frozenWatermark) {
+    return { status: "after_frozen_watermark" as const };
+  }
+  return {
+    refundedAt: input.refundedAt,
+    refundedQuantity,
+    status: "included" as const,
+  };
+}
+
+export function posAdjustmentSourceIsCoherent(input: {
+  adjustment: {
+    _id: unknown;
+    appliedAt?: number;
+    correctedSubtotal: number;
+    correctedTax: number;
+    correctedTotal: number;
+    deltaTotal: number;
+    originalSubtotal: number;
+    originalTax: number;
+    originalTotal: number;
+    storeId: unknown;
+    transactionId: unknown;
+  };
+  lines: Array<{
+    adjustmentId: unknown;
+    correctedQuantity: number;
+    correctedTotal: number;
+    inventoryDelta: number;
+    lineType: "added" | "existing";
+    originalQuantity: number;
+    originalTransactionItemId?: unknown;
+    originalTotal: number;
+    pendingCheckoutItemId?: unknown;
+    productId: unknown;
+    productSkuId: unknown;
+    quantityDelta: number;
+    storeId: unknown;
+    transactionId: unknown;
+    unitPrice: number;
+  }>;
+  originalItems: Array<{
+    _id: unknown;
+    pendingCheckoutItemId?: unknown;
+    productId: unknown;
+    productSkuId: unknown;
+    quantity: number;
+    totalPrice: number;
+    transactionId: unknown;
+    unitPrice: number;
+  }>;
+  productSkus: Array<{
+    _id: unknown;
+    productId: unknown;
+    storeId: unknown;
+  }>;
+  parentTransaction: {
+    _id: unknown;
+    completedAt: number;
+    storeId: unknown;
+    subtotal: number;
+    tax: number;
+    total: number;
+  } | null;
+}) {
+  const { adjustment, lines } = input;
+  const originalItemsById = new Map(
+    input.originalItems.map((item) => [String(item._id), item]),
+  );
+  const productSkusById = new Map(
+    input.productSkus.map((sku) => [String(sku._id), sku]),
+  );
+  const lineDelta = lines.reduce(
+    (sum, line) => sum + line.correctedTotal - line.originalTotal,
+    0,
+  );
+  const subtotalDelta = adjustment.correctedSubtotal - adjustment.originalSubtotal;
+  const taxDelta = adjustment.correctedTax - adjustment.originalTax;
+  const sameAmount = (left: number, right: number) =>
+    Number(left.toFixed(2)) === Number(right.toFixed(2));
+  return (
+    Boolean(
+      input.parentTransaction &&
+        adjustment.appliedAt !== undefined &&
+        adjustment.appliedAt >= input.parentTransaction.completedAt &&
+        String(input.parentTransaction._id) ===
+          String(adjustment.transactionId) &&
+        String(input.parentTransaction.storeId) === String(adjustment.storeId) &&
+        sameAmount(
+          input.parentTransaction.subtotal,
+          adjustment.originalSubtotal,
+        ) &&
+        sameAmount(input.parentTransaction.tax, adjustment.originalTax) &&
+        sameAmount(input.parentTransaction.total, adjustment.originalTotal),
+    ) &&
+    sameAmount(
+      adjustment.originalSubtotal + adjustment.originalTax,
+      adjustment.originalTotal,
+    ) &&
+    sameAmount(
+      adjustment.correctedSubtotal + adjustment.correctedTax,
+      adjustment.correctedTotal,
+    ) &&
+    sameAmount(
+      adjustment.correctedTotal - adjustment.originalTotal,
+      adjustment.deltaTotal,
+    ) &&
+    sameAmount(lineDelta, subtotalDelta) &&
+    sameAmount(adjustment.deltaTotal - lineDelta, taxDelta) &&
+    lines.length > 0 &&
+    lines.every((line) => {
+      const quantitiesAreCoherent =
+        Number.isInteger(line.originalQuantity) &&
+        Number.isInteger(line.correctedQuantity) &&
+        Number.isInteger(line.quantityDelta) &&
+        Number.isInteger(line.inventoryDelta) &&
+        line.originalQuantity >= 0 &&
+        line.correctedQuantity >= 0 &&
+        line.quantityDelta === line.correctedQuantity - line.originalQuantity &&
+        line.inventoryDelta === -line.quantityDelta;
+      const moneyIsCoherent =
+        sameAmount(
+          line.correctedTotal,
+          line.unitPrice * line.correctedQuantity,
+        );
+      if (!quantitiesAreCoherent || !moneyIsCoherent) return false;
+      if (
+        String(line.adjustmentId) !== String(adjustment._id) ||
+        String(line.storeId) !== String(adjustment.storeId) ||
+        String(line.transactionId) !== String(adjustment.transactionId)
+      ) {
+        return false;
+      }
+      if (line.lineType === "added") {
+        const sku = productSkusById.get(String(line.productSkuId));
+        return (
+          line.originalTransactionItemId === undefined &&
+          line.pendingCheckoutItemId === undefined &&
+          line.originalQuantity === 0 &&
+          sameAmount(line.originalTotal, 0) &&
+          Boolean(
+            sku &&
+              String(sku.storeId) === String(adjustment.storeId) &&
+              String(sku.productId) === String(line.productId),
+          )
+        );
+      }
+      if (line.originalTransactionItemId === undefined) return false;
+      const original = originalItemsById.get(
+        String(line.originalTransactionItemId),
+      );
+      return Boolean(
+        original &&
+          String(original.transactionId) === String(adjustment.transactionId) &&
+          String(original.productId) === String(line.productId) &&
+          String(original.productSkuId) === String(line.productSkuId) &&
+          (original.pendingCheckoutItemId === undefined
+            ? line.pendingCheckoutItemId === undefined
+            : String(original.pendingCheckoutItemId) ===
+              String(line.pendingCheckoutItemId)) &&
+          original.quantity === line.originalQuantity &&
+          sameAmount(original.unitPrice, line.unitPrice) &&
+          sameAmount(original.totalPrice, line.originalTotal) &&
+          sameAmount(
+            original.totalPrice,
+            original.unitPrice * original.quantity,
+          ),
+      );
+    })
+  );
+}
+
+export function posSkuAttributionMatchesSourceItem(input: {
+  attribution: {
+    canonicalProductId?: unknown;
+    canonicalProductSkuId?: unknown;
+    organizationId?: unknown;
+    originalProductId?: unknown;
+    originalProductSkuId: unknown;
+    pendingCheckoutItemId: unknown;
+    storeId: unknown;
+  };
+  canonicalProduct: {
+    _id: unknown;
+    organizationId: unknown;
+    storeId: unknown;
+  } | null;
+  canonicalSku: {
+    _id: unknown;
+    productId: unknown;
+    storeId: unknown;
+  } | null;
+  item: {
+    pendingCheckoutItemId?: unknown;
+    productId: unknown;
+    productSkuId: unknown;
+  };
+  organizationId: unknown;
+  pendingItem: {
+    _id: unknown;
+    approvedProductId?: unknown;
+    approvedProductSkuId?: unknown;
+    organizationId: unknown;
+    provisionalProductId?: unknown;
+    provisionalProductSkuId?: unknown;
+    status: string;
+    storeId: unknown;
+  } | null;
+  storeId: unknown;
+}) {
+  const baseMatches =
+    input.item.pendingCheckoutItemId !== undefined &&
+    String(input.attribution.storeId) === String(input.storeId) &&
+    String(input.attribution.pendingCheckoutItemId) ===
+      String(input.item.pendingCheckoutItemId);
+  if (!baseMatches) return false;
+  if (!input.pendingItem) return false;
+  const tenantMatches =
+    String(input.attribution.organizationId) ===
+      String(input.organizationId) &&
+    String(input.pendingItem._id) ===
+      String(input.item.pendingCheckoutItemId) &&
+    String(input.pendingItem.storeId) === String(input.storeId) &&
+    String(input.pendingItem.organizationId) ===
+      String(input.organizationId);
+  const originalMatchesPending =
+    input.pendingItem.provisionalProductSkuId !== undefined &&
+    String(input.attribution.originalProductSkuId) ===
+      String(input.pendingItem.provisionalProductSkuId) &&
+    (input.pendingItem.provisionalProductId === undefined
+      ? input.attribution.originalProductId === undefined
+      : String(input.attribution.originalProductId) ===
+        String(input.pendingItem.provisionalProductId));
+  const canonicalCatalogMatches =
+    input.attribution.canonicalProductId !== undefined &&
+    input.canonicalProduct !== null &&
+    input.canonicalProduct !== undefined &&
+    input.canonicalSku !== null &&
+    input.canonicalSku !== undefined &&
+    String(input.canonicalProduct._id) ===
+      String(input.attribution.canonicalProductId) &&
+    String(input.canonicalProduct.storeId) === String(input.storeId) &&
+    String(input.canonicalProduct.organizationId) ===
+      String(input.organizationId) &&
+    String(input.canonicalSku._id) ===
+      String(input.attribution.canonicalProductSkuId) &&
+    String(input.canonicalSku.storeId) === String(input.storeId) &&
+    String(input.canonicalSku.productId) ===
+      String(input.canonicalProduct._id);
+  const itemMatchesOriginal =
+    String(input.item.productSkuId) ===
+      String(input.attribution.originalProductSkuId) &&
+    (input.attribution.originalProductId === undefined ||
+      String(input.item.productId) ===
+        String(input.attribution.originalProductId));
+  const resolved =
+    input.pendingItem.status === "approved" ||
+    input.pendingItem.status === "linked_to_catalog";
+  const canonicalMatchesPending =
+    !resolved ||
+    (input.pendingItem.approvedProductId !== undefined &&
+      input.pendingItem.approvedProductSkuId !== undefined &&
+      String(input.pendingItem.approvedProductId) ===
+        String(input.attribution.canonicalProductId) &&
+      String(input.pendingItem.approvedProductSkuId) ===
+        String(input.attribution.canonicalProductSkuId));
+  const itemMatchesCanonical =
+    resolved &&
+    String(input.item.productId) ===
+      String(input.attribution.canonicalProductId) &&
+    String(input.item.productSkuId) ===
+      String(input.attribution.canonicalProductSkuId);
+  return (
+    tenantMatches &&
+    originalMatchesPending &&
+    canonicalCatalogMatches &&
+    canonicalMatchesPending &&
+    (itemMatchesOriginal || itemMatchesCanonical)
+  );
+}
+
+export function posOriginalSaleSourceIsCoherent(input: {
+  items: Array<{
+    discount?: number;
+    inventoryImportProvisionalSkuId?: unknown;
+    pendingCheckoutItemId?: unknown;
+    productId: unknown;
+    productSkuId: unknown;
+    quantity: number;
+    totalPrice: number;
+    unitPrice: number;
+  }>;
+  itemEvidence: Array<{
+    pending: {
+      approvedProductId?: unknown;
+      approvedProductSkuId?: unknown;
+      organizationId: unknown;
+      provisionalProductId?: unknown;
+      provisionalProductSkuId?: unknown;
+      status?: string;
+      storeId: unknown;
+    } | null;
+    product: { organizationId: unknown; storeId: unknown } | null;
+    provisional: {
+      organizationId: unknown;
+      productId?: unknown;
+      productSkuId?: unknown;
+      storeId: unknown;
+    } | null;
+    sku: { productId: unknown; storeId: unknown } | null;
+  }>;
+  organizationId: unknown;
+  serviceCases: Array<{ organizationId?: unknown; storeId: unknown } | null>;
+  services: Array<{
+    quantity: number;
+    totalPrice: number;
+    unitPrice: number;
+  }>;
+  storeId: unknown;
+}) {
+  const sameAmount = (left: number, right: number) =>
+    Number(left.toFixed(2)) === Number(right.toFixed(2));
+  const lineMoneyAndUnitsAreCoherent = (line: {
+    quantity: number;
+    totalPrice: number;
+    unitPrice: number;
+  }) =>
+    Number.isInteger(line.quantity) &&
+    line.quantity > 0 &&
+    Number.isFinite(line.unitPrice) &&
+    line.unitPrice >= 0 &&
+    sameAmount(line.totalPrice, line.unitPrice * line.quantity);
+  return (
+    input.items.length === input.itemEvidence.length &&
+    input.services.length === input.serviceCases.length &&
+    input.items.every((item, index) => {
+      const evidence = input.itemEvidence[index];
+      return Boolean(
+        evidence &&
+          lineMoneyAndUnitsAreCoherent(item) &&
+          (item.discount === undefined || sameAmount(item.discount, 0)) &&
+          evidence.sku &&
+          String(evidence.sku.storeId) === String(input.storeId) &&
+          String(evidence.sku.productId) === String(item.productId) &&
+          evidence.product &&
+          String(evidence.product.storeId) === String(input.storeId) &&
+          String(evidence.product.organizationId) ===
+            String(input.organizationId) &&
+          (item.pendingCheckoutItemId === undefined ||
+            (evidence.pending &&
+              String(evidence.pending.storeId) === String(input.storeId) &&
+              String(evidence.pending.organizationId) ===
+                String(input.organizationId) &&
+              (evidence.pending.status === "linked_to_catalog"
+                ? ((evidence.pending.provisionalProductId !== undefined &&
+                    evidence.pending.provisionalProductSkuId !== undefined &&
+                    String(evidence.pending.provisionalProductId) ===
+                      String(item.productId) &&
+                    String(evidence.pending.provisionalProductSkuId) ===
+                      String(item.productSkuId)) ||
+                  (evidence.pending.approvedProductId !== undefined &&
+                    evidence.pending.approvedProductSkuId !== undefined &&
+                    String(evidence.pending.approvedProductId) ===
+                      String(item.productId) &&
+                    String(evidence.pending.approvedProductSkuId) ===
+                      String(item.productSkuId)))
+                : (evidence.pending.provisionalProductId === undefined ||
+                    String(evidence.pending.provisionalProductId) ===
+                      String(item.productId)) &&
+                  (evidence.pending.provisionalProductSkuId === undefined ||
+                    String(evidence.pending.provisionalProductSkuId) ===
+                      String(item.productSkuId))))) &&
+          (item.inventoryImportProvisionalSkuId === undefined ||
+            (evidence.provisional &&
+              String(evidence.provisional.storeId) === String(input.storeId) &&
+              String(evidence.provisional.organizationId) ===
+                String(input.organizationId) &&
+              (evidence.provisional.productId === undefined ||
+                String(evidence.provisional.productId) ===
+                  String(item.productId)) &&
+              (evidence.provisional.productSkuId === undefined ||
+                String(evidence.provisional.productSkuId) ===
+                  String(item.productSkuId)))),
+      );
+    }) &&
+    input.services.every((line, index) => {
+      const serviceCase = input.serviceCases[index];
+      return Boolean(
+        serviceCase &&
+          lineMoneyAndUnitsAreCoherent(line) &&
+          String(serviceCase.storeId) === String(input.storeId) &&
+          (serviceCase.organizationId === undefined ||
+            String(serviceCase.organizationId) === String(input.organizationId)),
+      );
+    })
+  );
+}
+
+export function posOriginalSaleIdentityMode(input: {
+  sourceLineCount: number;
+  sourceLinesAreCoherent: boolean;
+  total: number;
+}) {
+  return input.sourceLinesAreCoherent &&
+    classifyHistoricalSourceSize(input.sourceLineCount).status !==
+      "quarantined" &&
+    (input.sourceLineCount > 0 || input.total === 0)
+    ? ("line" as const)
+    : ("transaction_summary" as const);
+}
+
+export async function planPosRow(
   ctx: MutationCtx,
   transaction: Doc<"posTransaction">,
   store: Doc<"store">,
@@ -1611,36 +2085,146 @@ async function planPosRow(
       )
       .take(HISTORICAL_SOURCE_LINE_LIMIT + 1),
   ]);
-  if (
-    classifyHistoricalSourceSize(items.length + services.length).status ===
-    "quarantined"
-  ) {
-    return [
-      oversizedSourceFact({
-        currency: null,
-        eventKey: `pos:${transaction._id}:source_incomplete`,
-        occurredAt: transaction.completedAt,
-        sourceDomain: "pos",
-        sourceId: String(transaction._id),
-        sourceType: "pos_transaction",
+  const [itemEvidence, serviceCases] = await Promise.all([
+    Promise.all(
+      items.map(async (item) => {
+        const [sku, product, pending, provisional] = await Promise.all([
+          ctx.db.get("productSku", item.productSkuId),
+          ctx.db.get("product", item.productId),
+          item.pendingCheckoutItemId
+            ? ctx.db.get("posPendingCheckoutItem", item.pendingCheckoutItemId)
+            : Promise.resolve(null),
+          item.inventoryImportProvisionalSkuId
+            ? ctx.db.get(
+                "inventoryImportProvisionalSku",
+                item.inventoryImportProvisionalSkuId,
+              )
+            : Promise.resolve(null),
+        ]);
+        return { pending, product, provisional, sku };
       }),
-    ];
+    ),
+    Promise.all(
+      services.map((line) => ctx.db.get("serviceCase", line.serviceCaseId)),
+    ),
+  ]);
+  const sourceLinesAreCoherent = posOriginalSaleSourceIsCoherent({
+    itemEvidence,
+    items,
+    organizationId: store.organizationId,
+    serviceCases,
+    services,
+    storeId: store._id,
+  });
+  const identityMode = posOriginalSaleIdentityMode({
+    sourceLineCount: items.length + services.length,
+    sourceLinesAreCoherent,
+    total: transaction.total,
+  });
+  if (identityMode === "transaction_summary") {
+    const summary: HistoricalPlannedFact = {
+      amountMinor: transaction.total,
+      businessEventKey: `pos:${transaction._id}:complete:transaction_summary`,
+      completeness: "partial",
+      costStatus: "unknown",
+      currency: normalizeCurrency(store.currency),
+      factType: "sale",
+      limitingReason: "source_incomplete",
+      occurredAt: transaction.completedAt,
+      quantity: undefined,
+      sourceDomain: "pos",
+      sourceId: String(transaction._id),
+      sourceLineKey: "transaction_summary",
+      sourceType: "pos_transaction",
+    };
+    if (mode === "sale") return [summary];
+    if (mode === "void") {
+      if (
+        transaction.voidedAt !== undefined &&
+        transaction.voidedAt < transaction.completedAt
+      ) {
+        return [
+          summary,
+          oversizedSourceFact({
+            currency: normalizeCurrency(store.currency),
+            eventKey: `pos:${transaction._id}:void:source_incomplete`,
+            occurredAt: transaction.voidedAt,
+            sourceDomain: "pos",
+            sourceId: String(transaction._id),
+            sourceType: "pos_transaction",
+          }),
+        ];
+      }
+      if (
+        transaction.voidedAt !== undefined &&
+        transaction.voidedAt > cutoff
+      ) {
+        return [summary];
+      }
+      return [
+        summary,
+        ...planHistoricalReversalFacts({
+          currency: normalizeCurrency(store.currency),
+          kind: "void",
+          occurredAt: transaction.voidedAt ?? null,
+          originalFacts: [summary],
+          reversalBusinessEventKey: canonicalReportingBusinessEventKey({
+            kind: "pos_void",
+            transactionId: String(transaction._id),
+          }),
+        }),
+      ];
+    }
+    return transaction.status === "refunded"
+      ? [
+          summary,
+          oversizedSourceFact({
+            currency: normalizeCurrency(store.currency),
+            eventKey: `pos:${transaction._id}:refund:source_incomplete`,
+            occurredAt: transaction.refundedAt ?? null,
+            sourceDomain: "pos",
+            sourceId: String(transaction._id),
+            sourceType: "pos_transaction",
+          }),
+        ]
+      : [];
   }
   const attributionByPendingCheckoutItemId = new Map<
     string,
     Doc<"reportingSkuAttribution">
   >();
-  for (const item of items) {
+  for (const [index, item] of items.entries()) {
     if (!item.pendingCheckoutItemId) continue;
-    const attribution = await ctx.db
+    const attributions = await ctx.db
       .query("reportingSkuAttribution")
       .withIndex("by_storeId_pendingCheckoutItemId", (q) =>
         q
           .eq("storeId", transaction.storeId)
           .eq("pendingCheckoutItemId", item.pendingCheckoutItemId!),
       )
-      .first();
-    if (attribution && attribution.status !== "conflict") {
+      .take(2);
+    const attribution = attributions.length === 1 ? attributions[0] : null;
+    const [canonicalProduct, canonicalSku] = attribution
+      ? await Promise.all([
+          attribution.canonicalProductId
+            ? ctx.db.get("product", attribution.canonicalProductId)
+            : Promise.resolve(null),
+          ctx.db.get("productSku", attribution.canonicalProductSkuId),
+        ])
+      : [null, null];
+    if (
+      attribution &&
+      attribution.status !== "conflict" &&
+      posSkuAttributionMatchesSourceItem({
+        attribution,
+        canonicalProduct,
+        canonicalSku,
+        item,
+        organizationId: store.organizationId,
+        pendingItem: itemEvidence[index]?.pending ?? null,
+        storeId: transaction.storeId,
+      })
+    ) {
       attributionByPendingCheckoutItemId.set(
         String(item.pendingCheckoutItemId),
         attribution,
@@ -1678,7 +2262,7 @@ async function planPosRow(
   ];
   const originalFacts = commerceFacts(
     adaptPosCompleted({
-      currency: "",
+      currency: normalizeCurrency(store.currency) ?? "",
       lines,
       occurredAt: transaction.completedAt,
       recordedAt: transaction._creationTime,
@@ -1689,10 +2273,32 @@ async function planPosRow(
   );
   if (mode === "sale") return originalFacts;
   if (mode === "void") {
+    if (
+      transaction.voidedAt !== undefined &&
+      transaction.voidedAt < transaction.completedAt
+    ) {
+      return [
+        ...originalFacts,
+        oversizedSourceFact({
+          currency: normalizeCurrency(store.currency),
+          eventKey: `pos:${transaction._id}:void:source_incomplete`,
+          occurredAt: transaction.voidedAt,
+          sourceDomain: "pos",
+          sourceId: String(transaction._id),
+          sourceType: "pos_transaction",
+        }),
+      ];
+    }
+    if (
+      transaction.voidedAt !== undefined &&
+      transaction.voidedAt > cutoff
+    ) {
+      return originalFacts;
+    }
     return [
       ...originalFacts,
       ...planHistoricalReversalFacts({
-        currency: null,
+        currency: normalizeCurrency(store.currency),
         kind: "void",
         occurredAt: transaction.voidedAt ?? null,
         originalFacts,
@@ -1704,36 +2310,63 @@ async function planPosRow(
     ];
   }
   const refundedFacts: HistoricalPlannedFact[] = [];
-  for (const item of items) {
-    const refundedQuantity =
-      item.refundedQuantity ?? (item.isRefunded ? item.quantity : 0);
-    if (!item.refundedAt || item.refundedAt > cutoff || refundedQuantity <= 0)
+  for (const line of [...items, ...services]) {
+    const refundEvidence = classifyPosRefundEvidence({
+      completedAt: transaction.completedAt,
+      frozenWatermark: cutoff,
+      isRefunded: line.isRefunded,
+      quantity: line.quantity,
+      refundedAt: line.refundedAt,
+      refundedQuantity: line.refundedQuantity,
+    });
+    if (
+      refundEvidence.status === "none" ||
+      refundEvidence.status === "after_frozen_watermark"
+    ) {
       continue;
+    }
+    if (refundEvidence.status === "malformed") {
+      refundedFacts.push(
+        oversizedSourceFact({
+          currency: normalizeCurrency(store.currency),
+          eventKey: `pos:${transaction._id}:refund:${line._id}:source_incomplete`,
+          occurredAt: line.refundedAt ?? null,
+          sourceDomain: "pos",
+          sourceId: String(transaction._id),
+          sourceType: "pos_transaction",
+        }),
+      );
+      continue;
+    }
+    const refundedQuantity = refundEvidence.refundedQuantity;
     const original = originalFacts.find(
-      (fact) => fact.sourceLineKey === String(item._id),
+      (fact) => fact.sourceLineKey === String(line._id),
     );
     if (!original) continue;
     refundedFacts.push({
       ...planHistoricalReversalFacts({
-        currency: null,
+        currency: normalizeCurrency(store.currency),
         kind: "refund",
-        occurredAt: item.refundedAt,
+        occurredAt: refundEvidence.refundedAt,
         originalFacts: [
           {
             ...original,
             amountMinor: Math.round(
-              (item.totalPrice * refundedQuantity) / item.quantity,
+              (line.totalPrice * refundedQuantity) / line.quantity,
             ),
             quantity: refundedQuantity,
           },
         ],
         reversalBusinessEventKey: canonicalReportingBusinessEventKey({
           kind: "pos_refund",
-          refundId: String(item.refundedAt),
+          refundId: `${String(line._id)}:${line.refundedAt}`,
           transactionId: String(transaction._id),
         }),
       })[0]!,
     });
+  }
+  if (refundedFacts.length === 0 && transaction.status !== "refunded") {
+    return [];
   }
   if (refundedFacts.length === 0) {
     refundedFacts.push(
@@ -1747,7 +2380,10 @@ async function planPosRow(
       }),
     );
   }
-  return [...originalFacts, ...refundedFacts];
+  return [
+    ...(transaction.status === "refunded" ? originalFacts : []),
+    ...refundedFacts,
+  ];
 }
 
 async function planStorefrontRow(
@@ -1925,10 +2561,10 @@ async function planStorefrontRefundRow(
   return facts;
 }
 
-async function planPosAdjustmentRow(
+export async function planPosAdjustmentRow(
   ctx: MutationCtx,
   adjustment: Doc<"posTransactionAdjustment">,
-  _store: Doc<"store">,
+  store: Doc<"store">,
 ) {
   const lines = await ctx.db
     .query("posTransactionAdjustmentLine")
@@ -1946,24 +2582,142 @@ async function planPosAdjustmentRow(
       }),
     ];
   }
-  const facts: HistoricalPlannedFact[] = lines.map((line) => ({
-    amountMinor: line.correctedTotal - line.originalTotal,
-    businessEventKey: `pos:${adjustment.transactionId}:adjustment:${adjustment._id}:line:${line._id}`,
-    completeness: "partial",
-    costStatus: "unknown",
-    currency: normalizeCurrency(adjustment.currency),
-    factType: "correction",
-    limitingReason: "uncosted",
-    linkedBusinessEventKey: `pos:${adjustment.transactionId}:complete:${line.originalTransactionItemId ?? line._id}`,
-    occurredAt: adjustment.appliedAt ?? null,
-    productSkuId: String(line.productSkuId),
-    quantity: line.quantityDelta,
-    revenueKind: "merchandise",
-    sourceDomain: "pos",
-    sourceId: String(adjustment._id),
-    sourceLineKey: String(line._id),
-    sourceType: "pos_transaction_adjustment",
-  }));
+  const [parentTransaction, originalItems, productSkus, skuAttributionRows] = await Promise.all([
+    ctx.db.get("posTransaction", adjustment.transactionId),
+    Promise.all(
+      lines.map((line) =>
+        line.lineType === "existing" && line.originalTransactionItemId
+          ? ctx.db.get("posTransactionItem", line.originalTransactionItemId)
+          : Promise.resolve(null),
+      ),
+    ),
+    Promise.all(
+      lines.map((line) =>
+        line.lineType === "added"
+          ? ctx.db.get("productSku", line.productSkuId)
+          : Promise.resolve(null),
+      ),
+    ),
+    Promise.all(
+      lines.map((line) =>
+        line.pendingCheckoutItemId
+          ? ctx.db
+              .query("reportingSkuAttribution")
+              .withIndex("by_storeId_pendingCheckoutItemId", (q) =>
+                q
+                  .eq("storeId", adjustment.storeId)
+                  .eq("pendingCheckoutItemId", line.pendingCheckoutItemId!),
+              )
+              .take(2)
+          : Promise.resolve([]),
+      ),
+    ),
+  ]);
+  const validSkuAttributionByLineId = new Map<
+    string,
+    Doc<"reportingSkuAttribution">
+  >();
+  let invalidSkuAttributionEvidence = false;
+  for (const [index, line] of lines.entries()) {
+    if (!line.pendingCheckoutItemId) continue;
+    const rows = skuAttributionRows[index] ?? [];
+    const attribution = rows.length === 1 ? rows[0] : null;
+    const [pendingItem, canonicalProduct, canonicalSku] = attribution
+      ? await Promise.all([
+          ctx.db.get("posPendingCheckoutItem", line.pendingCheckoutItemId),
+          attribution.canonicalProductId
+            ? ctx.db.get("product", attribution.canonicalProductId)
+            : Promise.resolve(null),
+          ctx.db.get("productSku", attribution.canonicalProductSkuId),
+        ])
+      : [null, null, null];
+    if (
+      attribution &&
+      attribution.status !== "conflict" &&
+      posSkuAttributionMatchesSourceItem({
+        attribution,
+        canonicalProduct,
+        canonicalSku,
+        item: line,
+        organizationId: store.organizationId,
+        pendingItem,
+        storeId: adjustment.storeId,
+      })
+    ) {
+      validSkuAttributionByLineId.set(String(line._id), attribution);
+    } else if (rows.length > 0) {
+      invalidSkuAttributionEvidence = true;
+    }
+  }
+  if (
+    invalidSkuAttributionEvidence ||
+    !posAdjustmentSourceIsCoherent({
+      adjustment,
+      lines,
+      originalItems: originalItems.filter((item) => item !== null),
+      productSkus: productSkus.filter((sku) => sku !== null),
+      parentTransaction,
+    })
+  ) {
+    return [
+      oversizedSourceFact({
+        currency: normalizeCurrency(adjustment.currency),
+        eventKey: `pos:${adjustment.transactionId}:adjustment:${adjustment._id}:source_incomplete`,
+        occurredAt: adjustment.appliedAt ?? null,
+        sourceDomain: "pos",
+        sourceId: String(adjustment._id),
+        sourceType: "pos_transaction_adjustment",
+      }),
+    ];
+  }
+  const materialLines = lines.filter(
+    (line) =>
+      line.quantityDelta !== 0 ||
+      line.correctedTotal - line.originalTotal !== 0,
+  );
+  const facts: HistoricalPlannedFact[] = materialLines.map((line) => {
+    const amountMinor = line.correctedTotal - line.originalTotal;
+    const attribution = line.pendingCheckoutItemId
+      ? validSkuAttributionByLineId.get(String(line._id))
+      : null;
+    return {
+      attributionKind: line.pendingCheckoutItemId
+        ? "pending_checkout"
+        : "direct",
+      attributionVersion: 1,
+      amountMinor,
+      businessEventKey: `pos:${adjustment.transactionId}:adjustment:${adjustment._id}:line:${line._id}`,
+      completeness: "partial",
+      costStatus: "unknown",
+      currency: normalizeCurrency(adjustment.currency),
+      factType: amountMinor < 0 ? "refund" : "correction",
+      limitingReason: "uncosted",
+      linkedBusinessEventKey: `pos:${adjustment.transactionId}:complete:${line.originalTransactionItemId ?? line._id}`,
+      occurredAt: adjustment.appliedAt ?? null,
+      canonicalProductSkuId: line.pendingCheckoutItemId
+        ? attribution
+          ? String(attribution.canonicalProductSkuId)
+          : undefined
+        : String(line.productSkuId),
+      originalProductSkuId: String(
+        attribution?.originalProductSkuId ?? line.productSkuId,
+      ),
+      pendingCheckoutItemId: line.pendingCheckoutItemId
+        ? String(line.pendingCheckoutItemId)
+        : undefined,
+      productId: String(line.productId),
+      productSkuId: String(line.productSkuId),
+      provisionalProductSkuId: line.pendingCheckoutItemId
+        ? String(attribution?.originalProductSkuId ?? line.productSkuId)
+        : undefined,
+      quantity: line.quantityDelta,
+      revenueKind: "merchandise",
+      sourceDomain: "pos",
+      sourceId: String(adjustment._id),
+      sourceLineKey: String(line._id),
+      sourceType: "pos_transaction_adjustment",
+    };
+  });
   const lineDelta = lines.reduce(
     (sum, line) => sum + line.correctedTotal - line.originalTotal,
     0,
@@ -1976,7 +2730,7 @@ async function planPosAdjustmentRow(
       completeness: "complete",
       costStatus: "not_applicable",
       currency: normalizeCurrency(adjustment.currency),
-      factType: "correction",
+      factType: taxDelta < 0 ? "refund" : "correction",
       linkedBusinessEventKey: `pos:${adjustment.transactionId}:complete:tax`,
       occurredAt: adjustment.appliedAt ?? null,
       quantity: 0,
@@ -1990,9 +2744,11 @@ async function planPosAdjustmentRow(
   return facts;
 }
 
-function planPosPaymentCorrectionRow(
+export async function planPosPaymentCorrectionRow(
+  ctx: MutationCtx,
   event: Doc<"operationalEvent">,
-): HistoricalPlannedFact[] {
+  store: Doc<"store">,
+): Promise<HistoricalPlannedFact[]> {
   if (event.eventType !== "pos_transaction_payment_method_corrected") return [];
   const transactionId =
     event.posTransactionId ??
@@ -2005,6 +2761,54 @@ function planPosPaymentCorrectionRow(
     typeof event.metadata?.paymentMethod === "string"
       ? event.metadata.paymentMethod
       : undefined;
+  const transaction = transactionId
+    ? await ctx.db.get("posTransaction", transactionId as Id<"posTransaction">)
+    : null;
+  const sourceIsStructurallyBound = Boolean(
+    transactionId &&
+      event.storeId === store._id &&
+      event.subjectType === "pos_transaction" &&
+      event.subjectId === String(transactionId) &&
+      (!event.posTransactionId ||
+        String(event.posTransactionId) === String(transactionId)),
+  );
+  if (sourceIsStructurallyBound && transactionId && !transaction) {
+    return [
+      {
+        amountMinor: 0,
+        businessEventKey: `pos:${transactionId}:correction:${event._id}:orphan_payment_correction`,
+        completeness: "complete",
+        costStatus: "not_applicable",
+        currency: null,
+        exclusionReason: "orphan_payment_correction",
+        factType: "correction",
+        occurredAt: event.createdAt,
+        quantity: 0,
+        sourceDomain: "pos",
+        sourceId: String(event._id),
+        sourceType: "operational_event",
+      },
+    ];
+  }
+  const sourceIsBound = Boolean(
+    transaction &&
+      sourceIsStructurallyBound &&
+      String(transaction.storeId) === String(store._id),
+  );
+  if (!sourceIsBound || !transaction || event.createdAt < transaction.completedAt) {
+    return [
+      oversizedSourceFact({
+        currency: null,
+        eventKey: transactionId
+          ? `pos:${transactionId}:correction:${event._id}:source_incomplete`
+          : `pos:correction:${event._id}:source_incomplete`,
+        occurredAt: event.createdAt,
+        sourceDomain: "pos",
+        sourceId: String(event._id),
+        sourceType: "operational_event",
+      }),
+    ];
+  }
   return [
     {
       amountMinor: 0,
@@ -2014,7 +2818,7 @@ function planPosPaymentCorrectionRow(
       completeness: "complete",
       costStatus: "not_applicable",
       correctedSettlementMethod,
-      currency: null,
+      currency: normalizeCurrency(store.currency),
       factType: "correction",
       linkedBusinessEventKey: transactionId
         ? `pos:${transactionId}:complete`
@@ -2375,6 +3179,17 @@ function loadPosPage(
     .paginate({ cursor: args.cursor, numItems: PAGE_SIZE });
 }
 
+function loadAllPosPage(
+  ctx: MutationCtx,
+  args: { cursor: string | null; cutoff: number; storeId: Id<"store"> },
+) {
+  return ctx.db
+    .query("posTransaction")
+    .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+    .filter((q) => q.lte(q.field("completedAt"), args.cutoff))
+    .paginate({ cursor: args.cursor, numItems: PAGE_SIZE });
+}
+
 function loadPosAdjustmentPage(
   ctx: MutationCtx,
   args: { cursor: string | null; cutoff: number; storeId: Id<"store"> },
@@ -2558,30 +3373,22 @@ async function resolveHistoricalFactPeriodWithCtx(
   policy: HistoricalPolicy | null,
 ): Promise<HistoricalPeriodIdentity | null> {
   if (fact.occurredAt !== null) {
-    const period = await resolveReportingOperatingPeriodWithCtx(ctx, {
+    const period = await resolveReportingFinancialPeriodWithCtx(ctx, {
       occurrenceAt: fact.occurredAt,
+      organizationId: run.organizationId,
       storeId: run.storeId,
     });
     if (period.kind === "resolved") {
       return {
-        operatingDate: period.operatingDate,
-        scheduleVersionId: String(period.scheduleVersionId),
+        operatingDate: period.reportingDate,
+        timezoneVersionId: String(period.timezoneVersionId),
+        timezoneVersionHash: period.timezoneVersionHash,
+        scheduleContext: period.scheduleContext.kind,
+        scheduleVersionId:
+          period.scheduleContext.kind === "unavailable"
+            ? undefined
+            : String(period.scheduleContext.scheduleVersionId),
       };
-    }
-    if (policy) {
-      const policyPeriod = resolveHistoricalPolicyOperatingPeriod({
-        occurrenceAt: fact.occurredAt,
-        policy,
-      });
-      if (policyPeriod.kind === "resolved") {
-        return {
-          operatingDate: policyPeriod.operatingDate,
-          historicalInterpretationPolicyId:
-            policyPeriod.historicalInterpretationPolicyId,
-          historicalInterpretationPolicyHash:
-            policyPeriod.historicalInterpretationPolicyHash,
-        };
-      }
     }
   }
   return null;
@@ -2659,7 +3466,8 @@ async function recordHistoricalPreviewItem(
   if (existing) {
     if (
       existing.candidateFingerprint !== input.candidateFingerprint ||
-      existing.outcome !== input.outcome
+      existing.outcome !== input.outcome ||
+      existing.exclusionReason !== input.fact.exclusionReason
     ) {
       throw new Error(
         "Historical backfill preview candidate changed within the run",
@@ -2673,6 +3481,7 @@ async function recordHistoricalPreviewItem(
     createdAt: Date.now(),
     organizationId: input.run.organizationId,
     outcome: input.outcome,
+    exclusionReason: input.fact.exclusionReason,
     runId: input.run._id,
     sourceDomain: input.fact.sourceDomain,
     storeId: input.run.storeId,
@@ -2686,6 +3495,7 @@ async function recordHistoricalPreviewItem(
 type HistoricalManifestItemInput = {
   businessEventKey: string;
   candidateFingerprint: string;
+  exclusionReason?: HistoricalPlannedFact["exclusionReason"];
   inferredFields: string[];
   originallyMissingFields: string[];
   outcome: Doc<"reportingBackfillApplyManifestItem">["outcome"];
@@ -2706,6 +3516,7 @@ export function historicalManifestEntryDigest(
       item.businessEventKey,
       item.candidateFingerprint,
       item.outcome,
+      item.exclusionReason ?? null,
       item.inferredFields,
       item.originallyMissingFields,
       item.sanitizedCandidateJson,
@@ -2773,19 +3584,70 @@ async function requireBackfillManifestWithCtx(
 
 export const startHistoricalBackfill = internalMutation({
   args: {
+    authorizationGrantId: v.optional(
+      v.id("reportingBackfillAuthorizationGrant"),
+    ),
     automationIdentity: v.string(),
+    censusToken: v.optional(v.string()),
+    financialDateContractVersion: v.optional(v.number()),
+    lifecycleJournalTerminalId: v.optional(v.string()),
+    lifecycleJournalTerminalRecordedAt: v.optional(v.number()),
     mode: v.union(v.literal("preview"), v.literal("apply")),
+    orchestratorRunId: v.optional(v.id("reportingRun")),
     periodEnd: v.optional(v.number()),
     periodStart: v.optional(v.number()),
     policyId: v.optional(v.id("reportingHistoricalInterpretationPolicy")),
     policyHash: v.optional(v.string()),
     previewRunId: v.optional(v.id("reportingRun")),
     requestKey: v.string(),
+    sourceScope: v.optional(v.literal("pos")),
+    skuAttributionTerminalSequence: v.optional(v.number()),
     storeId: v.id("store"),
   },
   handler: async (ctx, args) => {
     const store = await ctx.db.get("store", args.storeId);
     if (!store) throw new Error("Store not found");
+    if (args.sourceScope === "pos") {
+      if (
+        !args.authorizationGrantId ||
+        !args.orchestratorRunId ||
+        !args.censusToken ||
+        args.financialDateContractVersion === undefined
+      ) {
+        throw new Error("Authorized POS backfill lineage is incomplete");
+      }
+      const { grant, run: orchestrator } =
+        await requireAuthorizedLineageWithCtx(ctx, {
+          grantId: args.authorizationGrantId,
+          runId: args.orchestratorRunId,
+        });
+      if (
+        grant.runId !== orchestrator._id ||
+        grant.status !== "running" ||
+        grant.sourceScope !== "pos" ||
+        grant.organizationId !== store.organizationId ||
+        grant.storeId !== store._id ||
+        orchestrator.backfillAuthorizationGrantId !== grant._id ||
+        orchestrator.sourceScope !== "pos" ||
+        orchestrator.censusToken !== args.censusToken ||
+        orchestrator.financialDateContractVersion !==
+          args.financialDateContractVersion ||
+        grant.contractVersion !== args.financialDateContractVersion ||
+        orchestrator.status !== "running" ||
+        (args.mode === "preview"
+          ? orchestrator.cursor !== "pos_preview:queued"
+          : !orchestrator.cursor?.startsWith("pos_preview:completed:"))
+      ) {
+        throw new Error("Authorized POS backfill lineage is incompatible");
+      }
+    } else if (
+      args.authorizationGrantId !== undefined ||
+      args.orchestratorRunId !== undefined ||
+      args.censusToken !== undefined ||
+      args.financialDateContractVersion !== undefined
+    ) {
+      throw new Error("Historical backfill authorization scope is incomplete");
+    }
     const now = Date.now();
     if (args.mode === "preview" && args.previewRunId !== undefined) {
       throw new Error(
@@ -2809,9 +3671,45 @@ export const startHistoricalBackfill = internalMutation({
         preview,
         storeId: store._id,
       });
+      if (
+        args.sourceScope === "pos" &&
+        (preview.sourceScope !== "pos" ||
+          preview.backfillAuthorizationGrantId !== args.authorizationGrantId ||
+          preview.censusToken !== args.censusToken ||
+          preview.financialDateContractVersion !==
+            args.financialDateContractVersion)
+      ) {
+        throw new Error("Authorized POS preview lineage is incompatible");
+      }
+      if (args.sourceScope === "pos") {
+        assertSealedJournalTerminal({
+          apply: {
+            id: args.lifecycleJournalTerminalId,
+            recordedAt: args.lifecycleJournalTerminalRecordedAt,
+          },
+          preview: {
+            id: preview.lifecycleJournalTerminalId,
+            recordedAt: preview.lifecycleJournalTerminalRecordedAt,
+          },
+        });
+        if (
+          preview.skuAttributionTerminalSequence !==
+          args.skuAttributionTerminalSequence
+        ) {
+          throw new Error(
+            "Authorized POS attribution terminal changed after preview",
+          );
+        }
+      }
     }
-    const policyId = preview?.historicalInterpretationPolicyId ?? args.policyId;
-    const policyHash = preview?.historicalInterpretationPolicyHash ?? args.policyHash;
+    const policyId =
+      args.sourceScope === "pos"
+        ? undefined
+        : preview?.historicalInterpretationPolicyId ?? args.policyId;
+    const policyHash =
+      args.sourceScope === "pos"
+        ? undefined
+        : preview?.historicalInterpretationPolicyHash ?? args.policyHash;
     if ((policyId === undefined) !== (policyHash === undefined)) {
       throw new Error("Historical backfill policy identity is incomplete");
     }
@@ -2873,7 +3771,9 @@ export const startHistoricalBackfill = internalMutation({
         })
       : undefined;
     await ctx.db.patch("reportingRun", result.run._id, {
+      backfillAuthorizationGrantId: args.authorizationGrantId,
       backfillApplyManifestId: manifestId,
+      censusToken: args.censusToken,
       conflictCount: 0,
       coverageBasisPoints: 10_000,
       createdCount: 0,
@@ -2889,7 +3789,12 @@ export const startHistoricalBackfill = internalMutation({
       historicalInterpretationPolicyId: policyId,
       historicalInterpretationPolicyHash: policyHash,
       inferredCount: 0,
+      financialDateContractVersion: args.financialDateContractVersion,
+      lifecycleJournalTerminalId: args.lifecycleJournalTerminalId,
+      lifecycleJournalTerminalRecordedAt:
+        args.lifecycleJournalTerminalRecordedAt,
       omittedCount: 0,
+      orphanPaymentCorrectionCount: 0,
       periodEnd,
       periodStart,
       previewRunId: preview?._id,
@@ -2897,6 +3802,8 @@ export const startHistoricalBackfill = internalMutation({
       quarantinedCount: 0,
       startedAt: now,
       status: "running",
+      sourceScope: args.sourceScope,
+      skuAttributionTerminalSequence: args.skuAttributionTerminalSequence,
       unknownCount: 0,
       unknownFieldCount: 0,
     });
@@ -2930,13 +3837,46 @@ export const processHistoricalBackfillBatch = internalMutation({
     if (!store || store.organizationId !== run.organizationId) {
       throw new Error("Backfill store ownership changed");
     }
-    const policy = run.historicalInterpretationPolicyId
-      ? await requireApprovedHistoricalPolicyWithCtx(ctx, {
-          policyId: run.historicalInterpretationPolicyId,
-          policyHash: run.historicalInterpretationPolicyHash!,
-          storeId: run.storeId,
-        })
-      : null;
+    if (run.sourceScope === "pos") {
+      if (!run.backfillAuthorizationGrantId) {
+        throw new Error("Authorized POS backfill grant is unavailable");
+      }
+      const provisionalGrant = await ctx.db.get(
+        "reportingBackfillAuthorizationGrant",
+        run.backfillAuthorizationGrantId,
+      );
+      if (!provisionalGrant?.runId) {
+        throw new Error("Authorized POS backfill grant run is unavailable");
+      }
+      const { grant, run: orchestrator } =
+        await requireAuthorizedLineageWithCtx(ctx, {
+          grantId: provisionalGrant._id,
+          runId: provisionalGrant.runId,
+        });
+      if (
+        grant.status !== "running" ||
+        grant.sourceScope !== "pos" ||
+        grant.organizationId !== run.organizationId ||
+        grant.storeId !== run.storeId ||
+        orchestrator.backfillAuthorizationGrantId !== grant._id ||
+        orchestrator.censusToken !== run.censusToken ||
+        orchestrator.financialDateContractVersion !==
+          run.financialDateContractVersion ||
+        orchestrator.status !== "running"
+      ) {
+        throw new Error("Authorized POS backfill child lineage changed");
+      }
+    }
+    const policy =
+      run.sourceScope === "pos"
+        ? null
+        : run.historicalInterpretationPolicyId
+          ? await requireApprovedHistoricalPolicyWithCtx(ctx, {
+              policyId: run.historicalInterpretationPolicyId,
+              policyHash: run.historicalInterpretationPolicyHash!,
+              storeId: run.storeId,
+            })
+          : null;
     if (run.operation === "historical_backfill_manifest_apply") {
       try {
       const manifest = await requireBackfillManifestWithCtx(ctx, run);
@@ -2964,6 +3904,9 @@ export const processHistoricalBackfillBatch = internalMutation({
           item.sanitizedCandidateJson,
         );
         const fact = candidate.fact;
+        if (item.exclusionReason !== fact.exclusionReason) {
+          throw new Error("Historical backfill manifest exclusion changed");
+        }
         const fingerprint = await fingerprintHistoricalCandidateWithCtx(
           ctx,
           fact,
@@ -3069,9 +4012,17 @@ export const processHistoricalBackfillBatch = internalMutation({
       }
     }
     const cursor = decodeHistoricalBackfillCursor(run.cursor);
+    if (
+      run.sourceScope === "pos" &&
+      !POS_CENSUS_BACKFILL_PHASES.includes(
+        cursor.phase as (typeof POS_CENSUS_BACKFILL_PHASES)[number],
+      )
+    ) {
+      throw new Error("POS census cursor contains a non-POS phase");
+    }
     if (cursor.phase === "done") {
       const now = Date.now();
-      for (const sourceDomain of HISTORICAL_BACKFILL_SCANNED_SOURCE_DOMAINS) {
+      for (const sourceDomain of scannedSourceDomains(run)) {
         await upsertHistoricalBackfillSourceAudit(ctx, {
           counts: EMPTY_HISTORICAL_BACKFILL_AUDIT,
           now,
@@ -3131,7 +4082,7 @@ export const processHistoricalBackfillBatch = internalMutation({
           }
           return;
         }
-        for (const sourceDomain of HISTORICAL_BACKFILL_SCANNED_SOURCE_DOMAINS) {
+        for (const sourceDomain of scannedSourceDomains(run)) {
           const [previewAudits, preflightAudits] = await Promise.all([
             ctx.db
               .query("reportingBackfillSourceAudit")
@@ -3245,8 +4196,16 @@ export const processHistoricalBackfillBatch = internalMutation({
         sequence: finalAudit.plannedCount + 100,
         storeId: run.storeId,
       });
+      if (run.sourceScope === "pos") {
+        await ctx.scheduler.runAfter(
+          0,
+          internal.reporting.maintenance.posCensusBackfill
+            .continueAuthorizedPosCensusBackfill,
+          { childRunId: run._id },
+        );
+      }
       if (!run.operation.endsWith("preview")) {
-        for (const sourceDomain of HISTORICAL_BACKFILL_SCANNED_SOURCE_DOMAINS) {
+        for (const sourceDomain of scannedSourceDomains(run)) {
           const quarantinedCount = quarantines.filter(
             (row) => row.sourceDomain === sourceDomain,
           ).length;
@@ -3293,11 +4252,17 @@ export const processHistoricalBackfillBatch = internalMutation({
           status: "completed",
           storeId: run.storeId,
         });
-      } else if (cursor.phase === "pos_void" || cursor.phase === "pos_refund") {
+      } else if (cursor.phase === "pos_void") {
         page = await loadPosPage(ctx, {
           cursor: cursor.pageCursor,
           cutoff: run.frozenWatermark,
-          status: cursor.phase === "pos_void" ? "void" : "refunded",
+          status: "void",
+          storeId: run.storeId,
+        });
+      } else if (cursor.phase === "pos_refund") {
+        page = await loadAllPosPage(ctx, {
+          cursor: cursor.pageCursor,
+          cutoff: run.frozenWatermark,
           storeId: run.storeId,
         });
       } else if (cursor.phase === "pos_adjustment") {
@@ -3387,7 +4352,11 @@ export const processHistoricalBackfillBatch = internalMutation({
             store,
           );
         } else if (cursor.phase === "pos_payment_correction") {
-          facts = planPosPaymentCorrectionRow(row as Doc<"operationalEvent">);
+          facts = await planPosPaymentCorrectionRow(
+            ctx,
+            row as Doc<"operationalEvent">,
+            store,
+          );
         } else if (
           cursor.phase === "storefront_delivered" ||
           cursor.phase === "storefront_picked_up"
@@ -3461,6 +4430,7 @@ export const processHistoricalBackfillBatch = internalMutation({
               previewItem.candidateFingerprint !== candidateFingerprint ||
               previewItem.policyId !== policy?._id ||
               previewItem.policyHash !== policy?.approvalHash ||
+              previewItem.exclusionReason !== fact.exclusionReason ||
               JSON.stringify(previewItem.inferredFields ?? []) !==
                 JSON.stringify(normalized.inferredFields) ||
               JSON.stringify(previewItem.originallyMissingFields ?? []) !==
@@ -3489,6 +4459,7 @@ export const processHistoricalBackfillBatch = internalMutation({
             const manifestItem = {
               businessEventKey: historicalPreviewBusinessEventKey(fact),
               candidateFingerprint,
+              exclusionReason: fact.exclusionReason,
               inferredFields: normalized.inferredFields,
               originallyMissingFields: normalized.originallyMissingFields,
               outcome,
@@ -3523,6 +4494,7 @@ export const processHistoricalBackfillBatch = internalMutation({
             });
           }
           const delta = historicalBackfillAuditForOutcome({
+            exclusionReason: fact.exclusionReason,
             outcome,
             unknownFieldCount: historicalFactUnknownFields(fact).length,
             inferredCount: normalized.inferredFields.length,
@@ -3566,11 +4538,19 @@ export const processHistoricalBackfillBatch = internalMutation({
         historicalBackfillAuditFromRun(run),
         batchAudit,
       );
-      const next = advanceHistoricalBackfillCursor({
-        continueCursor: page.continueCursor,
-        isDone: page.isDone,
-        phase: cursor.phase,
-      });
+      const next =
+        run.sourceScope === "pos"
+          ? advancePosCensusCursor({
+              continueCursor: page.continueCursor,
+              isDone: page.isDone,
+              phase:
+                cursor.phase as (typeof POS_CENSUS_BACKFILL_PHASES)[number],
+            })
+          : advanceHistoricalBackfillCursor({
+              continueCursor: page.continueCursor,
+              isDone: page.isDone,
+              phase: cursor.phase,
+            });
       await ctx.db.patch("reportingRun", run._id, {
         ...historicalBackfillAuditPatch(cumulativeAudit),
         cursor: encodeHistoricalBackfillCursor(next),

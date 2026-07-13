@@ -1,6 +1,7 @@
 ---
 title: "Athena Reports Workspace Uses Generation-Coherent Server-Shaped Read Models"
 date: 2026-07-11
+last_updated: 2026-07-12
 category: architecture-patterns
 module: athena-webapp
 problem_type: architecture_pattern
@@ -25,7 +26,7 @@ tags:
   - cursor-coherence
   - tanstack-router
   - server-shaped-ui
-delivery_diff_fingerprint: e71af51a419c0be67ae7632c82b732269326be4466b1221c12473a990f844be2
+delivery_diff_fingerprint: 8f0b81d6dcaff204b644404cf2a31b4a027041fc8521e94b45e7e296073ef3c9
 ---
 
 # Athena Reports Workspace Uses Generation-Coherent Server-Shaped Read Models
@@ -47,6 +48,8 @@ Build Reports as a thin presentation layer over reporting-owned composite read m
 5. Return typed application destinations and explicit trust metadata. Money DTOs carry currency and minor-unit scale; unknown cost remains partial rather than becoming zero; Daily Close is trust evidence rather than a competing accounting total.
 6. Build summaries into an isolated watermark-keyed workspace epoch. Verify every family and required intraday evidence before atomically switching the read pointer; never clear or rebuild the live epoch in place.
 7. Layer URL ownership. Reports tabs preserve shared period keys (`preset`, `comparison`, `start`, `end`) and preserve `runId` only for a custom range. They discard view-owned cursor, filter, and sort state. Storefront may reuse its analytics presentation under `/reports/storefront`, but it remains independent from financial reporting queries.
+8. Activate one read bundle containing compatible store-day, SKU-day, and current-inventory epochs. If new inventory authority is globally absent, the inventory member may be verified as `unavailable/source_incomplete` only with zero valuation rows and zero discrepancies; sales remain visible. Legacy compatibility-shadow positions do not establish new authority.
+9. Persist explicit empty preset summaries after a complete store-day scan. Net sales and units may be zero only when certified POS coverage is complete; missing cost/profit remains null and limited. A missing summary in an active epoch remains a materialization defect, not an implicit zero.
 
 The primary code boundaries are:
 
@@ -69,6 +72,10 @@ This extends the reporting fact/projection boundary: that pattern establishes fa
 - Do not read mutable operational rows directly from Reports; use reporting-owned active generations and durable evidence.
 - Capture generation and watermark context once per composite read and bind it to every cursor.
 - Materialize into an isolated epoch, reject duplicate page deliveries transactionally, and switch the public pointer only after verification.
+- Keep the three required workspace members on the same grant, census hash,
+  contract versions, fact watermark, and certified orphan-exclusion count.
+- Distinguish proven zero from unavailable authority. Never synthesize inventory
+  quantity/value or treat a missing summary as an empty period in the reader.
 - Use indexed server-side filters and sorts, and cap pages before identity hydration.
 - Preserve revenue and valuation currencies separately, including `minorUnitScale`.
 - Treat unknown cost as partial coverage and Daily Close as supporting trust evidence.

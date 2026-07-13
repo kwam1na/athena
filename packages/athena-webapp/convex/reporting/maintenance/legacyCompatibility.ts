@@ -153,9 +153,6 @@ export function historicalPolicyApprovalHash(input: {
   contentHash: string;
   creatorUserId: string;
 }) {
-  if (input.approverUserId === input.creatorUserId) {
-    throw new Error("Historical reporting policy requires a distinct approver");
-  }
   return `historical-policy-approval-v1:${fnv1a(JSON.stringify([
     input.contentHash,
     input.creatorUserId,

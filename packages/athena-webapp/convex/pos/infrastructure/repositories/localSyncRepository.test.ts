@@ -47,4 +47,27 @@ describe("createConvexLocalSyncRepository", () => {
     expect(varianceReviewSource).not.toContain(".collect()");
     expect(varianceReviewSource).not.toContain(".take(20)");
   });
+
+  it("atomically journals locally synchronized completed sales", () => {
+    const source = readProjectFile(
+      "convex",
+      "pos",
+      "infrastructure",
+      "repositories",
+      "localSyncRepository.ts",
+    );
+    const transactionSource = source.slice(
+      source.indexOf("async createTransaction(input)"),
+      source.indexOf("async createTransactionItem(input)"),
+    );
+
+    expect(transactionSource).toContain(
+      "await appendPosLifecycleJournalWithCtx(ctx",
+    );
+    expect(transactionSource).toContain('eventKind: "completed"');
+    expect(transactionSource).toContain('origin: "local_sync"');
+    expect(transactionSource.indexOf('ctx.db.insert("posTransaction"')).toBeLessThan(
+      transactionSource.indexOf("await appendPosLifecycleJournalWithCtx(ctx"),
+    );
+  });
 });

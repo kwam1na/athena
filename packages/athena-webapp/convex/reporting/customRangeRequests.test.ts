@@ -11,6 +11,7 @@ import {
   customRangeSourcesAreAuthoritative,
   decideCustomRangeRequest,
   customRangeResultIdentity,
+  customRangeSkuSourceTerminalIsCurrent,
   nextCustomRangeWork,
 } from "./customRangeRequests";
 
@@ -24,14 +25,44 @@ const request = {
 };
 
 describe("custom reporting range requests", () => {
+  it("rejects new item range authority after a post-activation conflict", () => {
+    expect(
+      customRangeSkuSourceTerminalIsCurrent({
+        cursor: {
+          latestActivatedSequence: 1,
+          latestAppliedSequence: 1,
+          latestMaterialSequence: 2,
+        },
+        runTerminal: 1,
+        skuGenerationTerminal: 1,
+      }),
+    ).toBe(false);
+    expect(
+      customRangeSkuSourceTerminalIsCurrent({
+        cursor: {
+          latestActivatedSequence: 2,
+          latestAppliedSequence: 2,
+          latestMaterialSequence: 2,
+        },
+        runTerminal: 2,
+        skuGenerationTerminal: 2,
+      }),
+    ).toBe(true);
+  });
   it("uses one full source-authority predicate across store and SKU generations", () => {
     const authority = { factContractVersion: 1, metricContractVersion: 1, organizationId: "org-1", projectionContractVersion: 1, stableWatermark: 100, storeId: "store-1" };
-    const activation = { ...authority, generationId: "store-generation" };
+    const member = { generationId: "store-generation", projectionKind: "store_day" };
     const generation = { ...authority, generationId: "store-generation", projectionKind: "store_day", sourceWatermark: 100, status: "active" };
-    const input = { authority, skuActivation: { ...activation, generationId: "sku-generation" }, skuGeneration: { ...generation, generationId: "sku-generation", projectionKind: "sku_day" }, storeActivation: activation, storeGeneration: generation };
+    const input = { authority, skuMember: { generationId: "sku-generation", projectionKind: "sku_day" }, skuGeneration: { ...generation, generationId: "sku-generation", projectionKind: "sku_day" }, storeMember: member, storeGeneration: generation };
     expect(customRangeSourcesAreAuthoritative(input)).toBe(true);
     expect(customRangeSourcesAreAuthoritative({ ...input, skuGeneration: { ...input.skuGeneration, stableWatermark: 99 } })).toBe(false);
-    expect(customRangeSourcesAreAuthoritative({ ...input, skuActivation: { ...input.skuActivation, supersededAt: 101 } })).toBe(false);
+    expect(customRangeSourcesAreAuthoritative({ ...input, storeGeneration: { ...input.storeGeneration, status: "superseded" } })).toBe(true);
+    expect(customRangeSourcesAreAuthoritative({
+      ...input,
+      skuGeneration: { ...input.skuGeneration, status: "superseded" },
+      storeGeneration: { ...input.storeGeneration, status: "superseded" },
+    })).toBe(true);
+    expect(customRangeSourcesAreAuthoritative({ ...input, skuMember: { ...input.skuMember, generationId: "other" } })).toBe(false);
     expect(customRangeSourcesAreAuthoritative({ ...input, storeGeneration: { ...input.storeGeneration, organizationId: "foreign" } })).toBe(false);
   });
   it("uses idempotent identities for every persisted result family", () => {
@@ -217,7 +248,9 @@ describe("custom reporting range requests", () => {
     expect(source).toContain("run.sourceGenerationIds");
     expect(source).toContain("skuSourceGeneration.storeId !== run.storeId");
     expect(source).toContain("skuSourceGeneration.stableWatermark !== run.frozenWatermark");
-    expect(source).toContain("Custom range SKU source generation is no longer active");
+    expect(source).toContain("getActiveReadBundleWithCtx");
+    expect(source).toContain("getExactActiveWorkspaceEpochWithCtx");
+    expect(source).not.toContain("Custom range SKU source generation is no longer active");
     expect(source).toContain("resultFamily: v.optional(customRangeResultFamilyValidator)");
   });
 });

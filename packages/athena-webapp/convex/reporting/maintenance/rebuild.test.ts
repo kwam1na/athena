@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   decideStableCatchUp,
+  projectionRebuildLineage,
   reconciliationCurrencySegmentKey,
   reconciliationLogicalKey,
   reconcileRebuildSnapshot,
@@ -16,25 +17,94 @@ describe("reporting projection rebuild", () => {
     "utf8",
   );
 
-  it("segments reconciliation keys by immutable period lineage", () => {
+  it("segments v2 reconciliation by immutable timezone lineage, not schedule context", () => {
     const ordinary = reconciliationLogicalKey({
       metric: "net_sales",
       operatingDate: "2026-07-01",
+      timezoneVersionId: "timezone-1",
+      timezoneVersionHash: "timezone-hash-1",
       scheduleVersionId: "schedule-1",
     });
-    const historical = reconciliationLogicalKey({
+    const differentScheduleContext = reconciliationLogicalKey({
       metric: "net_sales",
       operatingDate: "2026-07-01",
-      historicalInterpretationPolicyId: "policy-1",
-      historicalInterpretationPolicyHash: "hash-1",
+      timezoneVersionId: "timezone-1",
+      timezoneVersionHash: "timezone-hash-1",
+      scheduleVersionId: "schedule-2",
     });
-    const revisedHistorical = reconciliationLogicalKey({
+    const revisedTimezone = reconciliationLogicalKey({
       metric: "net_sales",
       operatingDate: "2026-07-01",
-      historicalInterpretationPolicyId: "policy-1",
-      historicalInterpretationPolicyHash: "hash-2",
+      timezoneVersionId: "timezone-1",
+      timezoneVersionHash: "timezone-hash-2",
     });
-    expect(new Set([ordinary, historical, revisedHistorical]).size).toBe(3);
+    expect(differentScheduleContext).toBe(ordinary);
+    expect(revisedTimezone).not.toBe(ordinary);
+  });
+
+  it("requires exact all-or-none verified POS lineage on rebuild startup", () => {
+    const lineage = {
+      backfillAuthorizationGrantId: "grant-1",
+      censusToken: "census-1",
+      factSnapshotWatermark: 550,
+      financialDateContractVersion: 2,
+      frozenWatermark: 500,
+      sourceCensusHash: "source-census-1",
+      sourceScope: "pos" as const,
+    };
+    expect(projectionRebuildLineage(lineage)).toEqual(lineage);
+    expect(projectionRebuildLineage({})).toBeNull();
+    expect(() =>
+      projectionRebuildLineage({ skuAttributionTerminalSequence: 1 }),
+    ).toThrow("all-or-none");
+    expect(() =>
+      projectionRebuildLineage({
+        backfillAuthorizationGrantId: "grant-1",
+        sourceScope: "pos",
+      }),
+    ).toThrow("all-or-none");
+    expect(() =>
+      projectionRebuildLineage({
+        ...lineage,
+        censusToken: " ",
+      }),
+    ).toThrow("censusToken");
+    expect(
+      projectionRebuildLineage({
+        ...lineage,
+        skuAttributionTerminalSequence: 7,
+      }),
+    ).toMatchObject({ skuAttributionTerminalSequence: 7 });
+    expect(() =>
+      projectionRebuildLineage({
+        ...lineage,
+        skuAttributionTerminalSequence: 0,
+      }),
+    ).toThrow("skuAttributionTerminalSequence");
+  });
+
+  it("persists verified POS lineage on the rebuild run", () => {
+    expect(source).toContain("backfillAuthorizationGrantId: lineage?.backfillAuthorizationGrantId");
+    expect(source).toContain("censusToken: lineage?.censusToken");
+    expect(source).toMatch(
+      /financialDateContractVersion:\s*lineage\?\.financialDateContractVersion/,
+    );
+    expect(source).toContain("sourceScope: lineage?.sourceScope");
+    expect(source).toContain("sourceCensusHash: lineage?.sourceCensusHash");
+    expect(source).toContain("factSnapshotWatermark: lineage?.factSnapshotWatermark");
+    expect(source).toContain(
+      "orphanPaymentCorrectionCount:\n        certifiedPosLineage?.orphanPaymentCorrectionCount",
+    );
+    expect(source).not.toContain("orphanPaymentCorrectionCount: args.");
+    expect(source).toContain(
+      "lineage?.factSnapshotWatermark ?? stableRebuildWatermark(now)",
+    );
+    expect(source).toContain("if (!catchingUp && !run.backfillAuthorizationGrantId)");
+    expect(source).toContain("requireVerifiedPosBackfillLineageWithCtx(ctx, {");
+    expect(source).toMatch(
+      /projectionRebuildLineage\(\{[\s\S]*skuAttributionTerminalSequence:\s*args\.skuAttributionTerminalSequence/,
+    );
+    expect(source).toContain("reporting.activation.activateVerifiedGeneration");
   });
 
   it("uses mutation-time frozen watermarks and bounded continuation", () => {

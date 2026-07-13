@@ -1,6 +1,7 @@
 ---
 title: "Athena Store Schedule owns reusable store-local business time"
 date: 2026-06-27
+last_updated: 2026-07-12
 category: architecture
 module: athena-webapp
 problem_type: architecture_pattern
@@ -13,6 +14,7 @@ tags:
   - automation
   - store-configuration
   - timezone
+delivery_diff_fingerprint: 8f0b81d6dcaff204b644404cf2a31b4a027041fc8521e94b45e7e296073ef3c9
 ---
 
 ## Problem
@@ -61,6 +63,13 @@ a trustworthy IANA timezone and admin confirmation exist. Static timezone
 offsets are compatibility hints, not canonical timezones. EOD completion window
 metadata remains automation compatibility data; it is not store close time.
 
+Financial reporting is an explicit exception to schedule ownership. Reports
+uses a separate effective-dated `storeTimezoneVersion` authority to convert a
+source occurrence into a local calendar date. It may attach the resolved Store
+Schedule as expected-hours context, but schedule absence, closed state, or an
+outside-hours occurrence cannot reject a completed sale. This separation exists
+because real transactions may occur outside configured operating windows.
+
 ## Prevention
 
 - Add future store-local-time use cases through the Store Schedule context APIs
@@ -71,5 +80,8 @@ metadata remains automation compatibility data; it is not store close time.
   status; expose them only as quiet timing context when useful.
 - Add return-validator contract tests when new public Convex schedule functions
   expose explicit `returns` validators.
+- Never use Store Schedule existence as a prerequisite for financial fact
+  eligibility or report materialization. Persist schedule lineage only as
+  optional context when it resolves.
 - Regenerate Convex refs and Graphify when schedule schema, functions, or
   read-model consumers change.

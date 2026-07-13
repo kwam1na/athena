@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 
+vi.mock("../../infrastructure/posLifecycleJournal", () => ({
+  appendPosLifecycleJournalWithCtx: vi.fn(),
+}));
+
 import type { Id } from "../../../_generated/dataModel";
 import {
   createOrReuseRegisterSessionRepairMapping,

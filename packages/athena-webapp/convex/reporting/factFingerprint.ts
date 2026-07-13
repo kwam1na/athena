@@ -51,6 +51,8 @@ export type ReportingFactSemanticInput = {
   scheduleVersionId?: string;
   historicalInterpretationPolicyId?: string;
   historicalInterpretationPolicyHash?: string;
+  timezoneVersionId?: string;
+  timezoneVersionHash?: string;
   serviceCaseId?: string;
   sourceDomain: string;
   sourceLineKey?: string;
@@ -141,7 +143,10 @@ export function normalizeReportingFactSemantics(
     periodLineageKind: lineage.kind,
     periodLineageId: lineage.id,
     periodLineageHash:
-      lineage.kind === "historical_policy" ? lineage.hash : null,
+      lineage.kind === "historical_policy" ||
+      lineage.kind === "store_timezone"
+        ? lineage.hash
+        : null,
     serviceCaseId: normalizedOptionalString(input.serviceCaseId),
     sourceDomain: input.sourceDomain,
     sourceLineKey: input.sourceLineKey ?? null,
@@ -224,13 +229,32 @@ export function reportingPeriodLineage(input: {
   scheduleVersionId?: string | null;
   historicalInterpretationPolicyId?: string | null;
   historicalInterpretationPolicyHash?: string | null;
+  timezoneVersionId?: string | null;
+  timezoneVersionHash?: string | null;
 }) {
+  const hasTimezone =
+    input.timezoneVersionId !== undefined && input.timezoneVersionId !== null;
   const hasSchedule = input.scheduleVersionId !== undefined && input.scheduleVersionId !== null;
   const hasPolicy =
     input.historicalInterpretationPolicyId !== undefined &&
     input.historicalInterpretationPolicyId !== null;
-  if (hasSchedule === hasPolicy) {
+  if (hasTimezone && hasPolicy) {
+    throw new Error(
+      "Store timezone lineage cannot carry historical policy lineage",
+    );
+  }
+  if (!hasTimezone && [hasSchedule, hasPolicy].filter(Boolean).length !== 1) {
     throw new Error("Reporting period lineage requires exactly one source");
+  }
+  if (hasTimezone) {
+    if (!input.timezoneVersionHash) {
+      throw new Error("Store timezone lineage requires its immutable hash");
+    }
+    return {
+      kind: "store_timezone" as const,
+      id: String(input.timezoneVersionId),
+      hash: input.timezoneVersionHash,
+    };
   }
   if (hasSchedule) {
     if (input.historicalInterpretationPolicyHash) {

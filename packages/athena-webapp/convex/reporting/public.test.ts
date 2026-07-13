@@ -6,15 +6,89 @@ import {
   boundReportingPagination,
   boundReportingWorkspacePagination,
   buildReportingOverview,
+  customRangeSkuTerminalIsReadable,
   REPORTING_PUBLIC_PAGE_SIZE_MAX,
   publicPeriodLineage,
+  presentReportItemMetrics,
+  presentCurrentValuationResult,
+  reportingGenerationHasReadableStableWatermark,
+  reportingGenerationAttributionTerminalIsCurrent,
 } from "./public";
 
 describe("public reporting overview contract", () => {
-  it("serializes schedule and policy lineage as distinguishable browser-safe segments", () => {
+  it("keeps custom overview money readable while stale item results fail closed", () => {
+    const staleCursor = {
+      latestActivatedSequence: 1,
+      latestAppliedSequence: 1,
+      latestMaterialSequence: 2,
+    };
+    expect(
+      customRangeSkuTerminalIsReadable({
+        cursor: null,
+        generationTerminal: 1,
+        requestedSurface: "overview",
+        runTerminal: 1,
+        workspaceTerminal: 1,
+      }),
+    ).toBe(true);
+    expect(
+      customRangeSkuTerminalIsReadable({
+        cursor: staleCursor,
+        generationTerminal: 1,
+        requestedSurface: "sku_dependent",
+        runTerminal: 1,
+        workspaceTerminal: 1,
+      }),
+    ).toBe(false);
+    expect(
+      customRangeSkuTerminalIsReadable({
+        cursor: {
+          latestActivatedSequence: 2,
+          latestAppliedSequence: 2,
+          latestMaterialSequence: 2,
+        },
+        generationTerminal: 2,
+        requestedSurface: "sku_dependent",
+        runTerminal: 2,
+        workspaceTerminal: 2,
+      }),
+    ).toBe(true);
+  });
+  it("fails stale post-conflict SKU reads closed without hiding store money", () => {
+    const cursor = {
+      latestActivatedSequence: 1,
+      latestAppliedSequence: 1,
+      latestMaterialSequence: 2,
+    };
+    expect(
+      reportingGenerationAttributionTerminalIsCurrent({
+        cursor,
+        projectionKind: "sku_day",
+        terminal: 1,
+      }),
+    ).toBe(false);
+    expect(
+      reportingGenerationAttributionTerminalIsCurrent({
+        cursor,
+        projectionKind: "store_day",
+        terminal: undefined,
+      }),
+    ).toBe(true);
+  });
+  it("serializes schedule, timezone, and policy lineage as distinguishable browser-safe segments", () => {
     expect(publicPeriodLineage({ scheduleVersionId: "schedule-1" as never })).toEqual({
       kind: "store_schedule",
       id: "schedule-1",
+    });
+    expect(
+      publicPeriodLineage({
+        timezoneVersionId: "timezone-1" as never,
+        timezoneVersionHash: "timezone-hash-1",
+      }),
+    ).toEqual({
+      kind: "store_timezone",
+      id: "timezone-1",
+      hash: "timezone-hash-1",
     });
     expect(
       publicPeriodLineage({
@@ -59,11 +133,66 @@ describe("public reporting overview contract", () => {
   it("binds workspace reads to active authority and serves custom presentation DTOs", () => {
     const source = readFileSync(join(process.cwd(), "convex", "reporting", "public.ts"), "utf8");
     expect(source).toContain('generation.status !== "active"');
-    expect(source).toContain("generation.stableWatermark !== generation.sourceWatermark");
     expect(source).toContain("decodeReportingCursor(args.paginationOpts.cursor, cursorContextKey)");
     expect(source).toContain("getReportsCustomRangePresentation = query");
     expect(source).toContain('v.literal("item_detail")');
     expect(source).toContain('inventoryLimitingReason: currentInventory && !inventoryCompatible');
+  });
+
+  it("keeps bundle-selected superseded members readable during atomic cutover and rollback", () => {
+    const source = readFileSync(join(process.cwd(), "convex", "reporting", "public.ts"), "utf8");
+    expect(source).toContain('(generation.status !== "active" && generation.status !== "superseded")');
+    expect(source).not.toContain("generation.supersededAt !== undefined");
+  });
+
+  it("keeps the last activated stable snapshot readable while newer facts wait", () => {
+    expect(
+      reportingGenerationHasReadableStableWatermark({
+        sourceWatermark: 200,
+        stableWatermark: 100,
+      }),
+    ).toBe(true);
+    expect(
+      reportingGenerationHasReadableStableWatermark({
+        sourceWatermark: 100,
+        stableWatermark: 100,
+      }),
+    ).toBe(true);
+    expect(
+      reportingGenerationHasReadableStableWatermark({
+        sourceWatermark: 100,
+        stableWatermark: 200,
+      }),
+    ).toBe(false);
+    expect(
+      reportingGenerationHasReadableStableWatermark({
+        sourceWatermark: 100,
+        stableWatermark: undefined,
+      }),
+    ).toBe(false);
+  });
+
+  it("presents persisted item metrics with the browser DTO field names", () => {
+    expect(
+      presentReportItemMetrics({
+        cost_coverage_basis_points: 8000,
+        inventory_value: 75_000,
+        merchandise_profit: 50_000,
+        net_sales: 125_000,
+        on_hand_units: 6,
+        projected_days_of_cover: 5,
+        units_returned: 1,
+        units_sold: 4,
+      }),
+    ).toEqual({
+      costCoverageBasisPoints: 8000,
+      inventoryValueMinor: 75_000,
+      knownGrossProfitMinor: 50_000,
+      netRevenueMinor: 125_000,
+      netSoldUnits: 3,
+      onHandQuantity: 6,
+      projectedDaysOfCover: 5,
+    });
   });
 
   it("returns persisted currency code and minor-unit scale on item and inventory money DTOs", () => {
@@ -87,6 +216,26 @@ describe("public reporting overview contract", () => {
       health: { status: "pre_cutover" },
       status: "pre_cutover",
       storeId: "store-1",
+    });
+  });
+
+  it("exposes certified current inventory source absence explicitly", () => {
+    expect(
+      presentCurrentValuationResult({
+        generation: {
+          _id: "generation-1",
+          completeness: "unavailable",
+          limitingReason: "source_incomplete",
+          status: "active",
+        },
+        rows: [],
+      }),
+    ).toEqual({
+      completeness: "unavailable",
+      generationId: "generation-1",
+      limitingReason: "source_incomplete",
+      rows: [],
+      status: "unavailable",
     });
   });
 

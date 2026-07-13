@@ -86,14 +86,14 @@ describe("reporting historical interpretation policy", () => {
     ).toThrow("schedule is invalid");
   });
 
-  it("requires a distinct approver and binds approval identity into its hash", () => {
-    expect(() =>
+  it("allows one admin to authorize and binds that identity into its hash", () => {
+    expect(
       historicalPolicyApprovalHash({
         approverUserId: "user-1",
         contentHash: "hash-1",
         creatorUserId: "user-1",
       }),
-    ).toThrow("requires a distinct approver");
+    ).toContain("historical-policy-approval-v1:");
     expect(
       historicalPolicyApprovalHash({
         approverUserId: "user-2",

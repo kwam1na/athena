@@ -96,11 +96,11 @@ function createPublicScaleContext() {
     reportingProjectionGeneration: [
       {
         _id: "generation-1",
-        factContractVersion: 1,
+        factContractVersion: 2,
         metricContractVersion: 1,
         organizationId: "org-1",
         projectionKind: "sku_day",
-        projectionContractVersion: 1,
+        projectionContractVersion: 2,
         sourceWatermark: 100,
         stableWatermark: 100,
         status: "active",
@@ -108,16 +108,33 @@ function createPublicScaleContext() {
       },
       {
         _id: "generation-2",
-        factContractVersion: 1,
+        factContractVersion: 2,
         metricContractVersion: 1,
         organizationId: "org-2",
         projectionKind: "sku_day",
-        projectionContractVersion: 1,
+        projectionContractVersion: 2,
         sourceWatermark: 100,
         stableWatermark: 100,
         status: "active",
         storeId: "store-2",
       },
+    ],
+    posLifecycleJournal: [],
+    reportingReadBundleActivation: [
+      { _id: "bundle-activation-1", activatedAt: 100, bundleId: "bundle-1", organizationId: "org-1", storeId: "store-1" },
+      { _id: "bundle-activation-2", activatedAt: 100, bundleId: "bundle-2", organizationId: "org-2", storeId: "store-2" },
+    ],
+    reportingReadBundle: [
+      { _id: "bundle-1", censusToken: "census-1", factContractVersion: 2, grantId: "grant-1", members: [{ generationId: "generation-1", projectionKind: "sku_day", workspaceEpochId: "epoch-1" }], metricContractVersion: 1, organizationId: "org-1", projectionContractVersion: 2, reconciliationId: "reconciliation-1", sourceCensusHash: "census-hash-1", sourceWatermark: 100, status: "active", storeId: "store-1" },
+      { _id: "bundle-2", censusToken: "census-2", factContractVersion: 2, grantId: "grant-2", members: [{ generationId: "generation-2", projectionKind: "sku_day", workspaceEpochId: "epoch-2" }], metricContractVersion: 1, organizationId: "org-2", projectionContractVersion: 2, reconciliationId: "reconciliation-2", sourceCensusHash: "census-hash-2", sourceWatermark: 100, status: "active", storeId: "store-2" },
+    ],
+    reportingPosSourceReconciliation: [
+      { _id: "reconciliation-1", censusToken: "census-1", completedAt: 100, factSnapshotWatermark: 100, grantId: "grant-1", organizationId: "org-1", runId: "source-run-1", sourceCensusHash: "census-hash-1", status: "verified", storeId: "store-1", unexplainedCount: 0 },
+      { _id: "reconciliation-2", censusToken: "census-2", completedAt: 100, factSnapshotWatermark: 100, grantId: "grant-2", organizationId: "org-2", runId: "source-run-2", sourceCensusHash: "census-hash-2", status: "verified", storeId: "store-2", unexplainedCount: 0 },
+    ],
+    reportingRun: [
+      { _id: "source-run-1", backfillAuthorizationGrantId: "grant-1", censusToken: "census-1", factSnapshotWatermark: 100, frozenWatermark: 100, organizationId: "org-1", runType: "backfill", sourceCensusHash: "census-hash-1", status: "completed", storeId: "store-1" },
+      { _id: "source-run-2", backfillAuthorizationGrantId: "grant-2", censusToken: "census-2", factSnapshotWatermark: 100, frozenWatermark: 100, organizationId: "org-2", runType: "backfill", sourceCensusHash: "census-hash-2", status: "completed", storeId: "store-2" },
     ],
     reportingSkuDayProjection: skuRows,
     store: [
@@ -150,6 +167,11 @@ function createPublicScaleContext() {
           );
         const chain = {
           collect: async () => matchingRows(),
+          filter: (apply: Function) => {
+            const q = { field: () => undefined, lte: () => true };
+            apply(q);
+            return chain;
+          },
           first: async () => matchingRows()[0] ?? null,
           order: (_direction: "asc" | "desc") => chain,
           paginate: async (options: {

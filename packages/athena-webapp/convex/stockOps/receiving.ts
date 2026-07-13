@@ -4,6 +4,7 @@ import type { Id } from "../_generated/dataModel";
 import { v } from "convex/values";
 import { markCatalogSummaryNeedsRefresh } from "../inventory/catalogSummary";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
+import { REPORTING_FACT_CONTRACT_VERSION } from "../../shared/reportingContract";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import { requireStoreFullAdminAccess } from "./access";
 import { bestEffortRecordPurchaseOrderReceivingTraceWithCtx } from "./purchaseOrderTracing";
@@ -446,7 +447,7 @@ export async function receivePurchaseOrderBatchWithCtx(
           }
         : {}),
       contentFingerprint: `procurement-receipt:v2:${lineItem._id}:${lineItem.receivedQuantity}:${lineItem.plannedUnitCost}:${purchaseOrderCurrency ?? "unknown"}:${lineItem.confirmedUnitCost ?? "unknown"}:${lineItem.confirmedCurrency ?? "unknown"}`,
-      factContractVersion: 1,
+      factContractVersion: REPORTING_FACT_CONTRACT_VERSION,
       lines: [
         {
           grossAmountMinor: plannedCommitmentAmount,

@@ -3,6 +3,7 @@ import { v } from "convex/values";
 import {
   REPORTING_FACT_CONTRACT_VERSION,
   REPORTING_LINE_ATTRIBUTION_VERSION,
+  REPORTING_PROJECTION_CONTRACT_VERSION,
   type ReportingRecognitionChannel,
   type ReportingSkuAttributionKind,
   type ReportingSourceDomain,
@@ -13,7 +14,7 @@ import { internal } from "../_generated/api";
 import { internalMutation, type MutationCtx } from "../_generated/server";
 import { validateFactContractVersion } from "./metricContracts";
 import { sanitizeConflictEvidence } from "./integrity";
-import { resolveReportingOperatingPeriodWithCtx } from "./operatingPeriods";
+import { resolveReportingFinancialPeriodWithCtx } from "./operatingPeriods";
 import { upsertProjectionHealthWithCtx } from "./health";
 import { canonicalReportingFactKey } from "./factIdentity";
 import { canonicalReportingFactSemanticFingerprint } from "./factFingerprint";
@@ -330,7 +331,7 @@ export async function recordIngressFailureWithCtx(
     outcome:
       input.recoveryDisposition === "quarantined" ? "deferred" : "failed",
     recoveryDisposition: input.recoveryDisposition,
-    projectionContractVersion: 1,
+    projectionContractVersion: REPORTING_PROJECTION_CONTRACT_VERSION,
     safeCode: input.safeCode,
     safeReason: input.safeCode,
     startedAt: input.now,
@@ -398,7 +399,7 @@ async function quarantineIngressWithCtx(
       metricContractVersion: 1,
       organizationId: input.ingress.organizationId,
       processingWatermark: input.ingress.acceptedAt,
-      projectionContractVersion: 1,
+      projectionContractVersion: REPORTING_PROJECTION_CONTRACT_VERSION,
       projectionKind,
       quarantinedCount: openQuarantines.filter(
         (row) => row.sourceDomain === input.ingress.sourceDomain,
@@ -513,7 +514,7 @@ export async function appendReportingIngressWithCtx(
         metricContractVersion: 1,
         organizationId: args.organizationId,
         processingWatermark: args.acceptedAt,
-        projectionContractVersion: 1,
+        projectionContractVersion: REPORTING_PROJECTION_CONTRACT_VERSION,
         projectionKind,
         quarantinedCount,
         sourceDomain: args.sourceDomain,
@@ -671,8 +672,9 @@ export const processPendingIngress = internalMutation({
     const attempt =
       Math.max(previousAttempts?.attempt ?? 0, ingress.attemptCount ?? 0) + 1;
     const now = Date.now();
-    const period = await resolveReportingOperatingPeriodWithCtx(ctx, {
+    const period = await resolveReportingFinancialPeriodWithCtx(ctx, {
       occurrenceAt: ingress.occurredAt,
+      organizationId: ingress.organizationId,
       storeId: ingress.storeId,
     });
     if (period.kind !== "resolved") {
@@ -708,7 +710,7 @@ export const processPendingIngress = internalMutation({
           metricContractVersion: 1,
           organizationId: ingress.organizationId,
           processingWatermark: ingress.acceptedAt,
-          projectionContractVersion: 1,
+          projectionContractVersion: REPORTING_PROJECTION_CONTRACT_VERSION,
           projectionKind,
           quarantinedCount: openQuarantines.filter(
             (row) => row.sourceDomain === ingress.sourceDomain,
@@ -1033,7 +1035,7 @@ export const processPendingIngress = internalMutation({
         inventoryImportProvisionalSkuId: fact.inventoryImportProvisionalSkuId,
         linkedBusinessEventKey: fact.linkedBusinessEventKey,
         occurrenceAt: ingress.occurredAt,
-        operatingDate: period.operatingDate,
+        operatingDate: period.reportingDate,
         organizationId: ingress.organizationId,
         originalProductSkuId: fact.originalProductSkuId,
         originalQuantity: fact.originalQuantity,
@@ -1050,7 +1052,12 @@ export const processPendingIngress = internalMutation({
         recognitionProductId: fact.recognitionProductId,
         recognitionProductSkuId: fact.recognitionProductSkuId,
         revenueKind: fact.revenueKind,
-        scheduleVersionId: period.scheduleVersionId,
+        scheduleVersionId:
+          period.scheduleContext.kind === "unavailable"
+            ? undefined
+            : (period.scheduleContext.scheduleVersionId ?? undefined),
+        timezoneVersionHash: period.timezoneVersionHash,
+        timezoneVersionId: period.timezoneVersionId,
         serviceCaseId: fact.serviceCaseId,
         sourceDomain: ingress.sourceDomain,
         sourceLineKey: fact.sourceLineKey,
@@ -1158,7 +1165,7 @@ export const processPendingIngress = internalMutation({
         linkedBusinessEventKey: fact.linkedBusinessEventKey,
         metricContractVersion: 1,
         occurrenceAt: ingress.occurredAt,
-        operatingDate: period.operatingDate,
+        operatingDate: period.reportingDate,
         organizationId: ingress.organizationId,
         originalProductSkuId: fact.originalProductSkuId,
         originalQuantity: fact.originalQuantity,
@@ -1176,7 +1183,14 @@ export const processPendingIngress = internalMutation({
         recognitionProductId: fact.recognitionProductId,
         recognitionProductSkuId: fact.recognitionProductSkuId,
         revenueKind: fact.revenueKind,
-        scheduleVersionId: period.scheduleVersionId as Id<"storeSchedule">,
+        scheduleContext: period.scheduleContext.kind,
+        scheduleVersionId:
+          period.scheduleContext.kind === "unavailable"
+            ? undefined
+            : (period.scheduleContext.scheduleVersionId as Id<"storeSchedule">),
+        timezoneVersionHash: period.timezoneVersionHash,
+        timezoneVersionId:
+          period.timezoneVersionId as Id<"storeTimezoneVersion">,
         serviceCaseId: fact.serviceCaseId,
         sourceDomain: ingress.sourceDomain,
         sourceLineKey: fact.sourceLineKey,
@@ -1243,7 +1257,7 @@ export const processPendingIngress = internalMutation({
       ingressId: args.ingressId,
       metricContractVersion: 1,
       outcome: "succeeded",
-      projectionContractVersion: 1,
+      projectionContractVersion: REPORTING_PROJECTION_CONTRACT_VERSION,
       recoveryDisposition:
         ingress.firstFailureAt === undefined ? undefined : "recovered",
       startedAt: now,
@@ -1300,19 +1314,39 @@ export const resumePendingIngressForStore = internalMutation({
       }
     }
     const attributionLimit = Math.max(0, requestedLimit - pending.length);
-    const pendingAttributions =
+    const [pendingAttributions, retryPendingConflicts] =
       attributionLimit === 0
-        ? []
-        : await ctx.db
-            .query("reportingSkuAttribution")
-            .withIndex("by_storeId_status_updatedAt", (q) =>
-              q.eq("storeId", args.storeId).eq("status", "pending"),
-            )
-            .order("asc")
-            .take(attributionLimit);
+        ? [[], []]
+        : await Promise.all([
+          ctx.db
+              .query("reportingSkuAttribution")
+              .withIndex("by_storeId_status_updatedAt", (q) =>
+                q.eq("storeId", args.storeId).eq("status", "pending"),
+              )
+              .order("asc")
+              .take(attributionLimit),
+          ctx.db
+              .query("reportingSkuAttribution")
+              .withIndex(
+                "by_storeId_status_recoveryDisposition_updatedAt",
+                (q) =>
+                  q
+                    .eq("storeId", args.storeId)
+                    .eq("status", "conflict")
+                    .eq("recoveryDisposition", "retry_pending"),
+              )
+              .order("asc")
+              .take(attributionLimit),
+        ]);
+    const recoverableAttributions = [
+      ...pendingAttributions,
+      ...retryPendingConflicts,
+    ]
+      .sort((left, right) => left.updatedAt - right.updatedAt)
+      .slice(0, attributionLimit);
     let attributionScheduledCount = 0;
     let attributionFailedCount = 0;
-    for (const attribution of pendingAttributions) {
+    for (const attribution of recoverableAttributions) {
       const scheduled = await scheduleReportingWorkBestEffort(
         ctx,
         reportingEvidenceInternal.materializePendingCheckoutSkuAttribution,
@@ -1340,7 +1374,7 @@ export const resumePendingIngressForStore = internalMutation({
       attributionFailedCount,
       attributionScheduledCount,
       failedCount,
-      inspectedCount: pending.length + pendingAttributions.length,
+      inspectedCount: pending.length + recoverableAttributions.length,
       scheduledCount,
       storeId: args.storeId,
     };

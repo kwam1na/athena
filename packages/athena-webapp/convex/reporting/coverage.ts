@@ -56,8 +56,11 @@ export function metricsForProjectionKind(
 export function summarizeRequiredMetricCoverage(input: {
   metric: ReportingMetricName;
   observations: MetricCoverageObservation[];
+  requiredSourceDomains?: string[];
 }) {
-  const requiredSources = METRIC_CONTRACTS[input.metric].requiredSourceDomains;
+  const requiredSources =
+    input.requiredSourceDomains ??
+    METRIC_CONTRACTS[input.metric].requiredSourceDomains;
   const bySource = new Map(
     input.observations.map((observation) => [
       observation.sourceDomain,
@@ -153,6 +156,7 @@ export function coverageForFactContribution(input: {
 export function metricCoverageIsActivatable(input: {
   metric: ReportingMetricName;
   observations: MetricCoverageObservation[];
+  requiredSourceDomains?: string[];
 }) {
   const summary = summarizeRequiredMetricCoverage(input);
   const allowsUncostedKnownComponent =
@@ -364,10 +368,20 @@ export async function recordUncostedCurrentInventoryCoverageWithCtx(
   });
 }
 
+export function materializedGenerationCoverageCompleteness(input: {
+  defaultCompleteness: "complete" | "partial" | "unavailable";
+  hasLimitation: boolean;
+}) {
+  if (input.defaultCompleteness === "unavailable") return "unavailable" as const;
+  return input.hasLimitation
+    ? ("partial" as const)
+    : input.defaultCompleteness;
+}
+
 export async function materializeGenerationCoverageWithCtx(
   ctx: MutationCtx,
   input: {
-    defaultCompleteness: "complete" | "partial";
+    defaultCompleteness: "complete" | "partial" | "unavailable";
     failedSources?: Partial<Record<ReportingSourceDomain, number>>;
     generation: Doc<"reportingProjectionGeneration">;
     globalLimitingReason?: ReportingLimitingReason;
@@ -390,14 +404,16 @@ export async function materializeGenerationCoverageWithCtx(
       const omitted =
         input.omittedSources?.[sourceDomain as ReportingSourceDomain] ?? 0;
       await upsertCoverage(ctx, {
-        completeness:
-          failed > 0 ||
-          quarantined > 0 ||
-          omitted > 0 ||
-          input.truncated ||
-          input.globalLimitingReason
-            ? "partial"
-            : input.defaultCompleteness,
+        completeness: materializedGenerationCoverageCompleteness({
+          defaultCompleteness: input.defaultCompleteness,
+          hasLimitation: Boolean(
+            failed > 0 ||
+              quarantined > 0 ||
+              omitted > 0 ||
+              input.truncated ||
+              input.globalLimitingReason,
+          ),
+        }),
         failedDelta: failed,
         generation: input.generation,
         limitingReason:
@@ -427,10 +443,16 @@ export async function materializeGenerationCoverageWithCtx(
 
 export function generationCoverageIsActivatable(input: {
   coverage: Array<MetricCoverageObservation & { metric: string }>;
+  metrics?: ReportingMetricName[];
   projectionKind: Doc<"reportingProjectionGeneration">["projectionKind"];
+  requiredSourceDomains?: string[];
 }) {
-  return metricsForProjectionKind(input.projectionKind).every((metric) => {
+  return (input.metrics ?? metricsForProjectionKind(input.projectionKind)).every((metric) => {
     const observations = input.coverage.filter((row) => row.metric === metric);
-    return metricCoverageIsActivatable({ metric, observations });
+    return metricCoverageIsActivatable({
+      metric,
+      observations,
+      requiredSourceDomains: input.requiredSourceDomains,
+    });
   });
 }

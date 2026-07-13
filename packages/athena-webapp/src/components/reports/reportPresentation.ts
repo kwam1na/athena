@@ -31,8 +31,9 @@ const REPORT_STATUS_PRESENTATION: Record<
     tone: "notice",
   },
   pre_cutover: {
-    title: "Reporting starts here",
-    description: "Activity before reporting was enabled is not included.",
+    title: "Rebuilding reports",
+    description:
+      "Completed sales will appear when the reporting rebuild is finished.",
     tone: "notice",
   },
   uncosted_partial: {

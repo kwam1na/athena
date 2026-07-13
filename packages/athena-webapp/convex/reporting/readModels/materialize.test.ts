@@ -1,7 +1,160 @@
 import { describe, expect, it } from "vitest";
-import { accumulateCustomActiveDates, accumulateCustomActiveDays, activateVerifiedReportsWorkspaceEpoch, materializationPageMatchesEpoch, materializeActiveReportsWorkspace, selectReadableWorkspaceEpochId, startReportsWorkspaceMaterialization, workspaceEpochNeedsRefresh } from "./materialize";
+import { accumulateCustomActiveDates, accumulateCustomActiveDays, activateVerifiedReportsWorkspaceEpoch, emptyStorePresetSummaryFromCoverage, getExactActiveWorkspaceEpochWithCtx, materializationPageMatchesEpoch, materializeActiveReportsWorkspace, materializeActiveReportsWorkspaceForStore, materializeEmptyStorePresetSummaryWithCtx, selectReadableWorkspaceEpochId, startReportsWorkspaceMaterialization, workspaceEpochNeedsRefresh } from "./materialize";
 
 describe("Reports workspace production materialization", () => {
+  const completeCoverage = (metric: string) => ({
+    completeness: "complete" as const,
+    failedCount: 0,
+    generationId: "generation-1",
+    metric,
+    omittedCount: 0,
+    quarantinedCount: 0,
+    sourceDomain: "pos",
+    truncated: false,
+  });
+
+  function emptyPresetContext(input?: {
+    coverage?: Array<Record<string, unknown>>;
+    summaries?: Array<Record<string, unknown>>;
+  }) {
+    const coverage = input?.coverage ?? [
+      completeCoverage("net_sales"),
+      completeCoverage("units_sold"),
+      completeCoverage("gross_profit"),
+    ];
+    const summaries = input?.summaries ?? [];
+    const filters: Array<[string, unknown]> = [];
+    const query = (table: string) => {
+      filters.length = 0;
+      const builder: any = {
+        eq(field: string, value: unknown) {
+          filters.push([field, value]);
+          return builder;
+        },
+      };
+      const rows = () => {
+        const source = table === "reportingMetricCoverage" ? coverage : summaries;
+        return source.filter((row) =>
+          filters.every(([field, value]) => row[field] === value),
+        );
+      };
+      const chain: any = {
+        first: async () => rows()[0] ?? null,
+        take: async (limit: number) => rows().slice(0, limit),
+        withIndex: (_name: string, apply: Function) => {
+          apply(builder);
+          return chain;
+        },
+      };
+      return chain;
+    };
+    const ctx: any = {
+      db: {
+        get: async (table: string) =>
+          table === "reportingRun"
+            ? {
+                organizationId: "org-1",
+                sourceScope: "pos",
+                storeId: "store-1",
+              }
+            : null,
+        insert: async (_table: string, row: Record<string, unknown>) => {
+          const id = `summary-${summaries.length + 1}`;
+          summaries.push({ ...row, _id: id });
+          return id;
+        },
+        query,
+      },
+    };
+    return { ctx, summaries };
+  }
+
+  const storeGeneration = {
+    _id: "generation-1",
+    organizationId: "org-1",
+    runId: "run-1",
+    stableWatermark: 10,
+    storeId: "store-1",
+    workspaceEpochId: "epoch-1",
+  } as never;
+
+  it("materializes explicit zero summaries for empty today and WTD presets", async () => {
+    const { ctx, summaries } = emptyPresetContext();
+    await materializeEmptyStorePresetSummaryWithCtx(
+      ctx,
+      storeGeneration,
+      "today",
+      { endDate: "2026-07-13", startDate: "2026-07-13" },
+    );
+    await materializeEmptyStorePresetSummaryWithCtx(
+      ctx,
+      storeGeneration,
+      "wtd",
+      { endDate: "2026-07-13", startDate: "2026-07-13" },
+    );
+
+    expect(summaries).toEqual([
+      expect.objectContaining({
+        completeness: "complete",
+        metrics: expect.objectContaining({ net_sales: 0, units_sold: 0 }),
+        periodKey: "today",
+        rangeEndDate: "2026-07-13",
+        rangeStartDate: "2026-07-13",
+      }),
+      expect.objectContaining({
+        completeness: "complete",
+        metrics: expect.objectContaining({ net_sales: 0, units_sold: 0 }),
+        periodKey: "wtd",
+      }),
+    ]);
+  });
+
+  it("zeros only certified metrics and preserves unknown profit coverage", () => {
+    const result = emptyStorePresetSummaryFromCoverage([
+      completeCoverage("net_sales"),
+      completeCoverage("units_sold"),
+      {
+        ...completeCoverage("gross_profit"),
+        completeness: "partial",
+        limitingReason: "uncosted",
+      },
+    ] as never);
+
+    expect(result).toEqual({
+      completeness: "partial",
+      limitingReason: "uncosted",
+      metrics: {
+        cost_coverage_basis_points: null,
+        known_gross_profit: null,
+        net_sales: 0,
+        units_sold: 0,
+      },
+    });
+  });
+
+  it("preserves a non-empty preset summary instead of replacing it", async () => {
+    const existing = {
+      _id: "summary-existing",
+      metrics: { net_sales: 151_852_00, units_sold: 83 },
+      periodKey: "today",
+      workspaceEpochId: "epoch-1",
+    };
+    const { ctx, summaries } = emptyPresetContext({
+      coverage: [],
+      summaries: [existing],
+    });
+
+    await expect(
+      materializeEmptyStorePresetSummaryWithCtx(
+        ctx,
+        storeGeneration,
+        "today",
+        { endDate: "2026-07-13", startDate: "2026-07-13" },
+      ),
+    ).resolves.toBe(existing);
+    expect(summaries).toEqual([existing]);
+  });
+
   it("persists an activation block without scheduler polling churn", async () => {
     const epoch: any = { _id: "epoch-1", projectionKind: "store_day", sourceGenerationId: "generation-1", sourceWatermark: 10, status: "verified", storeId: "store-1" };
     const source: any = { _id: "generation-1", projectionKind: "store_day", stableWatermark: 10, status: "active" };
@@ -25,7 +178,7 @@ describe("Reports workspace production materialization", () => {
     expect(patched).toContainEqual(expect.objectContaining({ activationBlockedReason: undefined, status: "active" }));
   });
   it("keeps the old epoch visible while a replacement is building or verified", () => {
-    for (const status of ["building", "verified"] as const) expect(selectReadableWorkspaceEpochId({ activeEpochId: "old", candidateEpoch: { epochId: "new", status } })).toBe("old");
+    for (const status of ["building", "blocked", "verified"] as const) expect(selectReadableWorkspaceEpochId({ activeEpochId: "old", candidateEpoch: { epochId: "new", status } })).toBe("old");
   });
   it("switches visibility atomically only after candidate activation", () => {
     expect(selectReadableWorkspaceEpochId({ activeEpochId: "old", candidateEpoch: { epochId: "new", status: "active" } })).toBe("new");
@@ -36,6 +189,47 @@ describe("Reports workspace production materialization", () => {
   });
   it("keeps custom presentation unavailable until its epoch switches active", () => {
     expect(selectReadableWorkspaceEpochId({ activeEpochId: null, candidateEpoch: { epochId: "custom", status: "verified" } })).toBeNull();
+  });
+  it("keeps two completed custom ranges readable through their exact epochs", async () => {
+    const epochs = [
+      { _id: "epoch-1", sourceGenerationId: "generation-1", sourceWatermark: 10, status: "active" },
+      { _id: "epoch-2", sourceGenerationId: "generation-2", sourceWatermark: 20, status: "active" },
+    ];
+    let generationId = "";
+    let sourceWatermark = 0;
+    const chain: any = {
+      first: async () =>
+        epochs.find(
+          (epoch) =>
+            epoch.sourceGenerationId === generationId &&
+            epoch.sourceWatermark === sourceWatermark,
+        ) ?? null,
+      withIndex: (_name: string, apply: Function) => {
+        const q: any = {
+          eq: (field: string, value: string | number) => {
+            if (field === "sourceGenerationId") generationId = String(value);
+            if (field === "sourceWatermark") sourceWatermark = Number(value);
+            return q;
+          },
+        };
+        apply(q);
+        return chain;
+      },
+    };
+    const ctx = { db: { query: () => chain } } as never;
+
+    await expect(
+      getExactActiveWorkspaceEpochWithCtx(ctx, {
+        generationId: "generation-1" as never,
+        sourceWatermark: 10,
+      }),
+    ).resolves.toMatchObject({ _id: "epoch-1" });
+    await expect(
+      getExactActiveWorkspaceEpochWithCtx(ctx, {
+        generationId: "generation-2" as never,
+        sourceWatermark: 20,
+      }),
+    ).resolves.toMatchObject({ _id: "epoch-2" });
   });
   it("rejects stale and duplicate page deliveries after epoch progress advances", () => {
     const delivered = { cursor: "20", phase: "source", presetIndex: 0, sequence: 2 };
@@ -60,6 +254,58 @@ describe("Reports workspace production materialization", () => {
     const result = await handler({ db: { get: async () => generation, query: () => chain }, scheduler: { runAfter: async () => { scheduled += 1; } } }, { generationId: generation._id });
     expect(result).toEqual({ epochId: "epoch-1", status: "active" });
     expect(scheduled).toBe(0);
+  });
+  it("repairs historical intraday preparation for an already-active store generation", async () => {
+    const activations: Record<string, any> = {
+      store_day: { generationId: "store-generation", projectionKind: "store_day", storeId: "store-1" },
+      sku_day: { generationId: "sku-generation", projectionKind: "sku_day", storeId: "store-1" },
+    };
+    let requestedKind = "";
+    const chain: any = {
+      first: async () => activations[requestedKind] ?? null,
+      order: () => chain,
+      withIndex: (_name: string, apply: Function) => {
+        const q: any = { eq: (field: string, value: string) => { if (field === "projectionKind") requestedKind = value; return q; } };
+        apply(q);
+        return chain;
+      },
+    };
+    const scheduled: Array<{ args: any }> = [];
+    const handler = (materializeActiveReportsWorkspaceForStore as unknown as { _handler: Function })._handler;
+    await handler({
+      db: { query: () => chain },
+      scheduler: { runAfter: async (_delay: number, _reference: unknown, args: any) => scheduled.push({ args }) },
+    }, { storeId: "store-1" });
+
+    expect(scheduled.map(({ args }) => args)).toContainEqual({ sourceGenerationId: "store-generation" });
+    expect(scheduled.filter(({ args }) => args.sourceGenerationId === "store-generation")).toHaveLength(2);
+  });
+  it("records missing timezone authority as a blocked epoch instead of throwing", async () => {
+    const generation = { _id: "generation-1", factContractVersion: 2, metricContractVersion: 1, organizationId: "org-1", projectionContractVersion: 2, projectionKind: "store_day", sourceWatermark: 10, stableWatermark: 10, status: "active", storeId: "store-1" };
+    const epoch: any = { _id: "epoch-1", phase: "source", presetIndex: 0, sequence: 1, sourceGenerationId: generation._id, sourceWatermark: 10, status: "building", updatedAt: 10 };
+    const patched: any[] = [];
+    const scheduleChain: any = {
+      first: async () => null,
+      order: () => scheduleChain,
+      take: async () => [],
+      withIndex: (_name: string, apply: Function) => {
+        const q: any = { eq: () => q, lte: () => q };
+        apply(q);
+        return scheduleChain;
+      },
+    };
+    const handler = (materializeActiveReportsWorkspace as unknown as { _handler: Function })._handler;
+    const result = await handler({
+      db: {
+        get: async (table: string) => table === "reportingProjectionGeneration" ? generation : table === "store" ? { organizationId: "org-1" } : epoch,
+        patch: async (_table: string, _id: string, value: any) => { patched.push(value); Object.assign(epoch, value); },
+        query: () => scheduleChain,
+      },
+      scheduler: { runAfter: async () => undefined },
+    }, { cursor: null, epochId: epoch._id, generationId: generation._id, phase: "source", presetIndex: 0, sequence: 1 });
+
+    expect(result).toEqual({ reason: "timezone_unavailable", status: "blocked" });
+    expect(patched).toContainEqual(expect.objectContaining({ activationBlockedReason: "timezone_unavailable", status: "blocked" }));
   });
   it("resumes through more than 1,001 source rows without truncation", async () => {
     const generation = { _id: "generation-1", factContractVersion: 1, metricContractVersion: 1, organizationId: "org-1", projectionContractVersion: 1, projectionKind: "current_inventory", sourceWatermark: 10, stableWatermark: 10, status: "active", storeId: "store-1" };

@@ -405,6 +405,21 @@ export function isValidStoreTimezone(timezone: string) {
   }
 }
 
+export function resolveStoreCalendarRangeForDate(args: {
+  localDate: string;
+  timezone: string;
+}) {
+  if (!parseLocalDate(args.localDate) || !isValidStoreTimezone(args.timezone)) {
+    return { kind: "invalid" as const };
+  }
+  const startAt = localDateMinuteToUtc(args.localDate, 0, args.timezone);
+  const endAt = localDateMinuteToUtc(addDays(args.localDate, 1), 0, args.timezone);
+  if (startAt === null || endAt === null || endAt <= startAt) {
+    return { kind: "invalid" as const };
+  }
+  return { endAt, kind: "resolved" as const, startAt };
+}
+
 export function validateStoreScheduleDraft(
   schedule: StoreScheduleDraft,
 ): StoreScheduleValidationResult {

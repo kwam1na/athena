@@ -1,7 +1,7 @@
 ---
 title: "Athena Reporting Separates Atomic Source Effects from Asynchronous Projections"
 date: 2026-07-09
-last_updated: 2026-07-11
+last_updated: 2026-07-12
 category: architecture
 module: athena-webapp
 problem_type: architecture_pattern
@@ -19,7 +19,7 @@ tags:
   - inventory-valuation
   - projections
   - activation
-delivery_diff_fingerprint: edf512b9092649516fc1dae747efc2fbbdc152d64c409f73ab7d24baf7ae23ef
+delivery_diff_fingerprint: 8f0b81d6dcaff204b644404cf2a31b4a027041fc8521e94b45e7e296073ef3c9
 ---
 
 # Athena Reporting Separates Atomic Source Effects from Asynchronous Projections
@@ -72,28 +72,26 @@ The implementation ownership is:
   interpretation, sealed apply manifests, durable provenance, and bounded
   retention. They never rewrite operational source records.
 
-### Govern incomplete historical evidence explicitly
+### Rebuild early-development reporting from authoritative source truth
 
-Historical compatibility is a reporting interpretation, not a source repair.
-Use an immutable policy version scoped to one organization, store, and bounded
-interval. One authenticated full admin creates the draft and a different full
-admin approves it; actor identity comes from server authentication, never from
-caller-supplied ids or automation labels. The approved hash binds the reviewed
-period definition, GHS revenue-currency evidence, creator, and approver.
+Reports now uses a new-only financial contract. A completed POS occurrence plus
+the effective-dated store timezone determines the local reporting date. Store
+Schedule remains optional expected-hours context; closed-day, outside-hours,
+missing-hours, or later schedule edits cannot invalidate financial eligibility.
 
-Do not backdate shared Store Schedule rows for reporting. Compatibility periods
-remain reporting-owned and use an exactly-one lineage contract: ordinary facts
-and projections reference a Store Schedule, while compatibility facts and
-projections reference the approved reporting policy and hash. Lineage kind and
-identity are material in fingerprints, projection aggregation keys,
-reconciliation, and browser-safe results, so different interpretations cannot
-silently coalesce.
+For the early-development migration, do not carry v1 reporting facts or dual
+interpretation policy forward. A dev/local-only script replaces every explicitly
+enumerated reporting-owned table with an empty dataset while preserving POS,
+payment, product, inventory, store, timezone, and schedule source records. One
+authenticated current `full_admin` then creates an immutable store-scoped grant
+and triggers the full POS-history census. There is no second approver and no
+force-complete override.
 
-Infer only the evidence the policy authorizes. Missing GHS revenue currency may
-be supplied for covered POS, storefront, service, and payment events. Present
-conflicting currency remains a conflict. Revenue currency never supplies
-valuation denomination; absent or undenominated cost remains partial and cannot
-produce known COGS or profit.
+The census independently proves source identity, lifecycle, money, quantity,
+date, currency, and lineage before projections can activate. Missing-parent
+payment corrections are sealed as explicit non-facts because their amount,
+currency, ownership, and settlement lineage cannot be proven. A present but
+cross-store, misbound, or temporally invalid parent remains blocking.
 
 ### Seal meaning before incremental apply
 
@@ -143,9 +141,8 @@ reconciliation difference.
   the trustworthy known COGS while withholding unsupported profit.
 - Keep revenue and valuation currencies separate. Missing or cross-currency
   evidence degrades completeness instead of inheriting today's store currency.
-  A bounded dual-approved compatibility policy may supply missing historical
-  revenue currency when its evidence explicitly establishes that denomination;
-  it must never infer valuation currency or cost.
+  Historical POS currency comes from trustworthy store/source semantics; it
+  must never infer valuation currency or cost.
 - Keep source adapters pure and versioned so live ingress and historical
   backfill share recognition policy without letting backfill mutate operational
   state.
@@ -157,10 +154,9 @@ reconciliation difference.
   zero or generic no data.
 - Read reports only from a verified active generation. A completed build is
   still a candidate until reconciliation and activation pass.
-- Make historical policy fields widen-first in Convex schemas. Preserve old
-  schedule-backed documents, enforce exactly-one lineage in new write paths,
-  regenerate Convex API types, and deploy schema/functions before invoking new
-  maintenance functions or indexes.
+- Deploy schema/functions before the dev purge and authorized backfill. The
+  public trigger must prove the reporting-owned purge set is empty before it
+  creates lineage.
 - Freeze complete candidate semantics before apply. A digest plus live source
   re-reads is not a consistency boundary.
 - Keep raw manifests and fact evidence internal-only, store-scoped, indexed,

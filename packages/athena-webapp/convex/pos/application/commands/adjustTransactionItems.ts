@@ -40,6 +40,7 @@ import {
   outboundBasisFromEffect,
   reportingLineCostFromEffect,
 } from "../../../reporting/inventory/commerceEffects";
+import { appendPosLifecycleJournalWithCtx } from "../../infrastructure/posLifecycleJournal";
 
 const ITEM_ADJUSTMENT_ACTION = APPROVAL_ACTIONS.transactionItemAdjustment;
 const ITEM_ADJUSTMENT_ACTION_KEY = ITEM_ADJUSTMENT_ACTION.key;
@@ -1125,6 +1126,47 @@ async function applyApprovedAdjustment(
     status: "applied",
     updatedAt: now,
   });
+
+  if (!store?.organizationId) {
+    throw new Error("POS adjustment organization could not be resolved.");
+  }
+  await appendPosLifecycleJournalWithCtx(ctx, {
+    organizationId: store.organizationId,
+    storeId: args.transaction.storeId,
+    transactionId: args.transaction._id,
+    adjustmentId,
+    eventKind: "adjustment_applied",
+    eventKey: `pos:${args.transaction._id}:adjustment:${adjustmentId}`,
+    contentFingerprint: [
+      "pos-lifecycle-adjustment-v1",
+      adjustmentId,
+      args.plan.fingerprint,
+      args.plan.deltaTotal,
+      args.plan.settlementDirection,
+      args.plan.settlementAmount,
+    ].join(":"),
+    occurredAt: now,
+    origin: "cloud",
+  });
+  if (args.plan.settlementDirection === "refund") {
+    await appendPosLifecycleJournalWithCtx(ctx, {
+      organizationId: store.organizationId,
+      storeId: args.transaction.storeId,
+      transactionId: args.transaction._id,
+      adjustmentId,
+      eventKind: "refunded",
+      eventKey: `pos:${args.transaction._id}:refund-adjustment:${adjustmentId}`,
+      contentFingerprint: [
+        "pos-lifecycle-refund-v1",
+        adjustmentId,
+        args.plan.fingerprint,
+        args.plan.settlementAmount,
+        args.plan.settlementMethod,
+      ].join(":"),
+      occurredAt: now,
+      origin: "cloud",
+    });
+  }
 
   if (store?.organizationId) {
     const lines: ReportingIngressLineInput[] = args.plan.lines.map(

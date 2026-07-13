@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { internal } from "../../_generated/api";
-import type { Doc } from "../../_generated/dataModel";
+import type { Doc, Id } from "../../_generated/dataModel";
 import {
   internalAction,
   internalMutation,
@@ -18,6 +18,10 @@ import {
 import { upsertProjectionHealthWithCtx } from "../health";
 import { startOrResumeOccurrenceReplayWithCtx } from "../inventory/occurrenceReplay";
 import { assertReportingRunTransition } from "./runLedger";
+import {
+  projectionRebuildLineage,
+  requireVerifiedPosBackfillLineageWithCtx,
+} from "./posSourceReconciliationGate";
 
 const inventoryRebuildInternal = (internal as any).reporting.maintenance
   .inventoryRebuild;
@@ -28,6 +32,126 @@ type ContractVersions = {
   metricContractVersion: number;
   projectionContractVersion: number;
 };
+
+export function inventoryAuthorityFootprintDisposition(input: {
+  acceptedBaselineExists: boolean;
+  authoritativePositionExists: boolean;
+  authoritativePositionRevisionExists: boolean;
+  compatibilityShadowPositionExists?: boolean;
+  compatibilityShadowRevisionExists?: boolean;
+  eligibleSkuExists: boolean;
+}) {
+  return input.eligibleSkuExists &&
+    !input.acceptedBaselineExists &&
+    !input.authoritativePositionExists &&
+    !input.authoritativePositionRevisionExists
+    ? ("unavailable" as const)
+    : ("reconcile" as const);
+}
+
+export async function inventoryAuthorityFootprintWithCtx(
+  ctx: MutationCtx,
+  input: { frozenWatermark: number; storeId: Id<"store"> },
+) {
+  const [acceptedBaseline, authoritativePosition, eligibleSku] =
+    await Promise.all([
+      ctx.db
+        .query("reportingCutoverBaseline")
+        .withIndex("by_storeId_status_effectiveAt", (q) =>
+          q.eq("storeId", input.storeId).eq("status", "accepted"),
+        )
+        .first(),
+      ctx.db
+        .query("reportingInventoryPosition")
+        .withIndex("by_storeId_mode", (q) =>
+          q.eq("storeId", input.storeId).eq("mode", "authoritative"),
+        )
+        .first(),
+      ctx.db
+        .query("productSku")
+        .withIndex("by_storeId", (q) =>
+          q
+            .eq("storeId", input.storeId)
+            .lte("_creationTime", input.frozenWatermark),
+        )
+        .first(),
+    ]);
+  const authoritativePositionRevision = authoritativePosition
+    ? await ctx.db
+        .query("reportingInventoryPositionRevision")
+        .withIndex("by_positionId", (q) =>
+          q.eq("positionId", authoritativePosition._id),
+        )
+        .first()
+    : null;
+  return inventoryAuthorityFootprintDisposition({
+    acceptedBaselineExists: acceptedBaseline !== null,
+    authoritativePositionExists: authoritativePosition !== null,
+    authoritativePositionRevisionExists:
+      authoritativePositionRevision !== null,
+    eligibleSkuExists: eligibleSku !== null,
+  });
+}
+
+async function verifyUnavailableCurrentInventoryWithCtx(
+  ctx: MutationCtx,
+  input: {
+    generation: Doc<"reportingProjectionGeneration">;
+    run: Doc<"reportingRun">;
+  },
+) {
+  const completedAt = Date.now();
+  await materializeGenerationCoverageWithCtx(ctx, {
+    defaultCompleteness: "unavailable",
+    generation: input.generation,
+    globalLimitingReason: "source_incomplete",
+    periodEnd: input.run.frozenWatermark!,
+    periodStart: input.run.createdAt,
+    processingWatermark: input.run.frozenWatermark,
+  });
+  await ctx.db.patch(
+    "reportingProjectionGeneration",
+    input.generation._id,
+    {
+      completeness: "unavailable",
+      limitingReason: "source_incomplete",
+      sourceWatermark: input.run.frozenWatermark,
+      stableWatermark: input.run.frozenWatermark,
+      status: "verified",
+      verifiedAt: completedAt,
+    },
+  );
+  await ctx.db.patch("reportingRun", input.run._id, {
+    completedAt,
+    failedCount: 0,
+    processedCount: 0,
+    status: "completed",
+  });
+  await upsertProjectionHealthWithCtx(ctx, {
+    factContractVersion: input.generation.factContractVersion,
+    limitingReason: "source_incomplete",
+    metricContractVersion: input.generation.metricContractVersion,
+    organizationId: input.generation.organizationId,
+    processingWatermark: input.run.frozenWatermark,
+    projectionContractVersion: input.generation.projectionContractVersion,
+    projectionKind: "current_inventory",
+    quarantinedCount: 0,
+    sourceDomain: "inventory",
+    storeId: input.run.storeId,
+    updatedAt: completedAt,
+  });
+  if (input.run.backfillAuthorizationGrantId) {
+    await ctx.scheduler.runAfter(
+      0,
+      (internal as any).reporting.activation.activateVerifiedGeneration,
+      {
+        candidateGenerationId: input.generation._id,
+        expectedPriorGenerationId: input.run.expectedPriorGenerationId,
+        runId: input.run._id,
+      },
+    );
+  }
+}
 
 export function assessCurrentInventoryCandidate(input: {
   baseline: { sourceWatermark: number; status: string } | null;
@@ -99,7 +223,7 @@ export function assessCurrentInventoryCandidate(input: {
   return { reason: null, status: "candidate_complete" as const };
 }
 
-async function assessSkuWithCtx(
+export async function assessSkuWithCtx(
   ctx: MutationCtx,
   input: {
     frozenWatermark: number;
@@ -117,11 +241,14 @@ async function assessSkuWithCtx(
           .eq("status", "accepted"),
       )
       .take(2),
-    ctx.db
-      .query("reportingInventoryPosition")
-      .withIndex("by_storeId_productSkuId", (q) =>
-        q.eq("storeId", input.run.storeId).eq("productSkuId", input.sku._id),
-      )
+      ctx.db
+        .query("reportingInventoryPosition")
+        .withIndex("by_storeId_productSkuId_mode", (q) =>
+          q
+            .eq("storeId", input.run.storeId)
+            .eq("productSkuId", input.sku._id)
+            .eq("mode", "authoritative"),
+        )
       .take(2),
   ]);
   if (baselines.length > 1) {
@@ -251,11 +378,36 @@ async function recordRebuildDiscrepancy(
 export const startCurrentInventoryRebuild = internalMutation({
   args: {
     automationIdentity: v.string(),
+    backfillAuthorizationGrantId: v.optional(
+      v.id("reportingBackfillAuthorizationGrant"),
+    ),
+    censusToken: v.optional(v.string()),
+    factSnapshotWatermark: v.optional(v.number()),
+    financialDateContractVersion: v.optional(v.number()),
+    frozenWatermark: v.optional(v.number()),
+    sourceCensusHash: v.optional(v.string()),
+    sourceScope: v.optional(v.literal("pos")),
     storeId: v.id("store"),
   },
   handler: async (ctx, args) => {
     const store = await ctx.db.get("store", args.storeId);
     if (!store) throw new Error("Store not found");
+    const lineage = projectionRebuildLineage({
+      backfillAuthorizationGrantId: args.backfillAuthorizationGrantId,
+      censusToken: args.censusToken,
+      factSnapshotWatermark: args.factSnapshotWatermark,
+      financialDateContractVersion: args.financialDateContractVersion,
+      frozenWatermark: args.frozenWatermark,
+      sourceCensusHash: args.sourceCensusHash,
+      sourceScope: args.sourceScope,
+    });
+    const certifiedPosLineage = lineage
+      ? await requireVerifiedPosBackfillLineageWithCtx(ctx, {
+          lineage,
+          organizationId: store.organizationId,
+          storeId: args.storeId,
+        })
+      : null;
     const currentActivation = await ctx.db
       .query("reportingProjectionActivation")
       .withIndex("by_storeId_projectionKind_activatedAt", (q) =>
@@ -264,22 +416,34 @@ export const startCurrentInventoryRebuild = internalMutation({
       .order("desc")
       .first();
     const now = Date.now();
-    const frozenWatermark = Math.max(0, now - 1);
+    const frozenWatermark =
+      lineage?.factSnapshotWatermark ?? Math.max(0, now - 1);
     const runId = await ctx.db.insert("reportingRun", {
       actorKind: "automation",
       automationIdentity: args.automationIdentity,
+      backfillAuthorizationGrantId: lineage?.backfillAuthorizationGrantId as
+        | Id<"reportingBackfillAuthorizationGrant">
+        | undefined,
+      censusToken: lineage?.censusToken,
       createdAt: now,
       domain: "reporting",
       factContractVersion: REPORTING_FACT_CONTRACT_VERSION,
+      financialDateContractVersion:
+        lineage?.financialDateContractVersion,
+      factSnapshotWatermark: lineage?.factSnapshotWatermark,
       failedCount: 0,
       frozenWatermark,
       expectedPriorGenerationId: currentActivation?.generationId,
       metricContractVersion: 1,
       operation: "current_inventory_rebuild_building",
       organizationId: store.organizationId,
+      orphanPaymentCorrectionCount:
+        certifiedPosLineage?.orphanPaymentCorrectionCount,
       processedCount: 0,
       projectionContractVersion: REPORTING_PROJECTION_CONTRACT_VERSION,
       runType: "rebuild",
+      sourceScope: lineage?.sourceScope,
+      sourceCensusHash: lineage?.sourceCensusHash,
       status: "pending",
       storeId: args.storeId,
     });
@@ -326,6 +490,18 @@ export const processCurrentInventoryRebuildBatchMutation = internalMutation({
     if (!generation || generation.projectionKind !== "current_inventory") {
       throw new Error("Current inventory generation not found");
     }
+    const authorityDisposition = await inventoryAuthorityFootprintWithCtx(ctx, {
+      frozenWatermark: run.frozenWatermark,
+      storeId: run.storeId,
+    });
+    if (
+      authorityDisposition === "unavailable" &&
+      run.processedCount === 0 &&
+      run.cursor === undefined
+    ) {
+      await verifyUnavailableCurrentInventoryWithCtx(ctx, { generation, run });
+      return;
+    }
     const catchingUp =
       run.operation === "current_inventory_rebuild_catching_up";
     const page = await ctx.db
@@ -344,7 +520,12 @@ export const processCurrentInventoryRebuildBatchMutation = internalMutation({
         run,
         sku: productSku,
       });
-      if (assessment.reason === "position_after_frozen_watermark") continue;
+      if (
+        assessment.reason === "position_after_frozen_watermark" &&
+        !run.backfillAuthorizationGrantId
+      ) {
+        continue;
+      }
       if (
         assessment.reason === "occurrence_order_rebuild_required" &&
         position
@@ -430,7 +611,7 @@ export const processCurrentInventoryRebuildBatchMutation = internalMutation({
       });
       return;
     }
-    if (!catchingUp) {
+    if (!catchingUp && !run.backfillAuthorizationGrantId) {
       const nextWatermark = Math.max(run.frozenWatermark, Date.now() - 1);
       await ctx.db.patch("reportingProjectionGeneration", generation._id, {
         sourceWatermark: nextWatermark,
@@ -452,13 +633,17 @@ export const processCurrentInventoryRebuildBatchMutation = internalMutation({
       );
       return;
     }
-    const laterRevision = await ctx.db
-      .query("reportingInventoryPositionRevision")
-      .withIndex("by_storeId", (q) =>
-        q.eq("storeId", run.storeId).gt("_creationTime", run.frozenWatermark!),
-      )
-      .first();
-    if (laterRevision) {
+    const laterRevision = catchingUp
+      ? await ctx.db
+          .query("reportingInventoryPositionRevision")
+          .withIndex("by_storeId", (q) =>
+            q
+              .eq("storeId", run.storeId)
+              .gt("_creationTime", run.frozenWatermark!),
+          )
+          .first()
+      : null;
+    if (catchingUp && laterRevision) {
       const nextWatermark = Math.max(run.frozenWatermark, Date.now() - 1);
       await ctx.db.patch("reportingProjectionGeneration", generation._id, {
         sourceWatermark: nextWatermark,
@@ -511,6 +696,17 @@ export const processCurrentInventoryRebuildBatchMutation = internalMutation({
       storeId: run.storeId,
       updatedAt: completedAt,
     });
+    if (run.backfillAuthorizationGrantId) {
+      await ctx.scheduler.runAfter(
+        0,
+        (internal as any).reporting.activation.activateVerifiedGeneration,
+        {
+          candidateGenerationId: generation._id,
+          expectedPriorGenerationId: run.expectedPriorGenerationId,
+          runId: run._id,
+        },
+      );
+    }
   },
 });
 

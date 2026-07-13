@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import {
+  attributedProjectionProductSkuId,
   currencyForFactMetric,
   factContributionProjectionEligibility,
   mergeProjectionValue,
@@ -138,6 +139,20 @@ describe("reporting incremental projection processor", () => {
     ).toBe("project");
   });
 
+  it("routes SKU-day value to the sealed canonical attribution", () => {
+    expect(
+      attributedProjectionProductSkuId({
+        canonicalProductSkuId: "sku-canonical",
+        productSkuId: "sku-provisional",
+      } as never),
+    ).toBe("sku-canonical");
+    expect(
+      attributedProjectionProductSkuId({
+        productSkuId: "sku-direct",
+      } as never),
+    ).toBe("sku-direct");
+  });
+
   it("reports withheld currency contributions as omitted coverage", () => {
     const source = readFileSync(
       join(process.cwd(), "convex", "reporting", "projections", "processor.ts"),
@@ -245,17 +260,13 @@ describe("reporting incremental projection processor", () => {
       "utf8",
     );
     expect(source).toContain(
-      '"by_gen_date_metric_schedule"',
+      '"by_gen_date_metric_timezone"',
     );
     expect(source).toContain(
-      '"by_gen_date_metric_policy"',
+      '"by_gen_sku_date_metric_timezone"',
     );
-    expect(source).toContain(
-      '"by_gen_sku_date_metric_schedule"',
-    );
-    expect(source).toContain(
-      '"by_gen_sku_date_metric_policy"',
-    );
+    expect(source).not.toContain('"by_gen_date_metric_policy"');
+    expect(source).not.toContain('"by_gen_sku_date_metric_policy"');
     expect(source).not.toContain(".take(20)");
   });
 });

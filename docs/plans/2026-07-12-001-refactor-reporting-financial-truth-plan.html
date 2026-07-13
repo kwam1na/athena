@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Plan review: Make completed POS sales authoritative for Reports</title>
+  <style>
+    :root { color-scheme: light; --ink:#172033; --muted:#596579; --line:#dbe1e8; --paper:#fff; --wash:#f5f7fa; --accent:#254f86; --good:#e9f5ef; --risk:#fff5df; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--wash); color:var(--ink); font:15px/1.55 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    main { max-width:1120px; margin:32px auto; background:var(--paper); border:1px solid var(--line); border-radius:14px; padding:44px; box-shadow:0 10px 30px rgba(23,32,51,.06); }
+    h1 { margin:.25rem 0 .5rem; font-size:2.25rem; line-height:1.1; letter-spacing:-.025em; }
+    h2 { margin:2.3rem 0 .7rem; padding-top:.5rem; border-top:1px solid var(--line); font-size:1.35rem; }
+    h3 { margin:1.35rem 0 .45rem; font-size:1rem; }
+    p,li { max-width:88ch; }
+    .eyebrow { color:var(--accent); text-transform:uppercase; letter-spacing:.13em; font-weight:700; font-size:.72rem; }
+    .meta { display:flex; flex-wrap:wrap; gap:.5rem 1rem; color:var(--muted); margin:.7rem 0 1.4rem; }
+    .callout { padding:18px 20px; border-radius:10px; background:var(--good); border:1px solid #cce5d8; }
+    .risk { background:var(--risk); border-color:#ead39f; }
+    nav { columns:2; column-gap:2rem; padding:16px 20px; background:var(--wash); border-radius:10px; }
+    nav a { display:block; color:var(--accent); text-decoration:none; padding:2px 0; }
+    table { width:100%; border-collapse:collapse; margin:1rem 0; }
+    th,td { text-align:left; vertical-align:top; border:1px solid var(--line); padding:10px 12px; }
+    th { background:var(--wash); }
+    .units { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+    article { border:1px solid var(--line); border-radius:10px; padding:16px 18px; }
+    article h3 { margin-top:0; }
+    code { background:var(--wash); padding:.1em .3em; border-radius:4px; }
+    .small { color:var(--muted); font-size:.9rem; }
+    @media (max-width:760px) { main{margin:0;border:0;border-radius:0;padding:24px} nav{columns:1}.units{grid-template-columns:1fr} }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">Athena implementation plan</div>
+    <h1>Make completed POS sales authoritative for Reports</h1>
+    <div class="meta"><span>Created: 2026-07-12</span><span>Deepened: 2026-07-12</span><span>Type: refactor</span><span>Status: active</span><span>Canonical source: <a href="2026-07-12-001-refactor-reporting-financial-truth-plan.md">Markdown plan</a></span></div>
+    <div class="callout"><strong>Core invariant:</strong> A completed POS sale can be flagged for source-integrity uncertainty, but it cannot be excluded because operating-hours evidence is missing or says the store was closed.</div>
+  </header>
+
+  <h2 id="contents">Review map</h2>
+  <nav aria-label="Plan sections">
+    <a href="#problem">Problem and scope</a>
+    <a href="#decisions">Key decisions</a>
+    <a href="#flow">Target flow</a>
+    <a href="#units">Implementation units</a>
+    <a href="#risks">Risks</a>
+    <a href="#verification">Verification</a>
+  </nav>
+
+  <section id="problem">
+    <h2>Problem and scope</h2>
+    <p>Reporting currently bundles financial eligibility, local-date attribution, and expected operating hours. That allowed valid completed Wigclub sales to disappear when a historical policy ended before live ingress began, and still lets closed or missing schedules suppress commerce.</p>
+    <p>The redesign separates those responsibilities: completed POS status establishes eligibility; immutable occurrence plus an effective-dated store timezone establishes reporting date; Store Schedule supplies optional expected-hours context and comparison windows.</p>
+    <div class="callout risk"><strong>Explicit early-development purge:</strong> this supersedes the prior schedule-gated Reports design. A dev-only operator script empties the enumerated generated reporting tables while preserving authoritative POS and operational sources, then Athena rebuilds only the new contract. Reports may show rebuilding until the first verified bundle activates.</div>
+  </section>
+
+  <section id="decisions">
+    <h2>Key decisions</h2>
+    <table>
+      <thead><tr><th>Boundary</th><th>Decision</th></tr></thead>
+      <tbody>
+        <tr><td>Financial truth</td><td>Every valid completed POS sale counts, including closed-day, outside-hours, and no-hours cases.</td></tr>
+        <tr><td>Store time</td><td>Add effective-dated IANA timezone authority independent of opening windows.</td></tr>
+        <tr><td>Schedule role</td><td>Optional context for overnight interpretation, comparisons, and low-precedence attention; never an eligibility gate.</td></tr>
+        <tr><td>Historical repair</td><td>Reuse the sealed, idempotent full-store POS scanner instead of an interval patch.</td></tr>
+        <tr><td>Integrity proof</td><td>Require POS-source-to-fact reconciliation before existing fact-to-projection verification.</td></tr>
+        <tr><td>Legacy reporting state</td><td>Discard generated reporting state with an explicit dev-only table purge; do not build a generalized runtime reset engine and never delete POS source truth.</td></tr>
+        <tr><td>Census boundary</td><td>Seal a POS-only stabilized baseline plus lifecycle-journal cursor; occurrence is never the freeze coordinate.</td></tr>
+        <tr><td>Contract rollout</td><td>Use only the new reporting contract. Before its first verified bundle activates, Reports explicitly shows rebuilding rather than serving legacy readers.</td></tr>
+        <tr><td>Backfill authorization</td><td>After verifying the purge set is empty, one authenticated store full admin creates an immutable store/POS/run-scoped grant and triggers the automated backfill; all later phases are internal-only and cannot bypass integrity gates.</td></tr>
+        <tr><td>Known non-facts</td><td>A structurally bound payment-correction audit event whose POS parent no longer exists is sealed as <code>orphan_payment_correction</code>, never currency-inferred or materialized. Its count must agree across preview, audit, reconciliation, and census hash. Present cross-store or misbound parents still block. Unchanged adjustment snapshot lines are validated but do not create no-op facts.</td></tr>
+        <tr><td>Activation/rollback</td><td>The explicit early-development purge deletes legacy reporting facts. New-design facts are append-only afterward, and rollback only switches between verified new-design bundle pointers.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="flow">
+    <h2>Target flow</h2>
+    <ol>
+      <li>Deploy lifecycle journaling, then seal a POS-only stabilized baseline and durable terminal cursor.</li>
+      <li>Run the dev-only generated-reporting purge, then allow one authenticated store full admin to trigger the idempotent pipeline with immutable server-derived actor evidence.</li>
+      <li>Normalize original sales and linked refund, void, adjustment, and settlement effects.</li>
+      <li>Resolve immutable reporting dates from occurrence plus timezone; attach schedule context when available.</li>
+      <li>Seal preview dispositions and apply idempotently.</li>
+      <li>Prove source-to-fact counts, identities, signed money, units, dates, currencies, and lifecycle categories.</li>
+      <li>Rebuild and reconcile projections behind the active generation.</li>
+      <li>Activate verified generations and materialize Reports without requiring hours.</li>
+    </ol>
+  </section>
+
+  <section id="units">
+    <h2>Implementation units</h2>
+    <div class="units">
+      <article><h3>U1 — Store-time authority</h3><p>Introduce effective-dated timezone versions with trusted provenance and widen-first compatibility.</p></article>
+      <article><h3>U2 — Financial date contract</h3><p>Separate recognition, local date, timezone lineage, and optional schedule context in facts and projections.</p></article>
+      <article><h3>U3 — Live canonicalization</h3><p>Remove schedule-derived quarantine from valid new POS commerce while preserving source-integrity checks.</p></article>
+      <article><h3>U4 — Dev purge and full-store backfill</h3><p>Empty generated reporting tables with a dev-only operator command, verify that precondition, then run sealed preview/apply across all POS history and lifecycle effects.</p></article>
+      <article><h3>U5 — Source-to-fact proof</h3><p>Add bounded reconciliation that makes unexplained POS omissions an activation blocker.</p></article>
+      <article><h3>U6 — Projection set</h3><p>Rebuild and verify a new-contract generation set from purged-and-backfilled facts while Reports remains explicitly rebuilding.</p></article>
+      <article><h3>U7 — Reports cutover</h3><p>Materialize the projection set, seal the complete bundle, and atomically switch one public bundle pointer.</p></article>
+      <article><h3>U8 — Wigclub migration</h3><p>Exercise the U1–U7 capabilities once in dev and capture sanitized post-activation and rollback evidence.</p></article>
+    </div>
+  </section>
+
+  <section id="risks">
+    <h2>Primary risks</h2>
+    <table>
+      <thead><tr><th>Risk</th><th>Mitigation</th></tr></thead>
+      <tbody>
+        <tr><td>Timezone still coupled to schedules</td><td>Land independent effective-dated timezone authority first; never default silently to UTC.</td></tr>
+        <tr><td>Dev purge touches operational truth</td><td>Use a literal generated-reporting table list, per-table replacement, and hard refusal for production or unknown deployment names.</td></tr>
+        <tr><td>Net agreement hides missing lifecycle events</td><td>Reconcile stable identities and original/refund/void/adjustment categories, not net totals alone.</td></tr>
+        <tr><td>Backfill races with live sync</td><td>Freeze a watermark, share canonical identity, and run late-arrival catch-up reconciliation.</td></tr>
+        <tr><td>Mutable source status evades snapshot</td><td>Journal lifecycle transitions and bind stabilization plus terminal cursor into activation.</td></tr>
+        <tr><td>Purge leaves Reports temporarily empty</td><td>Expose a deliberate rebuilding state and activate public reads only from the first complete verified new-design bundle.</td></tr>
+        <tr><td>Full history exceeds function limits</td><td>Retain indexed phases, bounded pagination, resumable accumulators, and sealed manifests.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="verification">
+    <h2>Verification strategy</h2>
+    <ul>
+      <li>Every valid Wigclub POS event through the watermark has one canonical identity or linked lifecycle effect.</li>
+      <li>Source-to-fact and fact-to-projection reconciliation have zero unexplained differences.</li>
+      <li>A second full-store run creates no duplicate facts.</li>
+      <li>Sales during hours, outside hours, on closed days, and without hours all appear in Reports.</li>
+      <li>Missing cost and item attribution remain partial without suppressing trustworthy money.</li>
+      <li>The rebuilding window starts when the new-only reader deploys and ends at first verified bundle activation; later rebuilds preserve the prior new-design bundle.</li>
+    </ul>
+    <p class="small">Production deployment is deliberately excluded pending separate approval after dev evidence review.</p>
+  </section>
+</main>
+</body>
+</html>

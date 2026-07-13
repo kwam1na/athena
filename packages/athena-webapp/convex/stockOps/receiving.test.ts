@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import type { MutationCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
-import { ok } from "../../shared/commandResult";
+import { ok, userError } from "../../shared/commandResult";
 import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
 import { deriveFactMetricContributions } from "../reporting/projections/factContributions";
 
@@ -344,7 +344,10 @@ describe("stock ops receiving", () => {
     );
     assertConformsToExportedReturns(
       receivePurchaseOrderBatch,
-      ok({ receivingBatchId: "receiving-batch-2" }),
+      userError({
+        code: "validation_failed",
+        message: "Receiving batch is invalid.",
+      }),
     );
   });
 

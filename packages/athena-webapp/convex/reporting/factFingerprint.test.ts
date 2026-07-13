@@ -17,6 +17,34 @@ const base = {
 };
 
 describe("reporting fact period lineage", () => {
+  it("uses immutable timezone authority for the financial-date contract", () => {
+    expect(
+      reportingPeriodLineage({
+        timezoneVersionHash: "tz-hash-1",
+        timezoneVersionId: "timezone-1",
+      }),
+    ).toEqual({
+      kind: "store_timezone",
+      id: "timezone-1",
+      hash: "tz-hash-1",
+    });
+  });
+
+  it("makes timezone authority material to the semantic fingerprint", () => {
+    const first = canonicalReportingFactSemanticFingerprint({
+      ...base,
+      timezoneVersionHash: "tz-hash-1",
+      timezoneVersionId: "timezone-1",
+    });
+    const second = canonicalReportingFactSemanticFingerprint({
+      ...base,
+      timezoneVersionHash: "tz-hash-2",
+      timezoneVersionId: "timezone-2",
+    });
+
+    expect(first).not.toBe(second);
+  });
+
   it("keeps ordinary Store Schedule lineage backward compatible", () => {
     expect(reportingPeriodLineage({ scheduleVersionId: "schedule-1" })).toEqual({
       kind: "store_schedule",

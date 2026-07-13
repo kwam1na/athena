@@ -62,6 +62,7 @@ export const reportingProjectionGenerationSchema = v.object({
   factContractVersion: v.number(),
   metricContractVersion: v.number(),
   sourceWatermark: v.number(),
+  skuAttributionTerminalSequence: v.optional(v.number()),
   sourceGenerationIds: v.optional(
     v.array(v.id("reportingProjectionGeneration")),
   ),
@@ -121,6 +122,8 @@ const projectionValueFields = {
 export const reportingStoreDayProjectionSchema = v.object({
   ...projectionValueFields,
   operatingDate: v.string(),
+  timezoneVersionId: v.optional(v.id("storeTimezoneVersion")),
+  timezoneVersionHash: v.optional(v.string()),
   scheduleVersionId: v.optional(v.id("storeSchedule")),
   historicalInterpretationPolicyId: v.optional(
     v.id("reportingHistoricalInterpretationPolicy"),
@@ -174,6 +177,8 @@ export const reportingSkuDayProjectionSchema = v.object({
   ...projectionValueFields,
   productSkuId: v.id("productSku"),
   operatingDate: v.string(),
+  timezoneVersionId: v.optional(v.id("storeTimezoneVersion")),
+  timezoneVersionHash: v.optional(v.string()),
   scheduleVersionId: v.optional(v.id("storeSchedule")),
   historicalInterpretationPolicyId: v.optional(
     v.id("reportingHistoricalInterpretationPolicy"),
@@ -230,6 +235,8 @@ export const reportingDailyCloseProjectionSchema = v.object({
   organizationId: v.id("organization"),
   storeId: v.id("store"),
   operatingDate: v.string(),
+  timezoneVersionId: v.optional(v.id("storeTimezoneVersion")),
+  timezoneVersionHash: v.optional(v.string()),
   scheduleVersionId: v.optional(v.id("storeSchedule")),
   historicalInterpretationPolicyId: v.optional(
     v.id("reportingHistoricalInterpretationPolicy"),
@@ -385,6 +392,8 @@ export const reportingProjectionEvidenceSchema = v.object({
   sourceDomain: reportingSourceDomainSchema,
   businessEventKey: v.string(),
   operatingDate: v.optional(v.string()),
+  timezoneVersionId: v.optional(v.id("storeTimezoneVersion")),
+  timezoneVersionHash: v.optional(v.string()),
   scheduleVersionId: v.optional(v.id("storeSchedule")),
   historicalInterpretationPolicyId: v.optional(
     v.id("reportingHistoricalInterpretationPolicy"),

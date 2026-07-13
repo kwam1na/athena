@@ -5,7 +5,11 @@ import { join } from "node:path";
 import type { StoreScheduleDraft } from "../lib/storeScheduleTime";
 import {
   buildSameElapsedOperatingComparison,
+  resolveReportingFinancialPeriod,
+  resolveReportingFinancialPeriodWithCtx,
   resolveReportingOperatingPeriod,
+  resolveReportingReferencePeriod,
+  resolveReportingReferencePeriodWithCtx,
 } from "./operatingPeriods";
 
 function schedule(
@@ -31,6 +35,159 @@ function schedule(
 }
 
 describe("reporting operating periods", () => {
+  it("attributes money to the timezone-local date when no schedule exists", () => {
+    expect(
+      resolveReportingFinancialPeriod({
+        occurrenceAt: Date.parse("2026-07-12T00:30:00.000Z"),
+        schedule: null,
+        timezoneAuthority: {
+          timezone: "America/New_York",
+          timezoneVersionHash: "hash-1",
+          timezoneVersionId: "timezone-1",
+        },
+      }),
+    ).toEqual({
+      kind: "resolved",
+      occurrenceAt: Date.parse("2026-07-12T00:30:00.000Z"),
+      recognitionAt: Date.parse("2026-07-12T00:30:00.000Z"),
+      reportingDate: "2026-07-11",
+      scheduleContext: { kind: "unavailable" },
+      timezone: "America/New_York",
+      timezoneVersionHash: "hash-1",
+      timezoneVersionId: "timezone-1",
+    });
+  });
+
+  it("keeps closed and after-hours schedule state as non-blocking context", () => {
+    const timezoneAuthority = {
+      timezone: "Africa/Accra",
+      timezoneVersionHash: "hash-1",
+      timezoneVersionId: "timezone-1",
+    };
+    const closed = resolveReportingFinancialPeriod({
+      occurrenceAt: Date.parse("2026-07-12T12:00:00.000Z"),
+      schedule: schedule({
+        timezone: "Africa/Accra",
+        weeklyClosedDays: [0],
+        weeklyWindows: [],
+      }),
+      timezoneAuthority,
+    });
+    const afterHours = resolveReportingFinancialPeriod({
+      occurrenceAt: Date.parse("2026-07-06T21:00:00.000Z"),
+      schedule: schedule({
+        timezone: "Africa/Accra",
+        weeklyWindows: [
+          { dayOfWeek: 1, startMinute: 9 * 60, endMinute: 17 * 60 },
+        ],
+      }),
+      timezoneAuthority,
+    });
+
+    expect(closed).toMatchObject({
+      kind: "resolved",
+      reportingDate: "2026-07-12",
+      scheduleContext: { kind: "closed" },
+    });
+    expect(afterHours).toMatchObject({
+      kind: "resolved",
+      reportingDate: "2026-07-06",
+      scheduleContext: { kind: "outside_hours" },
+    });
+  });
+
+  it("rejects missing timezone authority and degrades conflicting schedule context", () => {
+    expect(
+      resolveReportingFinancialPeriod({
+        occurrenceAt: Date.parse("2026-07-12T00:30:00.000Z"),
+        schedule: null,
+        timezoneAuthority: null,
+      }),
+    ).toEqual({
+      kind: "missing_timezone_authority",
+      occurrenceAt: Date.parse("2026-07-12T00:30:00.000Z"),
+    });
+    expect(
+      resolveReportingFinancialPeriod({
+        occurrenceAt: Date.parse("2026-07-12T00:30:00.000Z"),
+        schedule: schedule({ timezone: "Africa/Accra" }),
+        timezoneAuthority: {
+          timezone: "America/New_York",
+          timezoneVersionHash: "hash-1",
+          timezoneVersionId: "timezone-1",
+        },
+      }),
+    ).toMatchObject({
+      kind: "resolved",
+      reportingDate: "2026-07-11",
+      scheduleContext: { kind: "unavailable" },
+      timezone: "America/New_York",
+    });
+    expect(
+      resolveReportingFinancialPeriod({
+        occurrenceAt: Date.parse("2026-07-12T00:30:00.000Z"),
+        schedule: null,
+        timezoneAuthority: {
+          timezone: "Not/A_Real_Zone",
+          timezoneVersionHash: "hash-1",
+          timezoneVersionId: "timezone-1",
+        },
+      }),
+    ).toEqual({
+      kind: "invalid_timezone_authority",
+      occurrenceAt: Date.parse("2026-07-12T00:30:00.000Z"),
+      timezoneVersionId: "timezone-1",
+    });
+  });
+
+  it("loads timezone authority independently when no schedule row exists", async () => {
+    const timezoneVersion = {
+      _id: "timezone-1",
+      organizationId: "org-1",
+      storeId: "store-1",
+      timezone: "America/New_York",
+      effectiveFrom: Date.parse("2026-01-01T00:00:00.000Z"),
+      contentHash: "hash-1",
+      source: "admin_authorized",
+      authorizedByUserId: "user-1",
+      authorizedAt: 1,
+      createdAt: 1,
+    };
+    const ctx = {
+      db: {
+        query: (table: string) => {
+          const chain = {
+            first: async () => null,
+            order: () => chain,
+            take: async () =>
+              table === "storeTimezoneVersion" ? [timezoneVersion] : [],
+            withIndex: (_name: string, apply: (q: unknown) => unknown) => {
+              const builder = {
+                eq: () => builder,
+                lte: () => builder,
+              };
+              apply(builder);
+              return chain;
+            },
+          };
+          return chain;
+        },
+      },
+    };
+
+    await expect(
+      resolveReportingFinancialPeriodWithCtx(ctx as never, {
+        occurrenceAt: Date.parse("2026-07-12T00:30:00.000Z"),
+        organizationId: "org-1" as never,
+        storeId: "store-1" as never,
+      }),
+    ).resolves.toMatchObject({
+      kind: "resolved",
+      reportingDate: "2026-07-11",
+      scheduleContext: { kind: "unavailable" },
+      timezoneVersionId: "timezone-1",
+    });
+  });
   it("owns historical operating-date range resolution on the server", () => {
     const source = readFileSync(join(import.meta.dirname, "operatingPeriods.ts"), "utf8");
     expect(source).toContain("resolveReportingOperatingDateRangeWithCtx");
@@ -194,6 +351,92 @@ describe("reporting operating periods", () => {
       comparisonKind: "closed",
       currentKind: "resolved",
       kind: "unavailable",
+    });
+  });
+
+  it("anchors Reports presets to the latest operating day when the store is closed", () => {
+    expect(
+      resolveReportingReferencePeriod({
+        occurrenceAt: Date.parse("2026-07-12T12:00:00.000Z"),
+        schedule: schedule({
+          timezone: "Africa/Accra",
+          weeklyClosedDays: [0],
+          weeklyWindows: [
+            { dayOfWeek: 6, startMinute: 9 * 60, endMinute: 19 * 60 },
+          ],
+        }),
+      }),
+    ).toMatchObject({
+      kind: "resolved",
+      operatingDate: "2026-07-11",
+      referenceAt: Date.parse("2026-07-11T19:00:00.000Z"),
+      startsAt: Date.parse("2026-07-11T09:00:00.000Z"),
+      endsAt: Date.parse("2026-07-11T19:00:00.000Z"),
+    });
+  });
+
+  it("uses the schedule version that governed the fallback operating day", async () => {
+    const currentSchedule = schedule({
+      _id: "schedule-current",
+      effectiveFrom: Date.parse("2026-07-12T00:00:00.000Z"),
+      timezone: "Africa/Accra",
+      weeklyClosedDays: [0, 6],
+      weeklyWindows: [
+        { dayOfWeek: 5, startMinute: 10 * 60, endMinute: 18 * 60 },
+      ],
+    });
+    const historicalSchedule = schedule({
+      _id: "schedule-historical",
+      effectiveTo: Date.parse("2026-07-12T00:00:00.000Z"),
+      status: "superseded",
+      timezone: "Africa/Accra",
+      weeklyClosedDays: [0],
+      weeklyWindows: [
+        { dayOfWeek: 6, startMinute: 9 * 60, endMinute: 19 * 60 },
+      ],
+    });
+    const schedules = {
+      active: [currentSchedule],
+      superseded: [historicalSchedule],
+    };
+    const ctx = {
+      db: {
+        query: () => {
+          let status: keyof typeof schedules = "active";
+          const chain = {
+            first: async () => schedules[status][0] ?? null,
+            order: () => chain,
+            take: async () => schedules[status],
+            withIndex: (
+              _name: string,
+              apply: (q: { eq: (field: string, value: string) => unknown }) => unknown,
+            ) => {
+              const builder = {
+                eq: (field: string, value: string) => {
+                  if (field === "status") status = value as keyof typeof schedules;
+                  return builder;
+                },
+                lte: () => builder,
+              };
+              apply(builder);
+              return chain;
+            },
+          };
+          return chain;
+        },
+      },
+    };
+
+    await expect(
+      resolveReportingReferencePeriodWithCtx(ctx as never, {
+        occurrenceAt: Date.parse("2026-07-12T12:00:00.000Z"),
+        storeId: "store-1" as never,
+      }),
+    ).resolves.toMatchObject({
+      kind: "resolved",
+      operatingDate: "2026-07-11",
+      referenceAt: Date.parse("2026-07-11T19:00:00.000Z"),
+      scheduleVersionId: "schedule-historical",
     });
   });
 });

@@ -8,14 +8,22 @@ import {
   action,
   internalMutation,
   internalQuery,
+  mutation,
   type MutationCtx,
 } from "../_generated/server";
 import { requireAuthenticatedAthenaUserWithCtx } from "../lib/athenaUserAuth";
+import { isTrustedRegisterCatalogSku } from "../pos/application/queries/listRegisterCatalog";
 import { requireReportingStoreAccess } from "./access";
 import { upsertProjectionHealthWithCtx } from "./health";
+import { requireAuthorizedLineageWithCtx } from "./maintenance/authorizedPosBackfill";
 import { reportingDestination } from "./readModels/destinations";
 import { scheduleReportingWorkBestEffort } from "./scheduling";
-import { reattributeFactInActiveSkuProjectionWithCtx } from "./projections/processor";
+import {
+  advanceSkuAttributionAppliedWithCtx,
+  allocateSkuAttributionSequenceWithCtx,
+  currentSkuAttributionCursorWithCtx,
+  markSkuAttributionAppliedWithCtx,
+} from "./skuAttributionSequence";
 
 export type EvidenceCursor = {
   factId: string;
@@ -553,6 +561,40 @@ export async function recordPaymentAllocationSkuEvidenceWithCtx(
 const reportingEvidenceInternal = (internal as any).reporting.evidence;
 const SKU_ATTRIBUTION_PAGE_SIZE = 20;
 
+export function assertSkuAttributionRecertificationLineage(input: {
+  attribution: Pick<
+    Doc<"reportingSkuAttribution">,
+    "organizationId" | "storeId"
+  >;
+  reconciliation: Pick<
+    Doc<"reportingPosSourceReconciliation">,
+    "grantId" | "organizationId" | "runId" | "status" | "storeId"
+  >;
+  sourceRun: Pick<
+    Doc<"reportingRun">,
+    | "_id"
+    | "backfillAuthorizationGrantId"
+    | "organizationId"
+    | "status"
+    | "storeId"
+  >;
+}) {
+  if (
+    input.reconciliation.organizationId !==
+      input.attribution.organizationId ||
+    input.reconciliation.storeId !== input.attribution.storeId ||
+    input.reconciliation.runId !== input.sourceRun._id ||
+    input.reconciliation.grantId !==
+      input.sourceRun.backfillAuthorizationGrantId ||
+    input.sourceRun.organizationId !== input.attribution.organizationId ||
+    input.sourceRun.storeId !== input.attribution.storeId ||
+    input.sourceRun.status !== "completed" ||
+    input.reconciliation.status !== "verified"
+  ) {
+    throw new Error("SKU attribution recertification lineage is invalid");
+  }
+}
+
 async function recordSkuAttributionFailureWithCtx(
   ctx: MutationCtx,
   attribution: Doc<"reportingSkuAttribution">,
@@ -565,9 +607,14 @@ async function recordSkuAttributionFailureWithCtx(
     latestFailureAt: now,
     latestFailureCode: safeCode,
     recoveryDisposition: "retry_pending",
-    status: "pending",
+    status: attribution.status === "conflict" ? "conflict" : "pending",
     updatedAt: now,
   });
+  await scheduleReportingWorkBestEffort(
+    ctx,
+    (internal as any).reporting.ingress.resumePendingIngressForStore,
+    { storeId: attribution.storeId },
+  );
 }
 
 export async function recordPendingCheckoutSkuAttributionWithCtx(
@@ -592,26 +639,147 @@ export async function recordPendingCheckoutSkuAttributionWithCtx(
     .take(2);
   if (existing.length > 1)
     throw new Error("SKU attribution identity is not unique");
+  const conflictFingerprint = JSON.stringify([
+    String(input.originalProductSkuId),
+    String(input.canonicalProductSkuId),
+    input.originalProductId ? String(input.originalProductId) : null,
+    input.canonicalProductId ? String(input.canonicalProductId) : null,
+  ]);
   if (
     existing[0] &&
     (existing[0].canonicalProductSkuId !== input.canonicalProductSkuId ||
       existing[0].originalProductSkuId !== input.originalProductSkuId)
   ) {
+    if (
+      existing[0].status === "conflict" &&
+      existing[0].conflictFingerprint === conflictFingerprint
+    ) {
+      if (existing[0].recoveryDisposition === "recovered") {
+        return {
+          attributionId: existing[0]._id,
+          kind: "conflict" as const,
+          scheduled: false,
+        };
+      }
+      const scheduled = await scheduleReportingWorkBestEffort(
+        ctx,
+        reportingEvidenceInternal.materializePendingCheckoutSkuAttribution,
+        { attributionId: existing[0]._id, cursor: existing[0].cursor ?? null },
+      );
+      if (!scheduled) {
+        await recordSkuAttributionFailureWithCtx(
+          ctx,
+          existing[0],
+          "sku_attribution_conflict_schedule_failed",
+        );
+      }
+      return {
+        attributionId: existing[0]._id,
+        kind: "conflict" as const,
+        scheduled,
+      };
+    }
+    const materialSequence = await allocateSkuAttributionSequenceWithCtx(
+      ctx,
+      input.storeId,
+    );
+    if (existing[0].materialSequence !== undefined) {
+      await markSkuAttributionAppliedWithCtx(ctx, {
+        sequence: existing[0].materialSequence,
+        storeId: input.storeId,
+      });
+    }
+    const now = Date.now();
     await ctx.db.patch("reportingSkuAttribution", existing[0]._id, {
-      latestFailureAt: Date.now(),
+      completedAt: undefined,
+      conflictFingerprint,
+      cursor: undefined,
+      latestFailureAt: now,
       latestFailureCode: "sku_attribution_conflict",
+      materialSequence,
+      recoveryDisposition: "retry_pending",
       status: "conflict",
-      updatedAt: Date.now(),
+      updatedAt: now,
     });
-    return { attributionId: existing[0]._id, kind: "conflict" as const };
+    const conflictAttribution = {
+      ...existing[0],
+      completedAt: undefined,
+      conflictFingerprint,
+      cursor: undefined,
+      latestFailureAt: now,
+      latestFailureCode: "sku_attribution_conflict",
+      materialSequence,
+      recoveryDisposition: "retry_pending" as const,
+      status: "conflict" as const,
+      updatedAt: now,
+    };
+    const scheduled = await scheduleReportingWorkBestEffort(
+      ctx,
+      reportingEvidenceInternal.materializePendingCheckoutSkuAttribution,
+      { attributionId: existing[0]._id, cursor: null },
+    );
+    if (!scheduled) {
+      await recordSkuAttributionFailureWithCtx(
+        ctx,
+        conflictAttribution,
+        "sku_attribution_conflict_schedule_failed",
+      );
+    } else {
+      await ctx.db.patch("reportingSkuAttribution", existing[0]._id, {
+        recoveryDisposition: "retry_scheduled",
+        updatedAt: now,
+      });
+    }
+    return {
+      attributionId: existing[0]._id,
+      kind: "conflict" as const,
+      scheduled,
+    };
+  }
+
+  if (existing[0]?.status === "conflict") {
+    if (existing[0].recoveryDisposition !== "recovered") {
+      const scheduled = await scheduleReportingWorkBestEffort(
+        ctx,
+        reportingEvidenceInternal.materializePendingCheckoutSkuAttribution,
+        { attributionId: existing[0]._id, cursor: existing[0].cursor ?? null },
+      );
+      if (!scheduled) {
+        await recordSkuAttributionFailureWithCtx(
+          ctx,
+          existing[0],
+          "sku_attribution_conflict_schedule_failed",
+        );
+      }
+      return {
+        attributionId: existing[0]._id,
+        kind: "conflict" as const,
+        scheduled,
+      };
+    }
+    return {
+      attributionId: existing[0]._id,
+      kind: "conflict" as const,
+      scheduled: false,
+    };
   }
 
   const now = Date.now();
+  const materialSequence = existing[0]
+    ? (existing[0].materialSequence ??
+      (await allocateSkuAttributionSequenceWithCtx(ctx, input.storeId)))
+    : await allocateSkuAttributionSequenceWithCtx(ctx, input.storeId);
+  if (existing[0] && existing[0].materialSequence === undefined) {
+    await ctx.db.patch("reportingSkuAttribution", existing[0]._id, {
+      materialSequence,
+    });
+  }
   const attributionId =
     existing[0]?._id ??
     (await ctx.db.insert("reportingSkuAttribution", {
       attributionKind: "pending_checkout",
       attributionVersion: REPORTING_LINE_ATTRIBUTION_VERSION,
+      materialSequence,
       canonicalProductId: input.canonicalProductId,
       canonicalProductSkuId: input.canonicalProductSkuId,
       createdAt: now,
@@ -631,6 +799,7 @@ export async function recordPendingCheckoutSkuAttributionWithCtx(
       _id: attributionId,
       attributionKind: "pending_checkout",
       attributionVersion: REPORTING_LINE_ATTRIBUTION_VERSION,
+      materialSequence,
       canonicalProductId: input.canonicalProductId,
       canonicalProductSkuId: input.canonicalProductSkuId,
       createdAt: now,
@@ -669,17 +838,274 @@ export async function recordPendingCheckoutSkuAttributionWithCtx(
   };
 }
 
+export async function resolvePendingCheckoutSkuAttributionConflictWithCtx(
+  ctx: MutationCtx,
+  input: {
+    attributionId: Id<"reportingSkuAttribution">;
+    canonicalProductId?: Id<"product">;
+    canonicalProductSkuId: Id<"productSku">;
+  },
+) {
+  const attribution = await ctx.db.get(
+    "reportingSkuAttribution",
+    input.attributionId,
+  );
+  if (!attribution) throw new Error("SKU attribution conflict is unavailable");
+  if (attribution.status !== "conflict") {
+    if (
+      attribution.canonicalProductSkuId !== input.canonicalProductSkuId ||
+      attribution.canonicalProductId !== input.canonicalProductId
+    ) {
+      throw new Error("SKU attribution resolution does not match material state");
+    }
+    if (attribution.status === "completed") {
+      return {
+        attributionId: attribution._id,
+        kind: "resolved" as const,
+        materialSequence: attribution.materialSequence,
+        scheduled: false,
+      };
+    }
+    const scheduled = await scheduleReportingWorkBestEffort(
+      ctx,
+      reportingEvidenceInternal.materializePendingCheckoutSkuAttribution,
+      { attributionId: attribution._id, cursor: attribution.cursor ?? null },
+    );
+    return {
+      attributionId: attribution._id,
+      kind: "resumed" as const,
+      materialSequence: attribution.materialSequence,
+      scheduled,
+    };
+  }
+  const pendingItem = await ctx.db.get(
+    "posPendingCheckoutItem",
+    attribution.pendingCheckoutItemId,
+  );
+  if (
+    !pendingItem ||
+    pendingItem.storeId !== attribution.storeId ||
+    pendingItem.organizationId !== attribution.organizationId ||
+    pendingItem.provisionalProductSkuId !== attribution.originalProductSkuId ||
+    pendingItem.approvedProductSkuId !== input.canonicalProductSkuId ||
+    pendingItem.approvedProductId !== input.canonicalProductId ||
+    (pendingItem.status !== "approved" &&
+      pendingItem.status !== "linked_to_catalog")
+  ) {
+    throw new Error("SKU attribution resolution lacks trusted source state");
+  }
+  const materialSequence = await allocateSkuAttributionSequenceWithCtx(
+    ctx,
+    attribution.storeId,
+  );
+  if (attribution.materialSequence !== undefined) {
+    await markSkuAttributionAppliedWithCtx(ctx, {
+      sequence: attribution.materialSequence,
+      storeId: attribution.storeId,
+    });
+  }
+  const now = Date.now();
+  const resolvedAttribution = {
+    ...attribution,
+    canonicalProductId: input.canonicalProductId,
+    canonicalProductSkuId: input.canonicalProductSkuId,
+    completedAt: undefined,
+    conflictFingerprint: undefined,
+    cursor: undefined,
+    materialSequence,
+    recoveryDisposition: "retry_pending" as const,
+    status: "pending" as const,
+    updatedAt: now,
+  };
+  await ctx.db.patch("reportingSkuAttribution", attribution._id, {
+    canonicalProductId: input.canonicalProductId,
+    canonicalProductSkuId: input.canonicalProductSkuId,
+    completedAt: undefined,
+    conflictFingerprint: undefined,
+    cursor: undefined,
+    materialSequence,
+    recoveryDisposition: "retry_pending",
+    status: "pending",
+    updatedAt: now,
+  });
+  const scheduled = await scheduleReportingWorkBestEffort(
+    ctx,
+    reportingEvidenceInternal.materializePendingCheckoutSkuAttribution,
+    { attributionId: attribution._id, cursor: null },
+  );
+  if (!scheduled) {
+    await recordSkuAttributionFailureWithCtx(
+      ctx,
+      resolvedAttribution,
+      "sku_attribution_resolution_schedule_failed",
+    );
+  } else {
+    await ctx.db.patch("reportingSkuAttribution", attribution._id, {
+      recoveryDisposition: "retry_scheduled",
+      updatedAt: now,
+    });
+  }
+  return {
+    attributionId: attribution._id,
+    kind: "resolved" as const,
+    materialSequence,
+    scheduled,
+  };
+}
+
+export function assertSkuAttributionConflictResolutionSource(input: {
+  attribution: Pick<
+    Doc<"reportingSkuAttribution">,
+    "organizationId" | "originalProductSkuId" | "status" | "storeId"
+  >;
+  pendingItem: Pick<
+    Doc<"posPendingCheckoutItem">,
+    | "approvedProductId"
+    | "approvedProductSkuId"
+    | "organizationId"
+    | "provisionalProductSkuId"
+    | "status"
+    | "storeId"
+  >;
+  organizationId: Id<"organization">;
+  storeId: Id<"store">;
+}) {
+  if (
+    input.attribution.status !== "conflict" ||
+    input.attribution.storeId !== input.storeId ||
+    input.attribution.organizationId !== input.organizationId ||
+    input.pendingItem.storeId !== input.storeId ||
+    input.pendingItem.organizationId !== input.organizationId ||
+    input.pendingItem.provisionalProductSkuId !==
+      input.attribution.originalProductSkuId ||
+    !input.pendingItem.approvedProductSkuId ||
+    (input.pendingItem.status !== "approved" &&
+      input.pendingItem.status !== "linked_to_catalog")
+  ) {
+    throw new Error("SKU attribution resolution lacks trusted source state");
+  }
+  return {
+    canonicalProductId: input.pendingItem.approvedProductId,
+    canonicalProductSkuId: input.pendingItem.approvedProductSkuId,
+  };
+}
+
+export function assertSkuAttributionConflictResolutionCatalog(input: {
+  approvedCategory: Doc<"category"> | null;
+  approvedProduct: Doc<"product"> | null;
+  approvedSku: Doc<"productSku"> | null;
+  organizationId: Id<"organization">;
+  pendingItem: Pick<
+    Doc<"posPendingCheckoutItem">,
+    "provisionalProductId" | "provisionalProductSkuId"
+  >;
+  provisionalSku: Doc<"productSku"> | null;
+  storeId: Id<"store">;
+}) {
+  if (
+    !input.approvedProduct ||
+    !input.approvedSku ||
+    !input.provisionalSku ||
+    input.approvedProduct.storeId !== input.storeId ||
+    input.approvedProduct.organizationId !== input.organizationId ||
+    input.approvedSku.storeId !== input.storeId ||
+    input.approvedSku.productId !== input.approvedProduct._id ||
+    input.provisionalSku.storeId !== input.storeId ||
+    input.provisionalSku._id !== input.pendingItem.provisionalProductSkuId ||
+    (input.pendingItem.provisionalProductId !== undefined &&
+      input.provisionalSku.productId !== input.pendingItem.provisionalProductId) ||
+    input.approvedProduct._id === input.pendingItem.provisionalProductId ||
+    input.approvedSku._id === input.pendingItem.provisionalProductSkuId ||
+    !isTrustedRegisterCatalogSku({
+      category: input.approvedCategory,
+      product: input.approvedProduct,
+      sku: input.approvedSku,
+    })
+  ) {
+    throw new Error("SKU attribution resolution lacks trusted catalog state");
+  }
+}
+
+export const resolvePendingCheckoutSkuAttributionConflict = internalMutation({
+  args: {
+    attributionId: v.id("reportingSkuAttribution"),
+    canonicalProductId: v.optional(v.id("product")),
+    canonicalProductSkuId: v.id("productSku"),
+  },
+  handler: resolvePendingCheckoutSkuAttributionConflictWithCtx,
+});
+
+export const resolvePendingCheckoutSkuAttributionConflictForStore = mutation({
+  args: {
+    attributionId: v.id("reportingSkuAttribution"),
+    storeId: v.id("store"),
+  },
+  handler: async (ctx, args) => {
+    const { store } = await requireReportingStoreAccess(ctx, args.storeId);
+    const attribution = await ctx.db.get(
+      "reportingSkuAttribution",
+      args.attributionId,
+    );
+    if (
+      !attribution ||
+      attribution.storeId !== args.storeId ||
+      attribution.organizationId !== store.organizationId ||
+      attribution.status !== "conflict"
+    ) {
+      throw new Error("SKU attribution conflict is unavailable");
+    }
+    const pendingItem = await ctx.db.get(
+      "posPendingCheckoutItem",
+      attribution.pendingCheckoutItemId,
+    );
+    if (!pendingItem) {
+      throw new Error("SKU attribution resolution lacks trusted source state");
+    }
+    const resolution = assertSkuAttributionConflictResolutionSource({
+      attribution,
+      organizationId: store.organizationId,
+      pendingItem,
+      storeId: args.storeId,
+    });
+    const [approvedProduct, approvedSku, provisionalSku] = await Promise.all([
+      resolution.canonicalProductId
+        ? ctx.db.get("product", resolution.canonicalProductId)
+        : Promise.resolve(null),
+      ctx.db.get("productSku", resolution.canonicalProductSkuId),
+      ctx.db.get("productSku", attribution.originalProductSkuId),
+    ]);
+    const approvedCategory = approvedProduct
+      ? await ctx.db.get("category", approvedProduct.categoryId)
+      : null;
+    assertSkuAttributionConflictResolutionCatalog({
+      approvedCategory,
+      approvedProduct,
+      approvedSku,
+      organizationId: store.organizationId,
+      pendingItem,
+      provisionalSku,
+      storeId: args.storeId,
+    });
+    return await resolvePendingCheckoutSkuAttributionConflictWithCtx(ctx, {
+      attributionId: attribution._id,
+      ...resolution,
+    });
+  },
+});
+
 export const materializePendingCheckoutSkuAttribution = internalMutation({
   args: {
     attributionId: v.id("reportingSkuAttribution"),
     cursor: v.union(v.string(), v.null()),
+    recertifyTerminal: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const attribution = await ctx.db.get(
       "reportingSkuAttribution",
       args.attributionId,
     );
-    if (!attribution || attribution.status === "conflict") return null;
+    if (!attribution) return null;
+    const materializingConflict = attribution.status === "conflict";
     const page = await ctx.db
       .query("reportingFact")
       .withIndex("by_storeId_pendingCheckoutItemId_recognitionAt", (q) =>
@@ -690,15 +1116,30 @@ export const materializePendingCheckoutSkuAttribution = internalMutation({
       .order("asc")
       .paginate({ cursor: args.cursor, numItems: SKU_ATTRIBUTION_PAGE_SIZE });
     for (const fact of page.page) {
-      await reattributeFactInActiveSkuProjectionWithCtx(ctx, {
-        attributionKind: "pending_checkout",
-        attributionVersion: attribution.attributionVersion,
-        canonicalProductSkuId: attribution.canonicalProductSkuId,
-        fact,
-        originalProductSkuId: attribution.originalProductSkuId,
-      });
       await ctx.db.patch("reportingFact", fact._id, {
-        canonicalProductSkuId: attribution.canonicalProductSkuId,
+        canonicalProductSkuId: materializingConflict
+          ? undefined
+          : attribution.canonicalProductSkuId,
+        ...(materializingConflict
+          ? {
+            attributionConflictPriorCompleteness:
+              fact.attributionConflictPriorCompleteness ?? fact.completeness,
+            attributionConflictPriorLimitingReason:
+              fact.attributionConflictPriorCompleteness === undefined
+                ? fact.limitingReason
+                : fact.attributionConflictPriorLimitingReason,
+            completeness: "partial" as const,
+            limitingReason: "source_incomplete" as const,
+          }
+          : fact.attributionConflictPriorCompleteness !== undefined
+            ? {
+              attributionConflictPriorCompleteness: undefined,
+              attributionConflictPriorLimitingReason: undefined,
+              completeness: fact.attributionConflictPriorCompleteness,
+              limitingReason:
+                fact.attributionConflictPriorLimitingReason,
+            }
+            : {}),
       });
       const evidenceRows = await ctx.db
         .query("reportingSkuEvidence")
@@ -716,7 +1157,9 @@ export const materializePendingCheckoutSkuAttribution = internalMutation({
           attributionVersion: attribution.attributionVersion,
           originalProductSkuId: attribution.originalProductSkuId,
           pendingCheckoutItemId: attribution.pendingCheckoutItemId,
-          productSkuId: attribution.canonicalProductSkuId,
+          productSkuId: materializingConflict
+            ? (evidenceRows[0].recognitionProductSkuId ?? fact.productSkuId)
+            : attribution.canonicalProductSkuId,
           provisionalProductSkuId: attribution.originalProductSkuId,
           recognitionProductSkuId:
             evidenceRows[0].recognitionProductSkuId ?? fact.productSkuId,
@@ -730,15 +1173,183 @@ export const materializePendingCheckoutSkuAttribution = internalMutation({
         completedAt: now,
         cursor: undefined,
         recoveryDisposition: "recovered",
-        status: "completed",
+        status: materializingConflict ? "conflict" : "completed",
         updatedAt: now,
       });
+      const recertificationCursor = args.recertifyTerminal !== undefined
+        ? await currentSkuAttributionCursorWithCtx(ctx, attribution.storeId)
+        : null;
+      const appliedResult = args.recertifyTerminal !== undefined
+        ? recertificationCursor?.latestMaterialSequence ===
+            args.recertifyTerminal &&
+          recertificationCursor.latestAppliedSequence ===
+            args.recertifyTerminal
+          ? {
+            advancedTo: args.recertifyTerminal,
+            caughtUp: true,
+            needsContinuation: false,
+          }
+          : null
+        : attribution.materialSequence !== undefined
+          ? await markSkuAttributionAppliedWithCtx(ctx, {
+            sequence: attribution.materialSequence,
+            storeId: attribution.storeId,
+          })
+          : null;
+      if (appliedResult?.needsContinuation) {
+        await ctx.scheduler.runAfter(
+          0,
+          reportingEvidenceInternal.continueSkuAttributionAppliedSequence,
+          { attributionId: attribution._id },
+        );
+      }
+      if (appliedResult?.caughtUp && appliedResult.advancedTo !== undefined) {
+        const activeBundle = await ctx.db
+          .query("reportingReadBundleActivation")
+          .withIndex("by_storeId_activatedAt", (q) =>
+            q.eq("storeId", attribution.storeId),
+          )
+          .order("desc")
+          .first();
+        const bundle = activeBundle && activeBundle.supersededAt === undefined
+          ? await ctx.db.get("reportingReadBundle", activeBundle.bundleId)
+          : null;
+        const fallbackReconciliations = bundle
+          ? []
+          : await ctx.db
+              .query("reportingPosSourceReconciliation")
+              .withIndex("by_storeId_status", (q) =>
+                q.eq("storeId", attribution.storeId).eq("status", "verified"),
+              )
+              .take(2);
+        const reconciliation = bundle
+          ? await ctx.db.get(
+              "reportingPosSourceReconciliation",
+              bundle.reconciliationId,
+            )
+          : fallbackReconciliations.length === 1
+            ? fallbackReconciliations[0]
+            : null;
+        const sourceRun = reconciliation
+          ? await ctx.db.get("reportingRun", reconciliation.runId)
+          : null;
+        if (
+          bundle &&
+          reconciliation &&
+          sourceRun?.frozenWatermark !== undefined &&
+          sourceRun.factSnapshotWatermark !== undefined &&
+          sourceRun.financialDateContractVersion !== undefined &&
+          sourceRun.sourceCensusHash
+        ) {
+          await ctx.scheduler.runAfter(
+            0,
+            (internal as any).reporting.maintenance.rebuild
+              .startProjectionRebuild,
+            {
+              automationIdentity: "sku-attribution-recertification",
+              backfillAuthorizationGrantId:
+                sourceRun.backfillAuthorizationGrantId,
+              censusToken: sourceRun.censusToken,
+              factSnapshotWatermark: sourceRun.factSnapshotWatermark,
+              financialDateContractVersion:
+                sourceRun.financialDateContractVersion,
+              frozenWatermark: sourceRun.frozenWatermark,
+              projectionKind: "sku_day",
+              skuAttributionTerminalSequence: appliedResult.advancedTo,
+              sourceCensusHash: sourceRun.sourceCensusHash,
+              sourceScope: "pos",
+              storeId: attribution.storeId,
+            },
+          );
+        } else if (
+          !bundle &&
+          reconciliation &&
+          sourceRun?.backfillAuthorizationGrantId &&
+          sourceRun.frozenWatermark !== undefined &&
+          sourceRun.financialDateContractVersion !== undefined &&
+          sourceRun.censusToken
+        ) {
+          assertSkuAttributionRecertificationLineage({
+            attribution,
+            reconciliation,
+            sourceRun,
+          });
+          const authorizedLineage =
+            await requireAuthorizedLineageWithCtx(ctx, {
+              grantId: sourceRun.backfillAuthorizationGrantId,
+              runId: sourceRun._id,
+            });
+          if (
+            authorizedLineage.grant.organizationId !==
+              attribution.organizationId ||
+            authorizedLineage.grant.storeId !== attribution.storeId ||
+            authorizedLineage.grant.runId !== sourceRun._id ||
+            authorizedLineage.run._id !== sourceRun._id ||
+            authorizedLineage.run.backfillAuthorizationGrantId !==
+              sourceRun.backfillAuthorizationGrantId
+          ) {
+            throw new Error(
+              "SKU attribution recertification authorization is invalid",
+            );
+          }
+          const latestJournal = await ctx.db
+            .query("posLifecycleJournal")
+            .withIndex("by_storeId_sequence", (q) =>
+              q.eq("storeId", attribution.storeId),
+            )
+            .order("desc")
+            .first();
+          await ctx.db.delete(
+            "reportingPosSourceReconciliation",
+            reconciliation._id,
+          );
+          await ctx.db.patch("reportingRun", sourceRun._id, {
+            completedAt: undefined,
+            cursor: "pos_preview:queued",
+            skuAttributionTerminalSequence: appliedResult.advancedTo,
+            status: "running",
+          });
+          await ctx.db.patch(
+            "reportingBackfillAuthorizationGrant",
+            sourceRun.backfillAuthorizationGrantId,
+            { completedAt: undefined, status: "running" },
+          );
+          await ctx.scheduler.runAfter(
+            0,
+            (internal as any).reporting.maintenance.backfill
+              .startHistoricalBackfill,
+            {
+              authorizationGrantId:
+                sourceRun.backfillAuthorizationGrantId,
+              automationIdentity: "sku-attribution-initial-recertification",
+              censusToken: sourceRun.censusToken,
+              financialDateContractVersion:
+                sourceRun.financialDateContractVersion,
+              lifecycleJournalTerminalId: latestJournal
+                ? String(latestJournal._id)
+                : undefined,
+              lifecycleJournalTerminalRecordedAt: latestJournal?.sequence,
+              mode: "preview",
+              orchestratorRunId: sourceRun._id,
+              periodEnd: sourceRun.frozenWatermark,
+              requestKey: `authorized-pos-preview:${sourceRun.censusToken}:sku-attribution:${appliedResult.advancedTo}`,
+              skuAttributionTerminalSequence: appliedResult.advancedTo,
+              sourceScope: "pos",
+              storeId: attribution.storeId,
+            },
+          );
+        }
+      }
       return { completed: true, processedCount: page.page.length };
     }
     const scheduled = await scheduleReportingWorkBestEffort(
       ctx,
       reportingEvidenceInternal.materializePendingCheckoutSkuAttribution,
-      { attributionId: attribution._id, cursor: page.continueCursor },
+      {
+        attributionId: attribution._id,
+        cursor: page.continueCursor,
+        recertifyTerminal: args.recertifyTerminal,
+      },
     );
     if (!scheduled) {
       await recordSkuAttributionFailureWithCtx(
@@ -760,6 +1371,42 @@ export const materializePendingCheckoutSkuAttribution = internalMutation({
       processedCount: page.page.length,
       scheduled,
     };
+  },
+});
+
+export const continueSkuAttributionAppliedSequence = internalMutation({
+  args: { attributionId: v.id("reportingSkuAttribution") },
+  handler: async (ctx, args) => {
+    const attribution = await ctx.db.get(
+      "reportingSkuAttribution",
+      args.attributionId,
+    );
+    if (
+      !attribution ||
+      (attribution.status !== "completed" && attribution.status !== "conflict")
+    ) return null;
+    const result = await advanceSkuAttributionAppliedWithCtx(
+      ctx,
+      attribution.storeId,
+    );
+    if (result.needsContinuation) {
+      await ctx.scheduler.runAfter(
+        0,
+        reportingEvidenceInternal.continueSkuAttributionAppliedSequence,
+        { attributionId: attribution._id },
+      );
+    } else if (result.caughtUp && result.advancedTo !== undefined) {
+      await ctx.scheduler.runAfter(
+        0,
+        reportingEvidenceInternal.materializePendingCheckoutSkuAttribution,
+        {
+          attributionId: attribution._id,
+          cursor: null,
+          recertifyTerminal: result.advancedTo,
+        },
+      );
+    }
+    return result;
   },
 });
 

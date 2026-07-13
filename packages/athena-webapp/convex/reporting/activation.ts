@@ -4,6 +4,24 @@ import { internalMutation, type MutationCtx } from "../_generated/server";
 import { v } from "convex/values";
 import { generationCoverageIsActivatable } from "./coverage";
 import { resolveReportingOperatingPeriodWithCtx } from "./operatingPeriods";
+import { requirePosSourceReconciliationReadinessWithCtx } from "./maintenance/posSourceReconciliationGate";
+import {
+  currentSkuAttributionCursorWithCtx,
+  unresolvedSkuAttributionConflictAtOrBeforeWithCtx,
+} from "./skuAttributionSequence";
+import type { ReportingMetricName } from "../../shared/reportingContract";
+
+const POS_MIGRATION_METRICS: ReportingMetricName[] = [
+  "gross_sales",
+  "discounts",
+  "net_sales",
+  "refunds",
+  "units_sold",
+  "units_returned",
+  "known_cogs",
+  "uncosted_revenue",
+  "gross_profit",
+];
 
 export type ProjectionGeneration = {
   contractVersion: number;
@@ -69,37 +87,60 @@ export function activateGeneration(input: ActivationInput) {
   };
 }
 
-export function rollbackGeneration(input: {
-  currentGenerationId: string;
-  expectedCurrentGenerationId: string;
-  requiredContractVersion: number;
-  requiredMetricVersion: number;
-  target: ProjectionGeneration;
-}) {
-  if (input.currentGenerationId !== input.expectedCurrentGenerationId) {
-    throw new Error("active generation changed");
-  }
-  assertActivatable(
-    input.target.status === "superseded"
-      ? { ...input.target, status: "verified" }
-      : input.target,
-    input.requiredContractVersion,
-    input.requiredMetricVersion,
-  );
-  if (input.target.generationId === input.currentGenerationId) {
-    throw new Error("rollback target is already active");
-  }
-  return {
-    activatedGenerationId: input.target.generationId,
-    supersededGenerationId: input.currentGenerationId,
+const CURRENT_INVENTORY_METRICS = new Set([
+  "inventory_value",
+  "on_hand_units",
+  "sellable_units",
+]);
+
+export function unavailableCurrentInventoryCoverageIsActivatable(input: {
+  candidate: {
+    completeness: string;
+    limitingReason?: string;
+    projectionKind: string;
   };
+  coverage: Array<{
+    completeness: string;
+    failedCount: number;
+    limitingReason?: string;
+    metric: string;
+    omittedCount: number;
+    quarantinedCount: number;
+    sourceDomain: string;
+    truncated: boolean;
+  }>;
+  discrepancyCount: number;
+  hasProjectionRows: boolean;
+}) {
+  return (
+    input.candidate.projectionKind === "current_inventory" &&
+    input.candidate.completeness === "unavailable" &&
+    input.candidate.limitingReason === "source_incomplete" &&
+    input.discrepancyCount === 0 &&
+    !input.hasProjectionRows &&
+    input.coverage.length === CURRENT_INVENTORY_METRICS.size &&
+    input.coverage.every(
+      (row) =>
+        CURRENT_INVENTORY_METRICS.has(row.metric) &&
+        row.sourceDomain === "inventory" &&
+        row.completeness === "unavailable" &&
+        row.limitingReason === "source_incomplete" &&
+        row.failedCount === 0 &&
+        row.omittedCount === 0 &&
+        row.quarantinedCount === 0 &&
+        row.truncated === false,
+    ) &&
+    new Set(input.coverage.map((row) => row.metric)).size ===
+      CURRENT_INVENTORY_METRICS.size
+  );
 }
 
 async function activationCoverageWithCtx(
   ctx: MutationCtx,
   candidate: Doc<"reportingProjectionGeneration">,
+  sourceScope?: "pos",
 ) {
-  const [discrepancies, coverage] = await Promise.all([
+  const [discrepancies, coverage, currentInventoryProjections] = await Promise.all([
     ctx.db
       .query("reportingReconciliationDiscrepancy")
       .withIndex("by_generationId", (q) => q.eq("generationId", candidate._id))
@@ -110,7 +151,22 @@ async function activationCoverageWithCtx(
         q.eq("generationId", candidate._id),
       )
       .take(500),
+    candidate.projectionKind === "current_inventory"
+      ? ctx.db
+          .query("reportingCurrentValuationProjection")
+          .withIndex("by_generationId_productSkuId_metric", (q) =>
+            q.eq("generationId", candidate._id),
+          )
+          .take(1)
+      : Promise.resolve([]),
   ]);
+  const unavailableCoverageReady =
+    unavailableCurrentInventoryCoverageIsActivatable({
+      candidate,
+      coverage,
+      discrepancyCount: discrepancies.length,
+      hasProjectionRows: currentInventoryProjections.length > 0,
+    });
   return {
     coverageReady: generationCoverageIsActivatable({
       coverage: coverage.map((row) => ({
@@ -124,8 +180,14 @@ async function activationCoverageWithCtx(
         sourceDomain: row.sourceDomain,
         truncated: row.truncated,
       })),
+      ...(sourceScope === "pos" && candidate.projectionKind !== "current_inventory"
+        ? {
+            metrics: POS_MIGRATION_METRICS,
+            requiredSourceDomains: ["pos"],
+          }
+        : {}),
       projectionKind: candidate.projectionKind,
-    }),
+    }) || unavailableCoverageReady,
     discrepancyCount: discrepancies.length,
   };
 }
@@ -308,14 +370,13 @@ async function assertNoPostVerificationWritesWithCtx(
     return;
   }
   if (freshnessAuthority === "inventory_positions") {
-    const laterRevision = await ctx.db
-      .query("reportingInventoryPositionRevision")
-      .withIndex("by_storeId", (q) =>
-        q
-          .eq("storeId", input.candidate.storeId)
-          .gt("_creationTime", stableWatermark),
-      )
-      .first();
+    const laterRevision = await findAuthoritativeInventoryRevisionAfterWithCtx(
+      ctx,
+      {
+        stableWatermark,
+        storeId: input.candidate.storeId,
+      },
+    );
     if (laterRevision) {
       throw new Error("Reporting candidate is stale at activation");
     }
@@ -324,6 +385,31 @@ async function assertNoPostVerificationWritesWithCtx(
   if (freshnessAuthority === "source_generations") {
     await assertActiveDerivedSourceLineageWithCtx(ctx, input);
   }
+}
+
+export async function findAuthoritativeInventoryRevisionAfterWithCtx(
+  ctx: Pick<MutationCtx, "db">,
+  input: { stableWatermark: number; storeId: Id<"store"> },
+) {
+  const revisions = await ctx.db
+    .query("reportingInventoryPositionRevision")
+    .withIndex("by_storeId", (q) =>
+      q
+        .eq("storeId", input.storeId)
+        .gt("_creationTime", input.stableWatermark),
+    )
+    .take(101);
+  if (revisions.length > 100) {
+    throw new Error("Authoritative inventory freshness evidence is truncated");
+  }
+  for (const revision of revisions) {
+    const position = await ctx.db.get(
+      "reportingInventoryPosition",
+      revision.positionId,
+    );
+    if (!position || position.mode === "authoritative") return revision;
+  }
+  return null;
 }
 
 export function activationFreshnessAuthority(
@@ -408,7 +494,34 @@ export const activateVerifiedGeneration = internalMutation({
       throw new Error("Reporting activation lineage is incompatible");
     }
     await requireIdentityMigrationReadinessWithCtx(ctx);
+    await requirePosSourceReconciliationReadinessWithCtx(ctx, {
+      candidate,
+      run,
+    });
     await assertNoPostVerificationWritesWithCtx(ctx, { candidate, run });
+    if (
+      candidate.projectionKind === "sku_day" &&
+      candidate.skuAttributionTerminalSequence !== undefined
+    ) {
+      const attributionCursor = await currentSkuAttributionCursorWithCtx(
+        ctx,
+        candidate.storeId,
+      );
+      const unresolvedAttributionConflict =
+        await unresolvedSkuAttributionConflictAtOrBeforeWithCtx(ctx, {
+          storeId: candidate.storeId,
+          terminalSequence: candidate.skuAttributionTerminalSequence,
+        });
+      if (
+        attributionCursor?.latestMaterialSequence !==
+          candidate.skuAttributionTerminalSequence ||
+        attributionCursor.latestAppliedSequence !==
+          candidate.skuAttributionTerminalSequence ||
+        unresolvedAttributionConflict
+      ) {
+        throw new Error("SKU attribution refresh was superseded");
+      }
+    }
     const currentActivation = await ctx.db
       .query("reportingProjectionActivation")
       .withIndex("by_storeId_projectionKind_activatedAt", (q) =>
@@ -441,6 +554,7 @@ export const activateVerifiedGeneration = internalMutation({
     const { coverageReady, discrepancyCount } = await activationCoverageWithCtx(
       ctx,
       candidate,
+      run.sourceScope,
     );
     activateGeneration({
       candidate: {
@@ -449,7 +563,8 @@ export const activateVerifiedGeneration = internalMutation({
         metricVersion: candidate.metricContractVersion,
         reconciliationDifferenceCount: discrepancyCount,
         requiredCoverageComplete:
-          candidate.completeness === "complete" && coverageReady,
+          (candidate.completeness === "complete" && coverageReady) ||
+          (candidate.completeness === "unavailable" && coverageReady),
         stableWatermark: candidate.stableWatermark !== undefined,
         status: "verified",
       },
@@ -506,182 +621,5 @@ export const activateVerifiedGeneration = internalMutation({
       );
     }
     return activationId;
-  },
-});
-
-export const rollbackToVerifiedGeneration = internalMutation({
-  args: {
-    automationIdentity: v.string(),
-    expectedCurrentGenerationId: v.id("reportingProjectionGeneration"),
-    storeId: v.id("store"),
-    targetGenerationId: v.id("reportingProjectionGeneration"),
-  },
-  handler: async (ctx, args) => {
-    if (!args.automationIdentity.trim()) {
-      throw new Error("Rollback automation identity is required");
-    }
-    const store = await ctx.db.get("store", args.storeId);
-    if (!store) throw new Error("Rollback input is unavailable");
-    await requireIdentityMigrationReadinessWithCtx(ctx);
-    const current = await ctx.db.get(
-      "reportingProjectionGeneration",
-      args.expectedCurrentGenerationId,
-    );
-    if (
-      !current ||
-      current.storeId !== args.storeId ||
-      current.status !== "active"
-    ) {
-      throw new Error("active generation changed");
-    }
-    const currentActivation = await ctx.db
-      .query("reportingProjectionActivation")
-      .withIndex("by_storeId_projectionKind_activatedAt", (q) =>
-        q
-          .eq("storeId", args.storeId)
-          .eq("projectionKind", current.projectionKind),
-      )
-      .order("desc")
-      .first();
-    if (
-      !currentActivation ||
-      currentActivation.generationId !== args.expectedCurrentGenerationId ||
-      currentActivation.supersededAt !== undefined ||
-      currentActivation.storeId !== args.storeId ||
-      currentActivation.organizationId !== store.organizationId ||
-      currentActivation.projectionKind !== current.projectionKind
-    ) {
-      throw new Error("active generation changed");
-    }
-    if (currentActivation.priorGenerationId !== args.targetGenerationId) {
-      throw new Error("rollback target is not the prior active generation");
-    }
-    const target = await ctx.db.get(
-      "reportingProjectionGeneration",
-      args.targetGenerationId,
-    );
-    if (
-      !target ||
-      target.storeId !== args.storeId ||
-      target.organizationId !== store.organizationId ||
-      target.projectionKind !== current.projectionKind ||
-      target.verifiedAt === undefined ||
-      target.status !== "superseded"
-    ) {
-      throw new Error("rollback target is unavailable");
-    }
-    const priorTargetActivations = await ctx.db
-      .query("reportingProjectionActivation")
-      .withIndex("by_generationId", (q) =>
-        q.eq("generationId", args.targetGenerationId),
-      )
-      .order("desc")
-      .take(2);
-    const priorTargetActivation = priorTargetActivations.find(
-      (activation) =>
-        activation.storeId === args.storeId &&
-        activation.organizationId === store.organizationId &&
-        activation.projectionKind === current.projectionKind &&
-        activation.supersededAt !== undefined &&
-        activation.activatedAt < currentActivation.activatedAt,
-    );
-    if (!priorTargetActivation) {
-      throw new Error("rollback target has no prior activation lineage");
-    }
-    if (
-      target.factContractVersion !== current.factContractVersion ||
-      target.metricContractVersion !== current.metricContractVersion ||
-      target.projectionContractVersion !== current.projectionContractVersion
-    ) {
-      throw new Error("rollback target version is incompatible");
-    }
-    const { coverageReady, discrepancyCount } = await activationCoverageWithCtx(
-      ctx,
-      target,
-    );
-    rollbackGeneration({
-      currentGenerationId: String(current._id),
-      expectedCurrentGenerationId: String(args.expectedCurrentGenerationId),
-      requiredContractVersion: current.projectionContractVersion,
-      requiredMetricVersion: current.metricContractVersion,
-      target: {
-        contractVersion: target.projectionContractVersion,
-        generationId: String(target._id),
-        metricVersion: target.metricContractVersion,
-        reconciliationDifferenceCount: discrepancyCount,
-        requiredCoverageComplete:
-          target.completeness === "complete" && coverageReady,
-        stableWatermark: target.stableWatermark !== undefined,
-        status: target.status,
-      },
-    });
-    const now = Date.now();
-    const runId = await ctx.db.insert("reportingRun", {
-      actorKind: "automation",
-      automationIdentity: args.automationIdentity,
-      createdAt: now,
-      domain: "reporting",
-      factContractVersion: target.factContractVersion,
-      failedCount: 0,
-      generationId: target._id,
-      metricContractVersion: target.metricContractVersion,
-      operation: "projection_rollback",
-      organizationId: store.organizationId,
-      processedCount: 1,
-      projectionContractVersion: target.projectionContractVersion,
-      runType: "rollback",
-      sourceGenerationId: current._id,
-      startedAt: now,
-      status: "running",
-      storeId: args.storeId,
-    });
-    await ctx.db.insert("reportingRunEvent", {
-      eventType: "rollback_started",
-      occurredAt: now,
-      outcome: "running",
-      runId,
-      sequence: 1,
-      storeId: args.storeId,
-    });
-    await ctx.db.patch("reportingProjectionActivation", currentActivation._id, {
-      supersededAt: now,
-    });
-    await ctx.db.patch("reportingProjectionGeneration", current._id, {
-      status: "superseded",
-      supersededAt: now,
-    });
-    const activationId = await ctx.db.insert("reportingProjectionActivation", {
-      activatedAt: now,
-      activationRunId: runId,
-      expectedPriorGenerationId: args.expectedCurrentGenerationId,
-      factContractVersion: target.factContractVersion,
-      generationId: target._id,
-      metricContractVersion: target.metricContractVersion,
-      organizationId: target.organizationId,
-      priorGenerationId: current._id,
-      projectionContractVersion: target.projectionContractVersion,
-      projectionKind: target.projectionKind,
-      storeId: target.storeId,
-    });
-    await ctx.db.patch("reportingProjectionGeneration", target._id, {
-      activatedAt: now,
-      status: "active",
-      supersededAt: undefined,
-    });
-    await ctx.db.patch("reportingRun", runId, {
-      completedAt: now,
-      status: "completed",
-    });
-    await ctx.db.insert("reportingRunEvent", {
-      eventType: "rollback_completed",
-      occurredAt: now,
-      outcome: "activated",
-      processedCount: 1,
-      runId,
-      sequence: 2,
-      storeId: args.storeId,
-    });
-    await scheduleDerivedRefreshes(ctx, target);
-    return { activationId, runId };
   },
 });
