@@ -364,7 +364,7 @@ function PosTerminalShell({
                 className={cn(
                   "flex min-h-0 flex-1 flex-col overflow-hidden bg-background",
                   isFullscreenActive
-                    ? "h-[calc(100svh-4rem)] p-0"
+                    ? "box-border h-svh py-layout-md md:py-8"
                     : "h-[calc(100svh-4rem)] p-8",
                 )}
               >
