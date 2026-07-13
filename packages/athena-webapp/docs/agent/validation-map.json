@@ -3,6 +3,49 @@
   "packageDir": "packages/athena-webapp",
   "surfaces": [
     {
+      "name": "shared-demo-admission-restore-and-orientation-edits",
+      "pathPrefixes": [
+        "packages/athena-webapp/docs/shared-demo-backend-coverage.md",
+        "packages/athena-webapp/convex/sharedDemo",
+        "packages/athena-webapp/convex/auth.ts",
+        "packages/athena-webapp/convex/auth/SharedDemoTicket.ts",
+        "packages/athena-webapp/convex/crons.ts",
+        "packages/athena-webapp/convex/http.ts",
+        "packages/athena-webapp/src/components/shared-demo",
+        "packages/athena-webapp/src/routes/demo.tsx",
+        "packages/athena-webapp/src/routes/_authed.tsx"
+      ],
+      "commands": [
+        {
+          "kind": "raw",
+          "command": "bun run --filter '@athena/webapp' test -- convex/sharedDemo src/components/shared-demo src/routes/demo.test.tsx src/routes/_authed.test.tsx"
+        },
+        {
+          "kind": "script",
+          "script": "audit:convex"
+        },
+        {
+          "kind": "script",
+          "script": "lint:convex:changed"
+        },
+        {
+          "kind": "script",
+          "script": "lint:frontend:changed"
+        },
+        {
+          "kind": "raw",
+          "command": "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json"
+        },
+        {
+          "kind": "script",
+          "script": "build"
+        }
+      ],
+      "behaviorScenarios": [
+        "athena-admin-shell-boot"
+      ]
+    },
+    {
       "name": "route-or-ui-only-edits",
       "pathPrefixes": [
         "packages/athena-webapp/src/assets",
