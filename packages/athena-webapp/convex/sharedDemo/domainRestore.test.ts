@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import { describe, expect, it } from "vitest";
 
 import { planDomainRestore, requireBoundedBatch, SHARED_DEMO_MUTABLE_TABLES } from "./domainRestore";
@@ -37,5 +39,11 @@ describe("shared demo domain restore registry", () => {
 
   it("fails closed instead of silently truncating an over-budget table", () => {
     expect(() => requireBoundedBatch(Array.from({ length: 501 }), "staffMessage")).toThrow("restore batch required");
+  });
+
+  it("uses the daily opening store-prefix index declared by the schema", () => {
+    const source = readFileSync("convex/sharedDemo/domainRestore.ts", "utf8");
+    expect(source).toContain('tableName === "dailyOpening"');
+    expect(source).toContain('withIndex("by_storeId_operatingDate"');
   });
 });
