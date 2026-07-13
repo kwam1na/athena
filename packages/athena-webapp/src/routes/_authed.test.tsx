@@ -333,8 +333,10 @@ describe("Authed layout", () => {
 
     expect(screen.getByTestId("authed-outlet")).toBeInTheDocument();
     expect(screen.getByTestId("authed-outlet").closest("main")).toHaveClass(
-      "h-[calc(100svh-4rem)]",
-      "p-0",
+      "box-border",
+      "h-svh",
+      "py-layout-md",
+      "md:py-8",
       "overflow-hidden",
     );
     expect(screen.getByTestId("sidebar-provider")).toBeInTheDocument();
