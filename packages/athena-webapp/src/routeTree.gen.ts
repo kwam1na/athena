@@ -24,6 +24,7 @@ import { Route as AuthedOrgUrlSlugStoreIndexRouteImport } from './routes/_authed
 import { Route as AuthedOrgUrlSlugSettingsIndexRouteImport } from './routes/_authed/$orgUrlSlug/settings/index'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/index'
 import { Route as AuthedOrgUrlSlugSettingsOrganizationIndexRouteImport } from './routes/_authed/$orgUrlSlug/settings/organization/index'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugStaffMessagesRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/staff-messages'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugSharedDemoRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/shared-demo'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugReportsRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/reports'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugHomeRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/home'
@@ -178,6 +179,12 @@ const AuthedOrgUrlSlugSettingsOrganizationIndexRoute =
   AuthedOrgUrlSlugSettingsOrganizationIndexRouteImport.update({
     id: '/$orgUrlSlug/settings/organization/',
     path: '/$orgUrlSlug/settings/organization/',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+const AuthedOrgUrlSlugStoreStoreUrlSlugStaffMessagesRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugStaffMessagesRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/staff-messages',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/staff-messages',
     getParentRoute: () => AuthedRoute,
   } as any)
 const AuthedOrgUrlSlugStoreStoreUrlSlugSharedDemoRoute =
@@ -681,6 +688,7 @@ export interface FileRoutesByFullPath {
   '/$orgUrlSlug/store/$storeUrlSlug/home': typeof AuthedOrgUrlSlugStoreStoreUrlSlugHomeRoute
   '/$orgUrlSlug/store/$storeUrlSlug/reports': typeof AuthedOrgUrlSlugStoreStoreUrlSlugReportsRouteWithChildren
   '/$orgUrlSlug/store/$storeUrlSlug/shared-demo': typeof AuthedOrgUrlSlugStoreStoreUrlSlugSharedDemoRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/staff-messages': typeof AuthedOrgUrlSlugStoreStoreUrlSlugStaffMessagesRoute
   '/$orgUrlSlug/settings/organization/': typeof AuthedOrgUrlSlugSettingsOrganizationIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/bags/$bagId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugBagsBagIdRoute
@@ -772,6 +780,7 @@ export interface FileRoutesByTo {
   '/$orgUrlSlug/store/$storeUrlSlug/app-settings': typeof AuthedOrgUrlSlugStoreStoreUrlSlugAppSettingsRoute
   '/$orgUrlSlug/store/$storeUrlSlug/home': typeof AuthedOrgUrlSlugStoreStoreUrlSlugHomeRoute
   '/$orgUrlSlug/store/$storeUrlSlug/shared-demo': typeof AuthedOrgUrlSlugStoreStoreUrlSlugSharedDemoRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/staff-messages': typeof AuthedOrgUrlSlugStoreStoreUrlSlugStaffMessagesRoute
   '/$orgUrlSlug/settings/organization': typeof AuthedOrgUrlSlugSettingsOrganizationIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug': typeof AuthedOrgUrlSlugStoreStoreUrlSlugIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/bags/$bagId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugBagsBagIdRoute
@@ -866,6 +875,7 @@ export interface FileRoutesById {
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/home': typeof AuthedOrgUrlSlugStoreStoreUrlSlugHomeRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/reports': typeof AuthedOrgUrlSlugStoreStoreUrlSlugReportsRouteWithChildren
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/shared-demo': typeof AuthedOrgUrlSlugStoreStoreUrlSlugSharedDemoRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/staff-messages': typeof AuthedOrgUrlSlugStoreStoreUrlSlugStaffMessagesRoute
   '/_authed/$orgUrlSlug/settings/organization/': typeof AuthedOrgUrlSlugSettingsOrganizationIndexRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugIndexRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/bags/$bagId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugBagsBagIdRoute
@@ -961,6 +971,7 @@ export interface FileRouteTypes {
     | '/$orgUrlSlug/store/$storeUrlSlug/home'
     | '/$orgUrlSlug/store/$storeUrlSlug/reports'
     | '/$orgUrlSlug/store/$storeUrlSlug/shared-demo'
+    | '/$orgUrlSlug/store/$storeUrlSlug/staff-messages'
     | '/$orgUrlSlug/settings/organization/'
     | '/$orgUrlSlug/store/$storeUrlSlug/'
     | '/$orgUrlSlug/store/$storeUrlSlug/bags/$bagId'
@@ -1052,6 +1063,7 @@ export interface FileRouteTypes {
     | '/$orgUrlSlug/store/$storeUrlSlug/app-settings'
     | '/$orgUrlSlug/store/$storeUrlSlug/home'
     | '/$orgUrlSlug/store/$storeUrlSlug/shared-demo'
+    | '/$orgUrlSlug/store/$storeUrlSlug/staff-messages'
     | '/$orgUrlSlug/settings/organization'
     | '/$orgUrlSlug/store/$storeUrlSlug'
     | '/$orgUrlSlug/store/$storeUrlSlug/bags/$bagId'
@@ -1145,6 +1157,7 @@ export interface FileRouteTypes {
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/home'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/reports'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/shared-demo'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/staff-messages'
     | '/_authed/$orgUrlSlug/settings/organization/'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/bags/$bagId'
@@ -1338,6 +1351,13 @@ declare module '@tanstack/react-router' {
       path: '/$orgUrlSlug/settings/organization'
       fullPath: '/$orgUrlSlug/settings/organization/'
       preLoaderRoute: typeof AuthedOrgUrlSlugSettingsOrganizationIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/staff-messages': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/staff-messages'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/staff-messages'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/staff-messages'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugStaffMessagesRouteImport
       parentRoute: typeof AuthedRoute
     }
     '/_authed/$orgUrlSlug/store/$storeUrlSlug/shared-demo': {
@@ -1963,6 +1983,7 @@ interface AuthedRouteChildren {
   AuthedOrgUrlSlugStoreStoreUrlSlugHomeRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugHomeRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugReportsRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugReportsRouteWithChildren
   AuthedOrgUrlSlugStoreStoreUrlSlugSharedDemoRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugSharedDemoRoute
+  AuthedOrgUrlSlugStoreStoreUrlSlugStaffMessagesRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugStaffMessagesRoute
   AuthedOrgUrlSlugSettingsOrganizationIndexRoute: typeof AuthedOrgUrlSlugSettingsOrganizationIndexRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugIndexRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugBagsBagIdRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugBagsBagIdRoute
@@ -2045,6 +2066,8 @@ const AuthedRouteChildren: AuthedRouteChildren = {
     AuthedOrgUrlSlugStoreStoreUrlSlugReportsRouteWithChildren,
   AuthedOrgUrlSlugStoreStoreUrlSlugSharedDemoRoute:
     AuthedOrgUrlSlugStoreStoreUrlSlugSharedDemoRoute,
+  AuthedOrgUrlSlugStoreStoreUrlSlugStaffMessagesRoute:
+    AuthedOrgUrlSlugStoreStoreUrlSlugStaffMessagesRoute,
   AuthedOrgUrlSlugSettingsOrganizationIndexRoute:
     AuthedOrgUrlSlugSettingsOrganizationIndexRoute,
   AuthedOrgUrlSlugStoreStoreUrlSlugIndexRoute:

@@ -1,25 +1,11 @@
 import { useAuthActions } from "@convex-dev/auth/react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useAction, useQuery } from "convex/react";
-import { makeFunctionReference } from "convex/server";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { api } from "~/convex/_generated/api";
-
-const issueSharedDemoTicket = makeFunctionReference<
-  "action",
-  "public",
-  Record<string, never>,
-  { expiresAt: number; ticket: string }
->("sharedDemo/admission:issueSharedDemoTicket");
-const getSharedDemoContext = makeFunctionReference<
-  "query",
-  "public",
-  Record<string, never>,
-  { kind: "shared_demo" } | null
->("sharedDemo/public:getContext");
 
 export const Route = createFileRoute("/demo")({
   component: SharedDemoEntry,
@@ -28,9 +14,9 @@ export const Route = createFileRoute("/demo")({
 
 export function SharedDemoEntry() {
   const { signIn, signOut } = useAuthActions();
-  const issueTicket = useAction(issueSharedDemoTicket);
+  const issueTicket = useAction(api.sharedDemo.admission.issueSharedDemoTicket);
   const { isLoading, user } = useAuth();
-  const demoContext = useQuery(getSharedDemoContext, {});
+  const demoContext = useQuery(api.sharedDemo.public.getContext, {});
   const organizations = useQuery(api.inventory.organizations.getAll, user?._id ? { userId: user._id } : "skip");
   const stores = useQuery(api.inventory.stores.getAll, organizations?.[0]?._id ? { organizationId: organizations[0]._id } : "skip");
   const navigate = useNavigate();

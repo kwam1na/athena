@@ -75,13 +75,14 @@ describe("shared demo ticket consumption", () => {
 
 describe("shared demo admission budget", () => {
   it("rejects a request after the transactional window limit", async () => {
+    const patch = vi.fn();
     const ctx = {
       db: {
-        patch: vi.fn(),
+        patch,
         query: vi.fn(() => ({ withIndex: vi.fn(() => ({ unique: vi.fn().mockResolvedValue({ _id: "bucket", count: 2, windowStartedAt: 9_000 }) })) })),
       },
     } as never;
     await expect(consumeAdmissionBudgetWithCtx(ctx, { kind: "mint", limit: 2, now: 10_000 })).rejects.toThrow("shared demo is busy");
-    expect(ctx.db.patch).not.toHaveBeenCalled();
+    expect(patch).not.toHaveBeenCalled();
   });
 });

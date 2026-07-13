@@ -37,7 +37,7 @@ export const provisionSharedDemo = internalMutation({
       ? await ctx.db.query("store").withIndex("by_organizationId_slug", (q) => q.eq("organizationId", existingOrganization._id).eq("slug", SHARED_DEMO_SEED.storeSlug)).unique()
       : null;
     if (existingOrganization || existingStore) {
-      if (!existingStore || existingStore.config?.sharedDemo !== true) throw new Error("Shared demo foundation is incomplete.");
+      if (!existingOrganization || !existingStore || existingStore.config?.sharedDemo !== true) throw new Error("Shared demo foundation is incomplete.");
       const owner = await ctx.db.query("athenaUser").withIndex("by_normalizedEmail", (q) => q.eq("normalizedEmail", SHARED_DEMO_SEED.ownerEmail)).unique();
       if (!owner) throw new Error("Shared demo owner is missing.");
       return { athenaUserId: owner._id, kind: "existing" as const, organizationId: existingOrganization._id, storeId: existingStore._id };

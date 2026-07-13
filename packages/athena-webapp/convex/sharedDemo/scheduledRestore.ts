@@ -8,7 +8,7 @@ export function sharedDemoRestoreEnabled(environment: Record<string, string | un
 
 export const runHourlyRestore = internalAction({
   args: {},
-  handler: async (ctx) => {
+  handler: async (ctx): Promise<unknown> => {
     if (!sharedDemoRestoreEnabled(process.env)) return { kind: "disabled" as const };
     const storeId = process.env.ATHENA_SHARED_DEMO_STORE_ID;
     if (!storeId) return { kind: "disabled" as const };

@@ -127,19 +127,19 @@ export async function decideSharedDemoEffect(
 
 export function validateSharedDemoCoverage() {
   const errors: string[] = [];
-  for (const [label, entries, key] of [
-    ["capability", SHARED_DEMO_CAPABILITY_CLASSIFICATIONS, "capability"],
-    ["gateway", SHARED_DEMO_EFFECT_CLASSIFICATIONS, "gateway"],
-  ] as const) {
-    const seen = new Set<string>();
-    for (const entry of entries) {
-      const value = entry[key];
-      if (seen.has(value)) errors.push(`Duplicate shared demo ${label}: ${value}`);
-      seen.add(value);
-      if (entry.decision !== "allowed" && entry.decision !== "denied" && entry.decision !== "simulated") {
-        errors.push(`Unknown shared demo decision: ${value}`);
-      }
+  const seenCapabilities = new Set<string>();
+  for (const entry of SHARED_DEMO_CAPABILITY_CLASSIFICATIONS) {
+    if (seenCapabilities.has(entry.capability)) {
+      errors.push(`Duplicate shared demo capability: ${entry.capability}`);
     }
+    seenCapabilities.add(entry.capability);
+  }
+  const seenGateways = new Set<string>();
+  for (const entry of SHARED_DEMO_EFFECT_CLASSIFICATIONS) {
+    if (seenGateways.has(entry.gateway)) {
+      errors.push(`Duplicate shared demo gateway: ${entry.gateway}`);
+    }
+    seenGateways.add(entry.gateway);
   }
   const coveredCapabilities = new Set(
     SHARED_DEMO_PUBLIC_FUNCTION_INVENTORY.map((entry) => entry.capability),

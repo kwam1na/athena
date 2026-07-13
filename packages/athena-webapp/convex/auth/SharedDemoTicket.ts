@@ -1,4 +1,7 @@
 import { ConvexCredentials } from "@convex-dev/auth/providers/ConvexCredentials";
+import type { GenericActionCtxWithAuthConfig } from "@convex-dev/auth/server";
+import type { GenericDataModel } from "convex/server";
+import type { Value } from "convex/values";
 
 import { internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
@@ -10,8 +13,8 @@ const consumeExchangeBudgetRef = (internal as any).sharedDemo.admission.consumeS
 export const SHARED_DEMO_AUTH_PROVIDER_ID = "shared-demo";
 
 export async function authorizeSharedDemoTicket(
-  credentials: Record<string, unknown>,
-  ctx: { runMutation: (reference: unknown, args: unknown) => Promise<unknown> },
+  credentials: Partial<Record<string, Value | undefined>>,
+  ctx: GenericActionCtxWithAuthConfig<GenericDataModel>,
 ): Promise<{ userId: Id<"users"> } | null> {
   const ticket = typeof credentials.ticket === "string" ? credentials.ticket : "";
   if (!ticket || ticket.length > 256) return null;

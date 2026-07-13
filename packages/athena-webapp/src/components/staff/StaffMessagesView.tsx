@@ -1,19 +1,15 @@
 import { useMutation, useQuery } from "convex/react";
-import { makeFunctionReference } from "convex/server";
 import { FormEvent, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
 
-const listStaffMessages = makeFunctionReference<"query", "public", { storeId: Id<"store"> }, Array<{ _id: Id<"staffMessage">; authorUserId: Id<"athenaUser">; body: string; createdAt: number }>>("operations/staffMessages:listStaffMessages");
-const postStaffMessage = makeFunctionReference<"mutation", "public", { body: string; expectedDemoRestoreEpoch?: number; storeId: Id<"store"> }, unknown>("operations/staffMessages:postStaffMessage");
-const getSharedDemoContext = makeFunctionReference<"query", "public", Record<string, never>, { kind: "shared_demo"; restore: { epoch: number } } | null>("sharedDemo/public:getContext");
-
 export function StaffMessagesView({ storeId }: { storeId: Id<"store"> }) {
-  const messages = useQuery(listStaffMessages, { storeId });
-  const demo = useQuery(getSharedDemoContext, {});
-  const post = useMutation(postStaffMessage);
+  const messages = useQuery(api.operations.staffMessages.listStaffMessages, { storeId });
+  const demo = useQuery(api.sharedDemo.public.getContext, {});
+  const post = useMutation(api.operations.staffMessages.postStaffMessage);
   const [body, setBody] = useState("");
   const [status, setStatus] = useState("");
 
