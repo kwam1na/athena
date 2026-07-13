@@ -1,13 +1,14 @@
 ---
 title: Landed Change Report Gate
 date: 2026-07-09
+last_updated: 2026-07-13
 category: harness
 module: repo
 problem_type: missing_handoff_guardrail
 component: landed-change-report-check
 resolution_type: guardrail
 severity: medium
-delivery_diff_fingerprint: 6d2d87fccf98b2d608965000f0a40ca68990201ccf6963378e6df5417ae6f513
+delivery_diff_fingerprint: a9a17fe3bebe44c4765fa5d86174c3c0f928fd67d4eb6f44d03900679e96c1de
 tags:
   - delivery-handoff
   - reports
@@ -25,8 +26,10 @@ handoffs, but without a repo sensor that expectation can drift under time pressu
 
 ## Solution
 
-Add `scripts/landed-change-report-check.ts` and wire `landed-report:check` into the
-`pr:athena:validate-provider` pipeline. The sensor totals reportable source-line changes against
+Add `scripts/landed-change-report-check.ts` and wire it with `compound:check` through
+`scripts/delivery-documentation-check.ts`. The composite `delivery:documentation-check` runs both
+policies before reporting, so a branch that lacks a solution note and a landed-change report gets
+one actionable failure containing both requirements. The report sensor totals reportable source-line changes against
 `origin/main` using the same branch-aware approach as `compound:check`. When the branch crosses the
 large-change threshold, it requires a changed HTML report under `docs/reports/`.
 
@@ -34,12 +37,13 @@ The check also verifies that changed report artifacts look like outputs from the
 `.agents/skills/ce-landed-change-report` workflow: they must carry the report marker, subagent
 evidence section, and pass-required quiz form.
 
-Run the same sensor in `pre-push:review` immediately after `compound:check` so review-loop edits
-that stale the report fingerprint fail locally before PR validation or merge.
+Run the composite policy in `pre-push:review` and CI as one documentation step so review-loop
+edits that stale either artifact are reported together before PR validation or merge.
 
 ## Prevention
 
-Keep the report gate in `pr:athena:validate-provider` beside `compound:check`, and update
-`scripts/landed-change-report-check.test.ts` whenever the landed-change report contract changes.
+Keep `delivery:documentation-check` in `pr:athena:validate-provider`, `pre-push:review`, and CI.
+Update `scripts/delivery-documentation-check.test.ts` whenever either policy's aggregate reporting
+or remediation guidance changes, and retain the individual sensor tests for their own contracts.
 Use the repo-local `.agents/skills/ce-landed-change-report` skill for report creation so generated
 reports satisfy the sensor and preserve the required human comprehension handoff.

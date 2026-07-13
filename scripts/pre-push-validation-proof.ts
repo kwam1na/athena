@@ -283,6 +283,7 @@ async function collectValidationFingerprintPaths(
     ".husky/pre-commit",
     "scripts/pre-push-review.ts",
     "scripts/pre-push-validation-proof.ts",
+    "scripts/delivery-documentation-check.ts",
     "scripts/harness-repo-validation.ts",
     "scripts/root-scripts-coverage.ts",
     "scripts/coverage-summary.ts",

@@ -209,7 +209,7 @@ scenarios that should prove the change.
 Repo-owned harness surfaces are handled separately from package validation maps.
 Changes under `scripts/`, package `docs/agent` guidance, package `AGENTS.md`,
 top-level repo wiring, GitHub workflows, Husky hooks, and `README.md` select the
-repo validation command set: `harness:test`, `compound:check`, `test:coverage`,
+repo validation command set: `harness:test`, `delivery:documentation-check`, `test:coverage`,
 and `harness:inferential-review`.
 
 Standalone `harness:review` runs that repo validation command set when those
