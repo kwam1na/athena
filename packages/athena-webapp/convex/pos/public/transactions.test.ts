@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+// Shared-demo policy narrows effects without changing transaction results.
+
 import {
   adjustTransactionItems,
   completeTransaction,

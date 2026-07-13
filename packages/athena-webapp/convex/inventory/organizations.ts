@@ -15,12 +15,14 @@ export const getAll = query({
     if (demoActor && args.userId !== demoActor.athenaUserId) return [];
     const memberOrgs = await ctx.db
       .query("organizationMember")
-      .filter((q) => q.eq(q.field("userId"), args.userId))
-      .collect();
+      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
+      .take(100);
 
     const orgs = memberOrgs.map((org) => org.organizationId);
 
-    const organizations = await Promise.all(orgs.map((org) => ctx.db.get(org)));
+    const organizations = await Promise.all(
+      orgs.map((org) => ctx.db.get("organization", org)),
+    );
 
     return organizations.filter((o) => !!o);
   },
@@ -31,12 +33,8 @@ export const getById = query({
     id: v.id(entity),
   },
   handler: async (ctx, args) => {
-    const organization = await ctx.db
-      .query(entity)
-      .filter((q) => q.eq(q.field("_id"), args.id))
-      .collect();
-
-    return organization;
+    const organization = await ctx.db.get("organization", args.id);
+    return organization ? [organization] : [];
   },
 });
 
@@ -77,7 +75,7 @@ export const create = mutation({
       role: "full_admin",
     });
 
-    return await ctx.db.get(id);
+    return await ctx.db.get("organization", id);
   },
 });
 
@@ -88,9 +86,9 @@ export const update = mutation({
   },
   handler: async (ctx, args) => {
     requireNonDemoFoundationMutation({ organizationId: args.id });
-    await ctx.db.patch(args.id, { name: args.name });
+    await ctx.db.patch("organization", args.id, { name: args.name });
 
-    return await ctx.db.get(args.id);
+    return await ctx.db.get("organization", args.id);
   },
 });
 
@@ -100,7 +98,7 @@ export const remove = mutation({
   },
   handler: async (ctx, args) => {
     requireNonDemoFoundationMutation({ organizationId: args.id });
-    await ctx.db.delete(args.id);
+    await ctx.db.delete("organization", args.id);
 
     return { message: "OK" };
   },

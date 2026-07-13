@@ -1,6 +1,20 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { consumeAdmissionBudgetWithCtx, consumeSharedDemoTicketWithCtx } from "./admission";
+import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
+import {
+  consumeAdmissionBudgetWithCtx,
+  consumeSharedDemoTicketWithCtx,
+  issueSharedDemoTicket,
+} from "./admission";
+
+describe("shared demo admission return contract", () => {
+  it("accepts the short-lived opaque ticket result", () => {
+    assertConformsToExportedReturns(issueSharedDemoTicket, {
+      ticket: "opaque-ticket",
+      expiresAt: 20_000,
+    });
+  });
+});
 
 function contextWith(ticket: Record<string, unknown> | null) {
   const patch = vi.fn();

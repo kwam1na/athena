@@ -1,4 +1,6 @@
 import { readFileSync } from "node:fs";
+
+// Shared-demo fulfillment limits preserve public order result envelopes.
 import { describe, expect, it } from "vitest";
 import { ok } from "../../shared/commandResult";
 import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";

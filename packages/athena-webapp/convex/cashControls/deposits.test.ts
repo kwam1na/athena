@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+// Shared-demo denial happens before these established public result envelopes.
 import { readFileSync } from "node:fs";
 import type { Id } from "../_generated/dataModel";
 import { ok, userError } from "../../shared/commandResult";

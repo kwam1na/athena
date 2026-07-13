@@ -1,5 +1,7 @@
 import { describe, it } from "vitest";
 
+// Shared-demo denial preserves the existing authentication result envelope.
+
 import { userError } from "../../shared/commandResult";
 import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
 import { syncAuthenticatedAthenaUser, verifyCode } from "./auth";

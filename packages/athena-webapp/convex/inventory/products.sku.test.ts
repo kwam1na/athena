@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+// Shared-demo denial preserves the established barcode result envelope.
+
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
@@ -31,6 +33,9 @@ const mocks = vi.hoisted(() => ({
   advanceRegisterCatalogRevision: vi.fn(),
   applyInventoryEffectWithCtx: vi.fn(),
   refreshProductSkuSearchForProduct: vi.fn(),
+  requireAuthenticatedAthenaUserWithCtx: vi.fn().mockResolvedValue({
+    _id: "athena-user-1",
+  }),
   requireProductSkuSearchReadAccess: vi.fn(),
   requireStoreFullAdminAccess: vi.fn(),
   removeProductSkuSearchProjection: vi.fn(),
@@ -45,6 +50,11 @@ vi.mock("../pos/application/sync/registerCatalogRevision", () => ({
 
 vi.mock("../reporting/inventory/effects", () => ({
   applyInventoryEffectWithCtx: mocks.applyInventoryEffectWithCtx,
+}));
+
+vi.mock("../lib/athenaUserAuth", () => ({
+  requireAuthenticatedAthenaUserWithCtx:
+    mocks.requireAuthenticatedAthenaUserWithCtx,
 }));
 
 vi.mock("../stockOps/access", () => ({

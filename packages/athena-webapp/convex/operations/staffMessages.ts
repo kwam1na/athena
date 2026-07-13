@@ -89,6 +89,6 @@ export const postStaffMessage = mutation({
       createdAt: now,
       updatedAt: now,
     });
-    return ctx.db.get(id);
+    return ctx.db.get("staffMessage", id);
   },
 });

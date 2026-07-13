@@ -103,9 +103,9 @@ export const storeSharedDemoTicket = internalMutation({
     }
 
     const [athenaUser, organization, store] = await Promise.all([
-      ctx.db.get(args.athenaUserId),
-      ctx.db.get(args.organizationId),
-      ctx.db.get(args.storeId),
+      ctx.db.get("athenaUser", args.athenaUserId),
+      ctx.db.get("organization", args.organizationId),
+      ctx.db.get("store", args.storeId),
     ]);
     if (!athenaUser || !organization || !store) {
       throw new Error("The shared demo store is not ready.");

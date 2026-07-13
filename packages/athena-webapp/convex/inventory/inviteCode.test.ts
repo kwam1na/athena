@@ -1,5 +1,7 @@
 import { describe, it } from "vitest";
 
+// Shared-demo denial preserves the existing invitation result envelopes.
+
 import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
 import { create, getAll, redeem } from "./inviteCode";
 

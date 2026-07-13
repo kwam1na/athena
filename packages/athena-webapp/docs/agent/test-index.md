@@ -87,6 +87,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`convex/inventory/skuSearch.test.ts`](../../convex/inventory/skuSearch.test.ts)
 - [`convex/inventory/storeConfigV2.test.ts`](../../convex/inventory/storeConfigV2.test.ts)
 - [`convex/inventory/storeSchedule.test.ts`](../../convex/inventory/storeSchedule.test.ts)
+- [`convex/inventory/stores.test.ts`](../../convex/inventory/stores.test.ts)
 - [`convex/inventory/taxonomySkuSearchRefresh.test.ts`](../../convex/inventory/taxonomySkuSearchRefresh.test.ts)
 - [`convex/lib/athenaUserAuth.test.ts`](../../convex/lib/athenaUserAuth.test.ts)
 - [`convex/lib/commandResultValidators.test.ts`](../../convex/lib/commandResultValidators.test.ts)
