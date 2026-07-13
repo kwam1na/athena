@@ -283,6 +283,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`convex/sharedDemo/providerEnforcement.test.ts`](../../convex/sharedDemo/providerEnforcement.test.ts)
 - [`convex/sharedDemo/provision.test.ts`](../../convex/sharedDemo/provision.test.ts)
 - [`convex/sharedDemo/public.test.ts`](../../convex/sharedDemo/public.test.ts)
+- [`convex/sharedDemo/readBoundary.test.ts`](../../convex/sharedDemo/readBoundary.test.ts)
 - [`convex/sharedDemo/reporting.test.ts`](../../convex/sharedDemo/reporting.test.ts)
 - [`convex/sharedDemo/restore.test.ts`](../../convex/sharedDemo/restore.test.ts)
 - [`convex/sharedDemo/scheduledRestore.test.ts`](../../convex/sharedDemo/scheduledRestore.test.ts)

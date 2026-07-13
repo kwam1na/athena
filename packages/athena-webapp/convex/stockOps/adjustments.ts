@@ -8,7 +8,10 @@ import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
 import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
-import { requireSharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
+import {
+  requireSharedDemoStoreCapabilityIfApplicable,
+  requireSharedDemoStoreReadIfApplicable,
+} from "../sharedDemo/actor";
 import { requireReadySharedDemoWriteWithCtx } from "../sharedDemo/restore";
 import {
   requireAuthenticatedAthenaUserWithCtx,
@@ -1253,6 +1256,7 @@ async function requireInventorySnapshotForProductSkusAccess(
   ctx: QueryCtx,
   storeId: Id<"store">,
 ) {
+  await requireSharedDemoStoreReadIfApplicable(ctx, storeId);
   const store = await ctx.db.get("store", storeId);
   if (!store) {
     throw new Error("Store not found.");
@@ -1275,6 +1279,7 @@ export const listInventorySnapshot = query({
     storeId: v.id("store"),
   },
   handler: async (ctx, args) => {
+    await requireSharedDemoStoreReadIfApplicable(ctx, args.storeId);
     return listInventorySnapshotWithCtx(ctx, args);
   },
 });
@@ -1296,6 +1301,7 @@ export const getInventoryUnitSummary = query({
     storeId: v.id("store"),
   },
   handler: async (ctx, args) => {
+    await requireSharedDemoStoreReadIfApplicable(ctx, args.storeId);
     return getInventoryUnitSummaryWithCtx(ctx, args);
   },
 });
@@ -1306,6 +1312,7 @@ export const listInventorySnapshotPage = query({
     storeId: v.id("store"),
   },
   handler: async (ctx, args) => {
+    await requireSharedDemoStoreReadIfApplicable(ctx, args.storeId);
     const productSkuPage = await ctx.db
       .query("productSku")
       .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))

@@ -1,6 +1,10 @@
 /* eslint-disable @convex-dev/no-collect-in-query -- V26-168 converts the primary commerce access paths to indexed or bounded reads first; remaining legacy scans in this large module will be reduced in follow-up passes. */
 import { v } from "convex/values";
-import { getSharedDemoActorWithCtx, requireSharedDemoCapabilityIfApplicable } from "../sharedDemo/actor";
+import {
+  getSharedDemoActorWithCtx,
+  requireSharedDemoCapabilityIfApplicable,
+  requireSharedDemoStoreReadIfApplicable,
+} from "../sharedDemo/actor";
 import { decideSharedDemoEffect, requireSharedDemoOrderFulfillmentUpdate } from "../sharedDemo/policy";
 import { requireReadySharedDemoWriteWithCtx } from "../sharedDemo/restore";
 import {
@@ -765,6 +769,8 @@ export const get = query({
     }
 
     if (!order) return null;
+
+    await requireSharedDemoStoreReadIfApplicable(ctx, order.storeId);
 
     const items = await listOrderItems(ctx, order._id);
 
@@ -2291,6 +2297,7 @@ export const returnAllItemsToStockInternal = internalMutation({
 export const newOrder = query({
   args: { storeId: v.id("store") },
   handler: async (ctx, args) => {
+    await requireSharedDemoStoreReadIfApplicable(ctx, args.storeId);
     const order = await ctx.db
       .query(entity)
       .filter((q) => q.eq(q.field("storeId"), args.storeId))
@@ -2395,6 +2402,7 @@ export const getOrderMetrics = query({
     netRevenue: v.number(),
   }),
   handler: async (ctx, args) => {
+    await requireSharedDemoStoreReadIfApplicable(ctx, args.storeId);
     // Calculate time filter based on time range
     let timeFilter: number | undefined;
     const now = Date.now();

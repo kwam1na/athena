@@ -41,9 +41,9 @@ export function SharedDemoStatusBar({ area = "Owner home", homeHref, onRestore, 
           <div className="min-w-[15rem] flex-1">
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-signal">Shared demo store</p>
             <p className="mt-layout-2xs text-xs leading-5 text-muted-foreground">Other visitors may change this store. Athena restores the baseline every hour.</p>
-            <p className="text-xs leading-5 text-muted-foreground">Do not enter real personal, payment, or credential information.</p>
+            <p className="text-xs leading-5 text-muted-foreground">Do not enter real personal, financial, credential, or other sensitive information.</p>
           </div>
-          <Button asChild variant="utility" size="lg"><a href={homeHref}><Home aria-hidden="true" /> <span className="hidden sm:inline">Owner home</span></a></Button>
+          <Button asChild variant="utility" size="lg"><a href={homeHref} aria-label="Owner home"><Home aria-hidden="true" /> <span className="hidden sm:inline">Owner home</span></a></Button>
           <SharedDemoGuide area={area} homeHref={homeHref} />
           <Button type="button" variant="utility" size="lg" disabled={restoring} onClick={() => setConfirmOpen(true)}><RotateCcw aria-hidden="true" /> Restore demo</Button>
         </div>

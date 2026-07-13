@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="fa0ecc641b1812e2c84ab94358706aaeeb1bf0c813e977ea6e1dbfd88ea9a74e">
+<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="544a04607996db8048125d231cc0c2c8e9aa11e7ef63a9990f87c70f8068e9f6">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -82,10 +82,10 @@
       <header>
         <h1>Athena shared demo: real workflows with bounded authority</h1>
         <p class="lede">How one synthetic store can support shared writes without becoming an unrestricted administrator or a parallel demo application.</p>
-        <div class="meta"><span class="pill">Linear V26-1039</span><span class="pill">Branch codex/V26-1039-shared-demo</span><span class="pill">PR not open yet</span><span class="pill">Dev backend provisioned</span><span class="pill">Browser validation pending</span><span class="pill">No production deploy</span><span class="pill">Root checkout unchanged</span></div>
+        <div class="meta"><span class="pill">Linear V26-1039</span><span class="pill">Branch codex/V26-1039-shared-demo</span><span class="pill">Ready PR follows final review</span><span class="pill">Dev backend provisioned</span><span class="pill">QA browser validation complete</span><span class="pill">No production deploy</span><span class="pill">Root checkout unchanged</span></div>
       </header>
       <section class="panel"><h2>Executive summary</h2>
-<p>Athena now has a dev/QA-gated /demo entry that exchanges a short-lived opaque ticket for a per-admission demo principal. Every principal maps to the same synthetic owner, organization, and store, so the deployed design shares writes without sharing renewable authentication authority; cross-visitor visibility remains part of the pending browser proof.</p>
+<p>Athena now has a dev/QA-gated /demo entry that exchanges a short-lived opaque ticket for a per-admission demo principal. Every principal maps to the same synthetic owner, organization, and store, so the deployed design shares writes without sharing renewable authentication authority. Independent browser admissions confirmed that one visitor's writes are visible to the next visitor before restore.</p>
 <p>The experience uses Athena&#x27;s real POS, inventory, cash, fulfillment, staff-message, Daily Operations, and Reports surfaces. A thin owner-oriented layer labels the store as shared, warns against sensitive input, explains six workflows, and exposes a manual restore. Hourly and manual restore share one versioned store-scoped boundary.</p>
 </section>
 <section class="panel"><h2>Why this mattered</h2>
@@ -149,7 +149,8 @@
 </section>
 <section class="panel"><h2>Validation and current finish line</h2>
 <p>Focused unit, handler-boundary, and component suites cover admission, actor expiry, capability enforcement, effect suppression, provisioning, domain restoration, cron, manual restore, staff messaging, /demo entry, orientation semantics, keyboard focus behavior, and restore UX. TypeScript, changed-file lint, generated API/route artifacts, Graphify, frontmatter validation, and cached diff checks have passed during development.</p>
-<p>The rebased backend is live on the shared dev Convex deployment under the QA-only deployment allowlist. Transactional provisioning exposed a missing-index assumption in baseline capture; the mutation rolled back cleanly, the restore query now uses the schema's <code>by_storeId_operatingDate</code> prefix index, and provisioning then completed. A second live restore check exposed an unsupported dynamic generated-API import; the static internal reference replaced it. Baseline v2 then migrated the seeded store day from already-started to ready-to-start, and the deployed restore completed all 13 baseline documents at epoch 4. Restore refuses stale state or captured-document versions, so provisioning alone owns baseline migration. The full <code>pr:athena</code> gate and deployed in-app browser validation remain required before the PR is marked ready. No production deploy, merge, or root alignment has occurred.</p>
+<p>The rebased backend is live on the shared dev Convex deployment under the QA-only deployment allowlist. Transactional provisioning exposed a missing-index assumption in baseline capture; the mutation rolled back cleanly, the restore query now uses the schema's <code>by_storeId_operatingDate</code> prefix index, and provisioning then completed. A second live restore check exposed an unsupported dynamic generated-API import; the static internal reference replaced it. Baseline v2 then migrated the seeded store day from already-started to ready-to-start, and the deployed restore completed all 13 baseline documents. Restore refuses stale state or captured-document versions, so provisioning alone owns baseline migration.</p>
+<p>The full <code>pr:athena</code> validation phases passed on the final tree; an overlapping generated-artifact process briefly held the worktree index lock during proof recording, after which the same-tree proof recorded successfully and pre-push reused it. Worktree browser testing exercised all six real workflows: Daily Operations start, staff message, stock adjustment, browser POS sale with cash activity, simulated-payment pickup fulfillment, and Reports reflection. A second fresh admission saw the first visitor's GHS 100 / four-unit shared activity. Manual restore returned Reports to the GHS 50 / two-unit baseline. The exact pushed SHA <code>7e48b6f9</code> then deployed through QA run <code>29238927789</code>; a fresh credential-free <code>/demo</code> admission reached the owner view, Reports showed the restored baseline, a direct Members route rendered the calm server-backed restriction boundary, and manual restore announced successful completion. Keyboard focus return and responsive/accessibility semantics are covered by component tests, including an explicit accessible name for the mobile Owner home control. No production deploy, merge, or root alignment has occurred.</p>
 </section>
 <section class="panel"><h2>Next-time guidance</h2>
 
@@ -158,7 +159,7 @@
 <li>Keep payload restrictions next to generic commands; capability permission alone is not enough for multi-purpose updates.</li>
 <li>Register every new mutable source or child table in provisioning, baseline capture, measured restore, and tests.</li>
 <li>Treat a new external effect as live for normal actors and explicitly simulated or denied for demo actors at the dispatch boundary.</li>
-<li>Use two browser contexts during QA to prove shared visibility, restore recovery, and cross-visitor communication behavior.</li>
+<li>Repeat the two-admission shared-visibility and restore check whenever the demo baseline or POS synchronization model changes.</li>
 </ul>
 </section>
 
@@ -196,7 +197,7 @@
 
 <div class="quiz-question" data-answer="1">
   <fieldset>
-    <legend>1. Why should a visitor never enter real personal, payment, or credential data?</legend>
+    <legend>1. Why should a visitor never enter real personal, financial, credential, or other sensitive data?</legend>
     <label><input type="radio" name="q1" value="0" /> Reports cannot render text</label>
 <label><input type="radio" name="q1" value="1" /> The store is shared and other visitors may observe writes before restore</label>
 <label><input type="radio" name="q1" value="2" /> Athena sends every field to a payment provider</label>

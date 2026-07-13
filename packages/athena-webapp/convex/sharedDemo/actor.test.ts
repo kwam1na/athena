@@ -4,6 +4,7 @@ import {
   getSharedDemoActorWithCtx,
   requireSharedDemoCapabilityIfApplicable,
   requireSharedDemoStoreCapabilityIfApplicable,
+  requireSharedDemoStoreReadIfApplicable,
 } from "./actor";
 
 vi.mock("@convex-dev/auth/server", () => ({
@@ -172,6 +173,32 @@ describe("shared demo actor resolution", () => {
       requireSharedDemoStoreCapabilityIfApplicable(
         demoCtx,
         "pos.sale.complete",
+        "other-store" as never,
+      ),
+    ).rejects.toThrow("unavailable in the shared demo");
+  });
+
+  it("clamps demo reads without requiring a write capability", async () => {
+    vi.mocked(getAuthUserId).mockResolvedValue("demo-auth" as never);
+    const demoCtx = {
+      auth: { getUserIdentity: vi.fn() },
+      db: {
+        query: vi.fn(() => ({
+          withIndex: vi.fn(() => ({
+            unique: vi.fn().mockResolvedValue({
+              admissionExpiresAt: Date.now() + 60_000,
+              athenaUserId: "athena-user",
+              organizationId: "organization",
+              storeId: "demo-store",
+            }),
+          })),
+        })),
+      },
+    } as never;
+
+    await expect(
+      requireSharedDemoStoreReadIfApplicable(
+        demoCtx,
         "other-store" as never,
       ),
     ).rejects.toThrow("unavailable in the shared demo");

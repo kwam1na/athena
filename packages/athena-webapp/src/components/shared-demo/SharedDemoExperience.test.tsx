@@ -27,6 +27,7 @@ describe("SharedDemoOwnerHome", () => {
     expect(screen.getByRole("link", { name: /Fulfill an order/ })).toHaveAttribute("href", routes.orders);
     expect(screen.getByRole("link", { name: /Coordinate the team/ })).toHaveAttribute("href", routes.staff);
     expect(screen.getByRole("link", { name: /Run today/ })).toHaveAttribute("href", routes.operations);
+    expect(screen.getByRole("link", { name: /Start today's store day/ })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Open Reports/ })).toHaveAttribute("href", routes.reports);
   });
 });
@@ -37,7 +38,8 @@ describe("SharedDemoStatusBar", () => {
 
     expect(screen.getByText("Shared demo store")).toBeInTheDocument();
     expect(screen.getByText(/Other visitors may change this store/)).toBeInTheDocument();
-    expect(screen.getByText(/Do not enter real personal, payment, or credential information/)).toBeInTheDocument();
+    expect(screen.getByText(/Do not enter real personal, financial, credential, or other sensitive information/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Owner home" })).toHaveAttribute("aria-label", "Owner home");
   });
 
   it("confirms shared impact and announces restore progress and completion", async () => {

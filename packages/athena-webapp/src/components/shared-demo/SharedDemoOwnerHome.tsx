@@ -23,7 +23,7 @@ const workflows = [
   ["Control cash", "Record an operational cash action without moving money outside Athena.", ClipboardCheck, "cash"],
   ["Fulfill an order", "Advance a seeded order without charging or contacting a customer.", ShoppingBag, "orders"],
   ["Coordinate the team", "Use today's shared work to leave clear context for the store team.", MessageCircleMore, "staff"],
-  ["Run today", "Review the open store day and the work that still needs attention.", Store, "operations"],
+  ["Run today", "Start today's store day and review the work that still needs attention.", Store, "operations"],
 ] as const;
 
 export function SharedDemoOwnerHome({ routes }: { routes: SharedDemoRoutes }) {
@@ -35,7 +35,7 @@ export function SharedDemoOwnerHome({ routes }: { routes: SharedDemoRoutes }) {
           See what is happening today
         </h1>
         <p className="mt-layout-md max-w-2xl text-base leading-7 text-muted-foreground">
-          This synthetic store is open for an active day. Explore the same sales, stock, cash, orders, team context, and daily work an owner uses to understand the business from anywhere.
+          This synthetic store is ready for an active day. Explore the same sales, stock, cash, orders, team context, and daily work an owner uses to understand the business from anywhere.
         </p>
       </section>
 

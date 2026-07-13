@@ -28,6 +28,7 @@ import {
   refreshCatalogSummaryWithCtx,
 } from "./catalogSummary";
 import { requireNonDemoFoundationMutation } from "../sharedDemo/foundation";
+import { requireSharedDemoStoreReadIfApplicable } from "../sharedDemo/actor";
 import { requireAuthenticatedAthenaUserWithCtx } from "../lib/athenaUserAuth";
 import {
   ensurePendingCheckoutReviewWorkForUnarchivedProduct,
@@ -273,6 +274,7 @@ export const getAll = query({
     ),
   },
   handler: async (ctx, args) => {
+    await requireSharedDemoStoreReadIfApplicable(ctx, args.storeId);
     let categoryId: Id<"category"> | undefined;
     let subcategoryId: Id<"subcategory"> | undefined;
 

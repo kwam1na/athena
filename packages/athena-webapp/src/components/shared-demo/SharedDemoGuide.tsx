@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 const guidance: Record<string, string> = {
   "Cash Controls": "Verify the register's expected cash and activity. No bank or payment movement occurs in the shared demo.",
   Inventory: "Follow stock movement in Athena's real inventory tools. Use only the synthetic products already in this store.",
-  Operations: "Review the open store day and leave operational context. External report delivery is not sent.",
+  Operations: "Start today's store day and leave operational context. External report delivery is not sent.",
   Orders: "Advance a synthetic order through fulfillment. No customer is charged or contacted.",
   POS: "Complete a synthetic sale in the real register. Receipt messages and external payment effects are suppressed.",
   Reports: "Inspect the reporting relationships Athena already supports. Exports are unavailable in the shared demo.",
@@ -34,7 +34,7 @@ export function SharedDemoGuide({ area, homeHref }: { area: string; homeHref: st
           <DialogDescription className="mt-layout-sm text-base leading-7">
             {guidance[area] ?? "Use Athena's real application surface to understand and act on this synthetic store day."}
           </DialogDescription>
-          <p className="mt-layout-lg text-sm leading-6 text-muted-foreground">Do not enter real personal, payment, or credential information. Other visitors can see changes made in this shared store.</p>
+          <p className="mt-layout-lg text-sm leading-6 text-muted-foreground">Do not enter real personal, financial, credential, or other sensitive information. Other visitors can see changes made in this shared store.</p>
           <Button asChild variant="utility" size="lg" className="mt-layout-lg">
             <a href={homeHref}><Home aria-hidden="true" /> Owner home</a>
           </Button>
