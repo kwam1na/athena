@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="b5e11c9da45800fd7f0a2dc250b7e6b9a118efeaade7984bc3ca0eb40eeddbc9" data-athena-report-base="d3e9ca1956a538ef2152ecde0f02f80961699e14^" data-athena-report-head="d3e9ca1956a538ef2152ecde0f02f80961699e14">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Fail Fast on Harness Contract Drift</title>
+    <style>
+      :root {
+        --ink: #1f2933;
+        --muted: #596674;
+        --line: #d9e2ec;
+        --paper: #ffffff;
+        --soft: #f6f8fb;
+        --accent: #1d4ed8;
+        --accent-soft: #dbeafe;
+        --good: #166534;
+        --bad: #b91c1c;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--soft);
+        color: var(--ink);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        line-height: 1.55;
+      }
+      main { max-width: 1120px; margin: 0 auto; padding: 48px 24px 72px; }
+      header { border-bottom: 1px solid var(--line); margin-bottom: 28px; padding-bottom: 28px; }
+      h1, h2, h3 { line-height: 1.18; letter-spacing: 0; }
+      h1 { font-size: 42px; max-width: 880px; margin: 0 0 16px; }
+      h2 { font-size: 28px; margin: 0 0 16px; }
+      p { margin: 0 0 14px; }
+      .lede { color: var(--muted); font-size: 18px; max-width: 880px; }
+      .meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+      .pill { border: 1px solid var(--line); border-radius: 999px; background: var(--paper); color: var(--muted); font-size: 13px; padding: 6px 10px; }
+      .panel { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; margin: 18px 0; padding: 22px; }
+      code { background: #eef2f7; border: 1px solid #d8dee8; border-radius: 5px; padding: 1px 5px; }
+      pre { overflow: auto; background: #111827; color: #e5e7eb; border-radius: 8px; padding: 16px; }
+      pre code { background: transparent; border: 0; color: inherit; padding: 0; }
+      table { width: 100%; border-collapse: collapse; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+      th, td { border-bottom: 1px solid var(--line); padding: 11px 12px; text-align: left; vertical-align: top; }
+      th { background: #eef2f7; color: var(--muted); font-size: 13px; text-transform: uppercase; }
+      tr:last-child td { border-bottom: 0; }
+      .quiz-question { border-top: 1px solid var(--line); padding: 18px 0; }
+      .quiz-question:first-child { border-top: 0; }
+      fieldset { border: 0; margin: 0; padding: 0; }
+      legend { font-weight: 700; margin-bottom: 10px; }
+      label { display: block; border: 1px solid var(--line); border-radius: 8px; background: #fbfdff; margin: 8px 0; padding: 10px 12px; cursor: pointer; }
+      @media (hover: hover) and (pointer: fine) {
+        label:hover { border-color: #b6c5d8; }
+      }
+      button {
+        appearance: none;
+        border: 0;
+        border-radius: 8px;
+        background: var(--accent);
+        color: #ffffff;
+        cursor: pointer;
+        font-weight: 700;
+        padding: 11px 16px;
+        transition: transform 140ms cubic-bezier(0.23, 1, 0.32, 1);
+      }
+      button:active { transform: scale(0.97); }
+      button.secondary { background: #475569; }
+      .quiz-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
+      #quizResult { font-weight: 700; }
+      .question-status { font-weight: 700; margin-top: 10px; }
+      .answer-detail { display: none; border-top: 1px dashed var(--line); color: var(--muted); margin-top: 10px; padding-top: 10px; }
+      .answer-detail.visible { display: block; }
+      .correct { border-color: #86efac !important; background: #f0fdf4 !important; }
+      .incorrect { border-color: #fecaca !important; background: #fef2f2 !important; }
+      @media (prefers-reduced-motion: reduce) { button { transition-duration: 0ms; } }
+      @media (max-width: 820px) { h1 { font-size: 32px; } main { padding: 32px 16px 56px; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Fail Fast on Harness Contract Drift</h1>
+        <p class="lede">How V26-1040 moved deterministic repository-contract failures ahead of expensive provider validation while preserving every merge-grade gate.</p>
+        <div class="meta"><span class="pill">V26-1040 · Done</span><span class="pill">PR #655 · Merged</span><span class="pill">Merge d3e9ca19</span><span class="pill">All required checks green</span><span class="pill">No production deploy</span><span class="pill">Local main aligned</span></div>
+      </header>
+      <section class="panel"><h2>Executive Summary</h2>
+<p>PR #655 merged V26-1040 into main on 2026-07-13. pr:athena now runs a dedicated static contract preflight after generated-artifact preparation and before provider validation. One run can report mapping gaps, live audit failures, stale audit or registry fixtures, and missing sibling-test updates together.</p>
+<p>The change does not weaken the existing review, proof, provider-evidence, or scorecard ladder. A consistent tree continues into the same heavy validation. A broken static contract stops early, records a blocked preflight span, and cannot claim provider evidence or proof.</p>
+</section>
+<section class="panel"><h2>Why This Mattered</h2>
+<p>Before this change, a registry edit could require several full pr:athena runs. The first run might expose an unmapped surface, the next stale harness-audit fixtures, and the next a registry script changed without its sibling test. Those failures were deterministic, but agents paid the cost of the large provider suite before seeing the complete repair contract.</p>
+<ul>
+<li>The target was earlier and more complete feedback, not fewer checks.</li>
+<li>Automatic edits to tests or fixtures remained out of scope because the harness should diagnose source-contract drift, not silently author intent.</li>
+<li>The user expanded the scope to make harness:inferential-review terminal output actionable without opening its JSON report.</li>
+</ul>
+</section>
+<section class="panel"><h2>Mental Model: A Circuit Breaker Before the Expensive Line</h2>
+<p>Think of pr:athena as a production line. Preparation updates generated inputs. The new preflight is a circuit breaker that checks whether the line&#x27;s wiring diagram, fixtures, and safety tests agree before expensive machinery starts. It gathers independent faults with all-settled semantics, then either opens the circuit with one repair list or lets the unchanged validation line proceed.</p>
+<pre><code>Before: prepare -&gt; validate -&gt; record-proof -&gt; scorecard
+After:  prepare -&gt; preflight -&gt; validate -&gt; record-proof -&gt; scorecard</code></pre>
+</section>
+<section class="panel"><h2>Before and After</h2>
+
+<ul>
+<li>Before: mapping, fixture, and sibling-test drift surfaced sequentially inside later review work after provider validation had begun.</li>
+<li>After: runHarnessContractPreflight executes four independent detectors concurrently and aggregates every deterministic finding into one result.</li>
+<li>Before: inferential failures required digging through the detailed report or machine artifact to understand the actionable boundary.</li>
+<li>After: a failed inferential CLI run ends with BLOCKED diagnostics naming severity, file, Why, Fix, runtime errors, and the artifact path.</li>
+<li>Unchanged: provider validation, full inferential review, harness audit, Graphify freshness, proof recording, and scorecard still run on a valid tree.</li>
+</ul>
+</section>
+<section class="panel"><h2>Failure Boundaries and Observability</h2>
+<p>The preflight classifies findings as validation-map, harness-audit, contract-fixtures, or sibling-test-policy. It fails closed when a detector cannot produce evidence. The optional base reference defaults to origin/main, so a shallow or misconfigured checkout must fetch the baseline rather than silently skipping change detection.</p>
+<p>The delivery ledger records preflight as its own span. Tests prove that a nonzero preflight result preserves the exit code, leaves proof_not_recorded, records no provider-skip evidence, and never invokes validate or record-proof. The machine-readable preflight artifact is local and ignored by git.</p>
+</section>
+<section class="panel"><h2>Validation, Review, and CI Recovery</h2>
+
+<ul>
+<li>Characterization-first and test-first coverage exercised real git sibling drift, real audit-fixture subprocess failures, three simultaneous contract failures, and the fully repaired pass state.</li>
+<li>The merge-ready local gate passed: 499 root harness tests, 5,875 Athena coverage tests, Graphify freshness, compound solution validation, architecture checks, and proof recording.</li>
+<li>Correctness, testing, and standards reviewers approved unanimously with zero critical or important findings after the real-detector fixtures were strengthened.</li>
+<li>The first remote Harness Implementation run exposed a shallow-checkout test assumption. The baseline became injectable while production behavior retained origin/main as its default; the CI-safe current-tree test uses HEAD.</li>
+<li>A later webapp coverage attempt reported a Vitest worker RPC timeout after all 5,875 tests passed. A clean failed-job rerun passed, followed by the storefront context check and automatic squash merge.</li>
+</ul>
+</section>
+<section class="panel"><h2>Finish Line and Intentionally Unchanged Surfaces</h2>
+<p>PR #655 merged as d3e9ca1956a538ef2152ecde0f02f80961699e14. Linear V26-1040 moved to Done through merge automation. The root checkout fast-forwarded to that exact origin/main commit and was clean before this report branch was created.</p>
+<p>No Athena, storefront, Convex, schema, API, permissions, data, or deployment configuration changed. Production deployment was intentionally not run because the merged diff contains repository-local harness tooling, tests, documentation, and generated Graphify artifacts only.</p>
+</section>
+<section class="panel"><h2>Next-Time Guidance</h2>
+
+<ul>
+<li>Put cheap deterministic contract checks after preparation but before expensive behavioral or provider sensors.</li>
+<li>Use the real fixture tests when drift lives in test setup; a live-repository audit cannot prove fixture completeness by itself.</li>
+<li>Export the narrowest reusable detector so a preflight does not misclassify unrelated findings owned by a later review phase.</li>
+<li>When extending the registry, update the registry source, regenerate harness docs, update the registry sibling test, refresh audit fixture paths, and run the focused preflight tests.</li>
+<li>If origin/main is unreachable, fetch it. Do not replace fail-closed change detection with an empty baseline in the production command.</li>
+</ul>
+</section>
+      
+<section class="panel">
+  <h2>Key Files</h2>
+  <table>
+    <thead><tr><th>File</th><th>Why It Matters</th></tr></thead>
+    <tbody><tr><td><code>scripts/harness-contract-preflight.ts</code></td><td>Owns the four-way all-settled preflight, finding classification, repair contract, machine artifact, and fail-closed result.</td></tr>
+<tr><td><code>scripts/harness-contract-preflight.test.ts</code></td><td>Proves real mapping, fixture, sibling-policy, aggregation, repaired-pass, CI-baseline, and fail-closed behavior.</td></tr>
+<tr><td><code>scripts/pr-athena-delivery-run.ts</code></td><td>Places preflight between preparation and validation so an early block prevents provider work and proof recording.</td></tr>
+<tr><td><code>scripts/harness-inferential-review.ts</code></td><td>Exports the narrow sibling-test detector and prints terminal-first Why/Fix diagnostics for blocking inferential results.</td></tr>
+<tr><td><code>docs/solutions/workflow-issues/static-harness-contract-preflight-before-provider-validation-2026-07-13.md</code></td><td>Captures the reusable static-preflight-before-expensive-sensors pattern for future delivery work.</td></tr>
+<tr><td><code>package.json</code></td><td>Exposes pr:athena:preflight as the stable repository command used by the delivery wrapper.</td></tr></tbody>
+  </table>
+</section>
+
+      
+<section class="panel">
+  <h2>Subagent Evidence</h2>
+  <ul><li><strong>Peirce · session context:</strong> Reconstructed ticket decisions, scope expansion, review iterations, CI finish-line changes, Linear closure, and durable learning from PR, Linear, and delivery evidence.</li>
+<li><strong>Herschel · delivered diff:</strong> Mapped all 15 merged files, the before/after orchestration, failure and observability boundaries, validation evidence, generated Graphify churn, residual risks, and intentionally unchanged product behavior.</li>
+<li><strong>Kuhn · report reviewer:</strong> Approved the rendered report after per-question textual status, correct-answer disclosure, aria-describedby linkage, reset behavior, and first-incorrect focus were verified.</li></ul>
+</section>
+
+      
+<section id="quiz" class="panel">
+  <h2>Quiz: Pass Required</h2>
+  <p>You must score at least 8 out of 10 to pass.</p>
+  <form id="changeQuiz" data-threshold="8">
+    
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>1. Where does the new static contract preflight run?</legend>
+    <label><input type="radio" name="q1" value="0" /> Before generated-artifact preparation</label>
+<label><input type="radio" name="q1" value="1" /> After preparation and before provider validation</label>
+<label><input type="radio" name="q1" value="2" /> After proof recording</label>
+<label><input type="radio" name="q1" value="3" /> Only in remote CI</label>
+  </fieldset>
+  <div class="answer-detail">Preparation runs first so generated inputs are current; preflight then blocks deterministic drift before expensive validation begins.</div>
+</div>
+
+<div class="quiz-question" data-answer="2">
+  <fieldset>
+    <legend>2. Why does the preflight use all-settled semantics?</legend>
+    <label><input type="radio" name="q2" value="0" /> To ignore detector errors</label>
+<label><input type="radio" name="q2" value="1" /> To run provider tests in the background</label>
+<label><input type="radio" name="q2" value="2" /> To report independent deterministic failures together</label>
+<label><input type="radio" name="q2" value="3" /> To automatically repair every fixture</label>
+  </fieldset>
+  <div class="answer-detail">Mapping, audit, fixture, and sibling-policy failures should be visible in one repair cycle rather than sequential full-gate runs.</div>
+</div>
+
+<div class="quiz-question" data-answer="2">
+  <fieldset>
+    <legend>3. What happens when preflight fails?</legend>
+    <label><input type="radio" name="q3" value="0" /> Validation continues but proof is marked partial</label>
+<label><input type="radio" name="q3" value="1" /> The failure is downgraded to a warning</label>
+<label><input type="radio" name="q3" value="2" /> Validate and record-proof are not invoked</label>
+<label><input type="radio" name="q3" value="3" /> The harness edits the registry test automatically</label>
+  </fieldset>
+  <div class="answer-detail">The delivery wrapper stops at the failed preflight, preserves its exit code, and records neither provider evidence nor proof.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>4. Which source owns the registry repair contract?</legend>
+    <label><input type="radio" name="q4" value="0" /> graphify-out/graph.json</label>
+<label><input type="radio" name="q4" value="1" /> scripts/harness-app-registry.ts</label>
+<label><input type="radio" name="q4" value="2" /> The provider evidence artifact</label>
+<label><input type="radio" name="q4" value="3" /> The GitHub workflow log</label>
+  </fieldset>
+  <div class="answer-detail">The registry is the source of truth; generated docs, its sibling test, and audit fixtures must remain consistent with it.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>5. Why did preflight reuse only a narrow inferential collector?</legend>
+    <label><input type="radio" name="q5" value="0" /> The full inferential review was deleted</label>
+<label><input type="radio" name="q5" value="1" /> To keep unrelated findings owned and labeled by the later full review</label>
+<label><input type="radio" name="q5" value="2" /> To avoid testing registry changes</label>
+<label><input type="radio" name="q5" value="3" /> Because imports cannot run in Bun</label>
+  </fieldset>
+  <div class="answer-detail">The preflight owns deterministic sibling-test policy only; unrelated inferential findings remain in the existing merge-grade phase.</div>
+</div>
+
+<div class="quiz-question" data-answer="2">
+  <fieldset>
+    <legend>6. What was the CI correction after the first Harness Implementation failure?</legend>
+    <label><input type="radio" name="q6" value="0" /> Production preflight stopped checking origin/main</label>
+<label><input type="radio" name="q6" value="1" /> The CI job was made optional</label>
+<label><input type="radio" name="q6" value="2" /> The baseline became injectable and the current-tree test uses HEAD</label>
+<label><input type="radio" name="q6" value="3" /> The test was removed</label>
+  </fieldset>
+  <div class="answer-detail">Production still defaults to origin/main and fails closed; only the environment-independent characterization supplies HEAD.</div>
+</div>
+
+<div class="quiz-question" data-answer="2">
+  <fieldset>
+    <legend>7. What did the late webapp validation failure mean?</legend>
+    <label><input type="radio" name="q7" value="0" /> One Athena behavior test failed</label>
+<label><input type="radio" name="q7" value="1" /> Coverage fell below policy</label>
+<label><input type="radio" name="q7" value="2" /> All 5,875 tests passed but Vitest timed out sending a worker update</label>
+<label><input type="radio" name="q7" value="3" /> The storefront build failed</label>
+  </fieldset>
+  <div class="answer-detail">The log showed every Athena test passing and one unhandled worker RPC timeout; a clean failed-job rerun passed.</div>
+</div>
+
+<div class="quiz-question" data-answer="0">
+  <fieldset>
+    <legend>8. Which behavior was intentionally unchanged?</legend>
+    <label><input type="radio" name="q8" value="0" /> Provider validation and proof still run on a valid tree</label>
+<label><input type="radio" name="q8" value="1" /> Preflight automatically rewrites fixture tests</label>
+<label><input type="radio" name="q8" value="2" /> Production deploy now runs for harness scripts</label>
+<label><input type="radio" name="q8" value="3" /> Inferential review no longer writes machine output</label>
+  </fieldset>
+  <div class="answer-detail">The new phase adds defense in depth; it does not remove or weaken the existing heavy validation and proof ladder.</div>
+</div>
+
+<div class="quiz-question" data-answer="2">
+  <fieldset>
+    <legend>9. What should an agent do when origin/main is unreachable?</legend>
+    <label><input type="radio" name="q9" value="0" /> Treat the changed-file set as empty</label>
+<label><input type="radio" name="q9" value="1" /> Skip sibling-test policy</label>
+<label><input type="radio" name="q9" value="2" /> Fetch the baseline and rerun</label>
+<label><input type="radio" name="q9" value="3" /> Record proof anyway</label>
+  </fieldset>
+  <div class="answer-detail">Missing baseline evidence is blocking by design; fetching origin/main restores trustworthy change detection.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>10. What was the final production and repository state?</legend>
+    <label><input type="radio" name="q10" value="0" /> PR open, production deployed, Linear In Review</label>
+<label><input type="radio" name="q10" value="1" /> PR merged, no deployable runtime surface, Linear Done, local main aligned</label>
+<label><input type="radio" name="q10" value="2" /> PR merged, full production deploy required, local main stale</label>
+<label><input type="radio" name="q10" value="3" /> Auto-merge armed but no merge SHA</label>
+  </fieldset>
+  <div class="answer-detail">The harness-only change merged as d3e9ca19, required no runtime deployment, closed V26-1040, and root main was fast-forwarded.</div>
+</div>
+
+    <div class="quiz-actions">
+      <button type="button" id="gradeQuiz">Grade quiz</button>
+      <button type="button" class="secondary" id="resetQuiz">Reset</button>
+      <span id="quizResult" aria-live="polite"></span>
+    </div>
+  </form>
+</section>
+
+    </main>
+    <script>
+      const questions = Array.from(document.querySelectorAll(".quiz-question"));
+      const result = document.getElementById("quizResult");
+      const form = document.getElementById("changeQuiz");
+      const threshold = Number(form.dataset.threshold || 0);
+      questions.forEach((question, index) => {
+        const status = document.createElement("p");
+        status.id = `questionStatus${index + 1}`;
+        status.className = "question-status";
+        status.setAttribute("aria-live", "polite");
+        question.querySelector("fieldset").setAttribute("aria-describedby", status.id);
+        question.querySelector(".answer-detail").before(status);
+        question.tabIndex = -1;
+      });
+      function clearGrades() {
+        questions.forEach((question) => {
+          question.classList.remove("correct", "incorrect");
+          question.querySelector(".question-status").textContent = "";
+          question.querySelector(".answer-detail").classList.remove("visible");
+        });
+        result.textContent = "";
+        result.style.color = "";
+      }
+      document.getElementById("gradeQuiz").addEventListener("click", () => {
+        clearGrades();
+        let score = 0;
+        let firstIncorrect = null;
+        questions.forEach((question, index) => {
+          const selected = document.querySelector(`input[name="q${index + 1}"]:checked`);
+          const isCorrect = selected && Number(selected.value) === Number(question.dataset.answer);
+          if (isCorrect) score += 1;
+          if (!isCorrect && !firstIncorrect) firstIncorrect = question;
+          question.classList.add(isCorrect ? "correct" : "incorrect");
+          const correctInput = question.querySelector(`input[value="${question.dataset.answer}"]`);
+          const correctAnswer = correctInput.closest("label").textContent.trim();
+          question.querySelector(".question-status").textContent = isCorrect
+            ? "Correct."
+            : `Incorrect. Correct answer: ${correctAnswer}`;
+          question.querySelector(".answer-detail").classList.add("visible");
+        });
+        const passed = score >= threshold;
+        result.textContent = passed
+          ? `Passed: ${score}/${questions.length}.`
+          : `Not passed: ${score}/${questions.length}. Review the report and try again.`;
+        result.style.color = passed ? "var(--good)" : "var(--bad)";
+        firstIncorrect?.focus();
+      });
+      document.getElementById("resetQuiz").addEventListener("click", () => {
+        form.reset();
+        clearGrades();
+      });
+    </script>
+  </body>
+</html>
