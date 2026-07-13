@@ -1801,12 +1801,38 @@ export function POSRegisterView(props: POSRegisterViewProps) {
   );
 }
 
-function POSRegisterViewContent({
+function POSRegisterViewContent(props: POSRegisterViewProps) {
+  if (props.viewModel) {
+    return (
+      <ResolvedPOSRegisterViewContent
+        workflowMode={props.workflowMode}
+        viewModel={props.viewModel}
+      />
+    );
+  }
+
+  return <DefaultPOSRegisterViewContent workflowMode={props.workflowMode} />;
+}
+
+function DefaultPOSRegisterViewContent({
   workflowMode,
-  viewModel: injectedViewModel,
-}: POSRegisterViewProps) {
-  const registerViewModel = useRegisterViewModel();
-  const viewModel = injectedViewModel ?? registerViewModel;
+}: Pick<POSRegisterViewProps, "workflowMode">) {
+  const viewModel = useRegisterViewModel();
+  return (
+    <ResolvedPOSRegisterViewContent
+      workflowMode={workflowMode}
+      viewModel={viewModel}
+    />
+  );
+}
+
+function ResolvedPOSRegisterViewContent({
+  workflowMode,
+  viewModel,
+}: {
+  workflowMode?: RegisterWorkflowMode;
+  viewModel: RegisterViewModel;
+}) {
   const appSessionRecovery = usePosTerminalAppSessionRecoveryRuntimeInput();
   const debugAppSessionRecovery = viewModel.debug?.appSessionRecovery;
   const effectiveWorkflowMode: RegisterWorkflowMode =
@@ -2243,6 +2269,7 @@ function POSRegisterViewContent({
   } = {}) => (
     <ProductEntry
       ref={productEntryRef}
+      catalogRows={viewModel.productEntry.catalogRows}
       disabled={viewModel.productEntry.disabled}
       showProductLookup={viewModel.productEntry.showProductLookup}
       setShowProductLookup={viewModel.productEntry.setShowProductLookup}

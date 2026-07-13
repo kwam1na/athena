@@ -52,6 +52,28 @@ describe("useAuth", () => {
     expect(result.current.user).toBeUndefined();
   });
 
+  it("advances the auth session epoch when the token changes for the same user", async () => {
+    let token = "jwt-1";
+    mocked.useAuthToken.mockImplementation(() => token);
+    mocked.useConvexAuth.mockReturnValue({
+      isAuthenticated: true,
+      isLoading: false,
+    });
+    mocked.useQuery.mockImplementation((_ref, args) =>
+      args === undefined ? { _id: "convex-user-1" } : { _id: "user-1" },
+    );
+
+    const { result, rerender } = renderHook(() => useAuth());
+    await waitFor(() => expect(result.current.user?._id).toBe("user-1"));
+    const initialEpoch = result.current.authSessionEpoch;
+
+    token = "jwt-2";
+    rerender();
+
+    expect(result.current.authSessionEpoch).toBe(initialEpoch + 1);
+    expect(result.current.user?._id).toBe("user-1");
+  });
+
   it("clears stale local auth state when the Convex session is missing", async () => {
     vi.mocked(window.localStorage.getItem).mockReturnValue("user-1");
     mocked.useConvexAuth.mockReturnValue({
@@ -72,7 +94,7 @@ describe("useAuth", () => {
 
     expect(result.current.user).toBeNull();
     expect(window.localStorage.removeItem).toHaveBeenCalledWith(
-      LOGGED_IN_USER_ID_KEY
+      LOGGED_IN_USER_ID_KEY,
     );
     expect(mocked.useQuery.mock.calls.at(-1)?.[1]).toBe("skip");
   });
@@ -84,9 +106,7 @@ describe("useAuth", () => {
       isAuthenticated: false,
       isLoading: false,
     });
-    mocked.useQuery
-      .mockReturnValueOnce(undefined)
-      .mockReturnValueOnce(null);
+    mocked.useQuery.mockReturnValueOnce(undefined).mockReturnValueOnce(null);
 
     const { result } = renderHook(() => useAuth());
 
@@ -110,7 +130,7 @@ describe("useAuth", () => {
 
     expect(result.current.user).toBeNull();
     expect(window.localStorage.removeItem).toHaveBeenCalledWith(
-      LOGGED_IN_USER_ID_KEY
+      LOGGED_IN_USER_ID_KEY,
     );
   });
 
@@ -129,11 +149,7 @@ describe("useAuth", () => {
         };
       }
 
-      if (
-        args &&
-        typeof args === "object" &&
-        Object.keys(args).length === 0
-      ) {
+      if (args && typeof args === "object" && Object.keys(args).length === 0) {
         return {
           _id: "user-1",
           email: "manager@example.com",
@@ -165,11 +181,7 @@ describe("useAuth", () => {
         return null;
       }
 
-      if (
-        args &&
-        typeof args === "object" &&
-        Object.keys(args).length === 0
-      ) {
+      if (args && typeof args === "object" && Object.keys(args).length === 0) {
         return {
           _id: "user-1",
           email: "manager@example.com",
@@ -192,7 +204,7 @@ describe("useAuth", () => {
     });
     expect(window.localStorage.setItem).toHaveBeenCalledWith(
       LOGGED_IN_USER_ID_KEY,
-      "user-1"
+      "user-1",
     );
   });
 
@@ -203,11 +215,7 @@ describe("useAuth", () => {
       isLoading: false,
     });
     mocked.useQuery.mockImplementation((_ref, args) => {
-      if (
-        args &&
-        typeof args === "object" &&
-        Object.keys(args).length === 0
-      ) {
+      if (args && typeof args === "object" && Object.keys(args).length === 0) {
         return {
           _id: "user-1",
           email: "manager@example.com",

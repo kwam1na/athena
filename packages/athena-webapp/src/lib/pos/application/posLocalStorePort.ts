@@ -12,6 +12,11 @@ import type {
   PosLocalOpaqueContinuation,
   PosLocalRegisterAvailabilitySnapshot,
   PosLocalRegisterCatalogSnapshot,
+  PosLocalRegisterCatalogPin,
+  PosLocalRegisterCatalogVersion,
+  PosLocalRegisterCatalogVersionState,
+  PosLocalRegisterCatalogVersionWriteOutcome,
+  PosRegisterCatalogRevision,
   PosLocalRegisterServiceCatalogSnapshot,
   PosLocalReviewResolutionReason,
   PosLocalStaffAuthorityReadiness,
@@ -170,6 +175,45 @@ export interface PosLocalCashierAuthorityPort {
   ): Promise<PosLocalStoreResult<PosLocalActiveCashierPresenceRecord>>;
 }
 export interface PosLocalCatalogPort {
+  pinRegisterCatalogVersion(input: {
+    ownerId?: string;
+    revision: PosRegisterCatalogRevision;
+    rows: PosRegisterCatalogRowDto[];
+    storeId: string;
+    terminalId: string;
+  }): Promise<PosLocalStoreResult<PosLocalRegisterCatalogPin>>;
+  promoteRegisterCatalogVersion(input: {
+    revision: number;
+    storeId: string;
+  }): Promise<PosLocalStoreResult<PosLocalRegisterCatalogVersionWriteOutcome>>;
+  readRegisterCatalogSelection(input: {
+    ownerId?: string;
+    storeId: string;
+    terminalId?: string;
+  }): Promise<PosLocalStoreResult<PosLocalRegisterCatalogVersion | null>>;
+  readRegisterCatalogPin(input: {
+    ownerId?: string;
+    storeId: string;
+    terminalId: string;
+  }): Promise<PosLocalStoreResult<PosLocalRegisterCatalogPin | null>>;
+  readRegisterCatalogVersionState(input: {
+    storeId: string;
+  }): Promise<PosLocalStoreResult<PosLocalRegisterCatalogVersionState>>;
+  releaseRegisterCatalogPin(input: {
+    ownerId?: string;
+    storeId: string;
+    terminalId: string;
+  }): Promise<PosLocalStoreResult<null>>;
+  renewRegisterCatalogPinLease?(input: {
+    ownerId?: string;
+    storeId: string;
+    terminalId: string;
+  }): Promise<PosLocalStoreResult<PosLocalRegisterCatalogPin | null>>;
+  stageRegisterCatalogVersion(input: {
+    revision: number;
+    rows: PosRegisterCatalogRowDto[];
+    storeId: string;
+  }): Promise<PosLocalStoreResult<PosLocalRegisterCatalogVersionWriteOutcome>>;
   readRegisterAvailabilitySnapshot(input: {
     storeId: string;
   }): Promise<PosLocalStoreResult<PosLocalRegisterAvailabilitySnapshot | null>>;

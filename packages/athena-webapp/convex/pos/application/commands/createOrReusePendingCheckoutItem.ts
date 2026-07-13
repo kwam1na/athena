@@ -3,6 +3,7 @@ import type { MutationCtx } from "../../../_generated/server";
 import { isPosCatalogVisible } from "../../../../shared/posCatalogVisibility";
 import { isPosUsableRegisterSessionStatus } from "../../../../shared/registerSessionStatus";
 import { upsertProductSkuSearchProjection } from "../../../inventory/skuSearch";
+import { advanceRegisterCatalogRevision } from "../sync/registerCatalogRevision";
 import { recordOperationalEventWithCtx } from "../../../operations/operationalEvents";
 import { createOperationalWorkItemWithCtx } from "../../../operations/operationalWorkItems";
 import { toSlug } from "../../../utils";
@@ -283,7 +284,9 @@ async function createProvisionalCatalogAnchors(
   });
 
   await ctx.db.patch("productSku", productSkuId, { sku });
-  await upsertProductSkuSearchProjection(ctx, productSkuId);
+  await upsertProductSkuSearchProjection(ctx, productSkuId, {
+    advanceRevision: false,
+  });
 
   return { productId, productSkuId, sku };
 }
@@ -808,6 +811,12 @@ export async function createOrReusePendingCheckoutItem(
       reviewPriority,
       updatedAt: timestamp,
     });
+    if (existing.provisionalPrice !== args.price) {
+      await advanceRegisterCatalogRevision(ctx, {
+        didChange: true,
+        storeId: args.storeId,
+      });
+    }
 
     const item = (await ctx.db.get("posPendingCheckoutItem", existing._id))!;
     await syncPendingCheckoutWorkItem(ctx, item);
@@ -874,6 +883,10 @@ export async function createOrReusePendingCheckoutItem(
   await ctx.db.patch("posPendingCheckoutItem", item._id, {
     provisionalProductId: anchors.productId,
     provisionalProductSkuId: anchors.productSkuId,
+  });
+  await advanceRegisterCatalogRevision(ctx, {
+    didChange: true,
+    storeId: args.storeId,
   });
   const itemWithAnchors = (await ctx.db.get(
     "posPendingCheckoutItem",

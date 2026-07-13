@@ -10,11 +10,7 @@ import type { PosTerminalLoginMode } from "~/shared/posTerminalLoginMode";
 import type { PosTerminalTransactionCapability } from "~/shared/posTerminalCapability";
 
 type PosOperationalRole =
-  | "manager"
-  | "front_desk"
-  | "stylist"
-  | "technician"
-  | "cashier";
+  "manager" | "front_desk" | "stylist" | "technician" | "cashier";
 
 export interface PosTerminalDto {
   _id: string;
@@ -164,9 +160,7 @@ export interface PosCatalogItemDto {
 }
 
 export type PosRegisterCatalogAvailabilityPolicy =
-  | "trusted_inventory"
-  | "active_provisional_import"
-  | "pending_checkout";
+  "trusted_inventory" | "active_provisional_import" | "pending_checkout";
 
 export interface PosRegisterCatalogRowDto {
   id: Id<"productSku"> | Id<"inventoryImportProvisionalSku">;
@@ -206,13 +200,18 @@ export interface PosRegisterCatalogRowDto {
 export interface PosRegisterCatalogInput {
   metadataRefreshKey?: string | number;
   refreshMetadataSnapshot?: boolean;
+  registerRefresh?: {
+    authScopeKey?: string;
+    isOperationallyIdle: boolean;
+    isOperationallyIdleNow?: () => boolean;
+    ownerId?: string;
+    terminalId: string;
+  };
   storeId?: Id<"store">;
 }
 
 export type PosServiceCatalogPricingModel =
-  | "fixed"
-  | "starting_at"
-  | "quote_after_consultation";
+  "fixed" | "starting_at" | "quote_after_consultation";
 
 export type PosServiceCatalogDepositType = "none" | "flat" | "percentage";
 

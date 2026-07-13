@@ -19,6 +19,7 @@ import type {
   PosDrawerAuthorityState,
   PosTerminalIntegrityState,
   PosProvisionedTerminalSeed,
+  PosRegisterCatalogRevision,
 } from "@/lib/pos/application/posLocalStoreTypes";
 
 export type PosLocalRegisterReadModelErrorCode =
@@ -142,6 +143,7 @@ export interface PosLocalRegisterReadModel {
   activeRegisterSession: PosLocalCashDrawerReadModel | null;
   activeSale: PosLocalActiveSaleReadModel | null;
   canSell: boolean;
+  durableCatalogRevision?: PosRegisterCatalogRevision;
   drawerAuthorityReason?: PosDrawerAuthorityState["reason"];
   saleBlockReason?: PosLocalSaleBlockReason;
   clearedSaleIds: string[];
@@ -174,6 +176,9 @@ export function projectLocalRegisterReadModel(input: {
   let activeRegisterSession: PosLocalCashDrawerReadModel | null = null;
   let closeoutState: PosLocalCloseoutState = null;
   let terminal = terminalFromSeed(input.terminalSeed ?? null);
+  const durableCatalogRevision = [...orderedEvents]
+    .reverse()
+    .find((event) => event.catalogRevision !== undefined)?.catalogRevision;
 
   for (const event of orderedEvents) {
     terminal ??= terminalFromEvent(event);
@@ -187,7 +192,8 @@ export function projectLocalRegisterReadModel(input: {
 
     if (event.type === "register.opened") {
       const localRegisterSessionId =
-        event.localRegisterSessionId ?? stringField(event.payload, "localRegisterSessionId");
+        event.localRegisterSessionId ??
+        stringField(event.payload, "localRegisterSessionId");
       if (!localRegisterSessionId) {
         errors.push(errorFor(event, "missing_register_session"));
         continue;
@@ -196,7 +202,10 @@ export function projectLocalRegisterReadModel(input: {
         activeRegisterSession &&
         isOpenLocalRegisterSessionStatus(activeRegisterSession.status) &&
         isUploadedRegisterOpenLifecycleEvent(event) &&
-        !registerLifecycleEventMatchesActiveSession(event, activeRegisterSession) &&
+        !registerLifecycleEventMatchesActiveSession(
+          event,
+          activeRegisterSession,
+        ) &&
         !canUploadedRegisterOpenReplaceBlockedDrawer({
           activeRegisterSession,
           drawerAuthority: input.drawerAuthority,
@@ -214,8 +223,9 @@ export function projectLocalRegisterReadModel(input: {
         localRegisterSessionId,
         ...(mappings.registerSession.get(localRegisterSessionId)
           ? {
-              cloudRegisterSessionId:
-                mappings.registerSession.get(localRegisterSessionId),
+              cloudRegisterSessionId: mappings.registerSession.get(
+                localRegisterSessionId,
+              ),
             }
           : {}),
         status: registerStatus(payload.status) ?? "open",
@@ -240,7 +250,12 @@ export function projectLocalRegisterReadModel(input: {
     }
 
     if (event.type === "register.closeout_started") {
-      if (!registerLifecycleEventMatchesActiveSession(event, activeRegisterSession)) {
+      if (
+        !registerLifecycleEventMatchesActiveSession(
+          event,
+          activeRegisterSession,
+        )
+      ) {
         errors.push(errorFor(event, "missing_register_session"));
         continue;
       }
@@ -263,7 +278,12 @@ export function projectLocalRegisterReadModel(input: {
     }
 
     if (event.type === "register.reopened") {
-      if (!registerLifecycleEventMatchesActiveSession(event, activeRegisterSession)) {
+      if (
+        !registerLifecycleEventMatchesActiveSession(
+          event,
+          activeRegisterSession,
+        )
+      ) {
         errors.push(errorFor(event, "missing_register_session"));
         continue;
       }
@@ -289,7 +309,8 @@ export function projectLocalRegisterReadModel(input: {
 
     if (event.type === "session.started") {
       const localPosSessionId =
-        event.localPosSessionId ?? stringField(event.payload, "localPosSessionId");
+        event.localPosSessionId ??
+        stringField(event.payload, "localPosSessionId");
       if (!localPosSessionId) {
         errors.push(errorFor(event, "malformed_payload"));
         continue;
@@ -444,13 +465,13 @@ export function projectLocalRegisterReadModel(input: {
     terminalIntegrity: input.terminalIntegrity,
   });
   const canSell =
-    isRegisterSessionSaleUsable(activeRegisterSession) &&
-    !saleBlockReason;
+    isRegisterSessionSaleUsable(activeRegisterSession) && !saleBlockReason;
 
   return {
     activeRegisterSession,
     activeSale,
     canSell,
+    ...(durableCatalogRevision !== undefined ? { durableCatalogRevision } : {}),
     ...(drawerAuthority?.status === "blocked"
       ? { drawerAuthorityReason: drawerAuthority.reason }
       : {}),
@@ -605,7 +626,9 @@ function toRegisterStateSession(
   };
 }
 
-function terminalFromSeed(seed: PosProvisionedTerminalSeed | null): PosTerminalDto | null {
+function terminalFromSeed(
+  seed: PosProvisionedTerminalSeed | null,
+): PosTerminalDto | null {
   if (!seed) return null;
   return {
     _id: seed.cloudTerminalId,
@@ -650,8 +673,11 @@ function getOrCreateSale(input: {
   mappings: ReturnType<typeof createMappingIndex>;
 }) {
   const localPosSessionId =
-    input.event.localPosSessionId ?? stringField(input.event.payload, "localPosSessionId");
-  const existing = localPosSessionId ? input.sales.get(localPosSessionId) : null;
+    input.event.localPosSessionId ??
+    stringField(input.event.payload, "localPosSessionId");
+  const existing = localPosSessionId
+    ? input.sales.get(localPosSessionId)
+    : null;
   if (existing) return existing;
 
   const fallbackLocalPosSessionId =
@@ -690,8 +716,7 @@ function getCompletedSale(input: {
 }): PosLocalCompletedSaleReadModel | null {
   const payload = asRecord(input.event.payload);
   const localPosSessionId =
-    input.event.localPosSessionId ??
-    stringField(payload, "localPosSessionId");
+    input.event.localPosSessionId ?? stringField(payload, "localPosSessionId");
   const localTransactionId =
     input.event.localTransactionId ??
     stringField(payload, "localTransactionId");
@@ -794,7 +819,9 @@ function parseCartItemPayload(
   };
 }
 
-function parseServiceLines(value: unknown): PosLocalServiceLineReadModel[] | null {
+function parseServiceLines(
+  value: unknown,
+): PosLocalServiceLineReadModel[] | null {
   if (value === undefined) return [];
   if (!Array.isArray(value)) return null;
 
@@ -859,7 +886,7 @@ function parsePayments(value: unknown): PosPaymentDto[] | null {
       return null;
     }
     payments.push({
-      ...(stringField(payment, "localPaymentId") ?? stringField(payment, "id")
+      ...((stringField(payment, "localPaymentId") ?? stringField(payment, "id"))
         ? {
             id:
               stringField(payment, "localPaymentId") ??
@@ -1078,12 +1105,11 @@ function canUploadedRegisterOpenReplaceBlockedDrawer(input: {
 
   return Boolean(
     input.event.sync.status === "synced" &&
-      replacementCloudRegisterSessionId &&
+    replacementCloudRegisterSessionId &&
+    input.activeRegisterSession.cloudRegisterSessionId &&
+    replacementCloudRegisterSessionId !==
       input.activeRegisterSession.cloudRegisterSessionId &&
-      replacementCloudRegisterSessionId !==
-        input.activeRegisterSession.cloudRegisterSessionId &&
-      (!activeDrawerAuthority ||
-        activeDrawerAuthority.reason === "cloud_closed"),
+    (!activeDrawerAuthority || activeDrawerAuthority.reason === "cloud_closed"),
   );
 }
 

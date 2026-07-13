@@ -9,6 +9,8 @@ import type {
   PosLocalOpaqueContinuation,
   PosLocalRegisterAvailabilitySnapshot,
   PosLocalRegisterCatalogSnapshot,
+  PosLocalRegisterCatalogPin,
+  PosLocalRegisterCatalogVersion,
   PosLocalRegisterServiceCatalogSnapshot,
   PosLocalStaffAuthorityRecord,
   PosLocalStoreDayReadiness,
@@ -25,6 +27,10 @@ type SemanticState = {
   authority: Map<string, PosDrawerAuthorityState>;
   availability: Map<string, PosLocalRegisterAvailabilitySnapshot>;
   catalog: Map<string, PosLocalRegisterCatalogSnapshot>;
+  catalogActive: Map<string, number | "legacy">;
+  catalogPins: Map<string, PosLocalRegisterCatalogPin>;
+  catalogStaged: Map<string, number>;
+  catalogVersions: Map<string, PosLocalRegisterCatalogVersion>;
   events: PosLocalEventRecord[];
   integrity: Map<string, PosTerminalIntegrityState>;
   mappings: Map<string, PosLocalCloudMapping>;
@@ -48,6 +54,10 @@ function createSemanticMemoryEngine(): ConformancePort & {
     authority: new Map(),
     availability: new Map(),
     catalog: new Map(),
+    catalogActive: new Map(),
+    catalogPins: new Map(),
+    catalogStaged: new Map(),
+    catalogVersions: new Map(),
     events: [],
     integrity: new Map(),
     mappings: new Map(),
@@ -77,6 +87,10 @@ function createSemanticMemoryEngine(): ConformancePort & {
       authority: new Map(state.authority),
       availability: new Map(state.availability),
       catalog: new Map(state.catalog),
+      catalogActive: new Map(state.catalogActive),
+      catalogPins: new Map(state.catalogPins),
+      catalogStaged: new Map(state.catalogStaged),
+      catalogVersions: new Map(state.catalogVersions),
       events: structuredClone(state.events),
       integrity: new Map(state.integrity),
       mappings: new Map(state.mappings),
@@ -112,6 +126,14 @@ function createSemanticMemoryEngine(): ConformancePort & {
       });
       return structuredClone(changed);
     });
+  }
+
+  function catalogVersionKey(storeId: string, revision: number | "legacy") {
+    return `${storeId}:${revision}`;
+  }
+
+  function catalogPinKey(storeId: string, terminalId: string) {
+    return `${storeId}:${terminalId}`;
   }
 
   const engine: ConformancePort & { failNextDurableCommit(): void } = {
@@ -155,6 +177,9 @@ function createSemanticMemoryEngine(): ConformancePort & {
       return publish((draft) => {
         const event: PosLocalEventRecord = {
           ...structuredClone(input),
+          ...(input.catalogPin
+            ? { catalogRevision: input.catalogPin.revision }
+            : {}),
           activity: { status: "pending" },
           createdAt: draft.events.length + 1,
           localEventId: `event-${draft.events.length + 1}`,
@@ -162,6 +187,30 @@ function createSemanticMemoryEngine(): ConformancePort & {
           sequence: draft.events.length + 1,
           sync: { status: input.initialSyncStatus ?? "pending" },
         };
+        if (input.catalogPin) {
+          const versionKey = catalogVersionKey(
+            input.storeId,
+            input.catalogPin.revision,
+          );
+          if (!draft.catalogVersions.has(versionKey)) {
+            draft.catalogVersions.set(versionKey, {
+              persistedAt: draft.events.length + 1,
+              revision: input.catalogPin.revision,
+              rows: structuredClone(input.catalogPin.rows),
+              schemaVersion: 1,
+              storeId: input.storeId,
+            });
+          }
+          draft.catalogPins.set(
+            catalogPinKey(input.storeId, input.terminalId),
+            {
+              pinnedAt: draft.events.length + 1,
+              revision: input.catalogPin.revision,
+              storeId: input.storeId,
+              terminalId: input.terminalId,
+            },
+          );
+        }
         draft.events.push(event);
         return structuredClone(event);
       });
@@ -390,6 +439,180 @@ function createSemanticMemoryEngine(): ConformancePort & {
     async readRegisterCatalogSnapshot({ storeId }) {
       const value = state.catalog.get(storeId);
       return { ok: true, value: value ? structuredClone(value) : null };
+    },
+
+    async readRegisterCatalogVersionState({ storeId }) {
+      const activeRevision =
+        state.catalogActive.get(storeId) ??
+        (state.catalog.has(storeId) ? "legacy" : null);
+      const stagedRevision = state.catalogStaged.get(storeId) ?? null;
+      const legacy = state.catalog.get(storeId);
+      const active =
+        activeRevision === null
+          ? null
+          : (state.catalogVersions.get(
+              catalogVersionKey(storeId, activeRevision),
+            ) ??
+            (legacy
+              ? {
+                  persistedAt: legacy.refreshedAt,
+                  revision: "legacy" as const,
+                  rows: legacy.rows,
+                  schemaVersion: legacy.schemaVersion,
+                  storeId,
+                }
+              : null));
+      const staged =
+        stagedRevision === null
+          ? null
+          : (state.catalogVersions.get(
+              catalogVersionKey(storeId, stagedRevision),
+            ) ?? null);
+      return {
+        ok: true,
+        value: structuredClone({
+          active,
+          activeRevision,
+          staged,
+          stagedRevision,
+        }),
+      };
+    },
+
+    async readRegisterCatalogSelection({ storeId, terminalId }) {
+      const pin = terminalId
+        ? state.catalogPins.get(catalogPinKey(storeId, terminalId))
+        : null;
+      if (pin) {
+        return {
+          ok: true,
+          value: structuredClone(
+            state.catalogVersions.get(catalogVersionKey(storeId, pin.revision)) ??
+              null,
+          ),
+        };
+      }
+      const versionState = await engine.readRegisterCatalogVersionState({
+        storeId,
+      });
+      return versionState.ok
+        ? { ok: true, value: versionState.value.active }
+        : versionState;
+    },
+
+    async readRegisterCatalogPin({ storeId, terminalId }) {
+      return {
+        ok: true,
+        value: structuredClone(
+          state.catalogPins.get(catalogPinKey(storeId, terminalId)) ?? null,
+        ),
+      };
+    },
+
+    async stageRegisterCatalogVersion({ revision, rows, storeId }) {
+      return publish((draft) => {
+        const newest = Math.max(
+          typeof draft.catalogActive.get(storeId) === "number"
+            ? (draft.catalogActive.get(storeId) as number)
+            : -1,
+          draft.catalogStaged.get(storeId) ?? -1,
+        );
+        const winnerRevision = newest > revision ? newest : revision;
+        const key = catalogVersionKey(storeId, winnerRevision);
+        let version = draft.catalogVersions.get(key);
+        if (!version) {
+          version = {
+            persistedAt: 1,
+            revision,
+            rows: structuredClone(rows),
+            schemaVersion: 1,
+            storeId,
+          };
+          draft.catalogVersions.set(
+            catalogVersionKey(storeId, revision),
+            version,
+          );
+        }
+        if (newest > revision) {
+          return {
+            revision: winnerRevision,
+            status: "already_newer" as const,
+            version,
+          };
+        }
+        const status =
+          draft.catalogStaged.get(storeId) === revision
+            ? ("already_current" as const)
+            : ("staged" as const);
+        draft.catalogStaged.set(storeId, revision);
+        return { revision, status, version };
+      });
+    },
+
+    async promoteRegisterCatalogVersion({ revision, storeId }) {
+      return publish((draft) => {
+        const activeRevision = draft.catalogActive.get(storeId);
+        const activeVersion =
+          activeRevision === undefined
+            ? undefined
+            : draft.catalogVersions.get(
+                catalogVersionKey(storeId, activeRevision),
+              );
+        if (
+          typeof activeRevision === "number" &&
+          activeRevision > revision &&
+          activeVersion
+        ) {
+          return {
+            revision: activeRevision,
+            status: "already_newer" as const,
+            version: activeVersion,
+          };
+        }
+        const version = draft.catalogVersions.get(
+          catalogVersionKey(storeId, revision),
+        );
+        if (!version) throw new Error("Missing staged catalog version");
+        const status =
+          activeRevision === revision
+            ? ("already_current" as const)
+            : ("promoted" as const);
+        draft.catalogActive.set(storeId, revision);
+        if (draft.catalogStaged.get(storeId) === revision)
+          draft.catalogStaged.delete(storeId);
+        draft.catalog.set(storeId, {
+          refreshedAt: version.persistedAt,
+          rows: structuredClone(version.rows),
+          schemaVersion: version.schemaVersion,
+          storeId,
+        });
+        return { revision, status, version };
+      });
+    },
+
+    async pinRegisterCatalogVersion({ revision, rows, storeId, terminalId }) {
+      return publish((draft) => {
+        const versionKey = catalogVersionKey(storeId, revision);
+        if (!draft.catalogVersions.has(versionKey)) {
+          draft.catalogVersions.set(versionKey, {
+            persistedAt: 1,
+            revision,
+            rows: structuredClone(rows),
+            schemaVersion: 1,
+            storeId,
+          });
+        }
+        const pin = { pinnedAt: 1, revision, storeId, terminalId };
+        draft.catalogPins.set(catalogPinKey(storeId, terminalId), pin);
+        return pin;
+      });
+    },
+
+    async releaseRegisterCatalogPin({ storeId, terminalId }) {
+      return publish((draft) => {
+        draft.catalogPins.delete(catalogPinKey(storeId, terminalId));
+        return null;
+      });
     },
 
     async writeRegisterCatalogSnapshot({ rows, storeId }) {
@@ -788,6 +1011,46 @@ describe("POS local-store application port conformance", () => {
       { ok: true, value: snapshot("store-1") },
       { ok: true, value: snapshot("store-1") },
     ]);
+  });
+
+  it("expresses revision staging, promotion, and runtime selection semantically", async () => {
+    const engine = createSemanticMemoryEngine();
+    await engine.writeRegisterCatalogSnapshot({ rows: [], storeId: "store-1" });
+    await expect(
+      engine.readRegisterCatalogVersionState({ storeId: "store-1" }),
+    ).resolves.toEqual({
+      ok: true,
+      value: expect.objectContaining({ activeRevision: "legacy" }),
+    });
+
+    const staged = await engine.stageRegisterCatalogVersion({
+      revision: 0,
+      rows: [],
+      storeId: "store-1",
+    });
+    expect(staged).toEqual({
+      ok: true,
+      value: expect.objectContaining({ status: "staged", revision: 0 }),
+    });
+    await engine.promoteRegisterCatalogVersion({
+      revision: 0,
+      storeId: "store-1",
+    });
+    await engine.pinRegisterCatalogVersion({
+      revision: 0,
+      rows: [],
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
+    await expect(
+      engine.readRegisterCatalogSelection({
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    ).resolves.toEqual({
+      ok: true,
+      value: expect.objectContaining({ revision: 0 }),
+    });
   });
 
   it("supports staff authority and terminal-scoped cashier presence", async () => {

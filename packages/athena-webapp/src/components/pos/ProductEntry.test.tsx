@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { useState } from "react";
+import { type ComponentProps, useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ProductEntry } from "./ProductEntry";
@@ -14,7 +14,6 @@ import type { Id } from "~/convex/_generated/dataModel";
 
 const quickAddProductSkuMock = vi.fn();
 const pendingCheckoutItemMock = vi.fn();
-const registerCatalogMock = vi.fn();
 
 type AddProductHandler = (
   product: Product,
@@ -32,7 +31,6 @@ globalThis.ResizeObserver = ResizeObserverStub;
 vi.mock("@/hooks/usePOSProducts", () => ({
   usePOSPendingCheckoutItemForSale: () => pendingCheckoutItemMock,
   usePOSQuickAddProductSku: () => quickAddProductSkuMock,
-  usePOSRegisterCatalog: () => registerCatalogMock(),
 }));
 
 vi.mock("@/hooks/useGetActiveStore", () => ({
@@ -73,6 +71,7 @@ function renderProductEntry(input: {
   setProductSearchQuery: (query: string) => void;
   canAddPendingCheckoutItem?: boolean;
   canQuickAddProduct?: boolean;
+  catalogRows?: ComponentProps<typeof ProductEntry>["catalogRows"];
 }) {
   function Harness() {
     const [productSearchQuery, setProductSearchQuery] =
@@ -80,6 +79,7 @@ function renderProductEntry(input: {
 
     return (
       <ProductEntry
+        catalogRows={input.catalogRows ?? []}
         canAddPendingCheckoutItem={input.canAddPendingCheckoutItem}
         canQuickAddProduct={input.canQuickAddProduct ?? true}
         pendingCheckoutContext={{
@@ -129,6 +129,7 @@ function renderProductEntryWithServices(input: {
   serviceEntry: RegisterServiceEntryState;
   setProductSearchQuery?: (query: string) => void;
   onBarcodeSubmit?: () => void;
+  catalogRows?: ComponentProps<typeof ProductEntry>["catalogRows"];
 }) {
   function Harness() {
     const [lookupMode, setLookupMode] = useState<RegisterLookupMode>(
@@ -138,6 +139,7 @@ function renderProductEntryWithServices(input: {
 
     return (
       <ProductEntry
+        catalogRows={input.catalogRows ?? []}
         canSearchProducts={input.canSearchProducts}
         canSearchServices={input.canSearchServices}
         isSearchLoading={false}
@@ -166,8 +168,6 @@ describe("ProductEntry", () => {
   beforeEach(() => {
     quickAddProductSkuMock.mockReset();
     pendingCheckoutItemMock.mockReset();
-    registerCatalogMock.mockReset();
-    registerCatalogMock.mockReturnValue([]);
   });
 
   it("clears the active search before adding a newly quick-added product to the cart", async () => {
@@ -384,12 +384,12 @@ describe("ProductEntry", () => {
     const onAddProduct = vi.fn<AddProductHandler>(async () => true);
     const setProductSearchQuery = vi.fn();
     quickAddProductSkuMock.mockResolvedValueOnce(attachedProduct);
-    registerCatalogMock.mockReturnValue([
+    const catalogRows: ComponentProps<typeof ProductEntry>["catalogRows"] = [
       {
-        id: "sku-existing",
-        productSkuId: "sku-existing",
-        skuId: "sku-existing",
-        productId: "product-existing",
+        id: "sku-existing" as Id<"productSku">,
+        productSkuId: "sku-existing" as Id<"productSku">,
+        skuId: "sku-existing" as Id<"productSku">,
+        productId: "product-existing" as Id<"product">,
         name: "Existing wig",
         sku: "EXISTING-SKU",
         barcode: "",
@@ -402,9 +402,9 @@ describe("ProductEntry", () => {
         color: "",
         areProcessingFeesAbsorbed: false,
       },
-    ]);
+    ];
 
-    renderProductEntry({ onAddProduct, setProductSearchQuery });
+    renderProductEntry({ catalogRows, onAddProduct, setProductSearchQuery });
 
     await user.click(
       screen.getByRole("button", { name: /quick add product/i }),

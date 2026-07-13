@@ -4,6 +4,28 @@ import { action, internalQuery, mutation, query } from "../_generated/server";
 import { deleteFileInR2, uploadFileToR2 } from "../cloudflare/r2";
 import { refreshCatalogSummaryWithCtx } from "./catalogSummary";
 import { getProductName } from "../utils";
+import type { Id } from "../_generated/dataModel";
+import {
+  upsertProductSkuSearchProjection,
+  upsertProductSkuSearchProjections,
+} from "./skuSearch";
+
+async function syncProductSkuSearchProjectionsByStore(
+  ctx: Parameters<typeof upsertProductSkuSearchProjections>[0],
+  skus: Array<{ _id: Id<"productSku">; storeId: Id<"store"> }>,
+) {
+  const skuIdsByStore = new Map<Id<"store">, Array<Id<"productSku">>>();
+  for (const sku of skus) {
+    const skuIds = skuIdsByStore.get(sku.storeId) ?? [];
+    skuIds.push(sku._id);
+    skuIdsByStore.set(sku.storeId, skuIds);
+  }
+  await Promise.all(
+    Array.from(skuIdsByStore, ([storeId, skuIds]) =>
+      upsertProductSkuSearchProjections(ctx, skuIds, storeId),
+    ),
+  );
+}
 
 export const generateUploadUrl = mutation({
   args: {},
@@ -110,6 +132,7 @@ export const update = mutation({
       await ctx.db.patch("productSku", args.id, {
         images: args.update.images,
       });
+      await upsertProductSkuSearchProjection(ctx, args.id);
       await refreshCatalogSummaryWithCtx(ctx, sku.storeId);
     }
   },
@@ -178,6 +201,17 @@ export const nukeProblematicImages = mutation({
     });
 
     await Promise.allSettled(updates);
+    await syncProductSkuSearchProjectionsByStore(
+      ctx,
+      productSkus.filter(
+        (sku) =>
+          Array.isArray(sku.images) &&
+          sku.images.some(
+            (image) =>
+              typeof image !== "string" || !image.includes(publicUrl),
+          ),
+      ),
+    );
 
     return { success: true };
   },
@@ -195,6 +229,8 @@ export const makeAllProductsVisible = mutation({
     });
 
     await Promise.allSettled(updates);
+    const skus = await ctx.db.query("productSku").collect();
+    await syncProductSkuSearchProjectionsByStore(ctx, skus);
 
     return { success: true, updatedCount: productSkus.length };
   },
@@ -204,6 +240,7 @@ export const backfillUndefinedSkuVisibilityFromProducts = mutation({
   args: {},
   handler: async (ctx) => {
     const productSkus = await ctx.db.query("productSku").collect();
+    const updatedSkus: typeof productSkus = [];
     let updatedCount = 0;
     let skippedMissingProductCount = 0;
     let skippedParentWithoutVisibilityCount = 0;
@@ -226,8 +263,11 @@ export const backfillUndefinedSkuVisibilityFromProducts = mutation({
       await ctx.db.patch("productSku", sku._id, {
         isVisible: product.isVisible,
       });
+      updatedSkus.push(sku);
       updatedCount += 1;
     }
+
+    await syncProductSkuSearchProjectionsByStore(ctx, updatedSkus);
 
     return {
       success: true,

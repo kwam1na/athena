@@ -3,18 +3,27 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Id } from "../../_generated/dataModel";
 
 const mocks = vi.hoisted(() => ({
+  advanceRegisterCatalogRevision: vi.fn(),
   applyInventoryEffectWithCtx: vi.fn(),
   createOrReusePendingCheckoutItem: vi.fn(),
   findStoreSkuByBarcode: vi.fn(),
   refreshCatalogSummaryWithCtx: vi.fn(),
   listRegisterCatalogAvailabilitySnapshot: vi.fn(),
+  listRegisterCatalogWithRevision: vi.fn(),
+  readRegisterCatalogRevision: vi.fn(),
   quickAddCatalogItem: vi.fn(),
   recordInventoryMovementWithCtx: vi.fn(),
   recordOperationalEventWithCtx: vi.fn(),
+  requireAuthenticatedAthenaUserIndexedWithCtx: vi.fn(),
   requireAuthenticatedAthenaUserWithCtx: vi.fn(),
   requireOrganizationMemberRoleWithCtx: vi.fn(),
   updateOperationalWorkItemStatusWithCtx: vi.fn(),
   upsertProductSkuSearchProjection: vi.fn(),
+}));
+
+vi.mock("../application/sync/registerCatalogRevision", () => ({
+  advanceRegisterCatalogRevision: mocks.advanceRegisterCatalogRevision,
+  readRegisterCatalogRevision: mocks.readRegisterCatalogRevision,
 }));
 
 vi.mock("../../reporting/inventory/effects", () => ({
@@ -22,6 +31,8 @@ vi.mock("../../reporting/inventory/effects", () => ({
 }));
 
 vi.mock("../../lib/athenaUserAuth", () => ({
+  requireAuthenticatedAthenaUserIndexedWithCtx:
+    mocks.requireAuthenticatedAthenaUserIndexedWithCtx,
   requireAuthenticatedAthenaUserWithCtx:
     mocks.requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx:
@@ -53,6 +64,7 @@ vi.mock("../application/queries/listRegisterCatalog", () => ({
   listRegisterCatalogAvailability: vi.fn(),
   listRegisterCatalogAvailabilitySnapshot:
     mocks.listRegisterCatalogAvailabilitySnapshot,
+  listRegisterCatalogWithRevision: mocks.listRegisterCatalogWithRevision,
 }));
 
 vi.mock("../application/queries/searchCatalog", () => ({
@@ -90,6 +102,8 @@ import {
   listPendingCheckoutItemsForReview,
   listPendingCheckoutProductPageBinding,
   listRegisterCatalogSnapshot,
+  listRegisterCatalogSnapshotWithRevision,
+  getRegisterCatalogRevision,
   listRegisterCatalogAvailability,
   listRegisterCatalogAvailabilitySnapshot,
   mapPendingCheckoutReviewStatusToWorkItemPatch,
@@ -108,6 +122,9 @@ describe("POS public catalog queries", () => {
     mocks.requireAuthenticatedAthenaUserWithCtx.mockResolvedValue({
       _id: "athena-user-1",
     });
+    mocks.requireAuthenticatedAthenaUserIndexedWithCtx.mockResolvedValue({
+      _id: "athena-user-1",
+    });
     mocks.requireOrganizationMemberRoleWithCtx.mockResolvedValue(undefined);
     mocks.listRegisterCatalogAvailabilitySnapshot.mockResolvedValue([
       {
@@ -117,6 +134,11 @@ describe("POS public catalog queries", () => {
         quantityAvailable: 3,
       },
     ]);
+    mocks.readRegisterCatalogRevision.mockResolvedValue(0);
+    mocks.listRegisterCatalogWithRevision.mockResolvedValue({
+      revision: 0,
+      rows: [],
+    });
     mocks.createOrReusePendingCheckoutItem.mockResolvedValue({
       id: "pending-1",
       lookupCode: "123456789012",
@@ -408,6 +430,68 @@ describe("POS public catalog queries", () => {
     expect(readRegisterCatalog.listRegisterCatalog).toHaveBeenCalledWith(ctx, {
       storeId: "store-1",
     });
+  });
+
+  it("returns only the current register catalog revision after store authorization", async () => {
+    mocks.readRegisterCatalogRevision.mockResolvedValue(7);
+    const ctx = buildCtx();
+
+    const revision = await getHandler(getRegisterCatalogRevision)(
+      ctx as never,
+      {
+        storeId: "store-1",
+      },
+    );
+
+    expect(revision).toEqual({ revision: 7, status: "ready" });
+    assertConformsToExportedReturns(getRegisterCatalogRevision, revision);
+
+    expect(mocks.readRegisterCatalogRevision).toHaveBeenCalledWith(
+      ctx,
+      "store-1",
+    );
+    expect(
+      mocks.requireAuthenticatedAthenaUserIndexedWithCtx,
+    ).toHaveBeenCalledWith(ctx);
+    expect(mocks.requireAuthenticatedAthenaUserWithCtx).not.toHaveBeenCalled();
+    expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalled();
+  });
+
+  it("returns an authorization pause sentinel without reading revision data", async () => {
+    mocks.requireAuthenticatedAthenaUserIndexedWithCtx.mockRejectedValueOnce(
+      new Error("Not authenticated"),
+    );
+    const ctx = buildCtx();
+
+    const result = await getHandler(getRegisterCatalogRevision)(ctx as never, {
+      storeId: "store-1",
+    });
+
+    expect(result).toEqual({ status: "authorization-paused" });
+    assertConformsToExportedReturns(getRegisterCatalogRevision, result);
+    expect(mocks.readRegisterCatalogRevision).not.toHaveBeenCalled();
+  });
+
+  it("returns revision and rows from one authorized query snapshot", async () => {
+    const envelope = { revision: 8, rows: [] };
+    mocks.listRegisterCatalogWithRevision.mockResolvedValue(envelope);
+    const ctx = buildCtx();
+
+    const result = await getHandler(listRegisterCatalogSnapshotWithRevision)(
+      ctx as never,
+      { storeId: "store-1" },
+    );
+
+    expect(result).toEqual(envelope);
+    assertConformsToExportedReturns(
+      listRegisterCatalogSnapshotWithRevision,
+      result,
+    );
+
+    expect(mocks.listRegisterCatalogWithRevision).toHaveBeenCalledWith(ctx, {
+      storeId: "store-1",
+    });
+    expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalled();
   });
 
   it("lists linked pending checkout aliases for trusted SKU rows", async () => {
@@ -1950,6 +2034,7 @@ describe("POS public catalog queries", () => {
     expect(mocks.upsertProductSkuSearchProjection).toHaveBeenCalledWith(
       ctx,
       "sku-live-1",
+      { advanceRevision: false },
     );
     expect(mocks.recordOperationalEventWithCtx).toHaveBeenCalledWith(
       ctx,

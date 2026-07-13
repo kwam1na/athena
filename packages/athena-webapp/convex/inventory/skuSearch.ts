@@ -9,6 +9,11 @@ import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
+import { advanceRegisterCatalogRevision } from "../pos/application/sync/registerCatalogRevision";
+import {
+  isProjectionProductPosCatalogVisible,
+  isProjectionSkuPosCatalogVisible,
+} from "../../shared/posCatalogVisibility";
 
 const DEFAULT_LIMIT = 25;
 const MAX_LIMIT = 50;
@@ -380,10 +385,78 @@ function projectionsEqual(
   return JSON.stringify(existingComparable) === JSON.stringify(nextComparable);
 }
 
-export async function upsertProductSkuSearchProjection(
+function isRegisterCatalogProjectionIncluded(
+  projection: Doc<"productSkuSearch"> | ProductSkuSearchProjection,
+) {
+  const operationalCategory =
+    projection.categorySlug === "legacy-import" ||
+    projection.categorySlug === "pos-pending-checkout" ||
+    projection.categorySlug === "pos-quick-add";
+  const draftAllowed =
+    projection.categorySlug === "legacy-import" ||
+    projection.categorySlug === "pos-pending-checkout";
+  const price = projection.netPrice ?? projection.price;
+
+  return (
+    projection.productAvailability !== "archived" &&
+    (projection.productAvailability !== "draft" || draftAllowed) &&
+    (isProjectionProductPosCatalogVisible(projection) || operationalCategory) &&
+    (isProjectionSkuPosCatalogVisible(projection) || draftAllowed) &&
+    price > 0
+  );
+}
+
+function registerCatalogProjectionsEqual(
+  existing: Doc<"productSkuSearch">,
+  next: ProductSkuSearchProjection,
+) {
+  const selectEffectiveFields = (
+    projection: Doc<"productSkuSearch"> | ProductSkuSearchProjection,
+  ) => ({
+    attributes: projection.attributes,
+    barcode: projection.barcode,
+    categoryName: projection.categoryName,
+    categorySlug: projection.categorySlug,
+    colorName: projection.colorName,
+    images: projection.images,
+    isVisible: projection.isVisible,
+    length: projection.length,
+    netPrice: projection.netPrice,
+    posVisible: projection.posVisible,
+    price: projection.price,
+    productAvailability: projection.productAvailability,
+    productDescription: projection.productDescription,
+    productIsVisible: projection.productIsVisible,
+    productName: projection.productName,
+    productPosVisible: projection.productPosVisible,
+    productProcessingFeesAbsorbed:
+      projection.productProcessingFeesAbsorbed,
+    size: projection.size,
+    sku: projection.sku,
+    subcategoryName: projection.subcategoryName,
+  });
+
+  const existingIncluded = isRegisterCatalogProjectionIncluded(existing);
+  const nextIncluded = isRegisterCatalogProjectionIncluded(next);
+  if (existingIncluded !== nextIncluded) return false;
+  if (!existingIncluded) return true;
+
+  return (
+    JSON.stringify(selectEffectiveFields(existing)) ===
+    JSON.stringify(selectEffectiveFields(next))
+  );
+}
+
+type ProductSkuSearchSyncResult = {
+  outcome: "upserted" | "unchanged" | "source_orphan";
+  registerCatalogChanged: boolean;
+  storeId?: Id<"store">;
+};
+
+async function syncProductSkuSearchProjection(
   ctx: Pick<MutationCtx, "db">,
   productSkuId: Id<"productSku">,
-): Promise<"upserted" | "unchanged" | "source_orphan"> {
+): Promise<ProductSkuSearchSyncResult> {
   const projection = await buildProductSkuSearchProjection(ctx, productSkuId);
   const existingRows = await ctx.db
     .query("productSkuSearch")
@@ -394,7 +467,13 @@ export async function upsertProductSkuSearchProjection(
     await Promise.all(
       existingRows.map((row) => ctx.db.delete("productSkuSearch", row._id)),
     );
-    return "source_orphan";
+    return {
+      outcome: "source_orphan",
+      registerCatalogChanged: existingRows.some(
+        isRegisterCatalogProjectionIncluded,
+      ),
+      storeId: existingRows[0]?.storeId,
+    };
   }
 
   const [firstRow, ...duplicates] = existingRows;
@@ -404,20 +483,52 @@ export async function upsertProductSkuSearchProjection(
 
   if (!firstRow) {
     await ctx.db.insert("productSkuSearch", projection);
-    return "upserted";
+    return {
+      outcome: "upserted",
+      registerCatalogChanged: isRegisterCatalogProjectionIncluded(projection),
+      storeId: projection.storeId,
+    };
   }
 
+  const registerCatalogChanged = !registerCatalogProjectionsEqual(
+    firstRow,
+    projection,
+  );
   if (projectionsEqual(firstRow, projection) && duplicates.length === 0) {
-    return "unchanged";
+    return {
+      outcome: "unchanged",
+      registerCatalogChanged: false,
+      storeId: projection.storeId,
+    };
   }
 
   await ctx.db.patch("productSkuSearch", firstRow._id, projection);
-  return "upserted";
+  return {
+    outcome: "upserted",
+    registerCatalogChanged,
+    storeId: projection.storeId,
+  };
+}
+
+export async function upsertProductSkuSearchProjection(
+  ctx: MutationCtx,
+  productSkuId: Id<"productSku">,
+  options?: { advanceRevision?: boolean },
+): Promise<"upserted" | "unchanged" | "source_orphan"> {
+  const result = await syncProductSkuSearchProjection(ctx, productSkuId);
+  if (options?.advanceRevision !== false && result.storeId) {
+    await advanceRegisterCatalogRevision(ctx, {
+      didChange: result.registerCatalogChanged,
+      storeId: result.storeId,
+    });
+  }
+  return result.outcome;
 }
 
 export async function removeProductSkuSearchProjection(
-  ctx: Pick<MutationCtx, "db">,
+  ctx: MutationCtx,
   productSkuId: Id<"productSku">,
+  options?: { advanceRevision?: boolean },
 ) {
   const rows = await ctx.db
     .query("productSkuSearch")
@@ -427,9 +538,82 @@ export async function removeProductSkuSearchProjection(
   await Promise.all(
     rows.map((row) => ctx.db.delete("productSkuSearch", row._id)),
   );
+  const registerCatalogChanged = rows.some(
+    isRegisterCatalogProjectionIncluded,
+  );
+  if (options?.advanceRevision !== false && rows[0]) {
+    await advanceRegisterCatalogRevision(ctx, {
+      didChange: registerCatalogChanged,
+      storeId: rows[0].storeId,
+    });
+  }
+  return registerCatalogChanged;
+}
+
+export async function upsertProductSkuSearchProjections(
+  ctx: MutationCtx,
+  productSkuIds: Array<Id<"productSku">>,
+  storeId: Id<"store">,
+  options?: { additionalEffectiveChange?: boolean },
+) {
+  const results = await Promise.all(
+    productSkuIds.map((productSkuId) =>
+      syncProductSkuSearchProjection(ctx, productSkuId),
+    ),
+  );
+  const didChange =
+    results.some((result) => result.registerCatalogChanged) ||
+    options?.additionalEffectiveChange === true;
+  await advanceRegisterCatalogRevision(ctx, { didChange, storeId });
+  return didChange;
+}
+
+export async function removeProductSkuSearchProjections(
+  ctx: MutationCtx,
+  productSkuIds: Array<Id<"productSku">>,
+  storeId: Id<"store">,
+  options?: { additionalEffectiveChange?: boolean },
+) {
+  const results = await Promise.all(
+    productSkuIds.map((productSkuId) =>
+      removeProductSkuSearchProjection(ctx, productSkuId, {
+        advanceRevision: false,
+      }),
+    ),
+  );
+  const didChange =
+    results.some(Boolean) || options?.additionalEffectiveChange === true;
+  await advanceRegisterCatalogRevision(ctx, { didChange, storeId });
+  return didChange;
 }
 
 export async function refreshProductSkuSearchForProduct(
+  ctx: MutationCtx,
+  productId: Id<"product">,
+  options?: {
+    additionalEffectiveChange?: boolean;
+    storeId?: Id<"store">;
+  },
+) {
+  const product = await ctx.db.get("product", productId);
+  const results = await syncProductSkuSearchForProduct(ctx, productId);
+  const storeId =
+    product?.storeId ??
+    results.find((result) => result.storeId)?.storeId ??
+    options?.storeId;
+  const didChange =
+    results.some((result) => result.registerCatalogChanged) ||
+    options?.additionalEffectiveChange === true;
+  if (storeId) {
+    await advanceRegisterCatalogRevision(ctx, {
+      didChange,
+      storeId,
+    });
+  }
+  return didChange;
+}
+
+async function syncProductSkuSearchForProduct(
   ctx: Pick<MutationCtx, "db">,
   productId: Id<"product">,
 ) {
@@ -438,13 +622,14 @@ export async function refreshProductSkuSearchForProduct(
     .withIndex("by_productId", (q) => q.eq("productId", productId))
     .collect();
 
-  await Promise.all(
-    skus.map((sku) => upsertProductSkuSearchProjection(ctx, sku._id)),
+  const results = await Promise.all(
+    skus.map((sku) => syncProductSkuSearchProjection(ctx, sku._id)),
   );
+  return results;
 }
 
 export async function refreshProductSkuSearchForCategory(
-  ctx: Pick<MutationCtx, "db">,
+  ctx: MutationCtx,
   categoryId: Id<"category">,
 ) {
   const products = await ctx.db
@@ -452,15 +637,25 @@ export async function refreshProductSkuSearchForCategory(
     .withIndex("by_categoryId", (q) => q.eq("categoryId", categoryId))
     .collect();
 
-  await Promise.all(
+  const results = await Promise.all(
     products.map((product) =>
-      refreshProductSkuSearchForProduct(ctx, product._id),
+      syncProductSkuSearchForProduct(ctx, product._id),
     ),
   );
+  const flattened = results.flat();
+  const category = await ctx.db.get("category", categoryId);
+  const storeId = category?.storeId ?? products[0]?.storeId;
+  if (storeId) {
+    await advanceRegisterCatalogRevision(ctx, {
+      didChange: flattened.some((result) => result.registerCatalogChanged),
+      storeId,
+    });
+  }
+  return flattened.some((result) => result.registerCatalogChanged);
 }
 
 export async function refreshProductSkuSearchForSubcategory(
-  ctx: Pick<MutationCtx, "db">,
+  ctx: MutationCtx,
   subcategoryId: Id<"subcategory">,
 ) {
   const products = await ctx.db
@@ -470,15 +665,25 @@ export async function refreshProductSkuSearchForSubcategory(
     )
     .collect();
 
-  await Promise.all(
+  const results = await Promise.all(
     products.map((product) =>
-      refreshProductSkuSearchForProduct(ctx, product._id),
+      syncProductSkuSearchForProduct(ctx, product._id),
     ),
   );
+  const flattened = results.flat();
+  const subcategory = await ctx.db.get("subcategory", subcategoryId);
+  const storeId = subcategory?.storeId ?? products[0]?.storeId;
+  if (storeId) {
+    await advanceRegisterCatalogRevision(ctx, {
+      didChange: flattened.some((result) => result.registerCatalogChanged),
+      storeId,
+    });
+  }
+  return flattened.some((result) => result.registerCatalogChanged);
 }
 
 export async function refreshProductSkuSearchForColor(
-  ctx: Pick<MutationCtx, "db">,
+  ctx: MutationCtx,
   colorId: Id<"color">,
 ) {
   const skus = await ctx.db
@@ -486,9 +691,18 @@ export async function refreshProductSkuSearchForColor(
     .withIndex("by_color", (q) => q.eq("color", colorId))
     .collect();
 
-  await Promise.all(
-    skus.map((sku) => upsertProductSkuSearchProjection(ctx, sku._id)),
+  const results = await Promise.all(
+    skus.map((sku) => syncProductSkuSearchProjection(ctx, sku._id)),
   );
+  const color = await ctx.db.get("color", colorId);
+  const storeId = color?.storeId ?? skus[0]?.storeId;
+  if (storeId) {
+    await advanceRegisterCatalogRevision(ctx, {
+      didChange: results.some((result) => result.registerCatalogChanged),
+      storeId,
+    });
+  }
+  return results.some((result) => result.registerCatalogChanged);
 }
 
 type ProductSkuSearchMatch = {
@@ -824,18 +1038,26 @@ export const repairProductSkuSearchPage = mutation({
       unchanged: 0,
       upserted: 0,
     };
+    let registerCatalogChanged = false;
 
     for (const sku of page.page) {
       const existingRows = await ctx.db
         .query("productSkuSearch")
         .withIndex("by_productSkuId", (q) => q.eq("productSkuId", sku._id))
         .collect();
-      const result = await upsertProductSkuSearchProjection(ctx, sku._id);
-      if (result === "upserted") stats.upserted += 1;
-      if (result === "unchanged") stats.unchanged += 1;
-      if (result === "source_orphan") stats.sourceOrphans += 1;
+      const result = await syncProductSkuSearchProjection(ctx, sku._id);
+      registerCatalogChanged =
+        registerCatalogChanged || result.registerCatalogChanged;
+      if (result.outcome === "upserted") stats.upserted += 1;
+      if (result.outcome === "unchanged") stats.unchanged += 1;
+      if (result.outcome === "source_orphan") stats.sourceOrphans += 1;
       stats.duplicatesCollapsed += Math.max(0, existingRows.length - 1);
     }
+
+    await advanceRegisterCatalogRevision(ctx, {
+      didChange: registerCatalogChanged,
+      storeId: args.storeId,
+    });
 
     return {
       ...stats,
@@ -874,12 +1096,15 @@ export const removeStaleProductSkuSearchPage = mutation({
       unchanged: 0,
       upserted: 0,
     };
+    let registerCatalogChanged = false;
 
     for (const row of page.page) {
       const source = await ctx.db.get("productSku", row.productSkuId);
 
       if (!source || source.storeId !== args.storeId) {
         await ctx.db.delete("productSkuSearch", row._id);
+        registerCatalogChanged =
+          registerCatalogChanged || isRegisterCatalogProjectionIncluded(row);
         stats.sourceOrphans += 1;
         stats.staleOrphansRemoved += 1;
         continue;
@@ -909,6 +1134,12 @@ export const removeStaleProductSkuSearchPage = mutation({
       stats.staleOrphansRemoved += duplicateRows.length;
       stats.unchanged += 1;
     }
+
+
+    await advanceRegisterCatalogRevision(ctx, {
+      didChange: registerCatalogChanged,
+      storeId: args.storeId,
+    });
 
     return {
       ...stats,

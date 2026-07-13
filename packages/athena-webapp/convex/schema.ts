@@ -16,6 +16,7 @@ import {
   inventoryHoldSchema,
   inventoryImportProvisionalSkuSchema,
   inventoryImportReviewVersionSchema,
+  posRegisterCatalogRevisionSchema,
   productSchema,
   productSkuSearchSchema,
   productSkuSchema,
@@ -858,6 +859,11 @@ const schema = defineSchema({
       "storeId",
       "provisionalProductSkuId",
     ])
+    .index("by_storeId_provisionalProductSkuId_status", [
+      "storeId",
+      "provisionalProductSkuId",
+      "status",
+    ])
     .index("by_storeId_provisionalProductId", [
       "storeId",
       "provisionalProductId",
@@ -1115,6 +1121,10 @@ const schema = defineSchema({
       searchField: "searchText",
       filterFields: ["storeId"],
     }),
+  posRegisterCatalogRevision: defineTable(posRegisterCatalogRevisionSchema).index(
+    "by_storeId",
+    ["storeId"],
+  ),
   purchaseOrder: defineTable(purchaseOrderSchema)
     .index("by_storeId", ["storeId"])
     .index("by_storeId_createdAt", ["storeId", "createdAt"])

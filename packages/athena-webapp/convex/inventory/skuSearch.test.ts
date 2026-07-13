@@ -5,7 +5,9 @@ import type { Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
 import {
+  refreshProductSkuSearchForProduct,
   repairProductSkuSearchPage,
+  removeProductSkuSearchProjections,
   removeStaleProductSkuSearchPage,
   searchProductSkus,
   upsertProductSkuSearchProjection,
@@ -14,9 +16,18 @@ import {
 const mockedAuthServer = vi.hoisted(() => ({
   getAuthUserId: vi.fn(),
 }));
+const mockedCatalogRevision = vi.hoisted(() => ({
+  advance: vi.fn(async (_ctx, args: { didChange: boolean }) =>
+    args.didChange ? 1 : 0,
+  ),
+}));
 
 vi.mock("@convex-dev/auth/server", () => ({
   getAuthUserId: mockedAuthServer.getAuthUserId,
+}));
+
+vi.mock("../pos/application/sync/registerCatalogRevision", () => ({
+  advanceRegisterCatalogRevision: mockedCatalogRevision.advance,
 }));
 
 type TableName =
@@ -237,6 +248,7 @@ const athenaUserId = "athena-user-1" as Id<"athenaUser">;
 
 beforeEach(() => {
   mockedAuthServer.getAuthUserId.mockResolvedValue(authUserId);
+  mockedCatalogRevision.advance.mockClear();
 });
 
 function baseSeed() {
@@ -347,6 +359,105 @@ function baseSeed() {
 }
 
 describe("SKU search foundation", () => {
+  it("combines additional snapshot changes into one product refresh revision", async () => {
+    const { ctx } = createCtx(baseSeed());
+
+    await refreshProductSkuSearchForProduct(ctx, productId, {
+      additionalEffectiveChange: true,
+    });
+
+    expect(mockedCatalogRevision.advance).toHaveBeenCalledTimes(1);
+    expect(mockedCatalogRevision.advance).toHaveBeenCalledWith(ctx, {
+      didChange: true,
+      storeId,
+    });
+  });
+
+  it("uses the known store fallback for a deleted product without sidecars", async () => {
+    const seed = baseSeed();
+    const { ctx } = createCtx({
+      ...seed,
+      product: [],
+      productSku: [],
+      productSkuSearch: [],
+    });
+
+    await refreshProductSkuSearchForProduct(ctx, productId, {
+      additionalEffectiveChange: true,
+      storeId,
+    });
+
+    expect(mockedCatalogRevision.advance).toHaveBeenCalledTimes(1);
+    expect(mockedCatalogRevision.advance).toHaveBeenCalledWith(ctx, {
+      didChange: true,
+      storeId,
+    });
+  });
+
+  it("combines additional snapshot changes into one bulk removal revision", async () => {
+    const { ctx } = createCtx(baseSeed());
+
+    await removeProductSkuSearchProjections(ctx, [], storeId, {
+      additionalEffectiveChange: true,
+    });
+
+    expect(mockedCatalogRevision.advance).toHaveBeenCalledTimes(1);
+    expect(mockedCatalogRevision.advance).toHaveBeenCalledWith(ctx, {
+      didChange: true,
+      storeId,
+    });
+  });
+
+  it("advances the register catalog revision only for effective metadata changes", async () => {
+    const { ctx, tables } = createCtx(baseSeed());
+    tables.product.set(productId, {
+      ...tables.product.get(productId)!,
+      availability: "live",
+      isVisible: true,
+    });
+    tables.productSku.set(skuId, {
+      ...tables.productSku.get(skuId)!,
+      isVisible: true,
+    });
+
+    await upsertProductSkuSearchProjection(ctx, skuId);
+    expect(mockedCatalogRevision.advance).toHaveBeenLastCalledWith(ctx, {
+      didChange: true,
+      storeId,
+    });
+
+    mockedCatalogRevision.advance.mockClear();
+    const sku = tables.productSku.get(skuId)!;
+    tables.productSku.set(skuId, { ...sku, inventoryCount: 12, quantityAvailable: 10 });
+    await upsertProductSkuSearchProjection(ctx, skuId);
+
+    expect(mockedCatalogRevision.advance).toHaveBeenLastCalledWith(ctx, {
+      didChange: false,
+      storeId,
+    });
+
+    tables.product.set(productId, {
+      ...tables.product.get(productId)!,
+      availability: "archived",
+    });
+    await upsertProductSkuSearchProjection(ctx, skuId);
+    expect(mockedCatalogRevision.advance).toHaveBeenLastCalledWith(ctx, {
+      didChange: true,
+      storeId,
+    });
+
+    mockedCatalogRevision.advance.mockClear();
+    tables.product.set(productId, {
+      ...tables.product.get(productId)!,
+      name: "Hidden metadata edit",
+    });
+    await upsertProductSkuSearchProjection(ctx, skuId);
+    expect(mockedCatalogRevision.advance).toHaveBeenLastCalledWith(ctx, {
+      didChange: false,
+      storeId,
+    });
+  });
+
   it("keeps changed public return contracts executable", () => {
     assertConformsToExportedReturns(searchProductSkus, {
       candidateOverflow: false,
@@ -918,6 +1029,43 @@ describe("SKU search foundation", () => {
       assertConformsToExportedReturns(removeStaleProductSkuSearchPage, result),
     ).not.toThrow();
     expect(tables.productSkuSearch.size).toBe(0);
+    expect(mockedCatalogRevision.advance).toHaveBeenLastCalledWith(ctx, {
+      didChange: true,
+      storeId,
+    });
+  });
+
+  it("does not advance the revision when repair removes an excluded orphan", async () => {
+    const { ctx } = createCtx({
+      ...baseSeed(),
+      productSkuSearch: [
+        {
+          _id: "excluded-stale-projection",
+          images: [],
+          inventoryCount: 1,
+          price: 1,
+          productAvailability: "archived",
+          productId,
+          productName: "Missing",
+          productSkuId: "missing-sku",
+          quantityAvailable: 1,
+          searchText: "missing",
+          storeId,
+          updatedAt: 1,
+          sourceUpdatedAt: 1,
+        },
+      ],
+    });
+
+    await getHandler(removeStaleProductSkuSearchPage)(ctx, {
+      paginationOpts: { cursor: null, numItems: 10 },
+      storeId,
+    });
+
+    expect(mockedCatalogRevision.advance).toHaveBeenLastCalledWith(ctx, {
+      didChange: false,
+      storeId,
+    });
   });
 
   it("collapses duplicate sidecars even when duplicates are split across pages", async () => {
@@ -949,6 +1097,10 @@ describe("SKU search foundation", () => {
       duplicatesCollapsed: 0,
     });
     expect(tables.productSkuSearch.size).toBe(1);
+    expect(mockedCatalogRevision.advance).toHaveBeenLastCalledWith(ctx, {
+      didChange: false,
+      storeId,
+    });
   });
 
   it("defines and uses the store-filtered Convex search index", () => {

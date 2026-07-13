@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { getFunctionName } from "convex/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -11,6 +11,7 @@ import type { Id } from "~/convex/_generated/dataModel";
 import { api } from "~/convex/_generated/api";
 import {
   __resetCatalogRefreshCoordinatorForTests,
+  getRegisterCatalogRefreshRetryDelay,
   useConvexRegisterCatalog,
   useConvexRegisterCatalogState,
   useConvexRegisterCatalogAvailability,
@@ -19,11 +20,24 @@ import {
   useConvexRegisterServiceCatalog,
   usePrewarmRegisterCatalogOfflineSnapshots,
 } from "./catalogGateway";
+import {
+  captureRegisterCatalogRuntimePin,
+  clearRegisterCatalogRuntimeActionGuard,
+  hasRegisterCatalogRuntimeActionGuard,
+} from "@/lib/pos/infrastructure/local/registerCatalogPinRuntime";
 
 const catalogStoreMocks = vi.hoisted(() => ({
+  promoteRegisterCatalogVersion: vi.fn(),
   readRegisterAvailabilitySnapshot: vi.fn(),
   readRegisterCatalogSnapshot: vi.fn(),
+  readRegisterCatalogSelection: vi.fn(),
+  readRegisterCatalogPin: vi.fn(),
+  readRegisterCatalogVersionState: vi.fn(),
   readRegisterServiceCatalogSnapshot: vi.fn(),
+  stageRegisterCatalogVersion: vi.fn(),
+  pinRegisterCatalogVersion: vi.fn(),
+  releaseRegisterCatalogPin: vi.fn(),
+  renewRegisterCatalogPinLease: vi.fn(),
   writeRegisterAvailabilitySnapshot: vi.fn(),
   writeRegisterCatalogSnapshot: vi.fn(),
   writeRegisterServiceCatalogSnapshot: vi.fn(),
@@ -112,6 +126,10 @@ describe("catalogGateway", () => {
 
   beforeEach(() => {
     __resetCatalogRefreshCoordinatorForTests();
+    clearRegisterCatalogRuntimeActionGuard({
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
     liveAvailabilityRows = undefined;
     fullAvailabilitySnapshotRows = undefined;
     convexMocks.query.mockReset();
@@ -137,7 +155,15 @@ describe("catalogGateway", () => {
     });
     catalogStoreMocks.readRegisterAvailabilitySnapshot.mockReset();
     catalogStoreMocks.readRegisterCatalogSnapshot.mockReset();
+    catalogStoreMocks.readRegisterCatalogSelection.mockReset();
+    catalogStoreMocks.readRegisterCatalogPin.mockReset();
+    catalogStoreMocks.readRegisterCatalogVersionState.mockReset();
     catalogStoreMocks.readRegisterServiceCatalogSnapshot.mockReset();
+    catalogStoreMocks.stageRegisterCatalogVersion.mockReset();
+    catalogStoreMocks.promoteRegisterCatalogVersion.mockReset();
+    catalogStoreMocks.pinRegisterCatalogVersion.mockReset();
+    catalogStoreMocks.releaseRegisterCatalogPin.mockReset();
+    catalogStoreMocks.renewRegisterCatalogPinLease.mockReset();
     catalogStoreMocks.writeRegisterAvailabilitySnapshot.mockReset();
     catalogStoreMocks.writeRegisterCatalogSnapshot.mockReset();
     catalogStoreMocks.writeRegisterServiceCatalogSnapshot.mockReset();
@@ -146,6 +172,35 @@ describe("catalogGateway", () => {
       value: null,
     });
     catalogStoreMocks.readRegisterCatalogSnapshot.mockResolvedValue({
+      ok: true,
+      value: null,
+    });
+    catalogStoreMocks.readRegisterCatalogSelection.mockResolvedValue({
+      ok: true,
+      value: null,
+    });
+    catalogStoreMocks.readRegisterCatalogVersionState.mockResolvedValue({
+      ok: true,
+      value: {
+        active: null,
+        activeRevision: null,
+        staged: null,
+        stagedRevision: null,
+      },
+    });
+    catalogStoreMocks.readRegisterCatalogPin.mockResolvedValue({
+      ok: true,
+      value: null,
+    });
+    catalogStoreMocks.pinRegisterCatalogVersion.mockResolvedValue({
+      ok: true,
+      value: null,
+    });
+    catalogStoreMocks.releaseRegisterCatalogPin.mockResolvedValue({
+      ok: true,
+      value: null,
+    });
+    catalogStoreMocks.renewRegisterCatalogPinLease.mockResolvedValue({
       ok: true,
       value: null,
     });
@@ -188,6 +243,12 @@ describe("catalogGateway", () => {
     });
   });
 
+  it("backs repeated full-snapshot failures into a quiet retry period", () => {
+    expect(
+      [0, 1, 2, 3, 4, 5].map(getRegisterCatalogRefreshRetryDelay),
+    ).toEqual([1_000, 2_000, 4_000, 8_000, 60_000, 60_000]);
+  });
+
   it("returns the cached register catalog snapshot without subscribing to full metadata", async () => {
     const cachedRows = [buildRegisterCatalogRow()];
     catalogStoreMocks.readRegisterCatalogSnapshot.mockResolvedValue({
@@ -205,7 +266,9 @@ describe("catalogGateway", () => {
     );
 
     await waitFor(() => expect(result.current).toEqual(cachedRows));
-    expect(convexMocks.useQuery).not.toHaveBeenCalled();
+    expect(
+      convexMocks.useQuery.mock.calls.every(([, args]) => args === "skip"),
+    ).toBe(true);
     expect(convexMocks.query).not.toHaveBeenCalled();
     expect(catalogStoreMocks.readRegisterCatalogSnapshot).toHaveBeenCalledWith({
       storeId: "store-1",
@@ -229,7 +292,9 @@ describe("catalogGateway", () => {
       expect(catalogStoreMocks.readRegisterCatalogSnapshot).toHaveBeenCalled(),
     );
     expect(result.current).toBeUndefined();
-    expect(convexMocks.useQuery).not.toHaveBeenCalled();
+    expect(
+      convexMocks.useQuery.mock.calls.every(([, args]) => args === "skip"),
+    ).toBe(true);
     expect(convexMocks.query).not.toHaveBeenCalled();
   });
 
@@ -298,7 +363,9 @@ describe("catalogGateway", () => {
     );
 
     await waitFor(() => expect(result.current).toEqual(refreshedRows));
-    expect(convexMocks.useQuery).not.toHaveBeenCalled();
+    expect(
+      convexMocks.useQuery.mock.calls.every(([, args]) => args === "skip"),
+    ).toBe(true);
     expect(convexMocks.query).toHaveBeenCalledWith(expect.anything(), {
       storeId: "store-1",
     });
@@ -578,6 +645,651 @@ describe("catalogGateway", () => {
         status: "ready",
       }),
     );
+  });
+
+  it("observes a tiny revision and promotes one durable refresh while idle", async () => {
+    const priorRows = [buildRegisterCatalogRow({ sku: "DW-OLD" })];
+    const refreshedRows = [buildRegisterCatalogRow({ sku: "DW-NEW" })];
+    const priorVersion = {
+      persistedAt: 1_000,
+      revision: 1,
+      rows: priorRows,
+      schemaVersion: 9,
+      storeId: "store-1",
+    };
+    const refreshedVersion = {
+      ...priorVersion,
+      revision: 2,
+      rows: refreshedRows,
+    };
+    convexMocks.useQuery.mockReturnValue({ revision: 2, status: "ready" });
+    convexMocks.query.mockResolvedValue({ revision: 2, rows: refreshedRows });
+    catalogStoreMocks.readRegisterCatalogSelection.mockResolvedValue({
+      ok: true,
+      value: priorVersion,
+    });
+    catalogStoreMocks.readRegisterCatalogVersionState.mockResolvedValue({
+      ok: true,
+      value: {
+        active: priorVersion,
+        activeRevision: 1,
+        staged: null,
+        stagedRevision: null,
+      },
+    });
+    catalogStoreMocks.stageRegisterCatalogVersion.mockResolvedValue({
+      ok: true,
+      value: { revision: 2, status: "staged", version: refreshedVersion },
+    });
+    catalogStoreMocks.promoteRegisterCatalogVersion.mockResolvedValue({
+      ok: true,
+      value: { revision: 2, status: "promoted", version: refreshedVersion },
+    });
+
+    const { result } = renderHook(() =>
+      useConvexRegisterCatalogState({
+        registerRefresh: {
+          isOperationallyIdle: true,
+          terminalId: "terminal-1",
+        },
+        storeId: "store-1" as Id<"store">,
+      }),
+    );
+
+    await waitFor(() => expect(result.current.rows).toEqual(refreshedRows));
+    expect(convexMocks.useQuery).toHaveBeenCalledWith(expect.anything(), {
+      storeId: "store-1",
+    });
+    expect(convexMocks.query).toHaveBeenCalledWith(expect.anything(), {
+      storeId: "store-1",
+    });
+    expect(catalogStoreMocks.stageRegisterCatalogVersion).toHaveBeenCalledWith({
+      revision: 2,
+      rows: refreshedRows,
+      storeId: "store-1",
+    });
+    expect(
+      catalogStoreMocks.promoteRegisterCatalogVersion,
+    ).toHaveBeenCalledWith({
+      revision: 2,
+      storeId: "store-1",
+    });
+    expect(result.current).toMatchObject({
+      appliedRevision: 2,
+      catalogRefreshStatus: "current",
+      observedRevision: 2,
+      source: "refresh",
+      status: "ready",
+    });
+  });
+
+  it("defers the full read while the register is busy and keeps trusted rows", async () => {
+    const priorRows = [buildRegisterCatalogRow({ sku: "DW-PINNED" })];
+    const priorVersion = {
+      persistedAt: 1_000,
+      revision: 1,
+      rows: priorRows,
+      schemaVersion: 9,
+      storeId: "store-1",
+    };
+    convexMocks.useQuery.mockReturnValue({ revision: 3, status: "ready" });
+    catalogStoreMocks.readRegisterCatalogSelection.mockResolvedValue({
+      ok: true,
+      value: priorVersion,
+    });
+
+    const { result } = renderHook(() =>
+      useConvexRegisterCatalogState({
+        registerRefresh: {
+          isOperationallyIdle: false,
+          terminalId: "terminal-1",
+        },
+        storeId: "store-1" as Id<"store">,
+      }),
+    );
+
+    await waitFor(() => expect(result.current.rows).toEqual(priorRows));
+    expect(result.current).toMatchObject({
+      appliedRevision: 1,
+      catalogRefreshStatus: "waiting-busy",
+      observedRevision: 3,
+    });
+    expect(convexMocks.query).not.toHaveBeenCalled();
+    expect(
+      catalogStoreMocks.stageRegisterCatalogVersion,
+    ).not.toHaveBeenCalled();
+    expect(
+      catalogStoreMocks.promoteRegisterCatalogVersion,
+    ).not.toHaveBeenCalled();
+    expect(catalogStoreMocks.pinRegisterCatalogVersion).not.toHaveBeenCalled();
+  });
+
+  it("renews the mounted owner's pin lease only while the register is non-idle", async () => {
+    const clearIntervalSpy = vi.spyOn(globalThis, "clearInterval");
+    const priorRows = [buildRegisterCatalogRow({ sku: "DW-PINNED" })];
+    convexMocks.useQuery.mockReturnValue({ revision: 1, status: "ready" });
+    catalogStoreMocks.readRegisterCatalogSelection.mockResolvedValue({
+      ok: true,
+      value: {
+        persistedAt: 1_000,
+        revision: 1,
+        rows: priorRows,
+        schemaVersion: 9,
+        storeId: "store-1",
+      },
+    });
+
+    const { rerender } = renderHook(
+      ({ isIdle }) =>
+        useConvexRegisterCatalogState({
+          registerRefresh: {
+            isOperationallyIdle: isIdle,
+            ownerId: "runtime-owner-1",
+            terminalId: "terminal-1",
+          },
+          storeId: "store-1" as Id<"store">,
+        }),
+      { initialProps: { isIdle: false } },
+    );
+
+    await waitFor(() =>
+      expect(
+        catalogStoreMocks.renewRegisterCatalogPinLease,
+      ).toHaveBeenCalledWith({
+        ownerId: "runtime-owner-1",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    );
+
+    rerender({ isIdle: true });
+    await waitFor(() => expect(clearIntervalSpy).toHaveBeenCalled());
+    clearIntervalSpy.mockRestore();
+  });
+
+  it("releases the runtime pin only after the register returns to idle", async () => {
+    const priorRows = [buildRegisterCatalogRow({ sku: "DW-PINNED" })];
+    const priorVersion = {
+      persistedAt: 1_000,
+      revision: 1,
+      rows: priorRows,
+      schemaVersion: 9,
+      storeId: "store-1",
+    };
+    convexMocks.useQuery.mockReturnValue({ revision: 1, status: "ready" });
+    catalogStoreMocks.readRegisterCatalogSelection.mockResolvedValue({
+      ok: true,
+      value: priorVersion,
+    });
+    catalogStoreMocks.readRegisterCatalogPin.mockResolvedValue({
+      ok: true,
+      value: {
+        pinnedAt: 900,
+        revision: 1,
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      },
+    });
+
+    const { rerender } = renderHook(
+      ({ isIdle }) =>
+        useConvexRegisterCatalogState({
+          registerRefresh: {
+            isOperationallyIdle: isIdle,
+            terminalId: "terminal-1",
+          },
+          storeId: "store-1" as Id<"store">,
+        }),
+      { initialProps: { isIdle: false } },
+    );
+
+    await waitFor(() =>
+      expect(catalogStoreMocks.readRegisterCatalogSelection).toHaveBeenCalled(),
+    );
+    expect(catalogStoreMocks.pinRegisterCatalogVersion).not.toHaveBeenCalled();
+    expect(catalogStoreMocks.releaseRegisterCatalogPin).not.toHaveBeenCalled();
+
+    rerender({ isIdle: true });
+
+    await waitFor(() =>
+      expect(
+        catalogStoreMocks.releaseRegisterCatalogPin,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          ownerId: expect.stringMatching(/^register-runtime-/),
+          storeId: "store-1",
+          terminalId: "terminal-1",
+        }),
+      ),
+    );
+  });
+
+  it("never exposes fetched rows when durable staging fails", async () => {
+    const priorRows = [buildRegisterCatalogRow({ sku: "DW-TRUSTED" })];
+    const incomingRows = [buildRegisterCatalogRow({ sku: "DW-UNPERSISTED" })];
+    const priorVersion = {
+      persistedAt: 1_000,
+      revision: 1,
+      rows: priorRows,
+      schemaVersion: 9,
+      storeId: "store-1",
+    };
+    convexMocks.useQuery.mockReturnValue({ revision: 2, status: "ready" });
+    convexMocks.query.mockResolvedValue({ revision: 2, rows: incomingRows });
+    catalogStoreMocks.readRegisterCatalogSelection.mockResolvedValue({
+      ok: true,
+      value: priorVersion,
+    });
+    catalogStoreMocks.stageRegisterCatalogVersion.mockResolvedValue({
+      ok: false,
+      error: { code: "write_failed", message: "disk full" },
+    });
+
+    const { result } = renderHook(() =>
+      useConvexRegisterCatalogState({
+        registerRefresh: {
+          isOperationallyIdle: true,
+          terminalId: "terminal-1",
+        },
+        storeId: "store-1" as Id<"store">,
+      }),
+    );
+
+    await waitFor(() =>
+      expect(result.current.catalogRefreshStatus).toBe("retry-delayed"),
+    );
+    expect(result.current.rows).toEqual(priorRows);
+    expect(result.current.rows).not.toEqual(incomingRows);
+    expect(
+      catalogStoreMocks.promoteRegisterCatalogVersion,
+    ).not.toHaveBeenCalled();
+  });
+
+  it("keeps prior rows when sale work starts during the promotion commit", async () => {
+    const priorRows = [buildRegisterCatalogRow({ sku: "DW-PRIOR" })];
+    const incomingRows = [buildRegisterCatalogRow({ sku: "DW-INCOMING" })];
+    const priorVersion = {
+      persistedAt: 1_000,
+      revision: 1,
+      rows: priorRows,
+      schemaVersion: 9,
+      storeId: "store-1",
+    };
+    const incomingVersion = {
+      ...priorVersion,
+      revision: 2,
+      rows: incomingRows,
+    };
+    let resolvePromotion!: (value: unknown) => void;
+    convexMocks.useQuery.mockReturnValue({ revision: 2, status: "ready" });
+    convexMocks.query.mockResolvedValue({ revision: 2, rows: incomingRows });
+    catalogStoreMocks.readRegisterCatalogSelection.mockResolvedValue({
+      ok: true,
+      value: priorVersion,
+    });
+    catalogStoreMocks.stageRegisterCatalogVersion.mockResolvedValue({
+      ok: true,
+      value: { revision: 2, status: "staged", version: incomingVersion },
+    });
+    catalogStoreMocks.promoteRegisterCatalogVersion.mockImplementation(
+      () => new Promise((resolve) => (resolvePromotion = resolve)),
+    );
+
+    const { result } = renderHook(() =>
+      useConvexRegisterCatalogState({
+        registerRefresh: {
+          isOperationallyIdle: true,
+          isOperationallyIdleNow: () =>
+            !hasRegisterCatalogRuntimeActionGuard({
+              storeId: "store-1",
+              terminalId: "terminal-1",
+            }),
+          terminalId: "terminal-1",
+        },
+        storeId: "store-1" as Id<"store">,
+      }),
+    );
+
+    await waitFor(() =>
+      expect(
+        catalogStoreMocks.promoteRegisterCatalogVersion,
+      ).toHaveBeenCalled(),
+    );
+    expect(
+      captureRegisterCatalogRuntimePin({
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    ).toMatchObject({ revision: 1, rows: priorRows });
+    resolvePromotion({
+      ok: true,
+      value: { revision: 2, status: "promoted", version: incomingVersion },
+    });
+
+    await waitFor(() =>
+      expect(result.current.catalogRefreshStatus).toBe("waiting-busy"),
+    );
+    expect(result.current.rows).toEqual(priorRows);
+    clearRegisterCatalogRuntimeActionGuard({
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
+  });
+
+  it("pauses authorization failures without hot-looping until scope changes", async () => {
+    const priorRows = [buildRegisterCatalogRow({ sku: "DW-TRUSTED" })];
+    const priorVersion = {
+      persistedAt: 1_000,
+      revision: 1,
+      rows: priorRows,
+      schemaVersion: 9,
+      storeId: "store-1",
+    };
+    convexMocks.useQuery.mockReturnValue({ revision: 2, status: "ready" });
+    const refreshedRows = [buildRegisterCatalogRow({ sku: "DW-AUTHORIZED" })];
+    const refreshedVersion = {
+      ...priorVersion,
+      revision: 2,
+      rows: refreshedRows,
+    };
+    convexMocks.query
+      .mockRejectedValueOnce(new Error("Permission denied"))
+      .mockResolvedValueOnce({ revision: 2, rows: refreshedRows });
+    catalogStoreMocks.readRegisterCatalogSelection.mockResolvedValue({
+      ok: true,
+      value: priorVersion,
+    });
+
+    catalogStoreMocks.stageRegisterCatalogVersion.mockResolvedValue({
+      ok: true,
+      value: { revision: 2, status: "staged", version: refreshedVersion },
+    });
+    catalogStoreMocks.promoteRegisterCatalogVersion.mockResolvedValue({
+      ok: true,
+      value: { revision: 2, status: "promoted", version: refreshedVersion },
+    });
+
+    const { result, rerender } = renderHook(
+      ({ authScopeKey }) =>
+        useConvexRegisterCatalogState({
+          registerRefresh: {
+            authScopeKey,
+            isOperationallyIdle: true,
+            terminalId: "terminal-1",
+          },
+          storeId: "store-1" as Id<"store">,
+        }),
+      { initialProps: { authScopeKey: "user-1:1" } },
+    );
+
+    await waitFor(() =>
+      expect(result.current.catalogRefreshStatus).toBe("authorization-paused"),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(convexMocks.query).toHaveBeenCalledTimes(1);
+    expect(result.current.rows).toEqual(priorRows);
+
+    rerender({ authScopeKey: "user-1:2" });
+
+    await waitFor(() =>
+      expect(result.current).toMatchObject({
+        catalogRefreshStatus: "current",
+        rows: refreshedRows,
+      }),
+    );
+    expect(convexMocks.query).toHaveBeenCalledTimes(2);
+  });
+
+  it("cancels transient retry backoff when the auth scope changes", async () => {
+    const priorRows = [buildRegisterCatalogRow({ sku: "DW-TRUSTED" })];
+    const refreshedRows = [buildRegisterCatalogRow({ sku: "DW-RECOVERED" })];
+    const priorVersion = {
+      persistedAt: 1_000,
+      revision: 1,
+      rows: priorRows,
+      schemaVersion: 9,
+      storeId: "store-1",
+    };
+    const refreshedVersion = {
+      ...priorVersion,
+      revision: 2,
+      rows: refreshedRows,
+    };
+    convexMocks.useQuery.mockReturnValue({ revision: 2, status: "ready" });
+    convexMocks.query
+      .mockRejectedValueOnce(new Error("Temporary service failure"))
+      .mockResolvedValueOnce({ revision: 2, rows: refreshedRows });
+    catalogStoreMocks.readRegisterCatalogSelection.mockResolvedValue({
+      ok: true,
+      value: priorVersion,
+    });
+    catalogStoreMocks.stageRegisterCatalogVersion.mockResolvedValue({
+      ok: true,
+      value: { revision: 2, status: "staged", version: refreshedVersion },
+    });
+    catalogStoreMocks.promoteRegisterCatalogVersion.mockResolvedValue({
+      ok: true,
+      value: { revision: 2, status: "promoted", version: refreshedVersion },
+    });
+
+    const { result, rerender } = renderHook(
+      ({ authScopeKey }) =>
+        useConvexRegisterCatalogState({
+          registerRefresh: {
+            authScopeKey,
+            isOperationallyIdle: true,
+            terminalId: "terminal-1",
+          },
+          storeId: "store-1" as Id<"store">,
+        }),
+      { initialProps: { authScopeKey: "user-1:1" } },
+    );
+
+    await waitFor(() =>
+      expect(result.current.catalogRefreshStatus).toBe("retry-delayed"),
+    );
+    expect(convexMocks.query).toHaveBeenCalledTimes(1);
+
+    rerender({ authScopeKey: "user-1:2" });
+
+    await waitFor(() =>
+      expect(result.current).toMatchObject({
+        catalogRefreshStatus: "current",
+        rows: refreshedRows,
+      }),
+    );
+    expect(convexMocks.query).toHaveBeenCalledTimes(2);
+  });
+
+  it("starts the new auth scope while the prior scope snapshot is still pending", async () => {
+    const priorRows = [buildRegisterCatalogRow({ sku: "DW-PRIOR" })];
+    const refreshedRows = [buildRegisterCatalogRow({ sku: "DW-NEW-SCOPE" })];
+    const priorVersion = {
+      persistedAt: 1_000,
+      revision: 1,
+      rows: priorRows,
+      schemaVersion: 9,
+      storeId: "store-1",
+    };
+    const refreshedVersion = {
+      ...priorVersion,
+      revision: 2,
+      rows: refreshedRows,
+    };
+    const pendingOldScope = new Promise<never>(() => undefined);
+    convexMocks.useQuery.mockReturnValue({ revision: 2, status: "ready" });
+    convexMocks.query
+      .mockReturnValueOnce(pendingOldScope)
+      .mockResolvedValueOnce({ revision: 2, rows: refreshedRows });
+    catalogStoreMocks.readRegisterCatalogSelection.mockResolvedValue({
+      ok: true,
+      value: priorVersion,
+    });
+    catalogStoreMocks.stageRegisterCatalogVersion.mockResolvedValue({
+      ok: true,
+      value: { revision: 2, status: "staged", version: refreshedVersion },
+    });
+    catalogStoreMocks.promoteRegisterCatalogVersion.mockResolvedValue({
+      ok: true,
+      value: { revision: 2, status: "promoted", version: refreshedVersion },
+    });
+
+    const { result, rerender } = renderHook(
+      ({ authScopeKey }) =>
+        useConvexRegisterCatalogState({
+          registerRefresh: {
+            authScopeKey,
+            isOperationallyIdle: true,
+            terminalId: "terminal-1",
+          },
+          storeId: "store-1" as Id<"store">,
+        }),
+      { initialProps: { authScopeKey: "user-1:1" } },
+    );
+
+    await waitFor(() => expect(convexMocks.query).toHaveBeenCalledTimes(1));
+    rerender({ authScopeKey: "user-1:2" });
+
+    await waitFor(() =>
+      expect(result.current).toMatchObject({
+        catalogRefreshStatus: "current",
+        rows: refreshedRows,
+      }),
+    );
+    expect(convexMocks.query).toHaveBeenCalledTimes(2);
+  });
+
+  it("rejects an old completion after returning through an A-B-A scope sequence", async () => {
+    const priorRows = [buildRegisterCatalogRow({ sku: "DW-PRIOR" })];
+    const staleRows = [buildRegisterCatalogRow({ sku: "DW-STALE-A" })];
+    const currentRows = [buildRegisterCatalogRow({ sku: "DW-CURRENT-A" })];
+    const priorVersion = {
+      persistedAt: 1_000,
+      revision: 1,
+      rows: priorRows,
+      schemaVersion: 9,
+      storeId: "store-1",
+    };
+    const currentVersion = {
+      ...priorVersion,
+      revision: 2,
+      rows: currentRows,
+    };
+    let resolveOldA!: (value: { revision: number; rows: PosRegisterCatalogRowDto[] }) => void;
+    const oldA = new Promise<{ revision: number; rows: PosRegisterCatalogRowDto[] }>(
+      (resolve) => (resolveOldA = resolve),
+    );
+    const pendingB = new Promise<never>(() => undefined);
+    convexMocks.useQuery.mockReturnValue({ revision: 2, status: "ready" });
+    convexMocks.query
+      .mockReturnValueOnce(oldA)
+      .mockReturnValueOnce(pendingB)
+      .mockResolvedValueOnce({ revision: 2, rows: currentRows });
+    catalogStoreMocks.readRegisterCatalogSelection.mockResolvedValue({
+      ok: true,
+      value: priorVersion,
+    });
+    catalogStoreMocks.stageRegisterCatalogVersion.mockResolvedValue({
+      ok: true,
+      value: { revision: 2, status: "staged", version: currentVersion },
+    });
+    catalogStoreMocks.promoteRegisterCatalogVersion.mockResolvedValue({
+      ok: true,
+      value: { revision: 2, status: "promoted", version: currentVersion },
+    });
+
+    const { result, rerender } = renderHook(
+      ({ authScopeKey }) =>
+        useConvexRegisterCatalogState({
+          registerRefresh: {
+            authScopeKey,
+            isOperationallyIdle: true,
+            terminalId: "terminal-1",
+          },
+          storeId: "store-1" as Id<"store">,
+        }),
+      { initialProps: { authScopeKey: "scope-a" } },
+    );
+
+    await waitFor(() => expect(convexMocks.query).toHaveBeenCalledTimes(1));
+    rerender({ authScopeKey: "scope-b" });
+    await waitFor(() => expect(convexMocks.query).toHaveBeenCalledTimes(2));
+    rerender({ authScopeKey: "scope-a" });
+    await waitFor(() => expect(convexMocks.query).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(result.current.rows).toEqual(currentRows));
+
+    await act(async () => {
+      resolveOldA({ revision: 1, rows: staleRows });
+      await Promise.resolve();
+    });
+    expect(catalogStoreMocks.stageRegisterCatalogVersion).not.toHaveBeenCalledWith(
+      expect.objectContaining({ rows: staleRows }),
+    );
+    expect(result.current.rows).toEqual(currentRows);
+  });
+
+  it("projects reactive authorization pause and resumes in the same scope when access returns", async () => {
+    let revisionSignal:
+      | { status: "authorization-paused" }
+      | { revision: number; status: "ready" } = {
+      status: "authorization-paused",
+    };
+    const trustedRows = [buildRegisterCatalogRow({ sku: "DW-TRUSTED" })];
+    const refreshedRows = [buildRegisterCatalogRow({ sku: "DW-RESTORED" })];
+    const refreshedVersion = {
+      persistedAt: 2_000,
+      revision: 2,
+      rows: refreshedRows,
+      schemaVersion: 9,
+      storeId: "store-1",
+    };
+    convexMocks.useQuery.mockImplementation(() => revisionSignal);
+    convexMocks.query.mockResolvedValue({ revision: 2, rows: refreshedRows });
+    catalogStoreMocks.readRegisterCatalogSelection.mockResolvedValue({
+      ok: true,
+      value: {
+        persistedAt: 1_000,
+        revision: 1,
+        rows: trustedRows,
+        schemaVersion: 9,
+        storeId: "store-1",
+      },
+    });
+    catalogStoreMocks.stageRegisterCatalogVersion.mockResolvedValue({
+      ok: true,
+      value: { revision: 2, status: "staged", version: refreshedVersion },
+    });
+    catalogStoreMocks.promoteRegisterCatalogVersion.mockResolvedValue({
+      ok: true,
+      value: { revision: 2, status: "promoted", version: refreshedVersion },
+    });
+
+    const { result, rerender } = renderHook(() =>
+      useConvexRegisterCatalogState({
+        registerRefresh: {
+          authScopeKey: "user-1:1",
+          isOperationallyIdle: true,
+          terminalId: "terminal-1",
+        },
+        storeId: "store-1" as Id<"store">,
+      }),
+    );
+
+    await waitFor(() =>
+      expect(result.current.catalogRefreshStatus).toBe("authorization-paused"),
+    );
+    expect(convexMocks.query).not.toHaveBeenCalled();
+
+    revisionSignal = { revision: 2, status: "ready" };
+    rerender();
+
+    await waitFor(() =>
+      expect(result.current).toMatchObject({
+        catalogRefreshStatus: "current",
+        rows: refreshedRows,
+      }),
+    );
+    expect(convexMocks.query).toHaveBeenCalledTimes(1);
   });
 
   it("refreshes register catalog metadata once during POS prewarm without a live subscription", async () => {

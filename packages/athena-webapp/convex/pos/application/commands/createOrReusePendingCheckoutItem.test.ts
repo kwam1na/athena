@@ -9,7 +9,12 @@ import {
 } from "./createOrReusePendingCheckoutItem";
 
 const mocks = vi.hoisted(() => ({
+  advanceRegisterCatalogRevision: vi.fn(),
   upsertProductSkuSearchProjection: vi.fn(),
+}));
+
+vi.mock("../sync/registerCatalogRevision", () => ({
+  advanceRegisterCatalogRevision: mocks.advanceRegisterCatalogRevision,
 }));
 
 vi.mock("../../../inventory/skuSearch", () => ({
@@ -170,6 +175,7 @@ const baseSeed = {
 
 describe("createOrReusePendingCheckoutItem", () => {
   beforeEach(() => {
+    mocks.advanceRegisterCatalogRevision.mockReset();
     mocks.upsertProductSkuSearchProjection.mockReset();
   });
 
@@ -231,7 +237,12 @@ describe("createOrReusePendingCheckoutItem", () => {
     expect(mocks.upsertProductSkuSearchProjection).toHaveBeenCalledWith(
       ctx,
       "productSku001",
+      { advanceRevision: false },
     );
+    expect(mocks.advanceRegisterCatalogRevision).toHaveBeenCalledWith(ctx, {
+      didChange: true,
+      storeId: "storezzzz",
+    });
 
     const item = Array.from(tables.posPendingCheckoutItem.values())[0];
     expect(item).toMatchObject({
@@ -544,6 +555,34 @@ describe("createOrReusePendingCheckoutItem", () => {
     });
   });
 
+  it("does not touch the catalog revision when reuse changes only sale evidence", async () => {
+    const { ctx } = createPendingCheckoutCtx(baseSeed);
+    const input = {
+      createdByUserId: "user0001" as Id<"athenaUser">,
+      lookupCode: "556677",
+      name: "Pending item",
+      price: 30_000,
+      quantitySold: 1,
+      source: "offline_sync" as const,
+      storeId: "storezzzz" as Id<"store">,
+    };
+
+    await createOrReusePendingCheckoutItem(ctx, {
+      ...input,
+      localEventId: "define-event-1",
+      timestamp: 1_000,
+    });
+    mocks.advanceRegisterCatalogRevision.mockReset();
+
+    await createOrReusePendingCheckoutItem(ctx, {
+      ...input,
+      localEventId: "define-event-2",
+      timestamp: 2_000,
+    });
+
+    expect(mocks.advanceRegisterCatalogRevision).not.toHaveBeenCalled();
+  });
+
   it("records sold evidence only after a pending checkout line is committed", async () => {
     const { ctx, tables } = createPendingCheckoutCtx({
       ...baseSeed,
@@ -571,6 +610,7 @@ describe("createOrReusePendingCheckoutItem", () => {
       timestamp: 1_000,
     });
 
+    mocks.advanceRegisterCatalogRevision.mockReset();
     await recordPendingCheckoutItemSaleEvidence(ctx, {
       actorStaffProfileId: "staff0001" as Id<"staffProfile">,
       actorUserId: "user0001" as Id<"athenaUser">,
@@ -585,6 +625,8 @@ describe("createOrReusePendingCheckoutItem", () => {
       terminalId: "terminal-1" as Id<"posTerminal">,
       timestamp: 2_000,
     });
+
+    expect(mocks.advanceRegisterCatalogRevision).not.toHaveBeenCalled();
 
     const item = Array.from(tables.posPendingCheckoutItem.values())[0];
     expect(item.evidence).toMatchObject({

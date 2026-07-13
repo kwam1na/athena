@@ -1,6 +1,6 @@
 import { useConvex, useMutation, useQuery } from "convex/react";
 import type { FunctionReference } from "convex/server";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type {
   PosBarcodeLookupInput,
@@ -16,6 +16,11 @@ import type {
 import type { PosCatalogReader } from "@/lib/pos/application/ports";
 import type { PosLocalRegisterCatalogSnapshot } from "@/lib/pos/application/posLocalStoreTypes";
 import { getDefaultPosLocalStore } from "@/lib/pos/infrastructure/local/posLocalStorageRuntime";
+import {
+  clearRegisterCatalogRuntimeSelection,
+  getRegisterCatalogRuntimeOwnerId,
+  setRegisterCatalogRuntimeSelection,
+} from "@/lib/pos/infrastructure/local/registerCatalogPinRuntime";
 import {
   type RegisterAvailabilitySnapshotState,
   readRegisterAvailabilitySnapshotState,
@@ -152,6 +157,47 @@ function coordinateCatalogRefresh<Rows, Persisted>({
   return promise;
 }
 
+const REGISTER_CATALOG_REFRESH_RETRY_BASE_DELAY_MS = 1_000;
+const REGISTER_CATALOG_REFRESH_RETRY_MAX_DELAY_MS = 8_000;
+const REGISTER_CATALOG_REFRESH_RETRY_QUIET_DELAY_MS = 60_000;
+const REGISTER_CATALOG_REFRESH_RAPID_RETRY_LIMIT = 4;
+const REGISTER_CATALOG_PIN_HEARTBEAT_MS = 5 * 60 * 1_000;
+const REGISTER_CATALOG_MIN_REFRESH_INTERVAL_MS = 5_000;
+
+export function getRegisterCatalogRefreshRetryDelay(attempt: number) {
+  return attempt >= REGISTER_CATALOG_REFRESH_RAPID_RETRY_LIMIT
+    ? REGISTER_CATALOG_REFRESH_RETRY_QUIET_DELAY_MS
+    : Math.min(
+        REGISTER_CATALOG_REFRESH_RETRY_BASE_DELAY_MS * 2 ** attempt,
+        REGISTER_CATALOG_REFRESH_RETRY_MAX_DELAY_MS,
+      );
+}
+
+type RegisterCatalogRevisionQuery = FunctionReference<
+  "query",
+  "public",
+  { storeId: Id<"store"> },
+  { status: "authorization-paused" } | { revision: number; status: "ready" }
+>;
+
+type RegisterCatalogRevisionedSnapshotQuery = FunctionReference<
+  "query",
+  "public",
+  { storeId: Id<"store"> },
+  { revision: number; rows: PosRegisterCatalogRowDto[] }
+>;
+
+const registerCatalogApi = api as unknown as {
+  pos: {
+    public: {
+      catalog: {
+        getRegisterCatalogRevision: RegisterCatalogRevisionQuery;
+        listRegisterCatalogSnapshotWithRevision: RegisterCatalogRevisionedSnapshotQuery;
+      };
+    };
+  };
+};
+
 type RegisterServiceCatalogSnapshotQuery = FunctionReference<
   "query",
   "public",
@@ -197,35 +243,58 @@ type RegisterCatalogAvailabilityGatewayState =
 
 type RegisterCatalogMetadataGatewayState =
   | {
+      appliedRevision?: number | "legacy";
+      catalogRefreshStatus?: RegisterCatalogRefreshStatus;
+      observedRevision?: number;
       refreshedAt: number;
       rows: PosRegisterCatalogRowDto[];
       source: "local" | "refresh";
       status: "ready";
     }
   | {
+      appliedRevision?: number | "legacy";
+      catalogRefreshStatus?: RegisterCatalogRefreshStatus;
+      observedRevision?: number;
       refreshedAt?: number;
       rows?: PosRegisterCatalogRowDto[];
       source: "local" | "none";
       status: "refreshing";
     }
   | {
+      appliedRevision?: number | "legacy";
+      catalogRefreshStatus?: RegisterCatalogRefreshStatus;
+      observedRevision?: number;
       rows?: undefined;
       source: "none";
       status: "loading" | "missing";
     }
   | {
+      appliedRevision?: number | "legacy";
+      catalogRefreshStatus?: RegisterCatalogRefreshStatus;
+      observedRevision?: number;
       error: unknown;
       rows?: undefined;
       source: "none";
       status: "local-store-failure";
     }
   | {
+      appliedRevision?: number | "legacy";
+      catalogRefreshStatus?: RegisterCatalogRefreshStatus;
+      observedRevision?: number;
       error: unknown;
       refreshedAt?: number;
       rows?: PosRegisterCatalogRowDto[];
       source: "local" | "none";
       status: "refresh-failed";
     };
+
+export type RegisterCatalogRefreshStatus =
+  | "current"
+  | "waiting-busy"
+  | "waiting-offline"
+  | "refreshing"
+  | "retry-delayed"
+  | "authorization-paused";
 
 type ProductByIdResult = {
   _id: Id<"product">;
@@ -281,6 +350,30 @@ function mapProductByIdResult(
   }));
 }
 
+function useBrowserOnlineStatus() {
+  const [isOnline, setIsOnline] = useState(() =>
+    typeof navigator === "undefined" ? true : navigator.onLine,
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const update = () => setIsOnline(navigator.onLine);
+    window.addEventListener("online", update);
+    window.addEventListener("offline", update);
+    return () => {
+      window.removeEventListener("online", update);
+      window.removeEventListener("offline", update);
+    };
+  }, []);
+
+  return isOnline;
+}
+
+function isAuthorizationError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return /unauth|forbidden|permission|access denied/i.test(message);
+}
+
 export function useConvexRegisterCatalog(
   input: PosRegisterCatalogInput,
 ): PosRegisterCatalogRowDto[] | undefined {
@@ -295,12 +388,64 @@ export function useConvexRegisterCatalogState(
   const convex = useConvex();
   const refreshKey = String(input.metadataRefreshKey ?? "");
   const shouldRefresh = Boolean(input.refreshMetadataSnapshot);
+  const registerRefresh = input.registerRefresh;
+  const isRegisterRefresh = Boolean(registerRefresh);
+  const registerTerminalId = registerRefresh?.terminalId;
+  const generatedRuntimeOwnerIdRef = useRef<string | undefined>(undefined);
+  if (registerRefresh && !generatedRuntimeOwnerIdRef.current) {
+    generatedRuntimeOwnerIdRef.current = getRegisterCatalogRuntimeOwnerId();
+  }
+  const registerRuntimeOwnerId =
+    registerRefresh?.ownerId ?? generatedRuntimeOwnerIdRef.current;
+  const isOperationallyIdle = registerRefresh?.isOperationallyIdle ?? false;
   const storeId = input.storeId;
+  const isOnline = useBrowserOnlineStatus();
+  const revisionSignal = useQuery(
+    registerCatalogApi.pos.public.catalog.getRegisterCatalogRevision,
+    storeId && isRegisterRefresh ? { storeId } : "skip",
+  ) as
+    | { status: "authorization-paused" }
+    | { revision: number; status: "ready" }
+    | undefined;
+  const observedRevision =
+    revisionSignal?.status === "ready" ? revisionSignal.revision : undefined;
+  const revisionAuthorizationPaused =
+    revisionSignal?.status === "authorization-paused";
+  const appliedRevisionRef = useRef<number | "legacy" | null>(null);
+  const authorizationPausedScopeRef = useRef<string | null>(null);
+  const revisionAuthorizationWasPausedRef = useRef(false);
+  const hydratedScopeRef = useRef<string | null>(null);
+  const inFlightAttemptRef = useRef<{ scopeKey: string } | null>(null);
+  const lastRefreshAtRef = useRef(0);
+  const retryAttemptRef = useRef(0);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const retryScopeRef = useRef<string | null>(null);
+  const previousOperationalIdleRef = useRef<boolean | null>(null);
+  const [reconcileTick, setReconcileTick] = useState(0);
+  const scopeKey = `${String(storeId ?? "")}:${registerTerminalId ?? ""}:${registerRefresh?.authScopeKey ?? ""}:${registerRuntimeOwnerId ?? ""}`;
+  const currentScopeRef = useRef(scopeKey);
+  const idleRef = useRef(isOperationallyIdle);
+  const readIdleNowRef = useRef(registerRefresh?.isOperationallyIdleNow);
+  currentScopeRef.current = scopeKey;
+  idleRef.current = isOperationallyIdle;
+  readIdleNowRef.current = registerRefresh?.isOperationallyIdleNow;
   const [state, setState] = useState<RegisterCatalogMetadataGatewayState>(() =>
     shouldRefresh
       ? { rows: undefined, source: "none", status: "refreshing" }
       : { source: "none", status: "loading" },
   );
+
+  useEffect(() => {
+    if (retryScopeRef.current === scopeKey) return;
+    if (retryTimerRef.current) {
+      clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = null;
+    }
+    retryScopeRef.current = scopeKey;
+    retryAttemptRef.current = 0;
+    lastRefreshAtRef.current = 0;
+    authorizationPausedScopeRef.current = null;
+  }, [scopeKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -325,13 +470,41 @@ export function useConvexRegisterCatalogState(
 
     void (async () => {
       const result =
-        await getDefaultPosLocalStore().readRegisterCatalogSnapshot({
-          storeId,
-        });
+        isRegisterRefresh && registerTerminalId
+          ? await getDefaultPosLocalStore().readRegisterCatalogSelection({
+              ownerId: registerRuntimeOwnerId,
+              storeId,
+              terminalId: registerTerminalId,
+            })
+          : await getDefaultPosLocalStore().readRegisterCatalogSnapshot({
+              storeId,
+            });
 
       if (cancelled) return;
       if (result.ok && result.value) {
         const snapshot = result.value;
+        if ("revision" in snapshot) {
+          appliedRevisionRef.current = snapshot.revision;
+          hydratedScopeRef.current = scopeKey;
+          if (registerTerminalId) {
+            setRegisterCatalogRuntimeSelection({
+              revision: snapshot.revision,
+              rows: snapshot.rows,
+              storeId,
+              terminalId: registerTerminalId,
+            });
+          }
+          setState({
+            appliedRevision: snapshot.revision,
+            catalogRefreshStatus: "current",
+            refreshedAt: snapshot.persistedAt,
+            rows: snapshot.rows,
+            source: "local",
+            status: "ready",
+          });
+          setReconcileTick((current) => current + 1);
+          return;
+        }
         if (shouldRefresh) {
           setState((current) =>
             current.status === "ready" && current.source === "refresh"
@@ -355,6 +528,17 @@ export function useConvexRegisterCatalogState(
       }
 
       if (result.ok) {
+        if (isRegisterRefresh) {
+          appliedRevisionRef.current = null;
+          hydratedScopeRef.current = scopeKey;
+          setState({
+            catalogRefreshStatus: "current",
+            source: "none",
+            status: "missing",
+          });
+          setReconcileTick((current) => current + 1);
+          return;
+        }
         if (shouldRefresh) {
           setState((current) =>
             current.status === "ready" && current.source === "refresh"
@@ -393,10 +577,57 @@ export function useConvexRegisterCatalogState(
     return () => {
       cancelled = true;
     };
-  }, [shouldRefresh, storeId]);
+  }, [
+    isRegisterRefresh,
+    registerRuntimeOwnerId,
+    registerTerminalId,
+    scopeKey,
+    shouldRefresh,
+    storeId,
+  ]);
 
   useEffect(() => {
-    if (!storeId || !shouldRefresh) {
+    if (
+      !storeId ||
+      !registerTerminalId ||
+      !registerRuntimeOwnerId ||
+      !isRegisterRefresh ||
+      isOperationallyIdle
+    ) {
+      return;
+    }
+
+    const renewRegisterCatalogPinLease =
+      getDefaultPosLocalStore().renewRegisterCatalogPinLease;
+    if (!renewRegisterCatalogPinLease) return;
+    const ownerId = registerRuntimeOwnerId;
+    const activeStoreId = storeId;
+    const terminalId = registerTerminalId;
+    let cancelled = false;
+    const renewLease = async () => {
+      const result = await renewRegisterCatalogPinLease({
+        ownerId,
+        storeId: activeStoreId,
+        terminalId,
+      });
+      if (cancelled || result.ok) return;
+    };
+    void renewLease();
+    const interval = setInterval(() => void renewLease(), REGISTER_CATALOG_PIN_HEARTBEAT_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [
+    isOperationallyIdle,
+    isRegisterRefresh,
+    registerRuntimeOwnerId,
+    registerTerminalId,
+    storeId,
+  ]);
+
+  useEffect(() => {
+    if (!storeId || !shouldRefresh || isRegisterRefresh) {
       return;
     }
 
@@ -487,7 +718,377 @@ export function useConvexRegisterCatalogState(
     return () => {
       cancelled = true;
     };
-  }, [convex, refreshKey, shouldRefresh, storeId]);
+  }, [convex, isRegisterRefresh, refreshKey, shouldRefresh, storeId]);
+
+  useEffect(() => {
+    if (!storeId || !registerTerminalId || !isRegisterRefresh) return;
+
+    if (!isOperationallyIdle) {
+      previousOperationalIdleRef.current = false;
+      return;
+    }
+
+    const isIdleNow = () => readIdleNowRef.current?.() ?? idleRef.current;
+    if (!isIdleNow()) return;
+
+    const priorIdle = previousOperationalIdleRef.current;
+    previousOperationalIdleRef.current = true;
+
+    if (priorIdle === true) return;
+
+    let cancelled = false;
+    void (async () => {
+      const pinResult = await getDefaultPosLocalStore().readRegisterCatalogPin({
+        ownerId: registerRuntimeOwnerId,
+        storeId,
+        terminalId: registerTerminalId,
+      });
+      if (cancelled || !isIdleNow() || !pinResult.ok || !pinResult.value) return;
+
+      const releaseResult =
+        await getDefaultPosLocalStore().releaseRegisterCatalogPin({
+          ownerId: registerRuntimeOwnerId,
+          storeId,
+          terminalId: registerTerminalId,
+        });
+      if (cancelled || !isIdleNow() || !releaseResult.ok) return;
+
+      const selectionResult =
+        await getDefaultPosLocalStore().readRegisterCatalogSelection({
+          ownerId: registerRuntimeOwnerId,
+          storeId,
+          terminalId: registerTerminalId,
+        });
+      if (
+        cancelled ||
+        !isIdleNow() ||
+        !selectionResult.ok ||
+        !selectionResult.value
+      ) {
+        return;
+      }
+
+      const version = selectionResult.value;
+      appliedRevisionRef.current = version.revision;
+      setRegisterCatalogRuntimeSelection({
+        revision: version.revision,
+        rows: version.rows,
+        storeId,
+        terminalId: registerTerminalId,
+      });
+      setState({
+        appliedRevision: version.revision,
+        catalogRefreshStatus: "current",
+        observedRevision,
+        refreshedAt: version.persistedAt,
+        rows: version.rows,
+        source: "local",
+        status: "ready",
+      });
+      setReconcileTick((current) => current + 1);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    isOperationallyIdle,
+    isRegisterRefresh,
+    observedRevision,
+    registerRuntimeOwnerId,
+    registerTerminalId,
+    storeId,
+  ]);
+
+  useEffect(() => {
+    if (
+      storeId &&
+      isRegisterRefresh &&
+      revisionAuthorizationPaused &&
+      hydratedScopeRef.current === scopeKey
+    ) {
+      revisionAuthorizationWasPausedRef.current = true;
+      authorizationPausedScopeRef.current = scopeKey;
+      setState((current) => ({
+        ...current,
+        catalogRefreshStatus: "authorization-paused",
+      }));
+      return;
+    }
+
+    if (
+      observedRevision !== undefined &&
+      revisionAuthorizationWasPausedRef.current &&
+      authorizationPausedScopeRef.current === scopeKey
+    ) {
+      revisionAuthorizationWasPausedRef.current = false;
+      authorizationPausedScopeRef.current = null;
+    }
+
+    if (
+      !storeId ||
+      !registerRuntimeOwnerId ||
+      !registerTerminalId ||
+      !isRegisterRefresh ||
+      observedRevision === undefined ||
+      hydratedScopeRef.current !== scopeKey
+    ) {
+      return;
+    }
+
+    const activeOwnerId = registerRuntimeOwnerId;
+    const activeTerminalId = registerTerminalId;
+
+    const appliedRevision = appliedRevisionRef.current;
+    const needsRefresh =
+      appliedRevision === null ||
+      appliedRevision === "legacy" ||
+      observedRevision > appliedRevision;
+
+    if (!needsRefresh) {
+      setState((current) => ({
+        ...current,
+        appliedRevision: appliedRevision ?? undefined,
+        catalogRefreshStatus: "current",
+        observedRevision,
+      }));
+      return;
+    }
+
+    const isIdleNow = () => readIdleNowRef.current?.() ?? idleRef.current;
+
+    if (!isIdleNow()) {
+      setState((current) => ({
+        ...current,
+        appliedRevision: appliedRevision ?? undefined,
+        catalogRefreshStatus: "waiting-busy",
+        observedRevision,
+      }));
+      return;
+    }
+
+    if (!isOnline) {
+      setState((current) => ({
+        ...current,
+        appliedRevision: appliedRevision ?? undefined,
+        catalogRefreshStatus: "waiting-offline",
+        observedRevision,
+      }));
+      return;
+    }
+
+    if (
+      inFlightAttemptRef.current?.scopeKey === scopeKey ||
+      retryTimerRef.current ||
+      authorizationPausedScopeRef.current === scopeKey
+    ) {
+      return;
+    }
+
+    const elapsed = Date.now() - lastRefreshAtRef.current;
+    if (
+      lastRefreshAtRef.current > 0 &&
+      elapsed < REGISTER_CATALOG_MIN_REFRESH_INTERVAL_MS
+    ) {
+      if (!retryTimerRef.current) {
+        retryTimerRef.current = setTimeout(() => {
+          retryTimerRef.current = null;
+          setReconcileTick((current) => current + 1);
+        }, REGISTER_CATALOG_MIN_REFRESH_INTERVAL_MS - elapsed);
+      }
+      setState((current) => ({
+        ...current,
+        appliedRevision: appliedRevision ?? undefined,
+        catalogRefreshStatus: "refreshing",
+        observedRevision,
+      }));
+      return;
+    }
+
+    const attemptScope = scopeKey;
+    const attempt = { scopeKey: attemptScope };
+    inFlightAttemptRef.current = attempt;
+    const isAttemptCurrent = () =>
+      currentScopeRef.current === attemptScope &&
+      inFlightAttemptRef.current === attempt;
+    setState((current) => ({
+      ...current,
+      appliedRevision: appliedRevision ?? undefined,
+      catalogRefreshStatus: "refreshing",
+      observedRevision,
+    }));
+
+    void (async () => {
+      try {
+        const envelope = await convex.query(
+          registerCatalogApi.pos.public.catalog
+            .listRegisterCatalogSnapshotWithRevision,
+          { storeId },
+        );
+        if (!isAttemptCurrent()) return;
+
+        if (!isIdleNow()) {
+          setState((current) => ({
+            ...current,
+            catalogRefreshStatus: "waiting-busy",
+            observedRevision,
+          }));
+          return;
+        }
+
+        const stageResult =
+          await getDefaultPosLocalStore().stageRegisterCatalogVersion({
+            revision: envelope.revision,
+            rows: envelope.rows,
+            storeId,
+          });
+        if (!isAttemptCurrent()) return;
+        if (!stageResult.ok) throw stageResult.error;
+
+        if (!isIdleNow()) {
+          setState((current) => ({
+            ...current,
+            catalogRefreshStatus: "waiting-busy",
+            observedRevision,
+          }));
+          return;
+        }
+
+        const promoteResult =
+          await getDefaultPosLocalStore().promoteRegisterCatalogVersion({
+            revision: stageResult.value.revision as number,
+            storeId,
+          });
+        if (!isAttemptCurrent()) return;
+        if (!promoteResult.ok) throw promoteResult.error;
+        if (!isIdleNow()) {
+          setState((current) => ({
+            ...current,
+            catalogRefreshStatus: "waiting-busy",
+            observedRevision,
+          }));
+          return;
+        }
+
+        const activePinResult =
+          await getDefaultPosLocalStore().readRegisterCatalogPin({
+            ownerId: activeOwnerId,
+            storeId,
+            terminalId: activeTerminalId,
+          });
+        if (!isAttemptCurrent()) return;
+        if (!activePinResult.ok) throw activePinResult.error;
+        const selectedResult = activePinResult.value
+          ? await getDefaultPosLocalStore().readRegisterCatalogSelection({
+              ownerId: activeOwnerId,
+              storeId,
+              terminalId: activeTerminalId,
+            })
+          : null;
+        if (!isAttemptCurrent()) return;
+        if (selectedResult && !selectedResult.ok) throw selectedResult.error;
+        const selectedVersion = selectedResult?.value;
+        if (
+          selectedVersion &&
+          selectedVersion.revision !== promoteResult.value.version.revision
+        ) {
+          appliedRevisionRef.current = selectedVersion.revision;
+          setState({
+            appliedRevision: selectedVersion.revision,
+            catalogRefreshStatus: "waiting-busy",
+            observedRevision,
+            refreshedAt: selectedVersion.persistedAt,
+            rows: selectedVersion.rows,
+            source: "local",
+            status: "ready",
+          });
+          return;
+        }
+
+        const version = promoteResult.value.version;
+        authorizationPausedScopeRef.current = null;
+        appliedRevisionRef.current = version.revision;
+        if (registerTerminalId) {
+          setRegisterCatalogRuntimeSelection({
+            revision: version.revision,
+            rows: version.rows,
+            storeId,
+            terminalId: registerTerminalId,
+          });
+        }
+        lastRefreshAtRef.current = Date.now();
+        retryAttemptRef.current = 0;
+        setState({
+          appliedRevision: version.revision,
+          catalogRefreshStatus:
+            typeof version.revision === "number" &&
+            version.revision >= observedRevision
+              ? "current"
+              : "refreshing",
+          observedRevision,
+          refreshedAt: version.persistedAt,
+          rows: version.rows,
+          source: "refresh",
+          status: "ready",
+        });
+      } catch (error) {
+        if (!isAttemptCurrent()) return;
+        const authorizationFailure = isAuthorizationError(error);
+        authorizationPausedScopeRef.current = authorizationFailure
+          ? attemptScope
+          : null;
+        setState((current) => ({
+          ...current,
+          catalogRefreshStatus: authorizationFailure
+            ? "authorization-paused"
+            : "retry-delayed",
+          observedRevision,
+        }));
+        if (!authorizationFailure && !retryTimerRef.current) {
+          const attempt = retryAttemptRef.current;
+          retryAttemptRef.current += 1;
+          const retryDelay = getRegisterCatalogRefreshRetryDelay(attempt);
+          retryTimerRef.current = setTimeout(() => {
+            retryTimerRef.current = null;
+            setReconcileTick((current) => current + 1);
+          }, retryDelay);
+        }
+      } finally {
+        if (inFlightAttemptRef.current === attempt) {
+          inFlightAttemptRef.current = null;
+        }
+        setReconcileTick((current) => current + 1);
+      }
+    })();
+  }, [
+    convex,
+    isOnline,
+    isOperationallyIdle,
+    isRegisterRefresh,
+    observedRevision,
+    revisionAuthorizationPaused,
+    registerTerminalId,
+    registerRuntimeOwnerId,
+    reconcileTick,
+    scopeKey,
+    storeId,
+  ]);
+
+  useEffect(
+    () => () => {
+      if (retryTimerRef.current) {
+        clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = null;
+      }
+      if (storeId && registerTerminalId) {
+        clearRegisterCatalogRuntimeSelection({
+          storeId,
+          terminalId: registerTerminalId,
+        });
+      }
+    },
+    [registerTerminalId, storeId],
+  );
 
   return state;
 }

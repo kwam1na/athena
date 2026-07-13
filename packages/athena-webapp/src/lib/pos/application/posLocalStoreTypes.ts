@@ -120,6 +120,7 @@ export interface PosLocalEventRecord {
   validationMetadata?: PosLocalEventValidationMetadata;
   payload: unknown;
   createdAt: number;
+  catalogRevision?: PosRegisterCatalogRevision;
   activity?: PosLocalActivityReportState;
   sync: {
     status: PosLocalSyncEventStatus;
@@ -281,6 +282,33 @@ export interface PosLocalRegisterCatalogSnapshot {
   schemaVersion: number;
   storeId: string;
 }
+export type PosRegisterCatalogRevision = number | "legacy";
+export interface PosLocalRegisterCatalogVersion {
+  persistedAt: number;
+  revision: PosRegisterCatalogRevision;
+  rows: PosRegisterCatalogRowDto[];
+  schemaVersion: number;
+  storeId: string;
+}
+export interface PosLocalRegisterCatalogVersionState {
+  active: PosLocalRegisterCatalogVersion | null;
+  activeRevision: PosRegisterCatalogRevision | null;
+  staged: PosLocalRegisterCatalogVersion | null;
+  stagedRevision: PosRegisterCatalogRevision | null;
+}
+export interface PosLocalRegisterCatalogPin {
+  leaseExpiresAt?: number;
+  ownerId?: string;
+  pinnedAt: number;
+  revision: PosRegisterCatalogRevision;
+  storeId: string;
+  terminalId: string;
+}
+export type PosLocalRegisterCatalogVersionWriteOutcome = {
+  revision: PosRegisterCatalogRevision;
+  status: "staged" | "promoted" | "already_current" | "already_newer";
+  version: PosLocalRegisterCatalogVersion;
+};
 export interface PosLocalRegisterServiceCatalogSnapshot {
   refreshedAt: number;
   rows: PosServiceCatalogRowDto[];
@@ -316,6 +344,11 @@ export type PosLocalAppendEventInput = {
   validationMetadata?: PosLocalEventValidationMetadata;
   initialSyncStatus?: PosLocalSyncEventStatus;
   payload: unknown;
+  catalogPin?: {
+    ownerId?: string;
+    revision: PosRegisterCatalogRevision;
+    rows: PosRegisterCatalogRowDto[];
+  };
 };
 
 export type PosLocalStoreErrorCode =

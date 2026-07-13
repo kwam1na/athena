@@ -6,6 +6,8 @@ import type {
   PosDrawerAuthorityState,
   PosLocalCloudMapping,
   PosLocalEventRecord,
+  PosLocalRegisterCatalogPin,
+  PosLocalRegisterCatalogVersionState,
   PosLocalStoreResult,
   PosTerminalIntegrityState,
   PosProvisionedTerminalSeed,
@@ -62,6 +64,23 @@ export type PosLocalRegisterReaderStore = {
     storeId: string;
     terminalId: string;
   }): Promise<PosLocalStoreResult<PosTerminalIntegrityState | null>>;
+  readRegisterCatalogPin?(input: {
+    ownerId?: string;
+    storeId: string;
+    terminalId: string;
+  }): Promise<PosLocalStoreResult<PosLocalRegisterCatalogPin | null>>;
+  readRegisterCatalogVersionState?(input: {
+    storeId: string;
+  }): Promise<PosLocalStoreResult<PosLocalRegisterCatalogVersionState>>;
+  pinRegisterCatalogVersion?(input: {
+    ownerId?: string;
+    revision: NonNullable<
+      PosLocalRegisterCatalogVersionState["activeRevision"]
+    >;
+    rows: NonNullable<PosLocalRegisterCatalogVersionState["active"]>["rows"];
+    storeId: string;
+    terminalId: string;
+  }): Promise<PosLocalStoreResult<PosLocalRegisterCatalogPin>>;
 };
 
 export async function readScopedPosLocalEvents(input: {
@@ -203,17 +222,45 @@ export async function readProjectedLocalRegisterModel(input: {
       : ({ ok: true, value: null } as const);
   if (!drawerAuthority.ok) return drawerAuthority;
 
-  return {
-    ok: true,
-    value: projectLocalRegisterReadModel({
-      events: scoped.value.events,
-      terminalSeed: scoped.value.terminalSeed,
-      mappings: projectionMappings,
-      isOnline: input.isOnline,
-      drawerAuthority: drawerAuthority.value,
-      terminalIntegrity: terminalIntegrity.value,
-    }),
-  };
+  const value = projectLocalRegisterReadModel({
+    events: scoped.value.events,
+    terminalSeed: scoped.value.terminalSeed,
+    mappings: projectionMappings,
+    isOnline: input.isOnline,
+    drawerAuthority: drawerAuthority.value,
+    terminalIntegrity: terminalIntegrity.value,
+  });
+  if (
+    value.activeSale &&
+    scope.storeId &&
+    scopedTerminalId &&
+    input.store.readRegisterCatalogPin &&
+    input.store.readRegisterCatalogVersionState &&
+    input.store.pinRegisterCatalogVersion
+  ) {
+    const existingPin = await input.store.readRegisterCatalogPin({
+      storeId: scope.storeId,
+      terminalId: scopedTerminalId,
+    });
+    if (!existingPin.ok) return existingPin;
+    if (!existingPin.value) {
+      const catalogState = await input.store.readRegisterCatalogVersionState({
+        storeId: scope.storeId,
+      });
+      if (!catalogState.ok) return catalogState;
+      if (catalogState.value.active) {
+        const pin = await input.store.pinRegisterCatalogVersion({
+          revision: catalogState.value.active.revision,
+          rows: catalogState.value.active.rows,
+          storeId: scope.storeId,
+          terminalId: scopedTerminalId,
+        });
+        if (!pin.ok) return pin;
+      }
+    }
+  }
+
+  return { ok: true, value };
 }
 
 async function readScopedPagesOrFallback<T>(input: {

@@ -18,8 +18,10 @@ import { readActiveHeldQuantitiesForSkus } from "./helpers/inventoryHolds";
 import {
   refreshProductSkuSearchForProduct,
   removeProductSkuSearchProjection,
+  removeProductSkuSearchProjections,
   requireProductSkuSearchReadAccess,
   upsertProductSkuSearchProjection,
+  upsertProductSkuSearchProjections,
 } from "./skuSearch";
 import {
   EMPTY_CATALOG_SUMMARY,
@@ -38,9 +40,68 @@ import {
   knownUnitCostBasis,
   uncostedBasis,
 } from "../reporting/inventory/valuation";
+import { advanceRegisterCatalogRevision } from "../pos/application/sync/registerCatalogRevision";
 
 const entity = "product";
 const LEGACY_IMPORT_CATEGORY_SLUG = "legacy-import";
+
+async function hasPendingCheckoutRegisterCatalogDependency(
+  ctx: MutationCtx,
+  sku: Pick<ProductSku, "_id" | "productId" | "storeId">,
+) {
+  const product = await ctx.db.get("product", sku.productId);
+  if (!product || product.storeId !== sku.storeId) return false;
+
+  const statuses =
+    product.availability === "archived"
+      ? (["pending_review", "flagged", "linked_to_catalog"] as const)
+      : (["linked_to_catalog"] as const);
+  const provisionalItems = await Promise.all(
+    statuses.map((status) =>
+      ctx.db
+        .query("posPendingCheckoutItem")
+        .withIndex("by_storeId_provisionalProductSkuId_status", (q) =>
+          q
+            .eq("storeId", sku.storeId)
+            .eq("provisionalProductSkuId", sku._id)
+            .eq("status", status),
+        )
+        .first(),
+    ),
+  );
+
+  return provisionalItems.some(Boolean);
+}
+
+async function productHasPendingCheckoutRegisterCatalogDependency(
+  ctx: MutationCtx,
+  productId: Id<"product">,
+) {
+  const skus = await ctx.db
+    .query("productSku")
+    .withIndex("by_productId", (q) => q.eq("productId", productId))
+    .collect();
+  const dependencies = await Promise.all(
+    skus.map((sku) =>
+      hasPendingCheckoutRegisterCatalogDependency(ctx, sku),
+    ),
+  );
+  return dependencies.some(Boolean);
+}
+
+async function removeProductAndRefreshCatalog(
+  ctx: MutationCtx,
+  product: Pick<ProductSku, "storeId"> & { _id: Id<"product"> },
+) {
+  const hasPendingCheckoutDependency =
+    await productHasPendingCheckoutRegisterCatalogDependency(ctx, product._id);
+  await ctx.db.delete("product", product._id);
+  await refreshProductSkuSearchForProduct(ctx, product._id, {
+    additionalEffectiveChange: hasPendingCheckoutDependency,
+    storeId: product.storeId,
+  });
+  await refreshCatalogSummaryWithCtx(ctx, product.storeId);
+}
 const PRODUCT_UPDATE_LEGACY_FINALIZED_ROW_SCAN_LIMIT = 25;
 
 async function hasAthenaTaxonomyWithCtx(
@@ -1275,9 +1336,10 @@ export const remove = internalMutation({
   },
   handler: async (ctx, args) => {
     const product = await ctx.db.get("product", args.id);
-    await ctx.db.delete("product", args.id);
     if (product) {
-      await refreshCatalogSummaryWithCtx(ctx, product.storeId);
+      await removeProductAndRefreshCatalog(ctx, product);
+    } else {
+      await ctx.db.delete("product", args.id);
     }
 
     return { message: "OK" };
@@ -1296,8 +1358,7 @@ export const removeInternal = internalMutation({
       return { message: "OK" };
     }
 
-    await ctx.db.delete("product", args.id);
-    await refreshCatalogSummaryWithCtx(ctx, product.storeId);
+    await removeProductAndRefreshCatalog(ctx, product);
 
     return { message: "OK" };
   },
@@ -1326,11 +1387,25 @@ export const removeSku = mutation({
   },
   handler: async (ctx, args) => {
     const sku = await ctx.db.get("productSku", args.id);
-    await removeProductSkuSearchProjection(ctx, args.id);
-    await ctx.db.delete("productSku", args.id);
-    if (sku) {
-      await refreshCatalogSummaryWithCtx(ctx, sku.storeId);
+    if (!sku) {
+      await removeProductSkuSearchProjection(ctx, args.id);
+      await ctx.db.delete("productSku", args.id);
+      return { message: "OK" };
     }
+
+    const hasPendingCheckoutDependency =
+      await hasPendingCheckoutRegisterCatalogDependency(ctx, sku);
+    const projectionChanged = await removeProductSkuSearchProjection(
+      ctx,
+      args.id,
+      { advanceRevision: false },
+    );
+    await ctx.db.delete("productSku", args.id);
+    await advanceRegisterCatalogRevision(ctx, {
+      didChange: projectionChanged || hasPendingCheckoutDependency,
+      storeId: sku.storeId,
+    });
+    await refreshCatalogSummaryWithCtx(ctx, sku.storeId);
 
     return { message: "OK" };
   },
@@ -1351,13 +1426,22 @@ export const removeAllProductsForStore = mutation({
       .filter((q) => q.eq(q.field("storeId"), args.storeId))
       .collect();
 
-    // Delete all SKUs using Promise.all
-    await Promise.all(
-      skus.map(async (sku) => {
-        await removeProductSkuSearchProjection(ctx, sku._id);
-        await ctx.db.delete("productSku", sku._id);
-      }),
+    const pendingCheckoutDependencies = await Promise.all(
+      skus.map((sku) =>
+        hasPendingCheckoutRegisterCatalogDependency(ctx, sku),
+      ),
     );
+
+    // Delete all SKUs using Promise.all
+    await removeProductSkuSearchProjections(
+      ctx,
+      skus.map((sku) => sku._id),
+      args.storeId,
+      {
+        additionalEffectiveChange: pendingCheckoutDependencies.some(Boolean),
+      },
+    );
+    await Promise.all(skus.map((sku) => ctx.db.delete("productSku", sku._id)));
 
     // Delete all products using Promise.all
     await Promise.all(
@@ -1403,9 +1487,25 @@ export const batchUpdateSkuPrices = mutation({
         `batchUpdateSkuPrices: ${failedCount} of ${args.updates.length} updates failed`,
       );
     }
-    const updatedSku = await ctx.db.get("productSku", args.updates[0].id);
-    if (updatedSku) {
-      await refreshCatalogSummaryWithCtx(ctx, updatedSku.storeId);
+    const successfulSkus = (
+      await Promise.all(
+        args.updates
+          .filter((_update, index) => results[index]?.status === "fulfilled")
+          .map((update) => ctx.db.get("productSku", update.id)),
+      )
+    ).filter((sku): sku is NonNullable<typeof sku> => sku !== null);
+    const skuIdsByStore = new Map<
+      Id<"store">,
+      Array<Id<"productSku">>
+    >();
+    for (const sku of successfulSkus) {
+      const skuIds = skuIdsByStore.get(sku.storeId) ?? [];
+      skuIds.push(sku._id);
+      skuIdsByStore.set(sku.storeId, skuIds);
+    }
+    for (const [storeId, skuIds] of skuIdsByStore) {
+      await upsertProductSkuSearchProjections(ctx, skuIds, storeId);
+      await refreshCatalogSummaryWithCtx(ctx, storeId);
     }
 
     return {

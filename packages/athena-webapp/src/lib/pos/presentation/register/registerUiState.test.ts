@@ -1,6 +1,39 @@
 import { describe, expect, it } from "vitest";
 
-import { buildRegisterUpdateApplyBlockerState } from "./registerUiState";
+import {
+  buildRegisterOperationalIdleState,
+  buildRegisterUpdateApplyBlockerState,
+} from "./registerUiState";
+
+describe("buildRegisterOperationalIdleState", () => {
+  it.each([
+    ["active sale work", { hasActiveSaleWork: true }],
+    ["checkout work", { hasCheckoutMutationInFlight: true }],
+    ["a drawer transition", { hasDrawerTransitionInFlight: true }],
+    ["local persistence risk", { hasLocalRuntimeApplyRisk: true }],
+  ])("keeps the register non-idle for %s", (_label, override) => {
+    expect(
+      buildRegisterOperationalIdleState({
+        hasActiveSaleWork: false,
+        hasCheckoutMutationInFlight: false,
+        hasDrawerTransitionInFlight: false,
+        hasLocalRuntimeApplyRisk: false,
+        ...override,
+      }),
+    ).toEqual({ isIdle: false });
+  });
+
+  it("reports idle only after every blocker clears", () => {
+    expect(
+      buildRegisterOperationalIdleState({
+        hasActiveSaleWork: false,
+        hasCheckoutMutationInFlight: false,
+        hasDrawerTransitionInFlight: false,
+        hasLocalRuntimeApplyRisk: false,
+      }),
+    ).toEqual({ isIdle: true });
+  });
+});
 
 describe("buildRegisterUpdateApplyBlockerState", () => {
   it("prioritizes checkout mutation work before other register update blockers", () => {

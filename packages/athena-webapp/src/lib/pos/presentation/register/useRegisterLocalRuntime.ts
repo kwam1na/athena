@@ -8,6 +8,7 @@ import { getDefaultPosLocalStore } from "@/lib/pos/infrastructure/local/posLocal
 import type { PosLocalStorePort } from "@/lib/pos/application/posLocalStorePort";
 import type { PosLocalEventValidationMetadata } from "@/lib/pos/application/posLocalStoreTypes";
 import { createLocalCommandGateway } from "@/lib/pos/infrastructure/local/localCommandGateway";
+import { captureRegisterCatalogRuntimePin } from "@/lib/pos/infrastructure/local/registerCatalogPinRuntime";
 import { readProjectedLocalRegisterModel } from "@/lib/pos/infrastructure/local/localRegisterReader";
 import type { PosLocalRegisterReadModel } from "@/lib/pos/infrastructure/local/registerReadModel";
 import { usePosLocalSyncRuntimeStatus } from "@/lib/pos/infrastructure/local/usePosLocalSyncRuntime";
@@ -130,6 +131,7 @@ export function useRegisterLocalRuntime(input: {
             localTerminalId: terminal.localTerminalId,
           }
         : null,
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- preserve bridge identity across equivalent terminal objects.
     [terminal?._id, terminal?.cloudTerminalId, terminal?.localTerminalId],
   );
 
@@ -275,6 +277,7 @@ export function useRegisterLocalRuntime(input: {
         authorityPersistenceFailed: () =>
           authorityPersistenceFailedRef.current ||
           !registerOperationalResetReadyRef.current,
+        captureRegisterCatalogPin: captureRegisterCatalogRuntimePin,
         store: localStore,
         createLocalId: (kind) => {
           if (kind === "local-register-session" && terminal?._id) {

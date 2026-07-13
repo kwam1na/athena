@@ -13,6 +13,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mockUseRegisterViewModel = vi.fn();
 const mockOpenQuickAddProduct = vi.fn(() => true);
 const mockUseAppActionBlocker = vi.fn();
+const mockUseAppMessage = vi.fn();
 const clearIndexedDbPosLocalStoreMock = vi.fn();
 const reloadWindowMock = vi.fn();
 
@@ -37,6 +38,7 @@ vi.mock("@/lib/pos/presentation/register/useRegisterViewModel", () => ({
 
 vi.mock("@/lib/app-messages", () => ({
   useAppActionBlocker: (args: unknown) => mockUseAppActionBlocker(args),
+  useAppMessage: (args: unknown) => mockUseAppMessage(args),
 }));
 
 vi.mock("@/lib/app-update", () => ({
@@ -410,6 +412,7 @@ describe("POSRegisterView", () => {
   beforeEach(() => {
     mockUseRegisterViewModel.mockReset();
     mockUseAppActionBlocker.mockClear();
+    mockUseAppMessage.mockClear();
     clearIndexedDbPosLocalStoreMock.mockReset();
     clearIndexedDbPosLocalStoreMock.mockResolvedValue({
       ok: true,
@@ -509,6 +512,44 @@ describe("POSRegisterView", () => {
       priority: "critical-workflow",
       guidance: "Finish, hold, or clear this sale before applying the update.",
     });
+  });
+
+  it("keeps catalog refresh coordination out of app messaging", async () => {
+    mockUseRegisterViewModel.mockReturnValue({
+      hasActiveStore: true,
+      catalogRefreshStatus: "waiting-busy",
+      header: {
+        title: "POS",
+        isSessionActive: true,
+      },
+      registerInfo: {
+        registerLabel: "Front Counter",
+        hasTerminal: true,
+      },
+      customerPanel: {},
+      productEntry: {
+        catalogRows: [],
+      },
+      cart: {
+        items: [],
+      },
+      checkout: {
+        isTransactionCompleted: false,
+      },
+      sessionPanel: {},
+      cashierCard: null,
+      closeoutControl: null,
+      drawerGate: null,
+      syncStatus: null,
+      authDialog: null,
+      commandApprovalDialog: null,
+      onNavigateBack: vi.fn(),
+    });
+
+    const { POSRegisterView } = await import("./POSRegisterView");
+    render(<POSRegisterView />);
+
+    expect(mockUseAppMessage).not.toHaveBeenCalled();
   });
 
   it("renders the thin register shell around the view model state", async () => {
@@ -1350,6 +1391,7 @@ describe("POSRegisterView", () => {
             setCustomerInfo: vi.fn(),
           },
           productEntry: {
+            catalogRows: [],
             disabled: false,
             showProductLookup: true,
             setShowProductLookup: vi.fn(),
@@ -1406,6 +1448,8 @@ describe("POSRegisterView", () => {
         }}
       />,
     );
+
+    expect(mockUseRegisterViewModel).not.toHaveBeenCalled();
 
     expect(
       screen.queryByText("Support sync diagnostics"),

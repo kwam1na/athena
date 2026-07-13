@@ -3,7 +3,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
-import { backfillUndefinedSkuVisibilityFromProducts } from "./productSku";
+import {
+  backfillUndefinedSkuVisibilityFromProducts,
+  getInventoryBySkuIds,
+} from "./productSku";
 import {
   archive,
   batchUpdateSkuPrices,
@@ -14,7 +17,9 @@ import {
   getCatalogSummary,
   getByIdOrSlug,
   repairCatalogSummary,
+  remove as removeProduct,
   removeAllProductsForStore,
+  removeInternal as removeProductInternal,
   removeSku,
   unarchive,
   update,
@@ -23,12 +28,19 @@ import {
 import { repairArchivedPendingCheckoutReviewWork } from "../pos/application/commands/pendingCheckoutReviewWorkLifecycle";
 
 const mocks = vi.hoisted(() => ({
+  advanceRegisterCatalogRevision: vi.fn(),
   applyInventoryEffectWithCtx: vi.fn(),
   refreshProductSkuSearchForProduct: vi.fn(),
   requireProductSkuSearchReadAccess: vi.fn(),
   requireStoreFullAdminAccess: vi.fn(),
   removeProductSkuSearchProjection: vi.fn(),
+  removeProductSkuSearchProjections: vi.fn(),
   upsertProductSkuSearchProjection: vi.fn(),
+  upsertProductSkuSearchProjections: vi.fn(),
+}));
+
+vi.mock("../pos/application/sync/registerCatalogRevision", () => ({
+  advanceRegisterCatalogRevision: mocks.advanceRegisterCatalogRevision,
 }));
 
 vi.mock("../reporting/inventory/effects", () => ({
@@ -42,8 +54,10 @@ vi.mock("../stockOps/access", () => ({
 vi.mock("./skuSearch", () => ({
   refreshProductSkuSearchForProduct: mocks.refreshProductSkuSearchForProduct,
   removeProductSkuSearchProjection: mocks.removeProductSkuSearchProjection,
+  removeProductSkuSearchProjections: mocks.removeProductSkuSearchProjections,
   requireProductSkuSearchReadAccess: mocks.requireProductSkuSearchReadAccess,
   upsertProductSkuSearchProjection: mocks.upsertProductSkuSearchProjection,
+  upsertProductSkuSearchProjections: mocks.upsertProductSkuSearchProjections,
 }));
 
 type TableName =
@@ -348,6 +362,7 @@ function createProductsQueryCtx(seed: Partial<Record<TableName, Row[]>>) {
 
 describe("inventory SKU generation", () => {
   beforeEach(() => {
+    mocks.advanceRegisterCatalogRevision.mockReset();
     mocks.applyInventoryEffectWithCtx.mockReset();
     mocks.applyInventoryEffectWithCtx.mockImplementation(
       async (
@@ -368,10 +383,15 @@ describe("inventory SKU generation", () => {
       },
     );
     mocks.refreshProductSkuSearchForProduct.mockReset();
+    mocks.refreshProductSkuSearchForProduct.mockResolvedValue(false);
     mocks.removeProductSkuSearchProjection.mockReset();
+    mocks.removeProductSkuSearchProjection.mockResolvedValue(false);
+    mocks.removeProductSkuSearchProjections.mockReset();
+    mocks.removeProductSkuSearchProjections.mockResolvedValue(false);
     mocks.requireProductSkuSearchReadAccess.mockReset();
     mocks.requireStoreFullAdminAccess.mockReset();
     mocks.upsertProductSkuSearchProjection.mockReset();
+    mocks.upsertProductSkuSearchProjections.mockReset();
   });
 
   it("generates a standard SKU when createSku receives an empty SKU", async () => {
@@ -602,6 +622,7 @@ describe("inventory SKU generation", () => {
     expect(mocks.removeProductSkuSearchProjection).toHaveBeenCalledWith(
       ctx,
       "productSku001",
+      { advanceRevision: false },
     );
     expect(tables.productSku.has("productSku001")).toBe(false);
     expect(Array.from(tables.catalogSummary.values())[0]).toMatchObject({
@@ -610,6 +631,135 @@ describe("inventory SKU generation", () => {
       productCount: 1,
       storeId: "storezzzz",
     });
+  });
+
+  it("advances the revision when deleting a SKU removes a suppressed pending-checkout row", async () => {
+    const { ctx } = createSkuMutationCtx({
+      posPendingCheckoutItem: [
+        pendingCheckoutItem({
+          provisionalProductSkuId: "productSku001",
+        }),
+      ],
+      product: [
+        {
+          _id: "product001",
+          availability: "archived",
+          storeId: "storezzzz",
+        },
+      ],
+      productSku: [
+        {
+          _id: "productSku001",
+          inventoryCount: 1,
+          price: 1000,
+          productId: "product001",
+          quantityAvailable: 1,
+          sku: "SKU-1",
+          storeId: "storezzzz",
+        },
+      ],
+    });
+
+    await getHandler(removeSku)(ctx, {
+      id: "productSku001" as Id<"productSku">,
+    });
+
+    expect(mocks.advanceRegisterCatalogRevision).toHaveBeenCalledWith(ctx, {
+      didChange: true,
+      storeId: "storezzzz",
+    });
+  });
+
+  it("includes suppressed pending-checkout rows in archived product deletion revision decisions", async () => {
+    const { ctx } = createSkuMutationCtx({
+      posPendingCheckoutItem: [pendingCheckoutItem()],
+      product: [
+        {
+          _id: "product001",
+          availability: "archived",
+          storeId: "storezzzz",
+        },
+      ],
+      productSku: [
+        {
+          _id: "sku001",
+          productId: "product001",
+          storeId: "storezzzz",
+        },
+      ],
+    });
+
+    await getHandler(removeProductInternal)(ctx, {
+      id: "product001" as Id<"product">,
+      storeId: "storezzzz" as Id<"store">,
+    });
+
+    expect(mocks.refreshProductSkuSearchForProduct).toHaveBeenCalledWith(
+      ctx,
+      "product001",
+      { additionalEffectiveChange: true, storeId: "storezzzz" },
+    );
+  });
+
+  it("shares the pending-checkout deletion decision in the unscoped internal path", async () => {
+    const { ctx } = createSkuMutationCtx({
+      posPendingCheckoutItem: [pendingCheckoutItem()],
+      product: [
+        {
+          _id: "product001",
+          availability: "archived",
+          storeId: "storezzzz",
+        },
+      ],
+      productSku: [
+        {
+          _id: "sku001",
+          productId: "product001",
+          storeId: "storezzzz",
+        },
+      ],
+    });
+
+    await getHandler(removeProduct)(ctx, {
+      id: "product001" as Id<"product">,
+    });
+
+    expect(mocks.refreshProductSkuSearchForProduct).toHaveBeenCalledWith(
+      ctx,
+      "product001",
+      { additionalEffectiveChange: true, storeId: "storezzzz" },
+    );
+  });
+
+  it("includes suppressed pending-checkout rows in store-wide deletion revision decisions", async () => {
+    const { ctx } = createSkuMutationCtx({
+      posPendingCheckoutItem: [pendingCheckoutItem()],
+      product: [
+        {
+          _id: "product001",
+          availability: "archived",
+          storeId: "storezzzz",
+        },
+      ],
+      productSku: [
+        {
+          _id: "sku001",
+          productId: "product001",
+          storeId: "storezzzz",
+        },
+      ],
+    });
+
+    await getHandler(removeAllProductsForStore)(ctx, {
+      storeId: "storezzzz" as Id<"store">,
+    });
+
+    expect(mocks.removeProductSkuSearchProjections).toHaveBeenCalledWith(
+      ctx,
+      ["sku001"],
+      "storezzzz",
+      { additionalEffectiveChange: true },
+    );
   });
 });
 
@@ -2006,10 +2156,75 @@ describe("product archiving", () => {
       storeId: "storezzzz",
     });
   });
+
+  it("refreshes projections and revisions independently for every store in a price batch", async () => {
+    const { ctx } = createSkuMutationCtx({
+      product: [
+        {
+          _id: "product001",
+          availability: "live",
+          storeId: "storeaaaa",
+        },
+        {
+          _id: "product002",
+          availability: "live",
+          storeId: "storebbbb",
+        },
+      ],
+      productSku: [
+        {
+          _id: "productSku001",
+          price: 0,
+          productId: "product001",
+          storeId: "storeaaaa",
+        },
+        {
+          _id: "productSku002",
+          price: 0,
+          productId: "product002",
+          storeId: "storebbbb",
+        },
+      ],
+    });
+
+    await getHandler(batchUpdateSkuPrices)(ctx, {
+      updates: [
+        {
+          id: "productSku001" as Id<"productSku">,
+          netPrice: 900,
+          price: 1_000,
+        },
+        {
+          id: "productSku002" as Id<"productSku">,
+          netPrice: 1_800,
+          price: 2_000,
+        },
+      ],
+    });
+
+    expect(mocks.upsertProductSkuSearchProjections).toHaveBeenCalledTimes(2);
+    expect(mocks.upsertProductSkuSearchProjections).toHaveBeenCalledWith(
+      ctx,
+      ["productSku001"],
+      "storeaaaa",
+    );
+    expect(mocks.upsertProductSkuSearchProjections).toHaveBeenCalledWith(
+      ctx,
+      ["productSku002"],
+      "storebbbb",
+    );
+  });
 });
 
 describe("product catalog visibility", () => {
   it("keeps product mutation return contracts executable", () => {
+    assertConformsToExportedReturns(getInventoryBySkuIds, [
+      {
+        _id: "productSku001",
+        inventoryCount: 2,
+        quantityAvailable: 1,
+      },
+    ]);
     assertConformsToExportedReturns(generateUniqueBarcode, {
       success: true,
       barcode: "123456789012",

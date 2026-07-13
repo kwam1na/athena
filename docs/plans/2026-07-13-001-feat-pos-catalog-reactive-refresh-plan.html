@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Plan: Refresh the POS catalog at safe idle boundaries</title>
+  <style>
+    :root { color-scheme: light; --ink:#18201d; --muted:#5d6863; --line:#d9dfdc; --paper:#fbfcfb; --panel:#fff; --accent:#1f6f54; --soft:#edf6f2; --warn:#8a5b13; }
+    * { box-sizing: border-box; }
+    body { margin:0; background:var(--paper); color:var(--ink); font:15px/1.58 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    main { width:min(1120px,calc(100% - 32px)); margin:32px auto 72px; }
+    header { padding:34px; border:1px solid var(--line); border-radius:16px; background:linear-gradient(145deg,#fff,var(--soft)); }
+    h1 { margin:8px 0 10px; max-width:850px; font-size:clamp(30px,4vw,48px); line-height:1.08; letter-spacing:-.035em; }
+    h2 { margin:0 0 14px; font-size:24px; letter-spacing:-.02em; }
+    h3 { margin:0 0 8px; font-size:17px; }
+    p { margin:0 0 12px; }
+    a { color:var(--accent); }
+    code { font:13px/1.4 ui-monospace,SFMono-Regular,Consolas,monospace; background:#f0f3f1; padding:2px 5px; border-radius:4px; overflow-wrap:anywhere; }
+    .eyebrow,.meta { color:var(--muted); font-size:13px; letter-spacing:.04em; text-transform:uppercase; }
+    .lede { max-width:900px; font-size:18px; }
+    nav { margin:18px 0; padding:16px 20px; border:1px solid var(--line); border-radius:12px; background:var(--panel); }
+    nav a { display:inline-block; margin:3px 18px 3px 0; text-decoration:none; }
+    section { margin-top:18px; padding:26px; border:1px solid var(--line); border-radius:14px; background:var(--panel); }
+    .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+    .card { padding:18px; border:1px solid var(--line); border-radius:10px; background:#fff; }
+    .card p:last-child,.card ul:last-child { margin-bottom:0; }
+    .tag { display:inline-block; margin:0 5px 5px 0; padding:3px 8px; border-radius:999px; background:var(--soft); color:var(--accent); font-size:12px; font-weight:700; }
+    ul,ol { margin:8px 0 0; padding-left:22px; }
+    li { margin:5px 0; }
+    table { width:100%; border-collapse:collapse; font-size:14px; }
+    th,td { padding:11px 12px; border:1px solid var(--line); text-align:left; vertical-align:top; }
+    th { background:#f3f6f4; }
+    .flow { display:grid; grid-template-columns:repeat(6,1fr); gap:8px; align-items:center; margin-top:14px; }
+    .node { min-height:78px; display:flex; align-items:center; justify-content:center; padding:10px; border:1px solid #bad1c8; border-radius:10px; background:var(--soft); text-align:center; font-weight:700; }
+    .arrow { color:var(--accent); text-align:center; font-weight:800; }
+    .unit { border-left:4px solid var(--accent); }
+    .risk-high { color:var(--warn); font-weight:700; }
+    footer { margin-top:24px; color:var(--muted); text-align:center; font-size:13px; }
+    @media (max-width:760px) { .grid { grid-template-columns:1fr; } .flow { grid-template-columns:1fr; } .arrow { transform:rotate(90deg); } section,header { padding:20px; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">Delivery plan · Feature · Active</div>
+    <h1>Refresh the POS catalog at safe idle boundaries</h1>
+    <p class="lede">Use a constant-size store revision to wake an open register, then coalesce and apply one full local catalog refresh only after the register is operationally idle and the snapshot is durably persisted.</p>
+    <p class="meta">Created July 13, 2026 · Canonical source: <a href="2026-07-13-001-feat-pos-catalog-reactive-refresh-plan.md">Markdown plan</a> · Origin: <a href="../brainstorms/2026-07-13-pos-register-catalog-refresh-requirements.md">requirements</a></p>
+  </header>
+
+  <nav aria-label="Plan sections">
+    <a href="#frame">Problem &amp; scope</a><a href="#design">Technical design</a><a href="#decisions">Decisions</a><a href="#units">Implementation units</a><a href="#risks">Risks</a><a href="#verification">Verification</a>
+  </nav>
+
+  <section id="frame">
+    <h2>Problem and delivery boundary</h2>
+    <div class="grid">
+      <article class="card">
+        <h3>Gap</h3>
+        <p>The register searches a local metadata snapshot. An already-open terminal currently misses products created or edited elsewhere until the route remounts.</p>
+      </article>
+      <article class="card">
+        <h3>Outcome</h3>
+        <p>Remote metadata becomes searchable at the first safe idle boundary, without a route reload, a live full-catalog subscription, or interference with active sale work.</p>
+      </article>
+      <article class="card">
+        <h3>Included</h3>
+        <ul><li>Store revision and atomic snapshot envelope</li><li>Monotonic IndexedDB persistence</li><li>Idle-gated single-flight coordinator</li><li>Silent background retry and recovery</li></ul>
+      </article>
+      <article class="card">
+        <h3>Excluded</h3>
+        <ul><li>Full-catalog live query or fixed polling</li><li>Per-SKU delta feed</li><li>Availability-triggered metadata refresh</li><li>Manual apply/dismiss controls</li><li>Cross-tab leader election</li></ul>
+      </article>
+    </div>
+  </section>
+
+  <section id="design">
+    <h2>Technical design</h2>
+    <p>The current trusted snapshot remains active throughout the flow. Every non-idle edge pins its revision and rows in memory; the first restorable busy command atomically verifies or re-materializes that version before committing its durable pin. The idle default may advance without changing busy runtimes, and its rows are mirrored for offline rollback compatibility.</p>
+    <div class="flow" aria-label="Catalog refresh flow">
+      <div class="node">Effective catalog mutation</div><div class="arrow">→</div><div class="node">Store revision notification</div><div class="arrow">→</div><div class="node">Idle-gated coordinator</div><div class="arrow">↓</div>
+      <div class="node">Local register search</div><div class="arrow">←</div><div class="node">Durable monotonic snapshot</div><div class="arrow">←</div><div class="node">Revisioned full snapshot</div><div class="arrow">←</div>
+    </div>
+    <h3 style="margin-top:20px">Coordinator modes</h3>
+    <table>
+      <thead><tr><th>Mode</th><th>Trusted catalog</th><th>Rule</th></tr></thead>
+      <tbody>
+        <tr><td>Current</td><td>Applied snapshot</td><td>A newer revision moves to waiting or refreshing.</td></tr>
+        <tr><td>Waiting</td><td>Applied snapshot</td><td>Busy/offline state coalesces to the latest observed revision with no full read.</td></tr>
+        <tr><td>Refreshing / staging</td><td>Applied snapshot</td><td>Single flight; newer revisions update only the latest target and the refresh budget bounds sustained churn.</td></tr>
+        <tr><td>Pending activation</td><td>Immediate-pin rows, durable pinned version, or previous active</td><td>A staged candidate may become the idle default; transient blockers use captured rows and restorable busy state uses a durable version.</td></tr>
+        <tr><td>Retry paused</td><td>Applied snapshot</td><td>Transient failures retry; offline/auth states pause without a hot loop.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="decisions">
+    <h2>Key decisions</h2>
+    <table>
+      <thead><tr><th>Decision</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>Dedicated monotonic store revision</td><td>Stock-derived summaries and boolean latches do not represent repeatable metadata-only changes.</td></tr>
+        <tr><td>Effective snapshot lifecycle coverage</td><td>The snapshot includes projections, provisional imports, and pending-checkout alias/suppression state.</td></tr>
+        <tr><td>Additive atomic <code>{revision, rows}</code> envelope</td><td>Preserves the legacy row-array endpoint while preventing acknowledgment of a revision whose rows came from another database snapshot.</td></tr>
+        <tr><td>Immediate and command-atomic runtime pins</td><td>Every transient blocker pins revision and rows in memory; durable upgrade verifies or re-materializes the version before committing restorable busy state.</td></tr>
+        <tr><td>Shared idle authority with repeated checks</td><td>A sale can begin during fetch or persistence; activation must still wait.</td></tr>
+        <tr><td>Register-specific orchestration</td><td>Expense, prewarm, and generic consumers keep their current one-shot lifecycle.</td></tr>
+        <tr><td>Background-only coordination</td><td>Waiting and automatic recovery do not require cashier decisions or compete with actionable register messages.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="units">
+    <h2>Implementation units</h2>
+    <div class="grid">
+      <article class="card unit"><span class="tag">U1</span><h3>Store revision contract</h3><p>Add the schema, monotonic transaction helper, same-store isolation, and no-op semantics.</p><p><strong>Depends on:</strong> none</p></article>
+      <article class="card unit"><span class="tag">U2</span><h3>Effective mutation coverage</h3><p>Wire product, fee-absorption, taxonomy, import, repair, direct pending-review/finalization, price-batch, and deletion lifecycles while excluding availability churn.</p><p><strong>Depends on:</strong> U1</p></article>
+      <article class="card unit"><span class="tag">U3</span><h3>Revisioned snapshot envelope</h3><p>Add tiny authenticated revision and revisioned-snapshot queries while preserving the legacy row-array endpoint.</p><p><strong>Depends on:</strong> U1</p></article>
+      <article class="card unit"><span class="tag">U4</span><h3>Durable local snapshot</h3><p>Retain revisioned versions, distinguish legacy state, commit pins with durable busy commands, and transactionally mirror the promoted default for rollback readers.</p><p><strong>Depends on:</strong> U3</p></article>
+      <article class="card unit"><span class="tag">U5</span><h3>Refresh coordinator</h3><p>Implement latest-observed/applied state, single flight, refresh-budget coalescing, idle/network gates, guarded promotion, retry, and stale-scope suppression.</p><p><strong>Depends on:</strong> U2, U3, U4</p></article>
+      <article class="card unit"><span class="tag">U6</span><h3>Register integration</h3><p>Share the operational-idle authority, consolidate ProductEntry catalog ownership, and keep waiting/retry/auth states inside the coordinator.</p><p><strong>Depends on:</strong> U5</p></article>
+    </div>
+  </section>
+
+  <section id="risks">
+    <h2>Risks and mitigations</h2>
+    <table>
+      <thead><tr><th>Risk</th><th>Mitigation</th></tr></thead>
+      <tbody>
+        <tr><td class="risk-high">Signal and snapshot diverge</td><td>Bump in the same mutation after effective writes; return revision and rows from one additive query transaction.</td></tr>
+        <tr><td>Mutation path is missed</td><td>Inventory every snapshot source and add representative mutation-family integration tests.</td></tr>
+        <tr><td>Stock churn triggers heavy reads</td><td>Explicit metadata equality and negative tests for sale, hold, quantity, and availability changes.</td></tr>
+        <tr><td>Sale/transient blocker begins, another tab promotes, or route remounts</td><td>Pin every non-idle edge immediately, commit restorable pins with commands, retain referenced versions, and hydrate pins before selecting rows.</td></tr>
+        <tr><td>Emergency rollback while offline</td><td>Promotion mirrors rows into the unchanged legacy record, and rollout tests read that record through the previous one-shot contract.</td></tr>
+        <tr><td>IndexedDB write fails</td><td>Keep prior rows and revision trusted; retry without exposing fetched-but-unpersisted data.</td></tr>
+        <tr><td>Tabs finish out of order</td><td>Monotonic staging/promotion plus store/auth epoch guards.</td></tr>
+        <tr><td>Sustained revision churn</td><td>Minimum per-terminal refresh interval, trailing-edge convergence, and maximum freshness deadline.</td></tr>
+        <tr><td>Duplicate register reads</td><td>One coordinator owns the register catalog; ProductEntry consumes the shared trusted rows.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="verification">
+    <h2>Verification strategy</h2>
+    <div class="grid">
+      <article class="card"><h3>Backend contract</h3><ul><li>Eligible metadata changes advance exactly when effective output changes.</li><li>Availability-only changes never advance.</li><li>Snapshot rows and revision correspond atomically.</li><li>High-cardinality projection read counts stay bounded.</li></ul></article>
+      <article class="card"><h3>Durability and races</h3><ul><li>Write failure exposes only previous trusted rows.</li><li>Transient pins carry rows; durable upgrade re-materializes a concurrently pruned version.</li><li>Busy transitions, other tabs, and remounts select the runtime-pinned revision.</li><li>Previous readers can load the mirrored default offline.</li></ul></article>
+      <article class="card"><h3>Register behavior</h3><ul><li>Every agreed blocker independently prevents refresh.</li><li>Burst during a sale causes zero full reads until idle and one after.</li><li>Remote create becomes searchable without reload.</li><li>ProductEntry cannot trigger a parallel register refresh.</li></ul></article>
+      <article class="card"><h3>Background recovery</h3><ul><li>Offline pauses; reconnect resumes.</li><li>Auth failure does not hot-loop.</li><li>Busy, offline, running, delayed, and auth-paused states remain internal.</li><li>No catalog-refresh app message or cashier control is registered.</li></ul></article>
+    </div>
+  </section>
+
+  <section>
+    <h2>Rollout notes</h2>
+    <ul>
+      <li>No server backfill: a missing server revision is zero, while unversioned local data uses a distinct legacy sentinel so the first canonical envelope cannot be skipped.</li>
+      <li>Add payload-free transition diagnostics for observed, target, applied, retry, and failure states.</li>
+      <li>Production verification should exercise both an idle already-open register and a register holding active sale work.</li>
+      <li>Revision graph records are additive; each promotion also updates the exact legacy catalog record so the previous one-shot reader remains usable offline after an idle-safe rollback.</li>
+    </ul>
+  </section>
+
+  <footer>Review artifact for <a href="2026-07-13-001-feat-pos-catalog-reactive-refresh-plan.md">2026-07-13-001-feat-pos-catalog-reactive-refresh-plan.md</a></footer>
+</main>
+</body>
+</html>

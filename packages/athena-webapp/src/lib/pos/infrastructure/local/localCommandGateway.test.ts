@@ -6,6 +6,7 @@ import {
   createPosLocalStore,
   type PosLocalEventValidationMetadata,
 } from "./posLocalStore";
+import type { PosRegisterCatalogRowDto } from "@/lib/pos/application/dto";
 
 function saleCommandInput() {
   return {
@@ -30,7 +31,9 @@ async function appendOpenDrawer(store: ReturnType<typeof createPosLocalStore>) {
   });
 }
 
-async function blockDrawerAuthority(store: ReturnType<typeof createPosLocalStore>) {
+async function blockDrawerAuthority(
+  store: ReturnType<typeof createPosLocalStore>,
+) {
   await store.writeDrawerAuthorityState({
     cloudRegisterSessionId: "cloud-register-1",
     localRegisterSessionId: "drawer-1",
@@ -83,6 +86,155 @@ async function createBlockedSaleGateway() {
 }
 
 describe("createLocalCommandGateway", () => {
+  it("commits the captured catalog pin with the first durable sale event", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+      clock: () => 10_000,
+    });
+    await appendOpenDrawer(store);
+    const rows: PosRegisterCatalogRowDto[] = [
+      {
+        id: "sku-1" as never,
+        productSkuId: "sku-1" as never,
+        skuId: "sku-1" as never,
+        productId: "product-1" as never,
+        name: "Body Wave",
+        sku: "BW-18",
+        barcode: "",
+        price: 100,
+        category: "Hair",
+        description: "Body wave bundle",
+        image: null,
+        size: "18",
+        length: 18,
+        color: "natural",
+        areProcessingFeesAbsorbed: false,
+      },
+    ];
+    await store.stageRegisterCatalogVersion({
+      revision: 1,
+      rows,
+      storeId: "store-1",
+    });
+    await store.promoteRegisterCatalogVersion({
+      revision: 1,
+      storeId: "store-1",
+    });
+    const gateway = createLocalCommandGateway({
+      captureRegisterCatalogPin: () => ({ revision: 1, rows }),
+      store,
+    });
+
+    await expect(
+      gateway.appendCartItem({
+        ...saleCommandInput(),
+        payload: {
+          localItemId: "item-1",
+          productId: "product-1",
+          productName: "Body Wave",
+          productSkuId: "sku-1",
+          productSku: "BW-18",
+          quantity: 1,
+          price: 100,
+          areProcessingFeesAbsorbed: false,
+        },
+      }),
+    ).resolves.toBe(true);
+
+    await store.stageRegisterCatalogVersion({
+      revision: 2,
+      rows: [{ ...rows[0], name: "New catalog" }],
+      storeId: "store-1",
+    });
+    await store.promoteRegisterCatalogVersion({
+      revision: 2,
+      storeId: "store-1",
+    });
+
+    expect(
+      await store.readRegisterCatalogSelection({
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    ).toEqual({
+      ok: true,
+      value: expect.objectContaining({ revision: 1, rows }),
+    });
+    const eventResult = await store.listEvents();
+    expect(eventResult.ok).toBe(true);
+    expect(eventResult.ok ? eventResult.value.at(-1) : undefined).toEqual(
+      expect.objectContaining({ catalogRevision: 1, type: "cart.item_added" }),
+    );
+  });
+
+  it("keeps the action-start catalog pin through asynchronous command validation", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+      clock: () => 10_000,
+    });
+    await appendOpenDrawer(store);
+    const revisionOneRows: PosRegisterCatalogRowDto[] = [
+      {
+        id: "sku-1" as never,
+        productSkuId: "sku-1" as never,
+        skuId: "sku-1" as never,
+        productId: "product-1" as never,
+        name: "Body Wave",
+        sku: "BW-18",
+        barcode: "",
+        price: 100,
+        category: "Hair",
+        description: "Body wave bundle",
+        image: null,
+        size: "18",
+        length: 18,
+        color: "natural",
+        areProcessingFeesAbsorbed: false,
+      },
+    ];
+    let selectedRevision = 1;
+    const gateway = createLocalCommandGateway({
+      captureRegisterCatalogPin: () => ({
+        revision: selectedRevision,
+        rows:
+          selectedRevision === 1
+            ? revisionOneRows
+            : [{ ...revisionOneRows[0], name: "Promoted during validation" }],
+      }),
+      store,
+    });
+
+    const command = gateway.appendCartItem({
+      ...saleCommandInput(),
+      payload: {
+        localItemId: "item-1",
+        productId: "product-1",
+        productName: "Body Wave",
+        productSkuId: "sku-1",
+        productSku: "BW-18",
+        quantity: 1,
+        price: 100,
+        areProcessingFeesAbsorbed: false,
+      },
+    });
+    selectedRevision = 2;
+
+    await expect(command).resolves.toBe(true);
+    const events = await store.listEvents();
+    expect(events.ok && events.value.at(-1)).toEqual(
+      expect.objectContaining({ catalogRevision: 1, type: "cart.item_added" }),
+    );
+    expect(
+      await store.readRegisterCatalogSelection({
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    ).toEqual({
+      ok: true,
+      value: expect.objectContaining({ revision: 1, rows: revisionOneRows }),
+    });
+  });
+
   it("blocks mutating drawer and sale commands while authority persistence failed", async () => {
     const store = createPosLocalStore({
       adapter: createMemoryPosLocalStorageAdapter(),
@@ -125,6 +277,40 @@ describe("createLocalCommandGateway", () => {
       ok: true,
       value: [expect.objectContaining({ type: "register.opened" })],
     });
+  });
+
+  it("settles the action-start catalog guard when validation rejects the command", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+    });
+    const settleActionGuard = vi.fn();
+    const gateway = createLocalCommandGateway({
+      authorityPersistenceFailed: true,
+      captureRegisterCatalogPin: () => ({
+        revision: 1,
+        rows: [],
+        settleActionGuard,
+      }),
+      store,
+    });
+
+    await expect(
+      gateway.appendCartItem({
+        ...saleCommandInput(),
+        payload: {
+          localItemId: "item-1",
+          productId: "product-1",
+          productName: "Body Wave",
+          productSkuId: "sku-1",
+          productSku: "BW-18",
+          quantity: 1,
+          price: 100,
+          areProcessingFeesAbsorbed: false,
+        },
+      }),
+    ).resolves.toBe(false);
+
+    expect(settleActionGuard).toHaveBeenCalledTimes(1);
   });
 
   it("keeps explicit clear-cart available during authority persistence failure", async () => {
@@ -317,10 +503,7 @@ describe("createLocalCommandGateway", () => {
         ...saleCommandInput(),
         localTransactionId: "transaction-1",
         validationMetadata: {
-          flags: [
-            "app-session-unverified",
-            "cloud-validation-uncertain",
-          ],
+          flags: ["app-session-unverified", "cloud-validation-uncertain"],
           observedAt: 2_000,
           uploadDeferredUntil: "app-session-validated",
         },
@@ -341,10 +524,7 @@ describe("createLocalCommandGateway", () => {
         expect.objectContaining({
           type: "transaction.completed",
           validationMetadata: {
-            flags: [
-              "app-session-unverified",
-              "cloud-validation-uncertain",
-            ],
+            flags: ["app-session-unverified", "cloud-validation-uncertain"],
             observedAt: 2_000,
             uploadDeferredUntil: "app-session-validated",
           },
@@ -408,10 +588,7 @@ describe("createLocalCommandGateway", () => {
 
   it("persists app-session validation metadata on drawer lifecycle commands", async () => {
     const validationMetadata: PosLocalEventValidationMetadata = {
-      flags: [
-        "app-session-unverified",
-        "cloud-validation-uncertain",
-      ],
+      flags: ["app-session-unverified", "cloud-validation-uncertain"],
       observedAt: 2_000,
       uploadDeferredUntil: "app-session-validated",
     };
@@ -1324,7 +1501,9 @@ describe("createLocalCommandGateway", () => {
         gateway.appendPaymentState({
           ...saleCommandInput(),
           checkoutStateVersion: 1,
-          payments: [{ id: "payment-1", method: "cash", amount: 100, timestamp: 1 }],
+          payments: [
+            { id: "payment-1", method: "cash", amount: 100, timestamp: 1 },
+          ],
           stage: "paymentAdded",
         }),
     ],
@@ -1352,60 +1531,63 @@ describe("createLocalCommandGateway", () => {
           reason: "Cart cleared",
         }),
     ],
-  ])("blocks %s when the command points at a stale drawer", async (_label, runCommand) => {
-    const store = createPosLocalStore({
-      adapter: createMemoryPosLocalStorageAdapter(),
-    });
-    await appendOpenDrawer(store);
-    await store.appendEvent({
-      type: "session.started",
-      terminalId: "terminal-1",
-      storeId: "store-1",
-      registerNumber: "1",
-      localRegisterSessionId: "drawer-1",
-      localPosSessionId: "session-1",
-      staffProfileId: "staff-1",
-      payload: { localPosSessionId: "session-1" },
-    });
-    await store.appendEvent({
-      type: "cart.item_added",
-      terminalId: "terminal-1",
-      storeId: "store-1",
-      registerNumber: "1",
-      localRegisterSessionId: "drawer-1",
-      localPosSessionId: "session-1",
-      staffProfileId: "staff-1",
-      payload: {
-        localItemId: "existing-item-1",
-        productId: "product-1",
-        productName: "Body Wave",
-        productSkuId: "sku-1",
-        quantity: 1,
-        price: 100,
-      },
-    });
-    await store.appendEvent({
-      type: "register.opened",
-      terminalId: "terminal-1",
-      storeId: "store-1",
-      registerNumber: "1",
-      localRegisterSessionId: "drawer-2",
-      staffProfileId: "staff-1",
-      payload: { localRegisterSessionId: "drawer-2", openingFloat: 200 },
-    });
-    const gateway = createLocalCommandGateway({ store });
+  ])(
+    "blocks %s when the command points at a stale drawer",
+    async (_label, runCommand) => {
+      const store = createPosLocalStore({
+        adapter: createMemoryPosLocalStorageAdapter(),
+      });
+      await appendOpenDrawer(store);
+      await store.appendEvent({
+        type: "session.started",
+        terminalId: "terminal-1",
+        storeId: "store-1",
+        registerNumber: "1",
+        localRegisterSessionId: "drawer-1",
+        localPosSessionId: "session-1",
+        staffProfileId: "staff-1",
+        payload: { localPosSessionId: "session-1" },
+      });
+      await store.appendEvent({
+        type: "cart.item_added",
+        terminalId: "terminal-1",
+        storeId: "store-1",
+        registerNumber: "1",
+        localRegisterSessionId: "drawer-1",
+        localPosSessionId: "session-1",
+        staffProfileId: "staff-1",
+        payload: {
+          localItemId: "existing-item-1",
+          productId: "product-1",
+          productName: "Body Wave",
+          productSkuId: "sku-1",
+          quantity: 1,
+          price: 100,
+        },
+      });
+      await store.appendEvent({
+        type: "register.opened",
+        terminalId: "terminal-1",
+        storeId: "store-1",
+        registerNumber: "1",
+        localRegisterSessionId: "drawer-2",
+        staffProfileId: "staff-1",
+        payload: { localRegisterSessionId: "drawer-2", openingFloat: 200 },
+      });
+      const gateway = createLocalCommandGateway({ store });
 
-    await expect(runCommand(gateway)).resolves.toBe(false);
-    await expect(store.listEvents()).resolves.toMatchObject({
-      ok: true,
-      value: [
-        expect.objectContaining({ type: "register.opened" }),
-        expect.objectContaining({ type: "session.started" }),
-        expect.objectContaining({ type: "cart.item_added" }),
-        expect.objectContaining({ type: "register.opened" }),
-      ],
-    });
-  });
+      await expect(runCommand(gateway)).resolves.toBe(false);
+      await expect(store.listEvents()).resolves.toMatchObject({
+        ok: true,
+        value: [
+          expect.objectContaining({ type: "register.opened" }),
+          expect.objectContaining({ type: "session.started" }),
+          expect.objectContaining({ type: "cart.item_added" }),
+          expect.objectContaining({ type: "register.opened" }),
+        ],
+      });
+    },
+  );
 
   it.each([
     [
@@ -1427,7 +1609,9 @@ describe("createLocalCommandGateway", () => {
         gateway.appendPaymentState({
           ...saleCommandInput(),
           checkoutStateVersion: 1,
-          payments: [{ id: "payment-1", method: "cash", amount: 100, timestamp: 1 }],
+          payments: [
+            { id: "payment-1", method: "cash", amount: 100, timestamp: 1 },
+          ],
           stage: "paymentAdded",
         }),
     ],
@@ -1447,19 +1631,22 @@ describe("createLocalCommandGateway", () => {
           },
         }),
     ],
-  ])("blocks %s when drawer authority is blocked", async (_label, runCommand) => {
-    const { gateway, store } = await createBlockedSaleGateway();
+  ])(
+    "blocks %s when drawer authority is blocked",
+    async (_label, runCommand) => {
+      const { gateway, store } = await createBlockedSaleGateway();
 
-    await expect(runCommand(gateway)).resolves.toBe(false);
-    await expect(store.listEvents()).resolves.toMatchObject({
-      ok: true,
-      value: [
-        expect.objectContaining({ type: "register.opened" }),
-        expect.objectContaining({ type: "session.started" }),
-        expect.objectContaining({ type: "cart.item_added" }),
-      ],
-    });
-  });
+      await expect(runCommand(gateway)).resolves.toBe(false);
+      await expect(store.listEvents()).resolves.toMatchObject({
+        ok: true,
+        value: [
+          expect.objectContaining({ type: "register.opened" }),
+          expect.objectContaining({ type: "session.started" }),
+          expect.objectContaining({ type: "cart.item_added" }),
+        ],
+      });
+    },
+  );
 
   it("allows only cart clear for the exact old drawer when cloud authority closed it", async () => {
     const { gateway, store } = await createBlockedSaleGateway();
@@ -1656,10 +1843,12 @@ describe("createLocalCommandGateway", () => {
       sync: { status: "synced" },
     });
     expect(events.value[0]).not.toHaveProperty("uploadSequence");
-    await expect(store.readLocalCloudMapping({
-      entity: "registerSession",
-      localId: "cloud-drawer-1",
-    })).resolves.toMatchObject({
+    await expect(
+      store.readLocalCloudMapping({
+        entity: "registerSession",
+        localId: "cloud-drawer-1",
+      }),
+    ).resolves.toMatchObject({
       ok: true,
       value: {
         cloudId: "cloud-drawer-1",
@@ -1694,10 +1883,12 @@ describe("createLocalCommandGateway", () => {
       }),
     ).resolves.toBe(true);
 
-    await expect(store.readLocalCloudMapping({
-      entity: "registerSession",
-      localId: "drawer-1",
-    })).resolves.toMatchObject({
+    await expect(
+      store.readLocalCloudMapping({
+        entity: "registerSession",
+        localId: "drawer-1",
+      }),
+    ).resolves.toMatchObject({
       ok: true,
       value: {
         cloudId: "cloud-drawer-1",

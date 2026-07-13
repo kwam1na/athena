@@ -11,6 +11,7 @@ import type {
 } from "@/components/pos/types";
 import type { Id } from "~/convex/_generated/dataModel";
 import type { PosPaymentMethod } from "@/lib/pos/domain";
+import type { PosRegisterCatalogRowDto } from "@/lib/pos/application/dto";
 import type { PosSyncStatusPresentation } from "@/lib/pos/presentation/syncStatusPresentation";
 
 export interface RegisterHeaderState {
@@ -35,6 +36,7 @@ export interface RegisterCustomerPanelState {
 }
 
 export interface RegisterProductEntryState {
+  catalogRows: PosRegisterCatalogRowDto[];
   disabled: boolean;
   canSearchProducts?: boolean;
   canSearchServices?: boolean;
@@ -59,15 +61,10 @@ export interface RegisterProductEntryState {
 export type RegisterLookupMode = "product" | "service";
 
 export type RegisterServicePricingModel =
-  | "fixed"
-  | "starting_at"
-  | "quote_after_consultation";
+  "fixed" | "starting_at" | "quote_after_consultation";
 
 export type RegisterServiceMode =
-  | "same_day"
-  | "consultation"
-  | "repair"
-  | "revamp";
+  "same_day" | "consultation" | "repair" | "revamp";
 
 export interface RegisterServiceSearchResult {
   id: string;
@@ -312,17 +309,35 @@ export interface RegisterUpdateApplyBlockerState {
 export const REGISTER_UPDATE_APPLY_BLOCKER_PRIORITY: UpdateApplyBlockerPriority =
   "critical-workflow";
 
+export interface RegisterOperationalIdleInput {
+  hasActiveSaleWork: boolean;
+  hasCheckoutMutationInFlight: boolean;
+  hasDrawerTransitionInFlight: boolean;
+  hasLocalRuntimeApplyRisk: boolean;
+}
+
+export function buildRegisterOperationalIdleState({
+  hasActiveSaleWork,
+  hasCheckoutMutationInFlight,
+  hasDrawerTransitionInFlight,
+  hasLocalRuntimeApplyRisk,
+}: RegisterOperationalIdleInput): { isIdle: boolean } {
+  return {
+    isIdle: !(
+      hasActiveSaleWork ||
+      hasCheckoutMutationInFlight ||
+      hasDrawerTransitionInFlight ||
+      hasLocalRuntimeApplyRisk
+    ),
+  };
+}
+
 export function buildRegisterUpdateApplyBlockerState({
   hasActiveSaleWork,
   hasCheckoutMutationInFlight,
   hasDrawerTransitionInFlight,
   hasLocalRuntimeApplyRisk,
-}: {
-  hasActiveSaleWork: boolean;
-  hasCheckoutMutationInFlight: boolean;
-  hasDrawerTransitionInFlight: boolean;
-  hasLocalRuntimeApplyRisk: boolean;
-}): RegisterUpdateApplyBlockerState {
+}: RegisterOperationalIdleInput): RegisterUpdateApplyBlockerState {
   if (hasCheckoutMutationInFlight) {
     return {
       active: true,
@@ -346,8 +361,7 @@ export function buildRegisterUpdateApplyBlockerState({
       active: true,
       priority: REGISTER_UPDATE_APPLY_BLOCKER_PRIORITY,
       label: "Sale in progress",
-      guidance:
-        "Finish, hold, or clear this sale before applying the update.",
+      guidance: "Finish, hold, or clear this sale before applying the update.",
     };
   }
 
@@ -610,9 +624,11 @@ export interface RegisterViewModel {
   drawerGate: RegisterDrawerGateState | null;
   closeoutControl: RegisterCloseoutControlState | null;
   updateApplyBlocker: RegisterUpdateApplyBlockerState;
-  syncStatus?: (PosSyncStatusPresentation & {
-    onRetrySync?: () => void;
-  }) | null;
+  syncStatus?:
+    | (PosSyncStatusPresentation & {
+        onRetrySync?: () => void;
+      })
+    | null;
   authDialog: RegisterAuthDialogState | null;
   commandApprovalDialog: RegisterCommandApprovalDialogState | null;
   onNavigateBack: () => Promise<void>;

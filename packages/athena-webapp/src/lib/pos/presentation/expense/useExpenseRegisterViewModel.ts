@@ -868,6 +868,7 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
       setCustomerInfo: () => {},
     },
     productEntry: {
+      catalogRows: registerCatalogRows ?? [],
       disabled: !terminal || !isCashierSignedIn,
       showProductLookup: true,
       setShowProductLookup: store.setShowProductEntry,

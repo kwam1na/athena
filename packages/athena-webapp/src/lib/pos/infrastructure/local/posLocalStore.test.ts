@@ -3,9 +3,11 @@ import { POS_LOCAL_LOGICAL_RECORD_VERSION } from "@/lib/pos/application/posLocal
 
 import type {
   PosRegisterCatalogAvailabilityRowDto,
+  PosRegisterCatalogRowDto,
   PosServiceCatalogRowDto,
 } from "@/lib/pos/application/dto";
 import {
+  REGISTER_CATALOG_PIN_LEASE_MS,
   POS_LOCAL_STORE_SCHEMA_VERSION,
   clearIndexedDbPosLocalStore,
   createIndexedDbPosLocalStorageAdapter,
@@ -79,6 +81,29 @@ function buildAvailabilityRow(
     skuId: "sku-1" as never,
     inStock: true,
     quantityAvailable: 5,
+    ...overrides,
+  };
+}
+
+function buildCatalogRow(
+  overrides: Partial<PosRegisterCatalogRowDto> = {},
+): PosRegisterCatalogRowDto {
+  return {
+    id: "sku-1" as never,
+    productSkuId: "sku-1" as never,
+    skuId: "sku-1" as never,
+    productId: "product-1" as never,
+    name: "Deep Wave",
+    sku: "DW-18",
+    barcode: "1234567890123",
+    price: 10_000,
+    category: "Hair",
+    description: "Deep wave bundle",
+    image: null,
+    size: "18",
+    length: 18,
+    color: "natural",
+    areProcessingFeesAbsorbed: false,
     ...overrides,
   };
 }
@@ -1421,6 +1446,477 @@ describe("posLocalStore", () => {
     await expect(
       store.readRegisterCatalogSnapshot({ storeId: "store-1" }),
     ).resolves.toEqual(write);
+  });
+
+  it("keeps a legacy snapshot distinct from canonical server revision zero", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+      clock: () => 1_700,
+    });
+    await store.writeRegisterCatalogSnapshot({
+      storeId: "store-1",
+      rows: [buildCatalogRow({ name: "Legacy" })],
+    });
+
+    const legacy = await store.readRegisterCatalogVersionState({
+      storeId: "store-1",
+    });
+    expect(legacy).toEqual({
+      ok: true,
+      value: expect.objectContaining({
+        activeRevision: "legacy",
+        active: expect.objectContaining({ revision: "legacy" }),
+      }),
+    });
+
+    await store.stageRegisterCatalogVersion({
+      revision: 0,
+      rows: [buildCatalogRow({ name: "Canonical zero" })],
+      storeId: "store-1",
+    });
+    await store.promoteRegisterCatalogVersion({
+      revision: 0,
+      storeId: "store-1",
+    });
+
+    const canonical = await store.readRegisterCatalogVersionState({
+      storeId: "store-1",
+    });
+    expect(canonical).toEqual({
+      ok: true,
+      value: expect.objectContaining({
+        activeRevision: 0,
+        active: expect.objectContaining({
+          revision: 0,
+          rows: [expect.objectContaining({ name: "Canonical zero" })],
+        }),
+      }),
+    });
+  });
+
+  it("stages and promotes catalog versions monotonically while mirroring the default", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+      clock: () => 1_800,
+    });
+    await store.stageRegisterCatalogVersion({
+      revision: 1,
+      rows: [buildCatalogRow({ name: "Revision one" })],
+      storeId: "store-1",
+    });
+    await store.promoteRegisterCatalogVersion({
+      revision: 1,
+      storeId: "store-1",
+    });
+    await store.stageRegisterCatalogVersion({
+      revision: 2,
+      rows: [buildCatalogRow({ name: "Revision two" })],
+      storeId: "store-1",
+    });
+
+    expect(
+      await store.readRegisterCatalogVersionState({ storeId: "store-1" }),
+    ).toEqual({
+      ok: true,
+      value: expect.objectContaining({ activeRevision: 1, stagedRevision: 2 }),
+    });
+    expect(
+      await store.stageRegisterCatalogVersion({
+        revision: 1,
+        rows: [buildCatalogRow({ name: "Delayed revision one" })],
+        storeId: "store-1",
+      }),
+    ).toEqual({
+      ok: true,
+      value: expect.objectContaining({ status: "already_newer" }),
+    });
+
+    await store.promoteRegisterCatalogVersion({
+      revision: 2,
+      storeId: "store-1",
+    });
+    await expect(
+      store.readRegisterCatalogSnapshot({ storeId: "store-1" }),
+    ).resolves.toEqual({
+      ok: true,
+      value: expect.objectContaining({
+        rows: [expect.objectContaining({ name: "Revision two" })],
+      }),
+    });
+    expect(
+      await store.promoteRegisterCatalogVersion({
+        revision: 1,
+        storeId: "store-1",
+      }),
+    ).toEqual({
+      ok: true,
+      value: expect.objectContaining({ status: "already_newer" }),
+    });
+  });
+
+  it("retains a runtime pin across promotion and re-materializes a pruned captured version", async () => {
+    const adapter = createMemoryPosLocalStorageAdapter();
+    const store = createPosLocalStore({ adapter, clock: () => 1_900 });
+    const revisionOneRows = [buildCatalogRow({ name: "Revision one" })];
+    await store.stageRegisterCatalogVersion({
+      revision: 1,
+      rows: revisionOneRows,
+      storeId: "store-1",
+    });
+    await store.promoteRegisterCatalogVersion({
+      revision: 1,
+      storeId: "store-1",
+    });
+    await store.pinRegisterCatalogVersion({
+      revision: 1,
+      rows: revisionOneRows,
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
+    await store.stageRegisterCatalogVersion({
+      revision: 2,
+      rows: [buildCatalogRow({ name: "Revision two" })],
+      storeId: "store-1",
+    });
+    await store.promoteRegisterCatalogVersion({
+      revision: 2,
+      storeId: "store-1",
+    });
+
+    expect(
+      await store.readRegisterCatalogSelection({
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    ).toEqual({
+      ok: true,
+      value: expect.objectContaining({ revision: 1, rows: revisionOneRows }),
+    });
+
+    await store.releaseRegisterCatalogPin({
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
+    expect(
+      await store.readRegisterCatalogSelection({
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    ).toEqual({
+      ok: true,
+      value: expect.objectContaining({ revision: 2 }),
+    });
+
+    await store.pinRegisterCatalogVersion({
+      revision: 1,
+      rows: revisionOneRows,
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
+    expect(
+      await store.readRegisterCatalogSelection({
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    ).toEqual({
+      ok: true,
+      value: expect.objectContaining({ revision: 1, rows: revisionOneRows }),
+    });
+  });
+
+  it("atomically promotes a newer staged catalog version", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+      clock: () => 1_950,
+    });
+    await store.stageRegisterCatalogVersion({
+      revision: 1,
+      rows: [buildCatalogRow({ name: "Revision one" })],
+      storeId: "store-1",
+    });
+    await store.promoteRegisterCatalogVersion({
+      revision: 1,
+      storeId: "store-1",
+    });
+    await store.stageRegisterCatalogVersion({
+      revision: 2,
+      rows: [buildCatalogRow({ name: "Revision two" })],
+      storeId: "store-1",
+    });
+    await store.stageRegisterCatalogVersion({
+      revision: 3,
+      rows: [buildCatalogRow({ name: "Revision three" })],
+      storeId: "store-1",
+    });
+
+    expect(
+      await store.promoteRegisterCatalogVersion({
+        revision: 2,
+        storeId: "store-1",
+      }),
+    ).toEqual({
+      ok: true,
+      value: expect.objectContaining({ status: "promoted", revision: 3 }),
+    });
+    expect(
+      await store.readRegisterCatalogVersionState({ storeId: "store-1" }),
+    ).toEqual({
+      ok: true,
+      value: expect.objectContaining({
+        activeRevision: 3,
+        stagedRevision: null,
+      }),
+    });
+    expect(
+      await store.readRegisterCatalogSnapshot({ storeId: "store-1" }),
+    ).toEqual({
+      ok: true,
+      value: expect.objectContaining({
+        rows: [expect.objectContaining({ name: "Revision three" })],
+      }),
+    });
+  });
+
+  it("commits a restorable catalog pin and event together across remounts", async () => {
+    const adapter = createMemoryPosLocalStorageAdapter();
+    const store = createPosLocalStore({ adapter, clock: () => 2_000 });
+    const rows = [buildCatalogRow({ name: "Pinned catalog" })];
+
+    await expect(
+      store.appendEvent({
+        type: "cart.item_added",
+        terminalId: "terminal-1",
+        storeId: "store-1",
+        localRegisterSessionId: "drawer-1",
+        localPosSessionId: "sale-1",
+        payload: { productSkuId: "sku-1" },
+        catalogPin: { revision: 7, rows },
+      }),
+    ).resolves.toEqual({
+      ok: true,
+      value: expect.objectContaining({ catalogRevision: 7 }),
+    });
+
+    const remountedStore = createPosLocalStore({ adapter, clock: () => 2_100 });
+    await expect(
+      remountedStore.readRegisterCatalogSelection({
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    ).resolves.toEqual({
+      ok: true,
+      value: expect.objectContaining({ revision: 7, rows }),
+    });
+  });
+
+  it("releasing one runtime owner preserves another tab's pinned catalog", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+      clock: () => 2_150,
+    });
+    const revisionOneRows = [buildCatalogRow({ name: "Busy tab catalog" })];
+    const revisionTwoRows = [buildCatalogRow({ name: "Idle tab catalog" })];
+
+    await store.pinRegisterCatalogVersion({
+      ownerId: "busy-tab",
+      revision: 1,
+      rows: revisionOneRows,
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
+    await store.pinRegisterCatalogVersion({
+      ownerId: "idle-tab",
+      revision: 1,
+      rows: revisionOneRows,
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
+    await store.stageRegisterCatalogVersion({
+      revision: 2,
+      rows: revisionTwoRows,
+      storeId: "store-1",
+    });
+    await store.promoteRegisterCatalogVersion({
+      revision: 2,
+      storeId: "store-1",
+    });
+
+    await store.releaseRegisterCatalogPin({
+      ownerId: "idle-tab",
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
+
+    await expect(
+      store.readRegisterCatalogSelection({
+        ownerId: "busy-tab",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    ).resolves.toEqual({
+      ok: true,
+      value: expect.objectContaining({ revision: 1, rows: revisionOneRows }),
+    });
+    await expect(
+      store.readRegisterCatalogSelection({
+        ownerId: "idle-tab",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    ).resolves.toEqual({
+      ok: true,
+      value: expect.objectContaining({ revision: 2, rows: revisionTwoRows }),
+    });
+  });
+
+  it("reclaims expired owner pins without releasing an active owner", async () => {
+    let now = 1_000;
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+      clock: () => now,
+    });
+    const revisionOneRows = [buildCatalogRow({ name: "Retained catalog" })];
+    await store.pinRegisterCatalogVersion({
+      ownerId: "abandoned-tab",
+      revision: 1,
+      rows: revisionOneRows,
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
+    await store.pinRegisterCatalogVersion({
+      ownerId: "active-tab",
+      revision: 1,
+      rows: revisionOneRows,
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
+
+    now += REGISTER_CATALOG_PIN_LEASE_MS - 1;
+    await store.renewRegisterCatalogPinLease({
+      ownerId: "active-tab",
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
+    now += 2;
+    await store.stageRegisterCatalogVersion({
+      revision: 2,
+      rows: [buildCatalogRow({ name: "Current catalog" })],
+      storeId: "store-1",
+    });
+    await store.promoteRegisterCatalogVersion({
+      revision: 2,
+      storeId: "store-1",
+    });
+
+    await expect(
+      store.readRegisterCatalogPin({
+        ownerId: "abandoned-tab",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    ).resolves.toEqual({ ok: true, value: null });
+    await expect(
+      store.readRegisterCatalogSelection({
+        ownerId: "active-tab",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    ).resolves.toEqual({
+      ok: true,
+      value: expect.objectContaining({ revision: 1, rows: revisionOneRows }),
+    });
+  });
+
+  it("does not persist an event when its catalog pin cannot commit", async () => {
+    const adapter = createMemoryPosLocalStorageAdapter({
+      failNextPutForStore: "registerCatalog",
+    });
+    const store = createPosLocalStore({ adapter, clock: () => 2_200 });
+    const append = await store.appendEvent({
+      type: "cart.item_added",
+      terminalId: "terminal-1",
+      storeId: "store-1",
+      localRegisterSessionId: "drawer-1",
+      localPosSessionId: "sale-1",
+      payload: { productSkuId: "sku-1" },
+      catalogPin: { revision: 8, rows: [buildCatalogRow()] },
+    });
+    expect(append).toEqual({
+      ok: false,
+      error: expect.objectContaining({ code: "write_failed" }),
+    });
+    await expect(store.listEvents()).resolves.toEqual({ ok: true, value: [] });
+    await expect(
+      store.readRegisterCatalogSelection({
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    ).resolves.toEqual({ ok: true, value: null });
+  });
+
+  it("pins a pre-feature active sale to the legacy catalog during hydration", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+      clock: () => 2_300,
+    });
+    const legacyRows = [buildCatalogRow({ name: "Legacy sale catalog" })];
+    await store.writeRegisterCatalogSnapshot({
+      storeId: "store-1",
+      rows: legacyRows,
+    });
+    await store.appendEvent({
+      type: "register.opened",
+      terminalId: "terminal-1",
+      storeId: "store-1",
+      localRegisterSessionId: "drawer-1",
+      payload: { localRegisterSessionId: "drawer-1", openingFloat: 100 },
+    });
+    await store.appendEvent({
+      type: "session.started",
+      terminalId: "terminal-1",
+      storeId: "store-1",
+      localRegisterSessionId: "drawer-1",
+      localPosSessionId: "sale-1",
+      payload: { localPosSessionId: "sale-1", status: "active" },
+    });
+
+    const model = await readProjectedLocalRegisterModel({
+      store,
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
+    expect(model).toEqual({
+      ok: true,
+      value: expect.objectContaining({ activeSale: expect.any(Object) }),
+    });
+    expect(
+      await store.readRegisterCatalogPin({
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    ).toEqual({
+      ok: true,
+      value: expect.objectContaining({ revision: "legacy" }),
+    });
+
+    await store.stageRegisterCatalogVersion({
+      revision: 0,
+      rows: [buildCatalogRow({ name: "Canonical zero" })],
+      storeId: "store-1",
+    });
+    await store.promoteRegisterCatalogVersion({
+      revision: 0,
+      storeId: "store-1",
+    });
+    expect(
+      await store.readRegisterCatalogSelection({
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    ).toEqual({
+      ok: true,
+      value: expect.objectContaining({ revision: "legacy", rows: legacyRows }),
+    });
   });
 
   it("writes and reads active service catalog snapshots for offline lookup", async () => {

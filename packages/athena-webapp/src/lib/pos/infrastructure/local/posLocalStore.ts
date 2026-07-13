@@ -18,6 +18,10 @@ import type {
   PosLocalLedgerSummary,
   PosLocalRegisterAvailabilitySnapshot,
   PosLocalRegisterCatalogSnapshot,
+  PosLocalRegisterCatalogPin,
+  PosLocalRegisterCatalogVersion,
+  PosLocalRegisterCatalogVersionState,
+  PosLocalRegisterCatalogVersionWriteOutcome,
   PosLocalRegisterServiceCatalogSnapshot,
   PosLocalReviewResolutionReason,
   PosLocalStaffAuthorityReadiness,
@@ -31,6 +35,7 @@ import type {
   PosRegisterLifecycleAuthorityObservation,
   PosRegisterLifecycleServerAuthority,
   PosRegisterOperationalStateResetResult,
+  PosRegisterCatalogRevision,
   PosTerminalIntegrityReason,
   PosTerminalIntegrityState,
 } from "@/lib/pos/application/posLocalStoreTypes";
@@ -122,6 +127,11 @@ const META_SEQUENCE_KEY = "sequence";
 const META_UPLOAD_SEQUENCE_PREFIX = "uploadSequence:";
 const META_REGISTER_OPERATIONAL_STATE_RESET_KEY =
   "registerOperationalStateReset:v1";
+const REGISTER_CATALOG_ACTIVE_PREFIX = "catalog-active:";
+const REGISTER_CATALOG_STAGED_PREFIX = "catalog-staged:";
+const REGISTER_CATALOG_VERSION_PREFIX = "catalog-version:";
+const REGISTER_CATALOG_PIN_PREFIX = "catalog-pin:";
+export const REGISTER_CATALOG_PIN_LEASE_MS = 24 * 60 * 60 * 1_000;
 const TERMINAL_SEED_KEY = "current";
 const TERMINAL_INTEGRITY_PREFIX = "terminalIntegrity:";
 const DRAWER_AUTHORITY_PREFIX = "drawerAuthority:";
@@ -184,6 +194,214 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
     options.createLocalId ??
     ((kind: string) =>
       `${kind}-${clock()}-${Math.random().toString(36).slice(2)}`);
+
+  function catalogRevisionKey(revision: PosRegisterCatalogRevision) {
+    return revision === "legacy" ? "legacy" : `server-${revision}`;
+  }
+
+  function catalogVersionKey(
+    storeId: string,
+    revision: PosRegisterCatalogRevision,
+  ) {
+    return `${REGISTER_CATALOG_VERSION_PREFIX}${storeId}:${catalogRevisionKey(revision)}`;
+  }
+
+  function catalogActiveKey(storeId: string) {
+    return `${REGISTER_CATALOG_ACTIVE_PREFIX}${storeId}`;
+  }
+
+  function catalogStagedKey(storeId: string) {
+    return `${REGISTER_CATALOG_STAGED_PREFIX}${storeId}`;
+  }
+
+  function catalogPinKey(storeId: string, terminalId: string, ownerId?: string) {
+    return `${REGISTER_CATALOG_PIN_PREFIX}${storeId}:${terminalId}:${ownerId ?? "default"}`;
+  }
+
+  function compareCatalogRevisions(
+    left: PosRegisterCatalogRevision,
+    right: PosRegisterCatalogRevision,
+  ) {
+    if (left === right) return 0;
+    if (left === "legacy") return -1;
+    if (right === "legacy") return 1;
+    return left - right;
+  }
+
+  async function readCatalogVersion(
+    transaction: PosLocalStoreTransaction,
+    storeId: string,
+    revision: PosRegisterCatalogRevision | null,
+  ) {
+    if (revision === null) return null;
+    return (
+      (await transaction.get<PosLocalRegisterCatalogVersion>(
+        "registerCatalog",
+        catalogVersionKey(storeId, revision),
+      )) ?? null
+    );
+  }
+
+  async function readCatalogPointer(
+    transaction: PosLocalStoreTransaction,
+    key: string,
+  ) {
+    return (
+      (
+        await transaction.get<{ revision: PosRegisterCatalogRevision }>(
+          "registerCatalog",
+          key,
+        )
+      )?.revision ?? null
+    );
+  }
+
+  async function readCatalogVersionStateInTransaction(
+    transaction: PosLocalStoreTransaction,
+    storeId: string,
+  ): Promise<PosLocalRegisterCatalogVersionState> {
+    let activeRevision = await readCatalogPointer(
+      transaction,
+      catalogActiveKey(storeId),
+    );
+    let active = await readCatalogVersion(transaction, storeId, activeRevision);
+    if (!active) {
+      const legacy =
+        (await transaction.get<PosLocalRegisterCatalogSnapshot>(
+          "registerCatalog",
+          storeId,
+        )) ?? null;
+      if (legacy) {
+        activeRevision = "legacy";
+        active = {
+          persistedAt: legacy.refreshedAt,
+          revision: "legacy",
+          rows: legacy.rows,
+          schemaVersion: legacy.schemaVersion,
+          storeId,
+        };
+      }
+    }
+    const stagedRevision = await readCatalogPointer(
+      transaction,
+      catalogStagedKey(storeId),
+    );
+    const staged = await readCatalogVersion(
+      transaction,
+      storeId,
+      stagedRevision,
+    );
+    return { active, activeRevision, staged, stagedRevision };
+  }
+
+  async function materializeCatalogVersion(
+    transaction: PosLocalStoreTransaction,
+    input: {
+      ownerId?: string;
+      revision: PosRegisterCatalogRevision;
+      rows: PosRegisterCatalogRowDto[];
+      storeId: string;
+    },
+  ) {
+    const existing = await readCatalogVersion(
+      transaction,
+      input.storeId,
+      input.revision,
+    );
+    if (existing) return existing;
+    const version: PosLocalRegisterCatalogVersion = {
+      persistedAt: clock(),
+      revision: input.revision,
+      rows: input.rows,
+      schemaVersion: POS_LOCAL_LOGICAL_RECORD_VERSION,
+      storeId: input.storeId,
+    };
+    await transaction.put(
+      "registerCatalog",
+      catalogVersionKey(input.storeId, input.revision),
+      version,
+    );
+    return version;
+  }
+
+  async function pinCatalogInTransaction(
+    transaction: PosLocalStoreTransaction,
+    input: {
+      ownerId?: string;
+      revision: PosRegisterCatalogRevision;
+      rows: PosRegisterCatalogRowDto[];
+      storeId: string;
+      terminalId: string;
+    },
+  ) {
+    await materializeCatalogVersion(transaction, input);
+    const pin: PosLocalRegisterCatalogPin = {
+      ...(input.ownerId ? { ownerId: input.ownerId } : {}),
+      leaseExpiresAt: clock() + REGISTER_CATALOG_PIN_LEASE_MS,
+      pinnedAt: clock(),
+      revision: input.revision,
+      storeId: input.storeId,
+      terminalId: input.terminalId,
+    };
+    await transaction.put(
+      "registerCatalog",
+      catalogPinKey(input.storeId, input.terminalId, input.ownerId),
+      pin,
+    );
+    return pin;
+  }
+
+  async function pruneUnreferencedCatalogVersions(
+    transaction: PosLocalStoreTransaction,
+    storeId: string,
+  ) {
+    const activeRevision = await readCatalogPointer(
+      transaction,
+      catalogActiveKey(storeId),
+    );
+    const stagedRevision = await readCatalogPointer(
+      transaction,
+      catalogStagedKey(storeId),
+    );
+    const retained = new Set(
+      [activeRevision, stagedRevision].filter(
+        (revision): revision is PosRegisterCatalogRevision => revision !== null,
+      ),
+    );
+    const pinKeyPrefix = `${REGISTER_CATALOG_PIN_PREFIX}${storeId}:`;
+    for (const key of await transaction.getAllKeys("registerCatalog")) {
+      if (!key.startsWith(pinKeyPrefix)) continue;
+      const record = await transaction.get<PosLocalRegisterCatalogPin>(
+        "registerCatalog",
+        key,
+      );
+      if (
+        record &&
+        record.storeId === storeId &&
+        (record.revision === "legacy" || typeof record.revision === "number")
+      ) {
+        const leaseExpiresAt =
+          record.leaseExpiresAt ??
+          record.pinnedAt + REGISTER_CATALOG_PIN_LEASE_MS;
+        if (leaseExpiresAt <= clock()) {
+          await transaction.delete("registerCatalog", key);
+        } else {
+          retained.add(record.revision);
+        }
+      }
+    }
+    const versionKeyPrefix = `${REGISTER_CATALOG_VERSION_PREFIX}${storeId}:`;
+    for (const key of await transaction.getAllKeys("registerCatalog")) {
+      if (!key.startsWith(versionKeyPrefix)) continue;
+      const version = await transaction.get<PosLocalRegisterCatalogVersion>(
+        "registerCatalog",
+        key,
+      );
+      if (version && !retained.has(version.revision)) {
+        await transaction.delete("registerCatalog", key);
+      }
+    }
+  }
 
   async function ensureSupportedSchema(
     transaction: PosLocalStoreTransaction,
@@ -313,6 +531,9 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
       ...(validationMetadata ? { validationMetadata } : {}),
       payload: normalizeLocalEventPayload(input),
       createdAt: clock(),
+      ...(input.catalogPin
+        ? { catalogRevision: input.catalogPin.revision }
+        : {}),
       ...(activity ? { activity } : {}),
       sync: {
         status: input.initialSyncStatus ?? getInitialSyncStatus(input.type),
@@ -320,6 +541,13 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
     };
 
     await transaction.put("events", String(nextSequence), event);
+    if (input.catalogPin) {
+      await pinCatalogInTransaction(transaction, {
+        ...input.catalogPin,
+        storeId: input.storeId,
+        terminalId: input.terminalId,
+      });
+    }
     await transaction.put("meta", META_SEQUENCE_KEY, nextSequence);
     return event;
   }
@@ -1297,6 +1525,319 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
       }
     },
 
+    async readRegisterCatalogVersionState(input: {
+      storeId: string;
+    }): Promise<PosLocalStoreResult<PosLocalRegisterCatalogVersionState>> {
+      try {
+        const value = await options.adapter.transaction(
+          "readonly",
+          ["meta", "registerCatalog"],
+          async (transaction) => {
+            await ensureSupportedSchema(transaction, "readonly");
+            return readCatalogVersionStateInTransaction(
+              transaction,
+              input.storeId,
+            );
+          },
+        );
+        return { ok: true, value };
+      } catch (error) {
+        return toFailure(error);
+      }
+    },
+
+    async readRegisterCatalogSelection(input: {
+      ownerId?: string;
+      storeId: string;
+      terminalId?: string;
+    }): Promise<PosLocalStoreResult<PosLocalRegisterCatalogVersion | null>> {
+      try {
+        const value = await options.adapter.transaction(
+          "readonly",
+          ["meta", "registerCatalog"],
+          async (transaction) => {
+            await ensureSupportedSchema(transaction, "readonly");
+            if (input.terminalId) {
+              const pin = await transaction.get<PosLocalRegisterCatalogPin>(
+                "registerCatalog",
+                catalogPinKey(input.storeId, input.terminalId, input.ownerId),
+              );
+              if (pin) {
+                const pinned = await readCatalogVersion(
+                  transaction,
+                  input.storeId,
+                  pin.revision,
+                );
+                return pinned;
+              }
+            }
+            return (
+              await readCatalogVersionStateInTransaction(
+                transaction,
+                input.storeId,
+              )
+            ).active;
+          },
+        );
+        return { ok: true, value };
+      } catch (error) {
+        return toFailure(error);
+      }
+    },
+
+    async readRegisterCatalogPin(input: {
+      ownerId?: string;
+      storeId: string;
+      terminalId: string;
+    }): Promise<PosLocalStoreResult<PosLocalRegisterCatalogPin | null>> {
+      try {
+        const value = await options.adapter.transaction(
+          "readonly",
+          ["meta", "registerCatalog"],
+          async (transaction) => {
+            await ensureSupportedSchema(transaction, "readonly");
+            return (
+              (await transaction.get<PosLocalRegisterCatalogPin>(
+                "registerCatalog",
+                catalogPinKey(input.storeId, input.terminalId, input.ownerId),
+              )) ?? null
+            );
+          },
+        );
+        return { ok: true, value };
+      } catch (error) {
+        return toFailure(error);
+      }
+    },
+
+    async stageRegisterCatalogVersion(input: {
+      revision: number;
+      rows: PosRegisterCatalogRowDto[];
+      storeId: string;
+    }): Promise<
+      PosLocalStoreResult<PosLocalRegisterCatalogVersionWriteOutcome>
+    > {
+      try {
+        const value = await options.adapter.transaction(
+          "readwrite",
+          ["meta", "registerCatalog"],
+          async (transaction) => {
+            await ensureSupportedSchema(transaction, "readwrite");
+            const state = await readCatalogVersionStateInTransaction(
+              transaction,
+              input.storeId,
+            );
+            const winner = [state.active, state.staged]
+              .filter((version): version is PosLocalRegisterCatalogVersion =>
+                Boolean(version),
+              )
+              .sort((left, right) =>
+                compareCatalogRevisions(right.revision, left.revision),
+              )[0];
+            if (
+              winner &&
+              compareCatalogRevisions(winner.revision, input.revision) > 0
+            ) {
+              return {
+                revision: winner.revision,
+                status: "already_newer" as const,
+                version: winner,
+              };
+            }
+            const version = await materializeCatalogVersion(transaction, input);
+            if (state.activeRevision === input.revision) {
+              return {
+                revision: input.revision,
+                status: "already_current" as const,
+                version,
+              };
+            }
+            if (state.stagedRevision === input.revision) {
+              return {
+                revision: input.revision,
+                status: "already_current" as const,
+                version,
+              };
+            }
+            await transaction.put(
+              "registerCatalog",
+              catalogStagedKey(input.storeId),
+              { revision: input.revision },
+            );
+            return {
+              revision: input.revision,
+              status: "staged" as const,
+              version,
+            };
+          },
+        );
+        return { ok: true, value };
+      } catch (error) {
+        return toFailure(error);
+      }
+    },
+
+    async promoteRegisterCatalogVersion(input: {
+      revision: number;
+      storeId: string;
+    }): Promise<
+      PosLocalStoreResult<PosLocalRegisterCatalogVersionWriteOutcome>
+    > {
+      try {
+        const value = await options.adapter.transaction(
+          "readwrite",
+          ["meta", "registerCatalog"],
+          async (transaction) => {
+            await ensureSupportedSchema(transaction, "readwrite");
+            const state = await readCatalogVersionStateInTransaction(
+              transaction,
+              input.storeId,
+            );
+            const requestedVersion = await readCatalogVersion(
+              transaction,
+              input.storeId,
+              input.revision,
+            );
+            const version = [state.active, state.staged, requestedVersion]
+              .filter((candidate): candidate is PosLocalRegisterCatalogVersion =>
+                Boolean(candidate),
+              )
+              .sort((left, right) =>
+                compareCatalogRevisions(right.revision, left.revision),
+              )[0];
+            if (!version) {
+              throw new Error(
+                "The staged register catalog version is missing.",
+              );
+            }
+            if (state.activeRevision === version.revision) {
+              return {
+                revision: version.revision,
+                status:
+                  version.revision === input.revision
+                    ? ("already_current" as const)
+                    : ("already_newer" as const),
+                version,
+              };
+            }
+            await transaction.put(
+              "registerCatalog",
+              catalogActiveKey(input.storeId),
+              { revision: version.revision },
+            );
+            if (state.stagedRevision === version.revision) {
+              await transaction.delete(
+                "registerCatalog",
+                catalogStagedKey(input.storeId),
+              );
+            }
+            const compatibilitySnapshot: PosLocalRegisterCatalogSnapshot = {
+              refreshedAt: version.persistedAt,
+              rows: version.rows,
+              schemaVersion: version.schemaVersion,
+              storeId: input.storeId,
+            };
+            await transaction.put(
+              "registerCatalog",
+              input.storeId,
+              compatibilitySnapshot,
+            );
+            await pruneUnreferencedCatalogVersions(transaction, input.storeId);
+            return {
+              revision: version.revision,
+              status: "promoted" as const,
+              version,
+            };
+          },
+        );
+        return { ok: true, value };
+      } catch (error) {
+        return toFailure(error);
+      }
+    },
+
+    async pinRegisterCatalogVersion(input: {
+      ownerId?: string;
+      revision: PosRegisterCatalogRevision;
+      rows: PosRegisterCatalogRowDto[];
+      storeId: string;
+      terminalId: string;
+    }): Promise<PosLocalStoreResult<PosLocalRegisterCatalogPin>> {
+      try {
+        const value = await options.adapter.transaction(
+          "readwrite",
+          ["meta", "registerCatalog"],
+          async (transaction) => {
+            await ensureSupportedSchema(transaction, "readwrite");
+            return pinCatalogInTransaction(transaction, input);
+          },
+        );
+        return { ok: true, value };
+      } catch (error) {
+        return toFailure(error);
+      }
+    },
+
+    async releaseRegisterCatalogPin(input: {
+      ownerId?: string;
+      storeId: string;
+      terminalId: string;
+    }): Promise<PosLocalStoreResult<null>> {
+      try {
+        const value = await options.adapter.transaction(
+          "readwrite",
+          ["meta", "registerCatalog"],
+          async (transaction) => {
+            await ensureSupportedSchema(transaction, "readwrite");
+            await transaction.delete(
+              "registerCatalog",
+              catalogPinKey(input.storeId, input.terminalId, input.ownerId),
+            );
+            await pruneUnreferencedCatalogVersions(transaction, input.storeId);
+            return null;
+          },
+        );
+        return { ok: true, value };
+      } catch (error) {
+        return toFailure(error);
+      }
+    },
+
+    async renewRegisterCatalogPinLease(input: {
+      ownerId?: string;
+      storeId: string;
+      terminalId: string;
+    }): Promise<PosLocalStoreResult<PosLocalRegisterCatalogPin | null>> {
+      try {
+        const value = await options.adapter.transaction(
+          "readwrite",
+          ["meta", "registerCatalog"],
+          async (transaction) => {
+            await ensureSupportedSchema(transaction, "readwrite");
+            const key = catalogPinKey(
+              input.storeId,
+              input.terminalId,
+              input.ownerId,
+            );
+            const existing = await transaction.get<PosLocalRegisterCatalogPin>(
+              "registerCatalog",
+              key,
+            );
+            if (!existing) return null;
+            const renewed = {
+              ...existing,
+              leaseExpiresAt: clock() + REGISTER_CATALOG_PIN_LEASE_MS,
+            };
+            await transaction.put("registerCatalog", key, renewed);
+            return renewed;
+          },
+        );
+        return { ok: true, value };
+      } catch (error) {
+        return toFailure(error);
+      }
+    },
+
     async writeRegisterCatalogSnapshot(input: {
       rows: PosRegisterCatalogRowDto[];
       storeId: string;
@@ -1468,7 +2009,7 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
       try {
         const value = await options.adapter.transaction(
           "readwrite",
-          ["meta", "events"],
+          ["meta", "events", "registerCatalog"],
           async (transaction) => {
             await ensureSupportedSchema(transaction, "readwrite");
             return appendEventInTransaction(transaction, input);

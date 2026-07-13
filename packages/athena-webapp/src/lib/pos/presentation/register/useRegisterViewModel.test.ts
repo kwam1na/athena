@@ -31,6 +31,7 @@ const mockCorrectRegisterSessionOpeningFloat = vi.fn();
 const mockRegisterTerminal = vi.fn();
 const mockNavigateBack = vi.fn();
 const mockUsePosLocalSyncRuntimeStatus = vi.fn();
+const mockUseConvexRegisterCatalogState = vi.fn();
 const mockUseConvexRegisterCatalogAvailability = vi.fn();
 const mockReadStoredTerminalFingerprint = vi.fn();
 const mockAppendLocalEvent = vi.fn();
@@ -302,6 +303,8 @@ vi.mock("@/hooks/usePOSProducts", () => ({
 
 vi.mock("@/lib/pos/infrastructure/convex/catalogGateway", () => ({
   useConvexRegisterCatalog: () => mockRegisterCatalogRows,
+  useConvexRegisterCatalogState: (...args: unknown[]) =>
+    mockUseConvexRegisterCatalogState(...args),
   useConvexRegisterServiceCatalog: () => mockRegisterServiceCatalogRows,
   useConvexRegisterCatalogAvailability: (...args: unknown[]) =>
     mockUseConvexRegisterCatalogAvailability(...args),
@@ -662,6 +665,14 @@ describe("useRegisterViewModel", () => {
     mockUseConvexRegisterCatalogAvailability.mockImplementation(
       () => mockRegisterCatalogAvailabilityRows,
     );
+    mockUseConvexRegisterCatalogState.mockReset();
+    mockUseConvexRegisterCatalogState.mockImplementation(() => ({
+      catalogRefreshStatus: "current",
+      refreshedAt: 1,
+      rows: mockRegisterCatalogRows,
+      source: "local",
+      status: "ready",
+    }));
     localStorage.clear();
     mockReadStoredTerminalFingerprint.mockReset();
     mockReadStoredTerminalFingerprint.mockReturnValue(null);
@@ -1012,6 +1023,31 @@ describe("useRegisterViewModel", () => {
         label: "Register ready",
         priority: "critical-workflow",
         guidance: "Apply the update when you are ready.",
+      }),
+    );
+  });
+
+  it("keeps catalog refresh non-idle while local persistence remains pending after visible work clears", async () => {
+    mockActiveSession = {
+      ...mockActiveSession!,
+      cartItems: [],
+      customer: null,
+      payments: [],
+    };
+    mockUsePosLocalSyncRuntimeStatus.mockReturnValue({
+      status: "pending",
+      pendingEventCount: 1,
+    });
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    renderHook(() => useRegisterViewModel());
+
+    await waitFor(() =>
+      expect(mockUseConvexRegisterCatalogState).toHaveBeenLastCalledWith({
+        registerRefresh: expect.objectContaining({
+          isOperationallyIdle: false,
+        }),
+        storeId: "store-1",
       }),
     );
   });
