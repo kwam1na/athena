@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="b5e11c9da45800fd7f0a2dc250b7e6b9a118efeaade7984bc3ca0eb40eeddbc9" data-athena-report-base="d3e9ca1956a538ef2152ecde0f02f80961699e14^" data-athena-report-head="d3e9ca1956a538ef2152ecde0f02f80961699e14">
+<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="f25282af8f200818fd13b3f20587d06c9702b3d58e0eda4aa99aaab5d548e0c2" data-athena-report-base="d3e9ca1956a538ef2152ecde0f02f80961699e14^" data-athena-report-head="d3e9ca1956a538ef2152ecde0f02f80961699e14" data-athena-policy-correction-pr="656" data-athena-policy-correction-status="delivery-candidate">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -78,7 +78,7 @@
       <header>
         <h1>Fail Fast on Harness Contract Drift</h1>
         <p class="lede">How V26-1040 moved deterministic repository-contract failures ahead of expensive provider validation while preserving every merge-grade gate.</p>
-        <div class="meta"><span class="pill">V26-1040 · Done</span><span class="pill">PR #655 · Merged</span><span class="pill">Merge d3e9ca19</span><span class="pill">All required checks green</span><span class="pill">No production deploy</span><span class="pill">Local main aligned</span></div>
+        <div class="meta"><span class="pill">V26-1040 · Done</span><span class="pill">PR #655 · Merged</span><span class="pill">Merge d3e9ca19</span><span class="pill">All required checks green</span><span class="pill">No production deploy</span><span class="pill">Local main aligned</span><span class="pill">Policy correction PR #656 · Delivery candidate</span></div>
       </header>
       <section class="panel"><h2>Executive Summary</h2>
 <p>PR #655 merged V26-1040 into main on 2026-07-13. pr:athena now runs a dedicated static contract preflight after generated-artifact preparation and before provider validation. One run can report mapping gaps, live audit failures, stale audit or registry fixtures, and missing sibling-test updates together.</p>
@@ -125,6 +125,11 @@ After:  prepare -&gt; preflight -&gt; validate -&gt; record-proof -&gt; scorecar
 <p>PR #655 merged as d3e9ca1956a538ef2152ecde0f02f80961699e14. Linear V26-1040 moved to Done through merge automation. The root checkout fast-forwarded to that exact origin/main commit and was clean before this report branch was created.</p>
 <p>No Athena, storefront, Convex, schema, API, permissions, data, or deployment configuration changed. Production deployment was intentionally not run because the merged diff contains repository-local harness tooling, tests, documentation, and generated Graphify artifacts only.</p>
 </section>
+<section class="panel"><h2>Delivery Policy Correction Candidate (PR #656)</h2>
+<p>This report exposed a sequencing flaw in the execute workflow: a required landed-change report was being generated only after the delivery PR had merged, which forced a second PR and meant the report was not actually included with delivery.</p>
+<p>PR #655 and V26-1040 are merged and closed. This report plus the execute-skill, regression-sensor, and solution-note corrections belong to separate PR #656, which is a delivery candidate and is not yet merged or root-aligned.</p>
+<p>If PR #656 lands, the repo-local execute skill will require applicable reports, compounding artifacts, report review, and the merge-ready Linear closeout record before merge, all on the same delivery branch. After merge, the only delivery actions will be aligning and cleaning local root and running the selected production deploys; either action may be explicitly deferred by the user or repo workflow. The focused harness regression test will preserve that boundary and its ordering.</p>
+</section>
 <section class="panel"><h2>Next-Time Guidance</h2>
 
 <ul>
@@ -145,6 +150,7 @@ After:  prepare -&gt; preflight -&gt; validate -&gt; record-proof -&gt; scorecar
 <tr><td><code>scripts/pr-athena-delivery-run.ts</code></td><td>Places preflight between preparation and validation so an early block prevents provider work and proof recording.</td></tr>
 <tr><td><code>scripts/harness-inferential-review.ts</code></td><td>Exports the narrow sibling-test detector and prints terminal-first Why/Fix diagnostics for blocking inferential results.</td></tr>
 <tr><td><code>docs/solutions/workflow-issues/static-harness-contract-preflight-before-provider-validation-2026-07-13.md</code></td><td>Captures the reusable static-preflight-before-expensive-sensors pattern for future delivery work.</td></tr>
+<tr><td><code>.agents/skills/execute/SKILL.md</code></td><td>PR #656 candidate update: requires reports and compounding artifacts in the delivery PR before merge and limits post-merge work to root alignment and non-deferred production deploys.</td></tr>
 <tr><td><code>package.json</code></td><td>Exposes pr:athena:preflight as the stable repository command used by the delivery wrapper.</td></tr></tbody>
   </table>
 </section>
@@ -264,13 +270,13 @@ After:  prepare -&gt; preflight -&gt; validate -&gt; record-proof -&gt; scorecar
 
 <div class="quiz-question" data-answer="1">
   <fieldset>
-    <legend>10. What was the final production and repository state?</legend>
+    <legend>10. What was the final production and repository state for PR #655 / V26-1040?</legend>
     <label><input type="radio" name="q10" value="0" /> PR open, production deployed, Linear In Review</label>
 <label><input type="radio" name="q10" value="1" /> PR merged, no deployable runtime surface, Linear Done, local main aligned</label>
 <label><input type="radio" name="q10" value="2" /> PR merged, full production deploy required, local main stale</label>
 <label><input type="radio" name="q10" value="3" /> Auto-merge armed but no merge SHA</label>
   </fieldset>
-  <div class="answer-detail">The harness-only change merged as d3e9ca19, required no runtime deployment, closed V26-1040, and root main was fast-forwarded.</div>
+  <div class="answer-detail">PR #655's harness-only change merged as d3e9ca19, required no runtime deployment, closed V26-1040, and root main was fast-forwarded. PR #656 is separately labeled as a delivery candidate in this report.</div>
 </div>
 
     <div class="quiz-actions">

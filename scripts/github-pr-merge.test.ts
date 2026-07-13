@@ -409,8 +409,12 @@ describe("github-pr-merge", () => {
 
   it("keeps the execute workflow pointed at the worktree-safe merge helper", async () => {
     const rootDir = path.resolve(import.meta.dirname, "..");
-    const [executeSkill, packageJson] = await Promise.all([
+    const [executeSkill, reportSkill, packageJson] = await Promise.all([
       readFile(path.join(rootDir, ".agents/skills/execute/SKILL.md"), "utf8"),
+      readFile(
+        path.join(rootDir, ".agents/skills/ce-landed-change-report/SKILL.md"),
+        "utf8"
+      ),
       readFile(path.join(rootDir, "package.json"), "utf8"),
     ]);
 
@@ -422,6 +426,61 @@ describe("github-pr-merge", () => {
     expect(executeSkill).toContain("Delivery always includes remote merge and local fast-forward");
     expect(executeSkill).toContain("fast-forward the local root checkout to `origin/main`");
     expect(executeSkill).toContain("Treat the merge as incomplete until the remote merge is confirmed");
+    expect(executeSkill).toContain(
+      "do not defer the report to a post-merge follow-up PR"
+    );
+    const artifactsSection = executeSkill.indexOf(
+      "### 8. Complete Delivery Artifacts + Compound The Learning"
+    );
+    const reviewSection = executeSkill.indexOf(
+      "### 9. Run The Review + Merge Loop"
+    );
+    const finalLinearComment = executeSkill.indexOf(
+      "After the review loop is unanimously green"
+    );
+    const mergeInstruction = executeSkill.indexOf(
+      "arm auto-merge with `bun run github:pr-merge",
+      finalLinearComment
+    );
+    const postMergeSection = executeSkill.indexOf(
+      "### 10. Post-Merge: Align Root + Run Non-Deferred Production Deploys"
+    );
+
+    expect(artifactsSection).toBeGreaterThan(-1);
+    expect(reviewSection).toBeGreaterThan(artifactsSection);
+    expect(finalLinearComment).toBeGreaterThan(reviewSection);
+    expect(mergeInstruction).toBeGreaterThan(finalLinearComment);
+    expect(postMergeSection).toBeGreaterThan(mergeInstruction);
+    expect(executeSkill.slice(artifactsSection, reviewSection)).toContain(
+      "Use the repo-local `$ce-compound` skill"
+    );
+    expect(executeSkill.slice(artifactsSection, reviewSection)).toContain(
+      "commit the approved report to the delivery branch"
+    );
+    expect(executeSkill.slice(reviewSection, postMergeSection)).toContain(
+      "post or refresh the merge-ready Linear comment"
+    );
+    expect(executeSkill.slice(postMergeSection)).toContain(
+      "Do not generate or refresh landed-change reports, solution notes, skills, PR descriptions, or Linear closeout comments after merge"
+    );
+    expect(executeSkill).not.toContain(
+      "Post-merge report work is limited to an explicitly requested metadata refresh"
+    );
+    expect(executeSkill).not.toContain(
+      "After merge, run repo-local `$ce-landed-change-report`"
+    );
+    expect(reportSkill).toContain(
+      "The normal execute-workflow mode is a delivery candidate"
+    );
+    expect(reportSkill).toContain(
+      "prefer the open delivery PR and its candidate head"
+    );
+    expect(reportSkill).toContain(
+      "do not claim merged, deployed, Linear `Done`, or root-aligned"
+    );
+    expect(reportSkill).toContain(
+      "do not generate or refresh it after merge"
+    );
   });
 
   it("runs local commands with optional stdin", async () => {
