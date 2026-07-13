@@ -3,8 +3,15 @@ import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 
 const mockedSkuSearch = vi.hoisted(() => ({
+  advanceRegisterCatalogRevision: vi.fn(),
   applyInventoryEffectWithCtx: vi.fn(),
   upsertProductSkuSearchProjection: vi.fn(),
+  upsertProductSkuSearchProjections: vi.fn(),
+}));
+
+vi.mock("../pos/application/sync/registerCatalogRevision", () => ({
+  advanceRegisterCatalogRevision:
+    mockedSkuSearch.advanceRegisterCatalogRevision,
 }));
 
 vi.mock("../reporting/inventory/effects", () => ({
@@ -14,6 +21,8 @@ vi.mock("../reporting/inventory/effects", () => ({
 vi.mock("./skuSearch", () => ({
   upsertProductSkuSearchProjection:
     mockedSkuSearch.upsertProductSkuSearchProjection,
+  upsertProductSkuSearchProjections:
+    mockedSkuSearch.upsertProductSkuSearchProjections,
 }));
 
 import {
@@ -98,7 +107,9 @@ beforeEach(() => {
       };
     },
   );
+  mockedSkuSearch.advanceRegisterCatalogRevision.mockReset();
   mockedSkuSearch.upsertProductSkuSearchProjection.mockReset();
+  mockedSkuSearch.upsertProductSkuSearchProjections.mockReset();
 });
 
 function createMutationCtx(seed: Partial<Record<TableName, Row[]>> = {}) {
@@ -410,10 +421,12 @@ describe("catalog import", () => {
       sku: "BW-18",
     });
     expect(
-      mockedSkuSearch.upsertProductSkuSearchProjection,
+      mockedSkuSearch.upsertProductSkuSearchProjections,
     ).toHaveBeenCalledWith(
       expect.anything(),
-      Array.from(tables.productSku.values())[0]._id,
+      [Array.from(tables.productSku.values())[0]._id],
+      "store-1",
+      { additionalEffectiveChange: false },
     );
     expect(Array.from(tables.operationalEvent.values())[0]).toMatchObject({
       eventType: "inventory_import_applied",
@@ -1184,7 +1197,9 @@ describe("catalog import", () => {
     });
     expect(
       mockedSkuSearch.upsertProductSkuSearchProjection,
-    ).toHaveBeenCalledWith(expect.anything(), "sku-1");
+    ).toHaveBeenCalledWith(expect.anything(), "sku-1", {
+      advanceRevision: false,
+    });
     expect(tables.product.get("product-1")).toMatchObject({
       availability: "live",
       inventoryCount: 10,
@@ -1552,14 +1567,15 @@ describe("catalog import", () => {
       isVisible: true,
     });
     expect(
-      mockedSkuSearch.upsertProductSkuSearchProjection,
-    ).toHaveBeenCalledWith(ctx, "sku-hidden-draft");
+      mockedSkuSearch.upsertProductSkuSearchProjections,
+    ).toHaveBeenCalledWith(
+      ctx,
+      ["sku-hidden-draft", "sku-hidden-draft-other"],
+      "store-1",
+    );
     expect(
-      mockedSkuSearch.upsertProductSkuSearchProjection,
-    ).not.toHaveBeenCalledWith(ctx, "sku-visible-live");
-    expect(
-      mockedSkuSearch.upsertProductSkuSearchProjection,
-    ).toHaveBeenCalledWith(ctx, "sku-hidden-draft-other");
+      mockedSkuSearch.upsertProductSkuSearchProjections,
+    ).not.toHaveBeenCalledWith(ctx, expect.arrayContaining(["sku-visible-live"]), "store-1");
     expect(Array.from(tables.operationalWorkItem.values())).toEqual([
       expect.objectContaining({
         metadata: expect.objectContaining({
@@ -1661,8 +1677,8 @@ describe("catalog import", () => {
       posVisible: true,
     });
     expect(
-      mockedSkuSearch.upsertProductSkuSearchProjection,
-    ).toHaveBeenCalledWith(ctx, "sku-hidden-draft");
+      mockedSkuSearch.upsertProductSkuSearchProjections,
+    ).toHaveBeenCalledWith(ctx, ["sku-hidden-draft"], "store-1");
   });
 
   it("returns a cursor so legacy visibility repair can advance past skipped rows", async () => {
@@ -1780,8 +1796,8 @@ describe("catalog import", () => {
       posVisible: true,
     });
     expect(
-      mockedSkuSearch.upsertProductSkuSearchProjection,
-    ).toHaveBeenCalledWith(ctx, "sku-hidden-draft");
+      mockedSkuSearch.upsertProductSkuSearchProjections,
+    ).toHaveBeenCalledWith(ctx, ["sku-hidden-draft"], "store-1");
   });
 
   it("continues through repair candidates that share a finalizedAt timestamp", async () => {
@@ -1894,11 +1910,11 @@ describe("catalog import", () => {
       posVisible: true,
     });
     expect(
-      mockedSkuSearch.upsertProductSkuSearchProjection,
-    ).toHaveBeenCalledWith(ctx, "sku-hidden-draft-1");
+      mockedSkuSearch.upsertProductSkuSearchProjections,
+    ).toHaveBeenNthCalledWith(1, ctx, ["sku-hidden-draft-1"], "store-1");
     expect(
-      mockedSkuSearch.upsertProductSkuSearchProjection,
-    ).toHaveBeenCalledWith(ctx, "sku-hidden-draft-2");
+      mockedSkuSearch.upsertProductSkuSearchProjections,
+    ).toHaveBeenNthCalledWith(2, ctx, ["sku-hidden-draft-2"], "store-1");
   });
 
   it("does not create an inventory movement when finalization has no trusted stock delta", async () => {

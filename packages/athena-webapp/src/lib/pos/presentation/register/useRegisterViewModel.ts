@@ -45,7 +45,7 @@ import { isSyncablePosLocalEvent } from "@/lib/pos/infrastructure/local/syncCont
 import { useLocalPosEntryContext } from "@/lib/pos/infrastructure/local/localPosEntryContext";
 import { readStoredTerminalFingerprint } from "@/lib/pos/infrastructure/terminal/fingerprint";
 import {
-  useConvexRegisterCatalog,
+  useConvexRegisterCatalogState,
   useConvexRegisterCatalogAvailability,
   useConvexRegisterServiceCatalog,
 } from "@/lib/pos/infrastructure/convex/catalogGateway";
@@ -77,6 +77,7 @@ import type {
   RegisterViewModel,
 } from "./registerUiState";
 import {
+  buildRegisterOperationalIdleState,
   buildRegisterUpdateApplyBlockerState,
   EMPTY_REGISTER_CUSTOMER_INFO,
 } from "./registerUiState";
@@ -169,6 +170,11 @@ import {
   type RegisterPaymentMutationDraft,
 } from "./useRegisterCheckoutDraftState";
 import { useRegisterLocalRuntime } from "./useRegisterLocalRuntime";
+import {
+  clearRegisterCatalogRuntimeActionGuard,
+  getRegisterCatalogRuntimeOwnerId,
+  hasRegisterCatalogRuntimeActionGuard,
+} from "@/lib/pos/infrastructure/local/registerCatalogPinRuntime";
 
 type LocalAuthenticatedStaff = {
   activeRoles: string[];
@@ -442,7 +448,7 @@ const POS_READINESS_REPAIR_GUARD_DELAY_MS = 1_500;
 
 export function useRegisterViewModel(): RegisterViewModel {
   const { activeStore } = useGetActiveStore();
-  const { user } = useAuth();
+  const { authSessionEpoch, user } = useAuth();
   const terminal = useGetTerminal();
   const routeParams = useParams({ strict: false }) as
     | {
@@ -551,6 +557,12 @@ export function useRegisterViewModel(): RegisterViewModel {
   } = useRegisterCheckoutDraftState();
   const [isCheckoutMutationInFlight, setIsCheckoutMutationInFlight] =
     useState(false);
+  const catalogOperationalIdleRef = useRef(false);
+  const [catalogOperationalIdle, setCatalogOperationalIdle] = useState(false);
+  const registerCatalogRuntimeOwnerId = useMemo(
+    () => getRegisterCatalogRuntimeOwnerId(),
+    [],
+  );
   const setCheckoutMutationLocked = useCallback(
     (locked: boolean) => {
       checkoutMutationLockedRef.current = locked;
@@ -710,10 +722,25 @@ export function useRegisterViewModel(): RegisterViewModel {
     staffProfileId,
     registerNumber: terminalRegisterNumber,
   });
-  const registerCatalogRows = useConvexRegisterCatalog({
-    refreshMetadataSnapshot: true,
+  const registerCatalogState = useConvexRegisterCatalogState({
+    registerRefresh: terminal?._id
+      ? {
+          authScopeKey: `${user?._id ? String(user._id) : "signed-out"}:${authSessionEpoch}`,
+          isOperationallyIdle: catalogOperationalIdle,
+          isOperationallyIdleNow: () =>
+            catalogOperationalIdleRef.current &&
+            !hasRegisterCatalogRuntimeActionGuard({
+              storeId: String(activeStoreId ?? ""),
+              terminalId: String(terminal._id),
+            }),
+          ownerId: registerCatalogRuntimeOwnerId,
+          terminalId: terminal._id,
+        }
+      : undefined,
     storeId: activeStoreId,
   });
+  const registerCatalogRows =
+    "rows" in registerCatalogState ? registerCatalogState.rows : undefined;
   const registerCatalogIndex = useRegisterCatalogIndex(registerCatalogRows);
   const registerCatalogSkuIds = useMemo(
     () => new Set((registerCatalogRows ?? []).map((row) => row.productSkuId)),
@@ -5423,7 +5450,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     (!staffProfileId &&
       (cashierPresenceRestore.status !== "pending" ||
         hasCashierPresenceRestoreGraceElapsed));
-  const updateApplyBlocker = buildRegisterUpdateApplyBlockerState({
+  const operationalIdleInput = {
     hasActiveSaleWork: hasInProgressSaleDraft && !isTransactionCompleted,
     hasCheckoutMutationInFlight: isCheckoutMutationInFlight,
     hasDrawerTransitionInFlight:
@@ -5431,10 +5458,22 @@ export function useRegisterViewModel(): RegisterViewModel {
       isSubmittingCloseout ||
       isCorrectingOpeningFloat ||
       isRepairingTerminalSetup,
-    hasLocalRuntimeApplyRisk: Boolean(
-      hasInProgressSaleDraft && localRuntimeStatusSourceForPresentation,
-    ),
-  });
+    hasLocalRuntimeApplyRisk: Boolean(localRuntimeStatusSourceForPresentation),
+  };
+  const updateApplyBlocker =
+    buildRegisterUpdateApplyBlockerState(operationalIdleInput);
+  const { isIdle: isRegisterOperationallyIdle } =
+    buildRegisterOperationalIdleState(operationalIdleInput);
+  catalogOperationalIdleRef.current = isRegisterOperationallyIdle;
+  useEffect(() => {
+    setCatalogOperationalIdle(isRegisterOperationallyIdle);
+    if (isRegisterOperationallyIdle && activeStoreId && terminal?._id) {
+      clearRegisterCatalogRuntimeActionGuard({
+        storeId: String(activeStoreId),
+        terminalId: String(terminal._id),
+      });
+    }
+  }, [activeStoreId, isRegisterOperationallyIdle, terminal?._id]);
 
   const authDialog =
     activeStoreId && terminal?._id
@@ -5513,6 +5552,8 @@ export function useRegisterViewModel(): RegisterViewModel {
 
   return {
     hasActiveStore: Boolean(activeStoreId),
+    catalogRefreshStatus:
+      registerCatalogState.catalogRefreshStatus ?? "current",
     debug: {
       activeStoreSource: activeStore
         ? "live"
@@ -5702,6 +5743,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       setCustomerInfo,
     },
     productEntry: {
+      catalogRows: registerCatalogRows ?? [],
       canSearchProducts: terminalCanTransactProducts,
       canSearchServices: terminalCanTransactServices,
       disabled:

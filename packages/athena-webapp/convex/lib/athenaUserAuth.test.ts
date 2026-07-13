@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Id } from "../_generated/dataModel";
 import {
+  findAthenaUserByEmailIndexedWithCtx,
   findAthenaUserByEmailWithCtx,
   normalizeAthenaUserEmail,
 } from "./athenaUserAuth";
@@ -94,6 +95,25 @@ describe("Athena user normalized identity", () => {
 
     await expect(
       findAthenaUserByEmailWithCtx(ctx as never, "ADMIN@example.com"),
+    ).resolves.toMatchObject({ _id: "indexed" });
+    expect(collect).not.toHaveBeenCalled();
+  });
+
+  it("offers an indexed-only lookup for reactive hot paths", async () => {
+    const { collect, ctx } = context([
+      {
+        _id: "legacy" as Id<"athenaUser">,
+        email: "Admin@example.com",
+      },
+      {
+        _id: "indexed" as Id<"athenaUser">,
+        email: "Admin@example.com",
+        normalizedEmail: "admin@example.com",
+      },
+    ]);
+
+    await expect(
+      findAthenaUserByEmailIndexedWithCtx(ctx as never, "ADMIN@example.com"),
     ).resolves.toMatchObject({ _id: "indexed" });
     expect(collect).not.toHaveBeenCalled();
   });

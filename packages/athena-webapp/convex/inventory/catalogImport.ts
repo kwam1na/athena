@@ -29,7 +29,11 @@ import { toSlug } from "../utils";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
 import { isPosCatalogVisible } from "../../shared/posCatalogVisibility";
 import { refreshCatalogSummaryWithCtx } from "./catalogSummary";
-import { upsertProductSkuSearchProjection } from "./skuSearch";
+import {
+  upsertProductSkuSearchProjection,
+  upsertProductSkuSearchProjections,
+} from "./skuSearch";
+import { advanceRegisterCatalogRevision } from "../pos/application/sync/registerCatalogRevision";
 
 const DEFAULT_CATEGORY_NAME = "Legacy import";
 const DEFAULT_SUBCATEGORY_NAME = "Imported inventory";
@@ -418,6 +422,7 @@ export async function importInventoryRowsWithCtx(
     subcategoriesCreated: 0,
   };
   const touchedProductIds = new Set<Id<"product">>();
+  const touchedProductSkuIds = new Set<Id<"productSku">>();
   const finalTrustedQuantitiesByRowNumber =
     buildFinalTrustedQuantitiesByRowNumber(importRows, activeProvisionalRows);
 
@@ -476,7 +481,7 @@ export async function importInventoryRowsWithCtx(
         storeId: args.storeId,
         targetQuantity: finalTrustedQuantity,
       });
-      await upsertProductSkuSearchProjection(ctx, existingSku._id);
+      touchedProductSkuIds.add(existingSku._id);
       summary.skusUpdated += 1;
     } else {
       const productSkuId = await ctx.db.insert(
@@ -496,7 +501,7 @@ export async function importInventoryRowsWithCtx(
         storeId: args.storeId,
         targetQuantity: finalTrustedQuantity,
       });
-      await upsertProductSkuSearchProjection(ctx, productSkuId);
+      touchedProductSkuIds.add(productSkuId);
       summary.skusCreated += 1;
     }
 
@@ -517,6 +522,12 @@ export async function importInventoryRowsWithCtx(
     rows: importRows,
     storeId: args.storeId,
   });
+  await upsertProductSkuSearchProjections(
+    ctx,
+    Array.from(touchedProductSkuIds),
+    args.storeId,
+    { additionalEffectiveChange: activeProvisionalRows.length > 0 },
+  );
 
   await recordOperationalEventWithCtx(ctx, {
     actorUserId: access.athenaUser._id,
@@ -817,6 +828,7 @@ export async function stageInventoryImportReviewRowsForPosWithCtx(
     trustedStockRowsUpdated: 0,
   };
   const stagedIds: Array<Id<"inventoryImportProvisionalSku">> = [];
+  let registerCatalogChanged = false;
 
   for (const row of rows) {
     const existing = await ctx.db
@@ -843,6 +855,7 @@ export async function stageInventoryImportReviewRowsForPosWithCtx(
           closedByUserId: access.athenaUser._id,
           updatedAt: now,
         });
+        registerCatalogChanged = true;
       }
       continue;
     }
@@ -888,6 +901,20 @@ export async function stageInventoryImportReviewRowsForPosWithCtx(
       summary.alreadyStaged = true;
       summary.provisionalRowsUpdated += 1;
       await ctx.db.patch("inventoryImportProvisionalSku", existing._id, patch);
+      registerCatalogChanged =
+        registerCatalogChanged ||
+        existing.status !== patch.status ||
+        existing.posExposureStatus !== patch.posExposureStatus ||
+        existing.productId !== patch.productId ||
+        existing.productSkuId !== patch.productSkuId ||
+        existing.importedProductName !== patch.importedProductName ||
+        existing.importedSku !== patch.importedSku ||
+        existing.importedBarcode !== patch.importedBarcode ||
+        existing.importedCategory !== patch.importedCategory ||
+        existing.importedColor !== patch.importedColor ||
+        existing.importedLength !== patch.importedLength ||
+        existing.importedPrice !== patch.importedPrice ||
+        existing.importedSize !== patch.importedSize;
       stagedIds.push(existing._id);
     } else {
       const id = await ctx.db.insert("inventoryImportProvisionalSku", {
@@ -900,11 +927,17 @@ export async function stageInventoryImportReviewRowsForPosWithCtx(
         },
       });
       summary.provisionalRowsCreated += 1;
+      registerCatalogChanged = true;
       stagedIds.push(id);
     }
 
     summary.rowsStaged += 1;
   }
+
+  await advanceRegisterCatalogRevision(ctx, {
+    didChange: registerCatalogChanged,
+    storeId: args.storeId,
+  });
 
   await recordOperationalEventWithCtx(ctx, {
     actorUserId: access.athenaUser._id,
@@ -1245,6 +1278,7 @@ export async function repairOnboardedLegacyImportTrustedSkuVisibilityWithCtx(
   const repairedSkus: LegacyImportTrustedVisibilityRepairSku[] = [];
   const taxonomyWorkItemSkus: LegacyImportTrustedVisibilityRepairSku[] = [];
   const repairedProductIds = new Set<Id<"product">>();
+  const repairedProductSkuIds: Array<Id<"productSku">> = [];
   let promotedToLive = 0;
   let refreshedSearchProjections = 0;
   let skippedArchivedProducts = 0;
@@ -1329,8 +1363,16 @@ export async function repairOnboardedLegacyImportTrustedSkuVisibilityWithCtx(
       repairedProductIds.add(product._id);
     }
 
-    await upsertProductSkuSearchProjection(ctx, productSku._id);
+    repairedProductSkuIds.push(productSku._id);
     refreshedSearchProjections += 1;
+  }
+
+  if (!dryRun && repairedProductSkuIds.length > 0) {
+    await upsertProductSkuSearchProjections(
+      ctx,
+      repairedProductSkuIds,
+      args.storeId,
+    );
   }
 
   return {
@@ -1613,7 +1655,9 @@ export async function finalizeTrustedInventoryFromProductPageWithCtx(
     provisionalSkuId: activeRow._id,
     storeId: normalizedArgs.storeId,
   });
-  await upsertProductSkuSearchProjection(ctx, normalizedArgs.productSkuId);
+  await upsertProductSkuSearchProjection(ctx, normalizedArgs.productSkuId, {
+    advanceRevision: false,
+  });
 
   const inventoryMovementId = inventoryEffect.movement?._id;
 
@@ -1638,6 +1682,10 @@ export async function finalizeTrustedInventoryFromProductPageWithCtx(
     provisionalSoldQuantityAtFinalization:
       activeRow.saleEvidence.totalQuantitySold,
     updatedAt: now,
+  });
+  await advanceRegisterCatalogRevision(ctx, {
+    didChange: true,
+    storeId: normalizedArgs.storeId,
   });
   await refreshCatalogSummaryWithCtx(ctx, normalizedArgs.storeId);
 
@@ -1901,6 +1949,11 @@ export async function completeFinalizedLegacyImportRowsForProductTaxonomyWithCtx
     });
     completedCount += 1;
   }
+
+  await advanceRegisterCatalogRevision(ctx, {
+    didChange: completedCount > 0,
+    storeId: args.storeId,
+  });
 
   return completedCount;
 }
@@ -2849,7 +2902,9 @@ async function findOrCreateProvisionalCatalogIdentity(
       storeId: args.storeId,
     }),
   });
-  await upsertProductSkuSearchProjection(ctx, productSkuId);
+  await upsertProductSkuSearchProjection(ctx, productSkuId, {
+    advanceRevision: false,
+  });
   const productSku = await ctx.db.get("productSku", productSkuId);
   if (!productSku) {
     throw new Error(`Row ${args.row.rowNumber}: SKU could not be loaded.`);

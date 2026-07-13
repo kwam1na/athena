@@ -5,7 +5,7 @@ import {
   LOGGED_IN_USER_ID_KEY,
 } from "../lib/constants";
 import { api } from "~/convex/_generated/api";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   failAthenaAuthSyncHandoff,
   getAthenaAuthSyncHandoffStatus,
@@ -16,6 +16,13 @@ export const useAuth = () => {
   const [isStorageLoaded, setIsStorageLoaded] = useState(false);
   const [pendingAuthSyncTick, setPendingAuthSyncTick] = useState(0);
   const authToken = useAuthToken();
+  const authSessionRef = useRef({ epoch: 0, token: authToken });
+  if (authSessionRef.current.token !== authToken) {
+    authSessionRef.current = {
+      epoch: authSessionRef.current.epoch + 1,
+      token: authToken,
+    };
+  }
   const { isAuthenticated, isLoading: isLoadingConvexAuth } = useConvexAuth();
   const pendingAuthSyncStatus = getAthenaAuthSyncHandoffStatus();
   const isPendingAuthSync = pendingAuthSyncStatus.kind === "active";
@@ -24,11 +31,10 @@ export const useAuth = () => {
     Boolean(authToken) && !isAuthenticated && currentConvexUser === undefined;
   const hasReadyConvexUser = Boolean(currentConvexUser);
   const isLoadingConvexUser =
-    (isAuthenticated || Boolean(authToken)) &&
-    currentConvexUser === undefined;
+    (isAuthenticated || Boolean(authToken)) && currentConvexUser === undefined;
   const authenticatedAthenaUser = useQuery(
     api.inventory.athenaUser.getAuthenticatedUser,
-    hasReadyConvexUser ? {} : "skip"
+    hasReadyConvexUser ? {} : "skip",
   );
   const isLoadingAthenaUser =
     hasReadyConvexUser && authenticatedAthenaUser === undefined;
@@ -44,7 +50,10 @@ export const useAuth = () => {
       setPendingAuthSyncTick((tick) => tick + 1);
     };
 
-    window.addEventListener(ATHENA_PENDING_AUTH_SYNC_EVENT, handlePendingAuthSync);
+    window.addEventListener(
+      ATHENA_PENDING_AUTH_SYNC_EVENT,
+      handlePendingAuthSync,
+    );
     window.addEventListener("storage", handlePendingAuthSync);
 
     return () => {
@@ -67,13 +76,16 @@ export const useAuth = () => {
       return;
     }
 
-    const timeoutId = window.setTimeout(() => {
-      const latestStatus = getAthenaAuthSyncHandoffStatus();
-      if (latestStatus.kind === "active") {
-        failAthenaAuthSyncHandoff();
-        setPendingAuthSyncTick((tick) => tick + 1);
-      }
-    }, Math.max(status.expiresAt - Date.now(), 0));
+    const timeoutId = window.setTimeout(
+      () => {
+        const latestStatus = getAthenaAuthSyncHandoffStatus();
+        if (latestStatus.kind === "active") {
+          failAthenaAuthSyncHandoff();
+          setPendingAuthSyncTick((tick) => tick + 1);
+        }
+      },
+      Math.max(status.expiresAt - Date.now(), 0),
+    );
 
     return () => window.clearTimeout(timeoutId);
   }, [authToken, isAuthenticated, isLoadingConvexAuth, pendingAuthSyncTick]);
@@ -123,6 +135,7 @@ export const useAuth = () => {
     isLoadingAthenaUser;
 
   return {
+    authSessionEpoch: authSessionRef.current.epoch,
     user: isLoading
       ? undefined
       : hasReadyConvexUser

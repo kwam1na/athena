@@ -1540,6 +1540,26 @@ describe("projectLocalRegisterReadModel", () => {
     expect(model.saleBlockReason).toBeUndefined();
     expect(model.syncStatus.state).toBe("synced");
   });
+  it("restores the latest durable catalog revision from replayed events", () => {
+    const model = projectLocalRegisterReadModel({
+      events: [
+        event({
+          sequence: 1,
+          type: "register.opened",
+          catalogRevision: "legacy",
+        }),
+        event({
+          sequence: 2,
+          type: "session.started",
+          localPosSessionId: "local-sale-1",
+          catalogRevision: 0,
+          payload: { localPosSessionId: "local-sale-1", status: "active" },
+        }),
+      ],
+    });
+
+    expect(model.durableCatalogRevision).toBe(0);
+  });
 });
 
 function errorCodes(errors: PosLocalRegisterReadModelError[]) {

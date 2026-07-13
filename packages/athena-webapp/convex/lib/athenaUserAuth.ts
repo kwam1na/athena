@@ -53,6 +53,27 @@ export async function findAthenaUserByEmailWithCtx(
   return matchingUsers[0] ?? null;
 }
 
+export async function findAthenaUserByEmailIndexedWithCtx(
+  ctx: AthenaAuthCtx,
+  email: string,
+) {
+  const normalizedEmail = normalizeAthenaUserEmail(email);
+  const matches = await ctx.db
+    .query("athenaUser")
+    .withIndex("by_normalizedEmail", (q) =>
+      q.eq("normalizedEmail", normalizedEmail),
+    )
+    .take(2);
+
+  if (matches.length > 1) {
+    throw new Error(
+      "Multiple Athena users match this email. Resolve duplicate accounts before continuing.",
+    );
+  }
+
+  return matches[0] ?? null;
+}
+
 async function getAuthenticatedUserRecord(ctx: AthenaAuthCtx) {
   const authUserId = await getAuthUserId(ctx);
 
@@ -88,6 +109,26 @@ export async function requireAuthenticatedAthenaUserWithCtx(
 ) {
   const athenaUser = await getAuthenticatedAthenaUserWithCtx(ctx);
 
+  if (!athenaUser) {
+    throw new Error("Sign in again to continue.");
+  }
+
+  return athenaUser;
+}
+
+export async function requireAuthenticatedAthenaUserIndexedWithCtx(
+  ctx: AthenaAuthCtx,
+) {
+  const authUserRecord = await getAuthenticatedUserRecord(ctx);
+
+  if (!authUserRecord) {
+    throw new Error("Sign in again to continue.");
+  }
+
+  const athenaUser = await findAthenaUserByEmailIndexedWithCtx(
+    ctx,
+    authUserRecord.normalizedEmail,
+  );
   if (!athenaUser) {
     throw new Error("Sign in again to continue.");
   }

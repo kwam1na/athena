@@ -241,6 +241,7 @@ import type * as pos_application_sync_ingestLocalEvents from "../pos/application
 import type * as pos_application_sync_posRegisterSessionActivity from "../pos/application/sync/posRegisterSessionActivity.js";
 import type * as pos_application_sync_projectLocalEvents from "../pos/application/sync/projectLocalEvents.js";
 import type * as pos_application_sync_projectionPolicies from "../pos/application/sync/projectionPolicies.js";
+import type * as pos_application_sync_registerCatalogRevision from "../pos/application/sync/registerCatalogRevision.js";
 import type * as pos_application_sync_registerMappingAuthorityRevision from "../pos/application/sync/registerMappingAuthorityRevision.js";
 import type * as pos_application_sync_registerSessionCloseoutHolds from "../pos/application/sync/registerSessionCloseoutHolds.js";
 import type * as pos_application_sync_registerSessionSyncReview from "../pos/application/sync/registerSessionSyncReview.js";
@@ -388,6 +389,7 @@ import type * as schemas_inventory_inventoryImportReviewVersion from "../schemas
 import type * as schemas_inventory_inviteCode from "../schemas/inventory/inviteCode.js";
 import type * as schemas_inventory_organization from "../schemas/inventory/organization.js";
 import type * as schemas_inventory_organizationMember from "../schemas/inventory/organizationMember.js";
+import type * as schemas_inventory_posRegisterCatalogRevision from "../schemas/inventory/posRegisterCatalogRevision.js";
 import type * as schemas_inventory_product from "../schemas/inventory/product.js";
 import type * as schemas_inventory_productSkuSearch from "../schemas/inventory/productSkuSearch.js";
 import type * as schemas_inventory_promoCode from "../schemas/inventory/promoCode.js";
@@ -788,6 +790,7 @@ declare const fullApi: ApiFromModules<{
   "pos/application/sync/posRegisterSessionActivity": typeof pos_application_sync_posRegisterSessionActivity;
   "pos/application/sync/projectLocalEvents": typeof pos_application_sync_projectLocalEvents;
   "pos/application/sync/projectionPolicies": typeof pos_application_sync_projectionPolicies;
+  "pos/application/sync/registerCatalogRevision": typeof pos_application_sync_registerCatalogRevision;
   "pos/application/sync/registerMappingAuthorityRevision": typeof pos_application_sync_registerMappingAuthorityRevision;
   "pos/application/sync/registerSessionCloseoutHolds": typeof pos_application_sync_registerSessionCloseoutHolds;
   "pos/application/sync/registerSessionSyncReview": typeof pos_application_sync_registerSessionSyncReview;
@@ -935,6 +938,7 @@ declare const fullApi: ApiFromModules<{
   "schemas/inventory/inviteCode": typeof schemas_inventory_inviteCode;
   "schemas/inventory/organization": typeof schemas_inventory_organization;
   "schemas/inventory/organizationMember": typeof schemas_inventory_organizationMember;
+  "schemas/inventory/posRegisterCatalogRevision": typeof schemas_inventory_posRegisterCatalogRevision;
   "schemas/inventory/product": typeof schemas_inventory_product;
   "schemas/inventory/productSkuSearch": typeof schemas_inventory_productSkuSearch;
   "schemas/inventory/promoCode": typeof schemas_inventory_promoCode;

@@ -6,6 +6,7 @@ import {
   listRegisterCatalog,
   listRegisterCatalogAvailability,
   listRegisterCatalogAvailabilitySnapshot,
+  listRegisterCatalogWithRevision,
 } from "./listRegisterCatalog";
 
 type TableName =
@@ -13,6 +14,7 @@ type TableName =
   | "color"
   | "inventoryHold"
   | "inventoryImportProvisionalSku"
+  | "posRegisterCatalogRevision"
   | "posPendingCheckoutItem"
   | "product"
   | "productSku"
@@ -34,6 +36,7 @@ function createRegisterCatalogCtx(
         "color",
         "inventoryHold",
         "inventoryImportProvisionalSku",
+        "posRegisterCatalogRevision",
         "posPendingCheckoutItem",
         "product",
         "productSku",
@@ -46,6 +49,7 @@ function createRegisterCatalogCtx(
     color: new Map(),
     inventoryHold: new Map(),
     inventoryImportProvisionalSku: new Map(),
+    posRegisterCatalogRevision: new Map(),
     posPendingCheckoutItem: new Map(),
     product: new Map(),
     productSku: new Map(),
@@ -175,6 +179,14 @@ function createRegisterCatalogCtx(
         countRead(table, rows.length);
         return rows;
       },
+      unique: async () => {
+        if (matches.length > 1) {
+          throw new Error(`Expected unique ${table} row`);
+        }
+        const row = matches[0] ?? null;
+        if (row) countRead(table);
+        return row;
+      },
     };
   }
 
@@ -245,6 +257,36 @@ function createRegisterCatalogCtx(
 }
 
 describe("listRegisterCatalog", () => {
+  it("returns rows with the matching store revision from one query snapshot", async () => {
+    const { ctx, readCounts } = createRegisterCatalogCtx({
+      posRegisterCatalogRevision: [
+        {
+          _id: "revision-store-a",
+          storeId: "store-a",
+          revision: 7,
+          updatedAt: 100,
+        },
+      ],
+    });
+
+    await expect(
+      listRegisterCatalogWithRevision(ctx, {
+        storeId: "store-a" as Id<"store">,
+      }),
+    ).resolves.toEqual({ revision: 7, rows: [] });
+    expect(readCounts.posRegisterCatalogRevision).toBe(1);
+  });
+
+  it("uses revision zero when a store has no revision record", async () => {
+    const { ctx } = createRegisterCatalogCtx({});
+
+    await expect(
+      listRegisterCatalogWithRevision(ctx, {
+        storeId: "store-a" as Id<"store">,
+      }),
+    ).resolves.toEqual({ revision: 0, rows: [] });
+  });
+
   it("returns compact store-scoped SKU rows with stable identity, display, and price fields", async () => {
     const { ctx } = createRegisterCatalogCtx({
       category: [

@@ -24,14 +24,18 @@ import type {
   PosLocalStoreResult,
   PosTerminalIntegrityState,
   PosProvisionedTerminalSeed,
+  PosRegisterCatalogRevision,
 } from "@/lib/pos/application/posLocalStoreTypes";
+import type { PosRegisterCatalogRowDto } from "@/lib/pos/application/dto";
 
 type PosLocalCommandStore = {
   appendEvent(
     input: PosLocalAppendEventInput,
   ): Promise<PosLocalStoreResult<PosLocalEventRecord>>;
   listEvents(): Promise<PosLocalStoreResult<PosLocalEventRecord[]>>;
-  listLocalCloudMappings?(): Promise<PosLocalStoreResult<PosLocalCloudMapping[]>>;
+  listLocalCloudMappings?(): Promise<
+    PosLocalStoreResult<PosLocalCloudMapping[]>
+  >;
   writeLocalCloudMapping?(
     mapping: PosLocalCloudMapping,
   ): Promise<PosLocalStoreResult<PosLocalCloudMapping>>;
@@ -57,8 +61,19 @@ type CreateLocalCommandGatewayOptions = {
   store: PosLocalCommandStore;
   clock?: () => number;
   createLocalId?: (kind: string) => string;
+  captureRegisterCatalogPin?: (scope: {
+    storeId: string;
+    terminalId: string;
+  }) => CapturedRegisterCatalogPin | null | undefined;
   onEventAppended?: () => void;
   staffProofToken?: string | ((staffProfileId: string) => string | undefined);
+};
+
+type CapturedRegisterCatalogPin = {
+  ownerId?: string;
+  revision: PosRegisterCatalogRevision;
+  rows: PosRegisterCatalogRowDto[];
+  settleActionGuard?: () => void;
 };
 
 type RegisterSessionSeedDecision = "append" | "already_seeded" | "blocked";
@@ -98,7 +113,9 @@ export function createLocalCommandGateway(
   reopenRegister(input: ReopenLocalRegisterInput): Promise<boolean>;
   seedRegisterSession(input: SeedLocalRegisterSessionInput): Promise<boolean>;
   startSession(input: LocalStartSessionInput): Promise<LocalStartSessionResult>;
-  startCloseout(input: StartLocalCloseoutInput): Promise<LocalStartCloseoutResult>;
+  startCloseout(
+    input: StartLocalCloseoutInput,
+  ): Promise<LocalStartCloseoutResult>;
 } {
   const clock = options.clock ?? Date.now;
   const createLocalId =
@@ -122,40 +139,78 @@ export function createLocalCommandGateway(
     };
   }
 
-  async function append(input: PosLocalAppendEventInput) {
-    const result = await options.store.appendEvent(input);
-    if (!result.ok) return toLocalUserError(result.error.message);
-    options.onEventAppended?.();
-    return null;
+  function captureCatalogPin(input: { storeId: string; terminalId: string }) {
+    return options.captureRegisterCatalogPin?.({
+      storeId: input.storeId,
+      terminalId: input.terminalId,
+    });
   }
 
-  async function appendBoolean(input: PosLocalAppendEventInput) {
-    return !(await append(input));
+  function settleCatalogPinGuard(catalogPin?: CapturedRegisterCatalogPin | null) {
+    catalogPin?.settleActionGuard?.();
   }
 
-  async function appendNewDrawer(input: LocalOpenDrawerInput) {
+  async function append(
+    input: PosLocalAppendEventInput,
+    catalogPin?: CapturedRegisterCatalogPin | null,
+  ) {
+    try {
+      const result = await options.store.appendEvent({
+        ...input,
+        ...(catalogPin
+          ? {
+              catalogPin: {
+                ...(catalogPin.ownerId ? { ownerId: catalogPin.ownerId } : {}),
+                revision: catalogPin.revision,
+                rows: catalogPin.rows,
+              },
+            }
+          : {}),
+      });
+      if (!result.ok) return toLocalUserError(result.error.message);
+      options.onEventAppended?.();
+      return null;
+    } finally {
+      settleCatalogPinGuard(catalogPin);
+    }
+  }
+
+  async function appendBoolean(
+    input: PosLocalAppendEventInput,
+    catalogPin?: CapturedRegisterCatalogPin | null,
+  ) {
+    return !(await append(input, catalogPin));
+  }
+
+  async function appendNewDrawer(
+    input: LocalOpenDrawerInput,
+    catalogPin?: CapturedRegisterCatalogPin | null,
+  ) {
     const localRegisterSessionId = createLocalId("local-register-session");
     const openedAt = clock();
-    const appendError = await append({
-      type: "register.opened",
-      terminalId: input.terminalId.toString(),
-      storeId: input.storeId.toString(),
-      registerNumber: input.registerNumber,
-      localRegisterSessionId,
-      staffProfileId: input.staffProfileId.toString(),
-      staffProofToken: resolveStaffProofToken(
-        options.staffProofToken,
-        input.staffProfileId.toString(),
-      ),
-      validationMetadata: input.validationMetadata,
-      payload: {
+    const appendError = await append(
+      {
+        type: "register.opened",
+        terminalId: input.terminalId.toString(),
+        storeId: input.storeId.toString(),
+        registerNumber: input.registerNumber,
         localRegisterSessionId,
-        openingFloat: input.openingFloat,
-        expectedCash: input.openingFloat,
-        notes: input.notes ?? null,
-        status: "open",
+        staffProfileId: input.staffProfileId.toString(),
+        staffProofToken: resolveStaffProofToken(
+          options.staffProofToken,
+          input.staffProfileId.toString(),
+        ),
+        validationMetadata: input.validationMetadata,
+        payload: {
+          localRegisterSessionId,
+          openingFloat: input.openingFloat,
+          expectedCash: input.openingFloat,
+          notes: input.notes ?? null,
+          status: "open",
+        },
       },
-    });
+      catalogPin,
+    );
     if (appendError) return appendError;
 
     return ok({
@@ -278,12 +333,10 @@ export function createLocalCommandGateway(
     });
     if (!model.ok) return "blocked";
     if (model.value.canSell) {
-      return (
-        model.value.activeRegisterSession?.localRegisterSessionId ===
+      return model.value.activeRegisterSession?.localRegisterSessionId ===
         input.localRegisterSessionId
-          ? "already_seeded"
-          : "blocked"
-      );
+        ? "already_seeded"
+        : "blocked";
     }
     const hasSettledCloseoutSession =
       model.value.activeRegisterSession?.status === "closing" &&
@@ -320,8 +373,14 @@ export function createLocalCommandGateway(
       : "blocked";
   }
 
-  async function appendWithResult(input: PosLocalAppendEventInput) {
-    const result = await options.store.appendEvent(input);
+  async function appendWithResult(
+    input: PosLocalAppendEventInput,
+    catalogPin?: CapturedRegisterCatalogPin | null,
+  ) {
+    const result = await options.store.appendEvent({
+      ...input,
+      ...(catalogPin ? { catalogPin } : {}),
+    });
     if (!result.ok) return toLocalUserError(result.error.message);
     options.onEventAppended?.();
     return ok({ event: result.value });
@@ -330,7 +389,10 @@ export function createLocalCommandGateway(
   async function writeSeedRegisterSessionMapping(
     input: SeedLocalRegisterSessionInput,
   ) {
-    if (!input.cloudRegisterSessionId || !options.store.writeLocalCloudMapping) {
+    if (
+      !input.cloudRegisterSessionId ||
+      !options.store.writeLocalCloudMapping
+    ) {
       return true;
     }
 
@@ -357,95 +419,143 @@ export function createLocalCommandGateway(
 
   return {
     async appendCartItem(input: AppendLocalCartItemInput) {
-      if (isAuthorityPersistenceFailed()) return false;
-      if (!(await canAppendSaleAffectingEvent(input))) return false;
-      return appendBoolean({
-        type: "cart.item_added",
-        terminalId: input.terminalId,
-        storeId: input.storeId,
-        registerNumber: input.registerNumber,
-        localRegisterSessionId: input.localRegisterSessionId,
-        localPosSessionId: input.localPosSessionId,
-        staffProfileId: input.staffProfileId,
-        validationMetadata: input.validationMetadata,
-        payload: input.payload,
-      });
+      const catalogPin = captureCatalogPin(input);
+      if (isAuthorityPersistenceFailed()) {
+        settleCatalogPinGuard(catalogPin);
+        return false;
+      }
+      if (!(await canAppendSaleAffectingEvent(input))) {
+        settleCatalogPinGuard(catalogPin);
+        return false;
+      }
+      return appendBoolean(
+        {
+          type: "cart.item_added",
+          terminalId: input.terminalId,
+          storeId: input.storeId,
+          registerNumber: input.registerNumber,
+          localRegisterSessionId: input.localRegisterSessionId,
+          localPosSessionId: input.localPosSessionId,
+          staffProfileId: input.staffProfileId,
+          validationMetadata: input.validationMetadata,
+          payload: input.payload,
+        },
+        catalogPin,
+      );
     },
 
-    async definePendingCheckoutItem(input: DefineLocalPendingCheckoutItemInput) {
-      if (isAuthorityPersistenceFailed()) return false;
-      if (!(await canAppendSaleAffectingEvent(input))) return false;
-      return appendBoolean({
-        type: "pending_checkout_item.defined",
-        terminalId: input.terminalId,
-        storeId: input.storeId,
-        registerNumber: input.registerNumber,
-        localRegisterSessionId: input.localRegisterSessionId,
-        localPosSessionId: input.localPosSessionId,
-        staffProfileId: input.staffProfileId,
-        staffProofToken: resolveStaffProofToken(
-          options.staffProofToken,
-          input.staffProfileId,
-        ),
-        validationMetadata: input.validationMetadata,
-        payload: input.payload,
-      });
+    async definePendingCheckoutItem(
+      input: DefineLocalPendingCheckoutItemInput,
+    ) {
+      const catalogPin = captureCatalogPin(input);
+      if (isAuthorityPersistenceFailed()) {
+        settleCatalogPinGuard(catalogPin);
+        return false;
+      }
+      if (!(await canAppendSaleAffectingEvent(input))) {
+        settleCatalogPinGuard(catalogPin);
+        return false;
+      }
+      return appendBoolean(
+        {
+          type: "pending_checkout_item.defined",
+          terminalId: input.terminalId,
+          storeId: input.storeId,
+          registerNumber: input.registerNumber,
+          localRegisterSessionId: input.localRegisterSessionId,
+          localPosSessionId: input.localPosSessionId,
+          staffProfileId: input.staffProfileId,
+          staffProofToken: resolveStaffProofToken(
+            options.staffProofToken,
+            input.staffProfileId,
+          ),
+          validationMetadata: input.validationMetadata,
+          payload: input.payload,
+        },
+        catalogPin,
+      );
     },
 
     async appendServiceLine(input: AppendLocalServiceLineInput) {
-      if (isAuthorityPersistenceFailed()) return false;
-      if (!(await canAppendSaleAffectingEvent(input))) return false;
-      return appendBoolean({
-        type: "cart.service_added",
-        terminalId: input.terminalId,
-        storeId: input.storeId,
-        registerNumber: input.registerNumber,
-        localRegisterSessionId: input.localRegisterSessionId,
-        localPosSessionId: input.localPosSessionId,
-        staffProfileId: input.staffProfileId,
-        validationMetadata: input.validationMetadata,
-        payload: {
+      const catalogPin = captureCatalogPin(input);
+      if (isAuthorityPersistenceFailed()) {
+        settleCatalogPinGuard(catalogPin);
+        return false;
+      }
+      if (!(await canAppendSaleAffectingEvent(input))) {
+        settleCatalogPinGuard(catalogPin);
+        return false;
+      }
+      return appendBoolean(
+        {
+          type: "cart.service_added",
+          terminalId: input.terminalId,
+          storeId: input.storeId,
+          registerNumber: input.registerNumber,
+          localRegisterSessionId: input.localRegisterSessionId,
           localPosSessionId: input.localPosSessionId,
-          ...input.payload,
+          staffProfileId: input.staffProfileId,
+          validationMetadata: input.validationMetadata,
+          payload: {
+            localPosSessionId: input.localPosSessionId,
+            ...input.payload,
+          },
         },
-      });
+        catalogPin,
+      );
     },
 
     async appendPaymentState(input: AppendLocalPaymentStateInput) {
-      if (isAuthorityPersistenceFailed()) return false;
-      if (!(await canAppendSaleAffectingEvent(input))) return false;
-      return appendBoolean({
-        type: "session.payments_updated",
-        terminalId: input.terminalId,
-        storeId: input.storeId,
-        registerNumber: input.registerNumber,
-        localRegisterSessionId: input.localRegisterSessionId,
-        localPosSessionId: input.localPosSessionId,
-        staffProfileId: input.staffProfileId,
-        validationMetadata: input.validationMetadata,
-        payload: {
+      const catalogPin = captureCatalogPin(input);
+      if (isAuthorityPersistenceFailed()) {
+        settleCatalogPinGuard(catalogPin);
+        return false;
+      }
+      if (!(await canAppendSaleAffectingEvent(input))) {
+        settleCatalogPinGuard(catalogPin);
+        return false;
+      }
+      return appendBoolean(
+        {
+          type: "session.payments_updated",
+          terminalId: input.terminalId,
+          storeId: input.storeId,
+          registerNumber: input.registerNumber,
+          localRegisterSessionId: input.localRegisterSessionId,
           localPosSessionId: input.localPosSessionId,
-          checkoutStateVersion: input.checkoutStateVersion,
-          payments: input.payments.map(({ id, method, amount, timestamp }) => ({
-            localPaymentId: id,
-            method,
-            amount,
-            timestamp,
-          })),
-          stage: input.stage,
-          paymentMethod: input.paymentMethod,
-          amount: input.amount,
-          previousAmount: input.previousAmount,
+          staffProfileId: input.staffProfileId,
+          validationMetadata: input.validationMetadata,
+          payload: {
+            localPosSessionId: input.localPosSessionId,
+            checkoutStateVersion: input.checkoutStateVersion,
+            payments: input.payments.map(
+              ({ id, method, amount, timestamp }) => ({
+                localPaymentId: id,
+                method,
+                amount,
+                timestamp,
+              }),
+            ),
+            stage: input.stage,
+            paymentMethod: input.paymentMethod,
+            amount: input.amount,
+            previousAmount: input.previousAmount,
+          },
         },
-      });
+        catalogPin,
+      );
     },
 
     async clearCart(input: ClearLocalCartInput) {
+      const catalogPin = captureCatalogPin(input);
       const model = await readModel({
         storeId: input.storeId,
         terminalId: input.terminalId,
       });
-      if (!model.ok) return false;
+      if (!model.ok) {
+        settleCatalogPinGuard(catalogPin);
+        return false;
+      }
       const hasPriorSaleActivity = hasLocalSaleActivity(
         model.value.sourceEvents,
         input,
@@ -455,61 +565,82 @@ export function createLocalCommandGateway(
         !(await canAppendSaleAffectingEvent(input)) &&
         !canClearExactCloudClosedDrawer(model.value, input)
       ) {
+        settleCatalogPinGuard(catalogPin);
         return false;
       }
 
-      return appendBoolean({
-        type: "cart.cleared",
-        terminalId: input.terminalId,
-        storeId: input.storeId,
-        registerNumber: input.registerNumber,
-        localRegisterSessionId: input.localRegisterSessionId,
-        localPosSessionId: input.localPosSessionId,
-        staffProfileId: input.staffProfileId,
-        validationMetadata: input.validationMetadata,
-        ...(hasPriorSaleActivity
-          ? {
-              staffProofToken: resolveStaffProofToken(
-                options.staffProofToken,
-                input.staffProfileId,
-              ),
-            }
-          : { initialSyncStatus: "synced" as const }),
-        payload: {
+      return appendBoolean(
+        {
+          type: "cart.cleared",
+          terminalId: input.terminalId,
+          storeId: input.storeId,
+          registerNumber: input.registerNumber,
+          localRegisterSessionId: input.localRegisterSessionId,
           localPosSessionId: input.localPosSessionId,
-          reason: input.reason ?? null,
+          staffProfileId: input.staffProfileId,
+          validationMetadata: input.validationMetadata,
+          ...(hasPriorSaleActivity
+            ? {
+                staffProofToken: resolveStaffProofToken(
+                  options.staffProofToken,
+                  input.staffProfileId,
+                ),
+              }
+            : { initialSyncStatus: "synced" as const }),
+          payload: {
+            localPosSessionId: input.localPosSessionId,
+            reason: input.reason ?? null,
+          },
         },
-      });
+        catalogPin,
+      );
     },
 
     async completeTransaction(input: CompleteLocalTransactionInput) {
-      if (isAuthorityPersistenceFailed()) return false;
-      if (!(await canAppendSaleAffectingEvent(input))) return false;
-      return appendBoolean({
-        type: "transaction.completed",
-        terminalId: input.terminalId,
-        storeId: input.storeId,
-        registerNumber: input.registerNumber,
-        localRegisterSessionId: input.localRegisterSessionId,
-        localPosSessionId: input.localPosSessionId,
-        localTransactionId: input.localTransactionId,
-        staffProfileId: input.staffProfileId,
-        staffProofToken: resolveStaffProofToken(
-          options.staffProofToken,
-          input.staffProfileId,
-        ),
-        validationMetadata: input.validationMetadata,
-        payload: input.payload,
-      });
+      const catalogPin = captureCatalogPin(input);
+      if (isAuthorityPersistenceFailed()) {
+        settleCatalogPinGuard(catalogPin);
+        return false;
+      }
+      if (!(await canAppendSaleAffectingEvent(input))) {
+        settleCatalogPinGuard(catalogPin);
+        return false;
+      }
+      return appendBoolean(
+        {
+          type: "transaction.completed",
+          terminalId: input.terminalId,
+          storeId: input.storeId,
+          registerNumber: input.registerNumber,
+          localRegisterSessionId: input.localRegisterSessionId,
+          localPosSessionId: input.localPosSessionId,
+          localTransactionId: input.localTransactionId,
+          staffProfileId: input.staffProfileId,
+          staffProofToken: resolveStaffProofToken(
+            options.staffProofToken,
+            input.staffProfileId,
+          ),
+          validationMetadata: input.validationMetadata,
+          payload: input.payload,
+        },
+        catalogPin,
+      );
     },
 
     async openDrawer(
       input: LocalOpenDrawerInput,
     ): Promise<LocalOpenDrawerResult> {
-      if (isAuthorityPersistenceFailed()) {
-        return authorityPersistenceUserError();
-      }
-      if (!hasCommandIdentity({ ...input, localRegisterSessionId: "pending" })) {
+      const catalogPin = captureCatalogPin({
+        storeId: input.storeId.toString(),
+        terminalId: input.terminalId.toString(),
+      });
+      try {
+        if (isAuthorityPersistenceFailed()) {
+          return authorityPersistenceUserError();
+        }
+      if (
+        !hasCommandIdentity({ ...input, localRegisterSessionId: "pending" })
+      ) {
         return toLocalUserError(
           blockedSaleMessage(
             !input.staffProfileId
@@ -535,10 +666,7 @@ export function createLocalCommandGateway(
         hasSettledCloseout,
         saleBlockReason: existingModel.value.saleBlockReason,
       });
-      if (
-        existingModel.value.saleBlockReason &&
-        !canOpenReplacementDrawer
-      ) {
+      if (existingModel.value.saleBlockReason && !canOpenReplacementDrawer) {
         return toLocalUserError(
           blockedSaleMessage(existingModel.value.saleBlockReason),
         );
@@ -550,7 +678,7 @@ export function createLocalCommandGateway(
         isOpenLocalRegisterSessionStatus(activeRegisterSession.status)
       ) {
         if (canOpenReplacementDrawer && !existingModel.value.canSell) {
-          return appendNewDrawer(input);
+          return await appendNewDrawer(input, catalogPin);
         }
         if (!existingModel.value.canSell) {
           return toLocalUserError(
@@ -583,68 +711,103 @@ export function createLocalCommandGateway(
         });
       }
 
-      return appendNewDrawer(input);
+        return await appendNewDrawer(input, catalogPin);
+      } finally {
+        settleCatalogPinGuard(catalogPin);
+      }
     },
 
     async reopenRegister(input: ReopenLocalRegisterInput) {
-      if (isAuthorityPersistenceFailed()) return false;
-      if (!(await canAppendRegisterReopen(input))) return false;
-      return appendBoolean({
-        type: "register.reopened",
-        terminalId: input.terminalId,
-        storeId: input.storeId,
-        registerNumber: input.registerNumber,
-        localRegisterSessionId: input.localRegisterSessionId,
-        staffProfileId: input.staffProfileId,
-        staffProofToken: resolveStaffProofToken(
-          options.staffProofToken,
-          input.staffProfileId,
-        ),
-        validationMetadata: input.validationMetadata,
-        payload: {
-          reason: input.reason,
+      const catalogPin = captureCatalogPin(input);
+      if (isAuthorityPersistenceFailed()) {
+        settleCatalogPinGuard(catalogPin);
+        return false;
+      }
+      if (!(await canAppendRegisterReopen(input))) {
+        settleCatalogPinGuard(catalogPin);
+        return false;
+      }
+      return appendBoolean(
+        {
+          type: "register.reopened",
+          terminalId: input.terminalId,
+          storeId: input.storeId,
+          registerNumber: input.registerNumber,
+          localRegisterSessionId: input.localRegisterSessionId,
+          staffProfileId: input.staffProfileId,
+          staffProofToken: resolveStaffProofToken(
+            options.staffProofToken,
+            input.staffProfileId,
+          ),
+          validationMetadata: input.validationMetadata,
+          payload: {
+            reason: input.reason,
+          },
         },
-      });
+        catalogPin,
+      );
     },
 
     async seedRegisterSession(input: SeedLocalRegisterSessionInput) {
-      if (isAuthorityPersistenceFailed()) return false;
-      const seedDecision = await resolveRegisterSessionSeedDecision(input);
-      if (seedDecision === "blocked") return false;
-      if (seedDecision === "already_seeded") {
-        return writeSeedRegisterSessionMapping(input);
+      const catalogPin = captureCatalogPin(input);
+      if (isAuthorityPersistenceFailed()) {
+        settleCatalogPinGuard(catalogPin);
+        return false;
       }
-      if (!(await writeSeedRegisterSessionMapping(input))) return false;
-      return appendBoolean({
-        type: "register.opened",
-        terminalId: input.terminalId,
-        storeId: input.storeId,
-        registerNumber: input.registerNumber,
-        localRegisterSessionId: input.localRegisterSessionId,
-        staffProfileId: input.staffProfileId,
-        staffProofToken: resolveStaffProofToken(
-          options.staffProofToken,
-          input.staffProfileId,
-        ),
-        validationMetadata: input.validationMetadata,
-        initialSyncStatus: "synced",
-        payload: {
+      const seedDecision = await resolveRegisterSessionSeedDecision(input);
+      if (seedDecision === "blocked") {
+        settleCatalogPinGuard(catalogPin);
+        return false;
+      }
+      if (seedDecision === "already_seeded") {
+        const result = await writeSeedRegisterSessionMapping(input);
+        settleCatalogPinGuard(catalogPin);
+        return result;
+      }
+      if (!(await writeSeedRegisterSessionMapping(input))) {
+        settleCatalogPinGuard(catalogPin);
+        return false;
+      }
+      return appendBoolean(
+        {
+          type: "register.opened",
+          terminalId: input.terminalId,
+          storeId: input.storeId,
+          registerNumber: input.registerNumber,
           localRegisterSessionId: input.localRegisterSessionId,
-          openingFloat: input.openingFloat,
-          expectedCash: input.expectedCash,
-          notes: input.notes ?? null,
-          status: input.status,
+          staffProfileId: input.staffProfileId,
+          staffProofToken: resolveStaffProofToken(
+            options.staffProofToken,
+            input.staffProfileId,
+          ),
+          validationMetadata: input.validationMetadata,
+          initialSyncStatus: "synced",
+          payload: {
+            localRegisterSessionId: input.localRegisterSessionId,
+            openingFloat: input.openingFloat,
+            expectedCash: input.expectedCash,
+            notes: input.notes ?? null,
+            status: input.status,
+          },
         },
-      });
+        catalogPin,
+      );
     },
 
     async startSession(
       input: LocalStartSessionInput,
     ): Promise<LocalStartSessionResult> {
-      if (isAuthorityPersistenceFailed()) {
-        return authorityPersistenceUserError();
-      }
-      if (!hasCommandIdentity({ ...input, localRegisterSessionId: "pending" })) {
+      const catalogPin = captureCatalogPin({
+        storeId: input.storeId.toString(),
+        terminalId: input.terminalId.toString(),
+      });
+      try {
+        if (isAuthorityPersistenceFailed()) {
+          return authorityPersistenceUserError();
+        }
+      if (
+        !hasCommandIdentity({ ...input, localRegisterSessionId: "pending" })
+      ) {
         return toLocalUserError(
           blockedSaleMessage(
             !input.staffProfileId
@@ -711,63 +874,76 @@ export function createLocalCommandGateway(
 
       const localPosSessionId =
         input.localPosSessionId ?? createLocalId("local-pos-session");
-      const appendError = await append({
-        type: "session.started",
-        terminalId: input.terminalId.toString(),
-        storeId: input.storeId.toString(),
-        registerNumber: input.registerNumber,
-        localRegisterSessionId,
-        localPosSessionId,
-        staffProfileId: input.staffProfileId?.toString(),
-        validationMetadata: input.validationMetadata,
-        payload: {
-          localPosSessionId,
+      const appendError = await append(
+        {
+          type: "session.started",
+          terminalId: input.terminalId.toString(),
+          storeId: input.storeId.toString(),
+          registerNumber: input.registerNumber,
           localRegisterSessionId,
-          status: "active",
+          localPosSessionId,
+          staffProfileId: input.staffProfileId?.toString(),
+          validationMetadata: input.validationMetadata,
+          payload: {
+            localPosSessionId,
+            localRegisterSessionId,
+            status: "active",
+          },
         },
-      });
+        catalogPin,
+      );
       if (appendError) return appendError;
 
-      return ok({
-        localPosSessionId,
-        expiresAt,
-      });
+        return ok({
+          localPosSessionId,
+          expiresAt,
+        });
+      } finally {
+        settleCatalogPinGuard(catalogPin);
+      }
     },
 
     async startCloseout(input: StartLocalCloseoutInput) {
-      if (isAuthorityPersistenceFailed()) {
-        return authorityPersistenceUserError();
-      }
-      if (!(await canAppendSaleAffectingEvent(input))) {
-        return toLocalUserError(
-          "Drawer setup needs repair before closeout can continue.",
-        );
-      }
-      return appendWithResult({
-        type: "register.closeout_started",
-        terminalId: input.terminalId,
-        storeId: input.storeId,
-        registerNumber: input.registerNumber,
-        localRegisterSessionId: input.localRegisterSessionId,
-        staffProfileId: input.staffProfileId,
-        staffProofToken: resolveStaffProofToken(
-          options.staffProofToken,
-          input.staffProfileId,
-        ),
-        validationMetadata: input.validationMetadata,
-        payload: {
-          countedCash: input.countedCash,
-          notes: input.notes ?? null,
+      const catalogPin = captureCatalogPin(input);
+      try {
+        if (isAuthorityPersistenceFailed()) {
+          return authorityPersistenceUserError();
+        }
+        if (!(await canAppendSaleAffectingEvent(input))) {
+          return toLocalUserError(
+            "Drawer setup needs repair before closeout can continue.",
+          );
+        }
+        return await appendWithResult(
+          {
+          type: "register.closeout_started",
+          terminalId: input.terminalId,
+          storeId: input.storeId,
+          registerNumber: input.registerNumber,
+          localRegisterSessionId: input.localRegisterSessionId,
+          staffProfileId: input.staffProfileId,
+          staffProofToken: resolveStaffProofToken(
+            options.staffProofToken,
+            input.staffProfileId,
+          ),
+          validationMetadata: input.validationMetadata,
+          payload: {
+            countedCash: input.countedCash,
+            notes: input.notes ?? null,
+          },
         },
-      }).then((result) =>
-        result.kind === "ok"
-          ? ok({
-              localEventId: result.data.event.localEventId,
-            })
-          : result,
-      );
+          catalogPin,
+        ).then((result) =>
+          result.kind === "ok"
+            ? ok({
+                localEventId: result.data.event.localEventId,
+              })
+            : result,
+        );
+      } finally {
+        settleCatalogPinGuard(catalogPin);
+      }
     },
-
   };
 }
 
@@ -865,9 +1041,9 @@ function hasCommandIdentity(input: {
 }) {
   return Boolean(
     input.localRegisterSessionId &&
-      input.staffProfileId &&
-      input.storeId &&
-      input.terminalId,
+    input.staffProfileId &&
+    input.storeId &&
+    input.terminalId,
   );
 }
 
@@ -908,10 +1084,7 @@ type AppendLocalPaymentStateInput = LocalSaleCommandContext & {
   payments: PosPaymentDto[];
   previousAmount?: number;
   stage:
-    | "paymentAdded"
-    | "paymentUpdated"
-    | "paymentRemoved"
-    | "paymentsCleared";
+    "paymentAdded" | "paymentUpdated" | "paymentRemoved" | "paymentsCleared";
 };
 
 type ClearLocalCartInput = LocalSaleCommandContext & {

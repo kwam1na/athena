@@ -13,6 +13,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mockUseRegisterViewModel = vi.fn();
 const mockOpenQuickAddProduct = vi.fn(() => true);
 const mockUseAppActionBlocker = vi.fn();
+const mockUseAppMessage = vi.fn();
 const clearIndexedDbPosLocalStoreMock = vi.fn();
 const reloadWindowMock = vi.fn();
 
@@ -37,6 +38,7 @@ vi.mock("@/lib/pos/presentation/register/useRegisterViewModel", () => ({
 
 vi.mock("@/lib/app-messages", () => ({
   useAppActionBlocker: (args: unknown) => mockUseAppActionBlocker(args),
+  useAppMessage: (args: unknown) => mockUseAppMessage(args),
 }));
 
 vi.mock("@/lib/app-update", () => ({
@@ -410,6 +412,7 @@ describe("POSRegisterView", () => {
   beforeEach(() => {
     mockUseRegisterViewModel.mockReset();
     mockUseAppActionBlocker.mockClear();
+    mockUseAppMessage.mockClear();
     clearIndexedDbPosLocalStoreMock.mockReset();
     clearIndexedDbPosLocalStoreMock.mockResolvedValue({
       ok: true,
@@ -508,6 +511,94 @@ describe("POSRegisterView", () => {
       label: "Sale in progress",
       priority: "critical-workflow",
       guidance: "Finish, hold, or clear this sale before applying the update.",
+    });
+  });
+
+  it("registers one passive catalog refresh message from the view model status", async () => {
+    mockUseRegisterViewModel.mockReturnValue({
+      hasActiveStore: true,
+      catalogRefreshStatus: "waiting-busy",
+      header: {
+        title: "POS",
+        isSessionActive: true,
+      },
+      registerInfo: {
+        registerLabel: "Front Counter",
+        hasTerminal: true,
+      },
+      customerPanel: {},
+      productEntry: {
+        catalogRows: [],
+      },
+      cart: {
+        items: [],
+      },
+      checkout: {
+        isTransactionCompleted: false,
+      },
+      sessionPanel: {},
+      cashierCard: null,
+      closeoutControl: null,
+      drawerGate: null,
+      syncStatus: null,
+      authDialog: null,
+      commandApprovalDialog: null,
+      onNavigateBack: vi.fn(),
+    });
+
+    const { POSRegisterView } = await import("./POSRegisterView");
+    render(<POSRegisterView />);
+
+    expect(mockUseAppMessage).toHaveBeenCalledTimes(1);
+    expect(mockUseAppMessage).toHaveBeenCalledWith({
+      active: true,
+      id: "pos-register.catalog-refresh",
+      label: "Product catalog update",
+      message:
+        "Product updates waiting. Athena will update the catalog when register work is complete.",
+      priority: 50,
+      toastId: "pos-register-catalog-refresh-toast",
+    });
+  });
+
+  it("clears the catalog refresh message when the view model is current", async () => {
+    mockUseRegisterViewModel.mockReturnValue({
+      hasActiveStore: true,
+      catalogRefreshStatus: "current",
+      header: {
+        title: "POS",
+        isSessionActive: true,
+      },
+      registerInfo: {
+        registerLabel: "Front Counter",
+        hasTerminal: true,
+      },
+      customerPanel: {},
+      productEntry: {
+        catalogRows: [],
+      },
+      cart: { items: [] },
+      checkout: { isTransactionCompleted: false },
+      sessionPanel: {},
+      cashierCard: null,
+      closeoutControl: null,
+      drawerGate: null,
+      syncStatus: null,
+      authDialog: null,
+      commandApprovalDialog: null,
+      onNavigateBack: vi.fn(),
+    });
+
+    const { POSRegisterView } = await import("./POSRegisterView");
+    render(<POSRegisterView />);
+
+    expect(mockUseAppMessage).toHaveBeenCalledWith({
+      active: false,
+      id: "pos-register.catalog-refresh",
+      label: "Product catalog update",
+      message: "Product catalog is current.",
+      priority: 50,
+      toastId: "pos-register-catalog-refresh-toast",
     });
   });
 
@@ -1302,6 +1393,7 @@ describe("POSRegisterView", () => {
         viewModel={{
           workflowMode: "expense",
           hasActiveStore: true,
+          catalogRefreshStatus: "current",
           debug: {
             activeStoreSource: "live",
             authDialogOpen: false,
@@ -1350,6 +1442,7 @@ describe("POSRegisterView", () => {
             setCustomerInfo: vi.fn(),
           },
           productEntry: {
+            catalogRows: [],
             disabled: false,
             showProductLookup: true,
             setShowProductLookup: vi.fn(),
@@ -1406,6 +1499,8 @@ describe("POSRegisterView", () => {
         }}
       />,
     );
+
+    expect(mockUseRegisterViewModel).not.toHaveBeenCalled();
 
     expect(
       screen.queryByText("Support sync diagnostics"),

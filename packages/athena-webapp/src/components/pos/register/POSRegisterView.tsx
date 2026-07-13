@@ -48,6 +48,7 @@ import {
 } from "react";
 
 import {
+  buildRegisterCatalogRefreshMessage,
   type RegisterServiceSearchResult,
   type RegisterViewModel,
   type RegisterWorkflowMode,
@@ -55,7 +56,7 @@ import {
 import { usePosTerminalAppSessionRecoveryRuntimeInput } from "@/lib/pos/infrastructure/terminal/posTerminalAppSessionRecoveryContext";
 import { clearDefaultPosLocalStore } from "@/lib/pos/infrastructure/local/posLocalStorageRuntime";
 import { useRegisterViewModel } from "@/lib/pos/presentation/register/useRegisterViewModel";
-import { useAppActionBlocker } from "@/lib/app-messages";
+import { useAppActionBlocker, useAppMessage } from "@/lib/app-messages";
 import { APP_UPDATE_APPLY_ACTION_ID } from "@/lib/app-update";
 import { currencyFormatter } from "~/shared/currencyFormatter";
 import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
@@ -1801,17 +1802,54 @@ export function POSRegisterView(props: POSRegisterViewProps) {
   );
 }
 
-function POSRegisterViewContent({
+function POSRegisterViewContent(props: POSRegisterViewProps) {
+  if (props.viewModel) {
+    return (
+      <ResolvedPOSRegisterViewContent
+        workflowMode={props.workflowMode}
+        viewModel={props.viewModel}
+      />
+    );
+  }
+
+  return <DefaultPOSRegisterViewContent workflowMode={props.workflowMode} />;
+}
+
+function DefaultPOSRegisterViewContent({
   workflowMode,
-  viewModel: injectedViewModel,
-}: POSRegisterViewProps) {
-  const registerViewModel = useRegisterViewModel();
-  const viewModel = injectedViewModel ?? registerViewModel;
+}: Pick<POSRegisterViewProps, "workflowMode">) {
+  const viewModel = useRegisterViewModel();
+  return (
+    <ResolvedPOSRegisterViewContent
+      workflowMode={workflowMode}
+      viewModel={viewModel}
+    />
+  );
+}
+
+function ResolvedPOSRegisterViewContent({
+  workflowMode,
+  viewModel,
+}: {
+  workflowMode?: RegisterWorkflowMode;
+  viewModel: RegisterViewModel;
+}) {
   const appSessionRecovery = usePosTerminalAppSessionRecoveryRuntimeInput();
   const debugAppSessionRecovery = viewModel.debug?.appSessionRecovery;
   const effectiveWorkflowMode: RegisterWorkflowMode =
     workflowMode ?? viewModel.workflowMode ?? "pos";
   const isPosWorkflow = effectiveWorkflowMode === "pos";
+  const catalogRefreshMessage = buildRegisterCatalogRefreshMessage(
+    viewModel.catalogRefreshStatus ?? "current",
+  );
+  useAppMessage({
+    active: isPosWorkflow && catalogRefreshMessage.active,
+    id: "pos-register.catalog-refresh",
+    label: catalogRefreshMessage.label,
+    message: catalogRefreshMessage.message,
+    priority: 50,
+    toastId: "pos-register-catalog-refresh-toast",
+  });
   const updateApplyBlocker = viewModel.updateApplyBlocker;
   useAppActionBlocker({
     actionId: APP_UPDATE_APPLY_ACTION_ID,
@@ -2243,6 +2281,7 @@ function POSRegisterViewContent({
   } = {}) => (
     <ProductEntry
       ref={productEntryRef}
+      catalogRows={viewModel.productEntry.catalogRows}
       disabled={viewModel.productEntry.disabled}
       showProductLookup={viewModel.productEntry.showProductLookup}
       setShowProductLookup={viewModel.productEntry.setShowProductLookup}

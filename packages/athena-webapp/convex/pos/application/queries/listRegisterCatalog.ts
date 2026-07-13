@@ -9,6 +9,7 @@ import {
   isProjectionProductPosCatalogVisible,
   isProjectionSkuPosCatalogVisible,
 } from "../../../../shared/posCatalogVisibility";
+import { readRegisterCatalogRevision } from "../sync/registerCatalogRevision";
 
 type InventoryImportProvisionalSkuId = Id<"inventoryImportProvisionalSku">;
 
@@ -1090,6 +1091,18 @@ export async function listRegisterCatalog(
   }
 
   return rows.concat(suppressedPendingCheckoutRows);
+}
+
+export async function listRegisterCatalogWithRevision(
+  ctx: QueryCtx,
+  args: {
+    storeId: Id<"store">;
+  },
+) {
+  const revision = await readRegisterCatalogRevision(ctx, args.storeId);
+  const rows = await listRegisterCatalog(ctx, args);
+
+  return { revision, rows };
 }
 
 export async function listRegisterCatalogAvailability(

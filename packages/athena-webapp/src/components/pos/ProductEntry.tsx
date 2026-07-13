@@ -9,16 +9,14 @@ import { normalizeQuickAddInitialLookupCode } from "@/components/product/quickAd
 import type { QuickAddProductSubmitPayload } from "@/components/product/QuickAddProductDialog";
 import { ScanBarcode, Scissors, Search } from "lucide-react";
 import type { Product } from "./types";
+import type { PosRegisterCatalogRowDto } from "@/lib/pos/application/dto";
 import type {
   RegisterLookupMode,
   RegisterServiceEntryState,
   RegisterServicePricingModel,
   RegisterServiceSearchResult,
 } from "@/lib/pos/presentation/register/registerUiState";
-import {
-  usePOSQuickAddProductSku,
-  usePOSRegisterCatalog,
-} from "@/hooks/usePOSProducts";
+import { usePOSQuickAddProductSku } from "@/hooks/usePOSProducts";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { currencyFormatter } from "~/convex/utils";
 import type { Id } from "~/convex/_generated/dataModel";
@@ -59,6 +57,7 @@ interface ProductSearchInputProps {
 }
 
 interface ProductEntryProps extends ProductSearchInputProps {
+  catalogRows: PosRegisterCatalogRowDto[];
   showProductLookup: boolean;
   setShowProductLookup: (value: boolean) => void;
   onAddProduct: (
@@ -426,6 +425,7 @@ export interface ProductEntryHandle {
 export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
   function ProductEntry(
     {
+      catalogRows,
       disabled,
       showProductLookup,
       productSearchQuery,
@@ -453,7 +453,6 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
     const { activeStore } = useGetActiveStore();
     const { user } = useAuth();
     const quickAddProductSku = usePOSQuickAddProductSku();
-    const registerCatalog = usePOSRegisterCatalog(activeStore?._id);
     const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
     const [quickAddInitialName, setQuickAddInitialName] = useState("");
     const [quickAddInitialLookupCode, setQuickAddInitialLookupCode] =
@@ -497,7 +496,7 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
     const isAddingVariant = Boolean(quickAddSourceProduct?.productId);
     const existingSkuOptions = useMemo<QuickAddExistingSkuOption[]>(
       () =>
-        (registerCatalog ?? [])
+        catalogRows
           .filter((item) => !item.barcode)
           .map((item) => ({
             productSkuId: String(item.productSkuId),
@@ -517,7 +516,7 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
                 : `${item.length}"`,
             ].filter((value): value is string => Boolean(value?.trim())),
           })),
-      [formatter, registerCatalog],
+      [catalogRows, formatter],
     );
 
     const handleOpenQuickAdd = useCallback(

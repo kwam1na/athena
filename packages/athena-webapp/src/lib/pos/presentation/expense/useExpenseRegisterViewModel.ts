@@ -789,6 +789,7 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
   return {
     workflowMode: "expense",
     hasActiveStore: Boolean(activeStore),
+    catalogRefreshStatus: "current",
     debug: {
       activeStoreSource: activeStore ? "live" : "missing",
       authDialogOpen: Boolean(activeStore && terminal && !isCashierSignedIn),
@@ -868,6 +869,7 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
       setCustomerInfo: () => {},
     },
     productEntry: {
+      catalogRows: registerCatalogRows ?? [],
       disabled: !terminal || !isCashierSignedIn,
       showProductLookup: true,
       setShowProductLookup: store.setShowProductEntry,
