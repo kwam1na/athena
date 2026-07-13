@@ -509,6 +509,7 @@ import type * as sharedDemo_foundation from "../sharedDemo/foundation.js";
 import type * as sharedDemo_policy from "../sharedDemo/policy.js";
 import type * as sharedDemo_provision from "../sharedDemo/provision.js";
 import type * as sharedDemo_public from "../sharedDemo/public.js";
+import type * as sharedDemo_reporting from "../sharedDemo/reporting.js";
 import type * as sharedDemo_restore from "../sharedDemo/restore.js";
 import type * as sharedDemo_scheduledRestore from "../sharedDemo/scheduledRestore.js";
 import type * as stockOps_access from "../stockOps/access.js";
@@ -1073,6 +1074,7 @@ declare const fullApi: ApiFromModules<{
   "sharedDemo/policy": typeof sharedDemo_policy;
   "sharedDemo/provision": typeof sharedDemo_provision;
   "sharedDemo/public": typeof sharedDemo_public;
+  "sharedDemo/reporting": typeof sharedDemo_reporting;
   "sharedDemo/restore": typeof sharedDemo_restore;
   "sharedDemo/scheduledRestore": typeof sharedDemo_scheduledRestore;
   "stockOps/access": typeof stockOps_access;

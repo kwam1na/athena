@@ -169,6 +169,7 @@ export interface RegisterCheckoutState {
   payments: Payment[];
   hasTerminal: boolean;
   isTransactionCompleted: boolean;
+  canVoidCompletedTransaction?: boolean;
   completedOrderNumber: string | null;
   completionBlockMessage?: string;
   serviceLines?: Array<{

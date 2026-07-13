@@ -52,6 +52,11 @@ describe("SharedDemoStatusBar", () => {
     expect(await screen.findByText("Restoring the shared demo store…")).toBeInTheDocument();
     finishRestore?.();
     await waitFor(() => expect(screen.queryByText("Restoring the shared demo store…")).not.toBeInTheDocument());
+    expect(
+      screen.getByText(
+        "Restore complete. The shared demo is back to its baseline.",
+      ),
+    ).toBeInTheDocument();
 
     rerender(<SharedDemoStatusBar homeHref="/demo-home" onRestore={onRestore} restoreStatus="restoring" />);
     expect(screen.getByText("The shared demo is being restored. Try your action again shortly.")).toBeInTheDocument();

@@ -317,6 +317,7 @@ async function applyOnlineOrderUpdate(
     returnItemsToStock?: boolean;
     signedInAthenaUser?: SignedInAthenaUser;
     update: Record<string, any>;
+    allowUncollectedPaymentOnDelivery?: boolean;
   }
 ) {
   const nextStatus =
@@ -342,7 +343,11 @@ async function applyOnlineOrderUpdate(
         ...order,
         paymentCollected: nextPaymentCollected,
       },
-      nextStatus!
+      nextStatus!,
+      {
+        allowUncollectedPaymentOnDelivery:
+          args.allowUncollectedPaymentOnDelivery,
+      },
     );
 
     updates.transitions = appendTransition(
@@ -1024,7 +1029,10 @@ export const update = mutation({
           throw new Error("This action is unavailable in the shared demo.");
         }
 
-        await applyOnlineOrderUpdate(ctx, order, args);
+        await applyOnlineOrderUpdate(ctx, order, {
+          ...args,
+          allowUncollectedPaymentOnDelivery: Boolean(demoActor),
+        });
         return ok(null);
       }
 
@@ -1064,6 +1072,7 @@ export const update = mutation({
         if (args.update.status) {
           await applyOnlineOrderUpdate(ctx, order, {
             ...args,
+            allowUncollectedPaymentOnDelivery: Boolean(demoActor),
             update: {
               ...rest,
               refunds,

@@ -191,6 +191,8 @@ export function AppSidebar({
     api.storeFront.onlineOrder.getAllOnlineOrders,
     activeStore?._id ? { storeId: activeStore._id } : "skip",
   ) as SidebarOrderSummary[] | undefined;
+  const sharedDemoContext = useQuery(api.sharedDemo.public.getContext, {});
+  const isSharedDemo = sharedDemoContext?.kind === "shared_demo";
 
   const openOrders = orders?.filter((order) => order.status === "open")?.length;
 
@@ -835,8 +837,10 @@ export function AppSidebar({
                 </SidebarMenuSub> */}
               </SidebarMenuCollapsible>
 
-              {/* Bulk operations section */}
-              <SidebarMenuItem>
+              {!isSharedDemo ? (
+                <>
+                  {/* Bulk operations section */}
+                  <SidebarMenuItem>
                 <SidebarMenuButton disabled={!hasFullAdminAccess} asChild>
                   <Link
                     to="/$orgUrlSlug/store/$storeUrlSlug/bulk-operations"
@@ -851,10 +855,10 @@ export function AppSidebar({
                     <p className="font-medium">Bulk Operations</p>
                   </Link>
                 </SidebarMenuButton>
-              </SidebarMenuItem>
+                  </SidebarMenuItem>
 
-              {/* Promo codes section */}
-              <SidebarMenuItem>
+                  {/* Promo codes section */}
+                  <SidebarMenuItem>
                 <SidebarMenuButton disabled={!hasFullAdminAccess} asChild>
                   <Link
                     to="/$orgUrlSlug/store/$storeUrlSlug/promo-codes"
@@ -869,7 +873,9 @@ export function AppSidebar({
                     <p className="font-medium">Promo codes</p>
                   </Link>
                 </SidebarMenuButton>
-              </SidebarMenuItem>
+                  </SidebarMenuItem>
+                </>
+              ) : null}
 
               {/* Reviews section */}
               <SidebarMenuItem>
@@ -1063,7 +1069,7 @@ export function AppSidebar({
           </SidebarGroup>
         </PermissionGate>
 
-        <PermissionGate requires="full_admin">
+        {!isSharedDemo ? <PermissionGate requires="full_admin">
           <SidebarGroup>
             <SidebarGroupLabel>Organization</SidebarGroupLabel>
             <SidebarGroupContent>
@@ -1087,9 +1093,9 @@ export function AppSidebar({
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
-        </PermissionGate>
+        </PermissionGate> : null}
 
-        <PermissionGate requires="full_admin">
+        {!isSharedDemo ? <PermissionGate requires="full_admin">
           <SidebarGroup>
             <SidebarGroupLabel>App</SidebarGroupLabel>
             <SidebarGroupContent>
@@ -1113,7 +1119,7 @@ export function AppSidebar({
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
-        </PermissionGate>
+        </PermissionGate> : null}
       </SidebarContent>
       {isContainedShell ? <ContainedSidebarToggle /> : <SidebarRail />}
     </Sidebar>

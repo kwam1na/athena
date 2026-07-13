@@ -5,11 +5,24 @@ import { internalMutation, type MutationCtx } from "../_generated/server";
 import { SHARED_DEMO_BASELINE_VERSION } from "./config";
 
 export const SHARED_DEMO_MUTABLE_TABLES = [
+  { domain: "pos", tableName: "posTerminal" },
+  { domain: "pos", tableName: "posLocalSyncConflict" },
+  { domain: "pos", tableName: "posLocalSyncCursor" },
+  { domain: "pos", tableName: "posLocalSyncMapping" },
+  { domain: "pos", tableName: "posLocalSyncEvent" },
+  { domain: "pos", tableName: "posLifecycleJournal" },
+  { domain: "pos", tableName: "posLifecycleJournalCursor" },
+  { domain: "pos", tableName: "posRegisterMappingAuthority" },
+  { domain: "pos", tableName: "posRegisterAuthorityReplicationStatus" },
+  { domain: "pos", tableName: "posSessionItem" },
+  { domain: "pos", tableName: "posSession" },
   { domain: "pos", tableName: "posTransactionItem" },
   { domain: "pos", tableName: "posTransaction" },
   { domain: "inventory", tableName: "inventoryMovement" },
   { domain: "inventory", tableName: "product" },
   { domain: "inventory", tableName: "productSku" },
+  { domain: "inventory", tableName: "productSkuSearch" },
+  { domain: "inventory", tableName: "reportingInventoryPosition" },
   { domain: "cash", tableName: "posRegisterSessionActivity" },
   { domain: "cash", tableName: "registerSession" },
   { domain: "orders", tableName: "onlineOrderItem" },
@@ -29,8 +42,9 @@ export function requireBoundedBatch<T>(rows: T[], tableName: string) {
 export function requireCurrentBaselineDocuments<T extends { baselineVersion: number }>(
   rows: T[],
   tableName: string,
+  baselineVersion = SHARED_DEMO_BASELINE_VERSION,
 ) {
-  if (rows.some((row) => row.baselineVersion !== SHARED_DEMO_BASELINE_VERSION)) {
+  if (rows.some((row) => row.baselineVersion !== baselineVersion)) {
     throw new Error(`Shared demo baseline version mismatch for ${tableName}.`);
   }
   return rows;
@@ -78,6 +92,10 @@ async function listStoreRows(ctx: any, tableName: string, storeId: Id<"store">) 
     const parents = await ctx.db.query("onlineOrder").withIndex("by_storeId", (q: any) => q.eq("storeId", storeId)).take(500);
     return requireBoundedBatch((await Promise.all(parents.map((parent: any) => ctx.db.query("onlineOrderItem").withIndex("by_orderId", (q: any) => q.eq("orderId", parent._id)).take(RESTORE_BATCH_LIMIT + 1)))).flat(), tableName);
   }
+  if (tableName === "posSessionItem") {
+    const parents = await ctx.db.query("posSession").withIndex("by_storeId", (q: any) => q.eq("storeId", storeId)).take(500);
+    return requireBoundedBatch((await Promise.all(parents.map((parent: any) => ctx.db.query("posSessionItem").withIndex("by_sessionId", (q: any) => q.eq("sessionId", parent._id)).take(RESTORE_BATCH_LIMIT + 1)))).flat(), tableName);
+  }
   if (tableName === "staffMessage") {
     return requireBoundedBatch(await ctx.db.query("staffMessage").withIndex("by_storeId_createdAt", (q: any) => q.eq("storeId", storeId)).take(RESTORE_BATCH_LIMIT + 1), tableName);
   }
@@ -87,6 +105,24 @@ async function listStoreRows(ctx: any, tableName: string, storeId: Id<"store">) 
   }
   if (tableName === "dailyOpening") {
     return requireBoundedBatch(await query.withIndex("by_storeId_operatingDate", (q: any) => q.eq("storeId", storeId)).take(RESTORE_BATCH_LIMIT + 1), tableName);
+  }
+  if (tableName === "posLocalSyncEvent" || tableName === "posLocalSyncMapping") {
+    return requireBoundedBatch(await query.withIndex("by_store_terminal_localEvent", (q: any) => q.eq("storeId", storeId)).take(RESTORE_BATCH_LIMIT + 1), tableName);
+  }
+  if (tableName === "posLocalSyncConflict") {
+    return requireBoundedBatch(await query.withIndex("by_store_status", (q: any) => q.eq("storeId", storeId)).take(RESTORE_BATCH_LIMIT + 1), tableName);
+  }
+  if (tableName === "posLocalSyncCursor" || tableName === "posRegisterMappingAuthority") {
+    return requireBoundedBatch(await query.withIndex("by_store_terminal", (q: any) => q.eq("storeId", storeId)).take(RESTORE_BATCH_LIMIT + 1), tableName);
+  }
+  if (tableName === "posRegisterAuthorityReplicationStatus") {
+    return requireBoundedBatch(await query.withIndex("by_store_terminal", (q: any) => q.eq("storeId", storeId)).take(RESTORE_BATCH_LIMIT + 1), tableName);
+  }
+  if (tableName === "posLifecycleJournal") {
+    return requireBoundedBatch(await query.withIndex("by_storeId_eventKey", (q: any) => q.eq("storeId", storeId)).take(RESTORE_BATCH_LIMIT + 1), tableName);
+  }
+  if (tableName === "reportingInventoryPosition") {
+    return requireBoundedBatch(await query.withIndex("by_storeId_productSkuId", (q: any) => q.eq("storeId", storeId)).take(RESTORE_BATCH_LIMIT + 1), tableName);
   }
   return requireBoundedBatch(await query.withIndex("by_storeId", (q: any) => q.eq("storeId", storeId)).take(RESTORE_BATCH_LIMIT + 1), tableName);
 }
@@ -119,16 +155,25 @@ export const captureBaselineDocuments = internalMutation({
   handler: captureBaselineDocumentsWithCtx,
 });
 
-export async function restoreMutableDemoStoreRowsWithCtx(ctx: any, storeId: Id<"store">) {
+export async function restoreMutableDemoStoreRowsWithCtx(
+  ctx: any,
+  storeId: Id<"store">,
+  options?: { baselineVersion?: number; skipTables?: readonly string[] },
+) {
   let restored = 0;
   const actualCounts: Record<string, number> = {};
   const expectedCounts: Record<string, number> = {};
   for (const entry of SHARED_DEMO_MUTABLE_TABLES) {
+    if (options?.skipTables?.includes(entry.tableName)) continue;
     const [current, baselineRows]: [any[], BaselineDocumentRow[]] = await Promise.all([
       listStoreRows(ctx, entry.tableName, storeId),
       ctx.db.query("sharedDemoBaselineDocument").withIndex("by_storeId_tableName", (q: any) => q.eq("storeId", storeId).eq("tableName", entry.tableName)).take(500),
     ]);
-    const baseline = requireCurrentBaselineDocuments(baselineRows, entry.tableName);
+    const baseline = requireCurrentBaselineDocuments(
+      baselineRows,
+      entry.tableName,
+      options?.baselineVersion,
+    );
     const currentIds = new Set(current.map((row: any) => String(row._id)));
     if (baseline.some((row: any) => !currentIds.has(row.documentId))) {
       throw new Error("Protected shared demo baseline row is missing.");

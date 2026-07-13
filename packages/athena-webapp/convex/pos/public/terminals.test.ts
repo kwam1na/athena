@@ -1877,6 +1877,7 @@ describe("POS terminal public mutations", () => {
     const commandResult = { kind: "ok" as const, data: recoveryCommand };
 
     assertConformsToExportedReturns(listTerminals as never, [terminal]);
+    expect(terminal.storeId).toBe("store-1");
     assertConformsToExportedReturns(getTerminalByFingerprint as never, terminal);
     assertConformsToExportedReturns(
       previewTerminalRecovery as never,

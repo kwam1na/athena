@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useQuery } from "convex/react";
 
 import { useConvexTerminalByFingerprint } from "@/lib/pos/infrastructure/convex/registerGateway";
 import { getDefaultPosLocalStore } from "@/lib/pos/infrastructure/local/posLocalStorageRuntime";
@@ -7,9 +8,14 @@ import type { Id } from "~/convex/_generated/dataModel";
 import type { PosTerminalLoginMode } from "~/shared/posTerminalLoginMode";
 import type { PosTerminalTransactionCapability } from "~/shared/posTerminalCapability";
 import useGetActiveStore from "./useGetActiveStore";
+import { api } from "~/convex/_generated/api";
 
 export const useGetTerminal = () => {
   const { activeStore } = useGetActiveStore();
+  const sharedDemoRegister = useQuery(
+    api.sharedDemo.public.getRegisterBootstrap,
+    {},
+  );
   const fingerprintHash = readStoredTerminalFingerprintHash();
   const [localTerminal, setLocalTerminal] = useState<{
     fingerprintHash: string;
@@ -74,6 +80,28 @@ export const useGetTerminal = () => {
       cancelled = true;
     };
   }, [activeStore?._id, fingerprintHash, terminal]);
+
+  if (
+    terminal &&
+    sharedDemoRegister?.kind === "shared_demo" &&
+    (!activeStore?._id || sharedDemoRegister.storeId === activeStore._id)
+  ) {
+    return {
+      ...terminal,
+      sharedDemoStaff: sharedDemoRegister.staff,
+    };
+  }
+
+  if (
+    !terminal &&
+    sharedDemoRegister?.kind === "shared_demo" &&
+    (!activeStore?._id || sharedDemoRegister.storeId === activeStore._id)
+  ) {
+    return {
+      ...sharedDemoRegister.terminal,
+      sharedDemoStaff: sharedDemoRegister.staff,
+    };
+  }
 
   if (fingerprintHash == null) {
     return null;

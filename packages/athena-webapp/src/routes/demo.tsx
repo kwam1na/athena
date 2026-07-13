@@ -37,9 +37,12 @@ export function SharedDemoEntry() {
   useEffect(() => {
     if (!isLoading && !user && !started.current) {
       started.current = true;
-      void enter();
+      void signOut().then(enter).catch(() => {
+        started.current = false;
+        setFailed(true);
+      });
     }
-  }, [enter, isLoading, user]);
+  }, [enter, isLoading, signOut, user]);
 
   useEffect(() => {
     if (isLoading || !user || demoContext === undefined || demoContext || started.current) return;

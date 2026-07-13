@@ -24,6 +24,7 @@ export type ProvisionedTerminalRecord = {
   _creationTime: number;
   storeId: Id<"store">;
   fingerprintHash: string;
+  heartbeatEnabled?: boolean;
   syncSecretHash?: string;
   displayName: string;
   registerNumber?: string;
@@ -50,6 +51,7 @@ export async function registerAndProvisionPosTerminal(input: {
   browserInfo: BrowserInfo;
   displayName: string;
   fingerprintHash: string;
+  heartbeatEnabled?: boolean;
   orgUrlSlug?: string;
   registerNumber: string;
   requestPersistentStorage?: () => Promise<unknown>;
@@ -59,6 +61,7 @@ export async function registerAndProvisionPosTerminal(input: {
     browserInfo: BrowserInfo;
     displayName: string;
     fingerprintHash: string;
+    heartbeatEnabled?: boolean;
     loginMode?: PosTerminalLoginMode;
     registerNumber: string;
     storeId: Id<"store">;
@@ -82,6 +85,9 @@ export async function registerAndProvisionPosTerminal(input: {
   const result = await input.registerTerminalMutation({
     storeId: input.activeStoreId,
     fingerprintHash: input.fingerprintHash,
+    ...(input.heartbeatEnabled === undefined
+      ? {}
+      : { heartbeatEnabled: input.heartbeatEnabled }),
     syncSecretHash: syncSecretToken,
     displayName: input.displayName,
     registerNumber: input.registerNumber,

@@ -10,6 +10,7 @@ import {
   requireOrganizationMemberRoleWithCtx,
 } from "../../lib/athenaUserAuth";
 import { userError } from "../../../shared/commandResult";
+import { requireSharedDemoStoreCapabilityIfApplicable } from "../../sharedDemo/actor";
 import { ingestLocalEventsWithCtx } from "../application/sync/ingestLocalEvents";
 import { hashPosTerminalSyncSecret } from "../application/sync/terminalSyncSecret";
 import { posLocalSyncMappingKindValidator } from "../../schemas/pos/posLocalSyncMapping";
@@ -175,7 +176,15 @@ export const ingestLocalEvents = mutation({
 
     let athenaUser;
     try {
-      athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+      const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(
+        ctx,
+        "pos.sale.complete",
+        args.storeId,
+      );
+      athenaUser = await requireAuthenticatedAthenaUserWithCtx(
+        ctx,
+        demoActor ? { sharedDemoCapability: "pos.sale.complete" } : undefined,
+      );
       await requireOrganizationMemberRoleWithCtx(ctx, {
         allowedRoles: ["full_admin", "pos_only"],
         failureMessage: "You do not have access to sync this POS terminal.",
@@ -336,7 +345,15 @@ export const ingestRegisterSessionActivity = mutation({
 
     let athenaUser;
     try {
-      athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+      const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(
+        ctx,
+        "cash.control.write",
+        args.storeId,
+      );
+      athenaUser = await requireAuthenticatedAthenaUserWithCtx(
+        ctx,
+        demoActor ? { sharedDemoCapability: "cash.control.write" } : undefined,
+      );
       await requireOrganizationMemberRoleWithCtx(ctx, {
         allowedRoles: ["full_admin", "pos_only"],
         failureMessage: "You do not have access to sync this POS terminal.",

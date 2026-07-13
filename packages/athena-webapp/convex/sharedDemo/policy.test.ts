@@ -58,6 +58,9 @@ describe("shared demo policy", () => {
     expect(() =>
       requireSharedDemoOrderFulfillmentUpdate({ status: "delivered" }),
     ).not.toThrow();
+    expect(() =>
+      requireSharedDemoOrderFulfillmentUpdate({ status: "picked-up" }),
+    ).not.toThrow();
     for (const update of [
       { status: "cancelled" },
       { status: "refunded" },

@@ -120,6 +120,22 @@ describe("online order operations helper mappings", () => {
       assertValidOnlineOrderStatusTransition(
         {
           deliveryMethod: "pickup",
+          paymentCollected: false,
+          paymentMethod: {
+            podPaymentMethod: "cash",
+            type: "payment_on_delivery",
+          },
+          status: "ready-for-pickup",
+        } as any,
+        "picked-up",
+        { allowUncollectedPaymentOnDelivery: true },
+      ),
+    ).not.toThrow();
+
+    expect(() =>
+      assertValidOnlineOrderStatusTransition(
+        {
+          deliveryMethod: "pickup",
           paymentCollected: true,
           paymentMethod: {
             podPaymentMethod: "cash",

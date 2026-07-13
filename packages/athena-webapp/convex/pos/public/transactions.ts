@@ -1,6 +1,11 @@
 import { v } from "convex/values";
 
-import { mutation, query, type MutationCtx, type QueryCtx } from "../../_generated/server";
+import {
+  mutation,
+  query,
+  type MutationCtx,
+  type QueryCtx,
+} from "../../_generated/server";
 import type { Id } from "../../_generated/dataModel";
 import { requireSharedDemoStoreCapabilityIfApplicable } from "../../sharedDemo/actor";
 import { requireReadySharedDemoWriteWithCtx } from "../../sharedDemo/restore";
@@ -43,6 +48,11 @@ async function requirePosTransactionStoreAccess(
     failureMessage: string;
   },
 ) {
+  const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(
+    ctx,
+    "pos.sale.complete",
+    args.storeId,
+  );
   const store = await ctx.db.get("store", args.storeId);
   if (!store) {
     return userError({
@@ -51,7 +61,10 @@ async function requirePosTransactionStoreAccess(
     });
   }
 
-  const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+  const athenaUser = await requireAuthenticatedAthenaUserWithCtx(
+    ctx,
+    demoActor ? { sharedDemoCapability: "pos.sale.complete" } : undefined,
+  );
   const membership = await requireOrganizationMemberRoleWithCtx(ctx, {
     allowedRoles: ["full_admin", "pos_only"],
     failureMessage: args.failureMessage,
@@ -333,12 +346,16 @@ function mapCorrectionError(error: unknown): CommandResult<never> | null {
     message === "Item adjustment approval request not found." ||
     message === "Payment method approval request has already been decided." ||
     message === "Payment method approval request does not match this store." ||
-    message === "Payment method approval request does not match this correction." ||
-    message === "Payment method approval request is missing correction details." ||
+    message ===
+      "Payment method approval request does not match this correction." ||
+    message ===
+      "Payment method approval request is missing correction details." ||
     message === "Item adjustment approval request has already been decided." ||
     message === "Item adjustment approval request does not match this store." ||
-    message === "Item adjustment approval request does not match this payload." ||
-    message === "Item adjustment approval request is missing adjustment details." ||
+    message ===
+      "Item adjustment approval request does not match this payload." ||
+    message ===
+      "Item adjustment approval request is missing adjustment details." ||
     message === "Item adjustment payload is stale for this transaction." ||
     message === "Item adjustment settlement does not match corrected totals." ||
     message === "Item adjustment cannot reduce inventory below zero." ||
@@ -348,9 +365,11 @@ function mapCorrectionError(error: unknown): CommandResult<never> | null {
     message === "Settlement method is required for item adjustments." ||
     message === "Item adjustment must include at least one changed line." ||
     message === "Item adjustment quantities must be whole numbers." ||
-    message === "This transaction already has an item adjustment waiting for approval." ||
+    message ===
+      "This transaction already has an item adjustment waiting for approval." ||
     message === "This transaction already has an item adjustment applied." ||
-    message === "Register closeout is under review. Reopen the register before updating adjustment settlement." ||
+    message ===
+      "Register closeout is under review. Reopen the register before updating adjustment settlement." ||
     message === "Register session expected cash cannot be negative." ||
     message.startsWith("Approval proof ")
   ) {
@@ -431,8 +450,13 @@ export const completeTransaction = mutation({
     }),
   ),
   handler: async (ctx, args) => {
-    const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(ctx, "pos.sale.complete", args.storeId);
-    if (demoActor) await requireReadySharedDemoWriteWithCtx(ctx, { storeId: args.storeId });
+    const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(
+      ctx,
+      "pos.sale.complete",
+      args.storeId,
+    );
+    if (demoActor)
+      await requireReadySharedDemoWriteWithCtx(ctx, { storeId: args.storeId });
     const store = await ctx.db.get("store", args.storeId);
     if (!store) {
       return userError({
@@ -915,7 +939,8 @@ export const correctTransactionCustomer = mutation({
     if (!args.actorStaffProfileId) {
       return userError({
         code: "authentication_failed",
-        message: "Staff sign-in is required before correcting customer attribution.",
+        message:
+          "Staff sign-in is required before correcting customer attribution.",
       });
     }
 
@@ -1021,7 +1046,8 @@ export const correctTransactionPaymentMethod = mutation({
       if (!args.actorStaffProfileId) {
         return userError({
           code: "authentication_failed",
-          message: "Staff sign-in is required before correcting payment method.",
+          message:
+            "Staff sign-in is required before correcting payment method.",
         });
       }
 
@@ -1077,7 +1103,8 @@ export const correctTransactionPaymentMethod = mutation({
       ) {
         return userError({
           code: "authentication_failed",
-          message: "Payment correction staff proof is invalid for this terminal.",
+          message:
+            "Payment correction staff proof is invalid for this terminal.",
         });
       }
 
@@ -1138,7 +1165,8 @@ export const adjustTransactionItems = mutation({
     if (!args.actorStaffProfileId) {
       return userError({
         code: "authentication_failed",
-        message: "Staff sign-in is required before adjusting transaction items.",
+        message:
+          "Staff sign-in is required before adjusting transaction items.",
       });
     }
 
@@ -1187,7 +1215,8 @@ export const adjustTransactionItems = mutation({
       ) {
         return userError({
           code: "authentication_failed",
-          message: "Item adjustment staff profile is not active for this store.",
+          message:
+            "Item adjustment staff profile is not active for this store.",
         });
       }
 
@@ -1234,10 +1263,7 @@ export const adjustTransactionItems = mutation({
         lastUsedAt: Date.now(),
       });
 
-      const {
-        staffProofToken: _staffProofToken,
-        ...commandArgs
-      } = args;
+      const { staffProofToken: _staffProofToken, ...commandArgs } = args;
       const result = await adjustTransactionItemsCommand(ctx, {
         ...commandArgs,
         actorUserId: athenaUser._id,

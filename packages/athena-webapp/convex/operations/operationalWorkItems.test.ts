@@ -3,12 +3,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Id } from "../_generated/dataModel";
 import { getQueueSnapshot } from "./operationalWorkItems";
 import * as athenaUserAuth from "../lib/athenaUserAuth";
+import * as sharedDemoActor from "../sharedDemo/actor";
 
 const TEST_MAX_QUEUE_ITEMS = 100;
 
 vi.mock("../lib/athenaUserAuth", () => ({
   requireAuthenticatedAthenaUserWithCtx: vi.fn(),
   requireOrganizationMemberRoleWithCtx: vi.fn(),
+}));
+vi.mock("../sharedDemo/actor", () => ({
+  requireSharedDemoStoreCapabilityIfApplicable: vi.fn(),
 }));
 
 function getHandler(definition: unknown) {
@@ -124,6 +128,26 @@ beforeEach(() => {
 });
 
 describe("getQueueSnapshot", () => {
+  it("uses the inventory capability for the shared demo queue snapshot", async () => {
+    const ctx = createQueueContext();
+    vi.mocked(
+      sharedDemoActor.requireSharedDemoStoreCapabilityIfApplicable,
+    ).mockResolvedValueOnce({ kind: "shared_demo" } as never);
+
+    await getHandler(getQueueSnapshot)(ctx, {
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(
+      sharedDemoActor.requireSharedDemoStoreCapabilityIfApplicable,
+    ).toHaveBeenCalledWith(ctx, "inventory.adjust", "store-1");
+    expect(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).toHaveBeenCalledWith(ctx, {
+      sharedDemoCapability: "inventory.adjust",
+    });
+  });
+
   it("includes current open work items and excludes terminal rows from the queue snapshot", async () => {
     const ctx = createQueueContext({
       workItems: [

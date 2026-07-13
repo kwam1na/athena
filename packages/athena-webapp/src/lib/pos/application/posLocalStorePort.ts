@@ -318,6 +318,9 @@ export interface PosLocalCompatibilityPort {
   resetRegisterOperationalStateForAuthorityCutover(): Promise<
     PosLocalStoreResult<PosRegisterOperationalStateResetResult>
   >;
+  /** Dev/QA shared-demo restore only: discard this browser's POS state after
+   * the server has restored the shared store baseline. */
+  resetSharedDemoLocalState?(): Promise<PosLocalStoreResult<null>>;
 }
 
 /** High-level outcomes only. Engines retain their native layout, indexes, queries, and transaction mechanics. */

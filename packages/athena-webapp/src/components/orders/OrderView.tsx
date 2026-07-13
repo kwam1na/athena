@@ -1,19 +1,15 @@
-import { useNavigate, useSearch } from "@tanstack/react-router";
 import View from "../View";
 import { CustomerDetailsView } from "./CustomerDetailsView";
 import { OrderDetailsView } from "./OrderDetailsView";
 import { OrderItemsView } from "./OrderItemsView";
 import { PickupDetailsView } from "./PickupDetailsView";
 import { Button } from "../ui/button";
-import { ArrowLeftIcon, CheckCircledIcon } from "@radix-ui/react-icons";
-import { Badge } from "../ui/badge";
+import { CheckCircledIcon } from "@radix-ui/react-icons";
 import {
   AlertCircleIcon,
-  Ban,
   RotateCcw,
   Store,
   Truck,
-  X,
   XCircle,
 } from "lucide-react";
 import {
@@ -22,7 +18,7 @@ import {
 } from "~/src/contexts/OnlineOrderContext";
 import { LoadingButton } from "../ui/loading-button";
 import { useState } from "react";
-import { useAction, useMutation } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "~/convex/_generated/api";
 import {
   currencyFormatter,
@@ -72,11 +68,16 @@ export function RefundOptions() {
   }: {
     returnToStock: boolean;
   }) => {
+    const externalTransactionId = order.externalTransactionId;
+    if (!externalTransactionId) {
+      toast.error("This order does not have a refundable payment reference.");
+      return;
+    }
     try {
       setIsRefundingOrder(true);
       const result = await runCommand(() =>
         refundOrder({
-          externalTransactionId: order?.externalTransactionId!,
+          externalTransactionId,
           amount: refundOptions.amount,
           returnItemsToStock: returnToStock,
         }),
@@ -100,8 +101,8 @@ export function RefundOptions() {
   const formatter = currencyFormatter(activeStore.currency);
 
   const itemsTotal =
-    order?.items?.reduce(
-      (acc, item: any) => acc + item.price * item.quantity,
+    order.items?.reduce(
+      (acc, item) => acc + item.price * item.quantity,
       0,
     ) || 0;
 
@@ -180,6 +181,7 @@ export function RefundOptions() {
 
 const Header = () => {
   const { order } = useOnlineOrder();
+  const sharedDemo = useQuery(api.sharedDemo.public.getContext, {});
 
   const { user } = useAuth();
 
@@ -198,7 +200,7 @@ const Header = () => {
   const isPickup = order?.deliveryMethod === "pickup";
 
   const handleUpdateOrder = async (
-    update: Record<string, any>,
+    update: Record<string, unknown>,
     options?: {
       errorMessage?: string;
       successMessage?: string;
@@ -206,10 +208,16 @@ const Header = () => {
   ) => {
     try {
       setIsUpdatingOrder(true);
+      const effectiveUpdate =
+        sharedDemo &&
+        update.status === "picked-up" &&
+        update.paymentCollected === true
+          ? { status: "picked-up" }
+          : update;
       const result = await runCommand(() =>
         updateOrder({
           orderId: order?._id,
-          update,
+          update: effectiveUpdate,
           signedInAthenaUser: user
             ? {
                 id: user._id,
@@ -226,8 +234,8 @@ const Header = () => {
 
       toast(
         options?.successMessage ??
-          (update.status
-            ? `Order marked as ${slugToWords(update.status)}`
+          (typeof effectiveUpdate.status === "string"
+            ? `Order marked as ${slugToWords(effectiveUpdate.status)}`
             : "Order updated"),
         {
           icon: <CheckCircledIcon className="w-4 h-4" />,
@@ -276,8 +284,8 @@ const Header = () => {
 
   const hasIssuedRefund = order.status.includes("refund");
 
-  const isReady = order?.items
-    ?.filter((i) => !Boolean(i.isRefunded))
+  const isReady = order.items
+    ?.filter((i) => !i.isRefunded)
     .every((item) => item.isReady);
 
   const { isOrderOpen, isOrderReady, isOrderOutForDelivery } =
@@ -292,7 +300,7 @@ const Header = () => {
     (order.isPODOrder || order.paymentMethod?.type === "payment_on_delivery");
 
   const canPerformInitialTransition =
-    (order.items?.some((item) => !Boolean(item.isRefunded)) &&
+    (order.items?.some((item) => !item.isRefunded) &&
       hasIssuedRefund) ||
     isOrderOpen;
 
@@ -482,7 +490,9 @@ const Header = () => {
                         ? "Failed to collect payment and complete pickup"
                         : "Failed to mark order as picked up",
                       successMessage: needsPickupPaymentCollection
-                        ? "Payment collected and order marked as picked up"
+                        ? sharedDemo
+                          ? "Order marked as picked up. No payment was collected."
+                          : "Payment collected and order marked as picked up"
                         : "Order marked as picked up",
                     },
                   )
@@ -492,7 +502,9 @@ const Header = () => {
                 <Store className="h-4 w-4 mr-1" />
                 <p className="text-sm">
                   {needsPickupPaymentCollection && isPODPickupOrder
-                    ? "\u2192 Collect payment & mark picked up"
+                    ? sharedDemo
+                      ? "\u2192 Mark picked up (payment simulated)"
+                      : "\u2192 Collect payment & mark picked up"
                     : "\u2192 Picked up"}
                 </p>
               </LoadingButton>
@@ -500,88 +512,6 @@ const Header = () => {
           </div>
         }
       />
-    </>
-  );
-};
-
-const VerifyPaymentAlert = () => {
-  const [isVerifyingPayment, setIsVerifyingPayment] = useState(false);
-  const { order } = useOnlineOrder();
-  const { user } = useAuth();
-
-  const verifyPayment = useAction(api.storeFront.payment.verifyPayment);
-
-  if (!order) return null;
-
-  if (
-    order.hasVerifiedPayment ||
-    order.paymentMethod?.type === "payment_on_delivery"
-  )
-    return null;
-
-  const handleVerifyPayment = async () => {
-    try {
-      setIsVerifyingPayment(true);
-      const res = await verifyPayment({
-        storeFrontUserId: order.storeFrontUserId,
-        externalReference: order.externalReference!,
-        signedInAthenaUser: user
-          ? {
-              id: user._id,
-              email: user.email,
-            }
-          : undefined,
-      });
-
-      if (!res.verified) {
-        toast("Unable to verify payment", {
-          icon: <Ban className="w-4 h-4" />,
-          description: res.message,
-        });
-      } else {
-        toast("Payment verified", {
-          icon: <CheckCircledIcon className="w-4 h-4" />,
-        });
-      }
-    } catch (error) {
-      console.error(error);
-      toast("Unable to verify payment", {
-        icon: <Ban className="w-4 h-4" />,
-        description: "Please try again",
-      });
-    } finally {
-      setIsVerifyingPayment(false);
-    }
-  };
-
-  return (
-    <div className="flex gap-2 px-4 rounded-lg text-yellow-700 bg-yellow-50 w-fit">
-      <AlertCircleIcon className="h-4 w-4 mt-3" />
-      <div className="space-y-2">
-        <div className="flex items-center gap-2">
-          <p className="text-sm">
-            Payment for this order has not been verified.
-          </p>
-          <LoadingButton
-            isLoading={isVerifyingPayment}
-            onClick={handleVerifyPayment}
-            variant={"link"}
-          >
-            <p className="text-sm text-yellow-700 underline">Verify payment</p>
-          </LoadingButton>
-        </div>
-        <p className="text-sm">
-          Payments are verified when the amount paid matches the order amount
-        </p>
-      </div>
-    </div>
-  );
-};
-
-const Alerts = () => {
-  return (
-    <>
-      <VerifyPaymentAlert />
     </>
   );
 };

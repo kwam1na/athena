@@ -15,7 +15,11 @@ const contextResult = v.union(
       epoch: v.number(),
       failureCode: v.optional(v.string()),
       startedAt: v.optional(v.number()),
-      status: v.union(v.literal("ready"), v.literal("restoring"), v.literal("failed")),
+      status: v.union(
+        v.literal("ready"),
+        v.literal("restoring"),
+        v.literal("failed"),
+      ),
     }),
     storeId: v.id("store"),
   }),
@@ -26,8 +30,15 @@ export const getContext = query({
   returns: contextResult,
   handler: async (ctx) => {
     let actor;
-    try { actor = await requireSharedDemoActorWithCtx(ctx); } catch { return null; }
-    const state = await ctx.db.query("sharedDemoRestoreState").withIndex("by_storeId", (q) => q.eq("storeId", actor.storeId)).unique();
+    try {
+      actor = await requireSharedDemoActorWithCtx(ctx);
+    } catch {
+      return null;
+    }
+    const state = await ctx.db
+      .query("sharedDemoRestoreState")
+      .withIndex("by_storeId", (q) => q.eq("storeId", actor.storeId))
+      .unique();
     if (!state) return null;
     const hour = 3_600_000;
     return {
@@ -46,26 +57,137 @@ export const getContext = query({
   },
 });
 
+export const getRegisterBootstrap = query({
+  args: {},
+  returns: v.union(
+    v.null(),
+    v.object({
+      kind: v.literal("shared_demo"),
+      storeId: v.id("store"),
+      staff: v.object({
+        activeRoles: v.array(v.string()),
+        displayName: v.string(),
+        staffProfileId: v.id("staffProfile"),
+      }),
+      terminal: v.object({
+        _id: v.id("posTerminal"),
+        displayName: v.string(),
+        loginMode: v.optional(
+          v.union(v.literal("standard"), v.literal("pos_only")),
+        ),
+        registerNumber: v.optional(v.string()),
+        status: v.string(),
+        transactionCapability: v.optional(
+          v.union(
+            v.literal("products_and_services"),
+            v.literal("products_only"),
+            v.literal("services_only"),
+          ),
+        ),
+      }),
+    }),
+  ),
+  handler: async (ctx) => {
+    let actor;
+    try {
+      actor = await requireSharedDemoActorWithCtx(ctx);
+    } catch {
+      return null;
+    }
+
+    const registerSession = await ctx.db
+      .query("registerSession")
+      .withIndex("by_storeId_status", (q) =>
+        q.eq("storeId", actor.storeId).eq("status", "active"),
+      )
+      .first();
+    if (
+      !registerSession?.terminalId ||
+      !registerSession.openedByStaffProfileId
+    ) {
+      return null;
+    }
+
+    const [terminal, staffProfile] = await Promise.all([
+      ctx.db.get("posTerminal", registerSession.terminalId),
+      ctx.db.get("staffProfile", registerSession.openedByStaffProfileId),
+    ]);
+    if (
+      !terminal ||
+      terminal.storeId !== actor.storeId ||
+      !staffProfile ||
+      staffProfile.storeId !== actor.storeId ||
+      staffProfile.status !== "active"
+    ) {
+      return null;
+    }
+
+    return {
+      kind: "shared_demo" as const,
+      storeId: actor.storeId,
+      staff: {
+        activeRoles: ["cashier"],
+        displayName: staffProfile.fullName,
+        staffProfileId: staffProfile._id,
+      },
+      terminal: {
+        _id: terminal._id,
+        displayName: terminal.displayName,
+        loginMode: terminal.loginMode,
+        registerNumber: terminal.registerNumber,
+        status: terminal.status,
+        transactionCapability: terminal.transactionCapability,
+      },
+    };
+  },
+});
+
 export const requestManualRestore = mutation({
   args: { idempotencyKey: v.string() },
   returns: v.object({
     baselineVersion: v.number(),
     epoch: v.number(),
-    kind: v.union(v.literal("started"), v.literal("already_running"), v.literal("rate_limited")),
+    kind: v.union(
+      v.literal("started"),
+      v.literal("already_running"),
+      v.literal("rate_limited"),
+    ),
   }),
   handler: async (ctx, args) => {
     const actor = await requireSharedDemoActorWithCtx(ctx);
-    if (!/^[A-Za-z0-9_-]{8,100}$/.test(args.idempotencyKey)) throw new Error("Restore request is invalid.");
-    const latest = await ctx.db.query("sharedDemoRestoreAudit").withIndex("by_storeId_occurredAt", (q) => q.eq("storeId", actor.storeId)).order("desc").first();
-    if (latest?.source === "manual" && latest.occurredAt > Date.now() - 60_000) {
-      const state = await ctx.db.query("sharedDemoRestoreState").withIndex("by_storeId", (q) => q.eq("storeId", actor.storeId)).unique();
-      return { baselineVersion: state?.baselineVersion ?? 1, epoch: state?.epoch ?? 0, kind: "rate_limited" as const };
+    if (!/^[A-Za-z0-9_-]{8,100}$/.test(args.idempotencyKey))
+      throw new Error("Restore request is invalid.");
+    const latest = await ctx.db
+      .query("sharedDemoRestoreAudit")
+      .withIndex("by_storeId_occurredAt", (q) => q.eq("storeId", actor.storeId))
+      .order("desc")
+      .first();
+    if (
+      latest?.source === "manual" &&
+      latest.occurredAt > Date.now() - 60_000
+    ) {
+      const state = await ctx.db
+        .query("sharedDemoRestoreState")
+        .withIndex("by_storeId", (q) => q.eq("storeId", actor.storeId))
+        .unique();
+      return {
+        baselineVersion: state?.baselineVersion ?? 1,
+        epoch: state?.epoch ?? 0,
+        kind: "rate_limited" as const,
+      };
     }
-    const result = await restoreBaselineWithCtx(ctx, { idempotencyKey: args.idempotencyKey, source: "manual", storeId: actor.storeId });
+    const result = await restoreBaselineWithCtx(ctx, {
+      idempotencyKey: args.idempotencyKey,
+      source: "manual",
+      storeId: actor.storeId,
+    });
     return {
       baselineVersion: result.baselineVersion,
       epoch: result.epoch,
-      kind: result.kind === "started" ? "started" as const : "already_running" as const,
+      kind:
+        result.kind === "started"
+          ? ("started" as const)
+          : ("already_running" as const),
     };
   },
 });

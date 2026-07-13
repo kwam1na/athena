@@ -10,7 +10,18 @@ describe("shared demo domain restore registry", () => {
       "pos", "inventory", "cash", "orders", "operations", "staff",
     ]);
     expect(SHARED_DEMO_MUTABLE_TABLES.map((entry) => entry.tableName)).toEqual(
-      expect.arrayContaining(["posTransactionItem", "onlineOrderItem", "staffMessage"]),
+      expect.arrayContaining([
+        "posTerminal",
+        "posLocalSyncEvent",
+        "posLocalSyncConflict",
+        "posSession",
+        "posSessionItem",
+        "posTransactionItem",
+        "productSkuSearch",
+        "reportingInventoryPosition",
+        "onlineOrderItem",
+        "staffMessage",
+      ]),
     );
   });
 
@@ -43,6 +54,13 @@ describe("shared demo domain restore registry", () => {
 
   it("rejects stale captured documents before restoring a table", () => {
     expect(() => requireCurrentBaselineDocuments([{ baselineVersion: 1 }], "dailyOpening")).toThrow("version mismatch");
+    expect(
+      requireCurrentBaselineDocuments(
+        [{ baselineVersion: 1 }],
+        "dailyOpening",
+        1,
+      ),
+    ).toHaveLength(1);
   });
 
   it("uses the daily opening store-prefix index declared by the schema", () => {

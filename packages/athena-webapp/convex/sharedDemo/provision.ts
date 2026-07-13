@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 
 import { internalMutation } from "../_generated/server";
+import { upsertProductSkuSearchProjection } from "../inventory/skuSearch";
 import { insertRegisterSessionWithAuthority } from "../operations/registerSessionAuthorityRevision";
 import { hashPosTerminalSyncSecret } from "../pos/application/sync/terminalSyncSecret";
 import { SHARED_DEMO_BASELINE_VERSION } from "./config";
@@ -44,11 +45,73 @@ export const provisionSharedDemo = internalMutation({
       const state = await ctx.db.query("sharedDemoRestoreState").withIndex("by_storeId", (q) => q.eq("storeId", existingStore._id)).unique();
       if (!state || state.baselineVersion > SHARED_DEMO_BASELINE_VERSION) throw new Error("Shared demo baseline version is invalid.");
       if (state.baselineVersion < SHARED_DEMO_BASELINE_VERSION) {
-        await restoreMutableDemoStoreRowsWithCtx(ctx, existingStore._id);
+        await restoreMutableDemoStoreRowsWithCtx(ctx, existingStore._id, {
+          baselineVersion: state.baselineVersion,
+          skipTables:
+            state.baselineVersion < 3
+              ? ["posTerminal", "productSkuSearch"]
+              : undefined,
+        });
+        const productSkus = await ctx.db
+          .query("productSku")
+          .withIndex("by_storeId", (q) => q.eq("storeId", existingStore._id))
+          .take(500);
+        for (const productSku of productSkus) {
+          await upsertProductSkuSearchProjection(ctx, productSku._id);
+          const reportingPositions = await ctx.db
+            .query("reportingInventoryPosition")
+            .withIndex("by_storeId_productSkuId", (q) =>
+              q
+                .eq("storeId", existingStore._id)
+                .eq("productSkuId", productSku._id),
+            )
+            .take(2);
+          if (reportingPositions.length > 1) {
+            throw new Error("Shared demo reporting inventory is ambiguous.");
+          }
+          if (reportingPositions[0]) {
+            await ctx.db.patch(
+              "reportingInventoryPosition",
+              reportingPositions[0]._id,
+              {
+                onHandQuantity: productSku.inventoryCount,
+                sellableQuantity: productSku.quantityAvailable,
+                updatedAt: now,
+              },
+            );
+          }
+        }
+        const cashier = await ctx.db
+          .query("staffProfile")
+          .withIndex("by_storeId", (q) => q.eq("storeId", existingStore._id))
+          .filter((q) => q.eq(q.field("staffCode"), "DEMO-001"))
+          .unique();
+        if (!cashier) throw new Error("Shared demo cashier is missing.");
+        const cashierAssignments = await ctx.db
+          .query("staffRoleAssignment")
+          .withIndex("by_staffProfileId", (q) =>
+            q.eq("staffProfileId", cashier._id),
+          )
+          .take(50);
+        if (!cashierAssignments.some((assignment) => assignment.role === "cashier")) {
+          await ctx.db.insert("staffRoleAssignment", {
+            assignedAt: now,
+            isPrimary: true,
+            organizationId: existingOrganization._id,
+            role: "cashier",
+            staffProfileId: cashier._id,
+            status: "active",
+            storeId: existingStore._id,
+          });
+        }
         const openings = await ctx.db.query("dailyOpening").withIndex("by_storeId_operatingDate", (q) => q.eq("storeId", existingStore._id)).take(500);
         for (const opening of openings) await ctx.db.delete("dailyOpening", opening._id);
         const events = await ctx.db.query("operationalEvent").withIndex("by_storeId", (q) => q.eq("storeId", existingStore._id)).take(500);
-        const seedEvent = events.find((event) => event.eventType === "demo.store_day_started");
+        const seedEvent = events.find(
+          (event) =>
+            event.eventType === "demo.store_day_started" ||
+            event.eventType === "demo.store_ready",
+        );
         if (!seedEvent) throw new Error("Shared demo operating narrative is incomplete.");
         await ctx.db.patch("operationalEvent", seedEvent._id, {
           eventType: "demo.store_ready",
@@ -101,6 +164,10 @@ export const provisionSharedDemo = internalMutation({
       createdByUserId: ownerUserId, firstName: "Ama", fullName: "Ama Mensah", jobTitle: "Cashier",
       lastName: "Mensah", memberRole: "pos_only", organizationId, staffCode: "DEMO-001", status: "active", storeId,
     });
+    await ctx.db.insert("staffRoleAssignment", {
+      assignedAt: now, isPrimary: true, organizationId, role: "cashier",
+      staffProfileId: cashierStaffId, status: "active", storeId,
+    });
     await ctx.db.insert("staffMessage", {
       authorUserId: ownerUserId,
       body: "Ama: Morning stock count is complete. The pickup order is ready at the counter.",
@@ -120,6 +187,7 @@ export const provisionSharedDemo = internalMutation({
       images: [], inventoryCount: 24, isVisible: true, posVisible: true, price: 2500, productId,
       productName: "Fresh Milk 1L", quantityAvailable: 24, sku: "DEMO-MILK-1L", storeId, unitCost: 1800,
     });
+    await upsertProductSkuSearchProjection(ctx, productSkuId);
     const terminalId = await ctx.db.insert("posTerminal", {
       browserInfo: { platform: "shared_demo", userAgent: "Athena Shared Demo" }, displayName: "Demo Front Register",
       fingerprintHash: "shared-demo-terminal", heartbeatEnabled: false, loginMode: "pos_only", registerNumber: "DEMO-01",

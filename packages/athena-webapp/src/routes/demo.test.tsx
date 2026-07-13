@@ -27,6 +27,7 @@ describe("SharedDemoEntry", () => {
   beforeEach(() => {
     Object.values(mocked).forEach((mock) => mock.mockReset());
     mocked.useAuth.mockReturnValue({ isLoading: false, user: null });
+    mocked.signOut.mockResolvedValue(undefined);
   });
 
   it("exchanges an opaque ticket without rendering or persisting it", async () => {
@@ -35,6 +36,7 @@ describe("SharedDemoEntry", () => {
     render(<SharedDemoEntry />);
 
     await waitFor(() => expect(mocked.signIn).toHaveBeenCalledWith("shared-demo", { ticket: "opaque-secret" }));
+    expect(mocked.signOut).toHaveBeenCalledTimes(1);
     expect(screen.queryByText("opaque-secret")).not.toBeInTheDocument();
     expect(window.localStorage.setItem).not.toHaveBeenCalledWith(expect.anything(), "opaque-secret");
   });

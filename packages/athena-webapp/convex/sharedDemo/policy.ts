@@ -35,6 +35,7 @@ export const SHARED_DEMO_POLICY = { defaultDecision: "denied" } as const;
 const SHARED_DEMO_FULFILLMENT_STATUSES = new Set([
   "ready-for-delivery",
   "ready-for-pickup",
+  "picked-up",
   "delivered",
 ]);
 

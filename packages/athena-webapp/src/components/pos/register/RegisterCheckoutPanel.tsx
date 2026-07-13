@@ -86,7 +86,10 @@ export function RegisterCheckoutPanel({
           })
         }
         onVoidTransaction={
-          completedTransactionId ? handleVoidTransaction : undefined
+          completedTransactionId &&
+          checkout.canVoidCompletedTransaction !== false
+            ? handleVoidTransaction
+            : undefined
         }
         onPaymentFlowChange={onPaymentFlowChange}
         onPaymentEntryStart={onPaymentEntryStart}

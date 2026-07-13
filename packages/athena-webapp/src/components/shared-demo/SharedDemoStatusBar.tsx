@@ -20,7 +20,7 @@ export function SharedDemoStatusBar({ area = "Owner home", homeHref, onRestore, 
     setMessage("Restoring the shared demo store…");
     try {
       await onRestore();
-      setMessage("Restore started. Athena will show when the shared baseline is ready.");
+      setMessage("Restore complete. The shared demo is back to its baseline.");
     } catch {
       setMessage("The demo store could not be restored. The previous store state is still available. Try again.");
     } finally {

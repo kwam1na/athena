@@ -705,6 +705,34 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
       }
     },
 
+    async resetSharedDemoLocalState(): Promise<PosLocalStoreResult<null>> {
+      try {
+        await options.adapter.transaction(
+          "readwrite",
+          [...POS_LOCAL_OBJECT_STORE_NAMES],
+          async (transaction) => {
+            await ensureSupportedSchema(transaction, "readwrite");
+            for (const storeName of POS_LOCAL_OBJECT_STORE_NAMES) {
+              const keys = await transaction.getAllKeys(storeName);
+              for (const key of keys) {
+                if (
+                  storeName === "meta" &&
+                  (key === META_SCHEMA_VERSION_KEY ||
+                    key === META_LOGICAL_RECORD_VERSION_KEY)
+                ) {
+                  continue;
+                }
+                await transaction.delete(storeName, key);
+              }
+            }
+          },
+        );
+        return { ok: true, value: null };
+      } catch (error) {
+        return toFailure(error);
+      }
+    },
+
     async writeProvisionedTerminalSeed(
       seed: PosProvisionedTerminalSeed,
     ): Promise<PosLocalStoreResult<PosProvisionedTerminalSeed>> {

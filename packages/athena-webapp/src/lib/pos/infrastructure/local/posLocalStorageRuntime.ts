@@ -200,6 +200,7 @@ const DURABLE_COMMIT_OPERATIONS = new Set<PropertyKey>([
   "markEventsSynced",
   "replaceStaffAuthoritySnapshot",
   "resetRegisterOperationalStateForAuthorityCutover",
+  "resetSharedDemoLocalState",
   "upsertStaffAuthorityRecord",
   "writeCashierPresence",
   "writeDrawerAuthorityState",
