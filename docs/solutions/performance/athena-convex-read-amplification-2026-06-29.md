@@ -1,23 +1,27 @@
 ---
 title: Athena Convex Posture Queries Stay Separate From Detail Reads
 date: 2026-06-29
-last_updated: 2026-07-06
+last_updated: 2026-07-13
 category: performance
 module: athena-webapp
-problem_type: convex_read_amplification
-component: operations-pos-read-models
+problem_type: performance_issue
+component: database
 symptoms:
   - "Convex production usage showed a June 27 Database I/O spike concentrated in default dashboard and POS queries"
   - "Default subscriptions mixed operator posture with full analytics, sync evidence, and full catalog metadata"
-root_cause: default_read_models_hydrated_detail_evidence_and_metadata
-resolution_type: posture_detail_query_split
+root_cause: logic_error
+resolution_type: code_fix
 severity: high
+delivery_diff_fingerprint: 727141fd14b348956a81ad055636da6a1ff9ad93c774b501ea167dadc0aca587
 tags:
   - convex
   - performance
   - pos
   - operations
   - catalog
+  - daily-operations
+  - runtime-status
+  - storefront
 ---
 
 # Athena Convex Posture Queries Stay Separate From Detail Reads
@@ -53,6 +57,67 @@ Split read contracts by intent:
 - Preserve command-side validation as the durable authority. A local cache can
   speed search and boot, but checkout/catalog commands must still validate
   current server truth.
+
+## July 13, 2026 Follow-up: Contain Reads Across the Entire Caller-to-Index Path
+
+Database I/O reached 29.4 GB of a 50 GB billing allocation while function-call
+and compute usage remained low. That shape means recurring functions were
+reading too much or rerunning too often; it is not evidence of proportional
+business volume. Containment therefore has to cover every layer that can
+amplify a read:
+
+- The app shell consumes the one-row `catalogSummary` projection. It hides an
+  unresolved-products badge when the summary is missing, dirty, or has never
+  been refreshed, and it never repairs catalog state from global navigation.
+- Daily Operations loads one bounded week-analytics contract. Selected-day
+  command-grade detail and store pulse are separate, intent-driven reads; the
+  route does not rebuild seven full daily snapshots on mount.
+- POS opening consumes a small authenticated Daily Close lifecycle gate. The
+  full Daily Close snapshot and mutations retain evidence and command
+  authority.
+- Runtime recovery verification uses
+  `by_store_terminal_verification` with a 20-row budget: five newest commands
+  remain prompt while a cursor on the existing terminal runtime-status row
+  rotates fifteen rows through the full verification-ready backlog. Verification
+  still requires completed status, fresh post-acknowledgement evidence, and an
+  exact evidence match.
+- Terminal heartbeat clients and the server share one material projection.
+  Volatile timestamps, browser/storage diagnostics, snapshot ages, and counts
+  do not trigger writes; cashier identity and operational posture still do.
+  A store-and-terminal lease elects one browser-context publisher, followers
+  forward newer material, and server idempotency remains authoritative because
+  storage and Web Locks are best-effort load-shedding rails.
+- Storefront homepage composition pushes store equality into merchandising and
+  product indexes, hydrates candidates in small batches only until visible
+  quotas are filled, and applies banner expiry at exact request time. Only the
+  inner query is minute-bucketed; the cookie-bearing HTTP response is not.
+- Register catalog metadata and full-availability refreshes are coordinated by
+  store and refresh class. Consumers share in-flight or recently persisted
+  success, persistence is serialized, and generations prevent an older result
+  from overwriting or stranding a newer refresh. The local snapshot remains a
+  continuity cache, not checkout authority.
+
+The maintenance/backfill follow-up is deliberately excluded from this delivery:
+the Dev backfill had already run, so V26-1047 is deferred and contributes no
+claimed read savings.
+
+### Observation Contract
+
+Do not add continuous logs or an in-app telemetry surface for this work. Record
+point-in-time evidence using matching 24-hour and 72-hour windows in Convex
+Usage:
+
+1. Capture Database I/O and Function Calls by deployment and function family.
+2. Derive average bytes per call so frequency and working-set regressions are
+   distinguishable.
+3. Use `bunx convex insights --prod --details --json` only as a bounded
+   diagnostic snapshot when a function needs investigation.
+4. Interpret production heartbeat results only after the M Supplies terminal
+   reports the target build. Production proves the single-terminal longitudinal
+   rate; cross-context concurrency is proven in Dev and automated tests.
+
+Bounded logs remain a diagnostic fallback for a named failure window, never the
+measurement surface.
 
 ## July 2026 Follow-up: Push Selectivity Into Indexes
 
@@ -100,6 +165,16 @@ that kind of rewrite.
 - When adding a companion query, update the frontend so it is lazy or tied to an
   explicit detail action; do not immediately subscribe to the companion query on
   initial route load.
+- Treat a compact contract as incomplete until its default callers are proven
+  not to mount detail companions eagerly.
+- Include operational identity in heartbeat material even when expiry and
+  observation timestamps are excluded. A cashier handoff is not diagnostic
+  churn.
+- When a bounded verification queue can retain unmatched rows, reserve a small
+  newest slice for prompt operator work and persist a bounded rotation cursor;
+  static newest/oldest edge samples can still starve middle rows forever.
+- A superseded one-shot refresh must settle from the newer persisted generation;
+  never leave an older consumer indefinitely in `refreshing`.
 - Run `bun run pre-commit:generated-artifacts` and Graphify after changing Convex
   read boundaries.
 
@@ -109,13 +184,33 @@ that kind of rewrite.
 - `bun run --filter '@athena/webapp' test -- convex/operations/dailyOperations.test.ts src/components/operations/DailyOperationsView.test.tsx`
 - `bun run --filter '@athena/webapp' test -- convex/pos/application/queries/terminals.test.ts convex/pos/public/terminals.test.ts`
 - `bun run --filter '@athena/webapp' test -- src/lib/pos/infrastructure/convex/catalogGateway.test.tsx`
+- `bun run --filter '@athena/webapp' test -- src/components/app-sidebar.test.tsx`
+- `bun run --filter '@athena/webapp' test -- convex/operations/dailyClose.test.ts src/components/pos/register/POSRegisterOpeningGuard.test.tsx`
+- `bun run --filter '@athena/webapp' test -- convex/pos/application/terminalRecovery/terminalCommandService.test.ts convex/pos/infrastructure/repositories/terminalRecoveryRepository.test.ts convex/pos/infrastructure/repositories/terminalRepository.test.ts shared/pos/terminalRuntimeMaterial.test.ts src/lib/pos/infrastructure/local/runtimeStatusPublisher.test.ts src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.test.ts`
+- `bun run --filter '@athena/webapp' test -- convex/storeFront/homepageSnapshot.test.ts convex/http/domains/customerChannel/routes/homepageSnapshot.test.ts`
 - `bun run --filter '@athena/webapp' audit:convex`
 - `bun run --filter '@athena/webapp' lint:convex:changed`
+- `bun run --filter '@athena/webapp' lint:frontend:changed`
 - `bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json`
 - `bun run --filter '@athena/webapp' build`
+- `bun run pre-commit:generated-artifacts`
+- `bun run graphify:check`
 - July 2026 follow-up:
   `bun run test -- convex/operations/dailyClose.test.ts convex/operations/dailyOperations.test.ts convex/pos/application/terminals.test.ts convex/pos/infrastructure/repositories/terminalRepository.test.ts convex/inventory/sessionQueryIndexes.test.ts convex/storeFront/commerceQueryIndexes.test.ts convex/contextTracking/contextEvents.test.ts convex/pos/public/posRecoveryCodes.test.ts convex/remoteAssist/transportInternal.test.ts`
 
 ## Related Issues
 
 - Linear: V26-905, V26-906, V26-907, V26-908, V26-909, V26-910, V26-911.
+- July 13 containment: V26-1041, V26-1042, V26-1043, V26-1044,
+  V26-1045, V26-1046, V26-1048.
+
+## Related Guidance
+
+- [POS runtime-status check-in storms](athena-pos-runtime-status-check-in-storm-2026-07-02.md)
+- [Homepage snapshot contract](../logic-errors/athena-homepage-snapshot-contract-2026-06-22.md)
+- [Foundation SKU search and catalog summary](../logic-errors/athena-foundation-sku-search-catalog-summary-2026-06-25.md)
+- [Daily Operations current-day refresh](../logic-errors/athena-daily-operations-current-day-refresh-2026-06-30.md)
+- [Operator context and filter boundaries](../logic-errors/athena-operator-context-and-filter-boundaries-2026-07-03.md)
+- [POS terminal recovery readiness](../architecture/athena-pos-terminal-recovery-readiness-boundary-2026-06-14.md)
+- [POS offline inventory snapshot](../architecture/athena-pos-offline-inventory-snapshot-2026-05-15.md)
+- [POS register authority replication](../logic-errors/athena-pos-register-authority-replication-2026-07-10.md)

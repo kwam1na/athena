@@ -12,6 +12,7 @@ import {
   getDailyOperationsTodayRefreshSnapshot,
   getDailyOperationsTimelinePreviewSnapshot,
   getDailyOperationsTimelineSnapshot,
+  getDailyOperationsWeekAnalyticsSnapshot,
 } from "./dailyOperations";
 
 vi.mock("../lib/athenaUserAuth", () => ({
@@ -2216,7 +2217,7 @@ describe("daily operations overview read model", () => {
     expect(snapshot.weekMetrics).toEqual([]);
   });
 
-  it("returns week analytics without timeline or store pulse detail from the explicit detail query", async () => {
+  it("returns selected-day detail without rebuilding the surrounding week", async () => {
     vi.mocked(
       athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
     ).mockResolvedValue({
@@ -2277,38 +2278,79 @@ describe("daily operations overview read model", () => {
     expect(snapshot.timelineHasMore).toBe(false);
     expect(snapshot.scheduledRunSummaries).toEqual([]);
     expect(snapshot.storePulse).toBeUndefined();
-    expect(snapshot.weekMetrics).toHaveLength(7);
+    expect(snapshot.weekMetrics).toEqual([]);
     expect(snapshot.weekStorePulses).toBeUndefined();
-    expect(snapshot.weekSnapshots).toHaveLength(7);
-    expect(
-      snapshot.weekSnapshots.find(
-        (weekSnapshot: (typeof snapshot.weekSnapshots)[number]) =>
-          weekSnapshot.operatingDate === "2026-05-08",
-      ),
-    ).toMatchObject({
-      operatingDate: "2026-05-08",
-      scheduledRunSummaries: [],
-      timeline: [],
-      timelineHasMore: false,
-    });
-    expect(
-      snapshot.weekSnapshots.find(
-        (weekSnapshot: (typeof snapshot.weekSnapshots)[number]) =>
-          weekSnapshot.operatingDate === "2026-05-07",
-      ),
-    ).toMatchObject({
-      operatingDate: "2026-05-07",
-      weekMetrics: [],
-    });
-    expect(
-      snapshot.weekMetrics.find(
-        (metric: (typeof snapshot.weekMetrics)[number]) =>
-          metric.operatingDate === "2026-05-08",
-      ),
-    ).toMatchObject({
+    expect(snapshot).not.toHaveProperty("weekSnapshots");
+    expect(snapshot.closeSummary).toMatchObject({
       salesTotal: 821500,
       transactionCount: 1,
     });
+  });
+
+  it("returns week analytics from a bounded contract without day snapshots", async () => {
+    vi.mocked(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).mockResolvedValue({
+      _creationTime: 0,
+      _id: "user-1" as Id<"athenaUser">,
+      email: "admin@wigclub.store",
+    });
+    vi.mocked(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).mockResolvedValue({
+      _creationTime: 0,
+      _id: "member-admin" as Id<"organizationMember">,
+      organizationId: "org-1" as Id<"organization">,
+      role: "full_admin",
+      userId: "user-1" as Id<"athenaUser">,
+    });
+
+    const snapshot = await getHandler(
+      getDailyOperationsWeekAnalyticsSnapshot,
+    )(
+      buildCtx({
+        dailyClose: [priorClose],
+        dailyOpening: [startedOpening],
+        posTransaction: [
+          {
+            _id: "txn-current",
+            changeGiven: 0,
+            completedAt: Date.UTC(2026, 4, 8, 16),
+            paymentMethod: "cash",
+            paymentAllocations: [],
+            payments: [{ amount: 821500, method: "cash" }],
+            status: "completed",
+            storeId: "store-1",
+            terminalId: "terminal-1",
+            total: 821500,
+            totalPaid: 821500,
+            transactionNumber: "TXN-CURRENT",
+          },
+        ],
+        store: [store],
+      }) as never,
+      {
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+        weekEndOperatingDate: "2026-05-09",
+      },
+    );
+
+    expect(snapshot).toEqual({
+      operatingDate: "2026-05-08",
+      weekEndOperatingDate: "2026-05-09",
+      weekMetrics: expect.arrayContaining([
+        expect.objectContaining({
+          operatingDate: "2026-05-08",
+          salesTotal: 821500,
+          transactionCount: 1,
+        }),
+      ]),
+    });
+    expect(snapshot.weekMetrics).toHaveLength(7);
+    expect(snapshot).not.toHaveProperty("weekSnapshots");
+    expect(snapshot).not.toHaveProperty("timeline");
+    expect(snapshot).not.toHaveProperty("storePulse");
   });
 
   it("returns selected-day store pulse detail from the explicit store pulse query", async () => {

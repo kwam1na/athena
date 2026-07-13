@@ -1,6 +1,8 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import React, { type ReactElement, type ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { getFunctionName } from "convex/server";
+import { api } from "~/convex/_generated/api";
 
 import {
   AppSidebar,
@@ -58,10 +60,6 @@ vi.mock("../hooks/useGetOrganizations", () => ({
 
 vi.mock("../hooks/useNewOrderNotification", () => ({
   useNewOrderNotification: vi.fn(),
-}));
-
-vi.mock("../hooks/useGetProducts", () => ({
-  useGetUnresolvedProducts: () => [],
 }));
 
 vi.mock("../hooks/useGetCategories", () => ({
@@ -208,6 +206,19 @@ vi.mock("@radix-ui/react-collapsible", () => {
 });
 
 describe("AppSidebar capability gates", () => {
+  const fullAdminPermissions = {
+    canAccessAdmin: () => true,
+    canAccessFullAdminSurfaces: () => true,
+    canAccessPOS: () => true,
+    canAccessOperations: () => true,
+    canAccessStoreDaySurfaces: () => true,
+    hasFullAdminAccess: true,
+    hasFinancialDetailsAccess: true,
+    hasStoreDaySurfaceAccess: true,
+    isLoading: false,
+    role: "full_admin",
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
     resetAppSidebarSubmenuStateForTests();
@@ -223,6 +234,46 @@ describe("AppSidebar capability gates", () => {
       state: "expanded",
       toggleSidebar: mocks.toggleSidebar,
     });
+  });
+
+  it("renders unresolved catalog work from a trustworthy summary", () => {
+    mocks.pathname = "/org/store/main/products";
+    mocks.usePermissions.mockReturnValue(fullAdminPermissions);
+    mocks.useQuery.mockImplementation((query) =>
+      getFunctionName(query) === "inventory/products:getCatalogSummary"
+        ? {
+            missingInfoProductCount: 7,
+            needsRefresh: false,
+            updatedAt: 123,
+          }
+        : [],
+    );
+
+    render(<AppSidebar />);
+
+    expect(screen.getByRole("link", { name: /unresolved 7/i })).toBeInTheDocument();
+    expect(mocks.useQuery).toHaveBeenNthCalledWith(
+      1,
+      api.inventory.products.getCatalogSummary,
+      { storeId: "store-1" },
+    );
+  });
+
+  it.each([
+    { needsRefresh: true, updatedAt: 123 },
+    { needsRefresh: false, updatedAt: 0 },
+  ])("hides unresolved work for an untrustworthy summary", (summaryState) => {
+    mocks.pathname = "/org/store/main/products";
+    mocks.usePermissions.mockReturnValue(fullAdminPermissions);
+    mocks.useQuery.mockImplementation((query) =>
+      getFunctionName(query) === "inventory/products:getCatalogSummary"
+        ? { missingInfoProductCount: 7, ...summaryState }
+        : [],
+    );
+
+    render(<AppSidebar />);
+
+    expect(screen.queryByRole("link", { name: /unresolved/i })).toBeNull();
   });
 
   it("keeps manager surfaces disabled for POS-only accounts", () => {

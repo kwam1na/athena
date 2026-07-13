@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   BEST_SELLERS_LIMIT,
+  FEATURED_ITEMS_LIMIT,
   buildHomepageSnapshotV1,
   get,
+  getHomepageSnapshotWithCtx,
+  hydrateHomepageRowsUntil,
   HOMEPAGE_SNAPSHOT_CONTRACT_VERSION,
 } from "./homepageSnapshot";
 import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
@@ -79,6 +82,259 @@ function sku(id: string, rank: number, overrides: Record<string, unknown> = {}) 
 }
 
 describe("homepage snapshot presenter", () => {
+  it("hydrates ranked candidates in bounded batches until the visible quota is full", async () => {
+    const hydrated: number[] = [];
+    const rows = Array.from({ length: 100 }, (_, index) => index);
+
+    const accepted = await hydrateHomepageRowsUntil({
+      rows,
+      batchSize: 4,
+      hydrate: async (row) => {
+        hydrated.push(row);
+        return { row, visible: row >= 6 };
+      },
+      isComplete: (items) => items.filter((item) => item.visible).length >= 5,
+    });
+
+    expect(accepted.filter((item) => item.visible).map((item) => item.row)).toEqual([
+      6, 7, 8, 9, 10, 11,
+    ]);
+    expect(hydrated).toEqual(Array.from({ length: 12 }, (_, index) => index));
+  });
+
+  it("uses store-scoped placement indexes and stops hydrating after the visible quota", async () => {
+    const indexReads: Array<[string, string]> = [];
+    const skuGets: string[] = [];
+    const bestSellerRows = Array.from({ length: 100 }, (_, index) => ({
+      _id: `best-${index}`,
+      rank: index,
+      productId: `product-${index}`,
+      productSkuId: `sku-${index}`,
+      storeId: "store-1",
+    }));
+    const db = {
+      get: async (table: string, id: string) => {
+        if (table === "store") return store;
+        if (table === "category") return publicCategory;
+        if (table === "subcategory") return publicSubcategory;
+        if (table === "productSku") {
+          skuGets.push(id);
+          return {
+            _id: id,
+            images: [],
+            isVisible: true,
+            price: 12_500,
+            productId: `product-${id.replace("sku-", "")}`,
+            quantityAvailable: 2,
+            storeId: "store-1",
+          };
+        }
+        if (table === "product") {
+          return {
+            _id: id,
+            availability: "live",
+            categoryId: "category-1",
+            currency: "GHS",
+            isVisible: true,
+            name: id,
+            slug: id,
+            storeId: "store-1",
+            subcategoryId: "subcategory-1",
+          };
+        }
+        return null;
+      },
+      query: (table: string) => {
+        const chain = {
+          first: async () => null,
+          take: async (limit: number) => {
+            if (table === "bestSeller") return bestSellerRows.slice(0, limit);
+            if (table === "featuredItem") return [];
+            if (table === "productSku") {
+              const index = skuGets.length - 1;
+              return [
+                {
+                  _id: `sku-${index}`,
+                  images: [],
+                  isVisible: true,
+                  price: 12_500,
+                  productId: `product-${index}`,
+                  quantityAvailable: 2,
+                  storeId: "store-1",
+                },
+              ];
+            }
+            return [];
+          },
+          withIndex: (index: string, build?: (q: any) => unknown) => {
+            indexReads.push([table, index]);
+            const q = {
+              eq: () => q,
+            };
+            build?.(q);
+            return chain;
+          },
+        };
+        return chain;
+      },
+    };
+
+    const snapshot = await getHomepageSnapshotWithCtx(
+      { db } as never,
+      { storeId: "store-1" as never, nowMs: 1_000 },
+    );
+
+    expect(snapshot?.bestSellers).toHaveLength(BEST_SELLERS_LIMIT);
+    expect(skuGets).toHaveLength(BEST_SELLERS_LIMIT);
+    expect(indexReads).toContainEqual(["bestSeller", "by_storeId"]);
+    expect(indexReads).toContainEqual(["featuredItem", "by_storeId"]);
+  });
+
+  it("finds a sellable best-seller sibling beyond the first twenty SKUs", async () => {
+    const placedSku = {
+      _id: "sku-placed",
+      images: [],
+      isVisible: true,
+      price: 12_500,
+      productId: "product-shared",
+      quantityAvailable: 0,
+      sku: "PLACED",
+      storeId: "store-1",
+    };
+    const siblingSkus = [
+      ...Array.from({ length: 21 }, (_, index) => ({
+        ...placedSku,
+        _id: `sku-sold-out-${index}`,
+        sku: `SOLD-OUT-${index}`,
+      })),
+      {
+        ...placedSku,
+        _id: "sku-sellable",
+        quantityAvailable: 3,
+        sku: "SELLABLE",
+      },
+    ];
+    const skuTakeLimits: number[] = [];
+    const db = {
+      get: async (table: string, id: string) => {
+        if (table === "store") return store;
+        if (table === "productSku") return placedSku;
+        if (table === "product") {
+          return {
+            _id: id,
+            availability: "live",
+            categoryId: publicCategory._id,
+            currency: "GHS",
+            isVisible: true,
+            name: "Shared product",
+            slug: "shared-product",
+            storeId: "store-1",
+            subcategoryId: publicSubcategory._id,
+          };
+        }
+        if (table === "category") return publicCategory;
+        if (table === "subcategory") return publicSubcategory;
+        return null;
+      },
+      query: (table: string) => {
+        const chain = {
+          first: async () => null,
+          take: async (limit: number) => {
+            if (table === "bestSeller") {
+              return [
+                {
+                  _id: "best-seller-placed",
+                  productSkuId: placedSku._id,
+                  rank: 0,
+                  storeId: "store-1",
+                },
+              ];
+            }
+            if (table === "productSku") {
+              skuTakeLimits.push(limit);
+              return siblingSkus.slice(0, limit);
+            }
+            return [];
+          },
+          withIndex: (_index: string, build?: (q: any) => unknown) => {
+            const q = { eq: () => q };
+            build?.(q);
+            return chain;
+          },
+        };
+        return chain;
+      },
+    };
+
+    const snapshot = await getHomepageSnapshotWithCtx(
+      { db } as never,
+      { storeId: "store-1" as never, nowMs: 1_000 },
+    );
+
+    expect(snapshot?.bestSellers[0]?.productSku).toMatchObject({
+      skuId: "sku-sellable",
+      sku: "SELLABLE",
+      quantityAvailable: 3,
+    });
+    expect(skuTakeLimits).toEqual([100]);
+  });
+
+  it("hydrates a late shop-look independently from the regular featured quota", async () => {
+    const categoryGets: string[] = [];
+    const featuredRows = [
+      ...Array.from({ length: 99 }, (_, index) => ({
+        _id: `featured-${index}`,
+        categoryId: `category-${index}`,
+        rank: index,
+        storeId: "store-1",
+        type: "regular",
+      })),
+      {
+        _id: "featured-shop-look",
+        categoryId: "category-shop-look",
+        rank: 99,
+        storeId: "store-1",
+        type: "shop_look",
+      },
+    ];
+    const db = {
+      get: async (table: string, id: string) => {
+        if (table === "store") return store;
+        if (table === "category") {
+          categoryGets.push(id);
+          return {
+            ...publicCategory,
+            _id: id,
+            slug: id,
+          };
+        }
+        return null;
+      },
+      query: (table: string) => {
+        const chain = {
+          first: async () => null,
+          take: async (limit: number) =>
+            table === "featuredItem" ? featuredRows.slice(0, limit) : [],
+          withIndex: (_index: string, build?: (q: any) => unknown) => {
+            const q = { eq: () => q };
+            build?.(q);
+            return chain;
+          },
+        };
+        return chain;
+      },
+    };
+
+    const snapshot = await getHomepageSnapshotWithCtx(
+      { db } as never,
+      { storeId: "store-1" as never, nowMs: 1_000 },
+    );
+
+    expect(snapshot?.featuredItems).toHaveLength(FEATURED_ITEMS_LIMIT);
+    expect(snapshot?.shopLook?.id).toBe("featured-shop-look");
+    expect(categoryGets).toHaveLength(FEATURED_ITEMS_LIMIT + 1);
+  });
+
   it("projects customer-safe homepage sections with explicit minor-unit money", () => {
     const snapshot = buildHomepageSnapshotV1({
       store,

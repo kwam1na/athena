@@ -10,7 +10,9 @@ import { createTerminalRecoveryCommandRepository } from "../../infrastructure/re
 type AcceptedRuntimeStatusSideEffectsArgs = {
   ctx: MutationCtx;
   receivedAt: number;
+  recoveryVerificationCursor?: string;
   runtimeStatus: TerminalRuntimeStatusInput;
+  runtimeStatusId: Id<"posTerminalRuntimeStatus">;
   storeId: Id<"store">;
   terminal: Doc<"posTerminal">;
   terminalId: Id<"posTerminal">;
@@ -20,9 +22,10 @@ export async function runAcceptedRuntimeStatusSideEffects(
   args: AcceptedRuntimeStatusSideEffectsArgs,
 ) {
   await reportRemoteAssistPresenceDiagnosticOnly(args);
-  await verifyTerminalRecoveryCommandsFromRuntime(
+  const verification = await verifyTerminalRecoveryCommandsFromRuntime(
     createTerminalRecoveryCommandRepository(args.ctx),
     {
+      cursor: args.recoveryVerificationCursor,
       runtimeStatus: {
         _id: "runtime-status-current" as never,
         _creationTime: args.receivedAt,
@@ -36,6 +39,11 @@ export async function runAcceptedRuntimeStatusSideEffects(
       verifiedAt: args.receivedAt,
     },
   );
+  if (verification.nextCursor !== args.recoveryVerificationCursor) {
+    await args.ctx.db.patch("posTerminalRuntimeStatus", args.runtimeStatusId, {
+      recoveryVerificationCursor: verification.nextCursor,
+    });
+  }
 }
 
 async function reportRemoteAssistPresenceDiagnosticOnly(

@@ -980,6 +980,42 @@ async function getDailyCloseForDate(
   return null;
 }
 
+export async function buildDailyCloseLifecycleGateWithCtx(
+  ctx: Pick<QueryCtx, "db">,
+  args: {
+    endAt?: number;
+    operatingDate: string;
+    startAt?: number;
+    storeId: Id<"store">;
+  },
+) {
+  if (!resolveOperatingDateRange(args)) {
+    return {
+      existingClose: null,
+      operatingDate: args.operatingDate,
+      status: "blocked" as const,
+      storeId: args.storeId,
+    };
+  }
+
+  const existingClose = await getDailyCloseForDate(ctx, args);
+  const lifecycleStatus = existingClose?.reopenedFromDailyCloseId
+    ? ("reopened" as const)
+    : existingClose
+      ? ("active" as const)
+      : null;
+
+  return {
+    existingClose: lifecycleStatus ? { lifecycleStatus } : null,
+    operatingDate: args.operatingDate,
+    status:
+      existingClose?.status === "completed"
+        ? ("completed" as const)
+        : ("ready" as const),
+    storeId: args.storeId,
+  };
+}
+
 async function getPriorCompletedDailyClose(
   ctx: Pick<QueryCtx, "db">,
   args: {
@@ -4815,6 +4851,31 @@ export const getDailyCloseSnapshot = query({
       ...args,
       includeManagerReviewEvidence: membership.role === "full_admin",
     });
+  },
+});
+
+export const getDailyCloseLifecycleGate = query({
+  args: {
+    endAt: v.optional(v.number()),
+    operatingDate: v.string(),
+    startAt: v.optional(v.number()),
+    storeId: v.id("store"),
+  },
+  handler: async (ctx, args) => {
+    const store = await ctx.db.get("store", args.storeId);
+    if (!store) {
+      throw new Error("Store not found.");
+    }
+
+    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+    await requireOrganizationMemberRoleWithCtx(ctx, {
+      allowedRoles: ["full_admin", "pos_only"],
+      failureMessage: "You cannot view EOD Review for this store.",
+      organizationId: store.organizationId,
+      userId: athenaUser._id,
+    });
+
+    return buildDailyCloseLifecycleGateWithCtx(ctx, args);
   },
 });
 

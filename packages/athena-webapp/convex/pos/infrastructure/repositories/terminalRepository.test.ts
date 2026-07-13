@@ -233,7 +233,7 @@ describe("terminalRepository runtime status", () => {
         },
         staffAuthority: {
           expiresAt: 130_000,
-          staffProfileId: "staff-2" as Id<"staffProfile">,
+          staffProfileId: "staff-1" as Id<"staffProfile">,
           status: "ready" as const,
         },
       }),
@@ -247,6 +247,36 @@ describe("terminalRepository runtime status", () => {
     expect(result).toEqual({
       didWrite: true,
       materialChanged: false,
+      runtimeStatusId: "runtime-status-1",
+    });
+    expect(ctx.db.patch).toHaveBeenCalledWith(
+      "posTerminalRuntimeStatus",
+      "runtime-status-1",
+      input,
+    );
+  });
+
+  it("marks cashier identity changes as side-effect material", async () => {
+    const ctx = buildCtx({
+      posTerminalRuntimeStatus: [buildRuntimeStatus()],
+    });
+    const input = buildRuntimeStatus({
+      reportedAt: 250,
+      receivedAt: 260,
+      staffAuthority: {
+        staffProfileId: "staff-2" as Id<"staffProfile">,
+        status: "ready",
+      },
+    });
+
+    const result = await upsertLatestRuntimeStatusWithOutcome(
+      ctx as never,
+      input,
+    );
+
+    expect(result).toEqual({
+      didWrite: true,
+      materialChanged: true,
       runtimeStatusId: "runtime-status-1",
     });
     expect(ctx.db.patch).toHaveBeenCalledWith(

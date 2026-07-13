@@ -8,6 +8,7 @@ import { getStorefrontUserFromRequest } from "../../../utils";
 
 const COOKIE_DOMAIN = "wigclub.store";
 const COOKIE_MAX_AGE_SECONDS = 90 * 24 * 60 * 60;
+const HOMEPAGE_MERCHANDISING_BUCKET_MS = 60_000;
 const homepageSnapshotQuery = api.storeFront.homepageSnapshot.get;
 
 type CookieToSet = {
@@ -27,6 +28,26 @@ type HomepageSnapshotBootstrapArgs = {
 
 const isDisplayableMarker = (marker?: string) => {
   return typeof marker === "string" && marker.trim().length > 0;
+};
+
+const presentSnapshotAtRequestTime = (snapshot: any, nowMs: number) => {
+  if (!snapshot) return snapshot;
+
+  const bannerMessage =
+    snapshot.bannerMessage?.countdownEndsAt !== undefined &&
+    snapshot.bannerMessage.countdownEndsAt <= nowMs
+      ? null
+      : snapshot.bannerMessage;
+
+  return {
+    ...snapshot,
+    ...(Object.prototype.hasOwnProperty.call(snapshot, "generatedAtMs")
+      ? { generatedAtMs: nowMs }
+      : {}),
+    ...(Object.prototype.hasOwnProperty.call(snapshot, "bannerMessage")
+      ? { bannerMessage }
+      : {}),
+  };
 };
 
 export const resolveHomepageSnapshotBootstrap = async ({
@@ -88,12 +109,14 @@ export const resolveHomepageSnapshotBootstrap = async ({
 
   const snapshot = await runQuery(homepageSnapshotQuery, {
     storeId: store._id as Id<"store">,
-    nowMs,
+    nowMs:
+      Math.floor(nowMs / HOMEPAGE_MERCHANDISING_BUCKET_MS) *
+      HOMEPAGE_MERCHANDISING_BUCKET_MS,
   });
 
   return {
     status: 200,
-    body: snapshot,
+    body: presentSnapshotAtRequestTime(snapshot, nowMs),
     cookies,
   };
 };

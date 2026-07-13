@@ -42,6 +42,14 @@ export type TerminalRecoveryCommandReadRepository = {
     statuses?: Array<Doc<"posTerminalRecoveryCommand">["status"]>;
     terminalId: Id<"posTerminal">;
   }): Promise<Doc<"posTerminalRecoveryCommand">[]>;
+  listRuntimeVerificationReadyCommands(args: {
+    cursor?: string;
+    storeId: Id<"store">;
+    terminalId: Id<"posTerminal">;
+  }): Promise<{
+    commands: Doc<"posTerminalRecoveryCommand">[];
+    nextCursor?: string;
+  }>;
 };
 
 export type TerminalRecoveryCommandRepository = TerminalRecoveryCommandReadRepository & {
@@ -396,25 +404,29 @@ function uniqueStrings(values: unknown[] | undefined) {
 export async function verifyTerminalRecoveryCommandsFromRuntime(
   repository: TerminalRecoveryCommandRepository,
   args: {
+    cursor?: string;
     runtimeStatus: Doc<"posTerminalRuntimeStatus">;
     storeId: Id<"store">;
     terminalId: Id<"posTerminal">;
     verifiedAt: number;
   },
 ) {
-  const commands = await repository.listCommandsForTerminal({
+  const page = await repository.listRuntimeVerificationReadyCommands({
+    cursor: args.cursor,
     storeId: args.storeId,
-    statuses: ["completed"],
     terminalId: args.terminalId,
   });
   const verifiedCommandIds: Array<Id<"posTerminalRecoveryCommand">> = [];
 
   if (args.verifiedAt - args.runtimeStatus.receivedAt > RUNTIME_VERIFICATION_FRESHNESS_MS) {
-    return { verifiedCommandIds };
+    return { nextCursor: page.nextCursor, verifiedCommandIds };
   }
 
-  for (const command of commands) {
-    if (command.verificationStatus !== "runtime_verification_ready") {
+  for (const command of page.commands) {
+    if (
+      command.status !== "completed" ||
+      command.verificationStatus !== "runtime_verification_ready"
+    ) {
       continue;
     }
     if (
@@ -432,7 +444,7 @@ export async function verifyTerminalRecoveryCommandsFromRuntime(
     }
   }
 
-  return { verifiedCommandIds };
+  return { nextCursor: page.nextCursor, verifiedCommandIds };
 }
 
 function runtimeMatchesExpectedEvidence(

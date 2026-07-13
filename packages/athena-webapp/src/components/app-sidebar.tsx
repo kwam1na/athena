@@ -58,7 +58,6 @@ import { useGetActiveOrganization } from "../hooks/useGetOrganizations";
 import { useNewOrderNotification } from "../hooks/useNewOrderNotification";
 import { useQuery } from "convex/react";
 import { api } from "~/convex/_generated/api";
-import { useGetUnresolvedProducts } from "../hooks/useGetProducts";
 // import { useProductWithNoImagesNotification } from "../hooks/useProductWithNoImagesNotification";
 import { useGetCategories } from "../hooks/useGetCategories";
 import { PermissionGate } from "./PermissionGate";
@@ -171,13 +170,22 @@ export function AppSidebar({
   const location = useLocation();
   const navigate = useNavigate();
 
-  const productsWithNoImages = useGetUnresolvedProducts();
-
   useNewOrderNotification();
 
   // useProductWithNoImagesNotification();
 
   const categories = useGetCategories();
+
+  const catalogSummary = useQuery(
+    api.inventory.products.getCatalogSummary,
+    activeStore?._id ? { storeId: activeStore._id } : "skip",
+  );
+  const unresolvedProductCount =
+    catalogSummary &&
+    catalogSummary.updatedAt !== 0 &&
+    catalogSummary.needsRefresh !== true
+      ? catalogSummary.missingInfoProductCount
+      : undefined;
 
   const orders = useQuery(
     api.storeFront.onlineOrder.getAllOnlineOrders,
@@ -777,7 +785,8 @@ export function AppSidebar({
                   </SidebarMenuSub>
                 ))}
 
-                {productsWithNoImages && productsWithNoImages.length > 0 && (
+                {unresolvedProductCount !== undefined &&
+                  unresolvedProductCount > 0 && (
                   <SidebarMenuSub>
                     <SidebarMenuSubItem>
                       <SidebarMenuButton
@@ -798,13 +807,13 @@ export function AppSidebar({
                             <p className="font-medium">Unresolved</p>
                           </div>
                           <p className="text-xs font-medium">
-                            {productsWithNoImages?.length}
+                            {unresolvedProductCount}
                           </p>
                         </Link>
                       </SidebarMenuButton>
                     </SidebarMenuSubItem>
                   </SidebarMenuSub>
-                )}
+                  )}
 
                 {/* <SidebarMenuSub>
                   <SidebarMenuSubItem>

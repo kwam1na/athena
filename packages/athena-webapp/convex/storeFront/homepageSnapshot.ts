@@ -21,8 +21,34 @@ export const BEST_SELLERS_LIMIT = 12;
 export const FEATURED_ITEMS_LIMIT = 12;
 export const FEATURED_ITEM_PRODUCTS_LIMIT = 5;
 export const HOMEPAGE_SNAPSHOT_SCAN_LIMIT = 100;
+export const HOMEPAGE_HYDRATION_BATCH_SIZE = 4;
 
 type AnyRecord = Record<string, any>;
+
+export async function hydrateHomepageRowsUntil<Row, Hydrated>({
+  rows,
+  batchSize,
+  hydrate,
+  isComplete,
+}: {
+  rows: readonly Row[];
+  batchSize: number;
+  hydrate: (row: Row) => Promise<Hydrated>;
+  isComplete: (hydrated: readonly Hydrated[]) => boolean;
+}) {
+  const hydrated: Hydrated[] = [];
+
+  for (let offset = 0; offset < rows.length; offset += batchSize) {
+    hydrated.push(
+      ...(await Promise.all(
+        rows.slice(offset, offset + batchSize).map((row) => hydrate(row)),
+      )),
+    );
+    if (isComplete(hydrated)) break;
+  }
+
+  return hydrated;
+}
 
 const nullableStringValidator = v.union(v.string(), v.null());
 const nullableNumberValidator = v.union(v.number(), v.null());
@@ -460,24 +486,35 @@ async function hydrateTargetProducts(
     | { kind: "category"; id: Id<"category"> }
     | { kind: "subcategory"; id: Id<"subcategory"> },
 ) {
-  const productsQuery = ctx.db
-    .query("product")
-    .withIndex("by_storeId", (q) => q.eq("storeId", storeId));
-
   const products =
     target.kind === "category"
-      ? await productsQuery
-          .filter((q) => q.eq(q.field("categoryId"), target.id))
+      ? await ctx.db
+          .query("product")
+          .withIndex("by_storeId_categoryId", (q) =>
+            q.eq("storeId", storeId).eq("categoryId", target.id),
+          )
           .take(HOMEPAGE_SNAPSHOT_SCAN_LIMIT)
-      : await productsQuery
-          .filter((q) => q.eq(q.field("subcategoryId"), target.id))
+      : await ctx.db
+          .query("product")
+          .withIndex("by_storeId_subcategoryId", (q) =>
+            q.eq("storeId", storeId).eq("subcategoryId", target.id),
+          )
           .take(HOMEPAGE_SNAPSHOT_SCAN_LIMIT);
 
-  const hydratedProducts = await Promise.all(
-    products.map((product) => hydrateProduct(ctx, product, storeId)),
+  const visibleCandidates = products.filter((product) =>
+    isCustomerVisibleProduct(product, String(storeId)),
   );
+  const hydratedProducts = await hydrateHomepageRowsUntil({
+    rows: visibleCandidates,
+    batchSize: HOMEPAGE_HYDRATION_BATCH_SIZE,
+    hydrate: (product) => hydrateProduct(ctx, product, storeId),
+    isComplete: (hydrated) =>
+      hydrated.filter(
+        (product) => presentProduct(product, String(storeId)) !== null,
+      ).length >= FEATURED_ITEM_PRODUCTS_LIMIT,
+  });
 
-  return hydratedProducts.slice(0, FEATURED_ITEM_PRODUCTS_LIMIT);
+  return hydratedProducts;
 }
 
 async function hydrateCategory(
@@ -589,48 +626,88 @@ async function hydrateFeaturedItem(
   return hydrated;
 }
 
+export async function getHomepageSnapshotWithCtx(
+  ctx: QueryCtx,
+  args: { storeId: Id<"store">; nowMs: number },
+) {
+  const store = await ctx.db.get("store", args.storeId);
+  if (!store) {
+    return null;
+  }
+
+  const [bannerMessage, bestSellerRows, featuredRows] = await Promise.all([
+    ctx.db
+      .query("bannerMessage")
+      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+      .first(),
+    ctx.db
+      .query("bestSeller")
+      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+      .take(HOMEPAGE_SNAPSHOT_SCAN_LIMIT),
+    ctx.db
+      .query("featuredItem")
+      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+      .take(HOMEPAGE_SNAPSHOT_SCAN_LIMIT),
+  ]);
+
+  const rankedBestSellerRows = sortByRankThenId(bestSellerRows);
+  const rankedFeaturedRows = sortByRankThenId(featuredRows);
+  const rankedRegularFeaturedRows = rankedFeaturedRows.filter(
+    (item) => item.type !== "shop_look",
+  );
+  const rankedShopLookRows = rankedFeaturedRows.filter(
+    (item) => item.type === "shop_look",
+  );
+  const [bestSellers, regularFeaturedItems, shopLookItems] = await Promise.all([
+    hydrateHomepageRowsUntil({
+      rows: rankedBestSellerRows,
+      batchSize: HOMEPAGE_HYDRATION_BATCH_SIZE,
+      hydrate: (item) => hydrateBestSeller(ctx, item),
+      isComplete: (items) =>
+        buildHomepageSnapshotV1({
+          store,
+          nowMs: args.nowMs,
+          bestSellers: [...items],
+        }).bestSellers.length >= BEST_SELLERS_LIMIT,
+    }),
+    hydrateHomepageRowsUntil({
+      rows: rankedRegularFeaturedRows,
+      batchSize: HOMEPAGE_HYDRATION_BATCH_SIZE,
+      hydrate: (item) => hydrateFeaturedItem(ctx, item, args.storeId),
+      isComplete: (items) =>
+        buildHomepageSnapshotV1({
+          store,
+          nowMs: args.nowMs,
+          featuredItems: [...items],
+        }).featuredItems.length >= FEATURED_ITEMS_LIMIT,
+    }),
+    hydrateHomepageRowsUntil({
+      rows: rankedShopLookRows,
+      batchSize: HOMEPAGE_HYDRATION_BATCH_SIZE,
+      hydrate: (item) => hydrateFeaturedItem(ctx, item, args.storeId),
+      isComplete: (items) =>
+        buildHomepageSnapshotV1({
+          store,
+          nowMs: args.nowMs,
+          featuredItems: [...items],
+        }).shopLook !== null,
+    }),
+  ]);
+
+  return buildHomepageSnapshotV1({
+    store,
+    nowMs: args.nowMs,
+    bannerMessage,
+    bestSellers,
+    featuredItems: [...regularFeaturedItems, ...shopLookItems],
+  });
+}
+
 export const get = query({
   args: {
     storeId: v.id("store"),
     nowMs: v.number(),
   },
   returns: v.union(homepageSnapshotV1Validator, v.null()),
-  handler: async (ctx, args) => {
-    const store = await ctx.db.get("store", args.storeId);
-    if (!store) {
-      return null;
-    }
-
-    const [bannerMessage, bestSellerRows, featuredRows] = await Promise.all([
-      ctx.db
-        .query("bannerMessage")
-        .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
-        .first(),
-      ctx.db
-        .query("bestSeller")
-        .filter((q) => q.eq(q.field("storeId"), args.storeId))
-        .take(HOMEPAGE_SNAPSHOT_SCAN_LIMIT),
-      ctx.db
-        .query("featuredItem")
-        .filter((q) => q.eq(q.field("storeId"), args.storeId))
-        .take(HOMEPAGE_SNAPSHOT_SCAN_LIMIT),
-    ]);
-
-    const [bestSellers, featuredItems] = await Promise.all([
-      Promise.all(bestSellerRows.map((item) => hydrateBestSeller(ctx, item))),
-      Promise.all(
-        featuredRows.map((item) =>
-          hydrateFeaturedItem(ctx, item, args.storeId),
-        ),
-      ),
-    ]);
-
-    return buildHomepageSnapshotV1({
-      store,
-      nowMs: args.nowMs,
-      bannerMessage,
-      bestSellers,
-      featuredItems,
-    });
-  },
+  handler: (ctx, args) => getHomepageSnapshotWithCtx(ctx, args),
 });

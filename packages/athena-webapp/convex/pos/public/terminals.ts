@@ -1195,13 +1195,19 @@ export const submitTerminalRuntimeStatus = mutation({
       return result;
     }
 
-    const { acceptedForSideEffects, ...runtimeStatusWriteResult } =
-      result.data;
+    const {
+      acceptedForSideEffects,
+      recoveryVerificationCursor,
+      runtimeStatusId,
+      ...runtimeStatusWriteResult
+    } = result.data;
     if (acceptedForSideEffects !== false) {
       await runAcceptedRuntimeStatusSideEffects({
         ctx,
         receivedAt: result.data.receivedAt,
+        recoveryVerificationCursor,
         runtimeStatus: safeStatus,
+        runtimeStatusId,
         storeId: args.storeId,
         terminal,
         terminalId: args.terminalId,

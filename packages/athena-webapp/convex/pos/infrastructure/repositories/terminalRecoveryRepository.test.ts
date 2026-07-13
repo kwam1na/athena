@@ -93,6 +93,88 @@ describe("terminalRecoveryRepository", () => {
     expect(ctx.gtLog).toEqual([["expiresAt", 500]]);
   });
 
+  it("rotates bounded verification-ready work while keeping newest commands prompt", async () => {
+    const readyCommands = Array.from({ length: 40 }, (_, index) => ({
+      _creationTime: index + 1,
+      _id: `command-ready-${index}` as Id<"posTerminalRecoveryCommand">,
+      status: "completed",
+      storeId: "store-1" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+      verificationStatus: "runtime_verification_ready",
+    }));
+    const ctx = buildQueryCtx({
+      posTerminalRecoveryCommand: [
+        ...readyCommands,
+        {
+          _creationTime: 0,
+          _id: "command-other-terminal",
+          status: "completed",
+          storeId: "store-1",
+          terminalId: "terminal-2",
+          verificationStatus: "runtime_verification_ready",
+        },
+        {
+          _creationTime: 0,
+          _id: "command-already-verified",
+          status: "completed",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+          verificationStatus: "verified",
+        },
+      ],
+    });
+    const repository = createTerminalRecoveryCommandReadRepository(ctx as never);
+
+    const first = await repository.listRuntimeVerificationReadyCommands({
+      storeId: "store-1" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+    });
+    const second = await repository.listRuntimeVerificationReadyCommands({
+      cursor: first.nextCursor,
+      storeId: "store-1" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+    });
+    const third = await repository.listRuntimeVerificationReadyCommands({
+      cursor: second.nextCursor,
+      storeId: "store-1" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+    });
+
+    expect(first).toEqual({
+      commands: [
+        ...readyCommands.slice(-5).reverse(),
+        ...readyCommands.slice(0, 15),
+      ],
+      nextCursor: "cursor:15",
+    });
+    expect(second).toEqual({
+      commands: [
+        ...readyCommands.slice(-5).reverse(),
+        ...readyCommands.slice(15, 30),
+      ],
+      nextCursor: "cursor:30",
+    });
+    expect(third).toEqual({
+      commands: [
+        ...readyCommands.slice(-5).reverse(),
+        ...readyCommands.slice(30, 35),
+      ],
+      nextCursor: undefined,
+    });
+    expect(
+      new Set(
+        [...first.commands, ...second.commands, ...third.commands].map(
+          (command) => command._id,
+        ),
+      ).size,
+    ).toBe(readyCommands.length);
+    expect(ctx.queryLog).toHaveLength(6);
+    expect(ctx.queryLog).toEqual(
+      expect.arrayContaining(["by_store_terminal_verification"]),
+    );
+    expect(ctx.eqLog).toHaveLength(18);
+  });
+
   it("writes command documents only through the mutation repository", async () => {
     const ctx = buildCtx();
     const repository = createTerminalRecoveryCommandRepository(ctx as never);
@@ -331,20 +413,48 @@ function buildCtx(tables: Record<string, unknown[]> = {}) {
             },
           };
           callback(q);
-          const result = {
+          const buildResult = (direction: "asc" | "desc" = "asc") => ({
             first: vi.fn(
-              async () => filterRows(tables[tableName], filters)[0] ?? null,
+              async () =>
+                orderedRows(tables[tableName], filters, direction)[0] ?? null,
             ),
             take: vi.fn(async (limit?: number) =>
-              filterRows(tables[tableName], filters).slice(0, limit),
+              orderedRows(tables[tableName], filters, direction).slice(
+                0,
+                limit,
+              ),
+            ),
+            paginate: vi.fn(
+              async ({
+                cursor,
+                numItems,
+              }: {
+                cursor: string | null;
+                numItems: number;
+              }) => {
+                const rows = orderedRows(tables[tableName], filters, direction);
+                const offset = cursor
+                  ? Number.parseInt(cursor.replace("cursor:", ""), 10)
+                  : 0;
+                const end = Math.min(offset + numItems, rows.length);
+                return {
+                  continueCursor: `cursor:${end}`,
+                  isDone: end >= rows.length,
+                  page: rows.slice(offset, end),
+                };
+              },
             ),
             unique: vi.fn(
-              async () => filterRows(tables[tableName], filters)[0] ?? null,
+              async () =>
+                orderedRows(tables[tableName], filters, direction)[0] ?? null,
             ),
-          };
+          });
+          const result = buildResult();
           return {
             ...result,
-            order: vi.fn(() => result),
+            order: vi.fn((direction: "asc" | "desc") =>
+              buildResult(direction),
+            ),
           };
         },
       })),
@@ -377,4 +487,13 @@ function filterRows(
   return (rows ?? []).filter((row) =>
     filters.every((filter) => filter(row as Record<string, unknown>)),
   );
+}
+
+function orderedRows(
+  rows: unknown[] | undefined,
+  filters: Array<(row: Record<string, unknown>) => boolean>,
+  direction: "asc" | "desc",
+) {
+  const filtered = filterRows(rows, filters);
+  return direction === "desc" ? filtered.reverse() : filtered;
 }

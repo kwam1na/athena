@@ -530,7 +530,7 @@ const schema = defineSchema({
   bannerMessage: defineTable(bannerMessageSchema).index("by_storeId", [
     "storeId",
   ]),
-  bestSeller: defineTable(bestSellerSchema),
+  bestSeller: defineTable(bestSellerSchema).index("by_storeId", ["storeId"]),
   category: defineTable(categorySchema).index("by_storeId_slug", [
     "storeId",
     "slug",
@@ -589,7 +589,9 @@ const schema = defineSchema({
       "status",
       "operatingDate",
     ]),
-  featuredItem: defineTable(featuredItemSchema),
+  featuredItem: defineTable(featuredItemSchema).index("by_storeId", [
+    "storeId",
+  ]),
   guest: defineTable(guestSchema)
     .index("by_storeId", ["storeId"])
     .index("by_marker", ["marker"]),
@@ -1090,6 +1092,8 @@ const schema = defineSchema({
   product: defineTable(productSchema)
     .index("by_categoryId", ["categoryId"])
     .index("by_storeId", ["storeId"])
+    .index("by_storeId_categoryId", ["storeId", "categoryId"])
+    .index("by_storeId_subcategoryId", ["storeId", "subcategoryId"])
     .index("by_subcategoryId", ["subcategoryId"]),
   productSku: defineTable(productSkuSchema)
     .index("by_color", ["color"])

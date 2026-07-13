@@ -18,6 +18,7 @@ describe("terminal health queries", () => {
       posTerminal: [buildTerminal()],
       posTerminalRuntimeStatus: [
         buildRuntimeStatus({
+          recoveryVerificationCursor: "internal-cursor",
           drawerAuthority: {
             cloudRegisterSessionId: "register-1",
             localRegisterSessionId: "local-register-1",
@@ -46,6 +47,9 @@ describe("terminal health queries", () => {
     });
 
     expect(summary?.health).toBe("online");
+    expect(summary?.runtimeStatus).not.toHaveProperty(
+      "recoveryVerificationCursor",
+    );
     expect(summary?.runtimeStatus?.drawerAuthority).toBeUndefined();
     expect(summary?.attentionReasons.map((reason) => reason.type)).not.toContain(
       "drawer_authority_blocked",

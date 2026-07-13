@@ -465,6 +465,8 @@ export async function submitTerminalRuntimeStatus(
     activeRegisterSessionDirective?: ActiveRegisterSessionDirective;
     acceptedForSideEffects: boolean;
     drawerAuthorityDirective?: DrawerAuthorityDirective;
+    recoveryVerificationCursor?: string;
+    runtimeStatusId: Id<"posTerminalRuntimeStatus">;
     terminalId: Id<"posTerminal">;
     reportedAt: number;
     receivedAt: number;
@@ -570,6 +572,9 @@ export async function submitTerminalRuntimeStatus(
   if (!runtimeStatusWrite.didWrite) {
     return ok({
       acceptedForSideEffects: false,
+      recoveryVerificationCursor:
+        runtimeStatusWrite.recoveryVerificationCursor,
+      runtimeStatusId: runtimeStatusWrite.runtimeStatusId,
       terminalId: args.terminalId,
       reportedAt,
       receivedAt,
@@ -602,6 +607,9 @@ export async function submitTerminalRuntimeStatus(
       drawerAuthorityDirective,
     }),
     acceptedForSideEffects: true,
+    recoveryVerificationCursor:
+      runtimeStatusWrite.recoveryVerificationCursor,
+    runtimeStatusId: runtimeStatusWrite.runtimeStatusId,
     terminalId: args.terminalId,
     reportedAt,
     receivedAt,

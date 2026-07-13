@@ -866,6 +866,9 @@ describe("terminal command service", () => {
         }),
         activeCommand,
       ]),
+      listRuntimeVerificationReadyCommands: vi.fn(async () => ({
+        commands: [],
+      })),
     };
 
     await expect(
@@ -1125,6 +1128,129 @@ describe("terminal command service", () => {
       verifiedAt: now,
     });
     expect(fresh.verifiedCommandIds).toEqual(["command-1"]);
+    expect(repository.listRuntimeVerificationReadyCommands).toHaveBeenCalledWith({
+      cursor: undefined,
+      storeId,
+      terminalId,
+    });
+    expect(repository.listCommandsForTerminal).not.toHaveBeenCalledWith({
+      storeId,
+      statuses: ["completed"],
+      terminalId,
+    });
+  });
+
+  it("advances a matching middle command past permanently unmatched edge rows", async () => {
+    const middleEligible = buildCommand({
+      _creationTime: 21,
+      _id: "command-middle-eligible" as Id<"posTerminalRecoveryCommand">,
+      expectedEvidence: { drawerAuthorityStatus: "healthy" },
+      status: "completed",
+      verificationStatus: "runtime_verification_ready",
+    });
+    const permanentlyUnmatched = Array.from({ length: 39 }, (_, index) =>
+      buildCommand({
+        _creationTime: index < 20 ? index + 1 : index + 2,
+        _id: `command-unmatched-${index}` as Id<"posTerminalRecoveryCommand">,
+        expectedEvidence: { localStoreAvailable: false },
+        status: "completed",
+        verificationStatus: "runtime_verification_ready",
+      }),
+    );
+    const repository = buildRepository({
+      commands: [...permanentlyUnmatched, middleEligible],
+    });
+    repository.listRuntimeVerificationReadyCommands
+      .mockResolvedValueOnce({
+        commands: [
+          ...permanentlyUnmatched.slice(-5).reverse(),
+          ...permanentlyUnmatched.slice(0, 15),
+        ],
+        nextCursor: "page-2",
+      })
+      .mockResolvedValueOnce({
+        commands: [
+          ...permanentlyUnmatched.slice(-5).reverse(),
+          ...permanentlyUnmatched.slice(15, 29),
+          middleEligible,
+        ],
+      });
+
+    const runtimeStatus = buildRuntimeStatus({
+      drawerAuthority: {
+        localRegisterSessionId: "register-1",
+        observedAt: now,
+        status: "healthy",
+      },
+      localStore: {
+        available: true,
+        terminalSeedReady: true,
+      },
+      receivedAt: now,
+    });
+    const first = await verifyTerminalRecoveryCommandsFromRuntime(repository, {
+      runtimeStatus,
+      storeId,
+      terminalId,
+      verifiedAt: now,
+    });
+    const second = await verifyTerminalRecoveryCommandsFromRuntime(repository, {
+      cursor: first.nextCursor,
+      runtimeStatus,
+      storeId,
+      terminalId,
+      verifiedAt: now,
+    });
+
+    expect(first).toEqual({
+      nextCursor: "page-2",
+      verifiedCommandIds: [],
+    });
+    expect(second.verifiedCommandIds).toEqual(["command-middle-eligible"]);
+    expect(repository.listRuntimeVerificationReadyCommands).toHaveBeenNthCalledWith(
+      2,
+      {
+        cursor: "page-2",
+        storeId,
+        terminalId,
+      },
+    );
+    expect(repository.patchCommand).toHaveBeenCalledTimes(1);
+    expect(repository.patchCommand).toHaveBeenCalledWith(
+      "command-middle-eligible",
+      { verificationStatus: "verified", verifiedAt: now },
+    );
+  });
+
+  it("does not verify a ready command before its lifecycle is completed", async () => {
+    const repository = buildRepository({
+      commands: [
+        buildCommand({
+          expectedEvidence: {
+            drawerAuthorityStatus: "healthy",
+          },
+          status: "claimed",
+          verificationStatus: "runtime_verification_ready",
+        }),
+      ],
+    });
+
+    const result = await verifyTerminalRecoveryCommandsFromRuntime(repository, {
+      runtimeStatus: buildRuntimeStatus({
+        drawerAuthority: {
+          localRegisterSessionId: "register-1",
+          observedAt: now,
+          status: "healthy",
+        },
+        receivedAt: now,
+      }),
+      storeId,
+      terminalId,
+      verifiedAt: now,
+    });
+
+    expect(result.verifiedCommandIds).toEqual([]);
+    expect(repository.patchCommand).not.toHaveBeenCalled();
   });
 
   it("verifies local review collection only after item-level details are present", async () => {
@@ -1575,6 +1701,17 @@ function buildRepository(seed: {
           return false;
         }
         return true;
+      }),
+    ),
+    listRuntimeVerificationReadyCommands: vi.fn(
+      async (): Promise<{
+        commands: Doc<"posTerminalRecoveryCommand">[];
+        nextCursor?: string;
+      }> => ({
+        commands: commands.filter(
+          (command) =>
+            command.verificationStatus === "runtime_verification_ready",
+        ),
       }),
     ),
     patchCommand: vi.fn(

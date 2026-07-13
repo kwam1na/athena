@@ -111,6 +111,10 @@ function deferred<T>() {
 
 describe("usePosLocalSyncRuntimeStatus", () => {
   beforeEach(() => {
+    Object.defineProperty(globalThis.navigator, "locks", {
+      configurable: true,
+      value: undefined,
+    });
     vi.resetAllMocks();
     vi.unstubAllEnvs();
     mocks.reportTerminalRuntimeStatus.mockResolvedValue({
@@ -4398,6 +4402,90 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(mocks.reportTerminalRuntimeStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it("replays follower-only material received while the leader publish is in flight", async () => {
+    const nextPublish = deferred<{
+      kind: "ok";
+      data: Record<string, never>;
+    }>();
+    mocks.reportTerminalRuntimeStatus
+      .mockReturnValueOnce(nextPublish.promise)
+      .mockResolvedValue({ kind: "ok", data: {} });
+    const store = {
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-1",
+          displayName: "Front",
+          provisionedAt: 1,
+          schemaVersion: 1,
+          syncSecretHash: "sync-secret-1",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+    };
+    const storeFactory = () => store as never;
+    const leader = renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        mode: "status-only",
+        storeFactory,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    try {
+      await waitFor(() =>
+        expect(mocks.reportTerminalRuntimeStatus).toHaveBeenCalledTimes(1),
+      );
+
+      const firstRuntimeStatus = mocks.reportTerminalRuntimeStatus.mock.calls[0]?.[0]
+        ?.status;
+      const followerRuntimeStatus = {
+        ...firstRuntimeStatus,
+        appSessionRecovery: { status: "blocked_app_account" },
+      };
+      act(() => {
+        window.dispatchEvent(
+          new StorageEvent("storage", {
+            key: "athena-pos-runtime-status-material:store-1:terminal-cloud-1",
+            newValue: JSON.stringify({
+              materialSignature: getRuntimeStatusPublishMaterialSignature({
+                runtimeStatus: followerRuntimeStatus,
+                storeId: "store-1",
+                terminalId: "terminal-cloud-1",
+              }),
+              ownerId: "follower-context",
+              runtimeStatus: followerRuntimeStatus,
+              sentAt: Date.now(),
+            }),
+          }),
+        );
+      });
+
+      nextPublish.resolve({ kind: "ok", data: {} });
+
+      await waitFor(() =>
+        expect(mocks.reportTerminalRuntimeStatus).toHaveBeenCalledTimes(2),
+      );
+      expect(mocks.reportTerminalRuntimeStatus).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          status: expect.objectContaining({
+            appSessionRecovery: expect.objectContaining({
+              status: "blocked_app_account",
+            }),
+          }),
+        }),
+      );
+    } finally {
+      leader.unmount();
+    }
   });
 
   it("does not replay an unchanged runtime check-in after a stale effect invalidation", async () => {
