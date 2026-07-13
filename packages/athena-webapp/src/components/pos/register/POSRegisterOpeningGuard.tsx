@@ -53,7 +53,7 @@ type DailyOpeningSnapshot = {
   status?: "blocked" | "needs_attention" | "ready" | "started";
 };
 
-type DailyCloseSnapshot = {
+type DailyCloseLifecycleGate = {
   existingClose?: {
     lifecycleStatus?: "active" | "reopened" | "superseded";
   } | null;
@@ -123,14 +123,14 @@ export function POSRegisterOpeningGuard({ children }: { children: ReactNode }) {
       : "skip",
   ) as DailyOpeningSnapshot | undefined;
   const dailyCloseSnapshot = useQuery(
-    api.operations.dailyClose.getDailyCloseSnapshot,
+    api.operations.dailyClose.getDailyCloseLifecycleGate,
     storeId
       ? {
           ...operatingDateRange,
           storeId,
         }
       : "skip",
-  ) as DailyCloseSnapshot | undefined;
+  ) as DailyCloseLifecycleGate | undefined;
   const localReadiness = useLocalPosReadiness({
     closeSnapshot: dailyCloseSnapshot,
     entryContext,
@@ -291,7 +291,7 @@ function POSReadinessLoadingState({
   operatingDate,
   storeId,
 }: {
-  closeSnapshot?: DailyCloseSnapshot;
+  closeSnapshot?: DailyCloseLifecycleGate;
   entryContext: ReturnType<typeof useLocalPosEntryContext>;
   isLoadingStores: boolean;
   localReadiness: LocalPosReadiness;
@@ -434,7 +434,7 @@ function getReadinessLoadingBlockers({
   openingSnapshot,
   storeId,
 }: {
-  closeSnapshot?: DailyCloseSnapshot;
+  closeSnapshot?: DailyCloseLifecycleGate;
   entryContext: ReturnType<typeof useLocalPosEntryContext>;
   isLoadingStores: boolean;
   localReadiness: LocalPosReadiness;
@@ -479,7 +479,7 @@ function getReadinessChecklistItems({
   operatingDate,
   storeId,
 }: {
-  closeSnapshot?: DailyCloseSnapshot;
+  closeSnapshot?: DailyCloseLifecycleGate;
   entryContext: ReturnType<typeof useLocalPosEntryContext>;
   isLoadingStores: boolean;
   localReadiness: LocalPosReadiness;

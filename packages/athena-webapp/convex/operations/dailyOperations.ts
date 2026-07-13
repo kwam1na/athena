@@ -2587,41 +2587,6 @@ export async function buildDailyOperationsSnapshotWithCtx(
   };
 }
 
-async function buildCompactDailyOperationsWeekSnapshotsWithCtx(
-  ctx: Pick<QueryCtx, "db">,
-  args: {
-    endAt?: number;
-    includeManagerReviewEvidence: boolean;
-    operatingDate: string;
-    operatingTimezoneOffsetMinutes?: number;
-    startAt?: number;
-    storeId: Id<"store">;
-    storePulseWindow?: DailyOperationsStorePulseWindow;
-    weekEndOperatingDate?: string;
-  },
-  weekMetrics: Awaited<
-    ReturnType<typeof buildDailyOperationsSnapshotWithCtx>
-  >["weekMetrics"],
-) {
-  const { endAt: _endAt, startAt: _startAt, ...weekSnapshotArgs } = args;
-
-  return Promise.all(
-    weekMetrics.map((metric) =>
-      buildDailyOperationsSnapshotWithCtx(ctx, {
-        ...weekSnapshotArgs,
-        includeAnalyticsDetails: false,
-        includeFinancialDetails: args.includeManagerReviewEvidence,
-        includeManagerReviewEvidence: args.includeManagerReviewEvidence,
-        includeScheduledRunSummaries: false,
-        operatingDate: metric.operatingDate,
-        scheduledRunSummariesLimit: 0,
-        timelineLimit: 0,
-        timelinePreviewLimit: 0,
-      }),
-    ),
-  );
-}
-
 function maybeRedactCloseSummary(
   summary: DailyOperationsCloseSummary,
   includeFinancialDetails: boolean,
@@ -2711,7 +2676,7 @@ export const getDailyOperationsDetailSnapshot = query({
 
     const snapshot = await buildDailyOperationsSnapshotWithCtx(ctx, {
       ...args,
-      includeAnalyticsDetails: includeManagerReviewEvidence,
+      includeAnalyticsDetails: false,
       includeFinancialDetails: includeManagerReviewEvidence,
       includeManagerReviewEvidence,
       includeScheduledRunSummaries: false,
@@ -2721,17 +2686,31 @@ export const getDailyOperationsDetailSnapshot = query({
       timelinePreviewLimit: 0,
     });
 
-    const weekSnapshots = await buildCompactDailyOperationsWeekSnapshotsWithCtx(
-      ctx,
-      {
-        ...args,
-        includeManagerReviewEvidence,
-      },
-      snapshot.weekMetrics,
+    return snapshot;
+  },
+});
+
+export const getDailyOperationsWeekAnalyticsSnapshot = query({
+  args: dailyOperationsSnapshotArgsValidator,
+  handler: async (ctx, args) => {
+    const { includeManagerReviewEvidence } =
+      await authorizeDailyOperationsSnapshot(ctx, args);
+    const weekEndOperatingDate = saturdayWeekEndOperatingDate(
+      args.weekEndOperatingDate ?? args.operatingDate,
     );
+
     return {
-      ...snapshot,
-      weekSnapshots,
+      operatingDate: args.operatingDate,
+      weekEndOperatingDate,
+      weekMetrics: includeManagerReviewEvidence
+        ? await buildWeekMetrics(ctx, {
+            operatingDate: args.operatingDate,
+            operatingTimezoneOffsetMinutes:
+              args.operatingTimezoneOffsetMinutes,
+            storeId: args.storeId,
+            weekEndOperatingDate,
+          })
+        : [],
     };
   },
 });

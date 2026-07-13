@@ -448,6 +448,8 @@ describe("submitTerminalRuntimeStatus", () => {
         reportedAt: 100,
         receivedAt: 200,
         acceptedForSideEffects: true,
+        recoveryVerificationCursor: undefined,
+        runtimeStatusId: "runtime-status-1",
       },
     });
     expect(
@@ -732,9 +734,11 @@ describe("submitTerminalRuntimeStatus", () => {
       kind: "ok",
       data: {
         acceptedForSideEffects: false,
+        recoveryVerificationCursor: undefined,
         terminalId: "terminal-1",
         reportedAt: 100,
         receivedAt: 200,
+        runtimeStatusId: "runtime-status-1",
       },
     });
     expect(db.get).not.toHaveBeenCalled();
@@ -1441,6 +1445,9 @@ describe("terminal health summaries", () => {
     const readRepository = {
       getCommand: vi.fn().mockResolvedValue(null),
       listCommandsForTerminal: vi.fn().mockResolvedValue([]),
+      listRuntimeVerificationReadyCommands: vi.fn().mockResolvedValue({
+        commands: [],
+      }),
     } satisfies TerminalRecoveryCommandReadRepository;
     const writeRepository = {
       ...readRepository,

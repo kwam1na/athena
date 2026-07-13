@@ -12,6 +12,7 @@ vi.mock("../reporting/ingress", () => ({
 }));
 import {
   buildDailyCloseSnapshotWithCtx,
+  buildDailyCloseLifecycleGateWithCtx,
   completeDailyClose,
   completeDailyCloseForAutomationWithCtx,
   completeDailyCloseWithCtx,
@@ -19,6 +20,7 @@ import {
   getDailyCloseSnapshot,
   getDailyCloseOpeningContext,
   getDailyCloseOpeningContextWithCtx,
+  getDailyCloseLifecycleGate,
   listCompletedDailyCloseHistoryWithCtx,
   resolveDailyCloseCarryForward,
   resolveDailyCloseCarryForwardWithCtx,
@@ -470,6 +472,102 @@ describe("end-of-day review backend foundation", () => {
   afterEach(() => {
     reportingIngressMocks.appendReportingIngressWithCtx.mockClear();
     vi.restoreAllMocks();
+  });
+
+  it("reads only the current store-day close lifecycle for the POS gate", async () => {
+    const { db, queryLog } = createDb({
+      dailyClose: [
+        completedDailyCloseRow({
+          operatingDate: "2026-05-08",
+        }),
+      ],
+      store: [store],
+    });
+
+    const gate = await buildDailyCloseLifecycleGateWithCtx(
+      { db } as unknown as QueryCtx,
+      {
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(gate).toEqual({
+      existingClose: { lifecycleStatus: "active" },
+      operatingDate: "2026-05-08",
+      status: "completed",
+      storeId: "store-1",
+    });
+    expect(queryLog).toEqual([
+      expect.objectContaining({
+        index: "by_storeId_operatingDate_lifecycleStatus",
+        table: "dailyClose",
+      }),
+    ]);
+  });
+
+  it("treats an active reopened close as open without consulting superseded history", async () => {
+    const { db, queryLog } = createDb({
+      dailyClose: [
+        completedDailyCloseRow({
+          lifecycleStatus: "reopened",
+          operatingDate: "2026-05-08",
+          supersededByDailyCloseId: "daily-close-reopened",
+        }),
+        {
+          ...completedDailyCloseRow({
+            _id: "daily-close-reopened",
+            operatingDate: "2026-05-08",
+          }),
+          lifecycleStatus: "active",
+          reopenedFromDailyCloseId: "daily-close-1",
+          status: "open",
+        },
+      ],
+      store: [store],
+    });
+
+    const gate = await buildDailyCloseLifecycleGateWithCtx(
+      { db } as unknown as QueryCtx,
+      {
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(gate).toEqual({
+      existingClose: { lifecycleStatus: "reopened" },
+      operatingDate: "2026-05-08",
+      status: "ready",
+      storeId: "store-1",
+    });
+    expect(queryLog).toHaveLength(1);
+  });
+
+  it("preserves POS-only authorization on the narrow lifecycle query", async () => {
+    mockDailyCloseSnapshotAccess("pos_only");
+    const { db } = createDb({ store: [store] });
+
+    const gate = await getHandler(getDailyCloseLifecycleGate)(
+      { db } as unknown as QueryCtx,
+      {
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(gate).toEqual({
+      existingClose: null,
+      operatingDate: "2026-05-08",
+      status: "ready",
+      storeId: "store-1",
+    });
+    expect(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ allowedRoles: ["full_admin", "pos_only"] }),
+    );
   });
 
   it("keeps daily close command results aligned with exported return validators", () => {

@@ -1,4 +1,5 @@
 import { renderHook, waitFor } from "@testing-library/react";
+import { getFunctionName } from "convex/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type {
@@ -9,6 +10,7 @@ import type {
 import type { Id } from "~/convex/_generated/dataModel";
 import { api } from "~/convex/_generated/api";
 import {
+  __resetCatalogRefreshCoordinatorForTests,
   useConvexRegisterCatalog,
   useConvexRegisterCatalogState,
   useConvexRegisterCatalogAvailability,
@@ -109,10 +111,21 @@ describe("catalogGateway", () => {
     PosRegisterCatalogAvailabilityRowDto[] | undefined;
 
   beforeEach(() => {
+    __resetCatalogRefreshCoordinatorForTests();
     liveAvailabilityRows = undefined;
     fullAvailabilitySnapshotRows = undefined;
     convexMocks.query.mockReset();
-    convexMocks.query.mockResolvedValue([]);
+    convexMocks.query.mockImplementation((query) => {
+      if (
+        getFunctionName(query) ===
+        "pos/public/catalog:listRegisterCatalogAvailabilitySnapshot"
+      ) {
+        return fullAvailabilitySnapshotRows === undefined
+          ? new Promise(() => undefined)
+          : Promise.resolve(fullAvailabilitySnapshotRows);
+      }
+      return Promise.resolve([]);
+    });
     convexMocks.useConvex.mockReset();
     convexMocks.useConvex.mockReturnValue({ query: convexMocks.query });
     convexMocks.useMutation.mockReset();
@@ -297,6 +310,247 @@ describe("catalogGateway", () => {
         rows: refreshedRows,
       }),
     );
+  });
+
+  it("shares one metadata query and persistence across concurrent consumers for one store", async () => {
+    const refreshedRows = [buildRegisterCatalogRow({ sku: "DW-SHARED" })];
+    let resolveRows!: (rows: PosRegisterCatalogRowDto[]) => void;
+    convexMocks.query.mockReturnValue(
+      new Promise<PosRegisterCatalogRowDto[]>((resolve) => {
+        resolveRows = resolve;
+      }),
+    );
+
+    const first = renderHook(() =>
+      useConvexRegisterCatalogState({
+        refreshMetadataSnapshot: true,
+        storeId: "store-1" as Id<"store">,
+      }),
+    );
+    const second = renderHook(() =>
+      useConvexRegisterCatalogState({
+        refreshMetadataSnapshot: true,
+        storeId: "store-1" as Id<"store">,
+      }),
+    );
+
+    await waitFor(() => expect(convexMocks.query).toHaveBeenCalledTimes(1));
+    resolveRows(refreshedRows);
+
+    await waitFor(() => expect(first.result.current.status).toBe("ready"));
+    await waitFor(() => expect(second.result.current.status).toBe("ready"));
+    expect(catalogStoreMocks.writeRegisterCatalogSnapshot).toHaveBeenCalledTimes(1);
+  });
+
+  it("reuses a recently completed metadata refresh for a later consumer", async () => {
+    const refreshedRows = [buildRegisterCatalogRow({ sku: "DW-RECENT" })];
+    convexMocks.query.mockResolvedValue(refreshedRows);
+
+    const first = renderHook(() =>
+      useConvexRegisterCatalogState({
+        refreshMetadataSnapshot: true,
+        storeId: "store-1" as Id<"store">,
+      }),
+    );
+    await waitFor(() => expect(first.result.current.status).toBe("ready"));
+
+    const second = renderHook(() =>
+      useConvexRegisterCatalogState({
+        refreshMetadataSnapshot: true,
+        storeId: "store-1" as Id<"store">,
+      }),
+    );
+    await waitFor(() => expect(second.result.current.status).toBe("ready"));
+
+    expect(convexMocks.query).toHaveBeenCalledTimes(1);
+    expect(catalogStoreMocks.writeRegisterCatalogSnapshot).toHaveBeenCalledTimes(1);
+  });
+
+  it("isolates refresh ownership between stores", async () => {
+    convexMocks.query.mockResolvedValue([buildRegisterCatalogRow()]);
+
+    const first = renderHook(() =>
+      useConvexRegisterCatalogState({
+        refreshMetadataSnapshot: true,
+        storeId: "store-1" as Id<"store">,
+      }),
+    );
+    const second = renderHook(() =>
+      useConvexRegisterCatalogState({
+        refreshMetadataSnapshot: true,
+        storeId: "store-2" as Id<"store">,
+      }),
+    );
+
+    await waitFor(() => expect(first.result.current.status).toBe("ready"));
+    await waitFor(() => expect(second.result.current.status).toBe("ready"));
+    expect(convexMocks.query).toHaveBeenCalledTimes(2);
+    expect(
+      convexMocks.query.mock.calls.map(([, args]) => args.storeId).sort(),
+    ).toEqual(["store-1", "store-2"]);
+  });
+
+  it("clears failed metadata ownership so a later consumer can retry", async () => {
+    convexMocks.query
+      .mockRejectedValueOnce(new Error("network unavailable"))
+      .mockResolvedValueOnce([buildRegisterCatalogRow({ sku: "RETRY" })]);
+
+    const first = renderHook(() =>
+      useConvexRegisterCatalogState({
+        refreshMetadataSnapshot: true,
+        storeId: "store-1" as Id<"store">,
+      }),
+    );
+    await waitFor(() =>
+      expect(first.result.current.status).toBe("refresh-failed"),
+    );
+    first.unmount();
+
+    const retry = renderHook(() =>
+      useConvexRegisterCatalogState({
+        refreshMetadataSnapshot: true,
+        storeId: "store-1" as Id<"store">,
+      }),
+    );
+    await waitFor(() => expect(retry.result.current.status).toBe("ready"));
+    expect(convexMocks.query).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps metadata and full-availability refresh classes independent", async () => {
+    const metadataRows = [buildRegisterCatalogRow({ sku: "META" })];
+    fullAvailabilitySnapshotRows = [buildAvailabilityRow()];
+    convexMocks.query.mockImplementation((query) =>
+      getFunctionName(query) ===
+      "pos/public/catalog:listRegisterCatalogAvailabilitySnapshot"
+        ? Promise.resolve(fullAvailabilitySnapshotRows)
+        : Promise.resolve(metadataRows),
+    );
+
+    renderHook(() =>
+      useConvexRegisterCatalogState({
+        refreshMetadataSnapshot: true,
+        storeId: "store-1" as Id<"store">,
+      }),
+    );
+    renderHook(() =>
+      useConvexRegisterCatalogAvailabilityState({
+        refreshFullAvailabilitySnapshot: true,
+        productSkuIds: [],
+        storeId: "store-1" as Id<"store">,
+      }),
+    );
+
+    await waitFor(() => expect(convexMocks.query).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(catalogStoreMocks.writeRegisterCatalogSnapshot).toHaveBeenCalledTimes(1),
+    );
+    await waitFor(() =>
+      expect(
+        catalogStoreMocks.writeRegisterAvailabilitySnapshot,
+      ).toHaveBeenCalledTimes(1),
+    );
+  });
+
+  it("does not let an older explicit metadata refresh overwrite a newer generation", async () => {
+    const resolvers = new Map<string, (rows: PosRegisterCatalogRowDto[]) => void>();
+    convexMocks.query.mockImplementation(
+      () =>
+        new Promise<PosRegisterCatalogRowDto[]>((resolve) => {
+          resolvers.set(String(resolvers.size), resolve);
+        }),
+    );
+
+    const older = renderHook(
+      ({ refreshKey }) =>
+        useConvexRegisterCatalogState({
+          metadataRefreshKey: refreshKey,
+          refreshMetadataSnapshot: true,
+          storeId: "store-1" as Id<"store">,
+        }),
+      { initialProps: { refreshKey: "generation-1" } },
+    );
+    older.rerender({ refreshKey: "generation-2" });
+
+    await waitFor(() => expect(convexMocks.query).toHaveBeenCalledTimes(2));
+    resolvers.get("1")?.([buildRegisterCatalogRow({ sku: "NEW" })]);
+    await waitFor(() => expect(older.result.current.status).toBe("ready"));
+    resolvers.get("0")?.([buildRegisterCatalogRow({ sku: "OLD" })]);
+
+    await waitFor(() =>
+      expect(catalogStoreMocks.writeRegisterCatalogSnapshot).toHaveBeenCalledTimes(1),
+    );
+    expect(catalogStoreMocks.writeRegisterCatalogSnapshot).toHaveBeenCalledWith({
+      storeId: "store-1",
+      rows: [expect.objectContaining({ sku: "NEW" })],
+    });
+  });
+
+  it("settles a superseded consumer from the newer persisted generation", async () => {
+    const resolvers: Array<(rows: PosRegisterCatalogRowDto[]) => void> = [];
+    let persistedRows: PosRegisterCatalogRowDto[] | null = null;
+    convexMocks.query.mockImplementation(
+      () =>
+        new Promise<PosRegisterCatalogRowDto[]>((resolve) => {
+          resolvers.push(resolve);
+        }),
+    );
+    catalogStoreMocks.writeRegisterCatalogSnapshot.mockImplementation(
+      async (input: { rows: PosRegisterCatalogRowDto[]; storeId: string }) => {
+        persistedRows = input.rows;
+        return {
+          ok: true,
+          value: {
+            refreshedAt: 2_000,
+            rows: input.rows,
+            schemaVersion: 8,
+            storeId: input.storeId,
+          },
+        };
+      },
+    );
+    catalogStoreMocks.readRegisterCatalogSnapshot.mockImplementation(
+      async () => ({
+        ok: true,
+        value: persistedRows
+          ? {
+              refreshedAt: 2_000,
+              rows: persistedRows,
+              schemaVersion: 8,
+              storeId: "store-1",
+            }
+          : null,
+      }),
+    );
+
+    const older = renderHook(() =>
+      useConvexRegisterCatalogState({
+        metadataRefreshKey: "generation-1",
+        refreshMetadataSnapshot: true,
+        storeId: "store-1" as Id<"store">,
+      }),
+    );
+    const newer = renderHook(() =>
+      useConvexRegisterCatalogState({
+        metadataRefreshKey: "generation-2",
+        refreshMetadataSnapshot: true,
+        storeId: "store-1" as Id<"store">,
+      }),
+    );
+
+    await waitFor(() => expect(convexMocks.query).toHaveBeenCalledTimes(2));
+    resolvers[1]?.([buildRegisterCatalogRow({ sku: "NEW" })]);
+    await waitFor(() => expect(newer.result.current.status).toBe("ready"));
+    resolvers[0]?.([buildRegisterCatalogRow({ sku: "OLD" })]);
+
+    await waitFor(() =>
+      expect(older.result.current).toEqual({
+        refreshedAt: 2_000,
+        rows: [expect.objectContaining({ sku: "NEW" })],
+        source: "local",
+        status: "ready",
+      }),
+    );
+    expect(catalogStoreMocks.writeRegisterCatalogSnapshot).toHaveBeenCalledTimes(1);
   });
 
   it("exposes explicit register catalog metadata refresh state", async () => {

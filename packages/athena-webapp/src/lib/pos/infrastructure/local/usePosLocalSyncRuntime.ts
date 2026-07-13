@@ -80,10 +80,12 @@ import {
   getRuntimeCheckInNotReadyReason,
   getRuntimeStatusPublishSignature,
   RUNTIME_STATUS_TRANSIENT_SYNCING_PUBLISH_DELAY_MS,
+  startRuntimeStatusLeaderLease,
   shouldPublishRuntimeStatus,
   shouldDelayTransientSyncingRuntimeStatusPublish,
   startRuntimeStatusFreshnessHeartbeat,
   withRuntimeCheckInPublishDebug as withCheckInPublishDebug,
+  type RuntimeStatusLeaderLease,
 } from "./runtimeStatusPublisher";
 import {
   buildPosTerminalRuntimeCopyDiagnostics,
@@ -268,6 +270,8 @@ export function usePosLocalSyncRuntimeStatus(input: {
   const [manualRetryToken, setManualRetryToken] = useState(0);
   const [runtimeStatusObservationToken, setRuntimeStatusObservationToken] =
     useState(0);
+  const [runtimeStatusLeadershipToken, setRuntimeStatusLeadershipToken] =
+    useState(0);
   const [appUpdateCommandCorrelation, setAppUpdateCommandCorrelation] =
     useState<AppUpdateCommandCorrelation | null>(() =>
       readStoredAppUpdateCommandCorrelation(),
@@ -308,6 +312,13 @@ export function usePosLocalSyncRuntimeStatus(input: {
   const queuedRuntimeStatusSignatureRef = useRef<string | null>(null);
   const forceNextRuntimeStatusPublishRef = useRef(false);
   const runtimeStatusPublisherIdRef = useRef(createRuntimeStatusPublisherId());
+  const runtimeStatusLeaderLeaseRef = useRef<RuntimeStatusLeaderLease | null>(
+    null,
+  );
+  const forwardedRuntimeStatusRef =
+    useRef<PosTerminalRuntimeStatusPayload | null>(null);
+  const queuedRuntimeStatusRef =
+    useRef<PosTerminalRuntimeStatusPayload | null>(null);
   const runtimeStatusSyncingPublishReadyMaterialSignatureRef = useRef<
     string | null
   >(null);
@@ -1119,6 +1130,66 @@ export function usePosLocalSyncRuntimeStatus(input: {
   ]);
 
   useEffect(() => {
+    runtimeStatusLeaderLeaseRef.current?.stop();
+    runtimeStatusLeaderLeaseRef.current = null;
+    forwardedRuntimeStatusRef.current = null;
+    queuedRuntimeStatusRef.current = null;
+    if (
+      !storeId ||
+      !runtimeStatusTerminalId ||
+      !runtimeStatusSyncSecretHash ||
+      terminalRuntimeConfig?.heartbeatEnabled === false
+    ) {
+      return;
+    }
+
+    let active = true;
+    const lease = startRuntimeStatusLeaderLease(
+      {
+        onLeadershipChange: () => {
+          if (active) {
+            setRuntimeStatusLeadershipToken((current) => current + 1);
+          }
+        },
+        onMaterial: (_materialSignature, forwardedRuntimeStatus) => {
+          if (
+            active &&
+            forwardedRuntimeStatus &&
+            typeof forwardedRuntimeStatus === "object"
+          ) {
+            forwardedRuntimeStatusRef.current =
+              forwardedRuntimeStatus as PosTerminalRuntimeStatusPayload;
+            setRuntimeStatusObservationToken((current) => current + 1);
+          }
+        },
+        ownerId: runtimeStatusPublisherIdRef.current,
+        storeId,
+        terminalId: runtimeStatusTerminalId,
+      },
+      { storage: getRuntimeStatusPublishStorage() },
+    );
+    runtimeStatusLeaderLeaseRef.current = lease;
+    void lease.renew().then(() => {
+      if (active) {
+        setRuntimeStatusLeadershipToken((current) => current + 1);
+      }
+    });
+
+    return () => {
+      active = false;
+      if (runtimeStatusLeaderLeaseRef.current === lease) {
+        runtimeStatusLeaderLeaseRef.current = null;
+      }
+      lease.stop();
+    };
+  }, [
+    runtimeStatusSyncSecretHash,
+    runtimeStatusTerminalId,
+    storeId,
+    terminalRuntimeConfig?.heartbeatEnabled,
+  ]);
+
+  useEffect(() => {
     const notReadyReason = getRuntimeCheckInNotReadyReason({
       storeId,
       syncSecretHash: runtimeStatusSyncSecretHash,
@@ -1168,14 +1239,31 @@ export function usePosLocalSyncRuntimeStatus(input: {
       storeId: checkInStoreId,
       terminalId: checkInTerminalId,
     });
-    const signature = getRuntimeStatusPublishSignature({
-      observationToken: runtimeStatusObservationToken,
+    const leaderLease = runtimeStatusLeaderLeaseRef.current;
+    const localMaterialSignature = getRuntimeStatusPublishMaterialSignature({
       runtimeStatus,
       storeId: checkInStoreId,
       terminalId: checkInTerminalId,
     });
+    if (!leaderLease?.isLeader()) {
+      leaderLease?.announceMaterial(localMaterialSignature, runtimeStatus);
+      return;
+    }
+    const forwardedRuntimeStatus = forwardedRuntimeStatusRef.current;
+    const queuedRuntimeStatus = queuedRuntimeStatusRef.current;
+    const hasForwardedRuntimeStatus = forwardedRuntimeStatus !== null;
+    const hasQueuedForwardedRuntimeStatus =
+      !hasForwardedRuntimeStatus && queuedRuntimeStatus !== null;
+    const runtimeStatusToPublish =
+      forwardedRuntimeStatus ?? queuedRuntimeStatus ?? runtimeStatus;
+    const signature = getRuntimeStatusPublishSignature({
+      observationToken: runtimeStatusObservationToken,
+      runtimeStatus: runtimeStatusToPublish,
+      storeId: checkInStoreId,
+      terminalId: checkInTerminalId,
+    });
     const materialSignature = getRuntimeStatusPublishMaterialSignature({
-      runtimeStatus,
+      runtimeStatus: runtimeStatusToPublish,
       storeId: checkInStoreId,
       terminalId: checkInTerminalId,
     });
@@ -1188,7 +1276,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
         materialSignature,
         readyMaterialSignature:
           runtimeStatusSyncingPublishReadyMaterialSignatureRef.current,
-        syncStatus: runtimeStatus.sync.status,
+        syncStatus: runtimeStatusToPublish.sync.status,
       })
     ) {
       scheduleRuntimeStatusSyncingPublishDelay({
@@ -1203,7 +1291,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
       });
       return;
     }
-    if (runtimeStatus.sync.status !== "syncing") {
+    if (runtimeStatusToPublish.sync.status !== "syncing") {
       clearRuntimeStatusSyncingPublishDelay({
         readyMaterialSignatureRef:
           runtimeStatusSyncingPublishReadyMaterialSignatureRef,
@@ -1223,6 +1311,15 @@ export function usePosLocalSyncRuntimeStatus(input: {
         return;
       }
       publishState.currentMaterialSignature = materialSignature;
+      if (
+        hasForwardedRuntimeStatus ||
+        hasQueuedForwardedRuntimeStatus
+      ) {
+        queuedRuntimeStatusRef.current = runtimeStatusToPublish;
+      }
+      if (hasForwardedRuntimeStatus) {
+        forwardedRuntimeStatusRef.current = null;
+      }
       queuedRuntimeStatusSignatureRef.current = signature;
       publishState.queuedPublisherId = publisherId;
       publishState.queuedMaterialSignature = materialSignature;
@@ -1244,6 +1341,9 @@ export function usePosLocalSyncRuntimeStatus(input: {
       return;
     }
     const attemptedAt = Date.now();
+    if (!leaderLease.isLeader(attemptedAt)) {
+      return;
+    }
     if (
       !claimRuntimeStatusPublishForCycle({
         allowRecentPublish: forcePublish,
@@ -1254,15 +1354,13 @@ export function usePosLocalSyncRuntimeStatus(input: {
         terminalId: checkInTerminalId,
       })
     ) {
-      forceNextRuntimeStatusPublishRef.current = false;
-      publishState.forceNextPublish = false;
-      lastRuntimeStatusSignatureRef.current = signature;
-      lastRuntimeStatusMaterialSignatureRef.current = materialSignature;
-      lastRuntimeStatusPublishedAtRef.current = attemptedAt;
-      publishState.lastSignature = signature;
-      publishState.lastMaterialSignature = materialSignature;
-      publishState.lastPublishedAt = attemptedAt;
       return;
+    }
+    if (hasForwardedRuntimeStatus) {
+      forwardedRuntimeStatusRef.current = null;
+      queuedRuntimeStatusRef.current = null;
+    } else if (hasQueuedForwardedRuntimeStatus) {
+      queuedRuntimeStatusRef.current = null;
     }
     forceNextRuntimeStatusPublishRef.current = false;
     publishState.forceNextPublish = false;
@@ -1295,7 +1393,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
         storeId: checkInStoreId as Id<"store">,
         terminalId: checkInTerminalId as Id<"posTerminal">,
         syncSecretHash: checkInSyncSecretHash,
-        status: toReportablePosTerminalRuntimeStatus(runtimeStatus),
+        status: toReportablePosTerminalRuntimeStatus(runtimeStatusToPublish),
       }),
     )
       .then(async (result) => {
@@ -1505,6 +1603,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
     appUpdateCommandCorrelation,
     runtimeStatus,
     runtimeStatusObservationToken,
+    runtimeStatusLeadershipToken,
     runtimeReadiness.terminalIntegrity,
     runtimeReadiness.terminalSeed,
     terminalRuntimeConfig,

@@ -194,6 +194,7 @@ vi.mock("~/convex/_generated/api", () => ({
   api: {
     operations: {
       dailyClose: {
+        getDailyCloseLifecycleGate: "getDailyCloseLifecycleGate",
         getDailyCloseSnapshot: "getDailyCloseSnapshot",
       },
       dailyOpening: {
@@ -274,7 +275,7 @@ describe("POSRegisterOpeningGuard", () => {
         return { status: "started" };
       }
 
-      if (queryName === "getDailyCloseSnapshot") {
+      if (queryName === "getDailyCloseLifecycleGate") {
         return { status: "ready" };
       }
 
@@ -302,7 +303,7 @@ describe("POSRegisterOpeningGuard", () => {
       }),
     );
     expect(useQueryMock).toHaveBeenCalledWith(
-      "getDailyCloseSnapshot",
+      "getDailyCloseLifecycleGate",
       expect.objectContaining({
         operatingDate: "2026-05-09",
         storeId: "store-1",
@@ -323,7 +324,7 @@ describe("POSRegisterOpeningGuard", () => {
         return { status: "started" };
       }
 
-      if (queryName === "getDailyCloseSnapshot") {
+      if (queryName === "getDailyCloseLifecycleGate") {
         return undefined;
       }
 
@@ -395,7 +396,7 @@ describe("POSRegisterOpeningGuard", () => {
         return { status: "ready" };
       }
 
-      if (queryName === "getDailyCloseSnapshot") {
+      if (queryName === "getDailyCloseLifecycleGate") {
         return { status: "ready" };
       }
 
@@ -504,7 +505,7 @@ describe("POSRegisterOpeningGuard", () => {
         return { status: "ready" };
       }
 
-      if (queryName === "getDailyCloseSnapshot") {
+      if (queryName === "getDailyCloseLifecycleGate") {
         return { status: "ready" };
       }
 
@@ -558,7 +559,7 @@ describe("POSRegisterOpeningGuard", () => {
         return { status: "needs_attention" };
       }
 
-      if (queryName === "getDailyCloseSnapshot") {
+      if (queryName === "getDailyCloseLifecycleGate") {
         return { status: "ready" };
       }
 
@@ -627,7 +628,7 @@ describe("POSRegisterOpeningGuard", () => {
         return { status: "started" };
       }
 
-      if (queryName === "getDailyCloseSnapshot") {
+      if (queryName === "getDailyCloseLifecycleGate") {
         return { status: "completed" };
       }
 
@@ -665,7 +666,7 @@ describe("POSRegisterOpeningGuard", () => {
         return { status: "started" };
       }
 
-      if (queryName === "getDailyCloseSnapshot") {
+      if (queryName === "getDailyCloseLifecycleGate") {
         return {
           existingClose: { lifecycleStatus: "reopened" },
           status: "completed",
@@ -692,7 +693,7 @@ describe("POSRegisterOpeningGuard", () => {
 
   it("renders the register from local readiness before the opening snapshot resolves", () => {
     useQueryMock.mockImplementation((queryName: string) => {
-      if (queryName === "getDailyCloseSnapshot") {
+      if (queryName === "getDailyCloseLifecycleGate") {
         return { status: "ready" };
       }
 
@@ -779,7 +780,7 @@ describe("POSRegisterOpeningGuard", () => {
       }),
     );
     expect(useQueryMock).toHaveBeenCalledWith(
-      "getDailyCloseSnapshot",
+      "getDailyCloseLifecycleGate",
       expect.objectContaining({
         operatingDate: "2026-05-09",
         storeId: "store-from-local-seed",

@@ -29,6 +29,8 @@ const mockedApi = vi.hoisted(() => ({
   getDailyOperationsTimelinePreviewSnapshot:
     "getDailyOperationsTimelinePreviewSnapshot",
   getDailyOperationsTimelineSnapshot: "getDailyOperationsTimelineSnapshot",
+  getDailyOperationsWeekAnalyticsSnapshot:
+    "getDailyOperationsWeekAnalyticsSnapshot",
 }));
 
 vi.mock("@tanstack/react-router", () => ({
@@ -1064,7 +1066,7 @@ describe("DailyOperationsViewContent", () => {
     );
     expect(screen.getByText("GH₵3,491")).toBeInTheDocument();
     expect(screen.getByText("2 cash transactions")).toBeInTheDocument();
-    expect(screen.getByText("Mobile Money")).toBeInTheDocument();
+    expect(screen.getAllByText("Mobile Money").length).toBeGreaterThan(0);
     expect(
       screen.getByRole("link", { name: "Open Mobile Money transactions" }),
     ).toHaveAttribute(
@@ -2669,6 +2671,26 @@ describe("DailyOperationsViewContent", () => {
     ).toBeInTheDocument();
   });
 
+  it("keeps bounded week metrics visible after selected-day detail hydrates", () => {
+    renderContent(
+      {
+        ...operatingSnapshot,
+        weekMetrics: [],
+      },
+      {
+        cachedWeekAnalyticsFetchedAt: Date.now(),
+        cachedWeekMetrics: weekMetrics,
+        hasDetailSnapshot: true,
+      },
+    );
+
+    expect(screen.getByText("Week sales")).toBeInTheDocument();
+    expect(screen.getByText("GH₵17,461")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "View May 7, 2026 operations" }),
+    ).toBeInTheDocument();
+  });
+
   it("links pending checkout review events to both pending and approved products inline", () => {
     renderContent({
       ...operatingSnapshot,
@@ -2960,6 +2982,10 @@ describe("DailyOperationsView", () => {
     (
       mockedApi as { getDailyOperationsTimelineSnapshot?: unknown }
     ).getDailyOperationsTimelineSnapshot = "getDailyOperationsTimelineSnapshot";
+    (
+      mockedApi as { getDailyOperationsWeekAnalyticsSnapshot?: unknown }
+    ).getDailyOperationsWeekAnalyticsSnapshot =
+      "getDailyOperationsWeekAnalyticsSnapshot";
     window.scrollTo = vi.fn();
     mockedHooks.useProtectedAdminPageState.mockReturnValue({
       activeStore: { _id: "store-1", currency: "GHS" },
@@ -3059,11 +3085,11 @@ describe("DailyOperationsView", () => {
     expect(screen.queryByText("Athena automation")).not.toBeInTheDocument();
   });
 
-  it("hydrates analytics detail on initial load for an uncached week", () => {
+  it("loads bounded week analytics while keeping selected-day detail lazy", () => {
     render(<DailyOperationsView />);
 
     expect(mockedHooks.useQuery).toHaveBeenCalledWith(
-      mockedApi.getDailyOperationsDetailSnapshot,
+      mockedApi.getDailyOperationsWeekAnalyticsSnapshot,
       expect.objectContaining({
         operatingTimezoneOffsetMinutes: expect.any(Number),
         storeId: "store-1",
@@ -3071,12 +3097,16 @@ describe("DailyOperationsView", () => {
         weekEndOperatingDate: getCurrentSaturdayWeekEndOperatingDate(),
       }),
     );
+    expect(mockedHooks.useQuery).toHaveBeenCalledWith(
+      mockedApi.getDailyOperationsDetailSnapshot,
+      "skip",
+    );
   });
 
-  it("mirrors the analytics layout before detail is loaded", () => {
+  it("mirrors the analytics layout before week analytics are loaded", () => {
     mockedHooks.useQuery.mockImplementation((query, args) => {
       if (args === "skip") return undefined;
-      if (query === mockedApi.getDailyOperationsDetailSnapshot) {
+      if (query === mockedApi.getDailyOperationsWeekAnalyticsSnapshot) {
         return undefined;
       }
       return operatingSnapshot;
@@ -3087,7 +3117,7 @@ describe("DailyOperationsView", () => {
       screen.getByRole("heading", { name: "Week at a glance" }),
     ).toBeInTheDocument();
     expect(screen.getByText("Week sales")).toBeInTheDocument();
-    expect(screen.getAllByText("Loading analytics").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Load analytics").length).toBeGreaterThan(0);
     expect(
       screen.getByRole("button", {
         name: "Load analytics for week at a glance",
@@ -3154,11 +3184,11 @@ describe("DailyOperationsView", () => {
     ).toBeInTheDocument();
   });
 
-  it("uses the explicit companion query for analytics hydration", () => {
+  it("uses the week companion query for automatic analytics hydration", () => {
     render(<DailyOperationsView />);
 
     expect(mockedHooks.useQuery).toHaveBeenCalledWith(
-      mockedApi.getDailyOperationsDetailSnapshot,
+      mockedApi.getDailyOperationsWeekAnalyticsSnapshot,
       expect.objectContaining({
         operatingTimezoneOffsetMinutes: expect.any(Number),
         storeId: "store-1",
@@ -3213,7 +3243,10 @@ describe("DailyOperationsView", () => {
   it("queries analytics detail when the empty analytics shell is clicked", () => {
     mockedHooks.useQuery.mockImplementation((query, args) => {
       if (args === "skip") return undefined;
-      if (query === mockedApi.getDailyOperationsDetailSnapshot) {
+      if (
+        query === mockedApi.getDailyOperationsDetailSnapshot ||
+        query === mockedApi.getDailyOperationsWeekAnalyticsSnapshot
+      ) {
         return undefined;
       }
       return operatingSnapshot;
@@ -3237,7 +3270,7 @@ describe("DailyOperationsView", () => {
     );
   });
 
-  it("queries selected-day store pulse detail on mount when auto hydration is enabled", () => {
+  it("keeps selected-day store pulse detail lazy on mount", () => {
     mockedHooks.useQuery.mockImplementation((query, args) => {
       if (args === "skip") return undefined;
       if (query === mockedApi.getDailyOperationsStorePulseSnapshot) {
@@ -3249,12 +3282,7 @@ describe("DailyOperationsView", () => {
 
     expect(mockedHooks.useQuery).toHaveBeenCalledWith(
       mockedApi.getDailyOperationsStorePulseSnapshot,
-      expect.objectContaining({
-        operatingTimezoneOffsetMinutes: expect.any(Number),
-        storeId: "store-1",
-        storePulseWindow: "today",
-        weekEndOperatingDate: getCurrentSaturdayWeekEndOperatingDate(),
-      }),
+      "skip",
     );
   });
 
@@ -3308,12 +3336,17 @@ describe("DailyOperationsView", () => {
     );
 
     shouldReturnPulseDetail = true;
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Load analytics for Top items",
+      }),
+    );
     view.rerender(<DailyOperationsView />);
 
     expect(
       await screen.findByText("Hydrated Selected Item"),
     ).toBeInTheDocument();
-    expect(screen.getByText("Mobile Money")).toBeInTheDocument();
+    expect(screen.getAllByText("Mobile Money").length).toBeGreaterThan(0);
     expect(screen.getByTestId("store-pulse-chart")).toHaveAttribute(
       "data-display-labels",
       "Sun, May 3|Mon, May 4|Tue, May 5|Wed, May 6|Thu, May 7|Fri, May 8",
@@ -3605,10 +3638,7 @@ describe("DailyOperationsView", () => {
     );
     expect(mockedHooks.useQuery).toHaveBeenCalledWith(
       mockedApi.getDailyOperationsDetailSnapshot,
-      expect.objectContaining({
-        operatingTimezoneOffsetMinutes: expect.any(Number),
-        storeId: "store-1",
-      }),
+      "skip",
     );
   });
 
@@ -3733,13 +3763,14 @@ describe("DailyOperationsView", () => {
     expect(screen.getByText(/Data refreshed at /)).toBeInTheDocument();
     expect(mockedHooks.useQuery).toHaveBeenCalledWith(
       mockedApi.getDailyOperationsSnapshot,
-      "skip",
-    );
-    expect(mockedHooks.useQuery).not.toHaveBeenCalledWith(
-      mockedApi.getDailyOperationsSnapshot,
       expect.objectContaining({
         operatingDate: "2026-05-07",
+        storeId: "store-1",
       }),
+    );
+    expect(mockedHooks.useQuery).toHaveBeenCalledWith(
+      mockedApi.getDailyOperationsWeekAnalyticsSnapshot,
+      "skip",
     );
     expect(
       screen.getByText((_, node) => node?.textContent === "GH₵17,461"),
@@ -3826,11 +3857,11 @@ describe("DailyOperationsView", () => {
     );
   });
 
-  it("hydrates analytics detail again after navigating to an uncached week", () => {
+  it("loads week analytics again after navigating to an uncached week", () => {
     const view = render(<DailyOperationsView />);
 
     expect(mockedHooks.useQuery).toHaveBeenCalledWith(
-      mockedApi.getDailyOperationsDetailSnapshot,
+      mockedApi.getDailyOperationsWeekAnalyticsSnapshot,
       expect.objectContaining({
         operatingDate: expect.any(String),
         storeId: "store-1",
@@ -3853,11 +3884,15 @@ describe("DailyOperationsView", () => {
       }),
     );
     expect(mockedHooks.useQuery).toHaveBeenCalledWith(
-      mockedApi.getDailyOperationsDetailSnapshot,
+      mockedApi.getDailyOperationsWeekAnalyticsSnapshot,
       expect.objectContaining({
         operatingDate: "2026-05-07",
         storeId: "store-1",
       }),
+    );
+    expect(mockedHooks.useQuery).toHaveBeenCalledWith(
+      mockedApi.getDailyOperationsDetailSnapshot,
+      "skip",
     );
   });
 

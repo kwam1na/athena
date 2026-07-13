@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Convex I/O Containment Delivery Plan</title>
+  <style>
+    :root { color-scheme: dark; --bg:#11130f; --panel:#1a1d17; --ink:#f0f2e9; --muted:#abb3a2; --line:#343b30; --accent:#b7e36a; --warn:#f2c66d; --blue:#83c7ef; }
+    * { box-sizing: border-box; }
+    body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.55 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    main { width:min(1120px,calc(100% - 32px)); margin:32px auto 64px; }
+    header,section { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:24px; margin:0 0 16px; }
+    h1 { margin:0 0 10px; font-size:clamp(28px,5vw,48px); line-height:1.05; letter-spacing:-.035em; }
+    h2 { margin:0 0 14px; font-size:22px; } h3 { margin:0 0 8px; font-size:16px; }
+    p { margin:0 0 12px; } p:last-child { margin-bottom:0; }
+    a { color:var(--accent); } code { color:var(--blue); }
+    .eyebrow,.meta { color:var(--muted); text-transform:uppercase; letter-spacing:.1em; font-size:12px; }
+    .lede { max-width:850px; font-size:19px; color:#dfe6d5; }
+    .grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
+    .two { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .card { border:1px solid var(--line); border-radius:10px; padding:16px; background:#151812; }
+    .metric { color:var(--accent); font-size:28px; font-weight:750; letter-spacing:-.03em; }
+    .warn { color:var(--warn); }
+    ol,ul { margin:8px 0 0; padding-left:20px; } li { margin:6px 0; }
+    nav a { display:inline-block; margin:4px 14px 4px 0; }
+    table { width:100%; border-collapse:collapse; }
+    th,td { text-align:left; vertical-align:top; border-bottom:1px solid var(--line); padding:10px 8px; }
+    th { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.08em; }
+    .phase { border-left:3px solid var(--accent); padding-left:14px; }
+    footer { color:var(--muted); text-align:center; padding:12px; }
+    @media (max-width:760px) { .grid,.two { grid-template-columns:1fr; } header,section { padding:18px; } table { display:block; overflow-x:auto; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">Fix · Active delivery plan · 13 July 2026</div>
+    <h1>Contain Convex database I/O before the billing limit</h1>
+    <p class="lede">Remove accidental read amplification, measure each family at fixed checkpoints, and preserve the command, offline, authorization, and reporting boundaries operators rely on.</p>
+    <p class="meta">Source of truth: <a href="2026-07-13-001-fix-convex-io-containment-plan.md">Markdown plan</a></p>
+  </header>
+
+  <section>
+    <nav aria-label="Plan contents">
+      <a href="#case">Case</a><a href="#scope">Scope</a><a href="#units">Delivery units</a><a href="#observation">Checkpoints</a><a href="#rollout">Rollout</a><a href="#followups">Structural follow-ups</a><a href="#proof">Proof</a>
+    </nav>
+  </section>
+
+  <section id="case">
+    <h2>The case for containment</h2>
+    <div class="grid">
+      <div class="card"><div class="metric warn">29.4 / 50 GB</div><p>Database I/O already consumed while calls and compute remain comfortable.</p></div>
+      <div class="card"><div class="metric">Stricter gate</div><p>Require both ≥60% recurring-rate reduction and the dated remaining-budget GB/hour ceiling.</p></div>
+      <div class="card"><div class="metric">24h + 72h</div><p>Acceptance windows, with a forecast below 45 GB for billing-period headroom.</p></div>
+    </div>
+    <p style="margin-top:16px">The measured pattern is broad read sets multiplied by global subscriptions, eager companion queries, heartbeat work, duplicate refreshes, and overlapping Dev maintenance—not an organic surge in business volume.</p>
+  </section>
+
+  <section id="scope">
+    <h2>Containment boundary</h2>
+    <p><strong>Execution correction:</strong> the Dev backfill was already complete and no further heavy maintenance is scheduled in this billing window. U8 is deferred; this delivery implements U1–U7 and credits no maintenance savings.</p>
+    <div class="grid two">
+      <div class="card"><h3>Change now</h3><ul><li>Shell badge source</li><li>Daily Operations day/week read split</li><li>POS close readiness DTO</li><li>Selective runtime verification and publisher ownership</li><li>Bounded homepage hydration</li><li>Store-keyed catalog refresh ownership</li></ul></div>
+      <div class="card"><h3>Keep load-bearing</h3><ul><li>Server-authoritative checkout and stock validation</li><li>Terminal health freshness</li><li>Daily Close lifecycle authority</li><li>One-shot POS snapshot reads</li><li>Cookie and guest bootstrap behavior</li><li>Reporting preview, manifest, reconcile, and activation gates</li></ul></div>
+    </div>
+  </section>
+
+  <section id="units">
+    <h2>Seven current delivery units and one deferred safeguard</h2>
+    <table>
+      <thead><tr><th>Unit</th><th>Change</th><th>Expected containment signal</th></tr></thead>
+      <tbody>
+        <tr><td>U1</td><td>Use trustworthy <code>catalogSummary</code> for the authenticated shell badge.</td><td>No sidebar-attributable <code>products.getAll</code>; ≥80% reduction in broad product reads during navigation.</td></tr>
+        <tr><td>U2</td><td>Split selected-day detail from bounded week-only Daily Operations analytics.</td><td>No route mount builds seven command-grade snapshots; ≥70% Daily Operations read-byte reduction.</td></tr>
+        <tr><td>U3</td><td>Replace the full Daily Close POS gate subscription with a lifecycle-compatible small DTO.</td><td>Identical open/reopen/loading behavior with a sharply smaller document set.</td></tr>
+        <tr><td>U4</td><td>Query only recovery commands awaiting runtime verification via the existing index.</td><td>No scan of completed-history windows on accepted heartbeats.</td></tr>
+        <tr><td>U5</td><td>Share material classification; forward follower state and serialize store-terminal lease transitions with Web Locks.</td><td>One steady-state publisher where supported; explicit best-effort fallback retains server no-op/side-effect safety.</td></tr>
+        <tr><td>U6</td><td>Add store-scoped homepage indexes, bucket reusable merchandising work, and apply exact request-time banner validity.</td><td>≥70% cold-read-byte reduction with exact expiry, public payload, and ranking parity.</td></tr>
+        <tr><td>U7</td><td>Coalesce in-flight and recent successful POS catalog refreshes per store.</td><td>One server read per concurrent refresh generation, with failure-safe retry.</td></tr>
+        <tr><td>U8 — deferred</td><td>Add a singleton maintenance reservation only if another heavy shared-Dev lineage is scheduled.</td><td>Future structural safeguard; no savings credited in this delivery.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="observation">
+    <h2>Point-in-time operator checkpoints</h2>
+    <div class="grid two">
+      <div class="card"><h3>Checkpoint evidence</h3><ul><li>Capture Database I/O and Function Calls breakdowns for identical ranges</li><li>Derive average bytes/call and prove minimum exposure</li><li>Use Insights and bounded recent logs only for diagnosis</li><li>Keep document/distribution boundaries in high-cardinality tests</li><li>No long-running collector or continuous log process</li></ul></div>
+      <div class="card"><h3>Operator report</h3><ul><li>One signed Markdown summary per baseline, 24-hour, and 72-hour window</li><li>Rate, forecast, function families, adoption, and correctness gates</li><li>Missing comparable evidence is Hold, never an inferred pass</li><li>Runbook and template under <code>docs/operations</code>; no app telemetry surface</li></ul></div>
+    </div>
+  </section>
+
+  <section id="rollout">
+    <h2>Combined deployment, measured by family</h2>
+    <div class="grid">
+      <div class="card phase"><h3>Deploy</h3><p>Ship reviewed U1–U7 Convex and Athena surfaces together. Record release SHA/build and one bounded Insights diagnostic.</p></div>
+      <div class="card phase"><h3>24-hour checkpoint</h3><p>Evaluate shell/Operations, POS/runtime, and homepage/catalog independently with matching dashboard ranges. Use M Supplies only as a single-terminal longitudinal Prod control.</p></div>
+      <div class="card phase"><h3>72-hour checkpoint</h3><p>Repeat matching windows across normal traffic. Only this signed checkpoint may declare the overall trajectory on track.</p></div>
+    </div>
+    <p style="margin-top:16px">There are no selective family flags or sequential progression gates. Missing baseline, exposure, or target-build evidence is Hold. Any correctness stop triggers whole-surface rollback to the prior functions/client; compatible additive indexes may remain. V26-1047/U8 is deferred and earns no savings credit.</p>
+  </section>
+
+  <section id="followups">
+    <h2>Future structural fixes, explicitly deferred</h2>
+    <div class="grid two">
+      <div class="card"><ul><li>Materialized Daily Operations day/week/store-day digests</li><li>Search-first product digests retiring remaining <code>getAll</code> consumers</li><li>Catalog revision documents and compact availability projections</li><li>Materialized public homepage payload</li></ul></div>
+      <div class="card"><ul><li>Terminal telemetry/heartbeat document split if runtime target remains unmet</li><li>Queue, cash, stock, and inventory-unit digests driven by measured evidence</li><li>Byte-aware maintenance batches plus a queued scheduler</li><li>Periodic usage-snapshot automation if a stable low-overhead export becomes available</li></ul></div>
+    </div>
+  </section>
+
+  <section id="proof">
+    <h2>Acceptance evidence</h2>
+    <ul>
+      <li>Comparable maintenance-free baseline and checkpoint windows, separated by Dev and Prod; the incomplete July 13 baseline is explicitly Hold.</li>
+      <li>Per-function call count, bytes, documents, cache behavior, and caller adoption.</li>
+      <li>High-cardinality fixtures plus focused Vitest contracts for authorization, store switching, expiry, takeover, and failure recovery.</li>
+      <li>Use a caller-attributed maintenance-free recurring GB/hour ledger. Historical maintenance and deferred U8 are never credited.</li>
+      <li>If measured recurring savings remain short, select one evidence-backed structural follow-up under a fresh plan; do not broaden this release or credit U8.</li>
+      <li>After every gate, enforce <code>(45 GB - cumulative billed GB) / remaining billing-period hours</code> and a ≥60% recurring-rate reduction, whichever is stricter.</li>
+      <li>Billing forecast below 45 GB after both 24-hour and 72-hour observations.</li>
+      <li>Every baseline/checkpoint decision has a CLI-backed operator report; missing billing, exposure, adoption, maintenance, or correctness evidence cannot pass.</li>
+      <li>Whole-surface rollback owner and trigger recorded for every checkpoint.</li>
+    </ul>
+  </section>
+
+  <footer>Review artifact only. The Markdown plan is the implementation source of truth.</footer>
+</main>
+</body>
+</html>

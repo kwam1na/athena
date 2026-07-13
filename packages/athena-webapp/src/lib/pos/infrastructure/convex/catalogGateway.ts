@@ -1,6 +1,6 @@
 import { useConvex, useMutation, useQuery } from "convex/react";
 import type { FunctionReference } from "convex/server";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import type {
   PosBarcodeLookupInput,
@@ -14,6 +14,7 @@ import type {
   PosServiceCatalogRowDto,
 } from "@/lib/pos/application/dto";
 import type { PosCatalogReader } from "@/lib/pos/application/ports";
+import type { PosLocalRegisterCatalogSnapshot } from "@/lib/pos/application/posLocalStoreTypes";
 import { getDefaultPosLocalStore } from "@/lib/pos/infrastructure/local/posLocalStorageRuntime";
 import {
   type RegisterAvailabilitySnapshotState,
@@ -30,7 +31,126 @@ import { isPosCatalogVisible } from "~/shared/posCatalogVisibility";
 
 const REGISTER_CATALOG_AVAILABILITY_LIMIT = 50;
 const REGISTER_AVAILABILITY_SNAPSHOT_WRITE_RETRY_DELAY_MS = 250;
+const REGISTER_CATALOG_REFRESH_REUSE_WINDOW_MS = 5_000;
 const LOCAL_PENDING_SKU_ID_PREFIX = "local-pending-sku-";
+
+type CatalogRefreshClass = "full-availability" | "metadata";
+
+type CatalogRefreshEntry = {
+  generation: number;
+  inFlight?: {
+    refreshKey: string;
+    promise: Promise<CatalogRefreshResult<unknown>>;
+  };
+  lastSuccess?: {
+    completedAt: number;
+    refreshKey: string;
+    value: unknown;
+  };
+  persistenceTail: Promise<void>;
+};
+
+type CatalogRefreshResult<Value> =
+  | { status: "completed"; value: Value }
+  | { status: "superseded" };
+
+const catalogRefreshEntries = new Map<string, CatalogRefreshEntry>();
+
+export function __resetCatalogRefreshCoordinatorForTests() {
+  catalogRefreshEntries.clear();
+}
+
+function catalogRefreshEntryKey(
+  storeId: string,
+  refreshClass: CatalogRefreshClass,
+) {
+  return `${refreshClass}:${storeId}`;
+}
+
+function coordinateCatalogRefresh<Rows, Persisted>({
+  storeId,
+  refreshClass,
+  refreshKey,
+  load,
+  persist,
+}: {
+  storeId: string;
+  refreshClass: CatalogRefreshClass;
+  refreshKey: string;
+  load: () => Promise<Rows>;
+  persist: (rows: Rows) => Promise<Persisted>;
+}): Promise<CatalogRefreshResult<Persisted>> {
+  const entryKey = catalogRefreshEntryKey(storeId, refreshClass);
+  const entry = catalogRefreshEntries.get(entryKey) ?? {
+    generation: 0,
+    persistenceTail: Promise.resolve(),
+  };
+  catalogRefreshEntries.set(entryKey, entry);
+
+  if (
+    entry.lastSuccess?.refreshKey === refreshKey &&
+    Date.now() - entry.lastSuccess.completedAt <=
+      REGISTER_CATALOG_REFRESH_REUSE_WINDOW_MS
+  ) {
+    return Promise.resolve({
+      status: "completed",
+      value: entry.lastSuccess.value as Persisted,
+    });
+  }
+
+  if (entry.inFlight?.refreshKey === refreshKey) {
+    return entry.inFlight.promise as Promise<CatalogRefreshResult<Persisted>>;
+  }
+
+  const generation = entry.generation + 1;
+  entry.generation = generation;
+  const promise = (async (): Promise<CatalogRefreshResult<Persisted>> => {
+    const rows = await load();
+    let persisted: Persisted | undefined;
+    let persistenceError: unknown;
+
+    const persistence = entry.persistenceTail.then(async () => {
+      if (entry.generation !== generation) return;
+      try {
+        persisted = await persist(rows);
+      } catch (error) {
+        persistenceError = error;
+      }
+    });
+    entry.persistenceTail = persistence.then(
+      () => undefined,
+      () => undefined,
+    );
+    await persistence;
+
+    if (entry.generation !== generation) {
+      return { status: "superseded" };
+    }
+    if (persistenceError !== undefined) throw persistenceError;
+    if (persisted === undefined) {
+      throw new Error("Catalog refresh persistence returned no result.");
+    }
+
+    entry.lastSuccess = {
+      completedAt: Date.now(),
+      refreshKey,
+      value: persisted,
+    };
+    return { status: "completed", value: persisted };
+  })();
+
+  entry.inFlight = {
+    refreshKey,
+    promise: promise as Promise<CatalogRefreshResult<unknown>>,
+  };
+  void promise.finally(() => {
+    if (entry.inFlight?.promise === promise) {
+      entry.inFlight = undefined;
+    }
+  }).catch(() => undefined);
+
+  return promise;
+}
 
 type RegisterServiceCatalogSnapshotQuery = FunctionReference<
   "query",
@@ -161,18 +281,6 @@ function mapProductByIdResult(
   }));
 }
 
-function signatureForAvailabilityRows(
-  storeId: string,
-  rows: readonly PosRegisterCatalogAvailabilityRowDto[],
-) {
-  return `${storeId}|${rows
-    .map(
-      (row) =>
-        `${String(row.productSkuId)}:${row.quantityAvailable}:${row.inStock ? 1 : 0}:${row.availabilityPolicy}`,
-    )
-    .join("|")}`;
-}
-
 export function useConvexRegisterCatalog(
   input: PosRegisterCatalogInput,
 ): PosRegisterCatalogRowDto[] | undefined {
@@ -185,7 +293,7 @@ export function useConvexRegisterCatalogState(
   input: PosRegisterCatalogInput,
 ): RegisterCatalogMetadataGatewayState {
   const convex = useConvex();
-  const refreshKey = input.metadataRefreshKey ?? "";
+  const refreshKey = String(input.metadataRefreshKey ?? "");
   const shouldRefresh = Boolean(input.refreshMetadataSnapshot);
   const storeId = input.storeId;
   const [state, setState] = useState<RegisterCatalogMetadataGatewayState>(() =>
@@ -303,37 +411,65 @@ export function useConvexRegisterCatalogState(
 
     void (async () => {
       try {
-        const rows = await convex.query(
-          api.pos.public.catalog.listRegisterCatalogSnapshot,
-          { storeId },
-        );
+        const refresh = await coordinateCatalogRefresh<
+          PosRegisterCatalogRowDto[],
+          PosLocalRegisterCatalogSnapshot
+        >({
+          refreshClass: "metadata",
+          refreshKey,
+          storeId,
+          load: () =>
+            convex.query(api.pos.public.catalog.listRegisterCatalogSnapshot, {
+              storeId,
+            }),
+          persist: async (rows) => {
+            const writeResult =
+              await getDefaultPosLocalStore().writeRegisterCatalogSnapshot({
+                storeId,
+                rows,
+              });
+            if (!writeResult.ok) throw writeResult.error;
+            return writeResult.value;
+          },
+        });
 
         if (cancelled) return;
-
-        const writeResult =
-          await getDefaultPosLocalStore().writeRegisterCatalogSnapshot({
-            storeId,
-            rows,
-          });
-
-        if (cancelled) return;
-
-        if (writeResult.ok) {
+        if (refresh.status === "superseded") {
+          const latest =
+            await getDefaultPosLocalStore().readRegisterCatalogSnapshot({
+              storeId,
+            });
+          if (cancelled) return;
+          if (latest.ok && latest.value) {
+            setState({
+              refreshedAt: latest.value.refreshedAt,
+              rows: latest.value.rows,
+              source: "local",
+              status: "ready",
+            });
+          } else {
+            setState((current) => ({
+              error: latest.ok
+                ? new Error("The newer catalog refresh was not persisted.")
+                : latest.error,
+              refreshedAt:
+                "refreshedAt" in current ? current.refreshedAt : undefined,
+              rows: "rows" in current ? current.rows : undefined,
+              source: "rows" in current && current.rows ? "local" : "none",
+              status: "refresh-failed",
+            }));
+          }
+          return;
+        }
+        if (refresh.status === "completed") {
           setState({
-            refreshedAt: writeResult.value.refreshedAt,
-            rows: writeResult.value.rows,
+            refreshedAt: refresh.value.refreshedAt,
+            rows: refresh.value.rows,
             source: "refresh",
             status: "ready",
           });
           return;
         }
-
-        setState({
-          error: writeResult.error,
-          rows,
-          source: "none",
-          status: "refresh-failed",
-        });
       } catch (error) {
         if (cancelled) return;
 
@@ -445,6 +581,7 @@ export function usePrewarmRegisterCatalogOfflineSnapshots(input: {
 export function useConvexRegisterCatalogAvailabilityState(
   input: PosRegisterCatalogAvailabilityInput,
 ): RegisterCatalogAvailabilityGatewayState {
+  const convex = useConvex();
   const productSkuIdKey = (input.productSkuIds ?? []).join("\u0000");
   const requestedProductSkuIds = useMemo(
     () =>
@@ -466,32 +603,11 @@ export function useConvexRegisterCatalogAvailabilityState(
   const storeId = input.storeId;
   const [localState, setLocalState] =
     useState<RegisterAvailabilitySnapshotState | null>(null);
-  const [
-    pendingFullSnapshotRefreshStoreId,
-    setPendingFullSnapshotRefreshStoreId,
-  ] = useState<string | null>(null);
-  const [pendingFullSnapshotPersistence, setPendingFullSnapshotPersistence] =
-    useState<{
-      retryAttempt: number;
-      rows: PosRegisterCatalogAvailabilityRowDto[];
-      signature: string;
-      storeId: string;
-    } | null>(null);
-  const lastPersistedFullSnapshotSignatureRef = useRef<string | null>(null);
   const liveRows = useQuery(
     api.pos.public.catalog.listRegisterCatalogAvailability,
     storeId && boundedProductSkuIds.length > 0
       ? { storeId, productSkuIds: boundedProductSkuIds }
       : "skip",
-  );
-  const shouldRefreshFullSnapshot = Boolean(
-    input.refreshFullAvailabilitySnapshot &&
-    storeId &&
-    pendingFullSnapshotRefreshStoreId === storeId,
-  );
-  const fullSnapshotRows = useQuery(
-    api.pos.public.catalog.listRegisterCatalogAvailabilitySnapshot,
-    shouldRefreshFullSnapshot ? { storeId: storeId! } : "skip",
   );
   const localRowsBySkuId = useMemo(() => {
     if (liveRows !== undefined || localState?.status !== "ready") {
@@ -509,19 +625,13 @@ export function useConvexRegisterCatalogAvailabilityState(
 
     if (!storeId) {
       setLocalState({ status: "missing", snapshot: null });
-      setPendingFullSnapshotRefreshStoreId(null);
-      setPendingFullSnapshotPersistence(null);
       return;
     }
 
     if (!input.refreshFullAvailabilitySnapshot) {
       setLocalState({ status: "missing", snapshot: null });
-      setPendingFullSnapshotRefreshStoreId(null);
-      setPendingFullSnapshotPersistence(null);
       return;
     }
-
-    setPendingFullSnapshotRefreshStoreId(storeId);
 
     void (async () => {
       const state = await readRegisterAvailabilitySnapshotState({
@@ -546,85 +656,76 @@ export function useConvexRegisterCatalogAvailabilityState(
   }, [input.refreshFullAvailabilitySnapshot, storeId]);
 
   useEffect(() => {
-    if (!storeId || fullSnapshotRows === undefined) {
-      return;
-    }
-
-    const nextSignature = signatureForAvailabilityRows(
-      storeId,
-      fullSnapshotRows,
-    );
-    setPendingFullSnapshotRefreshStoreId((current) =>
-      current === storeId ? null : current,
-    );
-    if (lastPersistedFullSnapshotSignatureRef.current === nextSignature) {
-      return;
-    }
-
-    setPendingFullSnapshotPersistence({
-      retryAttempt: 0,
-      rows: fullSnapshotRows,
-      signature: nextSignature,
-      storeId,
-    });
-  }, [fullSnapshotRows, storeId]);
-
-  useEffect(() => {
-    if (!pendingFullSnapshotPersistence) {
+    if (!storeId || !input.refreshFullAvailabilitySnapshot) {
       return;
     }
 
     let cancelled = false;
-    let retryTimeout: ReturnType<typeof setTimeout> | undefined;
-    const snapshot = pendingFullSnapshotPersistence;
-
     void (async () => {
-      const writeResult =
-        await getDefaultPosLocalStore().writeRegisterAvailabilitySnapshot({
-          storeId: snapshot.storeId,
-          rows: snapshot.rows,
+      try {
+        const refresh = await coordinateCatalogRefresh({
+          refreshClass: "full-availability",
+          refreshKey: "default",
+          storeId,
+          load: () =>
+            convex.query(
+              api.pos.public.catalog.listRegisterCatalogAvailabilitySnapshot,
+              { storeId },
+            ),
+          persist: async (rows) => {
+            let lastError: unknown;
+            for (let attempt = 0; attempt < 2; attempt += 1) {
+              const writeResult =
+                await getDefaultPosLocalStore().writeRegisterAvailabilitySnapshot({
+                  storeId,
+                  rows,
+                });
+              if (writeResult.ok) return writeResult.value;
+              lastError = writeResult.error;
+              if (attempt === 0) {
+                await new Promise((resolve) =>
+                  setTimeout(
+                    resolve,
+                    REGISTER_AVAILABILITY_SNAPSHOT_WRITE_RETRY_DELAY_MS,
+                  ),
+                );
+              }
+            }
+            throw lastError;
+          },
         });
 
-      if (cancelled) return;
-
-      if (writeResult.ok) {
-        lastPersistedFullSnapshotSignatureRef.current = snapshot.signature;
-        setPendingFullSnapshotPersistence((current) =>
-          current?.signature === snapshot.signature &&
-          current.storeId === snapshot.storeId
-            ? null
-            : current,
-        );
+        if (cancelled) return;
+        if (refresh.status === "superseded") {
+          const latest = await readRegisterAvailabilitySnapshotState({
+            store: getDefaultPosLocalStore(),
+            storeId,
+          });
+          if (!cancelled) setLocalState(latest);
+          return;
+        }
         setLocalState({
           status: "ready",
-          snapshot: writeResult.value,
+          snapshot: refresh.value,
         });
-        return;
-      }
-
-      setLocalState({
-        error: writeResult.error,
-        status: "local-store-failure",
-        snapshot: null,
-      });
-      retryTimeout = setTimeout(() => {
-        setPendingFullSnapshotPersistence((current) =>
-          current?.signature === snapshot.signature &&
-          current.storeId === snapshot.storeId &&
-          current.retryAttempt === snapshot.retryAttempt
-            ? { ...current, retryAttempt: current.retryAttempt + 1 }
-            : current,
+      } catch (error) {
+        if (cancelled) return;
+        setLocalState((current) =>
+          current?.status === "ready"
+            ? current
+            : {
+                error: error as never,
+                status: "local-store-failure",
+                snapshot: null,
+              },
         );
-      }, REGISTER_AVAILABILITY_SNAPSHOT_WRITE_RETRY_DELAY_MS);
+      }
     })();
 
     return () => {
       cancelled = true;
-      if (retryTimeout) {
-        clearTimeout(retryTimeout);
-      }
     };
-  }, [pendingFullSnapshotPersistence]);
+  }, [convex, input.refreshFullAvailabilitySnapshot, storeId]);
 
   if (requestedProductSkuIds.length === 0) {
     return { status: "ready", rows: [], source: "live" };

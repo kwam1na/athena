@@ -2,6 +2,7 @@ import type { Doc, Id } from "../../../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../../../_generated/server";
 
 import type { PosLocalSyncEventStatus } from "../../../../shared/posLocalSyncContract";
+import { getTerminalRuntimeMaterialSignature } from "../../../../shared/pos/terminalRuntimeMaterial";
 import { isPosUsableRegisterSessionStatus } from "../../../../shared/registerSessionStatus";
 import type {
   TerminalSyncEvidence,
@@ -132,6 +133,7 @@ export async function upsertLatestRuntimeStatusWithOutcome(
 ): Promise<{
   didWrite: boolean;
   materialChanged: boolean;
+  recoveryVerificationCursor?: string;
   runtimeStatusId: Id<"posTerminalRuntimeStatus">;
 }> {
   const existing = await getLatestRuntimeStatusForTerminal(ctx, {
@@ -144,6 +146,7 @@ export async function upsertLatestRuntimeStatusWithOutcome(
       return {
         didWrite: false,
         materialChanged: false,
+        recoveryVerificationCursor: existing.recoveryVerificationCursor,
         runtimeStatusId: existing._id,
       };
     }
@@ -157,6 +160,7 @@ export async function upsertLatestRuntimeStatusWithOutcome(
       return {
         didWrite: false,
         materialChanged: false,
+        recoveryVerificationCursor: existing.recoveryVerificationCursor,
         runtimeStatusId: existing._id,
       };
     }
@@ -165,6 +169,7 @@ export async function upsertLatestRuntimeStatusWithOutcome(
     return {
       didWrite: true,
       materialChanged,
+      recoveryVerificationCursor: existing.recoveryVerificationCursor,
       runtimeStatusId: existing._id,
     };
   }
@@ -204,105 +209,7 @@ function hasRuntimeStatusMaterialChanged(
 function runtimeStatusMaterialSignature(
   status: Partial<Doc<"posTerminalRuntimeStatus">>,
 ) {
-  const material = stripUndefined({
-    activeRegisterSession: stripObservedAt(status.activeRegisterSession),
-    appSessionRecovery: stripAuthorityStatus(status.appSessionRecovery),
-    appUpdate: stripAppUpdateForRuntimeEffects(status.appUpdate),
-    drawerAuthority: stripDrawerAuthorityForRuntimeEffects(
-      status.drawerAuthority,
-    ),
-    localStore: stripLocalStoreForRuntimeEffects(status.localStore),
-    saleAuthority: stripAuthorityStatus(status.saleAuthority),
-    staffAuthority: stripAuthorityStatus(status.staffAuthority),
-    sync: stripSyncForRuntimeEffects(status.sync),
-    terminalIntegrity: stripAuthorityStatus(status.terminalIntegrity),
-  });
-
-  return JSON.stringify(material);
-}
-
-function stripLocalStoreForRuntimeEffects(
-  value: Partial<Doc<"posTerminalRuntimeStatus">["localStore"]> | undefined,
-) {
-  if (!value) {
-    return undefined;
-  }
-
-  return stripUndefined({
-    available: value.available,
-    terminalSeedReady: value.terminalSeedReady,
-  });
-}
-
-function stripAppUpdateForRuntimeEffects(
-  value:
-    | Partial<NonNullable<Doc<"posTerminalRuntimeStatus">["appUpdate"]>>
-    | undefined,
-) {
-  if (!value) {
-    return undefined;
-  }
-
-  return stripUndefined({
-    commandExecutionId: value.commandExecutionId,
-    status: value.status,
-  });
-}
-
-function stripSyncForRuntimeEffects(
-  value: Partial<Doc<"posTerminalRuntimeStatus">["sync"]> | undefined,
-) {
-  if (!value) {
-    return undefined;
-  }
-
-  return stripUndefined({
-    localReviewEventCount: value.reviewEventCount,
-    reviewEvents:
-      value.reviewEventCount && value.reviewEventCount > 0
-        ? value.reviewEvents
-        : undefined,
-    status: value.status,
-  });
-}
-
-function stripDrawerAuthorityForRuntimeEffects(
-  value:
-    | Partial<NonNullable<Doc<"posTerminalRuntimeStatus">["drawerAuthority"]>>
-    | undefined,
-) {
-  if (!value) {
-    return undefined;
-  }
-
-  return stripUndefined({
-    cloudRegisterSessionId: value.cloudRegisterSessionId,
-    localRegisterSessionId: value.localRegisterSessionId,
-    status: value.status,
-  });
-}
-
-function stripAuthorityStatus<T extends { status?: unknown } | undefined>(
-  value: T,
-) {
-  if (!value) {
-    return undefined;
-  }
-
-  return stripUndefined({
-    status: value.status,
-  });
-}
-
-function stripObservedAt<T extends Record<string, unknown> | undefined>(
-  value: T,
-) {
-  if (!value) {
-    return undefined;
-  }
-
-  const { observedAt: _observedAt, ...rest } = value;
-  return stripUndefined(rest);
+  return getTerminalRuntimeMaterialSignature(status);
 }
 
 function stripUndefined<T extends Record<string, unknown>>(input: T) {

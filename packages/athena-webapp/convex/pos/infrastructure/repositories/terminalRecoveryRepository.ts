@@ -12,6 +12,11 @@ import {
 type TerminalRecoveryCtx = QueryCtx | MutationCtx;
 export type TerminalRecoveryConflictRepositoryCtx = QueryCtx | MutationCtx;
 const TERMINAL_RECOVERY_CONFLICT_SOURCE_LOOKUP_CAP = 100;
+const TERMINAL_RUNTIME_VERIFICATION_BATCH_SIZE = 20;
+const TERMINAL_RUNTIME_VERIFICATION_CURRENT_SIZE = 5;
+const TERMINAL_RUNTIME_VERIFICATION_ROTATION_SIZE =
+  TERMINAL_RUNTIME_VERIFICATION_BATCH_SIZE -
+  TERMINAL_RUNTIME_VERIFICATION_CURRENT_SIZE;
 const TERMINAL_RECOVERY_CONFLICT_TYPES = [
   "duplicate_local_id",
   "inventory",
@@ -68,7 +73,55 @@ export function createTerminalRecoveryCommandReadRepository(
         )
         .take(50);
     },
+    async listRuntimeVerificationReadyCommands(args) {
+      if (typeof ctx.db.query !== "function") {
+        return { commands: [] };
+      }
+      const verificationReadyQuery = () =>
+        ctx.db
+          .query("posTerminalRecoveryCommand")
+          .withIndex("by_store_terminal_verification", (q) =>
+            q
+              .eq("storeId", args.storeId)
+              .eq("terminalId", args.terminalId)
+              .eq("verificationStatus", "runtime_verification_ready"),
+          );
+      const [newestCommands, rotationPage] = await Promise.all([
+        // Keep current operator work prompt while a persisted cursor rotates
+        // the rest of the bounded read through every verification-ready row.
+        verificationReadyQuery()
+          .order("desc")
+          .take(TERMINAL_RUNTIME_VERIFICATION_CURRENT_SIZE),
+        verificationReadyQuery()
+          .order("asc")
+          .paginate({
+            cursor: args.cursor ?? null,
+            numItems: TERMINAL_RUNTIME_VERIFICATION_ROTATION_SIZE,
+          }),
+      ]);
+
+      return {
+        commands: dedupeRecoveryCommandsById([
+          ...newestCommands,
+          ...rotationPage.page,
+        ]),
+        nextCursor: rotationPage.isDone
+          ? undefined
+          : rotationPage.continueCursor,
+      };
+    },
   };
+}
+
+function dedupeRecoveryCommandsById<
+  T extends Pick<Doc<"posTerminalRecoveryCommand">, "_id">,
+>(commands: T[]) {
+  const seen = new Set<Id<"posTerminalRecoveryCommand">>();
+  return commands.filter((command) => {
+    if (seen.has(command._id)) return false;
+    seen.add(command._id);
+    return true;
+  });
 }
 
 export function createTerminalRecoveryCommandRepository(

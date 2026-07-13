@@ -1106,6 +1106,7 @@ function stripRuntimeStatusIdentity(status: Doc<"posTerminalRuntimeStatus">) {
     _creationTime: _creationTime,
     storeId: _storeId,
     terminalId: _terminalId,
+    recoveryVerificationCursor: _recoveryVerificationCursor,
     ...runtimeStatus
   } = status;
   return {

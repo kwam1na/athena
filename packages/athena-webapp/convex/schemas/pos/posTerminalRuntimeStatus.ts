@@ -310,4 +310,5 @@ export const posTerminalRuntimeStatusSchema = v.object({
   snapshots: posTerminalRuntimeSnapshotsValidator,
   terminalIntegrity: v.optional(posTerminalRuntimeTerminalIntegrityValidator),
   drawerAuthority: v.optional(posTerminalRuntimeDrawerAuthorityValidator),
+  recoveryVerificationCursor: v.optional(v.string()),
 });

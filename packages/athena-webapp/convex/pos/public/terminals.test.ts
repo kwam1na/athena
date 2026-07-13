@@ -520,6 +520,10 @@ describe("POS terminal public mutations", () => {
       kind: "ok",
       data: buildRecoveryCommand({ status: "completed" }),
     });
+    mocks.verifyTerminalRecoveryCommandsFromRuntime.mockResolvedValue({
+      nextCursor: undefined,
+      verifiedCommandIds: [],
+    });
     mocks.resolveTerminalCloudRepairCommand.mockResolvedValue({
       kind: "ok",
       data: {
