@@ -1,11 +1,11 @@
 ---
 name: ce-landed-change-report
-description: Create a digestible standalone HTML report for a landed change, merged PR, release, or completed Linear issue, with mandatory subagent-gathered context from prior sessions and delivered code changes plus an interactive comprehension quiz. Use when the user asks for an HTML report, explainer, digest, walkthrough, learning artifact, comprehension quiz, or post-merge understanding aid for work that has landed or is ready to explain.
+description: Create a digestible standalone HTML report for a delivery candidate or landed change, with mandatory subagent-gathered context from prior sessions and delivered code changes plus an interactive comprehension quiz. Use when the user asks for an HTML report, explainer, digest, walkthrough, learning artifact, comprehension quiz, or delivery understanding aid for work that is ready to review or has landed.
 ---
 
 # Landed Change Report
 
-Create a reader-friendly HTML report that explains a landed change with context, intuition, code-level mechanics, validation evidence, and a quiz the reader must pass.
+Create a reader-friendly HTML report that explains a delivery candidate or landed change with context, intuition, code-level mechanics, validation evidence, and a quiz the reader must pass. The normal execute-workflow mode is a delivery candidate: generate and commit the report before merge, then leave it unchanged after merge.
 
 This skill is intentionally subagent-driven. Do not create the report from only the current conversation unless subagents are unavailable in the host environment.
 
@@ -27,14 +27,14 @@ Run that command after final code/workflow edits and before final report renderi
 
 The report must include:
 
-- title, merge/PR/issue metadata, and status pills
+- title, PR/issue/source metadata, candidate-or-landed status, and status pills
 - executive summary
 - problem/context in plain language
 - intuition or mental model
 - before/after flow or layer breakdown
 - key file table with why each file matters
 - what changed and what intentionally did not change
-- validation, review, and deployment/root-alignment evidence
+- validation and review evidence, plus accurate deployment/root-alignment status (`pending`, `deferred`, `not applicable`, or completed evidence)
 - next-time workflow or operational guidance
 - interactive quiz with grade/reset behavior, answer explanations, and a pass threshold
 - subagent evidence summary naming the subagents used and what each contributed
@@ -67,7 +67,7 @@ Use `references/subagent-prompts.md` for prompt templates.
 
 ## Workflow
 
-### 1. Resolve The Landed Change
+### 1. Resolve The Change And Status Mode
 
 Accept any of:
 
@@ -75,21 +75,26 @@ Accept any of:
 - merge commit SHA
 - Linear issue id
 - branch name
-- plain-language description of the landed work
+- plain-language description of the delivery candidate or landed work
 
-Resolve to the most concrete artifact available, preferring a merged PR or merge commit. Capture:
+Resolve to the most concrete artifact available. When invoked from `$execute`, prefer the open delivery PR and its candidate head so the report can be included in that same PR before merge. Use landed mode only when the source was already merged before this reporting workflow began. Capture:
 
-- PR title, URL, body, state, merge SHA, and merged time
+- status mode: `delivery candidate` or `landed`
+- PR title, URL, body, state, candidate head SHA, and base SHA
+- merge SHA and merged time only in landed mode
 - commit range and changed files
 - Linear parent and child issues when available
 - validation/check status
-- deploy or no-deploy finish line
-- root-alignment state when relevant
+- deploy status: pending, deferred, not applicable, or completed evidence
+- root-alignment status: pending, deferred, not applicable, or completed evidence
+
+In delivery-candidate mode, do not claim merged, deployed, Linear `Done`, or root-aligned. Label those events as pending, deferred, or not applicable. Do not refresh the report after merge merely to replace candidate metadata; the final chat handoff carries the merge SHA and post-merge root/deploy result.
 
 Useful commands:
 
 ```bash
 gh pr view <pr> --json url,title,body,state,mergedAt,mergeCommit,statusCheckRollup
+gh pr view <pr> --json url,title,body,state,headRefOid,baseRefOid,statusCheckRollup
 git show --stat --numstat --name-only <merge-sha>
 git show --format=fuller --no-ext-diff <merge-sha> -- <important files>
 git status --short --branch
@@ -131,7 +136,7 @@ The report should teach the reader how to think about the change, not just list 
 
 Use this narrative order:
 
-1. **What happened**: merged PR, issue, commit, deployment/root state.
+1. **What is being delivered**: candidate PR/head and pending finish line, or merged PR/commit and completed finish line in landed mode.
 2. **Why it mattered**: operator/customer/system risk or product need.
 3. **The mental model**: a simple analogy, flow, table, or layer map.
 4. **Before vs after**: what was duplicated, broken, unclear, or missing before; what is now authoritative.
@@ -217,8 +222,8 @@ Check manually:
 - every major claim traces back to git, PR, Linear, local files, or subagent evidence
 - no secrets are present
 - quiz pass threshold is visible and enforced in JavaScript
-- report states whether production deploy occurred
-- report states whether root/local alignment occurred when relevant
+- report states the accurate production-deploy status without predicting a pending event
+- report states the accurate root/local-alignment status without predicting a pending event
 - report mentions subagents used
 
 If code files changed as part of creating or updating this skill, follow repo rules for Graphify. Documentation-only reports do not require Graphify unless repo policy says otherwise.
@@ -230,7 +235,7 @@ Return:
 ```text
 === Landed Change Report Complete ===
 Path: docs/reports/<report>.html
-Source: <PR/merge SHA/Linear issue>
+Source: <candidate PR/head or merged PR/merge SHA/Linear issue>
 Subagents: <names/roles used>
 Quiz: <N questions, pass threshold>
 Validation: <commands/checks run>
@@ -244,6 +249,7 @@ Notes: <deploy/root/Linear status, untracked/tracked state>
 - Do not let subagents write the report. They gather evidence; the orchestrator owns synthesis.
 - Do not turn the report into a PR description. It is a teaching artifact.
 - Do not overstate validation; say exactly what ran and what passed.
-- Do not claim production deployment unless a real deploy command completed.
+- Do not claim merge, Linear `Done`, root alignment, or production deployment unless each event actually occurred.
+- In execute delivery-candidate mode, commit the report to the delivery branch before merge and do not generate or refresh it after merge.
 - Do not include sensitive runtime data or raw secrets.
 - Do not mutate Linear, GitHub, or production systems unless the user explicitly asks.

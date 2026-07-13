@@ -30,7 +30,7 @@ Do not use this skill when:
 - When executing a coordinated batch of related tickets, delivery can mean all tickets land through one shared integration PR rather than one PR per ticket.
 - Delivery always includes remote merge and local fast-forward unless the user explicitly opts out, asks to rely on auto-merge, or permissions prevent it.
 - Delivery also means you leave the local repo tidy, back on `main`, and reflecting the merged remote state.
-- Delivery handoff includes a digestible landed-change report from `$ce-landed-change-report` for substantial or behavior-bearing work after the PR is actually merged.
+- For substantial or behavior-bearing work, the delivery PR includes a digestible landed-change report from `$ce-landed-change-report`; do not defer the report to a post-merge follow-up PR.
 - Do not stop at "PR open" or "ready for review" unless the user explicitly asked for that narrower handoff.
 - Only treat something as a blocker when it genuinely requires user input.
 - Document significant scope decisions in Linear as you work.
@@ -47,6 +47,7 @@ Do not use this skill when:
 - "The final suite passed, so test-first happened."
 - "The PR merged, so there is nothing left to teach the system."
 - "The PR merged, so the human reader does not need a digestible handoff."
+- "I'll merge first and add the landed-change report in a second PR."
 - "I noticed something adjacent, so I should silently expand this ticket."
 - "A vague improvement idea deserves a proactive ticket."
 
@@ -77,8 +78,9 @@ Use this resolution order before asking the user for context:
 - Merge target `main`; merge method `squash`; review loops run relevant reviewer subagents until unanimous approval with no numeric cap.
 - Merge is the default delivery posture. Do not stop at an open PR when auto-review and merge are on.
 - After merge, fast-forward the local root checkout to `origin/main`; do not leave the repo on a stale local `main`.
-- After merge, run repo-local `$ce-landed-change-report` for behavior changes, architecture/workflow changes, operator/customer-facing surfaces, cross-layer contracts, coordinated batches, or high-risk refactors. Use the merged PR URL, merge SHA, Linear issue context, and delivered diff as report inputs, and follow that skill's subagent requirements.
-- For large branches, satisfy `bun run landed-report:check` before merge by including a valid `docs/reports/**/*.html` report artifact with a current deliverable diff fingerprint. If reviewer-loop edits change the deliverable diff after report creation, regenerate the report before merge; refresh or annotate the report after merge when final merge details matter.
+- Before merge, run repo-local `$ce-landed-change-report` for behavior changes, architecture/workflow changes, operator/customer-facing surfaces, cross-layer contracts, coordinated batches, or high-risk refactors. Use the PR URL, candidate head SHA, Linear issue context, and delivered diff as report inputs, follow that skill's subagent requirements, and commit the report to the delivery branch.
+- Generate the report after implementation and primary validation have stabilized but before the final review-and-merge loop. Keep pre-merge status language accurate: identify the source as a delivery candidate and do not claim merge, deploy, Linear `Done`, or root alignment before those events happen.
+- Satisfy `bun run landed-report:check` before merge with a valid `docs/reports/**/*.html` artifact and current deliverable diff fingerprint. If reviewer-loop edits change the deliverable diff, regenerate the report and rerun its reviewer before merge. Do not generate or refresh the report after merge; any later user-requested correction is separate work, not delivery closeout.
 - In Athena, merge or arm auto-merge with `bun run github:pr-merge -- <pr-number-or-url> --method squash --delete-branch` or `bun run github:pr-merge -- <pr-number-or-url> --auto --method squash` instead of raw `gh pr merge`. The helper uses GitHub APIs directly, so it does not try to check out or update local `main` and is safe when `main` is already checked out in the root worktree.
 - Human approval is not required unless the user explicitly asks for it.
 - All PR checks must be green before the PR actually merges. If required checks are still pending after local gates pass, arm auto-merge instead of waiting and manually merging; if a check fails, investigate and fix it.
@@ -184,8 +186,21 @@ After opening the PR:
 - add the PR link to the Linear ticket
 - if it is a coordinated integration PR, add the same PR link to every included ticket
 - note final validation status and major scope decisions in Linear
+- decide whether the landed-change report applies using the delivery contract above
+- when it applies, generate and review the report with the PR URL and candidate head, commit it to this same delivery branch, rerun `bun run landed-report:check`, and push it before entering the final review-and-merge loop
 
-### 8. Run The Review + Merge Loop
+### 8. Complete Delivery Artifacts + Compound The Learning
+
+- Before the final review-and-merge loop, decide whether the work taught the system something reusable.
+- Use the repo-local `$ce-compound` skill when the repo has a `docs/solutions/` knowledge base and the learning is repo-specific. In Athena, do not hand-roll solution-note structure; the repo-local `ce-compound` template is the authoring contract enforced by `compound:check`.
+- Update a skill when the learning changes how agents should deliver work across repos.
+- Treat a `$ce-landed-change-report` as delivery handoff for human comprehension, not as a replacement for durable solution notes or skill updates.
+- Create a follow-up Linear issue when the learning is a concrete missing repo sensor, missing validation map coverage, missing reviewer, or tooling gap that should be implemented later; include the source evidence and why it is separate from the current task.
+- Record `No durable learning` only when the change is local, obvious, and unlikely to recur.
+- When the landed-change report applies, finish its required subagent evidence and report-review loop now, commit the approved report to the delivery branch, and keep its diff fingerprint current through later review edits.
+- Close completed subagents and clean up any worker-only worktrees before the final merge. Keep only the delivery worktree and branch needed by the open PR.
+
+### 9. Run The Review + Merge Loop
 
 - Run `$requesting-code-review`.
 - Treat any of the following as blocking:
@@ -204,31 +219,19 @@ After opening the PR:
 - The follow-up issue should capture the failing remote check, the local validations that passed, the root cause, and the local command, harness mapping, or coverage addition needed so the failure is caught before CI next time.
 - Link that follow-up issue from the current Linear ticket and the PR comment trail when it materially affects the handoff.
 - Keep looping relevant reviewer subagents until unanimous approval: every selected reviewer must report approval/no blocking findings, GitHub feedback must have no unresolved actionable blockers, and checks must be passing or auto-mergeable. There is no numeric iteration cap; stop only when the next fix is not clear, permissions/repo settings block progress, or genuine user input is required.
+- If a review-loop edit changes the deliverable diff, refresh the solution/report fingerprints, rerun the report reviewer when applicable, and keep those artifacts in this same PR.
+- After the review loop is unanimously green and the candidate head, telemetry, report, and compounding artifacts are final, post or refresh the merge-ready Linear comment with the PR URL, candidate head SHA, final telemetry, validation evidence, report path or skip reason, and compounding decision. Keep the ticket in the accurate pre-merge state so merge automation can move it to `Done`.
 - When local gates and review gates pass, mark the PR ready if needed and arm auto-merge with `bun run github:pr-merge -- <pr-number-or-url> --auto --method squash` unless the user explicitly asked you to wait through merge completion or repo settings reject auto-merge.
 - If auto-merge cannot be armed and all PR checks are already green, squash-merge into `main` with `bun run github:pr-merge -- <pr-number-or-url> --method squash --delete-branch`.
 - Treat the merge as incomplete until the remote merge is confirmed and the local root checkout fast-forwards to the merged `origin/main`.
 
-### 9. Compound The Learning
+### 10. Post-Merge: Align Root + Run Non-Deferred Production Deploys
 
-- Before final ticket closure, decide whether the work taught the system something reusable.
-- Use the repo-local `$ce-compound` skill when the repo has a `docs/solutions/` knowledge base and the learning is repo-specific. In Athena, do not hand-roll solution-note structure; the repo-local `ce-compound` template is the authoring contract enforced by `compound:check`.
-- Update a skill when the learning changes how agents should deliver work across repos.
-- Treat a `$ce-landed-change-report` as delivery handoff for human comprehension, not as a replacement for durable solution notes or skill updates.
-- Create a follow-up Linear issue when the learning is a concrete missing repo sensor, missing validation map coverage, missing reviewer, or tooling gap that should be implemented later; include the source evidence and why it is separate from the current ticket.
-- Record `No durable learning` only when the change is local, obvious, and unlikely to recur.
-- Include the compounding decision in the final Linear comment and handoff.
-
-### 10. Close The Loop
-
-- After merge, confirm the ticket has already moved to `Done` via merge automation.
-- If merge succeeded but Linear did not move to `Done`, update the ticket directly or document the automation mismatch in Linear before handoff.
-- Post a final Linear comment with the PR URL, merge SHA, final telemetry, validation evidence, and compounding decision.
-- For coordinated batches, confirm every included ticket reached `Done`, not just the ticket that happened to anchor the PR title.
-- After delivery, fetch `origin`, fast-forward the local root checkout's `main` branch to `origin/main`, switch back to `main`, and confirm the local checkout reflects the merged result.
-- Generate the `$ce-landed-change-report` after the merge SHA exists when the delivery changed behavior, architecture, workflow, operator/customer-facing surfaces, cross-layer contracts, or coordinated multiple tickets. Include the generated report path in the final handoff and, when useful, the final Linear comment.
-- Skip the report only when the user explicitly opts out, the change is purely mechanical/sensor-only/docs-only, or the handoff happens before an actual merge with auto-merge merely armed. If skipped, include the reason in the handoff.
-- Clean up the working tree and any temporary worktree or branch created for the ticket so the local repo is tidy before handoff.
-- For subagent batches, close each worker explicitly before handoff: wait for completion, review and merge or intentionally reject its diff, run the relevant focused validation, remove the worker worktree, delete the worker branch only after it is merged, and record any unresolved blocker in the parent ticket or PR.
-- If repeated blockers remain and the next fix is not clear, leave the issue in the most accurate state, post an unresolved-item checklist with the latest telemetry, and hand off the exact blocker.
+- Once the remote merge is confirmed, post-merge work is limited to aligning and cleaning the local root checkout and running the selected production deploys, except for either action the user or repo workflow explicitly deferred.
+- Fetch `origin`, fast-forward the root checkout's `main` branch to the exact merged `origin/main`, verify it is clean, then remove the merged delivery worktree and local branch as part of local alignment cleanup.
+- Inspect the merged diff and run the narrowest applicable local production deploy commands from the clean root checkout. If no deployable runtime surface changed, record that explicit no-deploy result. If deployment was deferred by the user or repo workflow, name the deferral accurately.
+- Do not generate or refresh landed-change reports, solution notes, skills, PR descriptions, or Linear closeout comments after merge. Those artifacts and decisions belong in the delivery PR before merge.
+- Include the merged PR, merge SHA, report path or skip reason, validation/review result, Linear state, root alignment, deploy result or deferral, and compounding decision in the final handoff.
+- If repeated blockers remain and the next fix is not clear, leave the task in the most accurate state and hand off the exact blocker.
 - If merge permissions or repo settings prevent merge, leave the ticket in `In Review` and document the exact blocker.
 - If `auto_review_and_merge = off`, stop at review-ready state and say it is awaiting manual review or merge.
