@@ -207,6 +207,7 @@ describe("runHarnessContractPreflight", () => {
 
   it("passes through every default adapter on the current consistent tree", async () => {
     const result = await runHarnessContractPreflight(process.cwd(), {
+      baseRef: "HEAD",
       writeMachineOutput: false,
     });
 

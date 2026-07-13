@@ -27,6 +27,7 @@ type HarnessContractPreflightMachine = {
 };
 
 type HarnessContractPreflightOptions = {
+  baseRef?: string;
   nowIso?: () => string;
   runSelfReview?: (rootDir: string) => Promise<{ blockers: string[] }>;
   runAudit?: (rootDir: string) => Promise<void>;
@@ -112,10 +113,11 @@ export async function runHarnessContractPreflight(
   options: HarnessContractPreflightOptions = {},
 ) {
   const findings: HarnessContractFinding[] = [];
+  const baseRef = options.baseRef ?? "origin/main";
   const runSelfReview =
     options.runSelfReview ??
     ((nextRootDir) =>
-      runHarnessSelfReview(nextRootDir, { baseRef: "origin/main" }));
+      runHarnessSelfReview(nextRootDir, { baseRef }));
   const runAudit = options.runAudit ?? runHarnessAudit;
   const runContractTests =
     options.runContractTests ?? runFocusedContractTests;
@@ -125,7 +127,7 @@ export async function runHarnessContractPreflight(
       const { collectHarnessSiblingTestPolicyFindings } = await import(
         "./harness-inferential-review"
       );
-      return collectHarnessSiblingTestPolicyFindings(nextRootDir);
+      return collectHarnessSiblingTestPolicyFindings(nextRootDir, { baseRef });
     });
 
   const [
