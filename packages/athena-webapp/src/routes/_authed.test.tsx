@@ -48,6 +48,10 @@ vi.mock("@tanstack/react-router", () => ({
   useRouterState: mocked.useRouterState,
 }));
 
+vi.mock("@/components/shared-demo/SharedDemoRuntime", () => ({
+  SharedDemoRuntime: () => null,
+}));
+
 vi.mock("../hooks/useAuth", () => ({
   useAuth: mocked.useAuth,
 }));

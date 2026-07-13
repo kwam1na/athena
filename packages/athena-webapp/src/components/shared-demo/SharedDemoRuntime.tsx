@@ -12,7 +12,7 @@ export function SharedDemoRuntime() {
   const location = useLocation();
   const restore = useCallback(async () => {
     const result = await requestRestore({ idempotencyKey: crypto.randomUUID() });
-    if (result.kind === "rate_limited" || result.kind === "failed") throw new Error(result.kind);
+    if (result.kind === "rate_limited") throw new Error(result.kind);
   }, [requestRestore]);
   if (!context || !orgUrlSlug || !storeUrlSlug) return null;
   const routes = getSharedDemoRoutes(orgUrlSlug, storeUrlSlug);

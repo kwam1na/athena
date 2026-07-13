@@ -19,7 +19,7 @@ new demo-reachable functions must be added to this inventory before release.
 | Cash control | Real operational write; no money movement |
 | Order fulfillment | Real status write; notification suppressed |
 | Staff communication | Real bounded shared message; no identity management |
-| Daily Operations | Real acknowledgement/action write |
+| Daily Operations | Real store-day start write |
 | Reports | Read-only existing projections |
 
 Identity, permissions, billing, integrations, exports, refunds/payment effects,
@@ -40,6 +40,11 @@ business write through `requireReadySharedDemoWriteWithCtx`. Restore replaces
 the versioned baseline rows, verifies expected domain counts, then publishes
 `ready`. Hourly and manual callers use the same internal `restoreBaseline`
 mutation and idempotency contract.
+
+Every store-scoped demo read or write also compares its target store to the
+server-owned principal before ordinary organization authorization runs. A
+restore verification, missing-row, or capacity error is intentionally allowed
+to escape the Convex mutation so all table replacements roll back atomically.
 
 The baseline capture stores exact source documents and stable IDs for the six
 domain tables plus POS and order line items. Restore deletes visitor-added rows,

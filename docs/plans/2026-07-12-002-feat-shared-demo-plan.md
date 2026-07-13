@@ -26,7 +26,7 @@ The shared demo is allowlist-first. Reads are allowed only within the demo store
 3. Cash-control operational writes (for example deposits/session activity), without bank/payment movement.
 4. Order fulfillment/status progression, without customer notification or payment effects.
 5. Internal staff communication, without staff identity, credential, role, or permission management.
-6. Daily Operations acknowledgements/actions.
+6. Daily Operations store-day start.
 
 Reports remain read-only and reflect these writes only where current Athena read models already do so.
 

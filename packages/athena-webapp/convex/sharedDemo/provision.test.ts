@@ -19,4 +19,12 @@ describe("shared demo provisioning", () => {
       source.lastIndexOf("captureBaselineDocumentsWithCtx"),
     );
   });
+
+  it("keeps Daily Operations actionable and migrates the prior started baseline", () => {
+    const source = readFileSync("convex/sharedDemo/provision.ts", "utf8");
+    expect(source).not.toContain('ctx.db.insert("dailyOpening"');
+    expect(source).toContain('eventType: "demo.store_ready"');
+    expect(source).toContain("restoreMutableDemoStoreRowsWithCtx");
+    expect(source).toContain('ctx.db.delete("dailyOpening"');
+  });
 });

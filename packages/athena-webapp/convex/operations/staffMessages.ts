@@ -5,7 +5,7 @@ import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
-import { requireSharedDemoCapabilityIfApplicable } from "../sharedDemo/actor";
+import { requireSharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
 import { requireReadySharedDemoWriteWithCtx } from "../sharedDemo/restore";
 
 export const STAFF_MESSAGE_MAX_LENGTH = 500;
@@ -13,6 +13,11 @@ export const STAFF_MESSAGE_RATE_WINDOW_MS = 60_000;
 export const STAFF_MESSAGE_RATE_LIMIT = 5;
 
 async function requireStoreMember(ctx: any, storeId: any) {
+  const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(
+    ctx,
+    "staff.communication.write",
+    storeId,
+  );
   const [store, user] = await Promise.all([
     ctx.db.get("store", storeId),
     requireAuthenticatedAthenaUserWithCtx(ctx, {
@@ -26,7 +31,7 @@ async function requireStoreMember(ctx: any, storeId: any) {
     organizationId: store.organizationId,
     userId: user._id,
   });
-  return { store, user };
+  return { demoActor, store, user };
 }
 
 export const listStaffMessages = query({
@@ -52,11 +57,7 @@ export const postStaffMessage = mutation({
     if (!body || body.length > STAFF_MESSAGE_MAX_LENGTH) {
       throw new Error(`Staff messages must be between 1 and ${STAFF_MESSAGE_MAX_LENGTH} characters.`);
     }
-    const demoActor = await requireSharedDemoCapabilityIfApplicable(
-      ctx,
-      "staff.communication.write",
-    );
-    const { store, user } = await requireStoreMember(ctx, args.storeId);
+    const { demoActor, store, user } = await requireStoreMember(ctx, args.storeId);
     if (demoActor) {
       if (args.expectedDemoRestoreEpoch === undefined) {
         throw new Error("Refresh the shared demo before posting a staff message.");

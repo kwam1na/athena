@@ -5,6 +5,7 @@ import {
   assertSharedDemoWriteEpoch,
   beginRestore,
   completeRestore,
+  requireCurrentSharedDemoBaseline,
   requireReadySharedDemoWriteWithCtx,
   SHARED_DEMO_BASELINE,
 } from "./restore";
@@ -16,6 +17,12 @@ describe("shared demo restore", () => {
     expect(first).toMatchObject({ kind: "started", state: { epoch: 5, status: "restoring" } });
     expect(beginRestore(first.state, { idempotencyKey: "hour-1", now: 101 })).toMatchObject({ kind: "existing", epoch: 5 });
     expect(beginRestore(first.state, { idempotencyKey: "manual-1", now: 101 })).toMatchObject({ kind: "busy", epoch: 5 });
+  });
+
+  it("requires provisioning to own every baseline version migration", () => {
+    expect(() => requireCurrentSharedDemoBaseline(null)).toThrow("requires provisioning");
+    expect(() => requireCurrentSharedDemoBaseline({ baselineVersion: 1, epoch: 2, status: "ready" })).toThrow("requires provisioning");
+    expect(requireCurrentSharedDemoBaseline({ baselineVersion: SHARED_DEMO_BASELINE.version, epoch: 3, status: "ready" })).toMatchObject({ epoch: 3 });
   });
 
   it("requires the same ready epoch in the business-write transaction", () => {
@@ -61,12 +68,14 @@ describe("shared demo restore", () => {
     ).toMatchObject({ status: "ready", completedAt: 20 });
   });
 
-  it("persists a failed state and audit instead of rethrowing after restore starts", () => {
+  it("lets restore failures abort the mutation so partial baseline writes roll back", () => {
     const source = readFileSync("convex/sharedDemo/restore.ts", "utf8");
     expect(source).toContain("actualCounts: domainRestore.actualCounts");
     expect(source).toContain("expectedCounts: domainRestore.expectedCounts");
-    expect(source).toContain('failureCode: "baseline_restore_failed"');
-    expect(source).toContain('outcome: "failed"');
-    expect(source).toContain('kind: "failed" as const');
+    expect(source).not.toContain('failureCode: "baseline_restore_failed"');
+    expect(source).not.toContain('outcome: "failed"');
+    expect(source).not.toContain("} catch {");
+    expect(source).not.toContain('await import("../_generated/api")');
+    expect(source).toContain("(internal as any).reporting.readModels.materialize");
   });
 });

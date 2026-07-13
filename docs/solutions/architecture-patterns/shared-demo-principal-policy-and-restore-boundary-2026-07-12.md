@@ -17,7 +17,7 @@ tags:
   - effect-policy
   - convex
   - restore-fence
-delivery_diff_fingerprint: 61337f2389889a7de2d810c1b2e0e60268c934d352739c59b8621719c9bcb435
+delivery_diff_fingerprint: 3bb833b588ee31f0a8d261b40bd515b1926664a059e2e7924f474a1465085a34
 ---
 
 # Shared demo principal policy and atomic restore boundary
@@ -39,7 +39,7 @@ Treat shared-demo access as a distinct server-derived principal layered on top o
 
 At write boundaries, normal actors retain existing behavior. Demo actors pass through a closed capability registry. Real writes are explicitly classified; protected and unknown writes fail closed. Provider-backed effects have a second classification boundary so an allowed business mutation cannot enqueue a live email, message, export, payment, refund, or integration effect later.
 
-Restore the real store through one versioned registry of store-scoped source and child tables. Provision a coherent synthetic foundation once, capture exact baseline documents, and use one singleton restore state as a lease and monotonic epoch. Every allowed demo mutation reads that epoch in the same Convex transaction as its business write. Restore deletes visitor-added rows, replaces modified baseline rows, refuses to recreate destructively removed protected rows, verifies the baseline, and then rematerializes supported Reports projections.
+Restore the real store through one versioned registry of store-scoped source and child tables. Provision a coherent synthetic foundation once, capture exact baseline documents, and use one singleton restore state as a lease and monotonic epoch. Every allowed demo mutation reads that epoch in the same Convex transaction as its business write. Restore deletes visitor-added rows, replaces modified baseline rows, refuses to recreate destructively removed protected rows, verifies the baseline, and then rematerializes supported Reports projections. Restore errors must escape the mutation so Convex rolls back every table change atomically.
 
 ## Why This Matters
 
@@ -54,6 +54,8 @@ Per-admission auth users prevent a newer visitor from extending every older brow
 - Clamp store and organization authority to the server-owned principal. Reject cross-store IDs even when the normal user is a full administrator.
 - Add every newly demo-writable table, including child rows, to the baseline registry or rebuild it deterministically after restore.
 - Query each baseline table through an index that actually exists in the deployed schema. A compound index with `storeId` first is valid for store-prefix capture even when there is no standalone `by_storeId` index.
+- Never catch a baseline error inside the mutation that performs table replacements. Returning a failure result would commit any earlier table writes; an uncaught error preserves the prior store transaction.
+- Let provisioning own baseline-version migration. Restore must reject stale state or snapshot versions before it begins, otherwise a scheduled restore can promote old seed semantics before migration runs.
 - Make allowed demo mutations read `sharedDemoRestoreState.epoch` in the same transaction as their write.
 - Keep synthetic seed data coherent and avoid unsupported reporting claims. Rematerialize only existing Reports relationships.
 - Test expired-principal behavior explicitly. An expired demo principal must throw; it must never fall through as a normal actor.

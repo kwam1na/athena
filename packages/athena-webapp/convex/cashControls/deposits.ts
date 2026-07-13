@@ -6,7 +6,7 @@ import {
 } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { v } from "convex/values";
-import { requireSharedDemoCapabilityIfApplicable } from "../sharedDemo/actor";
+import { requireSharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
 import { requireReadySharedDemoWriteWithCtx } from "../sharedDemo/restore";
 import {
   buildRegisterSessionCloseoutReview,
@@ -1435,7 +1435,7 @@ export const recordRegisterSessionDeposit = mutation({
     ctx,
     args,
   ): Promise<CommandResult<RecordRegisterSessionDepositResult>> => {
-    const demoActor = await requireSharedDemoCapabilityIfApplicable(ctx, "cash.control.write");
+    const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(ctx, "cash.control.write", args.storeId);
     if (demoActor) await requireReadySharedDemoWriteWithCtx(ctx, { storeId: args.storeId });
     let athenaUserId: Id<"athenaUser">;
     try {

@@ -8,7 +8,7 @@ import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
 import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
-import { requireSharedDemoCapabilityIfApplicable } from "../sharedDemo/actor";
+import { requireSharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
 import { requireReadySharedDemoWriteWithCtx } from "../sharedDemo/restore";
 import {
   requireAuthenticatedAthenaUserWithCtx,
@@ -1723,7 +1723,7 @@ export const submitStockAdjustmentBatch = mutation({
   },
   returns: commandResultValidator(v.any()),
   handler: async (ctx, args) => {
-    const demoActor = await requireSharedDemoCapabilityIfApplicable(ctx, "inventory.adjust");
+    const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(ctx, "inventory.adjust", args.storeId);
     if (demoActor) await requireReadySharedDemoWriteWithCtx(ctx, { storeId: args.storeId });
     return submitStockAdjustmentBatchCommandWithCtx(ctx, args);
   },

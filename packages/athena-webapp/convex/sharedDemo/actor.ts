@@ -1,6 +1,7 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 
 import type { MutationCtx, QueryCtx } from "../_generated/server";
+import type { Id } from "../_generated/dataModel";
 import { internalQuery } from "../_generated/server";
 import { v } from "convex/values";
 import type { SharedDemoCapability } from "./policy";
@@ -60,6 +61,20 @@ export async function requireSharedDemoCapabilityIfApplicable(
   const actor = await getSharedDemoActorWithCtx(ctx);
   if (!actor) return null;
   requireSharedDemoCapability(capability);
+  return actor;
+}
+
+/** Demo principals are valid only for their server-owned shared store. Normal
+ * actors keep using the existing domain authorization path. */
+export async function requireSharedDemoStoreCapabilityIfApplicable(
+  ctx: AuthCtx,
+  capability: SharedDemoCapability,
+  storeId: Id<"store">,
+) {
+  const actor = await requireSharedDemoCapabilityIfApplicable(ctx, capability);
+  if (actor && actor.storeId !== storeId) {
+    throw new Error("This action is unavailable in the shared demo.");
+  }
   return actor;
 }
 

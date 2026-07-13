@@ -5,7 +5,7 @@ vi.mock("../lib/athenaUserAuth", () => ({
   requireOrganizationMemberRoleWithCtx: vi.fn(),
 }));
 vi.mock("../sharedDemo/actor", () => ({
-  requireSharedDemoCapabilityIfApplicable: vi.fn(),
+  requireSharedDemoStoreCapabilityIfApplicable: vi.fn(),
 }));
 vi.mock("../sharedDemo/restore", () => ({
   requireReadySharedDemoWriteWithCtx: vi.fn(),
@@ -15,7 +15,7 @@ import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
-import { requireSharedDemoCapabilityIfApplicable } from "../sharedDemo/actor";
+import { requireSharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
 import { requireReadySharedDemoWriteWithCtx } from "../sharedDemo/restore";
 import {
   listStaffMessages,
@@ -56,7 +56,7 @@ describe("staff messages", () => {
     vi.clearAllMocks();
     vi.mocked(requireAuthenticatedAthenaUserWithCtx).mockResolvedValue({ _id: "user-1" } as never);
     vi.mocked(requireOrganizationMemberRoleWithCtx).mockResolvedValue({} as never);
-    vi.mocked(requireSharedDemoCapabilityIfApplicable).mockResolvedValue(null);
+    vi.mocked(requireSharedDemoStoreCapabilityIfApplicable).mockResolvedValue(null);
   });
 
   it("allows a normal member to post a bounded internal message", async () => {
@@ -68,7 +68,7 @@ describe("staff messages", () => {
   });
 
   it("requires the current restore epoch for demo writes", async () => {
-    vi.mocked(requireSharedDemoCapabilityIfApplicable).mockResolvedValue({ kind: "shared_demo" } as never);
+    vi.mocked(requireSharedDemoStoreCapabilityIfApplicable).mockResolvedValue({ kind: "shared_demo" } as never);
     const ctx = context();
     await expect(invoke(postStaffMessage, ctx, { body: "Opening complete", storeId: "store-1" })).rejects.toThrow("Refresh the shared demo");
     await invoke(postStaffMessage, ctx, { body: "Opening complete", expectedDemoRestoreEpoch: 7, storeId: "store-1" });

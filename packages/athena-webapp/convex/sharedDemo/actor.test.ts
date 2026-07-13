@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getSharedDemoActorWithCtx,
   requireSharedDemoCapabilityIfApplicable,
+  requireSharedDemoStoreCapabilityIfApplicable,
 } from "./actor";
 
 vi.mock("@convex-dev/auth/server", () => ({
@@ -147,5 +148,32 @@ describe("shared demo actor resolution", () => {
     await expect(
       requireSharedDemoCapabilityIfApplicable(demoCtx, "exports.generate"),
     ).rejects.toThrow("This action is unavailable in the shared demo.");
+  });
+
+  it("clamps an allowed demo capability to the server-owned store", async () => {
+    vi.mocked(getAuthUserId).mockResolvedValue("demo-auth" as never);
+    const demoCtx = {
+      auth: { getUserIdentity: vi.fn() },
+      db: {
+        query: vi.fn(() => ({
+          withIndex: vi.fn(() => ({
+            unique: vi.fn().mockResolvedValue({
+              admissionExpiresAt: Date.now() + 60_000,
+              athenaUserId: "athena-user",
+              organizationId: "organization",
+              storeId: "demo-store",
+            }),
+          })),
+        })),
+      },
+    } as never;
+
+    await expect(
+      requireSharedDemoStoreCapabilityIfApplicable(
+        demoCtx,
+        "pos.sale.complete",
+        "other-store" as never,
+      ),
+    ).rejects.toThrow("unavailable in the shared demo");
   });
 });

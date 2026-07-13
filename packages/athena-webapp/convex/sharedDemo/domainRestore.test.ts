@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-import { planDomainRestore, requireBoundedBatch, SHARED_DEMO_MUTABLE_TABLES } from "./domainRestore";
+import { planDomainRestore, requireBoundedBatch, requireCurrentBaselineDocuments, SHARED_DEMO_MUTABLE_TABLES } from "./domainRestore";
 
 describe("shared demo domain restore registry", () => {
   it("covers actual mutable tables for all six domains", () => {
@@ -39,6 +39,10 @@ describe("shared demo domain restore registry", () => {
 
   it("fails closed instead of silently truncating an over-budget table", () => {
     expect(() => requireBoundedBatch(Array.from({ length: 501 }), "staffMessage")).toThrow("restore batch required");
+  });
+
+  it("rejects stale captured documents before restoring a table", () => {
+    expect(() => requireCurrentBaselineDocuments([{ baselineVersion: 1 }], "dailyOpening")).toThrow("version mismatch");
   });
 
   it("uses the daily opening store-prefix index declared by the schema", () => {

@@ -192,6 +192,11 @@ function createPublicScaleContext() {
             };
           },
           take: async (limit: number) => matchingRows().slice(0, limit),
+          unique: async () => {
+            const rows = matchingRows();
+            if (rows.length > 1) throw new Error("Expected unique row");
+            return rows[0] ?? null;
+          },
           withIndex: (_indexName: string, apply: (q: typeof builder) => unknown) => {
             apply(builder);
             return chain;

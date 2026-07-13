@@ -26,6 +26,7 @@ import {
 } from "../../reporting/inventory/valuation";
 import { recordOperationalEventWithCtx } from "../../operations/operationalEvents";
 import { updateOperationalWorkItemStatusWithCtx } from "../../operations/operationalWorkItems";
+import { requireSharedDemoStoreCapabilityIfApplicable } from "../../sharedDemo/actor";
 import {
   lookupByBarcode,
   searchProducts,
@@ -465,6 +466,11 @@ async function requireRegisterCatalogStoreAccess(
     indexedIdentityOnly?: boolean;
   },
 ) {
+  await requireSharedDemoStoreCapabilityIfApplicable(
+    ctx,
+    "pos.sale.complete",
+    args.storeId,
+  );
   const store = await ctx.db.get("store", args.storeId);
   if (!store) {
     throw new Error("Store not found.");
@@ -670,7 +676,10 @@ export const search = query({
     storeId: v.id("store"),
     searchQuery: v.string(),
   },
-  handler: async (ctx, args) => searchProducts(ctx, args),
+  handler: async (ctx, args) => {
+    await requireRegisterCatalogStoreAccess(ctx, args);
+    return searchProducts(ctx, args);
+  },
 });
 
 export const listRegisterCatalogSnapshot = query({
@@ -765,7 +774,10 @@ export const barcodeLookup = query({
     catalogResultValidator,
     v.array(catalogResultValidator),
   ),
-  handler: async (ctx, args) => lookupByBarcode(ctx, args),
+  handler: async (ctx, args) => {
+    await requireRegisterCatalogStoreAccess(ctx, args);
+    return lookupByBarcode(ctx, args);
+  },
 });
 
 export const quickAddSku = mutation({

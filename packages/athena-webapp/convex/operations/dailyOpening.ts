@@ -6,7 +6,7 @@ import {
 } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { v } from "convex/values";
-import { requireSharedDemoCapabilityIfApplicable } from "../sharedDemo/actor";
+import { requireSharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
 import { requireReadySharedDemoWriteWithCtx } from "../sharedDemo/restore";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import { recordOperationalEventWithCtx } from "./operationalEvents";
@@ -1237,7 +1237,7 @@ export const startStoreDay = mutation({
   },
   returns: commandResultValidator(v.any()),
   handler: async (ctx, args) => {
-    const demoActor = await requireSharedDemoCapabilityIfApplicable(ctx, "daily_operations.write");
+    const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(ctx, "daily_operations.write", args.storeId);
     if (demoActor) await requireReadySharedDemoWriteWithCtx(ctx, { storeId: args.storeId });
     return startStoreDayWithCtx(ctx, args);
   },

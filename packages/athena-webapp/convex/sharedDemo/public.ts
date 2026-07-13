@@ -51,7 +51,7 @@ export const requestManualRestore = mutation({
   returns: v.object({
     baselineVersion: v.number(),
     epoch: v.number(),
-    kind: v.union(v.literal("started"), v.literal("already_running"), v.literal("rate_limited"), v.literal("failed")),
+    kind: v.union(v.literal("started"), v.literal("already_running"), v.literal("rate_limited")),
   }),
   handler: async (ctx, args) => {
     const actor = await requireSharedDemoActorWithCtx(ctx);
@@ -65,7 +65,7 @@ export const requestManualRestore = mutation({
     return {
       baselineVersion: result.baselineVersion,
       epoch: result.epoch,
-      kind: result.kind === "started" ? "started" as const : result.kind === "failed" ? "failed" as const : "already_running" as const,
+      kind: result.kind === "started" ? "started" as const : "already_running" as const,
     };
   },
 });

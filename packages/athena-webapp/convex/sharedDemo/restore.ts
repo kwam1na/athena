@@ -1,11 +1,13 @@
 import { v } from "convex/values";
 
+import { internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
 import { internalMutation, type MutationCtx } from "../_generated/server";
+import { SHARED_DEMO_BASELINE_VERSION } from "./config";
 import { restoreMutableDemoStoreRowsWithCtx } from "./domainRestore";
 
 export const SHARED_DEMO_BASELINE = {
-  version: 1,
+  version: SHARED_DEMO_BASELINE_VERSION,
   narrative: "A product-led neighborhood store in an active operating day.",
   expectedCounts: {
     cash: 1,
@@ -26,6 +28,15 @@ export type RestoreState = {
   startedAt?: number;
   status: "ready" | "restoring" | "failed";
 };
+
+export function requireCurrentSharedDemoBaseline<T extends RestoreState>(
+  state: T | null,
+): T {
+  if (!state || state.baselineVersion !== SHARED_DEMO_BASELINE.version) {
+    throw new Error("The shared demo baseline requires provisioning.");
+  }
+  return state;
+}
 
 export function beginRestore(
   state: RestoreState,
@@ -87,11 +98,7 @@ export async function restoreBaselineWithCtx(
       .query("sharedDemoRestoreState")
       .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
       .unique();
-    const current: RestoreState = existing ?? {
-      baselineVersion: SHARED_DEMO_BASELINE.version,
-      epoch: 0,
-      status: "ready",
-    };
+    const current = requireCurrentSharedDemoBaseline(existing);
     const decision = beginRestore(current, {
       idempotencyKey: args.idempotencyKey,
       now,
@@ -100,10 +107,8 @@ export async function restoreBaselineWithCtx(
       return { baselineVersion: current.baselineVersion, epoch: current.epoch, kind: decision.kind };
     }
 
-    if (existing) await ctx.db.patch("sharedDemoRestoreState", existing._id, decision.state);
-    else await ctx.db.insert("sharedDemoRestoreState", { ...decision.state, storeId: args.storeId });
+    await ctx.db.patch("sharedDemoRestoreState", current._id, decision.state);
 
-    try {
     const existingRows = await ctx.db
       .query("sharedDemoBaselineRow")
       .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
@@ -141,7 +146,7 @@ export async function restoreBaselineWithCtx(
     });
     await ctx.scheduler.runAfter(
       0,
-      (await import("../_generated/api")).internal.reporting.readModels.materialize
+      (internal as any).reporting.readModels.materialize
         .materializeActiveReportsWorkspaceForStore,
       { storeId: args.storeId },
     );
@@ -151,23 +156,6 @@ export async function restoreBaselineWithCtx(
       kind: "started" as const,
       restoredDocuments: domainRestore.restored,
     };
-    } catch {
-      const state = await ctx.db.query("sharedDemoRestoreState").withIndex("by_storeId", (q) => q.eq("storeId", args.storeId)).unique();
-      if (!state) throw new Error("Shared demo restore state disappeared.");
-      await ctx.db.patch("sharedDemoRestoreState", state._id, {
-        failureCode: "baseline_restore_failed",
-        status: "failed",
-      });
-      await ctx.db.insert("sharedDemoRestoreAudit", {
-        baselineVersion: state.baselineVersion,
-        epoch: state.epoch,
-        occurredAt: now,
-        outcome: "failed",
-        source: args.source,
-        storeId: args.storeId,
-      });
-      return { baselineVersion: state.baselineVersion, epoch: state.epoch, kind: "failed" as const, restoredDocuments: 0 };
-    }
 }
 
 export const restoreBaseline = internalMutation({

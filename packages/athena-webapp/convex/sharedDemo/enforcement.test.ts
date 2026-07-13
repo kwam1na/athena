@@ -5,6 +5,7 @@ vi.mock("./actor", async (importOriginal) => {
   return {
     ...actual,
     requireSharedDemoCapabilityIfApplicable: vi.fn(),
+    requireSharedDemoStoreCapabilityIfApplicable: vi.fn(),
   };
 });
 vi.mock("./restore", async (importOriginal) => {
@@ -12,7 +13,10 @@ vi.mock("./restore", async (importOriginal) => {
   return { ...actual, requireReadySharedDemoWriteWithCtx: vi.fn() };
 });
 
-import { requireSharedDemoCapabilityIfApplicable } from "./actor";
+import {
+  requireSharedDemoCapabilityIfApplicable,
+  requireSharedDemoStoreCapabilityIfApplicable,
+} from "./actor";
 import { requireReadySharedDemoWriteWithCtx } from "./restore";
 import { create as createInvite } from "../inventory/inviteCode";
 import {
@@ -89,30 +93,37 @@ describe("actual public shared-demo enforcement boundaries", () => {
 
   it.each([
     [completeTransaction, "pos.sale.complete", { storeId: "store" }],
-    [submitStockAdjustmentBatch, "inventory.adjust", {}],
-    [recordRegisterSessionDeposit, "cash.control.write", {}],
-    [updateOrder, "orders.fulfill", {}],
+    [submitStockAdjustmentBatch, "inventory.adjust", { storeId: "store" }],
+    [recordRegisterSessionDeposit, "cash.control.write", { storeId: "store" }],
     [postStaffMessage, "staff.communication.write", { body: "Store update", storeId: "store" }],
-    [startStoreDay, "daily_operations.write", {}],
-  ] as const)("routes each allowed workflow through the central boundary", async (fn, capability, args) => {
+    [startStoreDay, "daily_operations.write", { storeId: "store" }],
+  ] as const)("routes each store-scoped workflow through the central clamp", async (fn, capability, args) => {
+    const sentinel = new Error("boundary reached");
+    vi.mocked(requireSharedDemoStoreCapabilityIfApplicable).mockRejectedValueOnce(sentinel);
+    const ctx = { db: {} };
+    await expect(invoke(fn, ctx, args)).rejects.toThrow(sentinel.message);
+    expect(requireSharedDemoStoreCapabilityIfApplicable).toHaveBeenCalledWith(
+      ctx,
+      capability,
+      "store",
+    );
+  });
+
+  it("routes fulfillment through its loaded-order store clamp", async () => {
     const sentinel = new Error("boundary reached");
     vi.mocked(requireSharedDemoCapabilityIfApplicable).mockRejectedValueOnce(sentinel);
     const ctx = { db: {} };
-    await expect(invoke(fn, ctx, args)).rejects.toThrow(sentinel.message);
-    expect(requireSharedDemoCapabilityIfApplicable).toHaveBeenCalledWith(
-      ctx,
-      capability,
-    );
+    await expect(invoke(updateOrder, ctx, {})).rejects.toThrow(sentinel.message);
+    expect(requireSharedDemoCapabilityIfApplicable).toHaveBeenCalledWith(ctx, "orders.fulfill");
   });
 
   it.each([
     [completeTransaction, { storeId: "store" }, "store"],
     [submitStockAdjustmentBatch, { storeId: "store" }, "store"],
     [recordRegisterSessionDeposit, { storeId: "store" }, "store"],
-    [updateOrder, { update: { status: "delivered" } }, "demo-store"],
     [startStoreDay, { storeId: "store" }, "store"],
   ] as const)("fences a demo workflow before its business write", async (fn, args, storeId) => {
-    vi.mocked(requireSharedDemoCapabilityIfApplicable).mockResolvedValueOnce({
+    vi.mocked(requireSharedDemoStoreCapabilityIfApplicable).mockResolvedValueOnce({
       kind: "shared_demo",
       storeId: "demo-store",
     } as never);
@@ -127,5 +138,20 @@ describe("actual public shared-demo enforcement boundaries", () => {
     expect(ctx.db.get).not.toHaveBeenCalled();
     expect(ctx.db.insert).not.toHaveBeenCalled();
     expect(ctx.db.patch).not.toHaveBeenCalled();
+  });
+
+  it("fences fulfillment against the principal store before loading the order", async () => {
+    vi.mocked(requireSharedDemoCapabilityIfApplicable).mockResolvedValueOnce({
+      kind: "shared_demo",
+      storeId: "demo-store",
+    } as never);
+    const sentinel = new Error("restore fence reached");
+    vi.mocked(requireReadySharedDemoWriteWithCtx).mockRejectedValueOnce(sentinel);
+    const ctx = { db: { get: vi.fn(), insert: vi.fn(), patch: vi.fn() } };
+    await expect(invoke(updateOrder, ctx, { update: { status: "delivered" } })).rejects.toThrow(sentinel.message);
+    expect(requireReadySharedDemoWriteWithCtx).toHaveBeenCalledWith(ctx, {
+      storeId: "demo-store",
+    });
+    expect(ctx.db.get).not.toHaveBeenCalled();
   });
 });

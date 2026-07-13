@@ -2,7 +2,7 @@ import { v } from "convex/values";
 
 import { mutation, query, type MutationCtx, type QueryCtx } from "../../_generated/server";
 import type { Id } from "../../_generated/dataModel";
-import { requireSharedDemoCapabilityIfApplicable } from "../../sharedDemo/actor";
+import { requireSharedDemoStoreCapabilityIfApplicable } from "../../sharedDemo/actor";
 import { requireReadySharedDemoWriteWithCtx } from "../../sharedDemo/restore";
 import { commandResultValidator } from "../../lib/commandResultValidators";
 import {
@@ -431,7 +431,7 @@ export const completeTransaction = mutation({
     }),
   ),
   handler: async (ctx, args) => {
-    const demoActor = await requireSharedDemoCapabilityIfApplicable(ctx, "pos.sale.complete");
+    const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(ctx, "pos.sale.complete", args.storeId);
     if (demoActor) await requireReadySharedDemoWriteWithCtx(ctx, { storeId: args.storeId });
     const store = await ctx.db.get("store", args.storeId);
     if (!store) {

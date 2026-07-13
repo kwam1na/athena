@@ -2,6 +2,7 @@ import { v } from "convex/values";
 
 import type { Id } from "../_generated/dataModel";
 import { internalMutation, type MutationCtx } from "../_generated/server";
+import { SHARED_DEMO_BASELINE_VERSION } from "./config";
 
 export const SHARED_DEMO_MUTABLE_TABLES = [
   { domain: "pos", tableName: "posTransactionItem" },
@@ -25,7 +26,22 @@ export function requireBoundedBatch<T>(rows: T[], tableName: string) {
   return rows;
 }
 
+export function requireCurrentBaselineDocuments<T extends { baselineVersion: number }>(
+  rows: T[],
+  tableName: string,
+) {
+  if (rows.some((row) => row.baselineVersion !== SHARED_DEMO_BASELINE_VERSION)) {
+    throw new Error(`Shared demo baseline version mismatch for ${tableName}.`);
+  }
+  return rows;
+}
+
 type RestoreRow = { _id: string; storeId: string; [key: string]: unknown };
+type BaselineDocumentRow = {
+  baselineVersion: number;
+  document: Record<string, unknown>;
+  documentId: string;
+};
 
 export function planDomainRestore(args: {
   baseline: RestoreRow[];
@@ -86,7 +102,7 @@ export async function captureBaselineDocumentsWithCtx(
       const rows = await listStoreRows(ctx, entry.tableName, args.storeId);
       for (const row of rows) {
         await ctx.db.insert("sharedDemoBaselineDocument", {
-          baselineVersion: 1,
+          baselineVersion: SHARED_DEMO_BASELINE_VERSION,
           document: withoutSystemFields(row),
           documentId: String(row._id),
           storeId: args.storeId,
@@ -108,10 +124,11 @@ export async function restoreMutableDemoStoreRowsWithCtx(ctx: any, storeId: Id<"
   const actualCounts: Record<string, number> = {};
   const expectedCounts: Record<string, number> = {};
   for (const entry of SHARED_DEMO_MUTABLE_TABLES) {
-    const [current, baseline] = await Promise.all([
+    const [current, baselineRows]: [any[], BaselineDocumentRow[]] = await Promise.all([
       listStoreRows(ctx, entry.tableName, storeId),
       ctx.db.query("sharedDemoBaselineDocument").withIndex("by_storeId_tableName", (q: any) => q.eq("storeId", storeId).eq("tableName", entry.tableName)).take(500),
     ]);
+    const baseline = requireCurrentBaselineDocuments(baselineRows, entry.tableName);
     const currentIds = new Set(current.map((row: any) => String(row._id)));
     if (baseline.some((row: any) => !currentIds.has(row.documentId))) {
       throw new Error("Protected shared demo baseline row is missing.");

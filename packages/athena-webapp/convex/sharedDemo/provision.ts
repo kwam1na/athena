@@ -3,10 +3,11 @@ import { v } from "convex/values";
 import { internalMutation } from "../_generated/server";
 import { insertRegisterSessionWithAuthority } from "../operations/registerSessionAuthorityRevision";
 import { hashPosTerminalSyncSecret } from "../pos/application/sync/terminalSyncSecret";
-import { captureBaselineDocumentsWithCtx } from "./domainRestore";
+import { SHARED_DEMO_BASELINE_VERSION } from "./config";
+import { captureBaselineDocumentsWithCtx, restoreMutableDemoStoreRowsWithCtx } from "./domainRestore";
 
 export const SHARED_DEMO_SEED = {
-  version: 1,
+  version: SHARED_DEMO_BASELINE_VERSION,
   domains: ["pos", "inventory", "cash", "orders", "staff", "operations"],
   organizationSlug: "athena-shared-demo",
   storeSlug: "central",
@@ -40,6 +41,34 @@ export const provisionSharedDemo = internalMutation({
       if (!existingOrganization || !existingStore || existingStore.config?.sharedDemo !== true) throw new Error("Shared demo foundation is incomplete.");
       const owner = await ctx.db.query("athenaUser").withIndex("by_normalizedEmail", (q) => q.eq("normalizedEmail", SHARED_DEMO_SEED.ownerEmail)).unique();
       if (!owner) throw new Error("Shared demo owner is missing.");
+      const state = await ctx.db.query("sharedDemoRestoreState").withIndex("by_storeId", (q) => q.eq("storeId", existingStore._id)).unique();
+      if (!state || state.baselineVersion > SHARED_DEMO_BASELINE_VERSION) throw new Error("Shared demo baseline version is invalid.");
+      if (state.baselineVersion < SHARED_DEMO_BASELINE_VERSION) {
+        await restoreMutableDemoStoreRowsWithCtx(ctx, existingStore._id);
+        const openings = await ctx.db.query("dailyOpening").withIndex("by_storeId_operatingDate", (q) => q.eq("storeId", existingStore._id)).take(500);
+        for (const opening of openings) await ctx.db.delete("dailyOpening", opening._id);
+        const events = await ctx.db.query("operationalEvent").withIndex("by_storeId", (q) => q.eq("storeId", existingStore._id)).take(500);
+        const seedEvent = events.find((event) => event.eventType === "demo.store_day_started");
+        if (!seedEvent) throw new Error("Shared demo operating narrative is incomplete.");
+        await ctx.db.patch("operationalEvent", seedEvent._id, {
+          eventType: "demo.store_ready",
+          message: "The shared demo store is ready to start the operating day.",
+          subjectId: String(existingStore._id),
+          subjectLabel: operatingDate(now),
+          subjectType: "store",
+        });
+        await ctx.db.patch("sharedDemoRestoreState", state._id, {
+          baselineVersion: SHARED_DEMO_BASELINE_VERSION,
+          completedAt: now,
+          epoch: state.epoch + 1,
+          failureCode: undefined,
+          idempotencyKey: undefined,
+          startedAt: undefined,
+          status: "ready",
+        });
+        await captureBaselineDocumentsWithCtx(ctx, { storeId: existingStore._id });
+        return { athenaUserId: owner._id, kind: "migrated" as const, organizationId: existingOrganization._id, storeId: existingStore._id };
+      }
       return { athenaUserId: owner._id, kind: "existing" as const, organizationId: existingOrganization._id, storeId: existingStore._id };
     }
 
@@ -140,19 +169,12 @@ export const provisionSharedDemo = internalMutation({
     });
     await ctx.db.patch("checkoutSession", checkoutSessionId, { placedOrderId: orderId });
     await ctx.db.insert("onlineOrderItem", { isReady: true, orderId, price: 2500, productId, productName: "Fresh Milk 1L", productSku: "DEMO-MILK-1L", productSkuId, quantity: 1, storeFrontUserId: guestId });
-    const dailyOpeningId = await ctx.db.insert("dailyOpening", {
-      acknowledgedItemKeys: [], actorStaffProfileId: ownerStaffId, actorType: "human", actorUserId: ownerUserId,
-      carryForwardWorkItemIds: [], createdAt: now, operatingDate: operatingDate(now), organizationId,
-      readiness: { blockerCount: 0, carryForwardCount: 0, readyCount: 4, reviewCount: 1, status: "ready" },
-      sourceSubjects: [{ id: String(storeId), label: "Athena Demo Market — Central", type: "store" }],
-      startedAt: now - 14_400_000, status: "started", storeId, updatedAt: now,
-    });
     await ctx.db.insert("operationalEvent", {
       actorStaffProfileId: ownerStaffId, actorType: "human", actorUserId: ownerUserId, createdAt: now - 14_400_000,
-      eventType: "demo.store_day_started", message: "The shared demo store opened for the operating day.", organizationId,
-      subjectId: String(dailyOpeningId), subjectLabel: operatingDate(now), subjectType: "daily_opening", storeId,
+      eventType: "demo.store_ready", message: "The shared demo store is ready to start the operating day.", organizationId,
+      subjectId: String(storeId), subjectLabel: operatingDate(now), subjectType: "store", storeId,
     });
-    await ctx.db.insert("sharedDemoRestoreState", { baselineVersion: 1, completedAt: now, epoch: 0, status: "ready", storeId });
+    await ctx.db.insert("sharedDemoRestoreState", { baselineVersion: SHARED_DEMO_BASELINE_VERSION, completedAt: now, epoch: 0, status: "ready", storeId });
     await captureBaselineDocumentsWithCtx(ctx, { storeId });
     return { athenaUserId: ownerUserId, kind: "created" as const, organizationId, storeId };
   },

@@ -5,6 +5,7 @@ export const SHARED_DEMO_ADMISSION_DURATION_MS = 60 * 60_000;
 export const SHARED_DEMO_ADMISSION_RATE_WINDOW_MS = 60_000;
 export const SHARED_DEMO_MINT_RATE_LIMIT = 60;
 export const SHARED_DEMO_EXCHANGE_RATE_LIMIT = 60;
+export const SHARED_DEMO_BASELINE_VERSION = 2;
 
 type SharedDemoEnvironment = Record<string, string | undefined>;
 

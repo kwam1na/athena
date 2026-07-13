@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="80de736d6c0a590ca435871fe5daf31749e416ef9d6486bc021ec36f34fd5b58">
+<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="3bb833b588ee31f0a8d261b40bd515b1926664a059e2e7924f474a1465085a34">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -82,10 +82,10 @@
       <header>
         <h1>Athena shared demo: real workflows with bounded authority</h1>
         <p class="lede">How one synthetic store can support shared writes without becoming an unrestricted administrator or a parallel demo application.</p>
-        <div class="meta"><span class="pill">Linear V26-1039</span><span class="pill">Branch codex/V26-1039-shared-demo</span><span class="pill">PR not open yet</span><span class="pill">QA/browser validation paused</span><span class="pill">No production deploy</span><span class="pill">Root checkout unchanged</span></div>
+        <div class="meta"><span class="pill">Linear V26-1039</span><span class="pill">Branch codex/V26-1039-shared-demo</span><span class="pill">PR not open yet</span><span class="pill">Dev backend provisioned</span><span class="pill">Browser validation pending</span><span class="pill">No production deploy</span><span class="pill">Root checkout unchanged</span></div>
       </header>
       <section class="panel"><h2>Executive summary</h2>
-<p>Athena now has a dev/QA-gated /demo entry that exchanges a short-lived opaque ticket for a per-admission demo principal. Every principal maps to the same synthetic owner, organization, and store, so visitors see each other&#x27;s writes without sharing renewable authentication authority.</p>
+<p>Athena now has a dev/QA-gated /demo entry that exchanges a short-lived opaque ticket for a per-admission demo principal. Every principal maps to the same synthetic owner, organization, and store, so the deployed design shares writes without sharing renewable authentication authority; cross-visitor visibility remains part of the pending browser proof.</p>
 <p>The experience uses Athena&#x27;s real POS, inventory, cash, fulfillment, staff-message, Daily Operations, and Reports surfaces. A thin owner-oriented layer labels the store as shared, warns against sensitive input, explains six workflows, and exposes a manual restore. Hourly and manual restore share one versioned store-scoped boundary.</p>
 </section>
 <section class="panel"><h2>Why this mattered</h2>
@@ -101,12 +101,25 @@
        -&gt; provider effect simulated/denied
        -&gt; hourly/manual baseline restore</code></pre>
 </section>
+<section class="panel"><h2>Six real workflows</h2>
+<div class="table-wrap" role="region" aria-label="Shared demo workflow matrix" tabindex="0"><table>
+<thead><tr><th>Area</th><th>Real shared write</th><th>Effect boundary</th><th>Reporting posture</th></tr></thead>
+<tbody>
+<tr><td>POS</td><td>Complete a sale and record its items</td><td>No payment-provider effect</td><td>Existing sales and item projections may reflect the write</td></tr>
+<tr><td>Inventory</td><td>Submit a stock adjustment and movement</td><td>No external effect</td><td>Existing inventory and attention views may reflect the write</td></tr>
+<tr><td>Cash</td><td>Record register-session cash control</td><td>No money movement</td><td>No new report relationship is claimed</td></tr>
+<tr><td>Fulfillment</td><td>Advance the seeded pickup order</td><td>Customer notification is simulated</td><td>No new report relationship is claimed</td></tr>
+<tr><td>Staff</td><td>Post a bounded internal store message</td><td>No customer or identity effect</td><td>Not a Reports source</td></tr>
+<tr><td>Daily Operations</td><td>Start the seeded store day</td><td>No external effect</td><td>Existing operational surfaces remain authoritative</td></tr>
+</tbody></table></div>
+<p>Reports are a separate read-only surface. They show these writes only where Athena already has a supported materialized relationship.</p>
+</section>
 <section class="panel"><h2>Before and after</h2>
 
 <ul>
 <li>Before: no shared-demo principal, /demo entry, shared-store restore coordinator, or owner orientation existed on origin/main.</li>
 <li>After: each admission has its own non-renewable server-clock authority while all admissions map to one synthetic Athena owner/store.</li>
-<li>After: a recursive source sensor discovers every exported public mutation/action and provider-bearing module, explicitly classifying supported demo surfaces while unknown surfaces default to denied.</li>
+<li>After: a recursive CI sensor detects exported public mutations/actions and provider-bearing modules for explicit review. Runtime denial remains owned by the demo actor, store-scoped adapters, foundation guards, and provider-effect guards.</li>
 <li>After: provisioning creates coherent source and child rows, and restore replaces baseline rows, removes visitor-added rows, measures restored counts, and schedules existing Reports rematerialization.</li>
 <li>After: staff communication is a genuine bounded internal store workflow, not a customer banner or navigation placeholder.</li>
 </ul>
@@ -120,7 +133,7 @@
 <li>Configured demo user, organization, and store IDs are protected by auth-independent foundation guards, so signing out cannot bypass destructive administration checks.</li>
 <li>Catalog administration, global maintenance, store migration, cache invalidation, OTP, storage, media, payment, refund, export, and provider actions enforce ordinary non-demo authority or demo-effect denial before database changes, credential reads, uploads, deletes, or network dispatch.</li>
 <li>Order fulfillment accepts only bounded status changes. Customer notifications are simulated for demo actors; normal actors retain live scheduling.</li>
-<li>Every demo write reads the restore epoch in the same transaction. Restore records durable failure if verification fails or a table exceeds the bounded 500-row atomic restore budget.</li>
+<li>Every demo write reads the restore epoch in the same transaction. Verification or capacity failures escape the restore mutation so Convex rolls back every baseline change instead of committing a partial restore.</li>
 <li>The 500-row per-table boundary is intentional fail-closed capacity. Supporting larger stores would require a cursor-based multi-transaction coordinator.</li>
 </ul>
 </section>
@@ -135,8 +148,8 @@
 </ul>
 </section>
 <section class="panel"><h2>Validation and current finish line</h2>
-<p>Focused unit, handler-boundary, and component suites cover admission, actor expiry, capability enforcement, effect suppression, provisioning, domain restoration, cron, manual restore, staff messaging, /demo entry, orientation semantics, keyboard focus behavior, and restore UX. TypeScript, changed-file lint, generated API/route artifacts, Graphify, frontmatter validation, and cached diff checks have passed during development. A complete accessibility audit and runtime integration pass remain part of the paused browser gate.</p>
-<p>The full pr:athena gate is being rerun after security-review fixes and this report. QA/dev deployment and live browser validation are deliberately paused because another agent is changing the dev backend. The PR must not be marked ready until those runtime checks are completed. No production deploy, merge, or root alignment has occurred.</p>
+<p>Focused unit, handler-boundary, and component suites cover admission, actor expiry, capability enforcement, effect suppression, provisioning, domain restoration, cron, manual restore, staff messaging, /demo entry, orientation semantics, keyboard focus behavior, and restore UX. TypeScript, changed-file lint, generated API/route artifacts, Graphify, frontmatter validation, and cached diff checks have passed during development.</p>
+<p>The rebased backend is live on the shared dev Convex deployment under the QA-only deployment allowlist. Transactional provisioning exposed a missing-index assumption in baseline capture; the mutation rolled back cleanly, the restore query now uses the schema's <code>by_storeId_operatingDate</code> prefix index, and provisioning then completed. A second live restore check exposed an unsupported dynamic generated-API import; the static internal reference replaced it. Baseline v2 then migrated the seeded store day from already-started to ready-to-start, and the deployed restore completed all 13 baseline documents at epoch 4. Restore refuses stale state or captured-document versions, so provisioning alone owns baseline migration. The full <code>pr:athena</code> gate and deployed in-app browser validation remain required before the PR is marked ready. No production deploy, merge, or root alignment has occurred.</p>
 </section>
 <section class="panel"><h2>Next-time guidance</h2>
 
@@ -157,8 +170,8 @@
 <tr><td><code>packages/athena-webapp/convex/sharedDemo/actor.ts</code></td><td>Resolves server-owned demo authority, expiry, store scope, and capability enforcement without changing normal actors.</td></tr>
 <tr><td><code>packages/athena-webapp/convex/sharedDemo/policy.ts</code></td><td>Closed capability/effect registry and payload-level order-fulfillment restriction.</td></tr>
 <tr><td><code>packages/athena-webapp/convex/sharedDemo/provision.ts</code></td><td>Creates the stable synthetic owner/store and coherent six-domain source narrative.</td></tr>
-<tr><td><code>packages/athena-webapp/convex/sharedDemo/domainRestore.ts</code></td><td>Captures and restores real store-scoped source and child rows while preserving unrelated tenants.</td></tr>
-<tr><td><code>packages/athena-webapp/convex/sharedDemo/restore.ts</code></td><td>Coordinates restore lease/epoch, measured verification, durable failure, audit, and Reports rematerialization.</td></tr>
+<tr><td><code>packages/athena-webapp/convex/sharedDemo/domainRestore.ts</code></td><td>Captures and restores real store-scoped source and child rows through deployed schema indexes while preserving unrelated tenants.</td></tr>
+<tr><td><code>packages/athena-webapp/convex/sharedDemo/restore.ts</code></td><td>Coordinates restore lease/epoch, measured verification, atomic rollback on failure, audit, and Reports rematerialization.</td></tr>
 <tr><td><code>packages/athena-webapp/convex/operations/staffMessages.ts</code></td><td>Adds the real bounded internal staff-communication workflow with membership, rate, and restore fencing.</td></tr>
 <tr><td><code>packages/athena-webapp/src/routes/demo.tsx</code></td><td>Seamless credential-free entry into the configured shared store.</td></tr>
 <tr><td><code>packages/athena-webapp/src/components/shared-demo/SharedDemoStatusBar.tsx</code></td><td>Persistent shared-state, sensitive-data, hourly restore, guide, and manual restore communication.</td></tr>
@@ -171,6 +184,7 @@
   <h2>Subagent Evidence</h2>
   <ul><li><strong>requirements and session-context reviewer:</strong> Traced the sandbox-reference decisions, unanimous review loop, staff-communication correction, finish-line constraints, and local validation evidence.</li>
 <li><strong>security and delivered-diff reviewer:</strong> Mapped the staged architecture and found inconsistent deployment gates, missing throttling, unwired effect simulation, and restore verification/failure gaps; those blockers were then fixed and retested.</li>
+<li><strong>final delivered-diff reviewer:</strong> Found cross-store authority gaps and a caught-error restore path that could commit partial tables. Central store clamps and uncaught atomic rollback now cover the real writes and shared reads.</li>
 <li><strong>product and design reviewer:</strong> Approved the native Athena shell, owner-centered six-domain framing, persistent shared warning, optional guide, real-route navigation, restore copy, and accessibility posture.</li></ul>
 </section>
 
@@ -182,13 +196,13 @@
 
 <div class="quiz-question" data-answer="1">
   <fieldset>
-    <legend>1. Why does each visitor receive a separate auth principal?</legend>
-    <label><input type="radio" name="q1" value="0" /> To create a separate store</label>
-<label><input type="radio" name="q1" value="1" /> To prevent later visits from extending older admissions</label>
-<label><input type="radio" name="q1" value="2" /> To bypass Athena membership checks</label>
-<label><input type="radio" name="q1" value="3" /> To enable production login</label>
+    <legend>1. Why should a visitor never enter real personal, payment, or credential data?</legend>
+    <label><input type="radio" name="q1" value="0" /> Reports cannot render text</label>
+<label><input type="radio" name="q1" value="1" /> The store is shared and other visitors may observe writes before restore</label>
+<label><input type="radio" name="q1" value="2" /> Athena sends every field to a payment provider</label>
+<label><input type="radio" name="q1" value="3" /> The demo requires production credentials</label>
   </fieldset>
-  <div class="answer-detail">Correct: later visits must not extend older admissions. Business state is shared, but authentication authority and expiry are per admission.</div>
+  <div class="answer-detail">Correct: the synthetic store is shared. Visitors must use synthetic content because writes may be visible until the shared baseline is restored.</div>
 </div>
 
 <div class="quiz-question" data-answer="2">
@@ -204,13 +218,13 @@
 
 <div class="quiz-question" data-answer="2">
   <fieldset>
-    <legend>3. Which workflow is not a permitted real demo write?</legend>
-    <label><input type="radio" name="q3" value="0" /> Completing a POS sale</label>
-<label><input type="radio" name="q3" value="1" /> Posting an internal staff message</label>
-<label><input type="radio" name="q3" value="2" /> Changing organization permissions</label>
-<label><input type="radio" name="q3" value="3" /> Recording a cash-control deposit</label>
+    <legend>3. What should another admitted visitor observe after you post a staff message?</legend>
+    <label><input type="radio" name="q3" value="0" /> A private visitor-only copy</label>
+<label><input type="radio" name="q3" value="1" /> A new isolated store generation</label>
+<label><input type="radio" name="q3" value="2" /> The same message in the shared store until restore</label>
+<label><input type="radio" name="q3" value="3" /> A customer notification</label>
   </fieldset>
-  <div class="answer-detail">Correct: changing organization permissions is protected. POS, staff messages, and cash controls are explicitly classified real demo writes.</div>
+  <div class="answer-detail">Correct: staff communication is a real shared-store write, not a per-visitor session artifact or customer-facing effect.</div>
 </div>
 
 <div class="quiz-question" data-answer="2">
@@ -237,24 +251,24 @@
 
 <div class="quiz-question" data-answer="2">
   <fieldset>
-    <legend>6. How does restore treat visitor-added demo rows?</legend>
-    <label><input type="radio" name="q6" value="0" /> It preserves all of them</label>
-<label><input type="radio" name="q6" value="1" /> It moves them to production</label>
-<label><input type="radio" name="q6" value="2" /> It deletes store-scoped additions and replaces baseline rows</label>
-<label><input type="radio" name="q6" value="3" /> It only clears browser storage</label>
+    <legend>6. What is the scope of the manual Restore demo action?</legend>
+    <label><input type="radio" name="q6" value="0" /> Only the current browser tab</label>
+<label><input type="radio" name="q6" value="1" /> Only the current visitor's messages</label>
+<label><input type="radio" name="q6" value="2" /> The shared store for everyone using it</label>
+<label><input type="radio" name="q6" value="3" /> Every Athena tenant</label>
   </fieldset>
-  <div class="answer-detail">Correct: restore deletes store-scoped additions and replaces captured baseline rows in Athena&#x27;s real source and child tables.</div>
+  <div class="answer-detail">Correct: manual restore resets the shared synthetic store for every active visitor, which is why the UI asks for confirmation.</div>
 </div>
 
 <div class="quiz-question" data-answer="1">
   <fieldset>
     <legend>7. What happens if a restored table exceeds the current 500-row atomic budget?</legend>
     <label><input type="radio" name="q7" value="0" /> Rows after 500 are silently ignored</label>
-<label><input type="radio" name="q7" value="1" /> Restore records a durable failure and stops</label>
+<label><input type="radio" name="q7" value="1" /> The restore mutation throws and all of its writes roll back</label>
 <label><input type="radio" name="q7" value="2" /> The store is deleted</label>
 <label><input type="radio" name="q7" value="3" /> The browser performs the remainder</label>
   </fieldset>
-  <div class="answer-detail">Correct: restore records durable failure and stops. It never silently ignores rows beyond the bounded atomic budget.</div>
+  <div class="answer-detail">Correct: the bounded read throws, so Convex rolls back the entire restore mutation. Rows are never silently ignored and a partial baseline is not committed.</div>
 </div>
 
 <div class="quiz-question" data-answer="1">
@@ -270,13 +284,13 @@
 
 <div class="quiz-question" data-answer="2">
   <fieldset>
-    <legend>9. What happens when measured restored counts do not match the captured baseline?</legend>
-    <label><input type="radio" name="q9" value="0" /> The restore still reports ready</label>
-<label><input type="radio" name="q9" value="1" /> The browser guesses which rows are missing</label>
-<label><input type="radio" name="q9" value="2" /> Restore persists a failed state and audit result</label>
-<label><input type="radio" name="q9" value="3" /> The demo switches to a real tenant</label>
+    <legend>9. When should Reports reflect a demo write?</legend>
+    <label><input type="radio" name="q9" value="0" /> Every write must invent a new report metric</label>
+<label><input type="radio" name="q9" value="1" /> The browser should infer unsupported relationships</label>
+<label><input type="radio" name="q9" value="2" /> Only where Athena already supports a materialized relationship</label>
+<label><input type="radio" name="q9" value="3" /> Reports should remain empty in all cases</label>
   </fieldset>
-  <div class="answer-detail">Correct: a measured mismatch persists a failed state and audit result. It must never publish a false ready state.</div>
+  <div class="answer-detail">Correct: Reports remain read-only and truthful to Athena's existing projections. The demo does not invent unsupported metrics.</div>
 </div>
 
 <div class="quiz-question" data-answer="2">
