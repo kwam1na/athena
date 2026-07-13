@@ -17,7 +17,7 @@ tags:
   - effect-policy
   - convex
   - restore-fence
-delivery_diff_fingerprint: 80de736d6c0a590ca435871fe5daf31749e416ef9d6486bc021ec36f34fd5b58
+delivery_diff_fingerprint: 61337f2389889a7de2d810c1b2e0e60268c934d352739c59b8621719c9bcb435
 ---
 
 # Shared demo principal policy and atomic restore boundary
@@ -53,6 +53,7 @@ Per-admission auth users prevent a newer visitor from extending every older brow
 - Put demo capability checks inside the actual mutation/action boundary, before provider calls or durable writes. Hiding a route or control is never sufficient.
 - Clamp store and organization authority to the server-owned principal. Reject cross-store IDs even when the normal user is a full administrator.
 - Add every newly demo-writable table, including child rows, to the baseline registry or rebuild it deterministically after restore.
+- Query each baseline table through an index that actually exists in the deployed schema. A compound index with `storeId` first is valid for store-prefix capture even when there is no standalone `by_storeId` index.
 - Make allowed demo mutations read `sharedDemoRestoreState.epoch` in the same transaction as their write.
 - Keep synthetic seed data coherent and avoid unsupported reporting claims. Rematerialize only existing Reports relationships.
 - Test expired-principal behavior explicitly. An expired demo principal must throw; it must never fall through as a normal actor.
