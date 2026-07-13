@@ -5,10 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
+import { useSharedDemoContext } from "@/hooks/useSharedDemoContext";
 
 export function StaffMessagesView({ storeId }: { storeId: Id<"store"> }) {
   const messages = useQuery(api.operations.staffMessages.listStaffMessages, { storeId });
-  const demo = useQuery(api.sharedDemo.public.getContext, {});
+  const demo = useSharedDemoContext();
   const post = useMutation(api.operations.staffMessages.postStaffMessage);
   const [body, setBody] = useState("");
   const [status, setStatus] = useState("");

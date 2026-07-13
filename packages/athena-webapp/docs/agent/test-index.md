@@ -496,6 +496,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/hooks/useGetTerminal.test.ts`](../../src/hooks/useGetTerminal.test.ts)
 - [`src/hooks/usePOSProducts.test.ts`](../../src/hooks/usePOSProducts.test.ts)
 - [`src/hooks/useProtectedAdminPageState.test.tsx`](../../src/hooks/useProtectedAdminPageState.test.tsx)
+- [`src/hooks/useSharedDemoContext.test.ts`](../../src/hooks/useSharedDemoContext.test.ts)
 - [`src/lib/access/capabilities.test.ts`](../../src/lib/access/capabilities.test.ts)
 - [`src/lib/app-messages/useAppActionBlocker.test.tsx`](../../src/lib/app-messages/useAppActionBlocker.test.tsx)
 - [`src/lib/app-update/appUpdateReload.test.ts`](../../src/lib/app-update/appUpdateReload.test.ts)

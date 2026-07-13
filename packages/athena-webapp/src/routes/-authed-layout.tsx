@@ -69,13 +69,11 @@ import {
   useAthenaTheme,
 } from "@/lib/theme";
 import { SharedDemoRuntime } from "@/components/shared-demo/SharedDemoRuntime";
+import { useSharedDemoContext } from "@/hooks/useSharedDemoContext";
 import {
   SharedDemoRestrictedSurface,
 } from "@/components/shared-demo/SharedDemoRestrictedSurface";
 import { isSharedDemoRestrictedPath } from "@/components/shared-demo/sharedDemoRestrictions";
-import { useQuery } from "convex/react";
-import { api } from "~/convex/_generated/api";
-
 const POS_TERMINAL_FULLSCREEN_PATH_PATTERN =
   /^\/(?<orgUrlSlug>[^/]+)\/store\/(?<storeUrlSlug>[^/]+)\/pos\/(?:register|expense)\/?$/;
 const POS_HUB_PATH_PATTERN =
@@ -184,7 +182,7 @@ function isBrowserOffline() {
 
 function AuthedComponent() {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
-  const demoContext = useQuery(api.sharedDemo.public.getContext, {});
+  const demoContext = useSharedDemoContext();
   if (demoContext && isSharedDemoRestrictedPath(pathname)) {
     const storeRoot = pathname.match(/^\/[^/]+\/store\/[^/]+/)?.[0];
     return (

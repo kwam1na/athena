@@ -18,7 +18,7 @@ import {
 } from "~/src/contexts/OnlineOrderContext";
 import { LoadingButton } from "../ui/loading-button";
 import { useState } from "react";
-import { useAction, useMutation, useQuery } from "convex/react";
+import { useAction, useMutation } from "convex/react";
 import { api } from "~/convex/_generated/api";
 import {
   currencyFormatter,
@@ -44,6 +44,7 @@ import { OrderStatus } from "./OrderStatus";
 import { EmailStatusView } from "./EmailStatusView";
 import { ComposedPageHeader } from "../common/PageHeader";
 import { useAuth } from "~/src/hooks/useAuth";
+import { useSharedDemoContext } from "~/src/hooks/useSharedDemoContext";
 import { ReturnExchangeView } from "./ReturnExchangeView";
 import { presentCommandToast } from "~/src/lib/errors/presentCommandToast";
 import { runCommand } from "~/src/lib/errors/runCommand";
@@ -181,7 +182,7 @@ export function RefundOptions() {
 
 const Header = () => {
   const { order } = useOnlineOrder();
-  const sharedDemo = useQuery(api.sharedDemo.public.getContext, {});
+  const sharedDemo = useSharedDemoContext();
 
   const { user } = useAuth();
 

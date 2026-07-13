@@ -9,12 +9,16 @@ import type { PosTerminalLoginMode } from "~/shared/posTerminalLoginMode";
 import type { PosTerminalTransactionCapability } from "~/shared/posTerminalCapability";
 import useGetActiveStore from "./useGetActiveStore";
 import { api } from "~/convex/_generated/api";
+import {
+  isSharedDemoUiEnabled,
+  sharedDemoQueryArgs,
+} from "./useSharedDemoContext";
 
 export const useGetTerminal = () => {
   const { activeStore } = useGetActiveStore();
   const sharedDemoRegister = useQuery(
     api.sharedDemo.public.getRegisterBootstrap,
-    {},
+    sharedDemoQueryArgs(isSharedDemoUiEnabled),
   );
   const fingerprintHash = readStoredTerminalFingerprintHash();
   const [localTerminal, setLocalTerminal] = useState<{

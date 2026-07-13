@@ -17,7 +17,7 @@ tags:
   - effect-policy
   - convex
   - restore-fence
-delivery_diff_fingerprint: 101516ab875179f299fb17fd51515ae9c60065e925ae97b61c7be4753fe3dab3
+delivery_diff_fingerprint: d1e16c7b23f694805eb4a22754b5edeca30b8e21dfcb11430b61f7eff906ebb7
 ---
 
 # Shared demo principal policy and atomic restore boundary
@@ -59,6 +59,7 @@ Per-admission auth users prevent a newer visitor from extending every older brow
 - Make allowed demo mutations read `sharedDemoRestoreState.epoch` in the same transaction as their write.
 - Keep synthetic seed data coherent and avoid unsupported reporting claims. Rematerialize only existing Reports relationships.
 - Test expired-principal behavior explicitly. An expired demo principal must throw; it must never fall through as a normal actor.
+- Gate every frontend demo subscription on the Vite development runtime. A production candidate build may run against a backend that intentionally has no demo functions, so globally mounted shells must pass `"skip"` instead of querying demo APIs.
 - Keep shared free text bounded and rate-limited, and never include visitor payloads or admission tickets in telemetry.
 
 ## Examples

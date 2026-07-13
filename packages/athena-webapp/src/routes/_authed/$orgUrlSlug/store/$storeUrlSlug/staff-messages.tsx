@@ -2,13 +2,14 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 
 import { StaffMessagesView } from "@/components/staff/StaffMessagesView";
+import { useSharedDemoContext } from "@/hooks/useSharedDemoContext";
 import { api } from "~/convex/_generated/api";
 
 export const Route = createFileRoute("/_authed/$orgUrlSlug/store/$storeUrlSlug/staff-messages")({ component: StaffMessagesRoute });
 
 function StaffMessagesRoute() {
   const { orgUrlSlug, storeUrlSlug } = Route.useParams();
-  const demo = useQuery(api.sharedDemo.public.getContext, {});
+  const demo = useSharedDemoContext();
   const organization = useQuery(api.inventory.organizations.getByIdOrSlug, {
     identifier: orgUrlSlug,
   });

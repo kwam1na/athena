@@ -6,6 +6,7 @@ import {
   useSearch,
 } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
+import { useSharedDemoContext } from "@/hooks/useSharedDemoContext";
 import {
   ArrowUpRight,
   Ban,
@@ -2064,7 +2065,7 @@ function DailyOpeningConnectedView({
       ? { ...operatingDateRange, storeId: activeStore!._id }
       : "skip",
   ) as DailyOpeningSnapshot | undefined;
-  const sharedDemoContext = useQuery(api.sharedDemo.public.getContext, {});
+  const sharedDemoContext = useSharedDemoContext();
   const startStoreDayMutation = useExpectedDailyOpeningMutation(startStoreDay);
   const authenticateStaffCredential = useMutation(
     api.operations.staffCredentials.authenticateStaffCredential,

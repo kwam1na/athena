@@ -62,6 +62,7 @@ import { api } from "~/convex/_generated/api";
 import { useGetCategories } from "../hooks/useGetCategories";
 import { PermissionGate } from "./PermissionGate";
 import { usePermissions } from "../hooks/usePermissions";
+import { useSharedDemoContext } from "../hooks/useSharedDemoContext";
 
 type SidebarOrderSummary = {
   status: string;
@@ -191,7 +192,7 @@ export function AppSidebar({
     api.storeFront.onlineOrder.getAllOnlineOrders,
     activeStore?._id ? { storeId: activeStore._id } : "skip",
   ) as SidebarOrderSummary[] | undefined;
-  const sharedDemoContext = useQuery(api.sharedDemo.public.getContext, {});
+  const sharedDemoContext = useSharedDemoContext();
   const isSharedDemo = sharedDemoContext?.kind === "shared_demo";
 
   const openOrders = orders?.filter((order) => order.status === "open")?.length;

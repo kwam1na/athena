@@ -1,5 +1,5 @@
 import { useLocation, useParams } from "@tanstack/react-router";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation } from "convex/react";
 import { useCallback, useEffect } from "react";
 import {
   SharedDemoStatusBar,
@@ -17,9 +17,10 @@ import {
   requestDefaultPosLocalPersistentStorage,
 } from "@/lib/pos/infrastructure/local/posLocalStorageRuntime";
 import type { Id } from "~/convex/_generated/dataModel";
+import { useSharedDemoContext } from "@/hooks/useSharedDemoContext";
 
 export function SharedDemoRuntime() {
-  const context = useQuery(api.sharedDemo.public.getContext, {});
+  const context = useSharedDemoContext();
   const requestRestore = useMutation(
     api.sharedDemo.public.requestManualRestore,
   );
