@@ -92,6 +92,13 @@ import { Textarea } from "../ui/textarea";
 import { WorkflowTraceRouteLink } from "../traces/WorkflowTraceRouteLink";
 import { Accordion, AccordionContent, AccordionItem } from "../ui/accordion";
 import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "../ui/sheet";
+import { ItemsBreakdown } from "../store-pulse/StorePulseSummaryView";
+import {
   buildPosSyncStatusPresentation,
   formatPosReconciliationType,
   isDuplicateLocalIdReviewItem,
@@ -159,6 +166,7 @@ type RegisterSessionDetail = {
   netExpectedCash?: number;
   notes?: string | null;
   openedAt: number;
+  openedOperatingDate?: string;
   openedByStaffName?: string | null;
   openingFloat: number;
   pendingApprovalRequest?: RegisterSessionApprovalRequest | null;
@@ -204,6 +212,13 @@ type RegisterSessionTransaction = {
   workflowTraceId?: string | null;
 };
 
+type RegisterSessionItemBreakdown = {
+  name: string;
+  productSku: string | null;
+  quantity: number;
+  totalSales: number;
+};
+
 type RegisterSessionCloseoutReview = {
   hasVariance: boolean;
   reason?: string | null;
@@ -224,6 +239,7 @@ type RegisterSessionTimelineEvent = {
 export type RegisterSessionSnapshot = {
   closeoutReview: RegisterSessionCloseoutReview | null;
   deposits: RegisterSessionDeposit[];
+  itemsBreakdown?: RegisterSessionItemBreakdown[];
   financialPosition?: {
     averageTransaction: number;
     paymentMix: Array<{
@@ -3115,6 +3131,7 @@ export function RegisterSessionViewContent({
   const [isCorrectingOpeningFloat, setIsCorrectingOpeningFloat] =
     useState(false);
   const [isReopenApprovalOpen, setIsReopenApprovalOpen] = useState(false);
+  const [isItemsBreakdownOpen, setIsItemsBreakdownOpen] = useState(false);
   const closeoutApprovalRunner = useApprovedCommand({
     storeId: storeId as Id<"store"> | undefined,
     onAuthenticateForApproval:
@@ -3147,6 +3164,7 @@ export function RegisterSessionViewContent({
       setOpeningFloatCorrectionIntent(null);
       setPendingOpeningFloatApproval(null);
       setIsReopenApprovalOpen(false);
+      setIsItemsBreakdownOpen(false);
       return;
     }
 
@@ -3173,6 +3191,7 @@ export function RegisterSessionViewContent({
     setOpeningFloatCorrectionIntent(null);
     setPendingOpeningFloatApproval(null);
     setIsReopenApprovalOpen(false);
+    setIsItemsBreakdownOpen(false);
   }, [
     registerSession?._id,
     registerSession?.countedCash,
@@ -3733,6 +3752,11 @@ export function RegisterSessionViewContent({
   }
 
   const transactions = registerSessionSnapshot?.transactions ?? [];
+  const itemsBreakdown = registerSessionSnapshot?.itemsBreakdown ?? [];
+  const totalItemsSold = itemsBreakdown.reduce(
+    (total, item) => total + item.quantity,
+    0,
+  );
   const financialPosition = registerSessionSnapshot?.financialPosition;
   const previewTransactions = transactions.slice(
     0,
@@ -4610,70 +4634,79 @@ export function RegisterSessionViewContent({
                           />
                         </span>
                       </dd>
-                      <div className="mt-layout-md divide-y divide-border/70 rounded-md border border-border/70 bg-muted/10">
-                        <div className="flex items-center justify-between gap-layout-md px-3 py-2.5">
-                          <dt className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                            Opening float
-                          </dt>
-                          <dd className="font-numeric tabular-nums text-sm text-foreground">
-                            {formatCurrency(
-                              currency,
-                              registerSession.openingFloat,
-                            )}
-                          </dd>
-                        </div>
-                        <div className="flex items-center justify-between gap-layout-md px-3 py-2.5">
-                          <dt className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                            Counted
-                          </dt>
-                          <dd className="font-numeric tabular-nums text-sm text-foreground">
-                            {formatCurrency(currency, displayedCountedCash)}
-                          </dd>
-                        </div>
-                        <div className="flex items-center justify-between gap-layout-md px-3 py-2.5">
-                          <dt className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                            Deposited
-                          </dt>
-                          <dd className="font-numeric tabular-nums text-sm text-foreground">
-                            <CashControlsFinancialValue
-                              amount={registerSession.totalDeposited}
-                              canView={canViewFinancialDetails}
-                              currency={currency}
-                              label="Deposited cash"
-                            />
-                          </dd>
-                        </div>
-                        <div className="flex items-center justify-between gap-layout-md px-3 py-2.5">
-                          <dt className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                            Variance
-                          </dt>
-                          <dd
-                            className={`font-numeric tabular-nums text-sm ${getVarianceTone(displayedVariance)}`}
-                          >
-                            <CashControlsFinancialValue
-                              amount={displayedVariance ?? 0}
-                              canView={canViewFinancialDetails}
-                              currency={currency}
-                              label="Variance"
-                            />
-                          </dd>
-                        </div>
-                        {pendingCashVoidApprovedExpectedCash !== undefined ? (
+                      <details className="group mt-layout-sm border-t border-border/70 pt-layout-xs">
+                        <summary className="flex cursor-pointer list-none items-center justify-between gap-layout-md rounded-md px-1 py-2 text-xs font-medium text-muted-foreground transition-[color,transform] duration-fast ease-standard hover:text-foreground active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 [&::-webkit-details-marker]:hidden">
+                          <span>Cash details</span>
+                          <ChevronDown
+                            aria-hidden="true"
+                            className="h-4 w-4 transition-transform duration-fast ease-standard group-open:rotate-180 motion-reduce:transition-none"
+                          />
+                        </summary>
+                        <div className="mt-layout-xs divide-y divide-border/70 rounded-md border border-border/70 bg-muted/10">
                           <div className="flex items-center justify-between gap-layout-md px-3 py-2.5">
                             <dt className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                              After adjustments
+                              Opening float
+                            </dt>
+                            <dd className="font-numeric tabular-nums text-sm text-foreground">
+                              {formatCurrency(
+                                currency,
+                                registerSession.openingFloat,
+                              )}
+                            </dd>
+                          </div>
+                          <div className="flex items-center justify-between gap-layout-md px-3 py-2.5">
+                            <dt className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                              Counted
+                            </dt>
+                            <dd className="font-numeric tabular-nums text-sm text-foreground">
+                              {formatCurrency(currency, displayedCountedCash)}
+                            </dd>
+                          </div>
+                          <div className="flex items-center justify-between gap-layout-md px-3 py-2.5">
+                            <dt className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                              Deposited
                             </dt>
                             <dd className="font-numeric tabular-nums text-sm text-foreground">
                               <CashControlsFinancialValue
-                                amount={pendingCashVoidApprovedExpectedCash}
+                                amount={registerSession.totalDeposited}
                                 canView={canViewFinancialDetails}
                                 currency={currency}
-                                label="Expected cash after adjustments"
+                                label="Deposited cash"
                               />
                             </dd>
                           </div>
-                        ) : null}
-                      </div>
+                          <div className="flex items-center justify-between gap-layout-md px-3 py-2.5">
+                            <dt className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                              Variance
+                            </dt>
+                            <dd
+                              className={`font-numeric tabular-nums text-sm ${getVarianceTone(displayedVariance)}`}
+                            >
+                              <CashControlsFinancialValue
+                                amount={displayedVariance ?? 0}
+                                canView={canViewFinancialDetails}
+                                currency={currency}
+                                label="Variance"
+                              />
+                            </dd>
+                          </div>
+                          {pendingCashVoidApprovedExpectedCash !== undefined ? (
+                            <div className="flex items-center justify-between gap-layout-md px-3 py-2.5">
+                              <dt className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                                After adjustments
+                              </dt>
+                              <dd className="font-numeric tabular-nums text-sm text-foreground">
+                                <CashControlsFinancialValue
+                                  amount={pendingCashVoidApprovedExpectedCash}
+                                  canView={canViewFinancialDetails}
+                                  currency={currency}
+                                  label="Expected cash after adjustments"
+                                />
+                              </dd>
+                            </div>
+                          ) : null}
+                        </div>
+                      </details>
                       {canViewFinancialDetails && pendingCashVoidText ? (
                         <p className="mt-layout-md border-t border-border/70 pt-layout-md text-xs leading-5 text-muted-foreground">
                           {pendingCashVoidText}
@@ -4776,15 +4809,16 @@ export function RegisterSessionViewContent({
                                   ? "Closeout rejected"
                                   : "Closeout complete"}
                               </p>
-                              <Badge
-                                className="border-border bg-muted text-muted-foreground"
-                                size="sm"
-                                variant="outline"
-                              >
-                                {registerSession.status === "closeout_rejected"
-                                  ? "Rejected"
-                                  : "Closed"}
-                              </Badge>
+                              {registerSession.status ===
+                              "closeout_rejected" ? (
+                                <Badge
+                                  className="border-border bg-muted text-muted-foreground"
+                                  size="sm"
+                                  variant="outline"
+                                >
+                                  Rejected
+                                </Badge>
+                              ) : null}
                             </div>
                             {canViewFinancialDetails ? (
                               <dl
@@ -4981,112 +5015,123 @@ export function RegisterSessionViewContent({
                             ) : null}
 
                             {!canFinalizeCloseout && !isWaitingOnVoidReview ? (
-                              <>
-                                <label className="block space-y-2">
-                                  <span className="text-sm font-medium text-foreground">
-                                    Counted cash ({formattedCurrency})
-                                  </span>
-                                  <Input
-                                    aria-label="Closeout counted cash"
-                                    className="border-input bg-background"
-                                    inputMode="decimal"
-                                    onChange={(event) =>
-                                      setCountedCash(event.target.value)
-                                    }
-                                    pattern="[0-9]*[.]?[0-9]*"
-                                    type="text"
-                                    value={countedCash}
+                              <details className="group border-t border-border/70 pt-layout-xs">
+                                <summary className="flex cursor-pointer list-none items-center justify-between gap-layout-md rounded-md px-1 py-2 text-xs font-medium text-muted-foreground transition-[color,transform] duration-fast ease-standard hover:text-foreground active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 [&::-webkit-details-marker]:hidden">
+                                  <span>Closeout details</span>
+                                  <ChevronDown
+                                    aria-hidden="true"
+                                    className="h-4 w-4 transition-transform duration-fast ease-standard group-open:rotate-180 motion-reduce:transition-none"
                                   />
-                                </label>
+                                </summary>
+                                <div className="space-y-4 pt-layout-xs">
+                                  <label className="block space-y-2">
+                                    <span className="text-sm font-medium text-foreground">
+                                      Counted cash ({formattedCurrency})
+                                    </span>
+                                    <Input
+                                      aria-label="Closeout counted cash"
+                                      className="border-input bg-background"
+                                      inputMode="decimal"
+                                      onChange={(event) =>
+                                        setCountedCash(event.target.value)
+                                      }
+                                      pattern="[0-9]*[.]?[0-9]*"
+                                      type="text"
+                                      value={countedCash}
+                                    />
+                                  </label>
 
-                                {canViewFinancialDetails ? (
-                                  <div className="rounded-lg border border-border bg-muted/20 p-4">
-                                    <dl
-                                      className={cn(
-                                        "grid gap-3 text-sm",
-                                        pendingCashVoidApprovedExpectedCash !==
-                                          undefined
-                                          ? "grid-cols-3"
-                                          : "grid-cols-2",
-                                      )}
-                                    >
-                                      <div className="space-y-1">
-                                        <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                                          {pendingCashVoidText
-                                            ? "Expected now"
-                                            : "Expected"}
-                                        </dt>
-                                        <dd className="font-numeric tabular-nums text-foreground">
-                                          {formatCurrency(
-                                            currency,
-                                            expectedCash,
-                                          )}
-                                        </dd>
-                                      </div>
-                                      {pendingCashVoidApprovedExpectedCash !==
-                                      undefined ? (
+                                  {canViewFinancialDetails ? (
+                                    <div className="rounded-lg border border-border bg-muted/20 p-4">
+                                      <dl
+                                        className={cn(
+                                          "grid gap-3 text-sm",
+                                          pendingCashVoidApprovedExpectedCash !==
+                                            undefined
+                                            ? "grid-cols-3"
+                                            : "grid-cols-2",
+                                        )}
+                                      >
                                         <div className="space-y-1">
                                           <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                                            After adjustments
+                                            {pendingCashVoidText
+                                              ? "Expected now"
+                                              : "Expected"}
                                           </dt>
                                           <dd className="font-numeric tabular-nums text-foreground">
                                             {formatCurrency(
                                               currency,
-                                              pendingCashVoidApprovedExpectedCash,
+                                              expectedCash,
                                             )}
                                           </dd>
                                         </div>
-                                      ) : null}
-                                      <div className="space-y-1">
-                                        <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                                          Draft variance
-                                        </dt>
-                                        <dd
-                                          className={`font-numeric tabular-nums ${getVarianceTone(draftVariance ?? undefined)}`}
-                                        >
-                                          {draftVariance === null
-                                            ? "Pending count"
-                                            : formatCurrency(
+                                        {pendingCashVoidApprovedExpectedCash !==
+                                        undefined ? (
+                                          <div className="space-y-1">
+                                            <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                                              After adjustments
+                                            </dt>
+                                            <dd className="font-numeric tabular-nums text-foreground">
+                                              {formatCurrency(
                                                 currency,
-                                                draftVariance,
+                                                pendingCashVoidApprovedExpectedCash,
                                               )}
-                                        </dd>
-                                      </div>
-                                    </dl>
-                                    {pendingCashVoidText ? (
-                                      <p className="mt-4 border-t border-border pt-3 text-xs leading-5 text-muted-foreground">
-                                        {pendingCashVoidText}
-                                      </p>
-                                    ) : null}
-                                  </div>
-                                ) : null}
+                                            </dd>
+                                          </div>
+                                        ) : null}
+                                        <div className="space-y-1">
+                                          <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                                            Draft variance
+                                          </dt>
+                                          <dd
+                                            className={`font-numeric tabular-nums ${getVarianceTone(draftVariance ?? undefined)}`}
+                                          >
+                                            {draftVariance === null
+                                              ? "Pending count"
+                                              : formatCurrency(
+                                                  currency,
+                                                  draftVariance,
+                                                )}
+                                          </dd>
+                                        </div>
+                                      </dl>
+                                      {pendingCashVoidText ? (
+                                        <p className="mt-4 border-t border-border pt-3 text-xs leading-5 text-muted-foreground">
+                                          {pendingCashVoidText}
+                                        </p>
+                                      ) : null}
+                                    </div>
+                                  ) : null}
 
-                                <label className="block space-y-2">
-                                  <span className="text-sm font-medium text-foreground">
-                                    Closeout notes
-                                  </span>
-                                  <Textarea
-                                    aria-label="Closeout notes"
-                                    className="min-h-[96px] border-input bg-background"
-                                    onChange={(event) =>
-                                      setCloseoutNotes(event.target.value)
+                                  <label className="block space-y-2">
+                                    <span className="text-sm font-medium text-foreground">
+                                      Closeout notes
+                                    </span>
+                                    <Textarea
+                                      aria-label="Closeout notes"
+                                      className="min-h-[96px] border-input bg-background"
+                                      onChange={(event) =>
+                                        setCloseoutNotes(event.target.value)
+                                      }
+                                      placeholder="Add drawer notes if anything needs follow-up."
+                                      value={closeoutNotes}
+                                    />
+                                  </label>
+
+                                  <LoadingButton
+                                    className="w-full"
+                                    disabled={Boolean(pendingCloseoutAction)}
+                                    isLoading={
+                                      pendingCloseoutAction === "submit"
                                     }
-                                    placeholder="Add drawer notes if anything needs follow-up."
-                                    value={closeoutNotes}
-                                  />
-                                </label>
-
-                                <LoadingButton
-                                  className="w-full"
-                                  disabled={Boolean(pendingCloseoutAction)}
-                                  isLoading={pendingCloseoutAction === "submit"}
-                                  onClick={() => void handleSubmitCloseout()}
-                                  type="button"
-                                  variant="workflow"
-                                >
-                                  Submit closeout
-                                </LoadingButton>
-                              </>
+                                    onClick={() => void handleSubmitCloseout()}
+                                    type="button"
+                                    variant="workflow"
+                                  >
+                                    Submit closeout
+                                  </LoadingButton>
+                                </div>
+                              </details>
                             ) : null}
                           </div>
                         )}
@@ -5457,14 +5502,54 @@ export function RegisterSessionViewContent({
                         Completed sales recorded against this register session.
                       </p>
                     </div>
-                    <Badge
-                      className="border-border bg-muted text-muted-foreground"
-                      variant="outline"
-                    >
-                      {transactions.length}{" "}
-                      {transactions.length === 1 ? "sale" : "sales"}
-                    </Badge>
+                    <div className="flex items-center gap-layout-xs">
+                      {transactions.length > 0 ? (
+                        <Button
+                          onClick={() => setIsItemsBreakdownOpen(true)}
+                          size="sm"
+                          type="button"
+                          variant="ghost"
+                        >
+                          Items breakdown
+                        </Button>
+                      ) : null}
+                      <Badge
+                        className="border-border bg-muted text-muted-foreground"
+                        variant="outline"
+                      >
+                        {transactions.length}{" "}
+                        {transactions.length === 1 ? "sale" : "sales"}
+                      </Badge>
+                    </div>
                   </div>
+
+                  <Sheet
+                    open={isItemsBreakdownOpen}
+                    onOpenChange={setIsItemsBreakdownOpen}
+                  >
+                    <SheetContent
+                      className="flex w-[min(100vw,36rem)] max-w-[calc(100vw-1rem)] flex-col overflow-hidden border-border bg-app-canvas p-0 shadow-overlay sm:max-w-xl"
+                      side="right"
+                    >
+                      <SheetHeader className="border-b border-border px-layout-lg py-layout-md">
+                        <SheetTitle>Items breakdown</SheetTitle>
+                      </SheetHeader>
+                      <div className="min-h-0 flex-1 overflow-y-auto p-layout-lg">
+                        <ItemsBreakdown
+                          canViewFinancialDetails={canViewFinancialDetails}
+                          currencyFormatter={reviewReasonFormatter}
+                          description="Highest-volume items sold in this register session."
+                          emptyStateDescription="Completed sales will populate the item breakdown here."
+                          emptyStateTitle="No item history yet"
+                          items={itemsBreakdown}
+                          paginate={false}
+                          title="Items sold"
+                          totalItemsSold={totalItemsSold}
+                          variant="canvas"
+                        />
+                      </div>
+                    </SheetContent>
+                  </Sheet>
 
                   {transactions.length === 0 ? (
                     <div className="order-2 flex min-h-[260px] items-center justify-center rounded-lg border border-dashed border-border bg-muted/25">
@@ -5524,9 +5609,6 @@ export function RegisterSessionViewContent({
                                 Total
                               </TableHead>
                               <TableHead className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                                Payment
-                              </TableHead>
-                              <TableHead className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
                                 Cashier
                               </TableHead>
                               <TableHead className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
@@ -5541,6 +5623,10 @@ export function RegisterSessionViewContent({
                                   transaction.hasMultiplePaymentMethods,
                                 paymentMethod: transaction.paymentMethod,
                               });
+                              const paymentMethodLabel =
+                                transaction.hasMultiplePaymentMethods
+                                  ? "Multiple payment methods"
+                                  : `${formatPaymentMethod(transaction.paymentMethod)} payment`;
                               const transactionLabel = `#${transaction.transactionNumber}`;
                               const isVoidedTransaction =
                                 transaction.status === "void" ||
@@ -5628,20 +5714,21 @@ export function RegisterSessionViewContent({
                                       </span>
                                     </div>
                                   </TableCell>
-                                  <TableCell className="font-numeric tabular-nums text-foreground">
-                                    {formatCurrency(
-                                      currency,
-                                      transaction.total,
-                                    )}
-                                  </TableCell>
                                   <TableCell>
-                                    <span className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-                                      <PaymentIcon className="h-4 w-4" />
-                                      {transaction.hasMultiplePaymentMethods
-                                        ? "Multiple"
-                                        : formatPaymentMethod(
-                                            transaction.paymentMethod,
-                                          )}
+                                    <span className="inline-flex items-center gap-2 text-foreground">
+                                      <span className="font-numeric tabular-nums">
+                                        {formatCurrency(
+                                          currency,
+                                          transaction.total,
+                                        )}
+                                      </span>
+                                      <PaymentIcon
+                                        aria-hidden="true"
+                                        className="h-4 w-4 text-muted-foreground"
+                                      />
+                                      <span className="sr-only">
+                                        {paymentMethodLabel}
+                                      </span>
                                     </span>
                                   </TableCell>
                                   <TableCell className="text-sm text-muted-foreground">
@@ -5679,6 +5766,12 @@ export function RegisterSessionViewContent({
                               params={{ orgUrlSlug, storeUrlSlug }}
                               search={{
                                 o: getOrigin(),
+                                ...(registerSession.openedOperatingDate
+                                  ? {
+                                      operatingDate:
+                                        registerSession.openedOperatingDate,
+                                    }
+                                  : {}),
                                 registerSessionId: registerSession._id,
                               }}
                               to="/$orgUrlSlug/store/$storeUrlSlug/pos/transactions"

@@ -905,6 +905,9 @@ describe("cash control deposits", () => {
           ],
         ],
       ]),
+      totalSalesBySessionId: new Map([
+        ["session_open" as Id<"registerSession">, 33000],
+      ]),
       registerSessions: [
         {
           _id: "session_open" as Id<"registerSession">,
@@ -976,6 +979,7 @@ describe("cash control deposits", () => {
       registerNumber: "A1",
       terminalName: "Front counter",
       totalDeposited: 1200,
+      totalSales: 33000,
     });
 
     expect(snapshot.pendingCloseouts).toHaveLength(2);
@@ -7126,6 +7130,41 @@ describe("cash control deposits", () => {
           transactionNumber: "100003",
         },
       ],
+      posTransactionItem: [
+        {
+          _id: "transaction_item_body_wave_split",
+          productId: "product_body_wave",
+          productName: "Body Wave Wig",
+          productSku: "BW-18",
+          productSkuId: "sku_body_wave",
+          quantity: 2,
+          totalPrice: 6000,
+          transactionId: "transaction_split",
+          unitPrice: 3000,
+        },
+        {
+          _id: "transaction_item_lace_split",
+          productId: "product_lace",
+          productName: "Lace Front Wig",
+          productSku: "LF-14",
+          productSkuId: "sku_lace",
+          quantity: 1,
+          totalPrice: 4000,
+          transactionId: "transaction_split",
+          unitPrice: 4000,
+        },
+        {
+          _id: "transaction_item_body_wave_mobile",
+          productId: "product_body_wave",
+          productName: "Body Wave Wig",
+          productSku: "BW-18",
+          productSkuId: "sku_body_wave",
+          quantity: 1,
+          totalPrice: 5000,
+          transactionId: "transaction_mobile",
+          unitPrice: 5000,
+        },
+      ],
     });
 
     await expect(
@@ -7135,6 +7174,20 @@ describe("cash control deposits", () => {
       }),
     ).resolves.toEqual(
       expect.objectContaining({
+        itemsBreakdown: [
+          {
+            name: "Body Wave Wig",
+            productSku: "BW-18",
+            quantity: 3,
+            totalSales: 11000,
+          },
+          {
+            name: "Lace Front Wig",
+            productSku: "LF-14",
+            quantity: 1,
+            totalSales: 4000,
+          },
+        ],
         financialPosition: {
           averageTransaction: 7500,
           paymentMix: [

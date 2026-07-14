@@ -297,7 +297,7 @@ function QuickAddBarcodeScannerDialog({
   return createPortal(
     <div
       aria-modal="true"
-      className="pointer-events-auto fixed inset-0 z-[60] overflow-y-auto bg-slate-950/60 p-layout-md sm:flex sm:items-center sm:justify-center"
+      className="pointer-events-auto fixed inset-0 z-[60] overflow-y-auto bg-overlay-scrim/60 p-layout-md sm:flex sm:items-center sm:justify-center"
       role="dialog"
       style={{ pointerEvents: "auto" }}
     >

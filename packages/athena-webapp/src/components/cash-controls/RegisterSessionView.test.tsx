@@ -403,10 +403,6 @@ describe("RegisterSessionViewContent", () => {
     expect(screen.getByText("1 linked sale")).toBeInTheDocument();
     expect(screen.getByText("Closeout")).toBeInTheDocument();
     expect(screen.getByText("Closeout in progress")).toBeInTheDocument();
-    expect(screen.getByText("Opening float")).toBeInTheDocument();
-    expect(screen.getByText("$50")).toBeInTheDocument();
-    expect(screen.getAllByText("Counted").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("$171").length).toBeGreaterThan(0);
     expect(screen.getByText("Linked transactions")).toBeInTheDocument();
     const transactionRow = screen.getAllByRole("link", {
       name: "Open transaction #TXN-0031",
@@ -418,6 +414,26 @@ describe("RegisterSessionViewContent", () => {
       "tracking-[0.12em]",
     );
     expect(transactionDetails.getByText("Cash")).toHaveClass("text-sm");
+    const linkedTransactionsTable = screen.getByRole("table");
+    expect(
+      within(linkedTransactionsTable).queryByRole("columnheader", {
+        name: "Payment",
+      }),
+    ).not.toBeInTheDocument();
+    const desktopTransactionRow = within(linkedTransactionsTable).getByRole(
+      "link",
+      { name: "Open transaction #TXN-0031" },
+    );
+    const totalCell = within(desktopTransactionRow).getAllByRole("cell")[1];
+    const totalAmount = within(totalCell).getByText("$152");
+    const paymentIcon = totalCell.querySelector("svg");
+    expect(totalAmount).toBeInTheDocument();
+    expect(paymentIcon).not.toBeNull();
+    expect(
+      totalAmount.compareDocumentPosition(paymentIcon!) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(within(totalCell).getByText("Cash payment")).toHaveClass("sr-only");
     expect(
       screen.getAllByText(/3 items - Esi Boateng/i).length,
     ).toBeGreaterThan(0);
@@ -451,7 +467,72 @@ describe("RegisterSessionViewContent", () => {
     );
   });
 
-  it("hides register cash details while keeping closeout input available to non-manager staff", () => {
+  it("keeps cash metadata collapsed until the operator asks for details", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <RegisterSessionViewContent
+        actorStaffProfileId="staff-1"
+        actorUserId="user-1"
+        currency="USD"
+        isLoading={false}
+        onRecordDeposit={vi.fn()}
+        {...closeoutHandlers}
+        registerSessionSnapshot={baseSnapshot}
+        orgUrlSlug="wigclub"
+        storeUrlSlug="wigclub"
+      />,
+    );
+
+    expect(screen.getByText("Expected cash")).toBeInTheDocument();
+    expect(screen.getAllByText("$176").length).toBeGreaterThan(0);
+    const cashDetails = screen.getByText("Cash details").closest("details");
+    expect(cashDetails).not.toHaveAttribute("open");
+
+    await user.click(screen.getByText("Cash details"));
+
+    expect(cashDetails).toHaveAttribute("open");
+    expect(screen.getByText("Opening float")).toBeInTheDocument();
+    expect(screen.getByText("$50")).toBeInTheDocument();
+    expect(screen.getByText("Deposited")).toBeInTheDocument();
+    expect(screen.getByText("$24")).toBeInTheDocument();
+  });
+
+  it("keeps the closeout form collapsed until the operator asks for details", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <RegisterSessionViewContent
+        actorStaffProfileId="staff-1"
+        actorUserId="user-1"
+        currency="USD"
+        isLoading={false}
+        onRecordDeposit={vi.fn()}
+        {...closeoutHandlers}
+        registerSessionSnapshot={baseSnapshot}
+        orgUrlSlug="wigclub"
+        storeUrlSlug="wigclub"
+      />,
+    );
+
+    expect(screen.getByText("Count and close drawer")).toBeInTheDocument();
+    const closeoutDetails = screen
+      .getByText("Closeout details")
+      .closest("details");
+    expect(closeoutDetails).not.toHaveAttribute("open");
+
+    await user.click(screen.getByText("Closeout details"));
+
+    expect(closeoutDetails).toHaveAttribute("open");
+    expect(screen.getByLabelText("Closeout counted cash")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Submit closeout" }),
+    ).toBeInTheDocument();
+  });
+
+  it("hides register cash details while keeping closeout input available to non-manager staff", async () => {
+    const user = userEvent.setup();
+
     render(
       <RegisterSessionViewContent
         actorStaffProfileId="staff-1"
@@ -483,6 +564,7 @@ describe("RegisterSessionViewContent", () => {
     expect(screen.getByText("Cash position")).toBeInTheDocument();
     expect(screen.getAllByText("Manager only").length).toBeGreaterThan(0);
     expect(screen.queryByText("GH₵1,485")).not.toBeInTheDocument();
+    await user.click(screen.getByText("Cash details"));
     expect(screen.getByText("GH₵150")).toBeInTheDocument();
     expect(screen.getByText("Pending")).toBeInTheDocument();
     expect(
@@ -2620,6 +2702,14 @@ describe("RegisterSessionViewContent", () => {
     );
 
     expect(screen.getAllByText("Closed").length).toBeGreaterThan(0);
+    const completedCloseoutPanel = screen
+      .getByText("Closeout complete")
+      .closest("div.rounded-lg");
+
+    expect(completedCloseoutPanel).toBeInstanceOf(HTMLElement);
+    expect(
+      within(completedCloseoutPanel as HTMLElement).queryByText("Closed"),
+    ).not.toBeInTheDocument();
     expect(screen.getByText(expectedClosedAt)).toBeInTheDocument();
     expect(screen.getByText("By Kojo M.")).toBeInTheDocument();
     expect(
@@ -4238,6 +4328,10 @@ describe("RegisterSessionViewContent", () => {
         {...closeoutHandlers}
         registerSessionSnapshot={{
           ...baseSnapshot,
+          registerSession: {
+            ...baseSnapshot.registerSession,
+            openedOperatingDate: "2026-04-21",
+          },
           transactions,
         }}
         orgUrlSlug="wigclub"
@@ -4257,8 +4351,86 @@ describe("RegisterSessionViewContent", () => {
       screen.getByRole("link", { name: /View all linked transactions/i }),
     ).toHaveAttribute(
       "href",
-      "/wigclub/store/wigclub/pos/transactions?o=%252F&registerSessionId=session-1",
+      "/wigclub/store/wigclub/pos/transactions?o=%252F&operatingDate=2026-04-21&registerSessionId=session-1",
     );
+  });
+
+  it("opens the register-session items breakdown in a right sheet", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <RegisterSessionViewContent
+        actorUserId="user-1"
+        currency="USD"
+        isLoading={false}
+        onRecordDeposit={vi.fn()}
+        {...closeoutHandlers}
+        registerSessionSnapshot={{
+          ...baseSnapshot,
+          itemsBreakdown: [
+            {
+              name: "Body Wave Wig",
+              productSku: "BW-18",
+              quantity: 1,
+              totalSales: 45600,
+            },
+            {
+              name: "Lace Front Wig",
+              productSku: "LF-14",
+              quantity: 1,
+              totalSales: 12800,
+            },
+            ...Array.from({ length: 9 }, (_, index) => ({
+              name: `Session item ${index + 3}`,
+              productSku: `SESSION-${index + 3}`,
+              quantity: 1,
+              totalSales: 10000 - index,
+            })),
+          ],
+          transactions: [
+            {
+              _id: "transaction-1",
+              completedAt: new Date("2026-04-21T17:30:00.000Z").getTime(),
+              itemCount: 4,
+              paymentMethod: "cash",
+              total: 58400,
+              transactionNumber: "TXN-0031",
+            },
+          ],
+        }}
+        orgUrlSlug="wigclub"
+        storeId="store-1"
+        storeUrlSlug="wigclub"
+      />,
+    );
+
+    const itemsBreakdownButton = screen.getByRole("button", {
+      name: "Items breakdown",
+    });
+    expect(itemsBreakdownButton).toHaveClass("hover:bg-accent");
+    await user.click(itemsBreakdownButton);
+
+    const sheetElement = screen.getByRole("dialog");
+    expect(sheetElement).toHaveClass("bg-app-canvas");
+    const sheet = within(sheetElement);
+    expect(
+      sheet.getByRole("heading", { name: "Items breakdown" }),
+    ).toBeInTheDocument();
+    expect(
+      sheet.queryByText(
+        "Items sold across completed sales in this register session.",
+      ),
+    ).not.toBeInTheDocument();
+    expect(sheet.getByText("Body Wave Wig")).toBeInTheDocument();
+    expect(sheet.getAllByText("1 unit sold")).toHaveLength(11);
+    expect(sheet.getByText("Lace Front Wig")).toBeInTheDocument();
+    expect(sheet.getByText("Session Item 10")).toBeInTheDocument();
+    expect(sheet.getByText("Session Item 11")).toBeInTheDocument();
+    expect(
+      sheet.queryByRole("button", { name: "Go to next page" }),
+    ).not.toBeInTheDocument();
+    expect(sheet.queryByText("Showing 1-10 of 11")).not.toBeInTheDocument();
+    expect(sheet.getByLabelText("Total items sold: 11")).toBeInTheDocument();
   });
 
   it("uses manager elevation financial access for register detail visibility", () => {

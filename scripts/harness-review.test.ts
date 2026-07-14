@@ -442,7 +442,7 @@ describe("runHarnessReview", () => {
       "harness:check",
       "bun run workflow:check",
       "bun run harness:test",
-      "bun run compound:check",
+      "bun run delivery:documentation-check",
       "bun run test:coverage",
       "bun run harness:inferential-review",
     ]);
@@ -670,7 +670,7 @@ describe("runHarnessReview", () => {
       "harness:check",
       "raw:bun run workflow:check",
       "raw:bun run harness:test",
-      "raw:bun run compound:check",
+      "raw:bun run delivery:documentation-check",
       "raw:bun run test:coverage",
       "raw:bun run harness:inferential-review",
     ]);
@@ -680,7 +680,7 @@ describe("runHarnessReview", () => {
     const rootDir = await createFixtureRepo();
     const steps: string[] = [
       "raw:bun run workflow:check",
-      "raw:bun run compound:check",
+      "raw:bun run delivery:documentation-check",
       "raw:bun run test:coverage",
       "raw:bun run harness:test",
     ];
@@ -704,7 +704,7 @@ describe("runHarnessReview", () => {
 
     expect(steps).toEqual([
       "raw:bun run workflow:check",
-      "raw:bun run compound:check",
+      "raw:bun run delivery:documentation-check",
       "raw:bun run test:coverage",
       "raw:bun run harness:test",
       "harness:check",
@@ -756,7 +756,7 @@ describe("runHarnessReview", () => {
     expect(steps).toEqual([
       "harness:check",
       "raw:bun run workflow:check",
-      "raw:bun run compound:check",
+      "raw:bun run delivery:documentation-check",
       "raw:bun run test:coverage",
       "raw:bun run harness:inferential-review",
     ]);
@@ -1743,7 +1743,7 @@ describe("runHarnessReview", () => {
       "harness:check",
       "raw:bun run workflow:check",
       "raw:bun run harness:test",
-      "raw:bun run compound:check",
+      "raw:bun run delivery:documentation-check",
       "raw:bun run test:coverage",
       "raw:bun run harness:inferential-review",
     ]);

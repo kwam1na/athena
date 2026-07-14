@@ -528,32 +528,47 @@ export function StorePulseTimeline({
   );
 }
 
-export function TopItemsPanel({
+export type ItemsBreakdownItem = {
+  name: string;
+  productSku: string | null;
+  quantity: number;
+  totalSales: number;
+};
+
+export function ItemsBreakdown({
   canViewFinancialDetails,
   currencyFormatter,
-  emptyStateTimeContext = "current",
-  snapshot,
-  title = "Top items",
+  description,
+  emptyStateDescription,
+  emptyStateTitle,
+  items,
+  pageSize = topItemsPageSize,
+  paginate = true,
+  title,
+  totalItemsSold,
   variant = "card",
 }: {
   canViewFinancialDetails: boolean;
   currencyFormatter: Intl.NumberFormat;
-  emptyStateTimeContext?: StorePulseEmptyStateTimeContext;
-  snapshot: StorePulseOperatorSnapshot;
-  title?: string;
+  description: string;
+  emptyStateDescription: string;
+  emptyStateTitle: string;
+  items: ItemsBreakdownItem[];
+  pageSize?: number;
+  paginate?: boolean;
+  title: string;
+  totalItemsSold: number;
   variant?: StorePulseDetailVariant;
 }) {
   const [page, setPage] = useState(1);
-  const topItemCount = snapshot.topItems.length;
-  const pageCount = Math.max(1, Math.ceil(topItemCount / topItemsPageSize));
+  const topItemCount = items.length;
+  const pageCount = Math.max(1, Math.ceil(topItemCount / pageSize));
   const currentPage = Math.min(page, pageCount);
-  const pageStartIndex = (currentPage - 1) * topItemsPageSize;
-  const isPaginated = topItemCount > topItemsPageSize;
-  const visibleTopItems = snapshot.topItems.slice(
-    pageStartIndex,
-    pageStartIndex + topItemsPageSize,
-  );
-  const totalItemsSold = snapshot.comparison.currentItemsSold;
+  const pageStartIndex = paginate ? (currentPage - 1) * pageSize : 0;
+  const isPaginated = paginate && topItemCount > pageSize;
+  const visibleTopItems = paginate
+    ? items.slice(pageStartIndex, pageStartIndex + pageSize)
+    : items;
   const panelClassName =
     variant === "canvas" ? "" : detailCardClassName;
   const rowClassName =
@@ -564,9 +579,7 @@ export function TopItemsPanel({
       <div className="flex flex-col gap-layout-xs sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h3 className="text-base font-medium text-foreground">{title}</h3>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Highest-volume items in the current history window.
-          </p>
+          <p className="mt-1 text-sm text-muted-foreground">{description}</p>
         </div>
         <p
           aria-label={`Total items sold: ${totalItemsSold}`}
@@ -585,7 +598,7 @@ export function TopItemsPanel({
             : panelClassName
         }
       >
-        {snapshot.topItems.length ? (
+        {items.length ? (
           <>
             <div
               className={`divide-y divide-border/70 ${
@@ -634,27 +647,57 @@ export function TopItemsPanel({
                 onPageChange={setPage}
                 page={currentPage}
                 pageCount={pageCount}
-                pageSize={topItemsPageSize}
+                pageSize={pageSize}
                 totalItems={topItemCount}
               />
             ) : null}
           </>
         ) : (
           <EmptyState
-            description={
-              emptyStateTimeContext === "historical"
-                ? "No completed POS item movement was recorded for this day."
-                : "Completed POS sales will populate item movement here."
-            }
-            title={
-              emptyStateTimeContext === "historical"
-                ? "No item history"
-                : "No item history yet"
-            }
+            description={emptyStateDescription}
+            title={emptyStateTitle}
           />
         )}
       </div>
     </section>
+  );
+}
+
+export function TopItemsPanel({
+  canViewFinancialDetails,
+  currencyFormatter,
+  emptyStateTimeContext = "current",
+  snapshot,
+  title = "Top items",
+  variant = "card",
+}: {
+  canViewFinancialDetails: boolean;
+  currencyFormatter: Intl.NumberFormat;
+  emptyStateTimeContext?: StorePulseEmptyStateTimeContext;
+  snapshot: StorePulseOperatorSnapshot;
+  title?: string;
+  variant?: StorePulseDetailVariant;
+}) {
+  return (
+    <ItemsBreakdown
+      canViewFinancialDetails={canViewFinancialDetails}
+      currencyFormatter={currencyFormatter}
+      description="Highest-volume items in the current history window."
+      emptyStateDescription={
+        emptyStateTimeContext === "historical"
+          ? "No completed POS item movement was recorded for this day."
+          : "Completed POS sales will populate item movement here."
+      }
+      emptyStateTitle={
+        emptyStateTimeContext === "historical"
+          ? "No item history"
+          : "No item history yet"
+      }
+      items={snapshot.topItems}
+      title={title}
+      totalItemsSold={snapshot.comparison.currentItemsSold}
+      variant={variant}
+    />
   );
 }
 

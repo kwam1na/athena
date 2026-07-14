@@ -623,6 +623,7 @@ function buildRegisterSessionSummary(args: {
   syncConflicts?: CashControlSyncConflict[];
   terminalNamesById: Map<Id<"posTerminal">, string>;
   totalDeposited: number;
+  totalSales?: number;
 }) {
   const syncConflicts = args.syncConflicts ?? [];
   return {
@@ -663,6 +664,7 @@ function buildRegisterSessionSummary(args: {
       staffNamesById: args.staffNamesById,
     }),
     totalDeposited: args.totalDeposited,
+    ...(args.totalSales !== undefined ? { totalSales: args.totalSales } : {}),
   };
 }
 
@@ -717,6 +719,7 @@ export function buildCashControlsDashboardSnapshot(args: {
     CashControlSyncConflict[]
   >;
   terminalNamesById?: Map<Id<"posTerminal">, string>;
+  totalSalesBySessionId?: Map<Id<"registerSession">, number>;
 }) {
   const totalDepositedBySessionId = sumDepositsBySession(args.deposits);
   const registerNumberBySessionId = new Map(
@@ -741,6 +744,7 @@ export function buildCashControlsDashboardSnapshot(args: {
           args.syncConflictsBySessionId?.get(registerSession._id) ?? [],
         terminalNamesById: args.terminalNamesById ?? new Map(),
         totalDeposited: totalDepositedBySessionId.get(registerSession._id) ?? 0,
+        totalSales: args.totalSalesBySessionId?.get(registerSession._id),
       }),
     );
 
@@ -952,6 +956,38 @@ async function buildRegisterSessionFinancialPosition(
   };
 }
 
+async function listRegisterSessionTotalSalesBySessionId(
+  ctx: QueryCtx,
+  args: {
+    registerSessions: CashControlRegisterSession[];
+    storeId: Id<"store">;
+  },
+) {
+  const entries = await Promise.all(
+    args.registerSessions
+      .filter(isRegisterSessionSaleUsable)
+      .map(async (registerSession) => {
+        let totalSales = 0;
+        const query = ctx.db
+          .query("posTransaction")
+          .withIndex("by_storeId_status_registerSessionId_completedAt", (q) =>
+            q
+              .eq("storeId", args.storeId)
+              .eq("status", "completed")
+              .eq("registerSessionId", registerSession._id),
+          );
+
+        for await (const transaction of query) {
+          totalSales += transaction.total;
+        }
+
+        return [registerSession._id, totalSales] as const;
+      }),
+  );
+
+  return new Map(entries);
+}
+
 async function listPendingVoidApprovalSummariesBySessionId(
   ctx: Pick<QueryCtx, "db">,
   args: {
@@ -1086,6 +1122,11 @@ export const getDashboardSnapshot = query({
         registerSessions: dashboardRegisterSessionsWithTraceIds,
         storeId: args.storeId,
       });
+    const totalSalesBySessionId =
+      await listRegisterSessionTotalSalesBySessionId(ctx, {
+        registerSessions: dashboardRegisterSessionsWithTraceIds,
+        storeId: args.storeId,
+      });
     const relevantApprovalRequests = pendingApprovalRequests.filter(
       (approvalRequest) =>
         approvalRequest.requestType === "variance_review" &&
@@ -1123,6 +1164,7 @@ export const getDashboardSnapshot = query({
       staffNamesById,
       syncConflictsBySessionId,
       terminalNamesById,
+      totalSalesBySessionId,
     });
   },
 });
@@ -1230,6 +1272,37 @@ export const getRegisterSessionSnapshot = query({
       (sum, deposit) => sum + deposit.amount,
       0,
     );
+    const itemBreakdownByProduct = new Map<
+      string,
+      {
+        name: string;
+        productSku: string | null;
+        quantity: number;
+        totalSales: number;
+      }
+    >();
+    for (const transaction of transactions) {
+      if (transaction.status !== "completed") {
+        continue;
+      }
+
+      for (const item of transactionItemsById.get(transaction._id) ?? []) {
+        const key = `${item.productId}:${item.productSkuId}`;
+        const aggregate = itemBreakdownByProduct.get(key) ?? {
+          name: item.productName,
+          productSku: item.productSku || null,
+          quantity: 0,
+          totalSales: 0,
+        };
+        aggregate.quantity += item.quantity;
+        aggregate.totalSales += item.totalPrice;
+        itemBreakdownByProduct.set(key, aggregate);
+      }
+    }
+    const itemsBreakdown = Array.from(itemBreakdownByProduct.values()).sort(
+      (left, right) =>
+        right.quantity - left.quantity || right.totalSales - left.totalSales,
+    );
     const terminalNamesById = await listTerminalNames(
       ctx,
       new Set(registerSession.terminalId ? [registerSession.terminalId] : []),
@@ -1246,6 +1319,7 @@ export const getRegisterSessionSnapshot = query({
     return {
       closeoutReview,
       financialPosition,
+      itemsBreakdown,
       deposits: deposits
         .sort((left, right) => right.recordedAt - left.recordedAt)
         .map((deposit) => ({

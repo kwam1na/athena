@@ -84,6 +84,7 @@ export type CashControlsDashboardSession = {
   status: string;
   terminalName?: string | null;
   totalDeposited: number;
+  totalSales?: number;
   variance?: number;
   workflowTraceId?: string | null;
   localSyncStatus?: {
@@ -507,6 +508,7 @@ function DrawerSessionCard({
   const showCountedCash = countedCash !== undefined;
   const showVariance = variance !== 0 || showCountedCash;
   const showDeposited = session.totalDeposited > 0;
+  const showTotalSales = typeof session.totalSales === "number";
   const isCloseoutSyncReview =
     syncStatus.status === "needs_review" &&
     syncStatus.reconciliationItems.some(isRegisterCloseoutReviewItem);
@@ -532,6 +534,7 @@ function DrawerSessionCard({
       : undefined;
   const metricColumnCount =
     1 +
+    (showTotalSales ? 1 : 0) +
     (pendingCashVoidApprovedExpectedCash !== undefined ? 1 : 0) +
     (showDeposited ? 1 : 0) +
     (showCountedCash ? 1 : 0) +
@@ -613,6 +616,21 @@ function DrawerSessionCard({
                   : null,
         )}
       >
+        {showTotalSales ? (
+          <div>
+            <dt className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+              Total sales
+            </dt>
+            <dd className="mt-1 font-numeric tabular-nums text-sm text-foreground">
+              <CashControlsFinancialValue
+                amount={session.totalSales ?? 0}
+                canView={hasFinancialDetailsAccess}
+                currency={currency}
+                label="Total sales"
+              />
+            </dd>
+          </div>
+        ) : null}
         <div>
           <dt className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
             {pendingCashVoidContext ? "Expected now" : "Expected cash"}

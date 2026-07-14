@@ -56,6 +56,27 @@ describe("design system build config", () => {
     expect(indexCss).not.toContain("--ring: 31 91% 67%;");
   });
 
+  it("routes overlays through theme-aware scrim tokens", () => {
+    const indexCss = fs.readFileSync(path.join(packageDir, "src/index.css"), "utf8");
+    const overlaySources = [
+      "src/components/ui/sheet.tsx",
+      "src/components/ui/dialog.tsx",
+      "src/components/operations/StockAdjustmentWorkspace.tsx",
+      "src/components/product/QuickAddProductDialog.tsx",
+    ].map((file) => fs.readFileSync(path.join(packageDir, file), "utf8"));
+
+    expect(indexCss).toContain("--overlay-scrim: 15 23 42;");
+    expect(indexCss).toContain("--overlay-scrim: 0 0 0;");
+    expect(indexCss).toContain("--overlay-scrim: 2 6 23;");
+    expect(tailwindConfig.theme.extend.colors["overlay-scrim"]).toBe(
+      "rgb(var(--overlay-scrim) / <alpha-value>)",
+    );
+    for (const source of overlaySources) {
+      expect(source).toContain("bg-overlay-scrim/60");
+      expect(source).not.toContain("bg-slate-950/60");
+    }
+  });
+
   it("keeps dark success labels legible on soft success surfaces", () => {
     const indexCss = fs.readFileSync(path.join(packageDir, "src/index.css"), "utf8");
 

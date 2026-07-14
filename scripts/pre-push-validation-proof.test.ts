@@ -413,4 +413,29 @@ describe("pre-push validation proof", () => {
       reason: "validation wiring changed since proof recording",
     });
   });
+
+  it("reruns pre-push when delivery documentation wiring changes", async () => {
+    const rootDir = await createFixtureRoot();
+    await write(rootDir, "scripts/delivery-documentation-check.ts", "export {};\n");
+    await recordPrePushValidationProof(rootDir, {
+      spawn: createSpawn({}),
+      logger: { log() {}, warn() {} },
+    });
+
+    await write(
+      rootDir,
+      "scripts/delivery-documentation-check.ts",
+      "export const policy = 'changed';\n",
+    );
+
+    await expect(
+      evaluatePrePushValidationProof(rootDir, {
+        spawn: createSpawn({}),
+      }),
+    ).resolves.toMatchObject({
+      reusable: false,
+      status: "validation_wiring_changed",
+      reason: "validation wiring changed since proof recording",
+    });
+  });
 });

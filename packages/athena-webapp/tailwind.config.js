@@ -1,4 +1,4 @@
-/** @type {import('tailwindcss').Config} */
+/** @satisfies {import('tailwindcss').Config} */
 export default {
   darkMode: ["class"],
   content: {
@@ -47,6 +47,7 @@ export default {
       colors: {
         "app-canvas": "rgb(var(--app-canvas) / <alpha-value>)",
         "workspace-panel": "rgb(var(--workspace-panel) / <alpha-value>)",
+        "overlay-scrim": "rgb(var(--overlay-scrim) / <alpha-value>)",
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
         card: {

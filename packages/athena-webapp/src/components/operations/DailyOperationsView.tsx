@@ -199,6 +199,20 @@ type DailyOperationsCompletedCloseAttribution = {
   restrictedDetailsRedacted?: boolean | null;
 };
 
+type DailyOperationsAutomationUpdate =
+  | {
+      id: string;
+      occurredAt?: number | null;
+      status: DailyOperationsAutomationStatus;
+      type: "status";
+    }
+  | {
+      completedClose: DailyOperationsCompletedCloseAttribution;
+      id: string;
+      occurredAt?: number | null;
+      type: "completion";
+    };
+
 export type DailyOperationsSnapshot = {
   automationStatuses?: DailyOperationsAutomationStatus[];
   attentionItems: Array<{
@@ -1614,23 +1628,51 @@ function DailyOperationsTopBandShell({
 }
 
 function AutomationStatusPanel({
+  carryForwardCount,
+  completedClose,
   operatingDate,
   orgUrlSlug,
   openRegisterSessions = [],
+  showStatuses = true,
   snapshot,
   storeUrlSlug,
   variant = "default",
 }: {
+  carryForwardCount?: number | null;
+  completedClose?: DailyOperationsCompletedCloseAttribution | null;
   operatingDate: string;
   orgUrlSlug: string;
   openRegisterSessions?: DailyOperationsSnapshot["attentionItems"];
+  showStatuses?: boolean;
   snapshot: DailyOperationsSnapshot;
   storeUrlSlug: string;
   variant?: "compact" | "default";
 }) {
-  const statuses = getVisibleAutomationStatuses(snapshot);
+  const statuses = showStatuses ? getVisibleAutomationStatuses(snapshot) : [];
+  const hasCompletionAttribution = completedClose?.actorType === "automation";
+  const updates: DailyOperationsAutomationUpdate[] = statuses.map((status) => ({
+    id: status.id,
+    occurredAt: status.occurredAt,
+    status,
+    type: "status",
+  }));
 
-  if (statuses.length === 0) return null;
+  if (hasCompletionAttribution) {
+    updates.push({
+      completedClose,
+      id: `completion-${completedClose.completedAt ?? "unknown"}`,
+      occurredAt: completedClose.completedAt,
+      type: "completion",
+    });
+  }
+
+  updates.sort(
+    (left, right) =>
+      (right.occurredAt ?? Number.NEGATIVE_INFINITY) -
+      (left.occurredAt ?? Number.NEGATIVE_INFINITY),
+  );
+
+  if (updates.length === 0) return null;
 
   if (variant === "compact") {
     return (
@@ -1641,14 +1683,41 @@ function AutomationStatusPanel({
         title="Athena automation"
       >
         <div className="flex min-w-0 flex-col divide-y divide-border/70">
-          {statuses.map((status) => {
+          {updates.map((update) => {
+            if (update.type === "completion") {
+              return (
+                <article
+                  className="py-layout-sm first:pt-0 last:pb-0"
+                  key={update.id}
+                >
+                  <p className="text-sm font-medium leading-5 text-success">
+                    Athena completed EOD Review under store policy.
+                  </p>
+                  <p className="mt-1 text-sm leading-5 text-muted-foreground">
+                    {getDailyOperationsCompletionAttributionDetail(
+                      update.completedClose,
+                      carryForwardCount ??
+                        update.completedClose.carryForwardCount ??
+                        0,
+                    )}
+                  </p>
+                  {update.occurredAt ? (
+                    <p className="mt-1.5 font-numeric text-xs tabular-nums text-muted-foreground">
+                      {formatEventTime(update.occurredAt)}
+                    </p>
+                  ) : null}
+                </article>
+              );
+            }
+
+            const status = update.status;
             const label = getAutomationLaneLabel(status.lane);
             const link = status.sourceLink;
 
             return (
               <article
                 className="flex min-w-0 flex-col gap-layout-xs py-layout-sm first:pt-0 last:pb-0 sm:flex-row sm:items-start sm:justify-between"
-                key={status.id}
+                key={update.id}
               >
                 <div className="min-w-0">
                   <p className="break-words text-sm leading-5 text-foreground">
@@ -3240,9 +3309,18 @@ export function DailyOperationsViewContent({
     : false;
   const shouldShowHistoricalWorkflowPanel =
     isHistoricalDate && showHistoricalEodReviewAction;
+  const hasAutomationCompletion =
+    snapshot?.completedClose?.actorType === "automation";
+  const shouldShowCurrentAutomationBand = Boolean(
+    !isHistoricalDate &&
+      ((shouldShowAutomationStatuses &&
+        snapshot &&
+        getVisibleAutomationStatuses(snapshot).length > 0) ||
+        hasAutomationCompletion),
+  );
   const shouldShowTopStatusStack = snapshot
     ? shouldShowHistoricalWorkflowPanel ||
-      snapshot.completedClose?.actorType === "automation"
+      (hasAutomationCompletion && !shouldShowCurrentAutomationBand)
     : false;
   const primaryActionEmphasisStatus = snapshot
     ? getPrimaryActionEmphasisStatus({
@@ -3293,9 +3371,6 @@ export function DailyOperationsViewContent({
           to: "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId",
         }))
       : snapshotOpenRegisterSessions;
-  const hasVisibleAutomationStatuses = snapshot
-    ? getVisibleAutomationStatuses(snapshot).length > 0
-    : false;
   const actionableLanes = operationLanes.filter(isActionableLane);
   const weekMetricsForDisplay = cachedWeekMetrics ?? snapshot?.weekMetrics;
   const hasHydratedWeekAnalytics =
@@ -3459,12 +3534,17 @@ export function DailyOperationsViewContent({
                   </div>
                 </div>
 
-                {!isHistoricalDate && shouldShowAutomationStatuses ? (
+                {shouldShowCurrentAutomationBand ? (
                   <>
                     <AutomationStatusPanel
+                      carryForwardCount={
+                        snapshot.completedClose?.carryForwardCount
+                      }
+                      completedClose={snapshot.completedClose}
                       operatingDate={snapshot.operatingDate}
                       orgUrlSlug={orgUrlSlug}
                       openRegisterSessions={openRegisterSessions}
+                      showStatuses={shouldShowAutomationStatuses}
                       snapshot={snapshot}
                       storeUrlSlug={storeUrlSlug}
                       variant="compact"
@@ -3492,8 +3572,7 @@ export function DailyOperationsViewContent({
                   </section>
                 ) : null}
 
-                {!shouldShowAutomationStatuses ||
-                !hasVisibleAutomationStatuses ? (
+                {!shouldShowCurrentAutomationBand ? (
                   <OpenRegisterSessionsPanel
                     operatingDate={snapshot.operatingDate}
                     orgUrlSlug={orgUrlSlug}

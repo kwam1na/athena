@@ -1422,6 +1422,65 @@ describe("DailyOperationsViewContent", () => {
     expect(closeAutomationLink).toHaveClass("sm:ml-layout-md", "self-start");
   });
 
+  it("groups current store-day automation updates in one band", () => {
+    renderContent({
+      ...automationSnapshot,
+      completedClose: {
+        actorType: "automation",
+        automationDecisionReason:
+          "EOD Review has only low-risk review evidence within policy thresholds.",
+        completedAt: Date.UTC(2026, 4, 10, 22),
+      },
+    } as DailyOperationsSnapshot);
+
+    const automationHeadings = screen.getAllByRole("heading", {
+      name: "Athena automation",
+    });
+    const automationBand = automationHeadings[0]?.closest("section");
+
+    expect(automationHeadings).toHaveLength(1);
+    expect(automationBand).not.toBeNull();
+    expect(
+      within(automationBand!).getByText("Athena started Opening Handoff."),
+    ).toBeInTheDocument();
+    expect(
+      within(automationBand!).getByText(
+        "Athena prepared EOD Review for manager review.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(automationBand!).getByText(
+        "Athena completed EOD Review under store policy.",
+      ),
+    ).toBeInTheDocument();
+    const completedUpdate = within(automationBand!).getByText(
+      "Athena completed EOD Review under store policy.",
+    );
+    const preparedUpdate = within(automationBand!).getByText(
+      "Athena prepared EOD Review for manager review.",
+    );
+    const openingUpdate = within(automationBand!).getByText(
+      "Athena started Opening Handoff.",
+    );
+
+    expect(
+      within(completedUpdate.closest("article")!).getByText(
+        new Intl.DateTimeFormat([], {
+          hour: "numeric",
+          minute: "2-digit",
+        }).format(new Date(Date.UTC(2026, 4, 10, 22))),
+      ),
+    ).toBeInTheDocument();
+    expect(
+      completedUpdate.compareDocumentPosition(preparedUpdate) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      preparedUpdate.compareDocumentPosition(openingUpdate) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
   it("hides automation status evidence when full admin access is not active", () => {
     renderContent(automationSnapshot, {
       canViewAutomationStatuses: false,

@@ -42,11 +42,8 @@ jobs:
       - name: Check GitHub workflow YAML
         run: bun run workflow:check
 
-      - name: Check compound solution docs
-        run: bun run compound:check
-
-      - name: Check landed change reports
-        run: bun run landed-report:check
+      - name: Check delivery documentation
+        run: bun run delivery:documentation-check
 
       - name: Install Graphify runtime
         run: python3 -m pip install -r .graphify-requirements.txt

@@ -348,6 +348,7 @@ describe("TransactionsView", () => {
     useQueryMock.mockReturnValueOnce([]).mockReturnValueOnce({
       registerSession: {
         registerNumber: "3",
+        terminalName: "Front counter",
       },
     });
 
@@ -359,10 +360,14 @@ describe("TransactionsView", () => {
       registerSessionId: "session-1",
     });
     expect(
-      screen.getByText("Showing transactions linked to Register 3"),
+      screen.getByText(
+        "Showing transactions linked to Front counter / Register 3 / SION-1",
+      ),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("No transactions for Register 3"),
+      screen.getByText(
+        "No transactions for Front counter / Register 3 / SION-1",
+      ),
     ).toBeInTheDocument();
   });
 
@@ -408,10 +413,121 @@ describe("TransactionsView", () => {
     render(<TransactionsView />);
 
     expect(
-      screen.getByText("Showing Cash transactions"),
-    ).toBeInTheDocument();
+      screen.queryByText("Showing Cash transactions"),
+    ).not.toBeInTheDocument();
     expect(screen.getByText("POS-CASH-SPLIT")).toBeInTheDocument();
     expect(screen.queryByText("POS-CARD-ONLY")).not.toBeInTheDocument();
+  });
+
+  it("writes icon-only payment filter changes to route search", async () => {
+    const user = userEvent.setup();
+    useSearchMock.mockReturnValue({
+      o: "/wigclub/store/wigclub/pos",
+      page: 3,
+      paymentMethod: "cash",
+    });
+    getActiveStoreMock.mockReturnValue({
+      activeStore: {
+        _id: "store-1",
+        currency: "GHS",
+      },
+    });
+    useQueryMock.mockReturnValue([]);
+
+    render(<TransactionsView />);
+
+    expect(
+      screen.getByRole("radio", { name: "All payments" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("radio", { name: "Cash payments" }),
+    ).toHaveAttribute("aria-checked", "true");
+    const cardPaymentFilter = screen.getByRole("radio", {
+      name: "Card payments",
+    });
+    expect(cardPaymentFilter).not.toHaveAttribute("title");
+    expect(
+      screen.getByRole("radio", { name: "Mobile money payments" }),
+    ).toBeInTheDocument();
+
+    await user.hover(cardPaymentFilter);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+
+    await user.click(cardPaymentFilter);
+
+    const [navigateOptions] = navigateMock.mock.calls.at(-1) ?? [];
+    const updateSearch = navigateOptions?.search as
+      | ((current: Record<string, unknown>) => Record<string, unknown>)
+      | undefined;
+
+    expect(
+      updateSearch?.({
+        o: "/wigclub/store/wigclub/pos",
+        page: 3,
+        paymentMethod: "cash",
+      }),
+    ).toEqual({
+      o: "/wigclub/store/wigclub/pos",
+      paymentMethod: "card",
+    });
+
+    await user.click(screen.getByRole("radio", { name: "All payments" }));
+
+    const [clearNavigateOptions] = navigateMock.mock.calls.at(-1) ?? [];
+    const clearSearch = clearNavigateOptions?.search as
+      | ((current: Record<string, unknown>) => Record<string, unknown>)
+      | undefined;
+
+    expect(
+      clearSearch?.({
+        o: "/wigclub/store/wigclub/pos",
+        page: 2,
+        paymentMethod: "cash",
+      }),
+    ).toEqual({
+      o: "/wigclub/store/wigclub/pos",
+    });
+  });
+
+  it("uses the selected payment type in the empty state", () => {
+    useSearchMock.mockReturnValue({ paymentMethod: "card" });
+    getActiveStoreMock.mockReturnValue({
+      activeStore: {
+        _id: "store-1",
+        currency: "GHS",
+      },
+    });
+    useQueryMock.mockReturnValue([]);
+
+    render(<TransactionsView />);
+
+    expect(screen.getByText("No card transactions today")).toBeInTheDocument();
+    expect(document.querySelector(".lucide-credit-card")).toBeInTheDocument();
+    expect(document.querySelector(".lucide-receipt")).not.toBeInTheDocument();
+  });
+
+  it("visually highlights the selected mobile money filter", () => {
+    useSearchMock.mockReturnValue({ paymentMethod: "mobile_money" });
+    getActiveStoreMock.mockReturnValue({
+      activeStore: {
+        _id: "store-1",
+        currency: "GHS",
+      },
+    });
+    useQueryMock.mockReturnValue([]);
+
+    render(<TransactionsView />);
+
+    const mobileMoneyFilter = screen.getByRole("radio", {
+      name: "Mobile money payments",
+    });
+    expect(mobileMoneyFilter).toHaveAttribute("aria-checked", "true");
+    expect(mobileMoneyFilter).toHaveClass(
+      "data-[state=on]:!bg-background",
+      "data-[state=on]:ring-1",
+      "data-[state=on]:ring-border",
+    );
   });
 
   it("uses the operating date search param as the completed-from filter", () => {
@@ -447,8 +563,8 @@ describe("TransactionsView", () => {
       limit: 100,
     });
     expect(
-      screen.getByText("Showing transactions from May 8, 2026"),
-    ).toBeInTheDocument();
+      screen.queryByText("Showing transactions from May 8, 2026"),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "From May 8, 2026" }))
       .toBeInTheDocument();
     expect(screen.getByText("POS-MAY-08")).toBeInTheDocument();
@@ -493,7 +609,7 @@ describe("TransactionsView", () => {
     expect(screen.getByText("POS-ALL-TIME")).toBeInTheDocument();
   });
 
-  it("combines active payment and operating date filters into one summary", () => {
+  it("does not show a filter summary on the standalone transactions view", () => {
     useSearchMock.mockReturnValue({
       operatingDate: "2026-05-08",
       paymentMethod: "cash",
@@ -524,8 +640,8 @@ describe("TransactionsView", () => {
     render(<TransactionsView />);
 
     expect(
-      screen.getByText("Showing Cash transactions from May 8, 2026"),
-    ).toBeInTheDocument();
+      screen.queryByText("Showing Cash transactions from May 8, 2026"),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByText("Showing Cash transactions"),
     ).not.toBeInTheDocument();
