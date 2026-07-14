@@ -796,12 +796,19 @@ export const quickAddSku = mutation({
   },
   returns: catalogResultValidator,
   handler: async (ctx, args) => {
+    await requireSharedDemoStoreCapabilityIfApplicable(
+      ctx,
+      "catalog.quick_add",
+      args.storeId,
+    );
     const store = await ctx.db.get("store", args.storeId);
     if (!store) {
       throw new Error("Store not found.");
     }
 
-    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx, {
+      sharedDemoCapability: "catalog.quick_add",
+    });
     await requireOrganizationMemberRoleWithCtx(ctx, {
       allowedRoles: ["full_admin", "pos_only"],
       failureMessage: "You cannot quick add products for this store.",

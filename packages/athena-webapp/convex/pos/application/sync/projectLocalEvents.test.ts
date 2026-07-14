@@ -37,6 +37,54 @@ type ParsedExpenseRecordedEvent = Extract<
 >;
 
 describe("projectLocalSyncEvent", () => {
+  it("projects a local store-day start through the daily-opening boundary", async () => {
+    const repository = createProjectionRepository({
+      hasActivePosRole: ({ allowedRoles }) => allowedRoles.includes("cashier"),
+    });
+    const startStoreDayFromLocalSync = vi.fn().mockResolvedValue({
+      kind: "ok",
+      data: {
+        action: "started",
+        dailyOpeningId: "daily-opening-1",
+      },
+    });
+    repository.startStoreDayFromLocalSync = startStoreDayFromLocalSync;
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: {
+        localEventId: "event-store-day-1",
+        localRegisterSessionId: "local-register-1",
+        sequence: 2,
+        eventType: "store_day_started",
+        occurredAt: 10,
+        staffProfileId: "staff-1" as never,
+        staffProofToken: "proof-token-1",
+        payload: {
+          operatingDate: "2026-07-13",
+          startAt: 100,
+          endAt: 200,
+        },
+      },
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result).toEqual({
+      status: "projected",
+      mappings: [],
+      conflicts: [],
+    });
+    expect(startStoreDayFromLocalSync).toHaveBeenCalledWith({
+      actorStaffProfileId: "staff-1",
+      operatingDate: "2026-07-13",
+      startAt: 100,
+      endAt: 200,
+      storeId: "store-1",
+    });
+  });
+
   it("projects pending checkout item definitions through the reviewable pending item command", async () => {
     const repository = createProjectionRepository();
 

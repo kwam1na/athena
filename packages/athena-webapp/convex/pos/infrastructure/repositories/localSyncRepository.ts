@@ -49,6 +49,7 @@ import {
   markRegisterMappingAuthorityAmbiguous,
   markRegisterMappingAuthorityMapped,
 } from "../../application/sync/registerMappingAuthorityRevision";
+import { startStoreDayWithCtx } from "../../../operations/dailyOpening";
 
 function omitUndefined<T extends Record<string, unknown>>(value: T) {
   return Object.fromEntries(
@@ -147,6 +148,26 @@ export function createConvexLocalSyncRepository(
   return {
     appendReportingIngress(input) {
       return appendReportingIngressWithCtx(ctx, input);
+    },
+    async startStoreDayFromLocalSync(input) {
+      const result = await startStoreDayWithCtx(ctx, {
+        actorStaffProfileId: input.actorStaffProfileId,
+        actorType: "human",
+        endAt: input.endAt,
+        operatingDate: input.operatingDate,
+        startAt: input.startAt,
+        storeId: input.storeId,
+        terminalSyncReviewHandling: "manager_review",
+      });
+      return result.kind === "ok"
+        ? {
+            kind: "ok" as const,
+            data: {
+              action: result.data.action,
+              dailyOpeningId: result.data.dailyOpening._id,
+            },
+          }
+        : result;
     },
     getTerminal(terminalId) {
       return ctx.db.get("posTerminal", terminalId);

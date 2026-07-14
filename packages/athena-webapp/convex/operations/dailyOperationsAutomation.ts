@@ -37,6 +37,7 @@ import {
   completeDailyCloseForAutomationWithCtx,
 } from "./dailyClose";
 import { requireStoreFullAdminAccess } from "../stockOps/access";
+import { requireSharedDemoStoreReadIfApplicable } from "../sharedDemo/actor";
 import { getCashControlsConfig } from "./registerSessionCloseoutGate";
 import {
   getStoreScheduleContextForStoreAtWithCtx,
@@ -57,6 +58,20 @@ const EOD_AUTO_COMPLETE_LOW_RISK_REVIEW_CATEGORIES = new Set([
   "voided_sale",
 ]);
 const MINUTE_MS = 60 * 1000;
+
+async function requireAutomationPolicyReadAccess(
+  ctx: QueryCtx,
+  storeId: Id<"store">,
+) {
+  const demoActor = await requireSharedDemoStoreReadIfApplicable(ctx, storeId);
+  if (!demoActor) {
+    return requireStoreFullAdminAccess(ctx, storeId);
+  }
+
+  const store = await ctx.db.get("store", storeId);
+  if (!store) throw new Error("Store not found.");
+  return { store };
+}
 
 export const dailyOperationsOpeningAutoStartAction = defineAutomationAction({
   action: OPENING_AUTO_START_ACTION,
@@ -202,7 +217,7 @@ async function getOpeningAutoStartPolicyForApi(
   ctx: QueryCtx,
   args: { storeId: Id<"store"> },
 ) {
-  await requireStoreFullAdminAccess(ctx, args.storeId);
+  await requireAutomationPolicyReadAccess(ctx, args.storeId);
   const config = await getOpeningAutoStartPolicyConfigWithCtx(ctx, args);
 
   return {
@@ -224,7 +239,7 @@ async function getEodAutoCompletePolicyForApi(
   ctx: QueryCtx,
   args: { storeId: Id<"store"> },
 ) {
-  await requireStoreFullAdminAccess(ctx, args.storeId);
+  await requireAutomationPolicyReadAccess(ctx, args.storeId);
   const config = await getEodAutoCompletePolicyConfigWithCtx(ctx, args);
 
   return {
@@ -2384,7 +2399,10 @@ export const getRegisterCloseoutApprovalPolicy = query({
     storeId: v.id("store"),
   },
   handler: async (ctx, args) => {
-    const { store } = await requireStoreFullAdminAccess(ctx, args.storeId);
+    const { store } = await requireAutomationPolicyReadAccess(
+      ctx,
+      args.storeId,
+    );
     const config = getCashControlsConfig(store);
 
     return {

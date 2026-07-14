@@ -86,6 +86,113 @@ async function createBlockedSaleGateway() {
 }
 
 describe("createLocalCommandGateway", () => {
+  it("records store-day start without a drawer and updates readiness before cloud projection", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+      clock: () => 10_000,
+    });
+    const gateway = createLocalCommandGateway({
+      store,
+      staffProofToken: "staff-proof-1",
+    });
+
+    const result = await gateway.startStoreDay({
+      activeRoles: ["manager"],
+      endAt: 86_400_000,
+      operatingDate: "2026-07-13",
+      staffProfileId: "staff-1",
+      startAt: 0,
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
+
+    expect(result).toEqual({
+      kind: "ok",
+      data: {
+        localEventId: expect.any(String),
+        operatingDate: "2026-07-13",
+        status: "started",
+      },
+    });
+    await expect(store.readStoreDayReadiness({
+      operatingDate: "2026-07-13",
+      storeId: "store-1",
+    })).resolves.toEqual({
+      ok: true,
+      value: {
+        operatingDate: "2026-07-13",
+        source: "local",
+        status: "started",
+        storeId: "store-1",
+        updatedAt: 10_000,
+      },
+    });
+    await expect(store.listEvents()).resolves.toEqual({
+      ok: true,
+      value: expect.arrayContaining([
+        expect.objectContaining({
+          localRegisterSessionId: "store-day:2026-07-13",
+          staffProfileId: "staff-1",
+          staffProofToken: "staff-proof-1",
+          sync: { status: "pending" },
+          type: "store_day.started",
+          payload: {
+            endAt: 86_400_000,
+            operatingDate: "2026-07-13",
+            startAt: 0,
+          },
+        }),
+      ]),
+    });
+  });
+
+  it("allows a cashier to start the store day locally", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+    });
+    const gateway = createLocalCommandGateway({ store });
+
+    const result = await gateway.startStoreDay({
+      activeRoles: ["cashier"],
+      endAt: 200,
+      operatingDate: "2026-07-13",
+      staffProfileId: "staff-1",
+      startAt: 100,
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
+
+    expect(result).toMatchObject({ kind: "ok" });
+    await expect(store.listEvents()).resolves.toEqual({
+      ok: true,
+      value: expect.arrayContaining([
+        expect.objectContaining({ type: "store_day.started" }),
+      ]),
+    });
+  });
+
+  it("rejects a local store-day start without a POS role", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+    });
+    const gateway = createLocalCommandGateway({ store });
+
+    const result = await gateway.startStoreDay({
+      activeRoles: [],
+      endAt: 200,
+      operatingDate: "2026-07-13",
+      staffProfileId: "staff-1",
+      startAt: 100,
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
+
+    expect(result).toMatchObject({
+      kind: "user_error",
+      error: { code: "authorization_failed" },
+    });
+  });
+
   it("commits the captured catalog pin with the first durable sale event", async () => {
     const store = createPosLocalStore({
       adapter: createMemoryPosLocalStorageAdapter(),

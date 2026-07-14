@@ -208,9 +208,9 @@ export const HeroSectionTabs: React.FC = () => {
         )}
       </div>
 
-      <div className="space-y-layout-md border-t border-border pt-layout-md">
+      <div className="w-fit max-w-full space-y-layout-md border-t border-border pt-layout-md">
         <p className="text-sm font-medium text-foreground">Hero content options</p>
-        <div className="grid gap-layout-sm md:grid-cols-2">
+        <div className="grid w-fit max-w-full gap-layout-sm md:grid-cols-2">
           <div className="flex min-h-[5rem] items-center justify-between gap-layout-md rounded-md border border-border bg-background p-layout-sm">
             <div className="space-y-0.5">
               <label htmlFor="overlay-toggle" className="text-sm">
@@ -250,7 +250,7 @@ export const HeroSectionTabs: React.FC = () => {
           onValueChange={handleDisplayTypeChange}
           className="flex flex-col gap-layout-md border-t border-border pt-layout-md"
         >
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-fit max-w-full grid-cols-2">
             <TabsTrigger value="reel" className="flex items-center gap-2">
               <TvMinimalPlay className="h-4 w-4" />
               Landing Page Reel

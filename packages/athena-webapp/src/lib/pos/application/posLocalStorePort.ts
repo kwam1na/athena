@@ -321,6 +321,9 @@ export interface PosLocalCompatibilityPort {
   /** Dev/QA shared-demo restore only: discard this browser's POS state after
    * the server has restored the shared store baseline. */
   resetSharedDemoLocalState?(): Promise<PosLocalStoreResult<null>>;
+  /** Dev/QA shared-demo first-visit testing only: discard POS state and the
+   * provisioned terminal identity so the next bootstrap creates a new device. */
+  resetSharedDemoFirstVisitState?(): Promise<PosLocalStoreResult<null>>;
 }
 
 /** High-level outcomes only. Engines retain their native layout, indexes, queries, and transaction mechanics. */

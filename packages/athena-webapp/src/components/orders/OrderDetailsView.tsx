@@ -1,21 +1,16 @@
 import {
   Check,
   Circle,
-  Tag,
-  TriangleAlert,
   Banknote,
   Smartphone,
   Clock,
   CircleCheck,
-  CircleFadingPlus,
-  Dot,
   X,
   BadgeCheckIcon,
 } from "lucide-react";
 import View from "../View";
 import { useOnlineOrder } from "~/src/contexts/OnlineOrderContext";
 import {
-  capitalizeFirstLetter,
   currencyFormatter,
   getRelativeTime,
 } from "~/src/lib/utils";
@@ -40,6 +35,18 @@ interface ExternalTransaction {
   createdAt: string;
   reference: string;
   formattedAmount: string;
+}
+
+interface PaystackTransaction {
+  id: string;
+  amount: number;
+  currency: string;
+  status: string;
+  createdAt: string;
+  reference: string;
+  metadata: {
+    checkout_session_id?: string;
+  };
 }
 
 const VerifiedBadge = ({
@@ -132,9 +139,7 @@ export function OrderDetailsView() {
 
   const updateOrder = useMutation(api.storeFront.onlineOrder.update);
 
-  const [externalTransactions, setExternalTransactions] = useState<
-    ExternalTransaction[]
-  >([]);
+  const [, setExternalTransactions] = useState<ExternalTransaction[]>([]);
 
   useEffect(() => {
     const fetchTransactions = async () => {
@@ -146,11 +151,11 @@ export function OrderDetailsView() {
       setExternalTransactions(
         transactions.data
           .filter(
-            (transaction: any) =>
+            (transaction: PaystackTransaction) =>
               transaction.metadata.checkout_session_id ==
               order?.checkoutSessionId,
           )
-          .map((transaction: any) => {
+          .map((transaction: PaystackTransaction) => {
             return {
               id: transaction.id,
               amount: transaction.amount,
@@ -169,28 +174,10 @@ export function OrderDetailsView() {
     }
   }, [order?._id]);
 
-  const isDuplicateQuery = useQuery(
+  useQuery(
     api.storeFront.onlineOrder.isDuplicateOrder,
     order?._id ? { id: order._id } : "skip",
   );
-
-  const handleMarkAsVerified = async () => {
-    const result = await runCommand(() =>
-      updateOrder({
-        orderId: order?._id,
-        update: {
-          hasVerifiedPayment: true,
-        },
-      }),
-    );
-
-    if (result.kind !== "ok") {
-      presentCommandToast(result);
-      return;
-    }
-
-    toast.success("Order marked as verified");
-  };
 
   const handleMarkPaymentCollected = async () => {
     const result = await runCommand(() =>
@@ -271,9 +258,11 @@ export function OrderDetailsView() {
                 <p className="text-sm">{`${paymentMethod?.bank} ${paymentChannel}`}</p>
               )}
             </div>
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">{`ending in ${paymentMethod?.last4}`}</p>
-            </div>
+            {!isPODOrder && paymentMethod?.last4 ? (
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">{`ending in ${paymentMethod.last4}`}</p>
+              </div>
+            ) : null}
 
             {/* Payment Status Badges */}
             {isPODOrder ? (

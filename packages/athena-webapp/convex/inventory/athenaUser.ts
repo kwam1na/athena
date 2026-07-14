@@ -7,7 +7,7 @@ export function isExpiredSharedDemoSessionError(error: unknown) {
   return (
     error instanceof Error &&
     error.message ===
-      "The shared demo session has expired. Open the demo again."
+      "The demo session has expired. Open the demo again."
   );
 }
 

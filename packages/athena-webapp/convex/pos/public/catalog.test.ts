@@ -512,7 +512,7 @@ describe("POS public catalog queries", () => {
     [search, { searchQuery: "milk", storeId: "other-store" }, mocks.searchProducts],
     [barcodeLookup, { barcode: "123456789012", storeId: "other-store" }, mocks.lookupByBarcode],
   ] as const)("rejects a cross-store direct catalog read before its reader runs", async (fn, args, reader) => {
-    const denial = new Error("This action is unavailable in the shared demo.");
+    const denial = new Error("This action is unavailable in the demo.");
     mocks.requireSharedDemoStoreCapabilityIfApplicable.mockRejectedValueOnce(denial);
     const ctx = buildCtx();
     await expect(getHandler(fn)(ctx as never, args)).rejects.toThrow(denial.message);
@@ -811,8 +811,12 @@ describe("POS public catalog queries", () => {
       storeId: "store-1",
     });
 
+    expect(
+      mocks.requireSharedDemoStoreCapabilityIfApplicable,
+    ).toHaveBeenCalledWith(ctx, "catalog.quick_add", "store-1");
     expect(mocks.requireAuthenticatedAthenaUserWithCtx).toHaveBeenCalledWith(
       ctx,
+      { sharedDemoCapability: "catalog.quick_add" },
     );
     expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
       ctx,

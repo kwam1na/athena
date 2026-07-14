@@ -54,6 +54,7 @@ let defaultLastSuccessfulDurableCommitAt: number | undefined;
 let defaultLastDurableFailure:
   { code: PosLocalStoreErrorCode; observedAt: number } | undefined;
 const defaultLifecycleListeners = new Set<() => void>();
+const defaultTerminalSeedListeners = new Set<() => void>();
 
 export function getDefaultPosLocalStorageRuntime(): PosLocalStorageRuntime<PosLocalStorePort> {
   if (!defaultRuntime) {
@@ -78,7 +79,7 @@ export function getDefaultPosLocalStore(): PosLocalStorePort {
   defaultPort ??= createPosLocalStoreRuntimePort(
     getDefaultPosLocalStorageRuntime(),
     {
-      onDurableResult(result) {
+      onDurableResult(result, operation) {
         if (result.ok) {
           defaultLastSuccessfulDurableCommitAt = Date.now();
           defaultLastDurableFailure = undefined;
@@ -89,6 +90,9 @@ export function getDefaultPosLocalStore(): PosLocalStorePort {
           };
         }
         notifyDefaultLifecycleListeners();
+        if (result.ok && isTerminalSeedChangeOperation(operation)) {
+          notifyDefaultTerminalSeedListeners();
+        }
       },
     },
   );
@@ -105,6 +109,7 @@ export async function clearDefaultPosLocalStore() {
     defaultLastSuccessfulDurableCommitAt = undefined;
     defaultLastDurableFailure = undefined;
     notifyDefaultLifecycleListeners();
+    notifyDefaultTerminalSeedListeners();
   }
   return result;
 }
@@ -112,7 +117,10 @@ export async function clearDefaultPosLocalStore() {
 export function createPosLocalStoreRuntimePort(
   runtime: PosLocalStorageRuntime<PosLocalStorePort>,
   options?: {
-    onDurableResult?: (result: PosLocalStoreResult<unknown>) => void;
+    onDurableResult?: (
+      result: PosLocalStoreResult<unknown>,
+      operation: PropertyKey,
+    ) => void;
   },
 ): PosLocalStorePort {
   return new Proxy({} as PosLocalStorePort, {
@@ -130,7 +138,7 @@ export function createPosLocalStoreRuntimePort(
           }
           const result = await Reflect.apply(operation, store, args);
           if (isDurableCommitOperation(property) && isStoreResult(result)) {
-            options?.onDurableResult?.(result);
+            options?.onDurableResult?.(result, property);
           }
           return result;
         });
@@ -164,6 +172,11 @@ export function subscribeDefaultPosLocalStorageLifecycleHealth(
   return () => defaultLifecycleListeners.delete(listener);
 }
 
+export function subscribeDefaultPosTerminalSeedChanges(listener: () => void) {
+  defaultTerminalSeedListeners.add(listener);
+  return () => defaultTerminalSeedListeners.delete(listener);
+}
+
 /** Explicit user-gesture lifecycle capability; persistence denial remains advisory. */
 export function requestDefaultPosLocalPersistentStorage() {
   return requestPosLocalPersistentStorage({
@@ -173,6 +186,10 @@ export function requestDefaultPosLocalPersistentStorage() {
 
 function notifyDefaultLifecycleListeners() {
   for (const listener of defaultLifecycleListeners) listener();
+}
+
+function notifyDefaultTerminalSeedListeners() {
+  for (const listener of defaultTerminalSeedListeners) listener();
 }
 
 function isStoreResult(value: unknown): value is PosLocalStoreResult<unknown> {
@@ -200,6 +217,7 @@ const DURABLE_COMMIT_OPERATIONS = new Set<PropertyKey>([
   "markEventsSynced",
   "replaceStaffAuthoritySnapshot",
   "resetRegisterOperationalStateForAuthorityCutover",
+  "resetSharedDemoFirstVisitState",
   "resetSharedDemoLocalState",
   "upsertStaffAuthorityRecord",
   "writeCashierPresence",
@@ -216,6 +234,16 @@ const DURABLE_COMMIT_OPERATIONS = new Set<PropertyKey>([
 
 function isDurableCommitOperation(property: PropertyKey) {
   return DURABLE_COMMIT_OPERATIONS.has(property);
+}
+
+const TERMINAL_SEED_CHANGE_OPERATIONS = new Set<PropertyKey>([
+  "resetSharedDemoFirstVisitState",
+  "writeProvisionedTerminalSeed",
+  "writeProvisionedTerminalSeedAndClearTerminalIntegrity",
+]);
+
+function isTerminalSeedChangeOperation(property: PropertyKey) {
+  return TERMINAL_SEED_CHANGE_OPERATIONS.has(property);
 }
 
 export function createPosLocalStorageRuntime<TStore>({

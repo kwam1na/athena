@@ -25,6 +25,7 @@ export type PosLocalEntityKind =
 export type PosLocalEventType =
   | "terminal.seeded"
   | "register.opened"
+  | "store_day.started"
   | "session.started"
   | "session.payments_updated"
   | "cart.cleared"

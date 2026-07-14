@@ -19,23 +19,18 @@ import { toast } from "sonner";
 
 import { ComposedPageHeader } from "@/components/common/PageHeader";
 import { FadeIn } from "@/components/common/FadeIn";
-import {
-  StaffAuthenticationDialog,
-  type StaffAuthenticationResult,
-} from "@/components/staff-auth/StaffAuthenticationDialog";
+import type { StaffAuthenticationResult } from "@/components/staff-auth/StaffAuthenticationDialog";
 import { Button } from "@/components/ui/button";
 import { LoadingButton } from "@/components/ui/loading-button";
 import View from "@/components/View";
 import { CashierAuthDialog } from "@/components/pos/CashierAuthDialog";
+import { SharedDemoManagerSignInGuidance } from "@/components/shared-demo/SharedDemoManagerSignInGuidance";
+import { useSharedDemoRegisterBootstrapStatus } from "@/components/shared-demo/SharedDemoRuntime";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { presentCommandToast } from "@/lib/errors/presentCommandToast";
-import {
-  type NormalizedCommandResult,
-  runCommand,
-} from "@/lib/errors/runCommand";
+import { runCommand } from "@/lib/errors/runCommand";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
-import type { CommandResult } from "~/shared/commandResult";
 import { useLocalPosEntryContext } from "@/lib/pos/infrastructure/local/localPosEntryContext";
 import {
   type LocalPosReadiness,
@@ -45,8 +40,9 @@ import { clearDefaultPosLocalStore } from "@/lib/pos/infrastructure/local/posLoc
 import { getDefaultPosLocalStore } from "@/lib/pos/infrastructure/local/posLocalStorageRuntime";
 import type { PosLocalStorePort } from "@/lib/pos/application/posLocalStorePort";
 import { refreshAndStoreTerminalStaffAuthority } from "@/lib/pos/infrastructure/local/terminalStaffAuthorityRefresh";
+import { createLocalCommandGateway } from "@/lib/pos/infrastructure/local/localCommandGateway";
 import { logger } from "@/lib/logger";
-import { reloadWindow } from "@/lib/navigationUtils";
+import { getOrigin, reloadWindow } from "@/lib/navigationUtils";
 
 type DailyOpeningSnapshot = {
   operatingDate?: string;
@@ -98,6 +94,8 @@ function isBrowserOffline() {
 }
 
 export function POSRegisterOpeningGuard({ children }: { children: ReactNode }) {
+  const sharedDemoRegisterBootstrapStatus =
+    useSharedDemoRegisterBootstrapStatus();
   const { activeStore, isLoadingStores } = useGetActiveStore();
   const routeParams = useParams({ strict: false }) as
     | {
@@ -220,6 +218,23 @@ export function POSRegisterOpeningGuard({ children }: { children: ReactNode }) {
         } satisfies LocalPosReadiness)
       : localReadiness;
 
+  if (sharedDemoRegisterBootstrapStatus !== "ready") {
+    return (
+      <POSReadinessLoadingState
+        closeSnapshot={dailyCloseSnapshot}
+        description="Athena is aligning this browser with the demo register session."
+        entryContext={entryContext}
+        heading="Preparing this register"
+        isLoadingStores={isLoadingStores}
+        localReadiness={localReadiness}
+        openingSnapshot={snapshot}
+        operatingDate={operatingDateRange.operatingDate}
+        showChecklist={false}
+        storeId={storeId}
+      />
+    );
+  }
+
   if (isLoadingStores && entryContext.status === "loading") {
     return null;
   }
@@ -249,6 +264,11 @@ export function POSRegisterOpeningGuard({ children }: { children: ReactNode }) {
         localStore={localStore}
         onStarted={() => setLocallyStartedDayKey(activeDayKey)}
         operatingDateRange={operatingDateRange}
+        showDemoManagerGuidance={
+          routeParams?.orgUrlSlug === "demo" ||
+          (entryContext.status === "ready" &&
+            entryContext.orgUrlSlug === "demo")
+        }
         snapshot={snapshot}
         storeId={storeId}
       />
@@ -284,19 +304,26 @@ export function POSRegisterOpeningGuard({ children }: { children: ReactNode }) {
 
 function POSReadinessLoadingState({
   closeSnapshot,
+  description =
+    "Athena is confirming the store day and local register state before checkout opens.",
   entryContext,
+  heading = "Checking this register",
   isLoadingStores,
   localReadiness,
   openingSnapshot,
   operatingDate,
+  showChecklist = true,
   storeId,
 }: {
   closeSnapshot?: DailyCloseLifecycleGate;
+  description?: string;
   entryContext: ReturnType<typeof useLocalPosEntryContext>;
+  heading?: string;
   isLoadingStores: boolean;
   localReadiness: LocalPosReadiness;
   openingSnapshot?: DailyOpeningSnapshot;
   operatingDate?: string;
+  showChecklist?: boolean;
   storeId?: Id<"store">;
 }) {
   const blockers = getReadinessLoadingBlockers({
@@ -345,13 +372,13 @@ function POSReadinessLoadingState({
             <Loader2 className="h-5 w-5 animate-spin" />
           </div>
           <h2 className="text-xl font-medium text-foreground/80">
-            Checking this register
+            {heading}
           </h2>
           <p className="mt-3 max-w-lg text-base leading-7 text-muted-foreground">
-            Athena is confirming the store day and local register state before
-            checkout opens.
+            {description}
           </p>
-          <div className="mt-8 w-full rounded-lg border border-border/80 bg-muted/20 p-4 text-left">
+          {showChecklist ? (
+            <div className="mt-8 w-full rounded-lg border border-border/80 bg-muted/20 p-4 text-left">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p className="text-sm font-medium text-foreground">
@@ -419,7 +446,8 @@ function POSReadinessLoadingState({
                 </div>
               ))}
             </div>
-          </div>
+            </div>
+          ) : null}
         </div>
       </FadeIn>
     </View>
@@ -618,6 +646,7 @@ function StoreDayNotStartedState({
   localStore,
   onStarted,
   operatingDateRange,
+  showDemoManagerGuidance,
   snapshot,
   storeId,
 }: {
@@ -626,6 +655,7 @@ function StoreDayNotStartedState({
   localStore: PosLocalStorePort;
   onStarted: () => void;
   operatingDateRange: ReturnType<typeof getLocalOperatingDateRange>;
+  showDemoManagerGuidance: boolean;
   snapshot?: DailyOpeningSnapshot;
   storeId?: Id<"store">;
 }) {
@@ -636,10 +666,6 @@ function StoreDayNotStartedState({
       }
     | undefined;
   const canLinkToOpening = Boolean(params?.orgUrlSlug && params.storeUrlSlug);
-  const startStoreDay = useMutation(api.operations.dailyOpening.startStoreDay);
-  const authenticateStaffCredential = useMutation(
-    api.operations.staffCredentials.authenticateStaffCredential,
-  );
   const [isStarting, setIsStarting] = useState(false);
   const [isStaffAuthOpen, setIsStaffAuthOpen] = useState(false);
   const terminalId =
@@ -648,10 +674,16 @@ function StoreDayNotStartedState({
           Id<"posTerminal"> | undefined)
       : undefined;
   const canStartFromGate = Boolean(
-    storeId && (snapshot?.status === "ready" || localReadiness.canStartLocally),
+    storeId &&
+      terminalId &&
+      (snapshot?.status === "ready" || localReadiness.canStartLocally),
   );
-  const shouldStartLocally =
-    Boolean(localReadiness.canStartLocally) && snapshot?.status !== "ready";
+
+  useEffect(() => {
+    if (!terminalId) {
+      setIsStaffAuthOpen(false);
+    }
+  }, [terminalId]);
 
   const handleStartDay = async (staff: StaffAuthenticationResult) => {
     if (!storeId || isStarting) {
@@ -662,32 +694,23 @@ function StoreDayNotStartedState({
     setIsStarting(true);
 
     try {
-      if (shouldStartLocally) {
-        const result = await localStore.writeStoreDayReadiness({
-          storeId,
-          operatingDate: operatingDateRange.operatingDate,
-          status: "started",
-          source: "local",
-          updatedAt: Date.now(),
-        });
-
-        if (result.ok) {
-          toast.success("Store day started");
-          onStarted();
-          return;
-        }
-
-        toast.error(result.error.message);
+      if (!terminalId) {
+        toast.error("Mount an open register before starting the store day.");
         return;
       }
 
       const result = await runCommand(
         () =>
-          startStoreDay({
+          createLocalCommandGateway({
+            store: localStore,
+            staffProofToken: staff.posLocalStaffProof?.token,
+          }).startStoreDay({
             ...operatingDateRange,
-            actorStaffProfileId: staff.staffProfileId,
+            activeRoles: staff.activeRoles ?? [],
+            staffProfileId: staff.staffProfileId,
             storeId,
-          }) as Promise<CommandResult<unknown>>,
+            terminalId,
+          }),
       );
 
       if (result.kind === "ok") {
@@ -700,31 +723,6 @@ function StoreDayNotStartedState({
     } finally {
       setIsStarting(false);
     }
-  };
-
-  const handleAuthenticateStaff = async (args: {
-    pinHash: string;
-    username: string;
-  }): Promise<NormalizedCommandResult<StaffAuthenticationResult>> => {
-    if (!storeId) {
-      return {
-        kind: "user_error",
-        error: {
-          code: "validation_failed",
-          message: "Select a store before confirming staff credentials.",
-        },
-      };
-    }
-
-    return runCommand(
-      () =>
-        authenticateStaffCredential({
-          allowedRoles: ["cashier", "manager"],
-          pinHash: args.pinHash,
-          storeId,
-          username: args.username,
-        }) as Promise<CommandResult<StaffAuthenticationResult>>,
-    );
   };
 
   return (
@@ -784,6 +782,9 @@ function StoreDayNotStartedState({
                     storeUrlSlug: params!.storeUrlSlug!,
                   }}
                   to="/$orgUrlSlug/store/$storeUrlSlug/operations/opening"
+                  search={{
+                    o: getOrigin(),
+                  }}
                 >
                   Opening Handoff
                   <ArrowUpRight className="h-4 w-4" />
@@ -791,6 +792,9 @@ function StoreDayNotStartedState({
               </Button>
             ) : null}
           </div>
+          {showDemoManagerGuidance ? (
+            <SharedDemoManagerSignInGuidance className="mt-6 max-w-md" />
+          ) : null}
           {!canStartFromGate ? (
             <p className="mt-layout-md max-w-md text-sm leading-6 text-muted-foreground">
               Terminal setup is required before POS can start the day.
@@ -800,6 +804,7 @@ function StoreDayNotStartedState({
       </FadeIn>
       {terminalId && storeId ? (
         <CashierAuthDialog
+          allowedRoles={["cashier", "manager"]}
           onAuthenticated={(result) => {
             void handleStartDay(result);
           }}
@@ -808,22 +813,7 @@ function StoreDayNotStartedState({
           storeId={storeId}
           terminalId={terminalId}
         />
-      ) : (
-        <StaffAuthenticationDialog
-          copy={{
-            title: "Confirm staff credentials",
-            description: "Start the store day with your staff sign-in.",
-            submitLabel: "Start day",
-          }}
-          getSuccessMessage={() => null}
-          onAuthenticate={(args) => handleAuthenticateStaff(args)}
-          onAuthenticated={(result) => {
-            void handleStartDay(result);
-          }}
-          onDismiss={() => setIsStaffAuthOpen(false)}
-          open={isStaffAuthOpen}
-        />
-      )}
+      ) : null}
     </View>
   );
 }

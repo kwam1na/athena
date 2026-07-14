@@ -451,7 +451,7 @@ describe("cycle count drafts", () => {
 
   it("clamps cycle-count summaries to the shared demo store", async () => {
     const { ctx } = createCycleCountDraftCtx();
-    const denial = new Error("This action is unavailable in the shared demo.");
+    const denial = new Error("This action is unavailable in the demo.");
     sharedDemoMocks.requireSharedDemoStoreCapabilityIfApplicable.mockRejectedValueOnce(
       denial,
     );

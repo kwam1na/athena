@@ -6,6 +6,12 @@ export const POS_LOCAL_SYNC_EVENT_CONTRACT = [
     browserUploadable: true,
   },
   {
+    eventType: "store_day_started",
+    localEventType: "store_day.started",
+    syncScope: "pos",
+    browserUploadable: true,
+  },
+  {
     eventType: "pending_checkout_item_defined",
     localEventType: "pending_checkout_item.defined",
     syncScope: "pos",
@@ -149,6 +155,12 @@ export type PosLocalSyncRegisterOpenedPayload = {
   notes?: string;
 };
 
+export type PosLocalSyncStoreDayStartedPayload = {
+  operatingDate: string;
+  startAt: number;
+  endAt: number;
+};
+
 export type PosLocalSyncPendingCheckoutItemSearchContext = {
   query?: string;
   source?: "barcode" | "lookup_code" | "manual" | "catalog_search" | "unknown";
@@ -262,6 +274,7 @@ export type PosLocalSyncExpenseRecordedPayload = {
 
 export type PosLocalSyncPayloadByEventType = {
   register_opened: PosLocalSyncRegisterOpenedPayload;
+  store_day_started: PosLocalSyncStoreDayStartedPayload;
   pending_checkout_item_defined: PosLocalSyncPendingCheckoutItemDefinedPayload;
   sale_completed: PosLocalSyncSaleCompletedPayload;
   sale_cleared: PosLocalSyncSaleClearedPayload;

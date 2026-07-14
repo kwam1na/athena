@@ -2,7 +2,50 @@ import { v } from "convex/values";
 
 import { mutation, query } from "../_generated/server";
 import { requireSharedDemoActorWithCtx } from "./actor";
-import { restoreBaselineWithCtx } from "./restore";
+import {
+  beginRestoreLeaseWithCtx,
+} from "./restore";
+import { bindSharedDemoRegisterBaselineWithCtx } from "./registerBaseline";
+import { hashPosTerminalSyncSecret } from "../pos/application/sync/terminalSyncSecret";
+import {
+  SHARED_DEMO_CASHIER_STAFF_CODE,
+  SHARED_DEMO_REGISTER_NUMBER,
+} from "./config";
+
+export function selectSharedDemoRegisterBootstrapRecords<
+  TStaffProfile extends {
+    staffCode?: string;
+    status: string;
+    storeId: string;
+  },
+  TTerminal extends {
+    registerNumber?: string;
+    status: string;
+    storeId: string;
+  },
+>({
+  staffProfiles,
+  storeId,
+  terminals,
+}: {
+  staffProfiles: TStaffProfile[];
+  storeId: string;
+  terminals: TTerminal[];
+}) {
+  const staffProfile = staffProfiles.find(
+    (candidate) =>
+      candidate.storeId === storeId &&
+      candidate.staffCode === SHARED_DEMO_CASHIER_STAFF_CODE &&
+      candidate.status === "active",
+  );
+  const terminal = terminals.find(
+    (candidate) =>
+      candidate.storeId === storeId &&
+      candidate.registerNumber === SHARED_DEMO_REGISTER_NUMBER &&
+      candidate.status === "active",
+  );
+  return staffProfile && terminal ? { staffProfile, terminal } : null;
+}
 
 const contextResult = v.union(
   v.null(),
@@ -95,32 +138,23 @@ export const getRegisterBootstrap = query({
       return null;
     }
 
-    const registerSession = await ctx.db
-      .query("registerSession")
-      .withIndex("by_storeId_status", (q) =>
-        q.eq("storeId", actor.storeId).eq("status", "active"),
-      )
-      .first();
-    if (
-      !registerSession?.terminalId ||
-      !registerSession.openedByStaffProfileId
-    ) {
-      return null;
-    }
-
-    const [terminal, staffProfile] = await Promise.all([
-      ctx.db.get("posTerminal", registerSession.terminalId),
-      ctx.db.get("staffProfile", registerSession.openedByStaffProfileId),
+    const [terminals, staffProfiles] = await Promise.all([
+      ctx.db
+        .query("posTerminal")
+        .withIndex("by_storeId", (q) => q.eq("storeId", actor.storeId))
+        .take(50),
+      ctx.db
+        .query("staffProfile")
+        .withIndex("by_storeId", (q) => q.eq("storeId", actor.storeId))
+        .take(50),
     ]);
-    if (
-      !terminal ||
-      terminal.storeId !== actor.storeId ||
-      !staffProfile ||
-      staffProfile.storeId !== actor.storeId ||
-      staffProfile.status !== "active"
-    ) {
-      return null;
-    }
+    const records = selectSharedDemoRegisterBootstrapRecords({
+      staffProfiles,
+      storeId: actor.storeId,
+      terminals,
+    });
+    if (!records) return null;
+    const { staffProfile, terminal } = records;
 
     return {
       kind: "shared_demo" as const,
@@ -176,7 +210,7 @@ export const requestManualRestore = mutation({
         kind: "rate_limited" as const,
       };
     }
-    const result = await restoreBaselineWithCtx(ctx, {
+    const result = await beginRestoreLeaseWithCtx(ctx, {
       idempotencyKey: args.idempotencyKey,
       source: "manual",
       storeId: actor.storeId,
@@ -189,5 +223,90 @@ export const requestManualRestore = mutation({
           ? ("started" as const)
           : ("already_running" as const),
     };
+  },
+});
+
+export const resetBrowserExperience = mutation({
+  args: {
+    syncSecretHash: v.optional(v.string()),
+    terminalId: v.optional(v.id("posTerminal")),
+  },
+  returns: v.object({
+    baselineVersion: v.number(),
+    epoch: v.number(),
+    terminalDeleted: v.boolean(),
+  }),
+  handler: async (ctx, args) => {
+    const actor = await requireSharedDemoActorWithCtx(ctx);
+    if (Boolean(args.terminalId) !== Boolean(args.syncSecretHash)) {
+      throw new Error("The demo browser terminal proof is incomplete.");
+    }
+
+    let terminalCleanupRequested = false;
+    if (args.terminalId && args.syncSecretHash) {
+      const terminal = await ctx.db.get("posTerminal", args.terminalId);
+      if (terminal) {
+        const submittedSecret = await hashPosTerminalSyncSecret(
+          args.syncSecretHash,
+        );
+        if (
+          terminal.storeId !== actor.storeId ||
+          terminal.registerNumber === SHARED_DEMO_REGISTER_NUMBER ||
+          !terminal.syncSecretHash ||
+          terminal.syncSecretHash !== submittedSecret
+        ) {
+          throw new Error("The demo browser terminal could not be verified.");
+        }
+        terminalCleanupRequested = true;
+      }
+    }
+
+    const result = await beginRestoreLeaseWithCtx(ctx, {
+      cleanupTerminalId: terminalCleanupRequested ? args.terminalId : undefined,
+      idempotencyKey: crypto.randomUUID(),
+      source: "manual",
+      storeId: actor.storeId,
+    });
+
+    return {
+      baselineVersion: result.baselineVersion,
+      epoch: result.epoch,
+      terminalDeleted: false,
+    };
+  },
+});
+
+export const bindRegisterBaselineToTerminal = mutation({
+  args: { terminalId: v.id("posTerminal") },
+  returns: v.object({
+    bootstrap: v.object({
+      cloudRegisterSessionId: v.id("registerSession"),
+      expectedCash: v.number(),
+      localRegisterSessionId: v.string(),
+      openedAt: v.number(),
+      openingFloat: v.number(),
+      registerNumber: v.optional(v.string()),
+      staffProfileId: v.id("staffProfile"),
+      status: v.union(v.literal("active"), v.literal("open")),
+    }),
+    managerDisplayName: v.string(),
+    openedAt: v.number(),
+    operatingDate: v.string(),
+    registerNumber: v.string(),
+    terminalId: v.id("posTerminal"),
+    timezone: v.string(),
+  }),
+  handler: async (ctx, args) => {
+    const actor = await requireSharedDemoActorWithCtx(ctx);
+    const terminal = await ctx.db.get("posTerminal", args.terminalId);
+    if (!terminal || terminal.storeId !== actor.storeId) {
+      throw new Error("The demo register is unavailable on this browser.");
+    }
+    return bindSharedDemoRegisterBaselineWithCtx(ctx, {
+      actorUserId: actor.athenaUserId,
+      now: Date.now(),
+      storeId: actor.storeId,
+      terminal,
+    });
   },
 });

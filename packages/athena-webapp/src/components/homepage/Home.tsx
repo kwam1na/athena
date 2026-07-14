@@ -23,6 +23,7 @@ import type { MouseEvent, ReactNode } from "react";
 import { Button } from "../ui/button";
 import { getOrigin } from "~/src/lib/navigationUtils";
 import { getStoreConfigV2 } from "~/src/lib/storeConfig";
+import { useSharedDemoContext } from "~/src/hooks/useSharedDemoContext";
 import type { Store as StoreDoc } from "~/types";
 
 function HomepageSettingsSection({
@@ -175,8 +176,21 @@ function HomepageReadinessSummary({
   );
 }
 
+function HomepageDemoNotice() {
+  return (
+    <section className="w-fit max-w-full rounded-md border border-border bg-surface px-4 py-3">
+      <p className="text-sm font-medium">Homepage is view-only in the demo.</p>
+      <p className="mt-1 text-sm text-muted-foreground">
+        You can browse product selections; saving storefront content and media
+        changes is disabled.
+      </p>
+    </section>
+  );
+}
+
 export default function Home() {
   const { activeStore } = useGetActiveStore();
+  const isSharedDemo = Boolean(useSharedDemoContext());
 
   const products = useQuery(
     api.inventory.products.getAll,
@@ -203,7 +217,6 @@ export default function Home() {
     <View
       hideBorder
       hideHeaderBottomBorder
-      className="bg-background"
       scrollMode="page"
     >
       <FadeIn className="container mx-auto py-layout-xl">
@@ -214,6 +227,7 @@ export default function Home() {
               title="Homepage"
               description="Manage the storefront homepage content customers see before they browse products or start checkout."
             />
+            {isSharedDemo ? <HomepageDemoNotice /> : null}
 
             <HomepageReadinessSummary
               activeStore={activeStore}
@@ -222,27 +236,33 @@ export default function Home() {
               shopLookCount={shopLookItems?.length ?? 0}
             />
 
-            <HomepageSettingsSection
-              id="homepage-hero-display"
-              title="Hero display"
-              description="Choose the lead media, text treatment, and active reel or image for the top of the storefront."
+            <fieldset
+              aria-label="Homepage settings"
+              className="m-0 min-w-0 border-0 p-0"
+              disabled={isSharedDemo}
             >
-              <HeroSectionTabs />
-            </HomepageSettingsSection>
+              <HomepageSettingsSection
+                id="homepage-hero-display"
+                title="Hero display"
+                description="Choose the lead media, text treatment, and active reel or image for the top of the storefront."
+              >
+                <HeroSectionTabs />
+              </HomepageSettingsSection>
 
-            <HomepageSettingsSection
-              title="Site banner"
-              description="Set a short storefront announcement for offers, schedule changes, or time-bound customer notices."
-            >
-              <BannerMessageEditor storeId={activeStore._id} />
-            </HomepageSettingsSection>
+              <HomepageSettingsSection
+                title="Site banner"
+                description="Set a short storefront announcement for offers, schedule changes, or time-bound customer notices."
+              >
+                <BannerMessageEditor storeId={activeStore._id} />
+              </HomepageSettingsSection>
+            </fieldset>
 
             <HomepageSettingsSection
               id="homepage-best-sellers"
               title="Best sellers"
               description="Order the products that should anchor the customer's first shopping path."
             >
-              <BestSellers />
+              <BestSellers readOnly={isSharedDemo} />
             </HomepageSettingsSection>
 
             <HomepageSettingsSection
@@ -250,7 +270,7 @@ export default function Home() {
               title="Highlighted content"
               description="Select the product, category, or collection callout shown after the hero."
             >
-              <FeaturedSection />
+              <FeaturedSection readOnly={isSharedDemo} />
             </HomepageSettingsSection>
 
             <HomepageSettingsSection
@@ -258,7 +278,7 @@ export default function Home() {
               title="Shop the look"
               description="Pair one visual story with the product customers should move toward next."
             >
-              <ShopLookSection />
+              <ShopLookSection readOnly={isSharedDemo} />
             </HomepageSettingsSection>
           </PageWorkspace>
         )}
@@ -270,6 +290,7 @@ export default function Home() {
               title="Homepage"
               description="Add products before configuring the customer-facing homepage."
             />
+            {isSharedDemo ? <HomepageDemoNotice /> : null}
             <EmptyState
               icon={<StoreIcon className="w-16 h-16 text-muted-foreground" />}
               title={
@@ -279,20 +300,22 @@ export default function Home() {
                 </div>
               }
               cta={
-                <Link
-                  to="/$orgUrlSlug/store/$storeUrlSlug/products/new"
-                  params={(params) => ({
-                    ...params,
-                    orgUrlSlug: params.orgUrlSlug!,
-                    storeUrlSlug: params.storeUrlSlug!,
-                  })}
-                  search={{ o: getOrigin() }}
-                >
-                  <Button variant="outline">
-                    <PackagePlus className="h-4 w-4" />
-                    Add product
-                  </Button>
-                </Link>
+                isSharedDemo ? undefined : (
+                  <Link
+                    to="/$orgUrlSlug/store/$storeUrlSlug/products/new"
+                    params={(params) => ({
+                      ...params,
+                      orgUrlSlug: params.orgUrlSlug!,
+                      storeUrlSlug: params.storeUrlSlug!,
+                    })}
+                    search={{ o: getOrigin() }}
+                  >
+                    <Button variant="outline">
+                      <PackagePlus className="h-4 w-4" />
+                      Add product
+                    </Button>
+                  </Link>
+                )
               }
             />
           </PageWorkspace>

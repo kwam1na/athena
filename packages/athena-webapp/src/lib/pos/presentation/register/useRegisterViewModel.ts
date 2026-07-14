@@ -17,6 +17,7 @@ import type {
 import { useAuth } from "@/hooks/useAuth";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { useGetTerminal } from "@/hooks/useGetTerminal";
+import { useSharedDemoContext } from "@/hooks/useSharedDemoContext";
 import { useNavigateBack } from "@/hooks/use-navigate-back";
 import { getPendingCashVoidContext } from "@/lib/cashControls/pendingCashVoidPresentation";
 import { registerAndProvisionPosTerminal } from "@/lib/pos/application/registerAndProvisionPosTerminal";
@@ -449,6 +450,7 @@ const POS_READINESS_REPAIR_GUARD_DELAY_MS = 1_500;
 export function useRegisterViewModel(): RegisterViewModel {
   const { activeStore } = useGetActiveStore();
   const { authSessionEpoch, user } = useAuth();
+  const sharedDemoContext = useSharedDemoContext();
   const terminal = useGetTerminal();
   const sharedDemoStaff = (
     terminal as {
@@ -646,13 +648,13 @@ export function useRegisterViewModel(): RegisterViewModel {
   } = useRegisterLocalRuntime({
     activeStoreId,
     createLocalFallbackId,
+    expectedDemoEpoch: sharedDemoContext?.restore?.epoch,
     onRetryBootstrap: requestBootstrap,
     staffProfileId,
     staffProfileIdRef,
     staffProofToken,
     staffProofTokenRef,
     terminal,
-    trustServerValidatedDemoSession: Boolean(sharedDemoStaff),
   });
 
   useEffect(() => {
@@ -3102,7 +3104,9 @@ export function useRegisterViewModel(): RegisterViewModel {
           countedCash: parsedCountedCash,
           notes: trimmedCloseoutNotes,
           registerSessionId: cloudRegisterSessionId,
+          staffProofToken: staffProofToken ?? undefined,
           storeId: activeStoreId!,
+          terminalId: terminal._id,
         }),
       );
 
@@ -3146,6 +3150,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     registerNumber,
     requestBootstrap,
     staffProfileId,
+    staffProofToken,
     submitRegisterSessionCloseout,
     terminal?._id,
     user?._id,
@@ -3160,7 +3165,7 @@ export function useRegisterViewModel(): RegisterViewModel {
   }, []);
 
   const handleSubmitOpeningFloatCorrection = useCallback(async () => {
-    if (!activeStoreId || !user?._id || !staffProfileId) {
+    if (!activeStoreId || !user?._id || !staffProfileId || !terminal?._id) {
       setDrawerErrorMessage(
         "Register sign-in required. Sign in before correcting opening float.",
       );
@@ -3206,7 +3211,9 @@ export function useRegisterViewModel(): RegisterViewModel {
               correctedOpeningFloat: parsedOpeningFloat,
               reason,
               registerSessionId,
+              staffProofToken: staffProofToken ?? undefined,
               storeId: activeStoreId!,
+              terminalId: terminal._id,
             }),
           );
         } finally {
@@ -3243,6 +3250,8 @@ export function useRegisterViewModel(): RegisterViewModel {
     openingFloatCorrectionReason,
     requestBootstrap,
     staffProfileId,
+    staffProofToken,
+    terminal?._id,
     user?._id,
   ]);
 

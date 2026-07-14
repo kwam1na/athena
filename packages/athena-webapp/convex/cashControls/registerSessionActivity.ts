@@ -7,6 +7,7 @@ import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
+import { requireSharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
 import { formatStaffDisplayName } from "../../shared/staffDisplayName";
 
 const DEFAULT_ACTIVITY_PAGE_SIZE = 25;
@@ -161,6 +162,8 @@ function eventCategory(eventType: SyncEvidenceEvent["eventType"]): ActivityCateg
   switch (eventType) {
     case "register_opened":
       return "register";
+    case "store_day_started":
+      return "session";
     case "pending_checkout_item_defined":
     case "sale_cleared":
       return "cart";
@@ -179,6 +182,8 @@ function eventLabel(eventType: SyncEvidenceEvent["eventType"]) {
   switch (eventType) {
     case "register_opened":
       return "Register opened";
+    case "store_day_started":
+      return "Store day started";
     case "pending_checkout_item_defined":
       return "Cart item added";
     case "sale_completed":
@@ -742,7 +747,15 @@ async function requireFullAdminRegisterSessionAccess(
     throw new Error("Store not found.");
   }
 
-  const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+  const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(
+    ctx,
+    "cash.control.write",
+    args.storeId,
+  );
+  const athenaUser = await requireAuthenticatedAthenaUserWithCtx(
+    ctx,
+    demoActor ? { sharedDemoCapability: "cash.control.write" } : undefined,
+  );
   await requireOrganizationMemberRoleWithCtx(ctx, {
     allowedRoles: ["full_admin"],
     failureMessage: "You do not have access to POS activity.",

@@ -926,6 +926,68 @@ describe("daily opening backend foundation", () => {
     });
   });
 
+  it("routes a locally started POS day to manager review during projection", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 8, 8));
+    const { db, inserts } = createDb({
+      dailyClose: [
+        completedDailyClose({
+          carryForwardWorkItemIds: ["work-1"],
+          readiness: {
+            blockerCount: 0,
+            carryForwardCount: 1,
+            readyCount: 0,
+            reviewCount: 0,
+            status: "needs_attention",
+          },
+        }),
+      ],
+      operationalWorkItem: [
+        {
+          _id: "work-1",
+          approvalState: "not_required",
+          createdAt: Date.UTC(2026, 4, 7, 20),
+          organizationId: "org-1",
+          priority: "normal",
+          status: "open",
+          storeId: "store-1",
+          title: "Call customer tomorrow",
+          type: "daily_close_carry_forward",
+        },
+      ],
+      staffProfile: [activeStaffProfile],
+      store: [store],
+    });
+
+    const result = await startStoreDayWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+        terminalSyncReviewHandling: "manager_review",
+      },
+    );
+
+    expect(result).toMatchObject({
+      kind: "ok",
+      data: {
+        action: "started",
+        dailyOpening: {
+          actorStaffProfileId: "staff-1",
+          managerReviewEvidence: [
+            expect.objectContaining({
+              key: "operational_work_item:work-1:carry_forward",
+            }),
+          ],
+        },
+      },
+    });
+    expect(inserts[1].value).toMatchObject({
+      eventType: "daily_opening_acknowledged",
+      metadata: { managerReviewEvidenceCount: 1 },
+    });
+  });
+
   it("starts opening and records review evidence when a carry-forward reference is missing", async () => {
     vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 8, 8));
     const { db, inserts } = createDb({

@@ -70,7 +70,7 @@ describe("staff messages", () => {
   it("requires the current restore epoch for demo writes", async () => {
     vi.mocked(requireSharedDemoStoreCapabilityIfApplicable).mockResolvedValue({ kind: "shared_demo" } as never);
     const ctx = context();
-    await expect(invoke(postStaffMessage, ctx, { body: "Opening complete", storeId: "store-1" })).rejects.toThrow("Refresh the shared demo");
+    await expect(invoke(postStaffMessage, ctx, { body: "Opening complete", storeId: "store-1" })).rejects.toThrow("Refresh the demo");
     await invoke(postStaffMessage, ctx, { body: "Opening complete", expectedDemoRestoreEpoch: 7, storeId: "store-1" });
     expect(requireReadySharedDemoWriteWithCtx).toHaveBeenCalledWith(ctx, { expectedEpoch: 7, storeId: "store-1" });
   });

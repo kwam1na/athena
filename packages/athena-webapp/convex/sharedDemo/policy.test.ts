@@ -3,20 +3,87 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import {
+  classifySharedDemoPublicFunction,
   decideSharedDemoEffect,
   requireSharedDemoCapability,
   requireSharedDemoOrderFulfillmentUpdate,
   SHARED_DEMO_PUBLIC_FUNCTION_INVENTORY,
   validateSharedDemoCoverage,
 } from "./policy";
+import {
+  ATHENA_CAPABILITY_CATALOG,
+  SHARED_DEMO_ALLOWED_CAPABILITIES,
+} from "./capabilityCatalog";
 
 describe("shared demo policy", () => {
-  it("allows only the six write capabilities and reports reads", () => {
+  it("keeps the demo allowlist separate from Athena's complete capability catalog", () => {
+    expect(ATHENA_CAPABILITY_CATALOG.length).toBeGreaterThan(50);
+    expect(new Set(ATHENA_CAPABILITY_CATALOG.map(({ id }) => id)).size).toBe(
+      ATHENA_CAPABILITY_CATALOG.length,
+    );
+    expect(SHARED_DEMO_ALLOWED_CAPABILITIES).toEqual([
+      "approvals.manage",
+      "cash.control.write",
+      "catalog.quick_add",
+      "daily_operations.write",
+      "inventory.adjust",
+      "orders.fulfill",
+      "pos.sale.complete",
+      "reports.read",
+      "staff.authenticate",
+      "staff.communication.write",
+    ]);
     expect(requireSharedDemoCapability("pos.sale.complete")).toBe("pos.sale.complete");
     expect(requireSharedDemoCapability("reports.read")).toBe("reports.read");
     expect(() => requireSharedDemoCapability("billing.update" as never)).toThrow(
-      "This action is unavailable in the shared demo.",
+      "This action is unavailable in the demo.",
     );
+  });
+
+  it("classifies known Athena writes before applying the demo allowlist", () => {
+    expect(
+      classifySharedDemoPublicFunction("cashControls/closeouts:correctRegisterSessionOpeningFloat"),
+    ).toEqual({
+      capability: "cash.control.write",
+      decision: "declared",
+      demoDecision: "allowed",
+    });
+    expect(
+      classifySharedDemoPublicFunction("inventory/products:create"),
+    ).toEqual({
+      capability: "catalog.manage",
+      decision: "declared",
+      demoDecision: "denied",
+    });
+    expect(
+      classifySharedDemoPublicFunction("pos/public/catalog:quickAddSku"),
+    ).toEqual({
+      capability: "catalog.quick_add",
+      decision: "declared",
+      demoDecision: "allowed",
+    });
+    expect(
+      classifySharedDemoPublicFunction(
+        "operations/approvalRequests:decideApprovalRequest",
+      ),
+    ).toEqual({
+      capability: "approvals.manage",
+      decision: "declared",
+      demoDecision: "allowed",
+    });
+    expect(
+      classifySharedDemoPublicFunction(
+        "operations/staffCredentials:authenticateStaffCredentialForApproval",
+      ),
+    ).toEqual({
+      capability: "staff.authenticate",
+      decision: "declared",
+      demoDecision: "allowed",
+    });
+    expect(classifySharedDemoPublicFunction("unknown/module:write")).toEqual({
+      decision: "denied",
+      reason: "unclassified",
+    });
   });
 
   it("defaults unknown effects to denied and never calls live providers", async () => {
@@ -68,7 +135,7 @@ describe("shared demo policy", () => {
       { status: "delivered", paymentCollected: true },
     ]) {
       expect(() => requireSharedDemoOrderFulfillmentUpdate(update)).toThrow(
-        "This action is unavailable in the shared demo.",
+        "This action is unavailable in the demo.",
       );
     }
   });

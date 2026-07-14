@@ -330,6 +330,60 @@ describe("versioned register lifecycle authority query", () => {
     });
   });
 
+  it("returns the terminal active session when local authority has no candidates", async () => {
+    const repository = createRepository({
+      sessions: {
+        "cloud-active": registerSession("cloud-active", "active", {
+          expectedCash: 35000,
+          lifecycleAuthorityRevision: 3,
+          openedAt: 200,
+          openedByStaffProfileId: "staff-manager" as Id<"staffProfile">,
+          openingFloat: 30000,
+        }),
+      },
+      terminalSessions: {
+        active: [
+          registerSession("cloud-active", "active", {
+            expectedCash: 35000,
+            lifecycleAuthorityRevision: 3,
+            openedAt: 200,
+            openedByStaffProfileId: "staff-manager" as Id<"staffProfile">,
+            openingFloat: 30000,
+          }),
+        ],
+      },
+    });
+
+    await expect(
+      getRegisterLifecycleAuthority(
+        {} as never,
+        { candidates: [], storeId, terminal: terminal() },
+        repository,
+      ),
+    ).resolves.toEqual({
+      bootstrap: {
+        authorityCursor: {
+          lifecycleRevision: 3,
+          mappingAuthorityRevision: 0,
+        },
+        classification: "sale_usable",
+        cloudRegisterSessionId: "cloud-active",
+        cloudStatus: "active",
+        expectedCash: 35000,
+        lifecycleRevision: 3,
+        localRegisterSessionId: "cloud-active",
+        mappingAuthorityRevision: 0,
+        openedAt: 200,
+        openingFloat: 30000,
+        registerNumber: "1",
+        staffProfileId: "staff-manager",
+      },
+      candidateCount: 0,
+      maximumDocumentReads: 3,
+      results: [],
+    });
+  });
+
   it("orders mapping epochs before lifecycle revisions", () => {
     expect(
       compareRegisterLifecycleAuthorityCursors(
@@ -440,6 +494,9 @@ function createRepository(input: {
   authorities?: Record<string, Doc<"posRegisterMappingAuthority">>;
   mappings?: Record<string, Doc<"posLocalSyncMapping">[]>;
   sessions?: Record<string, Doc<"registerSession">>;
+  terminalSessions?: Partial<
+    Record<"active" | "open", Doc<"registerSession">[]>
+  >;
 }) {
   let readCount = 0;
   return {
@@ -456,6 +513,11 @@ function createRepository(input: {
     async getRegisterSession(cloudRegisterSessionId) {
       readCount += 1;
       return input.sessions?.[cloudRegisterSessionId] ?? null;
+    },
+    async listSaleUsableRegisterSessions(args) {
+      const rows = input.terminalSessions?.[args.status] ?? [];
+      readCount += rows.length;
+      return rows;
     },
     reads: () => readCount,
   } satisfies RegisterLifecycleAuthorityRepository & { reads(): number };

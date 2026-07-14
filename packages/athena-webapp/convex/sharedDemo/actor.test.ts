@@ -63,7 +63,7 @@ describe("shared demo actor resolution", () => {
       },
     } as never;
     await expect(getSharedDemoActorWithCtx(ctx, { now: 10_000 })).rejects.toThrow(
-      "shared demo session has expired",
+      "demo session has expired",
     );
   });
 
@@ -111,7 +111,7 @@ describe("shared demo actor resolution", () => {
       getSharedDemoActorWithCtx(contextFor("old-auth-user") as never, {
         now: 10_000,
       }),
-    ).rejects.toThrow("shared demo session has expired");
+    ).rejects.toThrow("demo session has expired");
     await expect(
       getSharedDemoActorWithCtx(contextFor("new-auth-user") as never, {
         now: 10_000,
@@ -148,7 +148,7 @@ describe("shared demo actor resolution", () => {
     } as never;
     await expect(
       requireSharedDemoCapabilityIfApplicable(demoCtx, "exports.generate"),
-    ).rejects.toThrow("This action is unavailable in the shared demo.");
+    ).rejects.toThrow("This action is unavailable in the demo.");
   });
 
   it("clamps an allowed demo capability to the server-owned store", async () => {
@@ -175,7 +175,7 @@ describe("shared demo actor resolution", () => {
         "pos.sale.complete",
         "other-store" as never,
       ),
-    ).rejects.toThrow("unavailable in the shared demo");
+    ).rejects.toThrow("unavailable in the demo");
   });
 
   it("clamps demo reads without requiring a write capability", async () => {
@@ -201,6 +201,6 @@ describe("shared demo actor resolution", () => {
         demoCtx,
         "other-store" as never,
       ),
-    ).rejects.toThrow("unavailable in the shared demo");
+    ).rejects.toThrow("unavailable in the demo");
   });
 });

@@ -31,7 +31,7 @@ export async function getSharedDemoReportsOverviewWithCtx(
   const actor = await getSharedDemoActorWithCtx(ctx);
   if (!actor) return null;
   if (actor.storeId !== args.storeId) {
-    throw new Error("This action is unavailable in the shared demo.");
+    throw new Error("This action is unavailable in the demo.");
   }
 
   const [transactions, deliveredOrders, pickedUpOrders] = await Promise.all([

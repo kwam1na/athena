@@ -9,6 +9,7 @@ import {
 } from "../_generated/server";
 import { ok, userError } from "../../shared/commandResult";
 import { commandResultValidator } from "../lib/commandResultValidators";
+import { requireSharedDemoCapabilityIfApplicable } from "../sharedDemo/actor";
 import { normalizePhoneNumber } from "./helpers/linking";
 import {
   createStaffCredentialWithCtx,
@@ -543,6 +544,7 @@ export const createStaffProfile = mutation({
   },
   returns: commandResultValidator(v.any()),
   handler: async (ctx, args) => {
+    await requireSharedDemoCapabilityIfApplicable(ctx, "staff.manage");
     try {
       return ok(await createStaffProfileWithCtx(ctx, args));
     } catch (error) {
@@ -596,6 +598,7 @@ export const updateStaffProfile = mutation({
   },
   returns: commandResultValidator(v.any()),
   handler: async (ctx, args) => {
+    await requireSharedDemoCapabilityIfApplicable(ctx, "staff.manage");
     try {
       return ok(await updateStaffProfileWithCtx(ctx, args));
     } catch (error) {

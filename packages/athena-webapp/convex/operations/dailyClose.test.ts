@@ -36,11 +36,13 @@ vi.mock("../lib/athenaUserAuth", () => ({
 }));
 vi.mock("../sharedDemo/actor", () => ({
   requireSharedDemoStoreCapabilityIfApplicable: vi.fn(),
+  requireSharedDemoStoreReadIfApplicable: vi.fn(),
 }));
 
 type TableName =
   | "approvalProof"
   | "approvalRequest"
+  | "athenaUser"
   | "automationRun"
   | "dailyClose"
   | "dailyOpening"
@@ -572,6 +574,37 @@ describe("end-of-day review backend foundation", () => {
       expect.anything(),
       expect.objectContaining({ allowedRoles: ["full_admin", "pos_only"] }),
     );
+  });
+
+  it("loads the lifecycle gate through the demo daily-operations boundary", async () => {
+    mockDailyCloseSnapshotAccess("full_admin");
+    vi.mocked(
+      sharedDemoActor.requireSharedDemoStoreReadIfApplicable,
+    ).mockResolvedValueOnce({
+      athenaUserId: "user-1",
+      kind: "shared_demo",
+      storeId: "store-1",
+    } as never);
+    const { db } = createDb({
+      athenaUser: [{ _id: "user-1", email: "demo@athena.invalid" }],
+      store: [store],
+    });
+    const ctx = { db } as unknown as QueryCtx;
+
+    await getHandler(getDailyCloseLifecycleGate)(ctx, {
+      operatingDate: "2026-05-08",
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(
+      sharedDemoActor.requireSharedDemoStoreReadIfApplicable,
+    ).toHaveBeenCalledWith(
+      ctx,
+      "store-1",
+    );
+    expect(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).not.toHaveBeenCalled();
   });
 
   it("keeps daily close command results aligned with exported return validators", () => {
@@ -1783,12 +1816,19 @@ describe("end-of-day review backend foundation", () => {
     expect(snapshot.blockers[0].metadata).not.toHaveProperty("variance");
   });
 
-  it("loads the EOD snapshot through the shared demo daily-operations capability", async () => {
+  it("loads the EOD snapshot through the demo read boundary", async () => {
     mockDailyCloseSnapshotAccess("full_admin");
     vi.mocked(
-      sharedDemoActor.requireSharedDemoStoreCapabilityIfApplicable,
-    ).mockResolvedValueOnce({ kind: "shared_demo" } as never);
-    const { db } = createDb({ store: [store] });
+      sharedDemoActor.requireSharedDemoStoreReadIfApplicable,
+    ).mockResolvedValueOnce({
+      athenaUserId: "user-1",
+      kind: "shared_demo",
+      storeId: "store-1",
+    } as never);
+    const { db } = createDb({
+      athenaUser: [{ _id: "user-1", email: "demo@athena.invalid" }],
+      store: [store],
+    });
     const ctx = { db } as unknown as QueryCtx;
 
     await getHandler(getDailyCloseSnapshot)(ctx, {
@@ -1797,13 +1837,11 @@ describe("end-of-day review backend foundation", () => {
     });
 
     expect(
-      sharedDemoActor.requireSharedDemoStoreCapabilityIfApplicable,
-    ).toHaveBeenCalledWith(ctx, "daily_operations.write", "store-1");
+      sharedDemoActor.requireSharedDemoStoreReadIfApplicable,
+    ).toHaveBeenCalledWith(ctx, "store-1");
     expect(
       athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
-    ).toHaveBeenCalledWith(ctx, {
-      sharedDemoCapability: "daily_operations.write",
-    });
+    ).not.toHaveBeenCalled();
   });
 
   it("returns financial metric amounts on the exported snapshot query for full admins", async () => {

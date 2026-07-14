@@ -43,6 +43,7 @@ function buildLocalSaleValidationMetadata(
 export function useRegisterLocalRuntime(input: {
   activeStoreId?: Id<"store">;
   createLocalFallbackId: (prefix: string) => string;
+  expectedDemoEpoch?: number;
   onRetryBootstrap: () => void;
   staffProfileId: Id<"staffProfile"> | null;
   staffProfileIdRef: MutableRefObject<Id<"staffProfile"> | null>;
@@ -72,6 +73,7 @@ export function useRegisterLocalRuntime(input: {
   const {
     activeStoreId,
     createLocalFallbackId,
+    expectedDemoEpoch,
     onRetryBootstrap,
     staffProfileId,
     staffProfileIdRef,
@@ -313,6 +315,7 @@ export function useRegisterLocalRuntime(input: {
     appSessionRecovery,
     drainOnAppend: true,
     eventAppendToken: localSyncEventAppendToken,
+    expectedDemoEpoch,
     mode: "status-only",
     onLocalEventsChanged: noteLocalRegisterEventChanged,
     storeId:

@@ -98,6 +98,12 @@ export type LocalStartCloseoutResult = CommandResult<{
   localEventId: string;
 }>;
 
+export type LocalStartStoreDayResult = CommandResult<{
+  localEventId: string;
+  operatingDate: string;
+  status: "started";
+}>;
+
 export function createLocalCommandGateway(
   options: CreateLocalCommandGatewayOptions,
 ): {
@@ -113,6 +119,9 @@ export function createLocalCommandGateway(
   reopenRegister(input: ReopenLocalRegisterInput): Promise<boolean>;
   seedRegisterSession(input: SeedLocalRegisterSessionInput): Promise<boolean>;
   startSession(input: LocalStartSessionInput): Promise<LocalStartSessionResult>;
+  startStoreDay(
+    input: LocalStartStoreDayInput,
+  ): Promise<LocalStartStoreDayResult>;
   startCloseout(
     input: StartLocalCloseoutInput,
   ): Promise<LocalStartCloseoutResult>;
@@ -903,6 +912,47 @@ export function createLocalCommandGateway(
       }
     },
 
+    async startStoreDay(input: LocalStartStoreDayInput) {
+      if (
+        !input.activeRoles.some(
+          (role) => role === "cashier" || role === "manager",
+        )
+      ) {
+        return userError({
+          code: "authorization_failed",
+          message:
+            "Cashier or manager access is required to start the store day.",
+        });
+      }
+      const result = await appendWithResult({
+        type: "store_day.started",
+        terminalId: input.terminalId,
+        storeId: input.storeId,
+        // Store-day start is durable before a drawer exists. The sync pipeline
+        // still uses this legacy field as its cursor identity, so keep the
+        // store-day stream separate from every register-session stream.
+        localRegisterSessionId: `store-day:${input.operatingDate}`,
+        staffProfileId: input.staffProfileId,
+        staffProofToken: resolveStaffProofToken(
+          options.staffProofToken,
+          input.staffProfileId,
+        ),
+        validationMetadata: input.validationMetadata,
+        payload: {
+          endAt: input.endAt,
+          operatingDate: input.operatingDate,
+          startAt: input.startAt,
+        },
+      });
+      return result.kind === "ok"
+        ? ok({
+            localEventId: result.data.event.localEventId,
+            operatingDate: input.operatingDate,
+            status: "started" as const,
+          })
+        : result;
+    },
+
     async startCloseout(input: StartLocalCloseoutInput) {
       const catalogPin = captureCatalogPin(input);
       try {
@@ -1112,4 +1162,15 @@ type SeedLocalRegisterSessionInput = LocalCommandContext & {
 type StartLocalCloseoutInput = LocalCommandContext & {
   countedCash: number;
   notes?: string | null;
+};
+
+type LocalStartStoreDayInput = {
+  activeRoles: string[];
+  endAt: number;
+  operatingDate: string;
+  staffProfileId: string;
+  startAt: number;
+  storeId: string;
+  terminalId: string;
+  validationMetadata?: PosLocalEventValidationMetadata;
 };

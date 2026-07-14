@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   hasFullAdminAccess: true,
   action: vi.fn(),
   mutation: vi.fn(),
+  sharedDemoContext: null as { storeId: string } | null,
   useQuery: vi.fn(() => null),
   toastSuccess: vi.fn(),
   toastError: vi.fn(),
@@ -96,6 +97,10 @@ vi.mock("@/hooks/usePermissions", () => ({
     hasFullAdminAccess: mocks.hasFullAdminAccess,
     isLoading: false,
   }),
+}));
+
+vi.mock("@/hooks/useSharedDemoContext", () => ({
+  useSharedDemoContext: () => mocks.sharedDemoContext,
 }));
 
 vi.mock("@/components/View", () => ({
@@ -281,6 +286,7 @@ describe("POSTerminalDetailViewContent", () => {
     mocks.activeStoreState.isLoadingStores = false;
     mocks.canAccessPOS.mockReturnValue(true);
     mocks.hasFullAdminAccess = true;
+    mocks.sharedDemoContext = null;
     mocks.action.mockResolvedValue({
       data: null,
       kind: "ok",
@@ -2670,6 +2676,7 @@ describe("POSTerminalDetailView", () => {
     mocks.activeStoreState.isLoadingStores = false;
     mocks.canAccessPOS.mockReturnValue(true);
     mocks.hasFullAdminAccess = true;
+    mocks.sharedDemoContext = null;
     mocks.action.mockResolvedValue({
       data: null,
       kind: "ok",
@@ -2729,6 +2736,20 @@ describe("POSTerminalDetailView", () => {
       name: /Athena webapp .* Version details\./,
     });
 
+    expect((mocks.useQuery.mock.calls as unknown[][])[2]?.[1]).toBe("skip");
+  });
+
+  it("keeps terminal health observational in the demo", () => {
+    mocks.sharedDemoContext = { storeId: "store-1" };
+    (
+      mocks.activeStoreState as { activeStore: Record<string, unknown> }
+    ).activeStore = {
+      _id: "store-1",
+      organizationId: "org-1",
+    };
+    render(<POSTerminalDetailView />);
+
+    expect((mocks.useQuery.mock.calls as unknown[][])[1]?.[1]).toBe("skip");
     expect((mocks.useQuery.mock.calls as unknown[][])[2]?.[1]).toBe("skip");
   });
 

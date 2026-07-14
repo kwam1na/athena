@@ -443,6 +443,7 @@ function UserMenu({
 
   return (
     <div className="flex shrink-0 items-center gap-1 sm:gap-layout-xs">
+      <SharedDemoRuntime />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
@@ -783,34 +784,35 @@ export default function Layout() {
         isFullscreenActive={isFullscreenActive}
         setFullscreenOverride={setFullscreenOverride}
       >
-        <SharedDemoRuntime />
-        {shouldMountRemoteAssistRuntime ? (
-          <PosRemoteAssistRuntimeHost
-            appSessionRecovery={posAppSessionRecoveryRuntimeInput}
-            entryContext={localPosEntryContext}
-          />
-        ) : null}
-        {isBlockedPosAppSession ? (
-          <PosTerminalBlockedShell
-            entryContext={localPosEntryContext}
-            recoveryReason={posTerminalAppSessionRecovery.reason}
-          />
-        ) : shouldRenderPosSignInGate ? (
-          <PosTerminalSignInGate redirectTo={authRedirectTo} />
-        ) : shouldRenderPendingPosTerminalShell ? (
-          <PosTerminalRecoveryPendingShell
-            status={
-              posTerminalAppSessionRecovery.status === "idle" ||
-              posTerminalAppSessionRecovery.status === "validating" ||
-              posTerminalAppSessionRecovery.status === "retrying" ||
-              posTerminalAppSessionRecovery.status === "waiting_for_network"
-                ? posTerminalAppSessionRecovery.status
-                : "validating"
-            }
-          />
-        ) : (
-          <Outlet />
-        )}
+        <SharedDemoRuntime gatePosUntilReady showControls={false}>
+          {shouldMountRemoteAssistRuntime ? (
+            <PosRemoteAssistRuntimeHost
+              appSessionRecovery={posAppSessionRecoveryRuntimeInput}
+              entryContext={localPosEntryContext}
+            />
+          ) : null}
+          {isBlockedPosAppSession ? (
+            <PosTerminalBlockedShell
+              entryContext={localPosEntryContext}
+              recoveryReason={posTerminalAppSessionRecovery.reason}
+            />
+          ) : shouldRenderPosSignInGate ? (
+            <PosTerminalSignInGate redirectTo={authRedirectTo} />
+          ) : shouldRenderPendingPosTerminalShell ? (
+            <PosTerminalRecoveryPendingShell
+              status={
+                posTerminalAppSessionRecovery.status === "idle" ||
+                posTerminalAppSessionRecovery.status === "validating" ||
+                posTerminalAppSessionRecovery.status === "retrying" ||
+                posTerminalAppSessionRecovery.status === "waiting_for_network"
+                  ? posTerminalAppSessionRecovery.status
+                  : "validating"
+              }
+            />
+          ) : (
+            <Outlet />
+          )}
+        </SharedDemoRuntime>
       </PosTerminalShell>
     );
   }
@@ -829,7 +831,6 @@ export default function Layout() {
                 userEmail={userEmail}
               />
             )}
-            {isFullscreenActive ? null : <SharedDemoRuntime />}
             <div
               className={cn(
                 "flex !min-h-0 flex-1",

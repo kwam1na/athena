@@ -80,6 +80,10 @@ vi.mock("@/hooks/useProtectedAdminPageState", () => ({
   useProtectedAdminPageState: mockedHooks.useProtectedAdminPageState,
 }));
 
+vi.mock("@/hooks/useSharedDemoContext", () => ({
+  useSharedDemoContext: () => undefined,
+}));
+
 vi.mock("~/convex/_generated/api", () => ({
   api: {
     operations: {

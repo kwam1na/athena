@@ -406,6 +406,7 @@ vi.mock("@/lib/pos/infrastructure/local/posLocalStore", () => ({
 
 vi.mock("@/lib/pos/infrastructure/local/posLocalStorageRuntime", () => ({
   getDefaultPosLocalStore: () => buildMockLocalStore(),
+  subscribeDefaultPosTerminalSeedChanges: vi.fn(() => () => undefined),
 }));
 
 function deferred<T>() {
@@ -4143,7 +4144,9 @@ describe("useRegisterViewModel", () => {
         actorUserId: "user-1",
         countedCash: 5_000,
         registerSessionId: "drawer-1",
+        staffProofToken: "staff-proof-token",
         storeId: "store-1",
+        terminalId: "terminal-1",
       }),
     );
     expect(mockMarkLocalEventsSynced).toHaveBeenCalledWith(["local-event-1"], {
@@ -4508,9 +4511,7 @@ describe("useRegisterViewModel", () => {
     const { result } = renderHook(() => useRegisterViewModel());
 
     await act(async () => {
-      result.current.authDialog?.onAuthenticated(
-        "staff-1" as Id<"staffProfile">,
-      );
+      result.current.authDialog?.onAuthenticated(buildStaffAuthenticationResult());
     });
 
     expect(result.current.closeoutControl?.canShowOpeningFloatCorrection).toBe(
@@ -4543,7 +4544,9 @@ describe("useRegisterViewModel", () => {
       correctedOpeningFloat: 4_500,
       reason: "Cashier typo",
       registerSessionId: "drawer-1",
+      staffProofToken: "staff-proof-token",
       storeId: "store-1",
+      terminalId: "terminal-1",
     });
     expect(toast.success).toHaveBeenCalledWith("Opening float corrected");
   });
@@ -4627,7 +4630,9 @@ describe("useRegisterViewModel", () => {
       correctedOpeningFloat: 4_500,
       reason: "Cashier typo",
       registerSessionId: "drawer-1",
+      staffProofToken: undefined,
       storeId: "store-1",
+      terminalId: "terminal-1",
     });
     expect(toast.success).toHaveBeenCalledWith("Opening float corrected");
   });

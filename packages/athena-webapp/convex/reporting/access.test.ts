@@ -80,7 +80,7 @@ describe("reporting access", () => {
 
   it("fails closed before reading a report for another store", async () => {
     vi.mocked(requireSharedDemoStoreCapabilityIfApplicable).mockRejectedValueOnce(
-      new Error("This action is unavailable in the shared demo."),
+      new Error("This action is unavailable in the demo."),
     );
     await expect(
       requireReportingStoreAccess(

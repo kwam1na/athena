@@ -3174,8 +3174,18 @@ describe("cash control closeouts", () => {
           if (table === "staffProfile") {
             return {
               _id: "staff-1",
-              linkedUserId: "manager-user-1",
+              linkedUserId: "other-user-1",
               organizationId: "org-1",
+              status: "active",
+              storeId: "store-1",
+            };
+          }
+
+          if (table === "staffCredential") {
+            return {
+              _id: "credential-1",
+              localVerifierVersion: 2,
+              staffProfileId: "staff-1",
               status: "active",
               storeId: "store-1",
             };
@@ -3184,6 +3194,21 @@ describe("cash control closeouts", () => {
           return null;
         }),
         insert,
+        patch: vi.fn(),
+        query: vi.fn(() => ({
+          withIndex: vi.fn(() => ({
+            unique: vi.fn(async () => ({
+              _id: "staff-proof-1",
+              credentialId: "credential-1",
+              credentialVersion: 2,
+              expiresAt: Date.now() + 60_000,
+              staffProfileId: "staff-1",
+              status: "active",
+              storeId: "store-1",
+              terminalId: "terminal-1",
+            })),
+          })),
+        })),
       },
       runMutation,
     };
@@ -3193,7 +3218,9 @@ describe("cash control closeouts", () => {
       correctedOpeningFloat: 20000,
       reason: "Drawer counted wrong at open.",
       registerSessionId: "session-1",
+      staffProofToken: "staff-proof-token",
       storeId: "store-1",
+      terminalId: "terminal-1",
     });
 
     expect(result).toMatchObject({

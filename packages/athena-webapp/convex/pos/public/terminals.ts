@@ -7,6 +7,7 @@ import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../../lib/athenaUserAuth";
+import { requireStoreMemberAccessWithCtx } from "../../lib/storeMemberAccess";
 import { ok, userError } from "../../../shared/commandResult";
 import {
   acknowledgeRegisterLifecycleAuthority as acknowledgeRegisterLifecycleAuthorityService,
@@ -244,6 +245,25 @@ const registerLifecycleAuthorityShadowReturnValidator = v.object({
 });
 
 const registerLifecycleAuthorityReturnValidator = v.object({
+  bootstrap: v.optional(
+    v.object({
+      authorityCursor: v.object({
+        lifecycleRevision: v.number(),
+        mappingAuthorityRevision: v.number(),
+      }),
+      classification: v.literal("sale_usable"),
+      cloudRegisterSessionId: v.string(),
+      cloudStatus: v.union(v.literal("open"), v.literal("active")),
+      expectedCash: v.number(),
+      lifecycleRevision: v.number(),
+      localRegisterSessionId: v.string(),
+      mappingAuthorityRevision: v.number(),
+      openedAt: v.number(),
+      openingFloat: v.number(),
+      registerNumber: v.optional(v.string()),
+      staffProfileId: v.optional(v.id("staffProfile")),
+    }),
+  ),
   candidateCount: v.number(),
   maximumDocumentReads: v.number(),
   results: v.array(
@@ -919,12 +939,11 @@ export const listTerminals = query({
   },
   returns: v.array(terminalReturnValidator),
   handler: async (ctx, args) => {
-    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
-    await requireTerminalStoreAccess(ctx, {
+    await requireStoreMemberAccessWithCtx(ctx, {
       allowedRoles: ["full_admin", "pos_only"],
+      demoAccess: { kind: "read" },
       failureMessage: "You do not have access to view POS terminals.",
       storeId: args.storeId,
-      userId: athenaUser._id,
     });
     const terminals = await listTerminalsQuery(ctx, args);
     return terminals.map(stripTerminalSyncSecret);
@@ -938,12 +957,11 @@ export const getTerminalByFingerprint = query({
   },
   returns: v.union(terminalReturnValidator, v.null()),
   handler: async (ctx, args) => {
-    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
-    await requireTerminalStoreAccess(ctx, {
+    await requireStoreMemberAccessWithCtx(ctx, {
       allowedRoles: ["full_admin", "pos_only"],
+      demoAccess: { kind: "read" },
       failureMessage: "You do not have access to view POS terminals.",
       storeId: args.storeId,
-      userId: athenaUser._id,
     });
     const terminal = await getTerminalByFingerprintQuery(ctx, args);
     return terminal ? stripTerminalSyncSecret(terminal) : null;
@@ -956,12 +974,11 @@ export const listTerminalHealthSummaries = query({
   },
   returns: v.array(terminalHealthSummaryReturnValidator),
   handler: async (ctx, args) => {
-    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
-    await requireTerminalStoreAccess(ctx, {
+    await requireStoreMemberAccessWithCtx(ctx, {
       allowedRoles: ["full_admin", "pos_only"],
+      demoAccess: { kind: "read" },
       failureMessage: "You do not have access to view POS terminal health.",
       storeId: args.storeId,
-      userId: athenaUser._id,
     });
     return listTerminalHealthSummariesQuery(ctx, args);
   },
@@ -974,12 +991,11 @@ export const getTerminalHealthSummary = query({
   },
   returns: v.union(terminalHealthSummaryReturnValidator, v.null()),
   handler: async (ctx, args) => {
-    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
-    await requireTerminalStoreAccess(ctx, {
+    await requireStoreMemberAccessWithCtx(ctx, {
       allowedRoles: ["full_admin", "pos_only"],
+      demoAccess: { kind: "read" },
       failureMessage: "You do not have access to view POS terminal health.",
       storeId: args.storeId,
-      userId: athenaUser._id,
     });
     return getTerminalHealthSummaryQuery(ctx, args);
   },
@@ -1319,15 +1335,18 @@ export const registerTerminal = mutation({
   returns: commandResultValidator(terminalProvisioningReturnValidator),
   handler: async (ctx, args) => {
     try {
-      const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
-      await requireTerminalStoreAccess(ctx, {
+      const { athenaUser, demoActor } = await requireStoreMemberAccessWithCtx(ctx, {
         allowedRoles: ["full_admin", "pos_only"],
+        demoAccess: {
+          capability: "daily_operations.write",
+          kind: "capability",
+        },
         failureMessage: "You do not have access to register this POS terminal.",
         storeId: args.storeId,
-        userId: athenaUser._id,
       });
       const result = await registerTerminalCommand(ctx, {
         ...args,
+        allowRegisterNumberChange: Boolean(demoActor),
         syncSecretHash: await hashPosTerminalSyncSecret(args.syncSecretHash),
         registeredByUserId: athenaUser._id,
       });

@@ -1,7 +1,29 @@
-import { describe, expect, it } from "vitest";
+import { act, renderHook, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { POS_LOCAL_STORE_SCHEMA_VERSION } from "./posLocalStore";
-import { resolveLocalPosEntryContext } from "./localPosEntryContext";
+import {
+  resolveLocalPosEntryContext,
+  useLocalPosEntryContext,
+} from "./localPosEntryContext";
+
+const localStorageMocks = vi.hoisted(() => ({
+  listener: undefined as (() => void) | undefined,
+  readProvisionedTerminalSeed: vi.fn(),
+}));
+
+vi.mock("./posLocalStorageRuntime", () => ({
+  getDefaultPosLocalStore: () => ({
+    readProvisionedTerminalSeed: localStorageMocks.readProvisionedTerminalSeed,
+  }),
+  subscribeDefaultPosLocalStorageLifecycleHealth: () => () => undefined,
+  subscribeDefaultPosTerminalSeedChanges: (listener: () => void) => {
+    localStorageMocks.listener = listener;
+    return () => {
+      localStorageMocks.listener = undefined;
+    };
+  },
+}));
 
 const terminalSeed = {
   terminalId: "local-terminal-1",
@@ -15,6 +37,11 @@ const terminalSeed = {
 };
 
 describe("localPosEntryContext", () => {
+  beforeEach(() => {
+    localStorageMocks.listener = undefined;
+    localStorageMocks.readProvisionedTerminalSeed.mockReset();
+  });
+
   it("uses route slugs and a matching provisioned seed without live store reads", () => {
     expect(
       resolveLocalPosEntryContext({
@@ -90,5 +117,42 @@ describe("localPosEntryContext", () => {
       message:
         "POS local store schema version 3 is newer than supported version 2.",
     });
+  });
+
+  it("refreshes when terminal provisioning commits after the first read", async () => {
+    localStorageMocks.readProvisionedTerminalSeed.mockResolvedValue({
+      ok: true,
+      value: null,
+    });
+    const { result } = renderHook(() =>
+      useLocalPosEntryContext({
+        activeOrganization: { slug: "demo" },
+        activeStore: { _id: "store-1", slug: "central" },
+        routeParams: {
+          orgUrlSlug: "demo",
+          storeUrlSlug: "central",
+        },
+      }),
+    );
+
+    await waitFor(() =>
+      expect(result.current).toMatchObject({
+        status: "ready",
+        terminalSeed: null,
+      }),
+    );
+
+    localStorageMocks.readProvisionedTerminalSeed.mockResolvedValue({
+      ok: true,
+      value: terminalSeed,
+    });
+    act(() => localStorageMocks.listener?.());
+
+    await waitFor(() =>
+      expect(result.current).toMatchObject({
+        status: "ready",
+        terminalSeed,
+      }),
+    );
   });
 });

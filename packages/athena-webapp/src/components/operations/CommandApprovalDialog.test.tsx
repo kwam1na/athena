@@ -192,7 +192,8 @@ describe("CommandApprovalDialog", () => {
     expect(
       screen.getByText(/payment method changes need manager approval/i),
     ).toBeInTheDocument();
-    expect(screen.getByText("Receipt #1001")).toBeInTheDocument();
+    expect(screen.getByText("Action")).toBeInTheDocument();
+    expect(screen.getByText("Update payment method")).toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: "Enter manager credentials" }),
     ).toBeInTheDocument();
@@ -235,6 +236,28 @@ describe("CommandApprovalDialog", () => {
         "Variance of -20000 exceeded the closeout approval threshold.",
       ),
     ).not.toBeInTheDocument();
+  });
+
+  it("identifies the action requiring approval", () => {
+    renderDialog({
+      approval: {
+        ...inlineApproval,
+        action: {
+          key: "cash_controls.register_session.correct_opening_float",
+          label: "Correct opening float",
+        },
+        subject: {
+          id: "register-session-1",
+          label: "WEB-7D5339",
+          type: "register_session",
+        },
+      },
+    });
+
+    expect(screen.getByText("Action")).toBeInTheDocument();
+    expect(screen.getByText("Correct opening float")).toBeInTheDocument();
+    expect(screen.queryByText("Subject")).not.toBeInTheDocument();
+    expect(screen.queryByText("WEB-7D5339")).not.toBeInTheDocument();
   });
 
   it("authenticates a manager, creates an approval proof, and returns proof id for retry", async () => {

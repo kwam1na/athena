@@ -17,6 +17,13 @@ function sourceFiles(root: string): string[] {
   });
 }
 
+function exportedFunctionSource(source: string, functionName: string) {
+  const start = source.indexOf(`export const ${functionName} =`);
+  if (start < 0) return "";
+  const nextExport = source.indexOf("\nexport const ", start + 1);
+  return source.slice(start, nextExport < 0 ? undefined : nextExport);
+}
+
 describe("shared demo static coverage", () => {
   it("keeps the default-deny public surface and effect sensors wired", () => {
     const policy = readFileSync("convex/sharedDemo/policy.ts", "utf8");
@@ -36,8 +43,9 @@ describe("shared demo static coverage", () => {
     expect(source.match(/order\.storeId !== demoActor\.storeId/g)).toHaveLength(2);
   });
 
-  it("classifies every exported public mutation and action with unknowns denied", () => {
+  it("classifies every exported public mutation and action", () => {
     const discovered: string[] = [];
+    const unclassified: string[] = [];
     for (const file of sourceFiles("convex")) {
       const source = readFileSync(file, "utf8");
       for (const match of source.matchAll(
@@ -46,12 +54,14 @@ describe("shared demo static coverage", () => {
         const moduleName = relative("convex", file).replace(/\.ts$/, "");
         const functionName = `${moduleName}:${match[1]}`;
         discovered.push(functionName);
-        expect(classifySharedDemoPublicFunction(functionName)).toMatchObject({
-          decision: expect.stringMatching(/^(declared|denied)$/),
-        });
+        const classification = classifySharedDemoPublicFunction(functionName);
+        if (classification.decision !== "declared") {
+          unclassified.push(functionName);
+        }
       }
     }
     expect(discovered.length).toBeGreaterThan(200);
+    expect(unclassified).toEqual([]);
   });
 
   it("defaults every discovered provider or network gateway to denied", () => {
@@ -102,6 +112,18 @@ describe("shared demo static coverage", () => {
     ] as const;
     for (const [moduleName, binding] of bindings) {
       expect(readFileSync(`convex/${moduleName}.ts`, "utf8"), moduleName).toContain(binding);
+    }
+  });
+
+  it("binds denied staff-profile writes at each exported handler", () => {
+    const source = readFileSync("convex/operations/staffProfiles.ts", "utf8");
+    for (const functionName of ["createStaffProfile", "updateStaffProfile"]) {
+      expect(
+        exportedFunctionSource(source, functionName),
+        functionName,
+      ).toContain(
+        'requireSharedDemoCapabilityIfApplicable(ctx, "staff.manage")',
+      );
     }
   });
 });

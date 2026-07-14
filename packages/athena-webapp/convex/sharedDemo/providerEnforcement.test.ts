@@ -13,7 +13,7 @@ describe("public provider action enforcement", () => {
     [stream.deleteStreamReelVersion, { storeId: "demo-store", version: 1 }],
     [stream.setActiveStreamReel, { storeId: "demo-store", version: 1 }],
   ] as const)("denies before credentials, fetch, or internal effects", async (fn, args) => {
-    const denial = new Error("This action is unavailable in the shared demo.");
+    const denial = new Error("This action is unavailable in the demo.");
     const ctx = { runQuery: vi.fn().mockRejectedValue(denial), runMutation: vi.fn() };
     const fetchSpy = vi.fn();
     vi.stubGlobal("fetch", fetchSpy);

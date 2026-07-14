@@ -9,6 +9,7 @@ const useMutationMock = vi.fn();
 const useQueryMock = vi.fn();
 const useParamsMock = vi.fn();
 const getActiveStoreMock = vi.fn();
+const sharedDemoContextMock = vi.fn();
 
 vi.mock("convex/react", () => ({
   useAction: (...args: unknown[]) => useActionMock(...args),
@@ -22,6 +23,11 @@ vi.mock("@tanstack/react-router", () => ({
 
 vi.mock("~/src/hooks/useGetActiveStore", () => ({
   default: () => getActiveStoreMock(),
+}));
+
+vi.mock("~/src/hooks/useSharedDemoContext", () => ({
+  isSharedDemoUiEnabled: true,
+  useSharedDemoContext: () => sharedDemoContextMock(),
 }));
 
 describe("UserInsightsSection", () => {
@@ -51,6 +57,19 @@ describe("UserInsightsSection", () => {
     getActiveStoreMock.mockReturnValue({
       activeStore: { _id: "store-1" },
     });
+    sharedDemoContextMock.mockReturnValue(null);
+  });
+
+  it("shared-demo-intelligence skips full-admin intelligence queries", () => {
+    sharedDemoContextMock.mockReturnValue({ storeId: "store-1" });
+
+    renderWithQueries();
+
+    expect(useQueryMock).toHaveBeenCalledTimes(2);
+    expect(useQueryMock.mock.calls.every(([, args]) => args === "skip")).toBe(
+      true,
+    );
+    expect(screen.queryByRole("region", { name: "Customer insights" })).toBeNull();
   });
 
   it("generates a customer readout for the selected user", async () => {

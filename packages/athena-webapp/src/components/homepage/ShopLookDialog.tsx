@@ -7,11 +7,13 @@ import type { Category, Product, Subcategory } from "~/types";
 
 export function ShopLookDialog({
   action,
+  disabled = false,
   featuredItemId,
   dialogOpen,
   setDialogOpen,
 }: {
   action: "add" | "edit";
+  disabled?: boolean;
   featuredItemId?: string;
   dialogOpen: boolean;
   setDialogOpen: React.Dispatch<React.SetStateAction<boolean>>;
@@ -60,6 +62,7 @@ export function ShopLookDialog({
       categories={categories as Category[] | undefined}
       currency={activeStore.currency}
       description="Select the product that should anchor the Shop the Look story."
+      disabled={disabled}
       onOpenChange={setDialogOpen}
       onSelectProduct={handleAddFeaturedItem}
       open={dialogOpen}

@@ -48,10 +48,10 @@ import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
+import { requireStoreMemberAccessWithCtx } from "../lib/storeMemberAccess";
 import { buildPaymentTotals, transactionCashDelta } from "./paymentTotals";
 import type { AutomationDecisionEvidence } from "../automation/runLedger";
 import { appendReportingIngressWithCtx } from "../reporting/ingress";
-import { requireSharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
 
 export { buildAdjustmentReportTotals, listAppliedTransactionAdjustmentsForDay };
 
@@ -4868,27 +4868,11 @@ export const getDailyCloseSnapshot = query({
     storeId: v.id("store"),
   },
   handler: async (ctx, args) => {
-    const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(
-      ctx,
-      "daily_operations.write",
-      args.storeId,
-    );
-    const store = await ctx.db.get("store", args.storeId);
-    if (!store) {
-      throw new Error("Store not found.");
-    }
-
-    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(
-      ctx,
-      demoActor
-        ? { sharedDemoCapability: "daily_operations.write" }
-        : undefined,
-    );
-    const membership = await requireOrganizationMemberRoleWithCtx(ctx, {
+    const { membership } = await requireStoreMemberAccessWithCtx(ctx, {
       allowedRoles: ["full_admin", "pos_only"],
+      demoAccess: { kind: "read" },
       failureMessage: "You cannot view EOD Review for this store.",
-      organizationId: store.organizationId,
-      userId: athenaUser._id,
+      storeId: args.storeId,
     });
 
     return buildDailyCloseSnapshotWithCtx(ctx, {
@@ -4906,17 +4890,11 @@ export const getDailyCloseLifecycleGate = query({
     storeId: v.id("store"),
   },
   handler: async (ctx, args) => {
-    const store = await ctx.db.get("store", args.storeId);
-    if (!store) {
-      throw new Error("Store not found.");
-    }
-
-    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
-    await requireOrganizationMemberRoleWithCtx(ctx, {
+    await requireStoreMemberAccessWithCtx(ctx, {
       allowedRoles: ["full_admin", "pos_only"],
+      demoAccess: { kind: "read" },
       failureMessage: "You cannot view EOD Review for this store.",
-      organizationId: store.organizationId,
-      userId: athenaUser._id,
+      storeId: args.storeId,
     });
 
     return buildDailyCloseLifecycleGateWithCtx(ctx, args);

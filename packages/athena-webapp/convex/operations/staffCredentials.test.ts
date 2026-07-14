@@ -9,12 +9,25 @@ const authMocks = vi.hoisted(() => ({
   requireAuthenticatedAthenaUserWithCtx: vi.fn(),
   requireOrganizationMemberRoleWithCtx: vi.fn(),
 }));
+const sharedDemoMocks = vi.hoisted(() => ({
+  requireSharedDemoCapabilityIfApplicable: vi.fn(),
+  requireSharedDemoStoreCapabilityIfApplicable: vi.fn(),
+  requireSharedDemoStoreReadIfApplicable: vi.fn(),
+}));
 
 vi.mock("../lib/athenaUserAuth", () => ({
   requireAuthenticatedAthenaUserWithCtx:
     authMocks.requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx:
     authMocks.requireOrganizationMemberRoleWithCtx,
+}));
+vi.mock("../sharedDemo/actor", () => ({
+  requireSharedDemoCapabilityIfApplicable:
+    sharedDemoMocks.requireSharedDemoCapabilityIfApplicable,
+  requireSharedDemoStoreCapabilityIfApplicable:
+    sharedDemoMocks.requireSharedDemoStoreCapabilityIfApplicable,
+  requireSharedDemoStoreReadIfApplicable:
+    sharedDemoMocks.requireSharedDemoStoreReadIfApplicable,
 }));
 
 import {
@@ -40,6 +53,7 @@ import { hashPosLocalStaffProofToken } from "../pos/application/sync/staffProof"
 type TableName =
   | "approvalProof"
   | "approvalRequesterChallenge"
+  | "athenaUser"
   | "expenseSession"
   | "operationalEvent"
   | "posTerminal"
@@ -62,6 +76,7 @@ const localPinVerifier = {
 function createStaffCredentialsMutationCtx(seed?: {
   approvalProofs?: Row[];
   approvalRequesterChallenges?: Row[];
+  athenaUsers?: Row[];
   expenseSessions?: Row[];
   operationalEvents?: Row[];
   posTerminals?: Row[];
@@ -78,6 +93,9 @@ function createStaffCredentialsMutationCtx(seed?: {
     ),
     approvalRequesterChallenge: new Map(
       (seed?.approvalRequesterChallenges ?? []).map((row) => [row._id, row])
+    ),
+    athenaUser: new Map(
+      (seed?.athenaUsers ?? []).map((row) => [row._id, row])
     ),
     expenseSession: new Map(
       (seed?.expenseSessions ?? []).map((row) => [row._id, row])
@@ -130,6 +148,7 @@ function createStaffCredentialsMutationCtx(seed?: {
   const insertCounters: Record<TableName, number> = {
     approvalProof: 0,
     approvalRequesterChallenge: 0,
+    athenaUser: 0,
     expenseSession: 0,
     operationalEvent: 0,
     posTerminal: 0,
@@ -284,6 +303,16 @@ async function createRestoredProofValidationCtx(overrides: {
 
 describe("staff credential operations", () => {
   beforeEach(() => {
+    vi.clearAllMocks();
+    sharedDemoMocks.requireSharedDemoCapabilityIfApplicable.mockResolvedValue(
+      null
+    );
+    sharedDemoMocks.requireSharedDemoStoreCapabilityIfApplicable.mockResolvedValue(
+      null
+    );
+    sharedDemoMocks.requireSharedDemoStoreReadIfApplicable.mockResolvedValue(
+      null
+    );
     authMocks.requireAuthenticatedAthenaUserWithCtx.mockResolvedValue({
       _id: "athena-user-1",
     });
@@ -428,6 +457,73 @@ describe("staff credential operations", () => {
     expect(tables.staffCredential.get("credential-1")).not.toHaveProperty(
       "authenticationLockedUntil",
     );
+  });
+
+  it("authenticates seeded operational staff through the shared demo store boundary", async () => {
+    const { ctx } = createStaffCredentialsMutationCtx({
+      athenaUsers: [{ _id: "demo-user" }],
+      credentials: [
+        {
+          _id: "credential-1",
+          staffProfileId: "manager-1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          username: "kofi",
+          pinHash: "hash-1111",
+          status: "active",
+        },
+      ],
+      profiles: [
+        {
+          _id: "manager-1",
+          storeId: "store_1",
+          organizationId: "org_1",
+          status: "active",
+          fullName: "Kofi Mensah",
+        },
+      ],
+      roles: [
+        {
+          _id: "role-1",
+          staffProfileId: "manager-1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          role: "manager",
+          isPrimary: true,
+          status: "active",
+          assignedAt: 1,
+        },
+      ],
+    });
+    sharedDemoMocks.requireSharedDemoStoreReadIfApplicable.mockResolvedValue({
+      athenaUserId: "demo-user",
+      kind: "shared_demo",
+      storeId: "store_1",
+    });
+    authMocks.requireAuthenticatedAthenaUserWithCtx.mockRejectedValue(
+      new Error("Sign in again to continue."),
+    );
+
+    await expect(
+      getHandler(authenticateStaffCredential)(ctx, {
+        allowedRoles: ["manager"],
+        storeId: "store_1" as Id<"store">,
+        username: "kofi",
+        pinHash: "hash-1111",
+      }),
+    ).resolves.toMatchObject({
+      kind: "ok",
+      data: {
+        activeRoles: ["manager"],
+        staffProfileId: "manager-1",
+      },
+    });
+    expect(
+      sharedDemoMocks.requireSharedDemoStoreReadIfApplicable,
+    ).toHaveBeenCalledWith(ctx, "store_1");
+    expect(
+      authMocks.requireAuthenticatedAthenaUserWithCtx,
+    ).not.toHaveBeenCalled();
   });
 
   it("requires store access before public manager approval authentication can mint proofs", async () => {
@@ -1555,6 +1651,68 @@ describe("staff credential operations", () => {
         staffProfileId: "staff_profile_1",
       }),
     });
+  });
+
+  it("authenticates demo managers through the terminal's store-scoped read boundary", async () => {
+    sharedDemoMocks.requireSharedDemoStoreReadIfApplicable.mockResolvedValue({
+      athenaUserId: "athena-user-1",
+      storeId: "store_1",
+    });
+    const { ctx } = createStaffCredentialsMutationCtx({
+      athenaUsers: [{ _id: "athena-user-1" }],
+      credentials: [
+        {
+          _id: "credential-1",
+          staffProfileId: "staff_profile_1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          username: "kofi",
+          pinHash: "hash-1",
+          status: "active",
+        },
+      ],
+      profiles: [
+        {
+          _id: "staff_profile_1",
+          storeId: "store_1",
+          organizationId: "org_1",
+          status: "active",
+          fullName: "Kofi Mensah",
+        },
+      ],
+      roles: [
+        {
+          _id: "role_1",
+          staffProfileId: "staff_profile_1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          role: "manager",
+          isPrimary: true,
+          status: "active",
+          assignedAt: 1,
+        },
+      ],
+    });
+
+    await expect(
+      getHandler(authenticateStaffCredentialForTerminal)(ctx, {
+        allowedRoles: ["manager"],
+        pinHash: "hash-1",
+        storeId: "store_1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        username: "kofi",
+      }),
+    ).resolves.toEqual({
+      kind: "ok",
+      data: expect.objectContaining({
+        activeRoles: ["manager"],
+        staffProfileId: "staff_profile_1",
+      }),
+    });
+    expect(
+      sharedDemoMocks.requireSharedDemoStoreReadIfApplicable,
+    ).toHaveBeenCalledWith(ctx, "store_1");
+    expect(authMocks.requireAuthenticatedAthenaUserWithCtx).not.toHaveBeenCalled();
   });
 
   it("requires the signed-in user to have POS access before public terminal authentication", async () => {

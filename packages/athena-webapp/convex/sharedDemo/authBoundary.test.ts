@@ -21,7 +21,7 @@ describe("shared demo explicit Athena identity adapter", () => {
   it("does not resolve a demo admission through the ordinary email path", async () => {
     const ctx = {
       auth: { getUserIdentity: vi.fn() },
-      db: { get: vi.fn().mockResolvedValue({ name: "Athena shared demo owner" }) },
+      db: { get: vi.fn().mockResolvedValue({ name: "Athena demo owner" }) },
     } as never;
     await expect(getAuthenticatedAthenaUserWithCtx(ctx)).resolves.toBeNull();
   });
@@ -41,6 +41,6 @@ describe("shared demo explicit Athena identity adapter", () => {
       getAuthenticatedAthenaUserWithCtx(ctx, {
         sharedDemoCapability: "identity.manage",
       }),
-    ).rejects.toThrow("unavailable in the shared demo");
+    ).rejects.toThrow("unavailable in the demo");
   });
 });

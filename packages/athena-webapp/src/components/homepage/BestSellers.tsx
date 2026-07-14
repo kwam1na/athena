@@ -36,7 +36,7 @@ type BestSellerItem = {
   productSku: ProductSku;
 };
 
-export const BestSellers = () => {
+export const BestSellers = ({ readOnly = false }: { readOnly?: boolean }) => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [isOrdering, setIsOrdering] = useState(false);
 
@@ -74,7 +74,7 @@ export const BestSellers = () => {
   };
 
   const onDragEnd = async (result: DropResult) => {
-    if (!result.destination || !bestSellers) return;
+    if (readOnly || !result.destination || !bestSellers) return;
     if (result.destination.index === result.source.index) return;
 
     const previousItems = bestSellers;
@@ -124,7 +124,7 @@ export const BestSellers = () => {
   };
 
   const moveBestSeller = async (index: number, direction: -1 | 1) => {
-    if (!bestSellers || isOrdering) return;
+    if (readOnly || !bestSellers || isOrdering) return;
 
     const nextIndex = index + direction;
     if (nextIndex < 0 || nextIndex >= bestSellers.length) return;
@@ -140,6 +140,7 @@ export const BestSellers = () => {
   return (
     <div className="space-y-layout-lg">
       <BestSellersDialog
+        disabled={readOnly}
         dialogOpen={dialogOpen}
         setDialogOpen={setDialogOpen}
       />
@@ -227,7 +228,7 @@ export const BestSellers = () => {
                                 <TooltipTrigger asChild>
                                   <Button
                                     aria-label={`Move ${itemLabel} up`}
-                                    disabled={isOrdering || index === 0}
+                                    disabled={readOnly || isOrdering || index === 0}
                                     onClick={() => moveBestSeller(index, -1)}
                                     size="icon"
                                     title={`Move ${itemLabel} up`}
@@ -243,6 +244,7 @@ export const BestSellers = () => {
                                   <Button
                                     aria-label={`Move ${itemLabel} down`}
                                     disabled={
+                                      readOnly ||
                                       isOrdering ||
                                       index === (bestSellers?.length ?? 0) - 1
                                     }
@@ -260,7 +262,7 @@ export const BestSellers = () => {
                                 <TooltipTrigger asChild>
                                   <Button
                                     aria-label={`Remove ${itemLabel}`}
-                                    disabled={isOrdering}
+                                    disabled={readOnly || isOrdering}
                                     onClick={() =>
                                       handleRemoveBestSeller(bestSeller)
                                     }

@@ -37,7 +37,7 @@ type FeaturedHomepageItem = {
   subcategory?: Subcategory | null;
 };
 
-export const FeaturedSection = () => {
+export const FeaturedSection = ({ readOnly = false }: { readOnly?: boolean }) => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [isOrdering, setIsOrdering] = useState(false);
 
@@ -76,7 +76,7 @@ export const FeaturedSection = () => {
   };
 
   const onDragEnd = async (result: DropResult) => {
-    if (!result.destination || !featuredItems) return;
+    if (readOnly || !result.destination || !featuredItems) return;
     if (result.destination.index === result.source.index) return;
 
     const previousItems = featuredItems;
@@ -126,7 +126,7 @@ export const FeaturedSection = () => {
   };
 
   const moveFeaturedItem = async (index: number, direction: -1 | 1) => {
-    if (!featuredItems || isOrdering) return;
+    if (readOnly || !featuredItems || isOrdering) return;
 
     const nextIndex = index + direction;
     if (nextIndex < 0 || nextIndex >= featuredItems.length) return;
@@ -144,6 +144,7 @@ export const FeaturedSection = () => {
   return (
     <div className="space-y-layout-lg">
       <FeaturedSectionDialog
+        disabled={readOnly}
         dialogOpen={dialogOpen}
         setDialogOpen={setDialogOpen}
       />
@@ -249,7 +250,7 @@ export const FeaturedSection = () => {
                                 <TooltipTrigger asChild>
                                   <Button
                                     aria-label={`Move ${itemLabel} up`}
-                                    disabled={isOrdering || index === 0}
+                                    disabled={readOnly || isOrdering || index === 0}
                                     onClick={() => moveFeaturedItem(index, -1)}
                                     size="icon"
                                     title={`Move ${itemLabel} up`}
@@ -265,6 +266,7 @@ export const FeaturedSection = () => {
                                   <Button
                                     aria-label={`Move ${itemLabel} down`}
                                     disabled={
+                                      readOnly ||
                                       isOrdering ||
                                       index === (featuredItems?.length ?? 0) - 1
                                     }
@@ -282,7 +284,7 @@ export const FeaturedSection = () => {
                                 <TooltipTrigger asChild>
                                   <Button
                                     aria-label={`Remove ${itemLabel}`}
-                                    disabled={isOrdering}
+                                    disabled={readOnly || isOrdering}
                                     onClick={() =>
                                       handleHighlightedItem(featuredItem)
                                     }

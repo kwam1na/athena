@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="cde444dad95a6c3cbbacfce4197fd2b82c028f393f3d6e49915ced3e57dbcb88">
+<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="3d2dfa9bde64b83ee31bbd502efddf71d38edc986d2addf143f6aae53eba29aa">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -82,7 +82,7 @@
       <header>
         <h1>Athena shared demo: real workflows with bounded authority</h1>
         <p class="lede">How one synthetic store can support shared writes without becoming an unrestricted administrator or a parallel demo application.</p>
-        <div class="meta"><span class="pill">Linear V26-1039</span><span class="pill">Branch codex/V26-1039-shared-demo</span><span class="pill">Ready PR follows final review</span><span class="pill">Dev backend provisioned</span><span class="pill">QA browser validation complete</span><span class="pill">No production deploy</span><span class="pill">Root checkout unchanged</span></div>
+        <div class="meta"><span class="pill">Linear V26-1039</span><span class="pill">Branch codex/V26-1039-shared-demo</span><span class="pill">Unanimous multi-lens approval</span><span class="pill">Candidate cron verified live</span><span class="pill">In-app browser flow complete</span><span class="pill">Pre-merge delivery candidate</span></div>
       </header>
       <section class="panel"><h2>Executive summary</h2>
 <p>Athena now has a dev/QA-gated /demo entry that exchanges a short-lived opaque ticket for a per-admission demo principal. Every principal maps to the same synthetic owner, organization, and store, so the deployed design shares writes without sharing renewable authentication authority. Independent browser admissions confirmed that one visitor's writes are visible to the next visitor before restore.</p>
@@ -120,7 +120,7 @@
 <li>Before: no shared-demo principal, /demo entry, shared-store restore coordinator, or owner orientation existed on origin/main.</li>
 <li>After: each admission has its own non-renewable server-clock authority while all admissions map to one synthetic Athena owner/store.</li>
 <li>After: a recursive CI sensor detects exported public mutations/actions and provider-bearing modules for explicit review. Runtime denial remains owned by the demo actor, store-scoped adapters, foundation guards, and provider-effect guards.</li>
-<li>After: provisioning creates coherent source and child rows, and restore replaces baseline rows, removes visitor-added rows, measures restored counts, and schedules existing Reports rematerialization.</li>
+<li>After: provisioning creates coherent source and child rows, and restore replaces the exhaustive mutable registry, removes visitor-added rows, restores reporting ingress/facts/projections through bounded indexes, and verifies measured counts before publishing ready.</li>
 <li>After: staff communication is a genuine bounded internal store workflow, not a customer banner or navigation placeholder.</li>
 </ul>
 </section>
@@ -133,7 +133,7 @@
 <li>Configured demo user, organization, and store IDs are protected by auth-independent foundation guards, so signing out cannot bypass destructive administration checks.</li>
 <li>Catalog administration, global maintenance, store migration, cache invalidation, OTP, storage, media, payment, refund, export, and provider actions enforce ordinary non-demo authority or demo-effect denial before database changes, credential reads, uploads, deletes, or network dispatch.</li>
 <li>Order fulfillment accepts only bounded status changes. Customer notifications are simulated for demo actors; normal actors retain live scheduling.</li>
-<li>Every demo write reads the restore epoch in the same transaction. Verification or capacity failures escape the restore mutation so Convex rolls back every baseline change instead of committing a partial restore.</li>
+<li>Every demo write reads the restore epoch in the same transaction. Restore lease acquisition and continuation scheduling are atomic; apply persists an idempotent receipt; completion publishes ready only after the receipt and queued terminal cleanup are complete.</li>
 <li>The 500-row per-table boundary is intentional fail-closed capacity. Supporting larger stores would require a cursor-based multi-transaction coordinator.</li>
 </ul>
 </section>
@@ -148,10 +148,10 @@
 </ul>
 </section>
 <section class="panel"><h2>Validation and current finish line</h2>
-<p>Focused unit, handler-boundary, and component suites cover admission, actor expiry, capability enforcement, effect suppression, provisioning, domain restoration, cron, manual restore, staff messaging, /demo entry, orientation semantics, keyboard focus behavior, and restore UX. TypeScript, changed-file lint, generated API/route artifacts, Graphify, frontmatter validation, and cached diff checks have passed during development.</p>
-<p>The rebased backend is live on the shared dev Convex deployment under the QA-only deployment allowlist. Transactional provisioning exposed a missing-index assumption in baseline capture; the mutation rolled back cleanly, the restore query now uses the schema's <code>by_storeId_operatingDate</code> prefix index, and provisioning then completed. A second live restore check exposed an unsupported dynamic generated-API import; the static internal reference replaced it. Baseline v2 then migrated the seeded store day from already-started to ready-to-start, and the deployed restore completed all 13 baseline documents. Restore refuses stale state or captured-document versions, so provisioning alone owns baseline migration.</p>
-<p>The full <code>pr:athena</code> validation phases passed on the final tree; an overlapping generated-artifact process briefly held the worktree index lock during proof recording, after which the same-tree proof recorded successfully and pre-push reused it. Worktree browser testing exercised all six real workflows: Daily Operations start, staff message, stock adjustment, browser POS sale with cash activity, simulated-payment pickup fulfillment, and Reports reflection. A second fresh admission saw the first visitor's GHS 100 / four-unit shared activity. Manual restore returned Reports to the GHS 50 / two-unit baseline. The exact pushed SHA <code>7e48b6f9</code> then deployed through QA run <code>29238927789</code>; a fresh credential-free <code>/demo</code> admission reached the owner view, Reports showed the restored baseline, a direct Members route rendered the calm server-backed restriction boundary, and manual restore announced successful completion. Keyboard focus return and responsive/accessibility semantics are covered by component tests, including an explicit accessible name for the mobile Owner home control. No production deploy, merge, or root alignment has occurred.</p>
-<p>The first PR CI run also proved a deployment-skew boundary: its production-backend POS lane used the candidate frontend against the intentionally unchanged production Convex deployment. Globally mounted demo context and register-bootstrap subscriptions initially called functions that do not exist in production. A single Vite-development gate now makes every demo subscription pass <code>"skip"</code> in production builds while keeping local and QA dev surfaces enabled. A production build pointed at the production backend then rendered the public POS terminal-setup surface with no demo console errors or error boundary. Focused mode-gate and affected UI tests passed before rerunning the full gate and CI.</p>
+<p>Focused unit, handler-boundary, and component suites cover admission, actor expiry, capability enforcement, effect suppression, provisioning, the complete mutable-table registry, durable restore leases and receipts, cron, manual restore, staff messaging, /demo entry, POS epoch propagation, and the single authoritative local-sync runtime. The shared-demo-focused suite passes 170 tests; the broader affected runtime suite passes 502 tests. TypeScript and changed Convex/frontend lint are green, and Graphify was rebuilt to 10,450 nodes and 12,699 edges.</p>
+<p>The final reviewer loop reached unanimous approval from security, correctness, and product/runtime lenses. Their blockers drove architectural fixes only: exact per-event capability enforcement, staff mutation guards, full source/reporting restore closure, durable lease scheduling and apply receipts, truthful terminal cleanup, deterministic missing-state recovery, epoch-aware POS activity, and removal of a competing simplified POS drain. Existing visual behavior remained the contract.</p>
+<p>The exact hourly implementation was pushed to the shared dev Convex deployment and invoked through <code>verifyHourlyRestoreNow</code>. Live migration first exposed a stale checkout-session reference; migration now validates store/order ownership and recreates/rebinds the canonical session when necessary. The rerun advanced baseline v10 to epoch 44, and the scheduled continuation reached <code>ready</code> with phase <code>applied</code>, a completion timestamp, and no failure code.</p>
+<p>Post-approval in-app browser validation exercised the requested operator flow against that candidate: credential-free /demo admission; the seeded DEMO-01 register in Cash Controls; cashier and manager PIN sign-ins; a completed cash sale; manager quick-add of a product; a zero-variance clean closeout; a threshold-exceeding $60 variance against a $50 expected drawer; pending-review visibility in Cash Controls; and manager approval through final closed status. This report describes the pre-merge candidate; production deploy and local-root alignment occur only after PR merge.</p>
 </section>
 <section class="panel"><h2>Next-time guidance</h2>
 
@@ -173,7 +173,7 @@
 <tr><td><code>packages/athena-webapp/convex/sharedDemo/policy.ts</code></td><td>Closed capability/effect registry and payload-level order-fulfillment restriction.</td></tr>
 <tr><td><code>packages/athena-webapp/convex/sharedDemo/provision.ts</code></td><td>Creates the stable synthetic owner/store and coherent six-domain source narrative.</td></tr>
 <tr><td><code>packages/athena-webapp/convex/sharedDemo/domainRestore.ts</code></td><td>Captures and restores real store-scoped source and child rows through deployed schema indexes while preserving unrelated tenants.</td></tr>
-<tr><td><code>packages/athena-webapp/convex/sharedDemo/restore.ts</code></td><td>Coordinates restore lease/epoch, measured verification, atomic rollback on failure, audit, and Reports rematerialization.</td></tr>
+<tr><td><code>packages/athena-webapp/convex/sharedDemo/restore.ts</code></td><td>Coordinates the durable restore lease, epoch fence, idempotent apply receipt, measured verification, and ready publication.</td></tr>
 <tr><td><code>packages/athena-webapp/convex/operations/staffMessages.ts</code></td><td>Adds the real bounded internal staff-communication workflow with membership, rate, and restore fencing.</td></tr>
 <tr><td><code>packages/athena-webapp/src/routes/demo.tsx</code></td><td>Seamless credential-free entry into the configured shared store.</td></tr>
 <tr><td><code>packages/athena-webapp/src/components/shared-demo/SharedDemoStatusBar.tsx</code></td><td>Persistent shared-state, sensitive-data, hourly restore, guide, and manual restore communication.</td></tr>
@@ -187,7 +187,8 @@
   <ul><li><strong>requirements and session-context reviewer:</strong> Traced the sandbox-reference decisions, unanimous review loop, staff-communication correction, finish-line constraints, and local validation evidence.</li>
 <li><strong>security and delivered-diff reviewer:</strong> Mapped the staged architecture and found inconsistent deployment gates, missing throttling, unwired effect simulation, and restore verification/failure gaps; those blockers were then fixed and retested.</li>
 <li><strong>final delivered-diff reviewer:</strong> Found cross-store authority gaps and a caught-error restore path that could commit partial tables. Central store clamps and uncaught atomic rollback now cover the real writes and shared reads.</li>
-<li><strong>product and design reviewer:</strong> Approved the native Athena shell, owner-centered six-domain framing, persistent shared warning, optional guide, real-route navigation, restore copy, and accessibility posture.</li></ul>
+<li><strong>product and design reviewer:</strong> Approved the native Athena shell, owner-centered six-domain framing, persistent shared warning, optional guide, real-route navigation, restore copy, and accessibility posture.</li>
+<li><strong>final unanimous architecture loop:</strong> Security, correctness, and product/runtime reviewers each returned APPROVE on the same final tree after the durable restore, exhaustive registry, bootstrap recovery, epoch-aware sync, and single-drain fixes.</li></ul>
 </section>
 
 

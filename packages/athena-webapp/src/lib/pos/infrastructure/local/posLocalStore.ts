@@ -541,6 +541,23 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
     };
 
     await transaction.put("events", String(nextSequence), event);
+    if (input.type === "store_day.started") {
+      const payload = asRecord(event.payload);
+      const operatingDate = stringOrEmpty(payload.operatingDate);
+      if (operatingDate) {
+        await transaction.put(
+          "readiness",
+          readinessKey(input.storeId, operatingDate),
+          {
+            operatingDate,
+            source: "local",
+            status: "started",
+            storeId: input.storeId,
+            updatedAt: event.createdAt,
+          } satisfies PosLocalStoreDayReadiness,
+        );
+      }
+    }
     if (input.catalogPin) {
       await pinCatalogInTransaction(transaction, {
         ...input.catalogPin,
@@ -706,6 +723,37 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
     },
 
     async resetSharedDemoLocalState(): Promise<PosLocalStoreResult<null>> {
+      try {
+        await options.adapter.transaction(
+          "readwrite",
+          [...POS_LOCAL_OBJECT_STORE_NAMES],
+          async (transaction) => {
+            await ensureSupportedSchema(transaction, "readwrite");
+            for (const storeName of POS_LOCAL_OBJECT_STORE_NAMES) {
+              // Terminal identity is durable device foundation. Demo restore
+              // clears operational state around it without unmounting POS.
+              if (storeName === "terminalSeed") continue;
+              const keys = await transaction.getAllKeys(storeName);
+              for (const key of keys) {
+                if (
+                  storeName === "meta" &&
+                  (key === META_SCHEMA_VERSION_KEY ||
+                    key === META_LOGICAL_RECORD_VERSION_KEY)
+                ) {
+                  continue;
+                }
+                await transaction.delete(storeName, key);
+              }
+            }
+          },
+        );
+        return { ok: true, value: null };
+      } catch (error) {
+        return toFailure(error);
+      }
+    },
+
+    async resetSharedDemoFirstVisitState(): Promise<PosLocalStoreResult<null>> {
       try {
         await options.adapter.transaction(
           "readwrite",
@@ -2037,7 +2085,7 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
       try {
         const value = await options.adapter.transaction(
           "readwrite",
-          ["meta", "events", "registerCatalog"],
+          ["meta", "events", "readiness", "registerCatalog"],
           async (transaction) => {
             await ensureSupportedSchema(transaction, "readwrite");
             return appendEventInTransaction(transaction, input);

@@ -22,6 +22,7 @@ import { ok, userError, type CommandResult } from "~/shared/commandResult";
 import type { RegisterWorkflowMode } from "~/src/lib/pos/presentation/register/registerUiState";
 
 interface CashierAuthDialogProps {
+  allowedRoles?: Array<"cashier" | "manager">;
   onAuthenticated: (result: StaffAuthenticationResult) => void;
   onDismiss: () => void;
   open: boolean;
@@ -54,6 +55,7 @@ function isBrowserOffline() {
 }
 
 export function CashierAuthDialog({
+  allowedRoles = ["cashier", "manager"],
   onAuthenticated,
   onDismiss,
   open,
@@ -250,6 +252,13 @@ export function CashierAuthDialog({
       });
     }
 
+    if (!allowedRoles.some((role) => authority.activeRoles.includes(role))) {
+      return userError({
+        code: "authorization_failed",
+        message: "Manager access is required for this action.",
+      });
+    }
+
     const verification = await verifyLocalPin(authority.verifier, args.pin);
     if (!verification.ok) {
       if (verification.reason === "invalid_pin") {
@@ -339,7 +348,7 @@ export function CashierAuthDialog({
 
     const authenticationResult = await runCommand(() =>
       authenticateStaffCredentialForTerminal({
-        allowedRoles: ["cashier", "manager"],
+        allowedRoles,
         allowActiveSessionsOnOtherTerminals: args.mode === "recover",
         pinHash: args.pinHash,
         storeId,
@@ -388,7 +397,7 @@ export function CashierAuthDialog({
 
     const recoveryResult = await runCommand(() =>
       authenticateStaffCredentialForTerminal({
-        allowedRoles: ["cashier", "manager"],
+        allowedRoles,
         pinHash: args.pinHash,
         storeId,
         terminalId,
@@ -452,6 +461,7 @@ export function CashierAuthDialog({
           : "Sign out from all registers",
       }}
       alternateTriggerLabel={recoveryLabel}
+      hideAlternateAction
       returnTriggerLabel="Return to sign in"
       onAuthenticate={authenticateStaff}
       getSuccessMessage={(result, mode) => {

@@ -8,6 +8,17 @@ const defaultStorageMocks = vi.hoisted(() => {
       value: { logicalRecordVersion: 1 },
     })),
     listLocalCloudMappings: vi.fn(async () => ({ ok: true, value: [] })),
+    resetSharedDemoLocalState: vi.fn(async () => ({ ok: true, value: null })),
+    resetSharedDemoFirstVisitState: vi.fn(async () => ({
+      ok: true,
+      value: null,
+    })),
+    writeStoreDayReadiness: vi.fn(
+      async (readiness: unknown): Promise<PosLocalStoreResult<unknown>> => ({
+        ok: true,
+        value: readiness,
+      }),
+    ),
     writeProvisionedTerminalSeed: vi.fn(
       async (seed: unknown): Promise<PosLocalStoreResult<unknown>> => ({
         ok: true,
@@ -35,6 +46,7 @@ import {
   getDefaultPosLocalStorageLifecycleHealth,
   getDefaultPosLocalStorageRuntime,
   getDefaultPosLocalStore,
+  subscribeDefaultPosTerminalSeedChanges,
 } from "./posLocalStorageRuntime";
 import type { PosLocalStorePort } from "@/lib/pos/application/posLocalStorePort";
 
@@ -117,6 +129,34 @@ describe("createPosLocalStorageRuntime", () => {
     expect(
       getDefaultPosLocalStorageLifecycleHealth().lastDurableFailure,
     ).toBeUndefined();
+  });
+
+  it("notifies terminal entry context only when the terminal seed changes", async () => {
+    const listener = vi.fn();
+    const unsubscribe = subscribeDefaultPosTerminalSeedChanges(listener);
+    const port = getDefaultPosLocalStore();
+
+    await port.writeStoreDayReadiness({
+      operatingDate: "2026-07-13",
+      source: "daily_opening",
+      status: "not_started",
+      storeId: "store-1",
+      updatedAt: 1,
+    });
+    expect(listener).not.toHaveBeenCalled();
+
+    await port.resetSharedDemoLocalState?.();
+    expect(listener).not.toHaveBeenCalled();
+
+    await port.resetSharedDemoFirstVisitState?.();
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    await port.writeProvisionedTerminalSeed({
+      terminalId: "terminal-1",
+    } as never);
+    expect(listener).toHaveBeenCalledTimes(2);
+
+    unsubscribe();
   });
 
   it("shares one asynchronous initialization and publishes one ready generation", async () => {

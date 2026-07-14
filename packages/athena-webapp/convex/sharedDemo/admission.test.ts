@@ -55,7 +55,7 @@ describe("shared demo ticket consumption", () => {
       consumedAt: 10_000,
     });
     expect(patch).toHaveBeenNthCalledWith(2, "sharedDemoPrincipal", "principal-1", {
-      admissionExpiresAt: 3_610_000,
+      admissionExpiresAt: 10_810_000,
       updatedAt: 10_000,
     });
   });
@@ -82,7 +82,7 @@ describe("shared demo admission budget", () => {
         query: vi.fn(() => ({ withIndex: vi.fn(() => ({ unique: vi.fn().mockResolvedValue({ _id: "bucket", count: 2, windowStartedAt: 9_000 }) })) })),
       },
     } as never;
-    await expect(consumeAdmissionBudgetWithCtx(ctx, { kind: "mint", limit: 2, now: 10_000 })).rejects.toThrow("shared demo is busy");
+    await expect(consumeAdmissionBudgetWithCtx(ctx, { kind: "mint", limit: 2, now: 10_000 })).rejects.toThrow("demo is busy");
     expect(patch).not.toHaveBeenCalled();
   });
 });

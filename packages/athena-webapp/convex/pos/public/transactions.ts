@@ -699,23 +699,13 @@ export const getTransactionById = query({
     }),
   ),
   handler: async (ctx, args) => {
-    const transaction = await getTransactionQuery(ctx, args);
-    if (!transaction) {
-      return null;
-    }
-
-    const store = await ctx.db.get("store", transaction.storeId);
-    if (!store) {
-      return null;
-    }
-
-    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
-    await requireOrganizationMemberRoleWithCtx(ctx, {
-      allowedRoles: ["full_admin", "pos_only"],
+    const access = await requirePosTransactionAccess(ctx, {
+      transactionId: args.transactionId,
       failureMessage: "You cannot view this transaction.",
-      organizationId: store.organizationId,
-      userId: athenaUser._id,
     });
+    if ("kind" in access) {
+      return null;
+    }
 
     return getTransactionByIdQuery(ctx, args);
   },

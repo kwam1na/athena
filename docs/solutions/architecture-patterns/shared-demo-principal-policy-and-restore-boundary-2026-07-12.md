@@ -17,7 +17,7 @@ tags:
   - effect-policy
   - convex
   - restore-fence
-delivery_diff_fingerprint: cde444dad95a6c3cbbacfce4197fd2b82c028f393f3d6e49915ced3e57dbcb88
+delivery_diff_fingerprint: 3d2dfa9bde64b83ee31bbd502efddf71d38edc986d2addf143f6aae53eba29aa
 ---
 
 # Shared demo principal policy and atomic restore boundary
@@ -39,7 +39,7 @@ Treat shared-demo access as a distinct server-derived principal layered on top o
 
 At write boundaries, normal actors retain existing behavior. Demo actors pass through a closed capability registry. Real writes are explicitly classified; protected and unknown writes fail closed. Provider-backed effects have a second classification boundary so an allowed business mutation cannot enqueue a live email, message, export, payment, refund, or integration effect later.
 
-Restore the real store through one versioned registry of store-scoped source and child tables. Provision a coherent synthetic foundation once, capture exact baseline documents, and use one singleton restore state as a lease and monotonic epoch. Every allowed demo mutation reads that epoch in the same Convex transaction as its business write. Restore deletes visitor-added rows, replaces modified baseline rows, refuses to recreate destructively removed protected rows, verifies the baseline, and then rematerializes supported Reports projections. Restore errors must escape the mutation so Convex rolls back every table change atomically.
+Restore the real store through one versioned registry of store-scoped source and child tables. Provision a coherent synthetic foundation once, capture exact baseline documents, and use one singleton restore state as a durable lease and monotonic epoch. The lease mutation persists its idempotency key and schedules continuation in the same transaction. Apply records a stable receipt; completion publishes `ready` only from that receipt and only after queued terminal cleanup is empty. Retries join or replay the same lease instead of starting a competing restore. Every allowed demo mutation reads the epoch in the same Convex transaction as its business write. Restore deletes visitor-added rows, replaces modified baseline rows, verifies the complete source/reporting projection closure through bounded indexed traversal, and publishes no false-ready state after failure.
 
 ## Why This Matters
 
@@ -54,7 +54,9 @@ Per-admission auth users prevent a newer visitor from extending every older brow
 - Clamp store and organization authority to the server-owned principal. Reject cross-store IDs even when the normal user is a full administrator.
 - Add every newly demo-writable table, including child rows, to the baseline registry or rebuild it deterministically after restore.
 - Query each baseline table through an index that actually exists in the deployed schema. A compound index with `storeId` first is valid for store-prefix capture even when there is no standalone `by_storeId` index.
-- Never catch a baseline error inside the mutation that performs table replacements. Returning a failure result would commit any earlier table writes; an uncaught error preserves the prior store transaction.
+- Schedule continuation in the same transaction that acquires the restore lease. Persist an apply receipt before publishing `ready`, and make apply/complete idempotent against that receipt.
+- Treat missing-state bootstrap as recovery, not permission to capture live data. Count every table in the mutable registry and validate deterministic seed markers—including credentials and their lockout state—before capturing a baseline.
+- Queue browser-terminal cleanup on the durable lease. Do not report deletion before apply processes it, and never publish `ready` while queued cleanup remains.
 - Let provisioning own baseline-version migration. Restore must reject stale state or snapshot versions before it begins, otherwise a scheduled restore can promote old seed semantics before migration runs.
 - Make allowed demo mutations read `sharedDemoRestoreState.epoch` in the same transaction as their write.
 - Keep synthetic seed data coherent and avoid unsupported reporting claims. Rematerialize only existing Reports relationships.

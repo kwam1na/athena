@@ -1032,7 +1032,7 @@ export const update = mutation({
           });
         }
         if (demoActor && order.storeId !== demoActor.storeId) {
-          throw new Error("This action is unavailable in the shared demo.");
+          throw new Error("This action is unavailable in the demo.");
         }
 
         await applyOnlineOrderUpdate(ctx, order, {
@@ -1056,7 +1056,7 @@ export const update = mutation({
           });
         }
         if (demoActor && order.storeId !== demoActor.storeId) {
-          throw new Error("This action is unavailable in the shared demo.");
+          throw new Error("This action is unavailable in the demo.");
         }
 
         const { refund_id, refund_amount, ...rest } = args.update;

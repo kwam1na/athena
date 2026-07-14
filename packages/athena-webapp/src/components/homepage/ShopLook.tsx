@@ -30,7 +30,7 @@ type ShopLookItem = {
   product?: Product | null;
 };
 
-export const ShopLookSection = () => {
+export const ShopLookSection = ({ readOnly = false }: { readOnly?: boolean }) => {
   const [dialogOpen, setDialogOpen] = useState(false);
 
   const { activeStore } = useGetActiveStore();
@@ -116,6 +116,7 @@ export const ShopLookSection = () => {
     <div className="space-y-layout-lg">
       <ShopLookDialog
         action={hasHighlightedItem ? "edit" : "add"}
+        disabled={readOnly}
         dialogOpen={dialogOpen}
         setDialogOpen={setDialogOpen}
         featuredItemId={featuredItem?._id}
@@ -124,7 +125,7 @@ export const ShopLookSection = () => {
         <ShopLookImageUploader
           currentImageUrl={storeConfig.media.images.shopTheLookImage}
           onImageUpdate={handleImageUpdate}
-          disabled={!activeStore}
+          disabled={!activeStore || readOnly}
         />
         <div className="w-full space-y-layout-sm">
           <p className="text-sm font-medium text-foreground">
@@ -166,6 +167,7 @@ export const ShopLookSection = () => {
                   <TooltipTrigger asChild>
                     <Button
                       aria-label={`Remove ${capitalizeWords(featuredItem.product.name)} from Shop the Look`}
+                      disabled={readOnly}
                       onClick={() => handleHighlightedItem(featuredItem)}
                       size="icon"
                       title={`Remove ${capitalizeWords(featuredItem.product.name)} from Shop the Look`}
@@ -179,7 +181,7 @@ export const ShopLookSection = () => {
               </TooltipProvider>
             </div>
           ) : (
-            <div className="rounded-md border border-dashed border-border bg-background p-layout-md text-sm text-muted-foreground">
+            <div className="w-fit max-w-full rounded-md border border-dashed border-border bg-background p-layout-md text-sm text-muted-foreground">
               Add the product customers should reach from this visual story.
             </div>
           )}

@@ -1,25 +1,23 @@
+import {
+  ATHENA_CAPABILITY_CATALOG,
+  classifyAthenaPublicWrite,
+  isSharedDemoCapabilityAllowed,
+  SHARED_DEMO_ALLOWED_CAPABILITIES,
+  type AthenaCapability,
+} from "./capabilityCatalog";
+
 export const SHARED_DEMO_UNAVAILABLE =
-  "This action is unavailable in the shared demo.";
+  "This action is unavailable in the demo.";
 
-export const SHARED_DEMO_CAPABILITY_CLASSIFICATIONS = [
-  { capability: "pos.sale.complete", decision: "allowed" },
-  { capability: "inventory.adjust", decision: "allowed" },
-  { capability: "cash.control.write", decision: "allowed" },
-  { capability: "orders.fulfill", decision: "allowed" },
-  { capability: "staff.communication.write", decision: "allowed" },
-  { capability: "daily_operations.write", decision: "allowed" },
-  { capability: "reports.read", decision: "allowed" },
-  { capability: "identity.manage", decision: "denied" },
-  { capability: "permissions.manage", decision: "denied" },
-  { capability: "billing.manage", decision: "denied" },
-  { capability: "integrations.manage", decision: "denied" },
-  { capability: "exports.generate", decision: "denied" },
-  { capability: "payments.refund", decision: "denied" },
-  { capability: "administration.destructive", decision: "denied" },
-] as const;
+export const SHARED_DEMO_CAPABILITY_CLASSIFICATIONS =
+  ATHENA_CAPABILITY_CATALOG.map(({ id: capability }) => ({
+    capability,
+    decision: isSharedDemoCapabilityAllowed(capability)
+      ? ("allowed" as const)
+      : ("denied" as const),
+  }));
 
-export type SharedDemoCapability =
-  (typeof SHARED_DEMO_CAPABILITY_CLASSIFICATIONS)[number]["capability"];
+export type SharedDemoCapability = AthenaCapability;
 
 export const SHARED_DEMO_EFFECT_CLASSIFICATIONS = [
   { gateway: "customer_message.send", decision: "simulated", label: "No customer message was sent." },
@@ -54,14 +52,25 @@ export function requireSharedDemoOrderFulfillmentUpdate(
 }
 
 export const SHARED_DEMO_PUBLIC_FUNCTION_INVENTORY = [
+  { functionName: "operations/approvalRequests:decideApprovalRequest", capability: "approvals.manage" },
+  { functionName: "operations/staffCredentials:authenticateStaffCredential", capability: "staff.authenticate" },
+  { functionName: "operations/staffCredentials:authenticateStaffCredentialForApproval", capability: "staff.authenticate" },
   { functionName: "pos/public/transactions:completeTransaction", capability: "pos.sale.complete" },
   { functionName: "stockOps/adjustments:submitStockAdjustmentBatch", capability: "inventory.adjust" },
   { functionName: "cashControls/deposits:recordRegisterSessionDeposit", capability: "cash.control.write" },
+  { functionName: "cashControls/closeouts:correctRegisterSessionOpeningFloat", capability: "cash.control.write" },
+  { functionName: "cashControls/closeouts:submitRegisterSessionCloseout", capability: "cash.control.write" },
+  { functionName: "cashControls/closeouts:reviewRegisterSessionCloseout", capability: "cash.control.write" },
+  { functionName: "cashControls/closeouts:reopenRegisterSessionCloseout", capability: "cash.control.write" },
+  { functionName: "pos/public/catalog:quickAddSku", capability: "catalog.quick_add" },
   { functionName: "storeFront/onlineOrder:update", capability: "orders.fulfill" },
   { functionName: "operations/staffMessages:postStaffMessage", capability: "staff.communication.write" },
   { functionName: "operations/dailyOpening:startStoreDay", capability: "daily_operations.write" },
+  { functionName: "pos/public/terminals:registerTerminal", capability: "daily_operations.write" },
   { functionName: "reporting/public:getReportsOverview", capability: "reports.read" },
   { functionName: "operations/staffCredentials:createStaffCredential", capability: "identity.manage" },
+  { functionName: "operations/staffProfiles:createStaffProfile", capability: "staff.manage" },
+  { functionName: "operations/staffProfiles:updateStaffProfile", capability: "staff.manage" },
   { functionName: "inventory/inviteCode:create", capability: "permissions.manage" },
   { functionName: "storeFront/payment:createTransaction", capability: "billing.manage" },
   { functionName: "inventory/stores:patchConfigV2Command", capability: "integrations.manage" },
@@ -74,12 +83,17 @@ export const SHARED_DEMO_PUBLIC_FUNCTION_INVENTORY = [
 }>;
 
 export function classifySharedDemoPublicFunction(functionName: string) {
-  const declared = SHARED_DEMO_PUBLIC_FUNCTION_INVENTORY.find(
-    (entry) => entry.functionName === functionName,
-  );
-  return declared
-    ? { capability: declared.capability, decision: "declared" as const }
-    : { decision: "denied" as const, reason: "unclassified" as const };
+  const classification = classifyAthenaPublicWrite(functionName);
+  if (classification.decision === "unclassified") {
+    return { decision: "denied" as const, reason: "unclassified" as const };
+  }
+  return {
+    capability: classification.capability,
+    decision: "declared" as const,
+    demoDecision: isSharedDemoCapabilityAllowed(classification.capability)
+      ? ("allowed" as const)
+      : ("denied" as const),
+  };
 }
 
 export function classifySharedDemoExternalGateway(gateway: string) {
@@ -102,10 +116,9 @@ export const SHARED_DEMO_GATEWAY_ENFORCEMENT_BINDINGS = [
 ] as const;
 
 export function requireSharedDemoCapability(capability: SharedDemoCapability) {
-  const entry = SHARED_DEMO_CAPABILITY_CLASSIFICATIONS.find(
-    (candidate) => candidate.capability === capability,
-  );
-  if (!entry || entry.decision !== "allowed") throw new Error(SHARED_DEMO_UNAVAILABLE);
+  if (!isSharedDemoCapabilityAllowed(capability)) {
+    throw new Error(SHARED_DEMO_UNAVAILABLE);
+  }
   return capability;
 }
 
@@ -131,23 +144,23 @@ export function validateSharedDemoCoverage() {
   const seenCapabilities = new Set<string>();
   for (const entry of SHARED_DEMO_CAPABILITY_CLASSIFICATIONS) {
     if (seenCapabilities.has(entry.capability)) {
-      errors.push(`Duplicate shared demo capability: ${entry.capability}`);
+      errors.push(`Duplicate demo capability: ${entry.capability}`);
     }
     seenCapabilities.add(entry.capability);
   }
   const seenGateways = new Set<string>();
   for (const entry of SHARED_DEMO_EFFECT_CLASSIFICATIONS) {
     if (seenGateways.has(entry.gateway)) {
-      errors.push(`Duplicate shared demo gateway: ${entry.gateway}`);
+      errors.push(`Duplicate demo gateway: ${entry.gateway}`);
     }
     seenGateways.add(entry.gateway);
   }
-  const coveredCapabilities = new Set(
+  const enforcedCapabilities = new Set(
     SHARED_DEMO_PUBLIC_FUNCTION_INVENTORY.map((entry) => entry.capability),
   );
-  for (const entry of SHARED_DEMO_CAPABILITY_CLASSIFICATIONS) {
-    if (!coveredCapabilities.has(entry.capability)) {
-      errors.push(`No public function represents shared demo capability: ${entry.capability}`);
+  for (const capability of SHARED_DEMO_ALLOWED_CAPABILITIES) {
+    if (!enforcedCapabilities.has(capability)) {
+      errors.push(`No enforced public function represents allowed demo capability: ${capability}`);
     }
   }
   return errors;

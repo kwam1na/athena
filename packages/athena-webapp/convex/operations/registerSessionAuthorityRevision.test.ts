@@ -2,14 +2,64 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildRegisterSessionAuthorityPatch,
+  deleteRegisterSessionWithAuthority,
   initialRegisterSessionAuthorityRevision,
   insertRegisterSessionWithAuthority,
   patchRegisterSessionWithAuthority,
+  replaceRegisterSessionWithAuthority,
 } from "./registerSessionAuthorityRevision";
 
 describe("register session lifecycle authority revision", () => {
   it("starts new register sessions at revision one", () => {
     expect(initialRegisterSessionAuthorityRevision()).toBe(1);
+  });
+
+  it("routes destructive cleanup through the centralized authority writer", async () => {
+    const deletes: string[] = [];
+    const ctx = {
+      db: {
+        async delete(_table: string, id: string) {
+          deletes.push(id);
+        },
+        async get() {
+          return { status: "closed", lifecycleAuthorityRevision: 4 };
+        },
+      },
+    };
+
+    await deleteRegisterSessionWithAuthority(
+      ctx as never,
+      "register-session-1" as never,
+    );
+
+    expect(deletes).toEqual(["register-session-1"]);
+  });
+
+  it("does not let baseline replacement roll lifecycle authority backward", async () => {
+    const replacements: unknown[] = [];
+    const ctx = {
+      db: {
+        async get() {
+          return { status: "closing", lifecycleAuthorityRevision: 9 };
+        },
+        async replace(_table: string, _id: string, value: unknown) {
+          replacements.push(value);
+        },
+      },
+    };
+
+    await replaceRegisterSessionWithAuthority(
+      ctx as never,
+      "register-session-1" as never,
+      { lifecycleAuthorityRevision: 2, status: "active" } as never,
+    );
+
+    expect(replacements).toEqual([
+      expect.objectContaining({
+        lifecycleAuthorityRevision: 10,
+        status: "active",
+      }),
+    ]);
   });
 
   it("increments every real lifecycle transition, including non-monotonic status order", () => {

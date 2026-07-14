@@ -26,7 +26,7 @@ export async function consumeAdmissionBudgetWithCtx(
     else await ctx.db.insert("sharedDemoAdmissionRateBucket", { count: 1, kind: args.kind, windowStartedAt: args.now });
     return;
   }
-  if (bucket.count >= args.limit) throw new Error("The shared demo is busy. Try again shortly.");
+  if (bucket.count >= args.limit) throw new Error("The demo is busy. Try again shortly.");
   await ctx.db.patch("sharedDemoAdmissionRateBucket", bucket._id, { count: bucket.count + 1 });
 }
 
@@ -99,7 +99,7 @@ export const storeSharedDemoTicket = internalMutation({
       args.organizationId !== config.organizationId ||
       args.storeId !== config.storeId
     ) {
-      throw new Error("Shared demo configuration changed during admission.");
+      throw new Error("Demo configuration changed during admission.");
     }
 
     const [athenaUser, organization, store] = await Promise.all([
@@ -108,10 +108,10 @@ export const storeSharedDemoTicket = internalMutation({
       ctx.db.get("store", args.storeId),
     ]);
     if (!athenaUser || !organization || !store) {
-      throw new Error("The shared demo store is not ready.");
+      throw new Error("The demo store is not ready.");
     }
     if (store.organizationId !== args.organizationId) {
-      throw new Error("The shared demo store configuration is invalid.");
+      throw new Error("The demo store configuration is invalid.");
     }
     const membership = await ctx.db
       .query("organizationMember")
@@ -120,14 +120,14 @@ export const storeSharedDemoTicket = internalMutation({
       )
       .unique();
     if (!membership || membership.role !== "full_admin") {
-      throw new Error("The shared demo owner membership is not ready.");
+      throw new Error("The demo owner membership is not ready.");
     }
 
     // A fresh auth identity per admission prevents a later visitor from extending
     // an earlier browser's server-authorized demo window. All identities still map
     // to the same dedicated Athena owner and shared store.
     const authUserId = await ctx.db.insert("users", {
-      name: "Athena shared demo owner",
+      name: "Athena demo owner",
     });
     const principalId = await ctx.db.insert("sharedDemoPrincipal", {
       authUserId,

@@ -5,9 +5,11 @@ import { HomepageProductPickerDialog } from "./HomepageProductPickerDialog";
 import type { Category, Product, ProductSku, Subcategory } from "~/types";
 
 export function BestSellersDialog({
+  disabled = false,
   dialogOpen,
   setDialogOpen,
 }: {
+  disabled?: boolean;
   dialogOpen: boolean;
   setDialogOpen: React.Dispatch<React.SetStateAction<boolean>>;
 }) {
@@ -49,6 +51,7 @@ export function BestSellersDialog({
       categories={categories as Category[] | undefined}
       currency={activeStore.currency}
       description="Select the exact SKU that should appear in the storefront best sellers list."
+      disabled={disabled}
       onOpenChange={setDialogOpen}
       onSelectSku={handleAddBestSeller}
       open={dialogOpen}

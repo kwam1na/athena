@@ -32,7 +32,10 @@ import {
   type PosTerminalIntegrityState,
   type PosProvisionedTerminalSeed,
 } from "@/lib/pos/application/posLocalStoreTypes";
-import { createLocalCommandGateway } from "./localCommandGateway";
+import {
+  seedRegisterSessionAuthorityBootstrap,
+  type RegisterSessionAuthorityBootstrap,
+} from "./registerSessionAuthorityBootstrap";
 import {
   clearRecoverableDrawerAuthorityForSyncedEvents,
   clearSupersededRecoverableDrawerAuthorityBlocks,
@@ -202,21 +205,16 @@ export type PosLocalSyncRuntimeMode = "drain-enabled" | "status-only";
 
 type PosLocalRuntimeStore = PosLocalStorePort;
 
+export type RuntimeActiveRegisterSessionDirective =
+  RegisterSessionAuthorityBootstrap & {
+    observedAt: number;
+    status: "active";
+  };
+
 type RuntimeDrawerAuthorityDirective = Omit<
   PosDrawerAuthorityState,
   "storeId" | "terminalId"
 >;
-export type RuntimeActiveRegisterSessionDirective = {
-  cloudRegisterSessionId: string;
-  expectedCash: number;
-  localRegisterSessionId: string;
-  observedAt: number;
-  openedAt: number;
-  openingFloat: number;
-  registerNumber?: string;
-  staffProfileId?: string;
-  status: "active";
-};
 type IngestLocalEventsArgs = FunctionArgs<
   typeof api.pos.public.sync.ingestLocalEvents
 >;
@@ -232,6 +230,7 @@ type IngestLocalEventsUploadArgs = Omit<IngestLocalEventsArgs, "events"> & {
 
 export function usePosLocalSyncRuntimeStatus(input: {
   appSessionRecovery?: PosTerminalRuntimeAppSessionRecoveryInput | null;
+  expectedDemoEpoch?: number;
   storeId?: string | null;
   terminalId?: string | null;
   drainOnAppend?: boolean;
@@ -317,8 +316,9 @@ export function usePosLocalSyncRuntimeStatus(input: {
   );
   const forwardedRuntimeStatusRef =
     useRef<PosTerminalRuntimeStatusPayload | null>(null);
-  const queuedRuntimeStatusRef =
-    useRef<PosTerminalRuntimeStatusPayload | null>(null);
+  const queuedRuntimeStatusRef = useRef<PosTerminalRuntimeStatusPayload | null>(
+    null,
+  );
   const runtimeStatusSyncingPublishReadyMaterialSignatureRef = useRef<
     string | null
   >(null);
@@ -680,6 +680,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
               await reportRegisterSessionActivityForEvents({
                 cloudTerminalId,
                 events: eventsToUpload,
+                expectedDemoEpoch: input.expectedDemoEpoch,
                 ingestRegisterSessionActivity,
                 store,
                 syncSeed,
@@ -690,6 +691,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
             void reportRegisterSessionActivityForEvents({
               cloudTerminalId,
               events: eventsToUpload,
+              expectedDemoEpoch: input.expectedDemoEpoch,
               ingestRegisterSessionActivity,
               store,
               syncSeed,
@@ -698,6 +700,9 @@ export function usePosLocalSyncRuntimeStatus(input: {
             const result = await ingestLocalEvents(
               toIngestLocalEventsArgs({
                 events: uploadedEvents,
+                ...(input.expectedDemoEpoch === undefined
+                  ? {}
+                  : { expectedDemoEpoch: input.expectedDemoEpoch }),
                 storeId: syncSeed.storeId,
                 syncSecretHash: syncSeed.syncSecretHash,
                 terminalId: cloudTerminalId,
@@ -722,7 +727,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
                 onLocalEventsChanged?.();
                 return { syncedEventIds: [] };
               }
-              if (isRetryableSyncAuthorizationFailure(result)) {
+              if (isRetryableSyncFailure(result)) {
                 throw new Error(result.error.message);
               }
               setDebug((current) => ({
@@ -985,6 +990,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
     mode,
     onLocalEventsChanged,
     input.appSessionRecovery,
+    input.expectedDemoEpoch,
     storeFactory,
     storeId,
     terminalId,
@@ -1311,10 +1317,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
         return;
       }
       publishState.currentMaterialSignature = materialSignature;
-      if (
-        hasForwardedRuntimeStatus ||
-        hasQueuedForwardedRuntimeStatus
-      ) {
+      if (hasForwardedRuntimeStatus || hasQueuedForwardedRuntimeStatus) {
         queuedRuntimeStatusRef.current = runtimeStatusToPublish;
       }
       if (hasForwardedRuntimeStatus) {
@@ -1420,8 +1423,8 @@ export function usePosLocalSyncRuntimeStatus(input: {
               const activeRegisterSessionDirective =
                 readRuntimeActiveRegisterSessionDirective(result.data);
               const activeRegisterSessionSeed =
-                await seedRuntimeActiveRegisterSessionDirective({
-                  directive: activeRegisterSessionDirective,
+                await seedRegisterSessionAuthorityBootstrap({
+                  bootstrap: activeRegisterSessionDirective,
                   staffProfileId,
                   staffProofToken,
                   store: authorityStore,
@@ -2276,61 +2279,6 @@ function readRuntimeActiveRegisterSessionDirective(
   };
 }
 
-async function seedRuntimeActiveRegisterSessionDirective(input: {
-  directive: RuntimeActiveRegisterSessionDirective | null;
-  staffProfileId?: string | null;
-  staffProofToken?: string | null;
-  store: PosLocalRuntimeStore;
-  storeId: string;
-  terminalId: string;
-}): Promise<{
-  seeded: boolean;
-  seedResult: NonNullable<
-    PosLocalRuntimeSyncDebug["activeRegisterSessionRepair"]
-  >["seedResult"];
-}> {
-  if (!input.directive) {
-    return { seeded: false, seedResult: "missing_directive" };
-  }
-  const staffProfileId =
-    input.staffProfileId ?? input.directive.staffProfileId ?? null;
-  if (!staffProfileId) {
-    return { seeded: false, seedResult: "missing_staff_identity" };
-  }
-
-  const gateway = createLocalCommandGateway({
-    allowExplicitRegisterSessionWithoutProjection: true,
-    allowRegisterSessionSeedAfterSettledHistory: true,
-    allowRegisterSessionSeedFromRuntimeDirective: true,
-    staffProofToken:
-      staffProfileId === input.staffProfileId
-        ? (input.staffProofToken ?? undefined)
-        : undefined,
-    store: input.store,
-  });
-
-  const seeded = await gateway.seedRegisterSession({
-    cloudRegisterSessionId: input.directive.cloudRegisterSessionId,
-    expectedCash: input.directive.expectedCash,
-    localRegisterSessionId: input.directive.localRegisterSessionId,
-    openingFloat: input.directive.openingFloat,
-    registerNumber: input.directive.registerNumber,
-    staffProfileId,
-    storeId: input.storeId,
-    terminalId: input.terminalId,
-    validationMetadata: {
-      flags: ["cloud-validation-uncertain"],
-      observedAt: input.directive.observedAt,
-    },
-    runtimeDirectiveRepair: true,
-    status: input.directive.status,
-  });
-  return {
-    seeded,
-    seedResult: seeded ? "seeded" : "gateway_rejected",
-  };
-}
-
 async function persistRuntimeDrawerAuthorityDirective(input: {
   directive: RuntimeDrawerAuthorityDirective | null;
   store: PosLocalRuntimeStore;
@@ -2431,21 +2379,23 @@ function isTerminalAuthorizationFailure(result: {
   );
 }
 
-function isRetryableSyncAuthorizationFailure(result: {
+function isRetryableSyncFailure(result: {
   kind: string;
   error?: {
     code?: string;
     message?: string;
     metadata?: Record<string, unknown>;
+    retryable?: boolean;
   };
 }): result is {
   kind: "user_error";
-  error: { code: "authorization_failed"; message: string };
+  error: { code: string; message: string };
 } {
   return (
     result.kind === "user_error" &&
-    result.error?.code === "authorization_failed" &&
-    !isTerminalAuthorizationUserError(result.error)
+    (result.error?.retryable === true ||
+      (result.error?.code === "authorization_failed" &&
+        !isTerminalAuthorizationUserError(result.error)))
   );
 }
 
@@ -2474,11 +2424,15 @@ function toTerminalRecoveryCommandAckResult(
 
 function toIngestLocalEventsArgs(input: {
   events: PosLocalUploadEvent[];
+  expectedDemoEpoch?: number;
   storeId: string;
   syncSecretHash: string;
   terminalId: string;
 }): IngestLocalEventsUploadArgs {
   return {
+    ...(input.expectedDemoEpoch === undefined
+      ? {}
+      : { expectedDemoEpoch: input.expectedDemoEpoch }),
     storeId: input.storeId as Id<"store">,
     terminalId: input.terminalId as Id<"posTerminal">,
     syncSecretHash: input.syncSecretHash,
@@ -2673,6 +2627,7 @@ export function isPosLocalRuntimeActivityReportCandidate(
 async function reportRegisterSessionActivityForEvents(input: {
   cloudTerminalId: string;
   events: PosLocalEventRecord[];
+  expectedDemoEpoch?: number;
   ingestRegisterSessionActivity: (
     args: IngestRegisterSessionActivityArgs,
   ) => Promise<unknown>;
@@ -2757,6 +2712,9 @@ async function reportRegisterSessionActivityForEvents(input: {
           uploadSequence: activity.uploadSequence,
         })),
         localRegisterSessionId,
+        ...(input.expectedDemoEpoch === undefined
+          ? {}
+          : { expectedDemoEpoch: input.expectedDemoEpoch }),
         registerNumber: reportableEvents[0]?.activity.registerNumber,
         reportedThroughOccurredAt: Math.max(
           ...reportableEvents.map(({ activity }) => activity.createdAt),
@@ -2774,7 +2732,9 @@ async function reportRegisterSessionActivityForEvents(input: {
         await markActivityReportFailed(
           input.store,
           reportableEvents,
-          "server_rejected",
+          isRetryableCommandFailure(result)
+            ? "network_error"
+            : "server_rejected",
         );
         continue;
       }
@@ -2900,6 +2860,15 @@ function isCommandOk(result: unknown): result is {
     (result as { data?: unknown }).data !== null &&
     Array.isArray((result as { data: { accepted?: unknown } }).data.accepted) &&
     Array.isArray((result as { data: { skipped?: unknown } }).data.skipped)
+  );
+}
+
+function isRetryableCommandFailure(result: unknown) {
+  return (
+    typeof result === "object" &&
+    result !== null &&
+    (result as { kind?: unknown }).kind === "user_error" &&
+    (result as { error?: { retryable?: unknown } }).error?.retryable === true
   );
 }
 

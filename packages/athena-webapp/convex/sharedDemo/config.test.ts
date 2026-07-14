@@ -4,6 +4,7 @@ import {
   isSharedDemoEnabled,
   readSharedDemoConfig,
   SHARED_DEMO_ADMISSION_DURATION_MS,
+  SHARED_DEMO_TIME_ZONE,
   SHARED_DEMO_TICKET_DURATION_MS,
 } from "./config";
 
@@ -41,7 +42,7 @@ describe("shared demo configuration", () => {
         ATHENA_SHARED_DEMO_DEPLOYMENT_ALLOWLIST: "demo-1",
         ATHENA_SHARED_DEMO_ENABLED: "true",
       }),
-    ).toThrow("Shared demo configuration is incomplete");
+    ).toThrow("Demo configuration is incomplete");
   });
 
   it("fails closed when the deployment ID is not explicitly allowlisted", () => {
@@ -53,8 +54,12 @@ describe("shared demo configuration", () => {
     })).toBe(false);
   });
 
-  it("uses a one-minute ticket and one-hour admission window", () => {
+  it("uses a one-minute ticket and three-hour admission window", () => {
     expect(SHARED_DEMO_TICKET_DURATION_MS).toBe(60_000);
-    expect(SHARED_DEMO_ADMISSION_DURATION_MS).toBe(3_600_000);
+    expect(SHARED_DEMO_ADMISSION_DURATION_MS).toBe(10_800_000);
+  });
+
+  it("uses one canonical New York operating timezone", () => {
+    expect(SHARED_DEMO_TIME_ZONE).toBe("America/New_York");
   });
 });

@@ -1673,6 +1673,62 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     expect(store.writeTerminalIntegrityState).not.toHaveBeenCalled();
   });
 
+  it("retries demo epoch precondition failures without creating review blocks", async () => {
+    mocks.ingestLocalEvents.mockResolvedValue({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+        message: "The demo register is refreshing. Try again shortly.",
+        retryable: true,
+      },
+    });
+    const store = {
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [
+          buildLocalEvent({
+            localEventId: "event-open",
+            sequence: 1,
+            type: "register.opened",
+            uploadSequence: 1,
+          }),
+        ],
+      })),
+      markEventsNeedsReview: vi.fn(async () => ({ ok: true, value: [] })),
+      markEventsSynced: vi.fn(async () => ({ ok: true, value: [] })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-1",
+          displayName: "Front",
+          provisionedAt: 1,
+          registerNumber: "1",
+          schemaVersion: 1,
+          syncSecretHash: "sync-secret-1",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+      writeDrawerAuthorityState: vi.fn(async () => ({ ok: true, value: null })),
+    };
+
+    renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        expectedDemoEpoch: 7,
+        storeFactory: () => store as never,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(() => expect(mocks.ingestLocalEvents).toHaveBeenCalled());
+    expect(mocks.ingestLocalEvents).toHaveBeenCalledWith(
+      expect.objectContaining({ expectedDemoEpoch: 7 }),
+    );
+    expect(store.markEventsNeedsReview).not.toHaveBeenCalled();
+    expect(store.writeDrawerAuthorityState).not.toHaveBeenCalled();
+  });
+
   it("skips upload attempts while terminal integrity is blocked", async () => {
     const store = {
       listEvents: vi.fn(async () => ({
@@ -4445,8 +4501,8 @@ describe("usePosLocalSyncRuntimeStatus", () => {
         expect(mocks.reportTerminalRuntimeStatus).toHaveBeenCalledTimes(1),
       );
 
-      const firstRuntimeStatus = mocks.reportTerminalRuntimeStatus.mock.calls[0]?.[0]
-        ?.status;
+      const firstRuntimeStatus =
+        mocks.reportTerminalRuntimeStatus.mock.calls[0]?.[0]?.status;
       const followerRuntimeStatus = {
         ...firstRuntimeStatus,
         appSessionRecovery: { status: "blocked_app_account" },
@@ -5509,6 +5565,7 @@ describe("usePosLocalSyncRuntimeStatus", () => {
 
     renderHook(() =>
       usePosLocalSyncRuntimeStatus({
+        expectedDemoEpoch: 7,
         mode: "drain-enabled",
         storeFactory: () => store as never,
         storeId: "store-1",
@@ -5519,6 +5576,7 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     await waitFor(() => expect(mocks.ingestLocalEvents).toHaveBeenCalled());
     expect(mocks.ingestLocalEvents).toHaveBeenCalledWith(
       expect.objectContaining({
+        expectedDemoEpoch: 7,
         events: [
           expect.objectContaining({
             eventType: "expense_recorded",
@@ -5605,6 +5663,7 @@ describe("usePosLocalSyncRuntimeStatus", () => {
 
     renderHook(() =>
       usePosLocalSyncRuntimeStatus({
+        expectedDemoEpoch: 7,
         mode: "drain-enabled",
         storeFactory: () => store as never,
         storeId: "store-1",
@@ -5628,6 +5687,7 @@ describe("usePosLocalSyncRuntimeStatus", () => {
             }),
           ],
           localRegisterSessionId: "register-1",
+          expectedDemoEpoch: 7,
           reportedThroughSequence: 2,
           storeId: "store-1",
           syncSecretHash: "sync-secret-1",

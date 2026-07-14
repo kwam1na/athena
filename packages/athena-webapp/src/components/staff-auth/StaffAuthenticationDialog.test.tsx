@@ -4,6 +4,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { StaffAuthenticationDialog } from "./StaffAuthenticationDialog";
 
+const mocks = vi.hoisted(() => ({
+  useSharedDemoContext: vi.fn(),
+}));
+
+vi.mock("@/hooks/useSharedDemoContext", () => ({
+  useSharedDemoContext: mocks.useSharedDemoContext,
+}));
+
 vi.mock("@/components/pos/PinInput", () => ({
   PinInput: ({
     disabled,
@@ -44,9 +52,24 @@ const baseProps = {
 
 describe("StaffAuthenticationDialog", () => {
   beforeEach(() => {
+    mocks.useSharedDemoContext.mockReset();
+    mocks.useSharedDemoContext.mockReturnValue(null);
     baseProps.onAuthenticate.mockReset();
     baseProps.onAuthenticated.mockReset();
     baseProps.onDismiss.mockReset();
+  });
+
+  it("shows demo manager and cashier credentials from the shared authentication base", () => {
+    mocks.useSharedDemoContext.mockReturnValue({ storeId: "demo-store" });
+
+    render(
+      <StaffAuthenticationDialog {...baseProps} presentation="embedded" />,
+    );
+
+    expect(screen.getByText("Demo staff sign-in")).toBeInTheDocument();
+    expect(screen.getByText("kofi")).toBeInTheDocument();
+    expect(screen.getByText("ama")).toBeInTheDocument();
+    expect(screen.getByText("1111")).toBeInTheDocument();
   });
 
   it("renders inline presentation without requiring a Dialog provider", () => {

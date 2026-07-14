@@ -39,7 +39,6 @@ import {
   AlertOctagon,
   PackageCheckIcon,
   PackageOpenIcon,
-  ChartNoAxesColumn,
   MessageCircleMore,
   CalendarDays,
   Tag,
@@ -533,24 +532,6 @@ export function AppSidebar({
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
-              {/* Reports section */}
-              <SidebarMenuItem>
-                <SidebarMenuButton disabled={!hasFullAdminAccess} asChild>
-                  <Link
-                    to="/$orgUrlSlug/store/$storeUrlSlug/reports"
-                    params={(p) => ({
-                      ...p,
-                      orgUrlSlug: activeOrganization?.slug,
-                      storeUrlSlug: activeStore?.slug,
-                    })}
-                    className="flex items-center"
-                  >
-                    <ChartNoAxesColumn className="w-4 h-4" />
-                    <p className="font-medium">Reports</p>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-
               {/* Homepage section */}
               <SidebarMenuItem>
                 <SidebarMenuButton disabled={!hasFullAdminAccess} asChild>
@@ -904,15 +885,16 @@ export function AppSidebar({
               </SidebarMenuItem>
 
               {/* Storefront section */}
-              <SidebarMenuCollapsible
-                icon={PanelTop}
-                label="Storefront"
-                disabled={!hasFullAdminAccess}
-                open={sidebarSubmenuOpenState.storefront}
-                onOpenChange={(open) =>
-                  setSidebarSubmenuOpen("storefront", open)
-                }
-              >
+              {!isSharedDemo ? (
+                <SidebarMenuCollapsible
+                  icon={PanelTop}
+                  label="Storefront"
+                  disabled={!hasFullAdminAccess}
+                  open={sidebarSubmenuOpenState.storefront}
+                  onOpenChange={(open) =>
+                    setSidebarSubmenuOpen("storefront", open)
+                  }
+                >
                 <SidebarMenuSub>
                   <SidebarMenuSubItem>
                     <SidebarMenuButton disabled={!hasFullAdminAccess} asChild>
@@ -988,7 +970,8 @@ export function AppSidebar({
                     </SidebarMenuButton>
                   </SidebarMenuSubItem>
                 </SidebarMenuSub>
-              </SidebarMenuCollapsible>
+                </SidebarMenuCollapsible>
+              ) : null}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

@@ -116,7 +116,7 @@ describe("useGetTerminal", () => {
     });
     mockUseConvexTerminalByFingerprint.mockReturnValue({
       _id: "terminal-browser",
-      displayName: "Shared Demo Register",
+      displayName: "Demo Register",
       registerNumber: "WEB-123456",
       status: "active",
     });
@@ -125,7 +125,7 @@ describe("useGetTerminal", () => {
 
     expect(result.current).toMatchObject({
       _id: "terminal-browser",
-      displayName: "Shared Demo Register",
+      displayName: "Demo Register",
       sharedDemoStaff: {
         staffProfileId: "staff-demo",
       },

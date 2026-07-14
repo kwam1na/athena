@@ -25,7 +25,7 @@ type TimeRange = "day" | "week" | "month" | "all";
 
 export default function OrdersView({ status = "all" }: { status?: string }) {
   const { activeStore } = useGetActiveStore();
-  const initialTimeRange: TimeRange = status === "all" ? "all" : "day";
+  const initialTimeRange: TimeRange = "all";
   const [selectedTimeRange, setSelectedTimeRange] =
     useState<TimeRange>(initialTimeRange);
 

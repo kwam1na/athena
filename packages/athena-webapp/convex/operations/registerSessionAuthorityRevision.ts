@@ -62,3 +62,35 @@ export async function patchRegisterSessionWithAuthority(
     buildRegisterSessionAuthorityPatch(current, patch),
   );
 }
+
+export async function deleteRegisterSessionWithAuthority(
+  ctx: MutationCtx,
+  registerSessionId: Id<"registerSession">,
+) {
+  const current = await ctx.db.get("registerSession", registerSessionId);
+  if (!current) return;
+  await ctx.db.delete("registerSession", registerSessionId);
+}
+
+export async function replaceRegisterSessionWithAuthority(
+  ctx: MutationCtx,
+  registerSessionId: Id<"registerSession">,
+  value: RegisterSessionDocument,
+) {
+  const current = await ctx.db.get("registerSession", registerSessionId);
+  if (!current) {
+    throw new Error("Register session not found.");
+  }
+  const {
+    lifecycleAuthorityRevision: _capturedRevision,
+    ...safeValue
+  } = value;
+  const lifecycleAuthorityRevision =
+    safeValue.status === current.status
+      ? (current.lifecycleAuthorityRevision ?? 0)
+      : (current.lifecycleAuthorityRevision ?? 0) + 1;
+  await ctx.db.replace("registerSession", registerSessionId, {
+    ...safeValue,
+    lifecycleAuthorityRevision,
+  });
+}

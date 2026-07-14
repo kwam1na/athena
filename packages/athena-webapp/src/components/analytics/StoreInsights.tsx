@@ -22,6 +22,10 @@ import {
   ReadoutTrustMetadata,
   type IntelligenceRunDebug,
 } from "../intelligence/ReadoutSupport";
+import {
+  isSharedDemoUiEnabled,
+  useSharedDemoContext,
+} from "@/hooks/useSharedDemoContext";
 
 interface StoreInsightsProps {
   storeId: Id<"store">;
@@ -41,21 +45,31 @@ type StoreInsightsResult = {
 };
 
 export default function StoreInsights({ storeId }: StoreInsightsProps) {
+  const sharedDemoContext = useSharedDemoContext();
+  const canUseIntelligence =
+    !isSharedDemoUiEnabled || sharedDemoContext === null;
   const latestArtifact = useQuery(
     api.intelligence.runs.latestArtifactBySubject,
-    {
-      storeId,
-      kind: "store_insights",
-      subjectTable: "store",
-      subjectId: String(storeId),
-    },
+    canUseIntelligence
+      ? {
+          storeId,
+          kind: "store_insights",
+          subjectTable: "store",
+          subjectId: String(storeId),
+        }
+      : "skip",
   );
-  const runDebug = useQuery(api.intelligence.runs.latestRunDebug, {
-    storeId,
-    capability: "storeInsights",
-    sourceRefTable: "store",
-    sourceRefId: String(storeId),
-  }) as IntelligenceRunDebug | null | undefined;
+  const runDebug = useQuery(
+    api.intelligence.runs.latestRunDebug,
+    canUseIntelligence
+      ? {
+          storeId,
+          capability: "storeInsights",
+          sourceRefTable: "store",
+          sourceRefId: String(storeId),
+        }
+      : "skip",
+  ) as IntelligenceRunDebug | null | undefined;
   const generateInsights = useAction(
     api.intelligence.capabilities.actions.generateStoreInsights,
   );
@@ -65,6 +79,8 @@ export default function StoreInsights({ storeId }: StoreInsightsProps) {
   const [insightsLoading, setInsightsLoading] = useState(false);
   const artifactInsights = latestArtifact?.payload as StoreInsightsResult | undefined;
   const visibleInsights = artifactInsights ?? null;
+
+  if (!canUseIntelligence) return null;
 
   const handleGenerate = async () => {
     setInsightsLoading(true);

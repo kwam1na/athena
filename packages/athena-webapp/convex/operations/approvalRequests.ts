@@ -23,6 +23,8 @@ import {
 } from "../../shared/commandResult";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import { consumeApprovalProofWithCtx } from "./approvalProofs";
+import { requireSharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
+import { requireReadySharedDemoWriteWithCtx } from "../sharedDemo/restore";
 
 const APPROVAL_DECISION_ACTION_KEY = "operations.approval_request.decide";
 const ITEM_ADJUSTMENT_REQUEST_TYPE = "pos_item_adjustment";
@@ -395,7 +397,9 @@ export async function decideApprovalRequestAsAuthenticatedUserWithCtx(
     throw new Error("Approval request has already been decided.");
   }
 
-  const reviewer = await requireAuthenticatedAthenaUserWithCtx(ctx);
+  const reviewer = await requireAuthenticatedAthenaUserWithCtx(ctx, {
+    sharedDemoCapability: "approvals.manage",
+  });
 
   await requireOrganizationMemberRoleWithCtx(ctx, {
     allowedRoles: ["full_admin"],
@@ -605,7 +609,25 @@ const decideApprovalRequestInternalArgs = {
 export const decideApprovalRequest = mutation({
   args: decideApprovalRequestArgs,
   returns: commandResultValidator(v.any()),
-  handler: (ctx, args) => decideApprovalRequestAsCommandWithCtx(ctx, args),
+  handler: async (ctx, args) => {
+    const approvalRequest = await ctx.db.get(
+      "approvalRequest",
+      args.approvalRequestId,
+    );
+    if (approvalRequest) {
+      const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(
+        ctx,
+        "approvals.manage",
+        approvalRequest.storeId,
+      );
+      if (demoActor) {
+        await requireReadySharedDemoWriteWithCtx(ctx, {
+          storeId: approvalRequest.storeId,
+        });
+      }
+    }
+    return decideApprovalRequestAsCommandWithCtx(ctx, args);
+  },
 });
 
 export const decideApprovalRequestInternal = internalMutation({

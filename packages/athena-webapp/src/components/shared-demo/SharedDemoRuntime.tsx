@@ -1,16 +1,18 @@
-import { useLocation, useParams } from "@tanstack/react-router";
+import { useParams } from "@tanstack/react-router";
 import { useMutation } from "convex/react";
-import { useCallback, useEffect } from "react";
 import {
-  SharedDemoStatusBar,
-  type SharedDemoRestoreStatus,
-} from "./SharedDemoStatusBar";
-import { getSharedDemoArea, getSharedDemoRoutes } from "./sharedDemoRoutes";
+  createContext,
+  type ReactNode,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
+import { SharedDemoStatusBar } from "./SharedDemoStatusBar";
+import { getSharedDemoRoutes } from "./sharedDemoRoutes";
 import { api } from "~/convex/_generated/api";
 import { generateBrowserFingerprint } from "@/lib/browserFingerprint";
 import { FINGERPRINT_STORAGE_KEY } from "@/lib/constants";
 import { readStoredTerminalFingerprint } from "@/lib/pos/infrastructure/terminal/fingerprint";
-import { buildPosLocalSyncUploadEvents } from "@/lib/pos/infrastructure/local/syncContract";
 import { registerAndProvisionPosTerminal } from "@/lib/pos/application/registerAndProvisionPosTerminal";
 import {
   getDefaultPosLocalStore,
@@ -18,170 +20,235 @@ import {
 } from "@/lib/pos/infrastructure/local/posLocalStorageRuntime";
 import type { Id } from "~/convex/_generated/dataModel";
 import { useSharedDemoContext } from "@/hooks/useSharedDemoContext";
+import {
+  getSharedDemoRegisterNumber,
+  getSharedDemoRestoreEpochStorageKey,
+  getSharedDemoTerminalName,
+  planSharedDemoLocalBootstrap,
+  resolveSharedDemoRegisterBootstrapAction,
+} from "./sharedDemoLocalBootstrap";
+import { seedRegisterSessionAuthorityBootstrap } from "@/lib/pos/infrastructure/local/registerSessionAuthorityBootstrap";
+import type { RegisterSessionAuthorityBootstrap } from "@/lib/pos/infrastructure/local/registerSessionAuthorityBootstrap";
+import { readProjectedLocalRegisterModel } from "@/lib/pos/infrastructure/local/localRegisterReader";
+import { coordinateSharedDemoRuntime } from "./sharedDemoRuntimeCoordinator";
 
-export function SharedDemoRuntime() {
+export type SharedDemoRegisterBootstrapStatus =
+  "idle" | "provisioning" | "projecting" | "ready" | "failed";
+
+const SharedDemoRegisterBootstrapContext =
+  createContext<SharedDemoRegisterBootstrapStatus>("ready");
+
+export function useSharedDemoRegisterBootstrapStatus() {
+  return useContext(SharedDemoRegisterBootstrapContext);
+}
+
+async function projectSharedDemoRegisterBootstrap(input: {
+  bootstrap: RegisterSessionAuthorityBootstrap;
+  storeId: string;
+  terminalId: string;
+}) {
+  const store = getDefaultPosLocalStore();
+  const seedResult = await seedRegisterSessionAuthorityBootstrap({
+    bootstrap: input.bootstrap,
+    store,
+    storeId: input.storeId,
+    terminalId: input.terminalId,
+  });
+  if (!seedResult.seeded) {
+    throw new Error(
+      `The demo register session could not be projected (${seedResult.seedResult}).`,
+    );
+  }
+  const projection = await readProjectedLocalRegisterModel({
+    isOnline: false,
+    store,
+    storeId: input.storeId,
+    terminalId: input.terminalId,
+  });
+  if (
+    !projection.ok ||
+    projection.value.activeRegisterSession?.localRegisterSessionId !==
+      input.bootstrap.localRegisterSessionId ||
+    (projection.value.activeRegisterSession.status !== "active" &&
+      projection.value.activeRegisterSession.status !== "open")
+  ) {
+    throw new Error("The demo register session was not available locally.");
+  }
+}
+
+export function SharedDemoRuntime({
+  children,
+  gatePosUntilReady = false,
+  showControls = true,
+}: {
+  children?: ReactNode;
+  gatePosUntilReady?: boolean;
+  showControls?: boolean;
+}) {
   const context = useSharedDemoContext();
-  const requestRestore = useMutation(
-    api.sharedDemo.public.requestManualRestore,
-  );
   const registerTerminal = useMutation(
     api.inventory.posTerminal.registerTerminal,
   );
-  const ingestDemoPosEvents = useMutation(
-    api.pos.public.sync.ingestLocalEvents,
+  const bindRegisterBaseline = useMutation(
+    api.sharedDemo.public.bindRegisterBaselineToTerminal,
   );
   const { orgUrlSlug, storeUrlSlug } = useParams({ strict: false });
-  const location = useLocation();
+  const contextRestoreEpoch = context?.restore.epoch;
+  const storeId = context?.storeId;
+  const restoreEpoch = contextRestoreEpoch;
+  const [bootstrapStatus, setBootstrapStatus] =
+    useState<SharedDemoRegisterBootstrapStatus>("idle");
   useEffect(() => {
-    if (!context || !orgUrlSlug || !storeUrlSlug) return;
+    if (
+      !storeId ||
+      restoreEpoch === undefined ||
+      !orgUrlSlug ||
+      !storeUrlSlug
+    ) {
+      return;
+    }
     let cancelled = false;
+    setBootstrapStatus("provisioning");
 
-    void (async () => {
+    void coordinateSharedDemoRuntime(storeId, restoreEpoch, async () => {
       const localStore = getDefaultPosLocalStore();
-      const epochStorageKey = `athena:shared-demo:restore-epoch:${context.storeId}`;
-      const priorEpoch = window.localStorage.getItem(epochStorageKey);
+      const epochStorageKey = getSharedDemoRestoreEpochStorageKey(storeId);
+      const priorEpochValue = window.localStorage.getItem(epochStorageKey);
       const storedSeed = await localStore.readProvisionedTerminalSeed();
-      const hasPriorDemoState =
-        storedSeed.ok && storedSeed.value?.storeId === context.storeId;
-      if (
-        (priorEpoch !== null &&
-          Number(priorEpoch) !== context.restore.epoch) ||
-        (priorEpoch === null && hasPriorDemoState)
-      ) {
+      const storedTerminalSeed = storedSeed.ok ? storedSeed.value : null;
+      const hasTerminalSeed = Boolean(storedTerminalSeed);
+      const hasMatchingTerminalSeed = storedTerminalSeed?.storeId === storeId;
+      const expectedRegisterNumber = storedTerminalSeed
+        ? getSharedDemoRegisterNumber(storedTerminalSeed.terminalId)
+        : null;
+      const hasMatchingRegisterNumber =
+        expectedRegisterNumber !== null &&
+        storedTerminalSeed?.registerNumber === expectedRegisterNumber;
+      const plan = planSharedDemoLocalBootstrap({
+        currentEpoch: restoreEpoch,
+        hasMatchingRegisterNumber,
+        hasMatchingTerminalSeed,
+        hasTerminalSeed,
+        priorEpoch: priorEpochValue === null ? null : Number(priorEpochValue),
+      });
+      if (plan.resetOperationalState) {
         const reset = await localStore.resetSharedDemoLocalState?.();
         if (reset && !reset.ok) throw new Error(reset.error.message);
       }
 
-      const fingerprint =
-        readStoredTerminalFingerprint() ??
-        (await generateBrowserFingerprint());
-      if (cancelled) return;
-      window.localStorage.setItem(
-        FINGERPRINT_STORAGE_KEY,
-        JSON.stringify(fingerprint),
-      );
-      const suffix = fingerprint.fingerprintHash.slice(0, 6).toUpperCase();
-      const result = await registerAndProvisionPosTerminal({
-        activeStoreId: context.storeId,
-        browserInfo: fingerprint.browserInfo,
-        displayName: "Shared Demo Register",
-        fingerprintHash: fingerprint.fingerprintHash,
-        heartbeatEnabled: true,
-        loginMode: "pos_only",
-        orgUrlSlug,
-        registerNumber: `WEB-${suffix}`,
-        registerTerminalMutation: registerTerminal,
-        requestPersistentStorage: requestDefaultPosLocalPersistentStorage,
-        storeFactory: getDefaultPosLocalStore,
-        storeUrlSlug,
-        transactionCapability: "products_only",
-      });
-      if (result.kind === "user_error") {
-        throw new Error(result.error.message);
-      }
-      window.localStorage.setItem(
-        epochStorageKey,
-        String(context.restore.epoch),
-      );
-    })().catch((error) => {
-      console.error("[shared-demo] POS bootstrap failed", error);
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [context, orgUrlSlug, registerTerminal, storeUrlSlug]);
-  useEffect(() => {
-    if (!context?.storeId) return;
-    let cancelled = false;
-    let draining = false;
-
-    const drain = async () => {
-      if (cancelled || draining) return;
-      draining = true;
-      try {
-        const store = getDefaultPosLocalStore();
-        const [seedResult, eventsResult] = await Promise.all([
-          store.readProvisionedTerminalSeed(),
-          store.listEvents(),
-        ]);
-        if (
-          !seedResult.ok ||
-          !eventsResult.ok ||
-          !seedResult.value ||
-          seedResult.value.storeId !== context.storeId
-        ) {
-          return;
-        }
-        const seed = seedResult.value;
-        const pending = eventsResult.value.filter(
-          (event) =>
-            event.storeId === context.storeId &&
-            (event.terminalId === seed.terminalId ||
-              event.terminalId === seed.cloudTerminalId) &&
-            (event.sync.status === "pending" ||
-              event.sync.status === "failed"),
+      if (plan.provisionTerminal) {
+        const fingerprint =
+          readStoredTerminalFingerprint() ??
+          (await generateBrowserFingerprint());
+        window.localStorage.setItem(
+          FINGERPRINT_STORAGE_KEY,
+          JSON.stringify(fingerprint),
         );
-        const events = buildPosLocalSyncUploadEvents(
-          pending,
-          eventsResult.value,
-          { appSessionValidation: "supported" },
+        const registerNumber = getSharedDemoRegisterNumber(
+          fingerprint.fingerprintHash,
         );
-        if (events.length === 0) return;
-        const result = await ingestDemoPosEvents({
-          events,
-          storeId: context.storeId,
-          syncSecretHash: seed.syncSecretHash,
-          terminalId: seed.cloudTerminalId as Id<"posTerminal">,
+        const result = await registerAndProvisionPosTerminal({
+          activeStoreId: storeId,
+          browserInfo: fingerprint.browserInfo,
+          displayName: getSharedDemoTerminalName(fingerprint.fingerprintHash),
+          fingerprintHash: fingerprint.fingerprintHash,
+          heartbeatEnabled: true,
+          loginMode: "pos_only",
+          orgUrlSlug,
+          registerNumber,
+          registerTerminalMutation: registerTerminal,
+          requestPersistentStorage: requestDefaultPosLocalPersistentStorage,
+          storeFactory: getDefaultPosLocalStore,
+          storeUrlSlug,
+          transactionCapability: "products_only",
         });
-        if (cancelled || result.kind !== "ok") return;
-        const projectedIds = result.data.accepted
-          .filter((event) => event.status === "projected")
-          .map((event) => event.localEventId);
-        if (projectedIds.length > 0) {
-          await store.markEventsSynced(projectedIds, { uploaded: true });
+        if (result.kind === "user_error") {
+          throw new Error(result.error.message);
         }
-        const reviewIds = result.data.accepted
-          .filter(
-            (event) =>
-              event.status === "conflicted" || event.status === "rejected",
-          )
-          .map((event) => event.localEventId);
-        if (reviewIds.length > 0) {
-          await store.markEventsNeedsReview(
-            reviewIds,
-            "Cloud sync needs review before this local event can finish.",
-            { uploaded: true },
-          );
-        }
-      } catch (error) {
-        console.warn("[shared-demo] POS sync retry deferred", error);
-      } finally {
-        draining = false;
       }
-    };
+      let boundBootstrap: RegisterSessionAuthorityBootstrap | null = null;
+      const seedBeforeBinding = await localStore.readProvisionedTerminalSeed();
+      if (!seedBeforeBinding.ok || !seedBeforeBinding.value) {
+        throw new Error(
+          "The demo register could not be linked to this browser.",
+        );
+      }
+      const localProjectionBeforeBinding =
+        await readProjectedLocalRegisterModel({
+          isOnline: false,
+          store: localStore,
+          storeId,
+          terminalId: seedBeforeBinding.value.terminalId,
+        });
+      const localSessionBeforeBinding = localProjectionBeforeBinding.ok
+        ? localProjectionBeforeBinding.value.activeRegisterSession
+        : null;
+      const hasUsableLocalSession = Boolean(
+        localSessionBeforeBinding &&
+        (localSessionBeforeBinding.status === "active" ||
+          localSessionBeforeBinding.status === "open"),
+      );
+      const registerBootstrapAction = resolveSharedDemoRegisterBootstrapAction({
+        bindRegisterBaseline: plan.bindRegisterBaseline,
+        hasUsableLocalSession,
+      });
+      if (registerBootstrapAction === "bind") {
+        const baseline = await bindRegisterBaseline({
+          terminalId: seedBeforeBinding.value
+            .cloudTerminalId as Id<"posTerminal">,
+        });
+        boundBootstrap = baseline.bootstrap;
+      }
+      const currentSeed = await localStore.readProvisionedTerminalSeed();
+      if (!currentSeed.ok || !currentSeed.value) {
+        throw new Error("The demo register is not available on this browser.");
+      }
+      if (boundBootstrap) {
+        await projectSharedDemoRegisterBootstrap({
+          bootstrap: boundBootstrap,
+          storeId,
+          terminalId: currentSeed.value.terminalId,
+        });
+      }
+      window.localStorage.setItem(epochStorageKey, String(restoreEpoch));
+    })
+      .then(() => {
+        if (!cancelled) setBootstrapStatus("ready");
+      })
+      .catch((error) => {
+        console.error("[shared-demo] POS bootstrap failed", error);
+        if (!cancelled) setBootstrapStatus("failed");
+      });
 
-    void drain();
-    const interval = window.setInterval(() => void drain(), 5_000);
     return () => {
       cancelled = true;
-      window.clearInterval(interval);
     };
-  }, [context?.storeId, ingestDemoPosEvents]);
-  const restore = useCallback(async () => {
-    const result = await requestRestore({
-      idempotencyKey: crypto.randomUUID(),
-    });
-    if (result.kind === "rate_limited") throw new Error(result.kind);
-  }, [requestRestore]);
-  if (!context || !orgUrlSlug || !storeUrlSlug) return null;
+  }, [
+    bindRegisterBaseline,
+    orgUrlSlug,
+    registerTerminal,
+    restoreEpoch,
+    storeId,
+    storeUrlSlug,
+  ]);
+  const providedBootstrapStatus =
+    gatePosUntilReady && context ? bootstrapStatus : "ready";
+  if (!context || !orgUrlSlug || !storeUrlSlug) {
+    return (
+      <SharedDemoRegisterBootstrapContext.Provider
+        value={providedBootstrapStatus}
+      >
+        {children}
+      </SharedDemoRegisterBootstrapContext.Provider>
+    );
+  }
   const routes = getSharedDemoRoutes(orgUrlSlug, storeUrlSlug);
   return (
-    <SharedDemoStatusBar
-      area={getSharedDemoArea(location.pathname)}
-      homeHref={routes.home}
-      onRestore={restore}
-      restoreStatus={context.restore.status as SharedDemoRestoreStatus}
-    />
+    <SharedDemoRegisterBootstrapContext.Provider
+      value={providedBootstrapStatus}
+    >
+      {showControls ? <SharedDemoStatusBar homeHref={routes.home} /> : null}
+      {children}
+    </SharedDemoRegisterBootstrapContext.Provider>
   );
 }

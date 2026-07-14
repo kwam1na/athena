@@ -7,13 +7,13 @@ export function SharedDemoRestrictedSurface({ homeHref }: { homeHref: string }) 
       className="mx-auto my-layout-xl w-full max-w-2xl border-y border-border py-layout-xl"
     >
       <p className="text-xs font-semibold uppercase tracking-[0.2em] text-signal">
-        Shared demo boundary
+        Demo boundary
       </p>
       <h1
         className="mt-layout-sm font-display text-3xl font-light"
         id="shared-demo-restricted-title"
       >
-        This area is not available in the shared demo.
+        This area is not available in the demo.
       </h1>
       <p className="mt-layout-md max-w-xl leading-7 text-muted-foreground">
         Identity, permissions, configuration, exports, and destructive

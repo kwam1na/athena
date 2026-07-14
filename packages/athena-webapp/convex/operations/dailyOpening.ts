@@ -117,6 +117,7 @@ type StartStoreDayArgs = {
   automationDecisionReason?: string;
   automationPolicyVersion?: string;
   automationRunId?: Id<"automationRun">;
+  terminalSyncReviewHandling?: "manager_review";
   endAt?: number;
   notes?: string;
   operatingDate: string;
@@ -909,7 +910,7 @@ export async function resolveSharedDemoOpeningActorWithCtx(
     return userError({
       code: "authorization_failed",
       message:
-        "The shared demo owner is unavailable. Restore the demo and try again.",
+        "The demo owner is unavailable. Restore the demo and try again.",
     });
   }
 
@@ -1115,6 +1116,7 @@ export async function startStoreDayWithCtx(
 
   const routeOpeningReviewToManager =
     snapshot.blockers.length > 0 ||
+    args.terminalSyncReviewHandling === "manager_review" ||
     (args.actorType === "automation" &&
       args.automationBlockerHandling === "manager_review");
 

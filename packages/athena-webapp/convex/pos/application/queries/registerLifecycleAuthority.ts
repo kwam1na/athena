@@ -46,6 +46,7 @@ export type RegisterLifecycleAuthorityCursor = {
 };
 
 export type RegisterLifecycleAuthorityResult = {
+  bootstrap?: RegisterLifecycleAuthorityBootstrap;
   candidateCount: number;
   maximumDocumentReads: number;
   results: Array<{
@@ -57,6 +58,21 @@ export type RegisterLifecycleAuthorityResult = {
     localRegisterSessionId: string;
     mappingAuthorityRevision: number;
   }>;
+};
+
+export type RegisterLifecycleAuthorityBootstrap = {
+  authorityCursor: RegisterLifecycleAuthorityCursor;
+  classification: "sale_usable";
+  cloudRegisterSessionId: string;
+  cloudStatus: "active" | "open";
+  expectedCash: number;
+  lifecycleRevision: number;
+  localRegisterSessionId: string;
+  mappingAuthorityRevision: number;
+  openedAt: number;
+  openingFloat: number;
+  registerNumber?: string;
+  staffProfileId?: Id<"staffProfile">;
 };
 
 export async function getRegisterLifecycleAuthorityAcknowledgement(
@@ -126,6 +142,13 @@ export async function getRegisterLifecycleAuthority(
   repository: RegisterLifecycleAuthorityRepository =
     createRegisterLifecycleAuthorityRepository(ctx),
 ): Promise<RegisterLifecycleAuthorityResult> {
+  const bootstrap =
+    args.candidates.length === 0
+      ? await getTerminalRegisterBootstrap(repository, {
+          storeId: args.storeId,
+          terminal: args.terminal,
+        })
+      : undefined;
   const results = await Promise.all(
     args.candidates.map((candidate) =>
       classifyVersionedCandidate(repository, {
@@ -137,6 +160,7 @@ export async function getRegisterLifecycleAuthority(
   );
 
   return {
+    ...(bootstrap ? { bootstrap } : {}),
     candidateCount: args.candidates.length,
     maximumDocumentReads: maximumDocumentReads(args.candidates.length),
     results,
@@ -181,7 +205,63 @@ function maximumDocumentReads(candidateCount: number) {
   // candidate. Versioned subjects read authority + session. Legacy subjects
   // return no authority document, then read mapping + session. Ambiguous
   // legacy mappings stop after the second mapping row.
-  return 1 + candidateCount * 2;
+  return 1 + (candidateCount === 0 ? 2 : candidateCount * 2);
+}
+
+async function getTerminalRegisterBootstrap(
+  repository: RegisterLifecycleAuthorityRepository,
+  input: {
+    storeId: Id<"store">;
+    terminal: Doc<"posTerminal">;
+  },
+): Promise<RegisterLifecycleAuthorityBootstrap | undefined> {
+  const sessions = (
+    await Promise.all(
+      (["active", "open"] as const).map((status) =>
+        repository.listSaleUsableRegisterSessions({
+          status,
+          storeId: input.storeId,
+          terminalId: input.terminal._id,
+        }),
+      ),
+    )
+  )
+    .flat()
+    .filter(
+      (session) =>
+        session.storeId === input.storeId &&
+        session.terminalId === input.terminal._id &&
+        isRegisterNumberCompatible(input.terminal, session),
+    )
+    .sort((left, right) => right._creationTime - left._creationTime);
+  const session = sessions[0];
+  if (!session || !isPosUsableRegisterSessionStatus(session.status)) {
+    return undefined;
+  }
+  const lifecycleRevision = normalizeRevision(
+    session.lifecycleAuthorityRevision,
+  );
+  return {
+    authorityCursor: {
+      lifecycleRevision,
+      mappingAuthorityRevision: 0,
+    },
+    classification: "sale_usable",
+    cloudRegisterSessionId: String(session._id),
+    cloudStatus: session.status as "active" | "open",
+    expectedCash: session.expectedCash,
+    lifecycleRevision,
+    localRegisterSessionId: String(session._id),
+    mappingAuthorityRevision: 0,
+    openedAt: session.openedAt,
+    openingFloat: session.openingFloat,
+    ...(session.registerNumber
+      ? { registerNumber: session.registerNumber }
+      : {}),
+    ...(session.openedByStaffProfileId
+      ? { staffProfileId: session.openedByStaffProfileId }
+      : {}),
+  };
 }
 
 async function classifyVersionedCandidate(

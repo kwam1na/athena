@@ -7,18 +7,18 @@ export function getSharedDemoEntryPresentation({
 }) {
   if (!enabled) {
     return {
-      detail: "Open the shared demo from an approved development or QA environment.",
-      title: "The shared demo is not available here.",
+      detail: "Open the demo from an approved development or QA environment.",
+      title: "The demo is not available here.",
     };
   }
   if (failed) {
     return {
       detail: "Athena could not open the synthetic store. Try again in a moment.",
-      title: "The shared demo is not available right now.",
+      title: "The demo is not available right now.",
     };
   }
   return {
     detail: "No account or credentials are needed. This may take a few seconds.",
-    title: "Opening the shared demo store…",
+    title: "Opening the demo store…",
   };
 }

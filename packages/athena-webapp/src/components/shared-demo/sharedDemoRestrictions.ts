@@ -1,16 +1,10 @@
-const RESTRICTED_PATHS = [
-  /\/app-settings(?:\/|$)/,
-  /\/bulk-operations(?:\/|$)/,
-  /\/configuration(?:\/|$)/,
-  /\/members(?:\/|$)/,
-  /\/operations\/(?:approvals|inventory-import)(?:\/|$)/,
-  /\/pos\/(?:settings|terminals)(?:\/|$)/,
-  /\/products\/(?:archived|new)(?:\/|$)/,
-  /\/products\/[^/]+\/edit(?:\/|$)/,
-  /\/promo-codes(?:\/|$)/,
-  /\/settings(?:\/|$)/,
-];
+import {
+  classifyAthenaViewSurface,
+  isSharedDemoSurfaceVisible,
+} from "./sharedDemoSurfaceCatalog";
+
+export const classifySharedDemoSurface = classifyAthenaViewSurface;
 
 export function isSharedDemoRestrictedPath(pathname: string) {
-  return RESTRICTED_PATHS.some((pattern) => pattern.test(pathname));
+  return !isSharedDemoSurfaceVisible(pathname);
 }

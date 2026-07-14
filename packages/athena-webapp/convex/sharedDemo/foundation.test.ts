@@ -26,7 +26,7 @@ describe("shared demo foundation guard", () => {
     { storeId: "demo-store" },
   ])("denies configured foundation IDs without relying on auth", (ids) => {
     expect(() => requireNonDemoFoundationMutation(ids as never, env)).toThrow(
-      "This action is unavailable in the shared demo.",
+      "This action is unavailable in the demo.",
     );
   });
 
@@ -46,7 +46,7 @@ describe("shared demo foundation guard", () => {
   ] as const)("protects the actual signed-out public handler", async (fn, args) => {
     const ctx = { auth: { getUserIdentity: vi.fn().mockResolvedValue(null) }, db: { delete: vi.fn(), insert: vi.fn(), patch: vi.fn() } };
     await expect((fn as any)._handler(ctx, args)).rejects.toThrow(
-      /This action is unavailable in the shared demo|Sign in again to continue/,
+      /This action is unavailable in the demo|Sign in again to continue/,
     );
     expect(ctx.db.delete).not.toHaveBeenCalled();
     expect(ctx.db.insert).not.toHaveBeenCalled();
@@ -76,7 +76,7 @@ describe("shared demo foundation guard", () => {
       },
     };
     await expect((fn as any)._handler(ctx, args)).rejects.toThrow(
-      /This action is unavailable in the shared demo|Sign in again to continue/,
+      /This action is unavailable in the demo|Sign in again to continue/,
     );
     expect(ctx.db.delete).not.toHaveBeenCalled();
     expect(ctx.db.insert).not.toHaveBeenCalled();

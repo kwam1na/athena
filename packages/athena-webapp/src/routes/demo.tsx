@@ -14,7 +14,7 @@ import { getSharedDemoEntryPresentation } from "./demoPresentation";
 
 export const Route = createFileRoute("/demo")({
   component: SharedDemoEntry,
-  head: () => ({ meta: [{ title: "Athena | Shared demo" }] }),
+  head: () => ({ meta: [{ title: "Athena | Demo" }] }),
 });
 
 export function SharedDemoEntry() {
@@ -64,19 +64,19 @@ export function SharedDemoEntry() {
 
   useEffect(() => {
     const organization = organizations?.[0];
-    const store = stores?.[0];
-    if (!user || !organization || !store) return;
+    const store = stores?.find(({ _id }) => _id === demoContext?.storeId);
+    if (!user || !demoContext || !organization || !store) return;
     navigate({
       to: "/$orgUrlSlug/store/$storeUrlSlug/shared-demo",
       params: { orgUrlSlug: organization.slug, storeUrlSlug: store.slug },
       replace: true,
     });
-  }, [navigate, organizations, stores, user]);
+  }, [demoContext, navigate, organizations, stores, user]);
 
   return (
     <main className="flex min-h-svh items-center justify-center bg-app-canvas px-layout-md py-layout-xl">
       <section aria-labelledby="demo-entry-title" className="w-full max-w-lg border-y border-border bg-background py-layout-xl text-center sm:px-layout-lg">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-signal">Athena shared demo</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-signal">Athena demo</p>
         <h1 id="demo-entry-title" className="mt-layout-md font-display text-4xl font-light text-foreground">
           {presentation.title}
         </h1>
@@ -84,7 +84,7 @@ export function SharedDemoEntry() {
           {presentation.detail}
         </p>
         {failed && isSharedDemoUiEnabled ? <Button type="button" size="lg" className="mt-layout-lg" onClick={() => { started.current = true; void enter(); }}>Try again</Button> : null}
-        {!failed && isSharedDemoUiEnabled ? <span className="sr-only" role="status">Signing in to the shared demo</span> : null}
+        {!failed && isSharedDemoUiEnabled ? <span className="sr-only" role="status">Signing in to the demo</span> : null}
       </section>
     </main>
   );

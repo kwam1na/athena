@@ -10,7 +10,12 @@ import {
   requireOrganizationMemberRoleWithCtx,
 } from "../../lib/athenaUserAuth";
 import { userError } from "../../../shared/commandResult";
-import { requireSharedDemoStoreCapabilityIfApplicable } from "../../sharedDemo/actor";
+import {
+  getSharedDemoActorWithCtx,
+  requireSharedDemoStoreCapabilityIfApplicable,
+} from "../../sharedDemo/actor";
+import type { SharedDemoCapability } from "../../sharedDemo/policy";
+import { requireReadySharedDemoWriteWithCtx } from "../../sharedDemo/restore";
 import { ingestLocalEventsWithCtx } from "../application/sync/ingestLocalEvents";
 import { hashPosTerminalSyncSecret } from "../application/sync/terminalSyncSecret";
 import { posLocalSyncMappingKindValidator } from "../../schemas/pos/posLocalSyncMapping";
@@ -18,9 +23,7 @@ import {
   posLocalSyncConflictStatusValidator,
   posLocalSyncConflictTypeValidator,
 } from "../../schemas/pos/posLocalSyncConflict";
-import {
-  posLocalSyncEventStatusValidator,
-} from "../../schemas/pos/posLocalSyncEvent";
+import { posLocalSyncEventStatusValidator } from "../../schemas/pos/posLocalSyncEvent";
 import { posLocalSyncUploadEventValidator } from "../../schemas/pos/posLocalSyncContractValidators";
 import {
   posRegisterSessionActivityCategoryValidator,
@@ -94,6 +97,25 @@ const MAX_LOCAL_SYNC_EVENTS_PER_REQUEST = 250;
 const MAX_PENDING_CHECKOUT_DEFINITIONS_PER_REQUEST = 50;
 const MAX_REGISTER_SESSION_ACTIVITY_PER_REQUEST = 250;
 
+export function sharedDemoCapabilityForSyncEvent(
+  eventType: Doc<"posLocalSyncEvent">["eventType"],
+): SharedDemoCapability {
+  switch (eventType) {
+    case "register_opened":
+    case "register_closed":
+    case "register_reopened":
+      return "cash.control.write";
+    case "store_day_started":
+      return "daily_operations.write";
+    case "pending_checkout_item_defined":
+    case "sale_completed":
+    case "sale_cleared":
+      return "pos.sale.complete";
+    case "expense_recorded":
+      return "expense.manage";
+  }
+}
+
 const registerSessionActivityUploadValidator = v.object({
   localEventId: v.string(),
   sequence: v.number(),
@@ -142,6 +164,7 @@ export const ingestLocalEvents = mutation({
     storeId: v.id("store"),
     terminalId: v.id("posTerminal"),
     syncSecretHash: v.string(),
+    expectedDemoEpoch: v.optional(v.number()),
     submittedAt: v.optional(v.number()),
     events: v.array(posLocalSyncUploadEventValidator),
   },
@@ -157,9 +180,7 @@ export const ingestLocalEvents = mutation({
     const pendingDefinitionCount = args.events.filter(
       (event) => event.eventType === "pending_checkout_item_defined",
     ).length;
-    if (
-      pendingDefinitionCount > MAX_PENDING_CHECKOUT_DEFINITIONS_PER_REQUEST
-    ) {
+    if (pendingDefinitionCount > MAX_PENDING_CHECKOUT_DEFINITIONS_PER_REQUEST) {
       return userError({
         code: "validation_failed",
         message: `Sync uploads can include at most ${MAX_PENDING_CHECKOUT_DEFINITIONS_PER_REQUEST} pending checkout items.`,
@@ -175,16 +196,27 @@ export const ingestLocalEvents = mutation({
     }
 
     let athenaUser;
+    let demoActor: Awaited<ReturnType<typeof getSharedDemoActorWithCtx>> = null;
     try {
-      const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(
-        ctx,
-        "pos.sale.complete",
-        args.storeId,
-      );
-      athenaUser = await requireAuthenticatedAthenaUserWithCtx(
-        ctx,
-        demoActor ? { sharedDemoCapability: "pos.sale.complete" } : undefined,
-      );
+      demoActor = await getSharedDemoActorWithCtx(ctx);
+      if (demoActor) {
+        const capabilities = new Set(
+          args.events.map((event) =>
+            sharedDemoCapabilityForSyncEvent(event.eventType),
+          ),
+        );
+        for (const capability of capabilities) {
+          await requireSharedDemoStoreCapabilityIfApplicable(
+            ctx,
+            capability,
+            args.storeId,
+          );
+        }
+        athenaUser = await ctx.db.get("athenaUser", demoActor.athenaUserId);
+        if (!athenaUser) throw new Error("Sign in again to continue.");
+      } else {
+        athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+      }
       await requireOrganizationMemberRoleWithCtx(ctx, {
         allowedRoles: ["full_admin", "pos_only"],
         failureMessage: "You do not have access to sync this POS terminal.",
@@ -196,6 +228,27 @@ export const ingestLocalEvents = mutation({
         code: "authorization_failed",
         message: "You do not have access to sync this POS terminal.",
       });
+    }
+    if (demoActor) {
+      if (args.expectedDemoEpoch === undefined) {
+        return userError({
+          code: "precondition_failed",
+          message: "The demo register is refreshing. Try again shortly.",
+          retryable: true,
+        });
+      }
+      try {
+        await requireReadySharedDemoWriteWithCtx(ctx, {
+          expectedEpoch: args.expectedDemoEpoch,
+          storeId: args.storeId,
+        });
+      } catch {
+        return userError({
+          code: "precondition_failed",
+          message: "The demo register is refreshing. Try again shortly.",
+          retryable: true,
+        });
+      }
     }
     const terminal = await ctx.db.get("posTerminal", args.terminalId);
     const submittedSyncSecretHash = await hashPosTerminalSyncSecret(
@@ -319,6 +372,7 @@ export const ingestRegisterSessionActivity = mutation({
     storeId: v.id("store"),
     terminalId: v.id("posTerminal"),
     syncSecretHash: v.string(),
+    expectedDemoEpoch: v.optional(v.number()),
     localRegisterSessionId: v.string(),
     registerNumber: v.optional(v.string()),
     reportedThroughSequence: v.number(),
@@ -344,16 +398,20 @@ export const ingestRegisterSessionActivity = mutation({
     }
 
     let athenaUser;
+    let demoActor: Awaited<ReturnType<typeof getSharedDemoActorWithCtx>> = null;
     try {
-      const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(
-        ctx,
-        "cash.control.write",
-        args.storeId,
-      );
-      athenaUser = await requireAuthenticatedAthenaUserWithCtx(
-        ctx,
-        demoActor ? { sharedDemoCapability: "cash.control.write" } : undefined,
-      );
+      demoActor = await getSharedDemoActorWithCtx(ctx);
+      if (demoActor) {
+        await requireSharedDemoStoreCapabilityIfApplicable(
+          ctx,
+          "cash.control.write",
+          args.storeId,
+        );
+        athenaUser = await ctx.db.get("athenaUser", demoActor.athenaUserId);
+        if (!athenaUser) throw new Error("Sign in again to continue.");
+      } else {
+        athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+      }
       await requireOrganizationMemberRoleWithCtx(ctx, {
         allowedRoles: ["full_admin", "pos_only"],
         failureMessage: "You do not have access to sync this POS terminal.",
@@ -365,6 +423,28 @@ export const ingestRegisterSessionActivity = mutation({
         code: "authorization_failed",
         message: "You do not have access to sync this POS terminal.",
       });
+    }
+
+    if (demoActor) {
+      if (args.expectedDemoEpoch === undefined) {
+        return userError({
+          code: "precondition_failed",
+          message: "The demo register is refreshing. Try again shortly.",
+          retryable: true,
+        });
+      }
+      try {
+        await requireReadySharedDemoWriteWithCtx(ctx, {
+          expectedEpoch: args.expectedDemoEpoch,
+          storeId: args.storeId,
+        });
+      } catch {
+        return userError({
+          code: "precondition_failed",
+          message: "The demo register is refreshing. Try again shortly.",
+          retryable: true,
+        });
+      }
     }
 
     const terminal = await ctx.db.get("posTerminal", args.terminalId);

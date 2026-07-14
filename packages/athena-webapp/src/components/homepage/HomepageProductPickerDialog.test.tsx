@@ -147,6 +147,60 @@ function PickerHarness() {
 }
 
 describe("HomepageProductPickerDialog", () => {
+  it("title-cases collection options", () => {
+    render(
+      <HomepageProductPickerDialog
+        categories={[{ _id: "category-groceries", name: "gROCERIES" }] as Category[]}
+        currency="GHS"
+        description="Select highlighted content"
+        onOpenChange={vi.fn()}
+        onSelectCategory={vi.fn()}
+        onSelectSubcategory={vi.fn()}
+        open
+        products={products}
+        searchId="homepage-picker-collections-title-case-test"
+        selectLabel="Feature product"
+        showCollections
+        subcategories={[
+          {
+            _id: "subcategory-dairy",
+            categoryId: "category-groceries",
+            name: "dAiRY",
+          },
+        ] as Subcategory[]}
+        title="Add highlighted content"
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Groceries" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Dairy" })).toBeInTheDocument();
+  });
+
+  it("keeps product rows browseable while disabling placement changes", async () => {
+    const onSelectSku = vi.fn();
+
+    render(
+      <HomepageProductPickerDialog
+        currency="GHS"
+        description="Select a SKU"
+        disabled
+        onOpenChange={vi.fn()}
+        onSelectSku={onSelectSku}
+        open
+        products={products}
+        searchId="homepage-picker-read-only-test"
+        selectLabel="Add SKU"
+        title="Add best seller"
+      />,
+    );
+
+    const row = screen.getByText("Lace Front Wig").closest("button");
+
+    expect(row).toBeDisabled();
+    await userEvent.click(row!);
+    expect(onSelectSku).not.toHaveBeenCalled();
+  });
+
   it("resets search filters and selection errors after parent-driven close and reopen", async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
 

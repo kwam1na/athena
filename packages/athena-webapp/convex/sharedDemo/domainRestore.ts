@@ -2,10 +2,17 @@ import { v } from "convex/values";
 
 import type { Id } from "../_generated/dataModel";
 import { internalMutation, type MutationCtx } from "../_generated/server";
+import {
+  deleteRegisterSessionWithAuthority,
+  insertRegisterSessionWithAuthority,
+  replaceRegisterSessionWithAuthority,
+} from "../operations/registerSessionAuthorityRevision";
 import { SHARED_DEMO_BASELINE_VERSION } from "./config";
 
 export const SHARED_DEMO_MUTABLE_TABLES = [
-  { domain: "pos", tableName: "posTerminal" },
+  // Device registration is durable POS foundation, not resettable store data.
+  // Keeping it outside this registry prevents an hourly restore from
+  // invalidating a mounted local-first register.
   { domain: "pos", tableName: "posLocalSyncConflict" },
   { domain: "pos", tableName: "posLocalSyncCursor" },
   { domain: "pos", tableName: "posLocalSyncMapping" },
@@ -14,6 +21,7 @@ export const SHARED_DEMO_MUTABLE_TABLES = [
   { domain: "pos", tableName: "posLifecycleJournalCursor" },
   { domain: "pos", tableName: "posRegisterMappingAuthority" },
   { domain: "pos", tableName: "posRegisterAuthorityReplicationStatus" },
+  { domain: "pos", tableName: "posPendingCheckoutItem" },
   { domain: "pos", tableName: "posSessionItem" },
   { domain: "pos", tableName: "posSession" },
   { domain: "pos", tableName: "posTransactionItem" },
@@ -23,19 +31,114 @@ export const SHARED_DEMO_MUTABLE_TABLES = [
   { domain: "inventory", tableName: "productSku" },
   { domain: "inventory", tableName: "productSkuSearch" },
   { domain: "inventory", tableName: "reportingInventoryPosition" },
+  { domain: "inventory", tableName: "reportingInventoryPositionRevision" },
+  { domain: "inventory", tableName: "reportingInventoryEffect" },
+  { domain: "inventory", tableName: "reportingInventoryEffectSourceReference" },
+  { domain: "inventory", tableName: "reportingInventoryDeficitLedger" },
+  { domain: "inventory", tableName: "reportingInventoryDeficitLot" },
+  { domain: "inventory", tableName: "reportingInventoryDeficitResolutionWork" },
+  { domain: "inventory", tableName: "reportingInventoryOccurrenceReplay" },
+  { domain: "inventory", tableName: "reportingInventoryOccurrenceReplayLot" },
+  { domain: "inventory", tableName: "reportingInventoryOccurrenceReplayOutcome" },
+  { domain: "inventory", tableName: "stockAdjustmentBatch" },
+  { domain: "inventory", tableName: "cycleCountDraft" },
+  { domain: "inventory", tableName: "cycleCountDraftLine" },
   { domain: "cash", tableName: "posRegisterSessionActivity" },
   { domain: "cash", tableName: "registerSession" },
   { domain: "orders", tableName: "onlineOrderItem" },
   { domain: "orders", tableName: "onlineOrder" },
+  { domain: "operations", tableName: "approvalRequest" },
+  { domain: "operations", tableName: "approvalProof" },
+  { domain: "operations", tableName: "approvalRequesterChallenge" },
+  { domain: "operations", tableName: "managerElevation" },
+  { domain: "operations", tableName: "operationalWorkItem" },
   { domain: "operations", tableName: "operationalEvent" },
   { domain: "operations", tableName: "dailyOpening" },
+  { domain: "reporting", tableName: "reportingIngress" },
+  { domain: "reporting", tableName: "reportingIngressSourceReference" },
+  { domain: "reporting", tableName: "reportingIngressLine" },
+  { domain: "reporting", tableName: "reportingIngressConflict" },
+  { domain: "reporting", tableName: "reportingFact" },
+  { domain: "reporting", tableName: "reportingFactSourceReference" },
+  { domain: "reporting", tableName: "reportingFactProcessingAttempt" },
+  { domain: "reporting", tableName: "reportingQuarantine" },
+  { domain: "reporting", tableName: "reportingProjectionHealth" },
+  { domain: "reporting", tableName: "reportingReconciliationDiscrepancy" },
+  { domain: "reporting", tableName: "reportingProjectionGeneration" },
+  { domain: "reporting", tableName: "reportingProjectionActivation" },
+  { domain: "reporting", tableName: "reportingStoreDayProjection" },
+  { domain: "reporting", tableName: "reportingStoreIntradayProjection" },
+  { domain: "reporting", tableName: "reportingStoreIntradayScheduleState" },
+  { domain: "reporting", tableName: "reportingSkuDayProjection" },
+  { domain: "reporting", tableName: "reportingCurrentValuationProjection" },
+  { domain: "reporting", tableName: "reportingRangeProjection" },
+  { domain: "reporting", tableName: "reportingAttentionProjection" },
+  { domain: "reporting", tableName: "reportingDailyCloseProjection" },
+  { domain: "reporting", tableName: "reportingSkuInsightProjection" },
+  { domain: "reporting", tableName: "reportingMetricCoverage" },
+  { domain: "reporting", tableName: "reportingStorePeriodSummary" },
+  { domain: "reporting", tableName: "reportingSkuPeriodSummary" },
+  { domain: "reporting", tableName: "reportingSkuPeriodClassification" },
+  { domain: "reporting", tableName: "reportingPeriodRollup" },
+  { domain: "reporting", tableName: "reportingPeriodFacet" },
+  { domain: "reporting", tableName: "reportingInventoryExposureSummary" },
+  { domain: "reporting", tableName: "reportingInventoryMovementSummary" },
+  { domain: "reporting", tableName: "reportingInventoryPeriodSummary" },
+  { domain: "reporting", tableName: "reportingDailyCloseTrust" },
+  { domain: "reporting", tableName: "reportingReadCursorContext" },
+  { domain: "reporting", tableName: "reportingWorkspaceMaterializationEpoch" },
+  { domain: "reporting", tableName: "reportingWorkspaceReadModelActivation" },
+  { domain: "reporting", tableName: "reportingReadBundle" },
+  { domain: "reporting", tableName: "reportingReadBundleActivation" },
+  { domain: "reporting", tableName: "reportingProjectionEvidence" },
+  { domain: "reporting", tableName: "reportingSkuEvidence" },
   { domain: "staff", tableName: "staffProfile" },
+  { domain: "staff", tableName: "staffCredential" },
   { domain: "staff", tableName: "staffMessage" },
 ] as const;
 const RESTORE_BATCH_LIMIT = 500;
+const REPORTING_STORE_INDEXES: Record<string, string> = {
+  reportingAttentionProjection: "by_storeId_scope_primaryReason",
+  reportingCurrentValuationProjection: "by_storeId_productSkuId",
+  reportingDailyCloseProjection:
+    "by_storeId_operatingDate_acceptedCloseVersion",
+  reportingMetricCoverage: "by_storeId_metric_sourceDomain",
+  reportingProjectionActivation:
+    "by_storeId_projectionKind_activatedAt",
+  reportingProjectionEvidence: "by_storeId_factId",
+  reportingProjectionGeneration: "by_storeId_projectionKind_status",
+  reportingRangeProjection: "by_storeId_rangeStartDate_rangeEndDate",
+  reportingReadBundle: "by_storeId_createdAt",
+  reportingReadBundleActivation: "by_storeId_activatedAt",
+  reportingReadCursorContext: "by_storeId_athenaUserId_expiresAt",
+  reportingSkuDayProjection: "by_storeId_productSkuId_operatingDate",
+  reportingSkuEvidence: "by_storeId_productSkuId_recognitionAt_identityKey",
+  reportingStoreDayProjection: "by_storeId_operatingDate_metric",
+  reportingStoreIntradayProjection:
+    "by_storeId_operatingDate_checkpointAt",
+  reportingWorkspaceReadModelActivation:
+    "by_storeId_projectionKind_activatedAt",
+};
+
+const REPORTING_GENERATION_INDEXES: Record<string, string> = {
+  reportingDailyCloseTrust: "by_generationId_operatingDate",
+  reportingInventoryExposureSummary: "by_generationId_productSkuId",
+  reportingInventoryMovementSummary:
+    "by_generationId_periodKey_productSkuId",
+  reportingInventoryPeriodSummary: "by_generationId_periodKey",
+  reportingPeriodFacet: "by_generationId_periodKey_facet_value",
+  reportingPeriodRollup:
+    "by_generationId_periodKey_dimension_dimensionId",
+  reportingSkuInsightProjection: "by_generationId_productSkuId",
+  reportingSkuPeriodClassification: "by_gen_period_class_sku",
+  reportingSkuPeriodSummary:
+    "by_generationId_periodKey_productSkuId",
+  reportingStoreIntradayScheduleState: "by_generationId_operatingDate",
+  reportingStorePeriodSummary: "by_generationId_periodKey",
+};
 
 export function requireBoundedBatch<T>(rows: T[], tableName: string) {
-  if (rows.length > RESTORE_BATCH_LIMIT) throw new Error(`Shared demo restore batch required for ${tableName}.`);
+  if (rows.length > RESTORE_BATCH_LIMIT) throw new Error(`Demo restore batch required for ${tableName}.`);
   return rows;
 }
 
@@ -45,7 +148,7 @@ export function requireCurrentBaselineDocuments<T extends { baselineVersion: num
   baselineVersion = SHARED_DEMO_BASELINE_VERSION,
 ) {
   if (rows.some((row) => row.baselineVersion !== baselineVersion)) {
-    throw new Error(`Shared demo baseline version mismatch for ${tableName}.`);
+    throw new Error(`Demo baseline version mismatch for ${tableName}.`);
   }
   return rows;
 }
@@ -66,14 +169,24 @@ export function planDomainRestore(args: {
   const untouched = args.current.filter((row) => row.storeId !== args.storeId);
   const baselineIds = new Set(args.baseline.map((row) => row._id));
   const currentIds = new Set(scoped.map((row) => row._id));
-  if (args.baseline.some((row) => !currentIds.has(row._id))) {
-    throw new Error("Protected shared demo baseline row is missing.");
-  }
   return {
+    missing: args.baseline.filter((row) => !currentIds.has(row._id)),
     remove: scoped.filter((row) => !baselineIds.has(row._id)).map((row) => row._id),
     replace: args.baseline,
     untouched,
   };
+}
+
+export function remapDocumentIds(
+  value: unknown,
+  documentIds: ReadonlyMap<string, string>,
+): unknown {
+  if (typeof value === "string") return documentIds.get(value) ?? value;
+  if (Array.isArray(value)) return value.map((item) => remapDocumentIds(item, documentIds));
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value).map(([key, item]) => [key, remapDocumentIds(item, documentIds)]),
+  );
 }
 
 function withoutSystemFields(row: Record<string, unknown>) {
@@ -84,6 +197,48 @@ function withoutSystemFields(row: Record<string, unknown>) {
 // This is intentionally the sole dynamic-table adapter. Its table names are
 // frozen by SHARED_DEMO_MUTABLE_TABLES and validated by the schema union.
 async function listStoreRows(ctx: any, tableName: string, storeId: Id<"store">) {
+  const reportingStoreIndex = REPORTING_STORE_INDEXES[tableName];
+  if (reportingStoreIndex) {
+    return requireBoundedBatch(
+      await ctx.db
+        .query(tableName)
+        .withIndex(reportingStoreIndex, (q: any) => q.eq("storeId", storeId))
+        .take(RESTORE_BATCH_LIMIT + 1),
+      tableName,
+    );
+  }
+  const reportingGenerationIndex = REPORTING_GENERATION_INDEXES[tableName];
+  if (
+    reportingGenerationIndex ||
+    tableName === "reportingWorkspaceMaterializationEpoch"
+  ) {
+    const generations = await ctx.db
+      .query("reportingProjectionGeneration")
+      .withIndex("by_storeId_projectionKind_status", (q: any) =>
+        q.eq("storeId", storeId),
+      )
+      .take(RESTORE_BATCH_LIMIT + 1);
+    requireBoundedBatch(generations, "reportingProjectionGeneration");
+    const indexName =
+      reportingGenerationIndex ??
+      "by_sourceGenerationId_sourceWatermark";
+    const parentField = reportingGenerationIndex
+      ? "generationId"
+      : "sourceGenerationId";
+    const rows = (
+      await Promise.all(
+        generations.map((generation: any) =>
+          ctx.db
+            .query(tableName)
+            .withIndex(indexName, (q: any) =>
+              q.eq(parentField, generation._id),
+            )
+            .take(RESTORE_BATCH_LIMIT + 1),
+        ),
+      )
+    ).flat();
+    return requireBoundedBatch(rows, tableName);
+  }
   if (tableName === "posTransactionItem") {
     const parents = await ctx.db.query("posTransaction").withIndex("by_storeId", (q: any) => q.eq("storeId", storeId)).take(500);
     return requireBoundedBatch((await Promise.all(parents.map((parent: any) => ctx.db.query("posTransactionItem").withIndex("by_transactionId", (q: any) => q.eq("transactionId", parent._id)).take(RESTORE_BATCH_LIMIT + 1)))).flat(), tableName);
@@ -96,12 +251,115 @@ async function listStoreRows(ctx: any, tableName: string, storeId: Id<"store">) 
     const parents = await ctx.db.query("posSession").withIndex("by_storeId", (q: any) => q.eq("storeId", storeId)).take(500);
     return requireBoundedBatch((await Promise.all(parents.map((parent: any) => ctx.db.query("posSessionItem").withIndex("by_sessionId", (q: any) => q.eq("sessionId", parent._id)).take(RESTORE_BATCH_LIMIT + 1)))).flat(), tableName);
   }
+  if (tableName === "cycleCountDraftLine") {
+    const parents = requireBoundedBatch(
+      await ctx.db
+        .query("cycleCountDraft")
+        .withIndex("by_storeId_status_scope_owner", (q: any) =>
+          q.eq("storeId", storeId),
+        )
+        .take(RESTORE_BATCH_LIMIT + 1),
+      "cycleCountDraft",
+    );
+    return requireBoundedBatch(
+      (
+        await Promise.all(
+          parents.map((parent: any) =>
+            ctx.db
+              .query("cycleCountDraftLine")
+              .withIndex("by_draftId", (q: any) => q.eq("draftId", parent._id))
+              .take(RESTORE_BATCH_LIMIT + 1),
+          ),
+        )
+      ).flat(),
+      tableName,
+    );
+  }
+  if (
+    tableName === "reportingInventoryDeficitLedger" ||
+    tableName === "reportingInventoryDeficitLot"
+  ) {
+    const positions = requireBoundedBatch(
+      await ctx.db
+        .query("reportingInventoryPosition")
+        .withIndex("by_storeId_productSkuId", (q: any) =>
+          q.eq("storeId", storeId),
+        )
+        .take(RESTORE_BATCH_LIMIT + 1),
+      "reportingInventoryPosition",
+    );
+    const indexName =
+      tableName === "reportingInventoryDeficitLedger"
+        ? "by_positionId_status"
+        : "by_positionId";
+    return requireBoundedBatch(
+      (
+        await Promise.all(
+          positions.map((position: any) =>
+            ctx.db
+              .query(tableName)
+              .withIndex(indexName, (q: any) =>
+                q.eq("positionId", position._id),
+              )
+              .take(RESTORE_BATCH_LIMIT + 1),
+          ),
+        )
+      ).flat(),
+      tableName,
+    );
+  }
+  if (
+    tableName === "reportingInventoryOccurrenceReplayLot" ||
+    tableName === "reportingInventoryOccurrenceReplayOutcome"
+  ) {
+    const replays = requireBoundedBatch(
+      await ctx.db
+        .query("reportingInventoryOccurrenceReplay")
+        .withIndex("by_storeId_status_updatedAt", (q: any) =>
+          q.eq("storeId", storeId),
+        )
+        .take(RESTORE_BATCH_LIMIT + 1),
+      "reportingInventoryOccurrenceReplay",
+    );
+    const indexName =
+      tableName === "reportingInventoryOccurrenceReplayLot"
+        ? "by_replayId_status_occurredAt_outboundEffectId"
+        : "by_replayId_status";
+    return requireBoundedBatch(
+      (
+        await Promise.all(
+          replays.map((replay: any) =>
+            ctx.db
+              .query(tableName)
+              .withIndex(indexName, (q: any) => q.eq("replayId", replay._id))
+              .take(RESTORE_BATCH_LIMIT + 1),
+          ),
+        )
+      ).flat(),
+      tableName,
+    );
+  }
   if (tableName === "staffMessage") {
     return requireBoundedBatch(await ctx.db.query("staffMessage").withIndex("by_storeId_createdAt", (q: any) => q.eq("storeId", storeId)).take(RESTORE_BATCH_LIMIT + 1), tableName);
   }
   const query = ctx.db.query(tableName);
   if (tableName === "posRegisterSessionActivity") {
     return requireBoundedBatch(await query.withIndex("by_store_registerSession_sequence", (q: any) => q.eq("storeId", storeId)).take(RESTORE_BATCH_LIMIT + 1), tableName);
+  }
+  if (tableName === "posPendingCheckoutItem") {
+    return requireBoundedBatch(await query.withIndex("by_storeId_status_updatedAt", (q: any) => q.eq("storeId", storeId)).take(RESTORE_BATCH_LIMIT + 1), tableName);
+  }
+  if (tableName === "cycleCountDraft") {
+    return requireBoundedBatch(await query.withIndex("by_storeId_status_scope_owner", (q: any) => q.eq("storeId", storeId)).take(RESTORE_BATCH_LIMIT + 1), tableName);
+  }
+  if (tableName === "staffCredential") {
+    return requireBoundedBatch(await query.withIndex("by_storeId_status", (q: any) => q.eq("storeId", storeId)).take(RESTORE_BATCH_LIMIT + 1), tableName);
+  }
+  if (
+    tableName === "reportingInventoryDeficitResolutionWork" ||
+    tableName === "reportingInventoryOccurrenceReplay"
+  ) {
+    return requireBoundedBatch(await query.withIndex("by_storeId_status_updatedAt", (q: any) => q.eq("storeId", storeId)).take(RESTORE_BATCH_LIMIT + 1), tableName);
   }
   if (tableName === "dailyOpening") {
     return requireBoundedBatch(await query.withIndex("by_storeId_operatingDate", (q: any) => q.eq("storeId", storeId)).take(RESTORE_BATCH_LIMIT + 1), tableName);
@@ -124,14 +382,63 @@ async function listStoreRows(ctx: any, tableName: string, storeId: Id<"store">) 
   if (tableName === "reportingInventoryPosition") {
     return requireBoundedBatch(await query.withIndex("by_storeId_productSkuId", (q: any) => q.eq("storeId", storeId)).take(RESTORE_BATCH_LIMIT + 1), tableName);
   }
+  if (tableName === "reportingIngress") {
+    return requireBoundedBatch(await query.withIndex("by_storeId_status_acceptedAt", (q: any) => q.eq("storeId", storeId)).take(RESTORE_BATCH_LIMIT + 1), tableName);
+  }
+  if (
+    tableName === "reportingIngressSourceReference" ||
+    tableName === "reportingFactSourceReference" ||
+    tableName === "reportingInventoryEffectSourceReference"
+  ) {
+    return requireBoundedBatch(await query.withIndex("by_storeId_sourceType_sourceId", (q: any) => q.eq("storeId", storeId)).take(RESTORE_BATCH_LIMIT + 1), tableName);
+  }
+  if (tableName === "reportingIngressLine") {
+    return requireBoundedBatch(await query.withIndex("by_storeId_productSkuId_createdAt", (q: any) => q.eq("storeId", storeId)).take(RESTORE_BATCH_LIMIT + 1), tableName);
+  }
+  if (
+    tableName === "reportingIngressConflict" ||
+    tableName === "reportingQuarantine" ||
+    tableName === "reportingReconciliationDiscrepancy"
+  ) {
+    return requireBoundedBatch(await query.withIndex("by_storeId_status_detectedAt", (q: any) => q.eq("storeId", storeId)).take(RESTORE_BATCH_LIMIT + 1), tableName);
+  }
+  if (tableName === "reportingFactProcessingAttempt") {
+    return requireBoundedBatch(await query.withIndex("by_storeId_outcome_startedAt", (q: any) => q.eq("storeId", storeId)).take(RESTORE_BATCH_LIMIT + 1), tableName);
+  }
+  if (tableName === "reportingProjectionHealth") {
+    return requireBoundedBatch(await query.withIndex("by_storeId_sourceDomain_projectionKind", (q: any) => q.eq("storeId", storeId)).take(RESTORE_BATCH_LIMIT + 1), tableName);
+  }
+  if (tableName === "reportingInventoryEffect") {
+    return requireBoundedBatch(await query.withIndex("by_storeId_productSkuId_occurrenceAt", (q: any) => q.eq("storeId", storeId)).take(RESTORE_BATCH_LIMIT + 1), tableName);
+  }
+  if (tableName === "approvalProof" || tableName === "approvalRequesterChallenge") {
+    return requireBoundedBatch(await query.withIndex("by_storeId_action_subject", (q: any) => q.eq("storeId", storeId)).take(RESTORE_BATCH_LIMIT + 1), tableName);
+  }
+  if (tableName === "managerElevation") {
+    return requireBoundedBatch(await query.withIndex("by_storeId_terminalId_accountId", (q: any) => q.eq("storeId", storeId)).take(RESTORE_BATCH_LIMIT + 1), tableName);
+  }
   return requireBoundedBatch(await query.withIndex("by_storeId", (q: any) => q.eq("storeId", storeId)).take(RESTORE_BATCH_LIMIT + 1), tableName);
+}
+
+export async function countMutableDemoStoreRowsWithCtx(
+  ctx: Pick<MutationCtx, "db">,
+  storeId: Id<"store">,
+) {
+  const counts: Record<string, number> = {};
+  for (const entry of SHARED_DEMO_MUTABLE_TABLES) {
+    counts[entry.tableName] = (
+      await listStoreRows(ctx, entry.tableName, storeId)
+    ).length;
+  }
+  return counts;
 }
 
 export async function captureBaselineDocumentsWithCtx(
   ctx: MutationCtx,
   args: { storeId: Id<"store"> },
 ) {
-    const prior = await ctx.db.query("sharedDemoBaselineDocument").withIndex("by_storeId", (q) => q.eq("storeId", args.storeId)).take(500);
+    const prior = await ctx.db.query("sharedDemoBaselineDocument").withIndex("by_storeId", (q) => q.eq("storeId", args.storeId)).take(2_001);
+    if (prior.length > 2_000) throw new Error("Demo baseline document capacity exceeded.");
     for (const row of prior) await ctx.db.delete("sharedDemoBaselineDocument", row._id);
     let captured = 0;
     for (const entry of SHARED_DEMO_MUTABLE_TABLES) {
@@ -163,6 +470,11 @@ export async function restoreMutableDemoStoreRowsWithCtx(
   let restored = 0;
   const actualCounts: Record<string, number> = {};
   const expectedCounts: Record<string, number> = {};
+  const tablePlans: Array<{
+    baseline: BaselineDocumentRow[];
+    current: any[];
+    entry: (typeof SHARED_DEMO_MUTABLE_TABLES)[number];
+  }> = [];
   for (const entry of SHARED_DEMO_MUTABLE_TABLES) {
     if (options?.skipTables?.includes(entry.tableName)) continue;
     const [current, baselineRows]: [any[], BaselineDocumentRow[]] = await Promise.all([
@@ -174,20 +486,60 @@ export async function restoreMutableDemoStoreRowsWithCtx(
       entry.tableName,
       options?.baselineVersion,
     );
-    const currentIds = new Set(current.map((row: any) => String(row._id)));
-    if (baseline.some((row: any) => !currentIds.has(row.documentId))) {
-      throw new Error("Protected shared demo baseline row is missing.");
+    tablePlans.push({ baseline, current, entry });
+  }
+
+  const documentIds = new Map<string, string>();
+  for (const { baseline, current } of tablePlans) {
+    const currentIds = new Set(current.map((row) => String(row._id)));
+    for (const snapshot of baseline) {
+      if (currentIds.has(snapshot.documentId)) {
+        documentIds.set(snapshot.documentId, snapshot.documentId);
+      }
     }
+  }
+  for (const { baseline, entry } of tablePlans) {
+    for (const snapshot of baseline) {
+      if (documentIds.has(snapshot.documentId)) continue;
+      const recreatedId = entry.tableName === "registerSession"
+        ? await insertRegisterSessionWithAuthority(ctx, snapshot.document as any)
+        : await ctx.db.insert(entry.tableName, snapshot.document);
+      documentIds.set(snapshot.documentId, String(recreatedId));
+    }
+  }
+
+  for (const { baseline, current, entry } of tablePlans) {
     const baselineIds = new Set(baseline.map((row: any) => row.documentId));
     for (const row of current) {
-      if (!baselineIds.has(String(row._id))) await ctx.db.delete(entry.tableName, row._id);
+      if (!baselineIds.has(String(row._id))) {
+        if (entry.tableName === "registerSession") {
+          await deleteRegisterSessionWithAuthority(ctx, row._id);
+        } else {
+          await ctx.db.delete(entry.tableName, row._id);
+        }
+      }
     }
     for (const snapshot of baseline) {
-      await ctx.db.replace(entry.tableName, snapshot.documentId, snapshot.document);
+      const documentId = documentIds.get(snapshot.documentId);
+      if (!documentId) throw new Error(`Demo baseline document could not be recreated for ${entry.tableName}.`);
+      const document = remapDocumentIds(snapshot.document, documentIds);
+      if (entry.tableName === "registerSession") {
+        await replaceRegisterSessionWithAuthority(
+          ctx,
+          documentId as Id<"registerSession">,
+          document as any,
+        );
+      } else {
+        await ctx.db.replace(entry.tableName, documentId, document);
+      }
+      await ctx.db.patch("sharedDemoBaselineDocument", (snapshot as any)._id, {
+        document,
+        documentId,
+      });
       restored += 1;
     }
     const verified = await listStoreRows(ctx, entry.tableName, storeId);
-    if (verified.length !== baseline.length) throw new Error(`Shared demo restore verification failed for ${entry.tableName}.`);
+    if (verified.length !== baseline.length) throw new Error(`Demo restore verification failed for ${entry.tableName}.`);
     actualCounts[entry.domain] = (actualCounts[entry.domain] ?? 0) + verified.length;
     expectedCounts[entry.domain] = (expectedCounts[entry.domain] ?? 0) + baseline.length;
   }

@@ -169,7 +169,7 @@ export function BannerMessageEditor({ storeId }: BannerMessageEditorProps) {
         </span>
       </div>
 
-      <div className="grid gap-layout-md md:grid-cols-2">
+      <div className="grid gap-x-layout-md gap-y-layout-xl md:grid-cols-2">
         <div className="space-y-layout-xs">
           <Label htmlFor="heading">Heading (optional)</Label>
           <Input
@@ -198,9 +198,10 @@ export function BannerMessageEditor({ storeId }: BannerMessageEditorProps) {
           </p>
         </div>
 
-        <div className="space-y-layout-xs md:col-span-2">
+        <div className="flex flex-col items-start gap-layout-xs md:col-span-2">
           <Label htmlFor="countdown">Countdown (optional)</Label>
           <DateTimePicker
+            className="w-fit max-w-full"
             value={countdownDate}
             onChange={handleCountdownChange}
             placeholder="Pick countdown end date and time"
@@ -216,7 +217,7 @@ export function BannerMessageEditor({ storeId }: BannerMessageEditorProps) {
         </div>
       </div>
 
-      <div className="rounded-md border border-border bg-background p-layout-md">
+      <div className="w-fit max-w-full rounded-md border border-border bg-background p-layout-md">
         <div className="flex items-center justify-between gap-layout-md">
           <div className="space-y-0.5">
             <Label htmlFor="active">Active</Label>

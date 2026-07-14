@@ -15,6 +15,11 @@ export type RegisterLifecycleAuthorityRepository = {
     storeId: Id<"store">;
     terminalId: Id<"posTerminal">;
   }): Promise<Doc<"posLocalSyncMapping">[]>;
+  listSaleUsableRegisterSessions(input: {
+    status: "active" | "open";
+    storeId: Id<"store">;
+    terminalId: Id<"posTerminal">;
+  }): Promise<Doc<"registerSession">[]>;
 };
 
 export function createRegisterLifecycleAuthorityRepository(
@@ -54,6 +59,19 @@ export function createRegisterLifecycleAuthorityRepository(
       if (!registerSessionId) return null;
 
       return ctx.db.get("registerSession", registerSessionId);
+    },
+
+    async listSaleUsableRegisterSessions(input) {
+      return ctx.db
+        .query("registerSession")
+        .withIndex("by_storeId_status_terminalId", (q) =>
+          q
+            .eq("storeId", input.storeId)
+            .eq("status", input.status)
+            .eq("terminalId", input.terminalId),
+        )
+        .order("desc")
+        .take(1);
     },
   };
 }

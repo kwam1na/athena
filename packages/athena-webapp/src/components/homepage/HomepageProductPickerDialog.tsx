@@ -49,6 +49,7 @@ type HomepageProductPickerDialogProps = {
   categories?: Category[];
   currency: string;
   description: string;
+  disabled?: boolean;
   emptyLabel?: string;
   onOpenChange: (open: boolean) => void;
   onSelectCategory?: (category: Category) => Promise<void> | void;
@@ -71,6 +72,7 @@ export function HomepageProductPickerDialog({
   categories = [],
   currency,
   description,
+  disabled = false,
   emptyLabel = "No products match the current search.",
   onOpenChange,
   onSelectCategory,
@@ -273,7 +275,7 @@ export function HomepageProductPickerDialog({
     key: string,
     callback: (() => Promise<void> | void) | undefined,
   ) => {
-    if (!callback || isSelecting) return;
+    if (disabled || !callback || isSelecting) return;
 
     setSelectionError(null);
     setPendingSelectionKey(key);
@@ -406,11 +408,11 @@ export function HomepageProductPickerDialog({
                         }
                         className={cn(
                           "grid w-full grid-cols-[4.5rem_minmax(0,1fr)] gap-layout-md px-layout-md py-layout-sm text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset md:grid-cols-[4.5rem_minmax(0,1fr)_auto]",
-                          productIsUnavailable || isSelecting
+                          productIsUnavailable || isSelecting || disabled
                             ? "cursor-not-allowed opacity-60"
                             : "hover:bg-surface",
                         )}
-                        disabled={productIsUnavailable || isSelecting}
+                        disabled={productIsUnavailable || isSelecting || disabled}
                         key={product._id}
                         onClick={() =>
                           handleSelection(selectionKey, () =>
@@ -501,11 +503,11 @@ export function HomepageProductPickerDialog({
                         }
                         className={cn(
                           "grid w-full grid-cols-[4.5rem_minmax(0,1fr)] gap-layout-md px-layout-md py-layout-sm text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset md:grid-cols-[4.5rem_minmax(0,1fr)_auto]",
-                          skuIsUnavailable || isSelecting
+                          skuIsUnavailable || isSelecting || disabled
                             ? "cursor-not-allowed opacity-60"
                             : "hover:bg-surface",
                         )}
-                        disabled={skuIsUnavailable || isSelecting}
+                        disabled={skuIsUnavailable || isSelecting || disabled}
                         key={sku._id}
                         onClick={() =>
                           handleSelection(selectionKey, () =>
@@ -576,8 +578,9 @@ export function HomepageProductPickerDialog({
             <div>
               <p className="text-sm font-medium text-foreground">Selection</p>
               <p className="mt-layout-xs text-xs leading-5 text-muted-foreground">
-                Search by product name, SKU, barcode, color, size, or category,
-                then select the row to add it.
+                {disabled
+                  ? "Browse by product name, SKU, barcode, color, size, or category. Saving is unavailable in the demo."
+                  : "Search by product name, SKU, barcode, color, size, or category, then select the row to add it."}
               </p>
             </div>
 
@@ -588,6 +591,7 @@ export function HomepageProductPickerDialog({
                   icon={<Tag className="h-4 w-4" />}
                   items={categories}
                   label="Categories"
+                  disabled={disabled}
                   onSelect={(category) =>
                     handleSelection(`category-${category._id}`, () =>
                       onSelectCategory?.(category),
@@ -602,6 +606,7 @@ export function HomepageProductPickerDialog({
                   icon={<Tag className="h-4 w-4" />}
                   items={subcategories}
                   label="Subcategories"
+                  disabled={disabled}
                   onSelect={(subcategory) =>
                     handleSelection(`subcategory-${subcategory._id}`, () =>
                       onSelectSubcategory?.(subcategory),
@@ -612,8 +617,9 @@ export function HomepageProductPickerDialog({
               </div>
             ) : (
               <div className="rounded-md border border-border bg-surface px-layout-md py-layout-sm text-xs leading-5 text-muted-foreground">
-                This picker only changes the storefront homepage placement. It
-                does not edit catalog stock or product details.
+                {disabled
+                  ? "This picker is available for browsing in the demo."
+                  : "This picker only changes the storefront homepage placement. It does not edit catalog stock or product details."}
               </div>
             )}
 
@@ -630,6 +636,7 @@ export function HomepageProductPickerDialog({
 }
 
 function CollectionPicker<TItem extends Category | Subcategory>({
+  disabled = false,
   getSelectionKey,
   icon,
   items,
@@ -637,6 +644,7 @@ function CollectionPicker<TItem extends Category | Subcategory>({
   onSelect,
   pendingSelectionKey,
 }: {
+  disabled?: boolean;
   getSelectionKey: (item: TItem) => string;
   icon: ReactNode;
   items: TItem[];
@@ -663,12 +671,12 @@ function CollectionPicker<TItem extends Category | Subcategory>({
             return (
               <button
                 className="w-full rounded-md border border-border bg-surface px-layout-sm py-layout-xs text-left text-sm text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={pendingSelectionKey !== null}
+                disabled={disabled || pendingSelectionKey !== null}
                 key={item._id}
                 onClick={() => onSelect(item)}
                 type="button"
               >
-                {isPending ? "Saving..." : item.name}
+                {isPending ? "Saving..." : capitalizeWords(item.name)}
               </button>
             );
           })

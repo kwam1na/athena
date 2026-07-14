@@ -60,7 +60,7 @@ export const postStaffMessage = mutation({
     const { demoActor, store, user } = await requireStoreMember(ctx, args.storeId);
     if (demoActor) {
       if (args.expectedDemoRestoreEpoch === undefined) {
-        throw new Error("Refresh the shared demo before posting a staff message.");
+        throw new Error("Refresh the demo before posting a staff message.");
       }
       await requireReadySharedDemoWriteWithCtx(ctx, {
         expectedEpoch: args.expectedDemoRestoreEpoch,

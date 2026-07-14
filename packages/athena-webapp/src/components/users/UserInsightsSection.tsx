@@ -18,6 +18,10 @@ import { api } from "~/convex/_generated/api";
 import { Id } from "~/convex/_generated/dataModel";
 import { capitalizeFirstLetter } from "~/src/lib/utils";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
+import {
+  isSharedDemoUiEnabled,
+  useSharedDemoContext,
+} from "~/src/hooks/useSharedDemoContext";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import {
@@ -44,11 +48,14 @@ export const UserInsightsSection = () => {
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [insightsLoading, setInsightsLoading] = useState(false);
   const { activeStore } = useGetActiveStore();
+  const sharedDemoContext = useSharedDemoContext();
+  const canUseIntelligence =
+    !isSharedDemoUiEnabled || sharedDemoContext === null;
   const { userId } = useParams({ strict: false });
 
   const latestArtifact = useQuery(
     api.intelligence.runs.latestArtifactBySubject,
-    userId && activeStore?._id
+    canUseIntelligence && userId && activeStore?._id
       ? {
           storeId: activeStore._id,
           kind: "user_insights",
@@ -59,7 +66,7 @@ export const UserInsightsSection = () => {
   );
   const runDebug = useQuery(
     api.intelligence.runs.latestRunDebug,
-    userId && activeStore?._id
+    canUseIntelligence && userId && activeStore?._id
       ? {
           storeId: activeStore._id,
           capability: "userInsights",
@@ -70,6 +77,8 @@ export const UserInsightsSection = () => {
   ) as IntelligenceRunDebug | null | undefined;
   const artifactInsights = latestArtifact?.payload as UserInsightsResult | undefined;
   const visibleInsights = artifactInsights ?? null;
+
+  if (!canUseIntelligence) return null;
 
   const handleGenerate = async () => {
     if (!userId || !activeStore?._id) return;

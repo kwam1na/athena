@@ -6,6 +6,9 @@ const authMock = vi.hoisted(() => ({
 const managerElevationMock = vi.hoisted(() => ({
   getActiveManagerElevationWithCtx: vi.fn(),
 }));
+const sharedDemoActorMock = vi.hoisted(() => ({
+  requireSharedDemoStoreReadIfApplicable: vi.fn(),
+}));
 
 vi.mock("@convex-dev/auth/server", () => ({
   getAuthUserId: authMock.getAuthUserId,
@@ -14,6 +17,11 @@ vi.mock("@convex-dev/auth/server", () => ({
 vi.mock("../operations/managerElevations", () => ({
   getActiveManagerElevationWithCtx:
     managerElevationMock.getActiveManagerElevationWithCtx,
+}));
+
+vi.mock("../sharedDemo/actor", () => ({
+  requireSharedDemoStoreReadIfApplicable:
+    sharedDemoActorMock.requireSharedDemoStoreReadIfApplicable,
 }));
 
 import type { Id } from "../_generated/dataModel";
@@ -312,6 +320,10 @@ function createAdminTraceReadCtx(
 describe("workflow trace core and public helpers", () => {
   beforeEach(() => {
     managerElevationMock.getActiveManagerElevationWithCtx.mockReset();
+    sharedDemoActorMock.requireSharedDemoStoreReadIfApplicable.mockReset();
+    sharedDemoActorMock.requireSharedDemoStoreReadIfApplicable.mockResolvedValue(
+      null,
+    );
   });
 
   it("updates existing traces instead of duplicating the same store-scoped trace id", async () => {
@@ -776,6 +788,76 @@ describe("workflow trace core and public helpers", () => {
       storeId,
       terminalId,
     });
+  });
+
+  it("allows the demo actor to view register-session and online-order traces only", async () => {
+    const storeId = "store-a" as Id<"store">;
+    const ctx = createTestCtx();
+    sharedDemoActorMock.requireSharedDemoStoreReadIfApplicable.mockResolvedValue(
+      {
+        athenaUserId: "athena-user-demo",
+        kind: "shared_demo",
+        organizationId: "org-1",
+        storeId,
+      },
+    );
+
+    await createWorkflowTraceWithCtx(ctx as never, {
+      storeId,
+      traceId: "register_session:8a1zs5",
+      workflowType: "register_session",
+      title: "Register session 8A1ZS5",
+      status: "started",
+      health: "healthy",
+      startedAt: 100,
+      primaryLookupType: "register_session_id",
+      primaryLookupValue: "8A1ZS5",
+    });
+    await createWorkflowTraceWithCtx(ctx as never, {
+      storeId,
+      traceId: "online_order:order-42",
+      workflowType: "online_order",
+      title: "Online order 42",
+      status: "started",
+      health: "healthy",
+      startedAt: 100,
+      primaryLookupType: "online_order_id",
+      primaryLookupValue: "order-42",
+    });
+    await createWorkflowTraceWithCtx(ctx as never, {
+      storeId,
+      traceId: "sensitive_workflow:case-42",
+      workflowType: "sensitive_workflow",
+      title: "Sensitive workflow CASE-42",
+      status: "started",
+      health: "healthy",
+      startedAt: 100,
+      primaryLookupType: "case_number",
+      primaryLookupValue: "CASE-42",
+    });
+
+    await expect(
+      getWorkflowTraceViewByIdWithCtx(ctx as never, {
+        storeId,
+        traceId: "register_session:8a1zs5",
+      }),
+    ).resolves.toMatchObject({
+      header: { traceId: "register_session:8a1zs5" },
+    });
+    await expect(
+      getWorkflowTraceViewByIdWithCtx(ctx as never, {
+        storeId,
+        traceId: "online_order:order-42",
+      }),
+    ).resolves.toMatchObject({
+      header: { traceId: "online_order:order-42" },
+    });
+    await expect(
+      getWorkflowTraceViewByIdWithCtx(ctx as never, {
+        storeId,
+        traceId: "sensitive_workflow:case-42",
+      }),
+    ).rejects.toThrow("This action is unavailable in the demo.");
   });
 
   it("routes lookup reads through the same workflow authorizer as direct trace reads", async () => {

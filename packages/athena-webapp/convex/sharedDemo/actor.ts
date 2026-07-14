@@ -31,10 +31,10 @@ export async function getSharedDemoActorWithCtx(
     return null;
   }
   if (!isSharedDemoEnabled(options.environment ?? process.env)) {
-    throw new Error("The shared demo is unavailable in this environment.");
+    throw new Error("The demo is unavailable in this environment.");
   }
   if (principal.admissionExpiresAt <= (options.now ?? Date.now())) {
-    throw new Error("The shared demo session has expired. Open the demo again.");
+    throw new Error("The demo session has expired. Open the demo again.");
   }
 
   return {
@@ -48,7 +48,7 @@ export async function getSharedDemoActorWithCtx(
 
 export async function requireSharedDemoActorWithCtx(ctx: AuthCtx) {
   const actor = await getSharedDemoActorWithCtx(ctx);
-  if (!actor) throw new Error("The shared demo session has expired. Open the demo again.");
+  if (!actor) throw new Error("The demo session has expired. Open the demo again.");
   return actor;
 }
 
@@ -73,7 +73,7 @@ export async function requireSharedDemoStoreCapabilityIfApplicable(
 ) {
   const actor = await requireSharedDemoCapabilityIfApplicable(ctx, capability);
   if (actor && actor.storeId !== storeId) {
-    throw new Error("This action is unavailable in the shared demo.");
+    throw new Error("This action is unavailable in the demo.");
   }
   return actor;
 }
@@ -86,16 +86,19 @@ export async function requireSharedDemoStoreReadIfApplicable(
 ) {
   const actor = await getSharedDemoActorWithCtx(ctx);
   if (actor && actor.storeId !== storeId) {
-    throw new Error("This action is unavailable in the shared demo.");
+    throw new Error("This action is unavailable in the demo.");
   }
   return actor;
 }
 
 const sharedDemoCapabilityValidator = v.union(
+  v.literal("approvals.manage"),
   v.literal("pos.sale.complete"), v.literal("inventory.adjust"),
-  v.literal("cash.control.write"), v.literal("orders.fulfill"),
+  v.literal("cash.control.write"), v.literal("catalog.quick_add"),
+  v.literal("orders.fulfill"),
   v.literal("staff.communication.write"), v.literal("daily_operations.write"),
-  v.literal("reports.read"), v.literal("identity.manage"),
+  v.literal("reports.read"), v.literal("staff.authenticate"),
+  v.literal("identity.manage"),
   v.literal("permissions.manage"), v.literal("billing.manage"),
   v.literal("integrations.manage"), v.literal("exports.generate"),
   v.literal("payments.refund"), v.literal("administration.destructive"),
@@ -117,7 +120,7 @@ export const requireAuthenticatedNonDemoEffect = internalQuery({
     const authUserId = await getAuthUserId(ctx);
     if (!authUserId) throw new Error("Sign in again to continue.");
     const actor = await getSharedDemoActorWithCtx(ctx);
-    if (actor) throw new Error("This action is unavailable in the shared demo.");
+    if (actor) throw new Error("This action is unavailable in the demo.");
     return null;
   },
 });
@@ -127,7 +130,7 @@ export const denySharedDemoEffectIfApplicable = internalQuery({
   returns: v.null(),
   handler: async (ctx) => {
     const actor = await getSharedDemoActorWithCtx(ctx);
-    if (actor) throw new Error("This action is unavailable in the shared demo.");
+    if (actor) throw new Error("This action is unavailable in the demo.");
     return null;
   },
 });

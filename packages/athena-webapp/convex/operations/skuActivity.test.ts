@@ -1,9 +1,21 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
+import * as athenaUserAuth from "../lib/athenaUserAuth";
+import * as sharedDemoActor from "../sharedDemo/actor";
+
+vi.mock("../lib/athenaUserAuth", () => ({
+  requireAuthenticatedAthenaUserWithCtx: vi.fn(),
+  requireOrganizationMemberRoleWithCtx: vi.fn(),
+}));
+vi.mock("../sharedDemo/actor", () => ({
+  requireSharedDemoStoreReadIfApplicable: vi.fn(),
+}));
+
 import {
   buildSkuActivityEvent,
   getSkuActivityForProductSkuWithCtx,
+  getUntrustedSkuSaleEvidence,
   getUntrustedSkuSaleEvidenceWithCtx,
   recordSkuActivityEventWithCtx,
 } from "./skuActivity";
@@ -21,6 +33,52 @@ type TableName =
   | "posTransactionAdjustmentLine"
   | "posTransactionItem"
   | "skuActivityEvent";
+
+function getHandler<TArgs, TResult>(definition: unknown) {
+  return (definition as { _handler: (ctx: unknown, args: TArgs) => TResult })
+    ._handler;
+}
+
+describe("SKU activity public read access", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(athenaUserAuth.requireAuthenticatedAthenaUserWithCtx).mockResolvedValue({
+      _id: "user-1",
+    } as never);
+    vi.mocked(athenaUserAuth.requireOrganizationMemberRoleWithCtx).mockResolvedValue({} as never);
+    vi.mocked(sharedDemoActor.requireSharedDemoStoreReadIfApplicable).mockResolvedValue(null);
+  });
+
+  it("allows the shared demo to read untrusted SKU sale evidence without normal-user auth", async () => {
+    vi.mocked(sharedDemoActor.requireSharedDemoStoreReadIfApplicable).mockResolvedValueOnce({
+      athenaUserId: "demo-user-1",
+      kind: "shared_demo",
+      storeId: "store-1",
+    } as never);
+    const { ctx } = createIndexedDb({});
+    const db = ctx.db as unknown as Record<string, unknown>;
+    const demoCtx = {
+      db: {
+        ...db,
+        get: async (tableOrId: string, id?: string) =>
+          tableOrId === "store" && id === "store-1"
+            ? { _id: "store-1", organizationId: "org-1" }
+            : (db.get as (tableOrId: string, id?: string) => unknown)(tableOrId, id),
+      },
+    } as unknown as QueryCtx;
+
+    await getHandler(getUntrustedSkuSaleEvidence)(demoCtx, {
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(
+      sharedDemoActor.requireSharedDemoStoreReadIfApplicable,
+    ).toHaveBeenCalledWith(demoCtx, "store-1");
+    expect(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).not.toHaveBeenCalled();
+  });
+});
 
 type Tables = Record<TableName, Map<string, Record<string, unknown>>>;
 

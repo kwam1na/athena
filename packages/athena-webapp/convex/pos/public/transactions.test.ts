@@ -1828,6 +1828,44 @@ describe("adjustTransactionItems public mutation", () => {
 });
 
 describe("getTransactionById public query authorization", () => {
+  it("shared-demo-transaction-detail uses only the transaction store capability", async () => {
+    vi.mocked(transactionQueries.getTransaction).mockResolvedValue({
+      _id: "txn-1",
+      storeId: "store-1",
+    } as never);
+    vi.mocked(transactionQueries.getTransactionById).mockResolvedValue({
+      _id: "txn-1",
+      receiptDeliveryHistory: [],
+    } as never);
+    vi.mocked(
+      sharedDemoActor.requireSharedDemoStoreCapabilityIfApplicable,
+    ).mockResolvedValue({ storeId: "store-1" } as never);
+    vi.mocked(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).mockResolvedValue({ _id: "demo-user-1" } as never);
+
+    const ctx = {
+      db: {
+        get: vi.fn().mockResolvedValue({
+          _id: "store-1",
+          organizationId: "org-1",
+        }),
+      },
+    };
+
+    await expect(
+      getHandler(getTransactionById)(ctx, { transactionId: "txn-1" }),
+    ).resolves.toEqual(expect.objectContaining({ _id: "txn-1" }));
+    expect(
+      sharedDemoActor.requireSharedDemoStoreCapabilityIfApplicable,
+    ).toHaveBeenCalledWith(ctx, "pos.sale.complete", "store-1");
+    expect(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).toHaveBeenCalledWith(ctx, {
+      sharedDemoCapability: "pos.sale.complete",
+    });
+  });
+
   it("requires a same-organization POS role before returning receipt delivery metadata", async () => {
     vi.mocked(transactionQueries.getTransaction).mockResolvedValue({
       _id: "txn-1",

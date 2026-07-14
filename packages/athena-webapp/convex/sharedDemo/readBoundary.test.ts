@@ -20,6 +20,11 @@ import {
   newOrder,
 } from "../storeFront/onlineOrder";
 import { requireSharedDemoStoreReadIfApplicable } from "./actor";
+import {
+  getEodAutoCompletePolicy,
+  getOpeningAutoStartPolicy,
+  getRegisterCloseoutApprovalPolicy,
+} from "../operations/dailyOperationsAutomation";
 
 const invoke = (fn: unknown, ctx: unknown, args: unknown) =>
   (fn as { _handler: (ctx: unknown, args: unknown) => Promise<unknown> })
@@ -41,11 +46,14 @@ describe("shared demo read store boundary", () => {
     ],
     [newOrder, { storeId: "other-store" }],
     [getOrderMetrics, { storeId: "other-store", timeRange: "day" }],
+    [getOpeningAutoStartPolicy, { storeId: "other-store" }],
+    [getEodAutoCompletePolicy, { storeId: "other-store" }],
+    [getRegisterCloseoutApprovalPolicy, { storeId: "other-store" }],
   ] as const)(
     "rejects a store-scoped read before its domain query runs",
     async (fn, args) => {
       const denial = new Error(
-        "This action is unavailable in the shared demo.",
+        "This action is unavailable in the demo.",
       );
       vi.mocked(requireSharedDemoStoreReadIfApplicable).mockRejectedValueOnce(
         denial,
@@ -64,7 +72,7 @@ describe("shared demo read store boundary", () => {
 
   it("authorizes an order's store before reading its child data", async () => {
     const denial = new Error(
-      "This action is unavailable in the shared demo.",
+      "This action is unavailable in the demo.",
     );
     vi.mocked(requireSharedDemoStoreReadIfApplicable).mockRejectedValueOnce(
       denial,
