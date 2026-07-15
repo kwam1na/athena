@@ -159,28 +159,27 @@ export async function migratePosAmountTableWithCtx(
 
   let migrated = 0;
   let skipped = 0;
-  let remaining = 0;
+  let legacyCandidates = 0;
 
   for (const row of rows) {
-    if (row.pesewasMigratedAt !== undefined) {
+    const alreadyMigrated = row.pesewasMigratedAt !== undefined;
+    const isLegacy = row._creationTime < args.cutoffTimestamp;
+    if (alreadyMigrated || !isLegacy) {
+      // Already pesewas (marked) or created after the pesewas-writer deploy.
       skipped++;
       continue;
     }
-    if (row._creationTime >= args.cutoffTimestamp) {
-      // Created after the pesewas-writer deploy: already minor units, not legacy.
-      skipped++;
-      continue;
-    }
+    legacyCandidates++;
     const patch = pesewasPatchForRow(args.table, row, now);
     await ctx.db.patch(args.table, row._id as never, patch as never);
     migrated++;
   }
 
-  remaining = rows.filter(
-    (row) =>
-      row.pesewasMigratedAt === undefined &&
-      row._creationTime < args.cutoffTimestamp,
-  ).length;
+  // Derive `remaining` from loop counters, NOT from the post-collect() snapshot:
+  // in the Convex runtime `ctx.db.patch` does not mutate the objects `collect()`
+  // returned, so re-filtering that array would count just-migrated rows as still
+  // pending and never let a completing run report `complete: true`.
+  const remaining = legacyCandidates - migrated;
 
   const run = await upsertMigrationRun(ctx, {
     table: args.table,

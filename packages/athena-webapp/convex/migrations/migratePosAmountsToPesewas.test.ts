@@ -22,7 +22,10 @@ function createCtx(seed: Record<string, Row[]>) {
   };
 
   const buildQuery = (name: string) => {
-    let rows = [...getRows(name)];
+    // Return snapshot COPIES, faithful to Convex: `ctx.db.patch` writes to the DB
+    // and does not mutate the objects a prior `collect()` returned. This is what
+    // catches a completion counter that reads the stale post-collect snapshot.
+    let rows = getRows(name).map((row) => ({ ...row }));
     const api = {
       withIndex(_index: string, fn?: (q: unknown) => unknown) {
         if (fn) {
@@ -153,7 +156,7 @@ describe("migratePosAmountTableWithCtx (U10)", () => {
     expect(tables.get("posTransaction")![0].total).toBe(1000);
   });
 
-  it("skips rows created after the cutoff (already pesewas) and reports incomplete while legacy rows remain", async () => {
+  it("skips rows created after the cutoff (already pesewas) and converts only legacy rows", async () => {
     const { ctx, tables } = createCtx({
       posTransaction: [
         { _id: "legacy", _creationTime: CUTOFF - 1, total: 5 },

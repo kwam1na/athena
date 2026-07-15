@@ -4856,29 +4856,44 @@ describe("completeTransaction re-pricing (U7)", () => {
     );
   });
 
-  it("records the server-derived basis for a matched line and mirrors it into reporting", async () => {
-    seedDirect({ price: 10 });
+  it("records the server-derived basis (not the client echo) for a round-equal matched line and mirrors it into reporting", async () => {
+    // Basis 10.004 and client 10.001 are equal after rounding to 2dp (both 10.00),
+    // so the line matches — but the server must store the BASIS (10.004), not the
+    // client value, so a fractional cent can't slip into storage.
+    seedDirect({ price: 10.004 });
     const result = await completeTransaction(
       { runMutation: vi.fn() } as never,
-      { ...directArgs },
+      {
+        ...directArgs,
+        items: [
+          {
+            skuId: "sku-1" as Id<"productSku">,
+            quantity: 1,
+            price: 10.001,
+            name: "Sneaker",
+            sku: "SKU-1",
+          },
+        ],
+      },
     );
 
     expect(result.kind).toBe("ok");
-    // No override audit for a non-deviating sale.
+    // No override audit for a non-deviating (round-equal) sale.
     expect(recordOperationalEventWithCtx).not.toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ eventType: "pos_transaction_price_override" }),
     );
+    // Stored line price is the server basis, not the client echo.
     expect(createPosTransactionItem).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ unitPrice: 10, totalPrice: 10 }),
+      expect.objectContaining({ unitPrice: 10.004, totalPrice: 10.004 }),
     );
     // Reporting *Minor fields reflect the server-derived price.
     expect(appendReportingIngressWithCtx).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         lines: expect.arrayContaining([
-          expect.objectContaining({ unitPriceMinor: 10 }),
+          expect.objectContaining({ unitPriceMinor: 10.004 }),
         ]),
       }),
     );
