@@ -21,7 +21,7 @@ tags:
   - sync
   - convergence
   - event-sourcing
-delivery_diff_fingerprint: 3d96d5e5419f730de433939c959be80cc1695cfbd8ec68b7f6dd754cfb5f0150
+delivery_diff_fingerprint: 5dfcd8ea8933490bfd8f7ba46a3f87930192f53b193670f47ee50fd8c056190e
 ---
 
 # POS local-first liveness and convergence hardening
