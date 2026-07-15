@@ -1859,12 +1859,24 @@ async function validateSaleCompletedInputs(
   const store = await repository.getStore(args.storeId);
   const terminal = await repository.getTerminal(args.terminalId);
 
-  if ((payload.serviceLines?.length ?? 0) > 0 && !store?.organizationId) {
+  // The store organization must be resolved BEFORE the first sale write. The
+  // concrete repository inserts the posTransaction row and only then resolves
+  // the organization (throwing post-write when absent), which would abort the
+  // whole batch and wedge the register stream. Validating it here makes the
+  // projector total for this data-shaped failure: zero writes, a conflict, and
+  // an advancing cursor. This applies to every sale, not only service sales.
+  if (!store?.organizationId) {
     const conflict = await createConflict(repository, args, {
       conflictType: "permission",
-      summary: "Store reference is missing for synced service sale.",
+      summary:
+        (payload.serviceLines?.length ?? 0) > 0
+          ? "Store reference is missing for synced service sale."
+          : "Store organization is missing for synced sale.",
       details: {
         localTransactionId: payload.localTransactionId,
+        ...((payload.serviceLines?.length ?? 0) > 0
+          ? {}
+          : { reason: "store_organization_unresolved" }),
       },
     });
     return conflictResult(conflict);

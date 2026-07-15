@@ -4204,6 +4204,162 @@ describe("ingestLocalEventsWithCtx", () => {
   });
 });
 
+describe("projection totality for data-shaped failures (U3)", () => {
+  it("turns a post-write mapping collision into a zero-write conflict instead of wedging the batch", async () => {
+    const repository = createFakeSyncRepository();
+    const service = createLocalSyncIngestionService({
+      repository,
+      projectionRepository: repository,
+      now: () => 100,
+    });
+
+    const collidingEvent = buildSaleCompletedEvent({ sequence: 2 });
+    // A distinct sale (own transaction id, own pos session) that reuses an
+    // earlier sale's local receipt number. The receipt mapping is created
+    // AFTER the sale session + transaction rows in projectSaleCompleted, so
+    // before this fix the projector wrote those rows and then threw on the
+    // mapping collision — aborting the whole mutation and wedging the stream.
+    (collidingEvent.payload as { localReceiptNumber: string }).localReceiptNumber =
+      "LR-001";
+
+    const result = await service.ingestBatch(
+      buildBatch({
+        events: [buildSaleCompletedEvent({ sequence: 1 }), collidingEvent],
+      }),
+    );
+
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") throw new Error("Expected ok result");
+
+    // The good event commits; the poison event becomes a conflict.
+    expect(result.data.accepted).toEqual([
+      expect.objectContaining({ sequence: 1, status: "projected" }),
+      expect.objectContaining({ sequence: 2, status: "conflicted" }),
+    ]);
+    // Critical invariant: zero committed rows for the poison event — only the
+    // first sale's transaction/session/payment rows exist.
+    expect(repository.createdTransactions).toHaveLength(1);
+    expect(repository.createdPaymentAllocations).toHaveLength(1);
+    expect(
+      repository.createdRegisterSessions.length +
+        repository.mappings.filter(
+          (mapping) => mapping.localEventId === collidingEvent.localEventId,
+        ).length,
+    ).toBe(0);
+    // A needs_review conflict was recorded for the poison event.
+    expect(
+      repository.conflicts.filter(
+        (conflict) =>
+          conflict.localEventId === collidingEvent.localEventId &&
+          conflict.status === "needs_review",
+      ),
+    ).toHaveLength(1);
+    // Liveness: the cursor advanced past the poison event.
+    expect(result.data.syncCursor.acceptedThroughSequence).toBe(2);
+  });
+
+  it("keeps surrounding events committing when a middle event hits a mapping collision", async () => {
+    const repository = createFakeSyncRepository();
+    const service = createLocalSyncIngestionService({
+      repository,
+      projectionRepository: repository,
+      now: () => 100,
+    });
+
+    const collidingEvent = buildSaleCompletedEvent({ sequence: 2 });
+    (collidingEvent.payload as { localReceiptNumber: string }).localReceiptNumber =
+      "LR-001";
+
+    const result = await service.ingestBatch(
+      buildBatch({
+        events: [
+          buildSaleCompletedEvent({ sequence: 1 }),
+          collidingEvent,
+          buildSaleCompletedEvent({ sequence: 3 }),
+        ],
+      }),
+    );
+
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") throw new Error("Expected ok result");
+    expect(result.data.accepted).toEqual([
+      expect.objectContaining({ sequence: 1, status: "projected" }),
+      expect.objectContaining({ sequence: 2, status: "conflicted" }),
+      expect.objectContaining({ sequence: 3, status: "projected" }),
+    ]);
+    expect(repository.createdTransactions).toHaveLength(2);
+    expect(result.data.syncCursor.acceptedThroughSequence).toBe(3);
+  });
+
+  it("turns an unresolved sale organization into a zero-write conflict instead of wedging", async () => {
+    // The concrete createTransaction inserts the posTransaction row and only
+    // then resolves the store organization, throwing post-write when it is
+    // missing — which aborts the whole mutation and wedges the register stream.
+    const repository = createFakeSyncRepository({ storeOrganizationId: undefined });
+    const service = createLocalSyncIngestionService({
+      repository,
+      projectionRepository: repository,
+      now: () => 100,
+    });
+
+    const result = await service.ingestBatch(
+      buildBatch({ events: [buildSaleCompletedEvent({ sequence: 1 })] }),
+    );
+
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") throw new Error("Expected ok result");
+    expect(result.data.accepted).toEqual([
+      expect.objectContaining({ sequence: 1, status: "conflicted" }),
+    ]);
+    // Zero committed rows for the poison event; the org check ran before any write.
+    expect(repository.createdTransactions).toHaveLength(0);
+    expect(repository.createdRegisterSessions).toHaveLength(0);
+    expect(
+      repository.conflicts.filter(
+        (conflict) => conflict.status === "needs_review",
+      ),
+    ).toHaveLength(1);
+    expect(result.data.syncCursor.acceptedThroughSequence).toBe(1);
+  });
+
+  it("still aborts the whole mutation on a genuine infra error (no false conflict)", async () => {
+    const repository = createFakeSyncRepository();
+    const originalCreateTransaction = repository.createTransaction.bind(repository);
+    let calls = 0;
+    repository.createTransaction = (async (input) => {
+      calls += 1;
+      if (calls === 2) {
+        throw new Error("Injected datastore failure.");
+      }
+      return originalCreateTransaction(input);
+    }) as typeof repository.createTransaction;
+
+    const service = createLocalSyncIngestionService({
+      repository,
+      projectionRepository: repository,
+      now: () => 100,
+    });
+
+    await expect(
+      service.ingestBatch(
+        buildBatch({
+          events: [
+            buildSaleCompletedEvent({ sequence: 1 }),
+            buildSaleCompletedEvent({ sequence: 2 }),
+          ],
+        }),
+      ),
+    ).rejects.toThrow("Injected datastore failure.");
+
+    // A genuine infra failure must not be laundered into a needs_review conflict.
+    expect(
+      repository.conflicts.filter(
+        (conflict) => conflict.localEventId === "event-sale-completed-2",
+      ),
+    ).toHaveLength(0);
+  });
+});
+
 function buildBatch(
   overrides: Partial<PosLocalSyncBatchInput> & {
     events: PosLocalSyncEventInput[];
@@ -4637,6 +4793,7 @@ function createFakeSyncRepository(
     invalidCloudIds: Set<string>;
     registerSessionsWithCloseoutReview: Set<string>;
     validCloudIds: Set<string>;
+    storeOrganizationId: string | undefined;
     validateLocalStaffProof: SyncProjectionRepository["validateLocalStaffProof"];
   }> = {},
 ): LocalSyncRepository & {
@@ -4699,6 +4856,10 @@ function createFakeSyncRepository(
     status: "active",
     linkedUserId: "athena-user-1",
   };
+  const storeOrganizationId =
+    "storeOrganizationId" in overrides
+      ? overrides.storeOrganizationId
+      : "org-1";
   const defaultExistingRegisterSession = {
     _id: "register-session-1",
     closeoutRecords: [],
@@ -4783,7 +4944,9 @@ function createFakeSyncRepository(
       return storeId === "store-1"
         ? ({
             _id: "store-1",
-            organizationId: "org-1",
+            ...(storeOrganizationId
+              ? { organizationId: storeOrganizationId }
+              : {}),
           } as never)
         : null;
     },
@@ -4967,6 +5130,33 @@ function createFakeSyncRepository(
       );
     },
     async createMapping(input) {
+      // Mirror createPosLocalSyncMappingWithAuthority collision semantics so
+      // the in-memory repository faithfully reproduces the post-write throw
+      // that wedges the batch when two projections claim the same local id.
+      const matches = mappings.filter(
+        (mapping) =>
+          mapping.storeId === input.storeId &&
+          mapping.terminalId === input.terminalId &&
+          mapping.localRegisterSessionId === input.localRegisterSessionId &&
+          mapping.localIdKind === input.localIdKind &&
+          mapping.localId === input.localId,
+      );
+      if (matches.length > 1) {
+        throw new Error("POS local sync mapping is ambiguous.");
+      }
+      const existing = matches[0];
+      if (existing) {
+        if (
+          existing.localEventId === input.localEventId &&
+          existing.cloudTable === input.cloudTable &&
+          existing.cloudId === input.cloudId
+        ) {
+          return existing;
+        }
+        throw new Error(
+          "POS local sync mapping already belongs to another projection.",
+        );
+      }
       const mapping = {
         _creationTime: 100,
         _id: `sync-mapping-${nextId++}`,
@@ -5180,6 +5370,11 @@ function createFakeSyncRepository(
     async createTransaction(input) {
       const id = `transaction-${createdTransactions.length + 1}`;
       createdTransactions.push({ _id: id, ...input });
+      // Mirror the concrete repository: the posTransaction row is inserted and
+      // THEN the organization is resolved, throwing post-write if it is missing.
+      if (!storeOrganizationId) {
+        throw new Error("Offline POS sale organization could not be resolved.");
+      }
       return id as never;
     },
     async createTransactionItem() {
