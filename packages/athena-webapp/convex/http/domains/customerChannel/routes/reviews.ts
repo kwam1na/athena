@@ -180,10 +180,17 @@ reviewRoutes.get("/order-item/:orderItemId", async (c) => {
 reviewRoutes.patch("/:id", async (c) => {
   try {
     const id = c.req.param("id");
+    const userId = getStorefrontUserFromRequest(c);
+
+    if (!userId) {
+      return c.json({ error: "User id missing" }, 401);
+    }
+
     const body = (await c.req.json()) as UpdateReviewRequest;
 
     const review = await c.env.runMutation(api.storeFront.reviews.update, {
       id: id as Id<"review">,
+      requestedByStoreFrontUserId: userId as Id<"storeFrontUser"> | Id<"guest">,
       ...body,
     });
 
@@ -201,9 +208,15 @@ reviewRoutes.patch("/:id", async (c) => {
 reviewRoutes.delete("/:id", async (c) => {
   try {
     const id = c.req.param("id");
+    const userId = getStorefrontUserFromRequest(c);
+
+    if (!userId) {
+      return c.json({ error: "User id missing" }, 401);
+    }
 
     await c.env.runMutation(api.storeFront.reviews.deleteReview, {
       id: id as Id<"review">,
+      requestedByStoreFrontUserId: userId as Id<"storeFrontUser"> | Id<"guest">,
     });
 
     return c.json({ success: true });

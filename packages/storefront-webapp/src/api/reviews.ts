@@ -51,6 +51,7 @@ export async function updateReview(
 ): Promise<Review> {
   const response = await fetch(`${getBaseUrl()}/${id}`, {
     method: "PATCH",
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
     },
@@ -69,6 +70,7 @@ export async function updateReview(
 export async function deleteReview(id: string): Promise<void> {
   const response = await fetch(`${getBaseUrl()}/${id}`, {
     method: "DELETE",
+    credentials: "include",
   });
 
   const res = await response.json();

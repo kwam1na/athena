@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { auth } from "./auth";
+import { resolveAllowedOrigin } from "./http/cors";
 import { HonoWithConvex, HttpRouterWithHono } from "convex-helpers/server/hono";
 import { ActionCtx } from "./_generated/server";
 import {
@@ -48,7 +49,7 @@ app.use(
   "*",
   cors({
     origin: (origin) => {
-      return origin;
+      return resolveAllowedOrigin(origin);
     },
     allowMethods: ["OPTIONS", "GET", "POST", "PUT", "PATCH", "DELETE"],
     credentials: true,

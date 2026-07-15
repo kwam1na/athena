@@ -3,6 +3,7 @@ import { HonoWithConvex } from "convex-helpers/server/hono";
 import { ActionCtx } from "../../../../_generated/server";
 import { api } from "../../../../_generated/api";
 import { Id } from "../../../../_generated/dataModel";
+import { getCookie } from "hono/cookie";
 import { getStorefrontUserFromRequest } from "../../../utils";
 import { isAuthorizedResourceOwner } from "./security";
 
@@ -49,6 +50,19 @@ onlineOrderRoutes.get("/:orderId", async (c) => {
 onlineOrderRoutes.post("/owner", async (c) => {
   try {
     const { currentOwnerId, newOwnerId } = await c.req.json();
+
+    // Only the authenticated user may claim their OWN prior guest session's
+    // orders into their account: the target must be this session's user cookie
+    // and the source must be this session's guest cookie. Without both checks
+    // an attacker could reassign an arbitrary guest's orders to themselves.
+    const authedUserId = getCookie(c, "user_id");
+    const authedGuestId = getCookie(c, "guest_id");
+    if (
+      !isAuthorizedResourceOwner(newOwnerId, authedUserId) ||
+      !isAuthorizedResourceOwner(currentOwnerId, authedGuestId)
+    ) {
+      return c.json({ error: "Forbidden" }, 403);
+    }
 
     const b = await c.env.runMutation(api.storeFront.onlineOrder.updateOwner, {
       currentOwner: currentOwnerId as Id<"guest">,

@@ -1,5 +1,3 @@
-// import { createHmac, timingSafeEqual } from "crypto";
-
 type BagCheckoutItem = {
   productId: string;
   productSku: string;
@@ -95,34 +93,60 @@ export function isDuplicateChargeSuccess(
   return false;
 }
 
-// export function isValidPaystackSignature(
-//   payload: string,
-//   secret: string
-// ): { computedSignature: string };
-// export function isValidPaystackSignature(
-//   payload: string,
-//   secret: string,
-//   signature: string
-// ): boolean;
-// export function isValidPaystackSignature(
-//   payload: string,
-//   secret: string,
-//   signature?: string
-// ): { computedSignature: string } | boolean {
-//   const computedSignature = createHmac("sha512", secret)
-//     .update(payload)
-//     .digest("hex");
+/**
+ * Constant-time comparison of two equal-length hex strings. Avoids leaking
+ * information about how much of a forged signature matched via timing.
+ */
+export function timingSafeEqualHex(a: string, b: string): boolean {
+  if (a.length !== b.length) {
+    return false;
+  }
 
-//   if (signature === undefined) {
-//     return { computedSignature };
-//   }
+  let mismatch = 0;
+  for (let i = 0; i < a.length; i++) {
+    mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
 
-//   if (computedSignature.length !== signature.length) {
-//     return false;
-//   }
+  return mismatch === 0;
+}
 
-//   return timingSafeEqual(
-//     Buffer.from(computedSignature, "utf8"),
-//     Buffer.from(signature, "utf8")
-//   );
-// }
+/**
+ * Compute the Paystack webhook signature (HMAC-SHA512 of the raw request body,
+ * hex-encoded). Uses Web Crypto so it runs in the Convex HTTP action runtime,
+ * which does not expose `node:crypto`.
+ */
+export async function computePaystackSignature(
+  payload: string,
+  secret: string
+): Promise<string> {
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(secret),
+    { name: "HMAC", hash: "SHA-512" },
+    false,
+    ["sign"]
+  );
+
+  const signatureBuffer = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    encoder.encode(payload)
+  );
+
+  return Array.from(new Uint8Array(signatureBuffer))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+/**
+ * Verify a Paystack `x-paystack-signature` header against the raw payload.
+ */
+export async function isValidPaystackSignature(
+  payload: string,
+  secret: string,
+  signature: string
+): Promise<boolean> {
+  const computedSignature = await computePaystackSignature(payload, secret);
+  return timingSafeEqualHex(computedSignature, signature.toLowerCase());
+}

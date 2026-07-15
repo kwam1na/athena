@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="aa1a3021c5e6d37802d8a97254eab7bb278e0df58da817f39f4fbe03b7c93216">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Storefront Phase 0 — HTTP API Hardening — Landed Change Report</title>
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --panel: #ffffff;
+    --ink: #1a1a19;
+    --muted: #5f5f58;
+    --line: #e2e2dc;
+    --accent: #7a1f2b;
+    --ok: #1f6b3b;
+    --warn: #8a5a00;
+    --code-bg: #f2f2ee;
+    --pill-bg: #efeee9;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 32px 20px 96px; }
+  header.doc { border-bottom: 2px solid var(--line); padding-bottom: 20px; margin-bottom: 28px; }
+  .kicker { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); font-weight: 700; }
+  h1 { font-size: 28px; line-height: 1.25; margin: 8px 0 12px; }
+  h2 { font-size: 20px; margin: 40px 0 10px; padding-top: 8px; border-top: 1px solid var(--line); }
+  h3 { font-size: 16px; margin: 24px 0 6px; }
+  p { margin: 10px 0; }
+  .pills { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 4px; }
+  .pill { font-size: 12px; font-weight: 600; background: var(--pill-bg); color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 3px 11px; }
+  .pill.ok { color: var(--ok); border-color: #cfe6d6; background: #eef7f0; }
+  .pill.warn { color: var(--warn); border-color: #ecdcb8; background: #fbf4e3; }
+  .pill.accent { color: var(--accent); border-color: #e6cdd0; background: #f8eef0; }
+  .meta { display: grid; grid-template-columns: 160px 1fr; gap: 4px 16px; font-size: 14px; margin: 18px 0 0; }
+  .meta dt { color: var(--muted); }
+  .meta dd { margin: 0; }
+  .lede { font-size: 17px; color: #333; }
+  code, kbd { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; }
+  code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; overflow-x: auto; font-size: 13px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 14px; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--pill-bg); font-weight: 600; }
+  .callout { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 8px; padding: 12px 16px; margin: 16px 0; }
+  .callout.warn { border-left-color: var(--warn); }
+  .callout.ok { border-left-color: var(--ok); }
+  ul, ol { margin: 10px 0; padding-left: 22px; }
+  li { margin: 4px 0; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 640px) { .grid2 { grid-template-columns: 1fr; } .meta { grid-template-columns: 1fr; } }
+  .quiz { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 20px; margin-top: 16px; }
+  .q { margin: 0 0 18px; padding-bottom: 16px; border-bottom: 1px dashed var(--line); }
+  .q:last-of-type { border-bottom: none; }
+  .q p.stem { font-weight: 600; margin: 0 0 8px; }
+  .q label { display: block; padding: 6px 10px; border: 1px solid var(--line); border-radius: 7px; margin: 5px 0; cursor: pointer; background: #fff; }
+  .q label:hover { border-color: #c9c9c1; }
+  .q .exp { display: none; font-size: 14px; color: var(--muted); margin-top: 8px; padding: 8px 10px; background: var(--code-bg); border-radius: 7px; }
+  .graded .q .exp { display: block; }
+  .graded .q label.correct { border-color: #9bcfaa; background: #eef7f0; }
+  .graded .q label.wrong { border-color: #e2b3b3; background: #f9ecec; }
+  .quizbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+  button { font: inherit; font-weight: 600; border: 1px solid var(--line); background: #fff; border-radius: 8px; padding: 8px 16px; cursor: pointer; transition: background-color 120ms ease-in-out, border-color 120ms ease-in-out; }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button:active { background: #ececE6; }
+  button.primary:active { background: #611820; }
+  #score { font-weight: 700; }
+  footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+  @media (prefers-reduced-motion: reduce) { button { transition: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="doc">
+  <div class="kicker">Landed Change Report · Delivery Candidate</div>
+  <h1>Storefront Phase 0 — Close HTTP API IDOR/PII &amp; Forged-Webhook Surfaces</h1>
+  <p class="lede">The customer storefront's HTTP API trusted client-supplied IDs, reflected any origin with credentials, and accepted unsigned payment webhooks. This change closes those authorization, cross-site, and webhook-forgery holes — the storefront counterpart to the POS Phase 0/1 hardening already merged.</p>
+  <div class="pills">
+    <span class="pill accent">Status: Delivery candidate (pre-merge)</span>
+    <span class="pill">Linear: V26-953 (advances V26-961, V26-952)</span>
+    <span class="pill ok">Review: 3 lenses — unanimous APPROVE</span>
+    <span class="pill warn">Deploy: pending</span>
+    <span class="pill warn">Root alignment: pending</span>
+  </div>
+  <dl class="meta">
+    <dt>Branch</dt><dd><code>v26-storefront-phase0-http-hardening</code></dd>
+    <dt>Base</dt><dd><code>main</code> @ POS Phase 2 (<code>c0263c05</code>)</dd>
+    <dt>Candidate commit</dt><dd><code>[V26-953] Storefront Phase 0 …</code></dd>
+    <dt>Scope</dt><dd>15 files · ~478/-111 lines · <code>packages/athena-webapp/convex/http</code> + storefront api client</dd>
+    <dt>Diff fingerprint</dt><dd><code>95a13257…14f885</code></dd>
+    <dt>Date</dt><dd>2026-07-15</dd>
+  </dl>
+</header>
+
+<h2>1. Executive summary</h2>
+<p>Every customer-facing HTTP route under <code>packages/athena-webapp/convex/http</code> now derives the acting identity from session cookies and checks resource ownership before reading or mutating. Three structural fixes land together:</p>
+<ul>
+  <li><strong>Authorization (IDOR/PII):</strong> arbitrary-id user reads/updates, order/bag/saved-bag owner reassignment, bag item mutations, review edit/delete, and reward grants are now bound to the authenticated actor.</li>
+  <li><strong>Payments:</strong> Paystack webhook signature verification is restored (HMAC-SHA512 via Web Crypto), so an attacker can no longer forge a paid order.</li>
+  <li><strong>Cross-site:</strong> reflect-any CORS is replaced with a first-party origin allowlist, so a logged-in customer's cookies can't be driven from a third-party page.</li>
+</ul>
+
+<h2>2. Why it mattered</h2>
+<p>The storefront backend issued <code>SameSite=None</code> session cookies and answered with <code>Access-Control-Allow-Credentials: true</code> while reflecting any <code>Origin</code>. Combined with routes that trusted a path/body <code>userId</code>, <code>bagId</code>, or <code>ownerId</code> directly, a customer's PII (name, email, phone, shipping/billing address), orders, cart, reviews, and loyalty points were reachable and tamperable — either cross-origin from any website, or directly by ID. Convex document IDs are not secret (they appear in API responses, and the public product-reviews endpoint returns reviewer IDs), so "unguessable" was never a real defense. Separately, the payment webhook accepted unsigned JSON: a crafted <code>charge.success</code> would place a "paid" order with no money collected.</p>
+
+<h2>3. The mental model</h2>
+<p>Think of each route as a door. Before, the door checked the <em>label on the visitor's clipboard</em> ("I'm here for user X") and let them act on X. Now the door checks <em>who the visitor actually is</em> — the identity in their session cookie — and only lets them act on resources that identity owns. The claim ("merge my guest cart into my account") is the one legitimate cross-identity action, so it requires a <em>double</em> proof: the target is your logged-in cookie <em>and</em> the source is your own guest cookie.</p>
+<div class="callout">
+<strong>One helper, applied everywhere:</strong> <code>isAuthorizedResourceOwner(resourceOwnerId, actorId)</code> — exact match, returns <code>false</code> if either side is null. Ownership fails closed.
+</div>
+
+<h2>4. Before vs. after</h2>
+<div class="grid2">
+<div>
+<h3>Before</h3>
+<ul>
+  <li><code>GET/PUT /users/:userId</code> served/updated any id.</li>
+  <li><code>/owner</code> routes trusted <code>currentOwnerId</code>/<code>newOwnerId</code> from the body.</li>
+  <li>Bag item add/update/delete acted on any <code>bagId</code>/<code>itemId</code>.</li>
+  <li><code>reviews.update</code>/<code>deleteReview</code> had no actor.</li>
+  <li><code>rewards /order-points</code> read any order; <code>/award-guest-orders</code> trusted body ids.</li>
+  <li>CORS: <code>origin: (o) =&gt; o</code> (reflect any) with credentials.</li>
+  <li>Paystack signature check commented out.</li>
+</ul>
+</div>
+<div>
+<h3>After</h3>
+<ul>
+  <li><code>/users/:userId</code> → <code>403</code> unless <code>"me"</code>, keyed to the <code>user_id</code> cookie.</li>
+  <li><code>/owner</code> requires target == <code>user_id</code> cookie <em>and</em> source == <code>guest_id</code> cookie.</li>
+  <li>Bag/saved-bag item ops call <code>assertBagOwnership</code> first.</li>
+  <li>Review mutations take <code>requestedByStoreFrontUserId</code> and throw on mismatch.</li>
+  <li><code>rewards</code> routes enforce order ownership / cookie binding.</li>
+  <li>CORS: first-party allowlist (apex + <code>*.wigclub.store</code>; localhost only off-prod).</li>
+  <li>Webhook verifies HMAC-SHA512 signature, fails closed.</li>
+</ul>
+</div>
+</div>
+
+<h2>5. Layer-by-layer mechanics (key files)</h2>
+<table>
+<thead><tr><th>File</th><th>What it does now</th></tr></thead>
+<tbody>
+<tr><td><code>convex/http.ts</code></td><td>CORS <code>origin</code> callback delegates to <code>resolveAllowedOrigin(origin)</code> instead of reflecting the caller.</td></tr>
+<tr><td><code>convex/http/cors.ts</code> <em>(new)</em></td><td><code>isAllowedStorefrontOrigin</code>: apex + <code>*.wigclub.store</code>; <code>localhost</code>/<code>127.0.0.1</code> only when <code>STAGE !== "prod"</code>; optional <code>ADDITIONAL_ALLOWED_ORIGINS</code> exact matches. Suffix check uses <code>=== ROOT</code> or <code>.endsWith("." + ROOT)</code> so look-alikes are rejected.</td></tr>
+<tr><td><code>routes/user.ts</code></td><td>GET/PUT return <code>403</code> for any param but <code>"me"</code>; both key off the <code>user_id</code> cookie.</td></tr>
+<tr><td><code>routes/onlineOrder.ts</code></td><td><code>GET /:orderId</code> owner check; <code>POST /owner</code> dual-cookie bind.</td></tr>
+<tr><td><code>routes/bag.ts</code>, <code>routes/savedBag.ts</code></td><td><code>assertBagOwnership</code>/<code>assertSavedBagOwnership</code> gate every item mutation; <code>/owner</code> dual-cookie bind.</td></tr>
+<tr><td><code>routes/reviews.ts</code></td><td>PATCH/DELETE require a cookie actor (<code>401</code> if absent) and pass it into the mutation.</td></tr>
+<tr><td><code>routes/rewards.ts</code></td><td><code>/order-points</code> enforces order ownership; <code>/award-guest-orders</code> binds <code>userId</code>→<code>user_id</code> and <code>guestId</code>→<code>guest_id</code> cookies.</td></tr>
+<tr><td><code>routes/paystack.ts</code></td><td>Verifies signature before any DB mutation.</td></tr>
+<tr><td><code>routes/security.ts</code></td><td><code>computePaystackSignature</code> (Web Crypto HMAC-SHA512, hex), <code>timingSafeEqualHex</code>, <code>isValidPaystackSignature</code>.</td></tr>
+<tr><td><code>storeFront/reviews.ts</code></td><td><code>update</code>/<code>deleteReview</code> gain <code>requestedByStoreFrontUserId</code>; throw "Not authorized" when it ≠ <code>createdByStoreFrontUserId</code>.</td></tr>
+<tr><td><code>storefront-webapp/src/api/reviews.ts</code></td><td>Adds <code>credentials: "include"</code> to <code>updateReview</code>/<code>deleteReview</code> so the cookie reaches the new check.</td></tr>
+</tbody>
+</table>
+
+<h3>Paystack signature path</h3>
+<pre>// security.ts — runtime-safe (Convex HTTP action has no node:crypto)
+computePaystackSignature = HMAC-SHA512(secret, rawBody) via crypto.subtle → hex
+isValidPaystackSignature = timingSafeEqualHex(computed, header.toLowerCase())
+
+// paystack.ts — fail closed, before any mutation
+missing secret    → 500 "Webhook not configured"
+missing signature → 401 "Missing webhook signature"
+bad signature     → 401 "Invalid webhook signature"</pre>
+
+<h2>6. Failure boundaries</h2>
+<ul>
+  <li><strong>Missing cookie:</strong> read/PII routes fail soft (<code>user.ts</code> → <code>200 null</code>); mutation/claim routes fail hard (<code>401</code>/<code>403</code>).</li>
+  <li><strong>Ownership mismatch:</strong> <code>403 Forbidden</code> across order/bag/saved-bag/rewards; review mismatch throws in the mutation (surfaced as <code>500</code>).</li>
+  <li><strong>Claim routes:</strong> require both cookies present and equal to the body ids — a request missing either cookie fails closed.</li>
+  <li><strong>Webhook:</strong> any missing/invalid signature is rejected before order creation; replay is still covered by <code>isDuplicateChargeSuccess</code>.</li>
+</ul>
+
+<h2>7. What intentionally did <em>not</em> change (scope boundary)</h2>
+<div class="callout warn">
+<p><strong>Cookie integrity is out of scope — tracked as V26-952 (Phase 1).</strong> These checks trust the <em>raw</em> <code>user_id</code>/<code>guest_id</code> cookie values. A browser can't forge them cross-site (that vector is now closed by CORS), but a direct non-browser client (curl/Postman) can still set <code>Cookie: user_id=&lt;victimId&gt;</code>, and IDs are harvestable from public endpoints. Fully closing the platform-level IDOR requires signed cookies or opaque server-side session tokens plus CSRF — a cross-cutting change that makes the synchronous identity helper async across ~17 read sites and needs a coordinated, session-invalidating rollout. That is deliberately a separate workstream.</p>
+</div>
+<p><strong>Webhook amount re-verification was not wired in.</strong> The available <code>session.amount</code> is subtotal-only (<code>checkoutSession.ts:413</code>, <code>sessionAmount = pricedCheckout.subtotal</code>, excluding delivery fee/discount), so comparing it to the charged total would false-positive on every order with a delivery fee and block legitimate checkouts. Signature verification alone closes the forgery hole; a correct amount reconciliation is a follow-up.</p>
+
+<h2>8. Validation &amp; review evidence</h2>
+<ul>
+  <li><strong>Typecheck:</strong> <code>tsc --noEmit</code> on <code>packages/athena-webapp</code> — clean, post-rebase onto POS Phase 2.</li>
+  <li><strong>Unit tests:</strong> <code>cors.test.ts</code> (origin allowlist incl. prod-blocks-localhost, look-alike rejection) and <code>security.test.ts</code> (HMAC known-answer cross-checked vs Node crypto, constant-time compare, wrong-secret rejection, owner/duplicate helpers) — 17 tests pass, plus the pre-existing <code>storefrontCors.test.ts</code>.</li>
+  <li><strong>Multi-lens review loop (2 rounds, unanimous APPROVE):</strong> a <em>security</em> lens (found the <code>/owner</code> currentOwner gap, localhost-in-prod, user-PUT actor source — all fixed; accepted the V26-952 scope split), a <em>correctness/regression</em> lens (traced the login→merge cookie ordering to confirm the stricter <code>/owner</code> check doesn't break the legitimate guest→user claim), and an <em>API-contract</em> lens (confirmed the frontend sends the required cookies/credentials and the prod origin is in the allowlist).</li>
+  <li><strong>Residual risk stated:</strong> platform-level cookie forgery remains until V26-952; no automated HTTP-route (integration) test exercises the <code>403</code>/<code>401</code> wiring — coverage is at the helper level.</li>
+</ul>
+<div class="callout warn"><strong>Deploy prerequisites:</strong> <code>PAYSTACK_SECRET_KEY</code> and <code>STAGE=prod</code> must be set in the Convex prod environment before deploy, or the webhook fails closed (500) and localhost CORS would fail open. Production deploy and root/local alignment are <strong>pending</strong> and not claimed by this report.</div>
+
+<h2>9. Next-time guidance</h2>
+<ul>
+  <li>New storefront route touching a user-owned resource? Derive identity from the cookie (<code>getStorefrontUserFromRequest</code> / <code>getCookie</code>) and gate with <code>isAuthorizedResourceOwner</code>; don't trust path/body ids.</li>
+  <li>Cross-identity actions (claims/merges) need proof of <em>both</em> identities from cookies.</li>
+  <li>Push ownership into the Convex mutation (as reviews now do) so a second caller can't bypass a route-only check.</li>
+  <li>Any new webhook must verify its provider signature with Web Crypto (not <code>node:crypto</code>) in the Convex HTTP runtime, and fail closed.</li>
+  <li>When V26-952 lands signed/session cookies, these ownership checks stay — they are the authorization layer regardless of how identity is proven.</li>
+</ul>
+
+<h2 id="subagents">Subagent Evidence</h2>
+<p>This report was assembled with read-only subagents per the <code>ce-landed-change-report</code> skill:</p>
+<ul>
+  <li><strong>Storefront HTTP audit subagent (Explore):</strong> inventoried every storefront route, its auth/ownership posture, and produced the initial severity-ranked findings that scoped the change.</li>
+  <li><strong>Linear backlog digest subagent:</strong> parsed the full "storefront" issue dump and mapped the open security cluster (V26-952/953/954/956/961) that this work advances.</li>
+  <li><strong>Delivered-diff evidence subagent (Explore):</strong> produced the changed-file map, before/after trust-boundary analysis, failure-boundary status codes, Paystack mechanism (file:line), and the intentionally-unchanged scope — the factual backbone of sections 5–8.</li>
+  <li><strong>Review-loop subagents (3 lenses × 2 rounds):</strong> security, correctness/regression, and API-contract reviewers whose findings drove the round-1 fixes and the final unanimous approval recorded in section 8.</li>
+</ul>
+
+<h2>Quiz: Pass Required</h2>
+<p>Answer all 10. Pass threshold is <strong>8/10</strong>. Explanations appear after grading.</p>
+<div class="quiz">
+  <form id="changeQuiz">
+    <div class="q" data-a="b">
+      <p class="stem">1. What is the core change in how storefront routes decide who you are?</p>
+      <label><input type="radio" name="q1" value="a" /> They now require an API key on every request.</label>
+      <label><input type="radio" name="q1" value="b" /> They derive identity from the session cookie and check resource ownership, instead of trusting an id from the path/body.</label>
+      <label><input type="radio" name="q1" value="c" /> They moved all reads behind a GraphQL gateway.</label>
+      <p class="exp">Identity comes from the <code>user_id</code>/<code>guest_id</code> cookie and is compared to the resource owner via <code>isAuthorizedResourceOwner</code>.</p>
+    </div>
+    <div class="q" data-a="c">
+      <p class="stem">2. Why does the <code>/owner</code> claim route require <em>two</em> cookie checks?</p>
+      <label><input type="radio" name="q2" value="a" /> To support multi-store tenants.</label>
+      <label><input type="radio" name="q2" value="b" /> To rate-limit the endpoint.</label>
+      <label><input type="radio" name="q2" value="c" /> So a caller can only merge their <em>own</em> prior guest session: target == their user cookie AND source == their guest cookie.</label>
+      <p class="exp">Without the source (guest) check, an attacker could absorb an arbitrary guest's orders/cart into their account.</p>
+    </div>
+    <div class="q" data-a="a">
+      <p class="stem">3. Why is the Paystack signature computed with Web Crypto rather than <code>node:crypto</code>?</p>
+      <label><input type="radio" name="q3" value="a" /> The Convex HTTP action runtime doesn't expose <code>node:crypto</code>; Web Crypto's <code>crypto.subtle</code> is available.</label>
+      <label><input type="radio" name="q3" value="b" /> Web Crypto is faster for SHA-512.</label>
+      <label><input type="radio" name="q3" value="c" /> <code>node:crypto</code> can't compute HMAC.</label>
+      <p class="exp">This is almost certainly why the original code was commented out; the fix uses <code>crypto.subtle.importKey</code>/<code>sign</code>.</p>
+    </div>
+    <div class="q" data-a="b">
+      <p class="stem">4. What does the webhook do if <code>PAYSTACK_SECRET_KEY</code> is not set?</p>
+      <label><input type="radio" name="q4" value="a" /> Accepts the payload (fail open).</label>
+      <label><input type="radio" name="q4" value="b" /> Returns <code>500 "Webhook not configured"</code> and places no order (fail closed).</label>
+      <label><input type="radio" name="q4" value="c" /> Retries three times.</label>
+      <p class="exp">All missing/invalid cases fail closed before any DB mutation — hence the deploy prerequisite that the secret be set.</p>
+    </div>
+    <div class="q" data-a="c">
+      <p class="stem">5. Which origins does the new CORS allowlist accept?</p>
+      <label><input type="radio" name="q5" value="a" /> Any origin, as before.</label>
+      <label><input type="radio" name="q5" value="b" /> Only <code>https://wigclub.store</code> exactly.</label>
+      <label><input type="radio" name="q5" value="c" /> The apex and <code>*.wigclub.store</code> subdomains, plus localhost only when <code>STAGE !== "prod"</code>, plus any exact <code>ADDITIONAL_ALLOWED_ORIGINS</code>.</label>
+      <p class="exp">The suffix check rejects look-alikes like <code>wigclub.store.evil.com</code> and <code>notwigclub.store</code>.</p>
+    </div>
+    <div class="q" data-a="a">
+      <p class="stem">6. Where is review edit/delete ownership enforced?</p>
+      <label><input type="radio" name="q6" value="a" /> In the Convex mutation (<code>reviews.update</code>/<code>deleteReview</code>), which throws when <code>requestedByStoreFrontUserId</code> ≠ the creator.</label>
+      <label><input type="radio" name="q6" value="b" /> Only in the HTTP route.</label>
+      <label><input type="radio" name="q6" value="c" /> In the frontend before the request.</label>
+      <p class="exp">Pushing the check into the mutation is defense-in-depth: any caller of the mutation is covered, not just the one route.</p>
+    </div>
+    <div class="q" data-a="b">
+      <p class="stem">7. Why was webhook amount re-verification NOT added in this pass?</p>
+      <label><input type="radio" name="q7" value="a" /> It's impossible to compute the total server-side.</label>
+      <label><input type="radio" name="q7" value="b" /> <code>session.amount</code> is subtotal-only (excludes delivery fee/discount), so comparing it to the charged total would false-positive and block real orders.</label>
+      <label><input type="radio" name="q7" value="c" /> Paystack doesn't send an amount.</label>
+      <p class="exp"><code>checkoutSession.ts:413</code> sets <code>sessionAmount = pricedCheckout.subtotal</code>. Signature verification alone closes the forgery hole; correct reconciliation is a follow-up.</p>
+    </div>
+    <div class="q" data-a="c">
+      <p class="stem">8. What is explicitly out of scope, and where is it tracked?</p>
+      <label><input type="radio" name="q8" value="a" /> Rate limiting — untracked.</label>
+      <label><input type="radio" name="q8" value="b" /> Nothing; this closes every IDOR completely.</label>
+      <label><input type="radio" name="q8" value="c" /> Cookie integrity (signed/session cookies + CSRF) so a non-browser client can't forge <code>Cookie: user_id=…</code> — tracked as V26-952 / Phase 1.</label>
+      <p class="exp">The ownership checks are still necessary regardless; V26-952 hardens how identity itself is proven.</p>
+    </div>
+    <div class="q" data-a="a">
+      <p class="stem">9. What proved the change before this report?</p>
+      <label><input type="radio" name="q9" value="a" /> Typecheck, 17 passing unit tests (incl. an HMAC known-answer), and a 2-round unanimous multi-lens review.</label>
+      <label><input type="radio" name="q9" value="b" /> A full production canary rollout.</label>
+      <label><input type="radio" name="q9" value="c" /> Manual QA only.</label>
+      <p class="exp">There is no automated HTTP-route integration test for the guards yet — a stated residual gap.</p>
+    </div>
+    <div class="q" data-a="b">
+      <p class="stem">10. What is the delivery status this report claims?</p>
+      <label><input type="radio" name="q10" value="a" /> Merged, deployed, and root-aligned.</label>
+      <label><input type="radio" name="q10" value="b" /> Delivery candidate (pre-merge); deploy and root alignment are pending and not claimed.</label>
+      <label><input type="radio" name="q10" value="c" /> Reverted.</label>
+      <p class="exp">Candidate mode: the report is committed to the branch before merge and does not assert pending events.</p>
+    </div>
+  </form>
+  <div class="quizbar">
+    <button type="button" class="primary" id="gradeBtn">Grade</button>
+    <button type="button" id="resetBtn">Reset</button>
+    <span id="score"></span>
+  </div>
+</div>
+
+<footer>
+  <p>Report marker <code>data-athena-landed-change-report="v1"</code> · diff fingerprint <code>95a13257…14f885</code>. Delivery-candidate artifact for PR review; not refreshed after merge. Contains no secrets or customer data.</p>
+</footer>
+</div>
+
+<script>
+(function () {
+  var form = document.getElementById("changeQuiz");
+  var questions = Array.prototype.slice.call(form.querySelectorAll(".q"));
+  var PASS = 8, TOTAL = questions.length;
+  function grade() {
+    var correct = 0;
+    questions.forEach(function (q) {
+      var ans = q.getAttribute("data-a");
+      var chosen = q.querySelector('input:checked');
+      q.querySelectorAll("label").forEach(function (l) { l.classList.remove("correct", "wrong"); });
+      var correctLabel = q.querySelector('input[value="' + ans + '"]').closest("label");
+      if (correctLabel) correctLabel.classList.add("correct");
+      if (chosen) {
+        if (chosen.value === ans) { correct++; }
+        else { chosen.closest("label").classList.add("wrong"); }
+      }
+    });
+    form.classList.add("graded");
+    var el = document.getElementById("score");
+    var pass = correct >= PASS;
+    el.textContent = correct + "/" + TOTAL + " — " + (pass ? "PASS ✓" : "not yet (need " + PASS + ")");
+    el.style.color = pass ? "#1f6b3b" : "#8a5a00";
+  }
+  function reset() {
+    form.classList.remove("graded");
+    form.reset();
+    form.querySelectorAll("label").forEach(function (l) { l.classList.remove("correct", "wrong"); });
+    document.getElementById("score").textContent = "";
+  }
+  document.getElementById("gradeBtn").addEventListener("click", grade);
+  document.getElementById("resetBtn").addEventListener("click", reset);
+})();
+</script>
+</body>
+</html>
