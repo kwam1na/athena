@@ -52,4 +52,8 @@ export const posTransactionSchema = v.object({
   voidApprovedByStaffProfileId: v.optional(v.id("staffProfile")),
   voidOperationalEventId: v.optional(v.id("operationalEvent")),
   receiptPrinted: v.optional(v.boolean()),
+  // U10: set once this row's money fields have been converted from cedis to
+  // integer pesewas by the POS pesewas migration. Deterministic idempotency
+  // marker (replaces the <10_000 heuristic); a marked row is never re-converted.
+  pesewasMigratedAt: v.optional(v.number()),
 });
