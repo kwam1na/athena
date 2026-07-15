@@ -5,6 +5,7 @@ export const posLocalSyncConflictTypeValidator = v.union(
   v.literal("inventory"),
   v.literal("payment"),
   v.literal("permission"),
+  v.literal("server_rejected"),
 );
 
 export const posLocalSyncConflictStatusValidator = v.union(

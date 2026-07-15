@@ -7,11 +7,14 @@ import { openDrawer } from "./commands/register";
 
 const authMocks = vi.hoisted(() => ({
   requireAuthenticatedAthenaUserWithCtx: vi.fn(),
+  requireOrganizationMemberRoleWithCtx: vi.fn(),
 }));
 
 vi.mock("../../lib/athenaUserAuth", () => ({
   requireAuthenticatedAthenaUserWithCtx:
     authMocks.requireAuthenticatedAthenaUserWithCtx,
+  requireOrganizationMemberRoleWithCtx:
+    authMocks.requireOrganizationMemberRoleWithCtx,
 }));
 
 const terminal = {
@@ -109,6 +112,13 @@ function createDbMock(
 describe("openDrawer", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    // Default to an authenticated org member; individual tests override as needed.
+    authMocks.requireAuthenticatedAthenaUserWithCtx.mockResolvedValue({
+      _id: "user-1" as Id<"athenaUser">,
+    });
+    authMocks.requireOrganizationMemberRoleWithCtx.mockResolvedValue({
+      role: "pos_only",
+    });
   });
 
   it("opens a register session with the authenticated Athena user and signed-in staff member", async () => {
