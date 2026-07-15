@@ -190,6 +190,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`convex/pos/infrastructure/repositories/terminalRepository.test.ts`](../../convex/pos/infrastructure/repositories/terminalRepository.test.ts)
 - [`convex/pos/infrastructure/repositories/transactionRepository.test.ts`](../../convex/pos/infrastructure/repositories/transactionRepository.test.ts)
 - [`convex/pos/public/catalog.test.ts`](../../convex/pos/public/catalog.test.ts)
+- [`convex/pos/public/customers.test.ts`](../../convex/pos/public/customers.test.ts)
 - [`convex/pos/public/posRecoveryCodes.test.ts`](../../convex/pos/public/posRecoveryCodes.test.ts)
 - [`convex/pos/public/register.test.ts`](../../convex/pos/public/register.test.ts)
 - [`convex/pos/public/sync.sharedDemo.test.ts`](../../convex/pos/public/sync.sharedDemo.test.ts)
