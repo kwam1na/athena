@@ -3,6 +3,12 @@ import { v } from "convex/values";
 export const posTransactionSchema = v.object({
   transactionNumber: v.string(),
   workflowTraceId: v.optional(v.string()),
+  // Client-stable idempotency token for the online completion paths. Dedups the
+  // transaction mint (see U8) so a retried completeTransaction /
+  // createTransactionFromSession returns the original sale instead of minting a
+  // second one. Namespaced with an "online:" prefix so it cannot collide with the
+  // offline sync `localTransactionId` mapping namespace.
+  idempotencyKey: v.optional(v.string()),
   storeId: v.id("store"),
   sessionId: v.optional(v.id("posSession")), // Link to the session that created this transaction (if created from session)
   registerSessionId: v.optional(v.id("registerSession")),
@@ -46,4 +52,8 @@ export const posTransactionSchema = v.object({
   voidApprovedByStaffProfileId: v.optional(v.id("staffProfile")),
   voidOperationalEventId: v.optional(v.id("operationalEvent")),
   receiptPrinted: v.optional(v.boolean()),
+  // U10: set once this row's money fields have been converted from cedis to
+  // integer pesewas by the POS pesewas migration. Deterministic idempotency
+  // marker (replaces the <10_000 heuristic); a marked row is never re-converted.
+  pesewasMigratedAt: v.optional(v.number()),
 });

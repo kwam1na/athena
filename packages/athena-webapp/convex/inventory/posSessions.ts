@@ -27,6 +27,7 @@ import {
   createTransactionFromSessionHandler,
   recordRegisterSessionSale,
 } from "./pos";
+import { onlineCompletionIdempotencyKey } from "../pos/application/commands/completeTransaction";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import { ok, userError } from "../../shared/commandResult";
 import {
@@ -1229,6 +1230,8 @@ export const completeSession = mutation({
     subtotal: v.number(),
     tax: v.number(),
     total: v.number(),
+    idempotencyKey: v.optional(v.string()),
+    priceOverrideApprovalProofId: v.optional(v.id("approvalProof")),
   },
   returns: commandResultValidator(completeSessionDataValidator),
   handler: async (ctx, args) => {
@@ -1290,9 +1293,16 @@ export const completeSession = mutation({
         tax: args.tax,
         total: args.total,
       },
+      idempotencyKey: args.idempotencyKey,
+      priceOverrideApprovalProofId: args.priceOverrideApprovalProofId,
     });
 
-    if (transactionResult.kind === "user_error") {
+    if (
+      transactionResult.kind === "user_error" ||
+      transactionResult.kind === "approval_required"
+    ) {
+      // Propagate a U7 price-override approval prompt (or any failure) before any
+      // session-completion side effect runs.
       return transactionResult;
     }
 
@@ -1337,6 +1347,12 @@ export const completeSession = mutation({
     await recordRegisterSessionSale(ctx, {
       payments: args.payments,
       changeGiven: totalPaid > args.total ? totalPaid - args.total : undefined,
+      // U8: guard the drawer-cash increment with the same client-stable token so a
+      // retried completeSession cannot double-count `expectedCash` even though the
+      // mint itself is deduped by `createTransactionFromSessionHandler`.
+      idempotencyKey: args.idempotencyKey
+        ? onlineCompletionIdempotencyKey(args.idempotencyKey)
+        : undefined,
       registerSessionId,
       registerNumber: session.registerNumber,
       storeId: session.storeId,

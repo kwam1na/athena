@@ -26,6 +26,7 @@ import {
   getPosSessionById,
   getRegisterSessionById,
   getPosTransactionById,
+  getPosTransactionByIdempotencyKey,
   getProductSkuById,
   getStoreById,
   listTransactionAdjustments,
@@ -92,6 +93,8 @@ type ActiveProvisionalImportSaleLine = {
   _id: InventoryImportProvisionalSkuId;
   productId: Id<"product">;
   productSkuId: Id<"productSku">;
+  // Server-authoritative catalog price for a provisional-import line (U7 basis).
+  importedPrice: number;
   saleEvidence?: {
     saleCount?: number;
     totalQuantitySold?: number;
@@ -770,6 +773,253 @@ function staleSaleTotalError() {
   });
 }
 
+// ---------------------------------------------------------------------------
+// U7: server-side re-pricing + manager-override audit
+//
+// Both online completion paths previously recomputed totals from the
+// client-supplied `item.price` and only checked internal arithmetic; the
+// authoritative catalog price was never compared, so a stale-catalog or
+// tampered terminal could sell at an arbitrary price with no attribution. The
+// offline projection path already re-prices (`projectLocalEvents.ts`); U7 makes
+// the online paths inherit the same basis, hard-rejecting an unauthorized
+// deviation and requiring a manager override (with an append-only audit) for an
+// authorized one.
+// ---------------------------------------------------------------------------
+
+const PRICE_OVERRIDE_ACTION = APPROVAL_ACTIONS.posPriceOverride;
+const PRICE_OVERRIDE_SUBJECT_TYPE = "pos_price_override";
+
+type RepricingLine = {
+  skuId: Id<"productSku">;
+  clientUnitPrice: number;
+  provisionalImportedPrice?: number;
+  displayName?: string;
+  // Lines with no trusted catalog basis — an UNRESOLVED pending-checkout item
+  // (pending_review/flagged) awaiting its own review workflow — carry an
+  // operator-entered price with validated provenance and are recorded as-is.
+  // Lines that resolve to a trusted catalog SKU (linked_to_catalog) are NOT
+  // exempt: they must be re-priced against the approved SKU, matching the offline
+  // authoritative path which also re-prices resolved pending lines.
+  exemptFromReprice?: boolean;
+};
+
+type RepricingDeviation = {
+  skuId: Id<"productSku">;
+  basis: number;
+  charged: number;
+  delta: number;
+};
+
+type RepricingResult =
+  | {
+      kind: "priced";
+      unitPrices: number[];
+      deviations: RepricingDeviation[];
+      approvedByStaffProfileId?: Id<"staffProfile">;
+    }
+  | { kind: "approval_required"; requirement: ApprovalRequirement }
+  | { kind: "rejected"; error: ReturnType<typeof userError> };
+
+/**
+ * Derive the server-authoritative unit price for a sale line, matching the
+ * offline projection basis exactly (`projectLocalEvents.ts` ~:3926):
+ * `provisional.importedPrice ?? (netPrice if number else price)`.
+ *
+ * Unit note: the catalog `price`/`netPrice` and the client-supplied price are in
+ * the same currency unit today (cedis, pre-U10). U7 compares like-for-like; when
+ * U10 flips POS money storage to integer pesewas, both the catalog and the client
+ * inputs move together, so this comparison stays consistent. Do not mix units.
+ */
+function deriveCatalogUnitPrice(
+  sku: { price?: number; netPrice?: number } | null | undefined,
+  provisionalImportedPrice: number | undefined,
+): number | null {
+  const basis =
+    provisionalImportedPrice ??
+    (typeof sku?.netPrice === "number" ? sku.netPrice : sku?.price);
+  return typeof basis === "number" && Number.isFinite(basis) ? basis : null;
+}
+
+function buildPosPriceOverrideApprovalRequirement(args: {
+  storeId: Id<"store">;
+  deviations: RepricingDeviation[];
+}): ApprovalRequirement {
+  const totalDelta = roundStoredAmount(
+    args.deviations.reduce((sum, deviation) => sum + deviation.delta, 0),
+  );
+  return {
+    action: PRICE_OVERRIDE_ACTION,
+    reason:
+      "Manager approval is required to sell at a price that differs from the catalog.",
+    requiredRole: "manager",
+    selfApproval: "allowed",
+    subject: {
+      id: args.storeId,
+      label: "POS sale price override",
+      type: PRICE_OVERRIDE_SUBJECT_TYPE,
+    },
+    copy: {
+      title: "Manager approval required",
+      message:
+        "A manager needs to approve selling at a price that differs from the catalog price.",
+      primaryActionLabel: "Request approval",
+      secondaryActionLabel: "Cancel",
+    },
+    resolutionModes: [{ kind: "inline_manager_proof" }],
+    metadata: {
+      deviationCount: args.deviations.length,
+      totalDelta,
+    },
+  };
+}
+
+/**
+ * Re-price every sale line against catalog authority. Returns the server-derived
+ * unit price per line (basis for matched lines, the charged price for lines an
+ * authorized manager explicitly overrode). An unauthorized deviation either
+ * requests approval (no proof) or is hard-rejected (invalid proof). A line whose
+ * catalog basis cannot be resolved is rejected rather than silently trusting the
+ * client.
+ */
+async function resolveRepricedLines(
+  ctx: MutationCtx,
+  args: {
+    storeId: Id<"store">;
+    actorStaffProfileId?: Id<"staffProfile">;
+    priceOverrideApprovalProofId?: Id<"approvalProof">;
+    lines: RepricingLine[];
+    getSku: (
+      skuId: Id<"productSku">,
+    ) => { price?: number; netPrice?: number } | null | undefined;
+  },
+): Promise<RepricingResult> {
+  const unitPrices: number[] = [];
+  const deviations: RepricingDeviation[] = [];
+
+  for (const line of args.lines) {
+    if (line.exemptFromReprice) {
+      unitPrices.push(line.clientUnitPrice);
+      continue;
+    }
+    const basis = deriveCatalogUnitPrice(
+      args.getSku(line.skuId),
+      line.provisionalImportedPrice,
+    );
+    if (basis === null) {
+      return {
+        kind: "rejected",
+        error: userError({
+          code: "precondition_failed",
+          message: `Catalog price for ${line.displayName ?? "this item"} is unavailable. Refresh the register catalog before completing this sale.`,
+        }),
+      };
+    }
+
+    if (roundStoredAmount(line.clientUnitPrice) === roundStoredAmount(basis)) {
+      // Record the server-derived basis (not the client echo) so a value that is
+      // merely equal-after-rounding cannot slip a fractional cent into storage.
+      unitPrices.push(basis);
+    } else {
+      deviations.push({
+        skuId: line.skuId,
+        basis,
+        charged: line.clientUnitPrice,
+        delta: roundStoredAmount(line.clientUnitPrice - basis),
+      });
+      unitPrices.push(line.clientUnitPrice);
+    }
+  }
+
+  if (deviations.length === 0) {
+    return { kind: "priced", unitPrices, deviations };
+  }
+
+  if (!args.priceOverrideApprovalProofId) {
+    return {
+      kind: "approval_required",
+      requirement: buildPosPriceOverrideApprovalRequirement({
+        storeId: args.storeId,
+        deviations,
+      }),
+    };
+  }
+
+  const approvalProof = await consumeCommandApprovalProofWithCtx(ctx, {
+    action: PRICE_OVERRIDE_ACTION,
+    approvalProofId: args.priceOverrideApprovalProofId,
+    requestedByStaffProfileId: args.actorStaffProfileId,
+    requiredRole: "manager",
+    storeId: args.storeId,
+    subject: {
+      type: PRICE_OVERRIDE_SUBJECT_TYPE,
+      id: args.storeId,
+    },
+  });
+
+  if (approvalProof.kind !== "ok") {
+    return {
+      kind: "rejected",
+      error: userError({
+        code: "precondition_failed",
+        message: approvalProof.error.message,
+      }),
+    };
+  }
+
+  return {
+    kind: "priced",
+    unitPrices,
+    deviations,
+    approvedByStaffProfileId: approvalProof.data.approvedByStaffProfileId,
+  };
+}
+
+/**
+ * Append-only audit for an authorized price override (reuses the operational
+ * event rail; no new table). Records the approver, each SKU's catalog basis, the
+ * charged price, and the delta so a manager-authorized deviation is attributable.
+ */
+async function recordPriceOverrideAudit(
+  ctx: MutationCtx,
+  args: {
+    storeId: Id<"store">;
+    organizationId?: Id<"organization">;
+    posTransactionId: Id<"posTransaction">;
+    transactionNumber: string;
+    registerSessionId?: Id<"registerSession">;
+    requesterStaffProfileId?: Id<"staffProfile">;
+    approvedByStaffProfileId?: Id<"staffProfile">;
+    deviations: RepricingDeviation[];
+  },
+) {
+  const totalDelta = roundStoredAmount(
+    args.deviations.reduce((sum, deviation) => sum + deviation.delta, 0),
+  );
+  await recordOperationalEventWithCtx(ctx, {
+    storeId: args.storeId,
+    organizationId: args.organizationId,
+    eventType: "pos_transaction_price_override",
+    subjectType: "posTransaction",
+    subjectId: args.posTransactionId,
+    message: `POS sale #${args.transactionNumber} completed with a manager-approved price override (${args.deviations.length} line(s), net delta ${totalDelta}).`,
+    metadata: {
+      transactionNumber: args.transactionNumber,
+      approvedByStaffProfileId: args.approvedByStaffProfileId,
+      requesterStaffProfileId: args.requesterStaffProfileId,
+      totalDelta,
+      lines: args.deviations.map((deviation) => ({
+        productSkuId: deviation.skuId,
+        catalogBasis: deviation.basis,
+        chargedPrice: deviation.charged,
+        delta: deviation.delta,
+      })),
+    },
+    actorStaffProfileId: args.approvedByStaffProfileId ?? args.requesterStaffProfileId,
+    registerSessionId: args.registerSessionId,
+    posTransactionId: args.posTransactionId,
+  });
+}
+
 function registerSessionMatchesIdentity(
   registerSession: {
     terminalId?: Id<"posTerminal">;
@@ -864,6 +1114,7 @@ export async function recordRegisterSessionSale(
   ctx: MutationCtx,
   args: {
     changeGiven?: number;
+    idempotencyKey?: string;
     payments: PosPaymentInput[];
     registerSessionId: Id<"registerSession">;
     registerNumber?: string;
@@ -879,6 +1130,10 @@ export async function recordRegisterSessionSale(
     {
       adjustmentKind: "sale",
       changeGiven: args.changeGiven,
+      // U8: guard the drawer-cash increment with the same client-stable token so a
+      // retried sale cannot double-count `expectedCash`, exactly as the void path
+      // already does via `recordedTransactionKeys`.
+      idempotencyKey: args.idempotencyKey,
       payments: args.payments,
       paymentCount: args.payments.length,
       paymentMethodLabels: paymentMethodLabels(args.payments),
@@ -891,6 +1146,48 @@ export async function recordRegisterSessionSale(
       transactionNumber: args.transactionNumber,
     },
   );
+}
+
+/**
+ * U8: namespace a client-supplied idempotency token for the online completion
+ * paths. The `online:` prefix guarantees the token cannot collide with the
+ * offline sync `localTransactionId` mapping namespace, so a sale can never be
+ * double-recorded across the online and offline rails.
+ */
+export function onlineCompletionIdempotencyKey(rawToken: string): string {
+  return rawToken.startsWith("online:") ? rawToken : `online:${rawToken}`;
+}
+
+/**
+ * U8: dedup the transaction mint. If a completed sale already exists for this
+ * store + idempotency token, return its identifiers (mirroring the offline
+ * `resolveExistingSaleProjection` replay behaviour) so a retried submission does
+ * not mint a second transaction, decrement stock again, or double the drawer cash.
+ */
+async function resolveExistingOnlineCompletion(
+  ctx: MutationCtx,
+  args: {
+    storeId: Id<"store">;
+    idempotencyKey: string;
+  },
+): Promise<{
+  transactionId: Id<"posTransaction">;
+  transactionNumber: string;
+  transactionItems: Array<Id<"posTransactionItem">>;
+} | null> {
+  const existing = await getPosTransactionByIdempotencyKey(ctx, {
+    storeId: args.storeId,
+    idempotencyKey: args.idempotencyKey,
+  });
+  if (!existing) {
+    return null;
+  }
+  const items = await listTransactionItems(ctx, existing._id);
+  return {
+    transactionId: existing._id,
+    transactionNumber: existing.transactionNumber,
+    transactionItems: items.map((item) => item._id),
+  };
 }
 
 async function recordRegisterSessionVoid(
@@ -986,15 +1283,32 @@ export async function completeTransaction(
     terminalId?: Id<"posTerminal">;
     staffProfileId?: Id<"staffProfile">;
     registerSessionId?: Id<"registerSession">;
+    idempotencyKey?: string;
+    priceOverrideApprovalProofId?: Id<"approvalProof">;
   },
 ): Promise<
-  CommandResult<{
+  ApprovalCommandResult<{
     transactionId: Id<"posTransaction">;
     transactionNumber: string;
     transactionItems: Array<Id<"posTransactionItem">>;
   }>
 > {
-  const canonicalTotals = calculateCanonicalTransactionTotals(args.items);
+  const idempotencyKey = args.idempotencyKey
+    ? onlineCompletionIdempotencyKey(args.idempotencyKey)
+    : undefined;
+  if (idempotencyKey) {
+    const existing = await resolveExistingOnlineCompletion(ctx, {
+      storeId: args.storeId,
+      idempotencyKey,
+    });
+    if (existing) {
+      return ok(existing);
+    }
+  }
+  // Client-arithmetic consistency: the submitted subtotal/tax/total must agree
+  // with the client's own line prices. Server-authoritative re-pricing (U7)
+  // happens below once catalog SKUs are loaded.
+  const submittedTotals = calculateCanonicalTransactionTotals(args.items);
   if (
     !totalsMatch(
       {
@@ -1002,7 +1316,7 @@ export async function completeTransaction(
         tax: args.tax,
         total: args.total,
       },
-      canonicalTotals,
+      submittedTotals,
     )
   ) {
     return staleSaleTotalError();
@@ -1140,6 +1454,39 @@ export async function completeTransaction(
     });
   }
 
+  // U7: re-price every line against catalog authority before minting. Matched
+  // lines record the server-derived basis; a deviation needs a manager override
+  // (audited) or is hard-rejected. `canonicalTotals` is derived from these
+  // authoritative prices, not the client echo.
+  const repricing = await resolveRepricedLines(ctx, {
+    storeId: args.storeId,
+    actorStaffProfileId: args.staffProfileId,
+    priceOverrideApprovalProofId: args.priceOverrideApprovalProofId,
+    getSku: (skuId) => skusById.get(skuId),
+    lines: args.items.map((item) => ({
+      skuId: item.skuId,
+      clientUnitPrice: item.price,
+      provisionalImportedPrice: item.inventoryImportProvisionalSkuId
+        ? provisionalImportLinesById.get(item.inventoryImportProvisionalSkuId)
+            ?.importedPrice
+        : undefined,
+      displayName: item.name,
+    })),
+  });
+  if (repricing.kind === "approval_required") {
+    return approvalRequired(repricing.requirement);
+  }
+  if (repricing.kind === "rejected") {
+    return repricing.error;
+  }
+  const derivedUnitPrices = repricing.unitPrices;
+  const canonicalTotals = calculateCanonicalTransactionTotals(
+    args.items.map((item, index) => ({
+      price: derivedUnitPrices[index],
+      quantity: item.quantity,
+    })),
+  );
+
   const totalPaid = calculateTotalPaid(args.payments);
   if (totalPaid < canonicalTotals.total) {
     return userError({
@@ -1158,6 +1505,7 @@ export async function completeTransaction(
 
   const transactionId = await createPosTransaction(ctx, {
     transactionNumber,
+    ...(idempotencyKey ? { idempotencyKey } : {}),
     storeId: args.storeId,
     sessionId: undefined,
     registerSessionId: args.registerSessionId,
@@ -1198,6 +1546,7 @@ export async function completeTransaction(
 
     await recordRegisterSessionSale(ctx, {
       changeGiven,
+      idempotencyKey,
       payments: args.payments,
       registerSessionId: args.registerSessionId,
       registerNumber: args.registerNumber,
@@ -1248,7 +1597,7 @@ export async function completeTransaction(
 
   const reportingProductIds = new Map<Id<"productSku">, Id<"product">>();
   const transactionItems = await Promise.all(
-    args.items.map(async (item) => {
+    args.items.map(async (item, index) => {
       const sku = await getProductSkuById(ctx, item.skuId);
       if (!sku) {
         throw new Error(
@@ -1257,6 +1606,7 @@ export async function completeTransaction(
       }
       reportingProductIds.set(item.skuId, sku.productId);
 
+      const unitPrice = derivedUnitPrices[index];
       const image = item.image ?? sku.images?.[0];
       const provisionalSku = item.inventoryImportProvisionalSkuId
         ? provisionalImportLinesById.get(item.inventoryImportProvisionalSkuId)
@@ -1273,8 +1623,8 @@ export async function completeTransaction(
         barcode: item.barcode,
         ...(image ? { image } : {}),
         quantity: item.quantity,
-        unitPrice: item.price,
-        totalPrice: item.price * item.quantity,
+        unitPrice,
+        totalPrice: unitPrice * item.quantity,
       });
 
       if (!provisionalSku) {
@@ -1333,8 +1683,8 @@ export async function completeTransaction(
       productId: reportingProductIds.get(item.skuId)!,
       productSkuId: item.skuId,
       quantity: item.quantity,
-      totalAmountMinor: item.price * item.quantity,
-      unitPriceMinor: item.price,
+      totalAmountMinor: derivedUnitPrices[index] * item.quantity,
+      unitPriceMinor: derivedUnitPrices[index],
     })),
     organizationId: store?.organizationId,
     storeCurrency: store?.currency,
@@ -1342,6 +1692,19 @@ export async function completeTransaction(
     totals: canonicalTotals,
     transactionId,
   });
+
+  if (repricing.deviations.length > 0) {
+    await recordPriceOverrideAudit(ctx, {
+      storeId: args.storeId,
+      organizationId: store?.organizationId,
+      posTransactionId: transactionId,
+      transactionNumber,
+      registerSessionId: args.registerSessionId,
+      requesterStaffProfileId: args.staffProfileId,
+      approvedByStaffProfileId: repricing.approvedByStaffProfileId,
+      deviations: repricing.deviations,
+    });
+  }
 
   await markCatalogSummaryNeedsRefresh(ctx, args.storeId);
 
@@ -2366,9 +2729,11 @@ export async function createTransactionFromSessionHandler(
     recordRegisterSale?: boolean;
     notes?: string;
     submittedTotals?: TransactionTotals;
+    idempotencyKey?: string;
+    priceOverrideApprovalProofId?: Id<"approvalProof">;
   },
 ): Promise<
-  CommandResult<{
+  ApprovalCommandResult<{
     transactionId: Id<"posTransaction">;
     transactionNumber: string;
     transactionItems: Array<Id<"posTransactionItem">>;
@@ -2389,6 +2754,19 @@ export async function createTransactionFromSessionHandler(
     });
   }
 
+  const idempotencyKey = args.idempotencyKey
+    ? onlineCompletionIdempotencyKey(args.idempotencyKey)
+    : undefined;
+  if (idempotencyKey) {
+    const existing = await resolveExistingOnlineCompletion(ctx, {
+      storeId: session.storeId,
+      idempotencyKey,
+    });
+    if (existing) {
+      return ok(existing);
+    }
+  }
+
   const items = await listSessionItems(ctx, args.sessionId);
   if (items.length === 0) {
     return userError({
@@ -2397,7 +2775,9 @@ export async function createTransactionFromSessionHandler(
     });
   }
 
-  const canonicalTotals = calculateCanonicalTransactionTotals(
+  // Client-arithmetic consistency against the session's own line prices; U7
+  // server-authoritative re-pricing happens below once catalog SKUs are loaded.
+  const submittedComputedTotals = calculateCanonicalTransactionTotals(
     items.map((item) => ({
       price: item.price,
       quantity: item.quantity,
@@ -2405,7 +2785,7 @@ export async function createTransactionFromSessionHandler(
   );
   if (
     args.submittedTotals &&
-    !totalsMatch(args.submittedTotals, canonicalTotals)
+    !totalsMatch(args.submittedTotals, submittedComputedTotals)
   ) {
     return staleSaleTotalError();
   }
@@ -2571,6 +2951,59 @@ export async function createTransactionFromSessionHandler(
     });
   }
 
+  // U7: re-price every session line against catalog authority before minting.
+  const repricingSkuById = new Map<
+    Id<"productSku">,
+    { price?: number; netPrice?: number } | null
+  >();
+  for (const item of items) {
+    if (!repricingSkuById.has(item.productSkuId)) {
+      repricingSkuById.set(
+        item.productSkuId,
+        await getProductSkuById(ctx, item.productSkuId),
+      );
+    }
+  }
+  const repricing = await resolveRepricedLines(ctx, {
+    storeId: session.storeId,
+    actorStaffProfileId: args.staffProfileId,
+    priceOverrideApprovalProofId: args.priceOverrideApprovalProofId,
+    getSku: (skuId) => repricingSkuById.get(skuId),
+    lines: items.map((item) => ({
+      skuId: item.productSkuId,
+      clientUnitPrice: item.price,
+      provisionalImportedPrice: item.inventoryImportProvisionalSkuId
+        ? provisionalImportLinesById.get(item.inventoryImportProvisionalSkuId)
+            ?.importedPrice
+        : undefined,
+      displayName: item.productName,
+      // Only an UNRESOLVED pending-checkout line (pending_review/flagged) carries
+      // an operator-entered price with no catalog basis and is exempt. A
+      // linked_to_catalog line resolves to a trusted catalog SKU
+      // (`approvedProductSkuId === item.productSkuId`) and MUST be re-priced
+      // against it — the offline authoritative path re-prices these too, so
+      // exempting them would let a tampered terminal sell a real catalog item at
+      // an arbitrary price with no override or audit.
+      exemptFromReprice: Boolean(
+        item.pendingCheckoutItemId &&
+          !linkedPendingTrustedItemIds.has(item.pendingCheckoutItemId),
+      ),
+    })),
+  });
+  if (repricing.kind === "approval_required") {
+    return approvalRequired(repricing.requirement);
+  }
+  if (repricing.kind === "rejected") {
+    return repricing.error;
+  }
+  const derivedUnitPrices = repricing.unitPrices;
+  const canonicalTotals = calculateCanonicalTransactionTotals(
+    items.map((item, index) => ({
+      price: derivedUnitPrices[index],
+      quantity: item.quantity,
+    })),
+  );
+
   const totalPaid = calculateTotalPaid(args.payments);
   const subtotal = canonicalTotals.subtotal;
   const tax = canonicalTotals.tax;
@@ -2590,6 +3023,7 @@ export async function createTransactionFromSessionHandler(
 
   const transactionId = await createPosTransaction(ctx, {
     transactionNumber,
+    ...(idempotencyKey ? { idempotencyKey } : {}),
     storeId: session.storeId,
     sessionId: args.sessionId,
     registerSessionId: resolvedRegisterSessionId.data,
@@ -2622,6 +3056,7 @@ export async function createTransactionFromSessionHandler(
   if (args.recordRegisterSale !== false) {
     await recordRegisterSessionSale(ctx, {
       changeGiven,
+      idempotencyKey,
       payments: args.payments,
       registerSessionId: resolvedRegisterSessionId.data,
       registerNumber: session.registerNumber,
@@ -2702,7 +3137,7 @@ export async function createTransactionFromSessionHandler(
   }
 
   const transactionItems = await Promise.all(
-    items.map(async (item) => {
+    items.map(async (item, index) => {
       const sku = await getProductSkuById(ctx, item.productSkuId);
       if (!sku) {
         throw new Error(
@@ -2710,6 +3145,7 @@ export async function createTransactionFromSessionHandler(
         );
       }
 
+      const unitPrice = derivedUnitPrices[index];
       const image = item.image ?? sku.images?.[0];
       const provisionalSku = item.inventoryImportProvisionalSkuId
         ? provisionalImportLinesById.get(item.inventoryImportProvisionalSkuId)
@@ -2727,8 +3163,8 @@ export async function createTransactionFromSessionHandler(
         barcode: item.barcode,
         ...(image ? { image } : {}),
         quantity: item.quantity,
-        unitPrice: item.price,
-        totalPrice: item.price * item.quantity,
+        unitPrice,
+        totalPrice: unitPrice * item.quantity,
       });
 
       const consumedHoldQuantity =
@@ -2815,8 +3251,8 @@ export async function createTransactionFromSessionHandler(
       productId: item.productId,
       productSkuId: item.productSkuId,
       quantity: item.quantity,
-      totalAmountMinor: item.price * item.quantity,
-      unitPriceMinor: item.price,
+      totalAmountMinor: derivedUnitPrices[index] * item.quantity,
+      unitPriceMinor: derivedUnitPrices[index],
     })),
     organizationId: store?.organizationId,
     storeCurrency: store?.currency,
@@ -2824,6 +3260,19 @@ export async function createTransactionFromSessionHandler(
     totals: { subtotal, tax, total },
     transactionId,
   });
+
+  if (repricing.deviations.length > 0) {
+    await recordPriceOverrideAudit(ctx, {
+      storeId: session.storeId,
+      organizationId: store?.organizationId,
+      posTransactionId: transactionId,
+      transactionNumber,
+      registerSessionId: resolvedRegisterSessionId.data,
+      requesterStaffProfileId: args.staffProfileId,
+      approvedByStaffProfileId: repricing.approvedByStaffProfileId,
+      deviations: repricing.deviations,
+    });
+  }
 
   await markCatalogSummaryNeedsRefresh(ctx, session.storeId);
 

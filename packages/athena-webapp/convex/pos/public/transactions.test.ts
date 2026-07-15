@@ -101,6 +101,16 @@ describe("POS public transaction query validators", () => {
     };
 
     assertConformsToExportedReturns(completeTransaction, validationError);
+    // Idempotent replay (U8) returns the original completed sale via the same
+    // exported ok shape, so a retried submission stays contract-conformant.
+    assertConformsToExportedReturns(completeTransaction, {
+      kind: "ok" as const,
+      data: {
+        transactionId: "txn-1" as Id<"posTransaction">,
+        transactionNumber: "584065",
+        transactionItems: ["txn-item-1" as Id<"posTransactionItem">],
+      },
+    });
     assertConformsToExportedReturns(getCompletedTransactions, []);
     assertConformsToExportedReturns(getCompletedTransactions, [
       {
@@ -193,6 +203,16 @@ describe("POS public transaction query validators", () => {
       createTransactionFromSession,
       validationError,
     );
+    // Idempotent replay (U8) returns the original session sale via the same
+    // exported ok shape.
+    assertConformsToExportedReturns(createTransactionFromSession, {
+      kind: "ok" as const,
+      data: {
+        transactionId: "txn-1" as Id<"posTransaction">,
+        transactionNumber: "584065",
+        transactionItems: ["txn-item-1" as Id<"posTransactionItem">],
+      },
+    });
     assertConformsToExportedReturns(
       correctTransactionCustomer,
       validationError,

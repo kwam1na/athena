@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="2d92db5b88fddb861a65ea51dffdf8afc502ca87f1c055ed896e1245d0b8698b">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>POS Phase 2 — Trust-Boundary Hardening (Landed-Change Report)</title>
+<style>
+  :root { --bg:#0f1115; --card:#171a21; --ink:#e7e9ee; --muted:#9aa3b2; --line:#262b36; --accent:#5aa0ff; --good:#3ecf8e; --warn:#f5a623; --bad:#ff6b6b; }
+  @media (prefers-color-scheme: light) { :root { --bg:#f6f7f9; --card:#fff; --ink:#1b1f27; --muted:#5b6472; --line:#e4e7ec; --accent:#2f6fed; } }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+  .wrap { max-width:960px; margin:0 auto; padding:32px 20px 80px; }
+  h1 { font-size:26px; margin:0 0 6px; }
+  h2 { font-size:19px; margin:32px 0 10px; border-bottom:1px solid var(--line); padding-bottom:6px; }
+  h3 { font-size:15px; margin:18px 0 6px; }
+  p, li { color:var(--ink); }
+  .muted { color:var(--muted); }
+  .pills { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0; }
+  .pill { font-size:12px; padding:3px 10px; border-radius:999px; border:1px solid var(--line); background:var(--card); color:var(--muted); }
+  .pill.good { color:var(--good); border-color:var(--good); }
+  .pill.warn { color:var(--warn); border-color:var(--warn); }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px 18px; margin:14px 0; }
+  code, pre { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:13px; }
+  pre { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:12px; overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; margin:10px 0; display:block; overflow-x:auto; }
+  th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); vertical-align:top; font-size:13.5px; }
+  th { color:var(--muted); font-weight:600; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  @media (max-width:720px){ .grid2{ grid-template-columns:1fr; } }
+  .u { display:inline-block; font-weight:700; color:var(--accent); }
+  .quiz .q { margin:16px 0; }
+  .quiz label { display:block; padding:8px 10px; border:1px solid var(--line); border-radius:8px; margin:5px 0; cursor:pointer; }
+  .quiz label:hover { border-color:var(--accent); }
+  .quiz .exp { display:none; font-size:13px; color:var(--muted); margin:6px 2px 0; padding-left:10px; border-left:2px solid var(--line); }
+  .btn { background:var(--accent); color:#fff; border:0; border-radius:8px; padding:10px 16px; font-size:14px; cursor:pointer; }
+  .btn.secondary { background:transparent; color:var(--accent); border:1px solid var(--accent); }
+  #score { font-weight:700; margin-left:12px; }
+  .ok{color:var(--good)} .no{color:var(--bad)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>POS Phase 2 — Trust-Boundary Hardening</h1>
+  <div class="muted">Re-pricing · Idempotency · Clock · Money · Landed-change report</div>
+  <div class="pills">
+    <span class="pill warn">delivery candidate</span>
+    <span class="pill">PR #661</span>
+    <span class="pill">branch fix/pos-phase2-trust-boundary</span>
+    <span class="pill good">focused tests green</span>
+    <span class="pill">merge: pending</span>
+    <span class="pill">deploy: deferred (PR-only)</span>
+  </div>
+  <div class="muted">Issues: V26-1062 (U7), V26-958 (U8), V26-1063 (U9), V26-1064 (U10) · follow-up V26-1066 (U10 constraint-flip cutover). Plan: <code>docs/plans/2026-07-15-001-fix-pos-local-first-hardening-plan.md</code>.</div>
+
+  <h2>Executive summary</h2>
+  <div class="card">
+    <p>The in-store POS runs local-first and drains events to Convex. Phase 2 closes the <b>client→server trust boundary</b> for the online completion paths, which previously trusted terminal-supplied prices, retries, clocks, and money units. Four coordinated units land together:</p>
+    <ul>
+      <li><span class="u">U7</span> — the server re-prices every sale line against catalog authority; an unauthorized deviation cannot complete, an authorized one needs a manager proof and writes an append-only audit.</li>
+      <li><span class="u">U8</span> — a client-stable idempotency token dedups the transaction mint and guards the drawer cash, so a retry can't mint a second sale or double-charge.</li>
+      <li><span class="u">U9</span> — the server derives the business timestamp and operating date from its own timezone authority; terminal clock skew is clamped/flagged without breaking sync retry-matching.</li>
+      <li><span class="u">U10</span> — a deterministic, idempotent pesewas migration + completion marker for the never-migrated POS money tables. The schema constraint-flip is deliberately deferred to a gated production cutover (V26-1066).</li>
+    </ul>
+  </div>
+
+  <h2>The problem, in plain language</h2>
+  <p>A local-first cash register is only as trustworthy as the values the terminal sends when it finally syncs. The audit found the online completion paths would:</p>
+  <ul>
+    <li><b>Trust the price.</b> Totals were recomputed from <code>item.price</code> and only checked for internal arithmetic — the catalog price was never compared. A stale-catalog or tampered terminal could sell at any price, with no record.</li>
+    <li><b>Trust the retry.</b> No idempotency token; every submit minted a fresh transaction number. A network retry after a committed sale created a second sale, a second stock decrement, and — because the drawer-cash call omitted the key the void path uses — double cash.</li>
+    <li><b>Trust the clock.</b> <code>occurredAt</code> and the operating-day window came straight from the terminal. A skewed clock booked sales into the wrong operating day and skewed closeout variance.</li>
+    <li><b>Trust the units.</b> POS money is unconstrained <code>v.number()</code> and, unlike the online-store tables, was never migrated to pesewas — it still stores cedis.</li>
+  </ul>
+  <p>The offline projection path already re-priced and deduped. Phase 2 treats it as the <i>template</i> and makes the online paths inherit the same discipline.</p>
+
+  <h2>The mental model</h2>
+  <div class="card">
+    <p><b>Client proposes, server decides.</b> For every money-relevant value the terminal sends, the server derives the authoritative version from its own state and treats the client value as a proposal it must validate:</p>
+    <table>
+      <tr><th>Value</th><th>Client proposes</th><th>Server derives / enforces</th></tr>
+      <tr><td>Line price</td><td><code>item.price</code></td><td><code>importedPrice ?? netPrice ?? price</code>; match, or manager-audited override, or reject</td></tr>
+      <tr><td>Sale identity</td><td>idempotency token</td><td>dedup the mint before minting; return the original on replay</td></tr>
+      <tr><td>Business time / day</td><td><code>occurredAt</code>, <code>operatingDate</code></td><td>clamp vs server time; derive operating date from timezone authority</td></tr>
+      <tr><td>Money unit</td><td>a number</td><td>integer pesewas (migration now; validator flip later)</td></tr>
+    </table>
+  </div>
+
+  <h2>Before / after — the completion path</h2>
+  <div class="grid2">
+    <div class="card"><h3>Before</h3><pre>completeTransaction(items, client totals)
+  totals = sum(client item.price)   // client-trusted
+  if totals internally consistent → OK
+  mint new txn number (always)
+  record drawer cash (no idem key)
+  store item.price verbatim</pre></div>
+    <div class="card"><h3>After</h3><pre>completeTransaction(items, token?, proof?)
+  if token && existing → return original  // U8
+  derive basis per line from catalog       // U7
+    match → record basis
+    deviate + manager proof → record + audit
+    deviate + no proof → approval_required
+  mint once, keyed by token                // U8
+  record drawer cash guarded by token      // U8
+  reporting *Minor = derived price         // U7</pre></div>
+  </div>
+  <p class="muted">Ingest (U9): the terminal <code>occurredAt</code>/payload are left untouched (they drive the <code>isSameLocalEvent</code> retry-match); the clamped business time and server operating date are stored in <b>additive</b> record fields computed once at first ingest.</p>
+
+  <h2>Key files</h2>
+  <table>
+    <tr><th>File</th><th>Why it matters</th></tr>
+    <tr><td><code>convex/pos/application/commands/completeTransaction.ts</code></td><td>U7 re-pricing + override audit and U8 mint dedup on both completion paths (the core).</td></tr>
+    <tr><td><code>convex/pos/public/transactions.ts</code>, <code>convex/inventory/posSessions.ts</code></td><td>Public entry points; accept the token + override proof and propagate <code>approval_required</code>. <code>completeSession</code> is the real client session path.</td></tr>
+    <tr><td><code>convex/pos/infrastructure/repositories/transactionRepository.ts</code></td><td><code>getPosTransactionByIdempotencyKey</code> — the mint-dedup lookup (U8).</td></tr>
+    <tr><td><code>convex/operations/approvalActions.ts</code></td><td>New <code>posPriceOverride</code> manager approval action (U7).</td></tr>
+    <tr><td><code>convex/pos/application/sync/ingestLocalEvents.ts</code>, <code>projectLocalEvents.ts</code>, <code>types.ts</code></td><td>U9 server clock: optional resolver dependency, additive attribution, store-day projector prefers the server date.</td></tr>
+    <tr><td><code>convex/schemas/pos/posLocalSyncEvent.ts</code></td><td>Additive <code>serverOccurredAt</code>/<code>serverOperatingDate</code>/<code>clockObservation</code> (retry-safe).</td></tr>
+    <tr><td><code>convex/migrations/migratePosAmountsToPesewas.ts</code> (+test)</td><td>U10 deterministic migration + <code>posAmountMigrationRun</code> completion marker + status query.</td></tr>
+    <tr><td><code>convex/schemas/pos/*</code>, <code>operations/registerSession.ts</code>, <code>schema.ts</code></td><td>Additive <code>pesewasMigratedAt</code> markers + <code>posTransaction.idempotencyKey</code> + new marker table. No money validator tightened.</td></tr>
+    <tr><td><code>src/lib/pos/infrastructure/convex/commandGateway.ts</code></td><td>Client sends <code>session:&lt;id&gt;</code> as the token; surfaces an unmet override requirement as a blocking failure.</td></tr>
+  </table>
+
+  <h2>What changed — and what deliberately did not</h2>
+  <div class="grid2">
+    <div class="card"><h3>Changed</h3><ul>
+      <li>Online completion now re-prices, dedups, and audits overrides on both paths.</li>
+      <li>Drawer cash is idempotent at every sale call site (incl. <code>completeSession</code>).</li>
+      <li>Ingest stores server-derived business time + operating date; store-day opens under the server date.</li>
+      <li>POS money migration mechanism + completion marker exist and are tested.</li>
+    </ul></div>
+    <div class="card"><h3>Intentionally unchanged</h3><ul>
+      <li><b>The schema money validators stay <code>v.number()</code></b> — flipping them before every legacy cedis row is migrated would reject those rows. Gated to V26-1066.</li>
+      <li>The event-sourcing core, sync-contract event shapes, and the <code>isSameLocalEvent</code> equality (occurredAt + payload) are untouched.</li>
+      <li>Offline-first posture: no online-only fallback sell path was added.</li>
+      <li>Pending-checkout lines keep their operator-entered price (own review workflow); exempt from catalog re-pricing.</li>
+    </ul></div>
+  </div>
+
+  <h2>Validation &amp; review evidence</h2>
+  <ul>
+    <li><code>completeTransaction.test.ts</code> — 86 pass (U7 re-pricing: tamper-reject both paths incl. the linked-catalog security regression, manager-override + audit, net-priced basis, round-equal basis-not-echo, missing-basis rejection, reporting/item parity; U8: mint dedup + drawer-cash threading + replay).</li>
+    <li><code>ingestLocalEvents.test.ts</code> + <code>projectLocalEvents.test.ts</code> — 230 pass (U9: future-skew clamp with preserved terminal occurredAt, offline-lag preserved, operating-date correction through the projector, missing-authority fallback, retry determinism).</li>
+    <li><code>migratePosAmountsToPesewas.test.ts</code> — 5 pass (U10: conversion incl. drawer variance integrity, idempotent re-run, post-cutoff skip, completion marker + status).</li>
+    <li><code>bunx tsc --noEmit</code> clean; <code>lint:convex:changed</code> pass (return-validator contracts re-proven for changed public modules).</li>
+    <li>Multi-lens review loop (money/payments, data-migration safety, security/authz, tests) run via subagents to unanimous approval; blocking findings integrated before final gate.</li>
+    <li><b>Deploy status:</b> deferred — Phase 2 is delivered as an open, mergeable PR per plan; production CD not run.</li>
+    <li><b>Root-alignment status:</b> not applicable pre-merge.</li>
+  </ul>
+
+  <h2>Next-time / operational guidance</h2>
+  <ul>
+    <li>Hardening an online path that has an offline twin? Mirror the offline projector's basis, dedup key, and conflict discipline instead of re-deriving.</li>
+    <li>Adding server-derived attribution to an event with an idempotency/equality check? Use <b>additive</b> fields and confirm what the equality function compares first.</li>
+    <li>Running the U10 cutover (V26-1066): convert writers to pesewas → deploy + run <code>migratePosAmountsToPesewas</code> until <code>posAmountMigrationStatus</code> reports <code>complete</code> for every table → only then flip the validators.</li>
+    <li>Touching a public Convex module with return validators? Touch a sibling <code>assertConformsToExportedReturns</code> proof in the same change, or <code>lint:convex:changed</code> blocks the push.</li>
+  </ul>
+
+  <h2>Comprehension quiz</h2>
+  <div class="muted">Quiz: Pass Required — threshold 8 / 10.</div>
+  <div class="quiz" id="changeQuiz"></div>
+  <div style="margin-top:14px">
+    <button class="btn" onclick="gradeQuiz()">Grade</button>
+    <button class="btn secondary" onclick="resetQuiz()">Reset</button>
+    <span id="score"></span>
+  </div>
+
+  <h2>Subagent Evidence</h2>
+  <div class="card muted">
+    <p>Four read-only review-lens subagents (general-purpose) analyzed the branch diff and doubled as the delivered-diff evidence for this report:</p>
+    <ul>
+      <li><b>Money/payments</b> — verified U7 basis + both-paths + reporting parity + no bypass; U8 dedup-at-mint + drawer-cash idempotency + cross-path namespace; U10 no-float + variance integrity.</li>
+      <li><b>Data-migration safety</b> — verified no validator was tightened, the migration is deterministic + idempotent with a real completion marker, and U9 additive fields keep the retry-match intact.</li>
+      <li><b>Security/authz</b> — verified the manager override is enforced and consumed correctly, the audit is append-only and attributable, and no bypass exists.</li>
+      <li><b>Tests</b> — verified the hard invariants (tamper-reject, override-audit, double-submit→one-of-everything, fractional/variance integrity, migration idempotency) are asserted, not just happy paths.</li>
+    </ul>
+    <p>Outcome: <b>unanimous APPROVE</b> across all four lenses after integrating two blocking findings — (1) the U10 completion marker computed <code>remaining</code> from a stale post-<code>collect()</code> snapshot (Convex <code>patch</code> doesn't mutate collected objects), so a completing run wrongly reported <code>complete: false</code> — fixed to derive from loop counters, with the test mock made faithful; (2) the U7 pending-checkout exemption was too broad and let <code>linked_to_catalog</code> catalog-backed lines bypass re-pricing — narrowed to unresolved pending lines only, with a tamper regression test. One non-blocking hardening (bind the override proof subject to the deviation amount/basket, not just <code>storeId</code>) is noted as a follow-up; single-use + TTL + the audit already bound attribution.</p>
+  </div>
+</div>
+
+<script>
+const QUIZ = [
+  { q:"Why must the idempotency dedup happen BEFORE minting the transaction number?", a:["A sale has no stable server id before mint, so keying off the freshly-minted id would produce a new key per retry and dedup nothing","Minting is faster","The client requires it","Convex forbids post-mint reads"], correct:0, exp:"Unlike void (which keys off an existing transaction._id), a new sale has no stable server id until it is minted — so the dedup must key off the client-stable token before mint." },
+  { q:"What is the U7 catalog price basis, matching the offline path exactly?", a:["Always sku.price","provisional.importedPrice ?? (netPrice if a number else price)","The client-submitted price","The average of recent sales"], correct:1, exp:"Comparing bare sku.price would spuriously reject legitimate net-priced/provisional-import lines that project fine offline." },
+  { q:"When a client price deviates from the basis and NO manager proof is present, the online path…", a:["Silently records the client price","Completes and flags a review","Returns approval_required and mints nothing","Uses the basis and completes"], correct:2, exp:"Online hard-rejects an unauthorized deviation (no sale minted); an authorized override needs a manager proof and writes an audit. Offline keeps its flag-and-project because money already moved." },
+  { q:"Why are the U9 server-derived clock values stored in ADDITIVE fields instead of overwriting occurredAt?", a:["To save space","Because isSameLocalEvent compares occurredAt + payload, so mutating them would break the sync retry-match","Because occurredAt is read-only in Convex","To keep the payload smaller"], correct:1, exp:"The retry-match compares occurredAt and the canonical payload; changing them would make a retried event fail to match the stored one. Additive fields are ignored by the match." },
+  { q:"How is the U9 clock derivation made deterministic across retries?", a:["It re-derives on every ingest","It is computed once at first ingest and stored; retries reuse the persisted values","It uses a random seed","It is disabled on retries"], correct:1, exp:"serverTimeAt is the first-ingest acceptance time; on retry the existing record is reused and nothing is recomputed, so the outcome is stable." },
+  { q:"What does U9 do when the store lacks timezone authority?", a:["Rejects the event and wedges the register","Falls back to the terminal operating date with a missing_timezone_authority flag","Uses UTC midnight","Crashes ingest"], correct:1, exp:"Defined missing-authority behavior: keep the terminal value (preserve liveness) but flag it so it is never silently trusted." },
+  { q:"Why does U10 NOT flip the schema money validators in this PR?", a:["It was forgotten","POS money is still cedis and never migrated; flipping before migration completes would reject legacy rows on read — it's a gated production cutover","Convex can't validate integers","The validators are already integer-only"], correct:1, exp:"The constraint-flip is a two-phase, prod-orchestrated cutover tracked as V26-1066; the migration + completion marker must verify completeness first." },
+  { q:"What replaces the old `< 10_000` heuristic in the U10 migration?", a:["A machine-learning classifier","A per-row pesewasMigratedAt marker plus a deployment cutoff timestamp","Nothing — it still uses the heuristic","Manual review of each row"], correct:1, exp:"Deterministic + idempotent: convert a row only if it predates the cutoff and is unmarked; re-runs convert nothing already marked." },
+  { q:"Where must the U8 idempotency token also be threaded so the drawer cash is guarded?", a:["Only completeTransaction","Every recordRegisterSessionSale call site, including inventory/posSessions.ts completeSession","Only the offline path","Nowhere; the mint dedup is enough"], correct:1, exp:"completeSession records drawer cash itself after calling the handler, so the token must guard recordedTransactionKeys there too — the mint dedup alone doesn't cover it." },
+  { q:"Why are pending-checkout lines exempt from U7 catalog re-pricing?", a:["They are always free","They carry an operator-entered price with their own validated review workflow and never appear in the offline path","Re-pricing is too slow","They have no productSkuId"], correct:1, exp:"Pending-checkout items are not governed by trusted catalog authority; their provenance is validated separately, so their price is recorded as-is." }
+];
+const el = document.getElementById('changeQuiz');
+QUIZ.forEach((item,i)=>{
+  const d=document.createElement('div'); d.className='q';
+  d.innerHTML='<b>'+(i+1)+'. '+item.q+'</b>'+item.a.map((opt,j)=>'<label><input type="radio" name="q'+i+'" value="'+j+'"> '+opt+'</label>').join('')+'<div class="exp" id="exp'+i+'">'+item.exp+'</div>';
+  el.appendChild(d);
+});
+function gradeQuiz(){
+  let s=0;
+  QUIZ.forEach((item,i)=>{
+    const sel=document.querySelector('input[name="q'+i+'"]:checked');
+    const exp=document.getElementById('exp'+i);
+    exp.style.display='block';
+    if(sel && Number(sel.value)===item.correct){ s++; exp.style.borderLeftColor='var(--good)'; }
+    else { exp.style.borderLeftColor='var(--bad)'; }
+  });
+  const out=document.getElementById('score');
+  out.innerHTML = s+' / '+QUIZ.length+' — '+(s>=8?'<span class="ok">PASS</span>':'<span class="no">try again (need 8)</span>');
+}
+function resetQuiz(){
+  QUIZ.forEach((_,i)=>{ const c=document.querySelector('input[name="q'+i+'"]:checked'); if(c)c.checked=false; document.getElementById('exp'+i).style.display='none'; });
+  document.getElementById('score').textContent='';
+}
+</script>
+</body>
+</html>

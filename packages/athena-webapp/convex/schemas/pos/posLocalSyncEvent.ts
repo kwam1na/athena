@@ -49,4 +49,30 @@ export const posLocalSyncEventSchema = v.object({
   heldReason: v.optional(v.string()),
   rejectionCode: v.optional(v.string()),
   rejectionMessage: v.optional(v.string()),
+  // U9: server-derived clock attribution, computed once at first ingest and
+  // stored additively. These fields are NOT part of the `isSameLocalEvent`
+  // retry-match (which compares only occurredAt + payload), so recording them
+  // cannot break sync-event idempotency. `occurredAt` and `payload` keep the
+  // terminal-supplied values; the server-authoritative business time and
+  // operating date live here so terminal clock skew cannot silently corrupt
+  // operating-day attribution.
+  serverOccurredAt: v.optional(v.number()),
+  serverOperatingDate: v.optional(v.string()),
+  clockObservation: v.optional(
+    v.object({
+      serverTimeAt: v.number(),
+      occurredAtStatus: v.union(
+        v.literal("in_bounds"),
+        v.literal("future_skew_clamped"),
+      ),
+      operatingDateStatus: v.optional(
+        v.union(
+          v.literal("terminal_matched"),
+          v.literal("server_corrected"),
+          v.literal("missing_timezone_authority"),
+        ),
+      ),
+      terminalOperatingDate: v.optional(v.string()),
+    }),
+  ),
 });

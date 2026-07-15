@@ -55,6 +55,7 @@ import {
 import {
   posTransactionSchema,
   posTransactionItemSchema,
+  posAmountMigrationRunSchema,
   posTransactionServiceLineSchema,
   posTransactionAdjustmentSchema,
   posTransactionAdjustmentLineSchema,
@@ -836,8 +837,13 @@ const schema = defineSchema({
       "eventType",
       "occurredAt",
     ]),
+  posAmountMigrationRun: defineTable(posAmountMigrationRunSchema).index(
+    "by_table",
+    ["table"],
+  ),
   posTransaction: defineTable(posTransactionSchema)
     .index("by_storeId", ["storeId"])
+    .index("by_storeId_idempotencyKey", ["storeId", "idempotencyKey"])
     .index("by_staffProfileId", ["staffProfileId"])
     .index("by_storeId_status_completedAt", [
       "storeId",

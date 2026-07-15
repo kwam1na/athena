@@ -55,4 +55,6 @@ export const posSessionSchema = v.object({
   // Notes
   holdReason: v.optional(v.string()),
   notes: v.optional(v.string()),
+  // U10: deterministic idempotency marker for the cedis→pesewas migration.
+  pesewasMigratedAt: v.optional(v.number()),
 });

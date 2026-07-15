@@ -1,5 +1,6 @@
 export * from "./posTransaction";
 export * from "./posTransactionItem";
+export * from "./posAmountMigrationRun";
 export * from "./posTransactionServiceLine";
 export * from "./posTransactionAdjustment";
 export * from "./posTransactionAdjustmentLine";

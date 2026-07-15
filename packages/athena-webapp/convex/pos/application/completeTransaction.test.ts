@@ -29,6 +29,7 @@ import {
   getPosSessionById,
   getRegisterSessionById,
   getProductSkuById,
+  getPosTransactionByIdempotencyKey,
   getStoreById,
   listTransactionAdjustments,
   listSessionItems,
@@ -84,6 +85,7 @@ vi.mock("../infrastructure/repositories/transactionRepository", () => ({
   getPosSessionById: vi.fn(),
   getRegisterSessionById: vi.fn(),
   getPosTransactionById: vi.fn(),
+  getPosTransactionByIdempotencyKey: vi.fn(),
   getProductSkuById: vi.fn(),
   getStoreById: vi.fn(),
   listTransactionAdjustments: vi.fn(),
@@ -127,6 +129,10 @@ vi.mock("../../operations/approvalActions", () => ({
     transactionVoid: {
       key: "pos.transaction.void",
       label: "Void completed transaction",
+    },
+    posPriceOverride: {
+      key: "pos.sale.price_override",
+      label: "Override POS sale price",
     },
   },
   consumeCommandApprovalProofWithCtx: vi.fn(),
@@ -1478,6 +1484,7 @@ describe("completeTransaction checkout side effects", () => {
       _id: "sku-1",
       images: [],
       inventoryCount: 10,
+      price: 10,
       productId: "product-1",
       quantityAvailable: 10,
       sku: "SKU-1",
@@ -1528,6 +1535,7 @@ describe("completeTransaction checkout side effects", () => {
       _id: "sku-1",
       images: [],
       inventoryCount: 10,
+      price: 10,
       productId: "product-1",
       quantityAvailable: 10,
       sku: "SKU-1",
@@ -1670,6 +1678,7 @@ describe("completeTransaction checkout side effects", () => {
       storeId: "store-1",
       status: "active",
       posExposureStatus: "available",
+      importedPrice: 15,
       productId: "product-import-1",
       productSkuId: "sku-import-1",
       saleEvidence: {
@@ -1724,6 +1733,7 @@ describe("completeTransaction checkout side effects", () => {
       _id: "sku-import-1",
       images: [],
       inventoryCount: 0,
+      price: 15,
       productId: "product-import-1",
       quantityAvailable: 0,
       sku: "LEGACY-1",
@@ -1809,6 +1819,7 @@ describe("completeTransaction checkout side effects", () => {
           storeId: "store-1",
           status: "active",
           posExposureStatus: "available",
+          importedPrice: 15,
           productId: "product-import-1",
           productSkuId: "sku-import-1",
           saleEvidence: {
@@ -1821,6 +1832,7 @@ describe("completeTransaction checkout side effects", () => {
           storeId: "store-1",
           status: "active",
           posExposureStatus: "available",
+          importedPrice: 15,
           productId: "product-import-1",
           productSkuId: "sku-import-1",
           saleEvidence: {
@@ -1872,6 +1884,7 @@ describe("completeTransaction checkout side effects", () => {
       _id: "sku-import-1",
       images: [],
       inventoryCount: 0,
+      price: 15,
       productId: "product-import-1",
       quantityAvailable: 0,
       sku: "LEGACY-1",
@@ -1996,6 +2009,7 @@ describe("completeTransaction checkout side effects", () => {
       _id: "sku-import-1",
       images: [],
       inventoryCount: 0,
+      price: 15,
       productId: "product-import-1",
       quantityAvailable: 0,
       sku: "LEGACY-1",
@@ -2133,6 +2147,7 @@ describe("completeTransaction checkout side effects", () => {
       _id: "sku-import-1",
       images: [],
       inventoryCount: 0,
+      price: 15,
       productId: "product-import-1",
       quantityAvailable: 0,
       sku: "LEGACY-1",
@@ -2174,6 +2189,7 @@ describe("completeTransaction checkout side effects", () => {
       _id: "sku-1",
       images: [],
       inventoryCount: 10,
+      price: 10,
       productId: "product-1",
       quantityAvailable: 10,
       sku: "SKU-1",
@@ -2212,6 +2228,7 @@ describe("completeTransaction checkout side effects", () => {
       _id: "sku-1",
       images: [],
       inventoryCount: 10,
+      price: 10,
       productId: "product-1",
       quantityAvailable: 10,
       sku: "SKU-1",
@@ -2479,6 +2496,7 @@ describe("completeTransaction trace ordering", () => {
       _id: "sku-1",
       images: [],
       inventoryCount: 10,
+      price: 10,
       productId: "product-1",
       quantityAvailable: 10,
       sku: "SKU-1",
@@ -2587,6 +2605,7 @@ describe("completeTransaction trace ordering", () => {
       _id: "sku-1",
       images: [],
       inventoryCount: 10,
+      price: 10,
       productId: "product-1",
       quantityAvailable: 10,
       sku: "SKU-1",
@@ -2688,6 +2707,7 @@ describe("completeTransaction trace ordering", () => {
       _id: "sku-1",
       images: [],
       inventoryCount: 10,
+      price: 10,
       productId: "product-1",
       quantityAvailable: 10,
       sku: "SKU-1",
@@ -3026,10 +3046,14 @@ describe("completeTransaction trace ordering", () => {
         image: undefined,
       },
     ] as never);
+    // Linked_to_catalog lines resolve to a trusted catalog SKU and are re-priced
+    // (U7 + security review); the catalog basis matches the line price here, so a
+    // legitimate linked sale completes without an override.
     vi.mocked(getProductSkuById).mockResolvedValue({
       _id: "sku-1",
       images: [],
       inventoryCount: 10,
+      price: 15,
       productId: "product-1",
       quantityAvailable: 10,
       sku: "SKU-1",
@@ -3110,6 +3134,7 @@ describe("completeTransaction trace ordering", () => {
       storeId: "store-1",
       status: "active",
       posExposureStatus: "available",
+      importedPrice: 15,
       productId: "product-import-1",
       productSkuId: "sku-import-1",
       saleEvidence: {
@@ -3174,6 +3199,7 @@ describe("completeTransaction trace ordering", () => {
       _id: "sku-import-1",
       images: [],
       inventoryCount: 0,
+      price: 15,
       productId: "product-import-1",
       quantityAvailable: 0,
       sku: "LEGACY-1",
@@ -3244,6 +3270,7 @@ describe("completeTransaction trace ordering", () => {
           storeId: "store-1",
           status: "active",
           posExposureStatus: "available",
+          importedPrice: 15,
           productId: "product-import-1",
           productSkuId: "sku-import-1",
           saleEvidence: {
@@ -3259,6 +3286,7 @@ describe("completeTransaction trace ordering", () => {
           storeId: "store-1",
           status: "active",
           posExposureStatus: "available",
+          importedPrice: 20,
           productId: "product-import-1",
           productSkuId: "sku-import-1",
           saleEvidence: {
@@ -3334,6 +3362,7 @@ describe("completeTransaction trace ordering", () => {
       _id: "sku-import-1",
       images: [],
       inventoryCount: 0,
+      price: 15,
       productId: "product-import-1",
       quantityAvailable: 0,
       sku: "LEGACY-1",
@@ -3413,6 +3442,7 @@ describe("completeTransaction trace ordering", () => {
               storeId: "store-1",
               status: "active",
               posExposureStatus: "available",
+              importedPrice: 15,
               productId: "product-import-1",
               productSkuId: "sku-import-1",
             };
@@ -3908,14 +3938,25 @@ describe("completeTransaction trace ordering", () => {
         image: undefined,
       },
     ] as never);
-    vi.mocked(getProductSkuById).mockResolvedValue({
-      _id: "sku-1",
-      images: [],
-      inventoryCount: 10,
-      productId: "product-1",
-      quantityAvailable: 10,
-      sku: "SKU-1",
-    } as never);
+    const canonicalSkuPrices: Record<string, number> = {
+      "sku-1": 8_000,
+      "sku-2": 25_000,
+      "sku-3": 50_000,
+      "sku-4": 2_400,
+    };
+    vi.mocked(getProductSkuById).mockImplementation((async (
+      _ctx: unknown,
+      skuId: string,
+    ) =>
+      ({
+        _id: skuId,
+        images: [],
+        inventoryCount: 10,
+        price: canonicalSkuPrices[skuId] ?? 0,
+        productId: `product-${String(skuId).split("-")[1]}`,
+        quantityAvailable: 10,
+        sku: String(skuId).toUpperCase(),
+      }) as never) as never);
     vi.mocked(createPosTransaction).mockResolvedValue("txn-1" as never);
     vi.mocked(recordRetailSalePaymentAllocations).mockResolvedValue(true);
     vi.mocked(createPosTransactionItem).mockResolvedValue(
@@ -4002,6 +4043,7 @@ describe("completeTransaction trace ordering", () => {
       _id: "sku-1",
       images: [],
       inventoryCount: 10,
+      price: 10,
       productId: "product-1",
       quantityAvailable: 10,
       sku: "SKU-1",
@@ -4081,6 +4123,7 @@ describe("completeTransaction trace ordering", () => {
       _id: "sku-1",
       images: [],
       inventoryCount: 10,
+      price: 10,
       productId: "product-1",
       quantityAvailable: 10,
       sku: "SKU-1",
@@ -4490,6 +4533,7 @@ describe("completeTransaction trace ordering", () => {
       _id: "sku-1",
       images: [],
       inventoryCount: 10,
+      price: 10,
       productId: "product-1",
       quantityAvailable: 10,
       sku: "SKU-1",
@@ -4538,5 +4582,486 @@ describe("completeTransaction trace ordering", () => {
       }),
     );
     expect(patchPosTransaction).not.toHaveBeenCalled();
+  });
+});
+
+describe("completeTransaction idempotency (U8)", () => {
+  const directArgs = {
+    storeId: "store-1" as Id<"store">,
+    items: [
+      {
+        skuId: "sku-1" as Id<"productSku">,
+        quantity: 1,
+        price: 10,
+        name: "Sneaker",
+        sku: "SKU-1",
+      },
+    ],
+    payments: [{ method: "cash", amount: 10, timestamp: 1 }],
+    subtotal: 10,
+    tax: 0,
+    total: 10,
+    registerNumber: "1",
+    terminalId: "terminal-1" as Id<"posTerminal">,
+    registerSessionId: "register-1" as Id<"registerSession">,
+  };
+
+  function seedDirectHappyPath() {
+    vi.mocked(getStoreById).mockResolvedValue({
+      _id: "store-1",
+      organizationId: "org-1",
+    } as never);
+    vi.mocked(getProductSkuById).mockResolvedValue({
+      _id: "sku-1",
+      images: [],
+      inventoryCount: 10,
+      price: 10,
+      productId: "product-1",
+      quantityAvailable: 10,
+      sku: "SKU-1",
+    } as never);
+    vi.mocked(createPosTransaction).mockResolvedValue("txn-1" as never);
+    vi.mocked(recordRetailSalePaymentAllocations).mockResolvedValue(true);
+    vi.mocked(createPosTransactionItem).mockResolvedValue("txn-item-1" as never);
+    vi.mocked(applyCommerceInventoryEffectWithCtx).mockResolvedValue(
+      undefined as never,
+    );
+  }
+
+  it("namespaces the client token and threads it to the mint and drawer cash on a fresh direct sale", async () => {
+    const runMutation = vi.fn().mockResolvedValue(undefined);
+    const ctx = { runMutation } as never;
+    seedDirectHappyPath();
+    vi.mocked(getPosTransactionByIdempotencyKey).mockResolvedValue(null as never);
+
+    const result = await completeTransaction(ctx, {
+      ...directArgs,
+      idempotencyKey: "client-token-1",
+    });
+
+    expect(result.kind).toBe("ok");
+    // Dedup lookup uses the namespaced token so it cannot collide with the
+    // offline `localTransactionId` mapping namespace.
+    expect(getPosTransactionByIdempotencyKey).toHaveBeenCalledWith(
+      expect.anything(),
+      { storeId: "store-1", idempotencyKey: "online:client-token-1" },
+    );
+    // The mint persists the token so later retries can find this sale.
+    expect(createPosTransaction).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ idempotencyKey: "online:client-token-1" }),
+    );
+    // The drawer-cash increment is guarded by the same token.
+    expect(runMutation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        adjustmentKind: "sale",
+        idempotencyKey: "online:client-token-1",
+      }),
+    );
+  });
+
+  it("returns the original direct sale on replay without minting or re-recording cash", async () => {
+    const runMutation = vi.fn().mockResolvedValue(undefined);
+    const ctx = { runMutation } as never;
+    vi.mocked(getPosTransactionByIdempotencyKey).mockResolvedValue({
+      _id: "txn-existing",
+      transactionNumber: "POS-EXISTING",
+    } as never);
+    vi.mocked(listTransactionItems).mockResolvedValue([
+      { _id: "txn-item-existing" },
+    ] as never);
+
+    const result = await completeTransaction(ctx, {
+      ...directArgs,
+      idempotencyKey: "client-token-1",
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        kind: "ok",
+        data: {
+          transactionId: "txn-existing",
+          transactionNumber: "POS-EXISTING",
+          transactionItems: ["txn-item-existing"],
+        },
+      }),
+    );
+    // No second sale is minted and no drawer cash is recorded on replay.
+    expect(createPosTransaction).not.toHaveBeenCalled();
+    expect(runMutation).not.toHaveBeenCalled();
+    expect(applyCommerceInventoryEffectWithCtx).not.toHaveBeenCalled();
+  });
+
+  it("returns the original session sale on replay without minting a duplicate", async () => {
+    const runMutation = vi.fn().mockResolvedValue(undefined);
+    const ctx = { runMutation } as never;
+    vi.mocked(getPosSessionById).mockResolvedValue({
+      _id: "session-1",
+      storeId: "store-1",
+      staffProfileId: "staff-1",
+    } as never);
+    vi.mocked(getPosTransactionByIdempotencyKey).mockResolvedValue({
+      _id: "txn-existing",
+      transactionNumber: "POS-EXISTING",
+    } as never);
+    vi.mocked(listTransactionItems).mockResolvedValue([
+      { _id: "txn-item-existing" },
+    ] as never);
+
+    const result = await createTransactionFromSessionHandler(ctx, {
+      sessionId: "session-1" as Id<"posSession">,
+      staffProfileId: "staff-1" as Id<"staffProfile">,
+      payments: [{ method: "cash", amount: 10, timestamp: 1 }],
+      registerSessionId: "register-1" as Id<"registerSession">,
+      idempotencyKey: "client-token-1",
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        kind: "ok",
+        data: {
+          transactionId: "txn-existing",
+          transactionNumber: "POS-EXISTING",
+          transactionItems: ["txn-item-existing"],
+        },
+      }),
+    );
+    expect(getPosTransactionByIdempotencyKey).toHaveBeenCalledWith(
+      expect.anything(),
+      { storeId: "store-1", idempotencyKey: "online:client-token-1" },
+    );
+    expect(createPosTransaction).not.toHaveBeenCalled();
+    expect(listSessionItems).not.toHaveBeenCalled();
+    expect(runMutation).not.toHaveBeenCalled();
+  });
+});
+
+describe("completeTransaction re-pricing (U7)", () => {
+  const directArgs = {
+    storeId: "store-1" as Id<"store">,
+    items: [
+      {
+        skuId: "sku-1" as Id<"productSku">,
+        quantity: 1,
+        price: 10,
+        name: "Sneaker",
+        sku: "SKU-1",
+      },
+    ],
+    payments: [{ method: "cash", amount: 10, timestamp: 1 }],
+    subtotal: 10,
+    tax: 0,
+    total: 10,
+    registerNumber: "1",
+    terminalId: "terminal-1" as Id<"posTerminal">,
+    staffProfileId: "staff-1" as Id<"staffProfile">,
+    registerSessionId: "register-1" as Id<"registerSession">,
+  };
+
+  function seedDirect(sku: Record<string, unknown>) {
+    vi.mocked(getStoreById).mockResolvedValue({
+      _id: "store-1",
+      organizationId: "org-1",
+    } as never);
+    vi.mocked(getProductSkuById).mockResolvedValue({
+      _id: "sku-1",
+      images: [],
+      inventoryCount: 10,
+      productId: "product-1",
+      quantityAvailable: 10,
+      sku: "SKU-1",
+      ...sku,
+    } as never);
+    vi.mocked(getPosTransactionByIdempotencyKey).mockResolvedValue(null as never);
+    vi.mocked(createPosTransaction).mockResolvedValue("txn-1" as never);
+    vi.mocked(recordRetailSalePaymentAllocations).mockResolvedValue(true);
+    vi.mocked(createPosTransactionItem).mockResolvedValue("txn-item-1" as never);
+    vi.mocked(applyCommerceInventoryEffectWithCtx).mockResolvedValue(
+      undefined as never,
+    );
+  }
+
+  it("hard-rejects a client price that deviates from the catalog basis without override authority", async () => {
+    seedDirect({ price: 20 });
+    const result = await completeTransaction({ runMutation: vi.fn() } as never, {
+      ...directArgs,
+    });
+
+    expect(result.kind).toBe("approval_required");
+    if (result.kind !== "approval_required") throw new Error("expected approval");
+    expect(result.approval.action.key).toBe("pos.sale.price_override");
+    expect(result.approval.requiredRole).toBe("manager");
+    expect(result.approval.subject.type).toBe("pos_price_override");
+    // No sale is minted, no stock decremented on a rejected tamper.
+    expect(createPosTransaction).not.toHaveBeenCalled();
+    expect(applyCommerceInventoryEffectWithCtx).not.toHaveBeenCalled();
+  });
+
+  it("completes an authorized manager override and writes an append-only audit", async () => {
+    seedDirect({ price: 20 });
+    vi.mocked(consumeCommandApprovalProofWithCtx).mockResolvedValue({
+      kind: "ok",
+      data: {
+        approvalProofId: "proof-1",
+        approvedByStaffProfileId: "manager-1",
+        consumedAt: 1,
+        expiresAt: 2,
+        requestedByStaffProfileId: "staff-1",
+      },
+    } as never);
+
+    const result = await completeTransaction(
+      { runMutation: vi.fn() } as never,
+      {
+        ...directArgs,
+        priceOverrideApprovalProofId: "proof-1" as Id<"approvalProof">,
+      },
+    );
+
+    expect(result.kind).toBe("ok");
+    // The manager proof is consumed against the price-override action/subject.
+    expect(consumeCommandApprovalProofWithCtx).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        action: expect.objectContaining({ key: "pos.sale.price_override" }),
+        approvalProofId: "proof-1",
+        requiredRole: "manager",
+        storeId: "store-1",
+        subject: expect.objectContaining({ type: "pos_price_override" }),
+      }),
+    );
+    // Append-only override audit records the approver, basis, charged, and delta.
+    expect(recordOperationalEventWithCtx).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        eventType: "pos_transaction_price_override",
+        subjectType: "posTransaction",
+        subjectId: "txn-1",
+        metadata: expect.objectContaining({
+          approvedByStaffProfileId: "manager-1",
+          totalDelta: -10,
+          lines: [
+            expect.objectContaining({
+              productSkuId: "sku-1",
+              catalogBasis: 20,
+              chargedPrice: 10,
+              delta: -10,
+            }),
+          ],
+        }),
+      }),
+    );
+    // The overridden (manager-approved) charged price is what gets recorded.
+    expect(createPosTransactionItem).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ unitPrice: 10, totalPrice: 10 }),
+    );
+  });
+
+  it("records the server-derived basis (not the client echo) for a round-equal matched line and mirrors it into reporting", async () => {
+    // Basis 10.004 and client 10.001 are equal after rounding to 2dp (both 10.00),
+    // so the line matches — but the server must store the BASIS (10.004), not the
+    // client value, so a fractional cent can't slip into storage.
+    seedDirect({ price: 10.004 });
+    const result = await completeTransaction(
+      { runMutation: vi.fn() } as never,
+      {
+        ...directArgs,
+        items: [
+          {
+            skuId: "sku-1" as Id<"productSku">,
+            quantity: 1,
+            price: 10.001,
+            name: "Sneaker",
+            sku: "SKU-1",
+          },
+        ],
+      },
+    );
+
+    expect(result.kind).toBe("ok");
+    // No override audit for a non-deviating (round-equal) sale.
+    expect(recordOperationalEventWithCtx).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ eventType: "pos_transaction_price_override" }),
+    );
+    // Stored line price is the server basis, not the client echo.
+    expect(createPosTransactionItem).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ unitPrice: 10.004, totalPrice: 10.004 }),
+    );
+    // Reporting *Minor fields reflect the server-derived price.
+    expect(appendReportingIngressWithCtx).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        lines: expect.arrayContaining([
+          expect.objectContaining({ unitPriceMinor: 10.004 }),
+        ]),
+      }),
+    );
+  });
+
+  it("prices a net-priced line against netPrice, not the gross price", async () => {
+    // Gross price 99 would deviate from the charged 10; netPrice 10 matches.
+    seedDirect({ price: 99, netPrice: 10 });
+    const result = await completeTransaction(
+      { runMutation: vi.fn() } as never,
+      { ...directArgs },
+    );
+    expect(result.kind).toBe("ok");
+    expect(consumeCommandApprovalProofWithCtx).not.toHaveBeenCalled();
+  });
+
+  it("rejects a line whose catalog basis is unavailable instead of trusting the client", async () => {
+    seedDirect({});
+    const result = await completeTransaction(
+      { runMutation: vi.fn() } as never,
+      { ...directArgs },
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        kind: "user_error",
+        error: expect.objectContaining({ code: "precondition_failed" }),
+      }),
+    );
+    expect(createPosTransaction).not.toHaveBeenCalled();
+  });
+
+  it("hard-rejects a tampered session sale without override authority (session path)", async () => {
+    vi.mocked(getStoreById).mockResolvedValue({
+      _id: "store-1",
+      organizationId: "org-1",
+    } as never);
+    vi.mocked(getPosSessionById).mockResolvedValue({
+      _id: "session-1",
+      storeId: "store-1",
+      staffProfileId: "staff-1",
+      registerNumber: "1",
+      registerSessionId: "register-1",
+      terminalId: "terminal-1",
+    } as never);
+    vi.mocked(getRegisterSessionById).mockResolvedValue({
+      _id: "register-1",
+      storeId: "store-1",
+      status: "open",
+      terminalId: "terminal-1",
+      registerNumber: "1",
+    } as never);
+    vi.mocked(getPosTransactionByIdempotencyKey).mockResolvedValue(null as never);
+    vi.mocked(listSessionItems).mockResolvedValue([
+      {
+        _id: "session-item-1",
+        sessionId: "session-1",
+        storeId: "store-1",
+        productId: "product-1",
+        productSkuId: "sku-1",
+        productSku: "SKU-1",
+        productName: "Sneaker",
+        price: 10,
+        quantity: 1,
+      },
+    ] as never);
+    vi.mocked(getProductSkuById).mockResolvedValue({
+      _id: "sku-1",
+      images: [],
+      inventoryCount: 10,
+      price: 20,
+      productId: "product-1",
+      quantityAvailable: 10,
+      sku: "SKU-1",
+    } as never);
+
+    const result = await createTransactionFromSessionHandler(
+      { runMutation: vi.fn() } as never,
+      {
+        sessionId: "session-1" as Id<"posSession">,
+        staffProfileId: "staff-1" as Id<"staffProfile">,
+        payments: [{ method: "cash", amount: 10, timestamp: 1 }],
+        registerSessionId: "register-1" as Id<"registerSession">,
+      },
+    );
+
+    expect(result.kind).toBe("approval_required");
+    expect(createPosTransaction).not.toHaveBeenCalled();
+  });
+
+  it("re-prices a linked_to_catalog pending line and hard-rejects a tampered price (security regression)", async () => {
+    // A linked_to_catalog line resolves to a trusted catalog SKU, so it must NOT
+    // be exempt from re-pricing. Selling it above the catalog basis without a
+    // manager proof must be rejected (previously it bypassed U7 entirely).
+    const linkedPendingCheckoutItem = {
+      _id: "pending-item-1",
+      approvedProductId: "product-1",
+      approvedProductSkuId: "sku-1",
+      storeId: "store-1",
+      status: "linked_to_catalog",
+      provisionalProductId: "product-pending-1",
+      provisionalProductSkuId: "sku-pending-1",
+    };
+    const ctx = {
+      db: {
+        get: vi.fn(async (tableName: string, id: string) =>
+          tableName === "posPendingCheckoutItem" && id === "pending-item-1"
+            ? linkedPendingCheckoutItem
+            : null,
+        ),
+        patch: vi.fn(),
+      },
+      runMutation: vi.fn(),
+    } as never;
+    vi.mocked(getStoreById).mockResolvedValue({
+      _id: "store-1",
+      organizationId: "org-1",
+    } as never);
+    vi.mocked(getPosSessionById).mockResolvedValue({
+      _id: "session-1",
+      storeId: "store-1",
+      staffProfileId: "staff-1",
+      registerNumber: "1",
+      registerSessionId: "register-1",
+      terminalId: "terminal-1",
+    } as never);
+    vi.mocked(getRegisterSessionById).mockResolvedValue({
+      _id: "register-1",
+      storeId: "store-1",
+      status: "open",
+      terminalId: "terminal-1",
+      registerNumber: "1",
+    } as never);
+    vi.mocked(getPosTransactionByIdempotencyKey).mockResolvedValue(null as never);
+    vi.mocked(listSessionItems).mockResolvedValue([
+      {
+        _id: "session-item-1",
+        sessionId: "session-1",
+        storeId: "store-1",
+        productId: "product-1",
+        productSkuId: "sku-1",
+        pendingCheckoutItemId: "pending-item-1",
+        productSku: "SKU-1",
+        productName: "Trusted bundle",
+        price: 25, // tampered: catalog basis is 15
+        quantity: 1,
+      },
+    ] as never);
+    vi.mocked(getProductSkuById).mockResolvedValue({
+      _id: "sku-1",
+      images: [],
+      inventoryCount: 10,
+      price: 15,
+      productId: "product-1",
+      quantityAvailable: 10,
+      sku: "SKU-1",
+    } as never);
+
+    const result = await createTransactionFromSessionHandler(ctx, {
+      sessionId: "session-1" as Id<"posSession">,
+      staffProfileId: "staff-1" as Id<"staffProfile">,
+      payments: [{ method: "cash", amount: 25, timestamp: 1 }],
+      registerSessionId: "register-1" as Id<"registerSession">,
+    });
+
+    expect(result.kind).toBe("approval_required");
+    expect(createPosTransaction).not.toHaveBeenCalled();
   });
 });

@@ -85,6 +85,45 @@ describe("projectLocalSyncEvent", () => {
     });
   });
 
+  it("persists the server-derived operating date over the terminal one when they diverge (U9)", async () => {
+    const repository = createProjectionRepository({
+      hasActivePosRole: ({ allowedRoles }) => allowedRoles.includes("cashier"),
+    });
+    const startStoreDayFromLocalSync = vi.fn().mockResolvedValue({
+      kind: "ok",
+      data: { action: "started", dailyOpeningId: "daily-opening-1" },
+    });
+    repository.startStoreDayFromLocalSync = startStoreDayFromLocalSync;
+
+    await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: {
+        localEventId: "event-store-day-1",
+        localRegisterSessionId: "local-register-1",
+        sequence: 2,
+        eventType: "store_day_started",
+        occurredAt: 10,
+        staffProfileId: "staff-1" as never,
+        staffProofToken: "proof-token-1",
+        payload: {
+          // Terminal claims the wrong day (clock/date skew).
+          operatingDate: "2026-07-12",
+          startAt: 100,
+          endAt: 200,
+        },
+      },
+      syncEventId: "sync-event-1",
+      now: 100,
+      // Server authority resolved a different operating date.
+      serverOperatingDate: "2026-07-13",
+    });
+
+    expect(startStoreDayFromLocalSync).toHaveBeenCalledWith(
+      expect.objectContaining({ operatingDate: "2026-07-13" }),
+    );
+  });
+
   it("projects pending checkout item definitions through the reviewable pending item command", async () => {
     const repository = createProjectionRepository();
 

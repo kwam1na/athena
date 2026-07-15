@@ -103,6 +103,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`convex/marketing/walkthroughRequestRetention.test.ts`](../../convex/marketing/walkthroughRequestRetention.test.ts)
 - [`convex/marketing/walkthroughRequests.test.ts`](../../convex/marketing/walkthroughRequests.test.ts)
 - [`convex/migrations/backfillAthenaUserNormalizedEmail.test.ts`](../../convex/migrations/backfillAthenaUserNormalizedEmail.test.ts)
+- [`convex/migrations/migratePosAmountsToPesewas.test.ts`](../../convex/migrations/migratePosAmountsToPesewas.test.ts)
 - [`convex/mtn/client.test.ts`](../../convex/mtn/client.test.ts)
 - [`convex/mtn/config.test.ts`](../../convex/mtn/config.test.ts)
 - [`convex/mtn/foundation.test.ts`](../../convex/mtn/foundation.test.ts)

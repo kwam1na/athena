@@ -170,6 +170,7 @@ import type * as marketing_walkthroughRequests from "../marketing/walkthroughReq
 import type * as migrations_backfillAthenaUserNormalizedEmail from "../migrations/backfillAthenaUserNormalizedEmail.js";
 import type * as migrations_backfillStoreSchedules from "../migrations/backfillStoreSchedules.js";
 import type * as migrations_migrateAmountsToPesewas from "../migrations/migrateAmountsToPesewas.js";
+import type * as migrations_migratePosAmountsToPesewas from "../migrations/migratePosAmountsToPesewas.js";
 import type * as mtn_client from "../mtn/client.js";
 import type * as mtn_collections from "../mtn/collections.js";
 import type * as mtn_config from "../mtn/config.js";
@@ -430,6 +431,7 @@ import type * as schemas_pos_expenseSessionItem from "../schemas/pos/expenseSess
 import type * as schemas_pos_expenseTransaction from "../schemas/pos/expenseTransaction.js";
 import type * as schemas_pos_expenseTransactionItem from "../schemas/pos/expenseTransactionItem.js";
 import type * as schemas_pos_index from "../schemas/pos/index.js";
+import type * as schemas_pos_posAmountMigrationRun from "../schemas/pos/posAmountMigrationRun.js";
 import type * as schemas_pos_posLifecycleJournal from "../schemas/pos/posLifecycleJournal.js";
 import type * as schemas_pos_posLocalStaffProof from "../schemas/pos/posLocalStaffProof.js";
 import type * as schemas_pos_posLocalSyncConflict from "../schemas/pos/posLocalSyncConflict.js";
@@ -740,6 +742,7 @@ declare const fullApi: ApiFromModules<{
   "migrations/backfillAthenaUserNormalizedEmail": typeof migrations_backfillAthenaUserNormalizedEmail;
   "migrations/backfillStoreSchedules": typeof migrations_backfillStoreSchedules;
   "migrations/migrateAmountsToPesewas": typeof migrations_migrateAmountsToPesewas;
+  "migrations/migratePosAmountsToPesewas": typeof migrations_migratePosAmountsToPesewas;
   "mtn/client": typeof mtn_client;
   "mtn/collections": typeof mtn_collections;
   "mtn/config": typeof mtn_config;
@@ -1000,6 +1003,7 @@ declare const fullApi: ApiFromModules<{
   "schemas/pos/expenseTransaction": typeof schemas_pos_expenseTransaction;
   "schemas/pos/expenseTransactionItem": typeof schemas_pos_expenseTransactionItem;
   "schemas/pos/index": typeof schemas_pos_index;
+  "schemas/pos/posAmountMigrationRun": typeof schemas_pos_posAmountMigrationRun;
   "schemas/pos/posLifecycleJournal": typeof schemas_pos_posLifecycleJournal;
   "schemas/pos/posLocalStaffProof": typeof schemas_pos_posLocalStaffProof;
   "schemas/pos/posLocalSyncConflict": typeof schemas_pos_posLocalSyncConflict;

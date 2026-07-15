@@ -169,6 +169,19 @@ export type LocalSyncEventRecord = {
   heldReason?: string;
   rejectionCode?: string;
   rejectionMessage?: string;
+  // U9: server-derived clock attribution (see posLocalSyncEvent schema). Stored
+  // once at first ingest; excluded from `isSameLocalEvent` so it is retry-safe.
+  serverOccurredAt?: number;
+  serverOperatingDate?: string;
+  clockObservation?: {
+    serverTimeAt: number;
+    occurredAtStatus: "in_bounds" | "future_skew_clamped";
+    operatingDateStatus?:
+      | "terminal_matched"
+      | "server_corrected"
+      | "missing_timezone_authority";
+    terminalOperatingDate?: string;
+  };
 };
 
 type LocalSyncMappingRecordBase = {

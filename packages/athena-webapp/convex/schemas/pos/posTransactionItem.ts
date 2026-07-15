@@ -18,4 +18,6 @@ export const posTransactionItemSchema = v.object({
   isRefunded: v.optional(v.boolean()),
   refundedQuantity: v.optional(v.number()),
   refundedAt: v.optional(v.number()),
+  // U10: deterministic idempotency marker for the cedis→pesewas migration.
+  pesewasMigratedAt: v.optional(v.number()),
 });
