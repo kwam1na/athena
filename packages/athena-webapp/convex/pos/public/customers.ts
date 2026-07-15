@@ -1,7 +1,18 @@
 import { v } from "convex/values";
 
-import { mutation, query } from "../../_generated/server";
+import {
+  mutation,
+  query,
+  type MutationCtx,
+  type QueryCtx,
+} from "../../_generated/server";
+import type { Doc, Id } from "../../_generated/dataModel";
 import { commandResultValidator } from "../../lib/commandResultValidators";
+import {
+  requireAuthenticatedAthenaUserWithCtx,
+  requireOrganizationMemberRoleWithCtx,
+} from "../../lib/athenaUserAuth";
+import { userError } from "../../../shared/commandResult";
 import {
   createCustomer as createCustomerCommand,
   linkToGuest as linkToGuestCommand,
@@ -19,6 +30,61 @@ import {
   getCustomerTransactions as getCustomerTransactionsQuery,
   searchCustomers as searchCustomersQuery,
 } from "../application/queries/searchCustomers";
+
+type PosCustomerStoreAccess =
+  | {
+      ok: true;
+      store: Doc<"store">;
+      athenaUser: Doc<"athenaUser">;
+      membership: Doc<"organizationMember">;
+    }
+  | { ok: false };
+
+async function requirePosCustomerStoreAccess(
+  ctx: MutationCtx | QueryCtx,
+  args: {
+    storeId: Id<"store">;
+    failureMessage: string;
+  },
+): Promise<PosCustomerStoreAccess> {
+  const store = await ctx.db.get("store", args.storeId);
+  if (!store) {
+    return { ok: false };
+  }
+
+  const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+  const membership = await requireOrganizationMemberRoleWithCtx(ctx, {
+    allowedRoles: ["full_admin", "pos_only"],
+    failureMessage: args.failureMessage,
+    organizationId: store.organizationId,
+    userId: athenaUser._id,
+  });
+
+  return { ok: true, store, athenaUser, membership };
+}
+
+async function requirePosCustomerAccessById(
+  ctx: MutationCtx | QueryCtx,
+  args: {
+    customerId: Id<"posCustomer">;
+    failureMessage: string;
+  },
+): Promise<PosCustomerStoreAccess & { customer?: Doc<"posCustomer"> }> {
+  const customer = await ctx.db.get("posCustomer", args.customerId);
+  if (!customer) {
+    return { ok: false };
+  }
+
+  const access = await requirePosCustomerStoreAccess(ctx, {
+    storeId: customer.storeId,
+    failureMessage: args.failureMessage,
+  });
+  if (!access.ok) {
+    return { ok: false };
+  }
+
+  return { ...access, customer };
+}
 
 const customerAddressValidator = v.object({
   street: v.optional(v.string()),
@@ -82,7 +148,17 @@ export const searchCustomers = query({
     searchQuery: v.string(),
   },
   returns: v.array(customerSummaryValidator),
-  handler: async (ctx, args) => searchCustomersQuery(ctx, args),
+  handler: async (ctx, args) => {
+    const access = await requirePosCustomerStoreAccess(ctx, {
+      storeId: args.storeId,
+      failureMessage: "You cannot search customers for this store.",
+    });
+    if (!access.ok) {
+      return [];
+    }
+
+    return searchCustomersQuery(ctx, args);
+  },
 });
 
 export const getCustomerById = query({
@@ -109,7 +185,17 @@ export const getCustomerById = query({
     }),
     v.null(),
   ),
-  handler: async (ctx, args) => getCustomerByIdQuery(ctx, args),
+  handler: async (ctx, args) => {
+    const access = await requirePosCustomerAccessById(ctx, {
+      customerId: args.customerId,
+      failureMessage: "You cannot view this customer.",
+    });
+    if (!access.ok) {
+      return null;
+    }
+
+    return getCustomerByIdQuery(ctx, args);
+  },
 });
 
 export const createCustomer = mutation({
@@ -122,7 +208,17 @@ export const createCustomer = mutation({
     notes: v.optional(v.string()),
   },
   returns: commandResultValidator(customerAttributionResultValidator),
-  handler: async (ctx, args) => createCustomerCommand(ctx, args),
+  handler: async (ctx, args) => {
+    const access = await requirePosCustomerStoreAccess(ctx, {
+      storeId: args.storeId,
+      failureMessage: "You cannot create customers for this store.",
+    });
+    if (!access.ok) {
+      return userError({ code: "not_found", message: "Store not found." });
+    }
+
+    return createCustomerCommand(ctx, args);
+  },
 });
 
 export const updateCustomer = mutation({
@@ -135,7 +231,17 @@ export const updateCustomer = mutation({
     notes: v.optional(v.string()),
   },
   returns: commandResultValidator(v.null()),
-  handler: async (ctx, args) => updateCustomerCommand(ctx, args),
+  handler: async (ctx, args) => {
+    const access = await requirePosCustomerAccessById(ctx, {
+      customerId: args.customerId,
+      failureMessage: "You cannot update this customer.",
+    });
+    if (!access.ok) {
+      return userError({ code: "not_found", message: "Customer not found." });
+    }
+
+    return updateCustomerCommand(ctx, args);
+  },
 });
 
 export const updateCustomerStats = mutation({
@@ -144,7 +250,17 @@ export const updateCustomerStats = mutation({
     transactionAmount: v.number(),
   },
   returns: v.null(),
-  handler: async (ctx, args) => updateCustomerStatsCommand(ctx, args),
+  handler: async (ctx, args) => {
+    const access = await requirePosCustomerAccessById(ctx, {
+      customerId: args.customerId,
+      failureMessage: "You cannot update this customer.",
+    });
+    if (!access.ok) {
+      return null;
+    }
+
+    return updateCustomerStatsCommand(ctx, args);
+  },
 });
 
 export const resolvePosCustomerSelection = mutation({
@@ -152,7 +268,17 @@ export const resolvePosCustomerSelection = mutation({
     customerId: v.id("posCustomer"),
   },
   returns: commandResultValidator(customerAttributionResultValidator),
-  handler: async (ctx, args) => resolvePosCustomerSelectionCommand(ctx, args),
+  handler: async (ctx, args) => {
+    const access = await requirePosCustomerAccessById(ctx, {
+      customerId: args.customerId,
+      failureMessage: "You cannot resolve this customer.",
+    });
+    if (!access.ok) {
+      return userError({ code: "not_found", message: "Customer not found." });
+    }
+
+    return resolvePosCustomerSelectionCommand(ctx, args);
+  },
 });
 
 export const getCustomerTransactions = query({
@@ -171,7 +297,17 @@ export const getCustomerTransactions = query({
       completedAt: v.number(),
     }),
   ),
-  handler: async (ctx, args) => getCustomerTransactionsQuery(ctx, args),
+  handler: async (ctx, args) => {
+    const access = await requirePosCustomerAccessById(ctx, {
+      customerId: args.customerId,
+      failureMessage: "You cannot view this customer.",
+    });
+    if (!access.ok) {
+      return [];
+    }
+
+    return getCustomerTransactionsQuery(ctx, args);
+  },
 });
 
 export const linkToStoreFrontUser = mutation({
@@ -180,7 +316,17 @@ export const linkToStoreFrontUser = mutation({
     storeFrontUserId: v.id("storeFrontUser"),
   },
   returns: commandResultValidator(customerAttributionResultValidator),
-  handler: async (ctx, args) => linkToStoreFrontUserCommand(ctx, args),
+  handler: async (ctx, args) => {
+    const access = await requirePosCustomerAccessById(ctx, {
+      customerId: args.posCustomerId,
+      failureMessage: "You cannot update this customer.",
+    });
+    if (!access.ok) {
+      return userError({ code: "not_found", message: "Customer not found." });
+    }
+
+    return linkToStoreFrontUserCommand(ctx, args);
+  },
 });
 
 export const linkToGuest = mutation({
@@ -189,7 +335,17 @@ export const linkToGuest = mutation({
     guestId: v.id("guest"),
   },
   returns: commandResultValidator(customerAttributionResultValidator),
-  handler: async (ctx, args) => linkToGuestCommand(ctx, args),
+  handler: async (ctx, args) => {
+    const access = await requirePosCustomerAccessById(ctx, {
+      customerId: args.posCustomerId,
+      failureMessage: "You cannot update this customer.",
+    });
+    if (!access.ok) {
+      return userError({ code: "not_found", message: "Customer not found." });
+    }
+
+    return linkToGuestCommand(ctx, args);
+  },
 });
 
 export const resolveStoreFrontUserMatch = mutation({
@@ -198,7 +354,17 @@ export const resolveStoreFrontUserMatch = mutation({
     storeFrontUserId: v.id("storeFrontUser"),
   },
   returns: commandResultValidator(customerAttributionResultValidator),
-  handler: async (ctx, args) => resolveStoreFrontUserMatchCommand(ctx, args),
+  handler: async (ctx, args) => {
+    const access = await requirePosCustomerStoreAccess(ctx, {
+      storeId: args.storeId,
+      failureMessage: "You cannot resolve customers for this store.",
+    });
+    if (!access.ok) {
+      return userError({ code: "not_found", message: "Store not found." });
+    }
+
+    return resolveStoreFrontUserMatchCommand(ctx, args);
+  },
 });
 
 export const resolveGuestMatch = mutation({
@@ -207,7 +373,17 @@ export const resolveGuestMatch = mutation({
     guestId: v.id("guest"),
   },
   returns: commandResultValidator(customerAttributionResultValidator),
-  handler: async (ctx, args) => resolveGuestMatchCommand(ctx, args),
+  handler: async (ctx, args) => {
+    const access = await requirePosCustomerStoreAccess(ctx, {
+      storeId: args.storeId,
+      failureMessage: "You cannot resolve customers for this store.",
+    });
+    if (!access.ok) {
+      return userError({ code: "not_found", message: "Store not found." });
+    }
+
+    return resolveGuestMatchCommand(ctx, args);
+  },
 });
 
 export const findByStoreFrontUser = query({
@@ -227,7 +403,25 @@ export const findByStoreFrontUser = query({
     }),
     v.null(),
   ),
-  handler: async (ctx, args) => findByStoreFrontUserQuery(ctx, args),
+  handler: async (ctx, args) => {
+    const storeFrontUser = await ctx.db.get(
+      "storeFrontUser",
+      args.storeFrontUserId,
+    );
+    if (!storeFrontUser) {
+      return null;
+    }
+
+    const access = await requirePosCustomerStoreAccess(ctx, {
+      storeId: storeFrontUser.storeId,
+      failureMessage: "You cannot view this customer.",
+    });
+    if (!access.ok) {
+      return null;
+    }
+
+    return findByStoreFrontUserQuery(ctx, args);
+  },
 });
 
 export const findPotentialMatches = query({
@@ -256,5 +450,15 @@ export const findPotentialMatches = query({
       }),
     ),
   }),
-  handler: async (ctx, args) => findPotentialMatchesQuery(ctx, args),
+  handler: async (ctx, args) => {
+    const access = await requirePosCustomerStoreAccess(ctx, {
+      storeId: args.storeId,
+      failureMessage: "You cannot view potential matches for this store.",
+    });
+    if (!access.ok) {
+      return { storeFrontUsers: [], guests: [] };
+    }
+
+    return findPotentialMatchesQuery(ctx, args);
+  },
 });

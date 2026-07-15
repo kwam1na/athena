@@ -48,7 +48,7 @@ export function useConvexRegisterState(
       : "skip",
   );
 
-  if (result === undefined) {
+  if (result === undefined || result === null) {
     return undefined;
   }
 

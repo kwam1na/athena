@@ -194,6 +194,155 @@ describe("createLocalSyncIngestionService", () => {
     expect(repository.createdPendingCheckoutItems).toEqual([]);
   });
 
+  it("creates a server_rejected conflict when a money-bearing sale is rejected for non-reconciling totals", async () => {
+    const repository = createFakeSyncRepository();
+    const service = createLocalSyncIngestionService({
+      repository,
+      projectionRepository: repository,
+      now: () => 100,
+    });
+
+    const event = buildSaleCompletedEvent({ sequence: 1 });
+    (event.payload as Record<string, unknown>).totals = {
+      subtotal: 25,
+      tax: 0,
+      total: 9_999,
+    };
+
+    const result = await service.ingestBatch(buildBatch({ events: [event] }));
+
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") throw new Error("Expected ok result");
+    expect(result.data.accepted).toEqual([
+      expect.objectContaining({
+        localEventId: "event-sale-completed-1",
+        sequence: 1,
+        status: "rejected",
+      }),
+    ]);
+    // Liveness preserved: the cursor still advances past a rejected event.
+    expect(result.data.syncCursor.acceptedThroughSequence).toBe(1);
+    // No canonical transaction is persisted for a rejected sale.
+    expect(repository.createdTransactions).toHaveLength(0);
+
+    const conflict = repository.conflicts.find(
+      (candidate) => candidate.conflictType === "server_rejected",
+    );
+    expect(conflict).toEqual(
+      expect.objectContaining({
+        localEventId: "event-sale-completed-1",
+        localRegisterSessionId: "local-register-1",
+        sequence: 1,
+        conflictType: "server_rejected",
+        status: "needs_review",
+      }),
+    );
+    expect(conflict?.details).toEqual(
+      expect.objectContaining({
+        code: "server_rejected",
+        localEventId: "event-sale-completed-1",
+        localRegisterSessionId: "local-register-1",
+        reason: expect.stringContaining("totals"),
+      }),
+    );
+    expect(result.data.conflicts).toContainEqual(
+      expect.objectContaining({ conflictType: "server_rejected" }),
+    );
+  });
+
+  it("records the sale amount when a money-bearing sale is rejected for an invalid payment", async () => {
+    const repository = createFakeSyncRepository();
+    const service = createLocalSyncIngestionService({
+      repository,
+      projectionRepository: repository,
+      now: () => 100,
+    });
+
+    const event = buildSaleCompletedEvent({ sequence: 1 });
+    const payments = (event.payload as Record<string, unknown>)
+      .payments as Array<Record<string, unknown>>;
+    delete payments[0].timestamp;
+
+    const result = await service.ingestBatch(buildBatch({ events: [event] }));
+
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") throw new Error("Expected ok result");
+    expect(result.data.accepted).toEqual([
+      expect.objectContaining({
+        localEventId: "event-sale-completed-1",
+        status: "rejected",
+      }),
+    ]);
+
+    const conflict = repository.conflicts.find(
+      (candidate) => candidate.conflictType === "server_rejected",
+    );
+    expect(conflict?.details).toEqual(
+      expect.objectContaining({
+        amount: 25,
+        localTransactionId: "local-txn-1",
+        reason: expect.stringContaining("payment"),
+      }),
+    );
+  });
+
+  it("does not duplicate the server_rejected conflict when a rejected sale is retried", async () => {
+    const repository = createFakeSyncRepository();
+    const service = createLocalSyncIngestionService({
+      repository,
+      projectionRepository: repository,
+      now: () => 100,
+    });
+
+    const event = buildSaleCompletedEvent({ sequence: 1 });
+    (event.payload as Record<string, unknown>).totals = {
+      subtotal: 25,
+      tax: 0,
+      total: 9_999,
+    };
+
+    await service.ingestBatch(buildBatch({ events: [event] }));
+    const retry = await service.ingestBatch(buildBatch({ events: [event] }));
+
+    expect(retry.kind).toBe("ok");
+    if (retry.kind !== "ok") throw new Error("Expected ok result");
+    const serverRejectedConflicts = repository.conflicts.filter(
+      (candidate) => candidate.conflictType === "server_rejected",
+    );
+    expect(serverRejectedConflicts).toHaveLength(1);
+    // The conflict still surfaces to the caller on replay.
+    expect(retry.data.conflicts).toContainEqual(
+      expect.objectContaining({ conflictType: "server_rejected" }),
+    );
+  });
+
+  it("does not create a conflict when a non-financial event is rejected", async () => {
+    const repository = createFakeSyncRepository();
+    const service = createLocalSyncIngestionService({
+      repository,
+      projectionRepository: repository,
+      now: () => 100,
+    });
+
+    const result = await service.ingestBatch(
+      buildBatch({
+        events: [
+          buildSaleClearedEvent({
+            sequence: 1,
+            payload: { localPosSessionId: "", reason: "Sale cleared" },
+          }),
+        ],
+      }),
+    );
+
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") throw new Error("Expected ok result");
+    expect(result.data.accepted).toEqual([
+      expect.objectContaining({ status: "rejected" }),
+    ]);
+    expect(repository.conflicts).toHaveLength(0);
+  });
+
   it("rejects malformed sale clear payloads", async () => {
     const repository = createFakeSyncRepository();
     const service = createLocalSyncIngestionService({

@@ -24,7 +24,11 @@ import type { CommandResult } from "../../../../shared/commandResult";
 export type { PosLocalSyncEventStatus, PosLocalSyncEventType };
 
 export type PosLocalSyncConflictType =
-  "duplicate_local_id" | "inventory" | "payment" | "permission";
+  | "duplicate_local_id"
+  | "inventory"
+  | "payment"
+  | "permission"
+  | "server_rejected";
 
 export type PosLocalSyncMappingKind =
   | "registerSession"

@@ -1,7 +1,10 @@
 import type { Doc, Id } from "../../../_generated/dataModel";
 import type { MutationCtx } from "../../../_generated/server";
 import { internal } from "../../../_generated/api";
-import { requireAuthenticatedAthenaUserWithCtx } from "../../../lib/athenaUserAuth";
+import {
+  requireAuthenticatedAthenaUserWithCtx,
+  requireOrganizationMemberRoleWithCtx,
+} from "../../../lib/athenaUserAuth";
 import type { PosCashDrawerSummary } from "../../domain/types";
 import { mapRegisterSessionToCashDrawerSummary } from "../../infrastructure/repositories/registerSessionRepository";
 import {
@@ -75,6 +78,13 @@ export async function openDrawer(
       message: "Store not found.",
     });
   }
+
+  await requireOrganizationMemberRoleWithCtx(ctx, {
+    allowedRoles: ["full_admin", "pos_only"],
+    failureMessage: "You cannot open a register drawer for this store.",
+    organizationId: store.organizationId,
+    userId: athenaUser._id,
+  });
 
   const terminal = await ctx.db.get("posTerminal", args.terminalId);
   if (!terminal || terminal.storeId !== args.storeId) {

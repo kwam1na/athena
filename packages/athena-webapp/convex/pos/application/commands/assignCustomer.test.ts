@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Id } from "../../../_generated/dataModel";
 import {
   createCustomer,
+  linkToGuest,
+  linkToStoreFrontUser,
   resolveGuestMatch,
   resolvePosCustomerSelection,
   resolveStoreFrontUserMatch,
@@ -233,6 +235,68 @@ describe("POS customer attribution commands", () => {
       }),
     );
     expect(createPosCustomer).not.toHaveBeenCalled();
+  });
+
+  it("links a same-store storefront user to a POS customer", async () => {
+    vi.mocked(getPosCustomerById).mockResolvedValue(posCustomer() as never);
+    vi.mocked(getStoreFrontUserById).mockResolvedValue(
+      storeFrontUser() as never,
+    );
+    vi.mocked(findPosCustomerByStoreFrontUser).mockResolvedValue(null as never);
+    vi.mocked(ensureCustomerProfileFromSources).mockResolvedValue(
+      customerProfile() as never,
+    );
+
+    const result = await linkToStoreFrontUser({} as never, {
+      posCustomerId: "pos-customer-1" as Id<"posCustomer">,
+      storeFrontUserId: "storefront-user-1" as Id<"storeFrontUser">,
+    });
+
+    expect(result).toMatchObject({ kind: "ok" });
+    expect(patchPosCustomer).toHaveBeenCalled();
+  });
+
+  it("refuses to link a storefront user from another store and never writes PII", async () => {
+    vi.mocked(getPosCustomerById).mockResolvedValue(posCustomer() as never);
+    vi.mocked(getStoreFrontUserById).mockResolvedValue({
+      ...storeFrontUser(),
+      _id: "storefront-user-2" as Id<"storeFrontUser">,
+      storeId: "store-2" as Id<"store">,
+      email: "victim@other-org.example.com",
+    } as never);
+
+    const result = await linkToStoreFrontUser({} as never, {
+      posCustomerId: "pos-customer-1" as Id<"posCustomer">,
+      storeFrontUserId: "storefront-user-2" as Id<"storeFrontUser">,
+    });
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: expect.objectContaining({ code: "not_found" }),
+    });
+    // No foreign PII is written onto the caller's customer.
+    expect(patchPosCustomer).not.toHaveBeenCalled();
+  });
+
+  it("refuses to link a guest from another store and never writes PII", async () => {
+    vi.mocked(getPosCustomerById).mockResolvedValue(posCustomer() as never);
+    vi.mocked(getGuestById).mockResolvedValue({
+      ...guest(),
+      _id: "guest-2" as Id<"guest">,
+      storeId: "store-2" as Id<"store">,
+      email: "victim@other-org.example.com",
+    } as never);
+
+    const result = await linkToGuest({} as never, {
+      posCustomerId: "pos-customer-1" as Id<"posCustomer">,
+      guestId: "guest-2" as Id<"guest">,
+    });
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: expect.objectContaining({ code: "not_found" }),
+    });
+    expect(patchPosCustomer).not.toHaveBeenCalled();
   });
 });
 

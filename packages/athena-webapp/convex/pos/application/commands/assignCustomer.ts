@@ -300,7 +300,14 @@ export async function linkToStoreFrontUser(
     args.storeFrontUserId,
   );
 
-  if (!posCustomer || !storeFrontUser) {
+  // Scope the storefront user to the POS customer's store. Without this a
+  // caller authorized for the POS customer's org could link (and read the
+  // PII of) a storefront user belonging to another store/org.
+  if (
+    !posCustomer ||
+    !storeFrontUser ||
+    storeFrontUser.storeId !== posCustomer.storeId
+  ) {
     return userError({
       code: "not_found",
       message: "Customer or storefront user not found.",
@@ -348,7 +355,9 @@ export async function linkToGuest(
   const posCustomer = await getPosCustomerById(ctx, args.posCustomerId);
   const guest = await getGuestById(ctx, args.guestId);
 
-  if (!posCustomer || !guest) {
+  // Scope the guest to the POS customer's store, mirroring linkToStoreFrontUser,
+  // so a caller cannot link (and read the PII of) another store/org's guest.
+  if (!posCustomer || !guest || guest.storeId !== posCustomer.storeId) {
     return userError({
       code: "not_found",
       message: "Customer or guest not found.",
