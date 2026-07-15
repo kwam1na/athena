@@ -78,6 +78,13 @@ export interface PosLocalReviewResolutionMetadata {
   reason: PosLocalReviewResolutionReason;
   resolvedAt: number;
   status: "local_review_cleared";
+  /**
+   * Set once the server has acknowledged the corresponding conflict as
+   * resolved (U6 round-trip). Until then a locally-cleared review is NOT
+   * treated as fully settled by the sync-status derivation, so the terminal
+   * cannot show "synced" while the server still holds an open conflict.
+   */
+  serverConfirmedAt?: number;
 }
 export type PosLocalEventValidationFlag =
   "app-session-unverified" | "cloud-validation-uncertain";
@@ -136,6 +143,15 @@ export type PosLocalLedgerSummary = {
   eventCount: number;
   oldestEventAt?: number;
 };
+
+export type PosLocalLedgerPurgeResult =
+  | { status: "blocked"; reason: "active_presence" }
+  | {
+      status: "completed";
+      purgedCount: number;
+      purgedSequences: number[];
+      retainedCount: number;
+    };
 
 export interface PosLocalCloudMapping {
   entity: PosLocalEntityKind;

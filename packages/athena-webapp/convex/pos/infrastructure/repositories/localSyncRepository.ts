@@ -442,16 +442,26 @@ export function createConvexLocalSyncRepository(
         )
         .take(100);
 
-      await Promise.all(
-        conflicts
-          .filter((conflict) => conflict.status === "needs_review")
-          .map((conflict) =>
-            ctx.db.patch("posLocalSyncConflict", conflict._id, {
-              status: "resolved",
-              resolvedAt: args.resolvedAt,
-            }),
-          ),
+      const openConflicts = conflicts.filter(
+        (conflict) => conflict.status === "needs_review",
       );
+      await Promise.all(
+        openConflicts.map((conflict) =>
+          ctx.db.patch("posLocalSyncConflict", conflict._id, {
+            status: "resolved",
+            resolvedAt: args.resolvedAt,
+            // Attribution: who resolved the review and when (idempotent — an
+            // already-resolved conflict is untouched by the needs_review filter).
+            ...(args.resolvedByStaffProfileId
+              ? { resolvedByStaffProfileId: args.resolvedByStaffProfileId }
+              : {}),
+            ...(args.resolvedByUserId
+              ? { resolvedByUserId: args.resolvedByUserId }
+              : {}),
+          }),
+        ),
+      );
+      return openConflicts.length;
     },
     async listConflictsForEvent(args) {
       return ctx.db

@@ -291,3 +291,218 @@ describe("POS local store bounded operations", () => {
     expect(readerStore.listLocalCloudMappings).not.toHaveBeenCalled();
   });
 });
+
+describe("evidence-gated ledger purge (U4)", () => {
+  type Store = ReturnType<typeof createPosLocalStore>;
+
+  async function appendSettledEvent(
+    store: Store,
+    input: {
+      session: string;
+      status?: "synced" | "locally_resolved" | "pending";
+      reportActivity?: boolean;
+    },
+  ): Promise<string> {
+    const appended = await store.appendEvent({
+      payload: {},
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      localRegisterSessionId: input.session,
+      initialSyncStatus: input.status ?? "synced",
+      type: "session.started",
+    });
+    if (!appended.ok) throw new Error("Expected append to succeed");
+    if (input.reportActivity ?? true) {
+      await store.markEventsActivityReported([appended.value.localEventId]);
+    }
+    return appended.value.localEventId;
+  }
+
+  async function countEvents(adapter: PosLocalStorageAdapter): Promise<number> {
+    return adapter.transaction("readonly", ["events"], async (transaction) => {
+      const events = await transaction.getAll("events");
+      return events.length;
+    });
+  }
+
+  it("purges settled, unreferenced events from a prior session past the boundary", async () => {
+    const adapter = createMemoryPosLocalStorageAdapter();
+    const store = createPosLocalStore({ adapter, clock: () => 1_000 });
+    await appendSettledEvent(store, { session: "prior-session" });
+    await appendSettledEvent(store, { session: "prior-session" });
+    await appendSettledEvent(store, { session: "active-session" });
+
+    const result = await store.purgeSettledLedgerEvents({
+      activeLocalRegisterSessionId: "active-session",
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("Expected purge to succeed");
+    expect(result.value).toMatchObject({
+      status: "completed",
+      purgedCount: 2,
+      retainedCount: 1,
+    });
+    // The active session's event survives; the ledger shrank.
+    await expect(countEvents(adapter)).resolves.toBe(1);
+  });
+
+  it("never purges an unsynced event even past the boundary", async () => {
+    const adapter = createMemoryPosLocalStorageAdapter();
+    const store = createPosLocalStore({ adapter, clock: () => 1_000 });
+    await appendSettledEvent(store, {
+      session: "prior-session",
+      status: "pending",
+    });
+
+    const result = await store.purgeSettledLedgerEvents({
+      activeLocalRegisterSessionId: "active-session",
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("Expected purge to succeed");
+    expect(result.value).toMatchObject({
+      status: "completed",
+      purgedCount: 0,
+      retainedCount: 1,
+    });
+    await expect(countEvents(adapter)).resolves.toBe(1);
+  });
+
+  it("never purges a locally-cleared review the server has not confirmed", async () => {
+    const adapter = createMemoryPosLocalStorageAdapter();
+    const store = createPosLocalStore({ adapter, clock: () => 1_000 });
+    const appended = await store.appendEvent({
+      payload: {},
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      localRegisterSessionId: "prior-session",
+      initialSyncStatus: "needs_review",
+      type: "session.started",
+    });
+    if (!appended.ok) throw new Error("Expected append to succeed");
+    // Clear the review locally WITHOUT a server-confirmation stamp — the
+    // conflict may still be open server-side, so the event has not converged.
+    const cleared = await store.clearLocalReviewEvents([
+      appended.value.localEventId,
+    ]);
+    if (!cleared.ok) throw new Error("Expected clear to succeed");
+
+    const result = await store.purgeSettledLedgerEvents({
+      activeLocalRegisterSessionId: "active-session",
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("Expected purge to succeed");
+    expect(result.value).toMatchObject({ status: "completed", purgedCount: 0 });
+    // The unconfirmed local resolution survives so it can reconcile next sync.
+    await expect(countEvents(adapter)).resolves.toBe(1);
+  });
+
+  it("never purges a synced event whose session still holds drawer authority", async () => {
+    const adapter = createMemoryPosLocalStorageAdapter();
+    const store = createPosLocalStore({ adapter, clock: () => 1_000 });
+    await appendSettledEvent(store, { session: "prior-session" });
+    await store.writeDrawerAuthorityState({
+      localRegisterSessionId: "prior-session",
+      observedAt: 1_000,
+      status: "healthy",
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
+
+    const result = await store.purgeSettledLedgerEvents({
+      activeLocalRegisterSessionId: "active-session",
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("Expected purge to succeed");
+    expect(result.value).toMatchObject({ status: "completed", purgedCount: 0 });
+    await expect(countEvents(adapter)).resolves.toBe(1);
+  });
+
+  it("refuses to purge while a cashier is actively signed in", async () => {
+    const adapter = createMemoryPosLocalStorageAdapter();
+    const store = createPosLocalStore({ adapter, clock: () => 1_000 });
+    await appendSettledEvent(store, { session: "prior-session" });
+    await adapter.transaction(
+      "readwrite",
+      ["cashierPresence"],
+      async (transaction) => {
+        await transaction.put("cashierPresence", "terminal-1", {
+          activeRoles: ["cashier"],
+          credentialId: "credential-1",
+          credentialVersion: 1,
+          displayName: "Ama Mensah",
+          expiresAt: 10_000,
+          lastValidatedAt: 1_500,
+          offlineFreshUntil: 5_000,
+          operatingDate: "2026-07-15",
+          organizationId: "org-1",
+          signedInAt: 1_000,
+          staffProfileId: "staff-1",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+          username: "FrontDesk",
+          wrappedPosLocalStaffProof: {
+            ciphertext: "wrapped-proof-token",
+            expiresAt: 10_000,
+            iv: "proof-iv",
+          },
+        });
+      },
+    );
+
+    const result = await store.purgeSettledLedgerEvents({
+      activeLocalRegisterSessionId: "active-session",
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("Expected purge to succeed");
+    expect(result.value).toEqual({ status: "blocked", reason: "active_presence" });
+    // Nothing was deleted.
+    await expect(countEvents(adapter)).resolves.toBe(1);
+  });
+
+  it("never purges events of a session still mapped as current, even with no active id", async () => {
+    const adapter = createMemoryPosLocalStorageAdapter();
+    const store = createPosLocalStore({ adapter, clock: () => 1_000 });
+    await appendSettledEvent(store, { session: "current-session" });
+    await store.writeLocalCloudMapping({
+      cloudId: "cloud-register-1",
+      entity: "registerSession",
+      localId: "current-session",
+      mappedAt: 1_000,
+      registerCandidateState: "current",
+      registerNumber: "1",
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
+
+    const result = await store.purgeSettledLedgerEvents({});
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("Expected purge to succeed");
+    expect(result.value).toMatchObject({ status: "completed", purgedCount: 0 });
+    await expect(countEvents(adapter)).resolves.toBe(1);
+  });
+
+  it("is a no-op when nothing is purgeable and surfaces the counts", async () => {
+    const adapter = createMemoryPosLocalStorageAdapter();
+    const store = createPosLocalStore({ adapter, clock: () => 1_000 });
+    await appendSettledEvent(store, { session: "active-session" });
+
+    const result = await store.purgeSettledLedgerEvents({
+      activeLocalRegisterSessionId: "active-session",
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("Expected purge to succeed");
+    expect(result.value).toEqual({
+      status: "completed",
+      purgedCount: 0,
+      purgedSequences: [],
+      retainedCount: 1,
+    });
+  });
+});

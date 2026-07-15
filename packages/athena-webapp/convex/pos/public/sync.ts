@@ -9,7 +9,7 @@ import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../../lib/athenaUserAuth";
-import { userError } from "../../../shared/commandResult";
+import { ok, userError } from "../../../shared/commandResult";
 import {
   getSharedDemoActorWithCtx,
   requireSharedDemoStoreCapabilityIfApplicable,
@@ -31,6 +31,10 @@ import {
   posRegisterSessionActivitySkipCodeValidator,
 } from "../../schemas/pos/posRegisterSessionActivity";
 import { ingestRegisterSessionActivityWithCtx } from "../application/sync/posRegisterSessionActivity";
+import {
+  MAX_LOCAL_SYNC_REVIEW_EVENTS,
+  resolveLocalSyncReviewWithCtx,
+} from "../application/sync/resolveLocalSyncReview";
 
 const localSyncMappingValidator = v.object({
   _id: v.string(),
@@ -475,5 +479,61 @@ export const ingestRegisterSessionActivity = mutation({
       submittedAt: args.submittedAt ?? Date.now(),
       activities: args.activities,
     });
+  },
+});
+
+export const resolveLocalSyncReview = mutation({
+  args: {
+    storeId: v.id("store"),
+    terminalId: v.id("posTerminal"),
+    localEventIds: v.array(v.string()),
+    submittedAt: v.optional(v.number()),
+  },
+  returns: commandResultValidator(
+    v.object({
+      resolvedEventIds: v.array(v.string()),
+      resolvedConflictCount: v.number(),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    if (args.localEventIds.length > MAX_LOCAL_SYNC_REVIEW_EVENTS) {
+      return userError({
+        code: "validation_failed",
+        message: `A review resolution request can include at most ${MAX_LOCAL_SYNC_REVIEW_EVENTS} events.`,
+      });
+    }
+
+    const store = await ctx.db.get("store", args.storeId);
+    if (!store) {
+      return userError({ code: "not_found", message: "Store not found." });
+    }
+
+    let athenaUser;
+    try {
+      athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+      // One explicit POS org role gates the round-trip; a terminal cannot
+      // resolve a server-owned conflict without an authorized org member.
+      await requireOrganizationMemberRoleWithCtx(ctx, {
+        allowedRoles: ["full_admin", "pos_only"],
+        failureMessage: "You do not have access to resolve POS sync reviews.",
+        organizationId: store.organizationId,
+        userId: athenaUser._id,
+      });
+    } catch {
+      return userError({
+        code: "authorization_failed",
+        message: "You do not have access to resolve POS sync reviews.",
+      });
+    }
+
+    const result = await resolveLocalSyncReviewWithCtx(ctx, {
+      storeId: args.storeId,
+      terminalId: args.terminalId,
+      localEventIds: args.localEventIds,
+      resolvedByUserId: athenaUser._id,
+      now: args.submittedAt ?? Date.now(),
+    });
+
+    return ok(result);
   },
 });

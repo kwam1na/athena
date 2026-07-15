@@ -53,6 +53,7 @@ export type PosTerminalRecoveryCommandResult = {
     | "missing_callback"
     | "missing_payload"
     | "precondition_failed"
+    | "server_resolution_unavailable"
     | "terminal_mismatch"
     | "unsupported_command"
     | "unsafe_authority_state";
@@ -77,6 +78,10 @@ export type PosTerminalRecoveryCommandCallbackResult = {
   refreshedAt?: number;
   status?: string;
 };
+
+export type PosTerminalRecoveryReviewResolutionResult =
+  | { ok: true; serverConfirmedAt: number }
+  | { ok: false; message?: string };
 
 type PosLocalRuntimeStore = PosLocalStorePort;
 
@@ -111,6 +116,22 @@ export type PosTerminalRecoveryCommandContext = {
       }) =>
         | Promise<PosTerminalRecoveryCommandCallbackResult>
         | PosTerminalRecoveryCommandCallbackResult)
+    | null;
+  /**
+   * Round-trips a local review resolution to the server. When present, a local
+   * clear is only applied after the server acknowledges the resolution, so the
+   * terminal never shows a review cleared while the server still holds the
+   * conflict open. When absent, the clear falls back to a local-only mark that
+   * the sync status still surfaces as unconverged.
+   */
+  resolveServerReview?:
+    | ((scope: {
+        storeId: string;
+        terminalId: string;
+        localEventIds: string[];
+      }) =>
+        | Promise<PosTerminalRecoveryReviewResolutionResult>
+        | PosTerminalRecoveryReviewResolutionResult)
     | null;
   appUpdateCoordinator?: PosAppUpdateCoordinatorAdapter | null;
   store: PosLocalRuntimeStore;
@@ -406,8 +427,30 @@ async function executeClearLocalReviewItems(
     return preconditionFailed(context.command);
   }
 
+  // Round-trip the resolution to the server before marking the events settled.
+  // If the server does not acknowledge, leave the events needs_review so the
+  // terminal and server converge on the next sync instead of showing a false
+  // clear while the server conflict stays open.
+  let serverConfirmedAt: number | undefined;
+  if (context.resolveServerReview && selection.idsToClear.length > 0) {
+    const resolution = await context.resolveServerReview({
+      storeId: context.storeId,
+      terminalId: context.terminalId,
+      localEventIds: selection.idsToClear,
+    });
+    if (!resolution.ok) {
+      return failed(context.command, "server_resolution_unavailable", {
+        message:
+          resolution.message ??
+          "POS sync review could not be resolved on the server. It will retry on the next sync.",
+      });
+    }
+    serverConfirmedAt = resolution.serverConfirmedAt;
+  }
+
   const clear = await context.store.clearLocalReviewEvents(
     selection.idsToClear,
+    serverConfirmedAt !== undefined ? { serverConfirmedAt } : undefined,
   );
   if (!clear.ok) {
     return failed(context.command, "local_store_failure", {

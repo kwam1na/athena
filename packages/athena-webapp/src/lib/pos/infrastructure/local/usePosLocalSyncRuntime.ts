@@ -203,6 +203,18 @@ export type PosLocalRuntimeSyncDebug = {
 
 export type PosLocalSyncRuntimeMode = "drain-enabled" | "status-only";
 
+/**
+ * Minimum spacing between idle-boundary ledger purges so a health tick storm
+ * cannot repeatedly contend for the readwrite purge transaction.
+ */
+const POS_LOCAL_LEDGER_PURGE_MIN_INTERVAL_MS = 5 * 60_000;
+
+function isElevatedLedgerPressure(
+  pressure: ReturnType<typeof classifyPosLocalLedgerPressure>,
+): boolean {
+  return pressure === "warning" || pressure === "critical";
+}
+
 type PosLocalRuntimeStore = PosLocalStorePort;
 
 export type RuntimeActiveRegisterSessionDirective =
@@ -248,6 +260,9 @@ export function usePosLocalSyncRuntimeStatus(input: {
   const ingestLocalEvents = useMutation(api.pos.public.sync.ingestLocalEvents);
   const ingestRegisterSessionActivity = useMutation(
     api.pos.public.sync.ingestRegisterSessionActivity,
+  );
+  const resolveLocalSyncReview = useMutation(
+    api.pos.public.sync.resolveLocalSyncReview,
   );
   const reportTerminalRuntimeStatus = useMutation(
     api.pos.public.terminals.reportTerminalRuntimeStatus,
@@ -330,6 +345,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
   >(null);
   const isRuntimeStatusPublisherMountedRef = useRef(true);
   const observedRecoveryCommandIdsRef = useRef<Set<string>>(new Set());
+  const lastLedgerPurgeAtRef = useRef(0);
   const requestRetry = useCallback(() => {
     setRefreshToken((current) => current + 1);
     setManualRetryToken((current) => current + 1);
@@ -379,7 +395,46 @@ export function usePosLocalSyncRuntimeStatus(input: {
           storage: globalThis.navigator?.storage,
         }),
         summary,
-      ]).then(([health, ledgerSummary]) => {
+      ]).then(async ([health, initialLedgerSummary]) => {
+        let ledgerSummary = initialLedgerSummary;
+        // Evidence-gated ledger purge at a safe idle boundary. When the bounded
+        // ledger is under pressure, reclaim settled, unreferenced, past-boundary
+        // events so an all-day terminal cannot grow into a quota_exceeded
+        // sell-block. The purge self-gates: it never touches an unsynced /
+        // needs_review event, a session with live drawer authority, the current
+        // register session, or a terminal with an active cashier signed in.
+        const purge = store.purgeSettledLedgerEvents;
+        if (
+          !cancelled &&
+          storeId &&
+          terminalId &&
+          typeof purge === "function" &&
+          ledgerSummary?.ok === true &&
+          isElevatedLedgerPressure(
+            classifyPosLocalLedgerPressure(ledgerSummary.value),
+          ) &&
+          Date.now() - lastLedgerPurgeAtRef.current >=
+            POS_LOCAL_LEDGER_PURGE_MIN_INTERVAL_MS
+        ) {
+          lastLedgerPurgeAtRef.current = Date.now();
+          const purgeResult = await purge({});
+          if (
+            purgeResult.ok &&
+            purgeResult.value.status === "completed" &&
+            purgeResult.value.purgedCount > 0
+          ) {
+            // Health/log signal — the purge is never a silent bulk delete.
+            console.info(
+              `[pos-local-ledger] purged ${purgeResult.value.purgedCount} settled events at idle boundary; retained ${purgeResult.value.retainedCount}.`,
+            );
+            if (typeof store.readLedgerSummary === "function") {
+              ledgerSummary = await store.readLedgerSummary({
+                storeId,
+                terminalId,
+              });
+            }
+          }
+        }
         if (!cancelled) {
           const lifecycle = hasInjectedStore
             ? undefined
@@ -625,6 +680,28 @@ export function usePosLocalSyncRuntimeStatus(input: {
               schedulerScheduled: status.scheduled,
             }));
           },
+          // Only a normal (non-review) drain escalates a stuck held gap; the
+          // review-inclusive escalation drain must not re-escalate itself.
+          onHeldWithoutProgress: drainIncludesReviewEvents(options)
+            ? undefined
+            : (_heldEventIds, { consecutiveCount }) => {
+                if (shouldStop() || consecutiveCount !== 1) {
+                  return;
+                }
+                // Give a held successor of a stuck needs_review precursor a
+                // path forward: drive one review-inclusive drain so the
+                // precursor is re-projected instead of looping the same held
+                // gap indefinitely. If it still needs manager action, the
+                // truthful sync chip already surfaces the outstanding review.
+                const escalationScheduler = createDrainScheduler(syncSeed, {
+                  includeReviewEvents: true,
+                  onlyReviewEvents: true,
+                });
+                stopSchedulers.push(() => escalationScheduler.stop());
+                escalationScheduler.trigger("manual-retry", {
+                  priority: "high",
+                });
+              },
           markSynced: async (eventIds) => {
             if (eventIds.length === 0) return;
             const result = await store.markEventsSynced(eventIds, {
@@ -1681,6 +1758,29 @@ export function usePosLocalSyncRuntimeStatus(input: {
           command: claimResult.data,
           appUpdateCoordinator,
           onRetrySync: requestRetry,
+          resolveServerReview: async ({
+            storeId: reviewStoreId,
+            terminalId: reviewTerminalId,
+            localEventIds,
+          }) => {
+            try {
+              const response = await resolveLocalSyncReview({
+                storeId: reviewStoreId as Id<"store">,
+                terminalId: reviewTerminalId as Id<"posTerminal">,
+                localEventIds,
+              });
+              if (response.kind === "ok") {
+                return { ok: true, serverConfirmedAt: Date.now() };
+              }
+              return { ok: false, message: response.error.message };
+            } catch (error) {
+              return {
+                ok: false,
+                message:
+                  error instanceof Error ? error.message : String(error),
+              };
+            }
+          },
           refreshStaffAuthority: async ({ storeId, terminalId }) => {
             if (typeof store.replaceStaffAuthoritySnapshot !== "function") {
               throw new Error("Local staff authority storage is unavailable.");
@@ -1865,6 +1965,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
     recoveryCommands,
     refreshTerminalStaffAuthority,
     requestRetry,
+    resolveLocalSyncReview,
     runtimeReadiness.terminalSeed,
     runtimeStatusSyncSecretHash,
     runtimeStatusTerminalId,

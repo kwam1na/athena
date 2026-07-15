@@ -249,6 +249,7 @@ import type * as pos_application_sync_registerCatalogRevision from "../pos/appli
 import type * as pos_application_sync_registerMappingAuthorityRevision from "../pos/application/sync/registerMappingAuthorityRevision.js";
 import type * as pos_application_sync_registerSessionCloseoutHolds from "../pos/application/sync/registerSessionCloseoutHolds.js";
 import type * as pos_application_sync_registerSessionSyncReview from "../pos/application/sync/registerSessionSyncReview.js";
+import type * as pos_application_sync_resolveLocalSyncReview from "../pos/application/sync/resolveLocalSyncReview.js";
 import type * as pos_application_sync_staffProof from "../pos/application/sync/staffProof.js";
 import type * as pos_application_sync_staffProofValidation from "../pos/application/sync/staffProofValidation.js";
 import type * as pos_application_sync_terminalSyncSecret from "../pos/application/sync/terminalSyncSecret.js";
@@ -820,6 +821,7 @@ declare const fullApi: ApiFromModules<{
   "pos/application/sync/registerMappingAuthorityRevision": typeof pos_application_sync_registerMappingAuthorityRevision;
   "pos/application/sync/registerSessionCloseoutHolds": typeof pos_application_sync_registerSessionCloseoutHolds;
   "pos/application/sync/registerSessionSyncReview": typeof pos_application_sync_registerSessionSyncReview;
+  "pos/application/sync/resolveLocalSyncReview": typeof pos_application_sync_resolveLocalSyncReview;
   "pos/application/sync/staffProof": typeof pos_application_sync_staffProof;
   "pos/application/sync/staffProofValidation": typeof pos_application_sync_staffProofValidation;
   "pos/application/sync/terminalSyncSecret": typeof pos_application_sync_terminalSyncSecret;

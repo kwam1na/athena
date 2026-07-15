@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   requireOrganizationMemberRoleWithCtx: vi.fn(),
   ingestLocalEventsWithCtx: vi.fn(),
   ingestRegisterSessionActivityWithCtx: vi.fn(),
+  resolveLocalSyncReviewWithCtx: vi.fn(),
 }));
 
 vi.mock("../../lib/athenaUserAuth", () => ({
@@ -28,7 +29,16 @@ vi.mock("../application/sync/posRegisterSessionActivity", () => ({
     mocks.ingestRegisterSessionActivityWithCtx,
 }));
 
-import { ingestLocalEvents, ingestRegisterSessionActivity } from "./sync";
+vi.mock("../application/sync/resolveLocalSyncReview", () => ({
+  resolveLocalSyncReviewWithCtx: mocks.resolveLocalSyncReviewWithCtx,
+  MAX_LOCAL_SYNC_REVIEW_EVENTS: 100,
+}));
+
+import {
+  ingestLocalEvents,
+  ingestRegisterSessionActivity,
+  resolveLocalSyncReview,
+} from "./sync";
 
 const SYNC_SECRET_HASH =
   "e3aaef72556405db4093f59a9aa8ee6539f8e6542e60d92f08e782faa0d246fa";
@@ -49,6 +59,10 @@ describe("POS local sync public mutation", () => {
       _id: "athena-user-1",
     });
     mocks.requireOrganizationMemberRoleWithCtx.mockResolvedValue(undefined);
+    mocks.resolveLocalSyncReviewWithCtx.mockResolvedValue({
+      resolvedEventIds: [],
+      resolvedConflictCount: 0,
+    });
     mocks.ingestLocalEventsWithCtx.mockResolvedValue({
       kind: "ok",
       data: {
@@ -1182,6 +1196,93 @@ function collectPublicSyncArgsIssues(value: unknown) {
     value,
   );
 }
+
+describe("resolveLocalSyncReview public mutation", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    mocks.requireAuthenticatedAthenaUserWithCtx.mockResolvedValue({
+      _id: "athena-user-1",
+    });
+    mocks.requireOrganizationMemberRoleWithCtx.mockResolvedValue(undefined);
+    mocks.resolveLocalSyncReviewWithCtx.mockResolvedValue({
+      resolvedEventIds: ["event-review-1"],
+      resolvedConflictCount: 1,
+    });
+  });
+
+  it("denies a caller without the POS review role", async () => {
+    mocks.requireOrganizationMemberRoleWithCtx.mockRejectedValue(
+      new Error("denied"),
+    );
+    const ctx = buildCtx();
+
+    const result = await getHandler(resolveLocalSyncReview)(ctx as never, {
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      localEventIds: ["event-review-1"],
+    });
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "authorization_failed",
+        message: "You do not have access to resolve POS sync reviews.",
+      },
+    });
+    expect(mocks.resolveLocalSyncReviewWithCtx).not.toHaveBeenCalled();
+  });
+
+  it("returns not_found for an unknown store without resolving", async () => {
+    const ctx = buildCtx({ missingStore: true });
+
+    const result = await getHandler(resolveLocalSyncReview)(ctx as never, {
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      localEventIds: ["event-review-1"],
+    });
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: { code: "not_found", message: "Store not found." },
+    });
+    expect(mocks.resolveLocalSyncReviewWithCtx).not.toHaveBeenCalled();
+  });
+
+  it("round-trips an authorized resolution with the caller as the resolver", async () => {
+    const ctx = buildCtx();
+
+    const result = await getHandler(resolveLocalSyncReview)(ctx as never, {
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      localEventIds: ["event-review-1"],
+      submittedAt: 4_242,
+    });
+
+    expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        allowedRoles: ["full_admin", "pos_only"],
+        organizationId: "org-1",
+        userId: "athena-user-1",
+      }),
+    );
+    expect(mocks.resolveLocalSyncReviewWithCtx).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        storeId: "store-1",
+        terminalId: "terminal-1",
+        localEventIds: ["event-review-1"],
+        resolvedByUserId: "athena-user-1",
+        now: 4_242,
+      }),
+    );
+    assertConformsToExportedReturns(resolveLocalSyncReview, result);
+    expect(result).toEqual({
+      kind: "ok",
+      data: { resolvedEventIds: ["event-review-1"], resolvedConflictCount: 1 },
+    });
+  });
+});
 
 function buildCtx(
   options: {

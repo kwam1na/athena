@@ -496,6 +496,44 @@ export function createLocalSyncIngestionService(
               rejectionMessage: preparedEvent.message,
             });
           }
+          // A money-bearing sale that the server rejects would otherwise
+          // vanish with the drawer left short and nobody notified. Surface it
+          // as a manager-visible conflict while keeping the cursor advancing.
+          // Non-financial rejects stay silent to avoid conflict spam.
+          if (isMoneyBearingRejectedSaleEvent(event)) {
+            const rejectedCursorIdentity = getLocalSyncCursorIdentity(event);
+            const rejectedAmount = summarizeRejectedSaleAmount(event);
+            const rejectedLocalTransactionId = optionalString(
+              (event.payload as Record<string, unknown>).localTransactionId,
+            );
+            const serverRejectedConflict =
+              await dependencies.repository.createConflict({
+                storeId: batch.storeId,
+                terminalId: batch.terminalId,
+                localRegisterSessionId:
+                  rejectedCursorIdentity.localSyncCursorId,
+                localEventId: event.localEventId,
+                sequence: event.sequence,
+                conflictType: "server_rejected",
+                status: "needs_review",
+                summary: SERVER_REJECTED_SALE_CONFLICT_SUMMARY,
+                details: {
+                  code: "server_rejected",
+                  reason: preparedEvent.message,
+                  localEventId: event.localEventId,
+                  localRegisterSessionId:
+                    rejectedCursorIdentity.localSyncCursorId,
+                  ...(rejectedAmount === undefined
+                    ? {}
+                    : { amount: rejectedAmount }),
+                  ...(rejectedLocalTransactionId
+                    ? { localTransactionId: rejectedLocalTransactionId }
+                    : {}),
+                },
+                createdAt: dependencies.now(),
+              });
+            conflicts.push(serverRejectedConflict);
+          }
           accepted.push({
             localEventId: rejectedEvent.localEventId,
             sequence: rejectedEvent.sequence,
@@ -668,6 +706,44 @@ function getLocalSyncCursorIdentity(
     localSyncCursorId: localRegisterSessionId,
     localRegisterSessionId,
   };
+}
+
+const SERVER_REJECTED_SALE_CONFLICT_SUMMARY =
+  "Server rejected a completed sale during sync. Reconcile the drawer before closing.";
+
+function isMoneyBearingRejectedSaleEvent(
+  event: PosLocalSyncEventInput,
+): boolean {
+  if (event.eventType !== "sale_completed") {
+    return false;
+  }
+  const payments = (event.payload as { payments?: unknown } | undefined)
+    ?.payments;
+  return Array.isArray(payments) && payments.length > 0;
+}
+
+function summarizeRejectedSaleAmount(
+  event: PosLocalSyncEventInput,
+): number | undefined {
+  const payload = event.payload as
+    | { payments?: unknown; totals?: { total?: unknown } }
+    | undefined;
+  const payments = payload?.payments;
+  if (Array.isArray(payments)) {
+    let sum = 0;
+    let sawAmount = false;
+    for (const payment of payments) {
+      if (isRecord(payment) && isNonNegativeFiniteNumber(payment.amount)) {
+        sum += payment.amount;
+        sawAmount = true;
+      }
+    }
+    if (sawAmount) {
+      return sum;
+    }
+  }
+  const total = payload?.totals?.total;
+  return isNonNegativeFiniteNumber(total) ? total : undefined;
 }
 
 function prepareLocalSyncEventForProjection(input: {

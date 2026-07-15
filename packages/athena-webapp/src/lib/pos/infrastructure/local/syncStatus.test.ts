@@ -108,7 +108,7 @@ describe("derivePosLocalSyncStatus", () => {
     });
   });
 
-  it("treats locally resolved review items as terminal-settled without reporting cloud sync", () => {
+  it("keeps a locally-cleared review as needs-review until the server confirms it", () => {
     expect(
       derivePosLocalSyncStatus({
         events: [
@@ -118,6 +118,33 @@ describe("derivePosLocalSyncStatus", () => {
               localResolution: {
                 reason: "terminal_recovery_command",
                 resolvedAt: 10,
+                status: "local_review_cleared",
+              },
+              status: "locally_resolved",
+              uploaded: true,
+            },
+          }),
+        ],
+        isOnline: true,
+      }),
+    ).toMatchObject({
+      state: "needs_review",
+      // The high-water mark cannot advance past an unconfirmed local resolution.
+      lastSyncedSequence: 1,
+    });
+  });
+
+  it("treats a server-confirmed local resolution as fully settled", () => {
+    expect(
+      derivePosLocalSyncStatus({
+        events: [
+          event(1, "synced"),
+          event(2, "locally_resolved", {
+            sync: {
+              localResolution: {
+                reason: "terminal_recovery_command",
+                resolvedAt: 10,
+                serverConfirmedAt: 12,
                 status: "local_review_cleared",
               },
               status: "locally_resolved",

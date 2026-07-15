@@ -8,6 +8,7 @@ import type {
   PosLocalCloudMapping,
   PosLocalEntityKind,
   PosLocalEventRecord,
+  PosLocalLedgerPurgeResult,
   PosLocalLedgerSummary,
   PosLocalOpaqueContinuation,
   PosLocalRegisterAvailabilitySnapshot,
@@ -248,8 +249,19 @@ export interface PosLocalEventPort {
   }): Promise<PosLocalStoreResult<number>>;
   clearLocalReviewEvents(
     eventIds: string[],
-    clearOptions?: { reason?: PosLocalReviewResolutionReason },
+    clearOptions?: {
+      reason?: PosLocalReviewResolutionReason;
+      serverConfirmedAt?: number;
+    },
   ): Promise<PosLocalStoreResult<PosLocalEventRecord[]>>;
+  /**
+   * Evidence-gated selective purge of settled, unreferenced, past-boundary
+   * ledger events at a safe idle/rollover boundary. Optional so existing
+   * lightweight store doubles remain valid; callers must feature-detect it.
+   */
+  purgeSettledLedgerEvents?(input: {
+    activeLocalRegisterSessionId?: string;
+  }): Promise<PosLocalStoreResult<PosLocalLedgerPurgeResult>>;
   listEvents(): Promise<PosLocalStoreResult<PosLocalEventRecord[]>>;
   readLedgerSummary(input: {
     storeId: string;
