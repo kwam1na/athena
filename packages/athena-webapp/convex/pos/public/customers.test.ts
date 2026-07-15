@@ -59,6 +59,7 @@ import {
   updateCustomer,
   updateCustomerStats,
 } from "./customers";
+import { assertConformsToExportedReturns } from "../../lib/returnValidatorContract";
 
 function getHandler(definition: unknown) {
   return (definition as { _handler: Function })._handler;
@@ -326,4 +327,64 @@ describe("pos public customers authorization", () => {
       expect(delegate()).not.toHaveBeenCalled();
     },
   );
+});
+
+describe("pos public customers return contracts", () => {
+  const userErr = {
+    kind: "user_error" as const,
+    error: { code: "not_found" as const, message: "Not found." },
+  };
+  const attribution = {
+    kind: "ok" as const,
+    data: {
+      name: "Ada",
+      attribution: { kind: "sale_only" as const, reusable: false as const },
+    },
+  };
+
+  it("conforms searchCustomers returns to its exported validator", () => {
+    assertConformsToExportedReturns(searchCustomers as never, []);
+  });
+  it("conforms getCustomerById returns to its exported validator", () => {
+    assertConformsToExportedReturns(getCustomerById as never, null);
+  });
+  it("conforms createCustomer returns to its exported validator", () => {
+    assertConformsToExportedReturns(createCustomer as never, attribution);
+  });
+  it("conforms updateCustomer returns to its exported validator", () => {
+    assertConformsToExportedReturns(updateCustomer as never, userErr);
+  });
+  it("conforms updateCustomerStats returns to its exported validator", () => {
+    assertConformsToExportedReturns(updateCustomerStats as never, null);
+  });
+  it("conforms resolvePosCustomerSelection returns to its exported validator", () => {
+    assertConformsToExportedReturns(
+      resolvePosCustomerSelection as never,
+      attribution,
+    );
+  });
+  it("conforms getCustomerTransactions returns to its exported validator", () => {
+    assertConformsToExportedReturns(getCustomerTransactions as never, []);
+  });
+  it("conforms linkToStoreFrontUser returns to its exported validator", () => {
+    assertConformsToExportedReturns(linkToStoreFrontUser as never, userErr);
+  });
+  it("conforms linkToGuest returns to its exported validator", () => {
+    assertConformsToExportedReturns(linkToGuest as never, userErr);
+  });
+  it("conforms resolveStoreFrontUserMatch returns to its exported validator", () => {
+    assertConformsToExportedReturns(resolveStoreFrontUserMatch as never, userErr);
+  });
+  it("conforms resolveGuestMatch returns to its exported validator", () => {
+    assertConformsToExportedReturns(resolveGuestMatch as never, userErr);
+  });
+  it("conforms findByStoreFrontUser returns to its exported validator", () => {
+    assertConformsToExportedReturns(findByStoreFrontUser as never, null);
+  });
+  it("conforms findPotentialMatches returns to its exported validator", () => {
+    assertConformsToExportedReturns(findPotentialMatches as never, {
+      storeFrontUsers: [],
+      guests: [],
+    });
+  });
 });
