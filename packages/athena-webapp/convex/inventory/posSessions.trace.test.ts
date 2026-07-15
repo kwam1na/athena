@@ -128,6 +128,13 @@ describe("POS session exported return contracts", () => {
       transactionId: "pos-transaction-1",
       transactionNumber: "TX-001",
     }));
+    // Idempotent replay (U8): a retried completeSession returns the original
+    // sale via the same exported ok shape instead of minting a duplicate.
+    assertConformsToExportedReturns(completeSession, ok({
+      sessionId: "pos-session-1",
+      transactionId: "pos-transaction-existing",
+      transactionNumber: "TX-EXISTING",
+    }));
     assertConformsToExportedReturns(voidSession, sessionIdOnlyResult);
     assertConformsToExportedReturns(
       releaseSessionInventoryHoldsAndDeleteItems,
