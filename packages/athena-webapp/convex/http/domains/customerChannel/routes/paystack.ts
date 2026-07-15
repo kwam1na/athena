@@ -8,26 +8,30 @@ import {
   calculateOrderAmount,
   getOrderDiscountValue,
 } from "../../../../storeFront/helpers/paymentHelpers";
-import { isDuplicateChargeSuccess } from "./security";
+import {
+  isDuplicateChargeSuccess,
+  isValidPaystackSignature,
+} from "./security";
 
 const paystackRoutes: HonoWithConvex<ActionCtx> = new Hono();
 
 paystackRoutes.post("/", async (c) => {
-  // const secret = process.env.PAYSTACK_SECRET_KEY;
-  // const signature = c.req.header("x-paystack-signature");
+  const secret = process.env.PAYSTACK_SECRET_KEY;
+  const signature = c.req.header("x-paystack-signature");
   const rawPayload = await c.req.text();
 
-  // if (!secret) {
-  //   return c.json({ error: "PAYSTACK_SECRET_KEY is not configured" }, 500);
-  // }
+  if (!secret) {
+    console.error("PAYSTACK_SECRET_KEY is not configured");
+    return c.json({ error: "Webhook not configured" }, 500);
+  }
 
-  // if (!signature) {
-  //   return c.json({ error: "Missing webhook signature" }, 401);
-  // }
+  if (!signature) {
+    return c.json({ error: "Missing webhook signature" }, 401);
+  }
 
-  // if (!isValidPaystackSignature(rawPayload, secret, signature)) {
-  //   return c.json({ error: "Invalid webhook signature" }, 401);
-  // }
+  if (!(await isValidPaystackSignature(rawPayload, secret, signature))) {
+    return c.json({ error: "Invalid webhook signature" }, 401);
+  }
 
   let payload: any;
 

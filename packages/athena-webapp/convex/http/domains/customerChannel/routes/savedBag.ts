@@ -1,15 +1,36 @@
 import { Hono } from "hono";
 import { HonoWithConvex } from "convex-helpers/server/hono";
 import { ActionCtx } from "../../../../_generated/server";
-import { internal } from "../../../../_generated/api";
+import { api, internal } from "../../../../_generated/api";
 import { getCookie } from "hono/cookie";
 import { Id } from "../../../../_generated/dataModel";
 import {
   getStoreDataFromRequest,
   getStorefrontUserFromRequest,
 } from "../../../utils";
+import { isAuthorizedResourceOwner } from "./security";
 
 const savedBagRoutes: HonoWithConvex<ActionCtx> = new Hono();
+
+/**
+ * Verify that the saved bag identified by `bagId` belongs to the
+ * cookie-authenticated storefront actor.
+ */
+const assertSavedBagOwnership = async (
+  env: ActionCtx,
+  userId: Id<"storeFrontUser"> | Id<"guest"> | undefined,
+  bagId: string
+): Promise<boolean> => {
+  if (!userId) {
+    return false;
+  }
+
+  const bag = await env.runQuery(api.storeFront.savedBag.getById, {
+    id: bagId as Id<"savedBag">,
+  });
+
+  return Boolean(bag) && isAuthorizedResourceOwner(bag?.storeFrontUserId, userId);
+};
 
 // Get a specific bag
 savedBagRoutes.get("/:bagId", async (c) => {
@@ -58,6 +79,10 @@ savedBagRoutes.post("/:bagId/items", async (c) => {
 
   const userId = getStorefrontUserFromRequest(c);
 
+  if (!(await assertSavedBagOwnership(c.env, getStorefrontUserFromRequest(c), bagId))) {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+
   const b = await c.env.runMutation(internal.storeFront.savedBagItem.addItemToBag, {
     productId: productId as Id<"product">,
     quantity,
@@ -75,6 +100,17 @@ savedBagRoutes.post("/:bagId/owner", async (c) => {
   try {
     const { currentOwnerId, newOwnerId } = await c.req.json();
 
+    // Only the authenticated user may claim their OWN prior guest session's
+    // saved bag: target must be this session's user cookie, source its guest.
+    const authedUserId = getCookie(c, "user_id");
+    const authedGuestId = getCookie(c, "guest_id");
+    if (
+      !isAuthorizedResourceOwner(newOwnerId, authedUserId) ||
+      !isAuthorizedResourceOwner(currentOwnerId, authedGuestId)
+    ) {
+      return c.json({ error: "Forbidden" }, 403);
+    }
+
     const b = await c.env.runMutation(internal.storeFront.savedBag.updateOwner, {
       currentOwner: currentOwnerId as Id<"guest">,
       newOwner: newOwnerId as Id<"storeFrontUser">,
@@ -88,7 +124,11 @@ savedBagRoutes.post("/:bagId/owner", async (c) => {
 
 // Delete an item from a bag
 savedBagRoutes.delete("/:bagId/items/:itemId", async (c) => {
-  const { itemId } = c.req.param();
+  const { bagId, itemId } = c.req.param();
+
+  if (!(await assertSavedBagOwnership(c.env, getStorefrontUserFromRequest(c), bagId))) {
+    return c.json({ error: "Forbidden" }, 403);
+  }
 
   await c.env.runMutation(internal.storeFront.savedBagItem.deleteItemFromSavedBag, {
     itemId: itemId as Id<"savedBagItem">,
@@ -99,8 +139,12 @@ savedBagRoutes.delete("/:bagId/items/:itemId", async (c) => {
 
 // Update an item in a bag
 savedBagRoutes.put("/:bagId/items/:itemId", async (c) => {
-  const { itemId } = c.req.param();
+  const { bagId, itemId } = c.req.param();
   const { quantity } = await c.req.json();
+
+  if (!(await assertSavedBagOwnership(c.env, getStorefrontUserFromRequest(c), bagId))) {
+    return c.json({ error: "Forbidden" }, 403);
+  }
 
   const b = await c.env.runMutation(
     internal.storeFront.savedBagItem.updateItemInBag,

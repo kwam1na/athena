@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   buildCanonicalCheckoutProducts,
+  computePaystackSignature,
   hasValidPositiveQuantity,
   isAuthorizedResourceOwner,
   isAmountTampered,
   isDuplicateChargeSuccess,
-  // isValidPaystackSignature,
+  isValidPaystackSignature,
+  timingSafeEqualHex,
 } from "./security";
 
 describe("security helpers", () => {
@@ -84,23 +86,45 @@ describe("security helpers", () => {
     });
   });
 
-  // describe("isValidPaystackSignature", () => {
-  //   it("validates signed payloads and rejects bad signatures", () => {
-  //     const body = JSON.stringify({
-  //       event: "charge.success",
-  //       data: { id: 10 },
-  //     });
-  //     const secret = "test_secret";
+  describe("timingSafeEqualHex", () => {
+    it("compares equal-length hex strings and rejects mismatches", () => {
+      expect(timingSafeEqualHex("abcd", "abcd")).toBe(true);
+      expect(timingSafeEqualHex("abcd", "abce")).toBe(false);
+      expect(timingSafeEqualHex("abcd", "abc")).toBe(false);
+    });
+  });
 
-  //     const valid = isValidPaystackSignature(body, secret);
-  //     expect(
-  //       isValidPaystackSignature(body, secret, valid.computedSignature)
-  //     ).toBe(true);
-  //     expect(
-  //       isValidPaystackSignature(body, secret, "bad-signature")
-  //     ).toBe(false);
-  //   });
-  // });
+  describe("isValidPaystackSignature", () => {
+    it("validates signed payloads and rejects bad signatures", async () => {
+      const body = JSON.stringify({
+        event: "charge.success",
+        data: { id: 10 },
+      });
+      const secret = "test_secret";
+
+      const computed = await computePaystackSignature(body, secret);
+      expect(await isValidPaystackSignature(body, secret, computed)).toBe(true);
+      // Uppercase headers are normalized before comparison.
+      expect(
+        await isValidPaystackSignature(body, secret, computed.toUpperCase())
+      ).toBe(true);
+      expect(await isValidPaystackSignature(body, secret, "bad-signature")).toBe(
+        false
+      );
+      // A payload signed with a different secret must not validate.
+      expect(
+        await isValidPaystackSignature(body, "other_secret", computed)
+      ).toBe(false);
+    });
+
+    it("produces the known HMAC-SHA512 hex digest for a fixed input", async () => {
+      // Cross-checked against Node's crypto.createHmac("sha512", ...).
+      const computed = await computePaystackSignature("hello", "secret");
+      expect(computed).toBe(
+        "db1595ae88a62fd151ec1cba81b98c39df82daae7b4cb9820f446d5bf02f1dcfca6683d88cab3e273f5963ab8ec469a746b5b19086371239f67d1e5f99a79440"
+      );
+    });
+  });
 
   describe("isDuplicateChargeSuccess", () => {
     it("flags duplicates for already-paid or already-ordered sessions", () => {

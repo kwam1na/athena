@@ -47,6 +47,7 @@ type RatingDimension = {
 
 type UpdateReviewArgs = {
   id: Id<"review">;
+  requestedByStoreFrontUserId: Id<"storeFrontUser"> | Id<"guest">;
   title?: string;
   content?: string;
   ratings?: RatingDimension[];
@@ -272,6 +273,10 @@ export const hasUserReviewForOrderItem = query({
 export const update = mutation({
   args: {
     id: v.id(entity),
+    requestedByStoreFrontUserId: v.union(
+      v.id("storeFrontUser"),
+      v.id("guest")
+    ),
     title: v.optional(v.string()),
     content: v.optional(v.string()),
     ratings: v.optional(
@@ -286,7 +291,16 @@ export const update = mutation({
     ),
   },
   handler: async (ctx, args: UpdateReviewArgs) => {
-    const { id, ...updates } = args;
+    const { id, requestedByStoreFrontUserId, ...updates } = args;
+
+    const existing = await ctx.db.get("review", id);
+    if (!existing) {
+      throw new Error("Review not found");
+    }
+
+    if (existing.createdByStoreFrontUserId !== requestedByStoreFrontUserId) {
+      throw new Error("Not authorized to modify this review");
+    }
 
     const review = await ctx.db.patch("review", id, {
       ...updates,
@@ -300,9 +314,28 @@ export const update = mutation({
 export const deleteReview = mutation({
   args: {
     id: v.id(entity),
+    requestedByStoreFrontUserId: v.union(
+      v.id("storeFrontUser"),
+      v.id("guest")
+    ),
   },
-  handler: async (ctx, args: { id: Id<"review"> }) => {
-    const { id } = args;
+  handler: async (
+    ctx,
+    args: {
+      id: Id<"review">;
+      requestedByStoreFrontUserId: Id<"storeFrontUser"> | Id<"guest">;
+    }
+  ) => {
+    const { id, requestedByStoreFrontUserId } = args;
+
+    const existing = await ctx.db.get("review", id);
+    if (!existing) {
+      return;
+    }
+
+    if (existing.createdByStoreFrontUserId !== requestedByStoreFrontUserId) {
+      throw new Error("Not authorized to delete this review");
+    }
 
     await ctx.db.delete("review", id);
   },

@@ -3,10 +3,12 @@ import { HonoWithConvex } from "convex-helpers/server/hono";
 import { ActionCtx } from "../../../../_generated/server";
 import { api } from "../../../../_generated/api";
 import { Id } from "../../../../_generated/dataModel";
+import { getCookie } from "hono/cookie";
 import {
   getStoreDataFromRequest,
   getStorefrontUserFromRequest,
 } from "../../../utils";
+import { isAuthorizedResourceOwner } from "./security";
 
 const rewardsRoutes: HonoWithConvex<ActionCtx> = new Hono();
 
@@ -141,6 +143,24 @@ rewardsRoutes.get("/order-points", async (c) => {
     return c.json({ error: "Order ID is required" }, 400);
   }
 
+  const userId = getStorefrontUserFromRequest(c);
+  if (!userId) {
+    return c.json({ error: "User id missing" }, 401);
+  }
+
+  // Only the order owner may read its points (order IDs are client-visible).
+  const order = await c.env.runQuery(api.storeFront.onlineOrder.get, {
+    identifier: orderId as Id<"onlineOrder">,
+  });
+
+  if (!order) {
+    return c.json({ error: "Order not found" }, 404);
+  }
+
+  if (!isAuthorizedResourceOwner(order.storeFrontUserId, userId)) {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+
   try {
     const result = await c.env.runQuery(api.storeFront.rewards.getOrderPoints, {
       orderId: orderId as Id<"onlineOrder">,
@@ -163,6 +183,17 @@ rewardsRoutes.post("/award-guest-orders", async (c) => {
 
   if (!guestId) {
     return c.json({ error: "Guest ID is required" }, 400);
+  }
+
+  // Points may only be awarded to the authenticated user's own account, and
+  // only for guest orders belonging to that session's guest cookie.
+  const authedUserId = getCookie(c, "user_id");
+  const authedGuestId = getCookie(c, "guest_id");
+  if (!isAuthorizedResourceOwner(userId, authedUserId)) {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+  if (!isAuthorizedResourceOwner(guestId, authedGuestId)) {
+    return c.json({ error: "Forbidden" }, 403);
   }
 
   const result = await c.env.runMutation(
