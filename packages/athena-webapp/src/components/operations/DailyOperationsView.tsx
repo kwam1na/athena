@@ -347,6 +347,9 @@ export type DailyOperationsSnapshot = {
 };
 
 type DailyOperationsViewContentProps = {
+  cachedPriorWeekBoundaryMetric?:
+    | DailyOperationsSnapshot["weekMetrics"][number]
+    | null;
   cachedWeekAnalyticsFetchedAt?: number;
   cachedWeekMetrics?: DailyOperationsSnapshot["weekMetrics"];
   cachedWeekStorePulse?: StorePulseSummary | null;
@@ -400,6 +403,9 @@ type CachedWeekAnalytics = {
   >;
   fetchedAt: number;
   metrics: DailyOperationsSnapshot["weekMetrics"];
+  priorWeekBoundaryMetric?:
+    | DailyOperationsSnapshot["weekMetrics"][number]
+    | null;
   storePulse?: StorePulseSummary | null;
 };
 
@@ -425,6 +431,9 @@ type DailyOperationsTimelinePreviewSnapshot =
 
 type DailyOperationsWeekAnalyticsSnapshot = {
   operatingDate: string;
+  priorWeekBoundaryMetric?:
+    | DailyOperationsSnapshot["weekMetrics"][number]
+    | null;
   weekEndOperatingDate: string;
   weekMetrics: DailyOperationsSnapshot["weekMetrics"];
 };
@@ -1158,7 +1167,13 @@ function getPreviousOperatingDate(operatingDate: string) {
   return getLocalOperatingDate(date);
 }
 
-function getPriorComparisonMetric(snapshot: DailyOperationsSnapshot) {
+function getPriorComparisonMetric(
+  snapshot: DailyOperationsSnapshot,
+  cachedWeekMetrics?: DailyOperationsSnapshot["weekMetrics"],
+  cachedPriorWeekBoundaryMetric?:
+    | DailyOperationsSnapshot["weekMetrics"][number]
+    | null,
+) {
   const previousOperatingDate = getPreviousOperatingDate(
     snapshot.operatingDate,
   );
@@ -1169,7 +1184,13 @@ function getPriorComparisonMetric(snapshot: DailyOperationsSnapshot) {
     return snapshot.priorDayMetric;
   }
 
-  return snapshot.weekMetrics.find(
+  if (
+    cachedPriorWeekBoundaryMetric?.operatingDate === previousOperatingDate
+  ) {
+    return cachedPriorWeekBoundaryMetric;
+  }
+
+  return (cachedWeekMetrics ?? snapshot.weekMetrics).find(
     (metric) => metric.operatingDate === previousOperatingDate,
   );
 }
@@ -3216,6 +3237,7 @@ function WeekMetricsStrip({
 }
 
 export function DailyOperationsViewContent({
+  cachedPriorWeekBoundaryMetric,
   cachedWeekAnalyticsFetchedAt,
   cachedWeekMetrics,
   cachedWeekStorePulse,
@@ -3293,7 +3315,11 @@ export function DailyOperationsViewContent({
     ? getOtherPaymentTotals(snapshot.closeSummary)
     : [];
   const priorComparisonMetric = snapshot
-    ? getPriorComparisonMetric(snapshot)
+    ? getPriorComparisonMetric(
+        snapshot,
+        cachedWeekMetrics,
+        cachedPriorWeekBoundaryMetric,
+      )
     : undefined;
   const priorWindowLabel = snapshot
     ? getPriorWindowLabel(snapshot.operatingDate)
@@ -4290,6 +4316,8 @@ function DailyOperationsConnectedView({
           daySnapshots: existingWeekAnalytics?.daySnapshots ?? {},
           fetchedAt: Date.now(),
           metrics: queriedWeekAnalyticsSnapshot.weekMetrics,
+          priorWeekBoundaryMetric:
+            queriedWeekAnalyticsSnapshot.priorWeekBoundaryMetric,
           storePulse: existingWeekAnalytics?.storePulse,
         },
       };
@@ -4326,6 +4354,8 @@ function DailyOperationsConnectedView({
           },
           fetchedAt: existingWeekAnalytics?.fetchedAt ?? Date.now(),
           metrics: existingWeekAnalytics?.metrics ?? [],
+          priorWeekBoundaryMetric:
+            existingWeekAnalytics?.priorWeekBoundaryMetric,
           storePulse: existingWeekAnalytics?.storePulse,
         },
       };
@@ -4473,6 +4503,9 @@ function DailyOperationsConnectedView({
   return (
     <DailyOperationsViewContent
       currency={activeStore?.currency ?? "GHS"}
+      cachedPriorWeekBoundaryMetric={
+        cachedWeekAnalytics?.priorWeekBoundaryMetric
+      }
       cachedWeekAnalyticsFetchedAt={cachedWeekAnalytics?.fetchedAt}
       cachedWeekMetrics={cachedWeekMetrics}
       cachedWeekStorePulse={cachedWeekStorePulse}

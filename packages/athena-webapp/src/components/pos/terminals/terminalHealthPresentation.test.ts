@@ -672,6 +672,27 @@ describe("terminal health presentation", () => {
     ]);
   });
 
+  it("keeps legacy inventory review work out of terminal recovery", () => {
+    const presentation = buildTerminalRecoveryPresentation({
+      recoveryPreview: {
+        manualReview: [
+          {
+            reason: "Inventory review work",
+            source: "cloud_sync",
+            type: "synced_sale_inventory_review",
+          },
+        ],
+        readiness: "needs_manual_review",
+      },
+      runtimeStatus: null,
+      syncEvidence: {},
+      terminal: { status: "active" },
+    });
+
+    expect(presentation.groups.manualReview).toEqual([]);
+    expect(presentation.safeActions).toEqual([]);
+  });
+
   it("uses the Convex recoveryPreview field for terminal command actions", () => {
     const presentation = buildTerminalRecoveryPresentation({
       recoveryPreview: {
@@ -1412,6 +1433,44 @@ describe("terminal health presentation", () => {
     ).toBe("1 local review item is still on this terminal.");
 
     vi.useRealTimers();
+  });
+
+  it("does not classify inventory-only sync evidence as terminal review", () => {
+    expect(
+      classifyTerminalHealth({
+        health: "offline",
+        runtimeStatus: {
+          receivedAt: Date.now() - 4 * 60 * 60_000,
+          sync: {
+            failedEventCount: 0,
+            pendingEventCount: 0,
+            reviewEventCount: 0,
+            status: "idle",
+            uploadableEventCount: 0,
+          },
+        },
+        syncEvidence: {
+          conflictedCount: 1,
+          reviewSummary: {
+            groups: [{ conflictType: "inventory", count: 1 }],
+          },
+          unresolvedConflictCount: 1,
+          unresolvedConflicts: [
+            {
+              _id: "inventory-conflict-1",
+              conflictType: "inventory",
+              createdAt: Date.now(),
+              localEventId: "inventory-event-1",
+              localRegisterSessionId: "local-register-1",
+              sequence: 26,
+              summary:
+                "Inventory needs manager review for a synced offline sale.",
+            },
+          ],
+        },
+        terminal: { status: "active" },
+      }).label,
+    ).toBe("Offline");
   });
 
   it("returns backend attention reasons without synthesizing fallback reasons", () => {

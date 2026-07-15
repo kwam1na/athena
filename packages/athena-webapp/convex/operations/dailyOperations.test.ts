@@ -2355,6 +2355,9 @@ describe("daily operations overview read model", () => {
 
     expect(snapshot).toEqual({
       operatingDate: "2026-05-08",
+      priorWeekBoundaryMetric: expect.objectContaining({
+        operatingDate: "2026-05-02",
+      }),
       weekEndOperatingDate: "2026-05-09",
       weekMetrics: expect.arrayContaining([
         expect.objectContaining({

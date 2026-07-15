@@ -374,9 +374,9 @@ describe("POSTerminalDetailViewContent", () => {
     expect(
       screen.getByText("Local runtime review / next upload #14"),
     ).toBeInTheDocument();
-    expect(screen.getAllByText("Cloud sync evidence").length).toBeGreaterThan(
-      0,
-    );
+    expect(
+      screen.queryByRole("heading", { name: "Cloud sync evidence" }),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByText("Staff authority changed before sync."),
     ).toBeInTheDocument();
@@ -393,6 +393,7 @@ describe("POSTerminalDetailViewContent", () => {
       <POSTerminalDetailViewContent
         detail={{
           ...detail,
+          health: "offline",
           runtimeStatus: {
             ...detail.runtimeStatus!,
             buildSha: "old-build-sha",
@@ -2073,7 +2074,7 @@ describe("POSTerminalDetailViewContent", () => {
     expect(onResolveRegisterSessionReview).not.toHaveBeenCalled();
   });
 
-  it("routes inventory review attention to open work with inventory copy", () => {
+  it("does not render inventory review work as terminal attention", () => {
     render(
       <POSTerminalDetailViewContent
         detail={{
@@ -2092,6 +2093,70 @@ describe("POSTerminalDetailViewContent", () => {
               type: "synced_sale_inventory_review",
             },
           ],
+          operationalExplanation: {
+            blockingDomain: "manual_review",
+            detail:
+              "Manual review must finish before support repairs this terminal.",
+            evidenceReferences: [
+              {
+                count: 1,
+                source: "cloud_sync",
+                summary: "Inventory review work",
+                type: "synced_sale_inventory_review",
+              },
+            ],
+            headline: "Manager review needed",
+            lane: "needs_manual_review",
+            nextStep: "Use the linked review workspace.",
+            primaryOwner: "manager",
+            saleImpact: "can_transact_now",
+            secondaryActions: [],
+            severity: "warning",
+            summaryMeta: {
+              hasSecondarySafeRepair: false,
+              reviewBacklogCount: 1,
+              targetResolutionIncomplete: false,
+            },
+            supportAction: "manual_review",
+          },
+          recoveryPreview: {
+            manualReview: [
+              {
+                reason: "Inventory review work",
+                source: "cloud_sync",
+                type: "synced_sale_inventory_review",
+              },
+            ],
+            readiness: "needs_manual_review",
+          },
+          runtimeStatus: {
+            ...detail.runtimeStatus!,
+            sync: {
+              ...detail.runtimeStatus!.sync,
+              failedEventCount: 0,
+              localOnlyEventCount: 0,
+              pendingEventCount: 0,
+              reviewEventCount: 0,
+              reviewEvents: [],
+              status: "idle",
+              uploadableEventCount: 0,
+            },
+          },
+          syncEvidence: {
+            unresolvedConflictCount: 1,
+            unresolvedConflicts: [
+              {
+                _id: "inventory-conflict-1",
+                conflictType: "inventory",
+                createdAt: Date.now(),
+                localEventId: "inventory-event-1",
+                localRegisterSessionId: "local-register-1",
+                sequence: 26,
+                summary:
+                  "Inventory needs manager review for a synced offline sale.",
+              },
+            ],
+          },
         }}
         isLoading={false}
         orgUrlSlug="wigclub"
@@ -2100,17 +2165,25 @@ describe("POSTerminalDetailViewContent", () => {
     );
 
     expect(
-      screen.getByText("1 inventory review item needs attention."),
-    ).toBeInTheDocument();
+      screen.queryByText("1 inventory review item needs attention."),
+    ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: /review inventory work/i }),
-    ).toHaveAttribute("href", "/wigclub/store/osu/operations/open-work");
+      screen.queryByText("Why this terminal needs attention"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Manager review needed")).not.toBeInTheDocument();
+    expect(screen.queryByText("Needs review")).not.toBeInTheDocument();
+    expect(screen.queryByText("Conflicts and review")).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("link", { name: /review register session/i }),
+      screen.queryByRole("heading", { name: "Cloud sync evidence" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        "Inventory needs manager review for a synced offline sale.",
+      ),
     ).not.toBeInTheDocument();
   });
 
-  it("renders unresolved inventory review reasons without fabricating a CTA", () => {
+  it("hides unresolved legacy inventory review reasons", () => {
     render(
       <POSTerminalDetailViewContent
         detail={{
@@ -2133,13 +2206,10 @@ describe("POSTerminalDetailViewContent", () => {
     );
 
     expect(
-      screen.getByText("2 inventory review items need attention."),
-    ).toBeInTheDocument();
+      screen.queryByText("2 inventory review items need attention."),
+    ).not.toBeInTheDocument();
     expect(
-      screen.getByText("Inventory review required before support repair"),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("link", { name: /review inventory work/i }),
+      screen.queryByText("Why this terminal needs attention"),
     ).not.toBeInTheDocument();
   });
 
@@ -2629,7 +2699,7 @@ describe("POSTerminalDetailViewContent", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("renders the current aggregate sync evidence query shape", () => {
+  it("keeps aggregate sync telemetry out of the terminal support page", () => {
     render(
       <POSTerminalDetailViewContent
         detail={{
@@ -2658,8 +2728,11 @@ describe("POSTerminalDetailViewContent", () => {
       />,
     );
 
-    expect(screen.getByText("5 sampled")).toBeInTheDocument();
-    expect(screen.getByText("sale.completed")).toBeInTheDocument();
+    expect(screen.queryByText("5 sampled")).not.toBeInTheDocument();
+    expect(screen.queryByText("sale.completed")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Cloud sync evidence" }),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByText(
         "2 sync items need review; detailed conflict records were not returned.",

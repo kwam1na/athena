@@ -1,6 +1,8 @@
 ---
 title: Athena Terminal Operational State Aggregate
 date: 2026-06-27
+last_updated: 2026-07-14
+delivery_diff_fingerprint: 8529f1725053294a0a71de6e9335cc76b08e162c3f5401e174084e6ea6d981a8
 category: architecture
 module: pos-terminal-health
 problem_type: architecture_pattern
@@ -59,6 +61,10 @@ Fresh runtime evidence can prove active local drawer evidence and sale authority
 Terminal Health should explain the relationship between current facts instead of exposing raw ledger joins to each UI surface. `operationalExplanation` is the extension point for that explanation. It can say "Review needed. Sales can continue." when sale readiness is intact but unresolved review evidence remains, or "Waiting for check-in." when runtime evidence is stale. It should also name the primary owner and the bounded evidence that led to the lane.
 
 Safe cloud repair is never the explanation for business facts. The only repairable cloud lane is stale duplicate register/drawer-open lifecycle evidence that passes the existing source-event, store/terminal, stale-age, projection-safety, and precondition checks. Sale, payment, inventory, closeout, variance, customer, staff proof, unknown payload, and unresolved manual-review facts remain review-owned or diagnostic-owned evidence.
+
+### Inventory Review Ownership
+
+Inventory review is independent business work and must not become terminal attention. Filter `conflictType === "inventory"` before terminal cloud-repair classification; otherwise a skipped unsafe conflict can fall through to the generic manual-review posture and incorrectly mark a terminal or register as needing review. In UI fallbacks, prefer `reviewSummary` group counts and detailed conflicts while excluding inventory, and keep aggregate-only fallbacks conservative when evidence ownership is unknown. Regression coverage belongs in terminal query, policy, presentation, and detail tests: inventory-only evidence must not produce terminal manager review, a terminal `Needs review` badge, or a stale cloud-sync panel.
 
 ## Prevention
 

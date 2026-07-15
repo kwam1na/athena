@@ -733,10 +733,12 @@ async function buildTerminalRecoveryCloudRepairPreview(
     terminalId: Id<"posTerminal">;
   },
 ) {
-  const conflicts = await listTerminalRecoveryConflictsForRepair(ctx, {
-    storeId: args.storeId,
-    terminalId: args.terminalId,
-  });
+  const conflicts = (
+    await listTerminalRecoveryConflictsForRepair(ctx, {
+      storeId: args.storeId,
+      terminalId: args.terminalId,
+    })
+  ).filter((conflict) => conflict.conflictType !== "inventory");
   const repository = createTerminalCloudRepairQueryRepository(ctx);
   const classified = await Promise.all(
     conflicts.map(async (conflict): Promise<TerminalCloudRepairConflictClassification> => {

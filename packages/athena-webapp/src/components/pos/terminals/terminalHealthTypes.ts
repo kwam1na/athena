@@ -227,6 +227,12 @@ export type TerminalSyncEvidence = {
   };
   projectedCount?: number;
   rejectedCount?: number;
+  reviewSummary?: {
+    groups: Array<{
+      conflictType: string;
+      count: number;
+    }>;
+  };
   sampledEventCount?: number;
   unresolvedConflictCount?: number;
   unresolvedConflicts?: TerminalSyncConflict[];

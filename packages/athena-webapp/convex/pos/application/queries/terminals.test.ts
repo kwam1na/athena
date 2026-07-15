@@ -830,6 +830,39 @@ describe("terminal health queries", () => {
     ]);
   });
 
+  it("keeps inventory review conflicts out of terminal recovery posture", async () => {
+    const inventoryConflict = buildConflict({
+      _id: "inventory-review-conflict" as Id<"posLocalSyncConflict">,
+      conflictType: "inventory",
+      details: { workItemType: "synced_sale_inventory_review" },
+      localEventId: "inventory-review-event",
+      sequence: 26,
+      summary: "Inventory needs manager review for a synced offline sale.",
+    });
+    const ctx = buildQueryCtx({
+      posLocalSyncConflict: [inventoryConflict],
+      posTerminal: [buildTerminal()],
+      posTerminalRuntimeStatus: [buildRuntimeStatus()],
+      staffProfile: [buildStaffProfile()],
+      staffRoleAssignment: [buildStaffRoleAssignment()],
+    });
+
+    const summary = await getTerminalHealthSummary(ctx, {
+      now,
+      storeId,
+      terminalId,
+    });
+
+    expect(summary?.recoveryPreview?.cloudRepair.safeConflictIds).toEqual([]);
+    expect(summary?.recoveryPreview?.cloudRepair.skippedConflictIds).toEqual(
+      [],
+    );
+    expect(summary?.recoveryPreview?.manualReview).toEqual([]);
+    expect(summary?.operationalExplanation.blockingDomain).not.toBe(
+      "manual_review",
+    );
+  });
+
   it("keeps terminal health roster and detail posture aligned while detail owns recovery payloads", async () => {
     const ctx = buildQueryCtx({
       posTerminal: [buildTerminal()],

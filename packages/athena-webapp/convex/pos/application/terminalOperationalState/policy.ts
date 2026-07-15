@@ -279,34 +279,6 @@ export function deriveTerminalHealthAttentionReasons(
   }
 
   const currentReviewGroups = getCurrentReviewGroups(input.syncEvidence);
-  const inventoryReviewGroups = currentReviewGroups.filter(
-    (group) => isInventoryReviewGroup(group, !!input.syncEvidence.reviewSummary),
-  );
-  const inventoryReviewCount = sumReviewGroupCounts(inventoryReviewGroups);
-
-  if (inventoryReviewCount > 0) {
-    const inventoryReviewTarget = inventoryReviewGroups.find(
-      (group) => group.reviewTarget,
-    )?.reviewTarget;
-    const latestInventoryReviewSequence =
-      latestReviewGroupSequence(inventoryReviewGroups) ?? latestEvent?.sequence;
-    const reason: TerminalHealthAttentionReason = {
-      count: inventoryReviewCount,
-      latestEventSequence: latestInventoryReviewSequence,
-      latestEventStatus: latestEvent?.status,
-      source: "cloud_sync",
-      summary: `${inventoryReviewCount} inventory review item${inventoryReviewCount === 1 ? " needs" : "s need"} attention.`,
-      type: "synced_sale_inventory_review",
-    };
-    if (inventoryReviewTarget) {
-      reason.actionTarget = {
-        label: "Review inventory work",
-        type: "open_work",
-      };
-    }
-    reasons.push(reason);
-  }
-
   const cloudReviewGroups = currentReviewGroups.filter(
     (group) => !isInventoryReviewGroup(group, !!input.syncEvidence.reviewSummary),
   );
@@ -433,6 +405,9 @@ function reconcileTerminalHealthAttentionReasons(
   runtimeStatus: TerminalOperationalPolicyInput["runtimeStatus"],
 ): TerminalHealthAttentionReason[] {
   return reasons.filter((reason) => {
+    if (reason.type === "synced_sale_inventory_review") {
+      return false;
+    }
     if (reason.type === "local_review") {
       const sync = runtimeStatus?.sync;
       return Boolean(
@@ -630,7 +605,19 @@ function buildDiagnosticEvidence(input: TerminalOperationalPolicyInput) {
     });
   }
 
-  if ((input.syncEvidence.unresolvedConflictCount ?? 0) > 0) {
+  const reviewGroups = getCurrentReviewGroups(input.syncEvidence);
+  const hasDetailedReviewEvidence = Boolean(
+    input.syncEvidence.reviewSummary || input.syncEvidence.unresolvedConflicts,
+  );
+  const hasTerminalReviewEvidence =
+    reviewGroups.some(
+      (group) =>
+        !isInventoryReviewGroup(group, !!input.syncEvidence.reviewSummary),
+    ) ||
+    (!hasDetailedReviewEvidence &&
+      (input.syncEvidence.unresolvedConflictCount ?? 0) > 0);
+
+  if (hasTerminalReviewEvidence) {
     diagnostics.push({
       severity: "warning" as const,
       source: "sync_evidence" as const,

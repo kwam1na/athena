@@ -57,7 +57,6 @@ import {
   formatRegisterNumber,
   formatStatusLabel,
   formatTerminalTimestamp,
-  getRecentSyncEvents,
   getReviewEvidenceCount,
   getStaffAuthorityLabel,
   getSupportSafeAttentionReasonSummary,
@@ -70,7 +69,6 @@ import type {
   TerminalHealthAttentionReason,
   TerminalRecoveryAction,
   TerminalRuntimeStatus,
-  TerminalSyncEvent,
   TerminalSyncEvidence,
 } from "./terminalHealthTypes";
 
@@ -239,17 +237,6 @@ function DetailPanel({
       </div>
       {children}
     </section>
-  );
-}
-
-function Field({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div>
-      <p className="text-xs font-medium uppercase text-muted-foreground">
-        {label}
-      </p>
-      <div className="mt-1 text-sm text-foreground">{value}</div>
-    </div>
   );
 }
 
@@ -970,41 +957,6 @@ function normalizeOptionalRuntimeMetadata(value: string | undefined) {
   return value && value.trim().length > 0 ? value.trim() : undefined;
 }
 
-function SyncMetric({
-  detail,
-  label,
-  tone = "neutral",
-  value,
-}: {
-  detail: string;
-  label: string;
-  tone?: "danger" | "neutral" | "success" | "warning";
-  value: React.ReactNode;
-}) {
-  return (
-    <div
-      className={cn(
-        "rounded-md border bg-surface px-layout-md py-layout-md",
-        tone === "success"
-          ? "border-success/25 bg-success/5"
-          : tone === "warning"
-            ? "border-warning/30 bg-warning/10"
-            : tone === "danger"
-              ? "border-danger/25 bg-danger/5"
-              : "border-border/80",
-      )}
-    >
-      <p className="text-xs font-medium uppercase text-muted-foreground">
-        {label}
-      </p>
-      <p className="mt-1 font-numeric text-xl font-semibold tabular-nums text-foreground">
-        {value}
-      </p>
-      <p className="mt-1 text-xs text-muted-foreground">{detail}</p>
-    </div>
-  );
-}
-
 function getSyncEventStatusClassName(status: string) {
   switch (status) {
     case "accepted":
@@ -1018,117 +970,6 @@ function getSyncEventStatusClassName(status: string) {
     default:
       return "border-border bg-surface text-muted-foreground";
   }
-}
-
-function RecentSyncEventRow({ event }: { event: TerminalSyncEvent }) {
-  return (
-    <div className="grid gap-layout-sm px-layout-md py-layout-sm text-sm md:grid-cols-[5rem_minmax(0,1fr)_7rem] md:items-center">
-      <span className="font-numeric text-xs font-semibold tabular-nums text-muted-foreground">
-        #{event.sequence}
-      </span>
-      <span className="min-w-0 truncate font-medium text-foreground">
-        {event.eventType}
-      </span>
-      <span
-        className={cn(
-          "inline-flex w-fit items-center rounded-md border px-layout-xs py-1 text-xs font-medium",
-          getSyncEventStatusClassName(event.status),
-        )}
-      >
-        {formatStatusLabel(event.status)}
-      </span>
-    </div>
-  );
-}
-
-function SyncEvidenceSection({
-  syncEvidence,
-}: {
-  syncEvidence: TerminalSyncEvidence;
-}) {
-  const recentEvents = getRecentSyncEvents(syncEvidence);
-  const sampledEventCount =
-    syncEvidence.sampledEventCount ?? recentEvents.length;
-
-  return (
-    <DetailPanel
-      icon={<CheckCircle2 className="h-4 w-4 text-muted-foreground" />}
-      title="Cloud sync evidence"
-    >
-      <div className="rounded-md border border-border/80 bg-surface px-layout-md py-layout-md">
-        <div className="grid gap-layout-md md:grid-cols-[minmax(0,1fr)_11rem_10rem] md:items-center">
-          <div className="min-w-0">
-            <p className="text-xs font-medium uppercase text-muted-foreground">
-              Accepted through sequence
-            </p>
-            <div className="mt-1 flex min-w-0 flex-wrap items-baseline gap-layout-xs">
-              <p className="font-numeric text-2xl font-semibold tabular-nums text-foreground">
-                {syncEvidence.acceptedThroughSequence == null
-                  ? "No sequence"
-                  : `#${syncEvidence.acceptedThroughSequence}`}
-              </p>
-              <p className="text-sm text-muted-foreground">
-                latest cloud cursor for this terminal
-              </p>
-            </div>
-          </div>
-          <Field
-            label="Cursor updated"
-            value={formatTerminalTimestamp(syncEvidence.cursorUpdatedAt)}
-          />
-          <Field label="Recent sample" value={`${sampledEventCount} sampled`} />
-        </div>
-      </div>
-
-      <div className="mt-layout-md grid gap-layout-sm sm:grid-cols-2 xl:grid-cols-4">
-        <SyncMetric
-          detail="accepted by cloud"
-          label="Accepted"
-          tone="success"
-          value={syncEvidence.acceptedCount ?? 0}
-        />
-        <SyncMetric
-          detail="applied to read models"
-          label="Projected"
-          value={syncEvidence.projectedCount ?? 0}
-        />
-        <SyncMetric
-          detail="waiting before projection"
-          label="Held"
-          tone={(syncEvidence.heldCount ?? 0) > 0 ? "warning" : "neutral"}
-          value={syncEvidence.heldCount ?? 0}
-        />
-        <SyncMetric
-          detail="rejected by server"
-          label="Rejected"
-          tone={(syncEvidence.rejectedCount ?? 0) > 0 ? "danger" : "neutral"}
-          value={syncEvidence.rejectedCount ?? 0}
-        />
-      </div>
-
-      <div className="mt-layout-md overflow-hidden rounded-md border border-border/80 bg-surface">
-        <div className="grid gap-layout-sm border-b border-border/80 bg-surface-muted/40 px-layout-md py-layout-xs text-xs font-medium uppercase text-muted-foreground md:grid-cols-[5rem_minmax(0,1fr)_7rem]">
-          <span>Sequence</span>
-          <span>Event</span>
-          <span>Status</span>
-        </div>
-        <div className="divide-y divide-border/80">
-          {recentEvents.length === 0 ? (
-            <p className="px-layout-md py-layout-sm text-sm text-muted-foreground">
-              No recent sync events reported for this terminal.
-            </p>
-          ) : (
-            recentEvents.map((event) => (
-              <RecentSyncEventRow
-                event={event}
-                key={event._id ?? event.localEventId}
-              />
-            ))
-          )}
-        </div>
-      </div>
-    </DetailPanel>
-  );
 }
 
 function ConflictSection({
@@ -1165,7 +1006,9 @@ function ConflictSection({
         : [];
   const missingRuntimeReviewDetails =
     runtimeReviewCount > 0 && localReviewEvents.length === 0;
-  const unresolvedConflicts = syncEvidence.unresolvedConflicts ?? [];
+  const unresolvedConflicts = (syncEvidence.unresolvedConflicts ?? []).filter(
+    (conflict) => conflict.conflictType !== "inventory",
+  );
   const visibleConflicts = isConflictListExpanded
     ? unresolvedConflicts
     : unresolvedConflicts.slice(0, TERMINAL_DETAIL_LIST_VISIBLE_LIMIT);
@@ -1180,7 +1023,11 @@ function ConflictSection({
     localReviewEvents.length - TERMINAL_DETAIL_LIST_VISIBLE_LIMIT,
     0,
   );
-  const reviewCount = getReviewEvidenceCount(syncEvidence);
+  const reviewCount = detail && hasOnlyInventoryReviewEvidence(detail)
+    ? 0
+    : syncEvidence.unresolvedConflicts
+      ? unresolvedConflicts.length
+      : getReviewEvidenceCount(syncEvidence);
   const localReviewActionReason = {
     actionTarget: { type: "pos_register" },
     count: runtimeReviewCount,
@@ -1193,6 +1040,15 @@ function ConflictSection({
   );
   const localReviewClearAllAction =
     getLocalReviewClearAllAction(recoveryPreview);
+
+  if (
+    !operationalExplanation &&
+    reviewCount === 0 &&
+    localReviewEvents.length === 0 &&
+    !missingRuntimeReviewDetails
+  ) {
+    return null;
+  }
 
   return (
     <DetailPanel
@@ -1577,7 +1433,9 @@ function AttentionReasonsSection({
   storeUrlSlug?: string;
 }) {
   const reasons = getTerminalAttentionReasons(detail).filter(
-    (reason) => !isVerifiedTerminalCommandAttention(reason, detail),
+    (reason) =>
+      reason.type !== "synced_sale_inventory_review" &&
+      !isVerifiedTerminalCommandAttention(reason, detail),
   );
 
   if (reasons.length === 0) {
@@ -2502,7 +2360,8 @@ function RecoveryPanel({
   const operationalExplanation =
     buildTerminalOperationalExplanationPresentation(detail);
   const hasServerOperationalExplanation = Boolean(
-    detail.operationalExplanation,
+    detail.operationalExplanation &&
+      !shouldSuppressInventoryOperationalExplanation(detail),
   );
   const hasCurrentRecoveryWork = hasCurrentSupportRecoveryWork(recovery);
   const supportReadiness = hasCurrentRecoveryWork
@@ -2640,6 +2499,49 @@ function RecoveryPanel({
         </>
       ) : null}
     </DetailPanel>
+  );
+}
+
+function hasOnlyInventoryReviewEvidence(detail: TerminalHealthDetail) {
+  const recoveryPreview = detail.recoveryPreview ?? detail.recovery;
+  const conflicts = detail.syncEvidence.unresolvedConflicts ?? [];
+  const manualReview = recoveryPreview?.manualReview ?? [];
+  const explanationReferences =
+    detail.operationalExplanation?.evidenceReferences ?? [];
+  const hasInventoryReviewEvidence =
+    conflicts.some((conflict) => conflict.conflictType === "inventory") ||
+    manualReview.some(
+      (item) => item.type === "synced_sale_inventory_review",
+    ) ||
+    explanationReferences.some(
+      (reference) => reference.type === "synced_sale_inventory_review",
+    );
+  const terminalReviewEvidenceTypes = new Set([
+    "cloud_conflict",
+    "cloud_held",
+    "cloud_rejected",
+    "local_review",
+    "unsafe_cloud_conflict",
+  ]);
+  const hasTerminalReviewEvidence =
+    conflicts.some((conflict) => conflict.conflictType !== "inventory") ||
+    manualReview.some(
+      (item) => item.type !== "synced_sale_inventory_review",
+    ) ||
+    explanationReferences.some((reference) =>
+      terminalReviewEvidenceTypes.has(reference.type),
+    );
+
+  return hasInventoryReviewEvidence && !hasTerminalReviewEvidence;
+}
+
+function shouldSuppressInventoryOperationalExplanation(
+  detail: TerminalHealthDetail,
+) {
+  const blockingDomain = detail.operationalExplanation?.blockingDomain;
+  return (
+    (blockingDomain === "manual_review" || blockingDomain === "sync_review") &&
+    hasOnlyInventoryReviewEvidence(detail)
   );
 }
 
@@ -3094,7 +2996,7 @@ export function POSTerminalDetailViewContent({
             eyebrow="POS terminal"
             showBackButton
             title={detail.terminal.displayName}
-            description="Inspect the latest terminal check-in, cloud sync evidence, and support notes."
+            description="Inspect the latest terminal check-in, support recovery evidence, and support notes."
           />
 
           <div className="grid gap-layout-xl xl:grid-cols-[20rem_minmax(0,1fr)]">
@@ -3129,12 +3031,12 @@ export function POSTerminalDetailViewContent({
                 orgUrlSlug={orgUrlSlug}
                 storeUrlSlug={storeUrlSlug}
               />
-              <SyncEvidenceSection syncEvidence={detail.syncEvidence} />
               <ConflictSection
                 detail={detail}
                 onIssueTerminalRecoveryCommand={onIssueTerminalRecoveryCommand}
                 operationalExplanation={
-                  detail.operationalExplanation
+                  detail.operationalExplanation &&
+                  !shouldSuppressInventoryOperationalExplanation(detail)
                     ? buildTerminalOperationalExplanationPresentation(detail)
                     : undefined
                 }
