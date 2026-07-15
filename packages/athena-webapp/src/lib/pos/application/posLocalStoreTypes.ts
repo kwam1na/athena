@@ -137,6 +137,15 @@ export type PosLocalLedgerSummary = {
   oldestEventAt?: number;
 };
 
+export type PosLocalLedgerPurgeResult =
+  | { status: "blocked"; reason: "active_presence" }
+  | {
+      status: "completed";
+      purgedCount: number;
+      purgedSequences: number[];
+      retainedCount: number;
+    };
+
 export interface PosLocalCloudMapping {
   entity: PosLocalEntityKind;
   localId: string;

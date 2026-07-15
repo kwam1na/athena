@@ -203,6 +203,18 @@ export type PosLocalRuntimeSyncDebug = {
 
 export type PosLocalSyncRuntimeMode = "drain-enabled" | "status-only";
 
+/**
+ * Minimum spacing between idle-boundary ledger purges so a health tick storm
+ * cannot repeatedly contend for the readwrite purge transaction.
+ */
+const POS_LOCAL_LEDGER_PURGE_MIN_INTERVAL_MS = 5 * 60_000;
+
+function isElevatedLedgerPressure(
+  pressure: ReturnType<typeof classifyPosLocalLedgerPressure>,
+): boolean {
+  return pressure === "warning" || pressure === "critical";
+}
+
 type PosLocalRuntimeStore = PosLocalStorePort;
 
 export type RuntimeActiveRegisterSessionDirective =
@@ -330,6 +342,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
   >(null);
   const isRuntimeStatusPublisherMountedRef = useRef(true);
   const observedRecoveryCommandIdsRef = useRef<Set<string>>(new Set());
+  const lastLedgerPurgeAtRef = useRef(0);
   const requestRetry = useCallback(() => {
     setRefreshToken((current) => current + 1);
     setManualRetryToken((current) => current + 1);
@@ -379,7 +392,46 @@ export function usePosLocalSyncRuntimeStatus(input: {
           storage: globalThis.navigator?.storage,
         }),
         summary,
-      ]).then(([health, ledgerSummary]) => {
+      ]).then(async ([health, initialLedgerSummary]) => {
+        let ledgerSummary = initialLedgerSummary;
+        // Evidence-gated ledger purge at a safe idle boundary. When the bounded
+        // ledger is under pressure, reclaim settled, unreferenced, past-boundary
+        // events so an all-day terminal cannot grow into a quota_exceeded
+        // sell-block. The purge self-gates: it never touches an unsynced /
+        // needs_review event, a session with live drawer authority, the current
+        // register session, or a terminal with an active cashier signed in.
+        const purge = store.purgeSettledLedgerEvents;
+        if (
+          !cancelled &&
+          storeId &&
+          terminalId &&
+          typeof purge === "function" &&
+          ledgerSummary?.ok === true &&
+          isElevatedLedgerPressure(
+            classifyPosLocalLedgerPressure(ledgerSummary.value),
+          ) &&
+          Date.now() - lastLedgerPurgeAtRef.current >=
+            POS_LOCAL_LEDGER_PURGE_MIN_INTERVAL_MS
+        ) {
+          lastLedgerPurgeAtRef.current = Date.now();
+          const purgeResult = await purge({});
+          if (
+            purgeResult.ok &&
+            purgeResult.value.status === "completed" &&
+            purgeResult.value.purgedCount > 0
+          ) {
+            // Health/log signal — the purge is never a silent bulk delete.
+            console.info(
+              `[pos-local-ledger] purged ${purgeResult.value.purgedCount} settled events at idle boundary; retained ${purgeResult.value.retainedCount}.`,
+            );
+            if (typeof store.readLedgerSummary === "function") {
+              ledgerSummary = await store.readLedgerSummary({
+                storeId,
+                terminalId,
+              });
+            }
+          }
+        }
         if (!cancelled) {
           const lifecycle = hasInjectedStore
             ? undefined

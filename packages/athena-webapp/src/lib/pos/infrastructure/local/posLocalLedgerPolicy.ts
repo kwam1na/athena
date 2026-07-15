@@ -15,6 +15,12 @@ export type PosLocalLedgerRetentionFacts = {
   requiresActivitySettlement: boolean;
   syncStatus: PosLocalSyncEventStatus;
   uploadDeferred: boolean;
+  /**
+   * Whether the event has aged past the active store-day / register-session
+   * retention boundary. Events inside the active boundary are never purged even
+   * when otherwise settled, so an in-progress shift keeps its full local log.
+   */
+  pastRetentionBoundary: boolean;
 };
 
 export type PosLocalLedgerRetentionAssessment =
@@ -27,6 +33,7 @@ export type PosLocalLedgerRetentionAssessment =
         | "review_required"
         | "unsettled_sync"
         | "upload_deferred"
+        | "within_active_boundary"
         | "workflow_dependency";
     };
 
@@ -51,5 +58,7 @@ export function assessPosLocalLedgerRetention(
     return { eligible: false, reason: "workflow_dependency" };
   if (facts.hasReceiptDependency)
     return { eligible: false, reason: "receipt_dependency" };
+  if (!facts.pastRetentionBoundary)
+    return { eligible: false, reason: "within_active_boundary" };
   return { eligible: true, reason: "settled_unreferenced" };
 }

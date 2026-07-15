@@ -14,6 +14,7 @@ import type {
   PosLocalEventType,
   PosLocalEventValidationFlag,
   PosLocalEventValidationMetadata,
+  PosLocalLedgerPurgeResult,
   PosLocalOpaqueContinuation,
   PosLocalLedgerSummary,
   PosLocalRegisterAvailabilitySnapshot,
@@ -55,6 +56,7 @@ import type {
 } from "../../../../../shared/posLocalSyncContract";
 import { canReportPosRegisterSessionLocalActivityType } from "../../../../../shared/posRegisterSessionActivityContract";
 import { reconcileRegisterLifecycleServerAuthority } from "./registerLifecycleAuthorityReconciliation";
+import { assessPosLocalLedgerRetention } from "./posLocalLedgerPolicy";
 
 // Temporary compatibility for tests and migration utilities. Production
 // consumers import semantic contracts from the application boundary directly.
@@ -2773,6 +2775,111 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
       }
     },
 
+    async purgeSettledLedgerEvents(input: {
+      activeLocalRegisterSessionId?: string;
+    }): Promise<PosLocalStoreResult<PosLocalLedgerPurgeResult>> {
+      try {
+        const value = await options.adapter.transaction(
+          "readwrite",
+          ["meta", "events", "authority", "cashierPresence", "mappings"],
+          async (transaction): Promise<PosLocalLedgerPurgeResult> => {
+            await ensureSupportedSchema(transaction, "readwrite");
+
+            // Whole-store safety gate reused from the terminal-clear preflight:
+            // never purge while a cashier is actively signed in. The clear
+            // preflight's events>0 and blanket authority>0 refusals are
+            // deliberately NOT reused — they would always block a selective
+            // purge — so authority is instead consulted per event below.
+            const presenceRecords =
+              await transaction.getAll<unknown>("cashierPresence");
+            if (presenceRecords.some(isCashierPresenceRecord)) {
+              return { status: "blocked", reason: "active_presence" };
+            }
+
+            // Sessions that still hold a drawer-authority record are treated as
+            // referenced (workflow dependency), so their events are retained.
+            const authorityRecords =
+              await transaction.getAll<unknown>("authority");
+            const sessionsWithLiveAuthority = new Set<string>();
+            for (const record of authorityRecords) {
+              const localRegisterSessionId =
+                extractDrawerAuthorityRegisterSessionId(record);
+              if (localRegisterSessionId) {
+                sessionsWithLiveAuthority.add(localRegisterSessionId);
+              }
+            }
+
+            // Register sessions still marked "current" are never past the
+            // retention boundary, even if the caller omits the active id — this
+            // makes the purge self-protective against an under-specified caller.
+            const mappingRecords =
+              await transaction.getAll<PosLocalCloudMapping>("mappings");
+            const currentRegisterSessionIds = new Set<string>();
+            for (const mapping of mappingRecords) {
+              if (
+                mapping.entity === "registerSession" &&
+                mapping.registerCandidateState === "current"
+              ) {
+                currentRegisterSessionIds.add(mapping.localId);
+              }
+            }
+
+            const events =
+              await transaction.getAll<PosLocalEventRecord>("events");
+            const purgedSequences: number[] = [];
+            let retainedCount = 0;
+
+            for (const event of events) {
+              const sessionId = event.localRegisterSessionId;
+              // The retention boundary: events for the active register session
+              // (or any session still marked "current", and events with no
+              // session anchor) stay; only events from a prior/rolled-over
+              // session are purge candidates.
+              const pastRetentionBoundary = Boolean(
+                sessionId &&
+                  sessionId !== input.activeLocalRegisterSessionId &&
+                  !currentRegisterSessionIds.has(sessionId),
+              );
+              const assessment = assessPosLocalLedgerRetention({
+                activityStatus: event.activity?.status,
+                // Receipts become server-canonical once the sale is synced;
+                // the local ledger holds no receipt store the purge could strand.
+                hasReceiptDependency: false,
+                hasWorkflowDependency: Boolean(
+                  sessionId && sessionsWithLiveAuthority.has(sessionId),
+                ),
+                requiresActivitySettlement:
+                  canReportPosRegisterSessionLocalActivityType(event.type),
+                syncStatus: event.sync.status,
+                uploadDeferred:
+                  event.validationMetadata?.uploadDeferredUntil ===
+                  "app-session-validated",
+                pastRetentionBoundary,
+              });
+
+              if (assessment.eligible) {
+                await transaction.delete("events", String(event.sequence));
+                purgedSequences.push(event.sequence);
+              } else {
+                retainedCount += 1;
+              }
+            }
+
+            return {
+              status: "completed",
+              purgedCount: purgedSequences.length,
+              purgedSequences: purgedSequences.sort((left, right) => left - right),
+              retainedCount,
+            };
+          },
+        );
+
+        return { ok: true, value };
+      } catch (error) {
+        return toFailure(error);
+      }
+    },
+
     async listLocalCloudMappings(): Promise<
       PosLocalStoreResult<PosLocalCloudMapping[]>
     > {
@@ -3625,6 +3732,18 @@ function isStaffAuthorityRecord(
     typeof verifier.salt === "string" &&
     typeof verifier.version === "number"
   );
+}
+
+function extractDrawerAuthorityRegisterSessionId(
+  value: unknown,
+): string | null {
+  if (!value || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  return typeof record.localRegisterSessionId === "string" &&
+    record.localRegisterSessionId.length > 0 &&
+    typeof record.status === "string"
+    ? record.localRegisterSessionId
+    : null;
 }
 
 function isCashierPresenceRecord(
