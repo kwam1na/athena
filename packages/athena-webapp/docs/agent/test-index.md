@@ -144,6 +144,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`convex/pos/application/commands/assignCustomer.test.ts`](../../convex/pos/application/commands/assignCustomer.test.ts)
 - [`convex/pos/application/commands/createOrReusePendingCheckoutItem.test.ts`](../../convex/pos/application/commands/createOrReusePendingCheckoutItem.test.ts)
 - [`convex/pos/application/commands/quickAddCatalogItem.test.ts`](../../convex/pos/application/commands/quickAddCatalogItem.test.ts)
+- [`convex/pos/application/commands/register.test.ts`](../../convex/pos/application/commands/register.test.ts)
 - [`convex/pos/application/commands/registerLifecycleAuthority.test.ts`](../../convex/pos/application/commands/registerLifecycleAuthority.test.ts)
 - [`convex/pos/application/completeTransaction.test.ts`](../../convex/pos/application/completeTransaction.test.ts)
 - [`convex/pos/application/correctTransactionCustomer.test.ts`](../../convex/pos/application/correctTransactionCustomer.test.ts)
