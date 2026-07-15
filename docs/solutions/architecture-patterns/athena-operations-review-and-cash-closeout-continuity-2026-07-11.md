@@ -14,7 +14,7 @@ applies_when:
   - "Open Work contains repeated synced-sale inventory reviews for one product SKU"
   - "EOD Review and Opening Handoff must preserve exact logical-work membership across store days"
 tags: [athena, daily-operations, cash-controls, closeout, open-work, local-sync, logical-groups, eod-snapshot]
-delivery_diff_fingerprint: 8dca8c88c10d612fc109b0ab8a02514ae2ad4b0f3a7d659090757a9ebe58a7b2
+delivery_diff_fingerprint: aeebccf07fbef096f51def47c5470767a9d19972949f2cc2ea83574bdcb8373c
 ---
 
 # Daily Operations review and cash closeout continuity

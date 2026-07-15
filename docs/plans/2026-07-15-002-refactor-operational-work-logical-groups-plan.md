@@ -442,7 +442,7 @@ flowchart TB
 **Dependencies:** U2-U6
 
 **Files:**
-- Create: `docs/solutions/architecture-patterns/athena-operational-work-logical-group-projection-2026-07-15.md`
+- Update: `docs/solutions/architecture-patterns/athena-operations-review-and-cash-closeout-continuity-2026-07-11.md`
 - Modify only if the new helper/test path is not already covered: `scripts/harness-app-registry.ts`
 - Test if registry changes: `scripts/harness-app-registry.test.ts`
 - Regenerate through the registry workflow if needed: `packages/athena-webapp/docs/agent/validation-map.json`
