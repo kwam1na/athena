@@ -14,7 +14,7 @@ root_cause: missing_permission
 resolution_type: code_fix
 severity: critical
 tags: [pos, authorization, idor, pii, convex, sync-conflict, multi-tenant]
-delivery_diff_fingerprint: 8b6b4a580e8c85e9379046eb27165d200676216c8479f2ae448228f7076b84fc
+delivery_diff_fingerprint: 5d34f79afaf9ce6d1197f0fcf06a3de2a59e65affe958674c92b694e4d7fa03f
 ---
 
 # POS public surfaces need per-endpoint org authorization; rejected money-bearing sync events must leave a conflict
