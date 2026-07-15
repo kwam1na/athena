@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="58c96839fc0d89ba7d1914edbc77dfbf7c106dacdb537cae4f0bb0a8afa493c4">
+<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="b0c7016954feb4fb09535f1e5bbcc0e6cf18db16111443983706c0666304b8ba">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -137,7 +137,7 @@
 
   <h2>Validation &amp; review evidence</h2>
   <ul>
-    <li><code>completeTransaction.test.ts</code> — 85 pass (U7 re-pricing: tamper-reject both paths, manager-override + audit, net-priced basis, missing-basis rejection, reporting/item parity; U8: mint dedup + drawer-cash threading + replay).</li>
+    <li><code>completeTransaction.test.ts</code> — 86 pass (U7 re-pricing: tamper-reject both paths incl. the linked-catalog security regression, manager-override + audit, net-priced basis, round-equal basis-not-echo, missing-basis rejection, reporting/item parity; U8: mint dedup + drawer-cash threading + replay).</li>
     <li><code>ingestLocalEvents.test.ts</code> + <code>projectLocalEvents.test.ts</code> — 230 pass (U9: future-skew clamp with preserved terminal occurredAt, offline-lag preserved, operating-date correction through the projector, missing-authority fallback, retry determinism).</li>
     <li><code>migratePosAmountsToPesewas.test.ts</code> — 5 pass (U10: conversion incl. drawer variance integrity, idempotent re-run, post-cutoff skip, completion marker + status).</li>
     <li><code>bunx tsc --noEmit</code> clean; <code>lint:convex:changed</code> pass (return-validator contracts re-proven for changed public modules).</li>
@@ -172,7 +172,7 @@
       <li><b>Security/authz</b> — verified the manager override is enforced and consumed correctly, the audit is append-only and attributable, and no bypass exists.</li>
       <li><b>Tests</b> — verified the hard invariants (tamper-reject, override-audit, double-submit→one-of-everything, fractional/variance integrity, migration idempotency) are asserted, not just happy paths.</li>
     </ul>
-    <p>Blocking findings were integrated and the focused suites re-run before the final gate. (If a lens reported a defect, it is fixed in the delivered diff this fingerprint covers.)</p>
+    <p>Outcome: <b>unanimous APPROVE</b> across all four lenses after integrating two blocking findings — (1) the U10 completion marker computed <code>remaining</code> from a stale post-<code>collect()</code> snapshot (Convex <code>patch</code> doesn't mutate collected objects), so a completing run wrongly reported <code>complete: false</code> — fixed to derive from loop counters, with the test mock made faithful; (2) the U7 pending-checkout exemption was too broad and let <code>linked_to_catalog</code> catalog-backed lines bypass re-pricing — narrowed to unresolved pending lines only, with a tamper regression test. One non-blocking hardening (bind the override proof subject to the deviation amount/basket, not just <code>storeId</code>) is noted as a follow-up; single-use + TTL + the audit already bound attribution.</p>
   </div>
 </div>
 
