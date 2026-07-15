@@ -6,6 +6,8 @@ import { assertConformsToExportedReturns } from "../lib/returnValidatorContract"
 import {
   autoResolveSyncedSaleInventoryReviewsForStockAdjustmentWithCtx,
   resolveSyncedSaleInventoryReview,
+  resolveSyncedSaleInventoryReviewGroup,
+  resolveSyncedSaleInventoryReviewGroupWithCtx,
   resolveSyncedSaleInventoryReviewWithCtx,
 } from "./openWorkInventoryReviews";
 
@@ -34,6 +36,148 @@ beforeEach(() => {
 });
 
 describe("resolveSyncedSaleInventoryReviewWithCtx", () => {
+  it("resolves an exact current logical group through one command", async () => {
+    const ctx = buildCtx();
+
+    const result = await resolveSyncedSaleInventoryReviewGroupWithCtx(
+      ctx as never,
+      {
+        expectedMemberIds: ["work-item-1" as Id<"operationalWorkItem">],
+        groupKey: "synced_sale_inventory_review:store-1:sku-1",
+        outcome: "completed",
+        reason: "Inventory review handled from Open Work.",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result).toMatchObject({
+      kind: "ok",
+      data: { resolvedCount: 1, status: "completed" },
+    });
+    assertConformsToExportedReturns(
+      resolveSyncedSaleInventoryReviewGroup,
+      result,
+    );
+    expect(ctx.db.patch).toHaveBeenCalledWith(
+      "operationalWorkItem",
+      "work-item-1",
+      expect.objectContaining({ status: "completed" }),
+    );
+  });
+
+  it("writes nothing when current membership differs from the reviewed group", async () => {
+    const ctx = buildCtx();
+
+    const result = await resolveSyncedSaleInventoryReviewGroupWithCtx(
+      ctx as never,
+      {
+        expectedMemberIds: ["stale-work-item" as Id<"operationalWorkItem">],
+        groupKey: "synced_sale_inventory_review:store-1:sku-1",
+        outcome: "completed",
+        reason: "Inventory review handled from Open Work.",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "conflict",
+        message:
+          "This work changed. Review the refreshed group before marking it reviewed.",
+      },
+    });
+    expect(ctx.db.patch).not.toHaveBeenCalled();
+    expect(ctx.db.insert).not.toHaveBeenCalled();
+  });
+
+  it("returns a typed refresh conflict before writes when member source evidence is stale", async () => {
+    const ctx = buildCtx({
+      posTerminal: buildTerminal({ storeId: "store-2" as Id<"store"> }),
+    });
+
+    const result = await resolveSyncedSaleInventoryReviewGroupWithCtx(
+      ctx as never,
+      {
+        expectedMemberIds: ["work-item-1" as Id<"operationalWorkItem">],
+        groupKey: "synced_sale_inventory_review:store-1:sku-1",
+        outcome: "completed",
+        reason: "Inventory review handled from Open Work.",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "conflict",
+        message:
+          "This work changed. Review the refreshed group before marking it reviewed.",
+      },
+    });
+    expect(ctx.db.patch).not.toHaveBeenCalled();
+    expect(ctx.db.insert).not.toHaveBeenCalled();
+  });
+
+  it("rejects direct group resolution while an oversized repair is active", async () => {
+    const ctx = buildCtx({
+      oversizedOperationalWorkRepair: {
+        _creationTime: 1,
+        _id: "repair-1" as Id<"oversizedOperationalWorkRepair">,
+        createdAt: 1,
+        cursor: 0,
+        groupKey: "synced_sale_inventory_review:store-1:sku-1",
+        initiatorIdentifier: "support@example.com",
+        memberIds: ["work-item-1" as Id<"operationalWorkItem">],
+        organizationId: "org-1" as Id<"organization">,
+        productSkuId: "sku-1" as Id<"productSku">,
+        reason: "Support repair",
+        sourceIdentities: [
+          "synced_sale_inventory_review:store-1:terminal-1:local-register-1:local-txn-1",
+        ],
+        status: "running",
+        storeId: "store-1" as Id<"store">,
+        supportTicket: "SUP-123",
+        updatedAt: 1,
+      },
+    });
+
+    const result = await resolveSyncedSaleInventoryReviewGroupWithCtx(
+      ctx as never,
+      {
+        expectedMemberIds: ["work-item-1" as Id<"operationalWorkItem">],
+        groupKey: "synced_sale_inventory_review:store-1:sku-1",
+        outcome: "completed",
+        reason: "Inventory review handled from Open Work.",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result).toMatchObject({ kind: "user_error", error: { code: "conflict" } });
+    expect(ctx.db.patch).not.toHaveBeenCalled();
+    expect(ctx.db.insert).not.toHaveBeenCalled();
+  });
+
+  it("authenticates before probing current group membership", async () => {
+    const ctx = buildCtx();
+    vi.mocked(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).mockRejectedValueOnce(new Error("Authentication required."));
+
+    await expect(
+      resolveSyncedSaleInventoryReviewGroupWithCtx(ctx as never, {
+        expectedMemberIds: ["work-item-1" as Id<"operationalWorkItem">],
+        groupKey: "synced_sale_inventory_review:store-1:sku-1",
+        outcome: "completed",
+        reason: "Inventory review handled from Open Work.",
+        storeId: "store-1" as Id<"store">,
+      }),
+    ).rejects.toThrow("Authentication required.");
+
+    expect(ctx.db.query).not.toHaveBeenCalled();
+    expect(ctx.db.patch).not.toHaveBeenCalled();
+  });
+
   it("auto-resolves matching synced sale inventory review work from applied stock movements", async () => {
     const ctx = buildCtx();
 
@@ -630,6 +774,7 @@ function defaultArgs(
 type BuildCtxSeed = Partial<{
   inventoryMovement: Doc<"inventoryMovement"> | null;
   operationalWorkItem: Doc<"operationalWorkItem">;
+  oversizedOperationalWorkRepair: Doc<"oversizedOperationalWorkRepair">;
   posLocalSyncMapping: Doc<"posLocalSyncMapping">;
   productSku: Doc<"productSku"> | null;
   posTerminal: Doc<"posTerminal">;
@@ -646,6 +791,7 @@ function buildCtx(seed: BuildCtxSeed = {}) {
         ? buildInventoryMovement()
         : seed.inventoryMovement,
     operationalWorkItem: seed.operationalWorkItem ?? buildWorkItem(),
+    oversizedOperationalWorkRepair: seed.oversizedOperationalWorkRepair,
     posLocalSyncMapping: seed.posLocalSyncMapping ?? buildMapping(),
     productSku:
       seed.productSku === undefined ? buildProductSku() : seed.productSku,
@@ -669,7 +815,19 @@ function buildCtx(seed: BuildCtxSeed = {}) {
         },
       };
       builder(q);
+      const firstMatchingRow = async () => {
+        const row = rows[tableName as keyof typeof rows];
+        if (!row) return null;
+        return Object.entries(constraints).every(
+          ([field, value]) => row[field as keyof typeof row] === value,
+        )
+          ? row
+          : null;
+      };
       return {
+        order: vi.fn(() => ({
+          first: vi.fn(firstMatchingRow),
+        })),
         collect: vi.fn(async () => {
           const row = rows[tableName as keyof typeof rows];
           if (!row) return [];
@@ -679,15 +837,7 @@ function buildCtx(seed: BuildCtxSeed = {}) {
             ? [row]
             : [];
         }),
-        first: vi.fn(async () => {
-          const row = rows[tableName as keyof typeof rows];
-          if (!row) return null;
-          return Object.entries(constraints).every(
-            ([field, value]) => row[field as keyof typeof row] === value,
-          )
-            ? row
-            : null;
-        }),
+        first: vi.fn(firstMatchingRow),
         take: vi.fn(async () => {
           const row = rows[tableName as keyof typeof rows];
           if (!row) return [];

@@ -109,15 +109,12 @@ type DailyCloseAutomationStatus = {
     | "scheduled_later";
   id: string;
   occurredAt?: number | null;
-  outcome: "applied" | "prepared" | "skipped" | "failed" | "dry_run" | "disabled";
+  outcome:
+    "applied" | "prepared" | "skipped" | "failed" | "dry_run" | "disabled";
 };
 
 export type DailyCloseStatus =
-  | "blocked"
-  | "needs_review"
-  | "carry_forward"
-  | "ready"
-  | "completed";
+  "blocked" | "needs_review" | "carry_forward" | "ready" | "completed";
 
 type CarryForwardResolutionOutcome = "completed" | "cancelled";
 
@@ -130,6 +127,7 @@ export type DailyCloseItemLink = {
 };
 
 export type DailyCloseItem = {
+  carryForwardWorkItemIds?: Array<Id<"operationalWorkItem"> | string>;
   carryForwardResolution?: {
     businessDate: string;
     dailyCloseId: Id<"dailyClose"> | string;
@@ -184,6 +182,10 @@ export type DailyCloseSnapshot = {
     supersededByDailyCloseId?: Id<"dailyClose"> | string | null;
   } | null;
   operatingDate: string;
+  openWorkMembership?: {
+    completeness: "complete" | "incomplete";
+    observedLogicalCount: number;
+  };
   priorDaySummary?: DailyCloseSnapshot["summary"] | null;
   readyItems: DailyCloseItem[];
   reportSnapshot?: DailyCloseStoredReportSnapshot | null;
@@ -297,6 +299,7 @@ type BucketConfig = {
   description: string;
   emptyText: string;
   items: DailyCloseItem[];
+  countIsLowerBound?: boolean;
   status: BucketStatus;
   title: string;
   value: BucketStatus;
@@ -894,7 +897,9 @@ function getDailyCloseStatus(snapshot: DailyCloseSnapshot): DailyCloseStatus {
     snapshot.existingClose?.lifecycleStatus === "reopened" ||
     snapshot.existingClose?.lifecycleStatus === "superseded"
   ) {
-    return snapshot.readiness?.status === "blocked" ? "blocked" : "needs_review";
+    return snapshot.readiness?.status === "blocked"
+      ? "blocked"
+      : "needs_review";
   }
 
   if (snapshot.status) return snapshot.status;
@@ -936,9 +941,31 @@ function getCarryForwardWorkItemId(item: DailyCloseItem) {
 
 function getCarryForwardWorkItemIds(items: DailyCloseItem[]) {
   return items.flatMap((item) => {
+    if (item.carryForwardWorkItemIds?.length) {
+      return item.carryForwardWorkItemIds.filter(isUsableRouteIdentifier);
+    }
     const workItemId = getCarryForwardWorkItemId(item);
     return workItemId ? [workItemId] : [];
   });
+}
+
+function getCarryForwardSelectionId(item: DailyCloseItem) {
+  return item.carryForwardWorkItemIds?.length
+    ? getItemId(item)
+    : getCarryForwardWorkItemId(item);
+}
+
+function getSelectedCarryForwardWorkItemIds(
+  items: DailyCloseItem[],
+  selectedIds: string[],
+) {
+  const selected = new Set(selectedIds);
+  return getCarryForwardWorkItemIds(
+    items.filter((item) => {
+      const selectionId = getCarryForwardSelectionId(item);
+      return selectionId ? selected.has(selectionId) : false;
+    }),
+  );
 }
 
 function getCarryForwardResolutionContext(item: DailyCloseItem) {
@@ -1297,10 +1324,7 @@ function getMetadataValue(metadata: Record<string, unknown>, label: string) {
   );
 }
 
-const sourceLinkMetadataLabels = new Set([
-  "approval",
-  "session",
-]);
+const sourceLinkMetadataLabels = new Set(["approval", "session"]);
 
 function renderItemSourceLink({
   children,
@@ -2030,6 +2054,8 @@ function getBucketConfigs(snapshot: DailyCloseSnapshot): BucketConfig[] {
         "Selected items are preserved for follow-up during the next opening workflow.",
       emptyText: "No carry-forward items are currently reported.",
       items: snapshot.carryForwardItems,
+      countIsLowerBound:
+        snapshot.openWorkMembership?.completeness === "incomplete",
       status: "carry-forward",
       title: "Carry forward",
       value: "carry-forward",
@@ -2367,9 +2393,7 @@ function DailyCloseItemCard({
     <OperationReviewItemCard
       actionSlot={
         actionSlot ? (
-          <div className="flex flex-wrap items-center gap-2">
-            {actionSlot}
-          </div>
+          <div className="flex flex-wrap items-center gap-2">{actionSlot}</div>
         ) : null
       }
       collapsedMetadataEntries={collapsedMetadataEntries}
@@ -2541,7 +2565,7 @@ function BucketSection({
           </p>
         ) : (
           paginatedItems.map((item) => {
-            const selectionId = getCarryForwardWorkItemId(item);
+            const selectionId = getCarryForwardSelectionId(item);
             const isSelectable = Boolean(
               selectionId && selectedIds && onSelectedIdsChange,
             );
@@ -2555,7 +2579,7 @@ function BucketSection({
                     <CarryForwardResolutionActions
                       isDisabled={Boolean(
                         resolvingCarryForwardKey &&
-                          resolvingCarryForwardKey !== getItemId(item),
+                        resolvingCarryForwardKey !== getItemId(item),
                       )}
                       resolvingOutcome={
                         resolvingCarryForwardKey === getItemId(item)
@@ -2585,7 +2609,9 @@ function BucketSection({
                 }}
                 orgUrlSlug={orgUrlSlug}
                 selectable={isSelectable}
-                selected={selectionId ? selectedIds?.includes(selectionId) : false}
+                selected={
+                  selectionId ? selectedIds?.includes(selectionId) : false
+                }
                 storeUrlSlug={storeUrlSlug}
               />
             );
@@ -2668,6 +2694,7 @@ function BucketTabs({
               )}
             >
               {bucket.items.length}
+              {bucket.countIsLowerBound ? "+" : null}
             </span>
           </TabsTrigger>
         ))}
@@ -2854,8 +2881,7 @@ export function DailyCloseReadOnlyReport({
   const [selectedBucketValue, setSelectedBucketValue] =
     useState<BucketStatus>(defaultBucketValue);
   const [selectedBucketPage, setSelectedBucketPage] = useState(1);
-  const [isTransactionReportOpen, setIsTransactionReportOpen] =
-    useState(false);
+  const [isTransactionReportOpen, setIsTransactionReportOpen] = useState(false);
   const selectedBucket =
     buckets.find((bucket) => bucket.value === selectedBucketValue) ??
     buckets.find((bucket) => bucket.value === defaultBucketValue) ??
@@ -3271,6 +3297,11 @@ function CompletionRail({
         snapshot.carryForwardItems.length,
         "item",
         "None",
+      ).replace(
+        /^([0-9]+)/,
+        snapshot.openWorkMembership?.completeness === "incomplete"
+          ? "$1+"
+          : "$1",
       ),
       valueTone: snapshot.carryForwardItems.length > 0 ? "workflow" : "plain",
     },
@@ -3398,9 +3429,7 @@ function CompletionRail({
                 <textarea
                   className="min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   id="daily-close-reopen-reason"
-                  onChange={(event) =>
-                    onReopenReasonChange(event.target.value)
-                  }
+                  onChange={(event) => onReopenReasonChange(event.target.value)}
                   placeholder="Enter why this close needs revision."
                   value={reopenReason}
                 />
@@ -3504,14 +3533,17 @@ export function DailyCloseViewContent({
     report?: unknown;
     tab?: unknown;
   };
-  const carryForwardWorkItemIds = useMemo(
-    () => getCarryForwardWorkItemIds(snapshot?.carryForwardItems ?? []),
+  const carryForwardSelectionIds = useMemo(
+    () =>
+      (snapshot?.carryForwardItems ?? [])
+        .map(getCarryForwardSelectionId)
+        .filter((id): id is string => Boolean(id)),
     [snapshot?.carryForwardItems],
   );
   const selectedIds =
     selectedCarryForwardIds !== null
       ? selectedCarryForwardIds
-      : carryForwardWorkItemIds;
+      : carryForwardSelectionIds;
   const completionApprovalRunner = useApprovedCommand({
     storeId,
     onAuthenticateForApproval:
@@ -3601,7 +3633,10 @@ export function DailyCloseViewContent({
     setCommandMessage(null);
 
     const completionArgs = {
-      carryForwardWorkItemIds: selectedIds,
+      carryForwardWorkItemIds: getSelectedCarryForwardWorkItemIds(
+        snapshot.carryForwardItems,
+        selectedIds,
+      ),
       endAt: snapshot.endAt,
       notes,
       operatingDate: snapshot.operatingDate,
@@ -3842,6 +3877,15 @@ export function DailyCloseViewContent({
             <DailyCloseAutomationStatusPanel
               automationStatus={automationStatus}
             />
+            {displaySnapshot.openWorkMembership?.completeness ===
+            "incomplete" ? (
+              <div
+                className="rounded-lg border border-warning/35 bg-warning/10 px-layout-md py-layout-sm text-sm text-foreground"
+                role="status"
+              >
+                Open Work membership is incomplete.
+              </div>
+            ) : null}
             <BucketTabs
               buckets={buckets}
               canViewFinancialDetails={hasFinancialDetailsAccess}
@@ -4333,7 +4377,9 @@ export function DailyCloseView() {
       completeDailyClose={dailyCloseApi.completeDailyClose}
       getDailyCloseSnapshot={dailyCloseApi.getDailyCloseSnapshot}
       reopenDailyClose={dailyCloseApi.reopenDailyClose}
-      resolveDailyCloseCarryForward={dailyCloseApi.resolveDailyCloseCarryForward}
+      resolveDailyCloseCarryForward={
+        dailyCloseApi.resolveDailyCloseCarryForward
+      }
     />
   );
 }

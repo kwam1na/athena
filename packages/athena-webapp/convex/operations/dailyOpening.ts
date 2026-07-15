@@ -54,6 +54,16 @@ type DailyOpeningItem = {
         value: unknown;
       }>
     | Record<string, unknown>;
+  carryForwardWorkItemIds?: Id<"operationalWorkItem">[];
+};
+
+type FrozenCarryForwardGroup = {
+  key: string;
+  title: string;
+  message: string;
+  type: string;
+  memberWorkItemIds: Id<"operationalWorkItem">[];
+  memberCount: number;
 };
 
 type DailyOpeningManagerReviewEvidence = Omit<DailyOpeningItem, "severity"> & {
@@ -97,7 +107,15 @@ type DailyOpeningSnapshot = {
   readyItems: DailyOpeningItem[];
   readiness: DailyOpeningReadiness;
   startedOpening:
-    | (Doc<"dailyOpening"> & {
+    | (Omit<
+        Doc<"dailyOpening">,
+        | "carryForwardAcknowledgements"
+        | "carryForwardWorkItemIds"
+        | "managerReviewEvidence"
+      > & {
+        carryForwardAcknowledgements?: Doc<"dailyOpening">["carryForwardAcknowledgements"];
+        carryForwardWorkItemIds?: Doc<"dailyOpening">["carryForwardWorkItemIds"];
+        managerReviewEvidence?: Doc<"dailyOpening">["managerReviewEvidence"];
         reviewEvidence?: DailyOpeningManagerReviewEvidence[];
         startedByStaffName?: string | null;
       })
@@ -274,8 +292,15 @@ async function hydrateStartedOpening(
     ? await ctx.db.get("staffProfile", opening.actorStaffProfileId)
     : null;
 
+  const {
+    carryForwardAcknowledgements: _carryForwardAcknowledgements,
+    carryForwardWorkItemIds: _carryForwardWorkItemIds,
+    managerReviewEvidence: _managerReviewEvidence,
+    ...broadOpening
+  } = opening;
+
   return {
-    ...opening,
+    ...(args.includeManagerReviewEvidence ? opening : broadOpening),
     reviewEvidence: args.includeManagerReviewEvidence
       ? (opening.managerReviewEvidence ?? [])
       : [],
@@ -517,6 +542,194 @@ function missingCarryForwardItem(args: {
   };
 }
 
+type FrozenCarryForwardGroupEvidence =
+  | { integrity: "invalid" }
+  | { groups: FrozenCarryForwardGroup[]; integrity: "valid" };
+
+function frozenCarryForwardGroupEvidence(
+  priorClose: Doc<"dailyClose">,
+): FrozenCarryForwardGroupEvidence | null {
+  const reportSnapshot = priorClose.reportSnapshot as
+    | {
+        snapshotContractVersion?: number;
+        carryForwardGroups?: FrozenCarryForwardGroup[];
+      }
+    | undefined;
+
+  if (reportSnapshot?.snapshotContractVersion !== 2) return null;
+  if (!Array.isArray(reportSnapshot.carryForwardGroups)) {
+    return { integrity: "invalid" };
+  }
+
+  const groups = reportSnapshot.carryForwardGroups;
+  const rootMemberIds = priorClose.carryForwardWorkItemIds.map(String);
+  const groupedMemberIds: string[] = [];
+  const structurallyValid = groups.every((group) => {
+    if (
+      !group ||
+      typeof group.key !== "string" ||
+      typeof group.title !== "string" ||
+      typeof group.message !== "string" ||
+      typeof group.type !== "string" ||
+      !Array.isArray(group.memberWorkItemIds) ||
+      group.memberWorkItemIds.length === 0 ||
+      group.memberCount !== group.memberWorkItemIds.length
+    ) {
+      return false;
+    }
+
+    groupedMemberIds.push(...group.memberWorkItemIds.map(String));
+    return true;
+  });
+  const rootMembers = new Set(rootMemberIds);
+  const groupedMembers = new Set(groupedMemberIds);
+  const hasExactCoverage =
+    structurallyValid &&
+    rootMemberIds.length === rootMembers.size &&
+    groupedMemberIds.length === groupedMembers.size &&
+    rootMembers.size === groupedMembers.size &&
+    Array.from(rootMembers).every((memberId) => groupedMembers.has(memberId));
+
+  return hasExactCoverage
+    ? { groups, integrity: "valid" }
+    : { integrity: "invalid" };
+}
+
+function frozenCarryForwardAcknowledgementKey(groupIndex: number) {
+  return `carry_forward_group:${groupIndex}`;
+}
+
+function invalidFrozenCarryForwardEvidenceItem(
+  priorClose: Doc<"dailyClose">,
+  options: { includeManagerReviewEvidence?: boolean },
+): DailyOpeningItem {
+  return {
+    key: "carry_forward_integrity:invalid",
+    severity: "blocker",
+    category: "carry_forward_integrity",
+    title: "Prior-close work evidence is incomplete",
+    message:
+      "The prior end of day review does not contain a complete frozen work-group record. Restore the evidence before Opening Handoff can start.",
+    subject: {
+      type: "logical_operational_work_group",
+      id:
+        options.includeManagerReviewEvidence === false
+          ? "redacted"
+          : priorClose._id,
+      label: "Prior-close work evidence",
+    },
+    ...(options.includeManagerReviewEvidence === false
+      ? {}
+      : {
+          metadata: {
+            priorDailyCloseId: priorClose._id,
+            priorOperatingDate: priorClose.operatingDate,
+          },
+        }),
+  };
+}
+
+async function buildFrozenCarryForwardState(
+  ctx: Pick<QueryCtx, "db">,
+  priorClose: Doc<"dailyClose">,
+  options: { includeManagerReviewEvidence?: boolean } = {},
+) {
+  const evidence = frozenCarryForwardGroupEvidence(priorClose);
+
+  if (!evidence) return null;
+  if (evidence.integrity === "invalid") {
+    return {
+      blockers: [invalidFrozenCarryForwardEvidenceItem(priorClose, options)],
+      carryForwardItems: [],
+    };
+  }
+  const groups = evidence.groups;
+
+  const blockers: DailyOpeningItem[] = [];
+  const carryForwardItems: DailyOpeningItem[] = [];
+
+  for (const [index, group] of groups.entries()) {
+    const acknowledgementKey = frozenCarryForwardAcknowledgementKey(index);
+    const members = await Promise.all(
+      group.memberWorkItemIds.map((workItemId) =>
+        ctx.db.get("operationalWorkItem", workItemId),
+      ),
+    );
+    const missingCount = members.filter((member) => !member).length;
+
+    if (missingCount > 0) {
+      blockers.push({
+        key: `${acknowledgementKey}:missing`,
+        severity: "blocker",
+        category: "carry_forward_integrity",
+        title: "Prior-close work evidence is missing",
+        message:
+          "A prior-close work group could not be loaded completely. Restore the frozen evidence before Opening Handoff can start.",
+        subject: {
+          type: "logical_operational_work_group",
+          id:
+            options.includeManagerReviewEvidence === false
+              ? "redacted"
+              : group.key,
+          label: group.title,
+        },
+        ...(options.includeManagerReviewEvidence === false
+          ? {}
+          : {
+              carryForwardWorkItemIds: group.memberWorkItemIds,
+              metadata: {
+                frozenMemberCount: group.memberCount,
+                missingMemberCount: missingCount,
+                priorDailyCloseId: priorClose._id,
+                priorOperatingDate: priorClose.operatingDate,
+              },
+            }),
+      });
+      continue;
+    }
+
+    const unresolvedCount = members.filter(
+      (member) =>
+        member && !TERMINAL_WORK_ITEM_STATUSES.has(String(member.status)),
+    ).length;
+
+    if (unresolvedCount === 0) continue;
+
+    carryForwardItems.push({
+      key: acknowledgementKey,
+      severity: "carry_forward",
+      category: "carry_forward",
+      title: group.title,
+      message:
+        "This unresolved prior-close work group must be acknowledged for Opening.",
+      subject: {
+        type: "logical_operational_work_group",
+        id:
+          options.includeManagerReviewEvidence === false
+            ? "redacted"
+            : group.key,
+        label: group.title,
+      },
+      ...(options.includeManagerReviewEvidence === false
+        ? {}
+        : {
+            carryForwardWorkItemIds: group.memberWorkItemIds,
+            link: {
+              label: "View open work",
+              to: "/$orgUrlSlug/store/$storeUrlSlug/operations/open-work",
+            },
+            metadata: {
+              frozenMemberCount: group.memberCount,
+              unresolvedMemberCount: unresolvedCount,
+              type: group.type,
+            },
+          }),
+    });
+  }
+
+  return { blockers, carryForwardItems };
+}
+
 function priorCloseReadyItem(
   priorClose: Doc<"dailyClose">,
   options: {
@@ -600,7 +813,7 @@ function priorCloseReopenedItem(
   }
 
   return {
-    key: `daily_close:${priorClose._id}:reopened`,
+    key: "prior_close:reopened",
     severity: "review",
     category: "prior_close",
     title: "Prior EOD Review reopened",
@@ -678,7 +891,7 @@ function carryForwardItem(
   }
 
   return {
-    key: `operational_work_item:${workItem._id}:carry_forward`,
+    key: `carry_forward:${options.index ?? 0}`,
     severity: "carry_forward",
     category: "carry_forward",
     title: workItem.title,
@@ -909,8 +1122,7 @@ export async function resolveSharedDemoOpeningActorWithCtx(
   if (!staffProfile || staffProfile.status !== "active") {
     return userError({
       code: "authorization_failed",
-      message:
-        "The demo owner is unavailable. Restore the demo and try again.",
+      message: "The demo owner is unavailable. Restore the demo and try again.",
     });
   }
 
@@ -986,20 +1198,29 @@ export async function buildDailyOpeningSnapshotWithCtx(
     openingContext.priorClose ??
     (await getPriorDailyCloseForOpeningReview(ctx, args));
 
-  const blockers: DailyOpeningItem[] = openingContext.priorClose
-    ? await getMissingCarryForwardItems(ctx, openingContext.priorClose, {
+  const frozenCarryForwardState = openingContext.priorClose
+    ? await buildFrozenCarryForwardState(ctx, openingContext.priorClose, {
         includeManagerReviewEvidence: args.includeManagerReviewEvidence,
       })
-    : [];
+    : null;
+  const blockers: DailyOpeningItem[] = frozenCarryForwardState
+    ? frozenCarryForwardState.blockers
+    : openingContext.priorClose
+      ? await getMissingCarryForwardItems(ctx, openingContext.priorClose, {
+          includeManagerReviewEvidence: args.includeManagerReviewEvidence,
+        })
+      : [];
   const reviewItems: DailyOpeningItem[] = [];
-  const carryForwardItems = openingContext.carryForwardWorkItems
-    .filter((workItem) => !TERMINAL_WORK_ITEM_STATUSES.has(workItem.status))
-    .map((workItem, index) =>
-      carryForwardItem(workItem, {
-        includeManagerReviewEvidence: args.includeManagerReviewEvidence,
-        index,
-      }),
-    );
+  const carryForwardItems = frozenCarryForwardState
+    ? frozenCarryForwardState.carryForwardItems
+    : openingContext.carryForwardWorkItems
+        .filter((workItem) => !TERMINAL_WORK_ITEM_STATUSES.has(workItem.status))
+        .map((workItem, index) =>
+          carryForwardItem(workItem, {
+            includeManagerReviewEvidence: args.includeManagerReviewEvidence,
+            index,
+          }),
+        );
   const readyItems: DailyOpeningItem[] = [];
 
   if (priorClose) {
@@ -1120,6 +1341,27 @@ export async function startStoreDayWithCtx(
     (args.actorType === "automation" &&
       args.automationBlockerHandling === "manager_review");
 
+  const hasMissingPriorCloseEvidence = snapshot.blockers.some(
+    (item) =>
+      item.category === "carry_forward_integrity" ||
+      item.key.endsWith(":missing"),
+  );
+
+  if (hasMissingPriorCloseEvidence) {
+    return userError({
+      code: "precondition_failed",
+      message:
+        "Opening cannot start while prior-close work evidence is missing.",
+      metadata: {
+        missingEvidenceCount: snapshot.blockers.filter(
+          (item) =>
+            item.category === "carry_forward_integrity" ||
+            item.key.endsWith(":missing"),
+        ).length,
+      },
+    });
+  }
+
   const acknowledgedItemKeys = new Set(args.acknowledgedItemKeys ?? []);
   const requiredAcknowledgementKeys = [
     ...snapshot.reviewItems,
@@ -1152,6 +1394,26 @@ export async function startStoreDayWithCtx(
     ? managerReviewEvidenceFromSnapshot(snapshot)
     : [];
   const now = Date.now();
+  const carryForwardAcknowledgements = snapshot.carryForwardItems.map(
+    (item) => ({
+      key: item.key,
+      memberWorkItemIds:
+        item.carryForwardWorkItemIds ??
+        (item.subject.type === "operational_work_item"
+          ? [item.subject.id as Id<"operationalWorkItem">]
+          : []),
+      disposition: acknowledgedItemKeys.has(item.key)
+        ? ("acknowledged" as const)
+        : ("manager_review" as const),
+    }),
+  );
+  const carryForwardWorkItemIds = Array.from(
+    new Set(
+      carryForwardAcknowledgements.flatMap(
+        (acknowledgement) => acknowledgement.memberWorkItemIds,
+      ),
+    ),
+  );
   const dailyOpeningId = await ctx.db.insert("dailyOpening", {
     storeId: args.storeId,
     organizationId: store.organizationId,
@@ -1162,10 +1424,9 @@ export async function startStoreDayWithCtx(
     priorDailyCloseId: snapshot.priorClose?._id,
     readiness: snapshot.readiness,
     sourceSubjects: snapshot.sourceSubjects,
-    carryForwardWorkItemIds: snapshot.carryForwardItems.map(
-      (item) => item.subject.id as Id<"operationalWorkItem">,
-    ),
+    carryForwardWorkItemIds,
     acknowledgedItemKeys: args.acknowledgedItemKeys ?? [],
+    carryForwardAcknowledgements,
     notes: trimOptional(args.notes),
     createdAt: now,
     updatedAt: now,
@@ -1212,6 +1473,7 @@ export async function startStoreDayWithCtx(
     automationRunId: args.automationRunId,
     metadata: {
       acknowledgedItemKeys: args.acknowledgedItemKeys ?? [],
+      carryForwardAcknowledgementCount: carryForwardAcknowledgements.length,
       endAt: dailyOpening.endAt,
       ...(managerReviewEvidence.length > 0
         ? {

@@ -57,7 +57,17 @@ const dailyCloseReportItemValidator = v.object({
   metadata: v.optional(v.record(v.string(), v.any())),
 });
 
+const dailyCloseFrozenCarryForwardGroupValidator = v.object({
+  key: v.string(),
+  title: v.string(),
+  message: v.string(),
+  type: v.string(),
+  memberWorkItemIds: v.array(v.id("operationalWorkItem")),
+  memberCount: v.number(),
+});
+
 const dailyCloseReportSnapshotValidator = v.object({
+  snapshotContractVersion: v.optional(v.literal(2)),
   closeMetadata: v.object({
     operatingDate: v.string(),
     storeId: v.id("store"),
@@ -71,9 +81,7 @@ const dailyCloseReportSnapshotValidator = v.object({
     completionApprovedByStaffProfileId: v.optional(v.id("staffProfile")),
     completionRequestedByStaffProfileId: v.optional(v.id("staffProfile")),
     completionRequestedByUserId: v.optional(v.id("athenaUser")),
-    actorType: v.optional(
-      v.union(v.literal("human"), v.literal("automation")),
-    ),
+    actorType: v.optional(v.union(v.literal("human"), v.literal("automation"))),
     automationRunId: v.optional(v.id("automationRun")),
     automationPolicyVersion: v.optional(v.string()),
     automationDecisionReason: v.optional(v.string()),
@@ -95,7 +103,16 @@ const dailyCloseReportSnapshotValidator = v.object({
   summary: v.record(v.string(), v.any()),
   reviewedItems: v.array(dailyCloseReportItemValidator),
   carryForwardItems: v.array(dailyCloseReportItemValidator),
+  carryForwardGroups: v.optional(
+    v.array(dailyCloseFrozenCarryForwardGroupValidator),
+  ),
   readyItems: v.array(dailyCloseReportItemValidator),
+  openWorkMembership: v.optional(
+    v.object({
+      completeness: v.union(v.literal("complete"), v.literal("incomplete")),
+      observedLogicalCount: v.number(),
+    }),
+  ),
   sourceCompleteness: v.optional(dailyCloseSourceCompletenessValidator),
   sourceSubjects: v.array(dailyCloseSourceSubjectValidator),
 });
@@ -136,9 +153,7 @@ export const dailyCloseSchema = v.object({
   completionApprovedByStaffProfileId: v.optional(v.id("staffProfile")),
   completionRequestedByStaffProfileId: v.optional(v.id("staffProfile")),
   completionRequestedByUserId: v.optional(v.id("athenaUser")),
-  actorType: v.optional(
-    v.union(v.literal("human"), v.literal("automation")),
-  ),
+  actorType: v.optional(v.union(v.literal("human"), v.literal("automation"))),
   automationRunId: v.optional(v.id("automationRun")),
   automationPolicyVersion: v.optional(v.string()),
   automationDecisionReason: v.optional(v.string()),

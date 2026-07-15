@@ -101,6 +101,8 @@ import {
   managerElevationSchema,
   operationalEventSchema,
   operationalWorkItemSchema,
+  oversizedOperationalWorkRepairActionSchema,
+  oversizedOperationalWorkRepairSchema,
   paymentAllocationSchema,
   registerSessionSchema,
   skuActivityEventSchema,
@@ -704,8 +706,22 @@ const schema = defineSchema({
   inventoryMovement: defineTable(inventoryMovementSchema)
     .index("by_storeId", ["storeId"])
     .index("by_storeId_productSkuId", ["storeId", "productSkuId"])
+    .index("by_storeId_productSkuId_sourceType_createdAt", [
+      "storeId",
+      "productSkuId",
+      "sourceType",
+      "createdAt",
+    ])
     .index("by_storeId_source", ["storeId", "sourceType", "sourceId"])
     .index("by_workItemId", ["workItemId"]),
+  oversizedOperationalWorkRepair: defineTable(
+    oversizedOperationalWorkRepairSchema,
+  )
+    .index("by_storeId_groupKey_status", ["storeId", "groupKey", "status"])
+    .index("by_storeId_status", ["storeId", "status"]),
+  oversizedOperationalWorkRepairAction: defineTable(
+    oversizedOperationalWorkRepairActionSchema,
+  ).index("by_repairId_occurredAt", ["repairId", "occurredAt"]),
   skuActivityEvent: defineTable(skuActivityEventSchema)
     .index("by_storeId_productSkuId_occurredAt", [
       "storeId",

@@ -194,10 +194,12 @@ import type * as operations_dailyOperationsAutomation from "../operations/dailyO
 import type * as operations_helpers_eventBuilders from "../operations/helpers/eventBuilders.js";
 import type * as operations_helpers_linking from "../operations/helpers/linking.js";
 import type * as operations_inventoryMovements from "../operations/inventoryMovements.js";
+import type * as operations_logicalOperationalWork from "../operations/logicalOperationalWork.js";
 import type * as operations_managerElevations from "../operations/managerElevations.js";
 import type * as operations_openWorkInventoryReviews from "../operations/openWorkInventoryReviews.js";
 import type * as operations_operationalEvents from "../operations/operationalEvents.js";
 import type * as operations_operationalWorkItems from "../operations/operationalWorkItems.js";
+import type * as operations_oversizedOperationalWorkRepair from "../operations/oversizedOperationalWorkRepair.js";
 import type * as operations_paymentAllocations from "../operations/paymentAllocations.js";
 import type * as operations_paymentTotals from "../operations/paymentTotals.js";
 import type * as operations_registerCloseoutVarianceEmail from "../operations/registerCloseoutVarianceEmail.js";
@@ -418,6 +420,7 @@ import type * as schemas_operations_inventoryMovement from "../schemas/operation
 import type * as schemas_operations_managerElevation from "../schemas/operations/managerElevation.js";
 import type * as schemas_operations_operationalEvent from "../schemas/operations/operationalEvent.js";
 import type * as schemas_operations_operationalWorkItem from "../schemas/operations/operationalWorkItem.js";
+import type * as schemas_operations_oversizedOperationalWorkRepair from "../schemas/operations/oversizedOperationalWorkRepair.js";
 import type * as schemas_operations_paymentAllocation from "../schemas/operations/paymentAllocation.js";
 import type * as schemas_operations_registerSession from "../schemas/operations/registerSession.js";
 import type * as schemas_operations_skuActivityEvent from "../schemas/operations/skuActivityEvent.js";
@@ -766,10 +769,12 @@ declare const fullApi: ApiFromModules<{
   "operations/helpers/eventBuilders": typeof operations_helpers_eventBuilders;
   "operations/helpers/linking": typeof operations_helpers_linking;
   "operations/inventoryMovements": typeof operations_inventoryMovements;
+  "operations/logicalOperationalWork": typeof operations_logicalOperationalWork;
   "operations/managerElevations": typeof operations_managerElevations;
   "operations/openWorkInventoryReviews": typeof operations_openWorkInventoryReviews;
   "operations/operationalEvents": typeof operations_operationalEvents;
   "operations/operationalWorkItems": typeof operations_operationalWorkItems;
+  "operations/oversizedOperationalWorkRepair": typeof operations_oversizedOperationalWorkRepair;
   "operations/paymentAllocations": typeof operations_paymentAllocations;
   "operations/paymentTotals": typeof operations_paymentTotals;
   "operations/registerCloseoutVarianceEmail": typeof operations_registerCloseoutVarianceEmail;
@@ -990,6 +995,7 @@ declare const fullApi: ApiFromModules<{
   "schemas/operations/managerElevation": typeof schemas_operations_managerElevation;
   "schemas/operations/operationalEvent": typeof schemas_operations_operationalEvent;
   "schemas/operations/operationalWorkItem": typeof schemas_operations_operationalWorkItem;
+  "schemas/operations/oversizedOperationalWorkRepair": typeof schemas_operations_oversizedOperationalWorkRepair;
   "schemas/operations/paymentAllocation": typeof schemas_operations_paymentAllocation;
   "schemas/operations/registerSession": typeof schemas_operations_registerSession;
   "schemas/operations/skuActivityEvent": typeof schemas_operations_skuActivityEvent;

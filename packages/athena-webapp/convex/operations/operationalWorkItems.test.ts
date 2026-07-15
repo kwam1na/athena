@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Id } from "../_generated/dataModel";
-import { getQueueSnapshot } from "./operationalWorkItems";
+import {
+  createOperationalWorkItem,
+  getQueueSnapshot,
+} from "./operationalWorkItems";
 import * as athenaUserAuth from "../lib/athenaUserAuth";
 import * as sharedDemoActor from "../sharedDemo/actor";
 
@@ -52,6 +55,7 @@ function approvalRequest(overrides: Partial<QueueTestRow> = {}) {
 function createQueueContext(
   args: {
     approvalRequests?: QueueTestRow[];
+    oversizedRepairs?: QueueTestRow[];
     products?: QueueTestRow[];
     stores?: QueueTestRow[];
     workItems?: QueueTestRow[];
@@ -59,6 +63,7 @@ function createQueueContext(
 ) {
   const stores = args.stores ?? [{ _id: "store-1", organizationId: "org-1" }];
   const products = args.products ?? [];
+  const oversizedRepairs = args.oversizedRepairs ?? [];
   const workItems = args.workItems ?? [];
   const approvalRequests = args.approvalRequests ?? [];
 
@@ -102,6 +107,13 @@ function createQueueContext(
                 ),
               );
             }
+            if (tableName === "oversizedOperationalWorkRepair") {
+              return oversizedRepairs.filter((repair) =>
+                Array.from(constraints.entries()).every(
+                  ([fieldName, value]) => repair[fieldName] === value,
+                ),
+              );
+            }
             return [];
           };
 
@@ -128,6 +140,74 @@ beforeEach(() => {
 });
 
 describe("getQueueSnapshot", () => {
+  it("accepts refreshNonce only on the queue query contract", async () => {
+    type ExportedArgsContract = { exportArgs: () => Promise<string> };
+    const queueArgs = JSON.parse(
+      await (
+        getQueueSnapshot as unknown as ExportedArgsContract
+      ).exportArgs(),
+    );
+    const createArgs = JSON.parse(
+      await (
+        createOperationalWorkItem as unknown as ExportedArgsContract
+      ).exportArgs(),
+    );
+
+    expect(queueArgs.value.refreshNonce).toEqual({
+      fieldType: { type: "number" },
+      optional: true,
+    });
+    expect(createArgs.value.refreshNonce).toBeUndefined();
+  });
+
+  it("serializes aggregate synced-sale urgency independently from its representative", async () => {
+    const ctx = createQueueContext({
+      workItems: [
+        workItem({
+          _id: "work-open-oldest" as Id<"operationalWorkItem">,
+          createdAt: 1,
+          metadata: { localTransactionId: "transaction-open" },
+          productSkuId: "sku-1" as Id<"productSku">,
+          priority: "normal",
+          status: "open",
+          type: "synced_sale_inventory_review",
+        }),
+        workItem({
+          _id: "work-open-high-alias" as Id<"operationalWorkItem">,
+          createdAt: 3,
+          metadata: { localTransactionId: "transaction-open" },
+          productSkuId: "sku-1" as Id<"productSku">,
+          priority: "high",
+          status: "open",
+          type: "synced_sale_inventory_review",
+        }),
+        workItem({
+          _id: "work-in-progress" as Id<"operationalWorkItem">,
+          createdAt: 10,
+          metadata: { localTransactionId: "transaction-progress" },
+          productSkuId: "sku-1" as Id<"productSku">,
+          priority: "normal",
+          startedAt: 5,
+          status: "in_progress",
+          type: "synced_sale_inventory_review",
+        }),
+      ],
+    });
+
+    const result = await getHandler(getQueueSnapshot)(ctx, {
+      refreshNonce: 1,
+      storeId: "store-1" as Id<"store">,
+      workType: "synced_sale_inventory_review",
+    });
+
+    expect(result.workItems[0]).toMatchObject({
+      priority: "high",
+      status: "in_progress",
+      logicalGroup: {
+        oldestActionableAt: 1,
+      },
+    });
+  });
   it("uses the inventory capability for the shared demo queue snapshot", async () => {
     const ctx = createQueueContext();
     vi.mocked(
@@ -763,7 +843,130 @@ describe("getQueueSnapshot", () => {
     expect(result.overflow.workItems.open).toBe(true);
   });
 
-  it("exposes stable source identities and collapses duplicate current rows for surfaced work types", async () => {
+  it("returns truthful totals and selected-type cards beyond the all-work cap", async () => {
+    const ctx = createQueueContext({
+      workItems: [
+        ...Array.from({ length: TEST_MAX_QUEUE_ITEMS + 1 }, (_, index) =>
+          workItem({
+            _id: `catalog-${index}` as Id<"operationalWorkItem">,
+            metadata: { productId: `product-${index}` },
+            type: "catalog_taxonomy_setup",
+          }),
+        ),
+        workItem({
+          _id: "service-hidden-from-all-cap" as Id<"operationalWorkItem">,
+          type: "service_case",
+        }),
+      ],
+    });
+
+    const result = await getHandler(getQueueSnapshot)(ctx, {
+      storeId: "store-1" as Id<"store">,
+      workType: "service_case",
+    });
+
+    expect(result.workItems).toEqual([
+      expect.objectContaining({ _id: "service-hidden-from-all-cap" }),
+    ]);
+    expect(result.workItemSummary).toMatchObject({
+      completeness: "complete",
+      count: 102,
+      byType: expect.arrayContaining([
+        expect.objectContaining({
+          completeness: "complete",
+          count: 101,
+          type: "catalog_taxonomy_setup",
+        }),
+        expect.objectContaining({
+          completeness: "complete",
+          count: 1,
+          type: "service_case",
+        }),
+      ]),
+    });
+  });
+
+  it("keeps a selected synced-sale type exact when an unrelated lane is incomplete", async () => {
+    const ctx = createQueueContext({
+      workItems: [
+        ...Array.from({ length: 1_001 }, (_, index) =>
+          workItem({
+            _id: `service-${index}` as Id<"operationalWorkItem">,
+            type: "service_case",
+          }),
+        ),
+        workItem({
+          _id: "synced-review" as Id<"operationalWorkItem">,
+          productSkuId: "sku-1" as Id<"productSku">,
+          type: "synced_sale_inventory_review",
+        }),
+      ],
+    });
+
+    const result = await getHandler(getQueueSnapshot)(ctx, {
+      storeId: "store-1" as Id<"store">,
+      workType: "synced_sale_inventory_review",
+    });
+
+    expect(result.workItems[0]).toMatchObject({
+      _id: "synced-review",
+      logicalGroup: {
+        completeness: "complete",
+        resolutionAvailability: "available",
+      },
+    });
+    expect(result.workItemSummary).toMatchObject({
+      completeness: "incomplete",
+      byType: expect.arrayContaining([
+        expect.objectContaining({
+          completeness: "complete",
+          count: 1,
+          type: "synced_sale_inventory_review",
+        }),
+      ]),
+    });
+  });
+
+  it("fails synced-sale work closed when active repair membership is capped", async () => {
+    const ctx = createQueueContext({
+      oversizedRepairs: Array.from({ length: 1_001 }, (_, index) => ({
+        _id: `repair-${index}`,
+        groupKey: `synced_sale_inventory_review:store-1:sku-${index}`,
+        sourceIdentities: [`source-${index}`],
+        status: "pending",
+        storeId: "store-1",
+      })),
+      workItems: [
+        workItem({
+          _id: "synced-review" as Id<"operationalWorkItem">,
+          productSkuId: "sku-live" as Id<"productSku">,
+          type: "synced_sale_inventory_review",
+        }),
+      ],
+    });
+
+    const result = await getHandler(getQueueSnapshot)(ctx, {
+      storeId: "store-1" as Id<"store">,
+      workType: "synced_sale_inventory_review",
+    });
+
+    expect(result.workItems[0].logicalGroup).toMatchObject({
+      completeness: "incomplete",
+      memberIds: [],
+      members: [],
+      resolutionAvailability: "source_incomplete",
+    });
+    expect(result.workItemSummary.byType).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          completeness: "incomplete",
+          type: "synced_sale_inventory_review",
+        }),
+      ]),
+    );
+  });
+
+  it("exposes source identities while only collapsing synced-sale aliases", async () => {
     const ctx = createQueueContext({
       workItems: [
         workItem({
@@ -826,7 +1029,7 @@ describe("getQueueSnapshot", () => {
       storeId: "store-1" as Id<"store">,
     });
 
-    expect(result.workItems).toHaveLength(5);
+    expect(result.workItems).toHaveLength(6);
     expect(
       result.workItems.map((item: QueueTestRow) => [
         item._id,
@@ -835,6 +1038,10 @@ describe("getQueueSnapshot", () => {
     ).toEqual([
       [
         "work-pending-checkout-a",
+        "pos_pending_checkout_item_review:pending-checkout-1",
+      ],
+      [
+        "work-pending-checkout-b",
         "pos_pending_checkout_item_review:pending-checkout-1",
       ],
       [
@@ -848,6 +1055,61 @@ describe("getQueueSnapshot", () => {
       ["work-service-appointment", "service_appointment:appointment-1"],
       ["work-purchase-order", "purchase_order:purchase-order-1"],
     ]);
+    expect(result.workItems[3]).toMatchObject({
+      logicalGroup: {
+        key: "synced_sale_inventory_review:store-1:terminal-1:local-session-1:txn-1",
+        memberIds: ["work-synced-a", "work-synced-b"],
+        resolutionAvailability: "available",
+      },
+    });
+  });
+
+  it("returns one sanitized logical queue row for same-SKU sources before the display cap", async () => {
+    const ctx = createQueueContext({
+      workItems: [
+        workItem({
+          _id: "review-a" as Id<"operationalWorkItem">,
+          metadata: {
+            localTransactionId: "transaction-a",
+            primaryProductSkuId: "sku-1",
+            rawFinancialEvidence: { secret: true },
+          },
+          productSkuId: "sku-1" as Id<"productSku">,
+          type: "synced_sale_inventory_review",
+        }),
+        workItem({
+          _id: "review-b" as Id<"operationalWorkItem">,
+          createdAt: 2,
+          metadata: {
+            localTransactionId: "transaction-b",
+            primaryProductSkuId: "sku-1",
+            proofId: "hidden-proof",
+          },
+          productSkuId: "sku-1" as Id<"productSku">,
+          type: "synced_sale_inventory_review",
+        }),
+      ],
+    });
+
+    const result = await getHandler(getQueueSnapshot)(ctx, {
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(result.workItems).toHaveLength(1);
+    expect(result.workItems[0]).toMatchObject({
+      _id: "review-a",
+      logicalGroup: {
+        key: "synced_sale_inventory_review:store-1:sku-1",
+        memberIds: ["review-a", "review-b"],
+        members: [
+          expect.objectContaining({ _id: "review-a" }),
+          expect.objectContaining({ _id: "review-b" }),
+        ],
+        resolutionAvailability: "available",
+      },
+    });
+    expect(JSON.stringify(result.workItems)).not.toContain("hidden-proof");
+    expect(JSON.stringify(result.workItems)).not.toContain("rawFinancialEvidence");
   });
 
   it("prefers the synced sale resolver row with an affected SKU when duplicate current rows exist", async () => {

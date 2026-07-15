@@ -12,3 +12,4 @@ export * from "./skuActivityEvent";
 export * from "./paymentAllocation";
 export * from "./registerSession";
 export * from "./approvalRequest";
+export * from "./oversizedOperationalWorkRepair";

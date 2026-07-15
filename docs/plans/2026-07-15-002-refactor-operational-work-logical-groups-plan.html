@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Plan Review: Project logical Open Work groups across operations</title>
+  <style>
+    :root { color-scheme: light; --ink: #172033; --muted: #5e687a; --line: #dbe1ea; --paper: #ffffff; --wash: #f5f7fa; --accent: #3446a8; --accent-soft: #eef0ff; --warn: #8a4b08; --warn-soft: #fff6e8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--wash); color: var(--ink); font: 16px/1.6 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    main { width: min(1120px, calc(100% - 32px)); margin: 32px auto 64px; background: var(--paper); border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 18px 50px rgba(24, 34, 55, .08); overflow: hidden; }
+    header { padding: 44px 48px 36px; border-bottom: 1px solid var(--line); background: linear-gradient(135deg, #fff 0%, #f3f5ff 100%); }
+    header p { max-width: 820px; }
+    .eyebrow { color: var(--accent); font-size: .78rem; font-weight: 750; letter-spacing: .14em; text-transform: uppercase; }
+    h1 { max-width: 880px; margin: 8px 0 14px; font-size: clamp(2rem, 5vw, 3.6rem); line-height: 1.04; letter-spacing: -.04em; }
+    h2 { margin: 0 0 18px; font-size: 1.55rem; letter-spacing: -.02em; }
+    h3 { margin: 24px 0 10px; font-size: 1.08rem; }
+    p { margin: 0 0 14px; }
+    a { color: var(--accent); }
+    nav { padding: 22px 48px; border-bottom: 1px solid var(--line); background: #fbfcfe; }
+    nav ul { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 0; padding: 0; list-style: none; }
+    section { padding: 34px 48px; border-bottom: 1px solid var(--line); }
+    section:last-child { border-bottom: 0; }
+    ul, ol { margin: 0; padding-left: 1.25rem; }
+    li + li { margin-top: 7px; }
+    code { padding: .1em .35em; border-radius: 5px; background: #eef1f5; font-size: .92em; }
+    .meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
+    .pill { padding: 6px 10px; border: 1px solid var(--line); border-radius: 999px; background: #fff; color: var(--muted); font-size: .84rem; }
+    .callout { padding: 18px 20px; border: 1px solid #cfd4ff; border-radius: 12px; background: var(--accent-soft); }
+    .warning { border-color: #f0d1a6; background: var(--warn-soft); color: #5f3608; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(245px, 1fr)); gap: 14px; }
+    .card { padding: 18px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
+    .card strong { display: block; margin-bottom: 5px; }
+    .flow { display: grid; grid-template-columns: repeat(5, minmax(130px, 1fr)); gap: 10px; align-items: stretch; margin-top: 18px; }
+    .flow div { display: grid; place-items: center; min-height: 86px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; text-align: center; background: #fbfcfe; font-size: .9rem; }
+    .flow .accent { border-color: #cfd4ff; background: var(--accent-soft); }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: .92rem; }
+    th, td { padding: 11px 12px; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { background: #f4f6f9; }
+    .unit { margin-top: 14px; padding: 20px; border: 1px solid var(--line); border-radius: 12px; }
+    .unit h3 { margin-top: 0; }
+    .unit small { color: var(--muted); }
+    .checklist { columns: 2; column-gap: 34px; }
+    .checklist li { break-inside: avoid; }
+    footer { padding: 28px 48px; background: #fbfcfe; color: var(--muted); }
+    @media (max-width: 760px) { main { width: min(100% - 16px, 1120px); margin-top: 8px; } header, nav, section, footer { padding-left: 22px; padding-right: 22px; } .flow { grid-template-columns: 1fr; } .checklist { columns: 1; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">Implementation plan review</div>
+    <h1>Project logical Open Work groups across operations</h1>
+    <p>One server-owned projection will make Open Work, Daily Operations, EOD Review, EOD History, and Opening Handoff agree on SKU-scoped work while preserving every sale-level record for validation and audit.</p>
+    <div class="meta">
+      <span class="pill">Type: refactor</span>
+      <span class="pill">Status: active</span>
+      <span class="pill">Created: 2026-07-15</span>
+      <span class="pill">Deepened after multi-lens review: 2026-07-15</span>
+      <span class="pill">7 implementation units</span>
+    </div>
+    <p style="margin-top:18px"><a href="2026-07-15-002-refactor-operational-work-logical-groups-plan.md">Open canonical Markdown plan</a></p>
+  </header>
+
+  <nav aria-label="Plan sections">
+    <ul>
+      <li><a href="#problem">Problem</a></li>
+      <li><a href="#scope">Scope</a></li>
+      <li><a href="#design">Design</a></li>
+      <li><a href="#units">Units</a></li>
+      <li><a href="#risks">Risks</a></li>
+      <li><a href="#verification">Verification</a></li>
+    </ul>
+  </nav>
+
+  <section id="problem">
+    <h2>Problem and outcome</h2>
+    <p>Open Work currently groups synced-sale inventory reviews by SKU only in React. The other operations surfaces count or persist raw per-sale rows, and grouped resolution runs as sequential single-row commands. The result is cross-surface count drift, post-cap grouping, and a partial-write risk.</p>
+    <div class="callout"><strong>Target outcome:</strong> operators see one SKU-scoped unit everywhere and acknowledge it once, while Athena retains the exact sale-level members and their source validation. EOD freezes that membership; Opening never expands it from current work.</div>
+  </section>
+
+  <section id="scope">
+    <h2>Scope and invariants</h2>
+    <div class="grid">
+      <article class="card"><strong>Logical grouping</strong>Only current synced-sale inventory reviews with the same store and canonical SKU consolidate.</article>
+      <article class="card"><strong>Raw authority</strong>Every sale-linked work item, source mapping, proof check, terminal status, and event remains authoritative.</article>
+      <article class="card"><strong>Frozen handoff</strong>EOD persists the complete raw member set; Opening requires one key for that frozen set.</article>
+      <article class="card"><strong>Truthful limits</strong>Incomplete raw reads produce a logical lower bound and fail closed for resolution and EOD completion.</article>
+      <article class="card"><strong>Safe compatibility</strong>New snapshots are versioned; legacy history renders exactly as stored as singleton items.</article>
+      <article class="card"><strong>UI continuity</strong>Existing layouts and selected-filter heading copy remain; unrelated work types are unchanged.</article>
+    </div>
+    <h3>Explicit exclusions</h3>
+    <ul>
+      <li>No write-time merge into one mutable SKU record.</li>
+      <li>No grouping by title, receipt, product name, or other weak metadata.</li>
+      <li>No new Daily Operations resolution authority.</li>
+      <li>No consolidation of approvals, pending-checkout work, or unrelated work types.</li>
+      <li>No destructive migration of operational-work or event history.</li>
+      <li>No retrospective regrouping or backfill of legacy EOD snapshots.</li>
+      <li>No broad workspace redesign or agent-owned manual browser signoff.</li>
+    </ul>
+  </section>
+
+  <section id="design">
+    <h2>Technical shape</h2>
+    <p>The projection is server-owned and pure. Synced-sale aliases stay attached to one logical sale member; unrelated work types pass through unchanged. Source completeness owns exact versus lower-bound counts, while resolution availability distinguishes normal, oversized, remediation, and incomplete states. No signed snapshot token is required.</p>
+    <div class="flow" aria-label="Logical work flow">
+      <div>Raw per-sale work rows</div>
+      <div>Source members + retained aliases</div>
+      <div class="accent">Logical projection<br>store + type + SKU</div>
+      <div>Queue · Daily Ops · EOD</div>
+      <div>Frozen EOD membership · Opening</div>
+    </div>
+    <table>
+      <thead><tr><th>State</th><th>Visible count</th><th>Resolution</th><th>EOD</th></tr></thead>
+      <tbody>
+        <tr><td>Complete, within 50 rows</td><td>Exact membership/count + available resolution</td><td>Mutation re-derives and exactly matches the current group</td><td>Freeze allowed</td></tr>
+        <tr><td>Complete, group above 50 rows</td><td>Exact membership/count + budget-exceeded</td><td>Operator action disabled; support may start audited repair</td><td>Freeze allowed; one remediation unit until complete</td></tr>
+        <tr><td>Raw probe incomplete</td><td>Observed logical lower bound with <code>+</code>; no actionable membership</td><td>Fail closed</td><td>Blocked</td></tr>
+        <tr><td>Opening from frozen IDs</td><td>Exact historical membership</td><td>Acknowledgement only</td><td>Not applicable</td></tr>
+      </tbody>
+    </table>
+    <h3>Operator recovery states</h3>
+    <table>
+      <thead><tr><th>Surface</th><th>Visible state</th><th>Action and recovery</th></tr></thead>
+      <tbody>
+        <tr><td>Open Work incomplete</td><td><code>N+</code> and calm incomplete-membership banner</td><td>Disable review; reactive retry plus explicit Refresh; navigation remains available.</td></tr>
+        <tr><td>Open Work membership changed</td><td>Inline “This work changed. Review the refreshed group before marking it reviewed.” conflict</td><td>Zero writes for any new, removed, terminalized, or changed member; refresh and review the current complete group.</td></tr>
+        <tr><td>Open Work above atomic budget</td><td>Exact count and “needs support to complete safely” message</td><td>Disable operator review; support freezes a repair record and runs resumable bounded batches while the projection keeps one remediation unit.</td></tr>
+        <tr><td>Daily Operations incomplete</td><td><code>N+</code> and one updating attention item</td><td>Keep navigation to Open Work; no resolution action.</td></tr>
+        <tr><td>EOD incomplete</td><td><code>N+</code> and incomplete-membership readiness blocker</td><td>Block human and automated close; Refresh readiness or leave and return.</td></tr>
+        <tr><td>Opening missing evidence</td><td>One versioned-group blocker or one legacy singleton blocker</td><td>Block acknowledgement plus normal, manager, and automated start until remediation.</td></tr>
+      </tbody>
+    </table>
+    <div class="callout warning" style="margin-top:18px"><strong>Critical safety boundary:</strong> incomplete membership may be shown as partial information, but it cannot become a partially resolved SKU group or apparently complete carry-forward evidence.</div>
+  </section>
+
+  <section id="units">
+    <h2>Implementation units</h2>
+    <article class="unit"><h3>U1 · Canonical logical-work projection</h3><small>Foundation · no dependencies</small><p>Create orthogonal exhaustive source-completeness and resolution-availability unions for available, oversized, remediation, and incomplete states.</p></article>
+    <article class="unit"><h3>U2 · Queue DTO and Open Work consumption</h3><small>Depends on U1</small><p>Project before logical caps, return sanitized member evidence, remove React grouping, and preserve header/filter/mix/pagination behavior.</p></article>
+    <article class="unit"><h3>U3 · Atomic grouped resolution</h3><small>Depends on U1 and U2</small><p>Re-derive the complete current group and require exact submitted membership equality before transitioning at most 50 rows. Any concurrent change writes nothing and asks the operator to review again; larger groups use the internal repair runbook.</p></article>
+    <article class="unit"><h3>U4 · Daily Operations parity</h3><small>Depends on U1</small><p>Use logical units for the Open Work lane and attention feed, preserve routing ownership, and expose lower-bound counts when incomplete.</p></article>
+    <article class="unit"><h3>U5 · EOD freeze and immutable history</h3><small>Depends on U1</small><p>Show one carry-forward group, persist every representative/alias ID and versioned display snapshot, block incomplete freezes, and leave legacy snapshots exactly as stored.</p></article>
+    <article class="unit"><h3>U6 · Opening acknowledgement</h3><small>Depends on U1 and U5</small><p>Reconstruct only frozen versioned groups, keep legacy items singleton, bind one key to complete membership, and make missing evidence non-bypassable across every start path.</p></article>
+    <article class="unit"><h3>U7 · Cross-surface contract and sensors</h3><small>Depends on U2–U6</small><p>Prove parity with shared fixtures, add the durable solution note, keep validation routing current, refresh Graphify, and satisfy merge-grade repository gates.</p></article>
+  </section>
+
+  <section id="risks">
+    <h2>Primary risks</h2>
+    <table>
+      <thead><tr><th>Risk</th><th>Mitigation</th></tr></thead>
+      <tbody>
+        <tr><td>Source cap freezes only part of a group</td><td>Carry source completeness; show partial count; block atomic resolution and human/automation EOD completion.</td></tr>
+        <tr><td>Group exceeds Convex transaction limits</td><td>Cap operator transactions at 50 rows; route row 51 to a support-authorized repair with frozen membership, bounded scheduled batches, pause/resume, and one projected remediation state.</td></tr>
+        <tr><td>Legacy history is falsely regrouped</td><td>Version new snapshots only; render old snapshots exactly as stored and perform no inferred backfill.</td></tr>
+        <tr><td>Raw IDs leak through broad payloads</td><td>Use typed membership fields, explicit redactors, and negative payload tests.</td></tr>
+        <tr><td>Current rows mutate completed history</td><td>Persist display aggregates and membership at close time; render persisted evidence.</td></tr>
+        <tr><td>Terminal or missing members shrink evidence</td><td>Track frozen and unresolved membership separately; missing evidence blocks normal, manager, and automated starts.</td></tr>
+        <tr><td>Forged, partial, or stale client membership</td><td>Re-derive the complete current group inside the mutation and require exact representative/alias equality before writes.</td></tr>
+        <tr><td>Duplicate aliases resurface</td><td>Count once for display but retain every alias in completeness, freeze, cap, and atomic terminal/supersession evidence.</td></tr>
+        <tr><td>Event dedupe scans become unbounded</td><td>Insert after terminal preconditions or use an indexed business-event key; prove deep existing history does not change 50-row cost.</td></tr>
+        <tr><td>Repair authorization or actor provenance is weak</td><td>Use internal mutations behind a deploy-credential runbook and persist immutable initiator, reason, ticket, organization, and store evidence.</td></tr>
+        <tr><td>Alias arrives during repair</td><td>Recheck before batches/finalization, pause and audit-amend membership, retain completed evidence, and require a final no-alias proof.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="verification">
+    <h2>Verification strategy</h2>
+    <ul class="checklist">
+      <li>Projection and queue backend tests</li>
+      <li>Atomic resolution and no-partial-write tests</li>
+      <li>Exact-current-membership tests for added, removed, terminalized, and alias rows</li>
+      <li>Normalized zero-write “review again” conflict and refreshed UI tests</li>
+      <li>50-row success and 51-row zero-write boundary tests</li>
+      <li>Oversized support repair pause/resume/event-idempotency tests</li>
+      <li>Repair internal-only authorization and immutable actor/ticket evidence tests</li>
+      <li>Repair alias-before/between/finalization concurrency tests</li>
+      <li>Duplicate-alias resolution, EOD, and Opening lifecycle tests</li>
+      <li>Daily Operations count/attention parity</li>
+      <li>EOD live/completion/history/redaction tests</li>
+      <li>Opening acknowledgement and evidence tests</li>
+      <li>Open Work, Daily Operations, EOD, History, and Opening component tests</li>
+      <li>Legacy singleton and new versioned-snapshot compatibility fixtures</li>
+      <li>Incomplete source and oversized group failures</li>
+      <li>Trusted versus broad-reader payload checks</li>
+      <li>Route/browser-boundary coverage</li>
+      <li>Convex audit and changed lint</li>
+      <li>Frontend changed lint, typecheck, and build</li>
+      <li>Graphify rebuild and freshness</li>
+      <li>Compound/documentation and landed-report gates when triggered</li>
+      <li>Merge-grade <code>pr:athena</code></li>
+    </ul>
+    <p style="margin-top:18px">Manual browser validation remains delegated to the user. The implementation plan requires automated behavior and boundary evidence before that handoff.</p>
+  </section>
+
+  <footer>
+    Canonical source: <a href="2026-07-15-002-refactor-operational-work-logical-groups-plan.md">2026-07-15-002-refactor-operational-work-logical-groups-plan.md</a>
+  </footer>
+</main>
+</body>
+</html>

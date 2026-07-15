@@ -501,7 +501,7 @@ describe("daily opening backend foundation", () => {
     );
 
     expect(snapshot.carryForwardItems[0]).toMatchObject({
-      key: "operational_work_item:work-1:carry_forward",
+      key: "carry_forward:0",
       subject: {
         id: "work-1",
         type: "operational_work_item",
@@ -643,7 +643,7 @@ describe("daily opening backend foundation", () => {
     expect(snapshot.readyItems).toEqual([]);
     expect(snapshot.reviewItems).toContainEqual(
       expect.objectContaining({
-        key: "daily_close:daily-close-1:reopened",
+        key: "prior_close:reopened",
         title: "Prior EOD Review reopened",
         message:
           "The prior store day was reopened. Complete the revised end of day review before treating the prior close as clean.",
@@ -859,9 +859,7 @@ describe("daily opening backend foundation", () => {
       error: {
         code: "precondition_failed",
         metadata: {
-          unacknowledgedItemKeys: [
-            "operational_work_item:work-1:carry_forward",
-          ],
+          unacknowledgedItemKeys: ["carry_forward:0"],
         },
       },
     });
@@ -870,7 +868,7 @@ describe("daily opening backend foundation", () => {
     const result = await startStoreDayWithCtx(
       { db } as unknown as MutationCtx,
       {
-        acknowledgedItemKeys: ["operational_work_item:work-1:carry_forward"],
+        acknowledgedItemKeys: ["carry_forward:0"],
         actorStaffProfileId: "staff-1" as Id<"staffProfile">,
         actorUserId: "user-1" as Id<"athenaUser">,
         notes: "Opening handoff acknowledged.",
@@ -885,7 +883,7 @@ describe("daily opening backend foundation", () => {
       data: {
         action: "started",
         dailyOpening: {
-          acknowledgedItemKeys: ["operational_work_item:work-1:carry_forward"],
+          acknowledgedItemKeys: ["carry_forward:0"],
           actorStaffProfileId: "staff-1",
           actorUserId: "user-1",
           carryForwardWorkItemIds: ["work-1"],
@@ -917,7 +915,7 @@ describe("daily opening backend foundation", () => {
       eventType: "daily_opening_acknowledged",
       subjectType: "daily_opening",
       metadata: {
-        acknowledgedItemKeys: ["operational_work_item:work-1:carry_forward"],
+        acknowledgedItemKeys: ["carry_forward:0"],
         endAt: Date.UTC(2026, 4, 9),
         operatingDate: "2026-05-08",
         priorDailyCloseId: "daily-close-1",
@@ -976,7 +974,7 @@ describe("daily opening backend foundation", () => {
           actorStaffProfileId: "staff-1",
           managerReviewEvidence: [
             expect.objectContaining({
-              key: "operational_work_item:work-1:carry_forward",
+              key: "carry_forward:0",
             }),
           ],
         },
@@ -988,7 +986,7 @@ describe("daily opening backend foundation", () => {
     });
   });
 
-  it("starts opening and records review evidence when a carry-forward reference is missing", async () => {
+  it("blocks opening when a legacy carry-forward reference is missing", async () => {
     vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 8, 8));
     const { db, inserts } = createDb({
       dailyClose: [
@@ -1023,28 +1021,386 @@ describe("daily opening backend foundation", () => {
       type: "operational_work_item",
     });
     expect(result).toMatchObject({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+        metadata: { missingEvidenceCount: 1 },
+      },
+    });
+    expect(inserts).toEqual([]);
+  });
+
+  it("reconstructs one acknowledgement from versioned frozen membership and excludes later work", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 8, 8));
+    const frozenGroup = {
+      key: "logical_operational_work:synced_sale_inventory_review:store-1:sku-1:carry_forward",
+      memberCount: 2,
+      memberWorkItemIds: ["work-1", "work-2"],
+      message: "Frozen inventory review",
+      title: "Review inventory for SKU 1",
+      type: "synced_sale_inventory_review",
+    };
+    const workItem = (id: string, status: string = "open") => ({
+      _id: id,
+      approvalState: "not_required",
+      createdAt: Date.UTC(2026, 4, 7, 20),
+      organizationId: "org-1",
+      priority: "normal",
+      productSkuId: "sku-1",
+      status,
+      storeId: "store-1",
+      title: "Review inventory for SKU 1",
+      type: "synced_sale_inventory_review",
+    });
+    const { db, inserts, tables } = createDb({
+      dailyClose: [
+        completedDailyClose({
+          carryForwardWorkItemIds: ["work-1", "work-2"],
+          reportSnapshot: {
+            snapshotContractVersion: 2,
+            carryForwardGroups: [frozenGroup],
+          },
+        }),
+      ],
+      operationalWorkItem: [
+        workItem("work-1"),
+        workItem("work-2"),
+        workItem("work-later"),
+      ],
+      staffProfile: [activeStaffProfile],
+      store: [store],
+    });
+
+    const snapshot = await buildDailyOpeningSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.carryForwardItems).toEqual([
+      expect.objectContaining({
+        key: "carry_forward_group:0",
+        metadata: expect.objectContaining({
+          frozenMemberCount: 2,
+          unresolvedMemberCount: 2,
+        }),
+      }),
+    ]);
+
+    const blocked = await startStoreDayWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+    expect(blocked).toMatchObject({ kind: "user_error" });
+
+    const result = await startStoreDayWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        acknowledgedItemKeys: ["carry_forward_group:0"],
+        actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result).toMatchObject({
       kind: "ok",
       data: {
         dailyOpening: {
-          managerReviewEvidence: [
-            expect.objectContaining({
-              key: "operational_work_item:work-missing:missing",
-              severity: "blocker",
-            }),
+          carryForwardAcknowledgements: [
+            {
+              disposition: "acknowledged",
+              key: "carry_forward_group:0",
+              memberWorkItemIds: ["work-1", "work-2"],
+            },
           ],
+          carryForwardWorkItemIds: ["work-1", "work-2"],
         },
       },
     });
-    expect(inserts.map((insert) => insert.table)).toEqual([
-      "dailyOpening",
-      "operationalEvent",
-    ]);
-    expect(inserts[1].value).toMatchObject({
-      eventType: "daily_opening_acknowledged",
-      metadata: {
-        managerReviewEvidenceCount: 1,
-      },
+    expect(tables.get("operationalWorkItem")?.get("work-1")?.status).toBe(
+      "open",
+    );
+    expect(tables.get("operationalWorkItem")?.get("work-2")?.status).toBe(
+      "open",
+    );
+    expect(inserts.at(-1)?.value).toMatchObject({
+      metadata: { carryForwardAcknowledgementCount: 1 },
     });
+    expect(inserts.at(-1)?.value.metadata).not.toHaveProperty(
+      "carryForwardAcknowledgements",
+    );
+
+    const broadSnapshot = await buildDailyOpeningSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      {
+        includeManagerReviewEvidence: false,
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+    expect(broadSnapshot.startedOpening).not.toHaveProperty(
+      "carryForwardAcknowledgements",
+    );
+    expect(broadSnapshot.startedOpening).not.toHaveProperty(
+      "carryForwardWorkItemIds",
+    );
+  });
+
+  it("omits a versioned frozen group after every member becomes terminal", async () => {
+    const { db } = createDb({
+      dailyClose: [
+        completedDailyClose({
+          carryForwardWorkItemIds: ["work-1", "work-2"],
+          reportSnapshot: {
+            snapshotContractVersion: 2,
+            carryForwardGroups: [
+              {
+                key: "logical-operational-work:sku-1",
+                memberCount: 2,
+                memberWorkItemIds: ["work-1", "work-2"],
+                message: "Frozen inventory review",
+                title: "Review inventory for SKU 1",
+                type: "synced_sale_inventory_review",
+              },
+            ],
+          },
+        }),
+      ],
+      operationalWorkItem: [
+        {
+          _id: "work-1",
+          status: "completed",
+          storeId: "store-1",
+        },
+        {
+          _id: "work-2",
+          status: "cancelled",
+          storeId: "store-1",
+        },
+      ],
+      store: [store],
+    });
+
+    const snapshot = await buildDailyOpeningSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.carryForwardItems).toEqual([]);
+    expect(snapshot.blockers).toEqual([]);
+    expect(snapshot.readiness.carryForwardCount).toBe(0);
+  });
+
+  it("round-trips a broad-reader frozen-group acknowledgement key for a staff-profile start", async () => {
+    const frozenGroup = {
+      key: "logical-operational-work:sku-1",
+      memberCount: 1,
+      memberWorkItemIds: ["work-1"],
+      message: "Frozen inventory review",
+      title: "Review inventory for SKU 1",
+      type: "synced_sale_inventory_review",
+    };
+    const { db } = createDb({
+      dailyClose: [
+        completedDailyClose({
+          carryForwardWorkItemIds: ["work-1"],
+          reportSnapshot: {
+            snapshotContractVersion: 2,
+            carryForwardGroups: [frozenGroup],
+          },
+        }),
+      ],
+      operationalWorkItem: [
+        {
+          _id: "work-1",
+          approvalState: "not_required",
+          createdAt: 1,
+          organizationId: "org-1",
+          priority: "normal",
+          status: "open",
+          storeId: "store-1",
+          title: "Review inventory for SKU 1",
+          type: "synced_sale_inventory_review",
+        },
+      ],
+      staffProfile: [activeStaffProfile],
+      store: [store],
+    });
+    const broadSnapshot = await buildDailyOpeningSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      {
+        includeManagerReviewEvidence: false,
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+    const acknowledgementKey = broadSnapshot.carryForwardItems[0]?.key;
+
+    expect(acknowledgementKey).toBe("carry_forward_group:0");
+    await expect(
+      startStoreDayWithCtx({ db } as unknown as MutationCtx, {
+        acknowledgedItemKeys: [acknowledgementKey!],
+        actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+      }),
+    ).resolves.toMatchObject({ kind: "ok", data: { action: "started" } });
+  });
+
+  it.each([
+    ["missing groups", undefined],
+    ["empty groups", []],
+    [
+      "wrong member count",
+      [
+        {
+          key: "logical-operational-work:sku-1",
+          memberCount: 2,
+          memberWorkItemIds: ["work-1"],
+          message: "Frozen inventory review",
+          title: "Review inventory for SKU 1",
+          type: "synced_sale_inventory_review",
+        },
+      ],
+    ],
+    [
+      "duplicate membership",
+      [
+        {
+          key: "logical-operational-work:sku-1",
+          memberCount: 2,
+          memberWorkItemIds: ["work-1", "work-1"],
+          message: "Frozen inventory review",
+          title: "Review inventory for SKU 1",
+          type: "synced_sale_inventory_review",
+        },
+      ],
+    ],
+  ])("blocks malformed v2 frozen evidence with %s", async (_label, groups) => {
+    const { db, inserts } = createDb({
+      dailyClose: [
+        completedDailyClose({
+          carryForwardWorkItemIds: ["work-1"],
+          reportSnapshot: {
+            snapshotContractVersion: 2,
+            ...(groups === undefined ? {} : { carryForwardGroups: groups }),
+          },
+        }),
+      ],
+      operationalWorkItem: [
+        {
+          _id: "work-1",
+          status: "open",
+          storeId: "store-1",
+        },
+      ],
+      staffProfile: [activeStaffProfile],
+      store: [store],
+    });
+    const snapshot = await buildDailyOpeningSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.blockers).toEqual([
+      expect.objectContaining({
+        category: "carry_forward_integrity",
+        key: "carry_forward_integrity:invalid",
+      }),
+    ]);
+    for (const route of [
+      {},
+      { terminalSyncReviewHandling: "manager_review" as const },
+      {
+        actorType: "automation" as const,
+        automationBlockerHandling: "manager_review" as const,
+      },
+    ]) {
+      const result = await startStoreDayWithCtx(
+        { db } as unknown as MutationCtx,
+        {
+          actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+          operatingDate: "2026-05-08",
+          storeId: "store-1" as Id<"store">,
+          ...route,
+        },
+      );
+      expect(result).toMatchObject({
+        kind: "user_error",
+        error: { code: "precondition_failed" },
+      });
+    }
+    expect(inserts).toEqual([]);
+  });
+
+  it("treats missing versioned membership as non-bypassable for manager and automation routes", async () => {
+    const frozenGroup = {
+      key: "logical-operational-work:sku-1",
+      memberCount: 2,
+      memberWorkItemIds: ["work-1", "work-missing"],
+      message: "Frozen inventory review",
+      title: "Review inventory for SKU 1",
+      type: "synced_sale_inventory_review",
+    };
+    const { db, inserts } = createDb({
+      dailyClose: [
+        completedDailyClose({
+          carryForwardWorkItemIds: ["work-1", "work-missing"],
+          reportSnapshot: {
+            snapshotContractVersion: 2,
+            carryForwardGroups: [frozenGroup],
+          },
+        }),
+      ],
+      operationalWorkItem: [
+        {
+          _id: "work-1",
+          approvalState: "not_required",
+          createdAt: 1,
+          organizationId: "org-1",
+          priority: "normal",
+          status: "open",
+          storeId: "store-1",
+          title: "Review inventory for SKU 1",
+          type: "synced_sale_inventory_review",
+        },
+      ],
+      staffProfile: [activeStaffProfile],
+      store: [store],
+    });
+
+    const manual = await startStoreDayWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+        terminalSyncReviewHandling: "manager_review",
+      },
+    );
+    const automated = await startStoreDayWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        actorType: "automation",
+        automationBlockerHandling: "manager_review",
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(manual).toMatchObject({
+      kind: "user_error",
+      error: { metadata: { missingEvidenceCount: 1 } },
+    });
+    expect(automated).toMatchObject({
+      kind: "user_error",
+      error: { metadata: { missingEvidenceCount: 1 } },
+    });
+    expect(inserts).toEqual([]);
   });
 
   it("requires acknowledgement when there is no prior completed EOD Review", async () => {
