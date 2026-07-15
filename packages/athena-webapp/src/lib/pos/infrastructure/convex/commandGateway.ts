@@ -41,10 +41,10 @@ export function useConvexCommandGateway(): PosCommandGateway {
     openDrawer(input: PosOpenDrawerInput): Promise<PosOpenDrawerResultDto> {
       return openDrawerMutation(input);
     },
-    completeTransaction(
+    async completeTransaction(
       input: PosCompleteTransactionInput,
     ): Promise<PosCompleteTransactionResultDto> {
-      return completeSessionMutation({
+      const result = await completeSessionMutation({
         sessionId: input.sessionId,
         staffProfileId: input.staffProfileId,
         payments: input.payments,
@@ -58,6 +58,21 @@ export function useConvexCommandGateway(): PosCommandGateway {
         // charging the drawer.
         idempotencyKey: `session:${input.sessionId}`,
       });
+      // U7: the server hard-rejects a price that deviates from catalog authority
+      // unless an authorized manager override proof accompanies it. The online
+      // session gateway does not yet carry an inline manager-proof resubmission,
+      // so surface the requirement as a blocking failure rather than silently
+      // completing at an unverified price.
+      if (result.kind === "approval_required") {
+        return {
+          kind: "user_error",
+          error: {
+            code: "precondition_failed",
+            message: result.approval.reason,
+          },
+        };
+      }
+      return result;
     },
   };
 }

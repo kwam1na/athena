@@ -1231,6 +1231,7 @@ export const completeSession = mutation({
     tax: v.number(),
     total: v.number(),
     idempotencyKey: v.optional(v.string()),
+    priceOverrideApprovalProofId: v.optional(v.id("approvalProof")),
   },
   returns: commandResultValidator(completeSessionDataValidator),
   handler: async (ctx, args) => {
@@ -1293,9 +1294,15 @@ export const completeSession = mutation({
         total: args.total,
       },
       idempotencyKey: args.idempotencyKey,
+      priceOverrideApprovalProofId: args.priceOverrideApprovalProofId,
     });
 
-    if (transactionResult.kind === "user_error") {
+    if (
+      transactionResult.kind === "user_error" ||
+      transactionResult.kind === "approval_required"
+    ) {
+      // Propagate a U7 price-override approval prompt (or any failure) before any
+      // session-completion side effect runs.
       return transactionResult;
     }
 

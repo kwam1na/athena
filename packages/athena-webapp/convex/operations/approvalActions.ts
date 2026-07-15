@@ -44,6 +44,10 @@ export const APPROVAL_ACTIONS = {
     key: "pos.transaction.void",
     label: "Void completed transaction",
   },
+  posPriceOverride: {
+    key: "pos.sale.price_override",
+    label: "Override POS sale price",
+  },
 } as const satisfies Record<string, ApprovalActionIdentity>;
 
 export type ConsumeCommandApprovalProofArgs = {
