@@ -1725,7 +1725,7 @@ describe("POSRegisterView", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("shows an operable register as ready when manager review exists elsewhere", async () => {
+  it("surfaces an outstanding review truthfully even when the register stays operable", async () => {
     const onRetrySync = vi.fn();
     mockUseRegisterViewModel.mockReturnValue({
       hasActiveStore: true,
@@ -1773,14 +1773,16 @@ describe("POSRegisterView", () => {
     const { POSRegisterView } = await import("./POSRegisterView");
     render(<POSRegisterView />);
 
-    expect(screen.getByText("ready")).toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", {
-        name: /check pos sync review: needs review/i,
-      }),
-    ).not.toBeInTheDocument();
-    expect(screen.queryByText("needs review")).not.toBeInTheDocument();
-    expect(onRetrySync).not.toHaveBeenCalled();
+    // The outstanding review reads as review-needed, not success "ready", and
+    // is actionable — while the register itself remains operable.
+    expect(screen.queryByText("ready")).not.toBeInTheDocument();
+    const reviewControl = screen.getByRole("button", {
+      name: /check pos sync review: needs review/i,
+    });
+    expect(reviewControl).toBeInTheDocument();
+    expect(reviewControl).toHaveTextContent("needs review");
+    await userEvent.click(reviewControl);
+    expect(onRetrySync).toHaveBeenCalledTimes(1);
   });
 
   it("hides manager review sync from the header when another cashier step owns the flow", async () => {

@@ -677,6 +677,28 @@ export function usePosLocalSyncRuntimeStatus(input: {
               schedulerScheduled: status.scheduled,
             }));
           },
+          // Only a normal (non-review) drain escalates a stuck held gap; the
+          // review-inclusive escalation drain must not re-escalate itself.
+          onHeldWithoutProgress: drainIncludesReviewEvents(options)
+            ? undefined
+            : (_heldEventIds, { consecutiveCount }) => {
+                if (shouldStop() || consecutiveCount !== 1) {
+                  return;
+                }
+                // Give a held successor of a stuck needs_review precursor a
+                // path forward: drive one review-inclusive drain so the
+                // precursor is re-projected instead of looping the same held
+                // gap indefinitely. If it still needs manager action, the
+                // truthful sync chip already surfaces the outstanding review.
+                const escalationScheduler = createDrainScheduler(syncSeed, {
+                  includeReviewEvents: true,
+                  onlyReviewEvents: true,
+                });
+                stopSchedulers.push(() => escalationScheduler.stop());
+                escalationScheduler.trigger("manual-retry", {
+                  priority: "high",
+                });
+              },
           markSynced: async (eventIds) => {
             if (eventIds.length === 0) return;
             const result = await store.markEventsSynced(eventIds, {

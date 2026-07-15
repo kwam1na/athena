@@ -217,7 +217,7 @@ describe("terminalRuntimeStatus", () => {
     expect(JSON.stringify(status)).not.toContain("payments");
   });
 
-  it("treats locally resolved review items as settled in runtime sync metrics", () => {
+  it("does not advance the server-confirmed high-water past an unconfirmed local resolution", () => {
     const status = buildPosTerminalRuntimeStatus({
       browserInfo: { online: true },
       clock: () => 3_000,
@@ -250,9 +250,53 @@ describe("terminalRuntimeStatus", () => {
 
     expect(status.sync).toEqual(
       expect.objectContaining({
-        lastSyncedSequence: 1,
+        // The locally-cleared review is not server-confirmed, so the
+        // server-confirmed high-water cannot advance onto it.
+        lastSyncedSequence: 0,
         nextPendingUploadSequence: 2,
         oldestPendingEventAt: 2_000,
+        pendingEventCount: 1,
+        reviewEventCount: 0,
+        uploadableEventCount: 1,
+      }),
+    );
+  });
+
+  it("advances the high-water once a local resolution is server-confirmed", () => {
+    const status = buildPosTerminalRuntimeStatus({
+      browserInfo: { online: true },
+      clock: () => 3_000,
+      events: [
+        buildLocalEvent({
+          createdAt: 1_000,
+          localEventId: "event-local-review",
+          sequence: 1,
+          sync: {
+            localResolution: {
+              reason: "terminal_recovery_command",
+              resolvedAt: 2_500,
+              serverConfirmedAt: 2_600,
+              status: "local_review_cleared",
+            },
+            status: "locally_resolved",
+            uploaded: true,
+          },
+          uploadSequence: 1,
+        }),
+        buildLocalEvent({
+          createdAt: 2_000,
+          localEventId: "event-pending",
+          sequence: 2,
+          sync: { status: "pending" },
+          uploadSequence: 2,
+        }),
+      ],
+      source: "support-diagnostics",
+    });
+
+    expect(status.sync).toEqual(
+      expect.objectContaining({
+        lastSyncedSequence: 1,
         pendingEventCount: 1,
         reviewEventCount: 0,
         uploadableEventCount: 1,

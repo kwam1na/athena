@@ -75,13 +75,19 @@ export function derivePosLocalSyncStatus(input: {
   const uploadBlockingEvents = orderedEvents.filter(
     (event) =>
       typeof event.uploadSequence === "number" &&
-      !isLocallySettledSyncStatus(event.sync.status),
+      !isServerConvergedSyncEvent(event),
   );
   const pendingCount = uploadBlockingEvents.filter((event) =>
     event.sync.status === "pending" || event.sync.status === "syncing",
   ).length;
   const needsReviewCount = uploadBlockingEvents.filter(
-    (event) => event.sync.status === "needs_review",
+    (event) =>
+      event.sync.status === "needs_review" ||
+      // A locally-cleared review that the server has not yet confirmed is not
+      // silently settled — it must still read as needing attention so the
+      // terminal never shows "synced" while a server conflict stays open.
+      (event.sync.status === "locally_resolved" &&
+        !isServerConfirmedLocalResolution(event)),
   ).length;
   const failedCount = uploadBlockingEvents.filter(
     (event) => event.sync.status === "failed",
@@ -113,7 +119,7 @@ function getContiguousSyncedSequence(events: PosLocalEventRecord[]) {
       lastSyncedSequence = event.sequence;
       continue;
     }
-    if (!isLocallySettledSyncStatus(event.sync.status)) break;
+    if (!isServerConvergedSyncEvent(event)) break;
     lastSyncedSequence = event.sequence;
   }
   return lastSyncedSequence;
@@ -123,6 +129,31 @@ export function isLocallySettledSyncStatus(
   status: PosLocalEventRecord["sync"]["status"],
 ) {
   return status === "synced" || status === "locally_resolved";
+}
+
+/**
+ * Whether a locally-cleared review has been acknowledged as resolved by the
+ * server. Until then, terminal and server have not converged, so the event is
+ * not treated as fully settled by the chip-facing status derivation.
+ */
+export function isServerConfirmedLocalResolution(
+  event: PosLocalEventRecord,
+): boolean {
+  return typeof event.sync.localResolution?.serverConfirmedAt === "number";
+}
+
+/**
+ * Settlement for the sync-status surface: a `synced` event, or a
+ * `locally_resolved` event the server has already confirmed. An unconfirmed
+ * local resolution is deliberately excluded so an outstanding review renders
+ * truthfully instead of masquerading as "synced".
+ */
+export function isServerConvergedSyncEvent(event: PosLocalEventRecord): boolean {
+  if (event.sync.status === "synced") return true;
+  if (event.sync.status === "locally_resolved") {
+    return isServerConfirmedLocalResolution(event);
+  }
+  return false;
 }
 
 function getSyncState(input: {
