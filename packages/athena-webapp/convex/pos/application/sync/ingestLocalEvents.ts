@@ -3,6 +3,7 @@ import type { MutationCtx } from "../../../_generated/server";
 import { ok, userError, type CommandResult } from "../../../../shared/commandResult";
 import { isPosLocalSyncEventType } from "../../../../shared/posLocalSyncContract";
 import { createConvexLocalSyncRepository } from "../../infrastructure/repositories/localSyncRepository";
+import { resolveReportingCalendarReferenceWithCtx } from "../../../reporting/operatingPeriods";
 import { projectLocalSyncEvent } from "./projectLocalEvents";
 import { patchRegisterSessionActivityFromLocalSyncWithCtx } from "./posRegisterSessionActivity";
 import { hashPosLocalStaffProofToken } from "./staffProof";
@@ -18,6 +19,7 @@ import type {
   PosLocalSalePayload,
   PosLocalSyncEventInput,
   PosLocalSyncEventStatus,
+  PosLocalSyncEventType,
   SyncProjectionRepository,
 } from "./types";
 
@@ -100,11 +102,121 @@ function toSyncResultConflict(
   };
 }
 
+// U9: how far a terminal `occurredAt` may lead server time before it is treated
+// as clock skew. Legitimate offline lag is always in the past, so the forward
+// tolerance is deliberately tight (5 minutes covers ordinary clock drift).
+const POS_INGEST_FUTURE_SKEW_TOLERANCE_MS = 5 * 60 * 1000;
+
+export type ServerOperatingDateResolution =
+  | { kind: "resolved"; operatingDate: string }
+  | { kind: "missing_timezone_authority" }
+  | { kind: "missing_store" }
+  | { kind: "unavailable" };
+
+/**
+ * U9: server clock authority for the ingest trust boundary. Given only through
+ * the ctx wrapper; when absent the service behaves exactly as before (so the
+ * existing pure-service tests are unaffected). `resolveOperatingDate` is derived
+ * from the store's versioned timezone authority + schedule and is therefore
+ * deterministic for a fixed occurrence timestamp — the same event resolves to the
+ * same operating date on every retry.
+ */
+export type ServerClockAuthority = {
+  futureSkewToleranceMs: number;
+  resolveOperatingDate: (args: {
+    occurrenceAt: number;
+    storeId: Id<"store">;
+  }) => Promise<ServerOperatingDateResolution>;
+};
+
 type IngestionDependencies = {
   repository: LocalSyncIngestionRepository;
   projectionRepository: SyncProjectionRepository;
   now: () => number;
+  serverClock?: ServerClockAuthority;
 };
+
+type ServerClockAttribution = Pick<
+  LocalSyncEventRecord,
+  "serverOccurredAt" | "serverOperatingDate" | "clockObservation"
+>;
+
+/**
+ * Derive the server-authoritative business time and operating date for an event
+ * at first ingest. The terminal-supplied `occurredAt`/payload are left untouched
+ * (they drive `isSameLocalEvent`); the clamped/derived values are returned as
+ * additive attribution stored on the accepted record. `serverTimeAt` is the
+ * ingestion time, so the outcome is computed exactly once and stored — retries
+ * reuse the persisted record and never recompute.
+ */
+async function assessServerClock(
+  authority: ServerClockAuthority | undefined,
+  args: {
+    storeId: Id<"store">;
+    occurredAt: number;
+    serverTimeAt: number;
+    eventType: PosLocalSyncEventType;
+    terminalOperatingDate?: string;
+    operatingDateOccurrenceAt?: number;
+  },
+): Promise<ServerClockAttribution> {
+  if (!authority) {
+    return {};
+  }
+  const futureBound = args.serverTimeAt + authority.futureSkewToleranceMs;
+  // Only implausibly FUTURE timestamps are clamped; a plausibly old timestamp is
+  // legitimate offline lag and is preserved.
+  const occurredAtStatus =
+    args.occurredAt > futureBound ? "future_skew_clamped" : "in_bounds";
+  const serverOccurredAt =
+    occurredAtStatus === "future_skew_clamped"
+      ? args.serverTimeAt
+      : args.occurredAt;
+
+  let serverOperatingDate: string | undefined;
+  let operatingDateStatus:
+    | "terminal_matched"
+    | "server_corrected"
+    | "missing_timezone_authority"
+    | undefined = undefined;
+
+  if (
+    args.eventType === "store_day_started" &&
+    args.operatingDateOccurrenceAt !== undefined
+  ) {
+    const resolution = await authority.resolveOperatingDate({
+      occurrenceAt: args.operatingDateOccurrenceAt,
+      storeId: args.storeId,
+    });
+    if (resolution.kind === "resolved") {
+      serverOperatingDate = resolution.operatingDate;
+      operatingDateStatus =
+        resolution.operatingDate === args.terminalOperatingDate
+          ? "terminal_matched"
+          : "server_corrected";
+    } else if (
+      resolution.kind === "missing_timezone_authority" ||
+      resolution.kind === "missing_store"
+    ) {
+      // Defined missing-authority behavior: keep the terminal-supplied operating
+      // date (preserve liveness) but flag it so it is never silently trusted.
+      operatingDateStatus = "missing_timezone_authority";
+    }
+  }
+
+  return {
+    serverOccurredAt,
+    ...(serverOperatingDate ? { serverOperatingDate } : {}),
+    clockObservation: {
+      serverTimeAt: args.serverTimeAt,
+      occurredAtStatus,
+      ...(operatingDateStatus ? { operatingDateStatus } : {}),
+      ...(args.terminalOperatingDate
+        ? { terminalOperatingDate: args.terminalOperatingDate }
+        : {}),
+    },
+  };
+}
 
 const TERMINAL_NOT_PROVISIONED_MESSAGE =
   "This terminal is not provisioned for POS sync.";
@@ -228,6 +340,7 @@ export function createLocalSyncIngestionService(
                     syncEventId: existing._id,
                     submittedByUserId: batch.submittedByUserId,
                     now: acceptedAt,
+                    serverOperatingDate: existing.serverOperatingDate,
                     options: TERMINAL_INGESTION_PROJECTION_OPTIONS,
                   },
                 );
@@ -278,6 +391,7 @@ export function createLocalSyncIngestionService(
                     syncEventId: existing._id,
                     submittedByUserId: batch.submittedByUserId,
                     now: acceptedAt,
+                    serverOperatingDate: existing.serverOperatingDate,
                     options: TERMINAL_INGESTION_PROJECTION_OPTIONS,
                   },
                 );
@@ -396,6 +510,29 @@ export function createLocalSyncIngestionService(
 
         const parsedEvent = preparedEvent.event;
         const acceptedAt = existing?.acceptedAt ?? dependencies.now();
+        // U9: derive server-authoritative clock attribution exactly once, at first
+        // ingest. Retries reuse the persisted values so the outcome is stable and
+        // `isSameLocalEvent` (which ignores these fields) still matches.
+        const clockAttribution: ServerClockAttribution = existing
+          ? {
+              serverOccurredAt: existing.serverOccurredAt,
+              serverOperatingDate: existing.serverOperatingDate,
+              clockObservation: existing.clockObservation,
+            }
+          : await assessServerClock(dependencies.serverClock, {
+              storeId: batch.storeId,
+              occurredAt: event.occurredAt,
+              serverTimeAt: acceptedAt,
+              eventType: parsedEvent.eventType,
+              terminalOperatingDate:
+                parsedEvent.eventType === "store_day_started"
+                  ? (parsedEvent.payload.operatingDate as string)
+                  : undefined,
+              operatingDateOccurrenceAt:
+                parsedEvent.eventType === "store_day_started"
+                  ? (parsedEvent.payload.startAt as number)
+                  : undefined,
+            });
         const syncEvent =
           existing ??
           (await dependencies.repository.createEvent(
@@ -403,6 +540,7 @@ export function createLocalSyncIngestionService(
               payload: parsedEvent.payload,
               status: "accepted",
               acceptedAt,
+              ...clockAttribution,
             }),
           ));
         if (existing) {
@@ -433,6 +571,9 @@ export function createLocalSyncIngestionService(
             syncEventId: syncEvent._id,
             submittedByUserId: batch.submittedByUserId,
             now: acceptedAt,
+            // U9: the store-day projector persists this server-derived operating
+            // date instead of the terminal-supplied one when they diverge.
+            serverOperatingDate: clockAttribution.serverOperatingDate,
             options: TERMINAL_INGESTION_PROJECTION_OPTIONS,
           },
         );
@@ -1733,6 +1874,25 @@ export async function ingestLocalEventsWithCtx(
     repository,
     projectionRepository: repository,
     now: () => Date.now(),
+    serverClock: {
+      futureSkewToleranceMs: POS_INGEST_FUTURE_SKEW_TOLERANCE_MS,
+      resolveOperatingDate: async ({ occurrenceAt, storeId }) => {
+        const reference = await resolveReportingCalendarReferenceWithCtx(ctx, {
+          occurrenceAt,
+          storeId,
+        });
+        if (reference.kind === "resolved") {
+          return { kind: "resolved", operatingDate: reference.operatingDate };
+        }
+        if (reference.kind === "missing_store") {
+          return { kind: "missing_store" };
+        }
+        // Any other non-resolved outcome (missing/invalid timezone authority or an
+        // unresolvable schedule window) means the server cannot authoritatively
+        // derive the operating date; fall back to the terminal value with a flag.
+        return { kind: "missing_timezone_authority" };
+      },
+    },
   }).ingestBatch(batch);
   if (result.kind === "ok") {
     try {

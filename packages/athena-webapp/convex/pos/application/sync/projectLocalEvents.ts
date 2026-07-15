@@ -53,6 +53,10 @@ type ProjectEventArgs = {
   syncEventId: string;
   submittedByUserId?: Id<"athenaUser">;
   now: number;
+  // U9: server-derived operating date (from the store's versioned timezone
+  // authority). When present it overrides the terminal-supplied operating date so
+  // clock/date skew cannot book a store day under the wrong date.
+  serverOperatingDate?: string;
   options?: {
     allowClosedRegisterSaleProjection?: boolean;
     allowReviewedClosingRegisterSaleProjection?: boolean;
@@ -324,10 +328,13 @@ async function projectStoreDayStarted(
     throw new Error("POS store-day projection is not configured.");
   }
 
+  // U9: prefer the server-derived operating date over the terminal-supplied one.
+  const operatingDate =
+    args.serverOperatingDate ?? args.event.payload.operatingDate;
   const result = await repository.startStoreDayFromLocalSync({
     actorStaffProfileId: args.event.staffProfileId,
     endAt: args.event.payload.endAt,
-    operatingDate: args.event.payload.operatingDate,
+    operatingDate,
     startAt: args.event.payload.startAt,
     storeId: args.storeId,
   });
@@ -341,7 +348,7 @@ async function projectStoreDayStarted(
     details: {
       code: result.error.code,
       message: result.error.message,
-      operatingDate: args.event.payload.operatingDate,
+      operatingDate,
     },
   });
   return { status: "conflicted", mappings: [], conflicts: [conflict] };

@@ -4204,6 +4204,198 @@ describe("ingestLocalEventsWithCtx", () => {
   });
 });
 
+describe("createLocalSyncIngestionService server clock (U9)", () => {
+  const SERVER_TIME = 1_000_000_000_000;
+  const FIVE_MIN = 5 * 60 * 1000;
+
+  function buildStoreDayStartedEvent(
+    overrides: Partial<PosLocalSyncEventInput> & { operatingDate: string },
+  ): PosLocalSyncEventInput {
+    const { operatingDate, ...rest } = overrides;
+    return {
+      localEventId: "event-store-day-1",
+      localRegisterSessionId: "local-register-1",
+      sequence: 1,
+      eventType: "store_day_started",
+      occurredAt: SERVER_TIME - 1000,
+      staffProfileId: "staff-1" as never,
+      staffProofToken: "proof-token-1",
+      payload: {
+        operatingDate,
+        startAt: SERVER_TIME - 1000,
+        endAt: SERVER_TIME + 3600_000,
+      },
+      ...rest,
+    };
+  }
+
+  function serverClock(
+    resolveOperatingDate: (args: {
+      occurrenceAt: number;
+      storeId: Id<"store">;
+    }) => Promise<
+      | { kind: "resolved"; operatingDate: string }
+      | { kind: "missing_timezone_authority" }
+      | { kind: "missing_store" }
+      | { kind: "unavailable" }
+    >,
+  ) {
+    return { futureSkewToleranceMs: FIVE_MIN, resolveOperatingDate };
+  }
+
+  it("clamps an implausibly future occurredAt to server time and flags it, keeping the terminal occurredAt for retry matching", async () => {
+    const repository = createFakeSyncRepository();
+    const service = createLocalSyncIngestionService({
+      repository,
+      projectionRepository: repository,
+      now: () => SERVER_TIME,
+      serverClock: serverClock(async () => ({ kind: "unavailable" })),
+    });
+
+    const futureOccurredAt = SERVER_TIME + 10 * 60 * 1000; // 10 min ahead
+    const result = await service.ingestBatch(
+      buildBatch({
+        events: [
+          buildSaleCompletedEvent({ sequence: 1, occurredAt: futureOccurredAt }),
+        ],
+      }),
+    );
+    expect(result.kind).toBe("ok");
+
+    const record = repository.events.find(
+      (candidate) => candidate.localEventId === "event-sale-completed-1",
+    );
+    // Terminal occurredAt is preserved (it drives isSameLocalEvent); the
+    // server-derived business time is clamped to server time and flagged.
+    expect(record?.occurredAt).toBe(futureOccurredAt);
+    expect(record?.serverOccurredAt).toBe(SERVER_TIME);
+    expect(record?.clockObservation?.occurredAtStatus).toBe(
+      "future_skew_clamped",
+    );
+  });
+
+  it("preserves a legitimately old (offline-lag) occurredAt without clamping", async () => {
+    const repository = createFakeSyncRepository();
+    const service = createLocalSyncIngestionService({
+      repository,
+      projectionRepository: repository,
+      now: () => SERVER_TIME,
+      serverClock: serverClock(async () => ({ kind: "unavailable" })),
+    });
+
+    const laggedOccurredAt = SERVER_TIME - 3 * 3600_000; // 3 hours ago
+    await service.ingestBatch(
+      buildBatch({
+        events: [
+          buildSaleCompletedEvent({ sequence: 1, occurredAt: laggedOccurredAt }),
+        ],
+      }),
+    );
+
+    const record = repository.events.find(
+      (candidate) => candidate.localEventId === "event-sale-completed-1",
+    );
+    expect(record?.serverOccurredAt).toBe(laggedOccurredAt);
+    expect(record?.clockObservation?.occurredAtStatus).toBe("in_bounds");
+  });
+
+  it("derives and stores the server operating date, flagging a terminal mismatch", async () => {
+    const repository = createFakeSyncRepository();
+    repository.startStoreDayFromLocalSync = vi
+      .fn()
+      .mockResolvedValue({ kind: "ok", data: { action: "started" } });
+    const service = createLocalSyncIngestionService({
+      repository,
+      projectionRepository: repository,
+      now: () => SERVER_TIME,
+      serverClock: serverClock(async () => ({
+        kind: "resolved",
+        operatingDate: "2026-07-15",
+      })),
+    });
+
+    await service.ingestBatch(
+      buildBatch({
+        events: [buildStoreDayStartedEvent({ operatingDate: "2026-07-14" })],
+      }),
+    );
+
+    const record = repository.events.find(
+      (candidate) => candidate.localEventId === "event-store-day-1",
+    );
+    expect(record?.serverOperatingDate).toBe("2026-07-15");
+    expect(record?.clockObservation?.operatingDateStatus).toBe(
+      "server_corrected",
+    );
+    // The projector persisted the server-derived date, not the terminal one.
+    expect(repository.startStoreDayFromLocalSync).toHaveBeenCalledWith(
+      expect.objectContaining({ operatingDate: "2026-07-15" }),
+    );
+  });
+
+  it("falls back to the terminal operating date with a flag when timezone authority is missing", async () => {
+    const repository = createFakeSyncRepository();
+    repository.startStoreDayFromLocalSync = vi
+      .fn()
+      .mockResolvedValue({ kind: "ok", data: { action: "started" } });
+    const service = createLocalSyncIngestionService({
+      repository,
+      projectionRepository: repository,
+      now: () => SERVER_TIME,
+      serverClock: serverClock(async () => ({
+        kind: "missing_timezone_authority",
+      })),
+    });
+
+    await service.ingestBatch(
+      buildBatch({
+        events: [buildStoreDayStartedEvent({ operatingDate: "2026-07-14" })],
+      }),
+    );
+
+    const record = repository.events.find(
+      (candidate) => candidate.localEventId === "event-store-day-1",
+    );
+    expect(record?.serverOperatingDate).toBeUndefined();
+    expect(record?.clockObservation?.operatingDateStatus).toBe(
+      "missing_timezone_authority",
+    );
+    // Liveness preserved: the store day still opens under the terminal date.
+    expect(repository.startStoreDayFromLocalSync).toHaveBeenCalledWith(
+      expect.objectContaining({ operatingDate: "2026-07-14" }),
+    );
+  });
+
+  it("re-ingesting a future-skewed event reuses the stored clamp deterministically (retry match holds)", async () => {
+    const repository = createFakeSyncRepository();
+    const service = createLocalSyncIngestionService({
+      repository,
+      projectionRepository: repository,
+      now: () => SERVER_TIME,
+      serverClock: serverClock(async () => ({ kind: "unavailable" })),
+    });
+
+    const futureOccurredAt = SERVER_TIME + 10 * 60 * 1000;
+    const event = buildSaleCompletedEvent({
+      sequence: 1,
+      occurredAt: futureOccurredAt,
+    });
+    const first = await service.ingestBatch(buildBatch({ events: [event] }));
+    expect(first.kind).toBe("ok");
+
+    // Retry the identical event; isSameLocalEvent compares the (unchanged)
+    // terminal occurredAt, so the retry matches and does not error.
+    const second = await service.ingestBatch(buildBatch({ events: [event] }));
+    expect(second.kind).toBe("ok");
+
+    const records = repository.events.filter(
+      (candidate) => candidate.localEventId === "event-sale-completed-1",
+    );
+    expect(records).toHaveLength(1);
+    expect(records[0]?.serverOccurredAt).toBe(SERVER_TIME);
+  });
+});
+
 function buildBatch(
   overrides: Partial<PosLocalSyncBatchInput> & {
     events: PosLocalSyncEventInput[];
