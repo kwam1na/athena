@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="8529f1725053294a0a71de6e9335cc76b08e162c3f5401e174084e6ea6d981a8">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Terminal inventory boundary and Daily Operations comparisons</title>
+    <style>
+      :root { color-scheme: light; --ink:#172033; --muted:#5f6b7c; --line:#dfe5ec; --wash:#f6f8fb; --accent:#2958a6; --ok:#146c43; --warn:#9a5a00; }
+      * { box-sizing: border-box; }
+      body { margin:0; background:#fff; color:var(--ink); font:15px/1.55 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+      main { max-width:960px; margin:0 auto; padding:56px 28px 72px; }
+      h1 { margin:0 0 8px; font-size:32px; letter-spacing:-.04em; line-height:1.1; }
+      h2 { margin:40px 0 12px; font-size:19px; letter-spacing:-.02em; }
+      p { margin:0 0 12px; } .lede { max-width:760px; color:var(--muted); font-size:17px; }
+      .meta, .grid { display:grid; gap:12px; } .meta { grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); margin-top:28px; }
+      .grid { grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); }
+      .card { border:1px solid var(--line); border-radius:12px; padding:16px; background:#fff; }
+      .card strong, .label { display:block; font-size:11px; color:var(--muted); letter-spacing:.08em; text-transform:uppercase; }
+      .card span { display:block; margin-top:4px; font-weight:650; }
+      .status { color:var(--ok); } .warning { color:var(--warn); }
+      table { width:100%; border-collapse:collapse; border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+      th,td { padding:12px 14px; text-align:left; vertical-align:top; border-bottom:1px solid var(--line); }
+      tr:last-child td { border-bottom:0; } th { background:var(--wash); font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
+      code { font:12px ui-monospace,SFMono-Regular,Menlo,monospace; color:#29436d; }
+      ul { margin:8px 0 0; padding-left:20px; } li { margin:5px 0; }
+      .callout { border-left:3px solid var(--accent); padding:13px 16px; background:#f4f7ff; border-radius:0 8px 8px 0; }
+      .blocker { border-left-color:var(--warn); background:#fff8ef; }
+      fieldset { border:1px solid var(--line); border-radius:10px; margin:12px 0; padding:14px; }
+      legend { font-weight:650; padding:0 5px; } label { display:block; margin:7px 0; cursor:pointer; }
+      button { border:0; border-radius:8px; padding:10px 14px; background:var(--accent); color:#fff; font:inherit; font-weight:650; cursor:pointer; }
+      button.secondary { margin-left:8px; background:#e9edf3; color:var(--ink); }
+      #quizResult { min-height:24px; margin-top:12px; font-weight:650; }
+      .footnote { color:var(--muted); font-size:13px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <p class="label">Landed change report · 14 July 2026</p>
+        <h1>Terminal inventory boundary and Daily Operations comparisons</h1>
+        <p class="lede">A delivery candidate that restores useful day-over-day context without restoring broad database reads, and keeps inventory review work in its own workspace instead of presenting it as terminal trouble.</p>
+        <div class="meta">
+          <div class="card"><strong>Branch</strong><span><code>codex/terminal-inventory-boundary</code></span></div>
+          <div class="card"><strong>Target</strong><span><code>main</code> via PR</span></div>
+          <div class="card"><strong>Candidate status</strong><span class="status">Rebased; ready to open</span></div>
+          <div class="card"><strong>Deployment</strong><span>Not requested</span></div>
+        </div>
+      </header>
+
+      <section>
+        <h2>Outcome</h2>
+        <div class="grid">
+          <div class="card"><strong>Daily Operations</strong><span>Metric cards again show prior-period comparisons from the existing bounded weekly read model plus one bounded predecessor lookup, used only at the selected-week boundary.</span></div>
+          <div class="card"><strong>POS terminal</strong><span>Inventory-only synced review items no longer produce terminal manager-review posture, a register “Needs review” badge, or terminal repair evidence.</span></div>
+          <div class="card"><strong>Noise reduction</strong><span>The Cloud sync evidence panel is removed as noisy historical detail; current recovery and terminal-required evidence remain visible.</span></div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Before and after</h2>
+        <table>
+          <thead><tr><th>Area</th><th>Before</th><th>After</th></tr></thead>
+          <tbody>
+            <tr><td>Metric cards</td><td>Current-day values had no comparison after the heavy-read reduction.</td><td>Comparisons are restored using the cached weekly range plus one bounded predecessor metric, used only at the selected-week boundary.</td></tr>
+            <tr><td>Inventory conflicts</td><td>Inventory review events could be classified as unsafe cloud conflicts and fall into generic manager review.</td><td><code>conflictType === "inventory"</code> is excluded before terminal cloud-repair classification and presentation fallbacks.</td></tr>
+            <tr><td>Terminal status</td><td>Inventory-only evidence could mark Register 1 as “Needs review.”</td><td>Register and terminal review status derives from terminal-owned review evidence only.</td></tr>
+            <tr><td>Detail diagnostics</td><td>A cloud-sync panel made historical evidence look operationally relevant.</td><td>The panel is removed as noisy historical detail; current repair and terminal-required evidence keep their existing paths.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>Read and ownership boundary</h2>
+        <p class="callout">The comparison restoration does not reinstate the removed heavy reads. The server reuses the bounded week aggregation and asks for at most one adjacent-day boundary metric. Terminal recovery similarly stays scoped to terminal-owned sync and runtime facts; inventory remains a review-workspace concern.</p>
+        <ul>
+          <li>Non-inventory cloud conflicts, held/rejected evidence, and terminal-local recovery remain eligible for the existing terminal paths.</li>
+          <li>UI filtering is deliberately defensive for older persisted payloads, while the query boundary prevents new inventory conflicts from being misclassified upstream.</li>
+          <li>Aggregate-only fallback data remains conservative when it cannot reliably identify the evidence owner.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Changed surfaces</h2>
+        <table>
+          <thead><tr><th>Surface</th><th>Key files</th><th>Purpose</th></tr></thead>
+          <tbody>
+            <tr><td>Daily Operations</td><td><code>convex/operations/dailyOperations.ts</code>, <code>DailyOperationsView.tsx</code></td><td>Bounded prior-period comparison data and card copy.</td></tr>
+            <tr><td>Terminal policy/query</td><td><code>terminalOperationalState/policy.ts</code>, <code>queries/terminals.ts</code></td><td>Exclude inventory review items before recovery classification.</td></tr>
+            <tr><td>Terminal presentation</td><td><code>terminalHealthPresentation.ts</code>, <code>POSTerminalDetailView.tsx</code></td><td>Suppress inventory-only review posture and stale cloud-sync evidence.</td></tr>
+            <tr><td>Regression coverage</td><td>Daily Operations, query, policy, terminal, and detail tests</td><td>Protect bounded reads and the inventory ownership boundary.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>Validation</h2>
+        <ul>
+          <li><span class="status">Passed</span> focused Daily Operations and terminal suite: 324 tests.</li>
+          <li><span class="status">Passed</span> terminal query/policy/detail regression suite: 283 tests.</li>
+          <li><span class="status">Passed</span> changed Convex lint, changed frontend lint, TypeScript check, diff whitespace check, and graph rebuild.</li>
+          <li><span class="warning">Environment blocker</span> <code>bun run pr:athena</code> reaches the generated-artifacts pre-commit step and stops on an existing shared development deployment record whose <code>posLocalSyncEvent.eventType</code> is <code>store_day_started</code>, outside the declared validator. This change does not modify that schema or record.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Subagent Evidence</h2>
+        <div class="grid">
+          <div class="card"><strong>session_context</strong><span>Confirmed the product intent: restore Daily Operations comparisons without reversing the read-efficiency work, and isolate inventory review from terminal support.</span></div>
+          <div class="card"><strong>diff_analysis</strong><span>Verified the change retains non-inventory recovery flows and applies defensive filtering at both query and presentation boundaries.</span></div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Handoff state</h2>
+        <div class="callout blocker"><strong>Pending merge and root alignment.</strong> The PR has not yet been opened at this report stage. After merge, the root checkout will be fast-forwarded to <code>main</code> and the delivery worktree removed. Deployment is intentionally out of scope for this request.</div>
+      </section>
+
+      <section id="changeQuiz">
+        <h2>Quiz: Pass Required</h2>
+        <p class="footnote">Select one answer per question. A delivery handoff passes at 8/10 or above.</p>
+        <form id="quiz">
+          <fieldset><legend>1. What data source supports comparisons for most days?</legend><label><input type="radio" name="q1" value="a"> A new full-history query</label><label><input type="radio" name="q1" value="b"> The existing bounded weekly aggregation</label><label><input type="radio" name="q1" value="c"> Browser-local estimates</label></fieldset>
+          <fieldset><legend>2. When is an extra metric lookup needed?</legend><label><input type="radio" name="q2" value="a"> At the selected week boundary</label><label><input type="radio" name="q2" value="b"> For every metric card</label><label><input type="radio" name="q2" value="c"> Never</label></fieldset>
+          <fieldset><legend>3. Which conflict type is excluded from terminal cloud-repair classification?</legend><label><input type="radio" name="q3" value="a"> Inventory</label><label><input type="radio" name="q3" value="b"> Rejected register-close</label><label><input type="radio" name="q3" value="c"> Held terminal sync</label></fieldset>
+          <fieldset><legend>4. Where should inventory review work be resolved?</legend><label><input type="radio" name="q4" value="a"> The terminal support detail</label><label><input type="radio" name="q4" value="b"> Its dedicated inventory review workspace</label><label><input type="radio" name="q4" value="c"> Remote Assist</label></fieldset>
+          <fieldset><legend>5. What must inventory-only evidence not create?</legend><label><input type="radio" name="q5" value="a"> A terminal manager-review posture</label><label><input type="radio" name="q5" value="b"> An inventory review record</label><label><input type="radio" name="q5" value="c"> A product-level audit entry</label></fieldset>
+          <fieldset><legend>6. What happens to stale Cloud sync evidence in the detail view?</legend><label><input type="radio" name="q6" value="a"> It becomes a terminal action</label><label><input type="radio" name="q6" value="b"> It is hidden as noise</label><label><input type="radio" name="q6" value="c"> It is converted to an inventory item</label></fieldset>
+          <fieldset><legend>7. Are non-inventory terminal recovery paths removed?</legend><label><input type="radio" name="q7" value="a"> Yes, all recovery is removed</label><label><input type="radio" name="q7" value="b"> No, terminal-owned evidence keeps its existing path</label><label><input type="radio" name="q7" value="c"> Only cloud repair remains</label></fieldset>
+          <fieldset><legend>8. Why does the UI keep a defensive filter?</legend><label><input type="radio" name="q8" value="a"> To tolerate older persisted payloads</label><label><input type="radio" name="q8" value="b"> To increase database reads</label><label><input type="radio" name="q8" value="c"> To hide all failures</label></fieldset>
+          <fieldset><legend>9. Did this delivery alter the production deployment?</legend><label><input type="radio" name="q9" value="a"> Yes</label><label><input type="radio" name="q9" value="b"> No, deployment was not requested</label><label><input type="radio" name="q9" value="c"> It only changed production data</label></fieldset>
+          <fieldset><legend>10. What shared environment issue blocked the full local PR gate?</legend><label><input type="radio" name="q10" value="a"> An unsupported development sync event value</label><label><input type="radio" name="q10" value="b"> A missing report file</label><label><input type="radio" name="q10" value="c"> A merge conflict</label></fieldset>
+          <button type="submit">Grade quiz</button><button class="secondary" type="reset">Reset</button>
+          <p id="quizResult" aria-live="polite"></p>
+        </form>
+      </section>
+    </main>
+    <script>
+      const answers = { q1: "b", q2: "a", q3: "a", q4: "b", q5: "a", q6: "b", q7: "b", q8: "a", q9: "b", q10: "a" };
+      const quiz = document.querySelector("#quiz");
+      const result = document.querySelector("#quizResult");
+      quiz.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const values = new FormData(quiz);
+        const score = Object.entries(answers).reduce((total, [key, answer]) => total + (values.get(key) === answer ? 1 : 0), 0);
+        result.textContent = score >= 8 ? `Pass: ${score}/10.` : `Not yet: ${score}/10. Review the report and try again.`;
+        result.className = score >= 8 ? "status" : "warning";
+      });
+      quiz.addEventListener("reset", () => { result.textContent = ""; result.className = ""; });
+    </script>
+  </body>
+</html>

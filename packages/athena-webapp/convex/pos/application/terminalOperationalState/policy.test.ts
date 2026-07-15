@@ -137,7 +137,7 @@ describe("terminal operational state policy", () => {
     );
   });
 
-  it("explains sale-ready review backlog without implying cashier blocking", () => {
+  it("keeps open-work inventory review independent from terminal readiness", () => {
     const state = buildTerminalOperationalState(
       baseInput({
         runtimeStatus: buildRuntimeStatus({
@@ -201,17 +201,15 @@ describe("terminal operational state policy", () => {
     );
 
     expect(state.salesReadiness).toBe("able_to_transact_now");
-    expect(state.operationalExplanation).toMatchObject({
-      headline: "Review needed. Sales can continue.",
-      lane: "sale_ready_with_review_backlog",
-      primaryOwner: "operations",
-      saleImpact: "can_transact_now",
-      supportAction: "manual_review",
-    });
+    expect(state.attentionReasons).toEqual([]);
+    expect(state.diagnosticEvidence).not.toContainEqual(
+      expect.objectContaining({ source: "sync_evidence" }),
+    );
+    expect(state.recoveryEvidence.manualReview).toEqual([]);
     expect(state.recoveryPreview.readiness).toBe("able_to_transact_now");
   });
 
-  it("keeps unresolved synced inventory conflicts in the inventory review lane", () => {
+  it("keeps inventory review work out of terminal attention and recovery", () => {
     const state = buildTerminalOperationalState(
       baseInput({
         syncEvidence: {
@@ -240,26 +238,8 @@ describe("terminal operational state policy", () => {
       }),
     );
 
-    expect(state.attentionReasons).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          count: 2,
-          summary: "2 inventory review items need attention.",
-          type: "synced_sale_inventory_review",
-        }),
-      ]),
-    );
-    expect(state.attentionReasons[0]?.actionTarget).toBeUndefined();
-    expect(state.attentionReasons.map((reason) => reason.type)).not.toContain(
-      "cloud_conflict",
-    );
-    expect(state.recoveryEvidence.manualReview).toEqual([
-      {
-        reason: "2 inventory review items need attention.",
-        source: "cloud_sync",
-        type: "synced_sale_inventory_review",
-      },
-    ]);
+    expect(state.attentionReasons).toEqual([]);
+    expect(state.recoveryEvidence.manualReview).toEqual([]);
   });
 
   it("treats local runtime review as terminal-local evidence collection instead of manual business review", () => {

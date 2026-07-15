@@ -222,6 +222,20 @@ export function getReviewEvidenceCount(
     return 0;
   }
 
+  if (syncEvidence.reviewSummary) {
+    return syncEvidence.reviewSummary.groups.reduce(
+      (count, group) =>
+        group.conflictType === "inventory" ? count : count + group.count,
+      0,
+    );
+  }
+
+  if (syncEvidence.unresolvedConflicts) {
+    return syncEvidence.unresolvedConflicts.filter(
+      (conflict) => conflict.conflictType !== "inventory",
+    ).length;
+  }
+
   const cloudReviewCount =
     (syncEvidence.conflictedCount ?? 0) +
     (syncEvidence.heldCount ?? 0) +
@@ -1589,6 +1603,10 @@ function buildRecoveryBlockersFromPreview(
   });
 
   preview.manualReview?.forEach((item, index) => {
+    if (item.type === "synced_sale_inventory_review") {
+      return;
+    }
+
     const normalizedReason = normalizeSupportCopy(item.reason);
     blockers.push({
       category: "manual_review",

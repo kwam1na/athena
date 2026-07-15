@@ -2698,19 +2698,34 @@ export const getDailyOperationsWeekAnalyticsSnapshot = query({
     const weekEndOperatingDate = saturdayWeekEndOperatingDate(
       args.weekEndOperatingDate ?? args.operatingDate,
     );
-
-    return {
-      operatingDate: args.operatingDate,
+    const priorWeekBoundaryOperatingDate = shiftOperatingDate(
       weekEndOperatingDate,
-      weekMetrics: includeManagerReviewEvidence
-        ? await buildWeekMetrics(ctx, {
+      -7,
+    );
+    const [weekMetrics, priorWeekBoundaryMetric] = includeManagerReviewEvidence
+      ? await Promise.all([
+          buildWeekMetrics(ctx, {
             operatingDate: args.operatingDate,
             operatingTimezoneOffsetMinutes:
               args.operatingTimezoneOffsetMinutes,
             storeId: args.storeId,
             weekEndOperatingDate,
-          })
-        : [],
+          }),
+          buildWeekMetricForDate(ctx, {
+            isSelected: false,
+            operatingDate: priorWeekBoundaryOperatingDate,
+            operatingTimezoneOffsetMinutes:
+              args.operatingTimezoneOffsetMinutes,
+            storeId: args.storeId,
+          }),
+        ])
+      : [[], null];
+
+    return {
+      operatingDate: args.operatingDate,
+      priorWeekBoundaryMetric,
+      weekEndOperatingDate,
+      weekMetrics,
     };
   },
 });

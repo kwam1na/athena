@@ -2118,7 +2118,7 @@ describe("terminal health summaries", () => {
     });
   });
 
-  it("does not synthesize inventory open-work links without a resolved target", async () => {
+  it("keeps unresolved inventory review work out of terminal attention", async () => {
     vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
     vi.mocked(getLatestRuntimeStatusForTerminal).mockResolvedValue(null);
     vi.mocked(getTerminalSyncEvidence).mockResolvedValue({
@@ -2165,14 +2165,7 @@ describe("terminal health summaries", () => {
       },
     );
 
-    expect(result?.attentionReasons).toEqual([
-      expect.objectContaining({
-        count: 2,
-        summary: "2 inventory review items need attention.",
-        type: "synced_sale_inventory_review",
-      }),
-    ]);
-    expect(result?.attentionReasons[0]?.actionTarget).toBeUndefined();
+    expect(result?.attentionReasons).toEqual([]);
   });
 
   it("resolves cloud review reasons to a cash-control register session when sync mapping exists", async () => {
@@ -2234,7 +2227,7 @@ describe("terminal health summaries", () => {
     ]);
   });
 
-  it("routes projected inventory review conflicts to operations work", async () => {
+  it("keeps projected inventory review conflicts out of terminal attention", async () => {
     vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
     vi.mocked(getLatestRuntimeStatusForTerminal).mockResolvedValue(null);
     vi.mocked(getTerminalSyncEvidence).mockResolvedValue({
@@ -2333,18 +2326,7 @@ describe("terminal health summaries", () => {
     );
 
     expect(resolveTerminalRegisterSessionActionTarget).not.toHaveBeenCalled();
-    expect(result?.attentionReasons).toEqual([
-      expect.objectContaining({
-        actionTarget: {
-          label: "Review inventory work",
-          type: "open_work",
-        },
-        count: 1,
-        source: "cloud_sync",
-        summary: "1 inventory review item needs attention.",
-        type: "synced_sale_inventory_review",
-      }),
-    ]);
+    expect(result?.attentionReasons).toEqual([]);
   });
 
   it("resolves each cloud review reason from its own register session evidence", async () => {

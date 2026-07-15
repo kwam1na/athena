@@ -2084,51 +2084,78 @@ describe("DailyOperationsViewContent", () => {
     const priorOperatingDate = shiftTestOperatingDate(currentOperatingDate, -1);
     const futureOperatingDate = shiftTestOperatingDate(currentOperatingDate, 1);
 
-    renderContent({
-      ...operatingSnapshot,
-      closeSummary: {
-        ...operatingSnapshot.closeSummary,
-        salesTotal: 1533100,
-        transactionCount: 3,
-      },
-      operatingDate: currentOperatingDate,
-      priorDayMetric: {
-        ...weekMetrics[0],
-        currentDayCashTotal: 200000,
-        currentDayCashTransactionCount: 1,
-        isClosed: false,
-        isSelected: false,
-        operatingDate: priorOperatingDate,
-        paymentTotals: [
-          { amount: 200000, method: "cash", transactionCount: 1 },
-          { amount: 800000, method: "mobile_money", transactionCount: 1 },
-        ],
-        salesTotal: 1000000,
-        transactionCount: 2,
-      },
-      weekMetrics: [
-        {
-          ...weekMetrics[0],
-          isClosed: false,
-          isSelected: true,
-          operatingDate: currentOperatingDate,
+    renderContent(
+      {
+        ...operatingSnapshot,
+        closeSummary: {
+          ...operatingSnapshot.closeSummary,
           salesTotal: 1533100,
           transactionCount: 3,
         },
-        {
-          ...weekMetrics[1],
+        operatingDate: currentOperatingDate,
+        priorDayMetric: undefined,
+        weekMetrics: [
+          {
+            ...weekMetrics[0],
+            isClosed: false,
+            isSelected: true,
+            operatingDate: currentOperatingDate,
+            salesTotal: 1533100,
+            transactionCount: 3,
+          },
+          {
+            ...weekMetrics[1],
+            isClosed: false,
+            isSelected: false,
+            operatingDate: futureOperatingDate,
+            salesTotal: 0,
+            transactionCount: 0,
+          },
+        ],
+      },
+      {
+        cachedPriorWeekBoundaryMetric: {
+          ...weekMetrics[0],
+          currentDayCashTotal: 200000,
+          currentDayCashTransactionCount: 1,
           isClosed: false,
           isSelected: false,
-          operatingDate: futureOperatingDate,
-          salesTotal: 0,
-          transactionCount: 0,
+          operatingDate: priorOperatingDate,
+          paymentTotals: [
+            { amount: 200000, method: "cash", transactionCount: 1 },
+            { amount: 800000, method: "mobile_money", transactionCount: 1 },
+          ],
+          salesTotal: 1000000,
+          transactionCount: 2,
         },
-      ],
-    });
+      },
+    );
 
     expect(screen.getByText("+53%")).toBeInTheDocument();
     expect(screen.getAllByText("vs yesterday").length).toBeGreaterThan(0);
     expect(screen.queryAllByText("None yesterday")).toHaveLength(0);
+  });
+
+  it("uses bounded week analytics for prior-day metric card comparisons", () => {
+    const priorMetric = weekMetrics.find(
+      (metric) => metric.operatingDate === "2026-05-07",
+    );
+
+    expect(priorMetric).toBeDefined();
+
+    renderContent(
+      {
+        ...operatingSnapshot,
+        priorDayMetric: undefined,
+        weekMetrics: [],
+      },
+      {
+        cachedWeekMetrics: weekMetrics,
+      },
+    );
+
+    expect(screen.getByText("+3307%")).toBeInTheDocument();
+    expect(screen.getAllByText("vs prior day").length).toBeGreaterThan(0);
   });
 
   it("uses payment-specific copy when a prior-day payment method has no entries", () => {
