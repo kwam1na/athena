@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="cd97b2c82044ebbbc1f7037f81d980aa756792a205e1187c48a0c92a2aa878ac">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>POS Phase 0 — Close IDOR/PII surfaces and stop silent rejected-sale loss</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --panel-2: #1e222b;
+    --border: #2a2f3a;
+    --text: #e6e9ef;
+    --muted: #9aa3b2;
+    --accent: #6ea8fe;
+    --ok: #4ade80;
+    --warn: #fbbf24;
+    --bad: #f87171;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f6f7f9; --panel: #ffffff; --panel-2: #f0f2f5; --border: #d9dee6;
+      --text: #1a1f29; --muted: #57607080; --muted: #5b6472; --accent: #2563eb;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.6 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  .wrap { max-width: 940px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.top { border-bottom: 1px solid var(--border); padding-bottom: 20px; margin-bottom: 28px; }
+  h1 { font-size: 26px; line-height: 1.25; margin: 0 0 10px; }
+  h2 { font-size: 19px; margin: 34px 0 12px; padding-top: 8px; }
+  h3 { font-size: 15px; margin: 20px 0 8px; color: var(--accent); }
+  p { margin: 10px 0; }
+  a { color: var(--accent); }
+  code { font-family: var(--mono); font-size: 0.86em; background: var(--panel-2);
+    padding: 1px 5px; border-radius: 4px; }
+  pre { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px 14px; overflow-x: auto; font-family: var(--mono); font-size: 12.5px; }
+  .pills { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+  .pill { font-size: 12px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--border);
+    background: var(--panel-2); color: var(--muted); }
+  .pill.ok { color: var(--ok); border-color: #2e5a3f; }
+  .pill.warn { color: var(--warn); border-color: #5a4a1f; }
+  .pill.accent { color: var(--accent); border-color: #2a4a7a; }
+  .meta { display: grid; grid-template-columns: 140px 1fr; gap: 4px 16px; font-size: 13.5px;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+  .meta dt { color: var(--muted); }
+  .meta dd { margin: 0; }
+  section { background: transparent; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    padding: 4px 18px 14px; margin: 14px 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; margin: 10px 0; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; }
+  ul, ol { padding-left: 22px; }
+  li { margin: 4px 0; }
+  .twocol { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 680px) { .twocol { grid-template-columns: 1fr; } .meta { grid-template-columns: 1fr; } }
+  .flow { font-family: var(--mono); font-size: 12px; white-space: pre-wrap; }
+  .quiz { margin-top: 10px; }
+  .q { background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px 16px; margin: 12px 0; }
+  .q p.stem { font-weight: 600; margin: 4px 0 8px; }
+  .q label { display: block; padding: 6px 8px; border-radius: 6px; cursor: pointer; }
+  .q label:hover { background: var(--panel-2); }
+  .q .explain { display: none; margin-top: 8px; font-size: 13px; color: var(--muted);
+    border-left: 3px solid var(--border); padding-left: 10px; }
+  .q.correct { border-color: #2e5a3f; }
+  .q.incorrect { border-color: #5a2e2e; }
+  .q.graded .explain { display: block; }
+  .quizbar { position: sticky; bottom: 0; background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 16px; margin-top: 16px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  button { font: inherit; padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--accent); color: #061020; font-weight: 600; cursor: pointer; }
+  button.secondary { background: var(--panel-2); color: var(--text); }
+  button:active { transform: translateY(1px); }
+  #score { font-weight: 700; }
+  .small { font-size: 12.5px; color: var(--muted); }
+  hr { border: none; border-top: 1px solid var(--border); margin: 28px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <div class="pills">
+    <span class="pill accent">Delivery candidate</span>
+    <span class="pill">POS local-first hardening · Phase 0</span>
+    <span class="pill ok">pr:athena green (pre-report)</span>
+    <span class="pill warn">Merge: pending</span>
+  </div>
+  <h1>POS Phase 0 — close IDOR/PII surfaces and stop silent rejected-sale loss</h1>
+  <p class="small">A digestible walkthrough of the change delivered on branch
+  <code>fix/pos-phase0-data-loss-authz</code>, batching Linear V26-1055, V26-1056, and V26-1057
+  into one integration PR.</p>
+</header>
+
+<dl class="meta">
+  <dt>Branch</dt><dd><code>fix/pos-phase0-data-loss-authz</code> → <code>main</code></dd>
+  <dt>Tickets</dt><dd>V26-1055 (U1 register authz), V26-1056 (U11 customers authz), V26-1057 (U2 rejected-sale conflict)</dd>
+  <dt>Plan</dt><dd><code>docs/plans/2026-07-15-001-fix-pos-local-first-hardening-plan.md</code></dd>
+  <dt>Status</dt><dd>Delivery candidate — not merged, not deployed, Linear not <em>Done</em></dd>
+  <dt>Deploy</dt><dd>Pending (post-merge, Convex-prod surface)</dd>
+  <dt>Root alignment</dt><dd>Pending (post-merge)</dd>
+  <dt>Diff fingerprint</dt><dd><code>cd97b2c8…a878ac</code></dd>
+</dl>
+
+<h2>Executive summary</h2>
+<div class="card">
+<p>A nine-pass audit found the event-sourced POS core sound but exposed active silent-failure paths in the
+seams around it. Phase 0 closes the three highest-severity ones:</p>
+<ul>
+  <li><strong>V26-1055 (U1):</strong> <code>register.getState</code> had <em>no</em> authorization and
+  <code>openDrawer</code> was authentication-only — two cross-tenant IDOR holes. Both now require org membership
+  scoped to the store that owns the resource.</li>
+  <li><strong>V26-1056 (U11):</strong> all 13 endpoints of <code>customers.ts</code> had zero authorization
+  (full PII by <code>customerId</code>, unauthenticated cross-tenant writes). Every endpoint is now org-scoped.</li>
+  <li><strong>V26-1057 (U2):</strong> a rejected money-bearing offline sale advanced the sync cursor and left
+  no record. It now creates a manager-visible <code>server_rejected</code> conflict while preserving cursor liveness.</li>
+</ul>
+</div>
+
+<h2>Why it mattered</h2>
+<p>This is an offline cash system running on in-store terminals. The failures that matter most are
+"another tenant can read/alter my POS state" and "money changed hands but the record is gone." The three
+gaps produced exactly those outcomes: a foreign-org user could read a store's cashier/drawer/held-cart state
+or open its drawer (corrupting cash-control attribution); anyone could read full customer PII by id or write
+customer records across tenants; and a validation-rejected cash sale could vanish with the drawer left short
+and nobody notified.</p>
+
+<h2>The mental model</h2>
+<div class="card">
+<p>Think of two trust boundaries around a sound core:</p>
+<ol>
+  <li><strong>Authorization boundary (U1/U11):</strong> every public Convex POS endpoint must resolve the
+  <em>store that owns the targeted resource</em> and confirm the caller is a member of that store's organization
+  <em>before</em> reading or writing. The template already existed:
+  <code>requirePosTransactionStoreAccess</code> in <code>transactions.ts</code>.</li>
+  <li><strong>Data-durability boundary (U2):</strong> no money-bearing event may leave the sync pipeline
+  without either a canonical transaction or a <code>needs_review</code> conflict. The conflict rail already
+  existed; the rejected branch just wasn't using it.</li>
+</ol>
+</div>
+
+<h2>Before vs after</h2>
+<div class="twocol">
+  <div class="card">
+    <h3>Before</h3>
+    <ul>
+      <li><code>getState</code>: any/no caller → full register state for any store.</li>
+      <li><code>openDrawer</code>: authenticated-only → open a drawer on any org's terminal.</li>
+      <li><code>customers.ts</code>: 13 endpoints, no auth → PII by id, cross-tenant writes.</li>
+      <li>Rejected money-bearing sale → cursor advances, no conflict, silent loss.</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h3>After</h3>
+    <ul>
+      <li><code>getState</code>: resolve store → require org member (<code>full_admin</code>/<code>pos_only</code>).</li>
+      <li><code>openDrawer</code>: same org check in the command before opening the session.</li>
+      <li><code>customers.ts</code>: every endpoint org-scoped; id-keyed reads scoped to the resource's store.</li>
+      <li>Rejected money-bearing sale → one <code>server_rejected</code> conflict, cursor still advances.</li>
+    </ul>
+  </div>
+</div>
+
+<h2>Rejected-sale flow (U2)</h2>
+<div class="card">
+<div class="flow">pending --drain--> [single Convex ingest mutation]
+   |-- valid ------------------> projected  (canonical write + mapping)     [unchanged]
+   |-- business/perm/dup ------> conflicted (needs_review)                  [unchanged]
+   |-- envelope/payload -------> rejected  (cursor advances)
+   |         └── money-bearing (sale_completed + payments)?
+   |                 ├── yes → ALSO create server_rejected conflict (needs_review)  [NEW]
+   |                 └── no  → stay silent (no conflict spam)                        [unchanged]
+</div>
+<p class="small">Cursor advance is preserved in every branch (liveness). <code>createConflict</code> dedups on
+(store, terminal, localEventId, needs_review, sequence, conflictType, summary, details), so replays create no
+duplicate; the replay path re-lists the existing conflict via <code>listConflictsForEvent</code>.</p>
+</div>
+
+<h2>Key files</h2>
+<table>
+<thead><tr><th>File</th><th>Why it matters</th></tr></thead>
+<tbody>
+<tr><td><code>convex/pos/public/register.ts</code></td><td>Adds the store-resolve + org-membership guard to the <code>getState</code> query wrapper; returns <code>null</code> for a missing store.</td></tr>
+<tr><td><code>convex/pos/application/commands/register.ts</code></td><td>Adds <code>requireOrganizationMemberRoleWithCtx</code> to <code>openDrawer</code> after the store/user are resolved, before the register session is opened.</td></tr>
+<tr><td><code>convex/pos/public/customers.ts</code></td><td>Adds <code>requirePosCustomerStoreAccess</code> / <code>requirePosCustomerAccessById</code> and guards all 13 endpoints; id-keyed reads scope to the resource's store org.</td></tr>
+<tr><td><code>convex/pos/application/sync/ingestLocalEvents.ts</code></td><td>Rejected branch creates a <code>server_rejected</code> conflict for money-bearing sales; adds money-bearing + amount helpers.</td></tr>
+<tr><td><code>convex/schemas/pos/posLocalSyncConflict.ts</code>, <code>.../sync/types.ts</code></td><td>Add the <code>server_rejected</code> literal to the conflictType union (schema + type), wiring up the dead classifier branch.</td></tr>
+<tr><td><code>src/lib/pos/infrastructure/convex/registerGateway.ts</code></td><td>Treats a <code>null</code> <code>getState</code> (store not found) as no-state so the client hook return type stays stable.</td></tr>
+<tr><td>4 <code>*.test.ts</code> files</td><td>Cross-org denial tests (proving the delegate is not called), PII-scope tests, and the rejected-sale conflict/dedup/no-spam tests.</td></tr>
+</tbody>
+</table>
+
+<h2>What intentionally did NOT change</h2>
+<ul>
+  <li>The event-sourcing core (single-mutation exactly-once, monotonic cursor, durable-commit-before-ack) and the sync-contract event shapes.</li>
+  <li>POS <code>catalog.ts</code> search/barcode exposure — deliberately deferred to V26-956.</li>
+  <li><code>terminalAppSessions.ts</code> — a deliberate terminal-proof + <code>validatePosAppAccount</code> exception; no redundant guard added.</li>
+  <li>Sibling POS surfaces (<code>terminals.ts</code>, <code>sync.ts</code>, <code>posRecoveryCodes.ts</code>) were swept per-endpoint and found already guarded — no change needed.</li>
+  <li>Non-financial rejected events stay silent (no new conflict) to avoid manager-facing spam.</li>
+</ul>
+
+<h2>Failure boundaries</h2>
+<ul>
+  <li><strong>Cross-org caller:</strong> <code>requireOrganizationMemberRoleWithCtx</code> throws → the endpoint rejects; the underlying query/command never runs.</li>
+  <li><strong>Missing store/customer:</strong> returns a clean <code>null</code> / empty / <code>not_found</code> without leaking existence beyond the pre-existing pattern; membership checks are skipped.</li>
+  <li><strong>Foreign valid id:</strong> id-keyed customer reads resolve the target's store first, so a valid foreign <code>customerId</code> is still denied.</li>
+  <li><strong>Malformed rejected payload:</strong> amount summarization is defensive (guards non-finite numbers), so the rejected branch cannot throw and abort the batch.</li>
+  <li><strong>Replay:</strong> conflict dedup makes re-ingesting a rejected event idempotent (exactly one conflict).</li>
+</ul>
+
+<h2>Validation &amp; review evidence</h2>
+<div class="card">
+<ul>
+  <li><strong>Targeted tests (green):</strong> <code>register.test.ts</code> (public + command), <code>customers.test.ts</code> (10 authz tests), <code>ingestLocalEvents.test.ts</code> (88 tests incl. 4 new server_rejected cases).</li>
+  <li><strong>Typecheck:</strong> <code>tsc --noEmit</code> clean (0 errors) after fixing the client <code>getState</code> null consumer.</li>
+  <li><strong>Full gate:</strong> <code>bun run pr:athena</code> — passed through dependency/generated-artifacts/harness/lint/architecture/tsc/coverage; then flagged the required solution note + this landed-change report (both added), after which the gate is re-run to green.</li>
+  <li><strong>Multi-lens internal review:</strong> three read-only reviewer subagents — Security/Authorization, Correctness (U2), and Tests — reviewed <code>git diff origin/main...HEAD</code>. Round 1: Correctness APPROVED; Security and Tests requested changes. Two blocking findings were integrated: (1) <code>linkToStoreFrontUser</code>/<code>linkToGuest</code> did not re-scope the secondary storefront-user/guest to the customer's store (cross-org PII read) — now rejected in the command; (2) 7 of 13 <code>customers.ts</code> guard sites lacked a cross-org denial test — added table-driven coverage. Round 2: both re-reviewed and APPROVED. Unanimous.</li>
+</ul>
+<p class="small">Residual risk: authorization is enforced at the public surface (and the <code>openDrawer</code> command); the
+customer application modules have no other callers, but a future internal caller would need its own guard.
+U2 changes the manager-visible conflict volume — the review surface renders the new money-bearing-scoped conflicts.</p>
+</div>
+
+<h2>Next-time guidance</h2>
+<ul>
+  <li>Adding a POS public endpoint? Resolve the store (directly or via the targeted resource) and call
+  <code>requireOrganizationMemberRoleWithCtx</code> before any read/write — copy <code>requirePosTransactionStoreAccess</code>.</li>
+  <li>Auditing auth coverage? Check <em>per endpoint</em>; an auth import in a file does not prove every export is guarded.</li>
+  <li>Touching sync ingest? Preserve cursor-advance on rejects, and never let a money-bearing event exit without a canonical row or a conflict.</li>
+</ul>
+
+<h2>Subagent Evidence</h2>
+<div class="card">
+<ul>
+  <li><strong>Security/Authorization reviewer</strong> — verified <code>getState</code>, <code>openDrawer</code>, and all 13 customer endpoints are org-scoped with no remaining IDOR/PII leak, and spot-checked the sibling-sweep claim.</li>
+  <li><strong>Correctness reviewer (U2)</strong> — traced the rejected branch, dedup, replay, cursor advance, and confirmed the classifier branch is no longer dead.</li>
+  <li><strong>Tests reviewer</strong> — verified the tests assert the regressions (cross-org denial proving delegate-not-called, PII scope, conflict creation/dedup/no-spam) rather than tautologies.</li>
+</ul>
+<p class="small">These read-only subagents analyzed the delivered diff and validation; the orchestrator synthesized this report.</p>
+</div>
+
+<h2>Comprehension quiz</h2>
+<p class="small">Quiz: Pass Required — 10 questions · pass threshold 8/10. Grading is local to your browser.</p>
+<div class="quiz" id="changeQuiz"></div>
+<div class="quizbar">
+  <button id="grade">Grade quiz</button>
+  <button id="reset" class="secondary">Reset</button>
+  <span id="score" class="small">Not graded yet.</span>
+</div>
+
+<hr />
+<p class="small">Generated as a delivery-candidate landed-change report. It does not claim merge, deploy, or Linear
+<em>Done</em> — those happen after this PR merges.</p>
+
+</div>
+
+<script>
+const QUESTIONS = [
+  { s: "Why did register.getState need a fix?", a: [
+    "It performed cross-tenant reads with no authorization, leaking another store's terminal/cashier/drawer/cart state",
+    "It was too slow and needed an index",
+    "It returned the wrong TypeScript type",
+    "It duplicated the openDrawer logic" ], c: 0,
+    e: "getState had no authorization at all — a classic IDOR read across tenants." },
+  { s: "How is the authorization scoped for these endpoints?", a: [
+    "By the caller's default organization only",
+    "By resolving the store that owns the targeted resource, then requiring org membership on that store",
+    "By a global admin allow-list",
+    "By the terminal sync-secret only" ], c: 1,
+    e: "Membership is checked against the resource's own organizationId, so a valid foreign id is still denied." },
+  { s: "What made openDrawer insufficient before?", a: [
+    "It had no authentication",
+    "It was authentication-only with no org-membership check, so any org's user could open a drawer",
+    "It opened two sessions at once",
+    "It skipped the terminal check" ], c: 1,
+    e: "It called requireAuthenticatedAthenaUserWithCtx but never verified org membership." },
+  { s: "For customerId-keyed reads (e.g. getCustomerById), how is cross-org access prevented?", a: [
+    "The endpoint trusts the customerId",
+    "It resolves the customer, then scopes membership to that customer's store org",
+    "It returns redacted PII to everyone",
+    "It requires a storeId that is never checked" ], c: 1,
+    e: "requirePosCustomerAccessById resolves the customer and checks membership on its store's org." },
+  { s: "When does a rejected sync event now create a conflict?", a: [
+    "For every rejected event",
+    "Only when it is money-bearing (sale_completed with a non-empty payments array)",
+    "Only for register_opened events",
+    "Never — it just logs" ], c: 1,
+    e: "Non-financial rejects stay silent to avoid conflict spam; only money-bearing sales create a conflict." },
+  { s: "What happens to the sync cursor when a money-bearing sale is rejected?", a: [
+    "It stalls until a manager resolves the conflict",
+    "It still advances (liveness preserved); the conflict is created in parallel",
+    "It rolls back the whole batch",
+    "It resets to zero" ], c: 1,
+    e: "Cursor advance is preserved in the rejected branch; a validation-rejected event cannot be auto-corrected." },
+  { s: "How is replay of a rejected event kept idempotent?", a: [
+    "A new conflict is created each time",
+    "createConflict dedups on the conflict key, and the replay path re-lists the existing conflict",
+    "The event is deleted on replay",
+    "Replays are blocked entirely" ], c: 1,
+    e: "createConflict returns the existing needs_review conflict; the replay path re-lists via listConflictsForEvent." },
+  { s: "What schema change wired up the manager review surface?", a: [
+    "A new posLocalSyncConflict table",
+    "Adding the server_rejected literal to the conflictType union in the schema and the type alias",
+    "Renaming needs_review to server_rejected",
+    "Removing the permission conflictType" ], c: 1,
+    e: "The classifier already had a dead server_rejected branch; adding the literal activated it." },
+  { s: "Which POS surface was intentionally left unchanged?", a: [
+    "customers.ts",
+    "terminalAppSessions.ts — a deliberate terminal-proof exception (and catalog.ts deferred to V26-956)",
+    "register.ts",
+    "ingestLocalEvents.ts" ], c: 1,
+    e: "terminalAppSessions.ts authorizes via terminal proof + validatePosAppAccount; catalog.ts is deferred." },
+  { s: "How should a future POS public endpoint be authorized?", a: [
+    "Trust the client-supplied storeId",
+    "Resolve the store (directly or via the targeted resource) and call requireOrganizationMemberRoleWithCtx before any read/write",
+    "Only check that the user is signed in",
+    "Rely on a per-file auth import being present" ], c: 1,
+    e: "Copy the requirePosTransactionStoreAccess pattern; per-file import presence is not proof of per-endpoint coverage." }
+];
+
+const quizEl = document.getElementById("changeQuiz");
+QUESTIONS.forEach((q, i) => {
+  const div = document.createElement("div");
+  div.className = "q"; div.dataset.i = i;
+  const opts = q.a.map((t, j) =>
+    `<label><input type="radio" name="q${i}" value="${j}"> ${t}</label>`).join("");
+  div.innerHTML = `<p class="stem">${i + 1}. ${q.s}</p>${opts}<div class="explain">${q.e}</div>`;
+  quizEl.appendChild(div);
+});
+
+document.getElementById("grade").addEventListener("click", () => {
+  let score = 0;
+  QUESTIONS.forEach((q, i) => {
+    const el = quizEl.querySelector(`.q[data-i="${i}"]`);
+    const sel = el.querySelector(`input[name="q${i}"]:checked`);
+    el.classList.add("graded");
+    el.classList.remove("correct", "incorrect");
+    if (sel && Number(sel.value) === q.c) { score++; el.classList.add("correct"); }
+    else { el.classList.add("incorrect"); }
+  });
+  const pass = score >= 8;
+  const s = document.getElementById("score");
+  s.textContent = `Score: ${score}/10 — ${pass ? "PASS ✓" : "below pass threshold (8/10)"}`;
+  s.style.color = pass ? "var(--ok)" : "var(--bad)";
+});
+
+document.getElementById("reset").addEventListener("click", () => {
+  quizEl.querySelectorAll(".q").forEach((el) => el.classList.remove("graded", "correct", "incorrect"));
+  quizEl.querySelectorAll("input[type=radio]").forEach((r) => (r.checked = false));
+  const s = document.getElementById("score");
+  s.textContent = "Not graded yet."; s.style.color = "";
+});
+</script>
+</body>
+</html>
