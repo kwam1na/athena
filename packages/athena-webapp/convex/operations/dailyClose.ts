@@ -16,9 +16,7 @@ import {
   userError,
   type ApprovalCommandResult,
 } from "../../shared/commandResult";
-import {
-  consumeCommandApprovalProofWithCtx,
-} from "./approvalActions";
+import { consumeCommandApprovalProofWithCtx } from "./approvalActions";
 import {
   dailyOperationsEodPrepareAction,
   getLatestDailyOperationsAutomationStatusWithCtx,
@@ -50,14 +48,12 @@ import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
+import { requireStoreMemberAccessWithCtx } from "../lib/storeMemberAccess";
 import { buildPaymentTotals, transactionCashDelta } from "./paymentTotals";
 import type { AutomationDecisionEvidence } from "../automation/runLedger";
 import { appendReportingIngressWithCtx } from "../reporting/ingress";
 
-export {
-  buildAdjustmentReportTotals,
-  listAppliedTransactionAdjustmentsForDay,
-};
+export { buildAdjustmentReportTotals, listAppliedTransactionAdjustmentsForDay };
 
 const DAILY_CLOSE_QUERY_LIMIT = 200;
 const DAILY_CLOSE_CARRY_FORWARD_SOURCE_PROBE_LIMIT = 1_000;
@@ -291,8 +287,7 @@ function normalizeCompletedDailyCloseSnapshot(args: {
   priorClose?: Doc<"dailyClose"> | null;
 }): DailyCloseSnapshot | null {
   const reportSnapshot = args.dailyClose.reportSnapshot as
-    | DailyCloseReportSnapshot
-    | undefined;
+    DailyCloseReportSnapshot | undefined;
 
   if (!reportSnapshot) {
     return null;
@@ -373,7 +368,8 @@ function sourceCompletenessEntry(args: {
   statuses?: string[];
 }): DailyCloseSourceCompletenessEntry {
   const complete =
-    args.complete ?? (args.limit === undefined || args.recordCount < args.limit);
+    args.complete ??
+    (args.limit === undefined || args.recordCount < args.limit);
 
   return {
     source: args.source,
@@ -383,15 +379,21 @@ function sourceCompletenessEntry(args: {
     ...(args.limit === undefined ? {} : { limit: args.limit }),
     ...(args.range === undefined ? {} : { range: args.range }),
     ...(args.statuses === undefined ? {} : { statuses: args.statuses }),
-    ...(complete ? {} : { reason: args.reason ?? `${args.source}_source_cap_reached` }),
+    ...(complete
+      ? {}
+      : { reason: args.reason ?? `${args.source}_source_cap_reached` }),
   };
 }
 
 function mergeSourceCompleteness(
-  ...sources: Array<DailyCloseSourceCompleteness | DailyCloseSourceCompletenessEntry>
+  ...sources: Array<
+    DailyCloseSourceCompleteness | DailyCloseSourceCompletenessEntry
+  >
 ) {
   return completeSourceCompleteness(
-    sources.flatMap((source) => ("entries" in source ? source.entries : [source])),
+    sources.flatMap((source) =>
+      "entries" in source ? source.entries : [source],
+    ),
   );
 }
 
@@ -405,7 +407,9 @@ function normalizeDailyCloseSummary(
       ? summary.currentDayCashTotal
       : 0;
   const expectedCashTotal =
-    typeof summary.expectedCashTotal === "number" ? summary.expectedCashTotal : 0;
+    typeof summary.expectedCashTotal === "number"
+      ? summary.expectedCashTotal
+      : 0;
   const netCashVariance =
     typeof summary.netCashVariance === "number" ? summary.netCashVariance : 0;
 
@@ -646,12 +650,16 @@ function registerSessionCloseoutOperatingAt(
     (record) =>
       record.type === "closed" && typeof record.occurredAt === "number",
   );
-  const closeoutSubmittedAt =
-    isSubmittedVarianceCloseout(session, closeoutApproval)
-      ? closeoutApproval?.createdAt
-      : undefined;
+  const closeoutSubmittedAt = isSubmittedVarianceCloseout(
+    session,
+    closeoutApproval,
+  )
+    ? closeoutApproval?.createdAt
+    : undefined;
 
-  return firstClosedRecord?.occurredAt ?? closeoutSubmittedAt ?? session.closedAt;
+  return (
+    firstClosedRecord?.occurredAt ?? closeoutSubmittedAt ?? session.closedAt
+  );
 }
 
 function isSubmittedVarianceCloseout(
@@ -812,7 +820,10 @@ async function buildApprovalRequestsById(
 
 function closeoutApprovalForRegisterSession(
   session: Pick<Doc<"registerSession">, "managerApprovalRequestId">,
-  approvalRequestsById: Map<Id<"approvalRequest">, Doc<"approvalRequest"> | null>,
+  approvalRequestsById: Map<
+    Id<"approvalRequest">,
+    Doc<"approvalRequest"> | null
+  >,
 ) {
   return session.managerApprovalRequestId
     ? (approvalRequestsById.get(session.managerApprovalRequestId) ?? undefined)
@@ -821,11 +832,7 @@ function closeoutApprovalForRegisterSession(
 
 async function filterRegisterSessionsBelongingToRange<
   TSession extends RegisterSessionRangeCandidate,
->(
-  ctx: Pick<QueryCtx, "db">,
-  sessions: TSession[],
-  range: DailyCloseRange,
-) {
+>(ctx: Pick<QueryCtx, "db">, sessions: TSession[], range: DailyCloseRange) {
   const approvalRequestsById = await buildApprovalRequestsById(
     ctx,
     sessions.map((session) => session.managerApprovalRequestId),
@@ -924,8 +931,7 @@ async function patchDailyCloseCarryForwardWorkItemMetadata(
     await ctx.db.patch("operationalWorkItem", workItem._id, {
       metadata: {
         ...(workItem.metadata ?? {}),
-        businessDate:
-          carryForwardBusinessDate(workItem) ?? args.operatingDate,
+        businessDate: carryForwardBusinessDate(workItem) ?? args.operatingDate,
         carryForwardSourceId: carryForwardSourceId(workItem),
         dailyCloseId: args.dailyCloseId,
         source: DAILY_CLOSE_SUBJECT_TYPE,
@@ -1139,7 +1145,10 @@ async function listRegisterSessionsForDailyClose(
         .eq("closeoutOperatingDate", undefined),
     )
     .take(REGISTER_SESSION_DAILY_CLOSE_SOURCE_LIMIT);
-  const closedSessionsById = new Map<Id<"registerSession">, Doc<"registerSession">>();
+  const closedSessionsById = new Map<
+    Id<"registerSession">,
+    Doc<"registerSession">
+  >();
 
   indexedClosedSessions.forEach((session) =>
     closedSessionsById.set(session._id, session),
@@ -1158,8 +1167,14 @@ async function listRegisterSessionsForDailyClose(
         ),
     )
     .forEach((session) => closedSessionsById.set(session._id, session));
-  const activeSessionsById = new Map<Id<"registerSession">, Doc<"registerSession">>();
-  const reviewOnlySessionsById = new Map<Id<"registerSession">, Doc<"registerSession">>();
+  const activeSessionsById = new Map<
+    Id<"registerSession">,
+    Doc<"registerSession">
+  >();
+  const reviewOnlySessionsById = new Map<
+    Id<"registerSession">,
+    Doc<"registerSession">
+  >();
 
   activeIndexedSessionPages
     .flat()
@@ -1169,9 +1184,9 @@ async function listRegisterSessionsForDailyClose(
     .flat()
     .filter((session) => registerSessionBelongsToRange(session, range))
     .forEach((session) => activeSessionsById.set(session._id, session));
-  reviewOnlyIndexedSessionPages.flat().forEach((session) =>
-    reviewOnlySessionsById.set(session._id, session),
-  );
+  reviewOnlyIndexedSessionPages
+    .flat()
+    .forEach((session) => reviewOnlySessionsById.set(session._id, session));
   reviewOnlyMissingDateSessionPages
     .flat()
     .filter((session) => registerSessionBelongsToRange(session, range))
@@ -1408,13 +1423,17 @@ async function listOpenPosSessions(
   );
 
   return {
-    rows: sessionPages.flat().filter(
-      (session) =>
-        session.expiresAt >= now && posSessionIntersectsRange(session, args),
-    ),
+    rows: sessionPages
+      .flat()
+      .filter(
+        (session) =>
+          session.expiresAt >= now && posSessionIntersectsRange(session, args),
+      ),
     completeness: sourceCompletenessEntry({
       source: "pos_session",
-      complete: sessionPages.every((page) => page.length < DAILY_CLOSE_QUERY_LIMIT),
+      complete: sessionPages.every(
+        (page) => page.length < DAILY_CLOSE_QUERY_LIMIT,
+      ),
       readMode: "by_storeId_and_status",
       recordCount: sessionPages.reduce((count, page) => count + page.length, 0),
       limit: DAILY_CLOSE_QUERY_LIMIT,
@@ -1444,7 +1463,9 @@ async function listOpenOperationalWorkItems(
     rows: workItems.flat(),
     completeness: sourceCompletenessEntry({
       source: "operational_work_item",
-      complete: workItems.every((page) => page.length < DAILY_CLOSE_QUERY_LIMIT),
+      complete: workItems.every(
+        (page) => page.length < DAILY_CLOSE_QUERY_LIMIT,
+      ),
       readMode: "by_storeId_status",
       recordCount: workItems.reduce((count, page) => count + page.length, 0),
       limit: DAILY_CLOSE_QUERY_LIMIT,
@@ -1774,8 +1795,7 @@ function completionAttributionForDailyClose(
   completedByStaffProfileId = dailyClose.completedByStaffProfileId,
 ): DailyCloseCompletionAttribution {
   const reportSnapshot = dailyClose.reportSnapshot as
-    | DailyCloseReportSnapshot
-    | undefined;
+    DailyCloseReportSnapshot | undefined;
   const closeMetadata = reportSnapshot?.closeMetadata;
 
   return {
@@ -1784,8 +1804,10 @@ function completionAttributionForDailyClose(
       dailyClose.automationDecisionReason ??
       closeMetadata?.automationDecisionReason,
     automationPolicyVersion:
-      dailyClose.automationPolicyVersion ?? closeMetadata?.automationPolicyVersion,
-    automationRunId: dailyClose.automationRunId ?? closeMetadata?.automationRunId,
+      dailyClose.automationPolicyVersion ??
+      closeMetadata?.automationPolicyVersion,
+    automationRunId:
+      dailyClose.automationRunId ?? closeMetadata?.automationRunId,
     completedByStaffProfileId,
     completedByUserId:
       dailyClose.completedByUserId ?? closeMetadata?.completedByUserId,
@@ -1802,7 +1824,8 @@ function completionAttributionForDailyClose(
       dailyClose.completionRequestedByUserId ??
       closeMetadata?.completionRequestedByUserId,
     policyReviewedItemKeys:
-      dailyClose.policyReviewedItemKeys ?? closeMetadata?.policyReviewedItemKeys,
+      dailyClose.policyReviewedItemKeys ??
+      closeMetadata?.policyReviewedItemKeys,
   };
 }
 
@@ -1910,7 +1933,10 @@ function maybeRedactDailyCloseSnapshotForBroadView(
 ): DailyCloseSnapshot {
   if (includeManagerReviewEvidence) return snapshot;
   const redactedCompletedClose = snapshot.completedClose
-    ? (({ policyReviewedItemKeys: _policyReviewedItemKeys, ...completedClose }) => ({
+    ? (({
+        policyReviewedItemKeys: _policyReviewedItemKeys,
+        ...completedClose
+      }) => ({
         ...completedClose,
         restrictedDetailsRedacted: Boolean(_policyReviewedItemKeys?.length),
       }))(snapshot.completedClose)
@@ -2044,7 +2070,8 @@ export async function buildDailyCloseSnapshotWithCtx(
     storeId: Id<"store">;
   },
 ): Promise<DailyCloseSnapshot> {
-  const includeManagerReviewEvidence = args.includeManagerReviewEvidence ?? true;
+  const includeManagerReviewEvidence =
+    args.includeManagerReviewEvidence ?? true;
   const range = resolveOperatingDateRange(args);
   const store = await getStore(ctx, args.storeId);
   const automationStatus =
@@ -2060,8 +2087,7 @@ export async function buildDailyCloseSnapshotWithCtx(
       severity: "blocker",
       category: "operating_date",
       title: "Invalid operating date",
-      message:
-        "EOD Review requires an operating date in YYYY-MM-DD format.",
+      message: "EOD Review requires an operating date in YYYY-MM-DD format.",
       subject: {
         type: DAILY_CLOSE_SUBJECT_TYPE,
         id: args.operatingDate,
@@ -2225,8 +2251,8 @@ export async function buildDailyCloseSnapshotWithCtx(
       (session) => session.managerApprovalRequestId,
     ),
   );
-  const submittedVarianceCloseoutSessions = activeRegisterSessionsInRange.filter(
-    (session) =>
+  const submittedVarianceCloseoutSessions =
+    activeRegisterSessionsInRange.filter((session) =>
       isSubmittedVarianceCloseout(
         session,
         closeoutApprovalForRegisterSession(
@@ -2234,7 +2260,7 @@ export async function buildDailyCloseSnapshotWithCtx(
           activeRegisterSessionApprovalsById,
         ),
       ),
-  );
+    );
   const activeRegisterSessions = activeRegisterSessionsInRange.filter(
     (session) =>
       !isSubmittedVarianceCloseout(
@@ -3006,7 +3032,9 @@ export async function buildDailyCloseSnapshotWithCtx(
 
           return {
             dailyCloseId: existingClose._id,
-            ...(attribution.actorType ? { actorType: attribution.actorType } : {}),
+            ...(attribution.actorType
+              ? { actorType: attribution.actorType }
+              : {}),
             ...(attribution.automationDecisionReason
               ? {
                   automationDecisionReason:
@@ -3015,8 +3043,7 @@ export async function buildDailyCloseSnapshotWithCtx(
               : {}),
             ...(attribution.automationPolicyVersion
               ? {
-                  automationPolicyVersion:
-                    attribution.automationPolicyVersion,
+                  automationPolicyVersion: attribution.automationPolicyVersion,
                 }
               : {}),
             ...(attribution.automationRunId
@@ -3133,7 +3160,9 @@ function carryForwardSourceId(
 }
 
 function sourceIdFromCarryForwardInput(
-  item: NonNullable<CompleteDailyCloseArgs["createCarryForwardWorkItems"]>[number],
+  item: NonNullable<
+    CompleteDailyCloseArgs["createCarryForwardWorkItems"]
+  >[number],
 ) {
   return (
     stringFromMetadata(item.metadata, "carryForwardSourceId") ??
@@ -3175,15 +3204,13 @@ async function findCurrentCarryForwardWorkItemBySource(
   );
 
   return (
-    pages
-      .flat()
-      .find((workItem) =>
-        carryForwardMetadataMatches({
-          businessDate: args.businessDate,
-          sourceId: args.sourceId,
-          workItem,
-        }),
-      ) ?? null
+    pages.flat().find((workItem) =>
+      carryForwardMetadataMatches({
+        businessDate: args.businessDate,
+        sourceId: args.sourceId,
+        workItem,
+      }),
+    ) ?? null
   );
 }
 
@@ -3607,8 +3634,7 @@ export async function completeDailyCloseWithCtx(
   if (snapshot.blockers.length > 0) {
     return userError({
       code: "precondition_failed",
-      message:
-        "EOD Review cannot be completed while blocker items remain.",
+      message: "EOD Review cannot be completed while blocker items remain.",
       metadata: {
         blockerCount: snapshot.blockers.length,
       },
@@ -3678,13 +3704,11 @@ export async function completeDailyCloseWithCtx(
   const completionRequestedByUserId = args.actorUserId;
   const completedByStaffProfileId = completionApprovedByStaffProfileId;
   const reviewedItemKeys = snapshot.reviewItems.map((item) => item.key);
-  const carryForwardWorkItemIds = uniqueOperationalWorkItemIds(
-    [
-      ...(snapshot.existingClose?.carryForwardWorkItemIds ?? []),
-      ...linkedWorkItemResult.workItems.map((workItem) => workItem._id),
-      ...createdWorkItemResult.workItems.map((workItem) => workItem._id),
-    ] as Id<"operationalWorkItem">[],
-  );
+  const carryForwardWorkItemIds = uniqueOperationalWorkItemIds([
+    ...(snapshot.existingClose?.carryForwardWorkItemIds ?? []),
+    ...linkedWorkItemResult.workItems.map((workItem) => workItem._id),
+    ...createdWorkItemResult.workItems.map((workItem) => workItem._id),
+  ] as Id<"operationalWorkItem">[]);
   const carryForwardWorkItems = (
     await Promise.all(
       carryForwardWorkItemIds.map((workItemId) =>
@@ -3993,11 +4017,14 @@ export async function completeDailyCloseForAutomationWithCtx(
     });
   }
 
-  const carryForwardResult = await validateAutomationCarryForwardWorkItems(ctx, {
-    organizationId: store.organizationId,
-    snapshot,
-    storeId: args.storeId,
-  });
+  const carryForwardResult = await validateAutomationCarryForwardWorkItems(
+    ctx,
+    {
+      organizationId: store.organizationId,
+      snapshot,
+      storeId: args.storeId,
+    },
+  );
 
   if (!carryForwardResult.ok) {
     return userError({
@@ -4272,7 +4299,9 @@ export async function resolveDailyCloseCarryForwardWithCtx(
     );
   }
 
-  if (stringFromMetadata(workItem.metadata, "source") !== DAILY_CLOSE_SUBJECT_TYPE) {
+  if (
+    stringFromMetadata(workItem.metadata, "source") !== DAILY_CLOSE_SUBJECT_TYPE
+  ) {
     return carryForwardResolutionValidationError(
       "Carry-forward source metadata is incomplete.",
     );
@@ -4308,7 +4337,10 @@ export async function resolveDailyCloseCarryForwardWithCtx(
     );
   }
 
-  const approvalProofRecord = await ctx.db.get("approvalProof", args.approvalProofId);
+  const approvalProofRecord = await ctx.db.get(
+    "approvalProof",
+    args.approvalProofId,
+  );
   const approvalProof = await consumeCommandApprovalProofWithCtx(ctx, {
     action: DAILY_CLOSE_CARRY_FORWARD_RESOLUTION_ACTION,
     approvalProofId: args.approvalProofId,
@@ -4558,7 +4590,8 @@ export async function reopenDailyCloseWithCtx(
     originalDailyClose.reportSnapshot as DailyCloseReportSnapshot;
   const reopenedShouldBeCurrent =
     originalDailyClose.isCurrent !== false &&
-    originalReportSnapshot.closeMetadata.currentnessMode !== "historical_record";
+    originalReportSnapshot.closeMetadata.currentnessMode !==
+      "historical_record";
   const reopenedDailyCloseId = await ctx.db.insert("dailyClose", {
     storeId: originalDailyClose.storeId,
     organizationId: originalDailyClose.organizationId,
@@ -4584,8 +4617,7 @@ export async function reopenDailyCloseWithCtx(
     reopenReason: reason,
     reopenedFromDailyCloseId: originalDailyClose._id,
     supersedesDailyCloseId: originalDailyClose._id,
-    reportingCloseVersion:
-      (originalDailyClose.reportingCloseVersion ?? 1) + 1,
+    reportingCloseVersion: (originalDailyClose.reportingCloseVersion ?? 1) + 1,
   });
 
   await ctx.db.patch("dailyClose", originalDailyClose._id, {
@@ -4728,7 +4760,8 @@ export async function listCompletedDailyCloseHistoryWithCtx(
     storeId: Id<"store">;
   },
 ) {
-  const includeManagerReviewEvidence = args.includeManagerReviewEvidence ?? true;
+  const includeManagerReviewEvidence =
+    args.includeManagerReviewEvidence ?? true;
   const limit = Math.min(
     Math.max(Math.floor(args.limit ?? 50), 1),
     DAILY_CLOSE_QUERY_LIMIT,
@@ -4805,7 +4838,8 @@ export async function getCompletedDailyCloseHistoryDetailWithCtx(
     completedByStaffProfileId,
   );
   const reportSnapshot = dailyClose.reportSnapshot as DailyCloseReportSnapshot;
-  const includeManagerReviewEvidence = args.includeManagerReviewEvidence ?? true;
+  const includeManagerReviewEvidence =
+    args.includeManagerReviewEvidence ?? true;
 
   return {
     dailyCloseId: dailyClose._id,
@@ -4834,17 +4868,11 @@ export const getDailyCloseSnapshot = query({
     storeId: v.id("store"),
   },
   handler: async (ctx, args) => {
-    const store = await ctx.db.get("store", args.storeId);
-    if (!store) {
-      throw new Error("Store not found.");
-    }
-
-    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
-    const membership = await requireOrganizationMemberRoleWithCtx(ctx, {
+    const { membership } = await requireStoreMemberAccessWithCtx(ctx, {
       allowedRoles: ["full_admin", "pos_only"],
+      demoAccess: { kind: "read" },
       failureMessage: "You cannot view EOD Review for this store.",
-      organizationId: store.organizationId,
-      userId: athenaUser._id,
+      storeId: args.storeId,
     });
 
     return buildDailyCloseSnapshotWithCtx(ctx, {
@@ -4862,17 +4890,11 @@ export const getDailyCloseLifecycleGate = query({
     storeId: v.id("store"),
   },
   handler: async (ctx, args) => {
-    const store = await ctx.db.get("store", args.storeId);
-    if (!store) {
-      throw new Error("Store not found.");
-    }
-
-    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
-    await requireOrganizationMemberRoleWithCtx(ctx, {
+    await requireStoreMemberAccessWithCtx(ctx, {
       allowedRoles: ["full_admin", "pos_only"],
+      demoAccess: { kind: "read" },
       failureMessage: "You cannot view EOD Review for this store.",
-      organizationId: store.organizationId,
-      userId: athenaUser._id,
+      storeId: args.storeId,
     });
 
     return buildDailyCloseLifecycleGateWithCtx(ctx, args);
@@ -5002,8 +5024,7 @@ export const resolveDailyCloseCarryForward = mutation({
     try {
       await requireOrganizationMemberRoleWithCtx(ctx, {
         allowedRoles: ["full_admin", "pos_only"],
-        failureMessage:
-          "You cannot resolve carry-forward work for this store.",
+        failureMessage: "You cannot resolve carry-forward work for this store.",
         organizationId: store.organizationId,
         userId: athenaUser._id,
       });

@@ -658,6 +658,7 @@ async function createFixtureRepo() {
   );
   await write("packages/athena-webapp/vitest.setup.ts", "export {};\n", rootDir);
   await write("packages/athena-webapp/src/routes/_authed.tsx", "export {};\n", rootDir);
+  await write("packages/athena-webapp/src/routes/demo.tsx", "export {};\n", rootDir);
   await write("packages/athena-webapp/src/routes/__root.tsx", "export {};\n", rootDir);
   await write("packages/athena-webapp/src/routes/_authed/index.tsx", "export {};\n", rootDir);
   await write(
@@ -712,6 +713,11 @@ async function createFixtureRepo() {
   );
   await write("packages/athena-webapp/src/routes/index.tsx", "export {};\n", rootDir);
   await write("packages/athena-webapp/src/components/AppShell.tsx", "export {};\n", rootDir);
+  await write(
+    "packages/athena-webapp/src/components/shared-demo/SharedDemoRuntime.tsx",
+    "export {};\n",
+    rootDir
+  );
   await write(
     "packages/athena-webapp/src/components/app-update/UpdateReadyBanner.test.tsx",
     "export {};\n",
@@ -1169,6 +1175,23 @@ async function createFixtureRepo() {
     rootDir
   );
   await write("packages/athena-webapp/src/test/setup.ts", "export {};\n", rootDir);
+  await write(
+    "packages/athena-webapp/docs/shared-demo-backend-coverage.md",
+    "# Shared demo backend coverage\n",
+    rootDir
+  );
+  await write("packages/athena-webapp/convex/auth.ts", "export {};\n", rootDir);
+  await write(
+    "packages/athena-webapp/convex/auth/SharedDemoTicket.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write("packages/athena-webapp/convex/crons.ts", "export {};\n", rootDir);
+  await write(
+    "packages/athena-webapp/convex/sharedDemo/public.ts",
+    "export {};\n",
+    rootDir
+  );
   await write("packages/athena-webapp/convex/http.ts", "export {};\n", rootDir);
   await write("packages/athena-webapp/convex/http/router.ts", "export {};\n", rootDir);
   await write("packages/athena-webapp/convex/schema.ts", "export {};\n", rootDir);

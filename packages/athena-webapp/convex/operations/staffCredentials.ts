@@ -28,6 +28,12 @@ import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
+import { requireStoreMemberAccessWithCtx } from "../lib/storeMemberAccess";
+import {
+  requireSharedDemoCapabilityIfApplicable,
+  requireSharedDemoStoreCapabilityIfApplicable,
+} from "../sharedDemo/actor";
+import { requireReadySharedDemoWriteWithCtx } from "../sharedDemo/restore";
 
 export const STAFF_CREDENTIAL_STATUS = v.union(
   v.literal("pending"),
@@ -220,18 +226,12 @@ async function requireStaffAuthenticationStoreAccessWithCtx(
   ctx: MutationCtx,
   storeId: Id<"store">,
 ) {
-  const store = await ctx.db.get("store", storeId);
-  if (!store) {
-    throw new Error("You do not have access to authenticate staff for this store.");
-  }
-
-  const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
-  await requireOrganizationMemberRoleWithCtx(ctx, {
+  await requireStoreMemberAccessWithCtx(ctx, {
     allowedRoles: ["full_admin", "pos_only"],
+    demoAccess: { kind: "read" },
     failureMessage:
       "You do not have access to authenticate staff for this store.",
-    organizationId: store.organizationId,
-    userId: athenaUser._id,
+    storeId,
   });
 }
 
@@ -311,16 +311,11 @@ async function requirePosTerminalAuthorityWithCtx(
   }
 
   try {
-    const store = await ctx.db.get("store", args.storeId);
-    if (!store) {
-      return terminalAuthorizationFailedResult();
-    }
-    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
-    await requireOrganizationMemberRoleWithCtx(ctx, {
+    const { store } = await requireStoreMemberAccessWithCtx(ctx, {
       allowedRoles: ["full_admin", "pos_only"],
+      demoAccess: { kind: "read" },
       failureMessage: "You do not have access to this POS terminal.",
-      organizationId: store.organizationId,
-      userId: athenaUser._id,
+      storeId: args.storeId,
     });
 
     return ok({ store, terminal });
@@ -1141,6 +1136,7 @@ export const createStaffCredential = mutation({
   returns: commandResultValidator(v.any()),
   handler: async (ctx, args) => {
     try {
+      await requireSharedDemoCapabilityIfApplicable(ctx, "identity.manage");
       await requireStaffCredentialManagementAccessWithCtx(
         ctx,
         args.organizationId,
@@ -1270,6 +1266,14 @@ export const authenticateStaffCredential = mutation({
     username: v.string(),
   },
   handler: async (ctx, args) => {
+    const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(
+      ctx,
+      "staff.authenticate",
+      args.storeId,
+    );
+    if (demoActor) {
+      await requireReadySharedDemoWriteWithCtx(ctx, { storeId: args.storeId });
+    }
     try {
       await requireStaffAuthenticationStoreAccessWithCtx(ctx, args.storeId);
     } catch {
@@ -1467,6 +1471,14 @@ export const authenticateStaffCredentialForApproval = mutation({
     }),
   ),
   handler: async (ctx, args) => {
+    const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(
+      ctx,
+      "staff.authenticate",
+      args.storeId,
+    );
+    if (demoActor) {
+      await requireReadySharedDemoWriteWithCtx(ctx, { storeId: args.storeId });
+    }
     try {
       await requireStaffAuthenticationStoreAccessWithCtx(ctx, args.storeId);
     } catch {

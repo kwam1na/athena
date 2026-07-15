@@ -68,7 +68,12 @@ import {
   setAthenaThemeModeWithTransition,
   useAthenaTheme,
 } from "@/lib/theme";
-
+import { SharedDemoRuntime } from "@/components/shared-demo/SharedDemoRuntime";
+import { useSharedDemoContext } from "@/hooks/useSharedDemoContext";
+import {
+  SharedDemoRestrictedSurface,
+} from "@/components/shared-demo/SharedDemoRestrictedSurface";
+import { isSharedDemoRestrictedPath } from "@/components/shared-demo/sharedDemoRestrictions";
 const POS_TERMINAL_FULLSCREEN_PATH_PATTERN =
   /^\/(?<orgUrlSlug>[^/]+)\/store\/(?<storeUrlSlug>[^/]+)\/pos\/(?:register|expense)\/?$/;
 const POS_HUB_PATH_PATTERN =
@@ -176,6 +181,16 @@ function isBrowserOffline() {
 }
 
 function AuthedComponent() {
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const demoContext = useSharedDemoContext();
+  if (demoContext && isSharedDemoRestrictedPath(pathname)) {
+    const storeRoot = pathname.match(/^\/[^/]+\/store\/[^/]+/)?.[0];
+    return (
+      <SharedDemoRestrictedSurface
+        homeHref={`${storeRoot ?? ""}/shared-demo`}
+      />
+    );
+  }
   return (
     <>
       <StoreModal />
@@ -428,6 +443,7 @@ function UserMenu({
 
   return (
     <div className="flex shrink-0 items-center gap-1 sm:gap-layout-xs">
+      <SharedDemoRuntime />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
@@ -768,33 +784,35 @@ export default function Layout() {
         isFullscreenActive={isFullscreenActive}
         setFullscreenOverride={setFullscreenOverride}
       >
-        {shouldMountRemoteAssistRuntime ? (
-          <PosRemoteAssistRuntimeHost
-            appSessionRecovery={posAppSessionRecoveryRuntimeInput}
-            entryContext={localPosEntryContext}
-          />
-        ) : null}
-        {isBlockedPosAppSession ? (
-          <PosTerminalBlockedShell
-            entryContext={localPosEntryContext}
-            recoveryReason={posTerminalAppSessionRecovery.reason}
-          />
-        ) : shouldRenderPosSignInGate ? (
-          <PosTerminalSignInGate redirectTo={authRedirectTo} />
-        ) : shouldRenderPendingPosTerminalShell ? (
-          <PosTerminalRecoveryPendingShell
-            status={
-              posTerminalAppSessionRecovery.status === "idle" ||
-              posTerminalAppSessionRecovery.status === "validating" ||
-              posTerminalAppSessionRecovery.status === "retrying" ||
-              posTerminalAppSessionRecovery.status === "waiting_for_network"
-                ? posTerminalAppSessionRecovery.status
-                : "validating"
-            }
-          />
-        ) : (
-          <Outlet />
-        )}
+        <SharedDemoRuntime gatePosUntilReady showControls={false}>
+          {shouldMountRemoteAssistRuntime ? (
+            <PosRemoteAssistRuntimeHost
+              appSessionRecovery={posAppSessionRecoveryRuntimeInput}
+              entryContext={localPosEntryContext}
+            />
+          ) : null}
+          {isBlockedPosAppSession ? (
+            <PosTerminalBlockedShell
+              entryContext={localPosEntryContext}
+              recoveryReason={posTerminalAppSessionRecovery.reason}
+            />
+          ) : shouldRenderPosSignInGate ? (
+            <PosTerminalSignInGate redirectTo={authRedirectTo} />
+          ) : shouldRenderPendingPosTerminalShell ? (
+            <PosTerminalRecoveryPendingShell
+              status={
+                posTerminalAppSessionRecovery.status === "idle" ||
+                posTerminalAppSessionRecovery.status === "validating" ||
+                posTerminalAppSessionRecovery.status === "retrying" ||
+                posTerminalAppSessionRecovery.status === "waiting_for_network"
+                  ? posTerminalAppSessionRecovery.status
+                  : "validating"
+              }
+            />
+          ) : (
+            <Outlet />
+          )}
+        </SharedDemoRuntime>
       </PosTerminalShell>
     );
   }
@@ -816,7 +834,7 @@ export default function Layout() {
             <div
               className={cn(
                 "flex !min-h-0 flex-1",
-                isFullscreenActive ? "h-svh" : "h-[calc(100svh-4rem)]",
+                isFullscreenActive && "h-svh",
               )}
             >
               {isFullscreenActive ? null : (

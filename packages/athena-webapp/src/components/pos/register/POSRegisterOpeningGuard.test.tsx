@@ -15,13 +15,24 @@ const clearIndexedDbPosLocalStoreMock = vi.fn();
 const reloadWindowMock = vi.fn();
 const replaceStaffAuthoritySnapshotMock = vi.fn();
 const writeStoreDayReadinessMock = vi.fn();
+const startLocalStoreDayMock = vi.fn();
+const useSharedDemoRegisterBootstrapStatusMock = vi.fn();
+
+vi.mock("@/lib/pos/infrastructure/local/localCommandGateway", () => ({
+  createLocalCommandGateway: () => ({
+    startStoreDay: (...args: unknown[]) => startLocalStoreDayMock(...args),
+  }),
+}));
 
 vi.mock("@/components/pos/CashierAuthDialog", () => ({
   CashierAuthDialog: ({
     onAuthenticated,
     open,
   }: {
-    onAuthenticated: (result: { staffProfileId: string }) => void;
+    onAuthenticated: (result: {
+      activeRoles: string[];
+      staffProfileId: string;
+    }) => void;
     open: boolean;
   }) =>
     open ? (
@@ -29,7 +40,10 @@ vi.mock("@/components/pos/CashierAuthDialog", () => ({
         <button
           type="button"
           onClick={() => {
-            onAuthenticated({ staffProfileId: "staff-1" });
+            onAuthenticated({
+              activeRoles: ["cashier"],
+              staffProfileId: "staff-1",
+            });
           }}
         >
           Confirm cashier
@@ -169,7 +183,13 @@ vi.mock("@/lib/pos/infrastructure/local/localPosReadiness", () => ({
     useLocalPosReadinessMock(...args),
 }));
 
+vi.mock("@/components/shared-demo/SharedDemoRuntime", () => ({
+  useSharedDemoRegisterBootstrapStatus: () =>
+    useSharedDemoRegisterBootstrapStatusMock(),
+}));
+
 vi.mock("@/lib/navigationUtils", () => ({
+  getOrigin: () => "/origin",
   reloadWindow: () => reloadWindowMock(),
 }));
 
@@ -216,6 +236,14 @@ describe("POSRegisterOpeningGuard", () => {
     vi.clearAllMocks();
     startStoreDayMock.mockResolvedValue({
       data: { action: "started" },
+      kind: "ok",
+    });
+    startLocalStoreDayMock.mockResolvedValue({
+      data: {
+        localEventId: "event-store-day-1",
+        operatingDate: "2026-05-09",
+        status: "started",
+      },
       kind: "ok",
     });
     writeStoreDayReadinessMock.mockResolvedValue({
@@ -270,6 +298,7 @@ describe("POSRegisterOpeningGuard", () => {
       source: "live",
       storeDayStatus: "started",
     });
+    useSharedDemoRegisterBootstrapStatusMock.mockReturnValue("ready");
     useQueryMock.mockImplementation((queryName: string) => {
       if (queryName === "getDailyOpeningSnapshot") {
         return { status: "started" };
@@ -309,6 +338,29 @@ describe("POSRegisterOpeningGuard", () => {
         storeId: "store-1",
       }),
     );
+  });
+
+  it("keeps demo register preparation inside the register shell", () => {
+    useSharedDemoRegisterBootstrapStatusMock.mockReturnValue("projecting");
+
+    render(
+      <POSRegisterOpeningGuard>
+        <div>Register workspace</div>
+      </POSRegisterOpeningGuard>,
+    );
+
+    expect(screen.queryByText("Register workspace")).not.toBeInTheDocument();
+    expect(screen.getByTestId("view-root")).toHaveAttribute(
+      "data-content-class",
+      expect.stringContaining("rounded-2xl border"),
+    );
+    expect(screen.getByText("POS")).toBeInTheDocument();
+    expect(screen.getByText("Preparing this register")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Athena is aligning this browser with the demo register session.",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("shows the POS shell while local readiness is loading", () => {
@@ -391,6 +443,14 @@ describe("POSRegisterOpeningGuard", () => {
   });
 
   it("shows a blocked state when the store day has not started", () => {
+    useLocalPosEntryContextMock.mockReturnValue({
+      status: "ready",
+      orgUrlSlug: "wigclub",
+      storeUrlSlug: "wigclub",
+      storeId: "store-1",
+      terminalSeed: { cloudTerminalId: "terminal-cloud-1" },
+      source: "live",
+    });
     useQueryMock.mockImplementation((queryName: string) => {
       if (queryName === "getDailyOpeningSnapshot") {
         return { status: "ready" };
@@ -425,6 +485,65 @@ describe("POSRegisterOpeningGuard", () => {
     expect(
       screen.getByRole("link", { name: /Opening Handoff/i }),
     ).toHaveAttribute("href", "/wigclub/store/wigclub/operations/opening");
+    expect(screen.queryByText("Demo staff sign-in")).not.toBeInTheDocument();
+  });
+
+  it("starts the demo through the local command gateway for later projection", async () => {
+    useLocalPosEntryContextMock.mockReturnValue({
+      status: "ready",
+      orgUrlSlug: "demo",
+      storeUrlSlug: "central",
+      storeId: "store-1",
+      terminalSeed: { cloudTerminalId: "terminal-cloud-1" },
+      source: "live",
+    });
+    useQueryMock.mockImplementation((queryName: string) => {
+      if (queryName === "getDailyOpeningSnapshot") {
+        return { status: "needs_attention" };
+      }
+      if (queryName === "getDailyCloseLifecycleGate") {
+        return { status: "ready" };
+      }
+      return undefined;
+    });
+    useLocalPosReadinessMock.mockReturnValue({
+      status: "blocked",
+      reason: "not_started",
+      canStartLocally: true,
+      message:
+        "Store day not started. Complete Opening Handoff before starting sales.",
+    });
+
+    render(
+      <POSRegisterOpeningGuard>
+        <div>Register workspace</div>
+      </POSRegisterOpeningGuard>,
+    );
+
+    expect(screen.getByText("Demo staff sign-in")).toBeInTheDocument();
+    expect(screen.getByText("kofi")).toBeInTheDocument();
+    expect(screen.getByText("ama")).toBeInTheDocument();
+    expect(screen.getByText("1111")).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Start day/i }));
+      await Promise.resolve();
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Confirm cashier/i }));
+      await Promise.resolve();
+    });
+
+    expect(startLocalStoreDayMock).toHaveBeenCalledWith({
+      activeRoles: ["cashier"],
+      endAt: new Date(2026, 4, 10).getTime(),
+      operatingDate: "2026-05-09",
+      staffProfileId: "staff-1",
+      startAt: new Date(2026, 4, 9).getTime(),
+      storeId: "store-1",
+      terminalId: "terminal-cloud-1",
+    });
+    expect(startStoreDayMock).not.toHaveBeenCalled();
   });
 
   it("refreshes terminal staff authority while online so credentials are available offline", async () => {
@@ -500,6 +619,14 @@ describe("POSRegisterOpeningGuard", () => {
   });
 
   it("authenticates staff and starts the store day from the POS gate when opening is ready", async () => {
+    useLocalPosEntryContextMock.mockReturnValue({
+      status: "ready",
+      orgUrlSlug: "wigclub",
+      storeUrlSlug: "wigclub",
+      storeId: "store-1",
+      terminalSeed: { cloudTerminalId: "terminal-cloud-1" },
+      source: "live",
+    });
     useQueryMock.mockImplementation((queryName: string) => {
       if (queryName === "getDailyOpeningSnapshot") {
         return { status: "ready" };
@@ -530,27 +657,84 @@ describe("POSRegisterOpeningGuard", () => {
     });
 
     expect(
-      screen.getByRole("dialog", { name: "Confirm staff credentials" }),
+      screen.getByRole("dialog", { name: "Sign in required" }),
     ).toBeInTheDocument();
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: /Confirm staff/i }));
+      fireEvent.click(screen.getByRole("button", { name: /Confirm cashier/i }));
       await Promise.resolve();
     });
 
-    expect(authenticateStaffCredentialMock).toHaveBeenCalledWith({
-      allowedRoles: ["cashier", "manager"],
-      pinHash: "hashed-pin",
-      storeId: "store-1",
-      username: "frontdesk",
-    });
-    expect(startStoreDayMock).toHaveBeenCalledWith({
-      actorStaffProfileId: "staff-1",
+    expect(startLocalStoreDayMock).toHaveBeenCalledWith({
+      activeRoles: ["cashier"],
       endAt: new Date(2026, 4, 10).getTime(),
       operatingDate: "2026-05-09",
+      staffProfileId: "staff-1",
       startAt: new Date(2026, 4, 9).getTime(),
       storeId: "store-1",
+      terminalId: "terminal-cloud-1",
     });
+  });
+
+  it("closes terminal sign-in instead of falling back to unscoped staff auth when the terminal seed disappears", async () => {
+    useLocalPosEntryContextMock.mockReturnValue({
+      status: "ready",
+      orgUrlSlug: "demo",
+      storeUrlSlug: "central",
+      storeId: "store-1",
+      terminalSeed: { cloudTerminalId: "terminal-cloud-1" },
+      source: "live",
+    });
+    useQueryMock.mockImplementation((queryName: string) => {
+      if (queryName === "getDailyOpeningSnapshot") {
+        return { status: "ready" };
+      }
+      if (queryName === "getDailyCloseLifecycleGate") {
+        return { status: "ready" };
+      }
+      return undefined;
+    });
+    useLocalPosReadinessMock.mockReturnValue({
+      status: "blocked",
+      reason: "not_started",
+      message: "Store day not started.",
+    });
+
+    const { rerender } = render(
+      <POSRegisterOpeningGuard>
+        <div>Register workspace</div>
+      </POSRegisterOpeningGuard>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Start day/i }));
+    expect(
+      screen.getByRole("dialog", { name: "Sign in required" }),
+    ).toBeInTheDocument();
+
+    useLocalPosEntryContextMock.mockReturnValue({
+      status: "ready",
+      orgUrlSlug: "demo",
+      storeUrlSlug: "central",
+      storeId: "store-1",
+      terminalSeed: null,
+      source: "live",
+    });
+    rerender(
+      <POSRegisterOpeningGuard>
+        <div>Register workspace</div>
+      </POSRegisterOpeningGuard>,
+    );
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Confirm staff" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText("Terminal setup is required before POS can start the day."),
+    ).toBeInTheDocument();
+    expect(startLocalStoreDayMock).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalledWith(
+      "Mount an open register before starting the store day.",
+    );
   });
 
   it("starts the store day locally when Opening Handoff needs review so sales can continue", async () => {
@@ -611,12 +795,14 @@ describe("POSRegisterOpeningGuard", () => {
       await Promise.resolve();
     });
 
-    expect(writeStoreDayReadinessMock).toHaveBeenCalledWith({
-      storeId: "store-1",
+    expect(startLocalStoreDayMock).toHaveBeenCalledWith({
+      activeRoles: ["cashier"],
+      endAt: new Date(2026, 4, 10).getTime(),
       operatingDate: "2026-05-09",
-      status: "started",
-      source: "local",
-      updatedAt: new Date(2026, 4, 9, 12).getTime(),
+      staffProfileId: "staff-1",
+      startAt: new Date(2026, 4, 9).getTime(),
+      storeId: "store-1",
+      terminalId: "terminal-cloud-1",
     });
     expect(startStoreDayMock).not.toHaveBeenCalled();
     expect(screen.getByText("Register workspace")).toBeInTheDocument();

@@ -33,6 +33,7 @@ import {
   hasCashAffectingCloseoutHolds,
   listRegisterSessionCloseoutHolds,
 } from "../pos/application/sync/registerSessionCloseoutHolds";
+import { validatePosLocalStaffProofWithCtx } from "../pos/application/sync/staffProofValidation";
 import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
@@ -50,6 +51,8 @@ import type {
   ApprovalRequesterBinding,
 } from "../../shared/approvalPolicy";
 import { formatStaffDisplayName } from "../../shared/staffDisplayName";
+import { requireSharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
+import { requireReadySharedDemoWriteWithCtx } from "../sharedDemo/restore";
 
 export {
   buildRegisterSessionCloseoutReview,
@@ -207,8 +210,10 @@ type SubmitRegisterSessionCloseoutArgs = {
   registerSessionId: Id<"registerSession">;
   requestedByStaffProfileId?: Id<"staffProfile">;
   staffPinHash?: string;
+  staffProofToken?: string;
   staffUsername?: string;
   storeId: Id<"store">;
+  terminalId?: Id<"posTerminal">;
 };
 
 type FinalizeRegisterSessionCloseoutArgs = {
@@ -278,7 +283,9 @@ type CorrectRegisterSessionOpeningFloatArgs = {
   correctedOpeningFloat: number;
   reason: string;
   registerSessionId: Id<"registerSession">;
+  staffProofToken?: string;
   storeId: Id<"store">;
+  terminalId?: Id<"posTerminal">;
 };
 
 function buildOpeningFloatCorrectionApprovalRequirement(args: {
@@ -585,13 +592,19 @@ async function staffProfileCanReviewCloseoutVariance(
 async function requireCashControlsStoreAccess(
   ctx: QueryCtx | MutationCtx,
   storeId: Id<"store">,
+  options?: { allowSharedDemoWrite?: boolean },
 ) {
   const store = await ctx.db.get("store", storeId);
   if (!store) {
     throw new Error("Store not found.");
   }
 
-  const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+  const athenaUser = await requireAuthenticatedAthenaUserWithCtx(
+    ctx,
+    options?.allowSharedDemoWrite
+      ? { sharedDemoCapability: "cash.control.write" }
+      : undefined,
+  );
   await requireOrganizationMemberRoleWithCtx(ctx, {
     allowedRoles: ["full_admin", "pos_only"],
     failureMessage: "You do not have access to cash controls.",
@@ -606,11 +619,14 @@ async function resolveCloseoutActorStaffProfileId(
   ctx: Pick<MutationCtx, "db">,
   args: {
     allowedCredentialRoles?: OperationalRole[];
+    allowSharedDemoStaffActor?: boolean;
     athenaUserId: Id<"athenaUser">;
     staffProfileId?: Id<"staffProfile">;
     staffPinHash?: string;
+    staffProofToken?: string;
     staffUsername?: string;
     storeId: Id<"store">;
+    terminalId?: Id<"posTerminal">;
   },
 ): Promise<CommandResult<Id<"staffProfile"> | undefined>> {
   if (!args.staffProfileId) {
@@ -629,8 +645,25 @@ async function resolveCloseoutActorStaffProfileId(
     });
   }
 
+  if (args.allowSharedDemoStaffActor) {
+    return ok(staffProfile._id);
+  }
+
   if (staffProfile.linkedUserId === args.athenaUserId) {
     return ok(staffProfile._id);
+  }
+
+  if (args.staffProofToken && args.terminalId) {
+    const staffProof = await validatePosLocalStaffProofWithCtx(ctx, {
+      now: Date.now(),
+      staffProfileId: staffProfile._id,
+      storeId: args.storeId,
+      terminalId: args.terminalId,
+      token: args.staffProofToken,
+    });
+    if (staffProof.kind === "ok") {
+      return ok(staffProfile._id);
+    }
   }
 
   if (args.staffPinHash && args.staffUsername) {
@@ -814,8 +847,10 @@ export const submitRegisterSessionCloseout = mutation({
     registerSessionId: v.id("registerSession"),
     requestedByStaffProfileId: v.optional(v.id("staffProfile")),
     staffPinHash: v.optional(v.string()),
+    staffProofToken: v.optional(v.string()),
     staffUsername: v.optional(v.string()),
     storeId: v.id("store"),
+    terminalId: v.optional(v.id("posTerminal")),
   },
   returns: submitRegisterSessionCloseoutResultValidator,
   handler: async (
@@ -829,18 +864,30 @@ export const submitRegisterSessionCloseout = mutation({
       });
     }
 
+    const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(
+      ctx,
+      "cash.control.write",
+      args.storeId,
+    );
+    if (demoActor) {
+      await requireReadySharedDemoWriteWithCtx(ctx, { storeId: args.storeId });
+    }
     const { athenaUser, store } = await requireCashControlsStoreAccess(
       ctx,
       args.storeId,
+      { allowSharedDemoWrite: true },
     );
     const actorUserId = athenaUser._id;
     const submitActorStaffProfileResult = await resolveCloseoutActorStaffProfileId(ctx, {
       allowedCredentialRoles: ["cashier", "manager"],
+      allowSharedDemoStaffActor: Boolean(demoActor),
       athenaUserId: athenaUser._id,
       staffProfileId: args.actorStaffProfileId ?? args.requestedByStaffProfileId,
       staffPinHash: args.staffPinHash,
+      staffProofToken: args.staffProofToken,
       staffUsername: args.staffUsername,
       storeId: args.storeId,
+      terminalId: args.terminalId,
     });
     if (submitActorStaffProfileResult.kind !== "ok") {
       return submitActorStaffProfileResult;
@@ -1756,7 +1803,19 @@ export const reopenRegisterSessionCloseout = mutation({
     ctx: MutationCtx,
     args: ReopenRegisterSessionCloseoutArgs
   ): Promise<CommandResult<ReopenRegisterSessionResult>> => {
-    const { athenaUser } = await requireCashControlsStoreAccess(ctx, args.storeId);
+    const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(
+      ctx,
+      "cash.control.write",
+      args.storeId,
+    );
+    if (demoActor) {
+      await requireReadySharedDemoWriteWithCtx(ctx, { storeId: args.storeId });
+    }
+    const { athenaUser } = await requireCashControlsStoreAccess(
+      ctx,
+      args.storeId,
+      { allowSharedDemoWrite: true },
+    );
     const actorUserId = athenaUser._id;
     const registerSession = await ctx.db.get("registerSession", args.registerSessionId);
 
@@ -2028,7 +2087,9 @@ export const correctRegisterSessionOpeningFloat = mutation({
     correctedOpeningFloat: v.number(),
     reason: v.string(),
     registerSessionId: v.id("registerSession"),
+    staffProofToken: v.optional(v.string()),
     storeId: v.id("store"),
+    terminalId: v.optional(v.id("posTerminal")),
   },
   returns: correctRegisterSessionOpeningFloatResultValidator,
   handler: async (
@@ -2051,12 +2112,27 @@ export const correctRegisterSessionOpeningFloat = mutation({
       });
     }
 
-    const { athenaUser } = await requireCashControlsStoreAccess(ctx, args.storeId);
+    const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(
+      ctx,
+      "cash.control.write",
+      args.storeId,
+    );
+    if (demoActor) {
+      await requireReadySharedDemoWriteWithCtx(ctx, { storeId: args.storeId });
+    }
+    const { athenaUser } = await requireCashControlsStoreAccess(
+      ctx,
+      args.storeId,
+      { allowSharedDemoWrite: true },
+    );
     const actorUserId = athenaUser._id;
     const actorStaffProfileResult = await resolveCloseoutActorStaffProfileId(ctx, {
+      allowSharedDemoStaffActor: Boolean(demoActor),
       athenaUserId: athenaUser._id,
       staffProfileId: args.actorStaffProfileId,
+      staffProofToken: args.staffProofToken,
       storeId: args.storeId,
+      terminalId: args.terminalId,
     });
     if (actorStaffProfileResult.kind !== "ok") {
       return actorStaffProfileResult;
@@ -2211,7 +2287,19 @@ export const reviewRegisterSessionCloseout = mutation({
     ctx: MutationCtx,
     args: ReviewRegisterSessionCloseoutArgs
   ): Promise<CommandResult<ReviewRegisterSessionCloseoutResult>> => {
-    const { athenaUser } = await requireCashControlsStoreAccess(ctx, args.storeId);
+    const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(
+      ctx,
+      "cash.control.write",
+      args.storeId,
+    );
+    if (demoActor) {
+      await requireReadySharedDemoWriteWithCtx(ctx, { storeId: args.storeId });
+    }
+    const { athenaUser } = await requireCashControlsStoreAccess(
+      ctx,
+      args.storeId,
+      { allowSharedDemoWrite: true },
+    );
     const reviewedByUserId = athenaUser._id;
     const registerSession = await ctx.db.get("registerSession", args.registerSessionId);
 

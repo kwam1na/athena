@@ -171,6 +171,10 @@ export const sendVerificationCodeViaProvider = action({
     storeId: v.id("store"),
   },
   handler: async (ctx, args): Promise<any> => {
+    await ctx.runQuery(
+      (internal as any).sharedDemo.actor.denySharedDemoEffectIfApplicable,
+      {},
+    );
     const [data, store] = await Promise.all([
       ctx.runMutation(internal.storeFront.auth.requestVerificationCode, {
         email: args.email,

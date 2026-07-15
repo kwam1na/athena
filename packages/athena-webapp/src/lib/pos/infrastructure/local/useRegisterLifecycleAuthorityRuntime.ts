@@ -8,7 +8,7 @@ import {
 } from "@/lib/pos/infrastructure/convex/registerLifecycleAuthorityGateway";
 import { getInitialRuntimeBuildMetadata } from "@/lib/runtimeBuildMetadata";
 import type { Id } from "~/convex/_generated/dataModel";
-import type { PosLocalRegisterAuthorityPort } from "@/lib/pos/application/posLocalStorePort";
+import type { PosLocalStorePort } from "@/lib/pos/application/posLocalStorePort";
 
 import {
   deriveRegisterLifecycleAuthorityCandidates,
@@ -23,8 +23,9 @@ import {
   shouldSubscribeToRegisterLifecycleAuthority,
   type RegisterLifecycleAuthorityRolloutPolicy,
 } from "./registerLifecycleAuthorityRollout";
+import { seedRegisterSessionAuthorityBootstrap } from "./registerSessionAuthorityBootstrap";
 
-type RegisterLifecycleAuthorityStore = PosLocalRegisterAuthorityPort;
+type RegisterLifecycleAuthorityStore = PosLocalStorePort;
 
 export type RegisterLifecycleAuthorityAuthorizationState =
   | { status: "not_ready" | "loading" | "offline" }
@@ -154,11 +155,12 @@ export function useRegisterLifecycleAuthorityRuntime(input: {
   const queryArgs = useMemo(() => {
     if (
       !isOnline ||
-      !shouldSubscribeToRegisterLifecycleAuthority(rolloutPolicy) ||
       !input.storeId ||
       !input.terminal?._id ||
       !terminalSeed?.syncSecretHash ||
-      candidates.status !== "ready"
+      (candidates.status !== "ready" && candidates.status !== "empty") ||
+      (candidates.status === "ready" &&
+        !shouldSubscribeToRegisterLifecycleAuthority(rolloutPolicy))
     ) {
       return "skip" as const;
     }
@@ -264,11 +266,53 @@ export function useRegisterLifecycleAuthorityRuntime(input: {
     if (
       !currentSnapshot ||
       !terminalSeed ||
-      !storeId ||
-      currentCandidates.status !== "ready"
+      !storeId
     ) {
       return;
     }
+
+    if (currentCandidates.status === "empty") {
+      if (!currentSnapshot.bootstrap) {
+        return;
+      }
+      const generation = ++applyGeneration.current;
+      let cancelled = false;
+      setPersistence({ status: "applying" });
+      void seedRegisterSessionAuthorityBootstrap({
+        bootstrap: {
+          ...currentSnapshot.bootstrap,
+          observedAt: Date.now(),
+          status: currentSnapshot.bootstrap.cloudStatus,
+        },
+        store,
+        storeId,
+        terminalId: terminalSeed.terminalId,
+      }).then(async (outcome) => {
+        if (cancelled || generation !== applyGeneration.current) return;
+        if (!outcome.seeded) {
+          setPersistence({ reason: "write_failed", status: "failed" });
+          onAdvisoryOutcomeRef.current?.({
+            appliedCount: 0,
+            candidateCount: 0,
+            outcome: "persistence_failed",
+          });
+          return;
+        }
+        await refreshLocalRegisterReadModelRef.current();
+        if (cancelled || generation !== applyGeneration.current) return;
+        setPersistence({ status: "ready" });
+        onAdvisoryOutcomeRef.current?.({
+          appliedCount: 1,
+          candidateCount: 0,
+          outcome: "applied",
+        });
+      });
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    if (currentCandidates.status !== "ready") return;
 
     if (
       !shouldApplyRegisterLifecycleAuthority(

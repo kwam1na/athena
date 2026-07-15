@@ -94,6 +94,7 @@ async function assertRegisterNumberIsAvailable(
 export async function registerTerminal(
   ctx: MutationCtx,
   args: {
+    allowRegisterNumberChange?: boolean;
     storeId: Id<"store">;
     fingerprintHash: string;
     syncSecretHash: string;
@@ -135,7 +136,10 @@ export async function registerTerminal(
         });
       }
 
-      if (existing.registerNumber !== nextRegisterNumber) {
+      if (
+        existing.registerNumber !== nextRegisterNumber &&
+        !args.allowRegisterNumberChange
+      ) {
         return userError({
           code: "validation_failed",
           message:

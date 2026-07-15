@@ -11,8 +11,12 @@ const authMocks = vi.hoisted(() => ({
   requireAuthenticatedAthenaUserWithCtx: vi.fn(),
   requireOrganizationMemberRoleWithCtx: vi.fn(),
 }));
+const sharedDemoMocks = vi.hoisted(() => ({
+  requireSharedDemoStoreCapabilityIfApplicable: vi.fn(),
+}));
 
 vi.mock("../lib/athenaUserAuth", () => authMocks);
+vi.mock("../sharedDemo/actor", () => sharedDemoMocks);
 
 function getHandler<TArgs, TResult>(definition: unknown) {
   return (definition as { _handler: (ctx: unknown, args: TArgs) => TResult })
@@ -153,12 +157,47 @@ describe("buildRegisterSessionActivityPage", () => {
 
 describe("listRegisterSessionActivity", () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     authMocks.requireAuthenticatedAthenaUserWithCtx.mockResolvedValue({
       _id: "user-1",
     });
     authMocks.requireOrganizationMemberRoleWithCtx.mockResolvedValue({
       role: "full_admin",
     });
+  });
+
+  it("shared-demo-pos-activity uses the store-clamped cash capability", async () => {
+    sharedDemoMocks.requireSharedDemoStoreCapabilityIfApplicable.mockResolvedValue({
+      storeId: "store-1",
+    });
+    const handler = getHandler(listRegisterSessionActivity);
+    const ctx = {
+      db: {
+        get: vi.fn(async (table: string) => {
+          if (table === "store") {
+            return { _id: "store-1", organizationId: "org-1" };
+          }
+          if (table === "registerSession") {
+            return { _id: "session-1", storeId: "store-1" };
+          }
+          return null;
+        }),
+      },
+    };
+
+    await handler(ctx, {
+      paginationOpts: { cursor: null, numItems: 10 },
+      registerSessionId: "session-1" as Id<"registerSession">,
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(
+      sharedDemoMocks.requireSharedDemoStoreCapabilityIfApplicable,
+    ).toHaveBeenCalledWith(ctx, "cash.control.write", "store-1");
+    expect(authMocks.requireAuthenticatedAthenaUserWithCtx).toHaveBeenCalledWith(
+      ctx,
+      { sharedDemoCapability: "cash.control.write" },
+    );
   });
 
   it("requires full-admin organization membership before returning activity", async () => {

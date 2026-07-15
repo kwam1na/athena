@@ -26,15 +26,19 @@ vi.mock("./auth/PosRecoveryCode", () => ({
 }));
 
 describe("Convex Auth provider composition", () => {
-  it("registers email OTP and POS recovery-code providers", async () => {
+  it("registers email OTP, POS recovery-code, and shared-demo providers", async () => {
     await import("./auth");
 
     expect(authMocks.convexAuth).toHaveBeenCalledWith(
       expect.objectContaining({
-        providers: [
+        providers: expect.arrayContaining([
           expect.objectContaining({ id: "athena-email-otp" }),
           expect.objectContaining({ id: ATHENA_POS_RECOVERY_CODE_PROVIDER_ID }),
-        ],
+          expect.objectContaining({
+            options: expect.objectContaining({ id: "shared-demo" }),
+            type: "credentials",
+          }),
+        ]),
       }),
     );
   });

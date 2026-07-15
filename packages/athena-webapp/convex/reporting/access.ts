@@ -1,6 +1,7 @@
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { requireAuthenticatedAthenaUserWithCtx } from "../lib/athenaUserAuth";
+import { requireSharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
 
 type ReportingAccessCtx =
   Pick<QueryCtx, "auth" | "db"> | Pick<MutationCtx, "auth" | "db">;
@@ -13,7 +14,14 @@ export async function requireReportingStoreAccess(
 ) {
   let athenaUser;
   try {
-    athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+    await requireSharedDemoStoreCapabilityIfApplicable(
+      ctx,
+      "reports.read",
+      storeId,
+    );
+    athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx, {
+      sharedDemoCapability: "reports.read",
+    });
   } catch {
     throw new Error(REPORTING_ACCESS_DENIED);
   }

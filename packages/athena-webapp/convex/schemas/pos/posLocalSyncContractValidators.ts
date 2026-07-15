@@ -52,6 +52,11 @@ const posLocalSyncPayloadValidators = {
     registerNumber: v.optional(v.string()),
     notes: v.optional(v.string()),
   }),
+  store_day_started: v.object({
+    operatingDate: v.string(),
+    startAt: v.number(),
+    endAt: v.number(),
+  }),
   pending_checkout_item_defined: v.object({
     localPendingCheckoutItemId: v.string(),
     name: v.string(),

@@ -39,7 +39,6 @@ import {
   AlertOctagon,
   PackageCheckIcon,
   PackageOpenIcon,
-  ChartNoAxesColumn,
   MessageCircleMore,
   CalendarDays,
   Tag,
@@ -62,6 +61,7 @@ import { api } from "~/convex/_generated/api";
 import { useGetCategories } from "../hooks/useGetCategories";
 import { PermissionGate } from "./PermissionGate";
 import { usePermissions } from "../hooks/usePermissions";
+import { useSharedDemoContext } from "../hooks/useSharedDemoContext";
 
 type SidebarOrderSummary = {
   status: string;
@@ -191,6 +191,8 @@ export function AppSidebar({
     api.storeFront.onlineOrder.getAllOnlineOrders,
     activeStore?._id ? { storeId: activeStore._id } : "skip",
   ) as SidebarOrderSummary[] | undefined;
+  const sharedDemoContext = useSharedDemoContext();
+  const isSharedDemo = sharedDemoContext?.kind === "shared_demo";
 
   const openOrders = orders?.filter((order) => order.status === "open")?.length;
 
@@ -530,24 +532,6 @@ export function AppSidebar({
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
-              {/* Reports section */}
-              <SidebarMenuItem>
-                <SidebarMenuButton disabled={!hasFullAdminAccess} asChild>
-                  <Link
-                    to="/$orgUrlSlug/store/$storeUrlSlug/reports"
-                    params={(p) => ({
-                      ...p,
-                      orgUrlSlug: activeOrganization?.slug,
-                      storeUrlSlug: activeStore?.slug,
-                    })}
-                    className="flex items-center"
-                  >
-                    <ChartNoAxesColumn className="w-4 h-4" />
-                    <p className="font-medium">Reports</p>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-
               {/* Homepage section */}
               <SidebarMenuItem>
                 <SidebarMenuButton disabled={!hasFullAdminAccess} asChild>
@@ -835,8 +819,10 @@ export function AppSidebar({
                 </SidebarMenuSub> */}
               </SidebarMenuCollapsible>
 
-              {/* Bulk operations section */}
-              <SidebarMenuItem>
+              {!isSharedDemo ? (
+                <>
+                  {/* Bulk operations section */}
+                  <SidebarMenuItem>
                 <SidebarMenuButton disabled={!hasFullAdminAccess} asChild>
                   <Link
                     to="/$orgUrlSlug/store/$storeUrlSlug/bulk-operations"
@@ -851,10 +837,10 @@ export function AppSidebar({
                     <p className="font-medium">Bulk Operations</p>
                   </Link>
                 </SidebarMenuButton>
-              </SidebarMenuItem>
+                  </SidebarMenuItem>
 
-              {/* Promo codes section */}
-              <SidebarMenuItem>
+                  {/* Promo codes section */}
+                  <SidebarMenuItem>
                 <SidebarMenuButton disabled={!hasFullAdminAccess} asChild>
                   <Link
                     to="/$orgUrlSlug/store/$storeUrlSlug/promo-codes"
@@ -869,7 +855,9 @@ export function AppSidebar({
                     <p className="font-medium">Promo codes</p>
                   </Link>
                 </SidebarMenuButton>
-              </SidebarMenuItem>
+                  </SidebarMenuItem>
+                </>
+              ) : null}
 
               {/* Reviews section */}
               <SidebarMenuItem>
@@ -897,15 +885,16 @@ export function AppSidebar({
               </SidebarMenuItem>
 
               {/* Storefront section */}
-              <SidebarMenuCollapsible
-                icon={PanelTop}
-                label="Storefront"
-                disabled={!hasFullAdminAccess}
-                open={sidebarSubmenuOpenState.storefront}
-                onOpenChange={(open) =>
-                  setSidebarSubmenuOpen("storefront", open)
-                }
-              >
+              {!isSharedDemo ? (
+                <SidebarMenuCollapsible
+                  icon={PanelTop}
+                  label="Storefront"
+                  disabled={!hasFullAdminAccess}
+                  open={sidebarSubmenuOpenState.storefront}
+                  onOpenChange={(open) =>
+                    setSidebarSubmenuOpen("storefront", open)
+                  }
+                >
                 <SidebarMenuSub>
                   <SidebarMenuSubItem>
                     <SidebarMenuButton disabled={!hasFullAdminAccess} asChild>
@@ -981,7 +970,8 @@ export function AppSidebar({
                     </SidebarMenuButton>
                   </SidebarMenuSubItem>
                 </SidebarMenuSub>
-              </SidebarMenuCollapsible>
+                </SidebarMenuCollapsible>
+              ) : null}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -1063,7 +1053,7 @@ export function AppSidebar({
           </SidebarGroup>
         </PermissionGate>
 
-        <PermissionGate requires="full_admin">
+        {!isSharedDemo ? <PermissionGate requires="full_admin">
           <SidebarGroup>
             <SidebarGroupLabel>Organization</SidebarGroupLabel>
             <SidebarGroupContent>
@@ -1087,9 +1077,9 @@ export function AppSidebar({
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
-        </PermissionGate>
+        </PermissionGate> : null}
 
-        <PermissionGate requires="full_admin">
+        {!isSharedDemo ? <PermissionGate requires="full_admin">
           <SidebarGroup>
             <SidebarGroupLabel>App</SidebarGroupLabel>
             <SidebarGroupContent>
@@ -1113,7 +1103,7 @@ export function AppSidebar({
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
-        </PermissionGate>
+        </PermissionGate> : null}
       </SidebarContent>
       {isContainedShell ? <ContainedSidebarToggle /> : <SidebarRail />}
     </Sidebar>

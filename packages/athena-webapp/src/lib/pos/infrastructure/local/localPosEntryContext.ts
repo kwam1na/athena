@@ -4,7 +4,10 @@ import {
   type PosLocalStoreResult,
   type PosProvisionedTerminalSeed,
 } from "@/lib/pos/application/posLocalStoreTypes";
-import { getDefaultPosLocalStore } from "./posLocalStorageRuntime";
+import {
+  getDefaultPosLocalStore,
+  subscribeDefaultPosTerminalSeedChanges,
+} from "./posLocalStorageRuntime";
 
 export type PosLocalEntryRouteParams = {
   orgUrlSlug?: string;
@@ -144,18 +147,26 @@ export function useLocalPosEntryContext(input: {
 
   useEffect(() => {
     let cancelled = false;
+    let readGeneration = 0;
 
-    void (async () => {
-      const result =
-        await getDefaultPosLocalStore().readProvisionedTerminalSeed();
+    const refreshSeed = () => {
+      const generation = ++readGeneration;
+      void (async () => {
+        const result =
+          await getDefaultPosLocalStore().readProvisionedTerminalSeed();
 
-      if (!cancelled) {
-        setSeedRead(result);
-      }
-    })();
+        if (!cancelled && generation === readGeneration) {
+          setSeedRead(result);
+        }
+      })();
+    };
+
+    const unsubscribe = subscribeDefaultPosTerminalSeedChanges(refreshSeed);
+    refreshSeed();
 
     return () => {
       cancelled = true;
+      unsubscribe();
     };
   }, []);
 

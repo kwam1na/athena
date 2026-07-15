@@ -157,6 +157,10 @@ export const sendVerificationCodeViaProvider = action({
     lastName: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await ctx.runQuery(
+      (internal as any).sharedDemo.actor.denySharedDemoEffectIfApplicable,
+      {},
+    );
     const data: any = await ctx.runMutation(
       internal.inventory.auth.requestVerificationCode,
       {

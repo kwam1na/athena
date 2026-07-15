@@ -6,6 +6,11 @@ import { requireReportingStoreAccess } from "./access";
 vi.mock("../lib/athenaUserAuth", () => ({
   requireAuthenticatedAthenaUserWithCtx: vi.fn(),
 }));
+vi.mock("../sharedDemo/actor", () => ({
+  requireSharedDemoStoreCapabilityIfApplicable: vi.fn(),
+}));
+
+import { requireSharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
 
 function context(args: {
   duplicateMembership?: boolean;
@@ -45,6 +50,7 @@ function context(args: {
 
 describe("reporting access", () => {
   beforeEach(() => {
+    vi.mocked(requireSharedDemoStoreCapabilityIfApplicable).mockResolvedValue(null);
     vi.mocked(
       athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
     ).mockResolvedValue({
@@ -65,6 +71,23 @@ describe("reporting access", () => {
       store: { _id: "store-1", organizationId: "org-1" },
       athenaUser: { _id: "user-1" },
     });
+    expect(requireSharedDemoStoreCapabilityIfApplicable).toHaveBeenCalledWith(
+      expect.anything(),
+      "reports.read",
+      "store-1",
+    );
+  });
+
+  it("fails closed before reading a report for another store", async () => {
+    vi.mocked(requireSharedDemoStoreCapabilityIfApplicable).mockRejectedValueOnce(
+      new Error("This action is unavailable in the demo."),
+    );
+    await expect(
+      requireReportingStoreAccess(
+        context({ role: "full_admin", storeOrganizationId: "org-1" }) as never,
+        "other-store" as Id<"store">,
+      ),
+    ).rejects.toThrow("Reports access unavailable.");
   });
 
   it.each([

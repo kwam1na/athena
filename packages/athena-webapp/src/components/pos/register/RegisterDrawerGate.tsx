@@ -833,7 +833,7 @@ export function RegisterDrawerGate({
               drawerGate.isSubmitting || drawerGate.canOpenDrawer === false
             }
             type="submit"
-            variant={drawerGate.isReplacement ? "workflow" : undefined}
+            variant="workflow"
           >
             {drawerGate.isSubmitting
               ? "Opening drawer"

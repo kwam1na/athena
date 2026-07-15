@@ -54,6 +54,12 @@ collect_changed_frontend_files() {
 }
 
 while IFS= read -r file; do
+  # A path can be present in the committed branch diff and deleted only in the
+  # staged delivery. Do not pass a non-existent path to ESLint.
+  if [ ! -f "$REPO_ROOT/$file" ]; then
+    continue
+  fi
+
   case "$file" in
     packages/athena-webapp/src/routeTree.gen.ts | \
     packages/athena-webapp/**/*.d.ts)

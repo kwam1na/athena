@@ -12,6 +12,10 @@ const mocks = vi.hoisted(() => ({
     return { accepted: true, coalesced: false };
   }),
   returnFreshSnapshot: false,
+  seedRegisterSessionAuthorityBootstrap: vi.fn(async () => ({
+    seeded: true,
+    seedResult: "seeded" as const,
+  })),
   snapshot: undefined as unknown,
   useRegisterLifecycleAuthorityAcknowledgement: vi.fn(() => mocks.acknowledge),
   useRegisterLifecycleAuthoritySnapshot: vi.fn(() =>
@@ -30,6 +34,11 @@ vi.mock(
       mocks.useRegisterLifecycleAuthoritySnapshot,
   }),
 );
+
+vi.mock("./registerSessionAuthorityBootstrap", () => ({
+  seedRegisterSessionAuthorityBootstrap:
+    mocks.seedRegisterSessionAuthorityBootstrap,
+}));
 
 const seed = {
   cloudTerminalId: "cloud-terminal-1",
@@ -139,6 +148,64 @@ describe("useRegisterLifecycleAuthorityRuntime", () => {
     mocks.acknowledge.mockResolvedValue({ accepted: true, coalesced: false });
     mocks.snapshot = undefined;
     mocks.returnFreshSnapshot = false;
+    mocks.seedRegisterSessionAuthorityBootstrap.mockResolvedValue({
+      seeded: true,
+      seedResult: "seeded",
+    });
+  });
+
+  it("projects terminal cloud authority when the local register is empty", async () => {
+    mocks.snapshot = {
+      bootstrap: {
+        authorityCursor: {
+          lifecycleRevision: 3,
+          mappingAuthorityRevision: 0,
+        },
+        classification: "sale_usable",
+        cloudRegisterSessionId: "cloud-register-2",
+        cloudStatus: "active",
+        expectedCash: 350,
+        lifecycleRevision: 3,
+        localRegisterSessionId: "cloud-register-2",
+        mappingAuthorityRevision: 0,
+        openedAt: 2,
+        openingFloat: 300,
+        registerNumber: "2",
+        staffProfileId: "staff-manager",
+      },
+      candidateCount: 0,
+      maximumDocumentReads: 3,
+      results: [],
+    };
+    const { result, store, refreshLocalRegisterReadModel } = renderRuntime({
+      localRegisterReadModel: {
+        activeRegisterSession: null,
+        mappings: [],
+        sourceEvents: [],
+      },
+    });
+
+    await waitFor(() => {
+      expect(result.current.persistence.status).toBe("ready");
+    });
+    expect(
+      mocks.useRegisterLifecycleAuthoritySnapshot,
+    ).toHaveBeenLastCalledWith({
+      candidates: [],
+      storeId: "store-1",
+      syncSecretHash: "sync-secret-1",
+      terminalId: "cloud-terminal-1",
+    });
+    expect(mocks.seedRegisterSessionAuthorityBootstrap).toHaveBeenCalledWith({
+      bootstrap: expect.objectContaining({
+        cloudRegisterSessionId: "cloud-register-2",
+        status: "active",
+      }),
+      store,
+      storeId: "store-1",
+      terminalId: "local-terminal-1",
+    });
+    expect(refreshLocalRegisterReadModel).toHaveBeenCalledTimes(1);
   });
 
   it("subscribes and durably applies closure authority without heartbeat or cashier input", async () => {

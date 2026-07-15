@@ -8,6 +8,7 @@ import {
   type ReportingSourceDomain,
 } from "../../shared/reportingContract";
 import { requireReportingStoreAccess } from "./access";
+import { getSharedDemoReportsOverviewWithCtx } from "../sharedDemo/reporting";
 import { summarizeProjectionHealthRead } from "./health";
 import { presentAttentionReason } from "./projections/attention";
 import { resolveReportingCalendarDateRangeWithCtx, resolveReportingCalendarReferenceWithCtx, resolveReportingOperatingDateRangeWithCtx } from "./operatingPeriods";
@@ -843,7 +844,12 @@ export const resolveReportsPeriod = query({
 export const getReportsOverview = query({
   args: reportPeriodArgs,
   handler: async (ctx, args) => {
-    await requireReportingStoreAccess(ctx, args.storeId);
+    const { store } = await requireReportingStoreAccess(ctx, args.storeId);
+    const demoOverview = await getSharedDemoReportsOverviewWithCtx(ctx, {
+      currency: store.currency,
+      storeId: args.storeId,
+    });
+    if (demoOverview) return demoOverview;
     const descriptor = await resolveRequestedReportsPeriod(ctx, args.storeId, args.periodKey);
     if (!descriptor) return { data: null, status: "schedule_unavailable" as const };
     const generation = await getActiveGeneration(ctx, args.storeId, "store_day");

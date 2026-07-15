@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+
+// Shared-demo export denial occurs before these public result envelopes.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Id } from "../_generated/dataModel";

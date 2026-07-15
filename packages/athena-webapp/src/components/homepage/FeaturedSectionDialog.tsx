@@ -10,9 +10,11 @@ import { HomepageProductPickerDialog } from "./HomepageProductPickerDialog";
 import type { Category, Product, Subcategory } from "~/types";
 
 export function FeaturedSectionDialog({
+  disabled = false,
   dialogOpen,
   setDialogOpen,
 }: {
+  disabled?: boolean;
   dialogOpen: boolean;
   setDialogOpen: React.Dispatch<React.SetStateAction<boolean>>;
 }) {
@@ -101,6 +103,7 @@ export function FeaturedSectionDialog({
       categories={storefrontVisibleCategories}
       currency={activeStore.currency}
       description="Select a product, category, or subcategory to feature below the homepage hero."
+      disabled={disabled}
       onOpenChange={setDialogOpen}
       onSelectCategory={handleAddCategory}
       onSelectProduct={handleAddProduct}

@@ -296,6 +296,38 @@ export const HARNESS_APP_REGISTRY = [
     ],
     validationScenarios: [
       {
+        title: "Shared demo admission, restore, and orientation edits",
+        touchedPaths: [
+          "docs/shared-demo-backend-coverage.md",
+          "convex/sharedDemo",
+          "convex/auth.ts",
+          "convex/auth/SharedDemoTicket.ts",
+          "convex/crons.ts",
+          "convex/http.ts",
+          "src/components/shared-demo",
+          "src/routes/demo.tsx",
+          "src/routes/_authed.tsx",
+        ],
+        commands: [
+          {
+            kind: "raw",
+            command:
+              "bun run --filter '@athena/webapp' test -- convex/sharedDemo src/components/shared-demo src/routes/demo.test.tsx src/routes/_authed.test.tsx",
+          },
+          { kind: "script", script: "audit:convex" },
+          { kind: "script", script: "lint:convex:changed" },
+          { kind: "script", script: "lint:frontend:changed" },
+          {
+            kind: "raw",
+            command:
+              "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
+          },
+          { kind: "script", script: "build" },
+        ],
+        behaviorScenarios: ["athena-admin-shell-boot"],
+        note: "Use this when the development-only shared demo changes admission, shared-store authority, restore semantics, effect restrictions, or the owner-oriented application shell. It validates the server boundary, credentialless entry, orientation layer, and generated application contracts together.",
+      },
+      {
         title: "Route or UI-only edits",
         touchedPaths: [
           "src/assets",

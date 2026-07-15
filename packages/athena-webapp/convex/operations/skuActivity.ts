@@ -5,6 +5,7 @@ import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
+import { requireSharedDemoStoreReadIfApplicable } from "../sharedDemo/actor";
 
 export type SkuActivityStatus =
   | "active"
@@ -544,10 +545,14 @@ async function requireSkuActivityStoreAccess(
   ctx: QueryCtx,
   storeId: Id<"store">
 ) {
-  const store = await ctx.db.get("store", storeId);
+  const [store, demoActor] = await Promise.all([
+    ctx.db.get("store", storeId),
+    requireSharedDemoStoreReadIfApplicable(ctx, storeId),
+  ]);
   if (!store) {
     throw new Error("Store not found.");
   }
+  if (demoActor) return;
 
   const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
   await requireOrganizationMemberRoleWithCtx(ctx, {
@@ -557,7 +562,6 @@ async function requireSkuActivityStoreAccess(
     userId: athenaUser._id,
   });
 
-  return { athenaUser, store };
 }
 
 function boundedNumber(

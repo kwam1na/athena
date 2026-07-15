@@ -110,6 +110,11 @@ export function CommandApprovalDialog({
   const approvalMessage =
     formatReviewReason(currencyFormatter("GHS"), approval.copy.message) ??
     approval.copy.message;
+  const approvalContext = approval.action.label
+    ? { label: "Action", value: approval.action.label }
+    : approval.subject.label
+      ? { label: "Subject", value: approval.subject.label }
+      : null;
 
   if (!inlineResolution) {
     const asyncResolution = getAsyncResolution(approval);
@@ -146,11 +151,13 @@ export function CommandApprovalDialog({
           </div>
         </div>
 
-        {approval.subject.label ? (
+        {approvalContext ? (
           <div className="min-w-0 shrink-0 overflow-hidden text-ellipsis border-b border-border/80 px-layout-lg py-layout-sm text-sm text-muted-foreground">
-            <span className="font-medium text-foreground">Subject</span>
+            <span className="font-medium text-foreground">
+              {approvalContext.label}
+            </span>
             <span className="mx-layout-xs text-muted-foreground">/</span>
-            {approval.subject.label}
+            {approvalContext.value}
           </div>
         ) : null}
 

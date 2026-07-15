@@ -6,7 +6,7 @@ import {
   useRouter,
   useRouterState,
 } from "@tanstack/react-router";
-import { ArrowLeft, Home } from "lucide-react";
+import { ArrowLeft, Home, RotateCcw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -25,6 +25,9 @@ export function DefaultCatchBoundary({ error }: ErrorComponentProps) {
     select: (state) => state.location.pathname,
   });
   const recoveryHomePath = getRecoveryHomePath(pathname);
+  const isExpiredDemoSession = /(?:shared )?demo session has expired/i.test(
+    error.message,
+  );
   const actionClassName =
     "transition-transform duration-150 ease-emphasized active:scale-[0.98]";
 
@@ -42,17 +45,27 @@ export function DefaultCatchBoundary({ error }: ErrorComponentProps) {
               id="default-catch-boundary-title"
               className="font-display text-4xl leading-tight tracking-normal text-foreground sm:text-[clamp(2.75rem,4.6vw,4.75rem)] sm:leading-[0.95] sm:tracking-[-0.05em]"
             >
-              {GENERIC_UNEXPECTED_ERROR_TITLE}
+              {isExpiredDemoSession
+                ? "Your demo session ended"
+                : GENERIC_UNEXPECTED_ERROR_TITLE}
             </h1>
             <p className="text-sm leading-6 text-muted-foreground md:text-lg md:leading-7">
-              {GENERIC_UNEXPECTED_ERROR_MESSAGE} If the problem keeps happening,
-              go back and retry the action.
+              {isExpiredDemoSession
+                ? "Open the demo again to start a fresh session and continue exploring Athena."
+                : `${GENERIC_UNEXPECTED_ERROR_MESSAGE} If the problem keeps happening, go back and retry the action.`}
             </p>
           </div>
         </div>
 
         <div className="flex flex-col items-start gap-2 sm:flex-row sm:flex-wrap">
-          {isRoot ? (
+          {isExpiredDemoSession ? (
+            <Button asChild className={actionClassName} variant="workflow">
+              <Link to="/demo">
+                <RotateCcw aria-hidden="true" className="h-4 w-4" />
+                Open demo again
+              </Link>
+            </Button>
+          ) : isRoot ? (
             <Button asChild className={actionClassName} variant="outline">
               <Link to={recoveryHomePath}>
                 <Home aria-hidden="true" className="h-4 w-4" />
@@ -74,15 +87,17 @@ export function DefaultCatchBoundary({ error }: ErrorComponentProps) {
             </Button>
           )}
 
-          <Button
-            onClick={() => {
-              router.invalidate();
-            }}
-            className={actionClassName}
-            variant="workflow"
-          >
-            Try again
-          </Button>
+          {!isExpiredDemoSession ? (
+            <Button
+              onClick={() => {
+                router.invalidate();
+              }}
+              className={actionClassName}
+              variant="workflow"
+            >
+              Try again
+            </Button>
+          ) : null}
         </div>
       </div>
     </section>

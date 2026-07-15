@@ -6,6 +6,8 @@ import {
 } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { v } from "convex/values";
+import { requireSharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
+import { requireReadySharedDemoWriteWithCtx } from "../sharedDemo/restore";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import { recordOperationalEventWithCtx } from "./operationalEvents";
 import { getDailyCloseOpeningContextWithCtx } from "./dailyClose";
@@ -54,10 +56,7 @@ type DailyOpeningItem = {
     | Record<string, unknown>;
 };
 
-type DailyOpeningManagerReviewEvidence = Omit<
-  DailyOpeningItem,
-  "severity"
-> & {
+type DailyOpeningManagerReviewEvidence = Omit<DailyOpeningItem, "severity"> & {
   severity: Exclude<DailyOpeningSeverity, "ready">;
 };
 
@@ -118,6 +117,7 @@ type StartStoreDayArgs = {
   automationDecisionReason?: string;
   automationPolicyVersion?: string;
   automationRunId?: Id<"automationRun">;
+  terminalSyncReviewHandling?: "manager_review";
   endAt?: number;
   notes?: string;
   operatingDate: string;
@@ -626,7 +626,9 @@ function priorCloseReopenedItem(
   };
 }
 
-function priorCloseNotesItem(priorClose: Doc<"dailyClose">): DailyOpeningItem | null {
+function priorCloseNotesItem(
+  priorClose: Doc<"dailyClose">,
+): DailyOpeningItem | null {
   const notes = trimOptional(priorClose.notes);
 
   if (!notes) {
@@ -638,7 +640,8 @@ function priorCloseNotesItem(priorClose: Doc<"dailyClose">): DailyOpeningItem | 
     severity: "review",
     category: "prior_close",
     title: "Prior EOD Review notes",
-    message: "Review the prior end of day review notes before acknowledging Opening Handoff.",
+    message:
+      "Review the prior end of day review notes before acknowledging Opening Handoff.",
     subject: {
       type: DAILY_CLOSE_SUBJECT_TYPE,
       id: priorClose._id,
@@ -815,7 +818,8 @@ async function resolveOpeningActor(
     if (!args.actorStaffProfileId) {
       return userError({
         code: "authorization_failed",
-        message: "Active store staff profile is required to acknowledge Opening.",
+        message:
+          "Active store staff profile is required to acknowledge Opening.",
       });
     }
 
@@ -836,7 +840,10 @@ async function resolveOpeningActor(
       }
     }
 
-    const staffProfile = await ctx.db.get("staffProfile", args.actorStaffProfileId);
+    const staffProfile = await ctx.db.get(
+      "staffProfile",
+      args.actorStaffProfileId,
+    );
 
     if (
       !staffProfile ||
@@ -845,7 +852,8 @@ async function resolveOpeningActor(
     ) {
       return userError({
         code: "authorization_failed",
-        message: "Active store staff profile is required to acknowledge Opening.",
+        message:
+          "Active store staff profile is required to acknowledge Opening.",
       });
     }
 
@@ -882,6 +890,34 @@ async function resolveOpeningActor(
       message: "Full admin access is required to acknowledge Opening.",
     });
   }
+}
+
+export async function resolveSharedDemoOpeningActorWithCtx(
+  ctx: Pick<MutationCtx, "db">,
+  args: {
+    athenaUserId: Id<"athenaUser">;
+    storeId: Id<"store">;
+  },
+) {
+  const staffProfile = await ctx.db
+    .query("staffProfile")
+    .withIndex("by_storeId_linkedUserId", (q) =>
+      q.eq("storeId", args.storeId).eq("linkedUserId", args.athenaUserId),
+    )
+    .unique();
+
+  if (!staffProfile || staffProfile.status !== "active") {
+    return userError({
+      code: "authorization_failed",
+      message:
+        "The demo owner is unavailable. Restore the demo and try again.",
+    });
+  }
+
+  return ok({
+    actorStaffProfileId: staffProfile._id,
+    actorUserId: args.athenaUserId,
+  });
 }
 
 export async function buildDailyOpeningSnapshotWithCtx(
@@ -1080,6 +1116,7 @@ export async function startStoreDayWithCtx(
 
   const routeOpeningReviewToManager =
     snapshot.blockers.length > 0 ||
+    args.terminalSyncReviewHandling === "manager_review" ||
     (args.actorType === "automation" &&
       args.automationBlockerHandling === "manager_review");
 
@@ -1234,5 +1271,24 @@ export const startStoreDay = mutation({
     storeId: v.id("store"),
   },
   returns: commandResultValidator(v.any()),
-  handler: (ctx, args) => startStoreDayWithCtx(ctx, args),
+  handler: async (ctx, args) => {
+    const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(
+      ctx,
+      "daily_operations.write",
+      args.storeId,
+    );
+    if (!demoActor) return startStoreDayWithCtx(ctx, args);
+
+    await requireReadySharedDemoWriteWithCtx(ctx, { storeId: args.storeId });
+    const openingActor = await resolveSharedDemoOpeningActorWithCtx(ctx, {
+      athenaUserId: demoActor.athenaUserId,
+      storeId: args.storeId,
+    });
+    if (openingActor.kind !== "ok") return openingActor;
+
+    return startStoreDayWithCtx(ctx, {
+      ...args,
+      ...openingActor.data,
+    });
+  },
 });

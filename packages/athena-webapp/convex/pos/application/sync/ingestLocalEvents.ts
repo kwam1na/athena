@@ -644,6 +644,23 @@ function parseLocalSyncEvent(
     };
   }
 
+  if (event.eventType === "store_day_started") {
+    return {
+      ok: true,
+      event: {
+        ...event,
+        syncScope: "pos",
+        localRegisterSessionId: event.localRegisterSessionId ?? "",
+        eventType: "store_day_started",
+        payload: {
+          operatingDate: event.payload.operatingDate as string,
+          startAt: event.payload.startAt as number,
+          endAt: event.payload.endAt as number,
+        },
+      },
+    };
+  }
+
   if (event.eventType === "pending_checkout_item_defined") {
     return {
       ok: true,
@@ -776,6 +793,22 @@ export function parseStoredLocalSyncEvent(
 function validateLocalSyncEventPayload(event: PosLocalSyncEventInput): string | null {
   if (event.eventType === "register_opened") {
     return validateRegisterOpenedPayload(event.payload);
+  }
+
+  if (event.eventType === "store_day_started") {
+    const { operatingDate, startAt, endAt } = event.payload;
+    if (
+      typeof operatingDate !== "string" ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(operatingDate) ||
+      typeof startAt !== "number" ||
+      !Number.isFinite(startAt) ||
+      typeof endAt !== "number" ||
+      !Number.isFinite(endAt) ||
+      endAt <= startAt
+    ) {
+      return "POS store-day start payload is invalid.";
+    }
+    return null;
   }
 
   if (event.eventType === "pending_checkout_item_defined") {

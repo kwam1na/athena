@@ -34,6 +34,7 @@ import { SkuSearchFilterBar } from "../stock-ops/SkuSearchFilterBar";
 import { ReceivingView } from "./ReceivingView";
 import { WorkflowTraceRouteLink } from "../traces/WorkflowTraceRouteLink";
 import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
+import { useSharedDemoContext } from "@/hooks/useSharedDemoContext";
 import { presentCommandToast } from "@/lib/errors/presentCommandToast";
 import { runCommand } from "@/lib/errors/runCommand";
 import {
@@ -2075,7 +2076,9 @@ export function ProcurementView({
     isAuthenticated,
     isLoadingAccess,
   } = useProtectedAdminPageState();
-  const procurementQueryArgs = canQueryProtectedData
+  const isSharedDemo = Boolean(useSharedDemoContext());
+  const canQueryProcurementData = canQueryProtectedData && !isSharedDemo;
+  const procurementQueryArgs = canQueryProcurementData
     ? { storeId: activeStore!._id }
     : "skip";
   const recommendations = useQuery(
@@ -2092,13 +2095,13 @@ export function ProcurementView({
   ) as InventorySnapshotItem[] | undefined;
   const vendors = useQuery(
     api.stockOps.vendors.listVendors,
-    canQueryProtectedData
+    canQueryProcurementData
       ? { status: "active", storeId: activeStore!._id }
       : "skip",
   ) as VendorSummary[] | undefined;
   const productSkuSearch = useQuery(
     api.inventory.skuSearch.searchProductSkus,
-    canQueryProtectedData && query?.trim()
+    canQueryProcurementData && query?.trim()
       ? { limit: 20, query: query.trim(), storeId: activeStore!._id }
       : "skip",
   ) as { results: ProductSkuSearchResultLike[] } | undefined;
@@ -2119,7 +2122,7 @@ export function ProcurementView({
       hasFullAdminAccess={hasFullAdminAccess}
       isLoadingPermissions={false}
       isLoadingProcurement={Boolean(
-        canQueryProtectedData &&
+        canQueryProcurementData &&
         (recommendations === undefined ||
           inventoryItems === undefined ||
           purchaseOrders === undefined ||

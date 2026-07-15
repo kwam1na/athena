@@ -9,6 +9,13 @@ import { getAuthenticatedAthenaUserWithCtx } from "../lib/athenaUserAuth";
 import { getActiveManagerElevationWithCtx } from "../operations/managerElevations";
 import { listWorkflowTraceEventsWithCtx } from "./core";
 import { buildWorkflowTraceViewModel } from "./presentation";
+import { requireSharedDemoStoreReadIfApplicable } from "../sharedDemo/actor";
+import { SHARED_DEMO_UNAVAILABLE } from "../sharedDemo/policy";
+
+const SHARED_DEMO_READABLE_WORKFLOW_TYPES = new Set([
+  "register_session",
+  "online_order",
+]);
 
 export type WorkflowTraceAccessAuthorizer = (
   ctx: QueryCtx,
@@ -121,7 +128,13 @@ export async function getWorkflowTraceViewByIdWithCtx(
     accessAuthorizers?: WorkflowTraceAccessAuthorizers;
   },
 ) {
-  await assertDefaultWorkflowTraceAccess(ctx, args);
+  const demoActor = await requireSharedDemoStoreReadIfApplicable(
+    ctx,
+    args.storeId,
+  );
+  if (!demoActor) {
+    await assertDefaultWorkflowTraceAccess(ctx, args);
+  }
 
   const trace = await ctx.db
     .query("workflowTrace")
@@ -134,12 +147,18 @@ export async function getWorkflowTraceViewByIdWithCtx(
     return null;
   }
 
-  await assertWorkflowTraceAccess(ctx, {
-    storeId: args.storeId,
-    terminalId: args.terminalId,
-    trace,
-    accessAuthorizers: args.accessAuthorizers,
-  });
+  if (demoActor) {
+    if (!SHARED_DEMO_READABLE_WORKFLOW_TYPES.has(trace.workflowType)) {
+      throw new Error(SHARED_DEMO_UNAVAILABLE);
+    }
+  } else {
+    await assertWorkflowTraceAccess(ctx, {
+      storeId: args.storeId,
+      terminalId: args.terminalId,
+      trace,
+      accessAuthorizers: args.accessAuthorizers,
+    });
+  }
 
   const events = await listWorkflowTraceEventsWithCtx(ctx as never, {
     storeId: args.storeId,
@@ -169,7 +188,19 @@ export async function getWorkflowTraceViewByLookupWithCtx(
     accessAuthorizers?: WorkflowTraceAccessAuthorizers;
   },
 ) {
-  await assertDefaultWorkflowTraceAccess(ctx, args);
+  const demoActor = await requireSharedDemoStoreReadIfApplicable(
+    ctx,
+    args.storeId,
+  );
+  if (
+    demoActor &&
+    !SHARED_DEMO_READABLE_WORKFLOW_TYPES.has(args.workflowType)
+  ) {
+    throw new Error(SHARED_DEMO_UNAVAILABLE);
+  }
+  if (!demoActor) {
+    await assertDefaultWorkflowTraceAccess(ctx, args);
+  }
 
   const lookup = await ctx.db
     .query("workflowTraceLookup")

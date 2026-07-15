@@ -9,6 +9,11 @@ import type { Doc, Id } from "../_generated/dataModel";
 import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import {
+  requireSharedDemoStoreCapabilityIfApplicable,
+  requireSharedDemoStoreReadIfApplicable,
+} from "../sharedDemo/actor";
+import { requireReadySharedDemoWriteWithCtx } from "../sharedDemo/restore";
+import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
@@ -1251,12 +1256,15 @@ async function requireInventorySnapshotForProductSkusAccess(
   ctx: QueryCtx,
   storeId: Id<"store">,
 ) {
+  await requireSharedDemoStoreReadIfApplicable(ctx, storeId);
   const store = await ctx.db.get("store", storeId);
   if (!store) {
     throw new Error("Store not found.");
   }
 
-  const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+  const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx, {
+    sharedDemoCapability: "inventory.adjust",
+  });
   await requireOrganizationMemberRoleWithCtx(ctx, {
     allowedRoles: ["full_admin", "pos_only"],
     failureMessage: "You do not have access to view stock inventory.",
@@ -1271,6 +1279,7 @@ export const listInventorySnapshot = query({
     storeId: v.id("store"),
   },
   handler: async (ctx, args) => {
+    await requireSharedDemoStoreReadIfApplicable(ctx, args.storeId);
     return listInventorySnapshotWithCtx(ctx, args);
   },
 });
@@ -1292,6 +1301,7 @@ export const getInventoryUnitSummary = query({
     storeId: v.id("store"),
   },
   handler: async (ctx, args) => {
+    await requireSharedDemoStoreReadIfApplicable(ctx, args.storeId);
     return getInventoryUnitSummaryWithCtx(ctx, args);
   },
 });
@@ -1302,6 +1312,7 @@ export const listInventorySnapshotPage = query({
     storeId: v.id("store"),
   },
   handler: async (ctx, args) => {
+    await requireSharedDemoStoreReadIfApplicable(ctx, args.storeId);
     const productSkuPage = await ctx.db
       .query("productSku")
       .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
@@ -1434,7 +1445,9 @@ export async function submitStockAdjustmentBatchWithCtx(
     throw new Error("Store not found.");
   }
 
-  const createdByUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+  const createdByUser = await requireAuthenticatedAthenaUserWithCtx(ctx, {
+    sharedDemoCapability: "inventory.adjust",
+  });
 
   await requireOrganizationMemberRoleWithCtx(ctx, {
     allowedRoles: ["full_admin", "pos_only"],
@@ -1716,6 +1729,9 @@ export const submitStockAdjustmentBatch = mutation({
     submissionKey: v.string(),
   },
   returns: commandResultValidator(v.any()),
-  handler: async (ctx, args) =>
-    submitStockAdjustmentBatchCommandWithCtx(ctx, args),
+  handler: async (ctx, args) => {
+    const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(ctx, "inventory.adjust", args.storeId);
+    if (demoActor) await requireReadySharedDemoWriteWithCtx(ctx, { storeId: args.storeId });
+    return submitStockAdjustmentBatchCommandWithCtx(ctx, args);
+  },
 });

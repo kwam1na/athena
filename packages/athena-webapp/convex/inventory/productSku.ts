@@ -4,7 +4,13 @@ import { action, internalQuery, mutation, query } from "../_generated/server";
 import { deleteFileInR2, uploadFileToR2 } from "../cloudflare/r2";
 import { refreshCatalogSummaryWithCtx } from "./catalogSummary";
 import { getProductName } from "../utils";
+import { internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
+import { requireAuthenticatedAthenaUserWithCtx } from "../lib/athenaUserAuth";
+import {
+  requireNonDemoFoundationExternalRefs,
+  requireNonDemoFoundationMutation,
+} from "../sharedDemo/foundation";
 import {
   upsertProductSkuSearchProjection,
   upsertProductSkuSearchProjections,
@@ -26,10 +32,10 @@ async function syncProductSkuSearchProjectionsByStore(
     ),
   );
 }
-
 export const generateUploadUrl = mutation({
   args: {},
   handler: async (ctx) => {
+  await requireAuthenticatedAthenaUserWithCtx(ctx);
   return await ctx.storage.generateUploadUrl();
 }
 });
@@ -125,9 +131,11 @@ export const getInventoryBySkuIds = query({
 export const update = mutation({
   args: { id: v.id("productSku"), update: v.record(v.string(), v.any()) },
   handler: async (ctx, args) => {
+    await requireAuthenticatedAthenaUserWithCtx(ctx);
     if (args.update.images) {
       const sku = await ctx.db.get("productSku", args.id);
       if (!sku) return;
+      requireNonDemoFoundationMutation({ storeId: sku.storeId });
 
       await ctx.db.patch("productSku", args.id, {
         images: args.update.images,
@@ -144,7 +152,12 @@ export const uploadImages = action({
     storeId: v.id("store"),
     productId: v.id("product"),
   },
-  handler: async (_, args) => {
+  handler: async (ctx, args) => {
+    await ctx.runQuery(
+      (internal as any).sharedDemo.actor.requireAuthenticatedNonDemoEffect,
+      {},
+    );
+    requireNonDemoFoundationMutation({ storeId: args.storeId });
     const uploadPromises = args.images.map(async (imgBuffer) => {
       return uploadFileToR2(
         imgBuffer,
@@ -163,7 +176,12 @@ export const deleteImages = action({
   args: {
     imageUrls: v.array(v.string()),
   },
-  handler: async (_, args) => {
+  handler: async (ctx, args) => {
+    await ctx.runQuery(
+      (internal as any).sharedDemo.actor.requireAuthenticatedNonDemoEffect,
+      {},
+    );
+    requireNonDemoFoundationExternalRefs(args.imageUrls);
     const deletePromises = args.imageUrls.map(async (url) => {
       return deleteFileInR2(url);
     });
@@ -177,6 +195,7 @@ export const deleteImages = action({
 export const nukeProblematicImages = mutation({
   args: {},
   handler: async (ctx) => {
+    await requireAuthenticatedAthenaUserWithCtx(ctx);
     const productSkus = await ctx.db.query("productSku").collect();
     const publicUrl = process.env.R2_PUBLIC_URL;
 
@@ -220,6 +239,7 @@ export const nukeProblematicImages = mutation({
 export const makeAllProductsVisible = mutation({
   args: {},
   handler: async (ctx) => {
+    await requireAuthenticatedAthenaUserWithCtx(ctx);
     const productSkus = await ctx.db.query("product").collect();
 
     const updates = productSkus.map(async (sku) => {
@@ -239,6 +259,7 @@ export const makeAllProductsVisible = mutation({
 export const backfillUndefinedSkuVisibilityFromProducts = mutation({
   args: {},
   handler: async (ctx) => {
+    await requireAuthenticatedAthenaUserWithCtx(ctx);
     const productSkus = await ctx.db.query("productSku").collect();
     const updatedSkus: typeof productSkus = [];
     let updatedCount = 0;

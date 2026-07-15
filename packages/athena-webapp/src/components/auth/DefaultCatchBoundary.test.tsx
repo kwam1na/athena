@@ -111,6 +111,43 @@ describe("DefaultCatchBoundary", () => {
     expect(mocked.invalidate).toHaveBeenCalledTimes(1);
   });
 
+  it.each([
+    "The demo session has expired. Open the demo again.",
+    "The shared demo session has expired. Open the demo again.",
+  ])("offers seamless demo re-entry for an expired demo session", (message) => {
+    mocked.useRouterState.mockImplementation(
+      ({ select }: { select: (state: unknown) => unknown }) =>
+        select({
+          location: {
+            pathname: "/demo/store/central/pos",
+          },
+        }),
+    );
+
+    render(
+      <DefaultCatchBoundary
+        error={new Error(`[CONVEX Q(inventory/pos:getTodaySummary)] ${message}`)}
+        reset={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "Your demo session ended" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Open the demo again to start a fresh session and continue exploring Athena.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open demo again" })).toHaveAttribute(
+      "href",
+      "/demo",
+    );
+    expect(
+      screen.queryByRole("button", { name: "Try again" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("keeps the non-root recovery link wired to browser back navigation", () => {
     mocked.useMatch.mockReturnValue(false);
 

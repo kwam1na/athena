@@ -2,6 +2,7 @@ import { v } from "convex/values";
 
 import { mutation } from "./_generated/server";
 import { patchRegisterSessionWithAuthority } from "./operations/registerSessionAuthorityRevision";
+import { requireAuthenticatedAthenaUserWithCtx } from "./lib/athenaUserAuth";
 
 export const patchBadTransaction = mutation({
   args: {
@@ -9,6 +10,7 @@ export const patchBadTransaction = mutation({
     expectedTransactionNumber: v.string(),
   },
   handler: async (ctx, args) => {
+    await requireAuthenticatedAthenaUserWithCtx(ctx);
     const transaction = await ctx.db.get("posTransaction", args.transactionId);
     if (!transaction) {
       throw new Error("Transaction not found");

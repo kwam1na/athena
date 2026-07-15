@@ -583,6 +583,85 @@ describe("posLocalStore", () => {
     });
   });
 
+  it("preserves terminal identity while resetting demo operational state", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+    });
+    await store.writeProvisionedTerminalSeed({
+      terminalId: "local-terminal-1",
+      cloudTerminalId: "terminal-cloud-1",
+      syncSecretHash: "sync-secret-1",
+      storeId: "store-1",
+      registerNumber: "1",
+      displayName: "Demo Register",
+      provisionedAt: 1_000,
+      schemaVersion: POS_LOCAL_LOGICAL_RECORD_VERSION,
+    });
+    await store.writeStoreDayReadiness({
+      storeId: "store-1",
+      operatingDate: "2026-07-13",
+      status: "started",
+      source: "local",
+      updatedAt: 2_000,
+    });
+
+    await expect(store.resetSharedDemoLocalState?.()).resolves.toEqual({
+      ok: true,
+      value: null,
+    });
+    await expect(store.readProvisionedTerminalSeed()).resolves.toMatchObject({
+      ok: true,
+      value: {
+        cloudTerminalId: "terminal-cloud-1",
+        terminalId: "local-terminal-1",
+      },
+    });
+    await expect(
+      store.readStoreDayReadiness({
+        storeId: "store-1",
+        operatingDate: "2026-07-13",
+      }),
+    ).resolves.toEqual({ ok: true, value: null });
+  });
+
+  it("removes terminal identity when resetting demo first-visit state", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+    });
+    await store.writeProvisionedTerminalSeed({
+      terminalId: "local-terminal-1",
+      cloudTerminalId: "terminal-cloud-1",
+      syncSecretHash: "sync-secret-1",
+      storeId: "store-1",
+      registerNumber: "1",
+      displayName: "Demo Register",
+      provisionedAt: 1_000,
+      schemaVersion: POS_LOCAL_LOGICAL_RECORD_VERSION,
+    });
+    await store.writeStoreDayReadiness({
+      storeId: "store-1",
+      operatingDate: "2026-07-14",
+      status: "started",
+      source: "local",
+      updatedAt: 2_000,
+    });
+
+    await expect(store.resetSharedDemoFirstVisitState?.()).resolves.toEqual({
+      ok: true,
+      value: null,
+    });
+    await expect(store.readProvisionedTerminalSeed()).resolves.toEqual({
+      ok: true,
+      value: null,
+    });
+    await expect(
+      store.readStoreDayReadiness({
+        storeId: "store-1",
+        operatingDate: "2026-07-14",
+      }),
+    ).resolves.toEqual({ ok: true, value: null });
+  });
+
   it("persists terminal integrity state without storing secret material", async () => {
     const store = createPosLocalStore({
       adapter: createMemoryPosLocalStorageAdapter(),

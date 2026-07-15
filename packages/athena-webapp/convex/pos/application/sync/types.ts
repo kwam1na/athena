@@ -19,6 +19,7 @@ import type {
 import type { RegisterSessionCloseoutHold } from "./registerSessionCloseoutHolds";
 import type { ReportingIngressArgs } from "../../../reporting/ingress";
 import type { CommerceInventoryEffectArgs } from "../../../reporting/inventory/commerceEffects";
+import type { CommandResult } from "../../../../shared/commandResult";
 
 export type { PosLocalSyncEventStatus, PosLocalSyncEventType };
 
@@ -270,6 +271,18 @@ export type SyncProjectionRepository = {
     now: number;
   }): Promise<boolean>;
   getStore(storeId: Id<"store">): Promise<Doc<"store"> | null>;
+  startStoreDayFromLocalSync?(input: {
+    actorStaffProfileId: Id<"staffProfile">;
+    endAt: number;
+    operatingDate: string;
+    startAt: number;
+    storeId: Id<"store">;
+  }): Promise<
+    CommandResult<{
+      action: "started" | "already_started";
+      dailyOpeningId: Id<"dailyOpening">;
+    }>
+  >;
   getRegisterSession(
     registerSessionId: Id<"registerSession">,
   ): Promise<Doc<"registerSession"> | null>;

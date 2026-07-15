@@ -5,7 +5,6 @@ import {
   ArrowUpRight,
   Banknote,
   CreditCardIcon,
-  SearchX,
   Smartphone,
   WalletCards,
 } from "lucide-react";
@@ -698,7 +697,7 @@ export function TransactionsView() {
                       paymentMethod: selectedPaymentMethodFilter,
                       className: "h-16 w-16 text-muted-foreground",
                     }) ?? (
-                      <SearchX className="h-16 w-16 text-muted-foreground" />
+                      <WalletCards className="h-16 w-16 text-muted-foreground" />
                     )
                   }
                   title={

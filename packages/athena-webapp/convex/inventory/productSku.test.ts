@@ -1,5 +1,7 @@
 import { describe, it } from "vitest";
 
+// Shared-demo restrictions do not change this inventory query contract.
+
 import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
 import { getInventoryBySkuIds } from "./productSku";
 

@@ -11,12 +11,15 @@ const mocks = vi.hoisted(() => ({
   listRegisterCatalogAvailabilitySnapshot: vi.fn(),
   listRegisterCatalogWithRevision: vi.fn(),
   readRegisterCatalogRevision: vi.fn(),
+  lookupByBarcode: vi.fn(),
   quickAddCatalogItem: vi.fn(),
   recordInventoryMovementWithCtx: vi.fn(),
   recordOperationalEventWithCtx: vi.fn(),
   requireAuthenticatedAthenaUserIndexedWithCtx: vi.fn(),
   requireAuthenticatedAthenaUserWithCtx: vi.fn(),
   requireOrganizationMemberRoleWithCtx: vi.fn(),
+  requireSharedDemoStoreCapabilityIfApplicable: vi.fn(),
+  searchProducts: vi.fn(),
   updateOperationalWorkItemStatusWithCtx: vi.fn(),
   upsertProductSkuSearchProjection: vi.fn(),
 }));
@@ -41,6 +44,11 @@ vi.mock("../../lib/athenaUserAuth", () => ({
 
 vi.mock("../../inventory/skuSearch", () => ({
   upsertProductSkuSearchProjection: mocks.upsertProductSkuSearchProjection,
+}));
+
+vi.mock("../../sharedDemo/actor", () => ({
+  requireSharedDemoStoreCapabilityIfApplicable:
+    mocks.requireSharedDemoStoreCapabilityIfApplicable,
 }));
 
 vi.mock("../../inventory/catalogSummary", () => ({
@@ -68,8 +76,8 @@ vi.mock("../application/queries/listRegisterCatalog", () => ({
 }));
 
 vi.mock("../application/queries/searchCatalog", () => ({
-  lookupByBarcode: vi.fn(),
-  searchProducts: vi.fn(),
+  lookupByBarcode: mocks.lookupByBarcode,
+  searchProducts: mocks.searchProducts,
 }));
 
 vi.mock("../application/commands/quickAddCatalogItem", () => ({
@@ -109,6 +117,7 @@ import {
   mapPendingCheckoutReviewStatusToWorkItemPatch,
   quickAddSku,
   resolvePendingCheckoutItemReview,
+  search,
 } from "./catalog";
 import { assertConformsToExportedReturns } from "../../lib/returnValidatorContract";
 
@@ -126,6 +135,7 @@ describe("POS public catalog queries", () => {
       _id: "athena-user-1",
     });
     mocks.requireOrganizationMemberRoleWithCtx.mockResolvedValue(undefined);
+    mocks.requireSharedDemoStoreCapabilityIfApplicable.mockResolvedValue(null);
     mocks.listRegisterCatalogAvailabilitySnapshot.mockResolvedValue([
       {
         productSkuId: "sku-1",
@@ -359,6 +369,7 @@ describe("POS public catalog queries", () => {
     ]);
     expect(mocks.requireAuthenticatedAthenaUserWithCtx).toHaveBeenCalledWith(
       ctx,
+      { sharedDemoCapability: "pos.sale.complete" },
     );
     expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
       ctx,
@@ -416,6 +427,7 @@ describe("POS public catalog queries", () => {
     assertConformsToExportedReturns(listRegisterCatalogSnapshot, rows);
     expect(mocks.requireAuthenticatedAthenaUserWithCtx).toHaveBeenCalledWith(
       ctx,
+      { sharedDemoCapability: "pos.sale.complete" },
     );
     expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
       ctx,
@@ -452,7 +464,9 @@ describe("POS public catalog queries", () => {
     );
     expect(
       mocks.requireAuthenticatedAthenaUserIndexedWithCtx,
-    ).toHaveBeenCalledWith(ctx);
+    ).toHaveBeenCalledWith(ctx, {
+      sharedDemoCapability: "pos.sale.complete",
+    });
     expect(mocks.requireAuthenticatedAthenaUserWithCtx).not.toHaveBeenCalled();
     expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalled();
   });
@@ -492,6 +506,22 @@ describe("POS public catalog queries", () => {
       storeId: "store-1",
     });
     expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalled();
+  });
+
+  it.each([
+    [search, { searchQuery: "milk", storeId: "other-store" }, mocks.searchProducts],
+    [barcodeLookup, { barcode: "123456789012", storeId: "other-store" }, mocks.lookupByBarcode],
+  ] as const)("rejects a cross-store direct catalog read before its reader runs", async (fn, args, reader) => {
+    const denial = new Error("This action is unavailable in the demo.");
+    mocks.requireSharedDemoStoreCapabilityIfApplicable.mockRejectedValueOnce(denial);
+    const ctx = buildCtx();
+    await expect(getHandler(fn)(ctx as never, args)).rejects.toThrow(denial.message);
+    expect(mocks.requireSharedDemoStoreCapabilityIfApplicable).toHaveBeenCalledWith(
+      ctx,
+      "pos.sale.complete",
+      "other-store",
+    );
+    expect(reader).not.toHaveBeenCalled();
   });
 
   it("lists linked pending checkout aliases for trusted SKU rows", async () => {
@@ -781,8 +811,12 @@ describe("POS public catalog queries", () => {
       storeId: "store-1",
     });
 
+    expect(
+      mocks.requireSharedDemoStoreCapabilityIfApplicable,
+    ).toHaveBeenCalledWith(ctx, "catalog.quick_add", "store-1");
     expect(mocks.requireAuthenticatedAthenaUserWithCtx).toHaveBeenCalledWith(
       ctx,
+      { sharedDemoCapability: "catalog.quick_add" },
     );
     expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
       ctx,

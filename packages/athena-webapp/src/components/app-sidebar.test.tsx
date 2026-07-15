@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   useGetActiveOrganization: vi.fn(),
   usePermissions: vi.fn(),
   useQuery: vi.fn(),
+  useSharedDemoContext: vi.fn(),
   useSidebar: vi.fn(),
   toggleSidebar: vi.fn(),
 }));
@@ -68,6 +69,10 @@ vi.mock("../hooks/useGetCategories", () => ({
 
 vi.mock("../hooks/usePermissions", () => ({
   usePermissions: mocks.usePermissions,
+}));
+
+vi.mock("../hooks/useSharedDemoContext", () => ({
+  useSharedDemoContext: mocks.useSharedDemoContext,
 }));
 
 vi.mock("@/components/ui/sidebar", () => {
@@ -230,10 +235,28 @@ describe("AppSidebar capability gates", () => {
       activeOrganization: { _id: "org-1", slug: "org" },
     });
     mocks.useQuery.mockReturnValue([]);
+    mocks.useSharedDemoContext.mockReturnValue(null);
     mocks.useSidebar.mockReturnValue({
       state: "expanded",
       toggleSidebar: mocks.toggleSidebar,
     });
+  });
+
+  it("hides Reports from the application menu", () => {
+    mocks.usePermissions.mockReturnValue(fullAdminPermissions);
+
+    render(<AppSidebar />);
+
+    expect(screen.queryByRole("link", { name: /reports/i })).toBeNull();
+  });
+
+  it("hides Storefront from the shared demo menu", () => {
+    mocks.usePermissions.mockReturnValue(fullAdminPermissions);
+    mocks.useSharedDemoContext.mockReturnValue({ kind: "shared_demo" });
+
+    render(<AppSidebar />);
+
+    expect(screen.queryByRole("button", { name: /storefront/i })).toBeNull();
   });
 
   it("renders unresolved catalog work from a trustworthy summary", () => {
@@ -324,10 +347,7 @@ describe("AppSidebar capability gates", () => {
       "aria-disabled",
       "true",
     );
-    expect(screen.getByRole("link", { name: /reports/i })).toHaveAttribute(
-      "aria-disabled",
-      "true",
-    );
+    expect(screen.queryByRole("link", { name: /reports/i })).toBeNull();
     expect(screen.getByRole("link", { name: /bulk operations/i })).toHaveAttribute(
       "aria-disabled",
       "true",

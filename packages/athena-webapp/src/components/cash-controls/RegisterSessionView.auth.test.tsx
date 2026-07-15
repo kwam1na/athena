@@ -48,6 +48,10 @@ vi.mock("@/hooks/useProtectedAdminPageState", () => ({
   useProtectedAdminPageState: mockedHooks.useProtectedAdminPageState,
 }));
 
+vi.mock("@/hooks/useSharedDemoContext", () => ({
+  useSharedDemoContext: () => undefined,
+}));
+
 vi.mock("../common/PageHeader", () => ({
   ComposedPageHeader: ({
     leadingContent,

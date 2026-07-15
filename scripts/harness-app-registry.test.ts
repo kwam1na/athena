@@ -216,6 +216,46 @@ describe("HARNESS_APP_REGISTRY", () => {
     });
   });
 
+  it("maps shared demo admission and restore edits to the bounded demo validation slice", () => {
+    const athena = HARNESS_APP_REGISTRY.find(
+      (entry) => entry.appName === "athena-webapp"
+    );
+    const sharedDemoScenario = athena?.validationScenarios.find(
+      (scenario) =>
+        scenario.title === "Shared demo admission, restore, and orientation edits"
+    );
+
+    expect(sharedDemoScenario).toMatchObject({
+      touchedPaths: [
+        "docs/shared-demo-backend-coverage.md",
+        "convex/sharedDemo",
+        "convex/auth.ts",
+        "convex/auth/SharedDemoTicket.ts",
+        "convex/crons.ts",
+        "convex/http.ts",
+        "src/components/shared-demo",
+        "src/routes/demo.tsx",
+        "src/routes/_authed.tsx",
+      ],
+      commands: [
+        {
+          kind: "raw",
+          command:
+            "bun run --filter '@athena/webapp' test -- convex/sharedDemo src/components/shared-demo src/routes/demo.test.tsx src/routes/_authed.test.tsx",
+        },
+        { kind: "script", script: "audit:convex" },
+        { kind: "script", script: "lint:convex:changed" },
+        { kind: "script", script: "lint:frontend:changed" },
+        {
+          kind: "raw",
+          command: "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
+        },
+        { kind: "script", script: "build" },
+      ],
+      behaviorScenarios: ["athena-admin-shell-boot"],
+    });
+  });
+
   it("maps reporting foundation edits to focused and merge-grade validation", () => {
     const athena = HARNESS_APP_REGISTRY.find(
       (entry) => entry.appName === "athena-webapp"

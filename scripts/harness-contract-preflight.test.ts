@@ -85,10 +85,10 @@ async function createRealAuditFixtureDrift() {
   const registryPath = path.join(rootDir, "scripts/harness-app-registry.ts");
   const baselineRegistry = await readFile(registryPath, "utf8");
   const driftedRegistry = baselineRegistry.replace(
-    '          "src/assets",',
+    '          "docs/shared-demo-backend-coverage.md",',
     [
-      '          "src/assets",',
       '          "docs/shared-demo-backend-coverage.md",',
+      '          "docs/__harness_contract_fixture_drift__.md",',
     ].join("\n"),
   );
   if (driftedRegistry === baselineRegistry) {

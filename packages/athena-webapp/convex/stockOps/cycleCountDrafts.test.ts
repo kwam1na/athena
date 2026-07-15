@@ -1,12 +1,19 @@
 import { describe, expect, it, vi } from "vitest";
 import type { MutationCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
+import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
 import {
+  discardCycleCountDraft,
   discardCycleCountDraftCommandWithCtx,
+  ensureCycleCountDraft,
   ensureCycleCountDraftCommandWithCtx,
   getActiveCycleCountDraftSummaryWithCtx,
+  refreshCycleCountDraftLineBaseline,
   refreshCycleCountDraftLineBaselineCommandWithCtx,
+  saveCycleCountDraftLine,
   saveCycleCountDraftLineCommandWithCtx,
+  submitActiveCycleCountDrafts,
+  submitCycleCountDraft,
   submitCycleCountDraftCommandWithCtx,
   submitActiveCycleCountDraftsCommandWithCtx,
 } from "./cycleCountDrafts";
@@ -17,6 +24,10 @@ const mockedAuthServer = vi.hoisted(() => ({
 const reportingMocks = vi.hoisted(() => ({
   applyInventoryEffectWithCtx: vi.fn(),
   resolveReportingOperatingPeriodWithCtx: vi.fn(),
+}));
+const sharedDemoMocks = vi.hoisted(() => ({
+  getSharedDemoActorWithCtx: vi.fn(),
+  requireSharedDemoStoreCapabilityIfApplicable: vi.fn(),
 }));
 
 vi.mock("@convex-dev/auth/server", () => ({
@@ -29,6 +40,25 @@ vi.mock("../reporting/operatingPeriods", () => ({
   resolveReportingOperatingPeriodWithCtx:
     reportingMocks.resolveReportingOperatingPeriodWithCtx,
 }));
+vi.mock("../sharedDemo/actor", () => sharedDemoMocks);
+
+describe("cycle count public return validators", () => {
+  it("accepts the shared command error contract", () => {
+    const result = {
+      error: { code: "validation_failed", message: "Count is invalid." },
+      kind: "user_error" as const,
+    };
+    assertConformsToExportedReturns(ensureCycleCountDraft, result);
+    assertConformsToExportedReturns(saveCycleCountDraftLine, result);
+    assertConformsToExportedReturns(discardCycleCountDraft, result);
+    assertConformsToExportedReturns(
+      refreshCycleCountDraftLineBaseline,
+      result,
+    );
+    assertConformsToExportedReturns(submitCycleCountDraft, result);
+    assertConformsToExportedReturns(submitActiveCycleCountDrafts, result);
+  });
+});
 
 function createCycleCountDraftCtx() {
   reportingMocks.resolveReportingOperatingPeriodWithCtx.mockResolvedValue({
@@ -417,6 +447,23 @@ describe("cycle count drafts", () => {
       staleLineCount: 0,
     });
     expect(summary.lastSavedAt).toEqual(expect.any(Number));
+  });
+
+  it("clamps cycle-count summaries to the shared demo store", async () => {
+    const { ctx } = createCycleCountDraftCtx();
+    const denial = new Error("This action is unavailable in the demo.");
+    sharedDemoMocks.requireSharedDemoStoreCapabilityIfApplicable.mockRejectedValueOnce(
+      denial,
+    );
+
+    await expect(
+      getActiveCycleCountDraftSummaryWithCtx(ctx, {
+        storeId: "other-store" as Id<"store">,
+      }),
+    ).rejects.toThrow(denial.message);
+    expect(
+      sharedDemoMocks.requireSharedDemoStoreCapabilityIfApplicable,
+    ).toHaveBeenCalledWith(ctx, "inventory.adjust", "other-store");
   });
 
   it("submits changed drafts across scopes for the active store", async () => {

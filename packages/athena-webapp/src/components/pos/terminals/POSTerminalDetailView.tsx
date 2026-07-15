@@ -48,6 +48,7 @@ import { cn } from "@/lib/utils";
 import type { ApprovalRequirement } from "~/shared/approvalPolicy";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
+import { useSharedDemoContext } from "@/hooks/useSharedDemoContext";
 import {
   buildTerminalOperationalExplanationPresentation,
   buildTerminalRecoveryPresentation,
@@ -3157,6 +3158,7 @@ export function POSTerminalDetailView() {
     hasFullAdminAccess,
     isLoading: isLoadingPermissions,
   } = usePermissions();
+  const demoContext = useSharedDemoContext();
   const params = useParams({ strict: false }) as
     | {
         orgUrlSlug?: string;
@@ -3167,6 +3169,7 @@ export function POSTerminalDetailView() {
   const isLoadingAccess =
     isLoadingUser || isLoadingStores || isLoadingPermissions;
   const canViewHealth = canAccessPOS();
+  const canManageTerminalHealth = hasFullAdminAccess && !demoContext;
   const canQuery = Boolean(
     activeStore?._id && user && canViewHealth && params?.terminalId,
   );
@@ -3181,7 +3184,7 @@ export function POSTerminalDetailView() {
   ) as TerminalHealthDetail | null | undefined;
   const remoteAssistClient = useQuery(
     remoteAssistApi.getClientByRuntime,
-    canQuery && activeStore?.organizationId
+    canQuery && !demoContext && activeStore?.organizationId
       ? {
           organizationId: activeStore.organizationId as Id<"organization">,
           runtimeIdentity: params!.terminalId as string,
@@ -3191,7 +3194,7 @@ export function POSTerminalDetailView() {
   ) as RemoteAssistClientSummary | null | undefined;
   const remoteAssistSession = useQuery(
     remoteAssistApi.getCurrentSessionByClient,
-    hasFullAdminAccess && remoteAssistClient?._id
+    canManageTerminalHealth && remoteAssistClient?._id
       ? {
           clientId: remoteAssistClient._id as Id<"remoteAssistClient">,
         }
@@ -3366,20 +3369,26 @@ export function POSTerminalDetailView() {
   return (
     <POSTerminalDetailViewContent
       detail={detail ?? null}
-      canStartRemoteAssist={hasFullAdminAccess}
+      canStartRemoteAssist={canManageTerminalHealth}
       isLoading={detail === undefined}
       onIssueTerminalRecoveryCommand={
-        hasFullAdminAccess ? onIssueTerminalRecoveryCommand : undefined
+        canManageTerminalHealth ? onIssueTerminalRecoveryCommand : undefined
       }
       onResolveTerminalCloudRepair={
-        hasFullAdminAccess ? onResolveTerminalCloudRepair : undefined
+        canManageTerminalHealth ? onResolveTerminalCloudRepair : undefined
       }
-      onResolveRegisterSessionReview={onResolveRegisterSessionReview}
+      onResolveRegisterSessionReview={
+        canManageTerminalHealth ? onResolveRegisterSessionReview : undefined
+      }
       onSetTerminalHeartbeat={
-        hasFullAdminAccess ? onSetTerminalHeartbeat : undefined
+        canManageTerminalHealth ? onSetTerminalHeartbeat : undefined
       }
-      onEndRemoteAssist={onEndRemoteAssist}
-      onStartRemoteAssist={onStartRemoteAssist}
+      onEndRemoteAssist={
+        canManageTerminalHealth ? onEndRemoteAssist : undefined
+      }
+      onStartRemoteAssist={
+        canManageTerminalHealth ? onStartRemoteAssist : undefined
+      }
       orgUrlSlug={params.orgUrlSlug}
       queryUnavailable={detail === null && !params.terminalId}
       remoteAssistClient={remoteAssistClient ?? null}

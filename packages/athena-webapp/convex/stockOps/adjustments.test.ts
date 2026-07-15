@@ -1,4 +1,6 @@
 import { readFileSync } from "node:fs";
+
+// Shared-demo adjustments retain the established batch result envelope.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";

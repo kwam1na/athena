@@ -32,6 +32,21 @@ const mocked = vi.hoisted(() => ({
   SidebarProvider: vi.fn(),
   useSidebar: vi.fn(),
   useRouterState: vi.fn(),
+  SharedDemoRuntime: vi.fn(
+    ({
+      children,
+      showControls = true,
+    }: {
+      children?: ReactNode;
+      gatePosUntilReady?: boolean;
+      showControls?: boolean;
+    }) => (
+      <>
+        {showControls ? <div aria-label="Demo controls" /> : null}
+        {children}
+      </>
+    ),
+  ),
 }));
 
 vi.mock("@tanstack/react-router", () => ({
@@ -46,6 +61,10 @@ vi.mock("@tanstack/react-router", () => ({
   },
   useNavigate: () => mocked.navigate,
   useRouterState: mocked.useRouterState,
+}));
+
+vi.mock("@/components/shared-demo/SharedDemoRuntime", () => ({
+  SharedDemoRuntime: mocked.SharedDemoRuntime,
 }));
 
 vi.mock("../hooks/useAuth", () => ({
@@ -348,6 +367,7 @@ describe("Authed layout", () => {
     );
     expect(screen.queryByTestId("app-sidebar")).not.toBeInTheDocument();
     expect(screen.queryByTestId("app-header")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Demo controls")).not.toBeInTheDocument();
     expect(screen.queryByTestId("store-modal")).not.toBeInTheDocument();
     expect(screen.queryByTestId("organization-modal")).not.toBeInTheDocument();
     expect(
@@ -857,6 +877,7 @@ describe("Authed layout", () => {
     expect(screen.queryByTestId("app-header")).not.toBeInTheDocument();
     expect(screen.queryByTestId("store-modal")).not.toBeInTheDocument();
     expect(screen.queryByTestId("organization-modal")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Demo controls")).not.toBeInTheDocument();
     expect(mocked.navigate).not.toHaveBeenCalled();
   });
 
@@ -1228,7 +1249,7 @@ describe("Authed layout", () => {
     expect(mocked.navigate).toHaveBeenCalledWith({ to: "/login" });
   });
 
-  it("places an icon-only theme toggle after the account menu", async () => {
+  it("places demo actions next to the account menu and the theme toggle after it", async () => {
     const user = userEvent.setup();
 
     vi.mocked(window.localStorage.getItem).mockImplementation((key) =>
@@ -1251,9 +1272,15 @@ describe("Authed layout", () => {
     const accountMenuButton = screen.getByRole("button", {
       name: "Open account menu for operator@example.com",
     });
+    const demoControls = screen.getByLabelText("Demo controls");
     const themeToggleButton = screen.getByRole("button", {
       name: "Switch to system theme",
     });
+
+    expect(
+      demoControls.compareDocumentPosition(accountMenuButton) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
 
     expect(accountMenuButton).toHaveClass(
       "h-10",
@@ -1454,6 +1481,7 @@ describe("Authed layout", () => {
 
     expect(screen.queryByTestId("app-header")).not.toBeInTheDocument();
     expect(screen.queryByTestId("app-sidebar")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Demo controls")).not.toBeInTheDocument();
     expect(screen.getByTestId("authed-outlet").closest("main")).toHaveClass(
       "box-border",
       "h-full",

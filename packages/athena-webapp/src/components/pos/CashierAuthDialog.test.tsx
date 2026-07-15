@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   hashPin: vi.fn(async (pin: string) => `hashed:${pin}`),
   toastError: vi.fn(),
   toastSuccess: vi.fn(),
+  useSharedDemoContext: vi.fn(),
   unwrapLocalStaffProofToken: vi.fn(
     async (): Promise<{ expiresAt: number; token: string } | null> => ({
       expiresAt: Date.now() + 10_000,
@@ -42,6 +43,10 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("convex/react", () => ({
   useMutation: mocks.useMutation,
+}));
+
+vi.mock("@/hooks/useSharedDemoContext", () => ({
+  useSharedDemoContext: mocks.useSharedDemoContext,
 }));
 
 vi.mock("sonner", () => ({
@@ -145,15 +150,19 @@ function buildLocalAuthorityRecord(overrides = {}) {
 }
 
 function renderDialog({
+  allowedRoles,
   authenticateMutation = vi.fn(),
   expireMutation = vi.fn(),
   refreshAuthorityMutation = vi.fn().mockResolvedValue(ok([])),
+  presentation,
   restoredCashier,
   workflowMode,
 }: {
+  allowedRoles?: Array<"cashier" | "manager">;
   authenticateMutation?: ReturnType<typeof vi.fn>;
   expireMutation?: ReturnType<typeof vi.fn>;
   refreshAuthorityMutation?: ReturnType<typeof vi.fn>;
+  presentation?: "dialog" | "inline";
   restoredCashier?: {
     displayName?: string | null;
     username: string;
@@ -175,9 +184,11 @@ function renderDialog({
 
   render(
     <CashierAuthDialog
+      allowedRoles={allowedRoles}
       open
       onAuthenticated={onAuthenticated}
       onDismiss={onDismiss}
+      presentation={presentation}
       restoredCashier={restoredCashier}
       storeId={storeId}
       terminalId={terminalId}
@@ -220,6 +231,7 @@ async function submitCredentials(
 describe("CashierAuthDialog", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.useSharedDemoContext.mockReturnValue(null);
     mocks.createPosLocalStore.mockReturnValue({
       readStaffAuthorityForUsername: vi.fn(async () => ({
         ok: true,
@@ -254,6 +266,53 @@ describe("CashierAuthDialog", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it("shows demo manager and cashier credentials in the inline POS sign-in card", () => {
+    mocks.useSharedDemoContext.mockReturnValue({ storeId });
+
+    renderDialog({ presentation: "inline" });
+
+    expect(screen.getByText("Demo staff sign-in")).toBeInTheDocument();
+    expect(screen.getByText("kofi")).toBeInTheDocument();
+    expect(screen.getByText("ama")).toBeInTheDocument();
+    expect(screen.getByText("1111")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Sign out from other registers" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("does not show demo manager credentials outside the demo store", () => {
+    renderDialog({ presentation: "inline" });
+
+    expect(screen.queryByText("Demo staff sign-in")).not.toBeInTheDocument();
+  });
+
+  it("restricts terminal authentication to the roles required by the action", async () => {
+    const authenticateMutation = vi.fn().mockResolvedValue(
+      ok({
+        activeRoles: ["manager"],
+        staffProfile: { fullName: "Kofi Mensah" },
+        staffProfileId,
+      }),
+    );
+    const { user } = renderDialog({
+      allowedRoles: ["manager"],
+      authenticateMutation,
+    });
+
+    await submitCredentials(user);
+
+    await waitFor(() =>
+      expect(authenticateMutation).toHaveBeenCalledWith({
+        allowedRoles: ["manager"],
+        allowActiveSessionsOnOtherTerminals: false,
+        pinHash: "hashed:1234",
+        storeId,
+        terminalId,
+        username: "frontdesk",
+      }),
+    );
   });
 
   it("shows safe authentication failure copy for invalid credentials", async () => {
@@ -330,7 +389,7 @@ describe("CashierAuthDialog", () => {
     expect(replaceStaffAuthoritySnapshot).not.toHaveBeenCalled();
   });
 
-  it("uses expense session copy when signing into expense mode", () => {
+  it("does not show the session recovery action in expense mode", () => {
     const authenticateMutation = vi.fn();
 
     renderDialog({ authenticateMutation, workflowMode: "expense" });
@@ -339,8 +398,8 @@ describe("CashierAuthDialog", () => {
       screen.getByRole("heading", { name: "Sign in required" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Sign out from other sessions" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: "Sign out from other sessions" }),
+    ).not.toBeInTheDocument();
   });
 
   it("does not leave cashier sign-in pending when the browser is offline", async () => {
@@ -471,6 +530,38 @@ describe("CashierAuthDialog", () => {
       expect.objectContaining({ ciphertext: "wrapped-proof-token" }),
     );
     expect(mocks.toastSuccess).toHaveBeenCalledWith("Signed in as Ama Mensah");
+  });
+
+  it("does not use cached cashier authority for a manager-only offline action", async () => {
+    Object.defineProperty(window.navigator, "onLine", {
+      configurable: true,
+      value: false,
+    });
+    mocks.createPosLocalStore.mockReturnValue({
+      readStaffAuthorityForUsername: vi.fn(async () => ({
+        ok: true,
+        value: buildLocalAuthorityRecord({ activeRoles: ["cashier"] }),
+      })),
+      replaceStaffAuthoritySnapshot: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+    });
+    const authenticateMutation = vi.fn();
+    const { user, onAuthenticated } = renderDialog({
+      allowedRoles: ["manager"],
+      authenticateMutation,
+    });
+
+    await submitCredentials(user);
+
+    await waitFor(() =>
+      expect(mocks.toastError).toHaveBeenCalledWith(
+        "Manager access is required for this action.",
+      ),
+    );
+    expect(onAuthenticated).not.toHaveBeenCalled();
+    expect(authenticateMutation).not.toHaveBeenCalled();
   });
 
   it("authenticates a locally authorized cashier offline before a proof has been wrapped", async () => {
@@ -613,8 +704,8 @@ describe("CashierAuthDialog", () => {
     ).toBeInTheDocument();
     expect(screen.getByLabelText(/username/i)).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Sign out from other registers" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: "Sign out from other registers" }),
+    ).not.toBeInTheDocument();
 
     const usernameInput = screen.getByLabelText(/username/i);
     await user.type(usernameInput, "frontdesk");
@@ -756,37 +847,6 @@ describe("CashierAuthDialog", () => {
     expect(mocks.toastSuccess).toHaveBeenCalledWith("Signed in as Ama Mensah");
   });
 
-  it("rejects offline recover mode without claiming other registers were signed out", async () => {
-    Object.defineProperty(window.navigator, "onLine", {
-      configurable: true,
-      value: false,
-    });
-    const authenticateMutation = vi.fn();
-    const expireMutation = vi.fn();
-
-    const { user, onAuthenticated } = renderDialog({
-      authenticateMutation,
-      expireMutation,
-    });
-
-    await user.click(
-      screen.getByRole("button", { name: "Sign out from other registers" }),
-    );
-    await submitCredentials(user);
-    await user.click(
-      screen.getByRole("button", { name: "Sign out from all registers" }),
-    );
-
-    await waitFor(() =>
-      expect(mocks.toastError).toHaveBeenCalledWith(
-        "Other register sign-outs need a connection. Reconnect, then try again.",
-      ),
-    );
-    expect(authenticateMutation).not.toHaveBeenCalled();
-    expect(expireMutation).not.toHaveBeenCalled();
-    expect(onAuthenticated).not.toHaveBeenCalled();
-  });
-
   it("collapses thrown faults to generic fallback copy and clears the PIN", async () => {
     const authenticateMutation = vi
       .fn()
@@ -839,75 +899,6 @@ describe("CashierAuthDialog", () => {
     expect(mocks.toastError).not.toHaveBeenCalled();
   });
 
-  it("authenticates before signing out from other registers", async () => {
-    const authenticateMutation = vi.fn().mockResolvedValue(
-      ok({
-        activeRoles: ["manager"],
-        credentialId: "credential-1",
-        staffProfile: {
-          firstName: "Ama",
-          fullName: "Ama Mensah",
-          lastName: "Mensah",
-        },
-        staffProfileId,
-      }),
-    );
-    const expireMutation = vi.fn().mockResolvedValue({ success: true });
-    const refreshAuthorityMutation = vi.fn().mockResolvedValue(ok([]));
-
-    const { user, onAuthenticated } = renderDialog({
-      authenticateMutation,
-      expireMutation,
-      refreshAuthorityMutation,
-    });
-
-    await user.click(
-      screen.getByRole("button", { name: "Sign out from other registers" }),
-    );
-    expect(
-      screen.getByRole("heading", { name: "Sign out from other registers" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Return to sign in" }),
-    ).toBeInTheDocument();
-
-    await submitCredentials(user);
-    await user.click(
-      screen.getByRole("button", { name: "Sign out from all registers" }),
-    );
-
-    await waitFor(() =>
-      expect(authenticateMutation).toHaveBeenNthCalledWith(1, {
-        allowedRoles: ["cashier", "manager"],
-        allowActiveSessionsOnOtherTerminals: true,
-        pinHash: "hashed:1234",
-        storeId,
-        terminalId,
-        username: "frontdesk",
-      }),
-    );
-    await waitFor(() =>
-      expect(expireMutation).toHaveBeenCalledWith({
-        staffProfileId,
-        terminalId,
-      }),
-    );
-    await waitFor(() =>
-      expect(authenticateMutation).toHaveBeenNthCalledWith(2, {
-        allowedRoles: ["cashier", "manager"],
-        pinHash: "hashed:1234",
-        storeId,
-        terminalId,
-        username: "frontdesk",
-      }),
-    );
-    expect(mocks.toastSuccess).toHaveBeenCalledWith(
-      "Signed out from all registers",
-    );
-    expect(onAuthenticated).toHaveBeenCalledWith(
-      expect.objectContaining({ staffProfileId }),
-    );
-  });
 });
 
 describe("mapThrownError", () => {

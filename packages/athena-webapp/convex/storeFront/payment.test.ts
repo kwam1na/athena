@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+// Shared-demo payment denial preserves the existing public result envelopes.
+
 const paystackMock = vi.hoisted(() => ({
   verifyTransaction: vi.fn(),
 }));

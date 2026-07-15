@@ -3,10 +3,27 @@ import { query } from "../_generated/server";
 import { Id } from "../_generated/dataModel";
 import { getAuthenticatedAthenaUserWithCtx } from "../lib/athenaUserAuth";
 
+export function isExpiredSharedDemoSessionError(error: unknown) {
+  return (
+    error instanceof Error &&
+    error.message ===
+      "The demo session has expired. Open the demo again."
+  );
+}
+
 export const getAuthenticatedUser = query({
   args: {},
   handler: async (ctx) => {
-    return getAuthenticatedAthenaUserWithCtx(ctx);
+    try {
+      return await getAuthenticatedAthenaUserWithCtx(ctx, {
+        sharedDemoCapability: "reports.read",
+      });
+    } catch (error) {
+      if (isExpiredSharedDemoSessionError(error)) {
+        return null;
+      }
+      throw error;
+    }
   },
 });
 

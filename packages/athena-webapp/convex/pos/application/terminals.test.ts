@@ -285,6 +285,34 @@ describe("registerTerminal", () => {
     expect(vi.mocked(patchTerminalRecord)).not.toHaveBeenCalled();
   });
 
+  it("reassigns an existing terminal when an authorized demo migration allows it", async () => {
+    vi.mocked(getTerminalByFingerprint).mockResolvedValue(existingTerminal);
+    vi.mocked(getTerminalByStoreIdAndRegisterNumber).mockResolvedValue(null);
+
+    const result = await registerTerminal({ db: null as never } as never, {
+      allowRegisterNumberChange: true,
+      storeId: "store-1" as Id<"store">,
+      fingerprintHash: "fingerprint-1",
+      syncSecretHash: "sync-secret-rotated",
+      displayName: "Demo Register",
+      registerNumber: "213305",
+      registeredByUserId: "user-1" as Id<"athenaUser">,
+      browserInfo,
+    });
+
+    expect(vi.mocked(patchTerminalRecord)).toHaveBeenCalledWith(
+      expect.anything(),
+      existingTerminal._id,
+      expect.objectContaining({ registerNumber: "213305" }),
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        kind: "ok",
+        data: expect.objectContaining({ registerNumber: "213305" }),
+      }),
+    );
+  });
+
   it("does not reactivate a revoked terminal through normal registration", async () => {
     vi.mocked(getTerminalByFingerprint).mockResolvedValue({
       ...existingTerminal,

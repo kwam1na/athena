@@ -4,6 +4,8 @@ import { internal } from "../_generated/api";
 import { normalizeStoreConfig } from "../inventory/storeConfigV2";
 
 const CLOUDFLARE_API_BASE = "https://api.cloudflare.com/client/v4";
+const requireAuthenticatedNonDemoEffectRef =
+  (internal as any).sharedDemo.actor.requireAuthenticatedNonDemoEffect;
 
 function getCloudflareConfig() {
   const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
@@ -27,7 +29,8 @@ export const getDirectUploadUrl = action({
   args: {
     maxDurationSeconds: v.optional(v.number()),
   },
-  handler: async (_ctx, args) => {
+  handler: async (ctx, args) => {
+    await ctx.runQuery(requireAuthenticatedNonDemoEffectRef, {});
     const { accountId, apiToken } = getCloudflareConfig();
     const maxDuration = args.maxDurationSeconds || 300; // 5 min default
 
@@ -68,7 +71,8 @@ export const getVideoStatus = action({
   args: {
     streamUid: v.string(),
   },
-  handler: async (_ctx, args) => {
+  handler: async (ctx, args) => {
+    await ctx.runQuery(requireAuthenticatedNonDemoEffectRef, {});
     const { accountId, apiToken } = getCloudflareConfig();
 
     const response = await fetch(
@@ -107,7 +111,8 @@ export const deleteVideo = action({
   args: {
     streamUid: v.string(),
   },
-  handler: async (_ctx, args) => {
+  handler: async (ctx, args) => {
+    await ctx.runQuery(requireAuthenticatedNonDemoEffectRef, {});
     const { accountId, apiToken } = getCloudflareConfig();
 
     const response = await fetch(
@@ -141,6 +146,7 @@ export const addStreamReelVersion = action({
     thumbnailUrl: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<{ success: true; version: number }> => {
+    await ctx.runQuery(requireAuthenticatedNonDemoEffectRef, {});
     const store: any = await ctx.runQuery(internal.inventory.stores.findById, {
       id: args.storeId,
     });
@@ -192,6 +198,7 @@ export const deleteStreamReelVersion = action({
     version: v.number(),
   },
   handler: async (ctx, args): Promise<{ success: true }> => {
+    await ctx.runQuery(requireAuthenticatedNonDemoEffectRef, {});
     const store: any = await ctx.runQuery(internal.inventory.stores.findById, {
       id: args.storeId,
     });
@@ -261,6 +268,7 @@ export const setActiveStreamReel = action({
     hlsUrl: v.string(),
   },
   handler: async (ctx, args): Promise<{ success: true }> => {
+    await ctx.runQuery(requireAuthenticatedNonDemoEffectRef, {});
     const store: any = await ctx.runQuery(internal.inventory.stores.findById, {
       id: args.storeId,
     });

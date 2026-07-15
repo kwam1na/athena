@@ -17,6 +17,7 @@ import type {
 import { useAuth } from "@/hooks/useAuth";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { useGetTerminal } from "@/hooks/useGetTerminal";
+import { useSharedDemoContext } from "@/hooks/useSharedDemoContext";
 import { useNavigateBack } from "@/hooks/use-navigate-back";
 import { getPendingCashVoidContext } from "@/lib/cashControls/pendingCashVoidPresentation";
 import { registerAndProvisionPosTerminal } from "@/lib/pos/application/registerAndProvisionPosTerminal";
@@ -449,7 +450,17 @@ const POS_READINESS_REPAIR_GUARD_DELAY_MS = 1_500;
 export function useRegisterViewModel(): RegisterViewModel {
   const { activeStore } = useGetActiveStore();
   const { authSessionEpoch, user } = useAuth();
+  const sharedDemoContext = useSharedDemoContext();
   const terminal = useGetTerminal();
+  const sharedDemoStaff = (
+    terminal as {
+      sharedDemoStaff?: {
+        activeRoles: string[];
+        displayName: string;
+        staffProfileId: Id<"staffProfile">;
+      };
+    } | null
+  )?.sharedDemoStaff;
   const routeParams = useParams({ strict: false }) as
     | {
         orgUrlSlug?: string;
@@ -478,6 +489,18 @@ export function useRegisterViewModel(): RegisterViewModel {
   staffProofTokenRef.current = staffProofToken;
   const [localAuthenticatedStaff, setLocalAuthenticatedStaff] =
     useState<LocalAuthenticatedStaff>(null);
+
+  useEffect(() => {
+    if (!sharedDemoStaff) return;
+    staffProfileIdRef.current = sharedDemoStaff.staffProfileId;
+    staffProofTokenRef.current = null;
+    setStaffProfileId(sharedDemoStaff.staffProfileId);
+    setStaffProofToken(null);
+    setLocalAuthenticatedStaff({
+      activeRoles: sharedDemoStaff.activeRoles,
+      displayName: sharedDemoStaff.displayName,
+    });
+  }, [sharedDemoStaff]);
   const [cashierPresenceRestore, setCashierPresenceRestore] =
     useState<CashierPresenceRestoreState>({ status: "pending" });
   const [
@@ -625,6 +648,7 @@ export function useRegisterViewModel(): RegisterViewModel {
   } = useRegisterLocalRuntime({
     activeStoreId,
     createLocalFallbackId,
+    expectedDemoEpoch: sharedDemoContext?.restore?.epoch,
     onRetryBootstrap: requestBootstrap,
     staffProfileId,
     staffProfileIdRef,
@@ -984,6 +1008,14 @@ export function useRegisterViewModel(): RegisterViewModel {
         return;
       }
 
+      if (sharedDemoStaff) {
+        setCashierPresenceRestore({
+          displayName: sharedDemoStaff.displayName,
+          status: "restored",
+        });
+        return;
+      }
+
       if (staffProfileIdRef.current) {
         setCashierPresenceRestore({ status: "restored" });
         return;
@@ -1138,6 +1170,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     activeStoreOrganizationId,
     localStore,
     terminal?._id,
+    sharedDemoStaff,
   ]);
 
   useEffect(() => {
@@ -3071,7 +3104,9 @@ export function useRegisterViewModel(): RegisterViewModel {
           countedCash: parsedCountedCash,
           notes: trimmedCloseoutNotes,
           registerSessionId: cloudRegisterSessionId,
+          staffProofToken: staffProofToken ?? undefined,
           storeId: activeStoreId!,
+          terminalId: terminal._id,
         }),
       );
 
@@ -3115,6 +3150,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     registerNumber,
     requestBootstrap,
     staffProfileId,
+    staffProofToken,
     submitRegisterSessionCloseout,
     terminal?._id,
     user?._id,
@@ -3129,7 +3165,7 @@ export function useRegisterViewModel(): RegisterViewModel {
   }, []);
 
   const handleSubmitOpeningFloatCorrection = useCallback(async () => {
-    if (!activeStoreId || !user?._id || !staffProfileId) {
+    if (!activeStoreId || !user?._id || !staffProfileId || !terminal?._id) {
       setDrawerErrorMessage(
         "Register sign-in required. Sign in before correcting opening float.",
       );
@@ -3175,7 +3211,9 @@ export function useRegisterViewModel(): RegisterViewModel {
               correctedOpeningFloat: parsedOpeningFloat,
               reason,
               registerSessionId,
+              staffProofToken: staffProofToken ?? undefined,
               storeId: activeStoreId!,
+              terminalId: terminal._id,
             }),
           );
         } finally {
@@ -3212,6 +3250,8 @@ export function useRegisterViewModel(): RegisterViewModel {
     openingFloatCorrectionReason,
     requestBootstrap,
     staffProfileId,
+    staffProofToken,
+    terminal?._id,
     user?._id,
   ]);
 
@@ -4992,15 +5032,21 @@ export function useRegisterViewModel(): RegisterViewModel {
     const isTerminalLookupResolved = terminal !== undefined;
     const terminalReady = Boolean(terminal);
     const cashierSetupReady =
-      !isStaffRosterLoaded || activeRegisterOperatorCount > 0;
+      Boolean(sharedDemoStaff) ||
+      !isStaffRosterLoaded ||
+      activeRegisterOperatorCount > 0;
     const cashierSignedIn = Boolean(staffProfileId);
     const shouldShow =
       (isTerminalLookupResolved && !terminalReady) ||
-      (isStaffRosterLoaded && activeRegisterOperatorCount === 0);
+      (isStaffRosterLoaded &&
+        activeRegisterOperatorCount === 0 &&
+        !sharedDemoStaff);
     const nextStep =
       isTerminalLookupResolved && !terminalReady
         ? "terminal"
-        : isStaffRosterLoaded && activeRegisterOperatorCount === 0
+        : isStaffRosterLoaded &&
+            activeRegisterOperatorCount === 0 &&
+            !sharedDemoStaff
           ? "cashierSetup"
           : "ready";
 
@@ -5009,13 +5055,14 @@ export function useRegisterViewModel(): RegisterViewModel {
       terminalReady,
       cashierSetupReady,
       cashierSignedIn,
-      cashierCount: activeRegisterOperatorCount,
+      cashierCount: sharedDemoStaff ? 1 : activeRegisterOperatorCount,
       nextStep,
     };
   }, [
     activeRegisterOperatorCount,
     isStaffRosterLoaded,
     staffProfileId,
+    sharedDemoStaff,
     terminal,
   ]);
   const cashierPresenceBlocksSale = isCashierPresenceBlockingSale(
@@ -5822,6 +5869,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       payments,
       hasTerminal: Boolean(terminal),
       isTransactionCompleted,
+      canVoidCompletedTransaction: !sharedDemoStaff,
       completedOrderNumber,
       completionBlockMessage: serviceCheckoutBlockMessage,
       serviceLines: serviceLineDrafts.map((item) => ({

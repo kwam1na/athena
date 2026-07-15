@@ -16,6 +16,7 @@ const mockedHooks = vi.hoisted(() => ({
   useMutation: vi.fn(),
   usePermissions: vi.fn(),
   useQuery: vi.fn(),
+  useSharedDemoContext: vi.fn(),
 }));
 
 vi.mock("convex/react", () => ({
@@ -46,6 +47,10 @@ vi.mock("@/hooks/useGetActiveStore", () => ({
 
 vi.mock("@/hooks/usePermissions", () => ({
   usePermissions: mockedHooks.usePermissions,
+}));
+
+vi.mock("@/hooks/useSharedDemoContext", () => ({
+  useSharedDemoContext: mockedHooks.useSharedDemoContext,
 }));
 
 const exposedRecommendation = {
@@ -388,6 +393,7 @@ describe("ProcurementViewContent", () => {
       canAccessOperations: () => true,
       isLoading: false,
     });
+    mockedHooks.useSharedDemoContext.mockReturnValue(null);
     mockedHooks.useQuery.mockImplementation((_, args) =>
       args === "skip"
         ? undefined
@@ -1332,6 +1338,22 @@ describe("ProcurementViewContent", () => {
       }),
     ).not.toBeInTheDocument();
     expect(mockedHooks.useQuery.mock.calls.map(([, args]) => args)).toEqual([
+      "skip",
+      "skip",
+      "skip",
+      "skip",
+      "skip",
+    ]);
+  });
+
+  it("skips protected procurement queries in the shared demo", () => {
+    mockedHooks.useSharedDemoContext.mockReturnValue({ storeId: "store-1" });
+    mockedHooks.useQuery.mockReturnValue(undefined);
+
+    render(<ProcurementView />);
+
+    expect(mockedHooks.useQuery.mock.calls.map(([, args]) => args)).toEqual([
+      "skip",
       "skip",
       "skip",
       "skip",

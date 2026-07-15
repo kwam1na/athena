@@ -225,9 +225,58 @@ import {
   landingFunnelDailyBucketSchema,
   landingFunnelEventSchema,
 } from "./schemas/marketing/landingFunnelEvent";
+import {
+  sharedDemoBaselineRowSchema,
+  sharedDemoBaselineDocumentSchema,
+  sharedDemoRestoreAuditSchema,
+  sharedDemoRestoreStateSchema,
+} from "./schemas/sharedDemo";
+import { staffMessageSchema } from "./schemas/staffMessages";
 
 const schema = defineSchema({
   ...authTables,
+  sharedDemoRestoreState: defineTable(sharedDemoRestoreStateSchema).index(
+    "by_storeId",
+    ["storeId"],
+  ),
+  sharedDemoBaselineRow: defineTable(sharedDemoBaselineRowSchema)
+    .index("by_storeId", ["storeId"])
+    .index("by_storeId_domain", ["storeId", "domain"]),
+  sharedDemoBaselineDocument: defineTable(sharedDemoBaselineDocumentSchema)
+    .index("by_storeId", ["storeId"])
+    .index("by_storeId_tableName", ["storeId", "tableName"])
+    .index("by_storeId_tableName_documentId", ["storeId", "tableName", "documentId"]),
+  sharedDemoRestoreAudit: defineTable(sharedDemoRestoreAuditSchema)
+    .index("by_storeId_occurredAt", ["storeId", "occurredAt"]),
+  sharedDemoPrincipal: defineTable({
+    authUserId: v.id("users"),
+    athenaUserId: v.id("athenaUser"),
+    organizationId: v.id("organization"),
+    storeId: v.id("store"),
+    admissionExpiresAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_authUserId", ["authUserId"]),
+  sharedDemoAdmissionTicket: defineTable({
+    authUserId: v.id("users"),
+    principalId: v.id("sharedDemoPrincipal"),
+    ticketHash: v.string(),
+    expiresAt: v.number(),
+    consumedAt: v.optional(v.number()),
+  })
+    .index("by_ticketHash", ["ticketHash"])
+    .index("by_expiresAt", ["expiresAt"]),
+  sharedDemoAdmissionRateBucket: defineTable({
+    count: v.number(),
+    kind: v.union(v.literal("mint"), v.literal("exchange")),
+    windowStartedAt: v.number(),
+  }).index("by_kind", ["kind"]),
+  staffMessage: defineTable(staffMessageSchema)
+    .index("by_storeId_createdAt", ["storeId", "createdAt"])
+    .index("by_storeId_authorUserId_createdAt", [
+      "storeId",
+      "authorUserId",
+      "createdAt",
+    ]),
   walkthroughRequest: defineTable(walkthroughRequestSchema)
     .index("by_submissionKey", ["submissionKey"])
     .index("by_normalizedEmail_and_submittedAt", [

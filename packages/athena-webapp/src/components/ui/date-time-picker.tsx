@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 
 interface DateTimePickerProps {
+  className?: string;
   id?: string;
   value?: Date;
   onChange: (date: Date | undefined) => void;
@@ -20,6 +21,7 @@ interface DateTimePickerProps {
 }
 
 export function DateTimePicker({
+  className,
   id,
   value,
   onChange,
@@ -110,7 +112,8 @@ export function DateTimePicker({
           id={id}
           variant="outline"
           className={cn(
-            "w-full justify-start text-left font-normal",
+            className ?? "w-full",
+            "justify-start text-left font-normal",
             !selectedDate && "text-muted-foreground"
           )}
           disabled={disabled}

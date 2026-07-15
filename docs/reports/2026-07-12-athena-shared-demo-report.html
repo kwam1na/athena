@@ -1,0 +1,367 @@
+<!doctype html>
+<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="3d2dfa9bde64b83ee31bbd502efddf71d38edc986d2addf143f6aae53eba29aa">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Athena shared demo: real workflows with bounded authority</title>
+    <style>
+      :root {
+        --ink: #1f2933;
+        --muted: #596674;
+        --line: #d9e2ec;
+        --paper: #ffffff;
+        --soft: #f6f8fb;
+        --accent: #1d4ed8;
+        --accent-soft: #dbeafe;
+        --good: #166534;
+        --bad: #b91c1c;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--soft);
+        color: var(--ink);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        line-height: 1.55;
+      }
+      main { max-width: 1120px; margin: 0 auto; padding: 48px 24px 72px; }
+      header { border-bottom: 1px solid var(--line); margin-bottom: 28px; padding-bottom: 28px; }
+      h1, h2, h3 { line-height: 1.18; letter-spacing: 0; }
+      h1 { font-size: 42px; max-width: 880px; margin: 0 0 16px; }
+      h2 { font-size: 28px; margin: 0 0 16px; }
+      p { margin: 0 0 14px; }
+      .lede { color: var(--muted); font-size: 18px; max-width: 880px; }
+      .meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+      .pill { border: 1px solid var(--line); border-radius: 999px; background: var(--paper); color: var(--muted); font-size: 13px; padding: 6px 10px; }
+      .panel { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; margin: 18px 0; padding: 22px; }
+      code { background: #eef2f7; border: 1px solid #d8dee8; border-radius: 5px; padding: 1px 5px; }
+      pre { overflow: auto; background: #111827; color: #e5e7eb; border-radius: 8px; padding: 16px; }
+      pre code { background: transparent; border: 0; color: inherit; padding: 0; }
+      table { width: 100%; border-collapse: collapse; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+      .table-wrap { max-width: 100%; overflow-x: auto; }
+      th, td { border-bottom: 1px solid var(--line); padding: 11px 12px; text-align: left; vertical-align: top; }
+      th { background: #eef2f7; color: var(--muted); font-size: 13px; text-transform: uppercase; }
+      tr:last-child td { border-bottom: 0; }
+      .quiz-question { border-top: 1px solid var(--line); padding: 18px 0; }
+      .quiz-question:first-child { border-top: 0; }
+      fieldset { border: 0; margin: 0; padding: 0; }
+      legend { font-weight: 700; margin-bottom: 10px; }
+      label { display: block; border: 1px solid var(--line); border-radius: 8px; background: #fbfdff; margin: 8px 0; padding: 10px 12px; cursor: pointer; }
+      label:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+      @media (hover: hover) and (pointer: fine) {
+        label:hover { border-color: #b6c5d8; }
+      }
+      button {
+        appearance: none;
+        border: 0;
+        border-radius: 8px;
+        background: var(--accent);
+        color: #ffffff;
+        cursor: pointer;
+        font-weight: 700;
+        padding: 11px 16px;
+        transition: transform 140ms cubic-bezier(0.23, 1, 0.32, 1);
+      }
+      button:active { transform: scale(0.97); }
+      button:focus-visible { outline: 3px solid var(--accent-soft); outline-offset: 3px; }
+      button.secondary { background: #475569; }
+      .quiz-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
+      #quizResult { font-weight: 700; }
+      .answer-detail { display: none; border-top: 1px dashed var(--line); color: var(--muted); margin-top: 10px; padding-top: 10px; }
+      .answer-detail.visible { display: block; }
+      .answer-status { display: none; font-weight: 700; margin-top: 10px; }
+      .answer-status.visible { display: block; }
+      .correct { border-color: #86efac !important; background: #f0fdf4 !important; }
+      .incorrect { border-color: #fecaca !important; background: #fef2f2 !important; }
+      @media (prefers-reduced-motion: reduce) { button { transition-duration: 0ms; } }
+      @media (max-width: 820px) { h1 { font-size: 32px; } main { padding: 32px 16px 56px; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Athena shared demo: real workflows with bounded authority</h1>
+        <p class="lede">How one synthetic store can support shared writes without becoming an unrestricted administrator or a parallel demo application.</p>
+        <div class="meta"><span class="pill">Linear V26-1039</span><span class="pill">Branch codex/V26-1039-shared-demo</span><span class="pill">Unanimous multi-lens approval</span><span class="pill">Candidate cron verified live</span><span class="pill">In-app browser flow complete</span><span class="pill">Pre-merge delivery candidate</span></div>
+      </header>
+      <section class="panel"><h2>Executive summary</h2>
+<p>Athena now has a dev/QA-gated /demo entry that exchanges a short-lived opaque ticket for a per-admission demo principal. Every principal maps to the same synthetic owner, organization, and store, so the deployed design shares writes without sharing renewable authentication authority. Independent browser admissions confirmed that one visitor's writes are visible to the next visitor before restore.</p>
+<p>The experience uses Athena&#x27;s real POS, inventory, cash, fulfillment, staff-message, Daily Operations, and Reports surfaces. A thin owner-oriented layer labels the store as shared, warns against sensitive input, explains six workflows, and exposes a manual restore. Hourly and manual restore share one versioned store-scoped boundary.</p>
+</section>
+<section class="panel"><h2>Why this mattered</h2>
+<p>A normal full-admin account is too broad for a public demo: ordinary membership checks also permit identity, permissions, integrations, exports, payments, refunds, and destructive administration. A fake demo application would be safer but would not prove Athena&#x27;s real operating workflows.</p>
+<p>The design therefore separates authentication authority, business identity, the source-derived demo function inventory, provider effects, and store restoration. Demo auth users cannot resolve through Athena&#x27;s ordinary email-based full-admin path; only explicitly classified adapters can map them to the shared business actor.</p>
+</section>
+<section class="panel"><h2>Mental model</h2>
+<p>Think of the shared store as one stage used by many short-lived badge holders. The badge identifies one admission, the store actor is shared, the capability usher permits only six real workflows, provider doors remain locked or simulated, and the stage manager restores the exact set after each hour.</p>
+<pre><code>/demo -&gt; one-time ticket -&gt; per-admission auth principal
+       -&gt; shared Athena owner/store
+       -&gt; real command + demo capability + restore epoch
+       -&gt; real store data
+       -&gt; provider effect simulated/denied
+       -&gt; hourly/manual baseline restore</code></pre>
+</section>
+<section class="panel"><h2>Six real workflows</h2>
+<div class="table-wrap" role="region" aria-label="Shared demo workflow matrix" tabindex="0"><table>
+<thead><tr><th>Area</th><th>Real shared write</th><th>Effect boundary</th><th>Reporting posture</th></tr></thead>
+<tbody>
+<tr><td>POS</td><td>Complete a sale and record its items</td><td>No payment-provider effect</td><td>Existing sales and item projections may reflect the write</td></tr>
+<tr><td>Inventory</td><td>Submit a stock adjustment and movement</td><td>No external effect</td><td>Existing inventory and attention views may reflect the write</td></tr>
+<tr><td>Cash</td><td>Record register-session cash control</td><td>No money movement</td><td>No new report relationship is claimed</td></tr>
+<tr><td>Fulfillment</td><td>Advance the seeded pickup order</td><td>Customer notification is simulated</td><td>No new report relationship is claimed</td></tr>
+<tr><td>Staff</td><td>Post a bounded internal store message</td><td>No customer or identity effect</td><td>Not a Reports source</td></tr>
+<tr><td>Daily Operations</td><td>Start the seeded store day</td><td>No external effect</td><td>Existing operational surfaces remain authoritative</td></tr>
+</tbody></table></div>
+<p>Reports are a separate read-only surface. They show these writes only where Athena already has a supported materialized relationship.</p>
+</section>
+<section class="panel"><h2>Before and after</h2>
+
+<ul>
+<li>Before: no shared-demo principal, /demo entry, shared-store restore coordinator, or owner orientation existed on origin/main.</li>
+<li>After: each admission has its own non-renewable server-clock authority while all admissions map to one synthetic Athena owner/store.</li>
+<li>After: a recursive CI sensor detects exported public mutations/actions and provider-bearing modules for explicit review. Runtime denial remains owned by the demo actor, store-scoped adapters, foundation guards, and provider-effect guards.</li>
+<li>After: provisioning creates coherent source and child rows, and restore replaces the exhaustive mutable registry, removes visitor-added rows, restores reporting ingress/facts/projections through bounded indexes, and verifies measured counts before publishing ready.</li>
+<li>After: staff communication is a genuine bounded internal store workflow, not a customer banner or navigation placeholder.</li>
+</ul>
+</section>
+<section class="panel"><h2>Failure boundaries</h2>
+
+<ul>
+<li>The feature requires the enable flag, development/QA environment, and an explicit deployment-ID allowlist; production and unknown deployments fail closed.</li>
+<li>Tickets are opaque and hash-only, expire after one minute, are transactionally single-use, and mint/exchange paths are throttled.</li>
+<li>Expired demo principals throw instead of falling through as normal actors. Cross-store authority comes from the principal, never client IDs.</li>
+<li>Configured demo user, organization, and store IDs are protected by auth-independent foundation guards, so signing out cannot bypass destructive administration checks.</li>
+<li>Catalog administration, global maintenance, store migration, cache invalidation, OTP, storage, media, payment, refund, export, and provider actions enforce ordinary non-demo authority or demo-effect denial before database changes, credential reads, uploads, deletes, or network dispatch.</li>
+<li>Order fulfillment accepts only bounded status changes. Customer notifications are simulated for demo actors; normal actors retain live scheduling.</li>
+<li>Every demo write reads the restore epoch in the same transaction. Restore lease acquisition and continuation scheduling are atomic; apply persists an idempotent receipt; completion publishes ready only after the receipt and queued terminal cleanup are complete.</li>
+<li>The 500-row per-table boundary is intentional fail-closed capacity. Supporting larger stores would require a cursor-based multi-transaction coordinator.</li>
+</ul>
+</section>
+<section class="panel"><h2>What intentionally did not change</h2>
+
+<ul>
+<li>No custom OIDC, JWKS, proof-of-possession, cookie proof, or browser key store was ported.</li>
+<li>No per-visitor stores, generations, purge/retention system, isolated materialization, or generation-fenced POS storage was added.</li>
+<li>Normal tenant authorization and application surfaces remain authoritative.</li>
+<li>Reports stay read-only and claim only relationships Athena already materializes.</li>
+<li>The isolated sandbox branch/worktree, production, and local root checkout remain untouched.</li>
+</ul>
+</section>
+<section class="panel"><h2>Validation and current finish line</h2>
+<p>Focused unit, handler-boundary, and component suites cover admission, actor expiry, capability enforcement, effect suppression, provisioning, the complete mutable-table registry, durable restore leases and receipts, cron, manual restore, staff messaging, /demo entry, POS epoch propagation, and the single authoritative local-sync runtime. The shared-demo-focused suite passes 170 tests; the broader affected runtime suite passes 502 tests. TypeScript and changed Convex/frontend lint are green, and Graphify was rebuilt to 10,450 nodes and 12,699 edges.</p>
+<p>The final reviewer loop reached unanimous approval from security, correctness, and product/runtime lenses. Their blockers drove architectural fixes only: exact per-event capability enforcement, staff mutation guards, full source/reporting restore closure, durable lease scheduling and apply receipts, truthful terminal cleanup, deterministic missing-state recovery, epoch-aware POS activity, and removal of a competing simplified POS drain. Existing visual behavior remained the contract.</p>
+<p>The exact hourly implementation was pushed to the shared dev Convex deployment and invoked through <code>verifyHourlyRestoreNow</code>. Live migration first exposed a stale checkout-session reference; migration now validates store/order ownership and recreates/rebinds the canonical session when necessary. The rerun advanced baseline v10 to epoch 44, and the scheduled continuation reached <code>ready</code> with phase <code>applied</code>, a completion timestamp, and no failure code.</p>
+<p>Post-approval in-app browser validation exercised the requested operator flow against that candidate: credential-free /demo admission; the seeded DEMO-01 register in Cash Controls; cashier and manager PIN sign-ins; a completed cash sale; manager quick-add of a product; a zero-variance clean closeout; a threshold-exceeding $60 variance against a $50 expected drawer; pending-review visibility in Cash Controls; and manager approval through final closed status. This report describes the pre-merge candidate; production deploy and local-root alignment occur only after PR merge.</p>
+</section>
+<section class="panel"><h2>Next-time guidance</h2>
+
+<ul>
+<li>Add every new demo-writable public function and provider gateway to the classification inventory before exposing it.</li>
+<li>Keep payload restrictions next to generic commands; capability permission alone is not enough for multi-purpose updates.</li>
+<li>Register every new mutable source or child table in provisioning, baseline capture, measured restore, and tests.</li>
+<li>Treat a new external effect as live for normal actors and explicitly simulated or denied for demo actors at the dispatch boundary.</li>
+<li>Repeat the two-admission shared-visibility and restore check whenever the demo baseline or POS synchronization model changes.</li>
+</ul>
+</section>
+
+<section class="panel">
+  <h2>Key Files</h2>
+  <div class="table-wrap" role="region" aria-label="Key files" tabindex="0"><table>
+    <thead><tr><th>File</th><th>Why It Matters</th></tr></thead>
+    <tbody><tr><td><code>packages/athena-webapp/convex/sharedDemo/admission.ts</code></td><td>Mints and atomically consumes throttled opaque tickets while binding a unique auth principal to the shared business actor.</td></tr>
+<tr><td><code>packages/athena-webapp/convex/sharedDemo/actor.ts</code></td><td>Resolves server-owned demo authority, expiry, store scope, and capability enforcement without changing normal actors.</td></tr>
+<tr><td><code>packages/athena-webapp/convex/sharedDemo/policy.ts</code></td><td>Closed capability/effect registry and payload-level order-fulfillment restriction.</td></tr>
+<tr><td><code>packages/athena-webapp/convex/sharedDemo/provision.ts</code></td><td>Creates the stable synthetic owner/store and coherent six-domain source narrative.</td></tr>
+<tr><td><code>packages/athena-webapp/convex/sharedDemo/domainRestore.ts</code></td><td>Captures and restores real store-scoped source and child rows through deployed schema indexes while preserving unrelated tenants.</td></tr>
+<tr><td><code>packages/athena-webapp/convex/sharedDemo/restore.ts</code></td><td>Coordinates the durable restore lease, epoch fence, idempotent apply receipt, measured verification, and ready publication.</td></tr>
+<tr><td><code>packages/athena-webapp/convex/operations/staffMessages.ts</code></td><td>Adds the real bounded internal staff-communication workflow with membership, rate, and restore fencing.</td></tr>
+<tr><td><code>packages/athena-webapp/src/routes/demo.tsx</code></td><td>Seamless credential-free entry into the configured shared store.</td></tr>
+<tr><td><code>packages/athena-webapp/src/components/shared-demo/SharedDemoStatusBar.tsx</code></td><td>Persistent shared-state, sensitive-data, hourly restore, guide, and manual restore communication.</td></tr>
+<tr><td><code>docs/solutions/architecture-patterns/shared-demo-principal-policy-and-restore-boundary-2026-07-12.md</code></td><td>Durable extension rules for demo authority, effects, and atomic restore.</td></tr></tbody>
+  </table></div>
+</section>
+
+
+<section class="panel">
+  <h2>Subagent Evidence</h2>
+  <ul><li><strong>requirements and session-context reviewer:</strong> Traced the sandbox-reference decisions, unanimous review loop, staff-communication correction, finish-line constraints, and local validation evidence.</li>
+<li><strong>security and delivered-diff reviewer:</strong> Mapped the staged architecture and found inconsistent deployment gates, missing throttling, unwired effect simulation, and restore verification/failure gaps; those blockers were then fixed and retested.</li>
+<li><strong>final delivered-diff reviewer:</strong> Found cross-store authority gaps and a caught-error restore path that could commit partial tables. Central store clamps and uncaught atomic rollback now cover the real writes and shared reads.</li>
+<li><strong>product and design reviewer:</strong> Approved the native Athena shell, owner-centered six-domain framing, persistent shared warning, optional guide, real-route navigation, restore copy, and accessibility posture.</li>
+<li><strong>final unanimous architecture loop:</strong> Security, correctness, and product/runtime reviewers each returned APPROVE on the same final tree after the durable restore, exhaustive registry, bootstrap recovery, epoch-aware sync, and single-drain fixes.</li></ul>
+</section>
+
+
+<section id="quiz" class="panel">
+  <h2>Quiz: Pass Required</h2>
+  <p>You must score at least 8 out of 10 to pass.</p>
+  <form id="changeQuiz" data-threshold="8">
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>1. Why should a visitor never enter real personal, financial, credential, or other sensitive data?</legend>
+    <label><input type="radio" name="q1" value="0" /> Reports cannot render text</label>
+<label><input type="radio" name="q1" value="1" /> The store is shared and other visitors may observe writes before restore</label>
+<label><input type="radio" name="q1" value="2" /> Athena sends every field to a payment provider</label>
+<label><input type="radio" name="q1" value="3" /> The demo requires production credentials</label>
+  </fieldset>
+  <div class="answer-detail">Correct: the synthetic store is shared. Visitors must use synthetic content because writes may be visible until the shared baseline is restored.</div>
+</div>
+
+<div class="quiz-question" data-answer="2">
+  <fieldset>
+    <legend>2. What identifies the authoritative demo store?</legend>
+    <label><input type="radio" name="q2" value="0" /> A store ID supplied by the browser</label>
+<label><input type="radio" name="q2" value="1" /> The current URL slug alone</label>
+<label><input type="radio" name="q2" value="2" /> The durable server-owned demo principal</label>
+<label><input type="radio" name="q2" value="3" /> The user&#x27;s last visited store</label>
+  </fieldset>
+  <div class="answer-detail">Correct: the durable server-owned principal. Browser IDs, URL slugs, and navigation history are not authorization evidence.</div>
+</div>
+
+<div class="quiz-question" data-answer="2">
+  <fieldset>
+    <legend>3. What should another admitted visitor observe after you post a staff message?</legend>
+    <label><input type="radio" name="q3" value="0" /> A private visitor-only copy</label>
+<label><input type="radio" name="q3" value="1" /> A new isolated store generation</label>
+<label><input type="radio" name="q3" value="2" /> The same message in the shared store until restore</label>
+<label><input type="radio" name="q3" value="3" /> A customer notification</label>
+  </fieldset>
+  <div class="answer-detail">Correct: staff communication is a real shared-store write, not a per-visitor session artifact or customer-facing effect.</div>
+</div>
+
+<div class="quiz-question" data-answer="2">
+  <fieldset>
+    <legend>4. What happens to an order notification triggered by demo fulfillment?</legend>
+    <label><input type="radio" name="q4" value="0" /> It sends normally</label>
+<label><input type="radio" name="q4" value="1" /> It is queued for production</label>
+<label><input type="radio" name="q4" value="2" /> It is simulated without provider dispatch</label>
+<label><input type="radio" name="q4" value="3" /> It asks the visitor for credentials</label>
+  </fieldset>
+  <div class="answer-detail">Correct: it is simulated without provider dispatch. The fulfillment state remains real, but a demo visitor cannot contact a customer.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>5. Why must a demo mutation read the restore epoch in its own transaction?</legend>
+    <label><input type="radio" name="q5" value="0" /> To improve CSS rendering</label>
+<label><input type="radio" name="q5" value="1" /> To prevent stale writes from landing across a restore</label>
+<label><input type="radio" name="q5" value="2" /> To refresh the auth ticket</label>
+<label><input type="radio" name="q5" value="3" /> To generate report charts</label>
+  </fieldset>
+  <div class="answer-detail">Correct: the same-transaction restore-state read prevents a stale write from crossing a restore; it is unrelated to auth refresh, CSS, or chart generation.</div>
+</div>
+
+<div class="quiz-question" data-answer="2">
+  <fieldset>
+    <legend>6. What is the scope of the manual Restore demo action?</legend>
+    <label><input type="radio" name="q6" value="0" /> Only the current browser tab</label>
+<label><input type="radio" name="q6" value="1" /> Only the current visitor's messages</label>
+<label><input type="radio" name="q6" value="2" /> The shared store for everyone using it</label>
+<label><input type="radio" name="q6" value="3" /> Every Athena tenant</label>
+  </fieldset>
+  <div class="answer-detail">Correct: manual restore resets the shared synthetic store for every active visitor, which is why the UI asks for confirmation.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>7. What happens if a restored table exceeds the current 500-row atomic budget?</legend>
+    <label><input type="radio" name="q7" value="0" /> Rows after 500 are silently ignored</label>
+<label><input type="radio" name="q7" value="1" /> The restore mutation throws and all of its writes roll back</label>
+<label><input type="radio" name="q7" value="2" /> The store is deleted</label>
+<label><input type="radio" name="q7" value="3" /> The browser performs the remainder</label>
+  </fieldset>
+  <div class="answer-detail">Correct: the bounded read throws, so Convex rolls back the entire restore mutation. Rows are never silently ignored and a partial baseline is not committed.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>8. What three checks enable the demo runtime?</legend>
+    <label><input type="radio" name="q8" value="0" /> URL, browser type, and role</label>
+<label><input type="radio" name="q8" value="1" /> Feature flag, dev/QA environment, and deployment-ID allowlist</label>
+<label><input type="radio" name="q8" value="2" /> Email, OTP, and payment provider</label>
+<label><input type="radio" name="q8" value="3" /> Store slug, timezone, and report status</label>
+  </fieldset>
+  <div class="answer-detail">Correct: all three checks must match. A copied feature flag cannot enable production or an unknown deployment ID.</div>
+</div>
+
+<div class="quiz-question" data-answer="2">
+  <fieldset>
+    <legend>9. When should Reports reflect a demo write?</legend>
+    <label><input type="radio" name="q9" value="0" /> Every write must invent a new report metric</label>
+<label><input type="radio" name="q9" value="1" /> The browser should infer unsupported relationships</label>
+<label><input type="radio" name="q9" value="2" /> Only where Athena already supports a materialized relationship</label>
+<label><input type="radio" name="q9" value="3" /> Reports should remain empty in all cases</label>
+  </fieldset>
+  <div class="answer-detail">Correct: Reports remain read-only and truthful to Athena's existing projections. The demo does not invent unsupported metrics.</div>
+</div>
+
+<div class="quiz-question" data-answer="2">
+  <fieldset>
+    <legend>10. When adding a new demo-writable feature, what is the complete extension posture?</legend>
+    <label><input type="radio" name="q10" value="0" /> Add a navigation link only</label>
+<label><input type="radio" name="q10" value="1" /> Grant full_admin and rely on UI hiding</label>
+<label><input type="radio" name="q10" value="2" /> Classify the function/effects, enforce payload/store/epoch boundaries, and register mutable tables</label>
+<label><input type="radio" name="q10" value="3" /> Create a per-visitor generation</label>
+  </fieldset>
+  <div class="answer-detail">Correct: classify function and effects, enforce payload/store/epoch boundaries, and register mutable tables. UI-only links or full-admin grants are insufficient.</div>
+</div>
+
+    <div class="quiz-actions">
+      <button type="button" id="gradeQuiz">Grade quiz</button>
+      <button type="button" class="secondary" id="resetQuiz">Reset</button>
+      <span id="quizResult" aria-live="polite" tabindex="-1"></span>
+    </div>
+  </form>
+</section>
+
+    </main>
+    <script>
+      const questions = Array.from(document.querySelectorAll(".quiz-question"));
+      const result = document.getElementById("quizResult");
+      const form = document.getElementById("changeQuiz");
+      const threshold = Number(form.dataset.threshold || 0);
+      questions.forEach((question) => {
+        const status = document.createElement("p");
+        status.className = "answer-status";
+        status.setAttribute("aria-live", "polite");
+        question.querySelector("fieldset").insertAdjacentElement("afterend", status);
+      });
+      function clearGrades() {
+        questions.forEach((question) => {
+          question.classList.remove("correct", "incorrect");
+          const status = question.querySelector(".answer-status");
+          status.classList.remove("visible");
+          status.textContent = "";
+          question.querySelector(".answer-detail").classList.remove("visible");
+        });
+        result.textContent = "";
+        result.style.color = "";
+      }
+      document.getElementById("gradeQuiz").addEventListener("click", () => {
+        clearGrades();
+        let score = 0;
+        questions.forEach((question, index) => {
+          const selected = document.querySelector(`input[name="q${index + 1}"]:checked`);
+          const isCorrect = selected && Number(selected.value) === Number(question.dataset.answer);
+          if (isCorrect) score += 1;
+          question.classList.add(isCorrect ? "correct" : "incorrect");
+          const status = question.querySelector(".answer-status");
+          status.textContent = isCorrect ? "Correct." : "Incorrect.";
+          status.classList.add("visible");
+          question.querySelector(".answer-detail").classList.add("visible");
+        });
+        const passed = score >= threshold;
+        result.textContent = passed
+          ? `Passed: ${score}/${questions.length}.`
+          : `Not passed: ${score}/${questions.length}. Review the report and try again.`;
+        result.style.color = passed ? "var(--good)" : "var(--bad)";
+        result.focus();
+      });
+      document.getElementById("resetQuiz").addEventListener("click", () => {
+        form.reset();
+        clearGrades();
+      });
+    </script>
+  </body>
+</html>

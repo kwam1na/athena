@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Id } from "../_generated/dataModel";
+import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
 import { deriveDefaultOperationalRoles } from "./helpers/linking";
 import {
   buildRoleAssignmentDrafts,
@@ -7,6 +8,7 @@ import {
   createStaffProfileWithCtx,
   getStaffProfileByIdWithCtx,
   listStaffProfilesWithCtx,
+  updateStaffProfile,
   updateStaffProfileWithCtx,
 } from "./staffProfiles";
 
@@ -94,6 +96,16 @@ function getHandler(definition: unknown) {
 }
 
 describe("staff profile helpers", () => {
+  it("keeps public mutation command results inside their declared contracts", () => {
+    assertConformsToExportedReturns(createStaffProfile, {
+      kind: "user_error",
+      error: { code: "conflict", message: "Username is already in use." },
+    });
+    assertConformsToExportedReturns(updateStaffProfile, {
+      kind: "user_error",
+      error: { code: "not_found", message: "Staff profile not found." },
+    });
+  });
   it("derives manager defaults for full admins", () => {
     expect(deriveDefaultOperationalRoles("full_admin")).toEqual(["manager"]);
   });

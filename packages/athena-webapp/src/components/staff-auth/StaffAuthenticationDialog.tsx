@@ -22,6 +22,8 @@ import {
 } from "~/shared/commandResult";
 import { StaffPinInput } from "./StaffPinInput";
 import { STAFF_PIN_LENGTH } from "./staffPinPolicy";
+import { SharedDemoManagerSignInGuidance } from "@/components/shared-demo/SharedDemoManagerSignInGuidance";
+import { useSharedDemoContext } from "@/hooks/useSharedDemoContext";
 
 export type StaffAuthMode = "authenticate" | "recover";
 
@@ -58,6 +60,7 @@ export type StaffAuthenticationDialogProps = {
     result: StaffAuthenticationResult,
     mode: StaffAuthMode,
   ) => string | null;
+  guidance?: React.ReactNode;
   hideAlternateAction?: boolean;
   lockedUsername?: {
     displayName?: string | null;
@@ -87,6 +90,7 @@ export function StaffAuthenticationDialog({
   alternateTriggerLabel,
   copy,
   getSuccessMessage,
+  guidance,
   hideAlternateAction = false,
   lockedUsername,
   lockedUsernameCopy,
@@ -98,6 +102,7 @@ export function StaffAuthenticationDialog({
   returnTriggerLabel,
   submitButtonVariant = "workflow",
 }: StaffAuthenticationDialogProps) {
+  const sharedDemoContext = useSharedDemoContext();
   const [mode, setMode] = useState<StaffAuthMode>("authenticate");
   const [username, setUsername] = useState("");
   const [pin, setPin] = useState("");
@@ -306,6 +311,9 @@ export function StaffAuthenticationDialog({
           />
         </div>
       </div>
+
+      {sharedDemoContext ? <SharedDemoManagerSignInGuidance /> : null}
+      {guidance}
 
       <div className="flex flex-col gap-layout-sm border-t pt-layout-lg sm:flex-row sm:items-center sm:justify-between">
         {isUsernameLocked ? (

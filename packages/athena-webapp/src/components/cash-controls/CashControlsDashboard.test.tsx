@@ -1,7 +1,38 @@
 import { render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { CashControlsDashboardContent } from "./CashControlsDashboard";
+import {
+  CashControlsDashboardContent,
+  prioritizeCashControlsSessionsForTerminal,
+} from "./CashControlsDashboard";
+
+describe("prioritizeCashControlsSessionsForTerminal", () => {
+  it("places this browser terminal's sessions first without reordering peers", () => {
+    const sessions = [
+      { _id: "other-1", terminalId: "terminal-other" },
+      { _id: "browser-1", terminalId: "terminal-browser" },
+      { _id: "other-2", terminalId: "terminal-other" },
+      { _id: "browser-2", terminalId: "terminal-browser" },
+    ] as never;
+
+    expect(
+      prioritizeCashControlsSessionsForTerminal(
+        sessions,
+        "terminal-browser",
+      ).map((session) => session._id),
+    ).toEqual(["browser-1", "browser-2", "other-1", "other-2"]);
+  });
+
+  it("preserves server order when this browser has no terminal", () => {
+    const sessions = [{ _id: "session-1" }, { _id: "session-2" }] as never;
+
+    expect(
+      prioritizeCashControlsSessionsForTerminal(sessions).map(
+        (session) => session._id,
+      ),
+    ).toEqual(["session-1", "session-2"]);
+  });
+});
 
 const mockNavigate = vi.fn();
 const mockHooks = vi.hoisted(() => ({
@@ -172,6 +203,62 @@ describe("CashControlsDashboardContent", () => {
       screen.queryByText("Loading cash controls..."),
     ).not.toBeInTheDocument();
     expect(screen.queryByText("Current control snapshot")).not.toBeInTheDocument();
+  });
+
+  it("visually groups drawers linked to this browser's terminal", () => {
+    render(
+      <CashControlsDashboardContent
+        browserTerminalId="terminal-browser"
+        currency="USD"
+        dashboardSnapshot={{
+          ...baseSnapshot,
+          registerSessions: [
+            {
+              _id: "session-other",
+              expectedCash: 20000,
+              openedAt: new Date("2026-04-21T09:00:00.000Z").getTime(),
+              openingFloat: 10000,
+              registerNumber: "200002",
+              status: "active",
+              terminalId: "terminal-other",
+              totalDeposited: 0,
+            },
+            {
+              _id: "session-browser",
+              expectedCash: 30000,
+              openedAt: new Date("2026-04-21T10:00:00.000Z").getTime(),
+              openingFloat: 10000,
+              registerNumber: "100001",
+              status: "active",
+              terminalId: "terminal-browser",
+              totalDeposited: 0,
+            },
+          ],
+        }}
+        isLoading={false}
+        orgUrlSlug="v26"
+        storeUrlSlug="east-legon"
+      />,
+    );
+
+    const browserDrawers = screen.getByRole("group", {
+      name: "Drawers on this browser",
+    });
+    const otherDrawers = screen.getByRole("group", {
+      name: "Other drawers",
+    });
+
+    expect(
+      within(browserDrawers).getByText("Register 100001"),
+    ).toBeInTheDocument();
+    expect(within(browserDrawers).getByText("This browser")).toBeInTheDocument();
+    expect(
+      within(browserDrawers).queryByText("Drawers linked to this terminal"),
+    ).not.toBeInTheDocument();
+    expect(within(browserDrawers).queryByText("Register 200002")).toBeNull();
+    expect(
+      within(otherDrawers).getByText("Register 200002"),
+    ).toBeInTheDocument();
   });
 
   it("renders overview metrics and register activity", () => {

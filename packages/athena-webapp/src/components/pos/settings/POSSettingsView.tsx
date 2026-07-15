@@ -34,6 +34,10 @@ import {
 } from "@/lib/pos/application/registerAndProvisionPosTerminal";
 import { usePermissions } from "@/hooks/usePermissions";
 import {
+  isSharedDemoUiEnabled,
+  useSharedDemoContext,
+} from "@/hooks/useSharedDemoContext";
+import {
   buildPosOfflineReadinessSummary,
   type PosOfflineReadinessInput,
   type PosOfflineReadinessSummary,
@@ -155,6 +159,7 @@ type FingerprintRegistrationCardProps = {
   existingTerminalName?: string | null;
   existingTerminalRegisterNumber?: string | null;
   offlineReadiness: PosOfflineReadinessSummary;
+  readOnly?: boolean;
 };
 
 function FingerprintRegistrationCard({
@@ -178,6 +183,7 @@ function FingerprintRegistrationCard({
   existingTerminalName,
   existingTerminalRegisterNumber,
   offlineReadiness,
+  readOnly = false,
 }: FingerprintRegistrationCardProps) {
   const terminalStatusLabel = fingerprintError
     ? "Needs attention"
@@ -221,6 +227,7 @@ function FingerprintRegistrationCard({
               placeholder="Front Counter Terminal"
               className="h-control-standard bg-background"
               value={displayName}
+              readOnly={readOnly}
               onChange={(event) => onDisplayNameChange(event.target.value)}
             />
             <p className="text-xs text-muted-foreground">
@@ -236,6 +243,7 @@ function FingerprintRegistrationCard({
               className="h-control-standard bg-background"
               value={registerNumber}
               disabled={isExistingTerminal && isRegisterNumberLocked}
+              readOnly={readOnly}
               onChange={(event) => onRegisterNumberChange(event.target.value)}
             />
             <p className="text-xs text-muted-foreground">
@@ -265,6 +273,7 @@ function FingerprintRegistrationCard({
                 <span className="flex items-start gap-layout-xs">
                   <RadioGroupItem
                     aria-label={option.label}
+                    disabled={readOnly}
                     value={option.value}
                   />
                   <span className="font-medium text-foreground">
@@ -296,6 +305,7 @@ function FingerprintRegistrationCard({
                 <span className="flex items-start gap-layout-xs">
                   <RadioGroupItem
                     aria-label={option.label}
+                    disabled={readOnly}
                     value={option.value}
                   />
                   <span className="font-medium text-foreground">
@@ -330,7 +340,7 @@ function FingerprintRegistrationCard({
             <LoadingButton
               onClick={onUpdateExisting}
               isLoading={isUpdatingExisting}
-              disabled={!canUpdateExisting || isUpdatingExisting}
+              disabled={readOnly || !canUpdateExisting || isUpdatingExisting}
               variant="default"
             >
               Save terminal settings
@@ -339,7 +349,7 @@ function FingerprintRegistrationCard({
             <LoadingButton
               onClick={onRegister}
               isLoading={isRegistering}
-              disabled={!canRegister || isRegistering}
+              disabled={readOnly || !canRegister || isRegistering}
               variant="default"
             >
               {primaryActionLabel}
@@ -590,10 +600,12 @@ const storeScheduleApi = (
 
 function StoreHoursTimingReadout({
   orgUrlSlug,
+  readOnly = false,
   storeId,
   storeUrlSlug,
 }: {
   orgUrlSlug?: string;
+  readOnly?: boolean;
   storeId?: Id<"store"> | null;
   storeUrlSlug?: string;
 }) {
@@ -656,7 +668,7 @@ function StoreHoursTimingReadout({
           </div>
         </dl>
 
-        {!isLoading && hasFullAdminAccess && orgUrlSlug && storeUrlSlug ? (
+        {!readOnly && !isLoading && hasFullAdminAccess && orgUrlSlug && storeUrlSlug ? (
           <HealthLink
             className="inline-flex h-control-compact items-center rounded-md bg-signal px-layout-md text-sm font-medium text-signal-foreground"
             params={{
@@ -675,9 +687,11 @@ function StoreHoursTimingReadout({
 
 function RegisterCloseoutApprovalPolicyAdminPanel({
   currency,
+  readOnly = false,
   storeId,
 }: {
   currency: string;
+  readOnly?: boolean;
   storeId?: Id<"store"> | null;
 }) {
   const { hasFullAdminAccess, isLoading } = usePermissions();
@@ -805,6 +819,7 @@ function RegisterCloseoutApprovalPolicyAdminPanel({
             step="0.01"
             type="number"
             value={varianceApprovalThreshold}
+            readOnly={readOnly}
           />
           <p className="text-sm leading-5 text-muted-foreground">
             Variances greater than this amount require manager approval.
@@ -826,7 +841,7 @@ function RegisterCloseoutApprovalPolicyAdminPanel({
 
         <div className="border-t border-border pt-layout-md">
           <LoadingButton
-            disabled={!canSave}
+            disabled={readOnly || !canSave}
             isLoading={isSaving}
             onClick={handleSave}
             variant="default"
@@ -841,9 +856,11 @@ function RegisterCloseoutApprovalPolicyAdminPanel({
 
 function EodCompletionAutomationAdminPanel({
   currency,
+  readOnly = false,
   storeId,
 }: {
   currency: string;
+  readOnly?: boolean;
   storeId?: Id<"store"> | null;
 }) {
   const { hasFullAdminAccess, isLoading } = usePermissions();
@@ -1078,12 +1095,21 @@ function EodCompletionAutomationAdminPanel({
             <label
               className="flex min-h-[6.5rem] cursor-pointer flex-col gap-layout-xs rounded-md border border-border bg-background p-layout-sm text-sm transition-colors has-[:checked]:border-action-commit has-[:checked]:bg-action-neutral-soft"
               key={option.value}
-              onMouseDown={() => setMode(option.value as AutomationPolicyMode)}
+              onMouseDown={
+                readOnly
+                  ? undefined
+                  : () => setMode(option.value as AutomationPolicyMode)
+              }
             >
               <span className="flex items-start gap-layout-xs">
                 <RadioGroupItem
                   aria-label={option.label}
-                  onClick={() => setMode(option.value as AutomationPolicyMode)}
+                  disabled={readOnly}
+                  onClick={
+                    readOnly
+                      ? undefined
+                      : () => setMode(option.value as AutomationPolicyMode)
+                  }
                   value={option.value}
                 />
                 <span className="font-medium text-foreground">
@@ -1101,6 +1127,7 @@ function EodCompletionAutomationAdminPanel({
           <div className="max-w-[18rem] space-y-layout-xs">
             <Label htmlFor="eod-completion-offset">EOD completion offset</Label>
             <Select
+              disabled={readOnly}
               onValueChange={(value) =>
                 setCompletionOffsetMinutes(Number(value))
               }
@@ -1133,6 +1160,7 @@ function EodCompletionAutomationAdminPanel({
               aria-label="Enable blocker-free completion"
               checked={cleanDayAutoCompleteEnabled}
               className="mt-1"
+              disabled={readOnly}
               onCheckedChange={(checked) =>
                 setCleanDayAutoCompleteEnabled(checked === true)
               }
@@ -1163,6 +1191,7 @@ function EodCompletionAutomationAdminPanel({
               step="0.01"
               type="number"
               value={maxAbsoluteCashVariance}
+              readOnly={readOnly}
             />
           </div>
           <div className="space-y-layout-xs min-w-0">
@@ -1175,6 +1204,7 @@ function EodCompletionAutomationAdminPanel({
               onChange={(event) => setMaxVoidedSaleCount(event.target.value)}
               type="number"
               value={maxVoidedSaleCount}
+              readOnly={readOnly}
             />
           </div>
           <div className="space-y-layout-xs min-w-0">
@@ -1188,6 +1218,7 @@ function EodCompletionAutomationAdminPanel({
               step="0.01"
               type="number"
               value={maxVoidedSaleTotal}
+              readOnly={readOnly}
             />
           </div>
         </div>
@@ -1207,7 +1238,7 @@ function EodCompletionAutomationAdminPanel({
 
         <div className="border-t border-border pt-layout-md">
           <LoadingButton
-            disabled={!canSave}
+            disabled={readOnly || !canSave}
             isLoading={isSaving}
             onClick={handleSave}
             variant="default"
@@ -1221,8 +1252,10 @@ function EodCompletionAutomationAdminPanel({
 }
 
 function StoreDayAutomationAdminPanel({
+  readOnly = false,
   storeId,
 }: {
+  readOnly?: boolean;
   storeId?: Id<"store"> | null;
 }) {
   const { hasFullAdminAccess, isLoading } = usePermissions();
@@ -1365,6 +1398,7 @@ function StoreDayAutomationAdminPanel({
               aria-label="Enable store-day auto-start"
               checked={isEnabled}
               className="mt-1"
+              disabled={readOnly}
               onCheckedChange={(checked) => setIsEnabled(checked === true)}
             />
             <span>
@@ -1385,6 +1419,7 @@ function StoreDayAutomationAdminPanel({
                 Auto-start offset
               </Label>
               <Select
+                disabled={readOnly}
                 onValueChange={(value) => setStartOffsetMinutes(Number(value))}
                 value={String(startOffsetMinutes)}
               >
@@ -1422,7 +1457,7 @@ function StoreDayAutomationAdminPanel({
 
         <div className="border-t border-border pt-layout-md">
           <LoadingButton
-            disabled={!canSave}
+            disabled={readOnly || !canSave}
             isLoading={isSaving}
             onClick={handleSave}
             variant="default"
@@ -1844,6 +1879,9 @@ export function POSSettingsView({
 } = {}) {
   const { activeStore } = useGetActiveStore();
   const { isLoading: isAuthLoading, user } = useAuth();
+  const sharedDemoContext = useSharedDemoContext();
+  const isReadOnlyDemoSurface =
+    isSharedDemoUiEnabled && sharedDemoContext !== null;
   const appSessionRecovery = usePosTerminalAppSessionRecoveryRuntimeInput();
   const routeParams = useParams({ strict: false }) as
     | {
@@ -2151,6 +2189,12 @@ export function POSSettingsView({
             description="Configure the register details this checkout station uses before staff start in-store sales."
           />
 
+          {isReadOnlyDemoSurface ? (
+            <p className="mt-layout-md w-fit rounded-md border border-border bg-surface-raised px-layout-md py-layout-sm text-sm text-muted-foreground">
+              POS settings are view-only in the demo.
+            </p>
+          ) : null}
+
           <section className="border-t border-border">
             <FingerprintRegistrationCard
               displayName={displayName}
@@ -2187,28 +2231,37 @@ export function POSSettingsView({
                 registrationState.existingTerminalRegisterNumber
               }
               offlineReadiness={offlineReadiness}
+              readOnly={isReadOnlyDemoSurface}
             />
           </section>
 
-          <StoreDayAutomationAdminPanel storeId={activeStore?._id ?? null} />
+          <StoreDayAutomationAdminPanel
+            readOnly={isReadOnlyDemoSurface}
+            storeId={activeStore?._id ?? null}
+          />
 
           <StoreHoursTimingReadout
             orgUrlSlug={routeParams?.orgUrlSlug}
+            readOnly={isReadOnlyDemoSurface}
             storeId={activeStore?._id ?? null}
             storeUrlSlug={routeParams?.storeUrlSlug}
           />
 
           <RegisterCloseoutApprovalPolicyAdminPanel
             currency={activeStore?.currency ?? "GHS"}
+            readOnly={isReadOnlyDemoSurface}
             storeId={activeStore?._id ?? null}
           />
 
           <EodCompletionAutomationAdminPanel
             currency={activeStore?.currency ?? "GHS"}
+            readOnly={isReadOnlyDemoSurface}
             storeId={activeStore?._id ?? null}
           />
 
-          <POSRecoveryCodeAdminPanel storeId={activeStore?._id ?? null} />
+          {isReadOnlyDemoSurface ? null : (
+            <POSRecoveryCodeAdminPanel storeId={activeStore?._id ?? null} />
+          )}
 
           <section className="grid gap-layout-xl border-b border-border py-layout-2xl lg:grid-cols-[17rem_minmax(0,1fr)]">
             <div className="space-y-layout-sm">
@@ -2226,7 +2279,7 @@ export function POSSettingsView({
               <p className="text-sm text-muted-foreground">
                 This settings page only changes the current checkout station.
               </p>
-              {routeParams?.orgUrlSlug && routeParams.storeUrlSlug ? (
+              {!isReadOnlyDemoSurface && routeParams?.orgUrlSlug && routeParams.storeUrlSlug ? (
                 <HealthLink
                   className="inline-flex h-control-compact items-center rounded-md bg-signal px-layout-md text-sm font-medium text-signal-foreground"
                   params={{
@@ -2245,11 +2298,11 @@ export function POSSettingsView({
                 >
                   Open terminal health
                 </HealthLink>
-              ) : (
+              ) : !isReadOnlyDemoSurface ? (
                 <p className="text-sm text-muted-foreground">
                   Select a store before opening terminal health.
                 </p>
-              )}
+              ) : null}
             </div>
           </section>
         </PageWorkspace>

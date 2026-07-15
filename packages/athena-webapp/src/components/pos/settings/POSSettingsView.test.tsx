@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => ({
   useMutation: vi.fn(),
   usePermissions: vi.fn(),
   useQuery: vi.fn(),
+  useSharedDemoContext: vi.fn(),
 }));
 
 vi.mock("convex/react", () => ({
@@ -45,6 +46,11 @@ vi.mock("@/hooks/useAuth", () => ({
 
 vi.mock("@/hooks/usePermissions", () => ({
   usePermissions: mocks.usePermissions,
+}));
+
+vi.mock("@/hooks/useSharedDemoContext", () => ({
+  isSharedDemoUiEnabled: true,
+  useSharedDemoContext: mocks.useSharedDemoContext,
 }));
 
 vi.mock("@tanstack/react-router", () => ({
@@ -145,6 +151,7 @@ vi.mock("@/components/ui/select", async () => {
   };
   type SelectRootProps = {
     children?: ReactNode;
+    disabled?: boolean;
     onValueChange?: (value: string) => void;
     value?: string;
   };
@@ -193,7 +200,7 @@ vi.mock("@/components/ui/select", async () => {
     return trigger;
   }
 
-  const Select = ({ children, onValueChange, value }: SelectRootProps) => {
+  const Select = ({ children, disabled, onValueChange, value }: SelectRootProps) => {
     const trigger = findTrigger(children);
     const { children: _children, ...triggerProps } = trigger?.props ?? {};
     void _children;
@@ -201,6 +208,7 @@ vi.mock("@/components/ui/select", async () => {
     return (
       <select
         {...triggerProps}
+        disabled={disabled}
         onChange={(event) => onValueChange?.(event.currentTarget.value)}
         value={value}
       >
@@ -320,6 +328,7 @@ describe("registerAndProvisionPosTerminal", () => {
       isLoading: false,
       user: { _id: "athena-user-1", email: "pos@wigclub.store" },
     });
+    mocks.useSharedDemoContext.mockReturnValue(null);
     mocks.useQuery.mockImplementation((ref) =>
       ref === "getRecoveryCodeStatus"
         ? {
@@ -392,6 +401,48 @@ describe("registerAndProvisionPosTerminal", () => {
         },
       },
     });
+  });
+
+  it("shows POS settings as view-only in the shared demo", async () => {
+    mocks.useSharedDemoContext.mockReturnValue({ storeId: "store-1" });
+
+    await renderPOSSettingsView();
+
+    expect(
+      screen.getByText("POS settings are view-only in the demo."),
+    ).toHaveClass("w-fit");
+    expect(screen.getByLabelText("Terminal name")).toHaveAttribute("readonly");
+    expect(screen.getByLabelText("Register number")).toHaveAttribute("readonly");
+    expect(screen.getByLabelText("Product SKUs and services")).toBeDisabled();
+    expect(screen.getByLabelText("Standard login")).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Register terminal" })).toBeDisabled();
+    expect(screen.getByText("Store Hours timing")).toBeInTheDocument();
+    expect(screen.getByText("Store day automation")).toBeInTheDocument();
+    expect(screen.getByLabelText("Enable store-day auto-start")).toBeDisabled();
+    expect(screen.getByRole("combobox", { name: "Store day auto-start offset" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Save store-day automation" })).toBeDisabled();
+    expect(screen.getByText("Closeout approval policy")).toBeInTheDocument();
+    expect(screen.getByLabelText("Closeout variance threshold (GH₵)")).toHaveAttribute("readonly");
+    expect(screen.getByRole("button", { name: "Save closeout approval policy" })).toBeDisabled();
+    expect(screen.getByText("EOD completion automation")).toBeInTheDocument();
+    expect(screen.getByLabelText("Dry run EOD completion")).toBeDisabled();
+    expect(screen.getByRole("combobox", { name: "EOD completion offset" })).toBeDisabled();
+    expect(screen.getByLabelText("Enable blocker-free completion")).toBeDisabled();
+    expect(screen.getByLabelText("Cash variance threshold (GH₵)")).toHaveAttribute("readonly");
+    expect(screen.getByLabelText("Voided sale count threshold")).toHaveAttribute("readonly");
+    expect(screen.getByLabelText("Voided sale total threshold (GH₵)")).toHaveAttribute("readonly");
+    expect(screen.getByRole("button", { name: "Save EOD completion automation" })).toBeDisabled();
+    expect(screen.queryByText("POS recovery code")).not.toBeInTheDocument();
+    expect(screen.getByText("Terminal health")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Open terminal health" })).not.toBeInTheDocument();
+    expect(mocks.useQuery).toHaveBeenCalledWith(
+      "getOpeningAutoStartPolicy",
+      { storeId: "store-1" },
+    );
+    expect(mocks.useQuery).not.toHaveBeenCalledWith(
+      "getRecoveryCodeStatus",
+      expect.anything(),
+    );
   });
 
   it("registers a typed terminal setup from the browser form", async () => {

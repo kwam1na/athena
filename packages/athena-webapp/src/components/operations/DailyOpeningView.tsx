@@ -6,6 +6,7 @@ import {
   useSearch,
 } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
+import { useSharedDemoContext } from "@/hooks/useSharedDemoContext";
 import {
   ArrowUpRight,
   Ban,
@@ -86,7 +87,8 @@ type DailyOpeningAutomationStatus = {
     | "scheduled_later";
   id: string;
   occurredAt?: number | null;
-  outcome: "applied" | "prepared" | "skipped" | "failed" | "dry_run" | "disabled";
+  outcome:
+    "applied" | "prepared" | "skipped" | "failed" | "dry_run" | "disabled";
   reviewEvidence?: DailyOpeningItem[];
 };
 
@@ -812,7 +814,10 @@ function OpeningAutomationReviewPanel({
       <div className="flex flex-col gap-layout-sm sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <h3 className="flex items-center gap-layout-xs text-base font-medium text-foreground">
-            <ClipboardCheck aria-hidden="true" className="h-4 w-4 text-warning" />
+            <ClipboardCheck
+              aria-hidden="true"
+              className="h-4 w-4 text-warning"
+            />
             Opening review
           </h3>
           <p className="mt-layout-xs text-sm leading-6 text-foreground">
@@ -1863,121 +1868,121 @@ export function DailyOpeningViewContent({
   return (
     <>
       <OperationReviewWorkspace
-      actions={
-        snapshot ? (
-          <OperatingDatePicker
-            operatingDate={snapshot.operatingDate}
-            onChange={onOperatingDateChange}
-          />
-        ) : null
-      }
-      afterGrid={null}
-      beforeMetrics={
-        snapshot ? (
-          <OpeningAutomationStatusPanel automationStatus={automationStatus} />
-        ) : null
-      }
-      description="Review prior close handoff, acknowledge carry-forward work, and confirm whether the store day can start."
-      eyebrow="Store Ops"
-      isLoading={isLoadingSnapshot || !snapshot}
-      loadingContent={null}
-      showBackButton
-      main={
-        snapshot ? (
-          <div className="space-y-layout-lg">
-            {isStarted ? (
-              <OpeningAutomationReviewPanel
+        actions={
+          snapshot ? (
+            <OperatingDatePicker
+              operatingDate={snapshot.operatingDate}
+              onChange={onOperatingDateChange}
+            />
+          ) : null
+        }
+        afterGrid={null}
+        beforeMetrics={
+          snapshot ? (
+            <OpeningAutomationStatusPanel automationStatus={automationStatus} />
+          ) : null
+        }
+        description="Review prior close handoff, acknowledge carry-forward work, and confirm whether the store day can start."
+        eyebrow="Store Ops"
+        isLoading={isLoadingSnapshot || !snapshot}
+        loadingContent={null}
+        showBackButton
+        main={
+          snapshot ? (
+            <div className="space-y-layout-lg">
+              {isStarted ? (
+                <OpeningAutomationReviewPanel
+                  currency={currency}
+                  items={reviewEvidence}
+                  orgUrlSlug={orgUrlSlug}
+                  storeUrlSlug={storeUrlSlug}
+                />
+              ) : null}
+              <BucketTabs
+                acknowledgedKeys={acknowledgedKeys}
+                buckets={buckets}
                 currency={currency}
-                items={reviewEvidence}
+                onAcknowledgedKeysChange={setAcknowledgedKeys}
+                onPageChange={handleBucketPageChange}
+                onValueChange={handleBucketValueChange}
                 orgUrlSlug={orgUrlSlug}
+                page={selectedBucketPage}
                 storeUrlSlug={storeUrlSlug}
+                value={selectedBucketValue}
               />
-            ) : null}
-            <BucketTabs
+            </div>
+          ) : null
+        }
+        metrics={
+          snapshot ? (
+            <>
+              <OperationsSummaryMetric
+                label="Prior close"
+                tone="quiet"
+                value={
+                  snapshot.priorClose
+                    ? formatOperatingDate(snapshot.priorClose.operatingDate)
+                    : "Not found"
+                }
+              />
+              <OperationsSummaryMetric
+                label="Blockers"
+                tone="quiet"
+                value={formatCount(
+                  displaySnapshot?.summary?.blockerCount ??
+                    displaySnapshot?.blockers.length ??
+                    0,
+                  "blocker",
+                  "No hard blockers",
+                )}
+              />
+              <OperationsSummaryMetric
+                label="Needs review"
+                tone="quiet"
+                value={formatCount(
+                  snapshot.summary?.reviewCount ?? snapshot.reviewItems.length,
+                  "item",
+                  "No review items",
+                )}
+              />
+              <OperationsSummaryMetric
+                label="Carry forward"
+                tone="quiet"
+                value={formatCount(
+                  snapshot.summary?.carryForwardCount ??
+                    snapshot.carryForwardItems.length,
+                  "item",
+                  "No carry-forward items",
+                )}
+              />
+            </>
+          ) : null
+        }
+        rail={
+          snapshot ? (
+            <OpeningRail
               acknowledgedKeys={acknowledgedKeys}
-              buckets={buckets}
-              currency={currency}
+              acknowledgedCount={acknowledgedRequiredCount}
+              acknowledgementItems={acknowledgementItems}
+              commandMessage={commandMessage}
+              isBlocked={isBlocked}
+              isStarted={isStarted}
+              isStarting={isStarting}
+              notes={notes}
               onAcknowledgedKeysChange={setAcknowledgedKeys}
-              onPageChange={handleBucketPageChange}
-              onValueChange={handleBucketValueChange}
-              orgUrlSlug={orgUrlSlug}
-              page={selectedBucketPage}
-              storeUrlSlug={storeUrlSlug}
-              value={selectedBucketValue}
+              onNotesChange={setNotes}
+              onStartDay={handleStartDay}
+              requiredAcknowledgementCount={requiredAcknowledgementKeys.length}
+              snapshot={displaySnapshot ?? snapshot}
+              status={status}
             />
-          </div>
-        ) : null
-      }
-      metrics={
-        snapshot ? (
-          <>
-            <OperationsSummaryMetric
-              label="Prior close"
-              tone="quiet"
-              value={
-                snapshot.priorClose
-                  ? formatOperatingDate(snapshot.priorClose.operatingDate)
-                  : "Not found"
-              }
-            />
-            <OperationsSummaryMetric
-              label="Blockers"
-              tone="quiet"
-              value={formatCount(
-                displaySnapshot?.summary?.blockerCount ??
-                  displaySnapshot?.blockers.length ??
-                  0,
-                "blocker",
-                "No hard blockers",
-              )}
-            />
-            <OperationsSummaryMetric
-              label="Needs review"
-              tone="quiet"
-              value={formatCount(
-                snapshot.summary?.reviewCount ?? snapshot.reviewItems.length,
-                "item",
-                "No review items",
-              )}
-            />
-            <OperationsSummaryMetric
-              label="Carry forward"
-              tone="quiet"
-              value={formatCount(
-                snapshot.summary?.carryForwardCount ??
-                  snapshot.carryForwardItems.length,
-                "item",
-                "No carry-forward items",
-              )}
-            />
-          </>
-        ) : null
-      }
-      rail={
-        snapshot ? (
-          <OpeningRail
-            acknowledgedKeys={acknowledgedKeys}
-            acknowledgedCount={acknowledgedRequiredCount}
-            acknowledgementItems={acknowledgementItems}
-            commandMessage={commandMessage}
-            isBlocked={isBlocked}
-            isStarted={isStarted}
-            isStarting={isStarting}
-            notes={notes}
-            onAcknowledgedKeysChange={setAcknowledgedKeys}
-            onNotesChange={setNotes}
-            onStartDay={handleStartDay}
-            requiredAcknowledgementCount={requiredAcknowledgementKeys.length}
-            snapshot={displaySnapshot ?? snapshot}
-            status={status}
-          />
-        ) : null
-      }
-      statusDescription={displayCopy.description}
-      statusTitle={
-        <DailyOpeningStatusTitle status={status} title={displayCopy.title} />
-      }
-      title="Opening Handoff"
+          ) : null
+        }
+        statusDescription={displayCopy.description}
+        statusTitle={
+          <DailyOpeningStatusTitle status={status} title={displayCopy.title} />
+        }
+        title="Opening Handoff"
       />
       {onAuthenticateStaff ? (
         <StaffAuthenticationDialog
@@ -2060,6 +2065,7 @@ function DailyOpeningConnectedView({
       ? { ...operatingDateRange, storeId: activeStore!._id }
       : "skip",
   ) as DailyOpeningSnapshot | undefined;
+  const sharedDemoContext = useSharedDemoContext();
   const startStoreDayMutation = useExpectedDailyOpeningMutation(startStoreDay);
   const authenticateStaffCredential = useMutation(
     api.operations.staffCredentials.authenticateStaffCredential,
@@ -2082,13 +2088,14 @@ function DailyOpeningConnectedView({
       };
     }
 
-    return runCommand(() =>
-      authenticateStaffCredential({
-        allowedRoles: ["cashier", "manager"],
-        pinHash: args.pinHash,
-        storeId: activeStore._id,
-        username: args.username,
-      }) as Promise<CommandResult<StaffAuthenticationResult>>,
+    return runCommand(
+      () =>
+        authenticateStaffCredential({
+          allowedRoles: ["cashier", "manager"],
+          pinHash: args.pinHash,
+          storeId: activeStore._id,
+          username: args.username,
+        }) as Promise<CommandResult<StaffAuthenticationResult>>,
     );
   }
 
@@ -2185,7 +2192,11 @@ function DailyOpeningConnectedView({
       isLoadingAccess={isLoadingAccess}
       isLoadingSnapshot={snapshot === undefined}
       isStarting={isStarting}
-      onAuthenticateStaff={handleAuthenticateStaff}
+      onAuthenticateStaff={
+        sharedDemoContext?.kind === "shared_demo"
+          ? undefined
+          : handleAuthenticateStaff
+      }
       onAuthenticateForApproval={handleAuthenticateForApproval}
       onOperatingDateChange={handleOperatingDateChange}
       onStartDay={handleStartDay}

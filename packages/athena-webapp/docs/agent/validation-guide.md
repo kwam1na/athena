@@ -4,6 +4,25 @@
 
 Use this decision guide to answer “what should I run for this change?” based on the surface you touched.
 
+## Shared demo admission, restore, and orientation edits
+
+Touched surfaces: `docs/shared-demo-backend-coverage.md`, `convex/sharedDemo`, `convex/auth.ts`, `convex/auth/SharedDemoTicket.ts`, `convex/crons.ts`, `convex/http.ts`, `src/components/shared-demo`, `src/routes/demo.tsx`, `src/routes/_authed.tsx`
+
+Run:
+
+- `bun run --filter '@athena/webapp' test -- convex/sharedDemo src/components/shared-demo src/routes/demo.test.tsx src/routes/_authed.test.tsx`
+- `bun run --filter '@athena/webapp' audit:convex`
+- `bun run --filter '@athena/webapp' lint:convex:changed`
+- `bun run --filter '@athena/webapp' lint:frontend:changed`
+- `bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json`
+- `bun run --filter '@athena/webapp' build`
+
+Behavior scenarios:
+
+- `athena-admin-shell-boot`
+
+Use this when the development-only shared demo changes admission, shared-store authority, restore semantics, effect restrictions, or the owner-oriented application shell. It validates the server boundary, credentialless entry, orientation layer, and generated application contracts together.
+
 ## Route or UI-only edits
 
 Touched surfaces: `src/assets`, `src/config.ts`, `src/config.test.ts`, `src/routes`, `src/components`, `src/hooks`, `src/contexts`, `src/index.css`

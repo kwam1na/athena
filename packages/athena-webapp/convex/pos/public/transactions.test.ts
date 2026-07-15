@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+// Shared-demo policy narrows effects without changing transaction results.
+
 import {
   adjustTransactionItems,
   completeTransaction,
@@ -19,6 +21,7 @@ import {
 import type { Id } from "../../_generated/dataModel";
 import { assertConformsToExportedReturns } from "../../lib/returnValidatorContract";
 import * as athenaUserAuth from "../../lib/athenaUserAuth";
+import * as sharedDemoActor from "../../sharedDemo/actor";
 import * as correctionCommands from "../application/commands/correctTransaction";
 import * as itemAdjustmentCommands from "../application/commands/adjustTransactionItems";
 import * as completeTransactionCommands from "../application/commands/completeTransaction";
@@ -28,6 +31,9 @@ import { hashPosLocalStaffProofToken } from "../application/sync/staffProof";
 vi.mock("../../lib/athenaUserAuth", () => ({
   requireAuthenticatedAthenaUserWithCtx: vi.fn(),
   requireOrganizationMemberRoleWithCtx: vi.fn(),
+}));
+vi.mock("../../sharedDemo/actor", () => ({
+  requireSharedDemoStoreCapabilityIfApplicable: vi.fn(),
 }));
 
 vi.mock("../application/queries/getTransactions", () => ({
@@ -57,7 +63,15 @@ vi.mock("../application/commands/completeTransaction", () => ({
 
 type SerializedValidator = {
   type: string;
-  value?: SerializedValidator[] | Record<string, SerializedValidator & { fieldType?: SerializedValidator; optional?: boolean }>;
+  value?:
+    | SerializedValidator[]
+    | Record<
+        string,
+        SerializedValidator & {
+          fieldType?: SerializedValidator;
+          optional?: boolean;
+        }
+      >;
 };
 
 function exportReturns(definition: unknown): string {
@@ -167,14 +181,22 @@ describe("POS public transaction query validators", () => {
         decisionApprovalProofId: "decision-proof-1" as Id<"approvalProof">,
         inventoryMovementIds: ["movement-1" as Id<"inventoryMovement">],
         operationalEventId: "event-1" as Id<"operationalEvent">,
-        paymentAllocationIds: ["payment-allocation-1" as Id<"paymentAllocation">],
+        paymentAllocationIds: [
+          "payment-allocation-1" as Id<"paymentAllocation">,
+        ],
         transactionId: "txn-void" as Id<"posTransaction">,
         transactionNumber: "584065",
         voidedAt: 2,
       },
     });
-    assertConformsToExportedReturns(createTransactionFromSession, validationError);
-    assertConformsToExportedReturns(correctTransactionCustomer, validationError);
+    assertConformsToExportedReturns(
+      createTransactionFromSession,
+      validationError,
+    );
+    assertConformsToExportedReturns(
+      correctTransactionCustomer,
+      validationError,
+    );
     assertConformsToExportedReturns(
       correctTransactionPaymentMethod,
       validationError,
@@ -237,7 +259,9 @@ describe("POS public transaction query validators", () => {
   });
 
   it("allows payment correction to return inline approval requirements", () => {
-    const validator = parseValidator(exportReturns(correctTransactionPaymentMethod));
+    const validator = parseValidator(
+      exportReturns(correctTransactionPaymentMethod),
+    );
 
     expect(validator.type).toBe("union");
     expect(JSON.stringify(validator)).toContain("approval_required");
@@ -341,7 +365,9 @@ describe("POS public transaction query validators", () => {
 
 describe("POS public transaction read and correction authorization", () => {
   beforeEach(() => {
-    vi.mocked(athenaUserAuth.requireAuthenticatedAthenaUserWithCtx).mockResolvedValue({
+    vi.mocked(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).mockResolvedValue({
       _id: "user-1",
     } as never);
   });
@@ -437,7 +463,9 @@ describe("POS public transaction read and correction authorization", () => {
                     tokenHash: await tokenHashPromise,
                   };
 
-                  return filters.every(([field, value]) => proof[field] === value)
+                  return filters.every(
+                    ([field, value]) => proof[field] === value,
+                  )
                     ? proof
                     : null;
                 }),
@@ -544,15 +572,14 @@ describe("POS public transaction read and correction authorization", () => {
       storeId: "store-1" as Id<"store">,
     });
 
-    expect(athenaUserAuth.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
-      ctx,
-      {
-        allowedRoles: ["full_admin", "pos_only"],
-        failureMessage: "You cannot view POS transactions for this store.",
-        organizationId: "org-1",
-        userId: "user-1",
-      },
-    );
+    expect(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).toHaveBeenCalledWith(ctx, {
+      allowedRoles: ["full_admin", "pos_only"],
+      failureMessage: "You cannot view POS transactions for this store.",
+      organizationId: "org-1",
+      userId: "user-1",
+    });
     expect(transactionQueries.getCompletedTransactions).toHaveBeenCalled();
   });
 
@@ -616,6 +643,31 @@ describe("POS public transaction read and correction authorization", () => {
     expect(result).toBe(summary);
   });
 
+  it("loads the POS pulse through the shared demo sale capability", async () => {
+    const summary = createStorePulseSummary();
+    vi.mocked(
+      sharedDemoActor.requireSharedDemoStoreCapabilityIfApplicable,
+    ).mockResolvedValueOnce({ kind: "shared_demo" } as never);
+    vi.mocked(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).mockResolvedValue(createMembership("full_admin"));
+    vi.mocked(transactionQueries.getTodaySummary).mockResolvedValue(summary);
+    const ctx = createTransactionAuthCtx();
+
+    await getHandler(getTodaySummary)(ctx as never, {
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(
+      sharedDemoActor.requireSharedDemoStoreCapabilityIfApplicable,
+    ).toHaveBeenCalledWith(ctx, "pos.sale.complete", "store-1");
+    expect(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).toHaveBeenCalledWith(ctx, {
+      sharedDemoCapability: "pos.sale.complete",
+    });
+  });
+
   it.each([
     [
       "getTransactionsByStore",
@@ -629,25 +681,33 @@ describe("POS public transaction read and correction authorization", () => {
       transactionQueries.getRecentTransactionsWithCustomers,
       { storeId: "store-1" },
     ],
-    ["getTodaySummary", getTodaySummary, transactionQueries.getTodaySummary, { storeId: "store-1" }],
-  ])("does not run %s when store authorization fails", async (_label, definition, queryMock, args) => {
-    vi.mocked(transactionQueries.getTransaction).mockResolvedValue({
-      _id: "txn-1",
-      storeId: "store-1",
-    } as never);
-    vi.mocked(
-      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
-    ).mockRejectedValueOnce(new Error("denied"));
+    [
+      "getTodaySummary",
+      getTodaySummary,
+      transactionQueries.getTodaySummary,
+      { storeId: "store-1" },
+    ],
+  ])(
+    "does not run %s when store authorization fails",
+    async (_label, definition, queryMock, args) => {
+      vi.mocked(transactionQueries.getTransaction).mockResolvedValue({
+        _id: "txn-1",
+        storeId: "store-1",
+      } as never);
+      vi.mocked(
+        athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+      ).mockRejectedValueOnce(new Error("denied"));
 
-    await expect(
-      getHandler(definition)(createTransactionAuthCtx() as never, args),
-    ).rejects.toThrow("denied");
+      await expect(
+        getHandler(definition)(createTransactionAuthCtx() as never, args),
+      ).rejects.toThrow("denied");
 
-    expect(queryMock).not.toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining(args),
-    );
-  });
+      expect(queryMock).not.toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining(args),
+      );
+    },
+  );
 
   it("derives the actor and validates staff/store before correcting transaction customer", async () => {
     vi.mocked(transactionQueries.getTransaction).mockResolvedValue({
@@ -685,7 +745,9 @@ describe("POS public transaction read and correction authorization", () => {
       _id: "txn-1",
       storeId: "store-1",
     } as never);
-    vi.mocked(correctionCommands.correctTransactionPaymentMethod).mockResolvedValue({
+    vi.mocked(
+      correctionCommands.correctTransactionPaymentMethod,
+    ).mockResolvedValue({
       paymentMethod: "card",
       previousPaymentMethod: "cash",
       transactionId: "txn-1",
@@ -703,7 +765,9 @@ describe("POS public transaction read and correction authorization", () => {
       }),
     ).resolves.toMatchObject({ kind: "ok" });
 
-    expect(correctionCommands.correctTransactionPaymentMethod).toHaveBeenCalledWith(
+    expect(
+      correctionCommands.correctTransactionPaymentMethod,
+    ).toHaveBeenCalledWith(
       ctx,
       expect.objectContaining({
         actorUserId: "user-1",
@@ -749,7 +813,9 @@ describe("POS public transaction read and correction authorization", () => {
       },
     });
 
-    expect(correctionCommands.correctTransactionPaymentMethod).not.toHaveBeenCalled();
+    expect(
+      correctionCommands.correctTransactionPaymentMethod,
+    ).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -845,7 +911,9 @@ describe("POS public transaction read and correction authorization", () => {
       },
     });
 
-    expect(correctionCommands.correctTransactionPaymentMethod).not.toHaveBeenCalled();
+    expect(
+      correctionCommands.correctTransactionPaymentMethod,
+    ).not.toHaveBeenCalled();
     expect(ctx.db.patch).not.toHaveBeenCalled();
   });
 
@@ -872,13 +940,17 @@ describe("POS public transaction read and correction authorization", () => {
       },
     });
 
-    expect(correctionCommands.correctTransactionCustomer).not.toHaveBeenCalled();
+    expect(
+      correctionCommands.correctTransactionCustomer,
+    ).not.toHaveBeenCalled();
   });
 });
 
 describe("legacy POS public checkout mutations", () => {
   beforeEach(() => {
-    vi.mocked(athenaUserAuth.requireAuthenticatedAthenaUserWithCtx).mockResolvedValue({
+    vi.mocked(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).mockResolvedValue({
       _id: "user-1",
     } as never);
   });
@@ -900,7 +972,9 @@ describe("legacy POS public checkout mutations", () => {
   }
 
   it("limits direct completeTransaction to full admins before invoking the command", async () => {
-    vi.mocked(completeTransactionCommands.completeTransaction).mockResolvedValue({
+    vi.mocked(
+      completeTransactionCommands.completeTransaction,
+    ).mockResolvedValue({
       kind: "ok",
       data: {
         transactionId: "txn-1",
@@ -954,7 +1028,9 @@ describe("legacy POS public checkout mutations", () => {
       },
     });
 
-    expect(completeTransactionCommands.completeTransaction).not.toHaveBeenCalled();
+    expect(
+      completeTransactionCommands.completeTransaction,
+    ).not.toHaveBeenCalled();
   });
 
   it("does not complete a direct transaction when authorization fails", async () => {
@@ -974,7 +1050,9 @@ describe("legacy POS public checkout mutations", () => {
       }),
     ).rejects.toThrow("You cannot complete this POS sale.");
 
-    expect(completeTransactionCommands.completeTransaction).not.toHaveBeenCalled();
+    expect(
+      completeTransactionCommands.completeTransaction,
+    ).not.toHaveBeenCalled();
   });
 
   it("marks a transaction receipt as printed after authorization", async () => {
@@ -1190,7 +1268,9 @@ describe("voidTransaction public mutation", () => {
       storeId: "store-1",
       terminalId: "terminal-1",
     } as never);
-    vi.mocked(athenaUserAuth.requireAuthenticatedAthenaUserWithCtx).mockResolvedValue({
+    vi.mocked(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).mockResolvedValue({
       _id: "user-1",
     } as never);
 
@@ -1345,25 +1425,30 @@ describe("voidTransaction public mutation", () => {
       "mismatched staff credential",
       { credential: { staffProfileId: "staff-other" } },
     ],
-  ])("rejects %s before invoking the void command", async (_label, overrides) => {
-    await expect(
-      getHandler(voidTransaction)(
-        createAuthorizedVoidCtx(overrides as never) as never,
-        {
-          actorStaffProfileId: "staff-1" as Id<"staffProfile">,
-          reason: "Duplicate sale",
-          staffProofToken: "proof-token-1",
-          transactionId: "txn-1" as Id<"posTransaction">,
+  ])(
+    "rejects %s before invoking the void command",
+    async (_label, overrides) => {
+      await expect(
+        getHandler(voidTransaction)(
+          createAuthorizedVoidCtx(overrides as never) as never,
+          {
+            actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+            reason: "Duplicate sale",
+            staffProofToken: "proof-token-1",
+            transactionId: "txn-1" as Id<"posTransaction">,
+          },
+        ),
+      ).resolves.toMatchObject({
+        kind: "user_error",
+        error: {
+          code: "authentication_failed",
         },
-      ),
-    ).resolves.toMatchObject({
-      kind: "user_error",
-      error: {
-        code: "authentication_failed",
-      },
-    });
-    expect(completeTransactionCommands.voidTransaction).not.toHaveBeenCalled();
-  });
+      });
+      expect(
+        completeTransactionCommands.voidTransaction,
+      ).not.toHaveBeenCalled();
+    },
+  );
 
   it("does not use staff proof or invoke void command when authentication fails", async () => {
     vi.mocked(
@@ -1409,7 +1494,9 @@ describe("createTransactionFromSession public mutation", () => {
     session?: Record<string, unknown> | null;
     store?: Record<string, unknown> | null;
   }) {
-    vi.mocked(athenaUserAuth.requireAuthenticatedAthenaUserWithCtx).mockResolvedValue({
+    vi.mocked(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).mockResolvedValue({
       _id: "user-1",
     } as never);
     vi.mocked(
@@ -1461,9 +1548,9 @@ describe("createTransactionFromSession public mutation", () => {
       transactionId: "txn-1",
     });
 
-    expect(athenaUserAuth.requireAuthenticatedAthenaUserWithCtx).toHaveBeenCalledWith(
-      ctx,
-    );
+    expect(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).toHaveBeenCalledWith(ctx);
     expect(
       athenaUserAuth.requireOrganizationMemberRoleWithCtx,
     ).toHaveBeenCalledWith(ctx, {
@@ -1474,7 +1561,10 @@ describe("createTransactionFromSession public mutation", () => {
     });
     expect(
       completeTransactionCommands.createTransactionFromSessionHandler,
-    ).toHaveBeenCalledWith(ctx, expect.objectContaining({ sessionId: "session-1" }));
+    ).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({ sessionId: "session-1" }),
+    );
   });
 
   it("does not complete a POS session when store authorization fails", async () => {
@@ -1578,7 +1668,9 @@ describe("adjustTransactionItems public mutation", () => {
       _id: "txn-1",
       storeId: "store-1",
     } as never);
-    vi.mocked(athenaUserAuth.requireAuthenticatedAthenaUserWithCtx).mockResolvedValue({
+    vi.mocked(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).mockResolvedValue({
       _id: "user-1",
     } as never);
 
@@ -1611,13 +1703,16 @@ describe("adjustTransactionItems public mutation", () => {
     } as never);
 
     await expect(
-      getHandler(adjustTransactionItems)(createAuthorizedItemAdjustmentCtx() as never, {
-        actorStaffProfileId: "staff-1",
-        payload,
-        reason: "Customer was charged for two instead of one",
-        staffProofToken: "proof-token-1",
-        transactionId: "txn-1",
-      }),
+      getHandler(adjustTransactionItems)(
+        createAuthorizedItemAdjustmentCtx() as never,
+        {
+          actorStaffProfileId: "staff-1",
+          payload,
+          reason: "Customer was charged for two instead of one",
+          staffProofToken: "proof-token-1",
+          transactionId: "txn-1",
+        },
+      ),
     ).resolves.toMatchObject({
       kind: "approval_required",
       approval: {
@@ -1649,13 +1744,16 @@ describe("adjustTransactionItems public mutation", () => {
     );
 
     await expect(
-      getHandler(adjustTransactionItems)(createAuthorizedItemAdjustmentCtx() as never, {
-        actorStaffProfileId: "staff-1",
-        payload,
-        reason: "Customer was charged for two instead of one",
-        staffProofToken: "proof-token-1",
-        transactionId: "txn-1",
-      }),
+      getHandler(adjustTransactionItems)(
+        createAuthorizedItemAdjustmentCtx() as never,
+        {
+          actorStaffProfileId: "staff-1",
+          payload,
+          reason: "Customer was charged for two instead of one",
+          staffProofToken: "proof-token-1",
+          transactionId: "txn-1",
+        },
+      ),
     ).resolves.toMatchObject({
       kind: "user_error",
       error: {
@@ -1679,32 +1777,19 @@ describe("adjustTransactionItems public mutation", () => {
         code: "authentication_failed",
       },
     });
-    expect(itemAdjustmentCommands.adjustTransactionItems).not.toHaveBeenCalled();
+    expect(
+      itemAdjustmentCommands.adjustTransactionItems,
+    ).not.toHaveBeenCalled();
   });
 
   it.each([
     ["missing staff profile", { staffProfile: null }],
-    [
-      "inactive staff profile",
-      { staffProfile: { status: "inactive" } },
-    ],
-    [
-      "cross-store staff profile",
-      { staffProfile: { storeId: "store-other" } },
-    ],
+    ["inactive staff profile", { staffProfile: { status: "inactive" } }],
+    ["cross-store staff profile", { staffProfile: { storeId: "store-other" } }],
     ["missing staff proof", { proof: null }],
-    [
-      "expired staff proof",
-      { proof: { expiresAt: Date.now() - 1 } },
-    ],
-    [
-      "mismatched staff proof",
-      { proof: { staffProfileId: "staff-other" } },
-    ],
-    [
-      "inactive staff credential",
-      { credential: { status: "revoked" } },
-    ],
+    ["expired staff proof", { proof: { expiresAt: Date.now() - 1 } }],
+    ["mismatched staff proof", { proof: { staffProfileId: "staff-other" } }],
+    ["inactive staff credential", { credential: { status: "revoked" } }],
     [
       "mismatched staff credential",
       { credential: { staffProfileId: "staff-other" } },
@@ -1735,12 +1820,52 @@ describe("adjustTransactionItems public mutation", () => {
           code: "authentication_failed",
         },
       });
-      expect(itemAdjustmentCommands.adjustTransactionItems).not.toHaveBeenCalled();
+      expect(
+        itemAdjustmentCommands.adjustTransactionItems,
+      ).not.toHaveBeenCalled();
     },
   );
 });
 
 describe("getTransactionById public query authorization", () => {
+  it("shared-demo-transaction-detail uses only the transaction store capability", async () => {
+    vi.mocked(transactionQueries.getTransaction).mockResolvedValue({
+      _id: "txn-1",
+      storeId: "store-1",
+    } as never);
+    vi.mocked(transactionQueries.getTransactionById).mockResolvedValue({
+      _id: "txn-1",
+      receiptDeliveryHistory: [],
+    } as never);
+    vi.mocked(
+      sharedDemoActor.requireSharedDemoStoreCapabilityIfApplicable,
+    ).mockResolvedValue({ storeId: "store-1" } as never);
+    vi.mocked(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).mockResolvedValue({ _id: "demo-user-1" } as never);
+
+    const ctx = {
+      db: {
+        get: vi.fn().mockResolvedValue({
+          _id: "store-1",
+          organizationId: "org-1",
+        }),
+      },
+    };
+
+    await expect(
+      getHandler(getTransactionById)(ctx, { transactionId: "txn-1" }),
+    ).resolves.toEqual(expect.objectContaining({ _id: "txn-1" }));
+    expect(
+      sharedDemoActor.requireSharedDemoStoreCapabilityIfApplicable,
+    ).toHaveBeenCalledWith(ctx, "pos.sale.complete", "store-1");
+    expect(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).toHaveBeenCalledWith(ctx, {
+      sharedDemoCapability: "pos.sale.complete",
+    });
+  });
+
   it("requires a same-organization POS role before returning receipt delivery metadata", async () => {
     vi.mocked(transactionQueries.getTransaction).mockResolvedValue({
       _id: "txn-1",
@@ -1750,7 +1875,9 @@ describe("getTransactionById public query authorization", () => {
       _id: "txn-1",
       receiptDeliveryHistory: [],
     } as never);
-    vi.mocked(athenaUserAuth.requireAuthenticatedAthenaUserWithCtx).mockResolvedValue({
+    vi.mocked(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).mockResolvedValue({
       _id: "user-1",
     } as never);
 
@@ -1788,9 +1915,9 @@ describe("getTransactionById public query authorization", () => {
       _id: "txn-1",
       storeId: "store-1",
     } as never);
-    vi.mocked(athenaUserAuth.requireAuthenticatedAthenaUserWithCtx).mockRejectedValue(
-      new Error("Sign in again to continue."),
-    );
+    vi.mocked(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).mockRejectedValue(new Error("Sign in again to continue."));
 
     const ctx = {
       db: {

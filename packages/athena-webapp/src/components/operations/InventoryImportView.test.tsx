@@ -20,6 +20,7 @@ const mockedHooks = vi.hoisted(() => ({
   useAppActionBlocker: vi.fn(),
   useOptionalManagerElevation: vi.fn(),
   useProtectedAdminPageState: vi.fn(),
+  useSharedDemoContext: vi.fn(),
 }));
 
 vi.mock("convex/react", () => ({
@@ -63,6 +64,10 @@ vi.mock("@/hooks/useProtectedAdminPageState", () => ({
   useProtectedAdminPageState: mockedHooks.useProtectedAdminPageState,
 }));
 
+vi.mock("@/hooks/useSharedDemoContext", () => ({
+  useSharedDemoContext: mockedHooks.useSharedDemoContext,
+}));
+
 vi.mock("@/lib/app-messages", () => ({
   useAppActionBlocker: mockedHooks.useAppActionBlocker,
 }));
@@ -80,6 +85,17 @@ function getSourcePreviewSection() {
   const section = heading.closest("section");
   if (!section) throw new Error("Source preview section missing");
   return within(section);
+}
+
+function getSourceImportFieldset() {
+  const importWorkspace = screen
+    .getByRole("heading", { name: "Source file" })
+    .closest("div.grid");
+  const fieldset = importWorkspace?.parentElement;
+  if (!(fieldset instanceof HTMLFieldSetElement)) {
+    throw new Error("Source import fieldset missing");
+  }
+  return fieldset;
 }
 
 function getReviewOverlaySection() {
@@ -144,6 +160,67 @@ describe("InventoryImportView", () => {
       isAuthenticated: true,
       isLoadingAccess: false,
     });
+    mockedHooks.useSharedDemoContext.mockReturnValue(null);
+  });
+
+  it("keeps inventory import view-only in the shared demo", () => {
+    mockedHooks.useSharedDemoContext.mockReturnValue({ storeId: "store-1" });
+
+    render(<InventoryImportView />);
+
+    const demoNotice = screen
+      .getByText("Inventory import is view-only in the demo.")
+      .closest("section");
+    expect(demoNotice).toHaveClass("w-fit", "max-w-full");
+    const importWorkspace = screen
+      .getByRole("heading", { name: "Source file" })
+      .closest("div.grid");
+    expect(importWorkspace).not.toHaveClass(
+      "mt-layout-xl",
+      "md:mt-layout-2xl",
+    );
+    expect(getSourceImportFieldset()).toHaveClass(
+      "m-0",
+      "min-w-0",
+      "border-0",
+      "p-0",
+    );
+    expect(getSourceImportFieldset()).not.toHaveClass("contents");
+    expect(screen.getByLabelText("File")).toBeDisabled();
+    expect(screen.getByLabelText("Raw export")).toBeDisabled();
+    expect(screen.getByLabelText("Notes")).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Save review version" }),
+    ).toBeDisabled();
+    expect(mockedHooks.useQuery).toHaveBeenNthCalledWith(
+      1,
+      expect.anything(),
+      "skip",
+    );
+    expect(mockedHooks.useQuery).toHaveBeenNthCalledWith(
+      2,
+      expect.anything(),
+      "skip",
+    );
+  });
+
+  it("uses the shared workspace rhythm without local overrides", () => {
+    render(<InventoryImportView />);
+
+    const importWorkspace = screen
+      .getByRole("heading", { name: "Source file" })
+      .closest("div.grid");
+    expect(importWorkspace).not.toHaveClass(
+      "mt-layout-xl",
+      "md:mt-layout-2xl",
+    );
+    expect(getSourceImportFieldset()).toHaveClass(
+      "m-0",
+      "min-w-0",
+      "border-0",
+      "p-0",
+    );
+    expect(getSourceImportFieldset()).not.toHaveClass("contents");
   });
 
   it("pages through every parsed preview row with the shared list pagination", async () => {

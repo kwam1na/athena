@@ -1,4 +1,9 @@
-import { mutation, query, type MutationCtx, type QueryCtx } from "../_generated/server";
+import {
+  mutation,
+  query,
+  type MutationCtx,
+  type QueryCtx,
+} from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { v } from "convex/values";
 import {
@@ -6,13 +11,16 @@ import {
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
 import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
-import { CYCLE_COUNT_REASON_CODE, submitStockAdjustmentBatchWithCtx } from "./adjustments";
+import {
+  CYCLE_COUNT_REASON_CODE,
+  submitStockAdjustmentBatchWithCtx,
+} from "./adjustments";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
 import { commandResultValidator } from "../lib/commandResultValidators";
+import { requireSharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
 
 type CycleCountDraftAccessCtx =
-  | Pick<QueryCtx, "auth" | "db">
-  | Pick<MutationCtx, "auth" | "db">;
+  Pick<QueryCtx, "auth" | "db"> | Pick<MutationCtx, "auth" | "db">;
 
 type CycleCountDraftWithLines = {
   draft: Doc<"cycleCountDraft">;
@@ -44,17 +52,26 @@ async function requireCycleCountDraftAccess(
   ctx: CycleCountDraftAccessCtx,
   storeId: Id<"store">,
 ) {
+  const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(
+    ctx,
+    "inventory.adjust",
+    storeId,
+  );
   const store = await ctx.db.get("store", storeId);
 
   if (!store) {
     throw new Error("Store not found.");
   }
 
-  const actorUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+  const actorUser = await requireAuthenticatedAthenaUserWithCtx(
+    ctx,
+    demoActor ? { sharedDemoCapability: "inventory.adjust" } : undefined,
+  );
 
   await requireOrganizationMemberRoleWithCtx(ctx, {
     allowedRoles: ["full_admin", "pos_only"],
-    failureMessage: "You do not have permission to adjust stock for this store.",
+    failureMessage:
+      "You do not have permission to adjust stock for this store.",
     organizationId: store.organizationId,
     userId: actorUser._id,
   });
@@ -182,9 +199,7 @@ async function listOpenCycleCountDraftsWithCtx(
   return ctx.db
     .query("cycleCountDraft")
     .withIndex("by_storeId_status_scope_owner", (q) =>
-      q
-        .eq("storeId", args.storeId)
-        .eq("status", "open"),
+      q.eq("storeId", args.storeId).eq("status", "open"),
     )
     .collect()
     .then((drafts) =>
@@ -360,7 +375,9 @@ export async function getActiveCycleCountDraftSummaryWithCtx(
   ).sort((left, right) => left.localeCompare(right));
   const changedDraftLines = (
     await Promise.all(
-      changedDrafts.map((draft) => listCycleCountDraftLinesWithCtx(ctx, draft._id)),
+      changedDrafts.map((draft) =>
+        listCycleCountDraftLinesWithCtx(ctx, draft._id),
+      ),
     )
   )
     .flat()
@@ -389,7 +406,8 @@ export async function getActiveCycleCountDraftSummaryWithCtx(
     ),
     lastSavedAt,
     netQuantityDelta: changedDraftLines.reduce(
-      (total, line) => total + line.countedQuantity - line.baselineInventoryCount,
+      (total, line) =>
+        total + line.countedQuantity - line.baselineInventoryCount,
       0,
     ),
     scopeKeys,
@@ -550,7 +568,9 @@ export async function discardCycleCountDraftCommandWithCtx(
   args: {
     draftId: Id<"cycleCountDraft">;
   },
-): Promise<CommandResult<{ draftId: Id<"cycleCountDraft">; status: "discarded" }>> {
+): Promise<
+  CommandResult<{ draftId: Id<"cycleCountDraft">; status: "discarded" }>
+> {
   try {
     const draft = await ctx.db.get("cycleCountDraft", args.draftId);
 
@@ -753,9 +773,9 @@ export async function submitCycleCountDraftCommandWithCtx(
       throw new Error("Cycle count draft not found.");
     }
 
-    const lines = (await listCycleCountDraftLinesWithCtx(ctx, args.draftId)).filter(
-      (line) => line.isDirty,
-    );
+    const lines = (
+      await listCycleCountDraftLinesWithCtx(ctx, args.draftId)
+    ).filter((line) => line.isDirty);
 
     if (lines.length === 0) {
       throw new Error("Change at least one count before submitting.");
@@ -792,7 +812,8 @@ export async function submitCycleCountDraftCommandWithCtx(
 
       return userError({
         code: "precondition_failed",
-        message: "Inventory changed since this count started. Review the affected SKUs before submitting.",
+        message:
+          "Inventory changed since this count started. Review the affected SKUs before submitting.",
         metadata: {
           staleLines,
         },
@@ -912,7 +933,8 @@ export async function submitActiveCycleCountDraftsCommandWithCtx(
 
       return userError({
         code: "precondition_failed",
-        message: "Inventory changed since this count started. Review the affected SKUs before submitting.",
+        message:
+          "Inventory changed since this count started. Review the affected SKUs before submitting.",
         metadata: {
           staleLines,
         },
@@ -995,7 +1017,9 @@ function mapCycleCountDraftError(error: unknown): CommandResult<never> {
     return userError({ code: "authentication_failed", message });
   }
 
-  if (message === "You do not have permission to adjust stock for this store.") {
+  if (
+    message === "You do not have permission to adjust stock for this store."
+  ) {
     return userError({ code: "authorization_failed", message });
   }
 

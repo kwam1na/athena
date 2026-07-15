@@ -466,6 +466,7 @@ describe("POS local sync public mutation", () => {
     });
 
     assertConformsToExportedReturns(ingestLocalEvents, result);
+    expect(result.kind).toBe("ok");
     expect(result).toMatchObject({
       kind: "ok",
       data: {

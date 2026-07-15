@@ -1,9 +1,10 @@
 import { Link, useParams } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
-import { ArrowRight, ArrowUpRight } from "lucide-react";
+import { ArrowRight, ArrowUpRight, Monitor } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
+import { useGetTerminal } from "@/hooks/useGetTerminal";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
   formatPendingCashVoidNotice,
@@ -83,6 +84,7 @@ export type CashControlsDashboardSession = {
   registerNumber?: string | null;
   status: string;
   terminalName?: string | null;
+  terminalId?: string | null;
   totalDeposited: number;
   totalSales?: number;
   variance?: number;
@@ -117,6 +119,7 @@ export type CashControlsDashboardSnapshot = {
 };
 
 type CashControlsDashboardContentProps = {
+  browserTerminalId?: string;
   currency: string;
   dashboardSnapshot: CashControlsDashboardSnapshot;
   hasFinancialDetailsAccess?: boolean;
@@ -124,6 +127,18 @@ type CashControlsDashboardContentProps = {
   orgUrlSlug: string;
   storeUrlSlug: string;
 };
+
+export function prioritizeCashControlsSessionsForTerminal(
+  sessions: CashControlsDashboardSession[],
+  terminalId?: string,
+) {
+  if (!terminalId) return sessions;
+
+  return [
+    ...sessions.filter((session) => session.terminalId === terminalId),
+    ...sessions.filter((session) => session.terminalId !== terminalId),
+  ];
+}
 
 function formatCurrency(currency: string, amount?: number | null) {
   if (amount === undefined || amount === null) {
@@ -748,6 +763,7 @@ function DrawerSessionCard({
 }
 
 function DrawerSessionLane({
+  browserTerminalId,
   currency,
   emptyDescription,
   hasFinancialDetailsAccess,
@@ -757,6 +773,7 @@ function DrawerSessionLane({
   title,
   variant,
 }: {
+  browserTerminalId?: string;
   currency: string;
   emptyDescription: string;
   hasFinancialDetailsAccess: boolean;
@@ -766,6 +783,30 @@ function DrawerSessionLane({
   title: string;
   variant?: "primary" | "standard";
 }) {
+  const browserSessions = browserTerminalId
+    ? sessions.filter((session) => session.terminalId === browserTerminalId)
+    : [];
+  const otherSessions = browserSessions.length
+    ? sessions.filter((session) => session.terminalId !== browserTerminalId)
+    : sessions;
+  const renderSessionCards = (
+    groupedSessions: CashControlsDashboardSession[],
+  ) => (
+    <div className="space-y-layout-sm">
+      {groupedSessions.map((session) => (
+        <DrawerSessionCard
+          currency={currency}
+          hasFinancialDetailsAccess={hasFinancialDetailsAccess}
+          key={session._id}
+          orgUrlSlug={orgUrlSlug}
+          session={session}
+          storeUrlSlug={storeUrlSlug}
+          variant={variant}
+        />
+      ))}
+    </div>
+  );
+
   return (
     <section className="space-y-layout-sm">
       <div className="flex items-center justify-between gap-layout-md">
@@ -785,17 +826,39 @@ function DrawerSessionLane({
         </div>
       ) : (
         <div className="space-y-layout-xl">
-          {sessions.map((session) => (
-            <DrawerSessionCard
-              currency={currency}
-              hasFinancialDetailsAccess={hasFinancialDetailsAccess}
-              key={session._id}
-              orgUrlSlug={orgUrlSlug}
-              session={session}
-              storeUrlSlug={storeUrlSlug}
-              variant={variant}
-            />
-          ))}
+          {browserSessions.length ? (
+            <div
+              aria-label="Drawers on this browser"
+              className="rounded-xl border border-signal/30 bg-signal/5 p-layout-sm shadow-surface"
+              role="group"
+            >
+              <div className="mb-layout-xs flex items-center gap-1.5 px-layout-2xs text-signal">
+                <Monitor aria-hidden className="h-3.5 w-3.5" />
+                <p className="text-[11px] font-medium uppercase tracking-[0.16em]">
+                  This browser
+                </p>
+              </div>
+              {renderSessionCards(browserSessions)}
+            </div>
+          ) : null}
+
+          {otherSessions.length ? (
+            <div
+              aria-label={browserSessions.length ? "Other drawers" : undefined}
+              className="space-y-layout-sm"
+              role={browserSessions.length ? "group" : undefined}
+            >
+              {browserSessions.length ? (
+                <div className="flex items-center gap-layout-sm px-layout-2xs">
+                  <p className="shrink-0 text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                    Other drawers
+                  </p>
+                  <span aria-hidden className="h-px flex-1 bg-border" />
+                </div>
+              ) : null}
+              {renderSessionCards(otherSessions)}
+            </div>
+          ) : null}
         </div>
       )}
     </section>
@@ -1233,19 +1296,24 @@ function ClosedSessionsSnapshot({
 }
 
 function CashroomWorkflow({
+  browserTerminalId,
   currency,
   hasFinancialDetailsAccess,
   snapshot,
   orgUrlSlug,
   storeUrlSlug,
 }: {
+  browserTerminalId?: string;
   currency: string;
   hasFinancialDetailsAccess: boolean;
   snapshot: CashControlsDashboardSnapshot;
   orgUrlSlug: string;
   storeUrlSlug: string;
 }) {
-  const sessions = snapshot.registerSessions;
+  const sessions = prioritizeCashControlsSessionsForTerminal(
+    snapshot.registerSessions,
+    browserTerminalId,
+  );
   const needsAttention = sessions.filter(
     (session) =>
       session.status === "closing" ||
@@ -1301,6 +1369,7 @@ function CashroomWorkflow({
         >
           {primaryLane ? (
             <DrawerSessionLane
+              browserTerminalId={browserTerminalId}
               currency={currency}
               emptyDescription={primaryLane.emptyDescription}
               hasFinancialDetailsAccess={hasFinancialDetailsAccess}
@@ -1314,6 +1383,7 @@ function CashroomWorkflow({
           <div className="space-y-layout-3xl">
             {hasNeedsAttention && hasLiveDrawers ? (
               <DrawerSessionLane
+                browserTerminalId={browserTerminalId}
                 currency={currency}
                 emptyDescription="No live drawers are open right now"
                 hasFinancialDetailsAccess={hasFinancialDetailsAccess}
@@ -1348,6 +1418,7 @@ function CashroomWorkflow({
 }
 
 export function CashControlsDashboardContent({
+  browserTerminalId,
   currency,
   dashboardSnapshot,
   hasFinancialDetailsAccess = true,
@@ -1391,6 +1462,7 @@ export function CashControlsDashboardContent({
               </section>
 
               <CashroomWorkflow
+                browserTerminalId={browserTerminalId}
                 currency={currency}
                 hasFinancialDetailsAccess={hasFinancialDetailsAccess}
                 orgUrlSlug={orgUrlSlug}
@@ -1406,6 +1478,7 @@ export function CashControlsDashboardContent({
 }
 
 export function CashControlsDashboard() {
+  const terminal = useGetTerminal();
   const {
     activeStore,
     canAccessProtectedSurface,
@@ -1458,6 +1531,7 @@ export function CashControlsDashboard() {
 
   return (
     <CashControlsDashboardContent
+      browserTerminalId={terminal?._id}
       currency={activeStore.currency || "USD"}
       dashboardSnapshot={
         dashboardSnapshot ?? {

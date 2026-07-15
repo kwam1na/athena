@@ -34,6 +34,9 @@ import {
   type ScheduledCronFamily,
 } from "../automation/scheduledRunLedger";
 
+const enforceSharedDemoActionCapabilityRef =
+  (internal as any).sharedDemo.actor.enforceSharedDemoActionCapability;
+
 const appUrl = process.env.APP_URL;
 
 type RefundReservationResult = {
@@ -176,6 +179,9 @@ export const createTransaction = action({
     }),
   ),
   handler: async (ctx, args) => {
+    await ctx.runQuery(enforceSharedDemoActionCapabilityRef, {
+      capability: "billing.manage",
+    });
     try {
       // Fetch the checkout session
       const session = await ctx.runQuery(
@@ -341,6 +347,9 @@ export const createPODOrder = action({
     reference: v.optional(v.string()),
   }),
   handler: async (ctx, args): Promise<PaymentResult> => {
+    await ctx.runQuery(enforceSharedDemoActionCapabilityRef, {
+      capability: "billing.manage",
+    });
     console.log(`Creating POD order for session: ${args.checkoutSessionId}`);
 
     try {
@@ -504,6 +513,9 @@ export const verifyPayment = action({
     }),
   ),
   handler: async (ctx, args): Promise<PaymentVerificationResult> => {
+    await ctx.runQuery(enforceSharedDemoActionCapabilityRef, {
+      capability: "billing.manage",
+    });
     console.log(
       `Verifying payment for session with reference: ${args.externalReference}`,
     );
@@ -695,6 +707,9 @@ export const refundPayment = action({
     let refundReservation: RefundReservationResult | undefined;
     let refundFinalized = false;
 
+    await ctx.runQuery(enforceSharedDemoActionCapabilityRef, {
+      capability: "payments.refund",
+    });
     try {
       const reservation = (await ctx.runMutation(
         internal.storeFront.onlineOrder.reserveRefundInternal,

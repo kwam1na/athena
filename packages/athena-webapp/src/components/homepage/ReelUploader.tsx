@@ -193,7 +193,7 @@ export const ReelUploader = () => {
         <button
           onClick={() => fileInputRef.current?.click()}
           className={cn(
-            "w-full border-2 border-dashed rounded-lg p-8",
+            "w-fit max-w-full border-2 border-dashed rounded-lg p-8",
             "flex flex-col items-center justify-center gap-2",
             "text-muted-foreground hover:text-foreground hover:border-foreground/30",
             "transition-colors cursor-pointer",

@@ -4,10 +4,7 @@ import { LoadingButton } from "../ui/loading-button";
 import {
   Image,
   PencilIcon,
-  Loader2,
-  UploadIcon,
   ArrowUp,
-  Undo,
   RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -35,6 +32,7 @@ export const ShopLookImageUploader: React.FC<ShopLookImageUploaderProps> = ({
   const [isEditing, setIsEditing] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [hasImageError, setHasImageError] = useState(false);
 
   // Loading states
   const [isUploading, setIsUploading] = useState(false);
@@ -50,6 +48,10 @@ export const ShopLookImageUploader: React.FC<ShopLookImageUploaderProps> = ({
   const displayImage =
     isEditing && previewImage ? previewImage : currentImageUrl;
   const showEditMode = isEditing && selectedFile;
+
+  useEffect(() => {
+    setHasImageError(false);
+  }, [displayImage]);
 
   // File validation
   const validateFile = (file: File): boolean => {
@@ -205,11 +207,30 @@ export const ShopLookImageUploader: React.FC<ShopLookImageUploaderProps> = ({
     <div className={cn("space-y-4", className)}>
       {/* Image Display */}
       <div className="relative">
-        <img
-          src={displayImage || "/placeholder.jpg"}
-          alt="Shop the look"
-          className="w-[400px] h-[640px] object-cover rounded-lg"
-        />
+        {displayImage && !hasImageError ? (
+          <img
+            src={displayImage}
+            alt="Shop the look"
+            className="h-[640px] w-[400px] rounded-lg object-cover"
+            onError={() => setHasImageError(true)}
+          />
+        ) : (
+          <div
+            aria-live="polite"
+            className="flex h-[640px] w-[400px] flex-col items-center justify-center gap-layout-sm rounded-lg border border-dashed border-border bg-muted/40 p-layout-lg text-center text-muted-foreground"
+            role="status"
+          >
+            <Image className="h-8 w-8" />
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-foreground">
+                No image yet
+              </p>
+              <p className="text-sm">
+                Upload an image to add this visual.
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Controls */}

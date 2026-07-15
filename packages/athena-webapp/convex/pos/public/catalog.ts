@@ -26,6 +26,7 @@ import {
 } from "../../reporting/inventory/valuation";
 import { recordOperationalEventWithCtx } from "../../operations/operationalEvents";
 import { updateOperationalWorkItemStatusWithCtx } from "../../operations/operationalWorkItems";
+import { requireSharedDemoStoreCapabilityIfApplicable } from "../../sharedDemo/actor";
 import {
   lookupByBarcode,
   searchProducts,
@@ -465,14 +466,23 @@ async function requireRegisterCatalogStoreAccess(
     indexedIdentityOnly?: boolean;
   },
 ) {
+  await requireSharedDemoStoreCapabilityIfApplicable(
+    ctx,
+    "pos.sale.complete",
+    args.storeId,
+  );
   const store = await ctx.db.get("store", args.storeId);
   if (!store) {
     throw new Error("Store not found.");
   }
 
   const athenaUser = options?.indexedIdentityOnly
-    ? await requireAuthenticatedAthenaUserIndexedWithCtx(ctx)
-    : await requireAuthenticatedAthenaUserWithCtx(ctx);
+    ? await requireAuthenticatedAthenaUserIndexedWithCtx(ctx, {
+        sharedDemoCapability: "pos.sale.complete",
+      })
+    : await requireAuthenticatedAthenaUserWithCtx(ctx, {
+        sharedDemoCapability: "pos.sale.complete",
+      });
   await requireOrganizationMemberRoleWithCtx(ctx, {
     allowedRoles: ["full_admin", "pos_only"],
     failureMessage:
@@ -666,7 +676,10 @@ export const search = query({
     storeId: v.id("store"),
     searchQuery: v.string(),
   },
-  handler: async (ctx, args) => searchProducts(ctx, args),
+  handler: async (ctx, args) => {
+    await requireRegisterCatalogStoreAccess(ctx, args);
+    return searchProducts(ctx, args);
+  },
 });
 
 export const listRegisterCatalogSnapshot = query({
@@ -761,7 +774,10 @@ export const barcodeLookup = query({
     catalogResultValidator,
     v.array(catalogResultValidator),
   ),
-  handler: async (ctx, args) => lookupByBarcode(ctx, args),
+  handler: async (ctx, args) => {
+    await requireRegisterCatalogStoreAccess(ctx, args);
+    return lookupByBarcode(ctx, args);
+  },
 });
 
 export const quickAddSku = mutation({
@@ -780,12 +796,19 @@ export const quickAddSku = mutation({
   },
   returns: catalogResultValidator,
   handler: async (ctx, args) => {
+    await requireSharedDemoStoreCapabilityIfApplicable(
+      ctx,
+      "catalog.quick_add",
+      args.storeId,
+    );
     const store = await ctx.db.get("store", args.storeId);
     if (!store) {
       throw new Error("Store not found.");
     }
 
-    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx, {
+      sharedDemoCapability: "catalog.quick_add",
+    });
     await requireOrganizationMemberRoleWithCtx(ctx, {
       allowedRoles: ["full_admin", "pos_only"],
       failureMessage: "You cannot quick add products for this store.",

@@ -2,6 +2,8 @@ import { mutation, query } from "../_generated/server";
 import { v } from "convex/values";
 import { colorSchema } from "../schemas/inventory";
 import { refreshProductSkuSearchForColor } from "./skuSearch";
+import { requireNonDemoFoundationMutation } from "../sharedDemo/foundation";
+import { requireAuthenticatedAthenaUserWithCtx } from "../lib/athenaUserAuth";
 
 export const getAll = query({
   args: {
@@ -29,6 +31,8 @@ export const getById = query({
 export const create = mutation({
   args: colorSchema,
   handler: async (ctx, args) => {
+    await requireAuthenticatedAthenaUserWithCtx(ctx);
+    requireNonDemoFoundationMutation({ storeId: args.storeId });
     const id = await ctx.db.insert("color", args);
 
     return await ctx.db.get("color", id);
@@ -41,6 +45,9 @@ export const update = mutation({
     name: v.string(),
   },
   handler: async (ctx, args) => {
+    await requireAuthenticatedAthenaUserWithCtx(ctx);
+    const existing = await ctx.db.get("color", args.id);
+    if (existing) requireNonDemoFoundationMutation({ storeId: existing.storeId });
     await ctx.db.patch("color", args.id, { name: args.name });
     await refreshProductSkuSearchForColor(ctx, args.id);
 
@@ -53,6 +60,9 @@ export const remove = mutation({
     id: v.id("color"),
   },
   handler: async (ctx, args) => {
+    await requireAuthenticatedAthenaUserWithCtx(ctx);
+    const existing = await ctx.db.get("color", args.id);
+    if (existing) requireNonDemoFoundationMutation({ storeId: existing.storeId });
     await ctx.db.delete("color", args.id);
     await refreshProductSkuSearchForColor(ctx, args.id);
 

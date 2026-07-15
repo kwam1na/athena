@@ -232,6 +232,7 @@ const PERMISSION_DRIFT_SUMMARY =
 
 const POS_SYNC_ALLOWED_ROLES_BY_EVENT = {
   register_opened: ["cashier", "manager"],
+  store_day_started: ["cashier", "manager"],
   pending_checkout_item_defined: ["cashier", "manager"],
   sale_completed: ["cashier", "manager"],
   sale_cleared: ["cashier", "manager"],
@@ -260,6 +261,13 @@ export async function projectLocalSyncEvent(
     return projectRegisterOpened(
       repository,
       args as ProjectEventArgsFor<"register_opened">,
+    );
+  }
+
+  if (args.event.eventType === "store_day_started") {
+    return projectStoreDayStarted(
+      repository,
+      args as ProjectEventArgsFor<"store_day_started">,
     );
   }
 
@@ -306,6 +314,37 @@ export async function projectLocalSyncEvent(
   }
 
   assertNever(args.event);
+}
+
+async function projectStoreDayStarted(
+  repository: SyncProjectionRepository,
+  args: ProjectEventArgsFor<"store_day_started">,
+): Promise<ProjectionResult> {
+  if (!repository.startStoreDayFromLocalSync) {
+    throw new Error("POS store-day projection is not configured.");
+  }
+
+  const result = await repository.startStoreDayFromLocalSync({
+    actorStaffProfileId: args.event.staffProfileId,
+    endAt: args.event.payload.endAt,
+    operatingDate: args.event.payload.operatingDate,
+    startAt: args.event.payload.startAt,
+    storeId: args.storeId,
+  });
+  if (result.kind === "ok") {
+    return { status: "projected", mappings: [], conflicts: [] };
+  }
+
+  const conflict = await createConflict(repository, args, {
+    conflictType: "permission",
+    summary: "Store-day start needs manager review after POS sync.",
+    details: {
+      code: result.error.code,
+      message: result.error.message,
+      operatingDate: args.event.payload.operatingDate,
+    },
+  });
+  return { status: "conflicted", mappings: [], conflicts: [conflict] };
 }
 
 export async function createOrReuseRegisterSessionRepairMapping(

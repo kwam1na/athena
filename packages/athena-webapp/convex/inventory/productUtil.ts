@@ -2,7 +2,7 @@
 
 import { v } from "convex/values";
 import { action, internalAction } from "../_generated/server";
-import { api } from "../_generated/api";
+import { api, internal } from "../_generated/api";
 import { ValkeyClient } from "../cache";
 
 export function buildAllProductsCacheKey(args: {
@@ -107,7 +107,11 @@ export const invalidateProductCache = internalAction({
 
 export const clearAllCache = action({
   args: {},
-  handler: async () => {
+  handler: async (ctx) => {
+    await ctx.runQuery(
+      (internal as any).sharedDemo.actor.requireAuthenticatedNonDemoEffect,
+      {},
+    );
     try {
       const cache = new ValkeyClient();
       // Use wildcard pattern to clear all keys

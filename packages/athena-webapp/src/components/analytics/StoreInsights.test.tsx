@@ -7,11 +7,17 @@ import StoreInsights from "./StoreInsights";
 const useActionMock = vi.fn();
 const useMutationMock = vi.fn();
 const useQueryMock = vi.fn();
+const useSharedDemoContextMock = vi.fn();
 
 vi.mock("convex/react", () => ({
   useAction: (...args: unknown[]) => useActionMock(...args),
   useMutation: (...args: unknown[]) => useMutationMock(...args),
   useQuery: (...args: unknown[]) => useQueryMock(...args),
+}));
+
+vi.mock("@/hooks/useSharedDemoContext", () => ({
+  isSharedDemoUiEnabled: true,
+  useSharedDemoContext: () => useSharedDemoContextMock(),
 }));
 
 describe("StoreInsights", () => {
@@ -38,6 +44,20 @@ describe("StoreInsights", () => {
     useActionMock.mockReturnValue(generateInsights);
     useMutationMock.mockReturnValue(dismissArtifact);
     useQueryMock.mockReturnValue(null);
+    useSharedDemoContextMock.mockReturnValue(null);
+  });
+
+  it("skips unsupported intelligence queries in the shared demo", () => {
+    useSharedDemoContextMock.mockReturnValue({ storeId: "store-1" });
+
+    renderWithQueries();
+
+    expect(useQueryMock).toHaveBeenCalledTimes(2);
+    expect(useQueryMock.mock.calls.map(([, args]) => args)).toEqual([
+      "skip",
+      "skip",
+    ]);
+    expect(screen.queryByRole("region", { name: "Store insights" })).toBeNull();
   });
 
   it("renders an empty store readout state with a generate action", async () => {

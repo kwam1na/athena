@@ -43,6 +43,7 @@ function buildLocalSaleValidationMetadata(
 export function useRegisterLocalRuntime(input: {
   activeStoreId?: Id<"store">;
   createLocalFallbackId: (prefix: string) => string;
+  expectedDemoEpoch?: number;
   onRetryBootstrap: () => void;
   staffProfileId: Id<"staffProfile"> | null;
   staffProfileIdRef: MutableRefObject<Id<"staffProfile"> | null>;
@@ -72,6 +73,7 @@ export function useRegisterLocalRuntime(input: {
   const {
     activeStoreId,
     createLocalFallbackId,
+    expectedDemoEpoch,
     onRetryBootstrap,
     staffProfileId,
     staffProfileIdRef,
@@ -122,17 +124,19 @@ export function useRegisterLocalRuntime(input: {
     () => buildLocalSaleValidationMetadata(appSessionRecovery?.status),
     [appSessionRecovery?.status],
   );
+  const terminalId = terminal?._id;
+  const cloudTerminalId = terminal?.cloudTerminalId;
+  const localTerminalId = terminal?.localTerminalId;
   const terminalDescriptor = useMemo<RegisterLocalRuntimeTerminal | null>(
     () =>
-      terminal
+      terminalId
         ? {
-            _id: terminal._id,
-            cloudTerminalId: terminal.cloudTerminalId,
-            localTerminalId: terminal.localTerminalId,
+            _id: terminalId,
+            cloudTerminalId,
+            localTerminalId,
           }
         : null,
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- preserve bridge identity across equivalent terminal objects.
-    [terminal?._id, terminal?.cloudTerminalId, terminal?.localTerminalId],
+    [cloudTerminalId, localTerminalId, terminalId],
   );
 
   useEffect(() => {
@@ -311,6 +315,7 @@ export function useRegisterLocalRuntime(input: {
     appSessionRecovery,
     drainOnAppend: true,
     eventAppendToken: localSyncEventAppendToken,
+    expectedDemoEpoch,
     mode: "status-only",
     onLocalEventsChanged: noteLocalRegisterEventChanged,
     storeId:

@@ -136,6 +136,26 @@ function toUploadEvent(
     };
   }
 
+  if (event.type === "store_day.started") {
+    const payload = asRecord(event.payload);
+    return {
+      localEventId: event.localEventId,
+      localRegisterSessionId: event.localRegisterSessionId,
+      eventType: syncEventTypeForLocalEvent(
+        event.type,
+        "store_day_started",
+      ),
+      occurredAt: event.createdAt,
+      staffProfileId: event.staffProfileId,
+      ...(event.staffProofToken ? { staffProofToken: event.staffProofToken } : {}),
+      payload: {
+        operatingDate: stringOrEmpty(payload.operatingDate),
+        startAt: numberOrZero(payload.startAt),
+        endAt: numberOrZero(payload.endAt),
+      },
+    };
+  }
+
   if (event.type === "transaction.completed") {
     const payload = asRecord(event.payload);
     const localPosSessionId =

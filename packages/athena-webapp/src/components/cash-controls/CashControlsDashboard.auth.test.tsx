@@ -8,6 +8,7 @@ const mockedHooks = vi.hoisted(() => ({
   useProtectedAdminPageState: vi.fn(),
   useQuery: vi.fn(),
   useParams: vi.fn(),
+  useGetTerminal: vi.fn(),
 }));
 
 vi.mock("convex/react", () => ({
@@ -40,6 +41,10 @@ vi.mock("@tanstack/react-router", () => ({
 
 vi.mock("@/hooks/useProtectedAdminPageState", () => ({
   useProtectedAdminPageState: mockedHooks.useProtectedAdminPageState,
+}));
+
+vi.mock("@/hooks/useGetTerminal", () => ({
+  useGetTerminal: mockedHooks.useGetTerminal,
 }));
 
 vi.mock("../common/PageHeader", () => ({
@@ -75,6 +80,7 @@ describe("CashControlsDashboard auth readiness", () => {
     window.scrollTo = vi.fn();
     vi.clearAllMocks();
     mockedHooks.useProtectedAdminPageState.mockReturnValue(readyProtectedState);
+    mockedHooks.useGetTerminal.mockReturnValue(null);
     mockedHooks.useParams.mockReturnValue({
       orgUrlSlug: "v26",
       storeUrlSlug: "east-legon",

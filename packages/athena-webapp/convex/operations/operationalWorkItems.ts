@@ -11,6 +11,7 @@ import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
+import { requireSharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
 import { listOpenLocalSyncConflictsByRegisterSession } from "../cashControls/deposits";
 
 const MAX_QUEUE_ITEMS = 100;
@@ -647,12 +648,20 @@ export const getQueueSnapshot = query({
     storeId: v.id("store"),
   },
   handler: async (ctx, args) => {
+    const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(
+      ctx,
+      "inventory.adjust",
+      args.storeId,
+    );
     const store = await ctx.db.get("store", args.storeId);
     if (!store) {
       throw new Error("Store not found.");
     }
 
-    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(
+      ctx,
+      demoActor ? { sharedDemoCapability: "inventory.adjust" } : undefined,
+    );
     await requireOrganizationMemberRoleWithCtx(ctx, {
       allowedRoles: ["full_admin", "pos_only"],
       failureMessage: "Only POS operators can view approval queue.",
@@ -660,11 +669,7 @@ export const getQueueSnapshot = query({
       userId: athenaUser._id,
     });
 
-    const [
-      rawWorkItemLanes,
-      approvalRequestLanes,
-      syncConflictsBySessionId,
-    ] =
+    const [rawWorkItemLanes, approvalRequestLanes, syncConflictsBySessionId] =
       await Promise.all([
         Promise.all(
           OPEN_WORK_ITEM_STATUSES.flatMap((status) =>

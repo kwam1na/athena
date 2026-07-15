@@ -507,6 +507,27 @@ describe("TransactionsView", () => {
     expect(document.querySelector(".lucide-receipt")).not.toBeInTheDocument();
   });
 
+  it("uses the all-payments icon for the unfiltered empty state", () => {
+    getActiveStoreMock.mockReturnValue({
+      activeStore: {
+        _id: "store-1",
+        currency: "GHS",
+      },
+    });
+    useQueryMock.mockReturnValue([]);
+
+    render(<TransactionsView />);
+
+    const walletIcons = document.querySelectorAll(".lucide-wallet-cards");
+
+    expect(walletIcons).toHaveLength(2);
+    expect(
+      screen
+        .getByRole("radio", { name: "All payments" })
+        .querySelector(".lucide-wallet-cards"),
+    ).toBeInTheDocument();
+  });
+
   it("visually highlights the selected mobile money filter", () => {
     useSearchMock.mockReturnValue({ paymentMethod: "mobile_money" });
     getActiveStoreMock.mockReturnValue({

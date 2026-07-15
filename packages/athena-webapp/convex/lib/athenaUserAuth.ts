@@ -1,6 +1,9 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
+import type { SharedDemoCapability } from "../sharedDemo/policy";
+import { getSharedDemoActorWithCtx } from "../sharedDemo/actor";
+import { requireSharedDemoCapability } from "../sharedDemo/policy";
 
 type AthenaAuthCtx =
   | Pick<QueryCtx, "auth" | "db">
@@ -94,7 +97,17 @@ async function getAuthenticatedUserRecord(ctx: AthenaAuthCtx) {
   };
 }
 
-export async function getAuthenticatedAthenaUserWithCtx(ctx: AthenaAuthCtx) {
+export async function getAuthenticatedAthenaUserWithCtx(
+  ctx: AthenaAuthCtx,
+  options?: { sharedDemoCapability: SharedDemoCapability },
+) {
+  if (options) {
+    const demoActor = await getSharedDemoActorWithCtx(ctx);
+    if (demoActor) {
+      requireSharedDemoCapability(options.sharedDemoCapability);
+      return ctx.db.get("athenaUser", demoActor.athenaUserId);
+    }
+  }
   const authUserRecord = await getAuthenticatedUserRecord(ctx);
 
   if (!authUserRecord) {
@@ -106,8 +119,9 @@ export async function getAuthenticatedAthenaUserWithCtx(ctx: AthenaAuthCtx) {
 
 export async function requireAuthenticatedAthenaUserWithCtx(
   ctx: AthenaAuthCtx,
+  options?: { sharedDemoCapability: SharedDemoCapability },
 ) {
-  const athenaUser = await getAuthenticatedAthenaUserWithCtx(ctx);
+  const athenaUser = await getAuthenticatedAthenaUserWithCtx(ctx, options);
 
   if (!athenaUser) {
     throw new Error("Sign in again to continue.");
@@ -118,7 +132,17 @@ export async function requireAuthenticatedAthenaUserWithCtx(
 
 export async function requireAuthenticatedAthenaUserIndexedWithCtx(
   ctx: AthenaAuthCtx,
+  options?: { sharedDemoCapability: SharedDemoCapability },
 ) {
+  if (options) {
+    const demoActor = await getSharedDemoActorWithCtx(ctx);
+    if (demoActor) {
+      requireSharedDemoCapability(options.sharedDemoCapability);
+      const athenaUser = await ctx.db.get("athenaUser", demoActor.athenaUserId);
+      if (!athenaUser) throw new Error("Sign in again to continue.");
+      return athenaUser;
+    }
+  }
   const authUserRecord = await getAuthenticatedUserRecord(ctx);
 
   if (!authUserRecord) {

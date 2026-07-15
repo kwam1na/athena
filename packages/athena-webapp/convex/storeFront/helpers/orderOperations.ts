@@ -43,7 +43,8 @@ export function assertValidOnlineOrderStatusTransition(
     Doc<"onlineOrder">,
     "deliveryMethod" | "isPODOrder" | "paymentCollected" | "paymentMethod" | "status"
   >,
-  nextStatus: string
+  nextStatus: string,
+  options: { allowUncollectedPaymentOnDelivery?: boolean } = {},
 ) {
   if (!nextStatus) {
     return;
@@ -73,7 +74,11 @@ export function assertValidOnlineOrderStatusTransition(
     );
   }
 
-  if (nextStatus === "picked-up" && isPaymentOnDeliveryOrder(order)) {
+  if (
+    nextStatus === "picked-up" &&
+    isPaymentOnDeliveryOrder(order) &&
+    !options.allowUncollectedPaymentOnDelivery
+  ) {
     if (!order.paymentCollected) {
       throw new Error(
         "Collect payment before marking this pickup order as picked up."

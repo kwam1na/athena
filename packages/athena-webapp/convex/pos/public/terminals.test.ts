@@ -21,6 +21,8 @@ const mocks = vi.hoisted(() => ({
   registerTerminalCommand: vi.fn(),
   requireAuthenticatedAthenaUserWithCtx: vi.fn(),
   requireOrganizationMemberRoleWithCtx: vi.fn(),
+  requireSharedDemoStoreCapabilityIfApplicable: vi.fn(),
+  requireSharedDemoStoreReadIfApplicable: vi.fn(),
   resolveTerminalCloudRepairCommand: vi.fn(),
   createRemoteAssistRepository: vi.fn(),
   remoteAssistGetClientByRuntime: vi.fn(),
@@ -39,6 +41,13 @@ vi.mock("../../lib/athenaUserAuth", () => ({
     mocks.requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx:
     mocks.requireOrganizationMemberRoleWithCtx,
+}));
+
+vi.mock("../../sharedDemo/actor", () => ({
+  requireSharedDemoStoreCapabilityIfApplicable:
+    mocks.requireSharedDemoStoreCapabilityIfApplicable,
+  requireSharedDemoStoreReadIfApplicable:
+    mocks.requireSharedDemoStoreReadIfApplicable,
 }));
 
 vi.mock("../application/commands/terminals", () => ({
@@ -570,6 +579,42 @@ describe("POS terminal public mutations", () => {
     );
   });
 
+  it("reprovisions the demo terminal through the store-scoped daily operations boundary", async () => {
+    mocks.requireSharedDemoStoreCapabilityIfApplicable.mockResolvedValue({
+      athenaUserId: "athena-user-1",
+      storeId: "store-1",
+    });
+    const ctx = buildCtx();
+
+    const result = await getHandler(registerTerminal)(ctx as never, {
+      storeId: "store-1",
+      fingerprintHash: "fingerprint-1",
+      syncSecretHash: "sync-secret-1",
+      displayName: "Demo Register",
+      registerNumber: "WEB-FINGER",
+      browserInfo: { userAgent: "test" },
+    });
+
+    expect(
+      mocks.requireSharedDemoStoreCapabilityIfApplicable,
+    ).toHaveBeenCalledWith(ctx, "daily_operations.write", "store-1");
+    expect(mocks.requireAuthenticatedAthenaUserWithCtx).not.toHaveBeenCalled();
+    expect(mocks.registerTerminalCommand).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        allowRegisterNumberChange: true,
+        registeredByUserId: "athena-user-1",
+        storeId: "store-1",
+      }),
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        kind: "ok",
+        data: expect.objectContaining({ syncSecretHash: "sync-secret-1" }),
+      }),
+    );
+  });
+
   it("does not register a terminal when store membership is missing", async () => {
     mocks.requireOrganizationMemberRoleWithCtx.mockRejectedValue(
       new Error("denied"),
@@ -1085,6 +1130,24 @@ describe("POS terminal public mutations", () => {
         syncSecretHash: expect.any(String),
       }),
     );
+  });
+
+  it("looks up the demo terminal by fingerprint through the demo read boundary", async () => {
+    const ctx = buildCtx();
+    mocks.requireSharedDemoStoreReadIfApplicable.mockResolvedValue({
+      athenaUserId: "athena-user-1",
+      storeId: "store-1",
+    });
+
+    await getHandler(getTerminalByFingerprint)(ctx as never, {
+      storeId: "store-1",
+      fingerprintHash: "fingerprint-1",
+    });
+
+    expect(
+      mocks.requireSharedDemoStoreReadIfApplicable,
+    ).toHaveBeenCalledWith(ctx, "store-1");
+    expect(mocks.requireAuthenticatedAthenaUserWithCtx).not.toHaveBeenCalled();
   });
 
   it("returns the sync secret only from terminal registration", async () => {
@@ -1796,6 +1859,30 @@ describe("POS terminal public mutations", () => {
     );
   });
 
+  it("loads terminal health through the demo read boundary", async () => {
+    const ctx = buildCtx();
+    mocks.requireSharedDemoStoreReadIfApplicable.mockResolvedValue({
+      athenaUserId: "athena-user-1",
+      storeId: "store-1",
+    });
+
+    await getHandler(listTerminalHealthSummaries)(ctx as never, {
+      storeId: "store-1",
+    });
+    await getHandler(getTerminalHealthSummary)(ctx as never, {
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
+
+    expect(
+      mocks.requireSharedDemoStoreReadIfApplicable,
+    ).toHaveBeenNthCalledWith(1, ctx, "store-1");
+    expect(
+      mocks.requireSharedDemoStoreReadIfApplicable,
+    ).toHaveBeenNthCalledWith(2, ctx, "store-1");
+    expect(mocks.requireAuthenticatedAthenaUserWithCtx).not.toHaveBeenCalled();
+  });
+
   it("exports validator-safe terminal health attention reasons", () => {
     const returnValidator = JSON.stringify(
       (listTerminalHealthSummaries as any).exportReturns(),
@@ -1877,6 +1964,7 @@ describe("POS terminal public mutations", () => {
     const commandResult = { kind: "ok" as const, data: recoveryCommand };
 
     assertConformsToExportedReturns(listTerminals as never, [terminal]);
+    expect(terminal.storeId).toBe("store-1");
     assertConformsToExportedReturns(getTerminalByFingerprint as never, terminal);
     assertConformsToExportedReturns(
       previewTerminalRecovery as never,
@@ -2798,6 +2886,10 @@ function buildCtx(
             _id: "store-1",
             organizationId: "org-1",
           };
+        }
+
+        if (tableName === "athenaUser" && id === "athena-user-1") {
+          return { _id: "athena-user-1" };
         }
 
         if (tableName === "posTerminal" && id === "terminal-1") {

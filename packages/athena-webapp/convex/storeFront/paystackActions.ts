@@ -2,6 +2,8 @@ import { v } from "convex/values";
 import { action } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { listTransactions, verifyTransaction } from "../paystack";
+const requireAuthenticatedNonDemoEffectRef =
+  (internal as any).sharedDemo.actor.requireAuthenticatedNonDemoEffect;
 
 /**
  * Action to fetch all transactions from Paystack
@@ -25,6 +27,7 @@ export const getAllTransactions = action({
     sameDay: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    await ctx.runQuery(requireAuthenticatedNonDemoEffectRef, {});
     try {
       const transactions = await listTransactions({
         perPage: args.perPage,
@@ -63,6 +66,7 @@ export const checkTransactionStatus = action({
     reference: v.string(),
   },
   handler: async (ctx, args) => {
+    await ctx.runQuery(requireAuthenticatedNonDemoEffectRef, {});
     try {
       const verificationResult = await verifyTransaction(args.reference);
 
@@ -95,6 +99,7 @@ export const findOrderTransactions = action({
     timeBuffer: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    await ctx.runQuery(requireAuthenticatedNonDemoEffectRef, {});
     try {
       // Now we use sameDay parameter instead of createdAfter
       const transactions = await listTransactions({

@@ -36,6 +36,12 @@ describe("syncContract", () => {
       },
       {
         browserUploadable: true,
+        eventType: "store_day_started",
+        localEventType: "store_day.started",
+        syncScope: "pos",
+      },
+      {
+        browserUploadable: true,
         eventType: "pending_checkout_item_defined",
         localEventType: "pending_checkout_item.defined",
         syncScope: "pos",
@@ -77,6 +83,7 @@ describe("syncContract", () => {
       ).map((contract) => contract.localEventType),
     ).toEqual([
       "register.opened",
+      "store_day.started",
       "pending_checkout_item.defined",
       "transaction.completed",
       "register.closeout_started",
@@ -91,6 +98,7 @@ describe("syncContract", () => {
   it("keeps scheduler selection and upload conversion on the same syncable event set", () => {
     const syncableEvents = [
       buildLocalEvent({ type: "register.opened" }),
+      buildLocalEvent({ type: "store_day.started" }),
       buildLocalEvent({ type: "pending_checkout_item.defined" }),
       buildLocalEvent({ type: "transaction.completed" }),
       buildLocalEvent({ type: "cart.cleared" }),
@@ -106,6 +114,7 @@ describe("syncContract", () => {
     const prooflessUploadEvent = buildLocalEvent({ staffProofToken: undefined });
 
     expect(syncableEvents.map(isSyncablePosLocalEvent)).toEqual([
+      true,
       true,
       true,
       true,
@@ -179,6 +188,30 @@ describe("syncContract", () => {
           countedCash: 125,
           notes: "Closed",
         }),
+      }),
+    ]);
+  });
+
+  it("maps a local store-day start into the projection contract", () => {
+    const event = buildLocalEvent({
+      localEventId: "event-store-day",
+      type: "store_day.started",
+      payload: {
+        operatingDate: "2026-07-13",
+        startAt: 100,
+        endAt: 200,
+      },
+    });
+
+    expect(buildPosLocalSyncUploadEvents([event], [event])).toEqual([
+      expect.objectContaining({
+        eventType: "store_day_started",
+        localEventId: "event-store-day",
+        payload: {
+          operatingDate: "2026-07-13",
+          startAt: 100,
+          endAt: 200,
+        },
       }),
     ]);
   });
@@ -1183,6 +1216,7 @@ function buildLocalEvent(
 function isUploadSequenceEventType(type: PosLocalEventRecord["type"]) {
   return (
     type === "register.opened" ||
+    type === "store_day.started" ||
     type === "pending_checkout_item.defined" ||
     type === "cart.cleared" ||
     type === "transaction.completed" ||

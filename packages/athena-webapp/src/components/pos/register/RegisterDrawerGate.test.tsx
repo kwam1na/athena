@@ -44,6 +44,14 @@ function renderGate(overrides: Partial<RegisterDrawerGateState> = {}) {
 }
 
 describe("RegisterDrawerGate", () => {
+  it("uses workflow styling for opening the drawer", () => {
+    renderGate();
+
+    expect(screen.getByRole("button", { name: "Open drawer" })).toHaveClass(
+      "bg-action-workflow",
+    );
+  });
+
   it("uses workflow styling for opening float corrections", () => {
     renderGate({
       correctedOpeningFloat: "5",

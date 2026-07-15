@@ -18,6 +18,12 @@ const mocks = vi.hoisted(() => ({
   refreshProductSkuSearchForColor: vi.fn(),
   refreshProductSkuSearchForSubcategory: vi.fn(),
   markCatalogSummaryNeedsRefresh: vi.fn(),
+  requireAuthenticatedAthenaUserWithCtx: vi.fn(),
+}));
+
+vi.mock("../lib/athenaUserAuth", () => ({
+  requireAuthenticatedAthenaUserWithCtx:
+    mocks.requireAuthenticatedAthenaUserWithCtx,
 }));
 
 vi.mock("./skuSearch", () => ({
@@ -104,6 +110,10 @@ describe("taxonomy SKU search refresh", () => {
     mocks.refreshProductSkuSearchForColor.mockReset();
     mocks.refreshProductSkuSearchForSubcategory.mockReset();
     mocks.markCatalogSummaryNeedsRefresh.mockReset();
+    mocks.requireAuthenticatedAthenaUserWithCtx.mockReset();
+    mocks.requireAuthenticatedAthenaUserWithCtx.mockResolvedValue({
+      _id: "athena-user-1",
+    });
   });
 
   it("marks the catalog summary stale after category creation", async () => {
