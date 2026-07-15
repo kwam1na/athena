@@ -4205,7 +4205,7 @@ describe("ingestLocalEventsWithCtx", () => {
 });
 
 describe("projection totality for data-shaped failures (U3)", () => {
-  it("turns a post-write mapping collision into a zero-write conflict instead of wedging the batch", async () => {
+  it("turns a reused-local-id sale into a zero-write conflict instead of wedging the batch", async () => {
     const repository = createFakeSyncRepository();
     const service = createLocalSyncIngestionService({
       repository,
@@ -4215,10 +4215,12 @@ describe("projection totality for data-shaped failures (U3)", () => {
 
     const collidingEvent = buildSaleCompletedEvent({ sequence: 2 });
     // A distinct sale (own transaction id, own pos session) that reuses an
-    // earlier sale's local receipt number. The receipt mapping is created
-    // AFTER the sale session + transaction rows in projectSaleCompleted, so
-    // before this fix the projector wrote those rows and then threw on the
-    // mapping collision — aborting the whole mutation and wedging the stream.
+    // earlier sale's local receipt number. validateSaleLocalIds intercepts the
+    // receipt-localId collision BEFORE the first ctx.db write and returns a
+    // conflict, so the poison event never reaches persistSaleSession/Record.
+    // The fake's createMapping faithfully throws on a genuine collision, so
+    // this proves the pre-write guard, not a post-write catch, keeps the sale
+    // total (zero committed rows) rather than wedging the batch.
     (collidingEvent.payload as { localReceiptNumber: string }).localReceiptNumber =
       "LR-001";
 

@@ -1276,6 +1276,7 @@ describe("resolveLocalSyncReview public mutation", () => {
         now: 4_242,
       }),
     );
+    assertConformsToExportedReturns(resolveLocalSyncReview, result);
     expect(result).toEqual({
       kind: "ok",
       data: { resolvedEventIds: ["event-review-1"], resolvedConflictCount: 1 },

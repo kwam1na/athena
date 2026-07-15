@@ -93,6 +93,26 @@ describe("resolveLocalSyncReview", () => {
     });
   });
 
+  it("reports only events whose open conflict was resolved in a mixed batch", async () => {
+    const repository = createFakeRepository([
+      { localEventId: "event-open", status: "needs_review" },
+      { localEventId: "event-already", status: "resolved", resolvedAt: 500 },
+    ]);
+
+    const result = await resolveLocalSyncReview(repository, {
+      storeId: STORE_ID,
+      terminalId: TERMINAL_ID,
+      localEventIds: ["event-open", "event-already", "event-no-conflict"],
+      resolvedByUserId: USER_ID,
+      now: 1_000,
+    });
+
+    // Only the event with an open conflict is reported as resolved; the
+    // already-resolved and the never-conflicted events are not misreported.
+    expect(result.resolvedEventIds).toEqual(["event-open"]);
+    expect(result.resolvedConflictCount).toBe(1);
+  });
+
   it("deduplicates event ids and drops blank ids before resolving", async () => {
     const repository = createFakeRepository([
       { localEventId: "event-1", status: "needs_review" },

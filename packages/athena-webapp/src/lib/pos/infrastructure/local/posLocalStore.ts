@@ -2862,6 +2862,11 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
                 uploadDeferred:
                   event.validationMetadata?.uploadDeferredUntil ===
                   "app-session-validated",
+                // Never purge a locally-cleared review the server has not yet
+                // confirmed — the local record is needed to converge next sync.
+                serverConfirmedResolution:
+                  typeof event.sync.localResolution?.serverConfirmedAt ===
+                  "number",
                 pastRetentionBoundary,
               });
 

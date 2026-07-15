@@ -62,7 +62,12 @@ export async function resolveLocalSyncReview(
         : {}),
     });
     resolvedConflictCount += resolvedCount;
-    resolvedEventIds.push(localEventId);
+    // Only report events that actually had an open conflict transitioned, so a
+    // caller reading resolvedEventIds is not misled by events that were already
+    // resolved or never had a conflict.
+    if (resolvedCount > 0) {
+      resolvedEventIds.push(localEventId);
+    }
   }
 
   return { resolvedEventIds, resolvedConflictCount };

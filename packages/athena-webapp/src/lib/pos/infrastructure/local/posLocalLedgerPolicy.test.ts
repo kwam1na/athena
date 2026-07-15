@@ -17,6 +17,7 @@ describe("assessPosLocalLedgerRetention", () => {
         requiresActivitySettlement: true,
         syncStatus: status,
         uploadDeferred: false,
+        serverConfirmedResolution: true,
         pastRetentionBoundary: true,
       }),
     ).toEqual({ eligible: false, reason });
@@ -31,6 +32,7 @@ describe("assessPosLocalLedgerRetention", () => {
         requiresActivitySettlement: true,
         syncStatus: "synced",
         uploadDeferred: false,
+        serverConfirmedResolution: true,
         pastRetentionBoundary: true,
       }),
     ).toEqual({ eligible: true, reason: "settled_unreferenced" });
@@ -45,6 +47,7 @@ describe("assessPosLocalLedgerRetention", () => {
         requiresActivitySettlement: true,
         syncStatus: "synced",
         uploadDeferred: false,
+        serverConfirmedResolution: true,
         pastRetentionBoundary: true,
       }),
     ).toEqual({ eligible: false, reason: "activity_unsettled" });
@@ -59,6 +62,7 @@ describe("assessPosLocalLedgerRetention", () => {
         requiresActivitySettlement: false,
         syncStatus: "synced",
         uploadDeferred: false,
+        serverConfirmedResolution: true,
         pastRetentionBoundary: true,
       }),
     ).toEqual({ eligible: true, reason: "settled_unreferenced" });
@@ -73,6 +77,7 @@ describe("assessPosLocalLedgerRetention", () => {
         requiresActivitySettlement: true,
         syncStatus: "synced",
         uploadDeferred: false,
+        serverConfirmedResolution: true,
         pastRetentionBoundary: false,
       }),
     ).toEqual({ eligible: false, reason: "within_active_boundary" });
@@ -87,9 +92,25 @@ describe("assessPosLocalLedgerRetention", () => {
         requiresActivitySettlement: true,
         syncStatus: "locally_resolved",
         uploadDeferred: false,
+        serverConfirmedResolution: true,
         pastRetentionBoundary: true,
       }),
     ).toEqual({ eligible: true, reason: "settled_unreferenced" });
+  });
+
+  it("never purges a locally-cleared review the server has not confirmed", () => {
+    expect(
+      assessPosLocalLedgerRetention({
+        activityStatus: "reported",
+        hasReceiptDependency: false,
+        hasWorkflowDependency: false,
+        requiresActivitySettlement: true,
+        syncStatus: "locally_resolved",
+        uploadDeferred: false,
+        serverConfirmedResolution: false,
+        pastRetentionBoundary: true,
+      }),
+    ).toEqual({ eligible: false, reason: "unsettled_sync" });
   });
 
   it("keeps protecting an unsettled event even when it is past the boundary", () => {
@@ -101,6 +122,7 @@ describe("assessPosLocalLedgerRetention", () => {
         requiresActivitySettlement: true,
         syncStatus: "pending",
         uploadDeferred: false,
+        serverConfirmedResolution: true,
         pastRetentionBoundary: true,
       }),
     ).toEqual({ eligible: false, reason: "unsettled_sync" });

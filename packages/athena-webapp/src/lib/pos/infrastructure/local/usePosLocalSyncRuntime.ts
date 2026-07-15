@@ -1965,6 +1965,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
     recoveryCommands,
     refreshTerminalStaffAuthority,
     requestRetry,
+    resolveLocalSyncReview,
     runtimeReadiness.terminalSeed,
     runtimeStatusSyncSecretHash,
     runtimeStatusTerminalId,

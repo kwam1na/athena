@@ -369,6 +369,36 @@ describe("evidence-gated ledger purge (U4)", () => {
     await expect(countEvents(adapter)).resolves.toBe(1);
   });
 
+  it("never purges a locally-cleared review the server has not confirmed", async () => {
+    const adapter = createMemoryPosLocalStorageAdapter();
+    const store = createPosLocalStore({ adapter, clock: () => 1_000 });
+    const appended = await store.appendEvent({
+      payload: {},
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      localRegisterSessionId: "prior-session",
+      initialSyncStatus: "needs_review",
+      type: "session.started",
+    });
+    if (!appended.ok) throw new Error("Expected append to succeed");
+    // Clear the review locally WITHOUT a server-confirmation stamp — the
+    // conflict may still be open server-side, so the event has not converged.
+    const cleared = await store.clearLocalReviewEvents([
+      appended.value.localEventId,
+    ]);
+    if (!cleared.ok) throw new Error("Expected clear to succeed");
+
+    const result = await store.purgeSettledLedgerEvents({
+      activeLocalRegisterSessionId: "active-session",
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("Expected purge to succeed");
+    expect(result.value).toMatchObject({ status: "completed", purgedCount: 0 });
+    // The unconfirmed local resolution survives so it can reconcile next sync.
+    await expect(countEvents(adapter)).resolves.toBe(1);
+  });
+
   it("never purges a synced event whose session still holds drawer authority", async () => {
     const adapter = createMemoryPosLocalStorageAdapter();
     const store = createPosLocalStore({ adapter, clock: () => 1_000 });

@@ -16,6 +16,14 @@ export type PosLocalLedgerRetentionFacts = {
   syncStatus: PosLocalSyncEventStatus;
   uploadDeferred: boolean;
   /**
+   * For a `locally_resolved` event, whether the server has acknowledged the
+   * resolution. An unconfirmed local resolution has NOT converged with the
+   * server (its conflict may still be open), so it must never be purged — the
+   * local record is required to reconcile on the next sync. Ignored for other
+   * statuses.
+   */
+  serverConfirmedResolution: boolean;
+  /**
    * Whether the event has aged past the active store-day / register-session
    * retention boundary. Events inside the active boundary are never purged even
    * when otherwise settled, so an in-progress shift keeps its full local log.
@@ -46,6 +54,15 @@ export function assessPosLocalLedgerRetention(
   if (
     facts.syncStatus !== "synced" &&
     facts.syncStatus !== "locally_resolved"
+  ) {
+    return { eligible: false, reason: "unsettled_sync" };
+  }
+  // A locally-cleared review that the server has not confirmed has not
+  // converged — its conflict may still be open server-side — so it is treated
+  // as unsettled and never purged, matching the sync-status surface.
+  if (
+    facts.syncStatus === "locally_resolved" &&
+    !facts.serverConfirmedResolution
   ) {
     return { eligible: false, reason: "unsettled_sync" };
   }
