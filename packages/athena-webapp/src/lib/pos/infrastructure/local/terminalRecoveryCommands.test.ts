@@ -1253,6 +1253,111 @@ describe("terminalRecoveryCommands", () => {
     });
   });
 
+  it("round-trips a local review clear to the server and stamps server confirmation", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+      createLocalId: () => "event-review-1",
+      clock: () => 4_000,
+    });
+    await store.appendEvent({
+      initialSyncStatus: "needs_review",
+      localRegisterSessionId: "register-local-1",
+      payload: { total: 1000 },
+      staffProfileId: "staff-1",
+      storeId: "store-1",
+      terminalId: "local-terminal-1",
+      type: "transaction.completed",
+    });
+    await store.markEventsNeedsReview(["event-review-1"], undefined, {
+      uploaded: true,
+    });
+    const resolveServerReview = vi
+      .fn()
+      .mockResolvedValue({ ok: true, serverConfirmedAt: 5_000 });
+
+    const result = await executeTerminalRecoveryCommand({
+      command: buildCommand({
+        commandContext: { localReviewEventIds: ["event-review-1"] },
+        type: "clear_local_review_items",
+      }),
+      resolveServerReview,
+      store,
+      storeId: "store-1",
+      terminalId: "terminal-cloud-1",
+      terminalSeed: seed,
+    });
+
+    expect(resolveServerReview).toHaveBeenCalledWith({
+      storeId: "store-1",
+      terminalId: "terminal-cloud-1",
+      localEventIds: ["event-review-1"],
+    });
+    expect(result.status).toBe("completed");
+    await expect(store.listEvents()).resolves.toMatchObject({
+      ok: true,
+      value: [
+        expect.objectContaining({
+          localEventId: "event-review-1",
+          sync: expect.objectContaining({
+            status: "locally_resolved",
+            localResolution: expect.objectContaining({
+              status: "local_review_cleared",
+              serverConfirmedAt: 5_000,
+            }),
+          }),
+        }),
+      ],
+    });
+  });
+
+  it("keeps events needs_review when the server does not acknowledge the resolution", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+      createLocalId: () => "event-review-1",
+      clock: () => 4_000,
+    });
+    await store.appendEvent({
+      initialSyncStatus: "needs_review",
+      localRegisterSessionId: "register-local-1",
+      payload: { total: 1000 },
+      staffProfileId: "staff-1",
+      storeId: "store-1",
+      terminalId: "local-terminal-1",
+      type: "transaction.completed",
+    });
+    await store.markEventsNeedsReview(["event-review-1"], undefined, {
+      uploaded: true,
+    });
+    const resolveServerReview = vi
+      .fn()
+      .mockResolvedValue({ ok: false, message: "offline" });
+
+    const result = await executeTerminalRecoveryCommand({
+      command: buildCommand({
+        commandContext: { localReviewEventIds: ["event-review-1"] },
+        type: "clear_local_review_items",
+      }),
+      resolveServerReview,
+      store,
+      storeId: "store-1",
+      terminalId: "terminal-cloud-1",
+      terminalSeed: seed,
+    });
+
+    expect(result.status).toBe("failed");
+    expect(result.reason).toBe("server_resolution_unavailable");
+    // The event must not be falsely settled while the server conflict is open.
+    await expect(store.listEvents()).resolves.toMatchObject({
+      ok: true,
+      value: [
+        expect.objectContaining({
+          localEventId: "event-review-1",
+          sync: expect.objectContaining({ status: "needs_review" }),
+        }),
+      ],
+    });
+  });
+
   it("fails local review clear commands without explicit ids", async () => {
     const store = createPosLocalStore({
       adapter: createMemoryPosLocalStorageAdapter(),

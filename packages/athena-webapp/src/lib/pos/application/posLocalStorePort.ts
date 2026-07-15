@@ -249,7 +249,10 @@ export interface PosLocalEventPort {
   }): Promise<PosLocalStoreResult<number>>;
   clearLocalReviewEvents(
     eventIds: string[],
-    clearOptions?: { reason?: PosLocalReviewResolutionReason },
+    clearOptions?: {
+      reason?: PosLocalReviewResolutionReason;
+      serverConfirmedAt?: number;
+    },
   ): Promise<PosLocalStoreResult<PosLocalEventRecord[]>>;
   /**
    * Evidence-gated selective purge of settled, unreferenced, past-boundary

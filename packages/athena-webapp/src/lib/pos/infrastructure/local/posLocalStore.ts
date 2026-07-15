@@ -2727,7 +2727,10 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
 
     async clearLocalReviewEvents(
       eventIds: string[],
-      clearOptions?: { reason?: PosLocalReviewResolutionReason },
+      clearOptions?: {
+        reason?: PosLocalReviewResolutionReason;
+        serverConfirmedAt?: number;
+      },
     ): Promise<PosLocalStoreResult<PosLocalEventRecord[]>> {
       try {
         const value = await options.adapter.transaction(
@@ -2751,6 +2754,11 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
                     reason: clearOptions?.reason ?? "terminal_recovery_command",
                     resolvedAt,
                     status: "local_review_cleared" as const,
+                    // Only stamped once the server has acknowledged the
+                    // resolution, so an un-round-tripped clear stays unconverged.
+                    ...(typeof clearOptions?.serverConfirmedAt === "number"
+                      ? { serverConfirmedAt: clearOptions.serverConfirmedAt }
+                      : {}),
                   },
                   status: "locally_resolved" as const,
                 },

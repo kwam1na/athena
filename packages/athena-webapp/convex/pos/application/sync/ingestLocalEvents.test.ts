@@ -5196,6 +5196,7 @@ function createFakeSyncRepository(
       return conflict;
     },
     async resolveConflictsForEvent(args) {
+      let resolvedCount = 0;
       for (const conflict of conflicts) {
         if (
           conflict.storeId === args.storeId &&
@@ -5205,8 +5206,16 @@ function createFakeSyncRepository(
         ) {
           conflict.status = "resolved";
           conflict.resolvedAt = args.resolvedAt;
+          if (args.resolvedByStaffProfileId) {
+            conflict.resolvedByStaffProfileId = args.resolvedByStaffProfileId;
+          }
+          if (args.resolvedByUserId) {
+            conflict.resolvedByUserId = args.resolvedByUserId;
+          }
+          resolvedCount += 1;
         }
       }
+      return resolvedCount;
     },
     async listConflictsForEvent(args) {
       return conflicts.filter(

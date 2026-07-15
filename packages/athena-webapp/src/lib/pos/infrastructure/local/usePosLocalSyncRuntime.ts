@@ -261,6 +261,9 @@ export function usePosLocalSyncRuntimeStatus(input: {
   const ingestRegisterSessionActivity = useMutation(
     api.pos.public.sync.ingestRegisterSessionActivity,
   );
+  const resolveLocalSyncReview = useMutation(
+    api.pos.public.sync.resolveLocalSyncReview,
+  );
   const reportTerminalRuntimeStatus = useMutation(
     api.pos.public.terminals.reportTerminalRuntimeStatus,
   );
@@ -1755,6 +1758,29 @@ export function usePosLocalSyncRuntimeStatus(input: {
           command: claimResult.data,
           appUpdateCoordinator,
           onRetrySync: requestRetry,
+          resolveServerReview: async ({
+            storeId: reviewStoreId,
+            terminalId: reviewTerminalId,
+            localEventIds,
+          }) => {
+            try {
+              const response = await resolveLocalSyncReview({
+                storeId: reviewStoreId as Id<"store">,
+                terminalId: reviewTerminalId as Id<"posTerminal">,
+                localEventIds,
+              });
+              if (response.kind === "ok") {
+                return { ok: true, serverConfirmedAt: Date.now() };
+              }
+              return { ok: false, message: response.error.message };
+            } catch (error) {
+              return {
+                ok: false,
+                message:
+                  error instanceof Error ? error.message : String(error),
+              };
+            }
+          },
           refreshStaffAuthority: async ({ storeId, terminalId }) => {
             if (typeof store.replaceStaffAuthoritySnapshot !== "function") {
               throw new Error("Local staff authority storage is unavailable.");
