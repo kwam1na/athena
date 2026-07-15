@@ -794,10 +794,12 @@ type RepricingLine = {
   clientUnitPrice: number;
   provisionalImportedPrice?: number;
   displayName?: string;
-  // Lines whose price is not governed by trusted catalog authority (a
-  // pending-checkout item awaiting its own review workflow) carry an
-  // operator-entered price with validated provenance and are recorded as-is,
-  // exactly as the offline sale path — which never sees them — implies.
+  // Lines with no trusted catalog basis — an UNRESOLVED pending-checkout item
+  // (pending_review/flagged) awaiting its own review workflow — carry an
+  // operator-entered price with validated provenance and are recorded as-is.
+  // Lines that resolve to a trusted catalog SKU (linked_to_catalog) are NOT
+  // exempt: they must be re-priced against the approved SKU, matching the offline
+  // authoritative path which also re-prices resolved pending lines.
   exemptFromReprice?: boolean;
 };
 
@@ -2975,9 +2977,17 @@ export async function createTransactionFromSessionHandler(
             ?.importedPrice
         : undefined,
       displayName: item.productName,
-      // A pending-checkout line carries an operator-entered price and its own
-      // review workflow; it is not governed by trusted catalog authority.
-      exemptFromReprice: Boolean(item.pendingCheckoutItemId),
+      // Only an UNRESOLVED pending-checkout line (pending_review/flagged) carries
+      // an operator-entered price with no catalog basis and is exempt. A
+      // linked_to_catalog line resolves to a trusted catalog SKU
+      // (`approvedProductSkuId === item.productSkuId`) and MUST be re-priced
+      // against it — the offline authoritative path re-prices these too, so
+      // exempting them would let a tampered terminal sell a real catalog item at
+      // an arbitrary price with no override or audit.
+      exemptFromReprice: Boolean(
+        item.pendingCheckoutItemId &&
+          !linkedPendingTrustedItemIds.has(item.pendingCheckoutItemId),
+      ),
     })),
   });
   if (repricing.kind === "approval_required") {

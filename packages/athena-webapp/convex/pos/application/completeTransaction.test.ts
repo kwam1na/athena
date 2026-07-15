@@ -3046,11 +3046,14 @@ describe("completeTransaction trace ordering", () => {
         image: undefined,
       },
     ] as never);
+    // Linked_to_catalog lines resolve to a trusted catalog SKU and are re-priced
+    // (U7 + security review); the catalog basis matches the line price here, so a
+    // legitimate linked sale completes without an override.
     vi.mocked(getProductSkuById).mockResolvedValue({
       _id: "sku-1",
       images: [],
       inventoryCount: 10,
-      price: 10,
+      price: 15,
       productId: "product-1",
       quantityAvailable: 10,
       sku: "SKU-1",
@@ -4978,6 +4981,85 @@ describe("completeTransaction re-pricing (U7)", () => {
         registerSessionId: "register-1" as Id<"registerSession">,
       },
     );
+
+    expect(result.kind).toBe("approval_required");
+    expect(createPosTransaction).not.toHaveBeenCalled();
+  });
+
+  it("re-prices a linked_to_catalog pending line and hard-rejects a tampered price (security regression)", async () => {
+    // A linked_to_catalog line resolves to a trusted catalog SKU, so it must NOT
+    // be exempt from re-pricing. Selling it above the catalog basis without a
+    // manager proof must be rejected (previously it bypassed U7 entirely).
+    const linkedPendingCheckoutItem = {
+      _id: "pending-item-1",
+      approvedProductId: "product-1",
+      approvedProductSkuId: "sku-1",
+      storeId: "store-1",
+      status: "linked_to_catalog",
+      provisionalProductId: "product-pending-1",
+      provisionalProductSkuId: "sku-pending-1",
+    };
+    const ctx = {
+      db: {
+        get: vi.fn(async (tableName: string, id: string) =>
+          tableName === "posPendingCheckoutItem" && id === "pending-item-1"
+            ? linkedPendingCheckoutItem
+            : null,
+        ),
+        patch: vi.fn(),
+      },
+      runMutation: vi.fn(),
+    } as never;
+    vi.mocked(getStoreById).mockResolvedValue({
+      _id: "store-1",
+      organizationId: "org-1",
+    } as never);
+    vi.mocked(getPosSessionById).mockResolvedValue({
+      _id: "session-1",
+      storeId: "store-1",
+      staffProfileId: "staff-1",
+      registerNumber: "1",
+      registerSessionId: "register-1",
+      terminalId: "terminal-1",
+    } as never);
+    vi.mocked(getRegisterSessionById).mockResolvedValue({
+      _id: "register-1",
+      storeId: "store-1",
+      status: "open",
+      terminalId: "terminal-1",
+      registerNumber: "1",
+    } as never);
+    vi.mocked(getPosTransactionByIdempotencyKey).mockResolvedValue(null as never);
+    vi.mocked(listSessionItems).mockResolvedValue([
+      {
+        _id: "session-item-1",
+        sessionId: "session-1",
+        storeId: "store-1",
+        productId: "product-1",
+        productSkuId: "sku-1",
+        pendingCheckoutItemId: "pending-item-1",
+        productSku: "SKU-1",
+        productName: "Trusted bundle",
+        price: 25, // tampered: catalog basis is 15
+        quantity: 1,
+      },
+    ] as never);
+    vi.mocked(getProductSkuById).mockResolvedValue({
+      _id: "sku-1",
+      images: [],
+      inventoryCount: 10,
+      price: 15,
+      productId: "product-1",
+      quantityAvailable: 10,
+      sku: "SKU-1",
+    } as never);
+
+    const result = await createTransactionFromSessionHandler(ctx, {
+      sessionId: "session-1" as Id<"posSession">,
+      staffProfileId: "staff-1" as Id<"staffProfile">,
+      payments: [{ method: "cash", amount: 25, timestamp: 1 }],
+      registerSessionId: "register-1" as Id<"registerSession">,
+    });
 
     expect(result.kind).toBe("approval_required");
     expect(createPosTransaction).not.toHaveBeenCalled();
