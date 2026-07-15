@@ -13,7 +13,7 @@ applies_when:
   - "Adding an idempotency guard to a mutation that mints a new record"
   - "Tightening a schema money validator or migrating money to integer minor units"
 tags: [pos, trust-boundary, idempotency, re-pricing, pesewas, clock-skew, migration]
-delivery_diff_fingerprint: b0c7016954feb4fb09535f1e5bbcc0e6cf18db16111443983706c0666304b8ba
+delivery_diff_fingerprint: 2d92db5b88fddb861a65ea51dffdf8afc502ca87f1c055ed896e1245d0b8698b
 ---
 
 # POS client→server trust-boundary hardening: server derives, client proposes
