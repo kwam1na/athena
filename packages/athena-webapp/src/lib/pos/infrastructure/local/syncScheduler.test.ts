@@ -371,8 +371,59 @@ describe("syncScheduler", () => {
       expect.objectContaining({
         lastFailure: "Earlier POS history must sync before this event.",
         backoffUntil: 30_000,
+        heldWithoutProgress: true,
       }),
     );
+  });
+
+  it("escalates a held gap with no forward progress instead of looping silently", async () => {
+    const onHeldWithoutProgress = vi.fn();
+    const scheduler = createPosLocalSyncScheduler({
+      loadPendingEvents: vi.fn().mockResolvedValue([baseEvent({})]),
+      uploadBatch: vi.fn().mockResolvedValue({
+        heldEventIds: ["event-held"],
+        syncedEventIds: [],
+      }),
+      markSynced: vi.fn().mockResolvedValue(undefined),
+      isOnline: () => true,
+      now: () => 0,
+      baseBackoffMs: 30_000,
+      onHeldWithoutProgress,
+    });
+
+    scheduler.trigger("route-entry");
+    await vi.runAllTimersAsync();
+
+    expect(onHeldWithoutProgress).toHaveBeenCalledWith(["event-held"], {
+      consecutiveCount: 1,
+    });
+    expect(scheduler.getStatus().heldWithoutProgress).toBe(true);
+  });
+
+  it("does not escalate a held gap when the same drain made forward progress", async () => {
+    const onHeldWithoutProgress = vi.fn();
+    const scheduler = createPosLocalSyncScheduler({
+      loadPendingEvents: vi
+        .fn()
+        .mockResolvedValue([
+          baseEvent({ id: "event-1", sequence: 1 }),
+          baseEvent({ id: "event-held", sequence: 2 }),
+        ]),
+      uploadBatch: vi.fn().mockResolvedValue({
+        heldEventIds: ["event-held"],
+        syncedEventIds: ["event-1"],
+      }),
+      markSynced: vi.fn().mockResolvedValue(undefined),
+      isOnline: () => true,
+      now: () => 0,
+      baseBackoffMs: 30_000,
+      onHeldWithoutProgress,
+    });
+
+    scheduler.trigger("route-entry");
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(onHeldWithoutProgress).not.toHaveBeenCalled();
   });
 
   it("honors backoff for foreground interval retries", async () => {

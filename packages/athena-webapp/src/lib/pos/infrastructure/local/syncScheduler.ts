@@ -26,6 +26,13 @@ export interface PosLocalSyncStatus {
   failureCount: number;
   lastFailure: string | null;
   lastTrigger: PosLocalSyncTrigger | null;
+  /**
+   * A batch was entirely `held` behind an unadvanced cursor with no forward
+   * progress this drain. Distinguishes a stuck-precursor gap (which needs
+   * escalation) from an ordinary transient failure, so it is never a silent
+   * indefinite wedge.
+   */
+  heldWithoutProgress: boolean;
 }
 
 export interface PosLocalSyncScheduler {
@@ -70,6 +77,16 @@ export interface CreatePosLocalSyncSchedulerOptions {
   setIntervalFn?: typeof setInterval;
   clearIntervalFn?: typeof clearInterval;
   onStatusChange?(status: PosLocalSyncStatus): void;
+  /**
+   * Invoked when a drain makes no forward progress because every event in the
+   * batch is `held` behind an unadvanced cursor (typically a stuck
+   * `needs_review` precursor). Lets the runtime escalate — e.g. drive a
+   * review-inclusive drain — instead of looping the same held gap silently.
+   */
+  onHeldWithoutProgress?(
+    heldEventIds: string[],
+    context: { consecutiveCount: number },
+  ): void;
 }
 
 export function createPosLocalSyncScheduler(
@@ -96,6 +113,8 @@ export function createPosLocalSyncScheduler(
   let failureCount = 0;
   let lastFailure: string | null = null;
   let lastTrigger: PosLocalSyncTrigger | null = null;
+  let heldWithoutProgress = false;
+  let heldWithoutProgressCount = 0;
 
   const status = (): PosLocalSyncStatus => ({
     running,
@@ -104,6 +123,7 @@ export function createPosLocalSyncScheduler(
     failureCount,
     lastFailure,
     lastTrigger,
+    heldWithoutProgress,
   });
   const notifyStatusChange = () => {
     options.onStatusChange?.(status());
@@ -194,9 +214,22 @@ export function createPosLocalSyncScheduler(
             (result.reviewEventIds?.length ?? 0) > 0 ||
             (result.rejectedEventIds?.length ?? 0) > 0
           ) {
+            // Forward progress was made, so the held gap is expected to close
+            // on the immediate rerun — not a stuck-precursor wedge.
+            heldWithoutProgress = false;
+            heldWithoutProgressCount = 0;
             rerunRequested = true;
             return;
           }
+          // No forward progress: the batch is entirely held behind an
+          // unadvanced cursor (typically a stuck needs_review precursor).
+          // Surface it as an escalation signal so it is never a silent
+          // indefinite wedge, then back off as before.
+          heldWithoutProgress = true;
+          heldWithoutProgressCount += 1;
+          options.onHeldWithoutProgress?.([...result.heldEventIds], {
+            consecutiveCount: heldWithoutProgressCount,
+          });
           throw new Error("Earlier POS history must sync before this event.");
         }
       }
@@ -204,6 +237,8 @@ export function createPosLocalSyncScheduler(
       lastFailure = null;
       backoffUntil = null;
       failureCount = 0;
+      heldWithoutProgress = false;
+      heldWithoutProgressCount = 0;
       notifyStatusChange();
     } catch (error) {
       failureCount += 1;

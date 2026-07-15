@@ -497,7 +497,9 @@ function RegisterSyncStatusChip({
     return null;
   }
 
-  const tone = isOperableReview ? "success" : syncStatus.tone;
+  // An outstanding review is surfaced truthfully as an attention state even
+  // while the register stays operable — it is never masked as success "ready".
+  const tone = isOperableReview ? "warning" : syncStatus.tone;
   const className =
     tone === "success"
       ? "text-success"
@@ -507,12 +509,8 @@ function RegisterSyncStatusChip({
           ? "text-warning"
           : "text-muted-foreground";
   const canRetry =
-    !isOperableReview &&
-    syncStatus.status !== "synced" &&
-    syncStatus.onRetrySync;
-  const label = getRegisterSyncStatusChipLabel(syncStatus.status, {
-    isRegisterOperable,
-  });
+    syncStatus.status !== "synced" && Boolean(syncStatus.onRetrySync);
+  const label = getRegisterSyncStatusChipLabel(syncStatus.status);
   const actionLabel =
     syncStatus.status === "needs_review"
       ? "Check POS sync review"
@@ -549,7 +547,6 @@ function RegisterSyncStatusChip({
 
 function getRegisterSyncStatusChipLabel(
   status: NonNullable<RegisterViewModel["syncStatus"]>["status"],
-  options: { isRegisterOperable?: boolean } = {},
 ) {
   switch (status) {
     case "synced":
@@ -557,9 +554,8 @@ function getRegisterSyncStatusChipLabel(
     case "syncing":
       return "syncing";
     case "needs_review":
-      if (options.isRegisterOperable) {
-        return "ready";
-      }
+      // Operable or not, an outstanding review reads as review-needed — never
+      // as success "ready", which would hide sales still awaiting reconciliation.
       return "needs review";
     case "locally_closed_pending_sync":
       return "locally closed";

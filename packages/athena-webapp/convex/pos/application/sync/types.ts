@@ -821,7 +821,9 @@ export type LocalSyncIngestionRepository = {
     terminalId: Id<"posTerminal">;
     localEventId: string;
     resolvedAt: number;
-  }): Promise<void>;
+    resolvedByStaffProfileId?: Id<"staffProfile">;
+    resolvedByUserId?: Id<"athenaUser">;
+  }): Promise<number>;
   listMappingsForEvent(args: {
     storeId: Id<"store">;
     terminalId: Id<"posTerminal">;

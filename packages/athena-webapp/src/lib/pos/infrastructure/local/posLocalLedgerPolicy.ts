@@ -15,6 +15,20 @@ export type PosLocalLedgerRetentionFacts = {
   requiresActivitySettlement: boolean;
   syncStatus: PosLocalSyncEventStatus;
   uploadDeferred: boolean;
+  /**
+   * For a `locally_resolved` event, whether the server has acknowledged the
+   * resolution. An unconfirmed local resolution has NOT converged with the
+   * server (its conflict may still be open), so it must never be purged — the
+   * local record is required to reconcile on the next sync. Ignored for other
+   * statuses.
+   */
+  serverConfirmedResolution: boolean;
+  /**
+   * Whether the event has aged past the active store-day / register-session
+   * retention boundary. Events inside the active boundary are never purged even
+   * when otherwise settled, so an in-progress shift keeps its full local log.
+   */
+  pastRetentionBoundary: boolean;
 };
 
 export type PosLocalLedgerRetentionAssessment =
@@ -27,6 +41,7 @@ export type PosLocalLedgerRetentionAssessment =
         | "review_required"
         | "unsettled_sync"
         | "upload_deferred"
+        | "within_active_boundary"
         | "workflow_dependency";
     };
 
@@ -42,6 +57,15 @@ export function assessPosLocalLedgerRetention(
   ) {
     return { eligible: false, reason: "unsettled_sync" };
   }
+  // A locally-cleared review that the server has not confirmed has not
+  // converged — its conflict may still be open server-side — so it is treated
+  // as unsettled and never purged, matching the sync-status surface.
+  if (
+    facts.syncStatus === "locally_resolved" &&
+    !facts.serverConfirmedResolution
+  ) {
+    return { eligible: false, reason: "unsettled_sync" };
+  }
   if (facts.uploadDeferred)
     return { eligible: false, reason: "upload_deferred" };
   if (facts.requiresActivitySettlement && facts.activityStatus !== "reported") {
@@ -51,5 +75,7 @@ export function assessPosLocalLedgerRetention(
     return { eligible: false, reason: "workflow_dependency" };
   if (facts.hasReceiptDependency)
     return { eligible: false, reason: "receipt_dependency" };
+  if (!facts.pastRetentionBoundary)
+    return { eligible: false, reason: "within_active_boundary" };
   return { eligible: true, reason: "settled_unreferenced" };
 }
