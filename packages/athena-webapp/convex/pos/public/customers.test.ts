@@ -49,8 +49,15 @@ import {
   getCustomerById,
   getCustomerTransactions,
   findByStoreFrontUser,
+  findPotentialMatches,
+  linkToGuest,
+  linkToStoreFrontUser,
+  resolveGuestMatch,
+  resolvePosCustomerSelection,
+  resolveStoreFrontUserMatch,
   searchCustomers,
   updateCustomer,
+  updateCustomerStats,
 } from "./customers";
 
 function getHandler(definition: unknown) {
@@ -252,4 +259,71 @@ describe("pos public customers authorization", () => {
     ).rejects.toThrow("You cannot view this customer.");
     expect(mocks.getCustomerTransactions).not.toHaveBeenCalled();
   });
+
+  // Every endpoint wires its own guard one-liner, so each guard site needs its
+  // own cross-org denial regression — shared-helper coverage is not enough.
+  const denialCases: Array<{
+    name: string;
+    handler: unknown;
+    args: Record<string, unknown>;
+    delegate: () => ReturnType<typeof vi.fn>;
+  }> = [
+    {
+      name: "updateCustomerStats",
+      handler: updateCustomerStats,
+      args: { customerId: "customer-1", transactionAmount: 100 },
+      delegate: () => mocks.updateCustomerStats,
+    },
+    {
+      name: "resolvePosCustomerSelection",
+      handler: resolvePosCustomerSelection,
+      args: { customerId: "customer-1" },
+      delegate: () => mocks.resolvePosCustomerSelection,
+    },
+    {
+      name: "linkToStoreFrontUser",
+      handler: linkToStoreFrontUser,
+      args: { posCustomerId: "customer-1", storeFrontUserId: "sf-user-1" },
+      delegate: () => mocks.linkToStoreFrontUser,
+    },
+    {
+      name: "linkToGuest",
+      handler: linkToGuest,
+      args: { posCustomerId: "customer-1", guestId: "guest-1" },
+      delegate: () => mocks.linkToGuest,
+    },
+    {
+      name: "resolveStoreFrontUserMatch",
+      handler: resolveStoreFrontUserMatch,
+      args: { storeId: "store-1", storeFrontUserId: "sf-user-1" },
+      delegate: () => mocks.resolveStoreFrontUserMatch,
+    },
+    {
+      name: "resolveGuestMatch",
+      handler: resolveGuestMatch,
+      args: { storeId: "store-1", guestId: "guest-1" },
+      delegate: () => mocks.resolveGuestMatch,
+    },
+    {
+      name: "findPotentialMatches",
+      handler: findPotentialMatches,
+      args: { storeId: "store-1", email: "a@b.com" },
+      delegate: () => mocks.findPotentialMatches,
+    },
+  ];
+
+  it.each(denialCases)(
+    "denies $name across org boundaries and never runs the delegate",
+    async ({ handler, args, delegate }) => {
+      mocks.requireOrganizationMemberRoleWithCtx.mockRejectedValue(
+        new Error("cross-org denied"),
+      );
+      const ctx = buildCtx();
+
+      await expect(getHandler(handler)(ctx as never, args)).rejects.toThrow(
+        "cross-org denied",
+      );
+      expect(delegate()).not.toHaveBeenCalled();
+    },
+  );
 });
