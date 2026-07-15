@@ -29,6 +29,7 @@ import {
   getPosSessionById,
   getRegisterSessionById,
   getProductSkuById,
+  getPosTransactionByIdempotencyKey,
   getStoreById,
   listTransactionAdjustments,
   listSessionItems,
@@ -84,6 +85,7 @@ vi.mock("../infrastructure/repositories/transactionRepository", () => ({
   getPosSessionById: vi.fn(),
   getRegisterSessionById: vi.fn(),
   getPosTransactionById: vi.fn(),
+  getPosTransactionByIdempotencyKey: vi.fn(),
   getProductSkuById: vi.fn(),
   getStoreById: vi.fn(),
   listTransactionAdjustments: vi.fn(),
@@ -4538,5 +4540,156 @@ describe("completeTransaction trace ordering", () => {
       }),
     );
     expect(patchPosTransaction).not.toHaveBeenCalled();
+  });
+});
+
+describe("completeTransaction idempotency (U8)", () => {
+  const directArgs = {
+    storeId: "store-1" as Id<"store">,
+    items: [
+      {
+        skuId: "sku-1" as Id<"productSku">,
+        quantity: 1,
+        price: 10,
+        name: "Sneaker",
+        sku: "SKU-1",
+      },
+    ],
+    payments: [{ method: "cash", amount: 10, timestamp: 1 }],
+    subtotal: 10,
+    tax: 0,
+    total: 10,
+    registerNumber: "1",
+    terminalId: "terminal-1" as Id<"posTerminal">,
+    registerSessionId: "register-1" as Id<"registerSession">,
+  };
+
+  function seedDirectHappyPath() {
+    vi.mocked(getStoreById).mockResolvedValue({
+      _id: "store-1",
+      organizationId: "org-1",
+    } as never);
+    vi.mocked(getProductSkuById).mockResolvedValue({
+      _id: "sku-1",
+      images: [],
+      inventoryCount: 10,
+      productId: "product-1",
+      quantityAvailable: 10,
+      sku: "SKU-1",
+    } as never);
+    vi.mocked(createPosTransaction).mockResolvedValue("txn-1" as never);
+    vi.mocked(recordRetailSalePaymentAllocations).mockResolvedValue(true);
+    vi.mocked(createPosTransactionItem).mockResolvedValue("txn-item-1" as never);
+    vi.mocked(applyCommerceInventoryEffectWithCtx).mockResolvedValue(
+      undefined as never,
+    );
+  }
+
+  it("namespaces the client token and threads it to the mint and drawer cash on a fresh direct sale", async () => {
+    const runMutation = vi.fn().mockResolvedValue(undefined);
+    const ctx = { runMutation } as never;
+    seedDirectHappyPath();
+    vi.mocked(getPosTransactionByIdempotencyKey).mockResolvedValue(null as never);
+
+    const result = await completeTransaction(ctx, {
+      ...directArgs,
+      idempotencyKey: "client-token-1",
+    });
+
+    expect(result.kind).toBe("ok");
+    // Dedup lookup uses the namespaced token so it cannot collide with the
+    // offline `localTransactionId` mapping namespace.
+    expect(getPosTransactionByIdempotencyKey).toHaveBeenCalledWith(
+      expect.anything(),
+      { storeId: "store-1", idempotencyKey: "online:client-token-1" },
+    );
+    // The mint persists the token so later retries can find this sale.
+    expect(createPosTransaction).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ idempotencyKey: "online:client-token-1" }),
+    );
+    // The drawer-cash increment is guarded by the same token.
+    expect(runMutation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        adjustmentKind: "sale",
+        idempotencyKey: "online:client-token-1",
+      }),
+    );
+  });
+
+  it("returns the original direct sale on replay without minting or re-recording cash", async () => {
+    const runMutation = vi.fn().mockResolvedValue(undefined);
+    const ctx = { runMutation } as never;
+    vi.mocked(getPosTransactionByIdempotencyKey).mockResolvedValue({
+      _id: "txn-existing",
+      transactionNumber: "POS-EXISTING",
+    } as never);
+    vi.mocked(listTransactionItems).mockResolvedValue([
+      { _id: "txn-item-existing" },
+    ] as never);
+
+    const result = await completeTransaction(ctx, {
+      ...directArgs,
+      idempotencyKey: "client-token-1",
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        kind: "ok",
+        data: {
+          transactionId: "txn-existing",
+          transactionNumber: "POS-EXISTING",
+          transactionItems: ["txn-item-existing"],
+        },
+      }),
+    );
+    // No second sale is minted and no drawer cash is recorded on replay.
+    expect(createPosTransaction).not.toHaveBeenCalled();
+    expect(runMutation).not.toHaveBeenCalled();
+    expect(applyCommerceInventoryEffectWithCtx).not.toHaveBeenCalled();
+  });
+
+  it("returns the original session sale on replay without minting a duplicate", async () => {
+    const runMutation = vi.fn().mockResolvedValue(undefined);
+    const ctx = { runMutation } as never;
+    vi.mocked(getPosSessionById).mockResolvedValue({
+      _id: "session-1",
+      storeId: "store-1",
+      staffProfileId: "staff-1",
+    } as never);
+    vi.mocked(getPosTransactionByIdempotencyKey).mockResolvedValue({
+      _id: "txn-existing",
+      transactionNumber: "POS-EXISTING",
+    } as never);
+    vi.mocked(listTransactionItems).mockResolvedValue([
+      { _id: "txn-item-existing" },
+    ] as never);
+
+    const result = await createTransactionFromSessionHandler(ctx, {
+      sessionId: "session-1" as Id<"posSession">,
+      staffProfileId: "staff-1" as Id<"staffProfile">,
+      payments: [{ method: "cash", amount: 10, timestamp: 1 }],
+      registerSessionId: "register-1" as Id<"registerSession">,
+      idempotencyKey: "client-token-1",
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        kind: "ok",
+        data: {
+          transactionId: "txn-existing",
+          transactionNumber: "POS-EXISTING",
+          transactionItems: ["txn-item-existing"],
+        },
+      }),
+    );
+    expect(getPosTransactionByIdempotencyKey).toHaveBeenCalledWith(
+      expect.anything(),
+      { storeId: "store-1", idempotencyKey: "online:client-token-1" },
+    );
+    expect(createPosTransaction).not.toHaveBeenCalled();
+    expect(listSessionItems).not.toHaveBeenCalled();
+    expect(runMutation).not.toHaveBeenCalled();
   });
 });

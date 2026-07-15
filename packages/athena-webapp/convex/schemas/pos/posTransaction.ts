@@ -3,6 +3,12 @@ import { v } from "convex/values";
 export const posTransactionSchema = v.object({
   transactionNumber: v.string(),
   workflowTraceId: v.optional(v.string()),
+  // Client-stable idempotency token for the online completion paths. Dedups the
+  // transaction mint (see U8) so a retried completeTransaction /
+  // createTransactionFromSession returns the original sale instead of minting a
+  // second one. Namespaced with an "online:" prefix so it cannot collide with the
+  // offline sync `localTransactionId` mapping namespace.
+  idempotencyKey: v.optional(v.string()),
   storeId: v.id("store"),
   sessionId: v.optional(v.id("posSession")), // Link to the session that created this transaction (if created from session)
   registerSessionId: v.optional(v.id("registerSession")),

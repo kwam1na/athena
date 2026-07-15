@@ -838,6 +838,7 @@ const schema = defineSchema({
     ]),
   posTransaction: defineTable(posTransactionSchema)
     .index("by_storeId", ["storeId"])
+    .index("by_storeId_idempotencyKey", ["storeId", "idempotencyKey"])
     .index("by_staffProfileId", ["staffProfileId"])
     .index("by_storeId_status_completedAt", [
       "storeId",

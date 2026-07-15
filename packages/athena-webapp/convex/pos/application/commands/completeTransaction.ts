@@ -26,6 +26,7 @@ import {
   getPosSessionById,
   getRegisterSessionById,
   getPosTransactionById,
+  getPosTransactionByIdempotencyKey,
   getProductSkuById,
   getStoreById,
   listTransactionAdjustments,
@@ -864,6 +865,7 @@ export async function recordRegisterSessionSale(
   ctx: MutationCtx,
   args: {
     changeGiven?: number;
+    idempotencyKey?: string;
     payments: PosPaymentInput[];
     registerSessionId: Id<"registerSession">;
     registerNumber?: string;
@@ -879,6 +881,10 @@ export async function recordRegisterSessionSale(
     {
       adjustmentKind: "sale",
       changeGiven: args.changeGiven,
+      // U8: guard the drawer-cash increment with the same client-stable token so a
+      // retried sale cannot double-count `expectedCash`, exactly as the void path
+      // already does via `recordedTransactionKeys`.
+      idempotencyKey: args.idempotencyKey,
       payments: args.payments,
       paymentCount: args.payments.length,
       paymentMethodLabels: paymentMethodLabels(args.payments),
@@ -891,6 +897,48 @@ export async function recordRegisterSessionSale(
       transactionNumber: args.transactionNumber,
     },
   );
+}
+
+/**
+ * U8: namespace a client-supplied idempotency token for the online completion
+ * paths. The `online:` prefix guarantees the token cannot collide with the
+ * offline sync `localTransactionId` mapping namespace, so a sale can never be
+ * double-recorded across the online and offline rails.
+ */
+export function onlineCompletionIdempotencyKey(rawToken: string): string {
+  return rawToken.startsWith("online:") ? rawToken : `online:${rawToken}`;
+}
+
+/**
+ * U8: dedup the transaction mint. If a completed sale already exists for this
+ * store + idempotency token, return its identifiers (mirroring the offline
+ * `resolveExistingSaleProjection` replay behaviour) so a retried submission does
+ * not mint a second transaction, decrement stock again, or double the drawer cash.
+ */
+async function resolveExistingOnlineCompletion(
+  ctx: MutationCtx,
+  args: {
+    storeId: Id<"store">;
+    idempotencyKey: string;
+  },
+): Promise<{
+  transactionId: Id<"posTransaction">;
+  transactionNumber: string;
+  transactionItems: Array<Id<"posTransactionItem">>;
+} | null> {
+  const existing = await getPosTransactionByIdempotencyKey(ctx, {
+    storeId: args.storeId,
+    idempotencyKey: args.idempotencyKey,
+  });
+  if (!existing) {
+    return null;
+  }
+  const items = await listTransactionItems(ctx, existing._id);
+  return {
+    transactionId: existing._id,
+    transactionNumber: existing.transactionNumber,
+    transactionItems: items.map((item) => item._id),
+  };
 }
 
 async function recordRegisterSessionVoid(
@@ -986,6 +1034,7 @@ export async function completeTransaction(
     terminalId?: Id<"posTerminal">;
     staffProfileId?: Id<"staffProfile">;
     registerSessionId?: Id<"registerSession">;
+    idempotencyKey?: string;
   },
 ): Promise<
   CommandResult<{
@@ -994,6 +1043,18 @@ export async function completeTransaction(
     transactionItems: Array<Id<"posTransactionItem">>;
   }>
 > {
+  const idempotencyKey = args.idempotencyKey
+    ? onlineCompletionIdempotencyKey(args.idempotencyKey)
+    : undefined;
+  if (idempotencyKey) {
+    const existing = await resolveExistingOnlineCompletion(ctx, {
+      storeId: args.storeId,
+      idempotencyKey,
+    });
+    if (existing) {
+      return ok(existing);
+    }
+  }
   const canonicalTotals = calculateCanonicalTransactionTotals(args.items);
   if (
     !totalsMatch(
@@ -1158,6 +1219,7 @@ export async function completeTransaction(
 
   const transactionId = await createPosTransaction(ctx, {
     transactionNumber,
+    ...(idempotencyKey ? { idempotencyKey } : {}),
     storeId: args.storeId,
     sessionId: undefined,
     registerSessionId: args.registerSessionId,
@@ -1198,6 +1260,7 @@ export async function completeTransaction(
 
     await recordRegisterSessionSale(ctx, {
       changeGiven,
+      idempotencyKey,
       payments: args.payments,
       registerSessionId: args.registerSessionId,
       registerNumber: args.registerNumber,
@@ -2366,6 +2429,7 @@ export async function createTransactionFromSessionHandler(
     recordRegisterSale?: boolean;
     notes?: string;
     submittedTotals?: TransactionTotals;
+    idempotencyKey?: string;
   },
 ): Promise<
   CommandResult<{
@@ -2387,6 +2451,19 @@ export async function createTransactionFromSessionHandler(
       code: "precondition_failed",
       message: "This session is not associated with your cashier.",
     });
+  }
+
+  const idempotencyKey = args.idempotencyKey
+    ? onlineCompletionIdempotencyKey(args.idempotencyKey)
+    : undefined;
+  if (idempotencyKey) {
+    const existing = await resolveExistingOnlineCompletion(ctx, {
+      storeId: session.storeId,
+      idempotencyKey,
+    });
+    if (existing) {
+      return ok(existing);
+    }
   }
 
   const items = await listSessionItems(ctx, args.sessionId);
@@ -2590,6 +2667,7 @@ export async function createTransactionFromSessionHandler(
 
   const transactionId = await createPosTransaction(ctx, {
     transactionNumber,
+    ...(idempotencyKey ? { idempotencyKey } : {}),
     storeId: session.storeId,
     sessionId: args.sessionId,
     registerSessionId: resolvedRegisterSessionId.data,
@@ -2622,6 +2700,7 @@ export async function createTransactionFromSessionHandler(
   if (args.recordRegisterSale !== false) {
     await recordRegisterSessionSale(ctx, {
       changeGiven,
+      idempotencyKey,
       payments: args.payments,
       registerSessionId: resolvedRegisterSessionId.data,
       registerNumber: session.registerNumber,

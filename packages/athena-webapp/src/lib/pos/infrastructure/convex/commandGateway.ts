@@ -52,6 +52,11 @@ export function useConvexCommandGateway(): PosCommandGateway {
         subtotal: input.subtotal,
         tax: input.tax,
         total: input.total,
+        // U8: a session completes into exactly one sale, so the session id is a
+        // stable, client-supplied idempotency token — a retried completion returns
+        // the original transaction instead of minting a duplicate and double-
+        // charging the drawer.
+        idempotencyKey: `session:${input.sessionId}`,
       });
     },
   };

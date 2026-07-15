@@ -441,6 +441,7 @@ export const completeTransaction = mutation({
     terminalId: v.optional(v.id("posTerminal")),
     staffProfileId: v.optional(v.id("staffProfile")),
     registerSessionId: v.optional(v.id("registerSession")),
+    idempotencyKey: v.optional(v.string()),
   },
   returns: commandResultValidator(
     v.object({
@@ -872,6 +873,7 @@ export const createTransactionFromSession = mutation({
     payments: v.array(paymentValidator),
     registerSessionId: v.optional(v.id("registerSession")),
     notes: v.optional(v.string()),
+    idempotencyKey: v.optional(v.string()),
   },
   returns: commandResultValidator(
     v.object({

@@ -100,6 +100,27 @@ export async function getPosSessionById(
   return ctx.db.get("posSession", sessionId);
 }
 
+/**
+ * Look up a completed sale by its client-stable idempotency token (U8). Used to
+ * dedup the transaction mint on both online completion paths before a new
+ * transaction number is generated, so a retried submission returns the original
+ * sale instead of minting a duplicate.
+ */
+export async function getPosTransactionByIdempotencyKey(
+  ctx: PosTransactionReadCtx,
+  args: {
+    storeId: Id<"store">;
+    idempotencyKey: string;
+  },
+) {
+  return ctx.db
+    .query("posTransaction")
+    .withIndex("by_storeId_idempotencyKey", (q) =>
+      q.eq("storeId", args.storeId).eq("idempotencyKey", args.idempotencyKey),
+    )
+    .first();
+}
+
 export async function getRegisterSessionById(
   ctx: PosTransactionReadCtx,
   registerSessionId: Id<"registerSession">,
