@@ -27,7 +27,7 @@ tags:
   - session-revocation
   - local-first
   - convex
-delivery_diff_fingerprint: c454b7bca33ac30975ada71d95782b2da771812a2eb8793cae9048368280d8ac
+delivery_diff_fingerprint: 84eaae9014420777886d59f5be0b563ed1a9cbdd14e01d72d9b82b46b9f23bfe
 ---
 
 # Athena store service principals separate identity from granted authority
