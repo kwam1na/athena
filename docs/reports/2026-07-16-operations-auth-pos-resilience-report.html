@@ -1,0 +1,920 @@
+<!doctype html>
+<html
+  lang="en"
+  data-athena-landed-change-report="v1"
+  data-athena-report-diff-fingerprint="e72ee0ef3ebbb3d517f0826cb45e249828eaef7bae4497ecc5b3b7ced726709f"
+  data-athena-report-base="origin/main"
+  data-athena-report-head="working-tree"
+>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Athena Operations, Login, and POS Resilience Batch</title>
+    <style>
+      :root {
+        --ink: #1f2933;
+        --muted: #596674;
+        --line: #d9e2ec;
+        --paper: #ffffff;
+        --soft: #f6f8fb;
+        --accent: #1d4ed8;
+        --accent-soft: #dbeafe;
+        --good: #166534;
+        --bad: #b91c1c;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--soft);
+        color: var(--ink);
+        font-family:
+          Inter,
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+        line-height: 1.55;
+      }
+      main {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 48px 24px 72px;
+      }
+      header {
+        border-bottom: 1px solid var(--line);
+        margin-bottom: 28px;
+        padding-bottom: 28px;
+      }
+      h1,
+      h2,
+      h3 {
+        line-height: 1.18;
+        letter-spacing: 0;
+      }
+      h1 {
+        font-size: 42px;
+        max-width: 880px;
+        margin: 0 0 16px;
+      }
+      h2 {
+        font-size: 28px;
+        margin: 0 0 16px;
+      }
+      p {
+        margin: 0 0 14px;
+      }
+      .lede {
+        color: var(--muted);
+        font-size: 18px;
+        max-width: 880px;
+      }
+      .meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 20px;
+      }
+      .pill {
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: var(--paper);
+        color: var(--muted);
+        font-size: 13px;
+        padding: 6px 10px;
+      }
+      .panel {
+        background: var(--paper);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        margin: 18px 0;
+        padding: 22px;
+      }
+      code {
+        background: #eef2f7;
+        border: 1px solid #d8dee8;
+        border-radius: 5px;
+        padding: 1px 5px;
+      }
+      pre {
+        overflow: auto;
+        background: #111827;
+        color: #e5e7eb;
+        border-radius: 8px;
+        padding: 16px;
+      }
+      pre code {
+        background: transparent;
+        border: 0;
+        color: inherit;
+        padding: 0;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      th,
+      td {
+        border-bottom: 1px solid var(--line);
+        padding: 11px 12px;
+        text-align: left;
+        vertical-align: top;
+      }
+      th {
+        background: #eef2f7;
+        color: var(--muted);
+        font-size: 13px;
+        text-transform: uppercase;
+      }
+      tr:last-child td {
+        border-bottom: 0;
+      }
+      .quiz-question {
+        border-top: 1px solid var(--line);
+        padding: 18px 0;
+      }
+      .quiz-question:first-child {
+        border-top: 0;
+      }
+      fieldset {
+        border: 0;
+        margin: 0;
+        padding: 0;
+      }
+      legend {
+        font-weight: 700;
+        margin-bottom: 10px;
+      }
+      label {
+        display: block;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fbfdff;
+        margin: 8px 0;
+        padding: 10px 12px;
+        cursor: pointer;
+      }
+      @media (hover: hover) and (pointer: fine) {
+        label:hover {
+          border-color: #b6c5d8;
+        }
+      }
+      button {
+        appearance: none;
+        border: 0;
+        border-radius: 8px;
+        background: var(--accent);
+        color: #ffffff;
+        cursor: pointer;
+        font-weight: 700;
+        padding: 11px 16px;
+        transition: transform 140ms cubic-bezier(0.23, 1, 0.32, 1);
+      }
+      button:active {
+        transform: scale(0.97);
+      }
+      button.secondary {
+        background: #475569;
+      }
+      .quiz-actions {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 20px;
+      }
+      #quizResult {
+        font-weight: 700;
+      }
+      .answer-detail {
+        display: none;
+        border-top: 1px dashed var(--line);
+        color: var(--muted);
+        margin-top: 10px;
+        padding-top: 10px;
+      }
+      .answer-detail.visible {
+        display: block;
+      }
+      .correct {
+        border-color: #86efac !important;
+        background: #f0fdf4 !important;
+      }
+      .incorrect {
+        border-color: #fecaca !important;
+        background: #fef2f2 !important;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        button {
+          transition-duration: 0ms;
+        }
+      }
+      @media (max-width: 820px) {
+        h1 {
+          font-size: 32px;
+        }
+        main {
+          padding: 32px 16px 56px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Athena Operations, Login, and POS Resilience Batch</h1>
+        <p class="lede">
+          A delivery-candidate guide to the bounded read, access-policy,
+          historical Opening, and offline presentation changes accumulated
+          through iterative operator feedback.
+        </p>
+        <div class="meta">
+          <span class="pill">Delivery candidate</span
+          ><span class="pill">Branch codex/operations-auth-pos-delivery</span
+          ><span class="pill">Base fa891afb</span
+          ><span class="pill">PR pending</span
+          ><span class="pill">Production deploy skipped</span
+          ><span class="pill">Local root alignment pending</span>
+        </div>
+      </header>
+      <section class="panel">
+        <h2>Executive Summary</h2>
+        <p>
+          This candidate packages several related operational-hardening slices
+          from iterative feedback. It makes app-login admission explicit and
+          server-enforced, keeps POS recovery terminal-scoped, gives the
+          Operations sidebar cheap bounded attention counts, preserves
+          historical Opening membership, narrows Daily Close deposit reads to
+          the operating-day slice, and replaces broken product images with
+          stable fallbacks.
+        </p>
+        <p>
+          These changes improve posture and presentation without moving command
+          authority. Queue actions, register and staff authority, frozen Opening
+          evidence, checkout validation, and Daily Close command checks stay on
+          their existing server-owned paths. The 72-hour Convex containment
+          checkpoint remains Hold because the required Usage artifacts were
+          unavailable.
+        </p>
+      </section>
+      <section class="panel">
+        <h2>Why This Batch Mattered</h2>
+
+        <ul>
+          <li>
+            Any syntactically valid email could previously enter the OTP
+            provider path before Athena made an app-access decision.
+          </li>
+          <li>
+            Navigation lacked count-only Open Work and Approvals posture, while
+            loading full queue evidence would be too expensive for a sidebar.
+          </li>
+          <li>
+            Daily Close capped store-wide allocation rows before filtering, so
+            unrelated history could hide deposits from the selected operating
+            day.
+          </li>
+          <li>
+            Legacy Opening records could present multiple acknowledgements for
+            one logical same-SKU work group unless exact historical members were
+            projected together.
+          </li>
+          <li>
+            Truthy but broken remote image URLs displayed browser failure
+            chrome, and the POS shell did not react to online/offline events
+            after mount.
+          </li>
+        </ul>
+      </section>
+      <section class="panel">
+        <h2>Mental Model: Posture, Evidence, Authority</h2>
+        <p>
+          Think of the new summaries and UI states as an instrument panel. They
+          tell the operator where attention exists and whether the observation
+          is exact. They do not steer the system or authorize commands.
+        </p>
+        <p>
+          Posture reads are compact and bounded. Evidence views retain detailed
+          source records. Commands revalidate current server truth. When a
+          posture probe reaches its budget, Athena says N+ instead of pretending
+          the lower bound is exact.
+        </p>
+        <pre><code>indexed probe -&gt; logical projection -&gt; { count, completeness } -&gt; N or N+
+
+client preflight -&gt; OTP provider send gate -&gt; verification-time authorization
+
+historical member ids -&gt; logical carry-forward group -&gt; one acknowledgement</code></pre>
+      </section>
+      <section class="panel">
+        <h2>Before and After</h2>
+
+        <ul>
+          <li>
+            Login before: normalized email flowed directly to signIn. Login
+            after: a server decision preflights the request, while provider
+            delivery and token redemption independently enforce the same
+            allowlist.
+          </li>
+          <li>
+            Operations before: no compact navigation metadata. Operations after:
+            access-gated queries mount only while the Operations section is
+            expanded and return explicit completeness.
+          </li>
+          <li>
+            Daily Close before: take 200 allocations by store, then filter in
+            memory. Daily Close after: type, direction, status, and
+            operating-day range are enforced by a compound index before a
+            201-row completeness probe.
+          </li>
+          <li>
+            Opening before: legacy carry-forward rows became separate items.
+            Opening after: only the prior close&#x27;s referenced rows enter the
+            logical projection, preserving history while consolidating one
+            operator decision.
+          </li>
+          <li>
+            POS images before: a failed URL remained an image element. POS
+            images after: onError swaps the card or cart row to an accessible
+            package placeholder.
+          </li>
+        </ul>
+      </section>
+      <section class="panel">
+        <h2>Failure Boundaries</h2>
+
+        <ul>
+          <li>
+            The client approval query is feedback, not security. An unapproved
+            address is also blocked at delivery and verification, and the
+            submitted normalized email must match the auth account identifier.
+          </li>
+          <li>
+            POS recovery is shown only when local terminal provisioning exists.
+            Recovery still authenticates an app account; it does not grant
+            staff, manager, drawer, or sale authority.
+          </li>
+          <li>
+            Open Work and Approval counts use global budgets. Nonzero incomplete
+            observations render N+; an incomplete zero Approval observation
+            currently renders no metadata.
+          </li>
+          <li>
+            The login preflight exposes a public Boolean membership decision
+            even though the static address list stays out of the browser bundle.
+            Updating the hard-coded allowlist requires a backend code
+            deployment.
+          </li>
+          <li>
+            Frozen version-2 Opening membership remains authoritative. The
+            compatibility path only consolidates exact legacy member ids and
+            must not import later same-SKU work.
+          </li>
+          <li>
+            Browser online/offline state changes shell presentation and
+            rehydration behavior only. It is not terminal integrity, permission,
+            or proof that a sale may proceed.
+          </li>
+          <li>
+            A broken image falls back visually without disabling product
+            selection, quantity, cart, or checkout behavior.
+          </li>
+        </ul>
+      </section>
+      <section class="panel">
+        <h2>What Intentionally Did Not Change</h2>
+
+        <ul>
+          <li>
+            The existing OTP provider id remains stable for existing
+            auth-account records.
+          </li>
+          <li>
+            Raw operational work rows remain audit truth; logical groups are
+            projection, count, and acknowledgement behavior.
+          </li>
+          <li>
+            The detailed queue query and its actions remain separate from
+            sidebar summaries.
+          </li>
+          <li>
+            Daily Close keeps its bounded cap and fail-closed completeness
+            contract; only selectivity before the cap changed.
+          </li>
+          <li>
+            Service principals are not part of this candidate; the branch is
+            based on the main commit that reverted that rollout.
+          </li>
+          <li>
+            No production deploy will be run for this delivery. The requested
+            finish line is merged PR and local root alignment.
+          </li>
+        </ul>
+      </section>
+      <section class="panel">
+        <h2>Validation and Review Evidence</h2>
+
+        <ul>
+          <li>Initial focused validation: 13 files and 292 tests passed.</li>
+          <li>
+            Graphify rebuilt successfully and the Athena webapp TypeScript
+            project passed after nullable image URLs were normalized.
+          </li>
+          <li>
+            Review found that capped sync-conflict evidence did not propagate
+            incompleteness into the approval summary. The helper now returns
+            completeness, a regression test covers 101 conflict rows, and bun
+            run test -- convex/operations/operationalWorkItems.test.ts
+            convex/cashControls/deposits.test.ts passes 111 tests.
+          </li>
+          <li>
+            Graphify was rebuilt again after the sync-conflict completeness
+            correction and reports 10,563 nodes, 12,875 edges, and 2,529
+            communities.
+          </li>
+          <li>
+            The first full pr:athena run passed preflight and stopped only at
+            the repository&#x27;s required solution-note and landed-report
+            policy gates.
+          </li>
+          <li>
+            Final pr:athena and GitHub checks are pending until this
+            fingerprinted report and the updated performance solution note are
+            included.
+          </li>
+        </ul>
+      </section>
+      <section class="panel">
+        <h2>Operational Evidence and Finish Line</h2>
+        <p>
+          The staged 72-hour Convex I/O checkpoint records Hold, not Pass or
+          Rollback. Exact Usage exports and the referenced 24-hour artifact were
+          unavailable, and observed production build drift prevented
+          attribution. The candidate makes no savings claim from that
+          checkpoint.
+        </p>
+        <p>
+          At report time there is no PR or delivery commit. Merge, GitHub
+          checks, and local root alignment are pending. Production deployment is
+          explicitly skipped by user instruction.
+        </p>
+      </section>
+      <section class="panel">
+        <h2>Next-Time Guidance</h2>
+
+        <ul>
+          <li>
+            Put expected access-policy denials before framework side effects,
+            then retain server-side defense in depth at delivery and redemption.
+          </li>
+          <li>
+            For persistent navigation metadata, expose count-only queries with a
+            shared budget and explicit completeness; do not mount detail
+            companions eagerly.
+          </li>
+          <li>
+            Every capped downstream helper that feeds an exact-looking summary
+            must propagate overflow evidence.
+          </li>
+          <li>
+            Apply the complete business predicate in the index before a cap, and
+            probe limit plus one.
+          </li>
+          <li>
+            Historical workflows should reconstruct from historical member ids,
+            never live equivalent-looking rows.
+          </li>
+          <li>
+            Test failed remote media at every real rendering boundary, not only
+            URL-selection helpers.
+          </li>
+        </ul>
+      </section>
+
+      <section class="panel">
+        <h2>Key Files</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>File</th>
+              <th>Why It Matters</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>
+                <code>packages/athena-webapp/convex/otp/EmailOTP.ts</code>
+              </td>
+              <td>
+                Normalizes identifiers and enforces app-login eligibility at
+                delivery and verification.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <code
+                  >packages/athena-webapp/convex/otp/appLoginEmailAllowlist.ts</code
+                >
+              </td>
+              <td>
+                Owns the server-side approved-email decision without exposing
+                the static list to the browser bundle.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <code
+                  >packages/athena-webapp/src/components/auth/Login/LoginForm.tsx</code
+                >
+              </td>
+              <td>
+                Runs the server preflight and presents restrained, focus-safe
+                operator feedback.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <code
+                  >packages/athena-webapp/convex/operations/operationalWorkItems.ts</code
+                >
+              </td>
+              <td>
+                Builds bounded logical Open Work and Approval summaries with
+                completeness.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <code
+                  >packages/athena-webapp/convex/operations/dailyOpening.ts</code
+                >
+              </td>
+              <td>
+                Consolidates exact legacy carry-forward membership without
+                importing live work.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <code
+                  >packages/athena-webapp/convex/operations/dailyClose.ts</code
+                >
+              </td>
+              <td>
+                Reads the exact indexed operating-day deposit slice and records
+                overflow.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <code
+                  >packages/athena-webapp/src/components/app-sidebar.tsx</code
+                >
+              </td>
+              <td>
+                Mounts count summaries only when relevant and renders exact or
+                lower-bound labels.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <code
+                  >packages/athena-webapp/src/routes/-authed-layout.tsx</code
+                >
+              </td>
+              <td>
+                Keeps offline shell presentation reactive without treating
+                connectivity as authority.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <code
+                  >docs/reports/convex-io-containment/2026-07-16-72h.md</code
+                >
+              </td>
+              <td>
+                Records the bounded production checkpoint, missing evidence, and
+                Hold decision.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="panel">
+        <h2>Subagent Evidence</h2>
+        <ul>
+          <li>
+            <strong>delivery context and session historian:</strong> Recovered
+            iterative product decisions, rejected approaches, the reverted
+            service-principal baseline, and the exact no-deploy finish line.
+          </li>
+          <li>
+            <strong>delivered diff analyst:</strong> Mapped behavior layers,
+            authority boundaries, generated artifacts, tests, and the
+            sync-conflict completeness gap fixed before delivery.
+          </li>
+          <li>
+            <strong>related-docs finder:</strong> Scored overlap and directed
+            the delivery to update the existing Convex read-amplification note
+            instead of creating a duplicate catch-all.
+          </li>
+        </ul>
+      </section>
+
+      <section id="quiz" class="panel">
+        <h2>Quiz: Pass Required</h2>
+        <p>You must score at least 8 out of 10 to pass.</p>
+        <form id="changeQuiz" data-threshold="8">
+          <div class="quiz-question" data-answer="1">
+            <fieldset>
+              <legend>
+                1. Which layer is authoritative for app-login eligibility?
+              </legend>
+              <label
+                ><input type="radio" name="q1" value="0" /> The inline warning
+                in LoginForm</label
+              >
+              <label
+                ><input type="radio" name="q1" value="1" /> The server checks at
+                OTP delivery and verification</label
+              >
+              <label
+                ><input type="radio" name="q1" value="2" /> The browser&#x27;s
+                local terminal seed</label
+              >
+            </fieldset>
+            <div class="answer-detail">
+              The preflight improves feedback, but server delivery and
+              redemption checks enforce policy.
+            </div>
+          </div>
+
+          <div class="quiz-question" data-answer="1">
+            <fieldset>
+              <legend>2. Why can the sidebar show a count such as 100+?</legend>
+              <label
+                ><input type="radio" name="q2" value="0" /> The exact count is
+                rounded for visual simplicity</label
+              >
+              <label
+                ><input type="radio" name="q2" value="1" /> The read reached a
+                bounded budget, so 100 is only an observed lower bound</label
+              >
+              <label
+                ><input type="radio" name="q2" value="2" /> Approvals are always
+                grouped in batches of 100</label
+              >
+            </fieldset>
+            <div class="answer-detail">
+              Completeness travels with the count so a capped observation is
+              never presented as exact.
+            </div>
+          </div>
+
+          <div class="quiz-question" data-answer="1">
+            <fieldset>
+              <legend>
+                3. What is counted for Open Work navigation metadata?
+              </legend>
+              <label
+                ><input type="radio" name="q3" value="0" /> Raw operational
+                rows</label
+              >
+              <label
+                ><input type="radio" name="q3" value="1" /> Logical work groups
+                projected through the queue&#x27;s grouping boundary</label
+              >
+              <label
+                ><input type="radio" name="q3" value="2" /> Only approval
+                requests</label
+              >
+            </fieldset>
+            <div class="answer-detail">
+              Multiple rows can represent one operator decision, so navigation
+              uses the same logical projection as queue detail.
+            </div>
+          </div>
+
+          <div class="quiz-question" data-answer="2">
+            <fieldset>
+              <legend>
+                4. What fixed unrelated allocation history hiding current-day
+                deposits?
+              </legend>
+              <label
+                ><input type="radio" name="q4" value="0" /> Increasing the cap
+                without changing the query</label
+              >
+              <label
+                ><input type="radio" name="q4" value="1" /> Filtering rows in
+                React</label
+              >
+              <label
+                ><input type="radio" name="q4" value="2" /> Applying type,
+                direction, status, and date range in a compound index before
+                probing the cap</label
+              >
+            </fieldset>
+            <div class="answer-detail">
+              Selectivity must happen before the cap so unrelated rows cannot
+              consume the budget.
+            </div>
+          </div>
+
+          <div class="quiz-question" data-answer="1">
+            <fieldset>
+              <legend>
+                5. How does legacy Opening avoid absorbing work created after
+                the prior close?
+              </legend>
+              <label
+                ><input type="radio" name="q5" value="0" /> It groups all
+                current rows with the same SKU</label
+              >
+              <label
+                ><input type="radio" name="q5" value="1" /> It projects only the
+                exact member ids referenced by the prior close</label
+              >
+              <label
+                ><input type="radio" name="q5" value="2" /> It ignores logical
+                grouping</label
+              >
+            </fieldset>
+            <div class="answer-detail">
+              Historical membership is the boundary; later equivalent-looking
+              work is excluded.
+            </div>
+          </div>
+
+          <div class="quiz-question" data-answer="2">
+            <fieldset>
+              <legend>6. What authority does navigator.onLine provide?</legend>
+              <label
+                ><input type="radio" name="q6" value="0" /> Permission to sell
+                offline</label
+              >
+              <label
+                ><input type="radio" name="q6" value="1" /> Terminal
+                identity</label
+              >
+              <label
+                ><input type="radio" name="q6" value="2" /> Presentation and
+                rehydration state only</label
+              >
+            </fieldset>
+            <div class="answer-detail">
+              Connectivity adjusts the shell but cannot authorize terminal or
+              sale operations.
+            </div>
+          </div>
+
+          <div class="quiz-question" data-answer="1">
+            <fieldset>
+              <legend>7. What happens when a product image URL fails?</legend>
+              <label
+                ><input type="radio" name="q7" value="0" /> The product is
+                removed from results</label
+              >
+              <label
+                ><input type="radio" name="q7" value="1" /> An accessible
+                placeholder replaces the image while product behavior remains
+                available</label
+              >
+              <label
+                ><input type="radio" name="q7" value="2" /> Checkout is
+                blocked</label
+              >
+            </fieldset>
+            <div class="answer-detail">
+              The fallback is visual resilience, not a change to product or
+              checkout authority.
+            </div>
+          </div>
+
+          <div class="quiz-question" data-answer="1">
+            <fieldset>
+              <legend>
+                8. What review defect was fixed before final delivery?
+              </legend>
+              <label
+                ><input type="radio" name="q8" value="0" /> Open Work used no
+                authorization</label
+              >
+              <label
+                ><input type="radio" name="q8" value="1" /> Sync-conflict
+                overflow could be reported as complete in the approval
+                count</label
+              >
+              <label
+                ><input type="radio" name="q8" value="2" /> Daily Close had no
+                cap</label
+              >
+            </fieldset>
+            <div class="answer-detail">
+              The helper now propagates completeness and a 101-row regression
+              proves the boundary.
+            </div>
+          </div>
+
+          <div class="quiz-question" data-answer="2">
+            <fieldset>
+              <legend>
+                9. What does the 72-hour Convex checkpoint conclude?
+              </legend>
+              <label
+                ><input type="radio" name="q9" value="0" /> Pass with proven
+                savings</label
+              >
+              <label><input type="radio" name="q9" value="1" /> Rollback</label>
+              <label
+                ><input type="radio" name="q9" value="2" /> Hold because exact
+                Usage evidence and clean build attribution were
+                unavailable</label
+              >
+            </fieldset>
+            <div class="answer-detail">
+              The checkpoint deliberately makes no savings claim without
+              comparable evidence.
+            </div>
+          </div>
+
+          <div class="quiz-question" data-answer="2">
+            <fieldset>
+              <legend>
+                10. What is the requested finish line for this delivery?
+              </legend>
+              <label
+                ><input type="radio" name="q10" value="0" /> Merged PR,
+                production deploy, and local alignment</label
+              >
+              <label
+                ><input type="radio" name="q10" value="1" /> Open PR only</label
+              >
+              <label
+                ><input type="radio" name="q10" value="2" /> Merged PR and local
+                root alignment, with production deploy skipped</label
+              >
+            </fieldset>
+            <div class="answer-detail">
+              The user explicitly excluded production deployment from this
+              delivery.
+            </div>
+          </div>
+
+          <div class="quiz-actions">
+            <button type="button" id="gradeQuiz">Grade quiz</button>
+            <button type="button" class="secondary" id="resetQuiz">
+              Reset
+            </button>
+            <span id="quizResult" aria-live="polite"></span>
+          </div>
+        </form>
+      </section>
+    </main>
+    <script>
+      const questions = Array.from(document.querySelectorAll(".quiz-question"));
+      const result = document.getElementById("quizResult");
+      const form = document.getElementById("changeQuiz");
+      const threshold = Number(form.dataset.threshold || 0);
+      function clearGrades() {
+        questions.forEach((question) => {
+          question.classList.remove("correct", "incorrect");
+          question.querySelector(".answer-detail").classList.remove("visible");
+        });
+        result.textContent = "";
+        result.style.color = "";
+      }
+      document.getElementById("gradeQuiz").addEventListener("click", () => {
+        clearGrades();
+        let score = 0;
+        questions.forEach((question, index) => {
+          const selected = document.querySelector(
+            `input[name="q${index + 1}"]:checked`,
+          );
+          const isCorrect =
+            selected &&
+            Number(selected.value) === Number(question.dataset.answer);
+          if (isCorrect) score += 1;
+          question.classList.add(isCorrect ? "correct" : "incorrect");
+          question.querySelector(".answer-detail").classList.add("visible");
+        });
+        const passed = score >= threshold;
+        result.textContent = passed
+          ? `Passed: ${score}/${questions.length}.`
+          : `Not passed: ${score}/${questions.length}. Review the report and try again.`;
+        result.style.color = passed ? "var(--good)" : "var(--bad)";
+      });
+      document.getElementById("resetQuiz").addEventListener("click", () => {
+        form.reset();
+        clearGrades();
+      });
+    </script>
+  </body>
+</html>

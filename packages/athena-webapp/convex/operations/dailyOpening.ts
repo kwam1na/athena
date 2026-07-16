@@ -19,6 +19,10 @@ import {
 import { requireStoreFullAdminAccess } from "../stockOps/access";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
 import { consumeApprovalProofWithCtx } from "./approvalProofs";
+import {
+  projectLogicalOperationalWork,
+  type LogicalOperationalWorkGroup,
+} from "./logicalOperationalWork";
 
 const DAILY_OPENING_QUERY_LIMIT = 200;
 const DAILY_OPENING_SUBJECT_TYPE = "daily_opening";
@@ -914,6 +918,76 @@ function carryForwardItem(
   };
 }
 
+function legacyLogicalCarryForwardItem(
+  group: LogicalOperationalWorkGroup,
+  index: number,
+  options: { includeManagerReviewEvidence?: boolean },
+): DailyOpeningItem {
+  if (
+    group.items.length === 1 &&
+    (group.representative.type !== "synced_sale_inventory_review" ||
+      !group.productSkuId)
+  ) {
+    return {
+      ...carryForwardItem(group.representative, {
+        includeManagerReviewEvidence: options.includeManagerReviewEvidence,
+        index,
+      }),
+      ...(options.includeManagerReviewEvidence === false
+        ? {}
+        : { carryForwardWorkItemIds: group.items.map((item) => item._id) }),
+    };
+  }
+
+  const acknowledgementKey = frozenCarryForwardAcknowledgementKey(index);
+
+  return {
+    key: acknowledgementKey,
+    severity: "carry_forward",
+    category: "carry_forward",
+    title: group.representative.title,
+    message:
+      "This unresolved prior-close work group must be acknowledged for Opening.",
+    subject: {
+      type: "logical_operational_work_group",
+      id:
+        options.includeManagerReviewEvidence === false ? "redacted" : group.key,
+      label: group.representative.title,
+    },
+    ...(options.includeManagerReviewEvidence === false
+      ? {}
+      : {
+          carryForwardWorkItemIds: group.items.map((item) => item._id),
+          link: {
+            label: "View open work",
+            to: "/$orgUrlSlug/store/$storeUrlSlug/operations/open-work",
+          },
+          metadata: {
+            memberCount: group.items.length,
+            sourceCount: group.representatives.length,
+            oldestActionableAt: group.oldestActionableAt,
+            priority: group.priority,
+            status: group.status,
+            type: group.representative.type,
+          },
+        }),
+  };
+}
+
+function legacyCarryForwardItems(
+  workItems: Array<Doc<"operationalWorkItem">>,
+  options: { includeManagerReviewEvidence?: boolean },
+) {
+  return projectLogicalOperationalWork({
+    items: workItems.filter(
+      (workItem) => !TERMINAL_WORK_ITEM_STATUSES.has(workItem.status),
+    ),
+    sourceCompleteness: "complete",
+  }).groups.map((group, index) =>
+    legacyLogicalCarryForwardItem(group, index, options),
+  );
+}
+
 function redactPriorCloseForBroadOpeningSnapshot(
   priorClose: Doc<"dailyClose"> | null,
 ): DailyOpeningPriorClose | null {
@@ -1213,14 +1287,9 @@ export async function buildDailyOpeningSnapshotWithCtx(
   const reviewItems: DailyOpeningItem[] = [];
   const carryForwardItems = frozenCarryForwardState
     ? frozenCarryForwardState.carryForwardItems
-    : openingContext.carryForwardWorkItems
-        .filter((workItem) => !TERMINAL_WORK_ITEM_STATUSES.has(workItem.status))
-        .map((workItem, index) =>
-          carryForwardItem(workItem, {
-            includeManagerReviewEvidence: args.includeManagerReviewEvidence,
-            index,
-          }),
-        );
+    : legacyCarryForwardItems(openingContext.carryForwardWorkItems, {
+        includeManagerReviewEvidence: args.includeManagerReviewEvidence,
+      });
   const readyItems: DailyOpeningItem[] = [];
 
   if (priorClose) {

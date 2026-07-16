@@ -345,18 +345,20 @@ describe("Authed layout", () => {
       isLoading: true,
     });
     mocked.useRouterState.mockImplementation(({ select }) =>
-      select({ location: { pathname: "/wigclub/store/wigclub/pos/register" } }),
+      select({ location: { pathname: "/wigclub/store/wigclub/pos" } }),
     );
 
     render(<Layout />);
 
     expect(screen.getByTestId("authed-outlet")).toBeInTheDocument();
     expect(screen.getByTestId("authed-outlet").closest("main")).toHaveClass(
-      "box-border",
-      "h-svh",
-      "py-layout-md",
-      "md:py-8",
+      "bg-app-canvas",
+      "h-[calc(100svh-4rem)]",
       "overflow-hidden",
+      "p-8",
+    );
+    expect(screen.getByTestId("authed-outlet").closest("main")).not.toHaveClass(
+      "bg-background",
     );
     expect(screen.getByTestId("sidebar-provider")).toBeInTheDocument();
     expect(mocked.SidebarProvider).toHaveBeenCalledWith(

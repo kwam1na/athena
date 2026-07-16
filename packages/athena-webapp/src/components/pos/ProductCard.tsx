@@ -48,6 +48,8 @@ export function ProductCard({
   onAfterAdd,
 }: ProductCardProps) {
   const [quantityInput, setQuantityInput] = useState("1");
+  const [failedImageUrl, setFailedImageUrl] = useState<string | undefined>();
+  const imageUrl = product.image ?? undefined;
   const isProvisionalImport =
     product.availabilityPolicy === "active_provisional_import";
   const isPendingCheckoutItem =
@@ -97,14 +99,22 @@ export function ProductCard({
     >
       {/* Product Image */}
       <div className="w-16 h-16 bg-muted rounded flex items-center justify-center flex-shrink-0 overflow-hidden">
-        {product.image ? (
+        {imageUrl && imageUrl !== failedImageUrl ? (
           <img
-            src={product.image}
+            src={imageUrl}
             alt={product.name}
-            className="w-full h-full object-cover"
+            className="h-full w-full object-cover"
+            onError={() => setFailedImageUrl(imageUrl)}
           />
         ) : (
-          <Package className="w-5 h-5 text-muted-foreground" />
+          <span
+            aria-label={product.name}
+            className="text-muted-foreground"
+            data-image-fallback="true"
+            role="img"
+          >
+            <Package aria-hidden="true" className="h-5 w-5" />
+          </span>
         )}
       </div>
 

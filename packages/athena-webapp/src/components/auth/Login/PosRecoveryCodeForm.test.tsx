@@ -30,6 +30,21 @@ describe("PosRecoveryCodeForm", () => {
     window.sessionStorage.clear();
   });
 
+  it("names the seeded terminal in the recovery instructions", () => {
+    render(
+      <PosRecoveryCodeForm
+        storeId="store-1"
+        terminalName="Front register"
+        onBack={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByText("Sign in to Front register with the recovery code."),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText("POS account")).not.toBeInTheDocument();
+  });
+
   it("signs in the POS account and starts the shared Athena auth-sync handoff", async () => {
     const user = userEvent.setup();
     mocked.signIn.mockResolvedValue({ signingIn: true });

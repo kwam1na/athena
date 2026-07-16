@@ -378,6 +378,9 @@ function formatOpeningItemTitle(title: string) {
   const pendingCheckoutReviewMatch = trimmedTitle.match(
     /^(Review pending checkout item: )(.+)$/i,
   );
+  const catalogCategoryMatch = trimmedTitle.match(
+    /^(Assign catalog category: )(.+)$/i,
+  );
 
   if (inventoryReviewMatch) {
     return `${inventoryReviewMatch[1]}${capitalizeWords(inventoryReviewMatch[2])}`;
@@ -385,6 +388,10 @@ function formatOpeningItemTitle(title: string) {
 
   if (pendingCheckoutReviewMatch) {
     return `${pendingCheckoutReviewMatch[1]}${capitalizeWords(pendingCheckoutReviewMatch[2])}`;
+  }
+
+  if (catalogCategoryMatch) {
+    return `${catalogCategoryMatch[1]}${capitalizeWords(catalogCategoryMatch[2])}`;
   }
 
   return trimmedTitle === trimmedTitle.toLowerCase()

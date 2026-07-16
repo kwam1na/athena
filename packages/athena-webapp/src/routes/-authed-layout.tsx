@@ -180,6 +180,23 @@ function isBrowserOffline() {
   return typeof navigator !== "undefined" && navigator.onLine === false;
 }
 
+function useBrowserOfflineStatus() {
+  const [isOffline, setIsOffline] = useState(isBrowserOffline);
+
+  useEffect(() => {
+    const updateStatus = () => setIsOffline(isBrowserOffline());
+
+    window.addEventListener("offline", updateStatus);
+    window.addEventListener("online", updateStatus);
+    return () => {
+      window.removeEventListener("offline", updateStatus);
+      window.removeEventListener("online", updateStatus);
+    };
+  }, []);
+
+  return isOffline;
+}
+
 function AuthedComponent() {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const demoContext = useSharedDemoContext();
@@ -360,11 +377,13 @@ function PosTerminalShell({
   children,
   appSessionRecovery,
   isFullscreenActive,
+  isOffline,
   setFullscreenOverride,
 }: {
   children: ReactNode;
   appSessionRecovery?: PosTerminalRuntimeAppSessionRecoveryInput | null;
   isFullscreenActive: boolean;
+  isOffline: boolean;
   setFullscreenOverride: Dispatch<SetStateAction<boolean | null>>;
 }) {
   return (
@@ -377,7 +396,8 @@ function PosTerminalShell({
             <SidebarProvider className="contents" defaultOpen={false}>
               <main
                 className={cn(
-                  "flex min-h-0 flex-1 flex-col overflow-hidden bg-background",
+                  "flex min-h-0 flex-1 flex-col overflow-hidden",
+                  isOffline ? "bg-app-canvas" : "bg-background",
                   isFullscreenActive
                     ? "box-border h-svh py-layout-md md:py-8"
                     : "h-[calc(100svh-4rem)] p-8",
@@ -610,6 +630,7 @@ export default function Layout() {
     null,
   );
   const navigate = useNavigate();
+  const isOffline = useBrowserOfflineStatus();
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
@@ -685,7 +706,7 @@ export default function Layout() {
         !isPendingPosAppSessionRecovery &&
         !isClassifyingPosAppSession));
   const canRenderRehydratingPosShell =
-    routeWantsPos && isLoading && isBrowserOffline() && hasStoredLocalSession();
+    routeWantsPos && isLoading && isOffline && hasStoredLocalSession();
   const routeWantsFullscreen =
     isPosTerminalFullscreenPath(pathname) ||
     (isUnknownRouterPath(pathname) &&
@@ -782,6 +803,7 @@ export default function Layout() {
       <PosTerminalShell
         appSessionRecovery={posAppSessionRecoveryRuntimeInput}
         isFullscreenActive={isFullscreenActive}
+        isOffline={isOffline}
         setFullscreenOverride={setFullscreenOverride}
       >
         <SharedDemoRuntime gatePosUntilReady showControls={false}>

@@ -30,9 +30,7 @@ export const DUPLICATE_REGISTER_OPEN_SYNC_REVIEW_SUMMARIES = new Set([
 ]);
 
 export type RegisterSessionSyncReviewActionPolicy =
-  | "apply_or_reject"
-  | "override_or_reject"
-  | "reject_only";
+  "apply_or_reject" | "override_or_reject" | "reject_only";
 
 export type RegisterSessionSyncReviewKind =
   | "duplicate_register_closeout"
@@ -120,6 +118,7 @@ export type RegisterSessionLocalSyncStatus = {
 type ListOpenLocalSyncConflictsOptions = {
   includeRejectedEvidence?: boolean;
   includeTransactionMappingEvidence?: boolean;
+  limit?: number;
   registerSessionIds?: Array<Id<"registerSession">>;
 };
 
@@ -791,25 +790,25 @@ export function buildRegisterSessionLocalSyncStatus(
   };
 }
 
-export async function listOpenLocalSyncConflictsByRegisterSession(
+export async function listOpenLocalSyncConflictsByRegisterSessionWithCompleteness(
   ctx: Pick<QueryCtx, "db">,
   storeId: Id<"store">,
   options: ListOpenLocalSyncConflictsOptions = {},
 ) {
+  const syncConflictLimit = Math.min(
+    SYNC_CONFLICT_LIMIT,
+    Math.max(1, Math.floor(options.limit ?? SYNC_CONFLICT_LIMIT)),
+  );
   const hasTargetRegisterSessions = Boolean(options.registerSessionIds?.length);
   const targetedFacts = hasTargetRegisterSessions
-      ? await listTargetRegisterSessionSyncFacts(ctx, storeId, {
+    ? await listTargetRegisterSessionSyncFacts(ctx, storeId, {
         includeRejectedEvidence: options.includeRejectedEvidence,
         includeTransactionMappingEvidence:
           options.includeTransactionMappingEvidence,
         registerSessionIds: options.registerSessionIds!,
       })
     : { needsReviewConflicts: [], rejectedEvents: [], resolvedConflicts: [] };
-  const [
-    cappedNeedsReviewConflicts,
-    cappedResolvedConflicts,
-    cappedRejectedEvents,
-  ] =
+  const [needsReviewConflictProbe, resolvedConflictProbe, rejectedEventProbe] =
     hasTargetRegisterSessions
       ? [[], [], []]
       : await Promise.all([
@@ -818,22 +817,36 @@ export async function listOpenLocalSyncConflictsByRegisterSession(
             .withIndex("by_store_status", (q) =>
               q.eq("storeId", storeId).eq("status", "needs_review"),
             )
-            .take(SYNC_CONFLICT_LIMIT),
+            .take(syncConflictLimit + 1),
           ctx.db
             .query("posLocalSyncConflict")
             .withIndex("by_store_status", (q) =>
               q.eq("storeId", storeId).eq("status", "resolved"),
             )
-            .take(SYNC_CONFLICT_LIMIT),
+            .take(syncConflictLimit + 1),
           options.includeRejectedEvidence
             ? ctx.db
                 .query("posLocalSyncEvent")
                 .withIndex("by_store_status", (q) =>
                   q.eq("storeId", storeId).eq("status", "rejected"),
                 )
-                .take(SYNC_CONFLICT_LIMIT)
+                .take(syncConflictLimit + 1)
             : Promise.resolve([]),
         ]);
+  const readIncomplete =
+    !hasTargetRegisterSessions &&
+    (needsReviewConflictProbe.length > syncConflictLimit ||
+      resolvedConflictProbe.length > syncConflictLimit ||
+      rejectedEventProbe.length > syncConflictLimit);
+  const cappedNeedsReviewConflicts = needsReviewConflictProbe.slice(
+    0,
+    syncConflictLimit,
+  );
+  const cappedResolvedConflicts = resolvedConflictProbe.slice(
+    0,
+    syncConflictLimit,
+  );
+  const cappedRejectedEvents = rejectedEventProbe.slice(0, syncConflictLimit);
   const needsReviewConflicts = uniqueById([
     ...cappedNeedsReviewConflicts,
     ...targetedFacts.needsReviewConflicts,
@@ -849,8 +862,11 @@ export async function listOpenLocalSyncConflictsByRegisterSession(
   const projectedInventoryReviewResults = await Promise.all(
     needsReviewConflicts.map(async (conflict) => ({
       conflict,
-      hasInventoryWorkItem:
-        await hasInventoryReviewWorkItemForProjectedSale(ctx, storeId, conflict),
+      hasInventoryWorkItem: await hasInventoryReviewWorkItemForProjectedSale(
+        ctx,
+        storeId,
+        conflict,
+      ),
     })),
   );
   const projectedInventoryReviewEventKeys = new Set(
@@ -1078,13 +1094,34 @@ export async function listOpenLocalSyncConflictsByRegisterSession(
     }),
   );
 
-  return entries.reduce((conflictsBySessionId, entry) => {
-    if (!entry) return conflictsBySessionId;
+  const conflictsBySessionId = entries.reduce((result, entry) => {
+    if (!entry) return result;
     const [registerSessionId, conflict] = entry;
-    conflictsBySessionId.set(registerSessionId, [
-      ...(conflictsBySessionId.get(registerSessionId) ?? []),
+    result.set(registerSessionId, [
+      ...(result.get(registerSessionId) ?? []),
       conflict,
     ]);
-    return conflictsBySessionId;
+    return result;
   }, new Map<Id<"registerSession">, RegisterSessionSyncConflict[]>());
+
+  return {
+    completeness: readIncomplete
+      ? ("incomplete" as const)
+      : ("complete" as const),
+    conflictsBySessionId,
+  };
+}
+
+export async function listOpenLocalSyncConflictsByRegisterSession(
+  ctx: Pick<QueryCtx, "db">,
+  storeId: Id<"store">,
+  options: ListOpenLocalSyncConflictsOptions = {},
+) {
+  return (
+    await listOpenLocalSyncConflictsByRegisterSessionWithCompleteness(
+      ctx,
+      storeId,
+      options,
+    )
+  ).conflictsBySessionId;
 }

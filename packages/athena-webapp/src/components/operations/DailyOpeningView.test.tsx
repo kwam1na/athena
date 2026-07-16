@@ -923,6 +923,56 @@ describe("DailyOpeningViewContent", () => {
     expect(screen.queryByRole("tab", { name: /blocked/i })).toBeNull();
   });
 
+  it("keeps captured carry-forward evidence after the store day starts", () => {
+    renderContent({
+      ...blockedSnapshot,
+      carryForwardItems: [
+        {
+          category: "carry_forward",
+          id: "logical-clogs",
+          key: "carry_forward_group:0",
+          severity: "carry_forward",
+          title: "Review inventory for Clogs",
+        },
+      ],
+      startedOpening: {
+        reviewEvidence: [
+          {
+            category: "carry_forward",
+            id: "raw-clogs-1",
+            key: "carry_forward:0",
+            severity: "carry_forward",
+            title: "Review inventory for Clogs sale 1",
+          },
+          {
+            category: "carry_forward",
+            id: "raw-clogs-2",
+            key: "carry_forward:1",
+            severity: "carry_forward",
+            title: "Review inventory for Clogs sale 2",
+          },
+        ],
+        startedAt: Date.UTC(2026, 4, 8, 8, 30),
+      },
+      status: "started",
+    });
+
+    const openingReview = screen
+      .getByRole("heading", { name: "Opening review" })
+      .closest("section")!;
+
+    expect(within(openingReview).getByText("2 to review")).toBeInTheDocument();
+    expect(
+      within(openingReview).getByText("Review inventory for Clogs Sale 1"),
+    ).toBeInTheDocument();
+    expect(
+      within(openingReview).getByText("Review inventory for Clogs Sale 2"),
+    ).toBeInTheDocument();
+    expect(
+      within(openingReview).queryByText("Review inventory for Clogs"),
+    ).not.toBeInTheDocument();
+  });
+
   it("paginates automation review evidence at five items per page", async () => {
     const user = userEvent.setup();
     const reviewEvidence = Array.from({ length: 12 }, (_, index) => ({
@@ -1055,11 +1105,28 @@ describe("DailyOpeningViewContent", () => {
           title:
             "Review pending checkout item: protein Brazilian hair repair mask",
         },
+        {
+          category: "operational_work_item",
+          description:
+            "Open operational work will carry forward after the opening handoff.",
+          id: "carry-catalog-setup-1",
+          key: "carry-catalog-setup-1",
+          link: {
+            label: "View open work",
+            to: "/$orgUrlSlug/store/$storeUrlSlug/operations/open-work",
+          },
+          metadata: {
+            priority: "normal",
+            status: "open",
+            type: "catalog_taxonomy_setup",
+          },
+          title: "Assign catalog category: CERAVEHYDRATING FOAMING OIL",
+        },
       ],
       status: "needs_attention",
       summary: {
         blockerCount: 0,
-        carryForwardCount: 3,
+        carryForwardCount: 4,
         readyCount: 1,
         reviewCount: 0,
       },
@@ -1074,9 +1141,14 @@ describe("DailyOpeningViewContent", () => {
         "Review pending checkout item: Protein Brazilian Hair Repair Mask",
       ),
     ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Assign catalog category: Ceravehydrating Foaming Oil",
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByText("Service case")).toBeInTheDocument();
-    expect(screen.getAllByText("Normal")).toHaveLength(2);
-    expect(screen.getAllByText("Open")).toHaveLength(3);
+    expect(screen.getAllByText("Normal")).toHaveLength(3);
+    expect(screen.getAllByText("Open")).toHaveLength(4);
     expect(screen.queryByText("service_case")).not.toBeInTheDocument();
     expect(screen.queryByText("normal")).not.toBeInTheDocument();
     expect(screen.queryByText("open")).not.toBeInTheDocument();
