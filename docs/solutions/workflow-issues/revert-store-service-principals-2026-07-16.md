@@ -8,7 +8,7 @@ component: service-principals
 resolution_type: revert
 severity: medium
 tags: [revert, release-management, pos, service-principals, staged-rollout]
-delivery_diff_fingerprint: 39508769ea63485d3709f48d93602df24f459a649e0717b8fa56d9e5707c5858
+delivery_diff_fingerprint: 7333ef5e833ee09e92ba5d63c54ec55799d583db37a35454085442e43338a999
 ---
 
 ## Problem
