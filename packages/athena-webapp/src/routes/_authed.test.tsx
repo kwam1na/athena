@@ -1258,6 +1258,10 @@ describe("Authed layout", () => {
 
   it("signs out from the user menu", async () => {
     const user = userEvent.setup();
+    window.sessionStorage.setItem(
+      "athena.posServiceAuthPresentation.v1",
+      JSON.stringify({ kind: "active", redirectTo: "/", startedAt: 1 }),
+    );
 
     mocked.useAuth.mockReturnValue({
       user: { _id: "user-1", email: "kwami.nuh@gmail.com" },
@@ -1274,6 +1278,9 @@ describe("Authed layout", () => {
     );
     expect(window.localStorage.removeItem).toHaveBeenCalledWith(
       POS_APP_ACCOUNT_ID_KEY,
+    );
+    expect(window.sessionStorage.removeItem).toHaveBeenCalledWith(
+      "athena.posServiceAuthPresentation.v1",
     );
     expect(mocked.navigate).toHaveBeenCalledWith({ to: "/login" });
   });

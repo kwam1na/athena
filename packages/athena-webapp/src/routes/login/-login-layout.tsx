@@ -19,6 +19,7 @@ import {
   PUBLIC_HOME_PATH,
 } from "~/src/lib/navigation/appEntryRoutes";
 import {
+  clearPosServiceAuthPresentation,
   getPosServiceAuthPresentation,
   POS_SERVICE_AUTH_PRESENTATION_EVENT,
 } from "~/src/components/auth/Login/posRecoveryFlow";
@@ -125,6 +126,19 @@ export function LoginLayout() {
       );
     };
   }, []);
+
+  useEffect(() => {
+    const servicePresentation = getPosServiceAuthPresentation();
+    if (
+      servicePresentation?.kind !== "active" ||
+      isLoading ||
+      isAuthenticated ||
+      authToken
+    ) {
+      return;
+    }
+    clearPosServiceAuthPresentation();
+  }, [authToken, isAuthenticated, isLoading, servicePresentationTick]);
 
   useEffect(() => {
     const servicePresentation = getPosServiceAuthPresentation();

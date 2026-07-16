@@ -84,6 +84,7 @@ import { toDisplayAmount } from "~/convex/lib/currency";
 import { currencyDisplaySymbol } from "~/shared/currencyFormatter";
 import { convex } from "@/lib/convexClient";
 import { isVerifiedPosOfflineAuthorityReceiptCurrent } from "@/lib/pos/security/offlineAuthorityPublicKeys";
+import { clearPosServiceAuthPresentation } from "@/components/auth/Login/posRecoveryFlow";
 
 type HealthLinkProps = {
   children: ReactNode;
@@ -2795,6 +2796,7 @@ export function POSSettingsView({
     setContinueToRecoveryError(null);
     try {
       await signOut();
+      clearPosServiceAuthPresentation();
       localStorage.removeItem(LOGGED_IN_USER_ID_KEY);
       localStorage.removeItem(POS_APP_ACCOUNT_ID_KEY);
       await navigate({ to: "/login" });

@@ -649,6 +649,10 @@ describe("registerAndProvisionPosTerminal", () => {
     expect(window.localStorage.removeItem).not.toHaveBeenCalledWith(
       "logged_in_user_id",
     );
+    window.sessionStorage.setItem(
+      "athena.posServiceAuthPresentation.v1",
+      JSON.stringify({ kind: "active", redirectTo: "/", startedAt: 1 }),
+    );
     await user.click(screen.getByRole("button", { name: "Retry POS sign-in" }));
     await waitFor(() => expect(mocks.signOut).toHaveBeenCalledTimes(2));
     expect(window.localStorage.removeItem).toHaveBeenCalledWith(
@@ -657,6 +661,9 @@ describe("registerAndProvisionPosTerminal", () => {
     expect(window.localStorage.removeItem).toHaveBeenCalledWith(
       "athena.pos.app_account_id",
     );
+    expect(
+      window.sessionStorage.getItem("athena.posServiceAuthPresentation.v1"),
+    ).toBeNull();
     expect(mocks.navigate).toHaveBeenCalledWith({ to: "/login" });
   });
 

@@ -323,6 +323,7 @@ export function getPosServiceAuthPresentation(): {
 
 export function clearPosServiceAuthPresentation() {
   sessionStorage.removeItem(POS_SERVICE_AUTH_PRESENTATION_KEY);
+  window.dispatchEvent(new Event(POS_SERVICE_AUTH_PRESENTATION_EVENT));
 }
 
 function writePresentation(value: {

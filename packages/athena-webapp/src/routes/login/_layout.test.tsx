@@ -174,6 +174,39 @@ describe("LoginLayout", () => {
     );
   });
 
+  it("clears an expired service presentation and restores login recovery", async () => {
+    mocked.useConvexAuth.mockReturnValue({
+      isAuthenticated: false,
+      isLoading: false,
+    });
+    mocked.useAuthToken.mockReturnValue(null);
+    mocked.syncAuthenticatedAthenaUser.mockResolvedValue(
+      ok({ _id: "human-after-expiry" }),
+    );
+    let presentation: string | null = JSON.stringify({
+        kind: "active",
+        redirectTo: "/wigclub/store/wigclub/pos/register",
+        startedAt: Date.now(),
+      });
+    vi.mocked(window.sessionStorage.getItem).mockImplementation((key) =>
+      key === POS_SERVICE_AUTH_PRESENTATION_KEY ? presentation : null,
+    );
+    vi.mocked(window.sessionStorage.removeItem).mockImplementation((key) => {
+      if (key === POS_SERVICE_AUTH_PRESENTATION_KEY) presentation = null;
+    });
+
+    render(<LoginLayout />);
+
+    await waitFor(() =>
+      expect(window.sessionStorage.removeItem).toHaveBeenCalledWith(
+        POS_SERVICE_AUTH_PRESENTATION_KEY,
+      ),
+    );
+    expect(screen.getByText("Mock Login Outlet")).toBeInTheDocument();
+    expect(mocked.navigate).not.toHaveBeenCalled();
+    expect(mocked.syncAuthenticatedAthenaUser).not.toHaveBeenCalled();
+  });
+
   it("uses the pending auth-sync redirect after the Athena user sync succeeds", async () => {
     mocked.useConvexAuth.mockReturnValue({
       isAuthenticated: true,

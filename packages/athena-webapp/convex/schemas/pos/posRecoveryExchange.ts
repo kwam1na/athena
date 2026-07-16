@@ -5,6 +5,7 @@ export const posRecoveryExchangeStatusValidator = v.union(
   v.literal("prepared"),
   v.literal("activated"),
   v.literal("aborted"),
+  v.literal("cleanup_pending"),
   v.literal("expired"),
   v.literal("cleaned"),
 );
@@ -37,6 +38,11 @@ export const posRecoveryExchangeSchema = v.object({
   abortedAt: v.optional(v.number()),
   expiredAt: v.optional(v.number()),
   cleanedAt: v.optional(v.number()),
+  cleanupAttemptedAt: v.optional(v.number()),
+  cleanupFinalStatus: v.optional(
+    v.union(v.literal("expired"), v.literal("cleaned")),
+  ),
+  cleanupStartedAt: v.optional(v.number()),
   servicePrincipalSessionId: v.optional(v.id("servicePrincipalSession")),
   posApplicationSessionBindingId: v.optional(
     v.id("posApplicationSessionBinding"),
@@ -47,4 +53,8 @@ export const posRecoveryExchangeTable = defineTable(posRecoveryExchangeSchema)
   .index("by_recoveryCorrelationKey", ["recoveryCorrelationKey"])
   .index("by_authSessionId", ["authSessionId"])
   .index("by_status_and_expiresAt", ["status", "expiresAt"])
+  .index("by_status_and_cleanupAttemptedAt", [
+    "status",
+    "cleanupAttemptedAt",
+  ])
   .index("by_terminalId_and_status", ["terminalId", "status"]);

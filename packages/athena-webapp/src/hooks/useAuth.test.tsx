@@ -272,6 +272,67 @@ describe("useAuth", () => {
     );
   });
 
+  it("clears an active service presentation after Auth definitively expires", async () => {
+    let presentation: string | null = JSON.stringify({
+        kind: "active",
+        redirectTo: "/wigclub/store/wigclub/pos/register",
+        startedAt: Date.now(),
+      });
+    vi.mocked(window.sessionStorage.getItem).mockImplementation((key) =>
+      key === POS_SERVICE_AUTH_PRESENTATION_KEY ? presentation : null,
+    );
+    vi.mocked(window.sessionStorage.removeItem).mockImplementation((key) => {
+      if (key === POS_SERVICE_AUTH_PRESENTATION_KEY) presentation = null;
+    });
+    const authState = {
+      isAuthenticated: false,
+      isLoading: true,
+    };
+    mocked.useAuthToken.mockReturnValue(null);
+    mocked.useConvexAuth.mockImplementation(() => authState);
+    mocked.useQuery.mockReturnValue(null);
+
+    const { result, rerender } = renderHook(() => useAuth());
+
+    expect(window.sessionStorage.removeItem).not.toHaveBeenCalledWith(
+      POS_SERVICE_AUTH_PRESENTATION_KEY,
+    );
+    authState.isLoading = false;
+    rerender();
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.actorKind).toBeNull();
+    expect(result.current.user).toBeNull();
+    expect(window.sessionStorage.removeItem).toHaveBeenCalledWith(
+      POS_SERVICE_AUTH_PRESENTATION_KEY,
+    );
+  });
+
+  it("preserves pending service handoff metadata while the root provider is unauthenticated", () => {
+    vi.mocked(window.sessionStorage.getItem).mockImplementation((key) =>
+      key === POS_SERVICE_AUTH_PRESENTATION_KEY
+        ? JSON.stringify({
+            kind: "pending",
+            redirectTo: "/wigclub/store/wigclub/pos/register",
+            startedAt: Date.now(),
+          })
+        : null,
+    );
+    mocked.useAuthToken.mockReturnValue(null);
+    mocked.useConvexAuth.mockReturnValue({
+      isAuthenticated: false,
+      isLoading: false,
+    });
+    mocked.useQuery.mockReturnValue(null);
+
+    const { result } = renderHook(() => useAuth());
+
+    expect(result.current.isLoading).toBe(true);
+    expect(window.sessionStorage.removeItem).not.toHaveBeenCalledWith(
+      POS_SERVICE_AUTH_PRESENTATION_KEY,
+    );
+  });
+
   it("treats fresh pending auth sync as loading while the Convex session is settling", () => {
     vi.mocked(window.sessionStorage.getItem).mockImplementation((key) =>
       key === PENDING_ATHENA_AUTH_SYNC_KEY

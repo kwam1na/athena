@@ -72,6 +72,7 @@ import { SharedDemoRuntime } from "@/components/shared-demo/SharedDemoRuntime";
 import { useSharedDemoContext } from "@/hooks/useSharedDemoContext";
 import { SharedDemoRestrictedSurface } from "@/components/shared-demo/SharedDemoRestrictedSurface";
 import { isSharedDemoRestrictedPath } from "@/components/shared-demo/sharedDemoRestrictions";
+import { clearPosServiceAuthPresentation } from "@/components/auth/Login/posRecoveryFlow";
 const POS_TERMINAL_FULLSCREEN_PATH_PATTERN =
   /^\/(?<orgUrlSlug>[^/]+)\/store\/(?<storeUrlSlug>[^/]+)\/pos\/(?:register|expense)\/?$/;
 const POS_HUB_PATH_PATTERN =
@@ -414,6 +415,7 @@ function UserMenu({
 
   const handleSignOut = async () => {
     await signOut();
+    clearPosServiceAuthPresentation();
     localStorage.removeItem(LOGGED_IN_USER_ID_KEY);
     localStorage.removeItem(POS_APP_ACCOUNT_ID_KEY);
     navigate({ to: "/login" });

@@ -10,12 +10,17 @@ import {
   failAthenaAuthSyncHandoff,
   getAthenaAuthSyncHandoffStatus,
 } from "../components/auth/Login/authSyncHandoff";
-import { getPosServiceAuthPresentation } from "../components/auth/Login/posRecoveryFlow";
+import {
+  clearPosServiceAuthPresentation,
+  getPosServiceAuthPresentation,
+  POS_SERVICE_AUTH_PRESENTATION_EVENT,
+} from "../components/auth/Login/posRecoveryFlow";
 
 export const useAuth = () => {
   const [loggedInUserId, setLoggedInUserId] = useState<string | null>(null);
   const [isStorageLoaded, setIsStorageLoaded] = useState(false);
   const [pendingAuthSyncTick, setPendingAuthSyncTick] = useState(0);
+  const [servicePresentationTick, setServicePresentationTick] = useState(0);
   const authToken = useAuthToken();
   const authSessionRef = useRef({ epoch: 0, token: authToken });
   if (authSessionRef.current.token !== authToken) {
@@ -53,6 +58,39 @@ export const useAuth = () => {
   );
   const isLoadingAthenaUser =
     hasReadyConvexUser && authenticatedAthenaUser === undefined;
+
+  useEffect(() => {
+    const handleServicePresentation = () => {
+      setServicePresentationTick((tick) => tick + 1);
+    };
+    window.addEventListener(
+      POS_SERVICE_AUTH_PRESENTATION_EVENT,
+      handleServicePresentation,
+    );
+    return () =>
+      window.removeEventListener(
+        POS_SERVICE_AUTH_PRESENTATION_EVENT,
+        handleServicePresentation,
+      );
+  }, []);
+
+  useEffect(() => {
+    if (
+      servicePresentation?.kind !== "active" ||
+      isLoadingConvexAuth ||
+      isAuthenticated ||
+      authToken
+    ) {
+      return;
+    }
+    clearPosServiceAuthPresentation();
+  }, [
+    authToken,
+    isAuthenticated,
+    isLoadingConvexAuth,
+    servicePresentation?.kind,
+    servicePresentationTick,
+  ]);
 
   useEffect(() => {
     const id = localStorage.getItem(LOGGED_IN_USER_ID_KEY);

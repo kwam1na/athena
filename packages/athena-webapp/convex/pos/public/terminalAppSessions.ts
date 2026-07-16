@@ -26,6 +26,8 @@ const POS_SERVICE_SESSION_IDLE_DURATION_MS = 12 * 60 * 60 * 1000;
 const POS_SERVICE_SESSION_ABSOLUTE_DURATION_MS = 24 * 60 * 60 * 1000;
 const GENERIC_EXACT_SESSION_FAILURE =
   "POS session recovery could not be completed.";
+const POS_RECOVERY_CLEANUP_TOKEN_PAGE_SIZE = 20;
+const POS_RECOVERY_CLEANUP_MAX_EXCHANGES = 25;
 
 const blockedReasonValidator = v.union(
   v.literal("missing_terminal_proof"),
@@ -775,11 +777,17 @@ export const abortPreparedPosTerminalSession = mutation({
 
 export const cleanupExpiredPosRecoveryArtifacts = internalMutation({
   args: { limit: v.optional(v.number()) },
-  returns: v.object({ cleaned: v.number() }),
+  returns: v.object({ cleaned: v.number(), progressed: v.number() }),
   handler: async (ctx, args) => {
     const now = Date.now();
-    const limit = Math.max(1, Math.min(100, Math.floor(args.limit ?? 50)));
-    const [expiredPrepared, aborted] = await Promise.all([
+    const limit = Math.max(
+      1,
+      Math.min(
+        POS_RECOVERY_CLEANUP_MAX_EXCHANGES,
+        Math.floor(args.limit ?? POS_RECOVERY_CLEANUP_MAX_EXCHANGES),
+      ),
+    );
+    const [expiredPrepared, aborted, cleanupPending] = await Promise.all([
       ctx.db
         .query("posRecoveryExchange")
         .withIndex("by_status_and_expiresAt", (query) =>
@@ -792,20 +800,55 @@ export const cleanupExpiredPosRecoveryArtifacts = internalMutation({
           query.eq("status", "aborted").lte("expiresAt", now),
         )
         .take(limit),
+      ctx.db
+        .query("posRecoveryExchange")
+        .withIndex("by_status_and_cleanupAttemptedAt", (query) =>
+          query.eq("status", "cleanup_pending"),
+        )
+        .take(limit),
     ]);
-    const exchanges = [...expiredPrepared, ...aborted].slice(0, limit);
+    const exchanges = [...expiredPrepared, ...aborted, ...cleanupPending]
+      .sort(
+        (left, right) =>
+          (left.cleanupAttemptedAt ?? left.expiresAt) -
+            (right.cleanupAttemptedAt ?? right.expiresAt) ||
+          left._creationTime - right._creationTime,
+      )
+      .slice(0, limit);
+    let cleaned = 0;
     for (const exchange of exchanges) {
-      while (true) {
-        const refreshTokens = await ctx.db
-          .query("authRefreshTokens")
-          .withIndex("sessionId", (query) =>
-            query.eq("sessionId", exchange.authSessionId),
-          )
-          .take(20);
-        if (refreshTokens.length === 0) break;
-        for (const refreshToken of refreshTokens) {
-          await ctx.db.delete("authRefreshTokens", refreshToken._id);
-        }
+      const cleanupFinalStatus =
+        exchange.status === "prepared"
+          ? ("expired" as const)
+          : exchange.status === "aborted"
+            ? ("cleaned" as const)
+            : exchange.cleanupFinalStatus;
+      if (!cleanupFinalStatus) {
+        throw new Error(GENERIC_EXACT_SESSION_FAILURE);
+      }
+      const refreshTokenPage = await ctx.db
+        .query("authRefreshTokens")
+        .withIndex("sessionId", (query) =>
+          query.eq("sessionId", exchange.authSessionId),
+        )
+        .take(POS_RECOVERY_CLEANUP_TOKEN_PAGE_SIZE + 1);
+      const refreshTokens = refreshTokenPage.slice(
+        0,
+        POS_RECOVERY_CLEANUP_TOKEN_PAGE_SIZE,
+      );
+      for (const refreshToken of refreshTokens) {
+        await ctx.db.delete("authRefreshTokens", refreshToken._id);
+      }
+      if (refreshTokenPage.length > POS_RECOVERY_CLEANUP_TOKEN_PAGE_SIZE) {
+        await ctx.db.patch("posRecoveryExchange", exchange._id, {
+          cleanupAttemptedAt: now,
+          cleanupFinalStatus,
+          cleanupStartedAt: exchange.cleanupStartedAt ?? now,
+          revision: exchange.revision + 1,
+          status: "cleanup_pending",
+          updatedAt: now,
+        });
+        continue;
       }
       const authSession = await ctx.db.get(
         "authSessions",
@@ -814,8 +857,11 @@ export const cleanupExpiredPosRecoveryArtifacts = internalMutation({
       if (authSession) {
         await ctx.db.delete("authSessions", authSession._id);
       }
-      if (exchange.status === "prepared") {
+      if (cleanupFinalStatus === "expired") {
         await ctx.db.patch("posRecoveryExchange", exchange._id, {
+          cleanupAttemptedAt: now,
+          cleanupFinalStatus,
+          cleanupStartedAt: exchange.cleanupStartedAt ?? now,
           expiredAt: now,
           revision: exchange.revision + 1,
           status: "expired",
@@ -824,13 +870,17 @@ export const cleanupExpiredPosRecoveryArtifacts = internalMutation({
       } else {
         await ctx.db.patch("posRecoveryExchange", exchange._id, {
           cleanedAt: now,
+          cleanupAttemptedAt: now,
+          cleanupFinalStatus,
+          cleanupStartedAt: exchange.cleanupStartedAt ?? now,
           revision: exchange.revision + 1,
           status: "cleaned",
           updatedAt: now,
         });
       }
+      cleaned += 1;
     }
-    return { cleaned: exchanges.length };
+    return { cleaned, progressed: exchanges.length };
   },
 });
 

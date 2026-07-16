@@ -655,7 +655,7 @@ describe("exact-session POS recovery", () => {
     ctx.tables.posRecoveryExchange[0].expiresAt = 1_999;
     await expect(
       getHandler(cleanupExpiredPosRecoveryArtifacts)(ctx, { limit: 10 }),
-    ).resolves.toEqual({ cleaned: 1 });
+    ).resolves.toEqual({ cleaned: 1, progressed: 1 });
     expect(ctx.tables.authRefreshTokens).toHaveLength(0);
     expect(ctx.tables.posRecoveryExchange[0]).toEqual(
       expect.objectContaining({
@@ -665,16 +665,16 @@ describe("exact-session POS recovery", () => {
     );
     await expect(
       getHandler(cleanupExpiredPosRecoveryArtifacts)(ctx, { limit: 10 }),
-    ).resolves.toEqual({ cleaned: 0 });
+    ).resolves.toEqual({ cleaned: 0, progressed: 0 });
   });
 
-  it("fully drains refresh-token pages before advancing bounded aborted cleanup", async () => {
+  it("resumes bounded refresh cleanup without starving a later exchange", async () => {
     const ctx = await buildExactSessionCtx();
     const firstExchange = ctx.tables.posRecoveryExchange[0];
     firstExchange.status = "aborted";
     firstExchange.expiresAt = 1;
     ctx.tables.authRefreshTokens.push(
-      ...Array.from({ length: 25 }, (_, index) => ({
+      ...Array.from({ length: 65 }, (_, index) => ({
         _id: `refresh-first-${index}`,
         expirationTime: 9_999,
         sessionId: "auth-session",
@@ -700,23 +700,42 @@ describe("exact-session POS recovery", () => {
 
     await expect(
       getHandler(cleanupExpiredPosRecoveryArtifacts)(ctx, { limit: 1 }),
-    ).resolves.toEqual({ cleaned: 1 });
+    ).resolves.toEqual({ cleaned: 0, progressed: 1 });
     expect(
       ctx.tables.authRefreshTokens.filter(
         (token) => token.sessionId === "auth-session",
       ),
-    ).toHaveLength(0);
-    expect(ctx.tables.posRecoveryExchange[0].status).toBe("cleaned");
+    ).toHaveLength(45);
+    expect(ctx.tables.posRecoveryExchange[0]).toEqual(
+      expect.objectContaining({
+        cleanupFinalStatus: "cleaned",
+        cleanupStartedAt: expect.any(Number),
+        status: "cleanup_pending",
+      }),
+    );
     expect(ctx.tables.posRecoveryExchange[1].status).toBe("aborted");
+
+    // The attempted exchange moved to the back of the cleanup queue, so the
+    // smaller sibling makes progress instead of waiting behind all 65 rows.
+    await expect(
+      getHandler(cleanupExpiredPosRecoveryArtifacts)(ctx, { limit: 1 }),
+    ).resolves.toEqual({ cleaned: 1, progressed: 1 });
+    expect(ctx.tables.posRecoveryExchange[1].status).toBe("cleaned");
 
     await expect(
       getHandler(cleanupExpiredPosRecoveryArtifacts)(ctx, { limit: 1 }),
-    ).resolves.toEqual({ cleaned: 1 });
-    expect(ctx.tables.authRefreshTokens).toHaveLength(0);
-    expect(ctx.tables.posRecoveryExchange[1].status).toBe("cleaned");
+    ).resolves.toEqual({ cleaned: 0, progressed: 1 });
     await expect(
       getHandler(cleanupExpiredPosRecoveryArtifacts)(ctx, { limit: 1 }),
-    ).resolves.toEqual({ cleaned: 0 });
+    ).resolves.toEqual({ cleaned: 0, progressed: 1 });
+    await expect(
+      getHandler(cleanupExpiredPosRecoveryArtifacts)(ctx, { limit: 1 }),
+    ).resolves.toEqual({ cleaned: 1, progressed: 1 });
+    expect(ctx.tables.authRefreshTokens).toHaveLength(0);
+    expect(ctx.tables.posRecoveryExchange[0].status).toBe("cleaned");
+    await expect(
+      getHandler(cleanupExpiredPosRecoveryArtifacts)(ctx, { limit: 1 }),
+    ).resolves.toEqual({ cleaned: 0, progressed: 0 });
   });
 
   it("requires the exact issued Auth session to abort once refresh authority exists", async () => {
