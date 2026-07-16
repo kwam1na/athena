@@ -97,6 +97,9 @@ function createAdapter(calls: string[]): PosRecoveryFrontendAdapter {
     issue: vi.fn(async () => {
       calls.push("issue");
     }),
+    resume: vi.fn(async () => {
+      calls.push("resume");
+    }),
     activate: vi.fn(async () => {
       calls.push("activate");
       return activation;

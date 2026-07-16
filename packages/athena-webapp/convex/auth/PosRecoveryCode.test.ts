@@ -51,6 +51,7 @@ describe("PosRecoveryCode auth provider", () => {
     const ctx = {
       auth: { getUserIdentity: vi.fn(async () => null) },
       runMutation: vi.fn(async () => ({
+        status: "prepared",
         authSessionId: AUTH_SESSION_ID,
         authUserId: AUTH_USER_ID,
       })),
@@ -100,12 +101,10 @@ describe("PosRecoveryCode auth provider", () => {
     expect(ctx.runMutation).not.toHaveBeenCalled();
   });
 
-  it("returns null when internal verification rejects", async () => {
+  it("maps a committed recovery denial to null", async () => {
     const ctx = {
       auth: { getUserIdentity: vi.fn(async () => null) },
-      runMutation: vi.fn(async () => {
-        throw new Error("POS recovery sign-in failed.");
-      }),
+      runMutation: vi.fn(async () => ({ status: "denied" })),
     };
 
     await expect(
@@ -119,5 +118,27 @@ describe("PosRecoveryCode auth provider", () => {
         ctx as never,
       ),
     ).resolves.toBeNull();
+  });
+
+  it("does not normalize unexpected preparation failures", async () => {
+    const unexpected = new Error("database unavailable");
+    const ctx = {
+      auth: { getUserIdentity: vi.fn(async () => null) },
+      runMutation: vi.fn(async () => {
+        throw unexpected;
+      }),
+    };
+
+    await expect(
+      PosRecoveryCode.authorize(
+        {
+          code: "abc-123",
+          recoveryCorrelationKey: "recovery-correlation-1",
+          terminalId: TERMINAL_ID,
+          terminalProof: "terminal-proof",
+        },
+        ctx as never,
+      ),
+    ).rejects.toBe(unexpected);
   });
 });

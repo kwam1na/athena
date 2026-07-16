@@ -1,5 +1,5 @@
 import { ArrowLeft, ArrowRight } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   getDefaultAuthRuntimeHandoffCoordinator,
@@ -15,6 +15,7 @@ import {
   abortPosRecoveryFlow,
   activatePosRecoveryFlow,
   issuePosRecoveryFlow,
+  resumePosRecoveryFlow,
   startPosRecoveryFlow,
   verifyPromotedPosRecoveryFlow,
   type PosRecoveryFlowPhase,
@@ -63,11 +64,16 @@ export function PosRecoveryCodeForm({
     "checking" | "disconnected" | "failed" | "recovery_code"
   >(terminal ? "checking" : "failed");
   const sessionRef = useRef<PosRecoveryFlowSession | null>(null);
+  const startupResumeAttemptedRef = useRef(false);
 
   const browserFingerprintHash = terminal?.browserFingerprintHash;
   const hasTerminalEvidence = terminal !== null;
   const terminalId = terminal?.terminalId;
   const terminalProof = terminal?.terminalProof;
+  const updatePhase = useCallback((next: PosRecoveryFlowPhase) => {
+    setPhase(next);
+    setErrorMessage(null);
+  }, []);
   useEffect(() => {
     if (!browserFingerprintHash || !terminalId || !terminalProof) {
       if (hasTerminalEvidence) setPreflightState("failed");
@@ -113,6 +119,65 @@ export function PosRecoveryCodeForm({
     terminalId,
     terminalProof,
   ]);
+
+  useEffect(() => {
+    if (
+      preflightState !== "recovery_code" ||
+      !terminal ||
+      startupResumeAttemptedRef.current
+    ) {
+      return;
+    }
+    const runtimePhase = authRuntime.getSnapshot().handoffPhase;
+    if (
+      runtimePhase !== "prepared" &&
+      runtimePhase !== "auth_issued" &&
+      runtimePhase !== "activated"
+    ) {
+      return;
+    }
+    startupResumeAttemptedRef.current = true;
+    const session: PosRecoveryFlowSession = {
+      handle: authRuntime.getCurrentHandoffHandle(),
+      redirectTo: redirectTo ?? "/",
+      terminalId: terminal.terminalId,
+      terminalProof: terminal.terminalProof,
+    };
+    sessionRef.current = session;
+    let cancelled = false;
+    void resumePosRecoveryFlow({
+      adapter,
+      coordinator: authRuntime,
+      onPhase: (next) => {
+        if (!cancelled) updatePhase(next);
+      },
+      session,
+    })
+      .then((result) => {
+        if (cancelled || result.status !== "code_required") return;
+        setPhase("retry_issue");
+        setErrorMessage(
+          "Enter the recovery code again to continue this sign-in.",
+        );
+      })
+      .catch(() => {
+        if (cancelled) return;
+        const currentPhase = authRuntime.getSnapshot().handoffPhase;
+        setPhase(
+          currentPhase === "promoted"
+            ? "retry_verification"
+            : currentPhase === "activated"
+              ? "retry_activation"
+              : currentPhase === "auth_issued"
+                ? "retry_activation"
+                : "retry_issue",
+        );
+        setErrorMessage(RECOVERY_FAILURE_COPY);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [adapter, authRuntime, preflightState, redirectTo, terminal, updatePhase]);
 
   if (!terminal) {
     return (
@@ -203,11 +268,6 @@ export function PosRecoveryCodeForm({
     "aborting",
   ].includes(phase);
   const canSubmit = code.trim().length > 0 && !isBusy && phase !== "completed";
-
-  const updatePhase = (next: PosRecoveryFlowPhase) => {
-    setPhase(next);
-    setErrorMessage(null);
-  };
 
   async function submit() {
     if (!canSubmit) return;

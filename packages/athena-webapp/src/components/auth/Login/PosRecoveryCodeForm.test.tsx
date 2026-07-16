@@ -100,6 +100,71 @@ describe("PosRecoveryCodeForm", () => {
     expect(adapter.assertActivatedSession).toHaveBeenCalledTimes(2);
   });
 
+  it("resumes an Auth-issued namespace after reload without another code", async () => {
+    const storage = createMemoryStorage();
+    const beforeReload = createCoordinator(storage);
+    const handle = beforeReload.prepareHandoff();
+    beforeReload.markAuthIssued(handle);
+    const afterReload = createCoordinator(storage);
+    const adapter = createAdapter();
+
+    renderForm({ adapter, authRuntime: afterReload });
+
+    expect(
+      await screen.findByText(/checkout station signed in/i),
+    ).toBeInTheDocument();
+    expect(adapter.resume).toHaveBeenCalledWith({
+      storage: expect.any(Object),
+      storageNamespace: handle.pendingNamespace,
+    });
+    expect(adapter.issue).not.toHaveBeenCalled();
+    expect(adapter.activate).toHaveBeenCalledTimes(1);
+  });
+
+  it("requires code re-entry when a prepared namespace has no Auth tokens", async () => {
+    const user = userEvent.setup();
+    const storage = createMemoryStorage();
+    const beforeReload = createCoordinator(storage);
+    beforeReload.prepareHandoff();
+    const afterReload = createCoordinator(storage);
+    const adapter = createAdapter();
+    adapter.activate = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("not authenticated"))
+      .mockResolvedValueOnce(activation);
+
+    renderForm({ adapter, authRuntime: afterReload });
+
+    expect(
+      await screen.findByText(/enter the recovery code again/i),
+    ).toBeInTheDocument();
+    await user.type(screen.getByLabelText(/recovery code/i), "abc-123");
+    await user.click(screen.getByRole("button", { name: /try again/i }));
+
+    expect(
+      await screen.findByText(/checkout station signed in/i),
+    ).toBeInTheDocument();
+    expect(adapter.issue).toHaveBeenCalledTimes(1);
+    expect(adapter.activate).toHaveBeenCalledTimes(2);
+  });
+
+  it("activates a prepared journal when token issuance completed before reload", async () => {
+    const storage = createMemoryStorage();
+    const beforeReload = createCoordinator(storage);
+    beforeReload.prepareHandoff();
+    const afterReload = createCoordinator(storage);
+    const adapter = createAdapter();
+
+    renderForm({ adapter, authRuntime: afterReload });
+
+    expect(
+      await screen.findByText(/checkout station signed in/i),
+    ).toBeInTheDocument();
+    expect(adapter.resume).toHaveBeenCalledTimes(1);
+    expect(adapter.issue).not.toHaveBeenCalled();
+    expect(adapter.activate).toHaveBeenCalledTimes(1);
+  });
+
   it("routes revoked exact evidence to administrator reconnect without POS sign-in", async () => {
     const user = userEvent.setup();
     const adapter = createAdapter();
@@ -126,10 +191,10 @@ describe("PosRecoveryCodeForm", () => {
           "null",
       ),
     ).toEqual({
-        expiresAt: expect.any(Number),
-        reconnectIntentToken: "opaque-reconnect-token-123456",
-        version: 1,
-      });
+      expiresAt: expect.any(Number),
+      reconnectIntentToken: "opaque-reconnect-token-123456",
+      version: 1,
+    });
   });
 });
 
@@ -173,19 +238,20 @@ function createAdapter(): PosRecoveryFrontendAdapter {
       disposition: "recovery_code_required" as const,
     })),
     issue: vi.fn(async () => undefined),
+    resume: vi.fn(async () => undefined),
     activate: vi.fn(async () => activation),
     assertActivatedSession: vi.fn(async () => undefined),
     abort: vi.fn(async () => undefined),
   };
 }
 
-function createCoordinator() {
+function createCoordinator(storage = createMemoryStorage()) {
   let sequence = 0;
   return createAuthRuntimeHandoffCoordinator({
     now: () => 1_000,
     ownerToken: "form-test-owner",
     randomId: () => `form-generated-${++sequence}-12345678`,
-    storage: createMemoryStorage(),
+    storage,
   });
 }
 

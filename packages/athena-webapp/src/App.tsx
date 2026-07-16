@@ -9,6 +9,11 @@ import {
   getDefaultAuthRuntimeHandoffCoordinator,
   type AuthRuntimeHandoffCoordinator,
 } from "./lib/auth/authRuntimeHandoff";
+import { recoverPromotedPosRecoverySession } from "./lib/auth/recoverPromotedPosRecoverySession";
+import {
+  completeVerifiedPosRecoveryPromotion,
+  getPosServiceAuthPresentation,
+} from "./components/auth/Login/posRecoveryFlow";
 import {
   stageUpdateStaticAssets,
   UpdateCoordinatorProvider,
@@ -33,6 +38,17 @@ export function App({
     authRuntime.getSnapshot,
     authRuntime.getSnapshot,
   );
+
+  useEffect(() => {
+    if (authSnapshot.blockReason !== "stale_handoff") return;
+    void authRuntime
+      .runExclusive(async () => {
+        if (authRuntime.getSnapshot().blockReason === "stale_handoff") {
+          authRuntime.takeOverStaleHandoff();
+        }
+      })
+      .catch(() => authRuntime.refresh());
+  }, [authRuntime, authSnapshot.blockReason]);
 
   if (authSnapshot.status === "blocked") {
     return (
@@ -62,6 +78,10 @@ export function App({
               ? {}
               : { storageNamespace: authSnapshot.activeNamespace })}
           >
+            <AuthRuntimePromotionRecovery
+              authRuntime={authRuntime}
+              handoffPhase={authSnapshot.handoffPhase}
+            />
             <QueryClientProvider client={queryClient}>
               <RouterProvider router={router} />
             </QueryClientProvider>
@@ -70,6 +90,41 @@ export function App({
       </AppMessagesProvider>
     </PosLocalStorageRuntimeProvider>
   );
+}
+
+function AuthRuntimePromotionRecovery({
+  authRuntime,
+  handoffPhase,
+}: {
+  authRuntime: AuthRuntimeHandoffCoordinator;
+  handoffPhase: string;
+}) {
+  useEffect(() => {
+    if (handoffPhase !== "promoted") return;
+    let cancelled = false;
+    void authRuntime
+      .runExclusive(async () => {
+        if (authRuntime.getSnapshot().handoffPhase !== "promoted") return;
+        const handle = authRuntime.getCurrentHandoffHandle();
+        await authRuntime.keepLeaseAlive(handle, async () => {
+          await recoverPromotedPosRecoverySession();
+          if (cancelled) return;
+          const presentation = getPosServiceAuthPresentation();
+          completeVerifiedPosRecoveryPromotion({
+            coordinator: authRuntime,
+            handle,
+            redirectTo: presentation?.redirectTo ?? "/",
+          });
+        });
+      })
+      .catch(() => {
+        // Preserve the promoted namespace and retry after the next mount.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [authRuntime, handoffPhase]);
+  return null;
 }
 
 export function VersionCheckerBridge() {

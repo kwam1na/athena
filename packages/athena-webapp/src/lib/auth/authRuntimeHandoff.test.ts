@@ -114,6 +114,110 @@ describe("auth runtime handoff coordinator", () => {
     expect(listener).toHaveBeenCalledTimes(4);
     unsubscribe();
   });
+
+  it("reconstructs an owned in-flight handle after a reload", () => {
+    const storage = createMemoryStorage();
+    const beforeReload = createCoordinator(storage);
+    const handle = beforeReload.prepareHandoff();
+    beforeReload.markAuthIssued(handle);
+
+    const afterReload = createCoordinator(storage);
+
+    expect(afterReload.getCurrentHandoffHandle()).toEqual(handle);
+    expect(afterReload.getSnapshot().handoffPhase).toBe("auth_issued");
+  });
+
+  it("serializes the complete handoff through Web Locks", async () => {
+    let active = 0;
+    let maximumActive = 0;
+    let tail = Promise.resolve();
+    const lockRequests: Array<{
+      name: string;
+      options: { mode: "exclusive" };
+    }> = [];
+    const lockManager = {
+      async request<T>(
+        name: string,
+        options: { mode: "exclusive" },
+        callback: () => Promise<T>,
+      ) {
+        lockRequests.push({ name, options });
+        const previous = tail;
+        let release!: () => void;
+        tail = new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        await previous;
+        active += 1;
+        maximumActive = Math.max(maximumActive, active);
+        try {
+          return await callback();
+        } finally {
+          active -= 1;
+          release();
+        }
+      },
+    };
+    const coordinator = createAuthRuntimeHandoffCoordinator({
+      lockManager,
+      now: () => 1_000,
+      ownerToken: "owner-current",
+      randomId: () => "generated-lock-12345678",
+      storage: createMemoryStorage(),
+    });
+    let releaseFirst!: () => void;
+    const first = coordinator.runExclusive(
+      () => new Promise<void>((resolve) => (releaseFirst = resolve)),
+    );
+    const second = coordinator.runExclusive(async () => undefined);
+    await vi.waitFor(() => expect(lockRequests).toHaveLength(2));
+    releaseFirst();
+    await Promise.all([first, second]);
+
+    expect(maximumActive).toBe(1);
+    expect(lockRequests).toEqual([
+      {
+        name: "athena.authRuntimeHandoff.v1",
+        options: { mode: "exclusive" },
+      },
+      {
+        name: "athena.authRuntimeHandoff.v1",
+        options: { mode: "exclusive" },
+      },
+    ]);
+  });
+
+  it("renews the owner lease while an async handoff step is running", async () => {
+    vi.useFakeTimers();
+    try {
+      let now = 1_000;
+      const coordinator = createAuthRuntimeHandoffCoordinator({
+        lockManager: null,
+        now: () => now,
+        ownerToken: "owner-current",
+        randomId: () => "generated-lease-12345678",
+        storage: createMemoryStorage(),
+      });
+      const handle = coordinator.prepareHandoff({ leaseDurationMs: 3_000 });
+      let finish!: () => void;
+      const running = coordinator.keepLeaseAlive(
+        handle,
+        () => new Promise<void>((resolve) => (finish = resolve)),
+        { leaseDurationMs: 3_000 },
+      );
+
+      now = 2_000;
+      await vi.advanceTimersByTimeAsync(1_000);
+      now = 4_500;
+      await vi.advanceTimersByTimeAsync(1_000);
+      finish();
+      await running;
+
+      expect(() => coordinator.markAuthIssued(handle)).not.toThrow();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 function createCoordinator(

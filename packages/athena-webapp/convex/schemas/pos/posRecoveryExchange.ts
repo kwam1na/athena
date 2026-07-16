@@ -6,6 +6,7 @@ export const posRecoveryExchangeStatusValidator = v.union(
   v.literal("activated"),
   v.literal("aborted"),
   v.literal("expired"),
+  v.literal("cleaned"),
 );
 
 export const posRecoveryExchangeSchema = v.object({
@@ -35,6 +36,7 @@ export const posRecoveryExchangeSchema = v.object({
   activatedAt: v.optional(v.number()),
   abortedAt: v.optional(v.number()),
   expiredAt: v.optional(v.number()),
+  cleanedAt: v.optional(v.number()),
   servicePrincipalSessionId: v.optional(v.id("servicePrincipalSession")),
   posApplicationSessionBindingId: v.optional(
     v.id("posApplicationSessionBinding"),

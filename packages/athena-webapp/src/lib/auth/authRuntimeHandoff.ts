@@ -5,6 +5,7 @@ const OWNER_TOKEN_KEY = "athena.authRuntimeHandoff.owner.v1";
 const MANIFEST_PREFIX = "athena.authRuntimeHandoff.keys.v1.";
 const JOURNAL_VERSION = 1;
 const DEFAULT_LEASE_MS = 30_000;
+const HANDOFF_LOCK_NAME = "athena.authRuntimeHandoff.v1";
 
 type HandoffPhase =
   "idle" | "prepared" | "auth_issued" | "activated" | "promoted";
@@ -48,13 +49,25 @@ type CoordinatorOptions = {
   ownerToken: string;
   now?: () => number;
   randomId?: () => string;
+  lockManager?: AuthRuntimeLockManager | null;
 };
+
+type AuthRuntimeLockManager = {
+  request<T>(
+    name: string,
+    options: { mode: "exclusive" },
+    callback: () => Promise<T>,
+  ): Promise<T>;
+};
+
+const fallbackLockTails = new WeakMap<Storage, Promise<void>>();
 
 export function createAuthRuntimeHandoffCoordinator({
   storage,
   ownerToken,
   now = () => Date.now(),
   randomId = defaultRandomId,
+  lockManager = getBrowserLockManager(),
 }: CoordinatorOptions) {
   const listeners = new Set<() => void>();
   const tokenStorages = new Map<string, TokenStorage>();
@@ -216,6 +229,28 @@ export function createAuthRuntimeHandoffCoordinator({
     return handle;
   }
 
+  function getCurrentHandoffHandle() {
+    const journal = readJournal();
+    if (
+      journal === null ||
+      journal === "corrupt" ||
+      journal.phase === "idle" ||
+      journal.ownerToken !== ownerToken ||
+      !journal.pendingNamespace ||
+      !journal.correlationKey
+    ) {
+      throw handoffError("handoff_unavailable");
+    }
+    if ((journal.leaseExpiresAt ?? 0) <= now()) {
+      throw handoffError("handoff_lease_expired");
+    }
+    return Object.freeze({
+      correlationKey: journal.correlationKey,
+      ownerToken,
+      pendingNamespace: journal.pendingNamespace,
+    });
+  }
+
   function renewLease(
     handle: AuthRuntimeHandoffHandle,
     options: { leaseDurationMs?: number } = {},
@@ -226,6 +261,65 @@ export function createAuthRuntimeHandoffCoordinator({
       leaseExpiresAt: now() + (options.leaseDurationMs ?? DEFAULT_LEASE_MS),
       revision: journal.revision + 1,
       updatedAt: now(),
+    });
+  }
+
+  async function keepLeaseAlive<T>(
+    handle: AuthRuntimeHandoffHandle,
+    task: () => Promise<T>,
+    options: { leaseDurationMs?: number } = {},
+  ) {
+    const leaseDurationMs = options.leaseDurationMs ?? DEFAULT_LEASE_MS;
+    renewLease(handle, { leaseDurationMs });
+    const heartbeat = globalThis.setInterval(
+      () => {
+        try {
+          renewLease(handle, { leaseDurationMs });
+        } catch {
+          // The in-flight operation will fail its next transition if ownership
+          // was lost. A heartbeat must never overwrite a new owner.
+        }
+      },
+      Math.max(1_000, Math.floor(leaseDurationMs / 3)),
+    );
+    try {
+      return await task();
+    } finally {
+      globalThis.clearInterval(heartbeat);
+    }
+  }
+
+  function runExclusive<T>(task: () => Promise<T>) {
+    if (lockManager) {
+      return lockManager.request(
+        HANDOFF_LOCK_NAME,
+        { mode: "exclusive" },
+        async () => {
+          emit();
+          return task();
+        },
+      );
+    }
+
+    // Web Locks is unavailable in a small set of embedded browsers and in
+    // tests. Keep same-document callers serialized; the owner lease remains
+    // the cross-document fail-closed guard and is rechecked at every write.
+    const previous = fallbackLockTails.get(storage) ?? Promise.resolve();
+    let release!: () => void;
+    const next = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    fallbackLockTails.set(storage, next);
+    return previous.then(async () => {
+      try {
+        emit();
+        return await task();
+      } finally {
+        release();
+        if (fallbackLockTails.get(storage) === next) {
+          fallbackLockTails.delete(storage);
+        }
+      }
     });
   }
 
@@ -321,9 +415,11 @@ export function createAuthRuntimeHandoffCoordinator({
   return {
     clearAfterConfirmedAbort,
     completeVerifiedPromotion,
+    getCurrentHandoffHandle,
     getPendingTokenStorage,
     getSnapshot: () => snapshot,
     getTokenStorage,
+    keepLeaseAlive,
     markActivated: (handle: AuthRuntimeHandoffHandle) =>
       transition(handle, "auth_issued", "activated"),
     markAuthIssued: (handle: AuthRuntimeHandoffHandle) =>
@@ -335,6 +431,7 @@ export function createAuthRuntimeHandoffCoordinator({
       }),
     refresh: emit,
     renewLease,
+    runExclusive,
     subscribe(listener: () => void) {
       listeners.add(listener);
       return () => listeners.delete(listener);
@@ -370,6 +467,11 @@ function getOrCreateOwnerToken(storage: Storage) {
 
 function defaultRandomId() {
   return globalThis.crypto.randomUUID();
+}
+
+function getBrowserLockManager(): AuthRuntimeLockManager | null {
+  if (typeof navigator === "undefined" || !navigator.locks) return null;
+  return navigator.locks as AuthRuntimeLockManager;
 }
 
 function handoffError(code: string) {
@@ -423,9 +525,9 @@ function isJournal(value: unknown): value is HandoffJournal {
   }
   const hasHandoffFields = Boolean(
     journal.pendingNamespace &&
-      journal.correlationKey &&
-      journal.ownerToken &&
-      typeof journal.leaseExpiresAt === "number",
+    journal.correlationKey &&
+    journal.ownerToken &&
+    typeof journal.leaseExpiresAt === "number",
   );
   if (!hasHandoffFields) return false;
   return journal.phase === "promoted"

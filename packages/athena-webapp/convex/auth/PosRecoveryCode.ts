@@ -32,30 +32,30 @@ export const PosRecoveryCode: ReturnType<typeof ConvexCredentials> =
       return null;
     }
 
-    try {
-      // Recovery must originate from the isolated, empty Auth namespace. A
-      // mounted predecessor session is never allowed to prepare authority.
-      if (await ctx.auth.getUserIdentity()) return null;
+    // Recovery must originate from the isolated, empty Auth namespace. A
+    // mounted predecessor session is never allowed to prepare authority.
+    if (await ctx.auth.getUserIdentity()) return null;
 
-      const result = (await ctx.runMutation(
-        prepareRecoveryForAuthProviderRef,
-        {
-          code,
-          recoveryCorrelationKey,
-          terminalId: terminalId as never,
-          terminalProof,
-        },
-      )) as {
-        authSessionId: Id<"authSessions">;
-        authUserId: Id<"users">;
-      };
+    const result = (await ctx.runMutation(
+      prepareRecoveryForAuthProviderRef,
+      {
+        code,
+        recoveryCorrelationKey,
+        terminalId: terminalId as never,
+        terminalProof,
+      },
+    )) as
+      | {
+          status: "prepared";
+          authSessionId: Id<"authSessions">;
+          authUserId: Id<"users">;
+        }
+      | { status: "denied" };
 
-      return {
-        userId: result.authUserId,
-        sessionId: result.authSessionId,
-      };
-    } catch {
-      return null;
-    }
+    if (result.status === "denied") return null;
+    return {
+      userId: result.authUserId,
+      sessionId: result.authSessionId,
+    };
   },
 });

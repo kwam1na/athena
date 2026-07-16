@@ -169,6 +169,40 @@ function hasKeyedVerifier(credential: Doc<"posRecoveryCredential">) {
   );
 }
 
+export function buildPosServicePrincipalCredentialCensusState(
+  credential: Doc<"posRecoveryCredential">,
+) {
+  return [
+    credential._id,
+    credential.organizationId,
+    credential.servicePrincipalId,
+    credential.status,
+    credential.credentialRevision ?? 1,
+    credential.rotatedAt,
+    credential.verifierKind,
+    credential.codeHash === undefined
+      ? "legacy_hash_absent"
+      : "legacy_hash_present",
+    credential.codeSalt === undefined
+      ? "legacy_salt_absent"
+      : "legacy_salt_present",
+    credential.codeVersion,
+    credential.keyedVerifierDigest === undefined
+      ? "keyed_digest_absent"
+      : "keyed_digest_present",
+    credential.keyedVerifierSalt === undefined
+      ? "keyed_salt_absent"
+      : "keyed_salt_present",
+    credential.keyedVerifierVersion,
+    credential.keyedVerifierPepperVersion,
+    credential.keyedVerifierIterations,
+    credential.legacyMigrationStatus,
+    credential.plaintextCode === undefined
+      ? "plaintext_absent"
+      : "plaintext_present",
+  ] as const;
+}
+
 function uniqueSortedConflicts(
   conflicts: PosServicePrincipalMigrationConflict[],
 ) {
@@ -526,19 +560,7 @@ async function censusStoreWithCtx(
         : null,
     ),
     credential: credential
-      ? [
-          credential._id,
-          credential.organizationId,
-          credential.servicePrincipalId,
-          credential.status,
-          credential.credentialRevision ?? 1,
-          credential.verifierKind,
-          credential.keyedVerifierDigest,
-          credential.keyedVerifierSalt,
-          credential.keyedVerifierVersion,
-          credential.keyedVerifierPepperVersion,
-          credential.plaintextCode,
-        ]
+      ? buildPosServicePrincipalCredentialCensusState(credential)
       : null,
     terminals: terminals.map((terminal) => [
       terminal._id,
@@ -1131,60 +1153,6 @@ export async function transitionPosServicePrincipalMigrationModeWithCtx(
     ...(args.nextMode === "enforced" ? { enforcedAt: args.now } : {}),
   });
   return ctx.db.get("posServicePrincipalMigrationStoreState", state._id);
-}
-
-export async function recordPosTerminalMigrationRecoveryWithCtx(
-  ctx: MutationCtx,
-  args: {
-    credentialRevision: number;
-    now: number;
-    recoveryVersion: number;
-    servicePrincipalId: Id<"servicePrincipal">;
-    servicePrincipalSessionId: Id<"servicePrincipalSession">;
-    storeId: Id<"store">;
-    terminalId: Id<"posTerminal">;
-  },
-) {
-  const terminal = await ctx.db.get("posTerminal", args.terminalId);
-  if (!terminal || terminal.storeId !== args.storeId) {
-    throw new Error("terminal_scope_mismatch");
-  }
-  if (terminal.status !== "active") {
-    throw new Error("terminal_not_active");
-  }
-  const principal = await ctx.db.get(
-    "servicePrincipal",
-    args.servicePrincipalId,
-  );
-  if (!principal || principal.storeId !== args.storeId) {
-    throw new Error("principal_scope_mismatch");
-  }
-  const evidence = await ctx.db
-    .query("posServicePrincipalMigrationTerminalEvidence")
-    .withIndex("by_storeId_terminalId", (query) =>
-      query.eq("storeId", args.storeId).eq("terminalId", args.terminalId),
-    )
-    .take(2);
-  if (evidence.length !== 1) throw new Error("terminal_evidence_missing");
-  await ctx.db.patch(
-    "posServicePrincipalMigrationTerminalEvidence",
-    evidence[0]._id,
-    {
-      credentialRevision: args.credentialRevision,
-      recoveryVersion: args.recoveryVersion,
-      servicePrincipalId: args.servicePrincipalId,
-      servicePrincipalSessionId: args.servicePrincipalSessionId,
-      status: "recovered",
-      successfulRecoveryAt: args.now,
-      terminalLifecycleRevision: terminal.lifecycleRevision ?? 1,
-      terminalProofRevision: terminal.proofRevision ?? 1,
-      updatedAt: args.now,
-    },
-  );
-  return ctx.db.get(
-    "posServicePrincipalMigrationTerminalEvidence",
-    evidence[0]._id,
-  );
 }
 
 const batchResultValidator = v.object({

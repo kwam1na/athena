@@ -1,8 +1,5 @@
 import { v } from "convex/values";
-import {
-  getAuthSessionId,
-  getAuthUserId,
-} from "@convex-dev/auth/server";
+import { getAuthSessionId, getAuthUserId } from "@convex-dev/auth/server";
 
 import type { Doc, Id } from "../../_generated/dataModel";
 import {
@@ -21,6 +18,7 @@ import { issueServicePrincipalSession } from "../../servicePrincipals/lifecycle"
 import { requirePosApplicationAuthorityWithCtx } from "../application/posApplicationAuthority";
 import { hashPosTerminalSyncSecret } from "../application/sync/terminalSyncSecret";
 import { issuePosOfflineAuthorityReceipt } from "../application/offlineAuthorityReceipt";
+import { recordPosTerminalMigrationRecoveryWithCtx } from "../application/posServicePrincipalMigrationEvidence";
 
 const ASSERTION_TTL_MS = 5 * 60 * 1000;
 const POS_HUB_ROUTE_SCOPE = "pos_hub";
@@ -471,8 +469,7 @@ export async function activatePreparedPosTerminalSessionWithCtx(
     return {
       authorityExpiresAt: retainedSession.absoluteExpiresAt,
       offlineAuthorityReceipt: retainedBinding.offlineAuthorityReceipt,
-      posApplicationSessionBindingId:
-        exchange.posApplicationSessionBindingId,
+      posApplicationSessionBindingId: exchange.posApplicationSessionBindingId,
       servicePrincipalSessionId: exchange.servicePrincipalSessionId,
       status: "activated" as const,
       storeId: exchange.storeId,
@@ -561,9 +558,13 @@ export async function activatePreparedPosTerminalSessionWithCtx(
     terminalLifecycleRevision: exchange.terminalLifecycleRevision,
     terminalProofRevision: exchange.terminalProofRevision,
   });
-  await ctx.db.patch("posApplicationSessionBinding", posApplicationSessionBindingId, {
-    offlineAuthorityReceipt,
-  });
+  await ctx.db.patch(
+    "posApplicationSessionBinding",
+    posApplicationSessionBindingId,
+    {
+      offlineAuthorityReceipt,
+    },
+  );
 
   // The new authority is already present in this transaction before its
   // same-terminal predecessor is superseded. Sibling terminal lineages are
@@ -601,11 +602,23 @@ export async function activatePreparedPosTerminalSessionWithCtx(
     status: "activated",
     updatedAt: now,
   });
+  const recoveryVersion = (terminal.servicePrincipalRecoveryVersion ?? 0) + 1;
   await ctx.db.patch("posTerminal", terminal._id, {
     lastCorrelationId: exchange.recoveryCorrelationKey,
     lastServicePrincipalRecoveryAt: now,
-    servicePrincipalRecoveryVersion:
-      (terminal.servicePrincipalRecoveryVersion ?? 0) + 1,
+    servicePrincipalRecoveryVersion: recoveryVersion,
+  });
+  await recordPosTerminalMigrationRecoveryWithCtx(ctx, {
+    credentialId: exchange.posRecoveryCredentialId,
+    credentialRevision: exchange.credentialRevision,
+    now,
+    organizationId: exchange.organizationId,
+    posApplicationSessionBindingId,
+    recoveryVersion,
+    servicePrincipalId: exchange.servicePrincipalId,
+    servicePrincipalSessionId: issued.servicePrincipalSessionId,
+    storeId: exchange.storeId,
+    terminalId: exchange.terminalId,
   });
   await recordOperationalEventWithCtx(ctx, {
     actorServicePrincipalId: exchange.servicePrincipalId,
@@ -782,14 +795,17 @@ export const cleanupExpiredPosRecoveryArtifacts = internalMutation({
     ]);
     const exchanges = [...expiredPrepared, ...aborted].slice(0, limit);
     for (const exchange of exchanges) {
-      const refreshTokens = await ctx.db
-        .query("authRefreshTokens")
-        .withIndex("sessionId", (query) =>
-          query.eq("sessionId", exchange.authSessionId),
-        )
-        .take(20);
-      for (const refreshToken of refreshTokens) {
-        await ctx.db.delete("authRefreshTokens", refreshToken._id);
+      while (true) {
+        const refreshTokens = await ctx.db
+          .query("authRefreshTokens")
+          .withIndex("sessionId", (query) =>
+            query.eq("sessionId", exchange.authSessionId),
+          )
+          .take(20);
+        if (refreshTokens.length === 0) break;
+        for (const refreshToken of refreshTokens) {
+          await ctx.db.delete("authRefreshTokens", refreshToken._id);
+        }
       }
       const authSession = await ctx.db.get(
         "authSessions",
@@ -803,6 +819,13 @@ export const cleanupExpiredPosRecoveryArtifacts = internalMutation({
           expiredAt: now,
           revision: exchange.revision + 1,
           status: "expired",
+          updatedAt: now,
+        });
+      } else {
+        await ctx.db.patch("posRecoveryExchange", exchange._id, {
+          cleanedAt: now,
+          revision: exchange.revision + 1,
+          status: "cleaned",
           updatedAt: now,
         });
       }
@@ -833,8 +856,7 @@ export const getCurrentPosTerminalServiceSession = query({
       authorityExpiresAt: authority.actor.absoluteExpiresAt,
       authSessionId: authority.actor.authSessionId,
       offlineAuthorityReceipt: authority.offlineAuthorityReceipt,
-      posApplicationSessionBindingId:
-        authority.posApplicationSessionBindingId,
+      posApplicationSessionBindingId: authority.posApplicationSessionBindingId,
       servicePrincipalSessionId: authority.servicePrincipalSessionId,
       storeId: authority.storeId,
       terminalId: authority.terminalId,

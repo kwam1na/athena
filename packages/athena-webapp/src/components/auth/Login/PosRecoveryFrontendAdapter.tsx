@@ -3,11 +3,10 @@ import {
   useAuthActions,
   type TokenStorage,
 } from "@convex-dev/auth/react";
-import { ConvexReactClient, useMutation } from "convex/react";
+import { ConvexReactClient, useConvexAuth, useMutation } from "convex/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { api } from "~/convex/_generated/api";
-import { convex } from "../../../lib/convexClient";
 import { ATHENA_POS_RECOVERY_CODE_PROVIDER_ID } from "../../../../shared/auth";
 import type { AuthRuntimeHandoffCoordinator } from "../../../lib/auth/authRuntimeHandoff";
 import { PosRecoveryCodeForm } from "./PosRecoveryCodeForm";
@@ -16,11 +15,7 @@ import type {
   PosRecoveryFrontendAdapter,
 } from "./posRecoveryFlow";
 import type { PosRecoveryTerminalEvidence } from "./PosRecoveryCodeForm";
-import { getDefaultPosLocalStore } from "@/lib/pos/infrastructure/local/posLocalStorageRuntime";
-import { verifyPosOfflineAuthorityReceipt } from "@/lib/pos/security/offlineAuthorityPublicKeys";
-
-const ASSERTION_ATTEMPTS = 40;
-const ASSERTION_RETRY_DELAY_MS = 50;
+import { assertActivatedPosRecoverySession } from "../../../lib/auth/recoverPromotedPosRecoverySession";
 
 type PendingSession = {
   storage: TokenStorage;
@@ -117,6 +112,12 @@ function useProductionPosRecoveryAdapter() {
             resolve,
           });
         }),
+      resume: async (input) => {
+        setPendingSession({
+          storage: input.storage,
+          storageNamespace: input.storageNamespace,
+        });
+      },
       activate: () =>
         new Promise<PosRecoveryActivation>((resolve, reject) => {
           setCommand({
@@ -126,7 +127,7 @@ function useProductionPosRecoveryAdapter() {
             resolve,
           });
         }),
-      assertActivatedSession,
+      assertActivatedSession: assertActivatedPosRecoverySession,
       abort: (input) =>
         new Promise<void>((resolve, reject) => {
           setCommand({
@@ -185,6 +186,7 @@ function PendingCommandRunner({
   settle: (id: number) => void;
 }) {
   const { signIn } = useAuthActions();
+  const { isLoading } = useConvexAuth();
   const activate = useMutation(
     api.pos.public.terminalAppSessions.activatePreparedPosTerminalSession,
   );
@@ -195,6 +197,7 @@ function PendingCommandRunner({
 
   useEffect(() => {
     if (!command || lastCommandIdRef.current === command.id) return;
+    if (command.kind !== "issue" && isLoading) return;
     lastCommandIdRef.current = command.id;
 
     void (async () => {
@@ -233,68 +236,7 @@ function PendingCommandRunner({
         settle(command.id);
       }
     })();
-  }, [abort, activate, command, settle, signIn]);
+  }, [abort, activate, command, isLoading, settle, signIn]);
 
   return null;
-}
-
-async function assertActivatedSession(expected: PosRecoveryActivation) {
-  for (let attempt = 0; attempt < ASSERTION_ATTEMPTS; attempt += 1) {
-    try {
-      const current = await convex.query(
-        api.pos.public.terminalAppSessions.getCurrentPosTerminalServiceSession,
-        {},
-      );
-      if (
-        current.authorityExpiresAt === expected.authorityExpiresAt &&
-        current.offlineAuthorityReceipt === expected.offlineAuthorityReceipt &&
-        current.posApplicationSessionBindingId ===
-          expected.posApplicationSessionBindingId &&
-        current.servicePrincipalSessionId ===
-          expected.servicePrincipalSessionId &&
-        current.storeId === expected.storeId &&
-        current.terminalId === expected.terminalId
-      ) {
-        await persistActivatedOfflineAuthorityReceipt(expected);
-        return;
-      }
-    } catch {
-      // The root provider remount is asynchronous; retry against its new token.
-    }
-    await new Promise((resolve) =>
-      window.setTimeout(resolve, ASSERTION_RETRY_DELAY_MS),
-    );
-  }
-  throw new Error("pos_recovery_session_assertion_failed");
-}
-
-async function persistActivatedOfflineAuthorityReceipt(
-  activation: PosRecoveryActivation,
-) {
-  const verification = await verifyPosOfflineAuthorityReceipt({
-    envelope: activation.offlineAuthorityReceipt,
-    expectedStoreId: activation.storeId,
-    expectedTerminalId: activation.terminalId,
-  });
-  if (verification.status !== "valid") {
-    throw new Error("pos_offline_authority_receipt_invalid");
-  }
-
-  const store = getDefaultPosLocalStore();
-  const seedResult = await store.readProvisionedTerminalSeed();
-  const seed = seedResult.ok ? seedResult.value : null;
-  if (
-    !seed ||
-    seed.storeId !== activation.storeId ||
-    seed.cloudTerminalId !== activation.terminalId
-  ) {
-    throw new Error("pos_offline_authority_receipt_scope_invalid");
-  }
-  const writeResult = await store.writeProvisionedTerminalSeed({
-    ...seed,
-    offlineAuthorityReceipt: verification.receipt,
-  });
-  if (!writeResult.ok) {
-    throw new Error("pos_offline_authority_receipt_persistence_failed");
-  }
 }

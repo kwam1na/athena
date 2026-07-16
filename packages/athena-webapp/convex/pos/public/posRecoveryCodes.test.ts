@@ -427,13 +427,13 @@ describe("POS recovery codes", () => {
         ...args,
         code: "wrong-code",
       } as never),
-    ).rejects.toThrow("POS recovery sign-in failed.");
+    ).resolves.toEqual({ status: "denied" });
     await expect(
       prepareRecoveryForAuthProviderWithCtx(ctx as never, {
         ...args,
         terminalProof: "wrong-proof",
       } as never),
-    ).rejects.toThrow("POS recovery sign-in failed.");
+    ).resolves.toEqual({ status: "denied" });
     expect(ctx.tables.authSessions).toHaveLength(1);
     expect(ctx.tables.posRecoveryExchange).toHaveLength(1);
   });
@@ -465,7 +465,7 @@ describe("POS recovery codes", () => {
         terminalId: "terminal-1",
         terminalProof,
       } as never),
-    ).rejects.toThrow("POS recovery sign-in failed.");
+    ).resolves.toEqual({ status: "denied" });
     expect(credential.failedAttemptCount).toBe(0);
     expect(ctx.tables.posRecoveryExchange).toHaveLength(0);
   });
@@ -485,7 +485,7 @@ describe("POS recovery codes", () => {
         terminalId: "terminal-1",
         terminalProof: "wrong-proof",
       } as never),
-    ).rejects.toThrow("POS recovery sign-in failed.");
+    ).resolves.toEqual({ status: "denied" });
     expect(credential.failedAttemptCount).toBe(0);
 
     for (let attempt = 0; attempt < 5; attempt += 1) {
@@ -496,7 +496,7 @@ describe("POS recovery codes", () => {
           terminalId: "terminal-1",
           terminalProof,
         } as never),
-      ).rejects.toThrow("POS recovery sign-in failed.");
+      ).resolves.toEqual({ status: "denied" });
     }
     expect(credential).toEqual(
       expect.objectContaining({
@@ -526,7 +526,7 @@ describe("POS recovery codes", () => {
         terminalId: "terminal-1",
         terminalProof,
       } as never),
-    ).rejects.toThrow("POS recovery sign-in failed.");
+    ).resolves.toEqual({ status: "denied" });
 
     expect(credential.failedAttemptCount).toBe(0);
     expect(credential.lastUsedAt).toBeUndefined();

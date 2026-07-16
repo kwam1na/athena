@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import {
+  posApplicationSessionBindingSchema,
   posRecoveryCredentialSchema,
   posServicePrincipalMigrationCandidateSchema,
   posServicePrincipalMigrationRunSchema,
@@ -18,12 +19,13 @@ import {
 import { servicePrincipalTables } from "../schemas/servicePrincipals";
 import {
   backfillStoreServicePrincipalsBatchWithCtx,
+  buildPosServicePrincipalCredentialCensusState,
   evaluatePosGlobalRetirement,
   evaluatePosMigrationRollback,
-  recordPosTerminalMigrationRecoveryWithCtx,
   resolvePosMigrationAuthority,
   transitionPosServicePrincipalMigrationModeWithCtx,
 } from "./backfillStoreServicePrincipals";
+import { recordPosTerminalMigrationRecoveryWithCtx } from "../pos/application/posServicePrincipalMigrationEvidence";
 
 const modules = Object.fromEntries(
   Object.entries(import.meta.glob("../**/*.ts")).map(([path, loader]) => [
@@ -53,6 +55,9 @@ const schema = defineSchema({
     "by_storeId",
     ["storeId"],
   ),
+  posApplicationSessionBinding: defineTable(posApplicationSessionBindingSchema)
+    .index("by_servicePrincipalSessionId", ["servicePrincipalSessionId"])
+    .index("by_terminalId_and_status", ["terminalId", "status"]),
   posTerminal: defineTable(posTerminalSchema)
     .index("by_storeId", ["storeId"])
     .index("by_fingerprintHash", ["fingerprintHash"]),
@@ -359,6 +364,31 @@ describe("store service-principal migration controls", () => {
     ).toHaveLength(0);
   });
 
+  it("fingerprints safe credential state without retaining plaintext distinctions", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await seedLegacyStore(t, "A", { plaintext: "anchor42" });
+    const credential = await t.run((ctx) =>
+      ctx.db.get("posRecoveryCredential", seeded.credentialId),
+    );
+    expect(credential).not.toBeNull();
+
+    const anchor = buildPosServicePrincipalCredentialCensusState(credential!);
+    const beacon = buildPosServicePrincipalCredentialCensusState({
+      ...credential!,
+      plaintextCode: "beacon42",
+    });
+    const rotated = buildPosServicePrincipalCredentialCensusState({
+      ...credential!,
+      credentialRevision: (credential!.credentialRevision ?? 1) + 1,
+      plaintextCode: "beacon42",
+      rotatedAt: 2,
+    });
+
+    expect(anchor).toEqual(beacon);
+    expect(rotated).not.toEqual(anchor);
+    expect(JSON.stringify(anchor)).not.toContain("anchor42");
+  });
+
   it("blocks structural conflicts while preserving human POS-only membership census", async () => {
     const t = convexTest(schema, modules);
     const storeA = await seedLegacyStore(t, "A", {
@@ -449,43 +479,80 @@ describe("store service-principal migration controls", () => {
     const principal = (
       await t.run((ctx) => ctx.db.query("servicePrincipal").take(1))
     )[0];
-    const servicePrincipalSessionId = await t.run(async (ctx) => {
-      const binding = (
-        await ctx.db.query("servicePrincipalAuthBinding").take(1)
-      )[0];
-      const grant = (
-        await ctx.db.query("servicePrincipalCapability").take(1)
-      )[0];
-      const authSessionId = await ctx.db.insert("authSessions", {});
-      return ctx.db.insert("servicePrincipalSession", {
-        absoluteExpiresAt: 10_000,
-        authSessionId,
-        authUserId: binding.authUserId,
-        capabilityRevision: grant.revision,
-        consumerId: "pos",
-        idleExpiresAt: 5_000,
-        issuedAt: 100,
-        lastCorrelationId: "recovery-test",
-        lastSeenAt: 100,
-        organizationId: seeded.organizationId,
-        principalLifecycleRevision: principal.lifecycleRevision,
-        requiredCapabilityId: "pos.application",
-        revision: 1,
-        servicePrincipalAuthBindingId: binding._id,
-        servicePrincipalId: principal._id,
-        status: "active",
-        storeId: seeded.storeId,
-        updatedAt: 100,
-      });
-    });
     const before = await t.run((ctx) =>
       ctx.db.get("posTerminal", seeded.terminalId),
     );
+    const { posApplicationSessionBindingId, servicePrincipalSessionId } =
+      await t.run(async (ctx) => {
+        const binding = (
+          await ctx.db.query("servicePrincipalAuthBinding").take(1)
+        )[0];
+        const grant = (
+          await ctx.db.query("servicePrincipalCapability").take(1)
+        )[0];
+        const authSessionId = await ctx.db.insert("authSessions", {});
+        const servicePrincipalSessionId = await ctx.db.insert(
+          "servicePrincipalSession",
+          {
+            absoluteExpiresAt: 10_000,
+            authSessionId,
+            authUserId: binding.authUserId,
+            capabilityRevision: grant.revision,
+            consumerId: "pos",
+            idleExpiresAt: 5_000,
+            issuedAt: 100,
+            lastCorrelationId: "recovery-test",
+            lastSeenAt: 100,
+            organizationId: seeded.organizationId,
+            principalLifecycleRevision: principal.lifecycleRevision,
+            requiredCapabilityId: "pos.application",
+            revision: 1,
+            servicePrincipalAuthBindingId: binding._id,
+            servicePrincipalId: principal._id,
+            status: "active",
+            storeId: seeded.storeId,
+            updatedAt: 100,
+          },
+        );
+        const posApplicationSessionBindingId = await ctx.db.insert(
+          "posApplicationSessionBinding",
+          {
+            activatedAt: 100,
+            capabilityGrantId: grant._id,
+            capabilityId: "pos.application",
+            capabilityRevision: grant.revision,
+            consumerId: "pos",
+            credentialRevision: 2,
+            lastCorrelationId: "recovery-test",
+            offlineAuthorityReceipt: "signed-receipt",
+            organizationId: seeded.organizationId,
+            posRecoveryCredentialId: seeded.credentialId,
+            principalLifecycleRevision: principal.lifecycleRevision,
+            revision: 1,
+            servicePrincipalId: principal._id,
+            servicePrincipalSessionId,
+            status: "active",
+            storeId: seeded.storeId,
+            terminalId: seeded.terminalId,
+            terminalLifecycleRevision: 3,
+            terminalProofRevision: 5,
+            updatedAt: 100,
+          },
+        );
+        await ctx.db.patch("posTerminal", seeded.terminalId, {
+          lastServicePrincipalRecoveryAt: 100,
+          servicePrincipalRecoveryVersion: 1,
+        });
+        return { posApplicationSessionBindingId, servicePrincipalSessionId };
+      });
 
     const evidence = await t.run((ctx) =>
       recordPosTerminalMigrationRecoveryWithCtx(ctx as never, {
+        credentialId: seeded.credentialId,
         credentialRevision: 2,
         now: 500,
+        organizationId: seeded.organizationId,
+        posApplicationSessionBindingId,
         recoveryVersion: 1,
         servicePrincipalId: principal._id,
         servicePrincipalSessionId,
@@ -501,7 +568,11 @@ describe("store service-principal migration controls", () => {
     });
     expect(
       await t.run((ctx) => ctx.db.get("posTerminal", seeded.terminalId)),
-    ).toEqual(before);
+    ).toEqual({
+      ...before,
+      lastServicePrincipalRecoveryAt: 100,
+      servicePrincipalRecoveryVersion: 1,
+    });
 
     const shadow = await t.run((ctx) =>
       transitionPosServicePrincipalMigrationModeWithCtx(ctx as never, {

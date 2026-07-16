@@ -123,6 +123,7 @@ function renderLogin() {
       disposition: "recovery_code_required" as const,
     })),
     issue: vi.fn(async () => undefined),
+    resume: vi.fn(async () => undefined),
     activate: vi.fn(async () => ({
       authorityExpiresAt: 10_000,
       offlineAuthorityReceipt: "receipt-1",

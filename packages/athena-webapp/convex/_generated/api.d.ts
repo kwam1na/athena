@@ -240,6 +240,7 @@ import type * as pos_application_pendingCheckoutSkuResolution from "../pos/appli
 import type * as pos_application_posApplicationAuthority from "../pos/application/posApplicationAuthority.js";
 import type * as pos_application_posApplicationBoundaryInventory from "../pos/application/posApplicationBoundaryInventory.js";
 import type * as pos_application_posServicePrincipal from "../pos/application/posServicePrincipal.js";
+import type * as pos_application_posServicePrincipalMigrationEvidence from "../pos/application/posServicePrincipalMigrationEvidence.js";
 import type * as pos_application_queries_getRegisterState from "../pos/application/queries/getRegisterState.js";
 import type * as pos_application_queries_getTransactions from "../pos/application/queries/getTransactions.js";
 import type * as pos_application_queries_listRegisterCatalog from "../pos/application/queries/listRegisterCatalog.js";
@@ -838,6 +839,7 @@ declare const fullApi: ApiFromModules<{
   "pos/application/posApplicationAuthority": typeof pos_application_posApplicationAuthority;
   "pos/application/posApplicationBoundaryInventory": typeof pos_application_posApplicationBoundaryInventory;
   "pos/application/posServicePrincipal": typeof pos_application_posServicePrincipal;
+  "pos/application/posServicePrincipalMigrationEvidence": typeof pos_application_posServicePrincipalMigrationEvidence;
   "pos/application/queries/getRegisterState": typeof pos_application_queries_getRegisterState;
   "pos/application/queries/getTransactions": typeof pos_application_queries_getTransactions;
   "pos/application/queries/listRegisterCatalog": typeof pos_application_queries_listRegisterCatalog;

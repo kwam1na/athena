@@ -15,6 +15,7 @@ import {
   requireOrganizationMemberRoleWithCtx,
 } from "../../lib/athenaUserAuth";
 import {
+  ServicePrincipalFoundationError,
   STORE_SERVICE_PRINCIPAL_STABLE_KEY,
   reconcileServicePrincipalAuthBinding,
 } from "../../servicePrincipals/lifecycle";
@@ -145,6 +146,17 @@ type PosRecoveryAccessCtx =
 
 function failRecovery(): never {
   throw new Error(GENERIC_RECOVERY_FAILURE);
+}
+
+class PosRecoveryDeniedError extends Error {
+  constructor() {
+    super(GENERIC_RECOVERY_FAILURE);
+    this.name = "PosRecoveryDeniedError";
+  }
+}
+
+function denyRecovery(): never {
+  throw new PosRecoveryDeniedError();
 }
 
 function normalizeEmail(email: string) {
@@ -672,7 +684,7 @@ async function getCanonicalStoreServicePrincipal(
     )
     .take(2);
   if (principals.length !== 1 || principals[0].status !== "active") {
-    failRecovery();
+    denyRecovery();
   }
   return principals[0];
 }
@@ -689,14 +701,14 @@ async function getCurrentStoreRecoveryCredential(
     .query("posRecoveryCredential")
     .withIndex("by_storeId", (query) => query.eq("storeId", args.storeId))
     .take(2);
-  if (credentials.length !== 1) failRecovery();
+  if (credentials.length !== 1) denyRecovery();
   const credential = credentials[0];
   if (
     credential.organizationId !== args.organizationId ||
     (credential.servicePrincipalId !== undefined &&
       credential.servicePrincipalId !== args.servicePrincipalId)
   ) {
-    failRecovery();
+    denyRecovery();
   }
   return credential;
 }
@@ -722,7 +734,7 @@ async function verifyCurrentRecoveryCredential(
       metadata: { failureAuditBucket },
       metadataDedupeKeys: ["reason", "failureAuditBucket"],
     });
-    failRecovery();
+    denyRecovery();
   }
 
   if (
@@ -735,7 +747,7 @@ async function verifyCurrentRecoveryCredential(
   ) {
     // Exact-session recovery is an enforced store lane. A fast legacy
     // verifier cannot authorize it, even when its old hash happens to match.
-    failRecovery();
+    denyRecovery();
   }
   const matches = await verifyPosRecoveryCodeVerifier({
     digest: credential.keyedVerifierDigest,
@@ -787,7 +799,7 @@ async function verifyCurrentRecoveryCredential(
       metadataDedupeKeys: ["reason", "failureAuditBucket"],
     });
   }
-  failRecovery();
+  denyRecovery();
 }
 
 async function getOrCreateStableAuthBinding(
@@ -806,7 +818,7 @@ async function getOrCreateStableAuthBinding(
       query.eq("servicePrincipalId", args.servicePrincipalId),
     )
     .take(2);
-  if (bindings.length > 1) failRecovery();
+  if (bindings.length > 1) denyRecovery();
   const existing = bindings[0];
   if (existing) {
     if (
@@ -814,7 +826,7 @@ async function getOrCreateStableAuthBinding(
       existing.organizationId !== args.organizationId ||
       existing.storeId !== args.storeId
     ) {
-      failRecovery();
+      denyRecovery();
     }
     return existing;
   }
@@ -836,7 +848,7 @@ async function getOrCreateStableAuthBinding(
   return created;
 }
 
-export async function prepareRecoveryForAuthProviderWithCtx(
+async function prepareRecoveryForAuthProviderTransactionWithCtx(
   ctx: MutationCtx,
   args: PrepareRecoveryArgs,
 ) {
@@ -846,17 +858,17 @@ export async function prepareRecoveryForAuthProviderWithCtx(
     !terminalProof ||
     !POS_RECOVERY_CORRELATION_KEY_PATTERN.test(recoveryCorrelationKey)
   ) {
-    failRecovery();
+    denyRecovery();
   }
 
   // Authenticate the terminal before loading or mutating the shared recovery
   // credential so terminal-ID/proof spraying cannot affect its failure lane.
   const terminal = await ctx.db.get("posTerminal", args.terminalId);
   if (!terminal || terminal.status !== "active" || !terminal.syncSecretHash) {
-    failRecovery();
+    denyRecovery();
   }
   const submittedProofHash = await hashPosTerminalSyncSecret(terminalProof);
-  if (submittedProofHash !== terminal.syncSecretHash) failRecovery();
+  if (submittedProofHash !== terminal.syncSecretHash) denyRecovery();
 
   const store = await ctx.db.get("store", terminal.storeId);
   if (
@@ -864,7 +876,7 @@ export async function prepareRecoveryForAuthProviderWithCtx(
     (terminal.organizationId !== undefined &&
       terminal.organizationId !== store.organizationId)
   ) {
-    failRecovery();
+    denyRecovery();
   }
 
   const now = Date.now();
@@ -872,12 +884,18 @@ export async function prepareRecoveryForAuthProviderWithCtx(
     organizationId: store.organizationId,
     storeId: store._id,
   });
-  const grant = await resolvePosApplicationCapability(ctx as never, {
-    now,
-    organizationId: store.organizationId,
-    servicePrincipalId: principal._id,
-    storeId: store._id,
-  });
+  let grant: Awaited<ReturnType<typeof resolvePosApplicationCapability>>;
+  try {
+    grant = await resolvePosApplicationCapability(ctx as never, {
+      now,
+      organizationId: store.organizationId,
+      servicePrincipalId: principal._id,
+      storeId: store._id,
+    });
+  } catch (error) {
+    if (error instanceof ServicePrincipalFoundationError) denyRecovery();
+    throw error;
+  }
   const credential = await getCurrentStoreRecoveryCredential(ctx, {
     organizationId: store.organizationId,
     servicePrincipalId: principal._id,
@@ -898,7 +916,7 @@ export async function prepareRecoveryForAuthProviderWithCtx(
       query.eq("recoveryCorrelationKey", recoveryCorrelationKey),
     )
     .take(2);
-  if (existingExchanges.length > 1) failRecovery();
+  if (existingExchanges.length > 1) denyRecovery();
   const existingExchange = existingExchanges[0];
   if (existingExchange) {
     const authSession = await ctx.db.get(
@@ -925,9 +943,10 @@ export async function prepareRecoveryForAuthProviderWithCtx(
       authSession.userId !== existingExchange.authUserId ||
       authSession.expirationTime <= now
     ) {
-      failRecovery();
+      denyRecovery();
     }
     return {
+      status: "prepared" as const,
       authSessionId: existingExchange.authSessionId,
       authUserId: existingExchange.authUserId,
     };
@@ -995,7 +1014,27 @@ export async function prepareRecoveryForAuthProviderWithCtx(
     metadataDedupeKeys: ["recoveryCorrelationKey"],
   });
 
-  return { authSessionId, authUserId: authBinding.authUserId };
+  return {
+    status: "prepared" as const,
+    authSessionId,
+    authUserId: authBinding.authUserId,
+  };
+}
+
+export async function prepareRecoveryForAuthProviderWithCtx(
+  ctx: MutationCtx,
+  args: PrepareRecoveryArgs,
+) {
+  try {
+    return await prepareRecoveryForAuthProviderTransactionWithCtx(ctx, args);
+  } catch (error) {
+    if (error instanceof PosRecoveryDeniedError) {
+      // Expected denials return from the mutation so any throttling and
+      // secret-free audit writes performed earlier in the transaction commit.
+      return { status: "denied" as const };
+    }
+    throw error;
+  }
 }
 
 async function verifyCredentialWithCtx(

@@ -97,10 +97,7 @@ describe("terminal app-session recovery validation", () => {
       ctx as never,
       buildArgs(),
     );
-    assertConformsToExportedReturns(
-      validateTerminalAppSessionRecovery,
-      result,
-    );
+    assertConformsToExportedReturns(validateTerminalAppSessionRecovery, result);
 
     expect(result).toEqual({
       status: "recoverable",
@@ -115,12 +112,16 @@ describe("terminal app-session recovery validation", () => {
       },
     });
     if (result.status !== "recoverable") {
-      throw new Error("Expected terminal app-session recovery to be recoverable.");
+      throw new Error(
+        "Expected terminal app-session recovery to be recoverable.",
+      );
     }
-    expect(result.assertion.expiresAt).toBeGreaterThan(result.assertion.issuedAt);
-    expect(result.assertion.expiresAt - result.assertion.issuedAt).toBeLessThanOrEqual(
-      5 * 60 * 1000,
+    expect(result.assertion.expiresAt).toBeGreaterThan(
+      result.assertion.issuedAt,
     );
+    expect(
+      result.assertion.expiresAt - result.assertion.issuedAt,
+    ).toBeLessThanOrEqual(5 * 60 * 1000);
     expect(ctx.tables.operationalEvent).toEqual([
       expect.objectContaining({
         eventType: "pos_terminal_app_session_recovery_validated",
@@ -143,24 +144,27 @@ describe("terminal app-session recovery validation", () => {
     "products",
     "services",
     "general_app",
-  ])("blocks non-POS hub route scope %s before terminal/account inspection", async (routeIntent) => {
-    const ctx = await buildCtx();
+  ])(
+    "blocks non-POS hub route scope %s before terminal/account inspection",
+    async (routeIntent) => {
+      const ctx = await buildCtx();
 
-    const result = await validateTerminalAppSessionRecoveryWithCtx(
-      ctx as never,
-      buildArgs({ routeIntent }),
-    );
+      const result = await validateTerminalAppSessionRecoveryWithCtx(
+        ctx as never,
+        buildArgs({ routeIntent }),
+      );
 
-    expect(result).toEqual({
-      status: "blocked",
-      reason: "unsupported_route_scope",
-      diagnostics: {
+      expect(result).toEqual({
+        status: "blocked",
         reason: "unsupported_route_scope",
-      },
-    });
-    expect(ctx.db.get).not.toHaveBeenCalled();
-    expect(ctx.tables.operationalEvent).toHaveLength(0);
-  });
+        diagnostics: {
+          reason: "unsupported_route_scope",
+        },
+      });
+      expect(ctx.db.get).not.toHaveBeenCalled();
+      expect(ctx.tables.operationalEvent).toHaveLength(0);
+    },
+  );
 
   it.each([
     {
@@ -329,7 +333,9 @@ describe("terminal app-session recovery validation", () => {
     if (first.status !== "recoverable" || second.status !== "recoverable") {
       throw new Error("Expected repeated recovery checks to stay recoverable.");
     }
-    expect(first.assertion.recoveryAttemptId).toBe(second.assertion.recoveryAttemptId);
+    expect(first.assertion.recoveryAttemptId).toBe(
+      second.assertion.recoveryAttemptId,
+    );
     expect(ctx.tables.operationalEvent).toHaveLength(1);
   });
 
@@ -438,10 +444,7 @@ describe("exact-session POS recovery", () => {
       { now: 1_001 },
     );
 
-    assertConformsToExportedReturns(
-      activatePreparedPosTerminalSession,
-      first,
-    );
+    assertConformsToExportedReturns(activatePreparedPosTerminalSession, first);
     assertConformsToExportedReturns(abortPreparedPosTerminalSession, {
       status: "aborted",
     });
@@ -449,8 +452,7 @@ describe("exact-session POS recovery", () => {
       authorityExpiresAt: first.authorityExpiresAt,
       authSessionId: "auth-session",
       offlineAuthorityReceipt: first.offlineAuthorityReceipt,
-      posApplicationSessionBindingId:
-        first.posApplicationSessionBindingId,
+      posApplicationSessionBindingId: first.posApplicationSessionBindingId,
       servicePrincipalSessionId: first.servicePrincipalSessionId,
       storeId: STORE_ID,
       terminalId: TERMINAL_ID,
@@ -469,8 +471,7 @@ describe("exact-session POS recovery", () => {
       capabilityRevision: 1,
       credentialRevision: 1,
       issuedAt: 1_000,
-      posApplicationSessionBindingId:
-        first.posApplicationSessionBindingId,
+      posApplicationSessionBindingId: first.posApplicationSessionBindingId,
       principalLifecycleRevision: 1,
       servicePrincipalId: "principal-1",
       servicePrincipalSessionId: first.servicePrincipalSessionId,
@@ -483,10 +484,23 @@ describe("exact-session POS recovery", () => {
       expect.objectContaining({
         status: "activated",
         servicePrincipalSessionId: first.servicePrincipalSessionId,
-        posApplicationSessionBindingId:
-          first.posApplicationSessionBindingId,
+        posApplicationSessionBindingId: first.posApplicationSessionBindingId,
       }),
     );
+    expect(ctx.tables.posServicePrincipalMigrationTerminalEvidence).toEqual([
+      expect.objectContaining({
+        _id: "migration-evidence-target",
+        credentialRevision: 1,
+        recoveryVersion: 1,
+        servicePrincipalSessionId: first.servicePrincipalSessionId,
+        status: "recovered",
+        successfulRecoveryAt: 1_000,
+      }),
+      expect.objectContaining({
+        _id: "migration-evidence-sibling",
+        status: "pending",
+      }),
+    ]);
 
     ctx.auth.getUserIdentity.mockResolvedValue({
       subject: "auth-user|different-session",
@@ -507,8 +521,7 @@ describe("exact-session POS recovery", () => {
         absoluteExpiresAt: activated.authorityExpiresAt,
         authSessionId: "auth-session",
       },
-      posApplicationSessionBindingId:
-        activated.posApplicationSessionBindingId,
+      posApplicationSessionBindingId: activated.posApplicationSessionBindingId,
       servicePrincipalSessionId: activated.servicePrincipalSessionId,
       storeId: STORE_ID,
       terminalId: TERMINAL_ID,
@@ -537,6 +550,26 @@ describe("exact-session POS recovery", () => {
     );
   });
 
+  it("fails closed when migration evidence is not bound to the activated principal", async () => {
+    const ctx = await buildExactSessionCtx();
+    ctx.tables.posServicePrincipalMigrationTerminalEvidence[0].servicePrincipalId =
+      "principal-other";
+
+    await expect(
+      activatePreparedPosTerminalSessionWithCtx(ctx as never, { now: 1_000 }),
+    ).rejects.toThrow("pos_migration_recovery_authority_invalid");
+    expect(ctx.tables.posServicePrincipalMigrationTerminalEvidence).toEqual([
+      expect.objectContaining({
+        _id: "migration-evidence-target",
+        status: "pending",
+      }),
+      expect.objectContaining({
+        _id: "migration-evidence-sibling",
+        status: "pending",
+      }),
+    ]);
+  });
+
   it("proof-aborts before token issuance and bounded cleanup removes a later orphan refresh token", async () => {
     const ctx = await buildExactSessionCtx();
 
@@ -560,8 +593,70 @@ describe("exact-session POS recovery", () => {
       expirationTime: 9_999,
     });
     ctx.tables.posRecoveryExchange[0].expiresAt = 1_999;
-    await getHandler(cleanupExpiredPosRecoveryArtifacts)(ctx, { limit: 10 });
+    await expect(
+      getHandler(cleanupExpiredPosRecoveryArtifacts)(ctx, { limit: 10 }),
+    ).resolves.toEqual({ cleaned: 1 });
     expect(ctx.tables.authRefreshTokens).toHaveLength(0);
+    expect(ctx.tables.posRecoveryExchange[0]).toEqual(
+      expect.objectContaining({
+        cleanedAt: expect.any(Number),
+        status: "cleaned",
+      }),
+    );
+    await expect(
+      getHandler(cleanupExpiredPosRecoveryArtifacts)(ctx, { limit: 10 }),
+    ).resolves.toEqual({ cleaned: 0 });
+  });
+
+  it("fully drains refresh-token pages before advancing bounded aborted cleanup", async () => {
+    const ctx = await buildExactSessionCtx();
+    const firstExchange = ctx.tables.posRecoveryExchange[0];
+    firstExchange.status = "aborted";
+    firstExchange.expiresAt = 1;
+    ctx.tables.authRefreshTokens.push(
+      ...Array.from({ length: 25 }, (_, index) => ({
+        _id: `refresh-first-${index}`,
+        expirationTime: 9_999,
+        sessionId: "auth-session",
+      })),
+    );
+    ctx.tables.authSessions.push({
+      _id: "auth-session-2",
+      expirationTime: 100_000,
+      userId: "auth-user",
+    });
+    ctx.tables.posRecoveryExchange.push({
+      ...firstExchange,
+      _id: "exchange-2",
+      authSessionId: "auth-session-2",
+      recoveryCorrelationKey: "recovery_correlation_0002",
+      status: "aborted",
+    });
+    ctx.tables.authRefreshTokens.push({
+      _id: "refresh-second",
+      expirationTime: 9_999,
+      sessionId: "auth-session-2",
+    });
+
+    await expect(
+      getHandler(cleanupExpiredPosRecoveryArtifacts)(ctx, { limit: 1 }),
+    ).resolves.toEqual({ cleaned: 1 });
+    expect(
+      ctx.tables.authRefreshTokens.filter(
+        (token) => token.sessionId === "auth-session",
+      ),
+    ).toHaveLength(0);
+    expect(ctx.tables.posRecoveryExchange[0].status).toBe("cleaned");
+    expect(ctx.tables.posRecoveryExchange[1].status).toBe("aborted");
+
+    await expect(
+      getHandler(cleanupExpiredPosRecoveryArtifacts)(ctx, { limit: 1 }),
+    ).resolves.toEqual({ cleaned: 1 });
+    expect(ctx.tables.authRefreshTokens).toHaveLength(0);
+    expect(ctx.tables.posRecoveryExchange[1].status).toBe("cleaned");
+    await expect(
+      getHandler(cleanupExpiredPosRecoveryArtifacts)(ctx, { limit: 1 }),
+    ).resolves.toEqual({ cleaned: 0 });
   });
 
   it("requires the exact issued Auth session to abort once refresh authority exists", async () => {
@@ -608,11 +703,13 @@ function buildArgs(overrides: Record<string, unknown> = {}) {
   };
 }
 
-async function buildCtx(seed: {
-  accounts?: Array<Record<string, unknown>>;
-  members?: Array<Record<string, unknown>>;
-  terminal?: Record<string, unknown> | null;
-} = {}) {
+async function buildCtx(
+  seed: {
+    accounts?: Array<Record<string, unknown>>;
+    members?: Array<Record<string, unknown>>;
+    terminal?: Record<string, unknown> | null;
+  } = {},
+) {
   const terminalProofHash = await hashPosTerminalSyncSecret(PROOF);
   const tables = {
     athenaUser: [
@@ -694,10 +791,7 @@ async function buildCtx(seed: {
                 (...predicates) =>
                 (row) =>
                   predicates.every((matches) => matches(row)),
-              eq:
-                (field, value) =>
-                (row) =>
-                  row[field] === value,
+              eq: (field, value) => (row) => row[field] === value,
               field: (field) => field,
             });
             rows = rows.filter(predicate);
@@ -734,6 +828,32 @@ async function buildExactSessionCtx() {
     ],
     operationalEvent: [],
     posApplicationSessionBinding: [],
+    posServicePrincipalMigrationTerminalEvidence: [
+      {
+        _id: "migration-evidence-target",
+        organizationId: ORG_ID,
+        storeId: STORE_ID,
+        terminalId: TERMINAL_ID,
+        servicePrincipalId: "principal-1",
+        status: "pending",
+        terminalLifecycleRevision: 1,
+        terminalProofRevision: 1,
+        createdAt: 100,
+        updatedAt: 100,
+      },
+      {
+        _id: "migration-evidence-sibling",
+        organizationId: ORG_ID,
+        storeId: STORE_ID,
+        terminalId: "terminal-sibling",
+        servicePrincipalId: "principal-1",
+        status: "pending",
+        terminalLifecycleRevision: 1,
+        terminalProofRevision: 1,
+        createdAt: 100,
+        updatedAt: 100,
+      },
+    ],
     posRecoveryCredential: [
       {
         _id: "credential-1",
@@ -847,8 +967,7 @@ async function buildExactSessionCtx() {
         maybePatch?: Record<string, unknown>,
       ) => {
         const id = typeof idOrPatch === "string" ? idOrPatch : tableOrId;
-        const update =
-          typeof idOrPatch === "string" ? maybePatch! : idOrPatch;
+        const update = typeof idOrPatch === "string" ? maybePatch! : idOrPatch;
         const row = Object.values(tables)
           .flat()
           .find((candidate) => candidate._id === id);

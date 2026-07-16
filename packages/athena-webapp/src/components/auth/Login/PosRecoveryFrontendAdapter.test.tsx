@@ -37,6 +37,7 @@ vi.mock("convex/react", () => ({
   ConvexReactClient: class {
     close = vi.fn();
   },
+  useConvexAuth: () => ({ isAuthenticated: true, isLoading: false }),
   useMutation: (reference: string) =>
     reference === "requestPosTerminalRecoveryDisposition"
       ? mocked.requestDisposition

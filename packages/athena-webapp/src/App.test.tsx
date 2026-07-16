@@ -8,12 +8,17 @@ const mocks = vi.hoisted(() => ({
   reportDetectorFailed: vi.fn(),
   reportUpdateDetected: vi.fn(),
   stageUpdateStaticAssets: vi.fn(),
+  recoverPromotedPosRecoverySession: vi.fn(),
   storageRuntime: {},
   storageRuntimeProvider: vi.fn(),
   appMessagesProvider: vi.fn(),
   convexAuthProvider: vi.fn(),
   queryClientProvider: vi.fn(),
   updateCoordinatorProvider: vi.fn(),
+}));
+
+vi.mock("./lib/auth/recoverPromotedPosRecoverySession", () => ({
+  recoverPromotedPosRecoverySession: mocks.recoverPromotedPosRecoverySession,
 }));
 
 vi.mock("./appRouter", () => ({
@@ -206,6 +211,36 @@ describe("VersionCheckerBridge", () => {
 });
 
 describe("App", () => {
+  it("takes over a stale owner lease instead of remaining permanently blocked", async () => {
+    mocks.createVersionChecker.mockReturnValue({ stop: vi.fn() });
+    const storage = createMemoryStorage();
+    let now = 1_000;
+    const owner = createAuthRuntimeHandoffCoordinator({
+      now: () => now,
+      ownerToken: "previous-tab-owner",
+      randomId: () => "previous-tab-generated-12345678",
+      storage,
+    });
+    owner.prepareHandoff({ leaseDurationMs: 100 });
+    now = 1_101;
+    const recovering = createAuthRuntimeHandoffCoordinator({
+      now: () => now,
+      ownerToken: "replacement-tab-owner",
+      randomId: () => "replacement-tab-generated-12345678",
+      storage,
+    });
+
+    render(<App authRuntime={recovering} />);
+
+    await waitFor(() =>
+      expect(recovering.getSnapshot()).toMatchObject({
+        blockReason: null,
+        handoffPhase: "prepared",
+        status: "ready",
+      }),
+    );
+  });
+
   it("provides one process-level POS storage runtime without blocking routes", () => {
     mocks.createVersionChecker.mockReturnValue({ stop: vi.fn() });
     const authRuntime = createTestAuthRuntime();
@@ -227,23 +262,52 @@ describe("App", () => {
     expect(view.getByText("router rendered")).toBeTruthy();
   });
 
-  it("remounts auth against the promoted namespace", () => {
+  it("remounts auth against the promoted namespace", async () => {
     mocks.createVersionChecker.mockReturnValue({ stop: vi.fn() });
+    mocks.recoverPromotedPosRecoverySession.mockRejectedValue(
+      new Error("verification pending"),
+    );
     const authRuntime = createTestAuthRuntime();
     render(<App authRuntime={authRuntime} />);
     let handle!: ReturnType<typeof authRuntime.prepareHandoff>;
 
-    act(() => {
+    await act(async () => {
       handle = authRuntime.prepareHandoff();
       authRuntime.markAuthIssued(handle);
       authRuntime.markActivated(handle);
       authRuntime.promoteActivated(handle);
+      await Promise.resolve();
+      await Promise.resolve();
     });
 
     expect(mocks.convexAuthProvider).toHaveBeenLastCalledWith({
       storage: expect.any(Object),
       storageNamespace: handle.pendingNamespace,
     });
+  });
+
+  it("verifies and completes a promoted journal after reload", async () => {
+    mocks.createVersionChecker.mockReturnValue({ stop: vi.fn() });
+    mocks.recoverPromotedPosRecoverySession.mockClear();
+    mocks.recoverPromotedPosRecoverySession.mockResolvedValue({});
+    const storage = createMemoryStorage();
+    const beforeReload = createTestAuthRuntime(storage);
+    const handle = beforeReload.prepareHandoff();
+    beforeReload.markAuthIssued(handle);
+    beforeReload.markActivated(handle);
+    beforeReload.promoteActivated(handle);
+    const afterReload = createTestAuthRuntime(storage);
+
+    render(<App authRuntime={afterReload} />);
+
+    await waitFor(() =>
+      expect(afterReload.getSnapshot()).toMatchObject({
+        activeNamespace: handle.pendingNamespace,
+        handoffPhase: "idle",
+        status: "ready",
+      }),
+    );
+    expect(mocks.recoverPromotedPosRecoverySession).toHaveBeenCalledTimes(1);
   });
 
   it("fails closed before mounting auth for a corrupt journal", () => {
