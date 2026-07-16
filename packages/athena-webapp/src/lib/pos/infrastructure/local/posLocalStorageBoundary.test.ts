@@ -43,8 +43,7 @@ function collectProductionSources(directory: string): string[] {
     if (stats.isDirectory()) return collectProductionSources(nextPath);
     const extension = extname(nextPath);
     const isSource = extension === ".ts" || extension === ".tsx";
-    const isTest =
-      nextPath.endsWith(".test.ts") || nextPath.endsWith(".test.tsx");
+    const isTest = /\.(?:test|spec)\.tsx?$/.test(nextPath);
     return isSource && !isTest ? [nextPath] : [];
   });
 }

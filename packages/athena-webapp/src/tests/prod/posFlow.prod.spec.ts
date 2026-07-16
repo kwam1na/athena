@@ -17,6 +17,8 @@ const posHubPath =
 const posBasePath = posHubPath.replace(/\/$/, "");
 const posRegisterPath = `${posBasePath}/register`;
 const posLoginRecoveryPath = `/login?redirectTo=${encodeURIComponent(posRegisterPath)}`;
+const posLocalDatabaseName = "athena-pos-local";
+const posLocalSchemaVersion = 10;
 
 const publicPosEntryRoutes = [
   {
@@ -85,8 +87,7 @@ function collectProdRuntimeSignals(page: Page) {
         (message) =>
           /CONVEX Q|Server Error|Unhandled Runtime Error|Application error|ChunkLoadError/i.test(
             message,
-          ) &&
-          !message.includes("installHook.js"),
+          ) && !message.includes("installHook.js"),
       );
 
       expect(pageErrors, `${label} page errors`).toEqual([]);
@@ -102,10 +103,115 @@ async function openPosRecoveryForm(page: Page) {
   });
 
   await expect(page.getByRole("heading", { name: /log in/i })).toBeVisible();
-  await page.getByTestId("athena-login-pos-sign-in").click();
-  await expect(page.getByRole("heading", { name: /pos recovery/i })).toBeVisible();
+  const posSignInButton = page.getByTestId("athena-login-pos-sign-in");
+  let seededTerminal = false;
+
+  if (!(await posSignInButton.isVisible())) {
+    await page.waitForFunction(
+      async ({ databaseName, schemaVersion }) =>
+        (await indexedDB.databases()).some(
+          (database) =>
+            database.name === databaseName &&
+            database.version === schemaVersion,
+        ),
+      {
+        databaseName: posLocalDatabaseName,
+        schemaVersion: posLocalSchemaVersion,
+      },
+    );
+    await page.evaluate(
+      ({ databaseName, schemaVersion, storeId }) =>
+        new Promise<void>((resolve, reject) => {
+          const openRequest = indexedDB.open(databaseName, schemaVersion);
+
+          openRequest.onerror = () => reject(openRequest.error);
+          openRequest.onsuccess = () => {
+            const database = openRequest.result;
+            const transaction = database.transaction(
+              "terminalSeed",
+              "readwrite",
+            );
+
+            transaction.objectStore("terminalSeed").put(
+              {
+                terminalId: "prod-pos-e2e-terminal",
+                cloudTerminalId: "prod-pos-e2e-terminal",
+                syncSecretHash: "prod-pos-e2e-seed",
+                storeId,
+                displayName: "Production E2E terminal",
+                provisionedAt: Date.now(),
+                schemaVersion,
+              },
+              "current",
+            );
+            transaction.oncomplete = () => {
+              database.close();
+              resolve();
+            };
+            transaction.onerror = () => {
+              database.close();
+              reject(transaction.error);
+            };
+            transaction.onabort = () => {
+              database.close();
+              reject(transaction.error);
+            };
+          };
+        }),
+      {
+        databaseName: posLocalDatabaseName,
+        schemaVersion: posLocalSchemaVersion,
+        storeId: prodStoreId,
+      },
+    );
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await expect(page.getByRole("heading", { name: /log in/i })).toBeVisible();
+    seededTerminal = true;
+  }
+
+  await expect(posSignInButton).toBeVisible();
+  await posSignInButton.click();
+  await expect(
+    page.getByRole("heading", { name: /pos recovery/i }),
+  ).toBeVisible();
   await expect(page.getByText(/with the recovery code/i)).toBeVisible();
   await expect(page.getByLabel(/recovery code/i)).toBeVisible();
+
+  if (seededTerminal) {
+    await page.evaluate(
+      ({ databaseName, schemaVersion }) =>
+        new Promise<void>((resolve, reject) => {
+          const openRequest = indexedDB.open(databaseName, schemaVersion);
+
+          openRequest.onerror = () => reject(openRequest.error);
+          openRequest.onsuccess = () => {
+            const database = openRequest.result;
+            const transaction = database.transaction(
+              "terminalSeed",
+              "readwrite",
+            );
+
+            transaction.objectStore("terminalSeed").delete("current");
+            transaction.oncomplete = () => {
+              database.close();
+              resolve();
+            };
+            transaction.onerror = () => {
+              database.close();
+              reject(transaction.error);
+            };
+            transaction.onabort = () => {
+              database.close();
+              reject(transaction.error);
+            };
+          };
+        }),
+      {
+        databaseName: posLocalDatabaseName,
+        schemaVersion: posLocalSchemaVersion,
+      },
+    );
+  }
 }
 
 test.describe("production POS flow", () => {
@@ -117,7 +223,10 @@ test.describe("production POS flow", () => {
         const response = await gotoProdRoute(page, route.path);
 
         expect(response?.ok(), `${route.label} navigation`).toBe(true);
-        await expect(page.locator("#app"), `${route.label} app root`).not.toBeEmpty({
+        await expect(
+          page.locator("#app"),
+          `${route.label} app root`,
+        ).not.toBeEmpty({
           timeout: 30_000,
         });
         await expect(page.locator("body"), route.label).toContainText(
@@ -138,7 +247,9 @@ test.describe("production POS flow", () => {
   }) => {
     const runtimeSignals = collectProdRuntimeSignals(page);
     await openPosRecoveryForm(page);
-    await expect(page.getByRole("button", { name: /^continue$/i })).toBeDisabled();
+    await expect(
+      page.getByRole("button", { name: /^continue$/i }),
+    ).toBeDisabled();
     await expect(page.locator("body")).not.toContainText(
       /Server Error|CONVEX Q|Unhandled Runtime Error|Application error/i,
     );
