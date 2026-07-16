@@ -2100,20 +2100,32 @@ type DailyManagerReportAutomationSendResult = {
   storeId: Id<"store">;
 };
 
-function isReportableEodAutoCompleteResult(
+function dailyManagerReportStatusForEodAutoCompleteResult(
   result: DailyOperationsAutomationResult["eodAutoCompleteResults"][number],
-) {
-  return (
-    (result?.action === "applied" && result.run.outcome === "applied") ||
-    (result?.action === "recorded" && result.run.outcome === "prepared")
-  );
+): "applied" | "prepared" | "skipped" | "failed" | null {
+  if (!result) return null;
+
+  if (result.action === "applied" && result.run.outcome === "applied") {
+    return "applied";
+  }
+
+  if (result.action === "recorded" && result.run.outcome === "prepared") {
+    return "prepared";
+  }
+
+  if (result.run.outcome === "failed") return "failed";
+
+  if (result.run.outcome !== "skipped") return null;
+
+  const classification = result.run.decisionEvidence?.classification;
+  return classification === "completed" ? null : "skipped";
 }
 
 function shouldSendScheduledDailyManagerReports() {
   return process.env.STAGE === "prod";
 }
 
-export async function sendDailyManagerReportsForAppliedEodAutomationWithCtx(
+export async function sendDailyManagerReportsForEodAutomationWithCtx(
   ctx: Pick<ActionCtx, "runAction">,
   args: {
     results: DailyOperationsAutomationResult["eodAutoCompleteResults"];
@@ -2123,18 +2135,22 @@ export async function sendDailyManagerReportsForAppliedEodAutomationWithCtx(
     return [];
   }
 
-  const reportableResults = args.results.filter(
-    isReportableEodAutoCompleteResult,
-  );
+  const reportableResults = args.results.flatMap((result) => {
+    const status = dailyManagerReportStatusForEodAutoCompleteResult(result);
+    return result && status ? [{ result, status }] : [];
+  });
   const sentReports: DailyManagerReportAutomationSendResult[] = [];
 
-  for (const result of reportableResults) {
+  for (const { result, status } of reportableResults) {
     const reports = await ctx.runAction(
       internal.operations.dailyManagerReportEmail
         .sendDailyManagerReportToAdminsForDate,
       {
+        ...(status === "skipped" || status === "failed"
+          ? { automationRunId: result.run._id }
+          : {}),
         operatingDate: result.run.operatingDate,
-        status: result.run.outcome === "prepared" ? "prepared" : "applied",
+        status,
         storeId: result.run.storeId,
       },
     );
@@ -2172,7 +2188,7 @@ export const runConfiguredDailyOperationsAutomation = internalAction({
       {},
     );
     const dailyManagerReportResults =
-      await sendDailyManagerReportsForAppliedEodAutomationWithCtx(ctx, {
+      await sendDailyManagerReportsForEodAutomationWithCtx(ctx, {
         results: result.eodAutoCompleteResults,
       });
 

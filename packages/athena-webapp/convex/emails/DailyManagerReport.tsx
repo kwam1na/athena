@@ -113,16 +113,17 @@ const statusCopy: Record<DailyReportStatus, DailyReportStatusCopy> = {
     tone: "warning",
   },
   skipped: {
-    label: "Skipped",
-    preview: "EOD automation did not change the workflow.",
-    summary: "EOD automation did not change the workflow. Review EOD manually.",
+    label: "Manager action required",
+    preview: "EOD Review needs manager action.",
+    summary:
+      "Athena did not close this operating day. Open EOD Review, resolve the remaining items, and complete the close.",
     tone: "warning",
   },
   failed: {
-    label: "Automation failed",
-    preview: "EOD automation could not finish.",
+    label: "Automation needs attention",
+    preview: "EOD automation needs attention.",
     summary:
-      "Athena could not finish the EOD Review automation check. Open the workflow to review.",
+      "Athena could not complete the automated EOD check. Open EOD Review and complete the close manually. Contact support if the workflow is unavailable.",
     tone: "danger",
   },
   dry_run: {
@@ -187,19 +188,30 @@ export default function DailyManagerReport({
     blockers,
     carryForwardItems,
   });
+  const actionRequired = status === "skipped" || status === "failed";
   const hasRegisterSessionBlocker = blockers.some(isRegisterSessionBlocker);
   const expectedCashMetrics = cashMetrics.filter((metric) =>
     /expected cash/i.test(metric.label),
   );
-  const handoffSectionTitle =
-    blockers.length > 0 ? "Before close" : "Next opening";
+  const handoffSectionTitle = actionRequired
+    ? "Required action"
+    : status === "prepared"
+      ? "Manager review"
+      : blockers.length > 0
+        ? "Before close"
+        : "Next opening";
+  const emptyAttentionCopy = actionRequired
+    ? "Open EOD Review and complete the close manually."
+    : status === "prepared"
+      ? "Review EOD Review before completing the store day."
+      : "No follow-up needed for this operating day.";
   const attentionSummary = buildAttentionSummary({
     blockers: blockers.length,
     carryForward: carryForwardItems.length,
     reviewed: reviewedItems.length,
     status,
   });
-  const showStatusBadge = blockers.length > 0;
+  const showStatusBadge = actionRequired || blockers.length > 0;
 
   return (
     <Html>
@@ -214,7 +226,9 @@ export default function DailyManagerReport({
           }
         >
           <Section style={styles.header}>
-            <Text style={styles.eyebrow}>Athena daily report</Text>
+            <Text style={styles.eyebrow}>
+              {actionRequired ? "Athena EOD alert" : "Athena daily report"}
+            </Text>
             <Text style={styles.title}>{storeName}</Text>
             <Text style={styles.subtitle}>
               {operatingDate} | {timestampLabel} at {completedAt} by{" "}
@@ -244,9 +258,7 @@ export default function DailyManagerReport({
           <Section style={styles.section}>
             <SectionHeading title={handoffSectionTitle} quietTitle />
             {attentionItems.length === 0 ? (
-              <EmptyState>
-                No follow-up needed for this operating day.
-              </EmptyState>
+              <EmptyState>{emptyAttentionCopy}</EmptyState>
             ) : (
               <Section style={styles.attentionList}>
                 {attentionItems.slice(0, 4).map((item) => (
@@ -304,7 +316,9 @@ export default function DailyManagerReport({
 
           <Section style={styles.actionSection}>
             <Button href={reportUrl} style={styles.button}>
-              <span style={styles.buttonLabel}>View EOD Review</span>
+              <span style={styles.buttonLabel}>
+                {actionRequired ? "Open EOD Review" : "View EOD Review"}
+              </span>
               <ArrowUpRight
                 aria-hidden="true"
                 color={colors.foreground}
@@ -335,6 +349,9 @@ function buildAttentionSummary(args: {
   }
   if (args.reviewed > 0) {
     return `${args.reviewed} reviewed`;
+  }
+  if (args.status === "skipped" || args.status === "failed") {
+    return "Action required";
   }
   return "Status update";
 }

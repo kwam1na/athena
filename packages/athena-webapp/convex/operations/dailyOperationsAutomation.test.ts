@@ -15,7 +15,7 @@ import {
   runConfiguredDailyOperationsAutomationWithCtx,
   runDailyOpeningAutomationWithCtx,
   runScheduledDailyOperationsAutomationWithCtx,
-  sendDailyManagerReportsForAppliedEodAutomationWithCtx,
+  sendDailyManagerReportsForEodAutomationWithCtx,
   updateEodAutoCompletePolicy,
   updateOpeningAutoStartPolicy,
   updateRegisterCloseoutApprovalPolicy,
@@ -1039,7 +1039,7 @@ describe("daily operations automation adapter", () => {
     });
   });
 
-  it("sends manager reports for freshly applied or prepared EOD automation outcomes", async () => {
+  it("sends manager reports for completed, prepared, and actionable EOD automation outcomes", async () => {
     const originalStage = process.env.STAGE;
     process.env.STAGE = "prod";
     const runAction = vi.fn(async (_functionRef: unknown, args: unknown) => {
@@ -1059,7 +1059,7 @@ describe("daily operations automation adapter", () => {
     });
 
     try {
-      const result = await sendDailyManagerReportsForAppliedEodAutomationWithCtx(
+      const result = await sendDailyManagerReportsForEodAutomationWithCtx(
         { runAction } as never,
         {
           results: [
@@ -1091,11 +1091,40 @@ describe("daily operations automation adapter", () => {
               },
             },
             {
+              action: "already_completed",
+              run: {
+                _id: "automation-run-already-completed",
+                decisionEvidence: { classification: "completed" },
+                operatingDate: "2026-06-05",
+                outcome: "skipped",
+                storeId: "store-1",
+              },
+            },
+            {
               action: "recorded",
               run: {
                 _id: "automation-run-prepared",
-                operatingDate: "2026-06-05",
+                operatingDate: "2026-06-04",
                 outcome: "prepared",
+                storeId: "store-1",
+              },
+            },
+            {
+              action: "recorded",
+              run: {
+                _id: "automation-run-blocked",
+                decisionEvidence: { classification: "blocked" },
+                operatingDate: "2026-06-03",
+                outcome: "skipped",
+                storeId: "store-1",
+              },
+            },
+            {
+              action: "failed",
+              run: {
+                _id: "automation-run-failed",
+                operatingDate: "2026-06-02",
+                outcome: "failed",
                 storeId: "store-1",
               },
             },
@@ -1103,15 +1132,33 @@ describe("daily operations automation adapter", () => {
         },
       );
 
-      expect(runAction).toHaveBeenCalledTimes(2);
+      expect(runAction).toHaveBeenCalledTimes(5);
       expect(runAction.mock.calls[0]?.[1]).toEqual({
         operatingDate: "2026-06-08",
         status: "applied",
         storeId: "store-1",
       });
       expect(runAction.mock.calls[1]?.[1]).toEqual({
-        operatingDate: "2026-06-05",
+        automationRunId: "automation-run-skipped",
+        operatingDate: "2026-06-06",
+        status: "skipped",
+        storeId: "store-1",
+      });
+      expect(runAction.mock.calls[2]?.[1]).toEqual({
+        operatingDate: "2026-06-04",
         status: "prepared",
+        storeId: "store-1",
+      });
+      expect(runAction.mock.calls[3]?.[1]).toEqual({
+        automationRunId: "automation-run-blocked",
+        operatingDate: "2026-06-03",
+        status: "skipped",
+        storeId: "store-1",
+      });
+      expect(runAction.mock.calls[4]?.[1]).toEqual({
+        automationRunId: "automation-run-failed",
+        operatingDate: "2026-06-02",
+        status: "failed",
         storeId: "store-1",
       });
       expect(result).toEqual([
@@ -1130,16 +1177,55 @@ describe("daily operations automation adapter", () => {
           storeId: "store-1",
         },
         {
-          operatingDate: "2026-06-05",
+          operatingDate: "2026-06-06",
           reports: [
             {
-              operatingDate: "2026-06-05",
+              operatingDate: "2026-06-06",
+              recipientEmail: "manager@example.com",
+              status: 202,
+              storeName: "Accra",
+            },
+          ],
+          runId: "automation-run-skipped",
+          storeId: "store-1",
+        },
+        {
+          operatingDate: "2026-06-04",
+          reports: [
+            {
+              operatingDate: "2026-06-04",
               recipientEmail: "manager@example.com",
               status: 202,
               storeName: "Accra",
             },
           ],
           runId: "automation-run-prepared",
+          storeId: "store-1",
+        },
+        {
+          operatingDate: "2026-06-03",
+          reports: [
+            {
+              operatingDate: "2026-06-03",
+              recipientEmail: "manager@example.com",
+              status: 202,
+              storeName: "Accra",
+            },
+          ],
+          runId: "automation-run-blocked",
+          storeId: "store-1",
+        },
+        {
+          operatingDate: "2026-06-02",
+          reports: [
+            {
+              operatingDate: "2026-06-02",
+              recipientEmail: "manager@example.com",
+              status: 202,
+              storeName: "Accra",
+            },
+          ],
+          runId: "automation-run-failed",
           storeId: "store-1",
         },
       ]);
@@ -1154,7 +1240,7 @@ describe("daily operations automation adapter", () => {
     const runAction = vi.fn();
 
     try {
-      const result = await sendDailyManagerReportsForAppliedEodAutomationWithCtx(
+      const result = await sendDailyManagerReportsForEodAutomationWithCtx(
         { runAction } as never,
         {
           results: [

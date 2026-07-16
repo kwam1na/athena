@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="0f3e6994d617f1b1a3a772ecfb438053d25592b79bb8dd8e68c23c750d702f7c" data-athena-report-base="origin/main@44f5a194" data-athena-report-head="codex/fix-eod-admin-alerts (uncommitted candidate)">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>EOD Automation: Safe Outcomes and Manual-Close Alerts</title>
+    <style>
+      :root {
+        --ink: #1f2933;
+        --muted: #596674;
+        --line: #d9e2ec;
+        --paper: #ffffff;
+        --soft: #f6f8fb;
+        --accent: #1d4ed8;
+        --accent-soft: #dbeafe;
+        --good: #166534;
+        --bad: #b91c1c;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--soft);
+        color: var(--ink);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        line-height: 1.55;
+      }
+      main { max-width: 1120px; margin: 0 auto; padding: 48px 24px 72px; }
+      header { border-bottom: 1px solid var(--line); margin-bottom: 28px; padding-bottom: 28px; }
+      h1, h2, h3 { line-height: 1.18; letter-spacing: 0; }
+      h1 { font-size: 42px; max-width: 880px; margin: 0 0 16px; }
+      h2 { font-size: 28px; margin: 0 0 16px; }
+      p { margin: 0 0 14px; }
+      .lede { color: var(--muted); font-size: 18px; max-width: 880px; }
+      .meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+      .pill { border: 1px solid var(--line); border-radius: 999px; background: var(--paper); color: var(--muted); font-size: 13px; padding: 6px 10px; }
+      .panel { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; margin: 18px 0; padding: 22px; }
+      code { background: #eef2f7; border: 1px solid #d8dee8; border-radius: 5px; padding: 1px 5px; }
+      pre { overflow: auto; background: #111827; color: #e5e7eb; border-radius: 8px; padding: 16px; }
+      pre code { background: transparent; border: 0; color: inherit; padding: 0; }
+      table { width: 100%; border-collapse: collapse; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+      th, td { border-bottom: 1px solid var(--line); padding: 11px 12px; text-align: left; vertical-align: top; }
+      th { background: #eef2f7; color: var(--muted); font-size: 13px; text-transform: uppercase; }
+      tr:last-child td { border-bottom: 0; }
+      .quiz-question { border-top: 1px solid var(--line); padding: 18px 0; }
+      .quiz-question:first-child { border-top: 0; }
+      fieldset { border: 0; margin: 0; padding: 0; }
+      legend { font-weight: 700; margin-bottom: 10px; }
+      label { display: block; border: 1px solid var(--line); border-radius: 8px; background: #fbfdff; margin: 8px 0; padding: 10px 12px; cursor: pointer; }
+      @media (hover: hover) and (pointer: fine) {
+        label:hover { border-color: #b6c5d8; }
+      }
+      button {
+        appearance: none;
+        border: 0;
+        border-radius: 8px;
+        background: var(--accent);
+        color: #ffffff;
+        cursor: pointer;
+        font-weight: 700;
+        padding: 11px 16px;
+        transition: transform 140ms cubic-bezier(0.23, 1, 0.32, 1);
+      }
+      button:active { transform: scale(0.97); }
+      button.secondary { background: #475569; }
+      .quiz-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
+      #quizResult { font-weight: 700; }
+      .answer-detail { display: none; border-top: 1px dashed var(--line); color: var(--muted); margin-top: 10px; padding-top: 10px; }
+      .answer-detail.visible { display: block; }
+      .correct { border-color: #86efac !important; background: #f0fdf4 !important; }
+      .incorrect { border-color: #fecaca !important; background: #fef2f2 !important; }
+      @media (prefers-reduced-motion: reduce) { button { transition-duration: 0ms; } }
+      @media (max-width: 820px) { h1 { font-size: 32px; } main { padding: 32px 16px 56px; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>EOD Automation: Safe Outcomes and Manual-Close Alerts</h1>
+        <p class="lede">How Athena preserves automation evidence, tells admins when a day remains open, and avoids repeated cron email delivery.</p>
+        <div class="meta"><span class="pill">Delivery candidate</span><span class="pill">Branch codex/fix-eod-admin-alerts</span><span class="pill">Merge pending</span><span class="pill">Production deploy deferred</span><span class="pill">Local root alignment deferred</span></div>
+      </header>
+      <section class="panel"><h2>Executive Summary</h2>
+<p>This candidate fixes the EOD outcome ledger boundary and applies an explicit notification policy: every failed run and every skipped run except classification <code>completed</code> sends an action-required admin email. Applied and prepared reports keep their existing paths.</p>
+<p>Action-required delivery is reserved per recipient and store-day before the email provider is called. Successful sends are terminal, while failed or expired reservations can retry without every cron cycle resending the same alert.</p>
+</section>
+<section class="panel"><h2>Why It Mattered</h2>
+<p>The production incident began as a safe refusal to close: source evidence was incomplete, so Athena correctly did not complete the day. A second ledger patch then supplied eventIds as undefined; Convex removed the required field during validation and the visible outcome became a failure instead of a trustworthy skip.</p>
+<p>The operational consequence is the same whenever automation does not close the day: an operator must open EOD Review and finish manually. Silent skips leave admins without the instruction needed to close the operating day.</p>
+</section>
+<section class="panel"><h2>Mental Model</h2>
+<p>Treat EOD automation as a close attempt followed by an outcome router. The router trusts the recorded outcome and decision classification: failed and non-<code>completed</code> skipped outcomes require manual-close guidance. It does not independently query close state. A delivery ledger sits in front of the provider so retries are safe.</p>
+<ul>
+<li>Applied: the day closed; send the completed daily report.</li>
+<li>Prepared: manager review is expected; send the prepared report.</li>
+<li>Skipped and not classified completed: policy requires action-required guidance.</li>
+<li>Failed: policy requires action-required guidance and support context.</li>
+<li>Completed classification: no email because the day is already closed.</li>
+</ul>
+</section>
+<section class="panel"><h2>Before and After</h2>
+<p>Before, only fresh applied and prepared results entered the manager-report path. Skips and failures could leave an open day without admin notification, and the safe-skip outcome patch could erase the required eventIds evidence.</p>
+<p>After, optional patch fields are omitted unless a concrete value exists. The result router maps applied, prepared, skipped, and failed outcomes; every failure and every skip not classified <code>completed</code> carries the automation run ID into the action-required email path.</p>
+<pre><code>eventIds: undefined        -&gt; omit the patch field
+skipped + completed       -&gt; silent
+skipped + day still open -&gt; action-required email
+failed                    -&gt; action-required email</code></pre>
+</section>
+<section class="panel"><h2>Delivery and Retry Boundary</h2>
+<p>For each normalized admin email, Athena reserves an eod_action_required delivery keyed by domain, action, store, operating date, kind, and recipient. A pending reservation holds a five-minute lease. Sent is terminal; failed or expired reservations can be reclaimed and increment attemptCount.</p>
+<ul>
+<li>Provider failure marks the reservation failed and throws so a later scheduler run can retry.</li>
+<li>Recipients are processed sequentially; recipients already marked sent are suppressed on retry.</li>
+<li>The design is intentionally at-least-once at the provider boundary: acceptance followed by a failed sent-marker mutation can permit a later duplicate after lease expiry.</li>
+<li>Dedupe is once per recipient and store-day, so a later reason change that day does not send a second action-required email after success.</li>
+</ul>
+</section>
+<section class="panel"><h2>Operator Message</h2>
+<p>Skipped automation says Athena did not close the operating day and directs admins to open EOD Review, resolve remaining items, and complete the close.</p>
+<p>Failed automation says Athena could not complete the automated check, directs admins to close manually, and advises contacting support if the workflow is unavailable. Raw backend error text is not exposed as the primary instruction.</p>
+</section>
+<section class="panel"><h2>What Did Not Change</h2>
+
+<ul>
+<li>EOD eligibility, review thresholds, and close-command mechanics are unchanged.</li>
+<li>Applied and prepared daily-report behavior remains intact.</li>
+<li>ADMIN_EMAILS remains the recipient source; store-scoped recipient management is not added.</li>
+<li>Scheduled dispatch remains production-stage only.</li>
+<li>This delivery does not rerun the affected production day, align local root main, or deploy production services.</li>
+</ul>
+</section>
+<section class="panel"><h2>Validation and Current Status</h2>
+<p>Focused regression coverage proves safe skips retain eventIds, routing covers generic skips and completed suppression, email delivery retries after failure, and render copy gives manual-close guidance. The focused routing file passed 56 tests; the broader focused set previously passed 88 tests. Changed-Convex lint and diff checks passed, and Graphify was rebuilt to 10,565 nodes, 12,878 edges, and 2,529 communities.</p>
+<p>The merge-grade gate is being rerun after this required solution note and report are added. Merge is pending. Production deploy and local-root alignment are explicitly deferred by user request. A prior Convex code-generation command synchronized the configured development deployment; it did not deploy production.</p>
+</section>
+<section class="panel"><h2>Next-Time Guidance</h2>
+
+<ul>
+<li>Diagnose automation outcomes from the durable run and source-read evidence before treating a safe skip as a business-policy failure.</li>
+<li>Never patch a required Convex field with undefined; conditionally omit optional patch inputs.</li>
+<li>Route notifications by the operator action still required, not by a narrow list of backend classifications.</li>
+<li>Reserve external notifications before provider I/O and make retry semantics explicit in tests.</li>
+<li>When extending action-required mail, preserve the completed-classification silence and the per-recipient store-day dedupe boundary.</li>
+</ul>
+</section>
+      
+<section class="panel">
+  <h2>Key Files</h2>
+  <table>
+    <thead><tr><th>File</th><th>Why It Matters</th></tr></thead>
+    <tbody><tr><td><code>packages/athena-webapp/convex/automation/runLedger.ts</code></td><td>Preserves required eventIds evidence when a final outcome has no replacement IDs.</td></tr>
+<tr><td><code>packages/athena-webapp/convex/operations/dailyOperationsAutomation.ts</code></td><td>Owns the outcome-to-notification policy and production-only dispatch.</td></tr>
+<tr><td><code>packages/athena-webapp/convex/operations/dailyManagerReportEmail.ts</code></td><td>Validates actionable runs, builds live report data, reserves delivery, sends, and records success or failure.</td></tr>
+<tr><td><code>packages/athena-webapp/convex/emails/DailyManagerReport.tsx</code></td><td>Presents calm manual-close instructions and the EOD Review CTA.</td></tr>
+<tr><td><code>packages/athena-webapp/convex/schemas/automation.ts</code></td><td>Defines durable per-recipient delivery status, lease, attempts, and dedupe identity.</td></tr>
+<tr><td><code>packages/athena-webapp/convex/schema.ts</code></td><td>Registers the notification delivery table and indexes.</td></tr></tbody>
+  </table>
+</section>
+
+      
+<section class="panel">
+  <h2>Subagent Evidence</h2>
+  <ul><li><strong>session context:</strong> Reconstructed the production incident, policy discussion, finish-line changes, validation history, and development-deployment caveat from session evidence.</li>
+<li><strong>delivered diff:</strong> Mapped persistence, routing, email, schema, copy, tests, generated artifacts, unchanged behavior, and residual retry risks from the branch diff.</li></ul>
+</section>
+
+      
+<section id="quiz" class="panel">
+  <h2>Quiz: Pass Required</h2>
+  <p>You must score at least 8 out of 10 to pass.</p>
+  <form id="changeQuiz" data-threshold="8">
+    
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>1. Which recorded evidence suppresses an action-required email for a skipped EOD run?</legend>
+    <label><input type="radio" name="q1" value="0" /> The blocked classification</label>
+<label><input type="radio" name="q1" value="1" /> The completed classification</label>
+<label><input type="radio" name="q1" value="2" /> A variance below GH₵10</label>
+  </fieldset>
+  <div class="answer-detail">The router does not query close state; it suppresses a skipped run only when decision evidence is classified completed.</div>
+</div>
+
+<div class="quiz-question" data-answer="0">
+  <fieldset>
+    <legend>2. Why is eventIds omitted from the outcome patch when no new IDs exist?</legend>
+    <label><input type="radio" name="q2" value="0" /> To preserve the required initialized value</label>
+<label><input type="radio" name="q2" value="1" /> To reduce email size</label>
+<label><input type="radio" name="q2" value="2" /> To disable audit history</label>
+  </fieldset>
+  <div class="answer-detail">Passing undefined can remove the required Convex field during validation; omission preserves the existing array.</div>
+</div>
+
+<div class="quiz-question" data-answer="2">
+  <fieldset>
+    <legend>3. Which skipped outcome remains silent?</legend>
+    <label><input type="radio" name="q3" value="0" /> Outside completion window</label>
+<label><input type="radio" name="q3" value="1" /> Incomplete source reads</label>
+<label><input type="radio" name="q3" value="2" /> Already completed</label>
+  </fieldset>
+  <div class="answer-detail">A completed classification means no operator close action remains.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>4. What is the purpose of automationNotificationDelivery?</legend>
+    <label><input type="radio" name="q4" value="0" /> Replace automationRun</label>
+<label><input type="radio" name="q4" value="1" /> Prevent repeated successful alerts while supporting retries</label>
+<label><input type="radio" name="q4" value="2" /> Store email HTML forever</label>
+  </fieldset>
+  <div class="answer-detail">It reserves and records per-recipient action-required delivery state.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>5. What happens after a provider send fails?</legend>
+    <label><input type="radio" name="q5" value="0" /> The day is automatically closed</label>
+<label><input type="radio" name="q5" value="1" /> The reservation is marked failed and a later run may retry</label>
+<label><input type="radio" name="q5" value="2" /> The recipient is permanently suppressed</label>
+  </fieldset>
+  <div class="answer-detail">Failed reservations are retryable; successful sent reservations are terminal.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>6. What does a skipped-action email ask the admin to do?</legend>
+    <label><input type="radio" name="q6" value="0" /> Wait for tomorrow&#x27;s cron</label>
+<label><input type="radio" name="q6" value="1" /> Open EOD Review and complete the close manually</label>
+<label><input type="radio" name="q6" value="2" /> Delete the automation run</label>
+  </fieldset>
+  <div class="answer-detail">The message is operational: resolve remaining items and complete EOD Review.</div>
+</div>
+
+<div class="quiz-question" data-answer="0">
+  <fieldset>
+    <legend>7. Which behavior intentionally remains unchanged?</legend>
+    <label><input type="radio" name="q7" value="0" /> Applied and prepared report paths</label>
+<label><input type="radio" name="q7" value="1" /> All skip outcomes are silent</label>
+<label><input type="radio" name="q7" value="2" /> Recipients become store-configurable</label>
+  </fieldset>
+  <div class="answer-detail">Existing applied and prepared reports remain; skip/failure action messaging is additive.</div>
+</div>
+
+<div class="quiz-question" data-answer="0">
+  <fieldset>
+    <legend>8. What residual duplicate edge remains?</legend>
+    <label><input type="radio" name="q8" value="0" /> Provider accepts the email but marking sent fails</label>
+<label><input type="radio" name="q8" value="1" /> A sent reservation exists</label>
+<label><input type="radio" name="q8" value="2" /> The day is classified completed</label>
+  </fieldset>
+  <div class="answer-detail">After lease expiry, the system may retry because it cannot know the provider accepted the prior email.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>9. Where should future notification routing logic focus?</legend>
+    <label><input type="radio" name="q9" value="0" /> Raw backend wording</label>
+<label><input type="radio" name="q9" value="1" /> The operator action still required</label>
+<label><input type="radio" name="q9" value="2" /> The number of cron attempts</label>
+  </fieldset>
+  <div class="answer-detail">The durable product boundary is whether someone must still close the day.</div>
+</div>
+
+<div class="quiz-question" data-answer="0">
+  <fieldset>
+    <legend>10. What tradeoff follows from deduping action-required mail once per recipient and store-day?</legend>
+    <label><input type="radio" name="q10" value="0" /> A later reason change that day does not send another alert after success</label>
+<label><input type="radio" name="q10" value="1" /> Every cron run sends a fresh alert</label>
+<label><input type="radio" name="q10" value="2" /> Failed deliveries can never retry</label>
+  </fieldset>
+  <div class="answer-detail">The dedupe key does not include the run or reason, so a successful alert suppresses later same-day action-required outcomes for that recipient.</div>
+</div>
+
+    <div class="quiz-actions">
+      <button type="button" id="gradeQuiz">Grade quiz</button>
+      <button type="button" class="secondary" id="resetQuiz">Reset</button>
+      <span id="quizResult" aria-live="polite"></span>
+    </div>
+  </form>
+</section>
+
+    </main>
+    <script>
+      const questions = Array.from(document.querySelectorAll(".quiz-question"));
+      const result = document.getElementById("quizResult");
+      const form = document.getElementById("changeQuiz");
+      const threshold = Number(form.dataset.threshold || 0);
+      function clearGrades() {
+        questions.forEach((question) => {
+          question.classList.remove("correct", "incorrect");
+          question.querySelector(".answer-detail").classList.remove("visible");
+        });
+        result.textContent = "";
+        result.style.color = "";
+      }
+      document.getElementById("gradeQuiz").addEventListener("click", () => {
+        clearGrades();
+        let score = 0;
+        questions.forEach((question, index) => {
+          const selected = document.querySelector(`input[name="q${index + 1}"]:checked`);
+          const isCorrect = selected && Number(selected.value) === Number(question.dataset.answer);
+          if (isCorrect) score += 1;
+          question.classList.add(isCorrect ? "correct" : "incorrect");
+          question.querySelector(".answer-detail").classList.add("visible");
+        });
+        const passed = score >= threshold;
+        result.textContent = passed
+          ? `Passed: ${score}/${questions.length}.`
+          : `Not passed: ${score}/${questions.length}. Review the report and try again.`;
+        result.style.color = passed ? "var(--good)" : "var(--bad)";
+      });
+      document.getElementById("resetQuiz").addEventListener("click", () => {
+        form.reset();
+        clearGrades();
+      });
+    </script>
+  </body>
+</html>

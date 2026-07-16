@@ -532,7 +532,7 @@ export async function patchAutomationRunOutcomeWithCtx(
     appliedAt: args.appliedAt,
     decisionEvidence: args.decisionEvidence,
     error: args.error,
-    eventIds: args.eventIds,
+    ...(args.eventIds === undefined ? {} : { eventIds: args.eventIds }),
     outcome: args.outcome,
     updatedAt: Date.now(),
   });

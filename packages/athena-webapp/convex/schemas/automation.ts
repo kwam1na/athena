@@ -106,6 +106,29 @@ export const automationRunSchema = v.object({
   appliedAt: v.optional(v.number()),
 });
 
+export const automationNotificationDeliverySchema = v.object({
+  storeId: v.id("store"),
+  organizationId: v.optional(v.id("organization")),
+  operatingDate: v.string(),
+  domain: v.string(),
+  action: v.string(),
+  notificationKind: v.literal("eod_action_required"),
+  dedupeKey: v.string(),
+  automationRunId: v.id("automationRun"),
+  recipientEmail: v.string(),
+  status: v.union(
+    v.literal("pending"),
+    v.literal("sent"),
+    v.literal("failed"),
+  ),
+  attemptCount: v.number(),
+  leaseExpiresAt: v.optional(v.number()),
+  createdAt: v.number(),
+  updatedAt: v.number(),
+  sentAt: v.optional(v.number()),
+  failedAt: v.optional(v.number()),
+});
+
 export const scheduledRunLedgerOutcomeValidator = v.union(
   v.literal("applied"),
   v.literal("no_candidates"),
