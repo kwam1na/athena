@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="05fc5944e274efd5ce62b01df60c2d6160ff320b373ef3d58af1c7312867d01c" data-athena-report-base="2c4a4a5f591c1a4724d643ef471e09c17fb4f0bc" data-athena-report-head="working-tree-candidate">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>POS Exact-Session Recovery and Register Authority</title>
+    <style>
+      :root {
+        --ink: #1f2933;
+        --muted: #596674;
+        --line: #d9e2ec;
+        --paper: #ffffff;
+        --soft: #f6f8fb;
+        --accent: #1d4ed8;
+        --accent-soft: #dbeafe;
+        --good: #166534;
+        --bad: #b91c1c;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--soft);
+        color: var(--ink);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        line-height: 1.55;
+      }
+      main { max-width: 1120px; margin: 0 auto; padding: 48px 24px 72px; }
+      header { border-bottom: 1px solid var(--line); margin-bottom: 28px; padding-bottom: 28px; }
+      h1, h2, h3 { line-height: 1.18; letter-spacing: 0; }
+      h1 { font-size: 42px; max-width: 880px; margin: 0 0 16px; }
+      h2 { font-size: 28px; margin: 0 0 16px; }
+      p { margin: 0 0 14px; }
+      .lede { color: var(--muted); font-size: 18px; max-width: 880px; }
+      .meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+      .pill { border: 1px solid var(--line); border-radius: 999px; background: var(--paper); color: var(--muted); font-size: 13px; padding: 6px 10px; }
+      .panel { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; margin: 18px 0; padding: 22px; }
+      code { background: #eef2f7; border: 1px solid #d8dee8; border-radius: 5px; padding: 1px 5px; }
+      pre { overflow: auto; background: #111827; color: #e5e7eb; border-radius: 8px; padding: 16px; }
+      pre code { background: transparent; border: 0; color: inherit; padding: 0; }
+      table { width: 100%; border-collapse: collapse; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+      th, td { border-bottom: 1px solid var(--line); padding: 11px 12px; text-align: left; vertical-align: top; }
+      th { background: #eef2f7; color: var(--muted); font-size: 13px; text-transform: uppercase; }
+      tr:last-child td { border-bottom: 0; }
+      .quiz-question { border-top: 1px solid var(--line); padding: 18px 0; }
+      .quiz-question:first-child { border-top: 0; }
+      fieldset { border: 0; margin: 0; padding: 0; }
+      legend { font-weight: 700; margin-bottom: 10px; }
+      label { display: block; border: 1px solid var(--line); border-radius: 8px; background: #fbfdff; margin: 8px 0; padding: 10px 12px; cursor: pointer; }
+      @media (hover: hover) and (pointer: fine) {
+        label:hover { border-color: #b6c5d8; }
+      }
+      button {
+        appearance: none;
+        border: 0;
+        border-radius: 8px;
+        background: var(--accent);
+        color: #ffffff;
+        cursor: pointer;
+        font-weight: 700;
+        padding: 11px 16px;
+        transition: transform 140ms cubic-bezier(0.23, 1, 0.32, 1);
+      }
+      button:active { transform: scale(0.97); }
+      button.secondary { background: #475569; }
+      .quiz-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
+      #quizResult { font-weight: 700; }
+      .answer-detail { display: none; border-top: 1px dashed var(--line); color: var(--muted); margin-top: 10px; padding-top: 10px; }
+      .answer-detail.visible { display: block; }
+      .correct { border-color: #86efac !important; background: #f0fdf4 !important; }
+      .incorrect { border-color: #fecaca !important; background: #fef2f2 !important; }
+      @media (prefers-reduced-motion: reduce) { button { transition-duration: 0ms; } }
+      @media (max-width: 820px) { h1 { font-size: 32px; } main { padding: 32px 16px 56px; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>POS Exact-Session Recovery and Register Authority</h1>
+        <p class="lede">How terminal recovery now handles expired handoffs, Convex mutation replay, and Auth-provider remounts safely—requesting a fresh code when needed without weakening staff accountability.</p>
+        <div class="meta"><span class="pill">Delivery candidate</span><span class="pill">Branch: codex/pos-terminal-app-session-gate</span><span class="pill">Base: PR #666 / 2c4a4a5f</span><span class="pill">Report snapshot: 2026-07-16</span><span class="pill">Production deploy: out of scope</span><span class="pill">Root checkout: clean on main</span></div>
+      </header>
+      <section class="panel"><h2>Executive Summary</h2>
+<p>Fullscreen register and expense routes now require the terminal&#x27;s exact POS service-principal session. A human manager can administer POS, but cannot accidentally stand in for the checkout station&#x27;s application authority.</p>
+<p>Recovery is now resilient across three independent boundaries: an expiring browser/server handoff, deterministic execution inside a replayable Convex mutation, and the short interval while the root Auth provider remounts onto promoted service-session tokens. Register commands still require separate verified staff identity.</p>
+<p>Operators now see “POS sign-in required” when a fullscreen terminal route lacks application authority. If the prepared exchange has expired, the flow clears the confirmed local attempt and returns to fresh recovery-code entry.</p>
+</section>
+<section class="panel"><h2>Problem and Context</h2>
+<p>The terminal and store were valid, but the browser had no active POS application-session binding. Human authentication allowed the fullscreen register to mount, while protected POS calls correctly rejected that human session. Recovery then exposed additional failures: stale handoffs, expired prepared exchanges, mutation-forbidden cryptographic randomness, and a human-only daily-close query after activation.</p>
+<p>The safe response was to preserve the backend&#x27;s exact-session checks and repair each protocol boundary, not loosen POS operations to accept a manager login.</p>
+</section>
+<section class="panel"><h2>Mental Model: Four Separate Authority Lanes</h2>
+
+<ul>
+<li>Terminal application authority: exact Auth session, service-principal session, store capability, terminal, and application binding.</li>
+<li>Recovery continuity: bounded prepared exchange plus browser handoff journal; it can resume or expire but cannot grant authority by itself.</li>
+<li>Offline continuity: server-signed, expiring receipt verified against the reviewed development trust anchor; production trust remains empty and fail-closed.</li>
+<li>Personal accountability: verified cashier or manager staff proof for register and cash-control commands. Machine authority never supplies this identity.</li>
+</ul>
+</section>
+<section class="panel"><h2>Before and After Flow</h2>
+<p>Before: human manager auth could mount the fullscreen register; stale recovery state produced generic retry loops; receipt issuance called cryptographic APIs that Convex mutations reject; provider remount temporarily looked like a terminal failure.</p>
+<p>After: fullscreen route enters POS recovery; an isolated Auth namespace prepares the exact pair; one mutation validates current authority, issues the service session and binding, signs the receipt deterministically, and records audit evidence; promoted tokens remount; bounded polling verifies the exact activated session; only then does the register mount.</p>
+<pre><code>human on fullscreen POS
+  -&gt; recovery gate
+  -&gt; isolated exact Auth session
+  -&gt; atomic activation + deterministic receipt
+  -&gt; token promotion / provider remount
+  -&gt; exact-session assertion
+  -&gt; register mounts
+  -&gt; verified staff proof authorizes personal commands</code></pre>
+</section>
+<section class="panel"><h2>Recovery and Failure Boundaries</h2>
+
+<ul>
+<li>An expired prepared exchange is exact-session-aborted and returns code_required; the browser clears only the confirmed-aborted handoff and asks for a fresh code.</li>
+<li>A stale local lease can be reclaimed by its owner. A new attempt may discard only the abandoned local handoff journal and pending Auth namespace in prepared/auth-issued phases, never activated or promoted state. The server exchange expires or is cleaned through its own bounded path.</li>
+<li>Mutation-time receipt issuance uses seeded Math.random bytes and deterministic P-256 signing through @noble/curves. Missing signing configuration aborts the whole transaction.</li>
+<li>Immediately after promotion, getCurrentPosTerminalServiceSession may return unavailable while Auth remounts. The browser retries with bounded backoff and still requires an exact field-for-field activation match; persistent unavailability ultimately fails and may represent a real authority problem.</li>
+<li>Stage detail is logged server-side; public activation failures retain the generic recovery message.</li>
+<li>A mismatched development issuer, key version, or public JWK fails receipt verification. Production trust anchors remain empty.</li>
+</ul>
+</section>
+<section class="panel"><h2>Authorization After Activation</h2>
+<p>Only the daily-close lifecycle gate gained dual read authority: current POS application authority or the existing human store-membership lane. Broader daily-close snapshots and manager commands were not opened to the service principal.</p>
+<p>Register closeout and opening-float correction accept the POS service lane for application authority, but fail closed without an independently verified staff profile. Non-fullscreen routes keep their existing human-session behavior.</p>
+</section>
+<section class="panel"><h2>Validation and Review Evidence</h2>
+
+<ul>
+<li>Focused Vitest runs covered src/routes/_authed.test.tsx, the PosRecoveryCodeForm/FrontendAdapter/posRecoveryFlow suites, and recoverPromotedPosRecoverySession.test.ts. Earlier overlapping route/recovery runs reported 83 and 110 passing tests; those counts are not additive.</li>
+<li>The final backend recovery/security group—terminalAppSessions.test.ts, offlineAuthorityReceipt.test.ts, and offlineAuthorityPublicKeys.test.ts—reported 46 passing tests. A focused terminal-proof abort test rejected an unsafe relaxation, which was reverted.</li>
+<li>The complete convex/operations/dailyClose.test.ts suite reported 75 passing tests. Local Convex generation/refresh succeeded, and live browser verification reached the staff username/PIN form.</li>
+<li>TypeScript and changed-frontend lint passed during the route/recovery loop. Graphify rebuilt to 10,843 nodes and 13,286 edges; git diff --check and both delivery-documentation sensors passed for the report candidate.</li>
+<li>The authoritative final local-gate and CI results live in the commit/PR checks rather than this dated report snapshot. No production deploy, schema migration, or cleanup execution is part of this delivery.</li>
+</ul>
+</section>
+<section class="panel"><h2>What Intentionally Did Not Change</h2>
+
+<ul>
+<li>Exact principal, store, terminal, credential, capability, lifecycle, proof, and Auth-session validation remains fail-closed.</li>
+<li>Only the predecessor binding for the same principal and terminal is superseded; sibling terminal sessions are untouched.</li>
+<li>Production browser trust anchors stay empty and private signing keys remain environment-only.</li>
+<li>Human access remains valid on non-fullscreen administration surfaces.</li>
+<li>The bounded expired-artifact cleanup command was not scheduled or run; no schema migration or production cleanup is introduced.</li>
+</ul>
+</section>
+<section class="panel"><h2>Next-Time Operational Guidance</h2>
+
+<ul>
+<li>When recovery fails, use the server-side activation stage to identify the boundary while keeping the client message generic.</li>
+<li>Treat prepared-exchange expiry, stale local ownership, and provider remount as different states with different cleanup rules.</li>
+<li>Never add Web Crypto randomness or randomized signing to a Convex mutation; preserve deterministic transaction replay.</li>
+<li>Rotate the development server key and compiled public anchor together. Keep production trust enablement as an explicit reviewed operation.</li>
+<li>When extending a POS endpoint, decide separately whether it needs application authority, human membership, verified staff identity, or more than one lane.</li>
+</ul>
+</section>
+
+<section class="panel">
+  <h2>Key Files</h2>
+  <table>
+    <thead><tr><th>File</th><th>Why It Matters</th></tr></thead>
+    <tbody><tr><td><code>packages/athena-webapp/convex/pos/public/terminalAppSessions.ts</code></td><td>Owns exact-session activation, expired-exchange recovery, typed remount state, and audit evidence.</td></tr>
+<tr><td><code>packages/athena-webapp/convex/pos/application/offlineAuthorityReceipt.ts</code></td><td>Issues replay-stable nonces and deterministic P-256 receipts inside the activation mutation.</td></tr>
+<tr><td><code>packages/athena-webapp/src/components/auth/Login/posRecoveryFlow.ts</code></td><td>Coordinates stale handoff reclamation, typed code re-entry, resume, promotion, and abort.</td></tr>
+<tr><td><code>packages/athena-webapp/src/lib/auth/recoverPromotedPosRecoverySession.ts</code></td><td>Polls through Auth-provider remount with bounded backoff and exact-session comparison.</td></tr>
+<tr><td><code>packages/athena-webapp/src/routes/-authed-layout.tsx</code></td><td>Requires POS application authority for fullscreen register and expense execution routes.</td></tr>
+<tr><td><code>packages/athena-webapp/convex/cashControls/closeouts.ts</code></td><td>Separates terminal application authority from verified staff attribution on cash commands.</td></tr>
+<tr><td><code>packages/athena-webapp/convex/operations/dailyClose.ts</code></td><td>Adds a narrow dual-authority lifecycle read without broadening manager operations.</td></tr>
+<tr><td><code>docs/runbooks/store-service-principal-operations.md</code></td><td>Documents development trust-anchor setup while preserving production fail-closed behavior.</td></tr></tbody>
+  </table>
+</section>
+
+
+<section class="panel">
+  <h2>Subagent Evidence</h2>
+  <ul><li><strong>session context:</strong> Traced the staged activation failures through load_prepared_exchange, issue_offline_authority_receipt, and the daily-close human-only guard; grounded the sequence in the current session, base PR #666, terminalAppSessions.ts, offlineAuthorityReceipt.ts, and dailyClose.ts.</li>
+<li><strong>delivered diff:</strong> Compared the candidate against base 2c4a4a5f, mapped the authority layers across terminalAppSessions.ts, posRecoveryFlow.ts, -authed-layout.tsx, closeouts.ts, and dailyClose.ts, verified generated Graphify/index implications, and confirmed git diff --check.</li></ul>
+</section>
+
+
+<section id="quiz" class="panel">
+  <h2>Quiz: Pass Required</h2>
+  <p>You must score at least 8 out of 10 to pass.</p>
+  <form id="changeQuiz" data-threshold="8">
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>1. Why can a signed-in manager no longer directly mount the fullscreen register?</legend>
+    <label><input type="radio" name="q1" value="0" /> Managers lost all POS access</label>
+<label><input type="radio" name="q1" value="1" /> Fullscreen execution requires the terminal&#x27;s exact POS application session</label>
+<label><input type="radio" name="q1" value="2" /> The register is now offline-only</label>
+  </fieldset>
+  <div class="answer-detail">Human membership and terminal application authority are separate lanes; administration can remain human-authenticated while fullscreen execution requires the terminal session.</div>
+</div>
+
+<div class="quiz-question" data-answer="2">
+  <fieldset>
+    <legend>2. What should happen when a prepared recovery exchange expires before activation?</legend>
+    <label><input type="radio" name="q2" value="0" /> Accept the old code indefinitely</label>
+<label><input type="radio" name="q2" value="1" /> Loosen activation to terminal proof</label>
+<label><input type="radio" name="q2" value="2" /> Abort the bounded exact-session artifacts and request a fresh code</label>
+  </fieldset>
+  <div class="answer-detail">Expiry is a typed recoverable state: exact-session cleanup returns code_required and the browser starts a fresh attempt.</div>
+</div>
+
+<div class="quiz-question" data-answer="0">
+  <fieldset>
+    <legend>3. Why was Web Crypto signing replaced in the activation mutation?</legend>
+    <label><input type="radio" name="q3" value="0" /> Convex mutations must replay deterministically</label>
+<label><input type="radio" name="q3" value="1" /> Browsers cannot verify P-256</label>
+<label><input type="radio" name="q3" value="2" /> The receipt no longer needs a signature</label>
+  </fieldset>
+  <div class="answer-detail">Mutation replay requires stable outputs; both explicit crypto randomness and randomized ECDSA signing violate that boundary.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>4. What does the unavailable current-session result mean immediately after token promotion?</legend>
+    <label><input type="radio" name="q4" value="0" /> Authority is permanently revoked</label>
+<label><input type="radio" name="q4" value="1" /> The provider may still be remounting, so the client should retry within bounds</label>
+<label><input type="radio" name="q4" value="2" /> The client should bypass exact-session comparison</label>
+  </fieldset>
+  <div class="answer-detail">Unavailable may be a transient provider-remount state immediately after promotion. Bounded polling continues with exact activation matching; persistent unavailability eventually fails and can indicate a real authority problem.</div>
+</div>
+
+<div class="quiz-question" data-answer="0">
+  <fieldset>
+    <legend>5. Which stale local handoff may a new recovery attempt discard?</legend>
+    <label><input type="radio" name="q5" value="0" /> Only the abandoned local journal and pending Auth namespace in prepared or auth-issued phases</label>
+<label><input type="radio" name="q5" value="1" /> Any activated session</label>
+<label><input type="radio" name="q5" value="2" /> Any promoted session</label>
+  </fieldset>
+  <div class="answer-detail">Only local pre-activation state is discarded. Activated/promoted handoffs must be completed or safely resolved, while server exchanges expire or are cleaned through a separate bounded path.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>6. What additional identity is required when a service principal submits a register closeout?</legend>
+    <label><input type="radio" name="q6" value="0" /> None; the service principal is the manager</label>
+<label><input type="radio" name="q6" value="1" /> A verified staff actor</label>
+<label><input type="radio" name="q6" value="2" /> A production signing key</label>
+  </fieldset>
+  <div class="answer-detail">Machine authority permits the terminal application call, while staff proof supplies the person accountable for the cash action.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>7. Which daily-close surface gained POS service-principal access?</legend>
+    <label><input type="radio" name="q7" value="0" /> Every daily-close query and mutation</label>
+<label><input type="radio" name="q7" value="1" /> Only the lifecycle gate read</label>
+<label><input type="radio" name="q7" value="2" /> Only reopen-day commands</label>
+  </fieldset>
+  <div class="answer-detail">The change is deliberately narrow: the register lifecycle gate supports dual authority, while broader manager operations remain unchanged.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>8. What does this candidate do to production offline trust?</legend>
+    <label><input type="radio" name="q8" value="0" /> Enables it automatically</label>
+<label><input type="radio" name="q8" value="1" /> Leaves production trust anchors empty and fail-closed</label>
+<label><input type="radio" name="q8" value="2" /> Stores the private key in the repository</label>
+  </fieldset>
+  <div class="answer-detail">Only a development anchor is compiled under the development guard; production enablement remains a separate reviewed operation.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>9. Who cleans up an abandoned stale pre-activation attempt?</legend>
+    <label><input type="radio" name="q9" value="0" /> The browser deletes all server authority directly</label>
+<label><input type="radio" name="q9" value="1" /> The browser clears only eligible local state; the server expires or cleans its own bounded artifacts</label>
+<label><input type="radio" name="q9" value="2" /> The manager account adopts the service session</label>
+  </fieldset>
+  <div class="answer-detail">Local ownership and server authority are separate. Browser cleanup cannot grant or delete server authority outside the exact-session/terminal-proof rules.</div>
+</div>
+
+<div class="quiz-question" data-answer="2">
+  <fieldset>
+    <legend>10. What must happen before the promoted recovery flow accepts the current session?</legend>
+    <label><input type="radio" name="q10" value="0" /> One unavailable response is treated as success</label>
+<label><input type="radio" name="q10" value="1" /> Any service-principal session for the store is sufficient</label>
+<label><input type="radio" name="q10" value="2" /> Bounded polling must find the exact activated session fields</label>
+  </fieldset>
+  <div class="answer-detail">The remount window may be transient, but acceptance remains strict: the observed authority must match the activation&#x27;s session, binding, terminal, store, expiry, and receipt.</div>
+</div>
+
+    <div class="quiz-actions">
+      <button type="button" id="gradeQuiz">Grade quiz</button>
+      <button type="button" class="secondary" id="resetQuiz">Reset</button>
+      <span id="quizResult" aria-live="polite"></span>
+    </div>
+  </form>
+</section>
+
+    </main>
+    <script>
+      const questions = Array.from(document.querySelectorAll(".quiz-question"));
+      const result = document.getElementById("quizResult");
+      const form = document.getElementById("changeQuiz");
+      const threshold = Number(form.dataset.threshold || 0);
+      function clearGrades() {
+        questions.forEach((question) => {
+          question.classList.remove("correct", "incorrect");
+          question.querySelector(".answer-detail").classList.remove("visible");
+        });
+        result.textContent = "";
+        result.style.color = "";
+      }
+      document.getElementById("gradeQuiz").addEventListener("click", () => {
+        clearGrades();
+        let score = 0;
+        questions.forEach((question, index) => {
+          const selected = document.querySelector(`input[name="q${index + 1}"]:checked`);
+          const isCorrect = selected && Number(selected.value) === Number(question.dataset.answer);
+          if (isCorrect) score += 1;
+          question.classList.add(isCorrect ? "correct" : "incorrect");
+          question.querySelector(".answer-detail").classList.add("visible");
+        });
+        const passed = score >= threshold;
+        result.textContent = passed
+          ? `Passed: ${score}/${questions.length}.`
+          : `Not passed: ${score}/${questions.length}. Review the report and try again.`;
+        result.style.color = passed ? "var(--good)" : "var(--bad)";
+      });
+      document.getElementById("resetQuiz").addEventListener("click", () => {
+        form.reset();
+        clearGrades();
+      });
+    </script>
+  </body>
+</html>

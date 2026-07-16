@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import {
   canonicalJsonV1,
@@ -68,6 +68,26 @@ function issuanceInput() {
 }
 
 describe("POS offline authority receipt", () => {
+  it("issues receipts without nondeterministic cryptographic randomness", async () => {
+    configure([{ version: 1, state: "current", ...key1 }]);
+    const getRandomValues = vi
+      .spyOn(crypto, "getRandomValues")
+      .mockImplementation(() => {
+        throw new Error("cryptographic randomness unavailable");
+      });
+    const sign = vi.spyOn(crypto.subtle, "sign").mockImplementation(() => {
+      throw new Error("randomized signing unavailable");
+    });
+
+    await expect(
+      issuePosOfflineAuthorityReceipt(issuanceInput()),
+    ).resolves.toEqual(expect.any(String));
+    expect(getRandomValues).not.toHaveBeenCalled();
+    expect(sign).not.toHaveBeenCalled();
+    getRandomValues.mockRestore();
+    sign.mockRestore();
+  });
+
   it("canonicalizes recursively and signs the complete bounded v1 authority tuple", async () => {
     configure([
       {

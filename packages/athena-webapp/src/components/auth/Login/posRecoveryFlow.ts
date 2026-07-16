@@ -19,6 +19,17 @@ export type PosRecoveryActivation = {
   terminalId: string;
 };
 
+export type PosRecoveryActivationResult =
+  | PosRecoveryActivation
+  | { status: "code_required" };
+
+export class PosRecoveryCodeRequiredError extends Error {
+  constructor() {
+    super("pos_recovery_code_required");
+    this.name = "PosRecoveryCodeRequiredError";
+  }
+}
+
 export type PosRecoveryDisposition =
   | { disposition: "recovery_code_required" }
   | {
@@ -45,7 +56,7 @@ export type PosRecoveryFrontendAdapter = {
     storage: TokenStorage;
     storageNamespace: string;
   }): Promise<void>;
-  activate(): Promise<PosRecoveryActivation>;
+  activate(): Promise<PosRecoveryActivationResult>;
   assertActivatedSession(input: PosRecoveryActivation): Promise<void>;
   abort(input: {
     recoveryCorrelationKey: string;
@@ -87,6 +98,51 @@ export type PosRecoveryFlowSession = {
 export type PosRecoveryFlowPhase =
   "prepared" | "auth_issued" | "activating" | "promoting" | "completed";
 
+/**
+ * A handoff lease can expire while its owner is still the only driver — a
+ * network stall mid-step, a suspended tab, a long pause before "Try again".
+ * The journal still carries our owner token, so renewing the lease before the
+ * next transition is safe; if another document already took the handoff over,
+ * every subsequent transition still fails closed on owner mismatch.
+ */
+function reclaimStaleHandoffLease(coordinator: AuthRuntimeHandoffCoordinator) {
+  coordinator.refresh();
+  if (coordinator.getSnapshot().blockReason !== "stale_handoff") return;
+  try {
+    coordinator.takeOverStaleHandoff();
+  } catch {
+    // Another document reclaimed it first; the next transition fails closed.
+  }
+}
+
+/**
+ * A stale pre-activation handoff left behind by a crashed or abandoned
+ * attempt would otherwise block every future sign-in on this device with
+ * "handoff_in_progress". Its pending Auth tokens are discarded locally; the
+ * server-side exchange expires on its own and is retired by the bounded
+ * recovery cleanup. Activated and promoted handoffs are never discarded here
+ * — taking them over lets the app-level promotion recovery finish them.
+ */
+function discardAbandonedStaleHandoff(
+  coordinator: AuthRuntimeHandoffCoordinator,
+) {
+  coordinator.refresh();
+  if (coordinator.getSnapshot().blockReason !== "stale_handoff") return;
+  let abandonedHandle: AuthRuntimeHandoffHandle;
+  try {
+    abandonedHandle = coordinator.takeOverStaleHandoff();
+  } catch {
+    return;
+  }
+  const phase = coordinator.getSnapshot().handoffPhase;
+  if (phase !== "prepared" && phase !== "auth_issued") return;
+  try {
+    coordinator.clearAfterConfirmedAbort(abandonedHandle);
+  } catch {
+    // Leave the journal as-is; prepareHandoff below fails closed.
+  }
+}
+
 export async function startPosRecoveryFlow(input: {
   adapter: PosRecoveryFrontendAdapter;
   code: string;
@@ -98,6 +154,7 @@ export async function startPosRecoveryFlow(input: {
   terminalProof: string;
 }) {
   return input.coordinator.runExclusive(async () => {
+    discardAbandonedStaleHandoff(input.coordinator);
     const handle = input.coordinator.prepareHandoff();
     const session: PosRecoveryFlowSession = {
       handle,
@@ -118,9 +175,10 @@ export async function issuePosRecoveryFlow(input: {
   onPhase?: (phase: PosRecoveryFlowPhase) => void;
   session: PosRecoveryFlowSession;
 }) {
-  return input.coordinator.runExclusive(() =>
-    issuePosRecoveryFlowUnlocked(input),
-  );
+  return input.coordinator.runExclusive(() => {
+    reclaimStaleHandoffLease(input.coordinator);
+    return issuePosRecoveryFlowUnlocked(input);
+  });
 }
 
 async function issuePosRecoveryFlowUnlocked(input: {
@@ -151,9 +209,10 @@ export async function activatePosRecoveryFlow(input: {
   onPhase?: (phase: PosRecoveryFlowPhase) => void;
   session: PosRecoveryFlowSession;
 }) {
-  return input.coordinator.runExclusive(() =>
-    activatePosRecoveryFlowUnlocked(input),
-  );
+  return input.coordinator.runExclusive(() => {
+    reclaimStaleHandoffLease(input.coordinator);
+    return activatePosRecoveryFlowUnlocked(input);
+  });
 }
 
 async function activatePosRecoveryFlowUnlocked(
@@ -178,6 +237,10 @@ async function activatePosRecoveryFlowUnlocked(
     input.session.handle,
     () => input.adapter.activate(),
   );
+  if ("status" in activation) {
+    input.coordinator.clearAfterConfirmedAbort(input.session.handle);
+    throw new PosRecoveryCodeRequiredError();
+  }
   input.session.activation = activation;
   if (startingPhase === "prepared") {
     input.coordinator.markAuthIssued(input.session.handle);
@@ -201,9 +264,10 @@ export async function verifyPromotedPosRecoveryFlow(input: {
   onPhase?: (phase: PosRecoveryFlowPhase) => void;
   session: PosRecoveryFlowSession;
 }) {
-  return input.coordinator.runExclusive(() =>
-    verifyPromotedPosRecoveryFlowUnlocked(input),
-  );
+  return input.coordinator.runExclusive(() => {
+    reclaimStaleHandoffLease(input.coordinator);
+    return verifyPromotedPosRecoveryFlowUnlocked(input);
+  });
 }
 
 async function verifyPromotedPosRecoveryFlowUnlocked(input: {
@@ -232,6 +296,7 @@ export async function resumePosRecoveryFlow(input: {
   session: PosRecoveryFlowSession;
 }) {
   return input.coordinator.runExclusive(async () => {
+    reclaimStaleHandoffLease(input.coordinator);
     const phase = input.coordinator.getSnapshot().handoffPhase;
     if (phase === "promoted") return { status: "promoted" as const };
     if (
@@ -270,6 +335,7 @@ export async function abortPosRecoveryFlow(input: {
   session: PosRecoveryFlowSession;
 }) {
   return input.coordinator.runExclusive(async () => {
+    reclaimStaleHandoffLease(input.coordinator);
     await input.coordinator.keepLeaseAlive(input.session.handle, () =>
       input.adapter.abort({
         recoveryCorrelationKey: input.session.handle.correlationKey,

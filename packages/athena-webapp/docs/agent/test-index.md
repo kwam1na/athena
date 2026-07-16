@@ -544,6 +544,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/lib/app-update/updateCoordinator.test.ts`](../../src/lib/app-update/updateCoordinator.test.ts)
 - [`src/lib/app-update/updateDetectionSequencer.test.ts`](../../src/lib/app-update/updateDetectionSequencer.test.ts)
 - [`src/lib/auth/authRuntimeHandoff.test.ts`](../../src/lib/auth/authRuntimeHandoff.test.ts)
+- [`src/lib/auth/recoverPromotedPosRecoverySession.test.ts`](../../src/lib/auth/recoverPromotedPosRecoverySession.test.ts)
 - [`src/lib/errors/operatorMessages.test.ts`](../../src/lib/errors/operatorMessages.test.ts)
 - [`src/lib/errors/presentCommandToast.test.ts`](../../src/lib/errors/presentCommandToast.test.ts)
 - [`src/lib/errors/presentUnexpectedErrorToast.test.ts`](../../src/lib/errors/presentUnexpectedErrorToast.test.ts)

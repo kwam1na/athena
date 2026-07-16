@@ -53,6 +53,8 @@ import type {
 import { formatStaffDisplayName } from "../../shared/staffDisplayName";
 import { requireSharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
 import { requireReadySharedDemoWriteWithCtx } from "../sharedDemo/restore";
+import { getServicePrincipalActorWithCtx } from "../servicePrincipals/actor";
+import { requirePosApplicationAuthorityWithCtx } from "../pos/application/posApplicationAuthority";
 
 export {
   buildRegisterSessionCloseoutReview,
@@ -615,12 +617,36 @@ async function requireCashControlsStoreAccess(
   return { athenaUser, store };
 }
 
+/**
+ * Register-runtime commands arrive either from a signed-in human (store
+ * member) or from the POS application session — a store-scoped service
+ * principal with no athena user. The service lane carries no personal
+ * identity, so callers must require a verified staff actor whenever this
+ * helper returns a null athenaUser.
+ */
+async function requireCashControlsRegisterCommandAccess(
+  ctx: QueryCtx | MutationCtx,
+  storeId: Id<"store">,
+  options?: { allowSharedDemoWrite?: boolean },
+): Promise<{ athenaUser: Doc<"athenaUser"> | null; store: Doc<"store"> }> {
+  const serviceActor = await getServicePrincipalActorWithCtx(ctx);
+  if (serviceActor) {
+    await requirePosApplicationAuthorityWithCtx(ctx, { storeId });
+    const store = await ctx.db.get("store", storeId);
+    if (!store) {
+      throw new Error("Store not found.");
+    }
+    return { athenaUser: null, store };
+  }
+  return requireCashControlsStoreAccess(ctx, storeId, options);
+}
+
 async function resolveCloseoutActorStaffProfileId(
   ctx: Pick<MutationCtx, "db">,
   args: {
     allowedCredentialRoles?: OperationalRole[];
     allowSharedDemoStaffActor?: boolean;
-    athenaUserId: Id<"athenaUser">;
+    athenaUserId?: Id<"athenaUser">;
     staffProfileId?: Id<"staffProfile">;
     staffPinHash?: string;
     staffProofToken?: string;
@@ -649,7 +675,10 @@ async function resolveCloseoutActorStaffProfileId(
     return ok(staffProfile._id);
   }
 
-  if (staffProfile.linkedUserId === args.athenaUserId) {
+  if (
+    args.athenaUserId !== undefined &&
+    staffProfile.linkedUserId === args.athenaUserId
+  ) {
     return ok(staffProfile._id);
   }
 
@@ -872,16 +901,16 @@ export const submitRegisterSessionCloseout = mutation({
     if (demoActor) {
       await requireReadySharedDemoWriteWithCtx(ctx, { storeId: args.storeId });
     }
-    const { athenaUser, store } = await requireCashControlsStoreAccess(
+    const { athenaUser, store } = await requireCashControlsRegisterCommandAccess(
       ctx,
       args.storeId,
       { allowSharedDemoWrite: true },
     );
-    const actorUserId = athenaUser._id;
+    const actorUserId = athenaUser?._id;
     const submitActorStaffProfileResult = await resolveCloseoutActorStaffProfileId(ctx, {
       allowedCredentialRoles: ["cashier", "manager"],
       allowSharedDemoStaffActor: Boolean(demoActor),
-      athenaUserId: athenaUser._id,
+      athenaUserId: athenaUser?._id,
       staffProfileId: args.actorStaffProfileId ?? args.requestedByStaffProfileId,
       staffPinHash: args.staffPinHash,
       staffProofToken: args.staffProofToken,
@@ -893,6 +922,12 @@ export const submitRegisterSessionCloseout = mutation({
       return submitActorStaffProfileResult;
     }
     const submitActorStaffProfileId = submitActorStaffProfileResult.data;
+    if (!athenaUser && !submitActorStaffProfileId) {
+      return userError({
+        code: "authorization_failed",
+        message: "A verified staff actor is required to submit this closeout.",
+      });
+    }
     const registerSession = await ctx.db.get("registerSession", args.registerSessionId);
 
     if (!registerSession || registerSession.storeId !== args.storeId) {
@@ -2120,15 +2155,15 @@ export const correctRegisterSessionOpeningFloat = mutation({
     if (demoActor) {
       await requireReadySharedDemoWriteWithCtx(ctx, { storeId: args.storeId });
     }
-    const { athenaUser } = await requireCashControlsStoreAccess(
+    const { athenaUser } = await requireCashControlsRegisterCommandAccess(
       ctx,
       args.storeId,
       { allowSharedDemoWrite: true },
     );
-    const actorUserId = athenaUser._id;
+    const actorUserId = athenaUser?._id;
     const actorStaffProfileResult = await resolveCloseoutActorStaffProfileId(ctx, {
       allowSharedDemoStaffActor: Boolean(demoActor),
-      athenaUserId: athenaUser._id,
+      athenaUserId: athenaUser?._id,
       staffProfileId: args.actorStaffProfileId,
       staffProofToken: args.staffProofToken,
       storeId: args.storeId,
@@ -2138,6 +2173,13 @@ export const correctRegisterSessionOpeningFloat = mutation({
       return actorStaffProfileResult;
     }
     const actorStaffProfileId = actorStaffProfileResult.data;
+    if (!athenaUser && !actorStaffProfileId) {
+      return userError({
+        code: "authorization_failed",
+        message:
+          "A verified staff actor is required to correct the opening float.",
+      });
+    }
 
     const registerSession = await ctx.db.get(
       "registerSession",

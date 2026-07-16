@@ -15,6 +15,7 @@ import {
   abortPosRecoveryFlow,
   activatePosRecoveryFlow,
   issuePosRecoveryFlow,
+  PosRecoveryCodeRequiredError,
   resumePosRecoveryFlow,
   startPosRecoveryFlow,
   verifyPromotedPosRecoveryFlow,
@@ -128,7 +129,23 @@ export function PosRecoveryCodeForm({
     ) {
       return;
     }
-    const runtimePhase = authRuntime.getSnapshot().handoffPhase;
+    // The handoff snapshot is event-driven, while lease expiry is time-driven.
+    // Refresh before resuming so the app-level stale-handoff recovery can take
+    // ownership instead of letting getCurrentHandoffHandle throw in this effect.
+    authRuntime.refresh();
+    let refreshedSnapshot = authRuntime.getSnapshot();
+    if (refreshedSnapshot.blockReason === "stale_handoff") {
+      try {
+        authRuntime.takeOverStaleHandoff();
+        refreshedSnapshot = authRuntime.getSnapshot();
+      } catch {
+        setPhase("retry_issue");
+        setErrorMessage(RECOVERY_FAILURE_COPY);
+        return;
+      }
+    }
+    if (refreshedSnapshot.status === "blocked") return;
+    const runtimePhase = refreshedSnapshot.handoffPhase;
     if (
       runtimePhase !== "prepared" &&
       runtimePhase !== "auth_issued" &&
@@ -160,8 +177,16 @@ export function PosRecoveryCodeForm({
           "Enter the recovery code again to continue this sign-in.",
         );
       })
-      .catch(() => {
+      .catch((error) => {
         if (cancelled) return;
+        if (error instanceof PosRecoveryCodeRequiredError) {
+          sessionRef.current = null;
+          setPhase("retry_issue");
+          setErrorMessage(
+            "This sign-in attempt expired. Enter the recovery code again.",
+          );
+          return;
+        }
         const currentPhase = authRuntime.getSnapshot().handoffPhase;
         setPhase(
           currentPhase === "promoted"
@@ -312,7 +337,15 @@ export function PosRecoveryCodeForm({
         terminalId: terminalEvidence.terminalId,
         terminalProof: terminalEvidence.terminalProof,
       });
-    } catch {
+    } catch (error) {
+      if (error instanceof PosRecoveryCodeRequiredError) {
+        sessionRef.current = null;
+        setPhase("retry_issue");
+        setErrorMessage(
+          "This sign-in attempt expired. Enter the recovery code again.",
+        );
+        return;
+      }
       const runtimePhase = authRuntime.getSnapshot().handoffPhase;
       setPhase(
         runtimePhase === "promoted"

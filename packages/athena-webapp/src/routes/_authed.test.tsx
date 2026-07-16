@@ -353,7 +353,6 @@ describe("Authed layout", () => {
     mocked.useRouterState.mockImplementation(({ select }) =>
       select({ location: { pathname: "/wigclub/store/wigclub/pos/register" } }),
     );
-
     render(<Layout />);
 
     expect(screen.getByTestId("authed-outlet")).toBeInTheDocument();
@@ -889,40 +888,74 @@ describe("Authed layout", () => {
     expect(mocked.setOpenMobile).not.toHaveBeenCalled();
   });
 
-  it("mounts the signed-in POS register through the POS-only shell when a terminal seed is ready", () => {
+  it("routes a signed-in human manager to POS recovery before mounting the register", () => {
     mocked.useAuth.mockReturnValue({
-      user: { _id: "user-1", email: "cashier@example.com" },
+      actorKind: "human",
+      user: { _id: "user-1", email: "manager@example.com" },
       isLoading: false,
     });
     mocked.useLocalPosEntryContext.mockReturnValue(readyLocalPosEntryContext());
+    mocked.usePosTerminalAppSessionRecovery.mockReturnValue({
+      assertion: null,
+      reason: "pos_recovery_required",
+      status: "blocked",
+    });
     mocked.useRouterState.mockImplementation(({ select }) =>
       select({ location: { pathname: "/wigclub/store/wigclub/pos/register" } }),
     );
+    window.history.replaceState({}, "", "/wigclub/store/wigclub/pos/register");
 
     render(<Layout />);
 
-    expect(screen.getByTestId("authed-outlet")).toBeInTheDocument();
+    expect(screen.queryByTestId("authed-outlet")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "POS sign-in required" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Sign in to POS" }),
+    ).toHaveAttribute(
+      "href",
+      "/login?redirectTo=%2Fwigclub%2Fstore%2Fwigclub%2Fpos%2Fregister",
+    );
     expect(screen.queryByTestId("app-sidebar")).not.toBeInTheDocument();
     expect(screen.queryByTestId("app-header")).not.toBeInTheDocument();
     expect(screen.queryByTestId("store-modal")).not.toBeInTheDocument();
     expect(screen.queryByTestId("organization-modal")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Demo controls")).not.toBeInTheDocument();
+    expect(mocked.usePosTerminalAppSessionRecovery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        isAppUserMissing: true,
+        routeIntent: "pos_hub",
+      }),
+    );
+    expect(
+      screen.queryByTestId("pos-remote-assist-host"),
+    ).not.toBeInTheDocument();
     expect(mocked.navigate).not.toHaveBeenCalled();
   });
 
-  it("mounts the signed-in POS expense register through the POS-only shell when a terminal seed is ready", () => {
+  it("routes a signed-in human operator to POS recovery before mounting the expense register", () => {
     mocked.useAuth.mockReturnValue({
+      actorKind: "human",
       user: { _id: "user-1", email: "cashier@example.com" },
       isLoading: false,
     });
     mocked.useLocalPosEntryContext.mockReturnValue(readyLocalPosEntryContext());
+    mocked.usePosTerminalAppSessionRecovery.mockReturnValue({
+      assertion: null,
+      reason: "pos_recovery_required",
+      status: "blocked",
+    });
     mocked.useRouterState.mockImplementation(({ select }) =>
       select({ location: { pathname: "/wigclub/store/wigclub/pos/expense" } }),
     );
 
     render(<Layout />);
 
-    expect(screen.getByTestId("authed-outlet")).toBeInTheDocument();
+    expect(screen.queryByTestId("authed-outlet")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "POS sign-in required" }),
+    ).toBeInTheDocument();
     expect(screen.queryByTestId("app-sidebar")).not.toBeInTheDocument();
     expect(screen.queryByTestId("app-header")).not.toBeInTheDocument();
     expect(screen.queryByTestId("store-modal")).not.toBeInTheDocument();
@@ -1506,9 +1539,11 @@ describe("Authed layout", () => {
     ["/wigclub/store/wigclub/pos/expense", "POS expense register"],
   ])("starts fullscreen when the %s route becomes active", (pathname) => {
     mocked.useAuth.mockReturnValue({
-      user: { _id: "user-1", email: "operator@example.com" },
+      actorKind: "service_principal",
+      user: null,
       isLoading: false,
     });
+    mocked.useLocalPosEntryContext.mockReturnValue(readyLocalPosEntryContext());
     mocked.useRouterState.mockImplementation(({ select }) =>
       select({
         location: { pathname },
@@ -1522,7 +1557,9 @@ describe("Authed layout", () => {
     expect(screen.queryByLabelText("Demo controls")).not.toBeInTheDocument();
     expect(screen.getByTestId("authed-outlet").closest("main")).toHaveClass(
       "box-border",
-      "h-full",
+      "h-svh",
+      "py-layout-md",
+      "md:py-8",
       "overflow-hidden",
     );
   });
@@ -1534,9 +1571,13 @@ describe("Authed layout", () => {
     "starts fullscreen from the browser pathname on first %s render",
     (browserPathname) => {
       mocked.useAuth.mockReturnValue({
-        user: { _id: "user-1", email: "operator@example.com" },
+        actorKind: "service_principal",
+        user: null,
         isLoading: false,
       });
+      mocked.useLocalPosEntryContext.mockReturnValue(
+        readyLocalPosEntryContext(),
+      );
       mocked.useRouterState.mockImplementation(({ select }) =>
         select({ location: { pathname: "/" } }),
       );
@@ -1551,9 +1592,11 @@ describe("Authed layout", () => {
 
   it("toggles the mounted register flow with F", () => {
     mocked.useAuth.mockReturnValue({
-      user: { _id: "user-1", email: "operator@example.com" },
+      actorKind: "service_principal",
+      user: null,
       isLoading: false,
     });
+    mocked.useLocalPosEntryContext.mockReturnValue(readyLocalPosEntryContext());
     mocked.useRouterState.mockImplementation(({ select }) =>
       select({
         location: { pathname: "/wigclub/store/wigclub/pos/register" },
@@ -1568,20 +1611,31 @@ describe("Authed layout", () => {
 
     fireEvent.keyDown(document, { key: "f" });
 
-    expect(screen.getByTestId("app-header")).toBeInTheDocument();
-    expect(screen.getByTestId("app-sidebar")).toBeInTheDocument();
+    expect(screen.queryByTestId("app-header")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("app-sidebar")).not.toBeInTheDocument();
+    expect(screen.getByTestId("fullscreen-outlet").closest("main")).toHaveClass(
+      "h-[calc(100svh-4rem)]",
+      "p-8",
+    );
 
     fireEvent.keyDown(document, { key: "F" });
 
     expect(screen.queryByTestId("app-header")).not.toBeInTheDocument();
     expect(screen.queryByTestId("app-sidebar")).not.toBeInTheDocument();
+    expect(screen.getByTestId("fullscreen-outlet").closest("main")).toHaveClass(
+      "h-svh",
+      "py-layout-md",
+      "md:py-8",
+    );
   });
 
   it("uses the route default again after toggling away and returning to the register flow", () => {
     mocked.useAuth.mockReturnValue({
-      user: { _id: "user-1", email: "operator@example.com" },
+      actorKind: "service_principal",
+      user: null,
       isLoading: false,
     });
+    mocked.useLocalPosEntryContext.mockReturnValue(readyLocalPosEntryContext());
     let pathname = "/wigclub/store/wigclub/pos/register";
     mocked.useRouterState.mockImplementation(({ select }) =>
       select({ location: { pathname } }),
@@ -1591,7 +1645,10 @@ describe("Authed layout", () => {
     const { rerender } = render(<Layout />);
 
     fireEvent.keyDown(document, { key: "f" });
-    expect(screen.getByTestId("app-header")).toBeInTheDocument();
+    expect(screen.getByTestId("fullscreen-outlet").closest("main")).toHaveClass(
+      "h-[calc(100svh-4rem)]",
+      "p-8",
+    );
 
     pathname = "/wigclub/store/wigclub/pos";
     rerender(<Layout />);
@@ -1601,6 +1658,11 @@ describe("Authed layout", () => {
     rerender(<Layout />);
     expect(screen.queryByTestId("app-header")).not.toBeInTheDocument();
     expect(screen.queryByTestId("app-sidebar")).not.toBeInTheDocument();
+    expect(screen.getByTestId("fullscreen-outlet").closest("main")).toHaveClass(
+      "h-svh",
+      "py-layout-md",
+      "md:py-8",
+    );
   });
 
   it("shows the global nav after leaving the register flow even if the browser pathname is stale", () => {
@@ -1620,9 +1682,11 @@ describe("Authed layout", () => {
 
   it("keeps F available for typing while the register flow is mounted", () => {
     mocked.useAuth.mockReturnValue({
-      user: { _id: "user-1", email: "operator@example.com" },
+      actorKind: "service_principal",
+      user: null,
       isLoading: false,
     });
+    mocked.useLocalPosEntryContext.mockReturnValue(readyLocalPosEntryContext());
     mocked.useRouterState.mockImplementation(({ select }) =>
       select({
         location: { pathname: "/wigclub/store/wigclub/pos/register" },

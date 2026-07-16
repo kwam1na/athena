@@ -1,3 +1,5 @@
+import { p256 } from "@noble/curves/nist.js";
+
 import { env } from "../../_generated/server";
 
 export const POS_OFFLINE_AUTHORITY_RECEIPT_VERSION = 1;
@@ -99,8 +101,13 @@ function copyToArrayBufferView(bytes: Uint8Array): Uint8Array<ArrayBuffer> {
 }
 
 function randomNonce() {
-  const bytes = new Uint8Array(24);
-  crypto.getRandomValues(bytes);
+  // Convex supplies mutations with a strongly seeded, replay-stable
+  // Math.random implementation. Web Crypto randomness is forbidden because a
+  // mutation may be retried and must reproduce the same receipt byte-for-byte.
+  const bytes = Uint8Array.from(
+    { length: 24 },
+    () => Math.floor(Math.random() * 256),
+  );
   return encodeBase64Url(bytes);
 }
 
@@ -169,24 +176,26 @@ function readConfig(): OfflineAuthorityConfig {
   return { issuer: raw.issuer, leaseMs: raw.leaseMs as number, keys };
 }
 
-async function importPrivateKey(key: SigningKeyConfig) {
+async function readPrivateScalar(key: SigningKeyConfig) {
   if (key.privateKeyJwk) {
-    return crypto.subtle.importKey(
-      "jwk",
-      key.privateKeyJwk,
-      { name: "ECDSA", namedCurve: "P-256" },
-      false,
-      ["sign"],
-    );
+    if (typeof key.privateKeyJwk.d !== "string") {
+      throw new Error("POS offline authority signing is not configured.");
+    }
+    return decodeBase64Url(key.privateKeyJwk.d);
   }
   if (key.privateKeyPkcs8Base64Url) {
-    return crypto.subtle.importKey(
+    const imported = await crypto.subtle.importKey(
       "pkcs8",
       decodeBase64Url(key.privateKeyPkcs8Base64Url),
       { name: "ECDSA", namedCurve: "P-256" },
-      false,
+      true,
       ["sign"],
     );
+    const jwk = await crypto.subtle.exportKey("jwk", imported);
+    if (typeof jwk.d !== "string") {
+      throw new Error("POS offline authority signing is not configured.");
+    }
+    return decodeBase64Url(jwk.d);
   }
   throw new Error("POS offline authority signing is not configured.");
 }
@@ -247,12 +256,12 @@ export async function issuePosOfflineAuthorityReceipt(input: {
   const encodedPayload = encodeBase64Url(
     new TextEncoder().encode(canonicalJsonV1(payload)),
   );
-  const signature = await crypto.subtle.sign(
-    { name: "ECDSA", hash: "SHA-256" },
-    await importPrivateKey(key),
+  const signature = p256.sign(
     new TextEncoder().encode(encodedPayload),
+    await readPrivateScalar(key),
+    { format: "compact", prehash: true },
   );
-  return `${encodedPayload}.${encodeBase64Url(new Uint8Array(signature))}`;
+  return `${encodedPayload}.${encodeBase64Url(signature)}`;
 }
 
 function isReceiptPayload(value: unknown): value is PosOfflineAuthorityReceiptPayload {

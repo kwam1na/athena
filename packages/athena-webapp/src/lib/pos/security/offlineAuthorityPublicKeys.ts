@@ -19,8 +19,25 @@ export type PosOfflineAuthorityPublicKey = Readonly<{
  * before its receipts can authorize local continuation. Private key material
  * and runtime server configuration must never be imported into this module.
  */
+const DEV_POS_OFFLINE_AUTHORITY_PUBLIC_KEYS: readonly PosOfflineAuthorityPublicKey[] =
+  Object.freeze([
+    {
+      issuer: "athena-dev-pos-authority",
+      keyVersion: 1,
+      publicKeyJwk: {
+        crv: "P-256",
+        ext: true,
+        key_ops: ["verify"],
+        kty: "EC",
+        x: "HHW7ebnK8s-ZSUiwc9U8AVXCO8gXO9R6TWbxdUX9K-A",
+        y: "oMEdJIVKn7O2Ebi3S1fvdbDrZX9uhNYyfzlMnC24wNI",
+      },
+      state: "current",
+    },
+  ]);
+
 export const POS_OFFLINE_AUTHORITY_PUBLIC_KEYS: readonly PosOfflineAuthorityPublicKey[] =
-  Object.freeze([]);
+  import.meta.env.DEV ? DEV_POS_OFFLINE_AUTHORITY_PUBLIC_KEYS : Object.freeze([]);
 
 export type PosOfflineAuthorityReceiptPayloadV1 = {
   audience: typeof POS_OFFLINE_AUTHORITY_AUDIENCE;

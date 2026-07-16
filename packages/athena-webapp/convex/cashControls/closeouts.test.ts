@@ -12,6 +12,12 @@ import {
   submitRegisterSessionCloseout,
 } from "./closeouts";
 import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
+import { requireAuthenticatedAthenaUserWithCtx } from "../lib/athenaUserAuth";
+
+const serviceLaneMocks = vi.hoisted(() => ({
+  getServicePrincipalActorWithCtx: vi.fn(async (): Promise<unknown> => null),
+  requirePosApplicationAuthorityWithCtx: vi.fn(),
+}));
 
 vi.mock("../lib/athenaUserAuth", () => ({
   requireAuthenticatedAthenaUserWithCtx: vi.fn(async () => ({
@@ -19,6 +25,16 @@ vi.mock("../lib/athenaUserAuth", () => ({
     email: "manager@example.com",
   })),
   requireOrganizationMemberRoleWithCtx: vi.fn(async () => undefined),
+}));
+
+vi.mock("../servicePrincipals/actor", () => ({
+  getServicePrincipalActorWithCtx:
+    serviceLaneMocks.getServicePrincipalActorWithCtx,
+}));
+
+vi.mock("../pos/application/posApplicationAuthority", () => ({
+  requirePosApplicationAuthorityWithCtx:
+    serviceLaneMocks.requirePosApplicationAuthorityWithCtx,
 }));
 
 function getSource(relativePath: string) {
@@ -1559,6 +1575,210 @@ describe("cash control closeouts", () => {
       "approvalRequest",
       expect.anything(),
     );
+  });
+
+  it("accepts closeout submit from the POS application session with verified staff credentials", async () => {
+    serviceLaneMocks.getServicePrincipalActorWithCtx.mockResolvedValueOnce({
+      kind: "service_principal",
+    });
+    serviceLaneMocks.requirePosApplicationAuthorityWithCtx.mockResolvedValueOnce(
+      { storeId: "store-1", terminalId: "terminal-1" },
+    );
+    vi.mocked(requireAuthenticatedAthenaUserWithCtx).mockClear();
+    const closingSession = {
+      _id: "session-1",
+      countedCash: 70000,
+      expectedCash: 70000,
+      openedAt: 1,
+      organizationId: "org-1",
+      registerNumber: "A1",
+      status: "closing",
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    };
+    const closedSession = {
+      ...closingSession,
+      closedAt: Date.now(),
+      status: "closed",
+    };
+    const runMutation = vi
+      .fn()
+      .mockResolvedValueOnce(closingSession)
+      .mockResolvedValueOnce(closedSession);
+    const ctx = {
+      db: {
+        get: vi.fn(async (table: string) => {
+          if (table === "store") {
+            return { _id: "store-1", currency: "GHS", organizationId: "org-1" };
+          }
+          if (table === "registerSession") {
+            return {
+              _id: "session-1",
+              expectedCash: 70000,
+              openedAt: 1,
+              organizationId: "org-1",
+              registerNumber: "A1",
+              status: "active",
+              storeId: "store-1",
+              terminalId: "terminal-1",
+            };
+          }
+          if (table === "staffProfile") {
+            return {
+              _id: "cashier-1",
+              linkedUserId: "other-user-1",
+              organizationId: "org-1",
+              status: "active",
+              storeId: "store-1",
+            };
+          }
+          return null;
+        }),
+        insert: vi.fn(),
+        patch: vi.fn(),
+        query: vi.fn((table: string) => ({
+          withIndex: vi.fn(() => ({
+            collect: vi.fn(async () => []),
+            order: vi.fn(() => ({
+              first: vi.fn(async () => null),
+              take: vi.fn(async () => []),
+            })),
+            take: vi.fn(async () => {
+              if (table === "staffCredential") {
+                return [
+                  {
+                    _id: "credential-1",
+                    organizationId: "org-1",
+                    pinHash: "hashed-pin",
+                    staffProfileId: "cashier-1",
+                    status: "active",
+                    storeId: "store-1",
+                    username: "cashier",
+                  },
+                ];
+              }
+              if (table === "staffRoleAssignment") {
+                return [
+                  {
+                    organizationId: "org-1",
+                    role: "cashier",
+                    status: "active",
+                    storeId: "store-1",
+                  },
+                ];
+              }
+              return [];
+            }),
+            unique: vi.fn(async () => null),
+          })),
+        })),
+      },
+      runMutation,
+      runQuery: vi.fn(async () => ({ _id: "store-1" })),
+    };
+
+    const result = await getHandler(submitRegisterSessionCloseout)(ctx, {
+      actorStaffProfileId: "cashier-1",
+      countedCash: 70000,
+      registerSessionId: "session-1",
+      staffPinHash: "hashed-pin",
+      staffUsername: "cashier",
+      storeId: "store-1",
+    });
+
+    expect(result).toMatchObject({
+      kind: "ok",
+      data: {
+        action: "closed",
+        registerSession: closedSession,
+      },
+    });
+    expect(
+      serviceLaneMocks.requirePosApplicationAuthorityWithCtx,
+    ).toHaveBeenCalledWith(ctx, { storeId: "store-1" });
+    expect(requireAuthenticatedAthenaUserWithCtx).not.toHaveBeenCalled();
+    expect(runMutation).toHaveBeenNthCalledWith(
+      2,
+      expect.anything(),
+      expect.objectContaining({
+        closedByStaffProfileId: "cashier-1",
+        closedByUserId: undefined,
+        countedCash: 70000,
+        registerSessionId: "session-1",
+      }),
+    );
+  });
+
+  it("rejects closeout submit from the POS application session without a verified staff actor", async () => {
+    serviceLaneMocks.getServicePrincipalActorWithCtx.mockResolvedValueOnce({
+      kind: "service_principal",
+    });
+    serviceLaneMocks.requirePosApplicationAuthorityWithCtx.mockResolvedValueOnce(
+      { storeId: "store-1", terminalId: "terminal-1" },
+    );
+    const runMutation = vi.fn();
+    const ctx = {
+      db: {
+        get: vi.fn(async (table: string) =>
+          table === "store"
+            ? { _id: "store-1", currency: "GHS", organizationId: "org-1" }
+            : null,
+        ),
+      },
+      runMutation,
+    };
+
+    const result = await getHandler(submitRegisterSessionCloseout)(ctx, {
+      countedCash: 70000,
+      registerSessionId: "session-1",
+      storeId: "store-1",
+    });
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "authorization_failed",
+        message: "A verified staff actor is required to submit this closeout.",
+      },
+    });
+    expect(runMutation).not.toHaveBeenCalled();
+  });
+
+  it("rejects opening-float correction from the POS application session without a verified staff actor", async () => {
+    serviceLaneMocks.getServicePrincipalActorWithCtx.mockResolvedValueOnce({
+      kind: "service_principal",
+    });
+    serviceLaneMocks.requirePosApplicationAuthorityWithCtx.mockResolvedValueOnce(
+      { storeId: "store-1", terminalId: "terminal-1" },
+    );
+    const runMutation = vi.fn();
+    const ctx = {
+      db: {
+        get: vi.fn(async (table: string) =>
+          table === "store"
+            ? { _id: "store-1", currency: "GHS", organizationId: "org-1" }
+            : null,
+        ),
+      },
+      runMutation,
+    };
+
+    const result = await getHandler(correctRegisterSessionOpeningFloat)(ctx, {
+      correctedOpeningFloat: 10000,
+      reason: "Recount before opening",
+      registerSessionId: "session-1",
+      storeId: "store-1",
+    });
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "authorization_failed",
+        message:
+          "A verified staff actor is required to correct the opening float.",
+      },
+    });
+    expect(runMutation).not.toHaveBeenCalled();
   });
 
   it("returns an operational requester binding for unlinked staff variance closeout submissions", async () => {

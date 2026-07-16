@@ -5,7 +5,8 @@ import { verifyPosOfflineAuthorityReceipt } from "@/lib/pos/security/offlineAuth
 import type { PosRecoveryActivation } from "@/components/auth/Login/posRecoveryFlow";
 
 const ASSERTION_ATTEMPTS = 40;
-const ASSERTION_RETRY_DELAY_MS = 50;
+const ASSERTION_RETRY_MIN_DELAY_MS = 50;
+const ASSERTION_RETRY_MAX_DELAY_MS = 1_000;
 
 export async function assertActivatedPosRecoverySession(
   expected: PosRecoveryActivation,
@@ -14,6 +15,7 @@ export async function assertActivatedPosRecoverySession(
     try {
       const current = await loadCurrentActivation();
       if (
+        current !== null &&
         current.authorityExpiresAt === expected.authorityExpiresAt &&
         current.offlineAuthorityReceipt === expected.offlineAuthorityReceipt &&
         current.posApplicationSessionBindingId ===
@@ -27,9 +29,9 @@ export async function assertActivatedPosRecoverySession(
         return;
       }
     } catch {
-      // The root provider remount is asynchronous; retry against its new token.
+      // Transport failures are retried alongside the not-yet-remounted state.
     }
-    await retryDelay();
+    await retryDelay(attempt);
   }
   throw new Error("pos_recovery_session_assertion_failed");
 }
@@ -38,21 +40,26 @@ export async function recoverPromotedPosRecoverySession() {
   for (let attempt = 0; attempt < ASSERTION_ATTEMPTS; attempt += 1) {
     try {
       const activation = await loadCurrentActivation();
-      await persistActivatedOfflineAuthorityReceipt(activation);
-      return activation;
+      if (activation !== null) {
+        await persistActivatedOfflineAuthorityReceipt(activation);
+        return activation;
+      }
     } catch {
-      // The promoted provider may still be mounting against pending storage.
+      // Transport failures are retried alongside the not-yet-remounted state.
     }
-    await retryDelay();
+    await retryDelay(attempt);
   }
   throw new Error("pos_recovery_session_assertion_failed");
 }
 
-async function loadCurrentActivation(): Promise<PosRecoveryActivation> {
+async function loadCurrentActivation(): Promise<PosRecoveryActivation | null> {
   const current = await convex.query(
     api.pos.public.terminalAppSessions.getCurrentPosTerminalServiceSession,
     {},
   );
+  // The root provider remount is asynchronous; the caller retries against the
+  // new token once the query reports an authorized service session.
+  if (current.status !== "active") return null;
   return {
     authorityExpiresAt: current.authorityExpiresAt,
     offlineAuthorityReceipt: current.offlineAuthorityReceipt,
@@ -94,8 +101,12 @@ async function persistActivatedOfflineAuthorityReceipt(
   }
 }
 
-function retryDelay() {
-  return new Promise((resolve) =>
-    window.setTimeout(resolve, ASSERTION_RETRY_DELAY_MS),
+function retryDelay(attempt: number) {
+  // Fast polls cover the common quick remount; later polls back off so the
+  // overall window tolerates a slow auth handshake without giving up early.
+  const delayMs = Math.min(
+    ASSERTION_RETRY_MIN_DELAY_MS * 2 ** Math.floor(attempt / 5),
+    ASSERTION_RETRY_MAX_DELAY_MS,
   );
+  return new Promise((resolve) => window.setTimeout(resolve, delayMs));
 }

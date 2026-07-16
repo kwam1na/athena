@@ -53,6 +53,8 @@ import {
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
 import { requireStoreMemberAccessWithCtx } from "../lib/storeMemberAccess";
+import { requirePosApplicationAuthorityWithCtx } from "../pos/application/posApplicationAuthority";
+import { getServicePrincipalActorWithCtx } from "../servicePrincipals/actor";
 import { buildPaymentTotals, transactionCashDelta } from "./paymentTotals";
 import type { AutomationDecisionEvidence } from "../automation/runLedger";
 import { appendReportingIngressWithCtx } from "../reporting/ingress";
@@ -5210,6 +5212,23 @@ export const getDailyCloseSnapshot = query({
   },
 });
 
+async function requireDailyCloseLifecycleGateAccessWithCtx(
+  ctx: QueryCtx,
+  storeId: Id<"store">,
+) {
+  const serviceActor = await getServicePrincipalActorWithCtx(ctx);
+  if (serviceActor) {
+    await requirePosApplicationAuthorityWithCtx(ctx, { storeId });
+    return;
+  }
+  await requireStoreMemberAccessWithCtx(ctx, {
+    allowedRoles: ["full_admin", "pos_only"],
+    demoAccess: { kind: "read" },
+    failureMessage: "You cannot view EOD Review for this store.",
+    storeId,
+  });
+}
+
 export const getDailyCloseLifecycleGate = query({
   args: {
     endAt: v.optional(v.number()),
@@ -5218,12 +5237,7 @@ export const getDailyCloseLifecycleGate = query({
     storeId: v.id("store"),
   },
   handler: async (ctx, args) => {
-    await requireStoreMemberAccessWithCtx(ctx, {
-      allowedRoles: ["full_admin", "pos_only"],
-      demoAccess: { kind: "read" },
-      failureMessage: "You cannot view EOD Review for this store.",
-      storeId: args.storeId,
-    });
+    await requireDailyCloseLifecycleGateAccessWithCtx(ctx, args.storeId);
 
     return buildDailyCloseLifecycleGateWithCtx(ctx, args);
   },

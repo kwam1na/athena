@@ -73,19 +73,23 @@ describe("current terminal service session", () => {
       offlineAuthorityReceipt: "offline-receipt-1",
       posApplicationSessionBindingId: "pos-binding-1",
       servicePrincipalSessionId: "service-session-1",
+      status: "active",
       storeId: STORE_ID,
       terminalId: TERMINAL_ID,
     });
   });
 
-  it("normalizes stale or revoked authority failures", async () => {
+  it("reports stale or revoked authority as unavailable instead of erroring", async () => {
     mocks.requirePosApplicationAuthorityWithCtx.mockRejectedValueOnce(
       new Error("terminal revoked"),
     );
 
     await expect(
       getHandler(getCurrentPosTerminalServiceSession)({} as never, {}),
-    ).rejects.toThrow("POS session recovery could not be completed.");
+    ).resolves.toEqual({ status: "unavailable" });
+    assertConformsToExportedReturns(getCurrentPosTerminalServiceSession, {
+      status: "unavailable",
+    });
   });
 });
 
@@ -432,6 +436,26 @@ describe("terminal app-session recovery validation", () => {
 });
 
 describe("exact-session POS recovery", () => {
+  it("aborts an expired prepared session and requires the recovery code again", async () => {
+    const ctx = await buildExactSessionCtx();
+    ctx.tables.posRecoveryExchange[0].expiresAt = 999;
+
+    const result = await activatePreparedPosTerminalSessionWithCtx(
+      ctx as never,
+      { now: 1_000 },
+    );
+
+    expect(result).toEqual({ status: "code_required" });
+    expect(ctx.tables.posRecoveryExchange[0]).toEqual(
+      expect.objectContaining({
+        abortedAt: 1_000,
+        status: "aborted",
+      }),
+    );
+    expect(ctx.tables.authSessions).toHaveLength(0);
+    expect(ctx.tables.authRefreshTokens).toHaveLength(0);
+  });
+
   it("activates only the prepared Auth pair and retains the exact result for retry", async () => {
     const ctx = await buildExactSessionCtx();
 
@@ -454,6 +478,7 @@ describe("exact-session POS recovery", () => {
       offlineAuthorityReceipt: first.offlineAuthorityReceipt,
       posApplicationSessionBindingId: first.posApplicationSessionBindingId,
       servicePrincipalSessionId: first.servicePrincipalSessionId,
+      status: "active",
       storeId: STORE_ID,
       terminalId: TERMINAL_ID,
     });

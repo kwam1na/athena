@@ -79,6 +79,59 @@ describe("PosRecoveryCodeForm", () => {
     expect(adapter.activate).toHaveBeenCalledTimes(2);
   });
 
+  it("starts a fresh exchange when the prepared session has expired", async () => {
+    const user = userEvent.setup();
+    const adapter = createAdapter();
+    adapter.activate = vi
+      .fn()
+      .mockResolvedValueOnce({ status: "code_required" as const })
+      .mockResolvedValueOnce(activation);
+    renderForm({ adapter });
+
+    await user.type(await screen.findByLabelText(/recovery code/i), "abc-123");
+    await user.click(screen.getByRole("button", { name: /continue/i }));
+
+    expect(
+      await screen.findByText(/sign-in attempt expired/i),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /try again/i }));
+
+    expect(
+      await screen.findByText(/checkout station signed in/i),
+    ).toBeInTheDocument();
+    expect(adapter.issue).toHaveBeenCalledTimes(2);
+    expect(adapter.activate).toHaveBeenCalledTimes(2);
+  });
+
+  it("takes over a stale local handoff before requesting fresh code", async () => {
+    const user = userEvent.setup();
+    let now = 1_000;
+    const authRuntime = createCoordinatorWithNow(() => now);
+    const handle = authRuntime.prepareHandoff();
+    authRuntime.markAuthIssued(handle);
+    now = 40_000;
+    const adapter = createAdapter();
+    adapter.activate = vi
+      .fn()
+      .mockResolvedValueOnce({ status: "code_required" as const })
+      .mockResolvedValueOnce(activation);
+    renderForm({ adapter, authRuntime });
+
+    expect(
+      await screen.findByText(/sign-in attempt expired/i),
+    ).toBeInTheDocument();
+    expect(adapter.resume).toHaveBeenCalledTimes(1);
+    expect(adapter.abort).not.toHaveBeenCalled();
+
+    await user.type(screen.getByLabelText(/recovery code/i), "abc-123");
+    await user.click(screen.getByRole("button", { name: /try again/i }));
+
+    expect(
+      await screen.findByText(/checkout station signed in/i),
+    ).toBeInTheDocument();
+    expect(adapter.issue).toHaveBeenCalledTimes(1);
+  });
+
   it("retries post-promotion verification without issuing or activating again", async () => {
     const user = userEvent.setup();
     const adapter = createAdapter();
@@ -119,6 +172,26 @@ describe("PosRecoveryCodeForm", () => {
     });
     expect(adapter.issue).not.toHaveBeenCalled();
     expect(adapter.activate).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns an expired resumed exchange to fresh code entry", async () => {
+    const storage = createMemoryStorage();
+    const beforeReload = createCoordinator(storage);
+    const handle = beforeReload.prepareHandoff();
+    beforeReload.markAuthIssued(handle);
+    const afterReload = createCoordinator(storage);
+    const adapter = createAdapter();
+    adapter.activate = vi.fn(async () => ({
+      status: "code_required" as const,
+    }));
+
+    renderForm({ adapter, authRuntime: afterReload });
+
+    expect(
+      await screen.findByText(/sign-in attempt expired/i),
+    ).toBeInTheDocument();
+    expect(adapter.issue).not.toHaveBeenCalled();
+    expect(afterReload.getSnapshot().handoffPhase).toBe("idle");
   });
 
   it("requires code re-entry when a prepared namespace has no Auth tokens", async () => {
@@ -252,6 +325,16 @@ function createCoordinator(storage = createMemoryStorage()) {
     ownerToken: "form-test-owner",
     randomId: () => `form-generated-${++sequence}-12345678`,
     storage,
+  });
+}
+
+function createCoordinatorWithNow(now: () => number) {
+  let sequence = 0;
+  return createAuthRuntimeHandoffCoordinator({
+    now,
+    ownerToken: "form-test-owner",
+    randomId: () => `form-generated-${++sequence}-12345678`,
+    storage: createMemoryStorage(),
   });
 }
 

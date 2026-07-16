@@ -208,8 +208,17 @@ browser code. Keys use ECDSA P-256 with SHA-256.
 
 The browser does not read the server environment. Reviewed public trust anchors
 are compiled into `POS_OFFLINE_AUTHORITY_PUBLIC_KEYS`, with `issuer`,
-`keyVersion`, `publicKeyJwk`, and `state`. This delivery leaves that list empty,
-so production offline authority is not enabled by this work.
+`keyVersion`, `publicKeyJwk`, and `state`. Production builds keep that list
+empty, so production offline authority is not enabled by this work.
+
+Development builds (`import.meta.env.DEV`) compile in a single development
+anchor with issuer `athena-dev-pos-authority` and `keyVersion` 1 (see
+`src/lib/pos/security/offlineAuthorityPublicKeys.ts`). For dev receipts to
+verify, the dev Convex deployment's `POS_OFFLINE_AUTHORITY_KEYS_JSON` must use
+that same issuer and a version-1 key whose public JWK matches the compiled-in
+anchor; the matching private key lives only in the dev deployment environment,
+never in the repository. Rotating the dev keypair requires updating both sides
+together.
 
 For a planned rotation:
 

@@ -23,8 +23,17 @@ beforeAll(async () => {
 });
 
 describe("POS offline authority public keys", () => {
-  it("fails closed while the reviewed production registry is empty", async () => {
-    expect(POS_OFFLINE_AUTHORITY_PUBLIC_KEYS).toEqual([]);
+  it("loads only the reviewed development trust anchor", async () => {
+    expect(POS_OFFLINE_AUTHORITY_PUBLIC_KEYS).toEqual([
+      expect.objectContaining({
+        issuer: "athena-dev-pos-authority",
+        keyVersion: 1,
+        state: "current",
+      }),
+    ]);
+  });
+
+  it("fails closed when the trust-anchor registry is empty", async () => {
     const envelope = await signReceipt(receiptPayload());
 
     await expect(
@@ -33,6 +42,7 @@ describe("POS offline authority public keys", () => {
         expectedStoreId: "store-1",
         expectedTerminalId: "terminal-1",
         now: 2_000,
+        publicKeys: [],
       }),
     ).resolves.toEqual({ status: "rejected", reason: "unknown_key" });
   });

@@ -209,6 +209,17 @@ function getBlockedPosTerminalShellCopy({
   recoveryReason?: PosTerminalAppSessionRecoveryBlockReason | null;
 }) {
   if (recoveryReason) {
+    if (recoveryReason === "pos_recovery_required") {
+      return {
+        title: "POS sign-in required",
+        message:
+          "This checkout station needs POS sign-in before staff can open the register. Sign in to POS to continue.",
+        action: {
+          label: "Sign in to POS",
+        },
+      };
+    }
+
     return {
       title: "POS terminal recovery unavailable",
       message:
@@ -651,48 +662,55 @@ export default function Layout() {
     routeParams: storeRouteParams ?? undefined,
   });
   const storedAppAccountId = readStoredPosAppAccountId();
-  const isAppUserMissing =
-    !isLoading && user === null && !isServicePrincipalActor;
+  const routeWantsFullscreen =
+    isPosTerminalFullscreenPath(pathname) ||
+    (isUnknownRouterPath(pathname) &&
+      isPosTerminalFullscreenPath(browserPathname));
+  const routeRequiresPosApplicationSession = routeWantsFullscreen;
+  const isPosApplicationSessionMissing =
+    !isLoading &&
+    !isServicePrincipalActor &&
+    (user === null || routeRequiresPosApplicationSession);
   const posTerminalAppSessionRecovery = usePosTerminalAppSessionRecovery({
-    routeIntent: routeWantsPos ? "pos_hub" : null,
-    isAppUserMissing,
+    routeIntent:
+      routeWantsPos && isPosApplicationSessionMissing ? "pos_hub" : null,
+    isAppUserMissing: isPosApplicationSessionMissing,
     localEntryContext: localPosEntryContext,
     storedAppAccountId,
   });
   const hasLocalPosRecoveryTarget =
     routeWantsPos &&
-    isAppUserMissing &&
+    isPosApplicationSessionMissing &&
     localPosEntryContext.status === "ready" &&
-    Boolean(localPosEntryContext.terminalSeed) &&
-    Boolean(storedAppAccountId);
+    Boolean(localPosEntryContext.terminalSeed);
   const isRecoveredPosAppSession =
     routeWantsPos &&
-    isAppUserMissing &&
+    isPosApplicationSessionMissing &&
     hasLocalPosRecoveryTarget &&
     posTerminalAppSessionRecovery.status === "recoverable";
   const isNetworkWaitingPosAppSessionRecovery =
     routeWantsPos &&
-    isAppUserMissing &&
+    isPosApplicationSessionMissing &&
     hasLocalPosRecoveryTarget &&
     posTerminalAppSessionRecovery.status === "waiting_for_network";
   const isPendingPosAppSessionRecovery =
     routeWantsPos &&
-    isAppUserMissing &&
+    isPosApplicationSessionMissing &&
     hasLocalPosRecoveryTarget &&
     POS_RECOVERY_SHELL_PENDING_STATUSES.has(
       posTerminalAppSessionRecovery.status,
     );
   const isClassifyingPosAppSession =
     routeWantsPos &&
-    isAppUserMissing &&
+    isPosApplicationSessionMissing &&
     localPosEntryContext.status === "loading";
   const isBlockedRecovery =
     routeWantsPos &&
-    isAppUserMissing &&
+    isPosApplicationSessionMissing &&
     posTerminalAppSessionRecovery.status === "blocked";
   const isBlockedPosAppSession =
     routeWantsPos &&
-    isAppUserMissing &&
+    isPosApplicationSessionMissing &&
     (isBlockedRecovery ||
       (!hasLocalPosRecoveryTarget &&
         !isRecoveredPosAppSession &&
@@ -700,12 +718,8 @@ export default function Layout() {
         !isClassifyingPosAppSession));
   const canRenderRehydratingPosShell =
     routeWantsPos && isLoading && isBrowserOffline() && hasStoredLocalSession();
-  const routeWantsFullscreen =
-    isPosTerminalFullscreenPath(pathname) ||
-    (isUnknownRouterPath(pathname) &&
-      isPosTerminalFullscreenPath(browserPathname));
   const canRenderSignedInPosRegisterShell =
-    (Boolean(user) || isServicePrincipalActor) &&
+    isServicePrincipalActor &&
     routeWantsFullscreen &&
     localPosEntryContext.status === "ready" &&
     Boolean(localPosEntryContext.terminalSeed);
@@ -718,6 +732,7 @@ export default function Layout() {
     isPendingPosAppSessionRecovery || isClassifyingPosAppSession;
   const shouldMountRemoteAssistRuntime =
     (Boolean(user) || isServicePrincipalActor) &&
+    (!routeRequiresPosApplicationSession || isServicePrincipalActor) &&
     localPosEntryContext.status === "ready" &&
     Boolean(localPosEntryContext.terminalSeed);
   const posAppSessionRecoveryRuntimeInput =

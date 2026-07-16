@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import * as athenaUserAuth from "../lib/athenaUserAuth";
+import * as posApplicationAuthority from "../pos/application/posApplicationAuthority";
+import * as servicePrincipalActor from "../servicePrincipals/actor";
 import * as sharedDemoActor from "../sharedDemo/actor";
 const reportingIngressMocks = vi.hoisted(() => ({
   appendReportingIngressWithCtx: vi.fn(),
@@ -37,6 +39,12 @@ vi.mock("../lib/athenaUserAuth", () => ({
 vi.mock("../sharedDemo/actor", () => ({
   requireSharedDemoStoreCapabilityIfApplicable: vi.fn(),
   requireSharedDemoStoreReadIfApplicable: vi.fn(),
+}));
+vi.mock("../pos/application/posApplicationAuthority", () => ({
+  requirePosApplicationAuthorityWithCtx: vi.fn(),
+}));
+vi.mock("../servicePrincipals/actor", () => ({
+  getServicePrincipalActorWithCtx: vi.fn(),
 }));
 
 type TableName =
@@ -488,6 +496,9 @@ function mockDailyCloseSnapshotAccess(role: "full_admin" | "pos_only") {
 
 describe("end-of-day review backend foundation", () => {
   beforeEach(() => {
+    vi.mocked(
+      servicePrincipalActor.getServicePrincipalActorWithCtx,
+    ).mockResolvedValue(null);
     reportingIngressMocks.appendReportingIngressWithCtx.mockResolvedValue({
       ingressId: "reporting-ingress-1",
       kind: "appended",
@@ -593,6 +604,30 @@ describe("end-of-day review backend foundation", () => {
       expect.anything(),
       expect.objectContaining({ allowedRoles: ["full_admin", "pos_only"] }),
     );
+  });
+
+  it("accepts exact POS application authority on the register lifecycle gate", async () => {
+    vi.mocked(
+      servicePrincipalActor.getServicePrincipalActorWithCtx,
+    ).mockResolvedValue({ kind: "service_principal" } as never);
+    vi.mocked(
+      posApplicationAuthority.requirePosApplicationAuthorityWithCtx,
+    ).mockResolvedValue({ storeId: "store-1" } as never);
+    const { db } = createDb({ store: [store] });
+    const ctx = { db } as unknown as QueryCtx;
+
+    const gate = await getHandler(getDailyCloseLifecycleGate)(ctx, {
+      operatingDate: "2026-05-08",
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(gate).toMatchObject({ status: "ready", storeId: "store-1" });
+    expect(
+      posApplicationAuthority.requirePosApplicationAuthorityWithCtx,
+    ).toHaveBeenCalledWith(ctx, { storeId: "store-1" });
+    expect(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).not.toHaveBeenCalled();
   });
 
   it("loads the lifecycle gate through the demo daily-operations boundary", async () => {

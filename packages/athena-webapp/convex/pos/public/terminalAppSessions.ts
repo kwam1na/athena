@@ -327,15 +327,18 @@ export const validateTerminalAppSessionRecovery = mutation({
   handler: (ctx, args) => validateTerminalAppSessionRecoveryWithCtx(ctx, args),
 });
 
-const exactSessionActivationResultValidator = v.object({
-  authorityExpiresAt: v.number(),
-  offlineAuthorityReceipt: v.string(),
-  posApplicationSessionBindingId: v.id("posApplicationSessionBinding"),
-  servicePrincipalSessionId: v.id("servicePrincipalSession"),
-  status: v.literal("activated"),
-  storeId: v.id("store"),
-  terminalId: v.id("posTerminal"),
-});
+const exactSessionActivationResultValidator = v.union(
+  v.object({ status: v.literal("code_required") }),
+  v.object({
+    authorityExpiresAt: v.number(),
+    offlineAuthorityReceipt: v.string(),
+    posApplicationSessionBindingId: v.id("posApplicationSessionBinding"),
+    servicePrincipalSessionId: v.id("servicePrincipalSession"),
+    status: v.literal("activated"),
+    storeId: v.id("store"),
+    terminalId: v.id("posTerminal"),
+  }),
+);
 
 async function getOnlyExchangeForAuthSession(
   ctx: Pick<MutationCtx, "db">,
@@ -423,231 +426,267 @@ export async function activatePreparedPosTerminalSessionWithCtx(
   ctx: MutationCtx,
   options: { now?: number } = {},
 ) {
-  const [authUserId, authSessionId] = await Promise.all([
-    getAuthUserId(ctx),
-    getAuthSessionId(ctx),
-  ]);
-  if (!authUserId || !authSessionId) {
-    throw new Error(GENERIC_EXACT_SESSION_FAILURE);
-  }
-  const exchange = await getOnlyExchangeForAuthSession(ctx, authSessionId);
-  if (
-    exchange.authUserId !== authUserId ||
-    exchange.authSessionId !== authSessionId
-  ) {
-    throw new Error(GENERIC_EXACT_SESSION_FAILURE);
-  }
-  const now = options.now ?? Date.now();
-
-  if (exchange.status === "activated") {
+  let activationStage = "load_auth_identity";
+  try {
+    const [authUserId, authSessionId] = await Promise.all([
+      getAuthUserId(ctx),
+      getAuthSessionId(ctx),
+    ]);
+    if (!authUserId || !authSessionId) {
+      throw new Error(GENERIC_EXACT_SESSION_FAILURE);
+    }
+    activationStage = "load_prepared_exchange";
+    const exchange = await getOnlyExchangeForAuthSession(ctx, authSessionId);
     if (
-      !exchange.servicePrincipalSessionId ||
-      !exchange.posApplicationSessionBindingId
+      exchange.authUserId !== authUserId ||
+      exchange.authSessionId !== authSessionId
     ) {
       throw new Error(GENERIC_EXACT_SESSION_FAILURE);
     }
-    const retainedSession = await ctx.db.get(
-      "servicePrincipalSession",
-      exchange.servicePrincipalSessionId,
-    );
-    const retainedBinding = await ctx.db.get(
-      "posApplicationSessionBinding",
-      exchange.posApplicationSessionBindingId,
-    );
-    if (
-      !retainedSession ||
-      retainedSession.status !== "active" ||
-      retainedSession.absoluteExpiresAt <= now ||
-      !retainedBinding ||
-      retainedBinding.status !== "active" ||
-      retainedBinding.servicePrincipalSessionId !== retainedSession._id ||
-      retainedBinding.servicePrincipalId !== exchange.servicePrincipalId ||
-      retainedBinding.storeId !== exchange.storeId ||
-      retainedBinding.terminalId !== exchange.terminalId ||
-      !retainedBinding.offlineAuthorityReceipt
-    ) {
+    const now = options.now ?? Date.now();
+
+    if (exchange.status === "activated") {
+      activationStage = "reload_activated_session";
+      if (
+        !exchange.servicePrincipalSessionId ||
+        !exchange.posApplicationSessionBindingId
+      ) {
+        throw new Error(GENERIC_EXACT_SESSION_FAILURE);
+      }
+      const retainedSession = await ctx.db.get(
+        "servicePrincipalSession",
+        exchange.servicePrincipalSessionId,
+      );
+      const retainedBinding = await ctx.db.get(
+        "posApplicationSessionBinding",
+        exchange.posApplicationSessionBindingId,
+      );
+      if (
+        !retainedSession ||
+        retainedSession.status !== "active" ||
+        retainedSession.absoluteExpiresAt <= now ||
+        !retainedBinding ||
+        retainedBinding.status !== "active" ||
+        retainedBinding.servicePrincipalSessionId !== retainedSession._id ||
+        retainedBinding.servicePrincipalId !== exchange.servicePrincipalId ||
+        retainedBinding.storeId !== exchange.storeId ||
+        retainedBinding.terminalId !== exchange.terminalId ||
+        !retainedBinding.offlineAuthorityReceipt
+      ) {
+        throw new Error(GENERIC_EXACT_SESSION_FAILURE);
+      }
+      return {
+        authorityExpiresAt: retainedSession.absoluteExpiresAt,
+        offlineAuthorityReceipt: retainedBinding.offlineAuthorityReceipt,
+        posApplicationSessionBindingId: exchange.posApplicationSessionBindingId,
+        servicePrincipalSessionId: exchange.servicePrincipalSessionId,
+        status: "activated" as const,
+        storeId: exchange.storeId,
+        terminalId: exchange.terminalId,
+      };
+    }
+
+    if (exchange.status !== "prepared") {
       throw new Error(GENERIC_EXACT_SESSION_FAILURE);
     }
-    return {
-      authorityExpiresAt: retainedSession.absoluteExpiresAt,
-      offlineAuthorityReceipt: retainedBinding.offlineAuthorityReceipt,
-      posApplicationSessionBindingId: exchange.posApplicationSessionBindingId,
-      servicePrincipalSessionId: exchange.servicePrincipalSessionId,
-      status: "activated" as const,
-      storeId: exchange.storeId,
-      terminalId: exchange.terminalId,
-    };
-  }
-
-  if (exchange.status !== "prepared" || exchange.expiresAt <= now) {
-    throw new Error(GENERIC_EXACT_SESSION_FAILURE);
-  }
-  const { terminal } = await validateCurrentExchangeAuthority(
-    ctx,
-    exchange,
-    now,
-  );
-  const issued = await issueServicePrincipalSession(ctx as never, {
-    absoluteExpiresAt: now + POS_SERVICE_SESSION_ABSOLUTE_DURATION_MS,
-    authSessionId,
-    authUserId,
-    capabilityRevision: exchange.capabilityRevision,
-    consumerId: POS_SERVICE_PRINCIPAL_CONSUMER_ID,
-    correlationId: exchange.recoveryCorrelationKey,
-    idleExpiresAt: now + POS_SERVICE_SESSION_IDLE_DURATION_MS,
-    now,
-    organizationId: exchange.organizationId,
-    principalLifecycleRevision: exchange.principalLifecycleRevision,
-    requiredCapabilityId: POS_APPLICATION_CAPABILITY_ID,
-    servicePrincipalAuthBindingId: exchange.servicePrincipalAuthBindingId,
-    servicePrincipalId: exchange.servicePrincipalId,
-    storeId: exchange.storeId,
-  });
-  if (issued.status !== "active") {
-    throw new Error(GENERIC_EXACT_SESSION_FAILURE);
-  }
-
-  const predecessors = await ctx.db
-    .query("posApplicationSessionBinding")
-    .withIndex(
-      "by_servicePrincipalId_and_terminalId_and_consumerId_and_status",
-      (query) =>
-        query
-          .eq("servicePrincipalId", exchange.servicePrincipalId)
-          .eq("terminalId", exchange.terminalId)
-          .eq("consumerId", POS_SERVICE_PRINCIPAL_CONSUMER_ID)
-          .eq("status", "active"),
-    )
-    .take(2);
-  if (predecessors.length > 1) {
-    throw new Error(GENERIC_EXACT_SESSION_FAILURE);
-  }
-  const posApplicationSessionBindingId = await ctx.db.insert(
-    "posApplicationSessionBinding",
-    {
-      organizationId: exchange.organizationId,
-      storeId: exchange.storeId,
-      servicePrincipalId: exchange.servicePrincipalId,
-      servicePrincipalSessionId: issued.servicePrincipalSessionId,
-      terminalId: exchange.terminalId,
-      posRecoveryCredentialId: exchange.posRecoveryCredentialId,
-      capabilityGrantId: exchange.capabilityGrantId,
+    if (exchange.expiresAt <= now) {
+      activationStage = "abort_expired_exchange";
+      await abortPreparedPosTerminalSessionWithCtx(
+        ctx,
+        {
+          recoveryCorrelationKey: exchange.recoveryCorrelationKey,
+          terminalId: exchange.terminalId,
+        },
+        { now },
+      );
+      return { status: "code_required" as const };
+    }
+    activationStage = "validate_current_authority";
+    const { terminal } = await validateCurrentExchangeAuthority(
+      ctx,
+      exchange,
+      now,
+    );
+    activationStage = "issue_service_session";
+    const issued = await issueServicePrincipalSession(ctx as never, {
+      absoluteExpiresAt: now + POS_SERVICE_SESSION_ABSOLUTE_DURATION_MS,
+      authSessionId,
+      authUserId,
+      capabilityRevision: exchange.capabilityRevision,
       consumerId: POS_SERVICE_PRINCIPAL_CONSUMER_ID,
-      capabilityId: POS_APPLICATION_CAPABILITY_ID,
-      status: "active",
-      revision: 1,
+      correlationId: exchange.recoveryCorrelationKey,
+      idleExpiresAt: now + POS_SERVICE_SESSION_IDLE_DURATION_MS,
+      now,
+      organizationId: exchange.organizationId,
       principalLifecycleRevision: exchange.principalLifecycleRevision,
+      requiredCapabilityId: POS_APPLICATION_CAPABILITY_ID,
+      servicePrincipalAuthBindingId: exchange.servicePrincipalAuthBindingId,
+      servicePrincipalId: exchange.servicePrincipalId,
+      storeId: exchange.storeId,
+    });
+    if (issued.status !== "active") {
+      throw new Error(GENERIC_EXACT_SESSION_FAILURE);
+    }
+
+    activationStage = "load_predecessor_binding";
+    const predecessors = await ctx.db
+      .query("posApplicationSessionBinding")
+      .withIndex(
+        "by_servicePrincipalId_and_terminalId_and_consumerId_and_status",
+        (query) =>
+          query
+            .eq("servicePrincipalId", exchange.servicePrincipalId)
+            .eq("terminalId", exchange.terminalId)
+            .eq("consumerId", POS_SERVICE_PRINCIPAL_CONSUMER_ID)
+            .eq("status", "active"),
+      )
+      .take(2);
+    if (predecessors.length > 1) {
+      throw new Error(GENERIC_EXACT_SESSION_FAILURE);
+    }
+    activationStage = "create_application_binding";
+    const posApplicationSessionBindingId = await ctx.db.insert(
+      "posApplicationSessionBinding",
+      {
+        organizationId: exchange.organizationId,
+        storeId: exchange.storeId,
+        servicePrincipalId: exchange.servicePrincipalId,
+        servicePrincipalSessionId: issued.servicePrincipalSessionId,
+        terminalId: exchange.terminalId,
+        posRecoveryCredentialId: exchange.posRecoveryCredentialId,
+        capabilityGrantId: exchange.capabilityGrantId,
+        consumerId: POS_SERVICE_PRINCIPAL_CONSUMER_ID,
+        capabilityId: POS_APPLICATION_CAPABILITY_ID,
+        status: "active",
+        revision: 1,
+        principalLifecycleRevision: exchange.principalLifecycleRevision,
+        capabilityRevision: exchange.capabilityRevision,
+        credentialRevision: exchange.credentialRevision,
+        terminalLifecycleRevision: exchange.terminalLifecycleRevision,
+        terminalProofRevision: exchange.terminalProofRevision,
+        activatedAt: now,
+        updatedAt: now,
+        lastCorrelationId: exchange.recoveryCorrelationKey,
+      },
+    );
+    activationStage = "issue_offline_authority_receipt";
+    const offlineAuthorityReceipt = await issuePosOfflineAuthorityReceipt({
+      authorityExpiresAt: issued.absoluteExpiresAt,
       capabilityRevision: exchange.capabilityRevision,
       credentialRevision: exchange.credentialRevision,
+      issuedAt: now,
+      posApplicationSessionBindingId,
+      principalLifecycleRevision: exchange.principalLifecycleRevision,
+      servicePrincipalId: exchange.servicePrincipalId,
+      servicePrincipalSessionId: issued.servicePrincipalSessionId,
+      storeId: exchange.storeId,
+      terminalId: exchange.terminalId,
       terminalLifecycleRevision: exchange.terminalLifecycleRevision,
       terminalProofRevision: exchange.terminalProofRevision,
-      activatedAt: now,
-      updatedAt: now,
-      lastCorrelationId: exchange.recoveryCorrelationKey,
-    },
-  );
-  const offlineAuthorityReceipt = await issuePosOfflineAuthorityReceipt({
-    authorityExpiresAt: issued.absoluteExpiresAt,
-    capabilityRevision: exchange.capabilityRevision,
-    credentialRevision: exchange.credentialRevision,
-    issuedAt: now,
-    posApplicationSessionBindingId,
-    principalLifecycleRevision: exchange.principalLifecycleRevision,
-    servicePrincipalId: exchange.servicePrincipalId,
-    servicePrincipalSessionId: issued.servicePrincipalSessionId,
-    storeId: exchange.storeId,
-    terminalId: exchange.terminalId,
-    terminalLifecycleRevision: exchange.terminalLifecycleRevision,
-    terminalProofRevision: exchange.terminalProofRevision,
-  });
-  await ctx.db.patch(
-    "posApplicationSessionBinding",
-    posApplicationSessionBindingId,
-    {
-      offlineAuthorityReceipt,
-    },
-  );
-
-  // The new authority is already present in this transaction before its
-  // same-terminal predecessor is superseded. Sibling terminal lineages are
-  // never selected by this index.
-  const predecessor = predecessors[0];
-  if (predecessor) {
-    await ctx.db.patch("posApplicationSessionBinding", predecessor._id, {
-      lastCorrelationId: exchange.recoveryCorrelationKey,
-      revision: predecessor.revision + 1,
-      status: "superseded",
-      supersededAt: now,
-      updatedAt: now,
     });
-    const predecessorSession = await ctx.db.get(
-      "servicePrincipalSession",
-      predecessor.servicePrincipalSessionId,
+    activationStage = "attach_offline_authority_receipt";
+    await ctx.db.patch(
+      "posApplicationSessionBinding",
+      posApplicationSessionBindingId,
+      {
+        offlineAuthorityReceipt,
+      },
     );
-    if (predecessorSession?.status === "active") {
-      await ctx.db.patch("servicePrincipalSession", predecessorSession._id, {
+
+    // The new authority is already present in this transaction before its
+    // same-terminal predecessor is superseded. Sibling terminal lineages are
+    // never selected by this index.
+    activationStage = "supersede_predecessor_binding";
+    const predecessor = predecessors[0];
+    if (predecessor) {
+      await ctx.db.patch("posApplicationSessionBinding", predecessor._id, {
         lastCorrelationId: exchange.recoveryCorrelationKey,
-        revision: predecessorSession.revision + 1,
+        revision: predecessor.revision + 1,
         status: "superseded",
         supersededAt: now,
         updatedAt: now,
       });
+      const predecessorSession = await ctx.db.get(
+        "servicePrincipalSession",
+        predecessor.servicePrincipalSessionId,
+      );
+      if (predecessorSession?.status === "active") {
+        await ctx.db.patch("servicePrincipalSession", predecessorSession._id, {
+          lastCorrelationId: exchange.recoveryCorrelationKey,
+          revision: predecessorSession.revision + 1,
+          status: "superseded",
+          supersededAt: now,
+          updatedAt: now,
+        });
+      }
     }
+
+    activationStage = "activate_exchange";
+    await ctx.db.patch("posRecoveryExchange", exchange._id, {
+      activatedAt: now,
+      lastCorrelationId: exchange.recoveryCorrelationKey,
+      posApplicationSessionBindingId,
+      revision: exchange.revision + 1,
+      servicePrincipalSessionId: issued.servicePrincipalSessionId,
+      status: "activated",
+      updatedAt: now,
+    });
+    activationStage = "record_terminal_recovery";
+    const recoveryVersion = (terminal.servicePrincipalRecoveryVersion ?? 0) + 1;
+    await ctx.db.patch("posTerminal", terminal._id, {
+      lastCorrelationId: exchange.recoveryCorrelationKey,
+      lastServicePrincipalRecoveryAt: now,
+      servicePrincipalRecoveryVersion: recoveryVersion,
+    });
+    activationStage = "record_migration_evidence";
+    await recordPosTerminalMigrationRecoveryWithCtx(ctx, {
+      credentialId: exchange.posRecoveryCredentialId,
+      credentialRevision: exchange.credentialRevision,
+      now,
+      organizationId: exchange.organizationId,
+      posApplicationSessionBindingId,
+      recoveryVersion,
+      servicePrincipalId: exchange.servicePrincipalId,
+      servicePrincipalSessionId: issued.servicePrincipalSessionId,
+      storeId: exchange.storeId,
+      terminalId: exchange.terminalId,
+    });
+    activationStage = "record_operational_event";
+    await recordOperationalEventWithCtx(ctx, {
+      actorServicePrincipalId: exchange.servicePrincipalId,
+      actorServicePrincipalSessionId: issued.servicePrincipalSessionId,
+      actorType: "service_principal",
+      eventType: "pos_service_session_activated",
+      metadata: { recoveryCorrelationKey: exchange.recoveryCorrelationKey },
+      metadataDedupeKeys: ["recoveryCorrelationKey"],
+      organizationId: exchange.organizationId,
+      reason: "exact_session_activated",
+      servicePrincipalId: exchange.servicePrincipalId,
+      servicePrincipalSessionId: issued.servicePrincipalSessionId,
+      storeId: exchange.storeId,
+      subjectId: posApplicationSessionBindingId,
+      subjectType: "posApplicationSessionBinding",
+      terminalId: exchange.terminalId,
+    });
+
+    activationStage = "complete";
+    return {
+      authorityExpiresAt: issued.absoluteExpiresAt,
+      offlineAuthorityReceipt,
+      posApplicationSessionBindingId,
+      servicePrincipalSessionId: issued.servicePrincipalSessionId,
+      status: "activated" as const,
+      storeId: exchange.storeId,
+      terminalId: exchange.terminalId,
+    };
+  } catch (error) {
+    console.error("POS exact-session activation stage failed", {
+      activationStage,
+      reason:
+        error instanceof Error ? error.message : "unknown_activation_error",
+    });
+    throw error;
   }
-
-  await ctx.db.patch("posRecoveryExchange", exchange._id, {
-    activatedAt: now,
-    lastCorrelationId: exchange.recoveryCorrelationKey,
-    posApplicationSessionBindingId,
-    revision: exchange.revision + 1,
-    servicePrincipalSessionId: issued.servicePrincipalSessionId,
-    status: "activated",
-    updatedAt: now,
-  });
-  const recoveryVersion = (terminal.servicePrincipalRecoveryVersion ?? 0) + 1;
-  await ctx.db.patch("posTerminal", terminal._id, {
-    lastCorrelationId: exchange.recoveryCorrelationKey,
-    lastServicePrincipalRecoveryAt: now,
-    servicePrincipalRecoveryVersion: recoveryVersion,
-  });
-  await recordPosTerminalMigrationRecoveryWithCtx(ctx, {
-    credentialId: exchange.posRecoveryCredentialId,
-    credentialRevision: exchange.credentialRevision,
-    now,
-    organizationId: exchange.organizationId,
-    posApplicationSessionBindingId,
-    recoveryVersion,
-    servicePrincipalId: exchange.servicePrincipalId,
-    servicePrincipalSessionId: issued.servicePrincipalSessionId,
-    storeId: exchange.storeId,
-    terminalId: exchange.terminalId,
-  });
-  await recordOperationalEventWithCtx(ctx, {
-    actorServicePrincipalId: exchange.servicePrincipalId,
-    actorServicePrincipalSessionId: issued.servicePrincipalSessionId,
-    actorType: "service_principal",
-    eventType: "pos_service_session_activated",
-    metadata: { recoveryCorrelationKey: exchange.recoveryCorrelationKey },
-    metadataDedupeKeys: ["recoveryCorrelationKey"],
-    organizationId: exchange.organizationId,
-    reason: "exact_session_activated",
-    servicePrincipalId: exchange.servicePrincipalId,
-    servicePrincipalSessionId: issued.servicePrincipalSessionId,
-    storeId: exchange.storeId,
-    subjectId: posApplicationSessionBindingId,
-    subjectType: "posApplicationSessionBinding",
-    terminalId: exchange.terminalId,
-  });
-
-  return {
-    authorityExpiresAt: issued.absoluteExpiresAt,
-    offlineAuthorityReceipt,
-    posApplicationSessionBindingId,
-    servicePrincipalSessionId: issued.servicePrincipalSessionId,
-    status: "activated" as const,
-    storeId: exchange.storeId,
-    terminalId: exchange.terminalId,
-  };
 }
 
 export const activatePreparedPosTerminalSession = mutation({
@@ -702,18 +741,17 @@ export async function abortPreparedPosTerminalSessionWithCtx(
     throw new Error(GENERIC_EXACT_SESSION_FAILURE);
   }
 
-  if (refreshTokens.length > 0) {
-    const [authUserId, authSessionId] = await Promise.all([
-      getAuthUserId(ctx),
-      getAuthSessionId(ctx),
-    ]);
-    if (
-      authUserId !== exchange.authUserId ||
-      authSessionId !== exchange.authSessionId
-    ) {
-      throw new Error(GENERIC_EXACT_SESSION_FAILURE);
-    }
-  } else {
+  const [authUserId, authSessionId] = await Promise.all([
+    getAuthUserId(ctx),
+    getAuthSessionId(ctx),
+  ]);
+  const abortedByExactSession =
+    authUserId === exchange.authUserId &&
+    authSessionId === exchange.authSessionId;
+  if (refreshTokens.length > 0 && !abortedByExactSession) {
+    throw new Error(GENERIC_EXACT_SESSION_FAILURE);
+  }
+  if (!abortedByExactSession) {
     const terminal = await ctx.db.get("posTerminal", args.terminalId);
     const terminalProof = args.terminalProof?.trim();
     if (!terminal || !terminalProof || !terminal.syncSecretHash) {
@@ -750,7 +788,7 @@ export async function abortPreparedPosTerminalSessionWithCtx(
     metadata: { recoveryCorrelationKey: exchange.recoveryCorrelationKey },
     metadataDedupeKeys: ["recoveryCorrelationKey"],
     organizationId: exchange.organizationId,
-    reason: refreshTokens.length > 0 ? "issued_session_abort" : "proof_abort",
+    reason: abortedByExactSession ? "issued_session_abort" : "proof_abort",
     storeId: exchange.storeId,
     subjectId: exchange._id,
     subjectType: "posRecoveryExchange",
@@ -886,21 +924,27 @@ export const cleanupExpiredPosRecoveryArtifacts = internalMutation({
 
 export const getCurrentPosTerminalServiceSession = query({
   args: {},
-  returns: v.object({
-    authorityExpiresAt: v.number(),
-    authSessionId: v.id("authSessions"),
-    offlineAuthorityReceipt: v.string(),
-    posApplicationSessionBindingId: v.id("posApplicationSessionBinding"),
-    servicePrincipalSessionId: v.id("servicePrincipalSession"),
-    storeId: v.id("store"),
-    terminalId: v.id("posTerminal"),
-  }),
+  returns: v.union(
+    // Clients poll this while the Auth provider remounts onto freshly promoted
+    // tokens, so an unauthorized caller is an expected state — never an error.
+    v.object({ status: v.literal("unavailable") }),
+    v.object({
+      authorityExpiresAt: v.number(),
+      authSessionId: v.id("authSessions"),
+      offlineAuthorityReceipt: v.string(),
+      posApplicationSessionBindingId: v.id("posApplicationSessionBinding"),
+      servicePrincipalSessionId: v.id("servicePrincipalSession"),
+      status: v.literal("active"),
+      storeId: v.id("store"),
+      terminalId: v.id("posTerminal"),
+    }),
+  ),
   handler: async (ctx) => {
     let authority;
     try {
       authority = await requirePosApplicationAuthorityWithCtx(ctx);
     } catch {
-      throw new Error(GENERIC_EXACT_SESSION_FAILURE);
+      return { status: "unavailable" as const };
     }
     return {
       authorityExpiresAt: authority.actor.absoluteExpiresAt,
@@ -908,6 +952,7 @@ export const getCurrentPosTerminalServiceSession = query({
       offlineAuthorityReceipt: authority.offlineAuthorityReceipt,
       posApplicationSessionBindingId: authority.posApplicationSessionBindingId,
       servicePrincipalSessionId: authority.servicePrincipalSessionId,
+      status: "active" as const,
       storeId: authority.storeId,
       terminalId: authority.terminalId,
     };

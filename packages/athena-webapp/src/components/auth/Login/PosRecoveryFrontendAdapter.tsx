@@ -11,7 +11,7 @@ import { ATHENA_POS_RECOVERY_CODE_PROVIDER_ID } from "../../../../shared/auth";
 import type { AuthRuntimeHandoffCoordinator } from "../../../lib/auth/authRuntimeHandoff";
 import { PosRecoveryCodeForm } from "./PosRecoveryCodeForm";
 import type {
-  PosRecoveryActivation,
+  PosRecoveryActivationResult,
   PosRecoveryFrontendAdapter,
 } from "./posRecoveryFlow";
 import type { PosRecoveryTerminalEvidence } from "./PosRecoveryCodeForm";
@@ -34,7 +34,7 @@ type PendingCommand =
       id: number;
       kind: "activate";
       reject: (error: unknown) => void;
-      resolve: (activation: PosRecoveryActivation) => void;
+      resolve: (activation: PosRecoveryActivationResult) => void;
     }
   | {
       id: number;
@@ -63,6 +63,7 @@ export function ProductionPosRecoveryCodeForm({
     <>
       {runtime.pendingSession ? (
         <PendingPosRecoverySession
+          key={runtime.pendingSession.storageNamespace}
           command={runtime.command}
           session={runtime.pendingSession}
           settle={runtime.settle}
@@ -119,7 +120,7 @@ function useProductionPosRecoveryAdapter() {
         });
       },
       activate: () =>
-        new Promise<PosRecoveryActivation>((resolve, reject) => {
+        new Promise<PosRecoveryActivationResult>((resolve, reject) => {
           setCommand({
             id: ++sequenceRef.current,
             kind: "activate",
@@ -213,6 +214,10 @@ function PendingCommandRunner({
           command.resolve();
         } else if (command.kind === "activate") {
           const result = await activate({});
+          if (result.status === "code_required") {
+            command.resolve(result);
+            return;
+          }
           command.resolve({
             authorityExpiresAt: result.authorityExpiresAt,
             offlineAuthorityReceipt: result.offlineAuthorityReceipt,

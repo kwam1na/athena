@@ -93,7 +93,11 @@ describe("production POS recovery adapter", () => {
       disposition: "recovery_code_required",
     });
     mocked.activate.mockResolvedValue(activation);
-    mocked.query.mockResolvedValue({ ...activation, authSessionId: "auth-1" });
+    mocked.query.mockResolvedValue({
+      ...activation,
+      authSessionId: "auth-1",
+      status: "active" as const,
+    });
     mocked.verifyReceipt.mockResolvedValue({
       status: "valid",
       receipt: {

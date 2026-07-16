@@ -1,6 +1,7 @@
 ---
 title: "Athena store service principals separate identity from granted authority"
 date: 2026-07-15
+last_updated: 2026-07-16
 category: architecture-patterns
 module: athena-webapp
 problem_type: architecture_pattern
@@ -27,7 +28,7 @@ tags:
   - session-revocation
   - local-first
   - convex
-delivery_diff_fingerprint: 543294e600a955d8dbe9f38aa53177f1889bc73e87ea3fd794495f1b11556fd7
+delivery_diff_fingerprint: 05fc5944e274efd5ce62b01df60c2d6160ff320b373ef3d58af1c7312867d01c
 ---
 
 # Athena store service principals separate identity from granted authority
@@ -84,6 +85,29 @@ The browser journal contains routing metadata, never authority or secrets.
 Ambiguous failures remain resumable; cleanup and abort decisions are
 server-derived and bounded.
 
+### Make recovery retry-safe across mutation, lease, and provider boundaries
+
+Exact-session activation runs inside a Convex mutation, so every value it
+creates must be replay-stable. Use Convex's seeded `Math.random` for the receipt
+nonce and deterministic P-256 signing for the receipt signature. Web Crypto
+randomness and randomized ECDSA signing are not valid mutation dependencies:
+Convex may replay the mutation and requires the same inputs to produce the same
+durable result.
+
+Treat expiry as a recoverable protocol state rather than a generic failure. If
+the prepared exchange expires before activation, abort its bounded artifacts
+and return `code_required`; the browser clears the confirmed-aborted handoff and
+asks for a fresh recovery code. If the browser still owns a stale local handoff
+lease, it may reclaim that lease before the next phase. A newly started attempt
+may discard only abandoned pre-activation phases (`prepared` or `auth_issued`),
+never an activated or promoted handoff.
+
+After token promotion, the root Auth provider can temporarily expose neither
+the old human session nor the new service session. Make the current-session
+query return a typed `unavailable` state during that expected remount window,
+then poll with bounded backoff until the exact activated session appears. Do not
+surface transient unauthorized query errors as a terminal recovery failure.
+
 ### Reload current authority at every protected server boundary
 
 For each POS business call, reload and cross-check the backing Auth session,
@@ -98,6 +122,13 @@ human administration, POS business operation, device control, or intentionally
 public. Unknown endpoints fail the sensor. Staff, manager, drawer, register,
 and command checks remain additional gates; application access never implies
 operational authority.
+
+Fullscreen terminal routes require the POS application service session even if
+a human account is still authenticated in the browser. Queries that only load
+terminal lifecycle state may accept either current store-member access or the
+POS service principal. Commands that change register or cash state may accept
+the service principal for application authority, but must still require a
+verified cashier or manager staff actor for personal accountability.
 
 ### Revoke each lane independently
 
@@ -151,6 +182,10 @@ the migration code.
   email-based authorization when its service state is invalid.
 - Exact Auth-session lineage prevents an old or parallel session for the same
   transport user from inheriting newly activated application authority.
+- Deterministic receipt issuance keeps exact-session activation legal and
+  replay-safe inside a Convex mutation.
+- Typed transient states and bounded backoff let token promotion finish without
+  weakening exact-session validation or misreporting a normal provider remount.
 - Signed, expiring receipts preserve IndexedDB-first cashier work without
   letting offline state enroll, recover, refresh, or switch stores.
 - Preview evidence and explicit cutover modes make migration incompleteness
@@ -165,6 +200,11 @@ the migration code.
   resolution.
 - Bind service sessions to exact Auth session IDs and reload all mutable lanes
   required by the consumer on every protected server boundary.
+- Keep mutation-time receipt issuance deterministic; do not call cryptographic
+  randomness or randomized signing from a Convex mutation.
+- Model expired prepared exchanges and provider remounts as typed protocol
+  states, and cover stale-owner, takeover, abort, and bounded-retry paths in
+  tests.
 - Keep consumer capabilities outside the generic foundation and reject unknown
   catalog entries by default.
 - Preserve consumer-specific staff, manager, device, drawer, and command gates
@@ -190,6 +230,14 @@ lifecycle tests prove same-row reconnect and proof rotation; offline receipt
 tests cover canonical signatures, lease boundaries, key rotation, and copied
 scope; and migration tests cover stale previews, preserved terminal identity,
 neutral transport users, no enforced fallback, and closed retirement gates.
+
+The exact-session recovery follow-on is exercised by
+`convex/pos/public/terminalAppSessions.test.ts`, the login recovery-flow tests,
+`recoverPromotedPosRecoverySession.test.ts`, the authed-layout route tests, and
+the cash-control and daily-close authorization tests. Together they prove
+expired exchange recovery, stale handoff reclamation, provider-remount polling,
+service-session-only register routing, dual-authority lifecycle reads, and
+verified-staff requirements for register commands.
 
 ## Supersedes and Related Guidance
 
