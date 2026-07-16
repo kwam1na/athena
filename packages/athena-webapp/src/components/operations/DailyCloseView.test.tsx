@@ -1653,7 +1653,10 @@ describe("DailyCloseViewContent", () => {
           key: "logical-operational-work:sku-1",
           metadata: {
             memberCount: 3,
+            oldestActionableAt: 1_783_596_988_568,
+            priority: "high",
             sourceCount: 2,
+            status: "open",
             type: "synced_sale_inventory_review",
           },
           subject: {
@@ -1668,6 +1671,44 @@ describe("DailyCloseViewContent", () => {
     };
 
     renderContent(snapshot, { onComplete });
+
+    const logicalWorkCard = screen
+      .getByText("Review inventory for Sku 1")
+      .closest("article");
+
+    expect(logicalWorkCard).not.toBeNull();
+    expect(
+      within(logicalWorkCard as HTMLElement).getByText("Priority"),
+    ).toBeInTheDocument();
+    expect(
+      within(logicalWorkCard as HTMLElement).getByText("High"),
+    ).toBeInTheDocument();
+    expect(
+      within(logicalWorkCard as HTMLElement).getByText("Open since"),
+    ).toBeInTheDocument();
+    expect(
+      within(logicalWorkCard as HTMLElement).getByText("Work type"),
+    ).toBeInTheDocument();
+    expect(
+      within(logicalWorkCard as HTMLElement).getByText(
+        "Synced sale inventory",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(logicalWorkCard as HTMLElement).queryByText("Member Count"),
+    ).not.toBeInTheDocument();
+    expect(
+      within(logicalWorkCard as HTMLElement).queryByText("Source Count"),
+    ).not.toBeInTheDocument();
+    expect(
+      within(logicalWorkCard as HTMLElement).queryByText("1783596988568"),
+    ).not.toBeInTheDocument();
+    expect(
+      within(logicalWorkCard as HTMLElement).queryByRole("button", {
+        name: /show details/i,
+      }),
+    ).not.toBeInTheDocument();
+
     await user.click(
       screen.getByRole("button", { name: /complete EOD review/i }),
     );
@@ -1771,6 +1812,24 @@ describe("DailyCloseViewContent", () => {
         {
           description:
             "Open operational work will carry forward after the end of day review.",
+          id: "carry-catalog-setup-1",
+          metadata: {
+            priority: "normal",
+            status: "open",
+            type: "catalog_taxonomy_setup",
+          },
+          statusLabel: "Carry forward",
+          subject: {
+            id: "carry-catalog-setup-1",
+            label:
+              "Assign catalog category: CERAVEHYDRATING FOAMING OIL",
+            type: "operational_work_item",
+          },
+          title: "Assign catalog category: CERAVEHYDRATING FOAMING OIL",
+        },
+        {
+          description:
+            "Open operational work will carry forward after the end of day review.",
           id: "carry-pending-checkout-1",
           metadata: {
             priority: "normal",
@@ -1801,6 +1860,11 @@ describe("DailyCloseViewContent", () => {
     expect(screen.getByText("Review inventory for Clogs")).toBeInTheDocument();
     expect(
       screen.getByText(
+        "Assign catalog category: Ceravehydrating Foaming Oil",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
         "Review pending checkout item: Protein Brazilian Hair Repair Mask",
       ),
     ).toBeInTheDocument();
@@ -1816,7 +1880,7 @@ describe("DailyCloseViewContent", () => {
       .closest("article");
     expect(firstCard).not.toBeNull();
     expect(
-      within(firstCard as HTMLElement).getByText("Type"),
+      within(firstCard as HTMLElement).getByText("Work type"),
     ).toBeInTheDocument();
     expect(
       within(firstCard as HTMLElement).getByText("Service case"),

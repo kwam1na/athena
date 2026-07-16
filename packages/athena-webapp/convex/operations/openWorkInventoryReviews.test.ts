@@ -91,7 +91,7 @@ describe("resolveSyncedSaleInventoryReviewWithCtx", () => {
     expect(ctx.db.insert).not.toHaveBeenCalled();
   });
 
-  it("returns a typed refresh conflict before writes when member source evidence is stale", async () => {
+  it("preserves actionable member validation errors before grouped writes", async () => {
     const ctx = buildCtx({
       posTerminal: buildTerminal({ storeId: "store-2" as Id<"store"> }),
     });
@@ -110,9 +110,40 @@ describe("resolveSyncedSaleInventoryReviewWithCtx", () => {
     expect(result).toEqual({
       kind: "user_error",
       error: {
-        code: "conflict",
+        code: "validation_failed",
+        message: "Terminal does not match the inventory review store.",
+      },
+    });
+    expect(ctx.db.patch).not.toHaveBeenCalled();
+    expect(ctx.db.insert).not.toHaveBeenCalled();
+  });
+
+  it("preserves the stock-count requirement before grouped writes", async () => {
+    const ctx = buildCtx({
+      inventoryMovement: null,
+      productSku: buildProductSku({
+        inventoryCount: 0,
+        quantityAvailable: 0,
+      }),
+    });
+
+    const result = await resolveSyncedSaleInventoryReviewGroupWithCtx(
+      ctx as never,
+      {
+        expectedMemberIds: ["work-item-1" as Id<"operationalWorkItem">],
+        groupKey: "synced_sale_inventory_review:store-1:sku-1",
+        outcome: "completed",
+        reason: "Inventory review handled from Open Work.",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "validation_failed",
         message:
-          "This work changed. Review the refreshed group before marking it reviewed.",
+          "Update the affected SKU's stock count before marking this inventory review complete.",
       },
     });
     expect(ctx.db.patch).not.toHaveBeenCalled();

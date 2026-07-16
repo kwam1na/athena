@@ -8,8 +8,8 @@ Graphify is the navigation layer for the repo graph. Use the entry docs below fo
 
 ## Repo Summary
 - Code files discovered: 2600
-- Graph nodes: 10547
-- Graph edges: 12856
+- Graph nodes: 10548
+- Graph edges: 12858
 - Communities: 2526
 
 ## Graph Hotspots
@@ -18,7 +18,7 @@ Graphify is the navigation layer for the repo graph. Use the entry docs below fo
 - `posLocalStore.ts` (85 edges, Community 1) - [`packages/athena-webapp/src/lib/pos/infrastructure/local/posLocalStore.ts`](../../packages/athena-webapp/src/lib/pos/infrastructure/local/posLocalStore.ts)
 - `terminalHealthPresentation.ts` (76 edges, Community 3) - [`packages/athena-webapp/src/components/pos/terminals/terminalHealthPresentation.ts`](../../packages/athena-webapp/src/components/pos/terminals/terminalHealthPresentation.ts)
 - `dailyOperations.ts` (75 edges, Community 4) - [`packages/athena-webapp/convex/operations/dailyOperations.ts`](../../packages/athena-webapp/convex/operations/dailyOperations.ts)
-- `DailyCloseView.tsx` (73 edges, Community 5) - [`packages/athena-webapp/src/components/operations/DailyCloseView.tsx`](../../packages/athena-webapp/src/components/operations/DailyCloseView.tsx)
+- `DailyCloseView.tsx` (74 edges, Community 5) - [`packages/athena-webapp/src/components/operations/DailyCloseView.tsx`](../../packages/athena-webapp/src/components/operations/DailyCloseView.tsx)
 - `backfill.ts` (69 edges, Community 6) - [`packages/athena-webapp/convex/reporting/maintenance/backfill.ts`](../../packages/athena-webapp/convex/reporting/maintenance/backfill.ts)
 - `projectLocalEvents.ts` (67 edges, Community 7) - [`packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.ts`](../../packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.ts)
 

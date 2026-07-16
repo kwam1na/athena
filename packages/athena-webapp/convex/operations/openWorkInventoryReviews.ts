@@ -981,7 +981,7 @@ export async function resolveSyncedSaleInventoryReviewGroupWithCtx(
       validateOnly: true,
     });
     if (result.kind !== "ok") {
-      return conflictError(LOGICAL_GROUP_CHANGED_MESSAGE);
+      return result;
     }
   }
 

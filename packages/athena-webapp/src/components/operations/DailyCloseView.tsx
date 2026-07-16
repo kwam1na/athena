@@ -1002,6 +1002,9 @@ function formatDailyCloseItemTitle(title: string) {
   const pendingCheckoutReviewMatch = trimmedTitle.match(
     /^(Review pending checkout item: )(.+)$/i,
   );
+  const catalogCategoryMatch = trimmedTitle.match(
+    /^(Assign catalog category: )(.+)$/i,
+  );
 
   if (inventoryReviewMatch) {
     return `${inventoryReviewMatch[1]}${capitalizeWords(inventoryReviewMatch[2])}`;
@@ -1009,6 +1012,10 @@ function formatDailyCloseItemTitle(title: string) {
 
   if (pendingCheckoutReviewMatch) {
     return `${pendingCheckoutReviewMatch[1]}${capitalizeWords(pendingCheckoutReviewMatch[2])}`;
+  }
+
+  if (catalogCategoryMatch) {
+    return `${catalogCategoryMatch[1]}${capitalizeWords(catalogCategoryMatch[2])}`;
   }
 
   return trimmedTitle === trimmedTitle.toLowerCase()
@@ -1033,9 +1040,26 @@ function getItemContextLabel(item: DailyCloseItem) {
 }
 
 function isOperationalWorkItem(item: DailyCloseItem) {
+  const normalizedSubjectType = normalizeMetadataLabel(
+    item.subject?.type ?? "",
+  );
+
   return (
     normalizeMetadataLabel(item.category ?? "") === "operationalworkitem" ||
-    normalizeMetadataLabel(item.subject?.type ?? "") === "operationalworkitem"
+    normalizedSubjectType === "operationalworkitem" ||
+    normalizedSubjectType === "logicaloperationalworkgroup" ||
+    normalizedSubjectType === "incompletelogicaloperationalworkgroup"
+  );
+}
+
+function isLogicalOperationalWorkItem(item: DailyCloseItem) {
+  const normalizedSubjectType = normalizeMetadataLabel(
+    item.subject?.type ?? "",
+  );
+
+  return (
+    normalizedSubjectType === "logicaloperationalworkgroup" ||
+    normalizedSubjectType === "incompletelogicaloperationalworkgroup"
   );
 }
 
@@ -1089,6 +1113,7 @@ const timestampMetadataLabels = new Set([
   "expiredat",
   "expiresat",
   "heldat",
+  "oldestactionableat",
   "openedat",
   "requestedat",
   "closedat",
@@ -1280,12 +1305,22 @@ function formatTimestampMetadata(value: number) {
 }
 
 function getDisplayMetadataLabel(label: string, value: unknown) {
-  if (normalizeMetadataLabel(label) === "owner") {
+  const normalizedLabel = normalizeMetadataLabel(label);
+
+  if (normalizedLabel === "owner") {
     return "Staff";
   }
 
+  if (normalizedLabel === "oldestactionableat") {
+    return "Open since";
+  }
+
+  if (normalizedLabel === "type") {
+    return "Work type";
+  }
+
   if (
-    normalizeMetadataLabel(label) === "expiresat" &&
+    normalizedLabel === "expiresat" &&
     typeof value === "number" &&
     value < Date.now()
   ) {
@@ -2364,13 +2399,20 @@ function DailyCloseItemCard({
   const description = getItemDescription(item);
   const title = formatDailyCloseItemTitle(item.title);
   const showCollapsedDescription = shouldShowCollapsedDescription(description);
-  const metadataEntries = getMetadataEntries(
+  const rawMetadataEntries = getMetadataEntries(
     canViewFinancialDetails,
     item,
     currency,
     orgUrlSlug,
     storeUrlSlug,
   );
+  const metadataEntries = isLogicalOperationalWorkItem(item)
+    ? rawMetadataEntries.filter((entry) =>
+        ["priority", "opensince", "worktype"].includes(
+          normalizeMetadataLabel(entry.label),
+        ),
+      )
+    : rawMetadataEntries;
   const showMetadataDetails = !isOperationalWorkItem(item);
   const collapsedMetadataEntries = showMetadataDetails
     ? getCollapsedMetadataEntries(metadataEntries)

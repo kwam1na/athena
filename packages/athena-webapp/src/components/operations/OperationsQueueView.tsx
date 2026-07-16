@@ -17,6 +17,7 @@ import {
   PackageCheck,
   PackageSearch,
   ReceiptText,
+  RefreshCw,
   Scissors,
   ShoppingCart,
   type LucideIcon,
@@ -1426,27 +1427,33 @@ function SyncedSaleInventoryReviewGroupCard({
   return (
     <OperationReviewItemCard
       actionSlot={
-        <div className="flex flex-wrap items-center gap-layout-sm">
-          <QueueWorkItemActionSlot
-            item={representative}
-            orgUrlSlug={orgUrlSlug}
-            stockAdjustmentSkuId={productSkuId}
-            storeUrlSlug={storeUrlSlug}
-          />
+        <QueueWorkItemActionSlot
+          item={representative}
+          orgUrlSlug={orgUrlSlug}
+          stockAdjustmentSkuId={productSkuId}
+          storeUrlSlug={storeUrlSlug}
+        />
+      }
+      badgeSlot={
+        <>
           {conflictMessage && onRefresh ? (
-            <Button onClick={onRefresh} size="sm" type="button" variant="utility">
+            <Button
+              onClick={onRefresh}
+              size="sm"
+              type="button"
+              variant="utility"
+            >
+              <RefreshCw aria-hidden="true" />
               Refresh
             </Button>
           ) : null}
-        </div>
-      }
-      badgeSlot={
-        <Badge
-          className="border-border bg-surface text-muted-foreground shadow-sm"
-          variant="outline"
-        >
-          {highestPriority}
-        </Badge>
+          <Badge
+            className="border-border bg-surface text-muted-foreground shadow-sm"
+            variant="outline"
+          >
+            {highestPriority}
+          </Badge>
+        </>
       }
       className={contextPresentation.cardClassName}
       collapsedMetadataEntries={collapsedMetadataEntries}
@@ -1517,6 +1524,7 @@ function SyncedSaleInventoryReviewGroupCard({
         ) : null
       }
       itemId={`synced-sale-inventory-${productSkuId ?? representative._id}`}
+      stackDescription={Boolean(conflictMessage)}
       title={
         <>
           Review inventory for{" "}
@@ -2113,6 +2121,9 @@ export function OperationsQueueViewContent({
   const openWorkEmptyTitle = selectedOpenWorkType
     ? `No open ${getSentenceCaseWorkTypeLabel(selectedOpenWorkType)} work items`
     : "No open work items";
+  const openWorkEmptyDescription = selectedOpenWorkType
+    ? "There are no open items for this work type."
+    : "New service intakes and approval-driven stock reviews will appear here";
 
   useEffect(() => {
     setOpenWorkPage(requestedOpenWorkPage);
@@ -2219,9 +2230,18 @@ export function OperationsQueueViewContent({
                     {openWorkEmptyTitle}
                   </p>
                   <p className="mt-layout-sm text-sm leading-6 text-muted-foreground">
-                    New service intakes and approval-driven stock reviews will
-                    appear here
+                    {openWorkEmptyDescription}
                   </p>
+                  {selectedOpenWorkType ? (
+                    <Button
+                      className="mt-layout-md transition-[color,background-color,border-color,transform] duration-150 active:scale-[0.98]"
+                      onClick={() => handleOpenWorkTypeChange(undefined)}
+                      type="button"
+                      variant="utility"
+                    >
+                      View all work types
+                    </Button>
+                  ) : null}
                 </div>
               </div>
             ) : (

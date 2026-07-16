@@ -333,11 +333,16 @@ describe("OperationsQueueViewContent", () => {
     ).toBeInTheDocument();
   });
 
-  it("shows a truthful selected work type empty state while other work remains", () => {
+  it("offers a path back to all work types from a filtered empty state", async () => {
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+    const onOpenWorkSearchChange = vi.fn();
+
     render(
       <OperationsQueueViewContent
         {...baseProps}
         activeWorkflow="queue"
+        onOpenWorkSearchChange={onOpenWorkSearchChange}
         openWorkSearch={{ workType: "catalog_setup" }}
         workItemSummary={{
           byType: [
@@ -358,6 +363,18 @@ describe("OperationsQueueViewContent", () => {
       screen.getByText("No open catalog setup work items"),
     ).toBeInTheDocument();
     expect(screen.queryByText("No open work items")).not.toBeInTheDocument();
+    expect(
+      screen.getByText("There are no open items for this work type."),
+    ).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: "View all work types" }),
+    );
+
+    expect(onOpenWorkSearchChange).toHaveBeenCalledWith({
+      page: undefined,
+      workType: undefined,
+    });
   });
 
   it("uses the open work count in the loaded route header", () => {
@@ -1638,12 +1655,29 @@ describe("OperationsQueueViewContent", () => {
 
     await waitFor(() => expect(resolveGroup).toHaveBeenCalledTimes(1));
 
-    expect(
-      await screen.findByText(
-        "This work changed. Review the refreshed group before marking it reviewed.",
-      ),
-    ).toBeInTheDocument();
+    const conflictNotice = await screen.findByText(
+      "This work changed. Review the refreshed group before marking it reviewed.",
+    );
+    const inventoryReviewTitle = screen.getByRole("link", {
+      name: "Adore Dye",
+    }).parentElement;
+
+    expect(conflictNotice).toBeInTheDocument();
+    expect(conflictNotice.parentElement).toBe(
+      inventoryReviewTitle?.parentElement,
+    );
+    expect(conflictNotice.parentElement).toHaveClass("flex-col");
     expect(screen.getByRole("button", { name: "Mark reviewed" })).toBeDisabled();
+
+    const refreshButton = screen.getByRole("button", { name: "Refresh" });
+    const urgencyBadge = screen.getByText("High");
+
+    expect(refreshButton.parentElement).toBe(urgencyBadge.parentElement);
+    expect(refreshButton.querySelector("svg.lucide-refresh-cw")).toBeInTheDocument();
+    expect(
+      refreshButton.compareDocumentPosition(urgencyBadge) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
 
     currentQueue = makeQueueSnapshot(["work-item-1", "work-item-2"]);
     view.rerender(

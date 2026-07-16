@@ -24,6 +24,7 @@ type OperationReviewItemCardProps = {
   metadataEntries?: OperationReviewMetadataEntry[];
   selectionSlot?: ReactNode;
   showCollapsedDescription?: boolean;
+  stackDescription?: boolean;
   title: ReactNode;
 };
 
@@ -42,6 +43,7 @@ export function OperationReviewItemCard({
   metadataEntries = [],
   selectionSlot,
   showCollapsedDescription = true,
+  stackDescription = false,
   title,
 }: OperationReviewItemCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -91,7 +93,14 @@ export function OperationReviewItemCard({
                 {contextLabel}
               </p>
             </div>
-            <div className="flex flex-wrap items-baseline gap-x-layout-md gap-y-layout-xs">
+            <div
+              className={cn(
+                "flex gap-y-layout-xs",
+                stackDescription
+                  ? "flex-col items-start"
+                  : "flex-wrap items-baseline gap-x-layout-md",
+              )}
+            >
               <p className="font-medium leading-6 text-foreground">{title}</p>
               {description && showCollapsedDescription ? (
                 <p className="text-sm leading-6 text-muted-foreground">
