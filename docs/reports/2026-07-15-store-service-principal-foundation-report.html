@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="da96955c6d7b79ca5411a461b3207eb39b9c67873145b561169f918b5189748e" data-athena-report-base="70b64a7a3f2b4be6ffc73156dde7b36d27cd7c66" data-athena-report-head="7ccc968a4b30061c6e7b42c708f61a3bcc72fb13">
+<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="058a2f944c7f73cdc92138720e79a57a2b1146de2b57c592d3984d9bf1c1e437" data-athena-report-base="70b64a7a3f2b4be6ffc73156dde7b36d27cd7c66" data-athena-report-head="8e6a47fca442ec481a21ae6ff22673a00d2764af">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -80,7 +80,7 @@
       <header>
         <h1>Store service principals: identity without implicit authority</h1>
         <p class="lede">A delivery-candidate guide to Athena&#x27;s consumer-neutral machine identity foundation and its first POS implementation.</p>
-        <div class="meta"><span class="pill">Delivery candidate</span><span class="pill">Branch: codex/v26-1071-1079-store-service-principals</span><span class="pill">Candidate source head: 7ccc968a</span><span class="pill">Base: 70b64a7a</span><span class="pill">Linear: V26-1071 through V26-1079</span><span class="pill">PR and merge pending</span><span class="pill">Root alignment pending</span><span class="pill">No production deploy</span></div>
+        <div class="meta"><span class="pill">Delivery candidate</span><span class="pill">Branch: codex/v26-1071-1079-store-service-principals</span><span class="pill">Candidate source head: 8e6a47fc</span><span class="pill">Base: 70b64a7a</span><span class="pill">Linear: V26-1071 through V26-1079</span><span class="pill">PR and merge pending</span><span class="pill">Root alignment pending</span><span class="pill">No production deploy</span></div>
       </header>
       <section class="panel"><h2>Executive summary</h2>
 <p>Athena&#x27;s POS application authentication was anchored to one shared, human-shaped account even though recovery credentials and terminals were store-scoped. This candidate introduces the replacement architecture and application path through first-class store service principals: durable non-human identities that begin with no authority. Store migration and legacy retirement remain gated future operations.</p>
@@ -164,9 +164,10 @@ Staff, manager, drawer, register, and command authority remain additional gates.
 <li>Package TypeScript typecheck passed.</li>
 <li>Changed Convex lint, pagination sensor, and return-validator contract passed.</li>
 <li>git diff --check and the durable-learning fingerprint gate passed.</li>
-<li>Graphify rebuilt to 10,814 nodes, 13,249 edges, and 2,580 communities.</li>
+<li>Graphify rebuilt to 10,835 nodes, 13,275 edges, and 2,584 communities.</li>
 <li>Focused tests cover lifecycle/catalog/actor rules, exact-session handoff, current-state authority, terminal reconnect, recovery hardening, offline receipts, sync cursors, migration conflicts, route behavior, and admin/login UI.</li>
 <li>The merge gate identified and the candidate corrected one query-to-write-capable repository reachability issue by splitting Remote Assist read access into a QueryCtx-safe repository; focused tests, return-validator proof, changed Convex lint, and inferential review pass on the correction.</li>
+<li>The first multi-lens review identified and the candidate corrected four lifecycle boundaries: exact migration-recovery evidence, transactional persistence of denied-attempt counters and audit, browser handoff serialization and reload recovery, and complete non-starving cleanup of aborted Auth artifacts.</li>
 <li>Final multi-lens design/security/data, framework/Auth/Convex feasibility, and adversarial scope/local-first review is pending on the exact final commit.</li>
 </ul>
 </section>
@@ -222,7 +223,7 @@ Staff, manager, drawer, register, and command authority remain additional gates.
 <section class="panel">
   <h2>Subagent Evidence</h2>
   <ul><li><strong>report_context:</strong> Traced the shared-account problem, approved architectural decisions, delivery constraints, terminal-revocation experience, and explicit rollout hard stops from the requirements, plan, runbook, and branch state.</li>
-<li><strong>report_diff:</strong> Mapped the 155-file candidate into the generic foundation, POS adapter, recovery, current-state enforcement, offline continuity, migration controls, operator surfaces, validation evidence, and honest limits.</li>
+<li><strong>report_diff:</strong> Mapped the 163-file candidate into the generic foundation, POS adapter, recovery, current-state enforcement, offline continuity, migration controls, operator surfaces, validation evidence, and honest limits.</li>
 <li><strong>report_quiz:</strong> Derived the comprehension test, then adversarially reviewed this draft for missing comparisons, unsupported completion claims, operational guidance, quiz coverage, and accessibility.</li></ul>
 </section>
 
