@@ -27,7 +27,7 @@ tags:
   - session-revocation
   - local-first
   - convex
-delivery_diff_fingerprint: 468417555b369f4699e1a711bc25b9b922d7584eeb5d8fba6f71f10144d8ef6f
+delivery_diff_fingerprint: ef2bf98afc4e5599deab6af99d3e56fbedf57e8a67d0c6392c6e0a2860e52c45
 ---
 
 # Athena store service principals separate identity from granted authority
@@ -209,4 +209,3 @@ neutral transport users, no enforced fallback, and closed retirement gates.
   `docs/solutions/architecture-patterns/shared-demo-principal-policy-and-restore-boundary-2026-07-12.md`
   while giving durable store service principals independent lifecycle,
   transport, session, and consumer adapters.
-

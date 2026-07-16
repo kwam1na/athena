@@ -59,6 +59,7 @@ import { getLatestRuntimeStatusForTerminal } from "../infrastructure/repositorie
 import {
   disconnectRemoteAssistRuntimeSession,
 } from "../../remoteAssist/application/sessionService";
+import { createRemoteAssistReadRepository } from "../../remoteAssist/infrastructure/remoteAssistReadRepository";
 import { createRemoteAssistRepository } from "../../remoteAssist/infrastructure/remoteAssistRepository";
 import {
   posTerminalRecoveryCommandPayloadValidator,
@@ -1299,7 +1300,7 @@ export const getRuntimeRemoteAssistSession = query({
     if (!store) {
       return null;
     }
-    const remoteAssistRepository = createRemoteAssistRepository(ctx);
+    const remoteAssistRepository = createRemoteAssistReadRepository(ctx);
     const client = await remoteAssistRepository.getClientByRuntime({
       organizationId: store.organizationId,
       runtimeIdentity: args.terminalId,

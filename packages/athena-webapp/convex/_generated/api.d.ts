@@ -307,6 +307,7 @@ import type * as remoteAssist_application_policy from "../remoteAssist/applicati
 import type * as remoteAssist_application_posRuntimeAdapter from "../remoteAssist/application/posRuntimeAdapter.js";
 import type * as remoteAssist_application_sessionService from "../remoteAssist/application/sessionService.js";
 import type * as remoteAssist_application_types from "../remoteAssist/application/types.js";
+import type * as remoteAssist_infrastructure_remoteAssistReadRepository from "../remoteAssist/infrastructure/remoteAssistReadRepository.js";
 import type * as remoteAssist_infrastructure_remoteAssistRepository from "../remoteAssist/infrastructure/remoteAssistRepository.js";
 import type * as remoteAssist_infrastructure_transport_LiveKitRemoteAssistTransportProvider from "../remoteAssist/infrastructure/transport/LiveKitRemoteAssistTransportProvider.js";
 import type * as remoteAssist_infrastructure_transport_RemoteAssistTransportProvider from "../remoteAssist/infrastructure/transport/RemoteAssistTransportProvider.js";
@@ -904,6 +905,7 @@ declare const fullApi: ApiFromModules<{
   "remoteAssist/application/posRuntimeAdapter": typeof remoteAssist_application_posRuntimeAdapter;
   "remoteAssist/application/sessionService": typeof remoteAssist_application_sessionService;
   "remoteAssist/application/types": typeof remoteAssist_application_types;
+  "remoteAssist/infrastructure/remoteAssistReadRepository": typeof remoteAssist_infrastructure_remoteAssistReadRepository;
   "remoteAssist/infrastructure/remoteAssistRepository": typeof remoteAssist_infrastructure_remoteAssistRepository;
   "remoteAssist/infrastructure/transport/LiveKitRemoteAssistTransportProvider": typeof remoteAssist_infrastructure_transport_LiveKitRemoteAssistTransportProvider;
   "remoteAssist/infrastructure/transport/RemoteAssistTransportProvider": typeof remoteAssist_infrastructure_transport_RemoteAssistTransportProvider;

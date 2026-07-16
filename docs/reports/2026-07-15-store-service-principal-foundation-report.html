@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="468417555b369f4699e1a711bc25b9b922d7584eeb5d8fba6f71f10144d8ef6f" data-athena-report-base="70b64a7a3f2b4be6ffc73156dde7b36d27cd7c66" data-athena-report-head="f745e81a8eb8a90b4b6ddb53869a57c38d8ac8e8">
+<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="ef2bf98afc4e5599deab6af99d3e56fbedf57e8a67d0c6392c6e0a2860e52c45" data-athena-report-base="70b64a7a3f2b4be6ffc73156dde7b36d27cd7c66" data-athena-report-head="f745e81a8eb8a90b4b6ddb53869a57c38d8ac8e8">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -166,6 +166,7 @@ Staff, manager, drawer, register, and command authority remain additional gates.
 <li>git diff --check and the durable-learning fingerprint gate passed.</li>
 <li>Graphify rebuilt to 10,814 nodes, 13,249 edges, and 2,580 communities.</li>
 <li>Focused tests cover lifecycle/catalog/actor rules, exact-session handoff, current-state authority, terminal reconnect, recovery hardening, offline receipts, sync cursors, migration conflicts, route behavior, and admin/login UI.</li>
+<li>The merge gate identified and the candidate corrected one query-to-write-capable repository reachability issue by splitting Remote Assist read access into a QueryCtx-safe repository; focused tests, return-validator proof, changed Convex lint, and inferential review pass on the correction.</li>
 <li>Final multi-lens design/security/data, framework/Auth/Convex feasibility, and adversarial scope/local-first review is pending on the exact final commit.</li>
 </ul>
 </section>
@@ -206,6 +207,7 @@ Staff, manager, drawer, register, and command authority remain additional gates.
     <tbody><tr><td><code>packages/athena-webapp/convex/servicePrincipals/</code></td><td>Consumer-neutral principal lifecycle, closed capability catalog, exact sessions, and discriminated actor resolution.</td></tr>
 <tr><td><code>packages/athena-webapp/convex/pos/application/posApplicationAuthority.ts</code></td><td>Reloads and clamps every current POS application-authority lane.</td></tr>
 <tr><td><code>packages/athena-webapp/convex/pos/application/posApplicationBoundaryInventory.ts</code></td><td>Source-derived enforcement inventory that rejects unclassified callable boundaries.</td></tr>
+<tr><td><code>packages/athena-webapp/convex/remoteAssist/infrastructure/remoteAssistReadRepository.ts</code></td><td>QueryCtx-safe read boundary that prevents POS and support queries from reaching mutation-only persistence APIs.</td></tr>
 <tr><td><code>packages/athena-webapp/convex/pos/public/terminalAppSessions.ts</code></td><td>Prepared exchange, exact-session activation, idempotency, abort, and bounded cleanup.</td></tr>
 <tr><td><code>packages/athena-webapp/src/lib/auth/authRuntimeHandoff.ts</code></td><td>Two-phase isolated browser Auth namespace promotion and predecessor preservation.</td></tr>
 <tr><td><code>packages/athena-webapp/convex/pos/application/terminalLifecycle.ts</code></td><td>Terminal-scoped disconnect and proof-gated same-row administrator reconnect.</td></tr>

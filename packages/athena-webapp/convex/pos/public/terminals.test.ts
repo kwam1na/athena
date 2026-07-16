@@ -32,6 +32,7 @@ const mocks = vi.hoisted(() => ({
   requireSharedDemoStoreCapabilityIfApplicable: vi.fn(),
   requireSharedDemoStoreReadIfApplicable: vi.fn(),
   resolveTerminalCloudRepairCommand: vi.fn(),
+  createRemoteAssistReadRepository: vi.fn(),
   createRemoteAssistRepository: vi.fn(),
   remoteAssistGetClientByRuntime: vi.fn(),
   remoteAssistGetCurrentSessionForClient: vi.fn(),
@@ -137,6 +138,10 @@ vi.mock("../infrastructure/repositories/terminalRepository", () => ({
 
 vi.mock("../../remoteAssist/infrastructure/remoteAssistRepository", () => ({
   createRemoteAssistRepository: mocks.createRemoteAssistRepository,
+}));
+
+vi.mock("../../remoteAssist/infrastructure/remoteAssistReadRepository", () => ({
+  createRemoteAssistReadRepository: mocks.createRemoteAssistReadRepository,
 }));
 
 import { assertConformsToExportedReturns } from "../../lib/returnValidatorContract";
@@ -585,6 +590,11 @@ describe("POS terminal public mutations", () => {
       insertEvent: mocks.remoteAssistInsertEvent,
       patchSession: mocks.remoteAssistPatchSession,
       upsertClient: mocks.remoteAssistUpsertClient,
+    });
+    mocks.createRemoteAssistReadRepository.mockReturnValue({
+      getClientByRuntime: mocks.remoteAssistGetClientByRuntime,
+      getCurrentSessionForClient: mocks.remoteAssistGetCurrentSessionForClient,
+      getSession: mocks.remoteAssistGetSession,
     });
     mocks.remoteAssistUpsertClient.mockResolvedValue(buildRemoteAssistClient());
     mocks.remoteAssistGetClientByRuntime.mockResolvedValue(
