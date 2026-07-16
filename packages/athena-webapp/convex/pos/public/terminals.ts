@@ -2,18 +2,19 @@ import { v } from "convex/values";
 
 import { mutation, query, type MutationCtx, type QueryCtx } from "../../_generated/server";
 import type { Id } from "../../_generated/dataModel";
+import { recordOperationalEventWithCtx } from "../../operations/operationalEvents";
 import { commandResultValidator } from "../../lib/commandResultValidators";
 import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../../lib/athenaUserAuth";
 import { requireStoreMemberAccessWithCtx } from "../../lib/storeMemberAccess";
+import { getServicePrincipalActorWithCtx } from "../../servicePrincipals/actor";
 import { ok, userError } from "../../../shared/commandResult";
 import {
   acknowledgeRegisterLifecycleAuthority as acknowledgeRegisterLifecycleAuthorityService,
 } from "../application/commands/registerLifecycleAuthority";
 import {
-  deleteTerminal as deleteTerminalCommand,
   registerTerminal as registerTerminalCommand,
   submitTerminalRuntimeStatus as submitTerminalRuntimeStatusCommand,
   updateTerminal as updateTerminalCommand,
@@ -33,6 +34,14 @@ import {
   isValidRegisterLifecycleAuthorityCandidates,
 } from "../application/queries/registerLifecycleAuthority";
 import { hashPosTerminalSyncSecret } from "../application/sync/terminalSyncSecret";
+import {
+  disconnectPosTerminal,
+  findActiveTerminalFingerprintConflict,
+  reactivatePosTerminal,
+  reassignPosTerminal,
+  resolvePosTerminalReconnectIntent,
+  rotatePosTerminalProof,
+} from "../application/terminalLifecycle";
 import { resolveTerminalCloudRepair as resolveTerminalCloudRepairCommand } from "../application/terminalRecovery/resolveTerminalCloudRepair";
 import {
   acknowledgeTerminalRecoveryCommand as acknowledgeTerminalRecoveryCommandService,
@@ -50,6 +59,7 @@ import { getLatestRuntimeStatusForTerminal } from "../infrastructure/repositorie
 import {
   disconnectRemoteAssistRuntimeSession,
 } from "../../remoteAssist/application/sessionService";
+import { createRemoteAssistReadRepository } from "../../remoteAssist/infrastructure/remoteAssistReadRepository";
 import { createRemoteAssistRepository } from "../../remoteAssist/infrastructure/remoteAssistRepository";
 import {
   posTerminalRecoveryCommandPayloadValidator,
@@ -120,6 +130,17 @@ const terminalReturnValidator = v.object({
   registeredByUserId: v.id("athenaUser"),
   browserInfo: browserInfoValidator,
   registeredAt: v.number(),
+  organizationId: v.optional(v.id("organization")),
+  lifecycleRevision: v.optional(v.number()),
+  proofRevision: v.optional(v.number()),
+  disconnectedAt: v.optional(v.number()),
+  disconnectedByUserId: v.optional(v.id("athenaUser")),
+  reactivatedAt: v.optional(v.number()),
+  reactivatedByUserId: v.optional(v.id("athenaUser")),
+  proofRotatedAt: v.optional(v.number()),
+  lastServicePrincipalRecoveryAt: v.optional(v.number()),
+  servicePrincipalRecoveryVersion: v.optional(v.number()),
+  lastCorrelationId: v.optional(v.string()),
   status: statusValidator,
 });
 
@@ -137,6 +158,17 @@ const terminalProvisioningReturnValidator = v.object({
   registeredByUserId: v.id("athenaUser"),
   browserInfo: browserInfoValidator,
   registeredAt: v.number(),
+  organizationId: v.optional(v.id("organization")),
+  lifecycleRevision: v.optional(v.number()),
+  proofRevision: v.optional(v.number()),
+  disconnectedAt: v.optional(v.number()),
+  disconnectedByUserId: v.optional(v.id("athenaUser")),
+  reactivatedAt: v.optional(v.number()),
+  reactivatedByUserId: v.optional(v.id("athenaUser")),
+  proofRotatedAt: v.optional(v.number()),
+  lastServicePrincipalRecoveryAt: v.optional(v.number()),
+  servicePrincipalRecoveryVersion: v.optional(v.number()),
+  lastCorrelationId: v.optional(v.string()),
   status: statusValidator,
 });
 
@@ -896,6 +928,9 @@ async function requireTerminalStoreAccess(
     userId: Id<"athenaUser">;
   },
 ) {
+  if (await getServicePrincipalActorWithCtx(ctx)) {
+    throw new Error(args.failureMessage);
+  }
   const store = await ctx.db.get("store", args.storeId);
   if (!store) {
     throw new Error("Store not found.");
@@ -907,6 +942,16 @@ async function requireTerminalStoreAccess(
     organizationId: store.organizationId,
     userId: args.userId,
   });
+}
+
+async function requireHumanTerminalStoreMemberAccess(
+  ctx: Pick<QueryCtx, "auth" | "db"> | Pick<MutationCtx, "auth" | "db">,
+  args: Parameters<typeof requireStoreMemberAccessWithCtx>[1],
+) {
+  if (await getServicePrincipalActorWithCtx(ctx)) {
+    throw new Error(args.failureMessage);
+  }
+  return requireStoreMemberAccessWithCtx(ctx, args);
 }
 
 async function requireActiveTerminalSyncSecret(
@@ -939,7 +984,7 @@ export const listTerminals = query({
   },
   returns: v.array(terminalReturnValidator),
   handler: async (ctx, args) => {
-    await requireStoreMemberAccessWithCtx(ctx, {
+    await requireHumanTerminalStoreMemberAccess(ctx, {
       allowedRoles: ["full_admin", "pos_only"],
       demoAccess: { kind: "read" },
       failureMessage: "You do not have access to view POS terminals.",
@@ -957,7 +1002,7 @@ export const getTerminalByFingerprint = query({
   },
   returns: v.union(terminalReturnValidator, v.null()),
   handler: async (ctx, args) => {
-    await requireStoreMemberAccessWithCtx(ctx, {
+    await requireHumanTerminalStoreMemberAccess(ctx, {
       allowedRoles: ["full_admin", "pos_only"],
       demoAccess: { kind: "read" },
       failureMessage: "You do not have access to view POS terminals.",
@@ -974,7 +1019,7 @@ export const listTerminalHealthSummaries = query({
   },
   returns: v.array(terminalHealthSummaryReturnValidator),
   handler: async (ctx, args) => {
-    await requireStoreMemberAccessWithCtx(ctx, {
+    await requireHumanTerminalStoreMemberAccess(ctx, {
       allowedRoles: ["full_admin", "pos_only"],
       demoAccess: { kind: "read" },
       failureMessage: "You do not have access to view POS terminal health.",
@@ -991,7 +1036,7 @@ export const getTerminalHealthSummary = query({
   },
   returns: v.union(terminalHealthSummaryReturnValidator, v.null()),
   handler: async (ctx, args) => {
-    await requireStoreMemberAccessWithCtx(ctx, {
+    await requireHumanTerminalStoreMemberAccess(ctx, {
       allowedRoles: ["full_admin", "pos_only"],
       demoAccess: { kind: "read" },
       failureMessage: "You do not have access to view POS terminal health.",
@@ -1255,7 +1300,7 @@ export const getRuntimeRemoteAssistSession = query({
     if (!store) {
       return null;
     }
-    const remoteAssistRepository = createRemoteAssistRepository(ctx);
+    const remoteAssistRepository = createRemoteAssistReadRepository(ctx);
     const client = await remoteAssistRepository.getClientByRuntime({
       organizationId: store.organizationId,
       runtimeIdentity: args.terminalId,
@@ -1335,18 +1380,39 @@ export const registerTerminal = mutation({
   returns: commandResultValidator(terminalProvisioningReturnValidator),
   handler: async (ctx, args) => {
     try {
-      const { athenaUser, demoActor } = await requireStoreMemberAccessWithCtx(ctx, {
-        allowedRoles: ["full_admin", "pos_only"],
-        demoAccess: {
-          capability: "daily_operations.write",
-          kind: "capability",
+      const { athenaUser, store } = await requireHumanTerminalStoreMemberAccess(
+        ctx,
+        {
+          allowedRoles: ["full_admin"],
+          demoAccess: {
+            capability: "pos.terminal.manage",
+            kind: "capability",
+          },
+          failureMessage:
+            "You do not have access to register this POS terminal.",
+          storeId: args.storeId,
         },
-        failureMessage: "You do not have access to register this POS terminal.",
-        storeId: args.storeId,
+      );
+      const conflict = await findActiveTerminalFingerprintConflict(ctx, {
+        fingerprintHash: args.fingerprintHash,
+        targetStoreId: args.storeId,
       });
+      if (conflict) {
+        return userError({
+          code: "validation_failed",
+          message:
+            conflict.storeId === args.storeId
+              ? "This browser is already enrolled as a checkout station."
+              : "This browser is enrolled for another store and must be explicitly reassigned.",
+        });
+      }
+      const now = Date.now();
       const result = await registerTerminalCommand(ctx, {
         ...args,
-        allowRegisterNumberChange: Boolean(demoActor),
+        allowRegisterNumberChange: false,
+        correlationId: `terminal-enrollment:${args.fingerprintHash}:${now}`,
+        now,
+        organizationId: store.organizationId,
         syncSecretHash: await hashPosTerminalSyncSecret(args.syncSecretHash),
         registeredByUserId: athenaUser._id,
       });
@@ -1368,6 +1434,261 @@ export const registerTerminal = mutation({
   },
 });
 
+export const rotateTerminalProof = mutation({
+  args: {
+    currentSyncSecretHash: v.string(),
+    fingerprintHash: v.string(),
+    nextSyncSecretHash: v.string(),
+    storeId: v.id("store"),
+    terminalId: v.id("posTerminal"),
+  },
+  returns: commandResultValidator(terminalProvisioningReturnValidator),
+  handler: async (ctx, args) => {
+    try {
+      if (!args.nextSyncSecretHash.trim()) {
+        throw new Error("terminal_proof_invalid");
+      }
+      const now = Date.now();
+      await rotatePosTerminalProof(ctx, {
+        correlationId: `terminal-proof-rotation:${args.terminalId}:${now}`,
+        currentProofHash: await hashPosTerminalSyncSecret(
+          args.currentSyncSecretHash,
+        ),
+        fingerprintHash: args.fingerprintHash,
+        nextProofHash: await hashPosTerminalSyncSecret(args.nextSyncSecretHash),
+        now,
+        storeId: args.storeId,
+        terminalId: args.terminalId,
+      });
+      const terminal = await ctx.db.get("posTerminal", args.terminalId);
+      if (!terminal) throw new Error("terminal_missing");
+      return ok({ ...terminal, syncSecretHash: args.nextSyncSecretHash });
+    } catch {
+      return userError({
+        code: "authorization_failed",
+        message: "This checkout station proof could not be rotated.",
+      });
+    }
+  },
+});
+
+export const reassignTerminal = mutation({
+  args: {
+    currentSyncSecretHash: v.string(),
+    fingerprintHash: v.string(),
+    nextSyncSecretHash: v.string(),
+    sourceStoreId: v.id("store"),
+    targetStoreId: v.id("store"),
+    terminalId: v.id("posTerminal"),
+  },
+  returns: commandResultValidator(terminalProvisioningReturnValidator),
+  handler: async (ctx, args) => {
+    try {
+      const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+      const [sourceStore, targetStore] = await Promise.all([
+        ctx.db.get("store", args.sourceStoreId),
+        ctx.db.get("store", args.targetStoreId),
+      ]);
+      if (
+        !sourceStore ||
+        !targetStore ||
+        sourceStore.organizationId !== targetStore.organizationId
+      ) {
+        throw new Error("terminal_scope_invalid");
+      }
+      await requireOrganizationMemberRoleWithCtx(ctx, {
+        allowedRoles: ["full_admin"],
+        failureMessage: "You do not have access to reassign this POS terminal.",
+        organizationId: sourceStore.organizationId,
+        userId: athenaUser._id,
+      });
+      const now = Date.now();
+      await reassignPosTerminal(ctx, {
+        correlationId: `terminal-reassignment:${args.terminalId}:${now}`,
+        currentProofHash: await hashPosTerminalSyncSecret(
+          args.currentSyncSecretHash,
+        ),
+        fingerprintHash: args.fingerprintHash,
+        nextProofHash: await hashPosTerminalSyncSecret(args.nextSyncSecretHash),
+        now,
+        organizationId: targetStore.organizationId,
+        reassignedByUserId: athenaUser._id,
+        sourceStoreId: args.sourceStoreId,
+        targetStoreId: args.targetStoreId,
+        terminalId: args.terminalId,
+      });
+      const terminal = await ctx.db.get("posTerminal", args.terminalId);
+      if (!terminal) throw new Error("terminal_missing");
+      return ok({ ...terminal, syncSecretHash: args.nextSyncSecretHash });
+    } catch {
+      return userError({
+        code: "authorization_failed",
+        message: "You do not have access to reassign this POS terminal.",
+      });
+    }
+  },
+});
+
+export const reactivateTerminal = mutation({
+  args: {
+    fingerprintHash: v.string(),
+    nextSyncSecretHash: v.string(),
+    reconnectIntentToken: v.string(),
+    storeId: v.id("store"),
+    terminalId: v.id("posTerminal"),
+  },
+  returns: commandResultValidator(terminalProvisioningReturnValidator),
+  handler: async (ctx, args) => {
+    try {
+      const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+      await requireTerminalStoreAccess(ctx, {
+        allowedRoles: ["full_admin"],
+        failureMessage: "You do not have access to reactivate this POS terminal.",
+        storeId: args.storeId,
+        userId: athenaUser._id,
+      });
+      const now = Date.now();
+      await reactivatePosTerminal(ctx, {
+        browserFingerprintHash: args.fingerprintHash,
+        correlationId: `terminal-reactivation:${args.terminalId}:${now}`,
+        intentTokenHash: await hashPosTerminalSyncSecret(
+          args.reconnectIntentToken,
+        ),
+        nextProofHash: await hashPosTerminalSyncSecret(args.nextSyncSecretHash),
+        now,
+        reactivatedByUserId: athenaUser._id,
+        storeId: args.storeId,
+        terminalId: args.terminalId,
+      });
+      const terminal = await ctx.db.get("posTerminal", args.terminalId);
+      if (!terminal) throw new Error("terminal_missing");
+      return ok({ ...terminal, syncSecretHash: args.nextSyncSecretHash });
+    } catch {
+      return userError({
+        code: "authorization_failed",
+        message: "You do not have access to reactivate this POS terminal.",
+      });
+    }
+  },
+});
+
+const terminalReconnectIntentResolutionValidator = v.object({
+  disposition: v.literal("ready"),
+  displayName: v.string(),
+  expiresAt: v.number(),
+  storeId: v.id("store"),
+  terminalId: v.id("posTerminal"),
+});
+
+async function requireHumanAdminReconnectIntent(
+  ctx: QueryCtx | MutationCtx,
+  args: {
+    browserFingerprintHash: string;
+    reconnectIntentToken: string;
+  },
+) {
+  if (await getServicePrincipalActorWithCtx(ctx)) {
+    throw new Error("service_principal_not_human_administrator");
+  }
+  const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+  const browserFingerprintHash = args.browserFingerprintHash.trim();
+  const reconnectIntentToken = args.reconnectIntentToken.trim();
+  if (!browserFingerprintHash || !reconnectIntentToken) {
+    throw new Error("reconnect_intent_invalid");
+  }
+  const resolution = await resolvePosTerminalReconnectIntent(ctx as never, {
+    browserFingerprintHash,
+    intentTokenHash: await hashPosTerminalSyncSecret(reconnectIntentToken),
+    now: Date.now(),
+  });
+  await requireOrganizationMemberRoleWithCtx(ctx, {
+    allowedRoles: ["full_admin"],
+    failureMessage: "You do not have access to reconnect this POS terminal.",
+    organizationId: resolution.intent.organizationId,
+    userId: athenaUser._id,
+  });
+  return { athenaUser, ...resolution };
+}
+
+export const getTerminalReconnectIntentResolution = query({
+  args: {
+    browserFingerprintHash: v.string(),
+    reconnectIntentToken: v.string(),
+  },
+  returns: terminalReconnectIntentResolutionValidator,
+  handler: async (ctx, args) => {
+    try {
+      const { intent, terminal } = await requireHumanAdminReconnectIntent(
+        ctx,
+        args,
+      );
+      return {
+        disposition: "ready" as const,
+        displayName: terminal.displayName,
+        expiresAt: intent.expiresAt,
+        storeId: intent.storeId,
+        terminalId: intent.terminalId,
+      };
+    } catch {
+      throw new Error("This checkout station reconnect request is unavailable.");
+    }
+  },
+});
+
+export const reactivateTerminalFromReconnectIntent = mutation({
+  args: {
+    browserFingerprintHash: v.string(),
+    nextSyncSecretHash: v.string(),
+    reconnectIntentToken: v.string(),
+  },
+  returns: commandResultValidator(terminalProvisioningReturnValidator),
+  handler: async (ctx, args) => {
+    try {
+      if (!args.nextSyncSecretHash.trim()) {
+        throw new Error("terminal_proof_invalid");
+      }
+      const now = Date.now();
+      const { athenaUser, intent } = await requireHumanAdminReconnectIntent(
+        ctx,
+        args,
+      );
+      await reactivatePosTerminal(ctx, {
+        browserFingerprintHash: args.browserFingerprintHash.trim(),
+        correlationId: `terminal-reactivation:${intent.terminalId}:${now}`,
+        intentTokenHash: await hashPosTerminalSyncSecret(
+          args.reconnectIntentToken.trim(),
+        ),
+        nextProofHash: await hashPosTerminalSyncSecret(args.nextSyncSecretHash),
+        now,
+        reactivatedByUserId: athenaUser._id,
+        storeId: intent.storeId,
+        terminalId: intent.terminalId,
+      });
+      const terminal = await ctx.db.get("posTerminal", intent.terminalId);
+      if (!terminal) throw new Error("terminal_missing");
+      await recordOperationalEventWithCtx(ctx, {
+        actorUserId: athenaUser._id,
+        eventType: "pos_terminal_reconnected",
+        reason: "administrator_reconnect_completed",
+        message: "A checkout station was reconnected by an administrator.",
+        metadata: { reconnectIntentId: intent._id },
+        metadataDedupeKeys: ["reconnectIntentId"],
+        organizationId: intent.organizationId,
+        storeId: intent.storeId,
+        subjectId: terminal._id,
+        subjectType: "posTerminal",
+        terminalId: terminal._id,
+      });
+      return ok({ ...terminal, syncSecretHash: args.nextSyncSecretHash });
+    } catch {
+      return userError({
+        code: "authorization_failed",
+        message: "This checkout station reconnect request is unavailable.",
+      });
+    }
+  },
+});
+
 export const updateTerminal = mutation({
   args: {
     terminalId: v.id("posTerminal"),
@@ -1378,6 +1699,9 @@ export const updateTerminal = mutation({
   },
   returns: terminalReturnValidator,
   handler: async (ctx, args) => {
+    if (args.status !== undefined) {
+      throw new Error("Use the terminal lifecycle controls to change status.");
+    }
     const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
     const terminal = await ctx.db.get("posTerminal", args.terminalId);
     if (!terminal) {
@@ -1413,9 +1737,18 @@ export const deleteTerminal = mutation({
       storeId: terminal.storeId,
       userId: athenaUser._id,
     });
-    return deleteTerminalCommand(ctx, args);
+    await disconnectPosTerminal(ctx, {
+      correlationId: `terminal-disconnect:${args.terminalId}:${Date.now()}`,
+      disconnectedByUserId: athenaUser._id,
+      now: Date.now(),
+      storeId: terminal.storeId,
+      terminalId: args.terminalId,
+    });
+    return null;
   },
 });
+
+export const disconnectTerminal = deleteTerminal;
 
 export const resolveTerminalCloudRepair = mutation({
   args: {

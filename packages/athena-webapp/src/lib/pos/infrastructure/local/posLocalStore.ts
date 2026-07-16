@@ -57,6 +57,7 @@ import type {
 import { canReportPosRegisterSessionLocalActivityType } from "../../../../../shared/posRegisterSessionActivityContract";
 import { reconcileRegisterLifecycleServerAuthority } from "./registerLifecycleAuthorityReconciliation";
 import { assessPosLocalLedgerRetention } from "./posLocalLedgerPolicy";
+import { isVerifiedPosOfflineAuthorityReceiptCurrent } from "@/lib/pos/security/offlineAuthorityPublicKeys";
 
 // Temporary compatibility for tests and migration utilities. Production
 // consumers import semantic contracts from the application boundary directly.
@@ -504,6 +505,31 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
     const validationMetadata = normalizeEventValidationMetadata(
       input.validationMetadata,
     );
+    const terminalSeed = await transaction.get<PosProvisionedTerminalSeed>(
+      "terminalSeed",
+      TERMINAL_SEED_KEY,
+    );
+    const offlineAuthorityReceipt =
+      terminalSeed?.offlineAuthorityReceipt &&
+      terminalSeed.storeId === input.storeId &&
+      (terminalSeed.terminalId === input.terminalId ||
+        terminalSeed.cloudTerminalId === input.terminalId) &&
+      isVerifiedPosOfflineAuthorityReceiptCurrent({
+        now: clock(),
+        receipt: terminalSeed.offlineAuthorityReceipt,
+        storeId: input.storeId,
+        terminalId: terminalSeed.cloudTerminalId,
+      })
+        ? terminalSeed.offlineAuthorityReceipt
+        : null;
+    if (
+      validationMetadata?.flags.includes("app-session-unverified") &&
+      !offlineAuthorityReceipt
+    ) {
+      throw new Error(
+        "A current verified offline authority receipt is required for local continuation.",
+      );
+    }
     const activity = getInitialActivityState(input.type);
     const event: PosLocalEventRecord = {
       localEventId: createLocalId("event"),
@@ -529,6 +555,15 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
       ...(input.staffProfileId ? { staffProfileId: input.staffProfileId } : {}),
       ...(shouldPersistStaffProofToken(input)
         ? { staffProofToken: input.staffProofToken }
+        : {}),
+      ...(offlineAuthorityReceipt
+        ? {
+            offlineAuthorityReceipt: offlineAuthorityReceipt.envelope,
+            offlineAuthorityReceiptNonce:
+              offlineAuthorityReceipt.payload.nonce,
+            offlineAuthorityReceiptVersion:
+              offlineAuthorityReceipt.payload.version,
+          }
         : {}),
       ...(validationMetadata ? { validationMetadata } : {}),
       payload: normalizeLocalEventPayload(input),
@@ -636,7 +671,10 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
               "meta",
               META_LOGICAL_RECORD_VERSION_KEY,
             );
-            if (!logicalRecordVersion) {
+            if (
+              !logicalRecordVersion ||
+              logicalRecordVersion < POS_LOCAL_LOGICAL_RECORD_VERSION
+            ) {
               await migrateLegacyLogicalRecords(transaction);
               await transaction.put(
                 "meta",
@@ -2087,7 +2125,13 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
       try {
         const value = await options.adapter.transaction(
           "readwrite",
-          ["meta", "events", "readiness", "registerCatalog"],
+          [
+            "meta",
+            "events",
+            "readiness",
+            "registerCatalog",
+            "terminalSeed",
+          ],
           async (transaction) => {
             await ensureSupportedSchema(transaction, "readwrite");
             return appendEventInTransaction(transaction, input);

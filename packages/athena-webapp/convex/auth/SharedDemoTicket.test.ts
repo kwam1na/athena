@@ -22,6 +22,22 @@ describe("SharedDemoTicket provider", () => {
     );
   });
 
+  it("can select a distinct transport user for each credentials admission", async () => {
+    const runMutation = vi.fn()
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce({ authUserId: "transport-user-one" })
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce({ authUserId: "transport-user-two" });
+    const ctx = { runMutation } as never;
+
+    await expect(
+      authorizeSharedDemoTicket({ ticket: "ticket-one" }, ctx),
+    ).resolves.toEqual({ userId: "transport-user-one" });
+    await expect(
+      authorizeSharedDemoTicket({ ticket: "ticket-two" }, ctx),
+    ).resolves.toEqual({ userId: "transport-user-two" });
+  });
+
   it.each([{}, { ticket: "" }, { ticket: "x".repeat(257) }])(
     "rejects malformed credentials without touching storage",
     async (credentials) => {

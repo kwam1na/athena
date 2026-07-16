@@ -5,7 +5,7 @@ import { assertConformsToExportedReturns } from "../lib/returnValidatorContract"
 import { calculateTax, patchConfigV2Command } from "./stores";
 
 describe("store public return contracts", () => {
-  it("preserves configuration and tax results behind demo restrictions", () => {
+  it("preserves configuration and tax results behind lifecycle restrictions", () => {
     assertConformsToExportedReturns(patchConfigV2Command, ok(null));
     assertConformsToExportedReturns(calculateTax, {
       taxAmount: 0,

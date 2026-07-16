@@ -14,8 +14,16 @@ export const operationalEventSchema = v.object({
   actorUserId: v.optional(v.id("athenaUser")),
   actorStaffProfileId: v.optional(v.id("staffProfile")),
   actorType: v.optional(
-    v.union(v.literal("human"), v.literal("automation")),
+    v.union(
+      v.literal("human"),
+      v.literal("automation"),
+      v.literal("service_principal"),
+    ),
   ),
+  actorServicePrincipalId: v.optional(v.id("servicePrincipal")),
+  actorServicePrincipalSessionId: v.optional(v.id("servicePrincipalSession")),
+  servicePrincipalId: v.optional(v.id("servicePrincipal")),
+  servicePrincipalSessionId: v.optional(v.id("servicePrincipalSession")),
   automationRunId: v.optional(v.id("automationRun")),
   automationPolicyVersion: v.optional(v.string()),
   automationDecisionReason: v.optional(v.string()),

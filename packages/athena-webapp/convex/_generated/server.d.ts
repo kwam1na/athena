@@ -28,6 +28,7 @@ type Env = {
   readonly LANDING_FUNNEL_HOURLY_LIMIT: string | undefined;
   readonly LANDING_FUNNEL_INGRESS_DISABLED: string | undefined;
   readonly MAILERSEND_API_KEY: string | undefined;
+  readonly POS_OFFLINE_AUTHORITY_KEYS_JSON: string | undefined;
   readonly WALKTHROUGH_ALLOWED_ORIGINS: string | undefined;
   readonly WALKTHROUGH_ALLOW_LOCAL_ORIGINS: string | undefined;
   readonly WALKTHROUGH_DAILY_PER_EMAIL_LIMIT: string | undefined;

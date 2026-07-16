@@ -1,8 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  getServicePrincipalActorWithCtx: vi.fn(),
+  requirePosApplicationAuthorityWithCtx: vi.fn(),
   requireAuthenticatedAthenaUserWithCtx: vi.fn(),
   requireOrganizationMemberRoleWithCtx: vi.fn(),
+}));
+
+vi.mock("../../../servicePrincipals/actor", () => ({
+  getServicePrincipalActorWithCtx: mocks.getServicePrincipalActorWithCtx,
+}));
+vi.mock("../posApplicationAuthority", () => ({
+  requirePosApplicationAuthorityWithCtx:
+    mocks.requirePosApplicationAuthorityWithCtx,
 }));
 
 vi.mock("../../../lib/athenaUserAuth", () => ({
@@ -91,6 +101,11 @@ describe("openDrawer command authorization", () => {
     mocks.requireAuthenticatedAthenaUserWithCtx.mockResolvedValue({
       _id: "athena-user-1",
     });
+    mocks.getServicePrincipalActorWithCtx.mockResolvedValue(null);
+    mocks.requirePosApplicationAuthorityWithCtx.mockResolvedValue({
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
     mocks.requireOrganizationMemberRoleWithCtx.mockResolvedValue({
       role: "pos_only",
     });
@@ -148,6 +163,66 @@ describe("openDrawer command authorization", () => {
       error: expect.objectContaining({ code: "not_found" }),
     });
     expect(mocks.requireOrganizationMemberRoleWithCtx).not.toHaveBeenCalled();
+    expect(ctx.runMutation).not.toHaveBeenCalled();
+  });
+
+  it("opens for a same-store POS service session without synthesizing a human", async () => {
+    mocks.getServicePrincipalActorWithCtx.mockResolvedValue({
+      kind: "service_principal",
+    });
+    const ctx = buildCtx();
+
+    const result = await openDrawer(ctx as never, baseArgs);
+
+    expect(mocks.requirePosApplicationAuthorityWithCtx).toHaveBeenCalledWith(
+      ctx,
+      { storeId: "store-1" },
+    );
+    expect(mocks.requireAuthenticatedAthenaUserWithCtx).not.toHaveBeenCalled();
+    expect(ctx.runMutation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        openedByStaffProfileId: "staff-1",
+        openedByUserId: undefined,
+      }),
+    );
+    expect(result.kind).toBe("ok");
+  });
+
+  it("denies cross-terminal and revoked POS service authority", async () => {
+    mocks.getServicePrincipalActorWithCtx.mockResolvedValue({
+      kind: "service_principal",
+    });
+    mocks.requirePosApplicationAuthorityWithCtx.mockResolvedValueOnce({
+      storeId: "store-1",
+      terminalId: "terminal-2",
+    });
+    const crossTerminalCtx = buildCtx();
+    await expect(
+      openDrawer(crossTerminalCtx as never, baseArgs),
+    ).rejects.toThrow("no longer authorized");
+    expect(crossTerminalCtx.runMutation).not.toHaveBeenCalled();
+
+    mocks.requirePosApplicationAuthorityWithCtx.mockRejectedValueOnce(
+      new Error("The POS application session is no longer authorized."),
+    );
+    const revokedCtx = buildCtx();
+    await expect(openDrawer(revokedCtx as never, baseArgs)).rejects.toThrow(
+      "no longer authorized",
+    );
+    expect(revokedCtx.runMutation).not.toHaveBeenCalled();
+  });
+
+  it("does not fall through a malformed service actor into human authorization", async () => {
+    mocks.getServicePrincipalActorWithCtx.mockRejectedValue(
+      new Error("The service session is no longer valid."),
+    );
+    const ctx = buildCtx();
+
+    await expect(openDrawer(ctx as never, baseArgs)).rejects.toThrow(
+      "service session",
+    );
+    expect(mocks.requireAuthenticatedAthenaUserWithCtx).not.toHaveBeenCalled();
     expect(ctx.runMutation).not.toHaveBeenCalled();
   });
 });

@@ -1,6 +1,7 @@
 export type PosOfflineReadinessDomain =
   | "app_shell"
   | "app_session"
+  | "offline_authority"
   | "terminal_seed"
   | "staff_authority"
   | "register_catalog"
@@ -23,6 +24,7 @@ export type PosOfflineReadinessSignalInput = {
 export type PosOfflineReadinessInput = {
   appSession?: PosOfflineReadinessSignalInput | null;
   appShell?: PosOfflineReadinessSignalInput | null;
+  offlineAuthorityReceipt?: PosOfflineReadinessSignalInput | null;
   availabilitySnapshot?: PosOfflineReadinessSignalInput | null;
   registerCatalog?: PosOfflineReadinessSignalInput | null;
   serviceCatalog?: PosOfflineReadinessSignalInput | null;
@@ -85,6 +87,19 @@ const DOMAIN_DEFINITIONS: Array<{
       readyDescription: "App-session continuity is verified for POS.",
     },
     getInput: (input) => input.appSession,
+  },
+  {
+    definition: {
+      domain: "offline_authority",
+      label: "Offline access",
+      missingDescription:
+        "A verified offline access receipt has not reported to this page yet.",
+      needsAttentionDescription:
+        "POS recovery is required before this checkout station can continue locally while offline.",
+      readyDescription:
+        "A verified offline access receipt is active for this checkout station.",
+    },
+    getInput: (input) => input.offlineAuthorityReceipt,
   },
   {
     definition: {
@@ -224,10 +239,10 @@ function getSignalDescription(
   status: PosOfflineReadinessSignalStatus,
 ) {
   if (
-    definition.domain === "app_session" &&
+    definition.domain === "offline_authority" &&
     status === "local_continuation"
   ) {
-    return "App session is unverified while offline. Sales can continue locally and sync later for reconciliation.";
+    return "The signed offline access window is active. Existing local sale capture can continue until it expires.";
   }
 
   if (status === "needs_attention") {
@@ -270,10 +285,10 @@ function getSummaryDescription(
 
   if (status === "ready") {
     if (hasLocalContinuation) {
-      return "This checkout station has the local POS state needed for local sale continuation while app-session validation waits for the network.";
+      return "This checkout station has a verified signed lease and the local POS state needed for local sale continuation while the network is unavailable.";
     }
 
-    return "This checkout station has the app shell, terminal setup, staff authority, catalog, and availability data needed for offline POS.";
+    return "This checkout station has verified offline authority, the app shell, terminal setup, staff authority, catalog, and availability data needed for offline POS.";
   }
 
   if (status === "needs_attention") {

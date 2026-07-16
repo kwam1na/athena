@@ -9,6 +9,7 @@ import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../../lib/athenaUserAuth";
+import { getServicePrincipalActorWithCtx } from "../../servicePrincipals/actor";
 import { ok, userError } from "../../../shared/commandResult";
 import {
   getSharedDemoActorWithCtx,
@@ -17,6 +18,7 @@ import {
 import type { SharedDemoCapability } from "../../sharedDemo/policy";
 import { requireReadySharedDemoWriteWithCtx } from "../../sharedDemo/restore";
 import { ingestLocalEventsWithCtx } from "../application/sync/ingestLocalEvents";
+import { requirePosApplicationAuthorityWithCtx } from "../application/posApplicationAuthority";
 import { hashPosTerminalSyncSecret } from "../application/sync/terminalSyncSecret";
 import { posLocalSyncMappingKindValidator } from "../../schemas/pos/posLocalSyncMapping";
 import {
@@ -199,10 +201,22 @@ export const ingestLocalEvents = mutation({
       });
     }
 
-    let athenaUser;
+    let submittedByUserId: Id<"athenaUser"> | undefined;
     let demoActor: Awaited<ReturnType<typeof getSharedDemoActorWithCtx>> = null;
+    let enforceOfflineAuthorityReceipt = false;
     try {
-      demoActor = await getSharedDemoActorWithCtx(ctx);
+      const serviceActor = await getServicePrincipalActorWithCtx(ctx);
+      if (serviceActor) {
+        enforceOfflineAuthorityReceipt = true;
+        const authority = await requirePosApplicationAuthorityWithCtx(ctx, {
+          storeId: args.storeId,
+        });
+        if (authority.terminalId !== args.terminalId) {
+          throw new Error("terminal_scope_invalid");
+        }
+      } else {
+        demoActor = await getSharedDemoActorWithCtx(ctx);
+      }
       if (demoActor) {
         const capabilities = new Set(
           args.events.map((event) =>
@@ -216,17 +230,24 @@ export const ingestLocalEvents = mutation({
             args.storeId,
           );
         }
-        athenaUser = await ctx.db.get("athenaUser", demoActor.athenaUserId);
+        const athenaUser = await ctx.db.get(
+          "athenaUser",
+          demoActor.athenaUserId,
+        );
         if (!athenaUser) throw new Error("Sign in again to continue.");
-      } else {
-        athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+        submittedByUserId = athenaUser._id;
+      } else if (!serviceActor) {
+        const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+        submittedByUserId = athenaUser._id;
       }
-      await requireOrganizationMemberRoleWithCtx(ctx, {
-        allowedRoles: ["full_admin", "pos_only"],
-        failureMessage: "You do not have access to sync this POS terminal.",
-        organizationId: store.organizationId,
-        userId: athenaUser._id,
-      });
+      if (submittedByUserId) {
+        await requireOrganizationMemberRoleWithCtx(ctx, {
+          allowedRoles: ["full_admin", "pos_only"],
+          failureMessage: "You do not have access to sync this POS terminal.",
+          organizationId: store.organizationId,
+          userId: submittedByUserId,
+        });
+      }
     } catch {
       return userError({
         code: "authorization_failed",
@@ -274,7 +295,10 @@ export const ingestLocalEvents = mutation({
 
     const result = await ingestLocalEventsWithCtx(ctx, {
       ...args,
-      submittedByUserId: athenaUser._id,
+      ...(submittedByUserId ? { submittedByUserId } : {}),
+      ...(enforceOfflineAuthorityReceipt
+        ? { enforceOfflineAuthorityReceipt: true }
+        : {}),
       submittedAt: args.submittedAt ?? Date.now(),
     });
 
@@ -401,27 +425,44 @@ export const ingestRegisterSessionActivity = mutation({
       });
     }
 
-    let athenaUser;
+    let authorizedUserId: Id<"athenaUser"> | undefined;
     let demoActor: Awaited<ReturnType<typeof getSharedDemoActorWithCtx>> = null;
     try {
-      demoActor = await getSharedDemoActorWithCtx(ctx);
+      const serviceActor = await getServicePrincipalActorWithCtx(ctx);
+      if (serviceActor) {
+        const authority = await requirePosApplicationAuthorityWithCtx(ctx, {
+          storeId: args.storeId,
+        });
+        if (authority.terminalId !== args.terminalId) {
+          throw new Error("terminal_scope_invalid");
+        }
+      } else {
+        demoActor = await getSharedDemoActorWithCtx(ctx);
+      }
       if (demoActor) {
         await requireSharedDemoStoreCapabilityIfApplicable(
           ctx,
           "cash.control.write",
           args.storeId,
         );
-        athenaUser = await ctx.db.get("athenaUser", demoActor.athenaUserId);
+        const athenaUser = await ctx.db.get(
+          "athenaUser",
+          demoActor.athenaUserId,
+        );
         if (!athenaUser) throw new Error("Sign in again to continue.");
-      } else {
-        athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+        authorizedUserId = athenaUser._id;
+      } else if (!serviceActor) {
+        const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+        authorizedUserId = athenaUser._id;
       }
-      await requireOrganizationMemberRoleWithCtx(ctx, {
-        allowedRoles: ["full_admin", "pos_only"],
-        failureMessage: "You do not have access to sync this POS terminal.",
-        organizationId: store.organizationId,
-        userId: athenaUser._id,
-      });
+      if (authorizedUserId) {
+        await requireOrganizationMemberRoleWithCtx(ctx, {
+          allowedRoles: ["full_admin", "pos_only"],
+          failureMessage: "You do not have access to sync this POS terminal.",
+          organizationId: store.organizationId,
+          userId: authorizedUserId,
+        });
+      }
     } catch {
       return userError({
         code: "authorization_failed",
@@ -508,17 +549,28 @@ export const resolveLocalSyncReview = mutation({
       return userError({ code: "not_found", message: "Store not found." });
     }
 
-    let athenaUser;
+    let resolvedByUserId: Id<"athenaUser"> | undefined;
     try {
-      athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
-      // One explicit POS org role gates the round-trip; a terminal cannot
-      // resolve a server-owned conflict without an authorized org member.
-      await requireOrganizationMemberRoleWithCtx(ctx, {
-        allowedRoles: ["full_admin", "pos_only"],
-        failureMessage: "You do not have access to resolve POS sync reviews.",
-        organizationId: store.organizationId,
-        userId: athenaUser._id,
-      });
+      const serviceActor = await getServicePrincipalActorWithCtx(ctx);
+      if (serviceActor) {
+        const authority = await requirePosApplicationAuthorityWithCtx(ctx, {
+          storeId: args.storeId,
+        });
+        if (authority.terminalId !== args.terminalId) {
+          throw new Error("terminal_scope_invalid");
+        }
+      } else {
+        const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+        resolvedByUserId = athenaUser._id;
+        // One explicit POS org role gates the round-trip; a terminal cannot
+        // resolve a server-owned conflict without an authorized org member.
+        await requireOrganizationMemberRoleWithCtx(ctx, {
+          allowedRoles: ["full_admin", "pos_only"],
+          failureMessage: "You do not have access to resolve POS sync reviews.",
+          organizationId: store.organizationId,
+          userId: athenaUser._id,
+        });
+      }
     } catch {
       return userError({
         code: "authorization_failed",
@@ -530,7 +582,7 @@ export const resolveLocalSyncReview = mutation({
       storeId: args.storeId,
       terminalId: args.terminalId,
       localEventIds: args.localEventIds,
-      resolvedByUserId: athenaUser._id,
+      ...(resolvedByUserId ? { resolvedByUserId } : {}),
       now: args.submittedAt ?? Date.now(),
     });
 

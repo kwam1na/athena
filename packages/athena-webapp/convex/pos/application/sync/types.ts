@@ -26,6 +26,7 @@ export type { PosLocalSyncEventStatus, PosLocalSyncEventType };
 export type PosLocalSyncConflictType =
   | "duplicate_local_id"
   | "inventory"
+  | "offline_authority"
   | "payment"
   | "permission"
   | "server_rejected";
@@ -104,6 +105,7 @@ export type PosLocalSyncEventInput = {
   sequence: number;
   eventType: PosLocalSyncEventType;
   occurredAt: number;
+  offlineAuthorityReceipt?: string;
   staffProfileId: Id<"staffProfile">;
   staffProofToken?: string;
   payload: Record<string, unknown>;

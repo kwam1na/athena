@@ -40,6 +40,8 @@ import {
   getTransactionById as getTransactionByIdQuery,
   getTransactionsByStore as getTransactionsByStoreQuery,
 } from "../application/queries/getTransactions";
+import { getServicePrincipalActorWithCtx } from "../../servicePrincipals/actor";
+import { requirePosApplicationAuthorityWithCtx } from "../application/posApplicationAuthority";
 
 async function requirePosTransactionStoreAccess(
   ctx: MutationCtx | QueryCtx,
@@ -61,10 +63,22 @@ async function requirePosTransactionStoreAccess(
     });
   }
 
-  const athenaUser = await requireAuthenticatedAthenaUserWithCtx(
-    ctx,
-    demoActor ? { sharedDemoCapability: "pos.sale.complete" } : undefined,
-  );
+  const serviceActor = await getServicePrincipalActorWithCtx(ctx);
+  if (serviceActor) {
+    const posApplicationAuthority = await requirePosApplicationAuthorityWithCtx(
+      ctx,
+      {
+        storeId: args.storeId,
+      },
+    );
+    return { posApplicationAuthority, store };
+  }
+
+  const athenaUser = demoActor
+    ? await requireAuthenticatedAthenaUserWithCtx(ctx, {
+        sharedDemoCapability: "pos.sale.complete",
+      })
+    : await requireAuthenticatedAthenaUserWithCtx(ctx);
   const membership = await requireOrganizationMemberRoleWithCtx(ctx, {
     allowedRoles: ["full_admin", "pos_only"],
     failureMessage: args.failureMessage,
@@ -394,21 +408,11 @@ export const updateInventory = mutation({
       });
     }
 
-    const store = await ctx.db.get("store", sku.storeId);
-    if (!store) {
-      return userError({
-        code: "not_found",
-        message: "Store not found.",
-      });
-    }
-
-    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
-    await requireOrganizationMemberRoleWithCtx(ctx, {
-      allowedRoles: ["full_admin", "pos_only"],
+    const access = await requirePosTransactionStoreAccess(ctx, {
       failureMessage: "You cannot update POS inventory for this store.",
-      organizationId: store.organizationId,
-      userId: athenaUser._id,
+      storeId: sku.storeId,
     });
+    if ("kind" in access) return access;
 
     return updateInventoryCommand(ctx, args);
   },
@@ -452,13 +456,27 @@ export const completeTransaction = mutation({
     }),
   ),
   handler: async (ctx, args) => {
-    const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(
-      ctx,
-      "pos.sale.complete",
-      args.storeId,
-    );
-    if (demoActor)
-      await requireReadySharedDemoWriteWithCtx(ctx, { storeId: args.storeId });
+    const serviceActor = await getServicePrincipalActorWithCtx(ctx);
+    const demoActor = serviceActor
+      ? null
+      : await requireSharedDemoStoreCapabilityIfApplicable(
+          ctx,
+          "pos.sale.complete",
+          args.storeId,
+        );
+    if (serviceActor) {
+      const authority = await requirePosApplicationAuthorityWithCtx(ctx, {
+        storeId: args.storeId,
+      });
+      if (args.terminalId !== authority.terminalId) {
+        throw new Error("The POS application session is no longer authorized.");
+      }
+    } else if (demoActor) {
+      await requireReadySharedDemoWriteWithCtx(ctx, {
+        storeId: args.storeId,
+      });
+    }
+
     const store = await ctx.db.get("store", args.storeId);
     if (!store) {
       return userError({
@@ -467,16 +485,18 @@ export const completeTransaction = mutation({
       });
     }
 
-    const athenaUser = demoActor
-      ? await ctx.db.get("athenaUser", demoActor.athenaUserId)
-      : await requireAuthenticatedAthenaUserWithCtx(ctx);
-    if (!athenaUser) throw new Error("Sign in again to continue.");
-    await requireOrganizationMemberRoleWithCtx(ctx, {
-      allowedRoles: ["full_admin"],
-      failureMessage: "You cannot complete this POS sale.",
-      organizationId: store.organizationId,
-      userId: athenaUser._id,
-    });
+    if (!serviceActor) {
+      const athenaUser = demoActor
+        ? await ctx.db.get("athenaUser", demoActor.athenaUserId)
+        : await requireAuthenticatedAthenaUserWithCtx(ctx);
+      if (!athenaUser) throw new Error("Sign in again to continue.");
+      await requireOrganizationMemberRoleWithCtx(ctx, {
+        allowedRoles: ["full_admin"],
+        failureMessage: "You cannot complete this POS sale.",
+        organizationId: store.organizationId,
+        userId: athenaUser._id,
+      });
+    }
 
     if (!args.staffProfileId || !args.terminalId || !args.registerSessionId) {
       return userError({
@@ -752,21 +772,11 @@ export const voidTransaction = mutation({
       });
     }
 
-    const store = await ctx.db.get("store", transaction.storeId);
-    if (!store) {
-      return userError({
-        code: "not_found",
-        message: "Store not found.",
-      });
-    }
-
-    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
-    await requireOrganizationMemberRoleWithCtx(ctx, {
-      allowedRoles: ["full_admin", "pos_only"],
+    const access = await requirePosTransactionStoreAccess(ctx, {
       failureMessage: "You cannot void this transaction.",
-      organizationId: store.organizationId,
-      userId: athenaUser._id,
+      storeId: transaction.storeId,
     });
+    if ("kind" in access) return access;
 
     const staffProfile = await ctx.db.get("staffProfile", actorStaffProfileId);
     if (
@@ -829,7 +839,7 @@ export const voidTransaction = mutation({
     const result = await voidTransactionCommand(ctx, {
       ...commandArgs,
       actorStaffProfileId,
-      actorUserId: athenaUser._id,
+      actorUserId: access.athenaUser?._id,
       reason,
     });
 
@@ -893,21 +903,11 @@ export const createTransactionFromSession = mutation({
       });
     }
 
-    const store = await ctx.db.get("store", session.storeId);
-    if (!store) {
-      return userError({
-        code: "not_found",
-        message: "Store not found.",
-      });
-    }
-
-    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
-    await requireOrganizationMemberRoleWithCtx(ctx, {
-      allowedRoles: ["full_admin", "pos_only"],
+    const access = await requirePosTransactionStoreAccess(ctx, {
       failureMessage: "You cannot complete this POS sale.",
-      organizationId: store.organizationId,
-      userId: athenaUser._id,
+      storeId: session.storeId,
     });
+    if ("kind" in access) return access;
 
     return createTransactionFromSessionHandler(ctx, args);
   },
@@ -995,7 +995,7 @@ export const correctTransactionCustomer = mutation({
       return ok(
         await correctTransactionCustomerCommand(ctx, {
           ...args,
-          actorUserId: access.athenaUser._id,
+          actorUserId: access.athenaUser?._id,
         }),
       );
     } catch (error) {
@@ -1126,7 +1126,7 @@ export const correctTransactionPaymentMethod = mutation({
       const { staffProofToken: _staffProofToken, ...commandArgs } = args;
       const result = await correctTransactionPaymentMethodCommand(ctx, {
         ...commandArgs,
-        actorUserId: access.athenaUser._id,
+        actorUserId: access.athenaUser?._id,
       });
 
       if ("action" in result && result.action === "approval_required") {
@@ -1182,21 +1182,11 @@ export const adjustTransactionItems = mutation({
         });
       }
 
-      const store = await ctx.db.get("store", transaction.storeId);
-      if (!store) {
-        return userError({
-          code: "not_found",
-          message: "Store not found.",
-        });
-      }
-
-      const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
-      await requireOrganizationMemberRoleWithCtx(ctx, {
-        allowedRoles: ["full_admin", "pos_only"],
+      const access = await requirePosTransactionStoreAccess(ctx, {
         failureMessage: "You cannot adjust transaction items.",
-        organizationId: store.organizationId,
-        userId: athenaUser._id,
+        storeId: transaction.storeId,
       });
+      if ("kind" in access) return access;
 
       const staffProfile = await ctx.db.get(
         "staffProfile",
@@ -1260,7 +1250,7 @@ export const adjustTransactionItems = mutation({
       const { staffProofToken: _staffProofToken, ...commandArgs } = args;
       const result = await adjustTransactionItemsCommand(ctx, {
         ...commandArgs,
-        actorUserId: athenaUser._id,
+        actorUserId: access.athenaUser?._id,
       });
 
       if ("action" in result && result.action === "approval_required") {
@@ -1370,7 +1360,7 @@ export const getTodaySummary = query({
       };
     }
 
-    const hasFullAdminAccess = access.membership.role === "full_admin";
+    const hasFullAdminAccess = access.membership?.role === "full_admin";
     const summary = await getTodaySummaryQuery(ctx, {
       ...args,
       pulseWindow: hasFullAdminAccess ? args.pulseWindow : "today",

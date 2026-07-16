@@ -33,25 +33,25 @@ describe("POS and expense session indexing", () => {
     const schema = readProjectFile("convex", "schema.ts");
 
     expect(schema).toContain(
-      '.index("by_staffProfileId_and_status", ["staffProfileId", "status"])'
+      '.index("by_staffProfileId_and_status", ["staffProfileId", "status"])',
     );
     expect(schema).toContain(
-      '.index("by_status_and_expiresAt", ["status", "expiresAt"])'
+      '.index("by_status_and_expiresAt", ["status", "expiresAt"])',
     );
     expect(schema).toContain(
-      '.index("by_storeId_terminalId", ["storeId", "terminalId"])'
+      '.index("by_storeId_terminalId", ["storeId", "terminalId"])',
     );
     expect(schema).toContain(
-      '.index("by_storeId_staffProfileId", ["storeId", "staffProfileId"])'
+      '.index("by_storeId_staffProfileId", ["storeId", "staffProfileId"])',
     );
     expect(schema).toContain(
-      '.index("by_storeId_status_terminalId", ["storeId", "status", "terminalId"])'
+      '.index("by_storeId_status_terminalId", ["storeId", "status", "terminalId"])',
     );
-    expect(schema).toContain(
-      '.index("by_storeId_status_staffProfileId", ['
-    );
+    expect(schema).toContain('.index("by_storeId_status_staffProfileId", [');
     expect(schema).toContain('.index("by_expiresAt", ["expiresAt"])');
-    expect(schema).toContain('.index("by_registerSessionId", ["registerSessionId"])');
+    expect(schema).toContain(
+      '.index("by_registerSessionId", ["registerSessionId"])',
+    );
 
     const posSessionSchema = readSourceSlice(
       schema,
@@ -111,18 +111,45 @@ describe("POS and expense session indexing", () => {
 
   it("uses targeted session indexes instead of broad status scans in posSessions", () => {
     const source = readProjectFile("convex", "inventory", "posSessions.ts");
+    const storeSessionsSource = readSourceSlice(
+      source,
+      "export const getStoreSessions = query({",
+      "// Get a specific session by ID",
+    );
 
     expect(source).toContain('withIndex("by_staffProfileId_and_status"');
     expect(source).toContain('withIndex("by_storeId_status_terminalId"');
     expect(source).toContain('withIndex("by_storeId_status_staffProfileId"');
     expect(source).toContain('withIndex("by_storeId_terminalId"');
-    expect(source).toContain('withIndex("by_storeId_staffProfileId"');
+
+    // POS application authority now fixes this read to the exact current
+    // terminal. Keep both status and unfiltered branches on terminal-scoped
+    // indexes, then apply the optional staff predicate only to the bounded
+    // candidate set. The broader store/staff path would bypass that authority.
+    expect(storeSessionsSource).toContain(
+      "const terminalId = authority.terminalId",
+    );
+    expect(storeSessionsSource).toContain(
+      'withIndex("by_storeId_status_terminalId"',
+    );
+    expect(storeSessionsSource).toContain('withIndex("by_storeId_terminalId"');
+    expect(storeSessionsSource).toContain(".take(boundedLimit)");
+    expect(storeSessionsSource).toContain(
+      "session.staffProfileId === args.staffProfileId",
+    );
+    expect(storeSessionsSource).not.toContain(
+      'withIndex("by_storeId_staffProfileId"',
+    );
+    expect(storeSessionsSource).not.toContain(
+      'withIndex("by_storeId_and_status"',
+    );
+    expect(storeSessionsSource).not.toContain('withIndex("by_storeId"');
 
     expect(source).not.toContain(
-      '.withIndex("by_staffProfileId", (q) => q.eq("staffProfileId", args.staffProfileId))\n      .filter((q) => q.eq(q.field("status"), "active"))'
+      '.withIndex("by_staffProfileId", (q) => q.eq("staffProfileId", args.staffProfileId))\n      .filter((q) => q.eq(q.field("status"), "active"))',
     );
     expect(source).not.toContain(
-      '.withIndex("by_status", (q) => q.eq("status", "active"))\n          .filter((q) => q.lt(q.field("expiresAt"), now))'
+      '.withIndex("by_status", (q) => q.eq("status", "active"))\n          .filter((q) => q.lt(q.field("expiresAt"), now))',
     );
   });
 
@@ -175,11 +202,7 @@ describe("POS and expense session indexing", () => {
   });
 
   it("uses targeted session indexes instead of broad status scans in expenseSessions", () => {
-    const source = readProjectFile(
-      "convex",
-      "inventory",
-      "expenseSessions.ts"
-    );
+    const source = readProjectFile("convex", "inventory", "expenseSessions.ts");
     const repositorySource = readProjectFile(
       "convex",
       "pos",
@@ -197,10 +220,10 @@ describe("POS and expense session indexing", () => {
     expect(source).toContain('withIndex("by_storeId_staffProfileId"');
 
     expect(combinedSource).not.toContain(
-      '.withIndex("by_staffProfileId", (q) => q.eq("staffProfileId", args.staffProfileId))\n      .filter((q) => q.eq(q.field("status"), "active"))'
+      '.withIndex("by_staffProfileId", (q) => q.eq("staffProfileId", args.staffProfileId))\n      .filter((q) => q.eq(q.field("status"), "active"))',
     );
     expect(combinedSource).not.toContain(
-      '.withIndex("by_status", (q) => q.eq("status", "active"))\n          .filter((q) => q.lt(q.field("expiresAt"), now))'
+      '.withIndex("by_status", (q) => q.eq("status", "active"))\n          .filter((q) => q.lt(q.field("expiresAt"), now))',
     );
   });
 
@@ -249,11 +272,7 @@ describe("POS and expense session indexing", () => {
   });
 
   it("keeps expense session cleanup as a no-op because expense sessions do not expire", () => {
-    const source = readProjectFile(
-      "convex",
-      "inventory",
-      "expenseSessions.ts",
-    );
+    const source = readProjectFile("convex", "inventory", "expenseSessions.ts");
 
     const releaseSource = readSourceSlice(
       source,
@@ -265,6 +284,8 @@ describe("POS and expense session indexing", () => {
     expect(releaseSource).not.toContain('withIndex("by_expiresAt",');
     expect(releaseSource).not.toContain("Promise.all");
     expect(releaseSource).not.toContain(".paginate(");
-    expect(releaseSource).toContain("return { releasedCount: 0, sessionIds: [] };");
+    expect(releaseSource).toContain(
+      "return { releasedCount: 0, sessionIds: [] };",
+    );
   });
 });

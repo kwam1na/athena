@@ -70,10 +70,9 @@ import {
 } from "@/lib/theme";
 import { SharedDemoRuntime } from "@/components/shared-demo/SharedDemoRuntime";
 import { useSharedDemoContext } from "@/hooks/useSharedDemoContext";
-import {
-  SharedDemoRestrictedSurface,
-} from "@/components/shared-demo/SharedDemoRestrictedSurface";
+import { SharedDemoRestrictedSurface } from "@/components/shared-demo/SharedDemoRestrictedSurface";
 import { isSharedDemoRestrictedPath } from "@/components/shared-demo/sharedDemoRestrictions";
+import { clearPosServiceAuthPresentation } from "@/components/auth/Login/posRecoveryFlow";
 const POS_TERMINAL_FULLSCREEN_PATH_PATTERN =
   /^\/(?<orgUrlSlug>[^/]+)\/store\/(?<storeUrlSlug>[^/]+)\/pos\/(?:register|expense)\/?$/;
 const POS_HUB_PATH_PATTERN =
@@ -181,7 +180,9 @@ function isBrowserOffline() {
 }
 
 function AuthedComponent() {
-  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  });
   const demoContext = useSharedDemoContext();
   if (demoContext && isSharedDemoRestrictedPath(pathname)) {
     const storeRoot = pathname.match(/^\/[^/]+\/store\/[^/]+/)?.[0];
@@ -414,6 +415,7 @@ function UserMenu({
 
   const handleSignOut = async () => {
     await signOut();
+    clearPosServiceAuthPresentation();
     localStorage.removeItem(LOGGED_IN_USER_ID_KEY);
     localStorage.removeItem(POS_APP_ACCOUNT_ID_KEY);
     navigate({ to: "/login" });
@@ -432,7 +434,13 @@ function UserMenu({
           ? "system"
           : "light";
   const ThemeIcon =
-    mode === "system" ? (isMobile ? Smartphone : Monitor) : mode === "dark" ? Moon : Sun;
+    mode === "system"
+      ? isMobile
+        ? Smartphone
+        : Monitor
+      : mode === "dark"
+        ? Moon
+        : Sun;
   const themeToggleLabel =
     mode === "system"
       ? `Using system ${resolvedTheme} theme, switch to ${nextTheme} theme`
@@ -451,7 +459,9 @@ function UserMenu({
             aria-label={`Open account menu for ${userEmail}`}
             className={cn(
               "flex h-10 w-10 shrink-0 items-center justify-center gap-layout-xs px-0 text-sm text-foreground transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-9 sm:w-auto sm:min-w-0 sm:px-layout-xs",
-              isContainedShell ? `rounded-lg ${containedControlSurface}` : "rounded-md",
+              isContainedShell
+                ? `rounded-lg ${containedControlSurface}`
+                : "rounded-md",
             )}
           >
             <UserCircle className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -505,7 +515,9 @@ function UserMenu({
         title={themeToggleLabel}
         className={cn(
           "group flex h-10 w-10 shrink-0 items-center justify-center text-muted-foreground transition-[background-color,color,transform] duration-fast ease-standard hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.96] sm:h-9 sm:w-9",
-          isContainedShell ? `rounded-lg ${containedControlSurface}` : "rounded-md",
+          isContainedShell
+            ? `rounded-lg ${containedControlSurface}`
+            : "rounded-md",
         )}
         onClick={() => setAthenaThemeModeWithTransition(nextTheme)}
       >
@@ -619,7 +631,8 @@ export default function Layout() {
         ? state.location.href
         : state.location.pathname,
   });
-  const { isLoading, user } = useAuth();
+  const { actorKind, isLoading, user } = useAuth();
+  const isServicePrincipalActor = actorKind === "service_principal";
   const browserPathname = getBrowserPathname();
   const browserPathWithSearch = getBrowserPathWithSearch();
   const routerPosHubParams = getPosHubRouteParams(pathname);
@@ -638,7 +651,8 @@ export default function Layout() {
     routeParams: storeRouteParams ?? undefined,
   });
   const storedAppAccountId = readStoredPosAppAccountId();
-  const isAppUserMissing = !isLoading && user === null;
+  const isAppUserMissing =
+    !isLoading && user === null && !isServicePrincipalActor;
   const posTerminalAppSessionRecovery = usePosTerminalAppSessionRecovery({
     routeIntent: routeWantsPos ? "pos_hub" : null,
     isAppUserMissing,
@@ -691,7 +705,7 @@ export default function Layout() {
     (isUnknownRouterPath(pathname) &&
       isPosTerminalFullscreenPath(browserPathname));
   const canRenderSignedInPosRegisterShell =
-    Boolean(user) &&
+    (Boolean(user) || isServicePrincipalActor) &&
     routeWantsFullscreen &&
     localPosEntryContext.status === "ready" &&
     Boolean(localPosEntryContext.terminalSeed);
@@ -703,7 +717,7 @@ export default function Layout() {
   const shouldRenderPendingPosTerminalShell =
     isPendingPosAppSessionRecovery || isClassifyingPosAppSession;
   const shouldMountRemoteAssistRuntime =
-    Boolean(user) &&
+    (Boolean(user) || isServicePrincipalActor) &&
     localPosEntryContext.status === "ready" &&
     Boolean(localPosEntryContext.terminalSeed);
   const posAppSessionRecoveryRuntimeInput =
@@ -711,8 +725,8 @@ export default function Layout() {
   const userEmail =
     user?.email ??
     (shouldRenderPosTerminalShell ||
-      shouldRenderPosSignInGate ||
-      shouldRenderPendingPosTerminalShell
+    shouldRenderPosSignInGate ||
+    shouldRenderPendingPosTerminalShell
       ? "POS terminal"
       : "");
   const isFullscreenActive = fullscreenOverride ?? routeWantsFullscreen;
@@ -731,7 +745,7 @@ export default function Layout() {
       return;
     }
 
-    if (!isLoading && user === null) {
+    if (!isLoading && user === null && !isServicePrincipalActor) {
       const loginTarget = routeWantsPos
         ? {
             to: "/login" as const,
@@ -754,6 +768,7 @@ export default function Layout() {
     isBlockedPosAppSession,
     isClassifyingPosAppSession,
     isLoading,
+    isServicePrincipalActor,
     navigate,
     user,
   ]);
@@ -764,10 +779,10 @@ export default function Layout() {
 
   if (
     !shouldRenderPosTerminalShell &&
-      !shouldRenderPosSignInGate &&
-      !shouldRenderPendingPosTerminalShell &&
-      !isBlockedPosAppSession &&
-      (isLoading || user === null)
+    !shouldRenderPosSignInGate &&
+    !shouldRenderPendingPosTerminalShell &&
+    !isBlockedPosAppSession &&
+    (isLoading || (user === null && !isServicePrincipalActor))
   ) {
     return null; // or a loading spinner if you prefer
   }
@@ -821,15 +836,10 @@ export default function Layout() {
     <PermissionsProvider>
       <ManagerElevationProvider>
         <AppShellFullscreenContext.Provider value={{ setFullscreenOverride }}>
-          <SidebarProvider
-            className="fixed inset-0 h-svh !min-h-0 flex-col overflow-hidden bg-app-canvas"
-          >
+          <SidebarProvider className="fixed inset-0 h-svh !min-h-0 flex-col overflow-hidden bg-app-canvas">
             <MobileSidebarRouteDismiss routeKey={routeKey} />
             {isFullscreenActive ? null : (
-              <TopBar
-                shellVariant={APP_SHELL_VARIANT}
-                userEmail={userEmail}
-              />
+              <TopBar shellVariant={APP_SHELL_VARIANT} userEmail={userEmail} />
             )}
             <div
               className={cn(

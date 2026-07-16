@@ -1,10 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  getServicePrincipalActorWithCtx: vi.fn(),
+  requirePosApplicationAuthorityWithCtx: vi.fn(),
   requireAuthenticatedAthenaUserWithCtx: vi.fn(),
   requireOrganizationMemberRoleWithCtx: vi.fn(),
   getRegisterState: vi.fn(),
   openDrawerCommand: vi.fn(),
+}));
+
+vi.mock("../../servicePrincipals/actor", () => ({
+  getServicePrincipalActorWithCtx: mocks.getServicePrincipalActorWithCtx,
+}));
+
+vi.mock("../application/posApplicationAuthority", () => ({
+  requirePosApplicationAuthorityWithCtx:
+    mocks.requirePosApplicationAuthorityWithCtx,
 }));
 
 vi.mock("../../lib/athenaUserAuth", () => ({
@@ -70,6 +81,7 @@ describe("pos public register contracts", () => {
 describe("pos public register.getState authorization", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    mocks.getServicePrincipalActorWithCtx.mockResolvedValue(null);
     mocks.requireAuthenticatedAthenaUserWithCtx.mockResolvedValue({
       _id: "athena-user-1",
     });
@@ -77,6 +89,79 @@ describe("pos public register.getState authorization", () => {
       role: "pos_only",
     });
     mocks.getRegisterState.mockResolvedValue({ phase: "ready" });
+    mocks.openDrawerCommand.mockResolvedValue({ kind: "ok", data: null });
+  });
+
+  it("clamps same-store register state to the current POS terminal", async () => {
+    mocks.getServicePrincipalActorWithCtx.mockResolvedValue({
+      kind: "service_principal",
+    });
+    mocks.requirePosApplicationAuthorityWithCtx.mockResolvedValue({
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
+    const ctx = buildCtx();
+
+    await expect(
+      getHandler(getState)(ctx as never, { storeId: "store-1" }),
+    ).resolves.toEqual({ phase: "ready" });
+    expect(mocks.getRegisterState).toHaveBeenCalledWith(ctx, {
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
+    expect(mocks.requireAuthenticatedAthenaUserWithCtx).not.toHaveBeenCalled();
+  });
+
+  it.each(["cross-store scope", "revoked current authority"])(
+    "denies register state for %s",
+    async () => {
+      mocks.getServicePrincipalActorWithCtx.mockResolvedValue({
+        kind: "service_principal",
+      });
+      mocks.requirePosApplicationAuthorityWithCtx.mockRejectedValue(
+        new Error("The POS application session is no longer authorized."),
+      );
+      const ctx = buildCtx();
+
+      await expect(
+        getHandler(getState)(ctx as never, { storeId: "store-1" }),
+      ).rejects.toThrow(
+        "The POS application session is no longer authorized.",
+      );
+      expect(mocks.getRegisterState).not.toHaveBeenCalled();
+    },
+  );
+
+  it("checks POS application store and terminal authority before drawer proofs", async () => {
+    mocks.getServicePrincipalActorWithCtx.mockResolvedValue({
+      kind: "service_principal",
+    });
+    mocks.requirePosApplicationAuthorityWithCtx.mockResolvedValue({
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
+    const ctx = buildCtx();
+    const args = {
+      openingFloat: 100,
+      staffProfileId: "staff-1",
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    };
+
+    await expect(getHandler(openDrawer)(ctx as never, args)).resolves.toEqual({
+      kind: "ok",
+      data: null,
+    });
+    expect(mocks.openDrawerCommand).toHaveBeenCalledWith(ctx, args);
+
+    mocks.requirePosApplicationAuthorityWithCtx.mockResolvedValue({
+      storeId: "store-1",
+      terminalId: "terminal-2",
+    });
+    await expect(getHandler(openDrawer)(ctx as never, args)).rejects.toThrow(
+      "The POS application session is no longer authorized.",
+    );
+    expect(mocks.openDrawerCommand).toHaveBeenCalledTimes(1);
   });
 
   it("reads register state for a same-org member", async () => {

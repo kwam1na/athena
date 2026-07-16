@@ -7,6 +7,7 @@ import {
   type PosLocalEventValidationMetadata,
 } from "./posLocalStore";
 import type { PosRegisterCatalogRowDto } from "@/lib/pos/application/dto";
+import { POS_LOCAL_LOGICAL_RECORD_VERSION } from "@/lib/pos/application/posLocalStoreTypes";
 
 function saleCommandInput() {
   return {
@@ -28,6 +29,48 @@ async function appendOpenDrawer(store: ReturnType<typeof createPosLocalStore>) {
     localRegisterSessionId: "drawer-1",
     staffProfileId: "staff-1",
     payload: { localRegisterSessionId: "drawer-1", openingFloat: 100 },
+  });
+}
+
+function buildVerifiedOfflineAuthorityReceipt() {
+  return {
+    envelope: "signed-receipt-envelope-v1",
+    payload: {
+      audience: "athena.pos.offline" as const,
+      capabilityId: "pos.application" as const,
+      capabilityRevision: 3,
+      credentialRevision: 5,
+      expiresAt: 61_000,
+      issuedAt: 1_000,
+      issuer: "athena-test",
+      keyVersion: 1,
+      nonce: "receipt-nonce-1",
+      posApplicationSessionBindingId: "binding-1",
+      principalLifecycleRevision: 2,
+      servicePrincipalId: "principal-1",
+      servicePrincipalSessionId: "session-1",
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      terminalLifecycleRevision: 7,
+      terminalProofRevision: 11,
+      version: 1 as const,
+    },
+    verifiedAt: 1_500,
+  };
+}
+
+async function provisionVerifiedOfflineAuthority(
+  store: ReturnType<typeof createPosLocalStore>,
+) {
+  await store.writeProvisionedTerminalSeed({
+    cloudTerminalId: "terminal-1",
+    displayName: "Front register",
+    offlineAuthorityReceipt: buildVerifiedOfflineAuthorityReceipt(),
+    provisionedAt: 1_000,
+    schemaVersion: POS_LOCAL_LOGICAL_RECORD_VERSION,
+    storeId: "store-1",
+    syncSecretHash: "sync-secret-1",
+    terminalId: "local-terminal-1",
   });
 }
 
@@ -598,8 +641,10 @@ describe("createLocalCommandGateway", () => {
   it("persists app-session validation metadata on sale-affecting commands", async () => {
     const store = createPosLocalStore({
       adapter: createMemoryPosLocalStorageAdapter(),
+      clock: () => 2_000,
     });
     await appendOpenDrawer(store);
+    await provisionVerifiedOfflineAuthority(store);
     const gateway = createLocalCommandGateway({
       store,
       staffProofToken: "proof-1",
@@ -629,6 +674,9 @@ describe("createLocalCommandGateway", () => {
       ok: true,
       value: expect.arrayContaining([
         expect.objectContaining({
+          offlineAuthorityReceipt: "signed-receipt-envelope-v1",
+          offlineAuthorityReceiptNonce: "receipt-nonce-1",
+          offlineAuthorityReceiptVersion: 1,
           type: "transaction.completed",
           validationMetadata: {
             flags: ["app-session-unverified", "cloud-validation-uncertain"],
@@ -701,7 +749,9 @@ describe("createLocalCommandGateway", () => {
     };
     const store = createPosLocalStore({
       adapter: createMemoryPosLocalStorageAdapter(),
+      clock: () => 2_000,
     });
+    await provisionVerifiedOfflineAuthority(store);
     const gateway = createLocalCommandGateway({
       store,
       staffProofToken: "proof-1",
@@ -746,6 +796,7 @@ describe("createLocalCommandGateway", () => {
       ok: true,
       value: expect.arrayContaining([
         expect.objectContaining({
+          offlineAuthorityReceipt: "signed-receipt-envelope-v1",
           type: "register.opened",
           validationMetadata,
         }),
@@ -758,7 +809,9 @@ describe("createLocalCommandGateway", () => {
 
     const seedStore = createPosLocalStore({
       adapter: createMemoryPosLocalStorageAdapter(),
+      clock: () => 2_000,
     });
+    await provisionVerifiedOfflineAuthority(seedStore);
     const seedGateway = createLocalCommandGateway({
       allowExplicitRegisterSessionWithoutProjection: true,
       store: seedStore,

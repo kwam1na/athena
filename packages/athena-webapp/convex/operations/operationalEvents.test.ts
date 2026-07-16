@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import {
+  buildOperationalEvent,
   listProductOperationalTimelineWithCtx,
   recordOperationalEventWithCtx,
 } from "./operationalEvents";
@@ -347,6 +348,73 @@ describe("operational events", () => {
       expect.objectContaining({ actorUserId: "user-2" }),
       expect.objectContaining({ actorStaffProfileId: "staff-1" }),
     ]);
+  });
+
+  it("records service-principal actors and lifecycle references without human impersonation", async () => {
+    const ctx = createCtx({});
+    const baseEvent = {
+      actorServicePrincipalId:
+        "principal-actor" as Id<"servicePrincipal">,
+      actorType: "service_principal" as const,
+      eventType: "service_sync_completed",
+      message: "Service sync completed.",
+      servicePrincipalId: "principal-subject" as Id<"servicePrincipal">,
+      storeId: "store-1" as Id<"store">,
+      subjectId: "principal-subject",
+      subjectType: "service_principal",
+    };
+
+    await recordOperationalEventWithCtx(ctx as unknown as MutationCtx, {
+      ...baseEvent,
+      actorServicePrincipalSessionId:
+        "session-1" as Id<"servicePrincipalSession">,
+    });
+    await recordOperationalEventWithCtx(ctx as unknown as MutationCtx, {
+      ...baseEvent,
+      actorServicePrincipalSessionId:
+        "session-1" as Id<"servicePrincipalSession">,
+    });
+    await recordOperationalEventWithCtx(ctx as unknown as MutationCtx, {
+      ...baseEvent,
+      actorServicePrincipalSessionId:
+        "session-2" as Id<"servicePrincipalSession">,
+    });
+
+    const events = await ctx.db
+      .query("operationalEvent")
+      .withIndex("by_storeId_subject", (q) =>
+        q
+          .eq("storeId", "store-1" as Id<"store">)
+          .eq("subjectType", "service_principal")
+          .eq("subjectId", "principal-subject"),
+      )
+      .take(10);
+
+    expect(events).toHaveLength(2);
+    expect(events[0]).toMatchObject({
+      actorServicePrincipalId: "principal-actor",
+      actorServicePrincipalSessionId: "session-1",
+      actorType: "service_principal",
+      servicePrincipalId: "principal-subject",
+    });
+    expect(events[0]).not.toHaveProperty("actorUserId");
+    expect(events[0]).not.toHaveProperty("actorStaffProfileId");
+  });
+
+  it("rejects mixed human and service-principal actor lanes", () => {
+    expect(() =>
+      buildOperationalEvent({
+        actorServicePrincipalId:
+          "principal-actor" as Id<"servicePrincipal">,
+        actorType: "service_principal",
+        actorUserId: "human-user" as Id<"athenaUser">,
+        eventType: "invalid_actor",
+        message: "Invalid actor.",
+        storeId: "store-1" as Id<"store">,
+        subjectId: "subject",
+        subjectType: "fixture",
+      }),
+    ).toThrow("invalid_service_principal_actor");
   });
 
   it("normalizes POS trace fields into top-level fields and metadata", async () => {

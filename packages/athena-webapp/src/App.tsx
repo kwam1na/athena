@@ -1,10 +1,19 @@
-import { useEffect } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { RouterProvider } from "@tanstack/react-router";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { ConvexAuthProvider } from "@convex-dev/auth/react";
 
 import { convex, queryClient, router } from "./appRouter";
 import { AppMessagesProvider } from "./lib/app-messages";
+import {
+  getDefaultAuthRuntimeHandoffCoordinator,
+  type AuthRuntimeHandoffCoordinator,
+} from "./lib/auth/authRuntimeHandoff";
+import { recoverPromotedPosRecoverySession } from "./lib/auth/recoverPromotedPosRecoverySession";
+import {
+  completeVerifiedPosRecoveryPromotion,
+  getPosServiceAuthPresentation,
+} from "./components/auth/Login/posRecoveryFlow";
 import {
   stageUpdateStaticAssets,
   UpdateCoordinatorProvider,
@@ -19,7 +28,41 @@ import {
   type VersionCheckerUpdateDetectedEvent,
 } from "./utils/versionChecker";
 
-export function App() {
+export function App({
+  authRuntime = getDefaultAuthRuntimeHandoffCoordinator(),
+}: {
+  authRuntime?: AuthRuntimeHandoffCoordinator;
+} = {}) {
+  const authSnapshot = useSyncExternalStore(
+    authRuntime.subscribe,
+    authRuntime.getSnapshot,
+    authRuntime.getSnapshot,
+  );
+
+  useEffect(() => {
+    if (authSnapshot.blockReason !== "stale_handoff") return;
+    void authRuntime
+      .runExclusive(async () => {
+        if (authRuntime.getSnapshot().blockReason === "stale_handoff") {
+          authRuntime.takeOverStaleHandoff();
+        }
+      })
+      .catch(() => authRuntime.refresh());
+  }, [authRuntime, authSnapshot.blockReason]);
+
+  if (authSnapshot.status === "blocked") {
+    return (
+      <main role="alert">
+        Authentication is temporarily unavailable. Reload this page to try
+        again.
+      </main>
+    );
+  }
+
+  const tokenStorage = authRuntime.getTokenStorage(
+    authSnapshot.activeNamespace,
+  );
+
   return (
     <PosLocalStorageRuntimeProvider
       runtime={getDefaultPosLocalStorageRuntime()}
@@ -27,7 +70,18 @@ export function App() {
       <AppMessagesProvider>
         <UpdateCoordinatorProvider>
           <VersionCheckerBridge />
-          <ConvexAuthProvider client={convex}>
+          <ConvexAuthProvider
+            key={authSnapshot.providerRemountKey}
+            client={convex}
+            storage={tokenStorage}
+            {...(authSnapshot.activeNamespace === null
+              ? {}
+              : { storageNamespace: authSnapshot.activeNamespace })}
+          >
+            <AuthRuntimePromotionRecovery
+              authRuntime={authRuntime}
+              handoffPhase={authSnapshot.handoffPhase}
+            />
             <QueryClientProvider client={queryClient}>
               <RouterProvider router={router} />
             </QueryClientProvider>
@@ -36,6 +90,41 @@ export function App() {
       </AppMessagesProvider>
     </PosLocalStorageRuntimeProvider>
   );
+}
+
+function AuthRuntimePromotionRecovery({
+  authRuntime,
+  handoffPhase,
+}: {
+  authRuntime: AuthRuntimeHandoffCoordinator;
+  handoffPhase: string;
+}) {
+  useEffect(() => {
+    if (handoffPhase !== "promoted") return;
+    let cancelled = false;
+    void authRuntime
+      .runExclusive(async () => {
+        if (authRuntime.getSnapshot().handoffPhase !== "promoted") return;
+        const handle = authRuntime.getCurrentHandoffHandle();
+        await authRuntime.keepLeaseAlive(handle, async () => {
+          await recoverPromotedPosRecoverySession();
+          if (cancelled) return;
+          const presentation = getPosServiceAuthPresentation();
+          completeVerifiedPosRecoveryPromotion({
+            coordinator: authRuntime,
+            handle,
+            redirectTo: presentation?.redirectTo ?? "/",
+          });
+        });
+      })
+      .catch(() => {
+        // Preserve the promoted namespace and retry after the next mount.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [authRuntime, handoffPhase]);
+  return null;
 }
 
 export function VersionCheckerBridge() {

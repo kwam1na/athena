@@ -95,6 +95,9 @@ export async function registerTerminal(
   ctx: MutationCtx,
   args: {
     allowRegisterNumberChange?: boolean;
+    correlationId?: string;
+    organizationId?: Id<"organization">;
+    now?: number;
     storeId: Id<"store">;
     fingerprintHash: string;
     syncSecretHash: string;
@@ -173,6 +176,9 @@ export async function registerTerminal(
     }
 
     const terminalId = await registerTerminalRecord(ctx, {
+      ...(args.organizationId === undefined
+        ? {}
+        : { organizationId: args.organizationId }),
       storeId: args.storeId,
       fingerprintHash: args.fingerprintHash,
       syncSecretHash: args.syncSecretHash,
@@ -181,8 +187,13 @@ export async function registerTerminal(
       registerNumber: nextRegisterNumber,
       registeredByUserId: args.registeredByUserId,
       browserInfo: args.browserInfo,
-      registeredAt: Date.now(),
+      registeredAt: args.now ?? Date.now(),
       status: "active",
+      lifecycleRevision: 1,
+      proofRevision: 1,
+      ...(args.correlationId === undefined
+        ? {}
+        : { lastCorrelationId: args.correlationId }),
       loginMode,
       transactionCapability,
     });

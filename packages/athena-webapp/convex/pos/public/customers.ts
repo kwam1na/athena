@@ -12,6 +12,8 @@ import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../../lib/athenaUserAuth";
+import { getServicePrincipalActorWithCtx } from "../../servicePrincipals/actor";
+import { requirePosApplicationAuthorityWithCtx } from "../application/posApplicationAuthority";
 import { userError } from "../../../shared/commandResult";
 import {
   createCustomer as createCustomerCommand,
@@ -34,6 +36,12 @@ import {
 type PosCustomerStoreAccess =
   | {
       ok: true;
+      kind: "service_principal";
+      store: Doc<"store">;
+    }
+  | {
+      ok: true;
+      kind: "human";
       store: Doc<"store">;
       athenaUser: Doc<"athenaUser">;
       membership: Doc<"organizationMember">;
@@ -52,6 +60,14 @@ async function requirePosCustomerStoreAccess(
     return { ok: false };
   }
 
+  const serviceActor = await getServicePrincipalActorWithCtx(ctx);
+  if (serviceActor) {
+    await requirePosApplicationAuthorityWithCtx(ctx, {
+      storeId: args.storeId,
+    });
+    return { kind: "service_principal", ok: true, store };
+  }
+
   const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
   const membership = await requireOrganizationMemberRoleWithCtx(ctx, {
     allowedRoles: ["full_admin", "pos_only"],
@@ -60,7 +76,7 @@ async function requirePosCustomerStoreAccess(
     userId: athenaUser._id,
   });
 
-  return { ok: true, store, athenaUser, membership };
+  return { kind: "human", ok: true, store, athenaUser, membership };
 }
 
 async function requirePosCustomerAccessById(

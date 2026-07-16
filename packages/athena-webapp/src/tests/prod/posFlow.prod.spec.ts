@@ -9,6 +9,8 @@ const prodConvexUrl =
   process.env.ATHENA_PROD_CONVEX_URL ||
   "https://colorless-cardinal-870.convex.cloud";
 const prodConvexAuthToken = process.env.ATHENA_PROD_CONVEX_AUTH_TOKEN;
+const runLocalCandidateBuild =
+  process.env.ATHENA_POS_E2E_RUN_LOCAL_BUILD === "1";
 const prodStoreId = (process.env.ATHENA_PROD_POS_STORE_ID ||
   "nn7byz68a3j4tfjvgdf9evpt3n78kk38") as Id<"store">;
 const prodPosRecoveryCode = process.env.ATHENA_PROD_POS_RECOVERY_CODE;
@@ -85,8 +87,7 @@ function collectProdRuntimeSignals(page: Page) {
         (message) =>
           /CONVEX Q|Server Error|Unhandled Runtime Error|Application error|ChunkLoadError/i.test(
             message,
-          ) &&
-          !message.includes("installHook.js"),
+          ) && !message.includes("installHook.js"),
       );
 
       expect(pageErrors, `${label} page errors`).toEqual([]);
@@ -103,9 +104,25 @@ async function openPosRecoveryForm(page: Page) {
 
   await expect(page.getByRole("heading", { name: /log in/i })).toBeVisible();
   await page.getByRole("button", { name: /pos sign in/i }).click();
-  await expect(page.getByRole("heading", { name: /pos recovery/i })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: /pos recovery/i }),
+  ).toBeVisible();
   await expect(page.getByLabel(/pos account/i)).toBeVisible();
   await expect(page.getByLabel(/recovery code/i)).toBeVisible();
+}
+
+async function openCandidatePosRecoveryEntry(page: Page) {
+  await page.goto(posLoginRecoveryPath, {
+    waitUntil: "domcontentloaded",
+  });
+
+  await expect(page.getByRole("heading", { name: /log in/i })).toBeVisible();
+  await page.getByRole("button", { name: /pos sign in/i }).click();
+  await expect(
+    page.getByRole("heading", { name: /checkout station setup required/i }),
+  ).toBeVisible();
+  await expect(page.getByLabel(/pos account/i)).toHaveCount(0);
+  await expect(page.getByLabel(/recovery code/i)).toHaveCount(0);
 }
 
 test.describe("production POS flow", () => {
@@ -117,7 +134,10 @@ test.describe("production POS flow", () => {
         const response = await gotoProdRoute(page, route.path);
 
         expect(response?.ok(), `${route.label} navigation`).toBe(true);
-        await expect(page.locator("#app"), `${route.label} app root`).not.toBeEmpty({
+        await expect(
+          page.locator("#app"),
+          `${route.label} app root`,
+        ).not.toBeEmpty({
           timeout: 30_000,
         });
         await expect(page.locator("body"), route.label).toContainText(
@@ -133,21 +153,31 @@ test.describe("production POS flow", () => {
     }
   });
 
-  test("keeps POS recovery sign-in entry available without submitting", async ({
+  test("keeps the POS sign-in entry truthful for this browser", async ({
     page,
   }) => {
     const runtimeSignals = collectProdRuntimeSignals(page);
-    await openPosRecoveryForm(page);
-    await expect(page.getByRole("button", { name: /^continue$/i })).toBeDisabled();
+    if (runLocalCandidateBuild) {
+      await openCandidatePosRecoveryEntry(page);
+    } else {
+      await openPosRecoveryForm(page);
+      await expect(
+        page.getByRole("button", { name: /^continue$/i }),
+      ).toBeDisabled();
+    }
     await expect(page.locator("body")).not.toContainText(
       /Server Error|CONVEX Q|Unhandled Runtime Error|Application error/i,
     );
-    runtimeSignals.assertClean("POS recovery sign-in");
+    runtimeSignals.assertClean("POS sign-in entry");
   });
 
   test("authenticates through POS recovery and reaches register entry", async ({
     page,
   }) => {
+    test.skip(
+      runLocalCandidateBuild,
+      "Candidate recovery requires a locally enrolled terminal and a matching deployed service-principal backend; this production smoke must not provision or mutate production terminal state.",
+    );
     test.skip(
       !prodPosRecoveryCode,
       "ATHENA_PROD_POS_RECOVERY_CODE is required for authenticated POS E2E.",

@@ -292,6 +292,7 @@ export type PosLocalSyncUploadEventBase<
   sequence: number;
   eventType: EventType;
   occurredAt: number;
+  offlineAuthorityReceipt?: string;
   staffProfileId: string;
   staffProofToken?: string;
   payload: PosLocalSyncPayloadByEventType[EventType];

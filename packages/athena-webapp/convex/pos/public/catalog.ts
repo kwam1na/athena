@@ -48,6 +48,8 @@ import {
 import { readRegisterCatalogRevision } from "../application/sync/registerCatalogRevision";
 import { isPosUsableRegisterSessionStatus } from "../../../shared/registerSessionStatus";
 import { ok, userError } from "../../../shared/commandResult";
+import { getServicePrincipalActorWithCtx } from "../../servicePrincipals/actor";
+import { requirePosApplicationAuthorityWithCtx } from "../application/posApplicationAuthority";
 
 const catalogResultValidator = v.object({
   id: v.id("productSku"),
@@ -476,6 +478,13 @@ async function requireRegisterCatalogStoreAccess(
     throw new Error("Store not found.");
   }
 
+  const serviceActor = await getServicePrincipalActorWithCtx(ctx);
+  if (serviceActor) {
+    return requirePosApplicationAuthorityWithCtx(ctx, {
+      storeId: args.storeId,
+    });
+  }
+
   const athenaUser = options?.indexedIdentityOnly
     ? await requireAuthenticatedAthenaUserIndexedWithCtx(ctx, {
         sharedDemoCapability: "pos.sale.complete",
@@ -546,6 +555,7 @@ async function requirePendingCheckoutSaleContext(
 
   return {
     createdByStaffProfileId: staffProfile._id,
+    createdByUserId: staffProfile.linkedUserId,
     registerSessionId: registerSession._id,
     terminalId: terminal._id,
   };
@@ -806,6 +816,28 @@ export const quickAddSku = mutation({
       throw new Error("Store not found.");
     }
 
+    const serviceActor = await getServicePrincipalActorWithCtx(ctx);
+    if (serviceActor) {
+      const authority = await requirePosApplicationAuthorityWithCtx(ctx, {
+        storeId: args.storeId,
+      });
+      if (args.terminalId !== authority.terminalId) {
+        throw new Error("The POS application session is no longer authorized.");
+      }
+      const registerContext = await requirePendingCheckoutSaleContext(
+        ctx,
+        args,
+      );
+      if (!registerContext.createdByUserId) {
+        throw new Error("Active staff context is required to add this item.");
+      }
+      return quickAddCatalogItem(ctx, {
+        ...args,
+        ...registerContext,
+        createdByUserId: registerContext.createdByUserId,
+      });
+    }
+
     const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx, {
       sharedDemoCapability: "catalog.quick_add",
     });
@@ -841,15 +873,31 @@ export const createOrReusePendingCheckoutItemForSale = mutation({
       throw new Error("Store not found.");
     }
 
-    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
-    await requireOrganizationMemberRoleWithCtx(ctx, {
-      allowedRoles: ["full_admin", "pos_only"],
-      failureMessage: "You cannot add pending checkout items for this store.",
-      organizationId: store.organizationId,
-      userId: athenaUser._id,
-    });
-
+    const serviceActor = await getServicePrincipalActorWithCtx(ctx);
+    let createdByUserId: Id<"athenaUser"> | undefined;
+    let serviceTerminalId: Id<"posTerminal"> | undefined;
+    if (serviceActor) {
+      const authority = await requirePosApplicationAuthorityWithCtx(ctx, {
+        storeId: args.storeId,
+      });
+      serviceTerminalId = authority.terminalId;
+    } else {
+      const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+      await requireOrganizationMemberRoleWithCtx(ctx, {
+        allowedRoles: ["full_admin", "pos_only"],
+        failureMessage: "You cannot add pending checkout items for this store.",
+        organizationId: store.organizationId,
+        userId: athenaUser._id,
+      });
+      createdByUserId = athenaUser._id;
+    }
     const registerContext = await requirePendingCheckoutSaleContext(ctx, args);
+    if (serviceTerminalId) {
+      if (serviceTerminalId !== registerContext.terminalId) {
+        throw new Error("The POS application session is no longer authorized.");
+      }
+      createdByUserId = registerContext.createdByUserId;
+    }
 
     return createOrReusePendingCheckoutItem(ctx, {
       storeId: args.storeId,
@@ -857,8 +905,8 @@ export const createOrReusePendingCheckoutItemForSale = mutation({
       lookupCode: args.lookupCode,
       price: args.price,
       quantitySold: args.quantitySold,
-      createdByUserId: athenaUser._id,
       ...registerContext,
+      createdByUserId,
       source: "online",
     });
   },

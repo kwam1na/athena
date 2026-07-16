@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  createRemoteAssistReadRepository: vi.fn(),
   createRemoteAssistRepository: vi.fn(),
   endRemoteAssistSession: vi.fn(),
   getClient: vi.fn(),
@@ -28,7 +29,18 @@ vi.mock("./infrastructure/remoteAssistRepository", () => ({
   createRemoteAssistRepository: mocks.createRemoteAssistRepository,
 }));
 
+vi.mock("./infrastructure/remoteAssistReadRepository", () => ({
+  createRemoteAssistReadRepository: mocks.createRemoteAssistReadRepository,
+}));
+
+import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
 import * as remoteAssistPublic from "./public";
+import {
+  endSupportSession,
+  getClientByRuntime,
+  getCurrentSessionByClient,
+  startSession,
+} from "./public";
 
 function getHandler(definition: unknown) {
   return (definition as { _handler: Function })._handler;
@@ -48,6 +60,12 @@ describe("remote assist public API", () => {
     );
     mocks.getSession.mockResolvedValue(buildSession());
     mocks.createRemoteAssistRepository.mockReturnValue({
+      getClient: mocks.getClient,
+      getClientByRuntime: mocks.getClientByRuntime,
+      getCurrentSessionForClient: mocks.getCurrentSessionForClient,
+      getSession: mocks.getSession,
+    });
+    mocks.createRemoteAssistReadRepository.mockReturnValue({
       getClient: mocks.getClient,
       getClientByRuntime: mocks.getClientByRuntime,
       getCurrentSessionForClient: mocks.getCurrentSessionForClient,
@@ -74,6 +92,35 @@ describe("remote assist public API", () => {
     expect(remoteAssistPublic).toHaveProperty("getCurrentSessionByClient");
     expect(remoteAssistPublic).toHaveProperty("startSession");
     expect(remoteAssistPublic).toHaveProperty("endSupportSession");
+  });
+
+  it("validates representative public results against exported return validators", () => {
+    const client = buildClient();
+    const session = buildSession();
+    expect(() =>
+      assertConformsToExportedReturns(
+        getClientByRuntime,
+        client,
+      ),
+    ).not.toThrow();
+    expect(() =>
+      assertConformsToExportedReturns(
+        getCurrentSessionByClient,
+        session,
+      ),
+    ).not.toThrow();
+    expect(() =>
+      assertConformsToExportedReturns(startSession, {
+        kind: "ok",
+        data: session,
+      }),
+    ).not.toThrow();
+    expect(() =>
+      assertConformsToExportedReturns(endSupportSession, {
+        kind: "ok",
+        data: { ...session, endedAt: 2_000, status: "ended" },
+      }),
+    ).not.toThrow();
   });
 
   it("requires organization membership before returning a runtime client", async () => {

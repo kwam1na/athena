@@ -17,9 +17,15 @@ import userEvent from "@testing-library/user-event";
 
 const mocks = vi.hoisted(() => ({
   generateBrowserFingerprint: vi.fn(),
+  enableApplicationAccess: vi.fn(),
+  getApplicationAccessStatus: vi.fn(),
+  navigate: vi.fn(),
   registerTerminalMutation: vi.fn(),
+  reactivateTerminalMutation: vi.fn(),
   rotateRecoveryCode: vi.fn(),
   revokeRecoveryCode: vi.fn(),
+  revokeApplicationAccess: vi.fn(),
+  signOut: vi.fn(),
   updateRegisterCloseoutApprovalPolicy: vi.fn(),
   updateEodAutoCompletePolicy: vi.fn(),
   updateOpeningAutoStartPolicy: vi.fn(),
@@ -31,13 +37,23 @@ const mocks = vi.hoisted(() => ({
   useSharedDemoContext: vi.fn(),
 }));
 
+vi.mock("@convex-dev/auth/react", () => ({
+  useAuthActions: () => ({ signOut: mocks.signOut }),
+}));
+
 vi.mock("convex/react", () => ({
   useMutation: mocks.useMutation,
   useQuery: mocks.useQuery,
 }));
 
+vi.mock("@/lib/convexClient", () => ({
+  convex: { query: vi.fn() },
+}));
+
 vi.mock("@/hooks/useGetActiveStore", () => ({
-  default: () => ({ activeStore: { _id: "store-1", currency: "GHS" } }),
+  default: () => ({
+    activeStore: { _id: "store-1", currency: "GHS", name: "Downtown" },
+  }),
 }));
 
 vi.mock("@/hooks/useAuth", () => ({
@@ -80,6 +96,7 @@ vi.mock("@tanstack/react-router", () => ({
     );
   },
   useParams: () => ({ orgUrlSlug: "acme", storeUrlSlug: "downtown" }),
+  useNavigate: () => mocks.navigate,
 }));
 
 vi.mock("~/convex/_generated/api", () => ({
@@ -106,11 +123,22 @@ vi.mock("~/convex/_generated/api", () => ({
     },
     pos: {
       public: {
+        posApplicationAccess: {
+          enableApplicationAccess: "enableApplicationAccess",
+          getApplicationAccessStatus: "getApplicationAccessStatus",
+          revokeApplicationAccess: "revokeApplicationAccess",
+        },
         posRecoveryCodes: {
           getRecoveryCodeStatus: "getRecoveryCodeStatus",
           rotateRecoveryCode: "rotateRecoveryCode",
           revokeRecoveryCode: "revokeRecoveryCode",
           unlockRecoveryCode: "unlockRecoveryCode",
+        },
+        terminals: {
+          getTerminalReconnectIntentResolution:
+            "getTerminalReconnectIntentResolution",
+          reactivateTerminalFromReconnectIntent:
+            "reactivateTerminalFromReconnectIntent",
         },
       },
     },
@@ -125,22 +153,26 @@ vi.mock("@/components/ui/label", () => ({
   Label: (props: LabelHTMLAttributes<HTMLLabelElement>) => <label {...props} />,
 }));
 
-vi.mock("@/components/ui/loading-button", () => ({
-  LoadingButton: ({
-    children,
-    isLoading,
-    variant,
-    ...props
-  }: ButtonHTMLAttributes<HTMLButtonElement> & {
-    isLoading?: boolean;
-    variant?: string;
-  }) => {
-    void isLoading;
-    void variant;
-
-    return <button {...props}>{children}</button>;
-  },
-}));
+vi.mock("@/components/ui/loading-button", async () => {
+  const React = await vi.importActual<typeof import("react")>("react");
+  return {
+    LoadingButton: React.forwardRef<
+      HTMLButtonElement,
+      ButtonHTMLAttributes<HTMLButtonElement> & {
+        isLoading?: boolean;
+        variant?: string;
+      }
+    >(({ children, isLoading, variant, ...props }, ref) => {
+      void isLoading;
+      void variant;
+      return (
+        <button ref={ref} {...props}>
+          {children}
+        </button>
+      );
+    }),
+  };
+});
 
 vi.mock("@/components/ui/select", async () => {
   const React = await vi.importActual<typeof import("react")>("react");
@@ -200,7 +232,12 @@ vi.mock("@/components/ui/select", async () => {
     return trigger;
   }
 
-  const Select = ({ children, disabled, onValueChange, value }: SelectRootProps) => {
+  const Select = ({
+    children,
+    disabled,
+    onValueChange,
+    value,
+  }: SelectRootProps) => {
     const trigger = findTrigger(children);
     const { children: _children, ...triggerProps } = trigger?.props ?? {};
     void _children;
@@ -271,6 +308,20 @@ async function renderPOSSettingsView(view: ReactElement = <POSSettingsView />) {
   return result;
 }
 
+function createMemoryStorage(): Storage {
+  const values = new Map<string, string>();
+  return {
+    get length() {
+      return values.size;
+    },
+    clear: () => values.clear(),
+    getItem: (key) => values.get(key) ?? null,
+    key: (index) => [...values.keys()][index] ?? null,
+    removeItem: (key) => values.delete(key),
+    setItem: (key, value) => values.set(key, value),
+  };
+}
+
 describe("registerAndProvisionPosTerminal", () => {
   afterEach(() => {
     cleanup();
@@ -284,11 +335,31 @@ describe("registerAndProvisionPosTerminal", () => {
       "/acme/store/downtown/pos/settings?o=%2Facme%2Fstore%2Fdowntown%2Fpos",
     );
     window.localStorage.clear();
+    Object.defineProperty(window, "sessionStorage", {
+      configurable: true,
+      value: createMemoryStorage(),
+    });
     mocks.rotateRecoveryCode.mockResolvedValue({
       code: "abc123-def456",
       credential: { status: "active" },
     });
     mocks.revokeRecoveryCode.mockResolvedValue({ status: "revoked" });
+    mocks.enableApplicationAccess.mockResolvedValue({
+      grantId: "grant-1",
+      grantRevision: 2,
+      principalStatus: "active",
+      servicePrincipalId: "principal-1",
+      status: "enabled",
+    });
+    mocks.revokeApplicationAccess.mockResolvedValue({
+      grantId: "grant-1",
+      grantRevision: 2,
+      principalStatus: "active",
+      servicePrincipalId: "principal-1",
+      status: "revoked",
+    });
+    mocks.signOut.mockResolvedValue(undefined);
+    mocks.navigate.mockResolvedValue(undefined);
     mocks.unlockRecoveryCode.mockResolvedValue({ status: "active" });
     mocks.updateOpeningAutoStartPolicy.mockResolvedValue({
       mode: "enabled",
@@ -315,9 +386,18 @@ describe("registerAndProvisionPosTerminal", () => {
       if (ref === "updateRegisterCloseoutApprovalPolicy") {
         return mocks.updateRegisterCloseoutApprovalPolicy;
       }
+      if (ref === "enableApplicationAccess") {
+        return mocks.enableApplicationAccess;
+      }
+      if (ref === "revokeApplicationAccess") {
+        return mocks.revokeApplicationAccess;
+      }
       if (ref === "rotateRecoveryCode") return mocks.rotateRecoveryCode;
       if (ref === "revokeRecoveryCode") return mocks.revokeRecoveryCode;
       if (ref === "unlockRecoveryCode") return mocks.unlockRecoveryCode;
+      if (ref === "reactivateTerminalFromReconnectIntent") {
+        return mocks.reactivateTerminalMutation;
+      }
       return mocks.registerTerminalMutation;
     });
     mocks.usePermissions.mockReturnValue({
@@ -330,56 +410,64 @@ describe("registerAndProvisionPosTerminal", () => {
     });
     mocks.useSharedDemoContext.mockReturnValue(null);
     mocks.useQuery.mockImplementation((ref) =>
-      ref === "getRecoveryCodeStatus"
+      ref === "getApplicationAccessStatus"
         ? {
-            failedAttemptCount: 0,
-            lastUsedAt: undefined,
-            lockedUntil: undefined,
-            plaintextCode: "mintlamp42",
-            rotatedAt: 1,
-            status: "active",
+            grantId: "grant-1",
+            grantRevision: 1,
+            principalStatus: "active",
+            servicePrincipalId: "principal-1",
+            status: "enabled",
           }
-        : ref === "getOpeningAutoStartPolicy"
+        : ref === "getRecoveryCodeStatus"
           ? {
-              localStartMinutes: 510,
-              mode: "enabled",
-              openingBlockerHandling: "start_with_manager_review",
-              operatingTimezoneOffsetMinutes: -120,
+              failedAttemptCount: 0,
+              lastUsedAt: undefined,
+              lockedUntil: undefined,
+              plaintextCode: "mintlamp42",
+              rotatedAt: 1,
+              status: "active",
             }
-          : ref === "getEodAutoCompletePolicy"
+          : ref === "getOpeningAutoStartPolicy"
             ? {
-                cleanDayAutoCompleteEnabled: true,
-                localCompletionWindowMinutes: 1110,
-                maxAbsoluteCashVariance: 500,
-                maxVoidedSaleCount: 1,
-                maxVoidedSaleTotal: 2500,
-                mode: "dry_run",
+                localStartMinutes: 510,
+                mode: "enabled",
+                openingBlockerHandling: "start_with_manager_review",
                 operatingTimezoneOffsetMinutes: -120,
               }
-            : ref === "getRegisterCloseoutApprovalPolicy"
+            : ref === "getEodAutoCompletePolicy"
               ? {
-                  requireManagerSignoffForAnyVariance: false,
-                  requireManagerSignoffForOvers: false,
-                  requireManagerSignoffForShorts: false,
-                  varianceApprovalThreshold: 5000,
+                  cleanDayAutoCompleteEnabled: true,
+                  localCompletionWindowMinutes: 1110,
+                  maxAbsoluteCashVariance: 500,
+                  maxVoidedSaleCount: 1,
+                  maxVoidedSaleTotal: 2500,
+                  mode: "dry_run",
+                  operatingTimezoneOffsetMinutes: -120,
                 }
-              : ref === "getStoreScheduleSummary"
+              : ref === "getRegisterCloseoutApprovalPolicy"
                 ? {
-                    context: {
-                      currentWindow: {
-                        localEndLabel: "6:30 PM",
-                        localStartLabel: "8:30 AM",
-                      },
-                      isOpen: true,
-                      nextWindow: null,
-                      phase: "during_window",
-                      timezone: "America/New_York",
-                    },
-                    schedule: {
-                      timezone: "America/New_York",
-                    },
+                    requireManagerSignoffForAnyVariance: false,
+                    requireManagerSignoffForOvers: false,
+                    requireManagerSignoffForShorts: false,
+                    varianceApprovalThreshold: 5000,
                   }
-                : null,
+                : ref === "getStoreScheduleSummary"
+                  ? {
+                      context: {
+                        currentWindow: {
+                          localEndLabel: "6:30 PM",
+                          localStartLabel: "8:30 AM",
+                        },
+                        isOpen: true,
+                        nextWindow: null,
+                        phase: "during_window",
+                        timezone: "America/New_York",
+                      },
+                      schedule: {
+                        timezone: "America/New_York",
+                      },
+                    }
+                  : null,
     );
     mocks.generateBrowserFingerprint.mockResolvedValue({
       browserInfo: { userAgent: "test" },
@@ -412,33 +500,58 @@ describe("registerAndProvisionPosTerminal", () => {
       screen.getByText("POS settings are view-only in the demo."),
     ).toHaveClass("w-fit");
     expect(screen.getByLabelText("Terminal name")).toHaveAttribute("readonly");
-    expect(screen.getByLabelText("Register number")).toHaveAttribute("readonly");
+    expect(screen.getByLabelText("Register number")).toHaveAttribute(
+      "readonly",
+    );
     expect(screen.getByLabelText("Product SKUs and services")).toBeDisabled();
     expect(screen.getByLabelText("Standard login")).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Register terminal" })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Register terminal" }),
+    ).toBeDisabled();
     expect(screen.getByText("Store Hours timing")).toBeInTheDocument();
     expect(screen.getByText("Store day automation")).toBeInTheDocument();
     expect(screen.getByLabelText("Enable store-day auto-start")).toBeDisabled();
-    expect(screen.getByRole("combobox", { name: "Store day auto-start offset" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Save store-day automation" })).toBeDisabled();
+    expect(
+      screen.getByRole("combobox", { name: "Store day auto-start offset" }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Save store-day automation" }),
+    ).toBeDisabled();
     expect(screen.getByText("Closeout approval policy")).toBeInTheDocument();
-    expect(screen.getByLabelText("Closeout variance threshold (GH₵)")).toHaveAttribute("readonly");
-    expect(screen.getByRole("button", { name: "Save closeout approval policy" })).toBeDisabled();
+    expect(
+      screen.getByLabelText("Closeout variance threshold (GH₵)"),
+    ).toHaveAttribute("readonly");
+    expect(
+      screen.getByRole("button", { name: "Save closeout approval policy" }),
+    ).toBeDisabled();
     expect(screen.getByText("EOD completion automation")).toBeInTheDocument();
     expect(screen.getByLabelText("Dry run EOD completion")).toBeDisabled();
-    expect(screen.getByRole("combobox", { name: "EOD completion offset" })).toBeDisabled();
-    expect(screen.getByLabelText("Enable blocker-free completion")).toBeDisabled();
-    expect(screen.getByLabelText("Cash variance threshold (GH₵)")).toHaveAttribute("readonly");
-    expect(screen.getByLabelText("Voided sale count threshold")).toHaveAttribute("readonly");
-    expect(screen.getByLabelText("Voided sale total threshold (GH₵)")).toHaveAttribute("readonly");
-    expect(screen.getByRole("button", { name: "Save EOD completion automation" })).toBeDisabled();
+    expect(
+      screen.getByRole("combobox", { name: "EOD completion offset" }),
+    ).toBeDisabled();
+    expect(
+      screen.getByLabelText("Enable blocker-free completion"),
+    ).toBeDisabled();
+    expect(
+      screen.getByLabelText("Cash variance threshold (GH₵)"),
+    ).toHaveAttribute("readonly");
+    expect(
+      screen.getByLabelText("Voided sale count threshold"),
+    ).toHaveAttribute("readonly");
+    expect(
+      screen.getByLabelText("Voided sale total threshold (GH₵)"),
+    ).toHaveAttribute("readonly");
+    expect(
+      screen.getByRole("button", { name: "Save EOD completion automation" }),
+    ).toBeDisabled();
     expect(screen.queryByText("POS recovery code")).not.toBeInTheDocument();
     expect(screen.getByText("Terminal health")).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Open terminal health" })).not.toBeInTheDocument();
-    expect(mocks.useQuery).toHaveBeenCalledWith(
-      "getOpeningAutoStartPolicy",
-      { storeId: "store-1" },
-    );
+    expect(
+      screen.queryByRole("link", { name: "Open terminal health" }),
+    ).not.toBeInTheDocument();
+    expect(mocks.useQuery).toHaveBeenCalledWith("getOpeningAutoStartPolicy", {
+      storeId: "store-1",
+    });
     expect(mocks.useQuery).not.toHaveBeenCalledWith(
       "getRecoveryCodeStatus",
       expect.anything(),
@@ -512,6 +625,46 @@ describe("registerAndProvisionPosTerminal", () => {
         transactionCapability: "services_only",
       }),
     );
+    expect(
+      await screen.findByRole("heading", { name: "Checkout station ready" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Front counter is registered for Downtown/),
+    ).toBeInTheDocument();
+    window.localStorage.setItem("logged_in_user_id", "admin-1");
+    window.localStorage.setItem("athena.pos.app_account_id", "admin-1");
+    mocks.signOut
+      .mockRejectedValueOnce(new Error("sign-out unavailable"))
+      .mockResolvedValueOnce(undefined);
+    await user.click(
+      screen.getByRole("button", { name: "Continue to POS sign-in" }),
+    );
+    await waitFor(() => expect(mocks.signOut).toHaveBeenCalledTimes(1));
+    expect(
+      await screen.findByText(
+        "Administrator sign-out did not complete. Retry POS sign-in or stay in settings.",
+      ),
+    ).toHaveAttribute("role", "alert");
+    expect(mocks.navigate).not.toHaveBeenCalled();
+    expect(window.localStorage.removeItem).not.toHaveBeenCalledWith(
+      "logged_in_user_id",
+    );
+    window.sessionStorage.setItem(
+      "athena.posServiceAuthPresentation.v1",
+      JSON.stringify({ kind: "active", redirectTo: "/", startedAt: 1 }),
+    );
+    await user.click(screen.getByRole("button", { name: "Retry POS sign-in" }));
+    await waitFor(() => expect(mocks.signOut).toHaveBeenCalledTimes(2));
+    expect(window.localStorage.removeItem).toHaveBeenCalledWith(
+      "logged_in_user_id",
+    );
+    expect(window.localStorage.removeItem).toHaveBeenCalledWith(
+      "athena.pos.app_account_id",
+    );
+    expect(
+      window.sessionStorage.getItem("athena.posServiceAuthPresentation.v1"),
+    ).toBeNull();
+    expect(mocks.navigate).toHaveBeenCalledWith({ to: "/login" });
   });
 
   it("saves existing terminal settings through the locked register setup", async () => {
@@ -596,14 +749,242 @@ describe("registerAndProvisionPosTerminal", () => {
     );
   });
 
-  it("shows the current POS recovery code from status", async () => {
-    await renderPOSSettingsView();
+  it("resolves and reconnects only the affected current station with fresh proof", async () => {
+    const user = userEvent.setup();
+    const writeProvisionedTerminalSeedAndClearTerminalIntegrity = vi.fn(
+      async ({ seed: nextSeed }) => ({
+        ok: true as const,
+        value: nextSeed,
+      }),
+    );
+    const localSeed = {
+      cloudTerminalId: "terminal-existing",
+      displayName: "Front counter",
+      offlineAuthorityReceipt: {
+        envelope: "stale-receipt",
+        payload: {},
+        verifiedAt: 1,
+      },
+      orgUrlSlug: "acme",
+      provisionedAt: 1,
+      registerNumber: "3",
+      schemaVersion: 2,
+      storeId: "store-1",
+      storeUrlSlug: "downtown",
+      syncSecretHash: "revoked-proof",
+      terminalId: "fingerprint-1",
+    };
+    const store = {
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true as const,
+        value: localSeed,
+      })),
+      writeProvisionedTerminalSeed: vi.fn(),
+      writeProvisionedTerminalSeedAndClearTerminalIntegrity,
+    };
+    const reconnectResolver = vi.fn(async () => ({
+      disposition: "ready" as const,
+      displayName: "Front counter",
+      expiresAt: Date.now() + 60_000,
+      storeId: "store-1" as never,
+      terminalId: "terminal-existing" as never,
+    }));
+    mocks.reactivateTerminalMutation.mockImplementation(async (args) => ({
+      kind: "ok" as const,
+      data: {
+        _id: "terminal-existing",
+        _creationTime: 1,
+        browserInfo: { userAgent: "test" },
+        displayName: "Front counter",
+        fingerprintHash: "fingerprint-1",
+        registeredAt: 1,
+        registeredByUserId: "admin-1",
+        registerNumber: "3",
+        status: "active" as const,
+        storeId: "store-1",
+        syncSecretHash: args.nextSyncSecretHash,
+      },
+    }));
+    sessionStorage.setItem(
+      "athena.posTerminalReconnectIntent.v1",
+      JSON.stringify({
+        expiresAt: Date.now() + 60_000,
+        reconnectIntentToken: "opaque-reconnect-token-123456",
+        version: 1,
+      }),
+    );
 
-    expect(await screen.findByText("mintlamp42")).toBeInTheDocument();
-    expect(screen.getByText("Current recovery code")).toBeInTheDocument();
+    await renderPOSSettingsView(
+      <POSSettingsView
+        reconnectResolver={reconnectResolver}
+        storeFactory={() => store as never}
+      />,
+    );
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Reconnect this checkout station",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(mocks.reactivateTerminalMutation).toHaveBeenCalledWith({
+        browserFingerprintHash: "fingerprint-1",
+        nextSyncSecretHash: expect.any(String),
+        reconnectIntentToken: "opaque-reconnect-token-123456",
+      }),
+    );
+    expect(
+      writeProvisionedTerminalSeedAndClearTerminalIntegrity,
+    ).toHaveBeenCalledWith({
+      seed: expect.not.objectContaining({
+        offlineAuthorityReceipt: expect.anything(),
+      }),
+      terminalIntegrity: {
+        storeId: "store-1",
+        terminalId: "fingerprint-1",
+      },
+    });
+    expect(
+      await screen.findByText(/Front counter is reconnected for Downtown/),
+    ).toBeInTheDocument();
+    expect(
+      sessionStorage.getItem("athena.posTerminalReconnectIntent.v1"),
+    ).toBeNull();
   });
 
-  it("lets full admins rotate the POS recovery code and keeps plaintext visible", async () => {
+  it("does not resolve or mutate reconnect intent for a non-admin account", async () => {
+    const reconnectResolver = vi.fn();
+    mocks.usePermissions.mockReturnValue({
+      hasFullAdminAccess: false,
+      isLoading: false,
+    });
+    sessionStorage.setItem(
+      "athena.posTerminalReconnectIntent.v1",
+      JSON.stringify({
+        expiresAt: Date.now() + 60_000,
+        reconnectIntentToken: "opaque-reconnect-token-123456",
+        version: 1,
+      }),
+    );
+
+    await renderPOSSettingsView(
+      <POSSettingsView reconnectResolver={reconnectResolver} />,
+    );
+    expect(
+      await screen.findByText(/No terminal settings were changed/),
+    ).toHaveAttribute("role", "alert");
+    expect(reconnectResolver).not.toHaveBeenCalled();
+    expect(mocks.reactivateTerminalMutation).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when reconnect evidence is expired, replayed, or browser-scoped elsewhere", async () => {
+    const reconnectResolver = vi.fn(async () => {
+      throw new Error("This checkout station reconnect request is unavailable.");
+    });
+    sessionStorage.setItem(
+      "athena.posTerminalReconnectIntent.v1",
+      JSON.stringify({
+        expiresAt: Date.now() + 60_000,
+        reconnectIntentToken: "opaque-reconnect-token-123456",
+        version: 1,
+      }),
+    );
+
+    await renderPOSSettingsView(
+      <POSSettingsView reconnectResolver={reconnectResolver} />,
+    );
+    expect(
+      await screen.findByText(/No terminal settings were changed/),
+    ).toHaveAttribute("role", "alert");
+    expect(mocks.reactivateTerminalMutation).not.toHaveBeenCalled();
+  });
+
+  it("never refetches or displays recovery-code plaintext from status", async () => {
+    await renderPOSSettingsView();
+
+    expect(screen.queryByText("mintlamp42")).not.toBeInTheDocument();
+    expect(screen.queryByText("Current recovery code")).not.toBeInTheDocument();
+  });
+
+  it("revokes and re-enables POS application access with expected revisions", async () => {
+    const user = userEvent.setup();
+    await renderPOSSettingsView();
+
+    const revokeTrigger = await screen.findByRole("button", {
+      name: "Revoke application access",
+    });
+    await user.click(revokeTrigger);
+    expect(
+      screen.getByRole("heading", { name: "Revoke POS application access?" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/This changes application access for Downtown/),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cancel" })).toHaveFocus();
+
+    await user.keyboard("{Escape}");
+    expect(
+      screen.queryByRole("heading", { name: "Revoke POS application access?" }),
+    ).not.toBeInTheDocument();
+    expect(revokeTrigger).toHaveFocus();
+
+    await user.click(revokeTrigger);
+    await user.click(
+      screen
+        .getAllByRole("button", { name: "Revoke application access" })
+        .at(-1)!,
+    );
+    await waitFor(() =>
+      expect(mocks.revokeApplicationAccess).toHaveBeenCalledWith({
+        expectedRevision: 1,
+        storeId: "store-1",
+      }),
+    );
+    expect(
+      await screen.findByText("POS application access revoked."),
+    ).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: "Re-enable application access" }),
+    );
+    await waitFor(() =>
+      expect(mocks.enableApplicationAccess).toHaveBeenCalledWith({
+        expectedRevision: 2,
+        storeId: "store-1",
+      }),
+    );
+    expect(
+      screen.getByText("POS application access enabled."),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps application-access controls recoverable after mutation failure", async () => {
+    const user = userEvent.setup();
+    mocks.revokeApplicationAccess.mockRejectedValueOnce(new Error("network"));
+    await renderPOSSettingsView();
+
+    await user.click(
+      await screen.findByRole("button", { name: "Revoke application access" }),
+    );
+    await user.click(
+      screen
+        .getAllByRole("button", { name: "Revoke application access" })
+        .at(-1)!,
+    );
+
+    expect(
+      await screen.findByText(
+        "POS application access was not changed. Refresh and try again.",
+      ),
+    ).toHaveAttribute("role", "alert");
+    expect(
+      screen
+        .getAllByRole("button", { name: "Revoke application access" })
+        .at(-1),
+    ).toBeEnabled();
+  });
+
+  it("rotates with store consequences and reveals plaintext only once", async () => {
     const user = userEvent.setup();
 
     await renderPOSSettingsView();
@@ -611,13 +992,128 @@ describe("registerAndProvisionPosTerminal", () => {
     await user.click(
       await screen.findByRole("button", { name: /rotate recovery code/i }),
     );
+    expect(
+      screen.getByRole("heading", { name: "Rotate recovery code?" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/This changes the recovery credential for Downtown/),
+    ).toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", { name: "Rotate recovery code" }),
+    );
 
     await waitFor(() =>
       expect(mocks.rotateRecoveryCode).toHaveBeenCalledWith({
         storeId: "store-1",
       }),
     );
+    expect(
+      await screen.findByRole("heading", {
+        name: "Save the recovery code for Downtown",
+      }),
+    ).toBeInTheDocument();
     expect(screen.getByText("abc123-def456")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Done" })).toBeDisabled();
+    await user.click(
+      screen.getByText("I saved this recovery code in the approved location."),
+    );
+    await user.click(screen.getByRole("button", { name: "Done" }));
+    expect(screen.queryByText("abc123-def456")).not.toBeInTheDocument();
+  });
+
+  it("announces copy success and discards reveal-once plaintext on Escape", async () => {
+    const user = userEvent.setup();
+    const writeText = vi
+      .spyOn(navigator.clipboard, "writeText")
+      .mockResolvedValue(undefined);
+    await renderPOSSettingsView();
+
+    const rotateTrigger = await screen.findByRole("button", {
+      name: "Rotate recovery code",
+    });
+    await user.click(rotateTrigger);
+    await user.click(
+      screen.getByRole("button", { name: "Rotate recovery code" }),
+    );
+    await user.click(
+      await screen.findByRole("button", { name: "Copy recovery code" }),
+    );
+    expect(writeText).toHaveBeenCalledWith("abc123-def456");
+    expect(screen.getByText("Recovery code copied.")).toHaveAttribute(
+      "role",
+      "status",
+    );
+
+    await user.keyboard("{Escape}");
+    expect(screen.queryByText("abc123-def456")).not.toBeInTheDocument();
+    expect(rotateTrigger).toHaveFocus();
+  });
+
+  it("announces copy failure without hiding the reveal-once code", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(navigator.clipboard, "writeText").mockRejectedValue(
+      new Error("clipboard unavailable"),
+    );
+    await renderPOSSettingsView();
+
+    await user.click(
+      await screen.findByRole("button", { name: "Rotate recovery code" }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Rotate recovery code" }),
+    );
+    await user.click(
+      await screen.findByRole("button", { name: "Copy recovery code" }),
+    );
+
+    expect(
+      screen.getByText("Recovery code was not copied. Copy it manually."),
+    ).toHaveAttribute("role", "alert");
+    expect(screen.getByText("abc123-def456")).toBeInTheDocument();
+  });
+
+  it("shows the no-credential state without a plaintext recovery value", async () => {
+    mocks.useQuery.mockImplementation((ref) =>
+      ref === "getApplicationAccessStatus"
+        ? {
+            grantId: "grant-1",
+            grantRevision: 1,
+            principalStatus: "active",
+            servicePrincipalId: "principal-1",
+            status: "enabled",
+          }
+        : null,
+    );
+
+    await renderPOSSettingsView();
+
+    expect(
+      screen.getByText("No recovery credential is configured for this store."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Create recovery code" }),
+    ).toBeEnabled();
+  });
+
+  it("keeps recovery controls available after rotation fails", async () => {
+    const user = userEvent.setup();
+    mocks.rotateRecoveryCode.mockRejectedValueOnce(new Error("network"));
+    await renderPOSSettingsView();
+
+    await user.click(
+      await screen.findByRole("button", { name: "Rotate recovery code" }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Rotate recovery code" }),
+    );
+
+    expect(
+      await screen.findByText("Recovery code was not changed. Try again."),
+    ).toHaveAttribute("role", "alert");
+    expect(screen.queryByText("abc123-def456")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Rotate recovery code" }),
+    ).toBeEnabled();
   });
 
   it("lets full admins unlock a locked POS recovery code", async () => {
@@ -650,7 +1146,15 @@ describe("registerAndProvisionPosTerminal", () => {
 
     await renderPOSSettingsView();
 
-    await user.click(await screen.findByRole("button", { name: /revoke/i }));
+    await user.click(
+      await screen.findByRole("button", { name: "Revoke recovery code" }),
+    );
+    expect(
+      screen.getByText(/This changes the recovery credential for Downtown/),
+    ).toBeInTheDocument();
+    await user.click(
+      screen.getAllByRole("button", { name: "Revoke recovery code" }).at(-1)!,
+    );
 
     await waitFor(() =>
       expect(mocks.revokeRecoveryCode).toHaveBeenCalledWith({
@@ -1015,7 +1519,9 @@ describe("registerAndProvisionPosTerminal", () => {
     await renderPOSSettingsView();
 
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: /revoke/i })).toBeDisabled(),
+      expect(
+        screen.getByRole("button", { name: "Revoke recovery code" }),
+      ).toBeDisabled(),
     );
   });
 
@@ -1126,7 +1632,7 @@ describe("registerAndProvisionPosTerminal", () => {
     );
     expect(
       screen.getByText((_content, element) =>
-        Boolean(element?.textContent?.trim() === "1 of 7 reporting"),
+        Boolean(element?.textContent?.trim() === "1 of 8 reporting"),
       ),
     ).toBeInTheDocument();
     expect(
@@ -1248,6 +1754,19 @@ describe("registerAndProvisionPosTerminal", () => {
               ok: true,
               value: {
                 cloudTerminalId: "terminal-existing",
+                offlineAuthorityReceipt: {
+                  envelope: "receipt-1",
+                  payload: {
+                    audience: "athena.pos.offline",
+                    capabilityId: "pos.application",
+                    expiresAt: Date.now() + 60_000,
+                    issuedAt: Date.now() - 1_000,
+                    storeId: "store-1",
+                    terminalId: "terminal-existing",
+                    version: 1,
+                  },
+                  verifiedAt: Date.now(),
+                },
                 storeId: "store-1",
                 terminalId: "fingerprint-1",
               },
@@ -1280,7 +1799,7 @@ describe("registerAndProvisionPosTerminal", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText((_content, element) =>
-        Boolean(element?.textContent?.trim() === "7 of 7 reporting"),
+        Boolean(element?.textContent?.trim() === "8 of 8 reporting"),
       ),
     ).toBeInTheDocument();
   });

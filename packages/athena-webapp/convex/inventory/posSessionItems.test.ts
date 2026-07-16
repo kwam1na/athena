@@ -1,19 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Id } from "../_generated/dataModel";
+import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
 
 const mocks = vi.hoisted(() => ({
-  requireAuthenticatedAthenaUserWithCtx: vi.fn(),
-  requireOrganizationMemberRoleWithCtx: vi.fn(),
+  requirePosApplicationAuthorityWithCtx: vi.fn(),
   runRemoveSessionItemCommand: vi.fn(),
   runUpsertSessionItemCommand: vi.fn(),
 }));
 
-vi.mock("../lib/athenaUserAuth", () => ({
-  requireAuthenticatedAthenaUserWithCtx:
-    mocks.requireAuthenticatedAthenaUserWithCtx,
-  requireOrganizationMemberRoleWithCtx:
-    mocks.requireOrganizationMemberRoleWithCtx,
+vi.mock("../pos/application/posApplicationAuthority", () => ({
+  requirePosApplicationAuthorityWithCtx:
+    mocks.requirePosApplicationAuthorityWithCtx,
 }));
 
 vi.mock("../pos/application/commands/sessionCommands", () => ({
@@ -21,14 +19,15 @@ vi.mock("../pos/application/commands/sessionCommands", () => ({
   runUpsertSessionItemCommand: mocks.runUpsertSessionItemCommand,
 }));
 
-vi.mock(
-  "../pos/infrastructure/repositories/sessionCommandRepository",
-  () => ({
-    collectSessionItemsFromPages: vi.fn(),
-  }),
-);
+vi.mock("../pos/infrastructure/repositories/sessionCommandRepository", () => ({
+  collectSessionItemsFromPages: vi.fn(),
+}));
 
-import { addOrUpdateItem, removeItem } from "./posSessionItems";
+import {
+  addOrUpdateItem,
+  getSessionItems,
+  removeItem,
+} from "./posSessionItems";
 import { collectSessionItemsFromPages } from "../pos/infrastructure/repositories/sessionCommandRepository";
 
 function getHandler(definition: unknown) {
@@ -38,10 +37,10 @@ function getHandler(definition: unknown) {
 describe("posSessionItems public mutations", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    mocks.requireAuthenticatedAthenaUserWithCtx.mockResolvedValue({
-      _id: "user-1",
+    mocks.requirePosApplicationAuthorityWithCtx.mockResolvedValue({
+      storeId: "store-1",
+      terminalId: "terminal-1",
     });
-    mocks.requireOrganizationMemberRoleWithCtx.mockResolvedValue(undefined);
     mocks.runUpsertSessionItemCommand.mockResolvedValue({
       data: {
         expiresAt: 1,
@@ -55,6 +54,56 @@ describe("posSessionItems public mutations", () => {
       },
       status: "ok",
     });
+  });
+
+  it("proves public session-item handlers conform to their return validators", async () => {
+    vi.mocked(collectSessionItemsFromPages).mockResolvedValue([
+      {
+        _id: "item-1",
+        _creationTime: 1,
+        areProcessingFeesAbsorbed: false,
+        createdAt: 1,
+        price: 12000,
+        productId: "product-1",
+        productName: "Closure Wig",
+        productSku: "SKU-1",
+        productSkuId: "sku-1",
+        quantity: 1,
+        sessionId: "session-1",
+        storeId: "store-1",
+        updatedAt: 1,
+      },
+    ] as never);
+    const ctx = buildCtx();
+    const getResult = await getHandler(getSessionItems)(ctx as never, {
+      sessionId: "session-1" as Id<"posSession">,
+    });
+    const upsertResult = await getHandler(addOrUpdateItem)(ctx as never, {
+      barcode: "123",
+      price: 12000,
+      productId: "product-1" as Id<"product">,
+      productName: "Closure Wig",
+      productSku: "SKU-1",
+      productSkuId: "sku-1" as Id<"productSku">,
+      quantity: 1,
+      sessionId: "session-1" as Id<"posSession">,
+      staffProfileId: "staff-1" as Id<"staffProfile">,
+    });
+    const removeResult = await getHandler(removeItem)(ctx as never, {
+      itemId: "item-1" as Id<"posSessionItem">,
+      sessionId: "session-1" as Id<"posSession">,
+      staffProfileId: "staff-1" as Id<"staffProfile">,
+    });
+
+    expect(() =>
+      assertConformsToExportedReturns(getSessionItems, getResult),
+    ).not.toThrow();
+    expect(() =>
+      assertConformsToExportedReturns(addOrUpdateItem, upsertResult),
+    ).not.toThrow();
+    expect(() =>
+      assertConformsToExportedReturns(removeItem, removeResult),
+    ).not.toThrow();
   });
 
   it("requires authenticated store access before adding or updating a session item", async () => {
@@ -79,13 +128,12 @@ describe("posSessionItems public mutations", () => {
       kind: "ok",
     });
 
-    expect(mocks.requireAuthenticatedAthenaUserWithCtx).toHaveBeenCalledWith(ctx);
-    expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(ctx, {
-      allowedRoles: ["full_admin", "pos_only"],
-      failureMessage: "You cannot change this POS sale.",
-      organizationId: "org-1",
-      userId: "user-1",
-    });
+    expect(mocks.requirePosApplicationAuthorityWithCtx).toHaveBeenCalledWith(
+      ctx,
+      {
+        storeId: "store-1",
+      },
+    );
     expect(mocks.runUpsertSessionItemCommand).toHaveBeenCalledWith(
       ctx,
       expect.objectContaining({
@@ -95,8 +143,8 @@ describe("posSessionItems public mutations", () => {
   });
 
   it("does not mutate session items when authorization fails", async () => {
-    mocks.requireOrganizationMemberRoleWithCtx.mockRejectedValueOnce(
-      new Error("You cannot change this POS sale."),
+    mocks.requirePosApplicationAuthorityWithCtx.mockRejectedValueOnce(
+      new Error("The POS application session is no longer authorized."),
     );
 
     await expect(
@@ -105,7 +153,7 @@ describe("posSessionItems public mutations", () => {
         sessionId: "session-1" as Id<"posSession">,
         staffProfileId: "staff-1" as Id<"staffProfile">,
       }),
-    ).rejects.toThrow("You cannot change this POS sale.");
+    ).rejects.toThrow("no longer authorized");
 
     expect(mocks.runRemoveSessionItemCommand).not.toHaveBeenCalled();
   });
@@ -128,7 +176,6 @@ describe("posSessionItems public mutations", () => {
         updatedAt: 1,
       },
     ] as never);
-    const { getSessionItems } = await import("./posSessionItems");
     const ctx = buildCtx();
 
     const rows = await getHandler(getSessionItems)(ctx as never, {
@@ -136,27 +183,39 @@ describe("posSessionItems public mutations", () => {
     });
 
     expect(rows).toHaveLength(1);
-    expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(ctx, {
-      allowedRoles: ["full_admin", "pos_only"],
-      failureMessage: "You cannot change this POS sale.",
-      organizationId: "org-1",
-      userId: "user-1",
-    });
+    expect(mocks.requirePosApplicationAuthorityWithCtx).toHaveBeenCalledWith(
+      ctx,
+      { storeId: "store-1" },
+    );
   });
 
   it("does not return session items when authorization fails", async () => {
-    mocks.requireOrganizationMemberRoleWithCtx.mockRejectedValueOnce(
-      new Error("You cannot change this POS sale."),
+    mocks.requirePosApplicationAuthorityWithCtx.mockRejectedValueOnce(
+      new Error("The POS application session is no longer authorized."),
     );
-    const { getSessionItems } = await import("./posSessionItems");
-
     await expect(
       getHandler(getSessionItems)(buildCtx() as never, {
         sessionId: "session-1" as Id<"posSession">,
       }),
-    ).rejects.toThrow("You cannot change this POS sale.");
+    ).rejects.toThrow("no longer authorized");
 
     expect(collectSessionItemsFromPages).not.toHaveBeenCalled();
+  });
+
+  it("denies cross-terminal resource confusion", async () => {
+    mocks.requirePosApplicationAuthorityWithCtx.mockResolvedValueOnce({
+      storeId: "store-1",
+      terminalId: "terminal-2",
+    });
+
+    await expect(
+      getHandler(removeItem)(buildCtx() as never, {
+        itemId: "item-1" as Id<"posSessionItem">,
+        sessionId: "session-1" as Id<"posSession">,
+        staffProfileId: "staff-1" as Id<"staffProfile">,
+      }),
+    ).rejects.toThrow("no longer authorized");
+    expect(mocks.runRemoveSessionItemCommand).not.toHaveBeenCalled();
   });
 });
 
@@ -168,6 +227,7 @@ function buildCtx() {
           return {
             _id: "session-1",
             storeId: "store-1",
+            terminalId: "terminal-1",
           };
         }
         if (tableName === "store" && id === "store-1") {
