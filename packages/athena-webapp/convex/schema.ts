@@ -132,6 +132,7 @@ import {
   vendorSchema,
 } from "./schemas/stockOps";
 import {
+  automationNotificationDeliverySchema,
   automationPolicySchema,
   automationRunSchema,
   scheduledRunLedgerSchema,
@@ -383,6 +384,15 @@ const schema = defineSchema({
     ])
     .index("by_storeId_outcome", ["storeId", "outcome"])
     .index("by_storeId_idempotencyKey", ["storeId", "idempotencyKey"]),
+  automationNotificationDelivery: defineTable(
+    automationNotificationDeliverySchema,
+  )
+    .index("by_dedupeKey", ["dedupeKey"])
+    .index("by_storeId_operatingDate_action", [
+      "storeId",
+      "operatingDate",
+      "action",
+    ]),
   scheduledRunLedger: defineTable(scheduledRunLedgerSchema)
     .index("by_runKey", ["runKey"])
     .index("by_storeId_cronFamily_window", [

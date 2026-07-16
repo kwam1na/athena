@@ -429,6 +429,51 @@ describe("automation foundation", () => {
     );
   });
 
+  it("preserves required event ids when an eligible action safely skips", async () => {
+    const { db, patches } = createDb({
+      automationPolicy: [
+        {
+          _id: "policy-1",
+          action: "opening.auto_start",
+          createdAt: 1,
+          domain: "test_domain",
+          mode: "enabled",
+          policyVersion: "policy.v2",
+          storeId: "store-1",
+          updatedAt: 1,
+        },
+      ],
+    });
+
+    const result = await evaluateAutomationActionWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        action,
+        adapterDecision: eligibleDecision,
+        apply: vi.fn().mockResolvedValue({
+          error: {
+            code: "precondition_failed",
+            message: "The action needs manager review.",
+          },
+          outcome: "skipped" as const,
+        }),
+        idempotencyKey:
+          "test_domain:opening.auto_start:store-1:2026-06-08",
+        operatingDate: "2026-06-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result.run).toMatchObject({
+      error: {
+        code: "precondition_failed",
+      },
+      eventIds: [],
+      outcome: "skipped",
+    });
+    expect(patches.at(-1)?.value).not.toHaveProperty("eventIds");
+  });
+
   it("records invalid adapter input as a failed run without mutation", async () => {
     const { db } = createDb({
       automationPolicy: [

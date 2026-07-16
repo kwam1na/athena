@@ -81,7 +81,10 @@ describe("DailyManagerReport", () => {
 
     expect(html).toContain("Ready for manager review");
     expect(html).not.toContain("Review the close when you are ready.");
-    expect(html).toContain("Next opening");
+    expect(html).toContain("Manager review");
+    expect(html).toContain(
+      "Review EOD Review before completing the store day.",
+    );
     expect(html).not.toContain("Register session is still open");
     expect(html).not.toContain("Front Counter is still open.");
     expect(html).not.toContain(
@@ -238,11 +241,12 @@ describe("DailyManagerReport", () => {
       />,
     );
 
-    expect(html).toContain("Automation failed");
+    expect(html).toContain("Automation needs attention");
     expect(html).toContain(
-      "Athena could not finish the EOD Review automation check.",
+      "Athena could not complete the automated EOD check.",
     );
-    expect(html).toContain("Before close");
+    expect(html).toContain("Required action");
+    expect(html).toContain("Open EOD Review");
     expect(html).toContain("Register session open");
     expect(html).toContain("Front Counter is still open.");
     expect(html).toContain(

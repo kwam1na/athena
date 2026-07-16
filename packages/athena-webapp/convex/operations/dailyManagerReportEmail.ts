@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import {
   action,
   internalAction,
+  internalMutation,
   internalQuery,
   type ActionCtx,
   type QueryCtx,
@@ -73,12 +74,17 @@ type RegisterCashPositionSummary = {
   registerVarianceCount: number;
 };
 
-type DailyManagerReportSendStatus = "applied" | "prepared";
+type DailyManagerReportSendStatus =
+  | "applied"
+  | "prepared"
+  | "skipped"
+  | "failed";
 type PreparedDailyCloseSnapshot = Awaited<
   ReturnType<typeof buildDailyCloseSnapshotWithCtx>
 >;
 
 const REGISTER_SESSION_EMAIL_SOURCE_LIMIT = 1000;
+const ACTION_REQUIRED_DELIVERY_LEASE_MS = 5 * 60 * 1000;
 
 export const getMostRecentDailyManagerReportPayload = internalQuery({
   args: {
@@ -226,6 +232,161 @@ export const getPreparedDailyManagerReportPayloadForDate = internalQuery({
   },
 });
 
+export const getActionRequiredDailyManagerReportPayloadForRun = internalQuery({
+  args: {
+    automationRunId: v.id("automationRun"),
+  },
+  handler: async (ctx, args): Promise<DailyManagerReportPayload | null> => {
+    const run = await ctx.db.get("automationRun", args.automationRunId);
+
+    if (
+      !run ||
+      run.action !== "eod.auto_complete" ||
+      (run.outcome !== "skipped" && run.outcome !== "failed")
+    ) {
+      return null;
+    }
+
+    const store = await resolveStore(ctx, { storeId: run.storeId });
+    const snapshot = await buildDailyCloseSnapshotWithCtx(ctx, {
+      operatingDate: run.operatingDate,
+      storeId: run.storeId,
+    });
+    const cashPositionSummary = await buildRegisterCashPositionSummary(ctx, {
+      endAt: snapshot.endAt,
+      operatingDate: snapshot.operatingDate,
+      startAt: snapshot.startAt,
+      storeId: store._id,
+    });
+
+    return buildOpenDailyManagerReportPayload({
+      cashPositionSummary,
+      completedTimezone: await resolveStoreScheduleTimezoneForAt(ctx, {
+        at: run.updatedAt,
+        storeId: store._id,
+      }),
+      snapshot,
+      status: run.outcome,
+      statusAt: run.updatedAt,
+      store,
+    });
+  },
+});
+
+function actionRequiredDeliveryDedupeKey(args: {
+  operatingDate: string;
+  recipientEmail: string;
+  storeId: Id<"store">;
+}) {
+  return [
+    "daily_operations",
+    "eod.auto_complete",
+    args.storeId,
+    args.operatingDate,
+    "eod_action_required",
+    args.recipientEmail.trim().toLowerCase(),
+  ].join(":");
+}
+
+export const reserveActionRequiredDailyManagerReportDelivery = internalMutation({
+  args: {
+    automationRunId: v.id("automationRun"),
+    recipientEmail: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const run = await ctx.db.get("automationRun", args.automationRunId);
+
+    if (
+      !run ||
+      run.action !== "eod.auto_complete" ||
+      (run.outcome !== "skipped" && run.outcome !== "failed")
+    ) {
+      return null;
+    }
+
+    const now = Date.now();
+    const recipientEmail = args.recipientEmail.trim().toLowerCase();
+    const dedupeKey = actionRequiredDeliveryDedupeKey({
+      operatingDate: run.operatingDate,
+      recipientEmail,
+      storeId: run.storeId,
+    });
+    const existing = await ctx.db
+      .query("automationNotificationDelivery")
+      .withIndex("by_dedupeKey", (q) => q.eq("dedupeKey", dedupeKey))
+      .unique();
+
+    if (
+      existing?.status === "sent" ||
+      (existing?.status === "pending" &&
+        typeof existing.leaseExpiresAt === "number" &&
+        existing.leaseExpiresAt > now)
+    ) {
+      return null;
+    }
+
+    if (existing) {
+      await ctx.db.patch("automationNotificationDelivery", existing._id, {
+        attemptCount: existing.attemptCount + 1,
+        automationRunId: run._id,
+        failedAt: undefined,
+        leaseExpiresAt: now + ACTION_REQUIRED_DELIVERY_LEASE_MS,
+        status: "pending",
+        updatedAt: now,
+      });
+      return existing._id;
+    }
+
+    return ctx.db.insert("automationNotificationDelivery", {
+      action: run.action,
+      attemptCount: 1,
+      automationRunId: run._id,
+      createdAt: now,
+      dedupeKey,
+      domain: run.domain,
+      leaseExpiresAt: now + ACTION_REQUIRED_DELIVERY_LEASE_MS,
+      notificationKind: "eod_action_required",
+      operatingDate: run.operatingDate,
+      organizationId: run.organizationId,
+      recipientEmail,
+      status: "pending",
+      storeId: run.storeId,
+      updatedAt: now,
+    });
+  },
+});
+
+export const markActionRequiredDailyManagerReportDeliverySent = internalMutation({
+  args: {
+    deliveryId: v.id("automationNotificationDelivery"),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    await ctx.db.patch("automationNotificationDelivery", args.deliveryId, {
+      leaseExpiresAt: undefined,
+      sentAt: now,
+      status: "sent",
+      updatedAt: now,
+    });
+  },
+});
+
+export const markActionRequiredDailyManagerReportDeliveryFailed =
+  internalMutation({
+    args: {
+      deliveryId: v.id("automationNotificationDelivery"),
+    },
+    handler: async (ctx, args) => {
+      const now = Date.now();
+      await ctx.db.patch("automationNotificationDelivery", args.deliveryId, {
+        failedAt: now,
+        leaseExpiresAt: undefined,
+        status: "failed",
+        updatedAt: now,
+      });
+    },
+  });
+
 export const sendMostRecentDailyManagerReport = action({
   args: {
     recipientEmail: v.string(),
@@ -311,8 +472,9 @@ export const sendDailyManagerReportsForDateRange = action({
 });
 
 export async function sendDailyManagerReportToAdminsForDateWithCtx(
-  ctx: Pick<ActionCtx, "runQuery">,
+  ctx: Pick<ActionCtx, "runMutation" | "runQuery">,
   args: {
+    automationRunId?: Id<"automationRun">;
     operatingDate: string;
     preparedAt?: number;
     status?: DailyManagerReportSendStatus;
@@ -320,43 +482,88 @@ export async function sendDailyManagerReportToAdminsForDateWithCtx(
   },
 ): Promise<SentDailyManagerReport[]> {
   const status = args.status ?? "applied";
-  const report =
-    status === "prepared"
-      ? await ctx.runQuery(
-          internal.operations.dailyManagerReportEmail
-            .getPreparedDailyManagerReportPayloadForDate,
-          {
-            operatingDate: args.operatingDate,
-            preparedAt: args.preparedAt,
-            storeId: args.storeId,
-          },
-        )
-      : (
-          await ctx.runQuery(
-            internal.operations.dailyManagerReportEmail
-              .getDailyManagerReportPayloadsForDateRange,
-            {
-              endOperatingDate: args.operatingDate,
-              startOperatingDate: args.operatingDate,
-              storeId: args.storeId,
-            },
-          )
-        )[0];
+  const actionRequired = status === "skipped" || status === "failed";
+  let report: DailyManagerReportPayload | null | undefined;
+
+  if (actionRequired && !args.automationRunId) {
+    throw new Error("Action-required EOD email requires an automation run.");
+  }
+
+  if (status === "prepared") {
+    report = await ctx.runQuery(
+      internal.operations.dailyManagerReportEmail
+        .getPreparedDailyManagerReportPayloadForDate,
+      {
+        operatingDate: args.operatingDate,
+        preparedAt: args.preparedAt,
+        storeId: args.storeId,
+      },
+    );
+  } else if (actionRequired && args.automationRunId) {
+    report = await ctx.runQuery(
+      internal.operations.dailyManagerReportEmail
+        .getActionRequiredDailyManagerReportPayloadForRun,
+      { automationRunId: args.automationRunId },
+    );
+  } else if (!actionRequired) {
+    report = (
+      await ctx.runQuery(
+        internal.operations.dailyManagerReportEmail
+          .getDailyManagerReportPayloadsForDateRange,
+        {
+          endOperatingDate: args.operatingDate,
+          startOperatingDate: args.operatingDate,
+          storeId: args.storeId,
+        },
+      )
+    )[0];
+  }
 
   if (!report) return [];
 
   const sentReports: SentDailyManagerReport[] = [];
 
   for (const recipient of ADMIN_EMAILS) {
+    const deliveryId =
+      actionRequired && args.automationRunId
+        ? await ctx.runMutation(
+            internal.operations.dailyManagerReportEmail
+              .reserveActionRequiredDailyManagerReportDelivery,
+            {
+              automationRunId: args.automationRunId,
+              recipientEmail: recipient.email,
+            },
+          )
+        : null;
+
+    if (actionRequired && !deliveryId) continue;
+
     const response = await sendDailyManagerReportEmail({
       ...report,
       recipientEmail: recipient.email,
       recipientName: recipient.name,
-      subject: `${report.storeName} daily report - ${report.operatingDate}`,
+      subject: actionRequired
+        ? `Action required: ${report.storeName} EOD Review - ${report.operatingDate}`
+        : `${report.storeName} daily report - ${report.operatingDate}`,
     });
 
     if (!response.ok) {
+      if (deliveryId) {
+        await ctx.runMutation(
+          internal.operations.dailyManagerReportEmail
+            .markActionRequiredDailyManagerReportDeliveryFailed,
+          { deliveryId },
+        );
+      }
       throw new Error(await response.text());
+    }
+
+    if (deliveryId) {
+      await ctx.runMutation(
+        internal.operations.dailyManagerReportEmail
+          .markActionRequiredDailyManagerReportDeliverySent,
+        { deliveryId },
+      );
     }
 
     sentReports.push({
@@ -373,9 +580,17 @@ export async function sendDailyManagerReportToAdminsForDateWithCtx(
 
 export const sendDailyManagerReportToAdminsForDate = internalAction({
   args: {
+    automationRunId: v.optional(v.id("automationRun")),
     operatingDate: v.string(),
     preparedAt: v.optional(v.number()),
-    status: v.optional(v.union(v.literal("applied"), v.literal("prepared"))),
+    status: v.optional(
+      v.union(
+        v.literal("applied"),
+        v.literal("prepared"),
+        v.literal("skipped"),
+        v.literal("failed"),
+      ),
+    ),
     storeId: v.id("store"),
   },
   handler: (ctx, args) =>
@@ -465,6 +680,24 @@ function buildPreparedDailyManagerReportPayload(args: {
   snapshot: PreparedDailyCloseSnapshot;
   store: Doc<"store">;
 }): DailyManagerReportPayload {
+  return buildOpenDailyManagerReportPayload({
+    cashPositionSummary: args.cashPositionSummary,
+    completedTimezone: args.completedTimezone,
+    snapshot: args.snapshot,
+    status: "prepared",
+    statusAt: args.preparedAt ?? Date.now(),
+    store: args.store,
+  });
+}
+
+function buildOpenDailyManagerReportPayload(args: {
+  cashPositionSummary?: RegisterCashPositionSummary;
+  completedTimezone: string;
+  snapshot: PreparedDailyCloseSnapshot;
+  status: "prepared" | "skipped" | "failed";
+  statusAt: number;
+  store: Doc<"store">;
+}): DailyManagerReportPayload {
   const storeCurrency = normalizeCurrency(args.store.currency);
   const money = moneyFormatter(storeCurrency);
   const summary = {
@@ -478,12 +711,12 @@ function buildPreparedDailyManagerReportPayload(args: {
     storeName: args.store.name,
     operatingDate: formatOperatingDate(args.snapshot.operatingDate),
     completedAt: formatCompletedAt(
-      args.preparedAt ?? Date.now(),
+      args.statusAt,
       args.completedTimezone,
     ),
     completedBy: "Athena",
     storeCurrency,
-    status: "prepared",
+    status: args.status,
     reportUrl,
     reviewedItems: buildPreparedReviewItems(args.snapshot),
     carryForwardItems: buildPreparedCarryForwardItems(args.snapshot),
@@ -491,7 +724,10 @@ function buildPreparedDailyManagerReportPayload(args: {
     summaryMetrics: buildSummaryMetrics(summary, money),
     cashMetrics: buildCashMetrics(summary, money),
     paymentTotals: buildPaymentTotals(summary, money),
-    notes: "EOD Review is waiting for manager review.",
+    notes:
+      args.status === "prepared"
+        ? "EOD Review is waiting for manager review."
+        : undefined,
   };
 }
 
