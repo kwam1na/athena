@@ -112,6 +112,10 @@ vi.mock("../../remoteAssist/infrastructure/remoteAssistRepository", () => ({
   createRemoteAssistRepository: mocks.createRemoteAssistRepository,
 }));
 
+vi.mock("../../remoteAssist/infrastructure/remoteAssistReadRepository", () => ({
+  createRemoteAssistReadRepository: mocks.createRemoteAssistRepository,
+}));
+
 import { assertConformsToExportedReturns } from "../../lib/returnValidatorContract";
 import {
   acknowledgeRegisterLifecycleAuthority,

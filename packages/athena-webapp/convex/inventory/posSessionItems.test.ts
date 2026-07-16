@@ -28,8 +28,9 @@ vi.mock(
   }),
 );
 
-import { addOrUpdateItem, removeItem } from "./posSessionItems";
+import { addOrUpdateItem, getSessionItems, removeItem } from "./posSessionItems";
 import { collectSessionItemsFromPages } from "../pos/infrastructure/repositories/sessionCommandRepository";
+import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
 
 function getHandler(definition: unknown) {
   return (definition as { _handler: Function })._handler;
@@ -141,6 +142,45 @@ describe("posSessionItems public mutations", () => {
       failureMessage: "You cannot change this POS sale.",
       organizationId: "org-1",
       userId: "user-1",
+    });
+  });
+
+  it("proves public exports conform to their return validators", () => {
+    assertConformsToExportedReturns(getSessionItems, [
+      {
+        _id: "item-1" as Id<"posSessionItem">,
+        _creationTime: 1,
+        createdAt: 1,
+        price: 12000,
+        productId: "product-1" as Id<"product">,
+        productName: "Closure Wig",
+        productSku: "SKU-1",
+        productSkuId: "sku-1" as Id<"productSku">,
+        quantity: 1,
+        sessionId: "session-1" as Id<"posSession">,
+        storeId: "store-1" as Id<"store">,
+        updatedAt: 1,
+      },
+    ]);
+    assertConformsToExportedReturns(addOrUpdateItem, {
+      kind: "ok",
+      data: {
+        itemId: "item-1" as Id<"posSessionItem">,
+        expiresAt: 1,
+      },
+    });
+    assertConformsToExportedReturns(addOrUpdateItem, {
+      kind: "user_error",
+      error: {
+        code: "not_found",
+        message: "This sale is no longer available.",
+      },
+    });
+    assertConformsToExportedReturns(removeItem, {
+      kind: "ok",
+      data: {
+        expiresAt: 1,
+      },
     });
   });
 

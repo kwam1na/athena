@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { Id } from "../../_generated/dataModel";
+import { assertConformsToExportedReturns } from "../../lib/returnValidatorContract";
 import { hashPosTerminalSyncSecret } from "../application/sync/terminalSyncSecret";
 import {
   validateTerminalAppSessionRecovery,
@@ -28,6 +29,16 @@ describe("terminal app-session recovery validation", () => {
       ctx as never,
       buildArgs(),
     );
+    assertConformsToExportedReturns(validateTerminalAppSessionRecovery, result);
+    assertConformsToExportedReturns(validateTerminalAppSessionRecovery, {
+      diagnostics: { reason: "terminal_revoked" },
+      reason: "terminal_revoked",
+      status: "blocked",
+    });
+    assertConformsToExportedReturns(validateTerminalAppSessionRecovery, {
+      diagnostics: { reason: "transient_failure" },
+      status: "retryable",
+    });
 
     expect(result).toEqual({
       status: "recoverable",
