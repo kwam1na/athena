@@ -18,12 +18,14 @@ export function PosRecoveryCodeForm({
   redirectTo,
   storeId,
   storeUrlSlug,
+  terminalName,
 }: {
   onBack: () => void;
   orgUrlSlug?: string | null;
   redirectTo?: string | null;
   storeId?: string | null;
   storeUrlSlug?: string | null;
+  terminalName?: string | null;
 }) {
   const [code, setCode] = useState("");
   const [isSigningIn, setIsSigningIn] = useState(false);
@@ -31,6 +33,10 @@ export function PosRecoveryCodeForm({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const signInInFlightRef = useRef(false);
   const { signIn } = useAuthActions();
+  const normalizedTerminalName = terminalName?.trim();
+  const recoveryInstructions = normalizedTerminalName
+    ? `Sign in to ${normalizedTerminalName} with the recovery code.`
+    : "Sign in the POS account with the recovery code.";
 
   useEffect(() => {
     const handleAuthSyncFailed = () => {
@@ -114,7 +120,7 @@ export function PosRecoveryCodeForm({
           POS recovery
         </h2>
         <p className="w-fit bg-background text-sm leading-6 text-muted-foreground">
-          Sign in the POS account with the recovery code.
+          {recoveryInstructions}
         </p>
         <button
           type="button"
@@ -130,21 +136,6 @@ export function PosRecoveryCodeForm({
         className="relative flex w-full flex-col items-start gap-layout-md overflow-hidden rounded-lg border border-none bg-background p-layout-xs before:pointer-events-none before:absolute before:inset-0"
         onSubmit={handleSubmit}
       >
-        <div className="relative z-10 flex w-full flex-col gap-layout-sm">
-          <label
-            className="text-sm font-medium text-foreground"
-            htmlFor="pos-recovery-account"
-          >
-            POS account
-          </label>
-          <Input
-            id="pos-recovery-account"
-            value={POS_RECOVERY_ACCOUNT_EMAIL}
-            readOnly
-            className="h-control-standard border-border/80 bg-background shadow-[inset_0_1px_0_hsl(var(--background)/0.85)]"
-          />
-        </div>
-
         <div className="relative z-10 flex w-full flex-col gap-layout-sm">
           <label
             className="text-sm font-medium text-foreground"

@@ -21,6 +21,7 @@ function expectPendingAuthSyncRedirect(redirectTo: string) {
 }
 
 const mocked = vi.hoisted(() => ({
+  checkAppLoginEmailApproval: vi.fn(),
   navigate: vi.fn(),
   readProvisionedTerminalSeed: vi.fn(),
   signIn: vi.fn(),
@@ -29,6 +30,12 @@ const mocked = vi.hoisted(() => ({
 
 vi.mock("@convex-dev/auth/react", () => ({
   useAuthActions: () => ({ signIn: mocked.signIn }),
+}));
+
+vi.mock("convex/react", () => ({
+  useConvex: () => ({
+    query: mocked.checkAppLoginEmailApproval,
+  }),
 }));
 
 vi.mock("@tanstack/react-router", () => ({
@@ -44,6 +51,8 @@ vi.mock("@/lib/pos/infrastructure/local/posLocalStorageRuntime", () => ({
 
 describe("Login", () => {
   beforeEach(() => {
+    mocked.checkAppLoginEmailApproval.mockReset();
+    mocked.checkAppLoginEmailApproval.mockResolvedValue({ approved: true });
     mocked.navigate.mockReset();
     mocked.readProvisionedTerminalSeed.mockReset();
     mocked.readProvisionedTerminalSeed.mockResolvedValue({
@@ -63,10 +72,26 @@ describe("Login", () => {
     mocked.useSearch.mockReturnValue({
       redirectTo: "/wigclub/store/wigclub/pos/register",
     });
+    mocked.readProvisionedTerminalSeed.mockResolvedValue({
+      ok: true,
+      value: {
+        cloudTerminalId: "terminal-1",
+        displayName: "Front register",
+        provisionedAt: 1,
+        schemaVersion: 7,
+        storeId: "store-1",
+        syncSecretHash: "secret-hash",
+        terminalId: "fingerprint-1",
+      },
+    });
 
     render(<Login />);
 
-    await user.click(screen.getByRole("button", { name: /pos sign in/i }));
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Sign in to Front register",
+      }),
+    );
     await user.type(screen.getByLabelText(/recovery code/i), "abc-123");
     await user.click(screen.getByRole("button", { name: /continue/i }));
 
@@ -77,6 +102,7 @@ describe("Login", () => {
           code: "abc-123",
           email: "pos@wigclub.store",
           orgUrlSlug: "wigclub",
+          storeId: "store-1",
           storeUrlSlug: "wigclub",
         },
       ),
@@ -106,7 +132,14 @@ describe("Login", () => {
 
     render(<Login />);
 
-    await user.click(screen.getByRole("button", { name: /pos sign in/i }));
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Sign in to Front register",
+      }),
+    );
+    expect(
+      screen.getByText("Sign in to Front register with the recovery code."),
+    ).toBeInTheDocument();
     await waitFor(() =>
       expect(
         screen.queryByText("Open recovery from the store login route."),
@@ -178,7 +211,11 @@ describe("Login", () => {
 
     render(<Login />);
 
-    await user.click(screen.getByRole("button", { name: /pos sign in/i }));
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Sign in to Front register",
+      }),
+    );
     await waitFor(() =>
       expect(
         screen.queryByText("Open recovery from the store login route."),
@@ -201,19 +238,17 @@ describe("Login", () => {
     expect(mocked.navigate).not.toHaveBeenCalled();
   });
 
-  it("disables recovery-code submission when neither url nor local browser state identifies a store", async () => {
-    const user = userEvent.setup();
+  it("hides POS sign-in when the browser has no provisioned terminal seed", async () => {
     mocked.useSearch.mockReturnValue({ redirectTo: "/login" });
 
     render(<Login />);
 
-    await user.click(screen.getByRole("button", { name: /pos sign in/i }));
-    await user.type(screen.getByLabelText(/recovery code/i), "abc-123");
-
+    await waitFor(() =>
+      expect(mocked.readProvisionedTerminalSeed).toHaveBeenCalledOnce(),
+    );
     expect(
-      screen.getByText("Open recovery from the store login route."),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /continue/i })).toBeDisabled();
+      screen.queryByTestId("athena-login-pos-sign-in"),
+    ).not.toBeInTheDocument();
     expect(mocked.signIn).not.toHaveBeenCalled();
   });
 });

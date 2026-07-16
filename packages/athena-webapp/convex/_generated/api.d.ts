@@ -214,6 +214,7 @@ import type * as operations_staffMessages from "../operations/staffMessages.js";
 import type * as operations_staffProfiles from "../operations/staffProfiles.js";
 import type * as operations_staffRoles from "../operations/staffRoles.js";
 import type * as otp_EmailOTP from "../otp/EmailOTP.js";
+import type * as otp_appLoginEmailAllowlist from "../otp/appLoginEmailAllowlist.js";
 import type * as paystack_index from "../paystack/index.js";
 import type * as pos_application_commands_adjustTransactionItems from "../pos/application/commands/adjustTransactionItems.js";
 import type * as pos_application_commands_assignCustomer from "../pos/application/commands/assignCustomer.js";
@@ -298,6 +299,7 @@ import type * as remoteAssist_application_policy from "../remoteAssist/applicati
 import type * as remoteAssist_application_posRuntimeAdapter from "../remoteAssist/application/posRuntimeAdapter.js";
 import type * as remoteAssist_application_sessionService from "../remoteAssist/application/sessionService.js";
 import type * as remoteAssist_application_types from "../remoteAssist/application/types.js";
+import type * as remoteAssist_infrastructure_remoteAssistReadRepository from "../remoteAssist/infrastructure/remoteAssistReadRepository.js";
 import type * as remoteAssist_infrastructure_remoteAssistRepository from "../remoteAssist/infrastructure/remoteAssistRepository.js";
 import type * as remoteAssist_infrastructure_transport_LiveKitRemoteAssistTransportProvider from "../remoteAssist/infrastructure/transport/LiveKitRemoteAssistTransportProvider.js";
 import type * as remoteAssist_infrastructure_transport_RemoteAssistTransportProvider from "../remoteAssist/infrastructure/transport/RemoteAssistTransportProvider.js";
@@ -789,6 +791,7 @@ declare const fullApi: ApiFromModules<{
   "operations/staffProfiles": typeof operations_staffProfiles;
   "operations/staffRoles": typeof operations_staffRoles;
   "otp/EmailOTP": typeof otp_EmailOTP;
+  "otp/appLoginEmailAllowlist": typeof otp_appLoginEmailAllowlist;
   "paystack/index": typeof paystack_index;
   "pos/application/commands/adjustTransactionItems": typeof pos_application_commands_adjustTransactionItems;
   "pos/application/commands/assignCustomer": typeof pos_application_commands_assignCustomer;
@@ -873,6 +876,7 @@ declare const fullApi: ApiFromModules<{
   "remoteAssist/application/posRuntimeAdapter": typeof remoteAssist_application_posRuntimeAdapter;
   "remoteAssist/application/sessionService": typeof remoteAssist_application_sessionService;
   "remoteAssist/application/types": typeof remoteAssist_application_types;
+  "remoteAssist/infrastructure/remoteAssistReadRepository": typeof remoteAssist_infrastructure_remoteAssistReadRepository;
   "remoteAssist/infrastructure/remoteAssistRepository": typeof remoteAssist_infrastructure_remoteAssistRepository;
   "remoteAssist/infrastructure/transport/LiveKitRemoteAssistTransportProvider": typeof remoteAssist_infrastructure_transport_LiveKitRemoteAssistTransportProvider;
   "remoteAssist/infrastructure/transport/RemoteAssistTransportProvider": typeof remoteAssist_infrastructure_transport_RemoteAssistTransportProvider;

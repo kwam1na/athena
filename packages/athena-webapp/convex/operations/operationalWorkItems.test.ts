@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Id } from "../_generated/dataModel";
 import {
   createOperationalWorkItem,
+  getOpenWorkCountSummary,
+  getPendingApprovalCountSummary,
   getQueueSnapshot,
 } from "./operationalWorkItems";
 import * as athenaUserAuth from "../lib/athenaUserAuth";
@@ -57,6 +59,7 @@ function createQueueContext(
     approvalRequests?: QueueTestRow[];
     oversizedRepairs?: QueueTestRow[];
     products?: QueueTestRow[];
+    syncConflicts?: QueueTestRow[];
     stores?: QueueTestRow[];
     workItems?: QueueTestRow[];
   } = {},
@@ -66,6 +69,7 @@ function createQueueContext(
   const oversizedRepairs = args.oversizedRepairs ?? [];
   const workItems = args.workItems ?? [];
   const approvalRequests = args.approvalRequests ?? [];
+  const syncConflicts = args.syncConflicts ?? [];
 
   return {
     db: {
@@ -114,6 +118,13 @@ function createQueueContext(
                 ),
               );
             }
+            if (tableName === "posLocalSyncConflict") {
+              return syncConflicts.filter((conflict) =>
+                Array.from(constraints.entries()).every(
+                  ([fieldName, value]) => conflict[fieldName] === value,
+                ),
+              );
+            }
             return [];
           };
 
@@ -139,13 +150,149 @@ beforeEach(() => {
   } as never);
 });
 
+describe("getOpenWorkCountSummary", () => {
+  it("returns the bounded consolidated count without loading queue evidence", async () => {
+    const ctx = createQueueContext({
+      workItems: [
+        workItem({
+          _id: "synced-sale-1" as Id<"operationalWorkItem">,
+          metadata: { localTransactionId: "transaction-1" },
+          productSkuId: "sku-1" as Id<"productSku">,
+          type: "synced_sale_inventory_review",
+        }),
+        workItem({
+          _id: "synced-sale-2" as Id<"operationalWorkItem">,
+          metadata: { localTransactionId: "transaction-2" },
+          productSkuId: "sku-1" as Id<"productSku">,
+          status: "in_progress",
+          type: "synced_sale_inventory_review",
+        }),
+        workItem({
+          _id: "service-case-1" as Id<"operationalWorkItem">,
+          type: "service_case",
+        }),
+      ],
+    });
+
+    const result = await getHandler(getOpenWorkCountSummary)(ctx, {
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(result).toEqual({
+      completeness: "complete",
+      count: 2,
+    });
+    expect(ctx.db.query).not.toHaveBeenCalledWith("approvalRequest");
+    expect(ctx.db.query).not.toHaveBeenCalledWith("localSyncConflict");
+  });
+
+  it("marks the observed count incomplete when a logical-work lane reaches its read bound", async () => {
+    const ctx = createQueueContext({
+      workItems: Array.from({ length: 501 }, (_, index) =>
+        workItem({
+          _id: `service-case-${index}` as Id<"operationalWorkItem">,
+          type: "service_case",
+        }),
+      ),
+    });
+
+    const result = await getHandler(getOpenWorkCountSummary)(ctx, {
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(result).toEqual({
+      completeness: "incomplete",
+      count: 500,
+    });
+  });
+});
+
+describe("getPendingApprovalCountSummary", () => {
+  it("counts supported pending approvals without loading queue records", async () => {
+    const ctx = createQueueContext({
+      approvalRequests: [
+        approvalRequest({
+          _id: "approval-1" as Id<"approvalRequest">,
+          requestType: "variance_review",
+        }),
+        approvalRequest({
+          _id: "approval-2" as Id<"approvalRequest">,
+          requestType: "pos_transaction_void",
+        }),
+        approvalRequest({
+          _id: "approval-unsupported" as Id<"approvalRequest">,
+          requestType: "unsupported_review",
+        }),
+        approvalRequest({
+          _id: "approval-complete" as Id<"approvalRequest">,
+          requestType: "variance_review",
+          status: "approved",
+        }),
+      ],
+    });
+
+    const result = await getHandler(getPendingApprovalCountSummary)(ctx, {
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(result).toEqual({
+      completeness: "complete",
+      count: 2,
+    });
+    expect(ctx.db.query).not.toHaveBeenCalledWith("operationalWorkItem");
+  });
+
+  it("marks the observed approval count incomplete at the navigation read bound", async () => {
+    const ctx = createQueueContext({
+      approvalRequests: Array.from({ length: 101 }, (_, index) =>
+        approvalRequest({
+          _id: `approval-${index}` as Id<"approvalRequest">,
+          requestType: "variance_review",
+        }),
+      ),
+    });
+
+    const result = await getHandler(getPendingApprovalCountSummary)(ctx, {
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(result).toEqual({
+      completeness: "incomplete",
+      count: 100,
+    });
+  });
+
+  it("propagates incomplete sync-conflict evidence into the approval summary", async () => {
+    const ctx = createQueueContext({
+      syncConflicts: Array.from({ length: 101 }, (_, index) => ({
+        _id: `sync-conflict-${index}`,
+        conflictType: "permission",
+        createdAt: index,
+        details: {},
+        localEventId: `event-${index}`,
+        sequence: index,
+        status: "needs_review",
+        storeId: "store-1",
+        summary: "Register sync review needed.",
+      })),
+    });
+
+    const result = await getHandler(getPendingApprovalCountSummary)(ctx, {
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(result).toEqual({
+      completeness: "incomplete",
+      count: 0,
+    });
+  });
+});
+
 describe("getQueueSnapshot", () => {
   it("accepts refreshNonce only on the queue query contract", async () => {
     type ExportedArgsContract = { exportArgs: () => Promise<string> };
     const queueArgs = JSON.parse(
-      await (
-        getQueueSnapshot as unknown as ExportedArgsContract
-      ).exportArgs(),
+      await (getQueueSnapshot as unknown as ExportedArgsContract).exportArgs(),
     );
     const createArgs = JSON.parse(
       await (
@@ -1109,7 +1256,9 @@ describe("getQueueSnapshot", () => {
       },
     });
     expect(JSON.stringify(result.workItems)).not.toContain("hidden-proof");
-    expect(JSON.stringify(result.workItems)).not.toContain("rawFinancialEvidence");
+    expect(JSON.stringify(result.workItems)).not.toContain(
+      "rawFinancialEvidence",
+    );
   });
 
   it("prefers the synced sale resolver row with an affected SKU when duplicate current rows exist", async () => {

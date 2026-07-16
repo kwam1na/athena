@@ -1,7 +1,7 @@
 ---
 title: Athena Convex Posture Queries Stay Separate From Detail Reads
 date: 2026-06-29
-last_updated: 2026-07-13
+last_updated: 2026-07-16
 category: performance
 module: athena-webapp
 problem_type: performance_issue
@@ -12,7 +12,7 @@ symptoms:
 root_cause: logic_error
 resolution_type: code_fix
 severity: high
-delivery_diff_fingerprint: 727141fd14b348956a81ad055636da6a1ff9ad93c774b501ea167dadc0aca587
+delivery_diff_fingerprint: e72ee0ef3ebbb3d517f0826cb45e249828eaef7bae4497ecc5b3b7ced726709f
 tags:
   - convex
   - performance
@@ -148,6 +148,34 @@ is only safe when the first row is guaranteed to be compatible. Add a regression
 test with a newer incompatible row and an older compatible row before accepting
 that kind of rewrite.
 
+## July 16, 2026 Follow-up: Compact Counts Preserve Bounded-Read Honesty
+
+Compact navigation counts are posture reads, not miniature detail snapshots.
+The Operations sidebar now subscribes to dedicated open-work and pending-
+approval summaries only while the Operations section is expanded and the
+operator has financial-detail access. Each summary uses indexed, status- and
+type-selective probes with a shared total budget instead of mounting the full
+queue snapshot from global navigation.
+
+The summary contract returns both `count` and `completeness`. When a probe
+exhausts its budget, the UI renders `N+` rather than presenting a lower bound as
+an exact count. Open work is projected through the same logical-group boundary
+as the queue, including oversized-repair source identities, so multiple source
+rows do not inflate the operator-facing count. Pending approvals include
+bounded local-sync conflict evidence without hydrating approval details.
+
+The same rule applies to operating-day reads. Daily Close deposit allocation now
+uses `by_storeId_allocationType_direction_status_recordedAt` so allocation type,
+direction, status, and the operating-day range are enforced by the index before
+the limit. It probes one row beyond the budget and records incomplete source
+evidence when the cap is reached instead of filtering a broad store scan after
+truncation.
+
+These optimizations do not move command authority into summaries. Queue detail,
+Daily Opening carry-forward membership, Daily Close evidence, and command-side
+validation remain on their existing source-owned paths. The compact contracts
+only answer whether attention exists and whether that answer is exact.
+
 ## Prevention
 
 - Do not add detail evidence, full history, or analytics payloads back to default
@@ -167,6 +195,12 @@ that kind of rewrite.
   initial route load.
 - Treat a compact contract as incomplete until its default callers are proven
   not to mount detail companions eagerly.
+- Return explicit completeness with bounded count summaries, and render a lower
+  bound as `N+` rather than an exact value.
+- Count logical operational groups through the same projection used by queue
+  detail; never count raw work-item rows when several rows represent one task.
+- Push operating-day predicates into compound indexes before applying caps, and
+  probe one row beyond the budget so source incompleteness is observable.
 - Include operational identity in heartbeat material even when expiry and
   observation timestamps are excluded. A cashier handoff is not diagnostic
   churn.
@@ -197,6 +231,8 @@ that kind of rewrite.
 - `bun run graphify:check`
 - July 2026 follow-up:
   `bun run test -- convex/operations/dailyClose.test.ts convex/operations/dailyOperations.test.ts convex/pos/application/terminals.test.ts convex/pos/infrastructure/repositories/terminalRepository.test.ts convex/inventory/sessionQueryIndexes.test.ts convex/storeFront/commerceQueryIndexes.test.ts convex/contextTracking/contextEvents.test.ts convex/pos/public/posRecoveryCodes.test.ts convex/remoteAssist/transportInternal.test.ts`
+- July 16 bounded-count follow-up:
+  `bun run test -- convex/operations/dailyClose.test.ts convex/operations/dailyOpening.test.ts convex/operations/operationalWorkItems.test.ts src/components/app-sidebar.test.tsx src/components/operations/DailyOpeningView.test.tsx`
 
 ## Related Issues
 
@@ -210,6 +246,8 @@ that kind of rewrite.
 - [Homepage snapshot contract](../logic-errors/athena-homepage-snapshot-contract-2026-06-22.md)
 - [Foundation SKU search and catalog summary](../logic-errors/athena-foundation-sku-search-catalog-summary-2026-06-25.md)
 - [Daily Operations current-day refresh](../logic-errors/athena-daily-operations-current-day-refresh-2026-06-30.md)
+- [Daily Operations aggregate read model](../logic-errors/athena-daily-operations-aggregate-read-model-2026-05-08.md)
+- [Operations review and cash-closeout continuity](../architecture-patterns/athena-operations-review-and-cash-closeout-continuity-2026-07-11.md)
 - [Operator context and filter boundaries](../logic-errors/athena-operator-context-and-filter-boundaries-2026-07-03.md)
 - [POS terminal recovery readiness](../architecture/athena-pos-terminal-recovery-readiness-boundary-2026-06-14.md)
 - [POS offline inventory snapshot](../architecture/athena-pos-offline-inventory-snapshot-2026-05-15.md)

@@ -282,6 +282,65 @@ describe("AppSidebar capability gates", () => {
     );
   });
 
+  it("renders the consolidated open-work count as muted menu metadata", () => {
+    mocks.usePermissions.mockReturnValue(fullAdminPermissions);
+    mocks.useQuery.mockImplementation((query) =>
+      getFunctionName(query) ===
+      "operations/operationalWorkItems:getOpenWorkCountSummary"
+        ? { completeness: "complete", count: 20 }
+        : [],
+    );
+
+    render(<AppSidebar />);
+
+    const openWorkLink = screen.getByRole("link", { name: "Open work 20" });
+    const countLabel = screen.getByText("20");
+
+    expect(openWorkLink).toBeInTheDocument();
+    expect(countLabel).toHaveClass("text-muted-foreground", "tabular-nums");
+    expect(countLabel).not.toHaveClass("rounded-full", "bg-primary");
+    expect(mocks.useQuery).toHaveBeenCalledWith(
+      api.operations.operationalWorkItems.getOpenWorkCountSummary,
+      { storeId: "store-1" },
+    );
+  });
+
+  it("renders a nonzero pending-approval count as muted menu metadata", () => {
+    mocks.usePermissions.mockReturnValue(fullAdminPermissions);
+    mocks.useQuery.mockImplementation((query) =>
+      getFunctionName(query) ===
+      "operations/operationalWorkItems:getPendingApprovalCountSummary"
+        ? { completeness: "complete", count: 3 }
+        : [],
+    );
+
+    render(<AppSidebar />);
+
+    const approvalsLink = screen.getByRole("link", { name: "Approvals 3" });
+    const countLabel = approvalsLink.querySelector("span");
+
+    expect(countLabel).toHaveTextContent("3");
+    expect(countLabel).toHaveClass("text-muted-foreground", "tabular-nums");
+    expect(countLabel).not.toHaveClass("rounded-full", "bg-primary");
+  });
+
+  it("hides pending-approval metadata when the count is zero", () => {
+    mocks.usePermissions.mockReturnValue(fullAdminPermissions);
+    mocks.useQuery.mockImplementation((query) =>
+      getFunctionName(query) ===
+      "operations/operationalWorkItems:getPendingApprovalCountSummary"
+        ? { completeness: "complete", count: 0 }
+        : [],
+    );
+
+    render(<AppSidebar />);
+
+    expect(screen.getByRole("link", { name: "Approvals" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Approvals 0" }),
+    ).not.toBeInTheDocument();
+  });
+
   it.each([
     { needsRefresh: true, updatedAt: 123 },
     { needsRefresh: false, updatedAt: 0 },

@@ -69,7 +69,10 @@ export function Login() {
     return (
       <LoginForm
         setStep={setStep}
-        onUsePosRecoveryCode={() => setStep("posRecovery")}
+        onUsePosRecoveryCode={
+          localTerminalSeed ? () => setStep("posRecovery") : undefined
+        }
+        terminalName={localTerminalSeed?.displayName}
       />
     );
   }
@@ -84,6 +87,7 @@ export function Login() {
         storeUrlSlug={
           posRouteScope?.storeUrlSlug ?? localTerminalSeed?.storeUrlSlug ?? null
         }
+        terminalName={localTerminalSeed?.displayName}
         onBack={() => setStep("signIn")}
       />
     );

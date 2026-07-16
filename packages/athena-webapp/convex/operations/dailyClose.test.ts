@@ -4941,6 +4941,134 @@ describe("end-of-day review backend foundation", () => {
     );
   });
 
+  it("scopes payment-allocation completeness to the operating day", async () => {
+    const historicalAllocations = Array.from({ length: 201 }, (_, index) => ({
+      _id: `historical-allocation-${index + 1}`,
+      allocationType: "payment",
+      amount: 100,
+      createdAt: Date.UTC(2026, 4, 6, 12, index % 60),
+      direction: "in",
+      method: "cash",
+      recordedAt: Date.UTC(2026, 4, 6, 12, index % 60),
+      status: "recorded",
+      storeId: "store-1",
+      targetId: `historical-target-${index + 1}`,
+      targetType: "pos_transaction",
+    }));
+    const { db, queryLog } = createDb({
+      paymentAllocation: [
+        ...historicalAllocations,
+        {
+          _id: "deposit-current-day",
+          allocationType: "cash_deposit",
+          amount: 3000,
+          createdAt: Date.UTC(2026, 4, 7, 18),
+          direction: "out",
+          method: "cash",
+          recordedAt: Date.UTC(2026, 4, 7, 18),
+          status: "recorded",
+          storeId: "store-1",
+          targetId: "deposit-current-day-key",
+          targetType: "register_cash_deposit",
+        },
+      ],
+      store: [store],
+    });
+
+    const snapshot = await buildDailyCloseSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      { operatingDate: "2026-05-07", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.sourceCompleteness.entries).toContainEqual(
+      expect.objectContaining({
+        complete: true,
+        readMode:
+          "by_storeId_allocationType_direction_status_recordedAt",
+        recordCount: 1,
+        source: "payment_allocation",
+      }),
+    );
+    expect(snapshot.summary.cashDepositTotal).toBe(3000);
+    expect(queryLog).toContainEqual(
+      expect.objectContaining({
+        index: "by_storeId_allocationType_direction_status_recordedAt",
+        table: "paymentAllocation",
+      }),
+    );
+  });
+
+  it("ignores unrelated daily allocations when evaluating cash-deposit completeness", async () => {
+    const currentDayAllocations = Array.from({ length: 201 }, (_, index) => ({
+      _id: `current-day-allocation-${index + 1}`,
+      allocationType: "payment",
+      amount: 100,
+      createdAt: Date.UTC(2026, 4, 7, 12, index % 60),
+      direction: "in",
+      method: "cash",
+      recordedAt: Date.UTC(2026, 4, 7, 12, index % 60),
+      status: "recorded",
+      storeId: "store-1",
+      targetId: `current-day-target-${index + 1}`,
+      targetType: "pos_transaction",
+    }));
+    const { db } = createDb({
+      paymentAllocation: currentDayAllocations,
+      store: [store],
+    });
+
+    const snapshot = await buildDailyCloseSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      { operatingDate: "2026-05-07", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.sourceCompleteness.entries).toContainEqual(
+      expect.objectContaining({
+        complete: true,
+        readMode:
+          "by_storeId_allocationType_direction_status_recordedAt",
+        recordCount: 0,
+        source: "payment_allocation",
+      }),
+    );
+  });
+
+  it("fails cash-deposit completeness closed when the operating day exceeds the probe", async () => {
+    const currentDayDeposits = Array.from({ length: 201 }, (_, index) => ({
+      _id: `current-day-deposit-${index + 1}`,
+      allocationType: "cash_deposit",
+      amount: 100,
+      createdAt: Date.UTC(2026, 4, 7, 12, index % 60),
+      direction: "out",
+      method: "cash",
+      recordedAt: Date.UTC(2026, 4, 7, 12, index % 60),
+      status: "recorded",
+      storeId: "store-1",
+      targetId: `current-day-deposit-target-${index + 1}`,
+      targetType: "register_cash_deposit",
+    }));
+    const { db } = createDb({
+      paymentAllocation: currentDayDeposits,
+      store: [store],
+    });
+
+    const snapshot = await buildDailyCloseSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      { operatingDate: "2026-05-07", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.sourceCompleteness.entries).toContainEqual(
+      expect.objectContaining({
+        complete: false,
+        readMode:
+          "by_storeId_allocationType_direction_status_recordedAt",
+        reason: "payment_allocation_source_cap_reached",
+        recordCount: 200,
+        source: "payment_allocation",
+      }),
+    );
+  });
+
   it("records policy-reviewed item keys when automation completes reviewed items", async () => {
     vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 7, 22));
     const reviewKey = "pos_transaction:txn-void:void";

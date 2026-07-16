@@ -517,6 +517,101 @@ describe("daily opening backend foundation", () => {
     });
   });
 
+  it("consolidates legacy prior-close inventory reviews without including later work", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 8, 8));
+    const inventoryReview = (id: string, createdAt: number) => ({
+      _id: id,
+      approvalState: "not_required",
+      createdAt,
+      organizationId: "org-1",
+      priority: "high",
+      productSkuId: "sku-1",
+      status: "open",
+      storeId: "store-1",
+      title: "Review inventory for Clogs",
+      type: "synced_sale_inventory_review",
+    });
+    const { db, tables } = createDb({
+      dailyClose: [
+        completedDailyClose({
+          carryForwardWorkItemIds: ["work-1", "work-2"],
+          readiness: {
+            blockerCount: 0,
+            carryForwardCount: 2,
+            readyCount: 1,
+            reviewCount: 0,
+            status: "ready",
+          },
+        }),
+      ],
+      operationalWorkItem: [
+        inventoryReview("work-1", 4),
+        inventoryReview("work-2", 5),
+        inventoryReview("work-later", 6),
+      ],
+      staffProfile: [activeStaffProfile],
+      store: [store],
+    });
+
+    const snapshot = await buildDailyOpeningSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      {
+        includeManagerReviewEvidence: true,
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(snapshot.carryForwardItems).toEqual([
+      expect.objectContaining({
+        key: "carry_forward_group:0",
+        carryForwardWorkItemIds: ["work-1", "work-2"],
+        subject: {
+          id: "synced_sale_inventory_review:store-1:sku-1",
+          label: "Review inventory for Clogs",
+          type: "logical_operational_work_group",
+        },
+        metadata: expect.objectContaining({
+          memberCount: 2,
+          sourceCount: 2,
+          type: "synced_sale_inventory_review",
+        }),
+      }),
+    ]);
+    expect(snapshot.carryForwardItems[0]?.carryForwardWorkItemIds).not.toContain(
+      "work-later",
+    );
+
+    const result = await startStoreDayWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        acknowledgedItemKeys: ["carry_forward_group:0"],
+        actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result).toMatchObject({
+      kind: "ok",
+      data: {
+        dailyOpening: {
+          carryForwardAcknowledgements: [
+            {
+              disposition: "acknowledged",
+              key: "carry_forward_group:0",
+              memberWorkItemIds: ["work-1", "work-2"],
+            },
+          ],
+          carryForwardWorkItemIds: ["work-1", "work-2"],
+        },
+      },
+    });
+    expect(tables.get("dailyOpening")?.values().next().value).not.toMatchObject({
+      carryForwardWorkItemIds: expect.arrayContaining(["work-later"]),
+    });
+  });
+
   it("redacts missing carry-forward blockers for broad opening snapshot readers", async () => {
     const { db } = createDb({
       dailyClose: [

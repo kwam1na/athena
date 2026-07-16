@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -67,6 +67,32 @@ describe("CartItems service lines", () => {
     expect(productName).toHaveClass("leading-5", "sm:line-clamp-2");
     expect(productName).not.toHaveClass("truncate");
     expect(screen.getByText("KK38-W78-N4G")).toHaveClass("break-all");
+  });
+
+  it("replaces a failed product image with the no-image placeholder", () => {
+    render(
+      <CartItems
+        cartItems={[
+          {
+            id: "item-1" as never,
+            barcode: "812429039192",
+            image: "https://example.com/broken-product.jpg",
+            name: "Eyeliner Pencil",
+            price: 2500,
+            quantity: 1,
+            sku: "6N2Y-XEH-XGN",
+          },
+        ]}
+        readOnly
+      />,
+    );
+
+    fireEvent.error(screen.getByRole("img", { name: "Eyeliner Pencil" }));
+
+    expect(
+      screen.getByRole("img", { name: "Eyeliner Pencil" }),
+    ).toHaveAttribute("data-image-fallback", "true");
+    expect(screen.queryByAltText("Eyeliner Pencil")).not.toBeInTheDocument();
   });
 
   it("renders service lines separately from product SKU metadata", () => {

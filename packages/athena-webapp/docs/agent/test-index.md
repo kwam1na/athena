@@ -143,6 +143,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`convex/operations/staffMessages.test.ts`](../../convex/operations/staffMessages.test.ts)
 - [`convex/operations/staffProfiles.test.ts`](../../convex/operations/staffProfiles.test.ts)
 - [`convex/otp/EmailOTP.test.ts`](../../convex/otp/EmailOTP.test.ts)
+- [`convex/otp/appLoginEmailAllowlist.test.ts`](../../convex/otp/appLoginEmailAllowlist.test.ts)
 - [`convex/pos/application/adjustTransactionItems.test.ts`](../../convex/pos/application/adjustTransactionItems.test.ts)
 - [`convex/pos/application/commands/assignCustomer.test.ts`](../../convex/pos/application/commands/assignCustomer.test.ts)
 - [`convex/pos/application/commands/createOrReusePendingCheckoutItem.test.ts`](../../convex/pos/application/commands/createOrReusePendingCheckoutItem.test.ts)

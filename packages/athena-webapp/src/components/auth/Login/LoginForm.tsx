@@ -1,22 +1,46 @@
 import { useForm } from "@tanstack/react-form";
 import { zodValidator } from "@tanstack/zod-form-adapter";
 import { useAuthActions } from "@convex-dev/auth/react";
-import { useState } from "react";
+import { useConvex } from "convex/react";
+import { useRef, useState } from "react";
+import { api } from "~/convex/_generated/api";
 import { Input } from "../../ui/input";
 import { LoadingButton } from "../../ui/loading-button";
-import { ATHENA_EMAIL_OTP_PROVIDER_ID } from "../../../../shared/auth";
+import {
+  ATHENA_EMAIL_OTP_PROVIDER_ID,
+  ATHENA_LOGIN_EMAIL_NOT_APPROVED_ERROR_CODE,
+} from "../../../../shared/auth";
 import { z } from "zod";
-import { ArrowRight, KeyRound } from "lucide-react";
+import { ArrowRight, CircleMinus, KeyRound } from "lucide-react";
+
+type LoginSubmissionIssue = "not_approved" | "delivery_failed" | null;
+
+function isEmailNotApprovedError(error: unknown) {
+  return (
+    error instanceof Error &&
+    error.message.includes(ATHENA_LOGIN_EMAIL_NOT_APPROVED_ERROR_CODE)
+  );
+}
 
 export function LoginForm({
   onUsePosRecoveryCode,
   setStep,
+  terminalName,
 }: {
   onUsePosRecoveryCode?: () => void;
   setStep: (step: { email: string }) => void;
+  terminalName?: string | null;
 }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submissionIssue, setSubmissionIssue] =
+    useState<LoginSubmissionIssue>(null);
+  const emailInputRef = useRef<HTMLInputElement>(null);
+  const convex = useConvex();
   const { signIn } = useAuthActions();
+  const normalizedTerminalName = terminalName?.trim();
+  const posSignInLabel = normalizedTerminalName
+    ? `Sign in to ${normalizedTerminalName}`
+    : "POS sign in";
 
   const form = useForm({
     validatorAdapter: zodValidator(),
@@ -26,13 +50,32 @@ export function LoginForm({
 
     onSubmit: async ({ value }) => {
       setIsSubmitting(true);
+      setSubmissionIssue(null);
       const normalizedEmail = value.email.trim().toLowerCase();
 
       try {
+        const approval = await convex.query(
+          api.otp.appLoginEmailAllowlist.checkAppLoginEmailApproval,
+          { email: normalizedEmail },
+        );
+
+        if (!approval.approved) {
+          setSubmissionIssue("not_approved");
+          emailInputRef.current?.focus();
+          emailInputRef.current?.select();
+          return;
+        }
+
         await signIn(ATHENA_EMAIL_OTP_PROVIDER_ID, {
           email: normalizedEmail,
         });
         setStep({ email: normalizedEmail });
+      } catch (error) {
+        setSubmissionIssue(
+          isEmailNotApprovedError(error) ? "not_approved" : "delivery_failed",
+        );
+        emailInputRef.current?.focus();
+        emailInputRef.current?.select();
       } finally {
         setIsSubmitting(false);
       }
@@ -61,30 +104,60 @@ export function LoginForm({
             }}
             children={(field) => (
               <Input
+                ref={emailInputRef}
                 id="email"
                 type="email"
                 aria-label="Email"
+                aria-describedby={
+                  submissionIssue ? "athena-login-submission-message" : undefined
+                }
+                aria-invalid={submissionIssue ? true : undefined}
                 autoComplete="email"
                 data-testid="athena-login-email-input"
                 placeholder="Email"
                 value={field.state.value}
                 onBlur={field.handleBlur}
-                onChange={(e) => field.handleChange(e.target.value)}
+                onChange={(e) => {
+                  setSubmissionIssue(null);
+                  field.handleChange(e.target.value);
+                }}
                 className={`h-control-standard border-border/80 bg-background shadow-[inset_0_1px_0_hsl(var(--background)/0.85)] ${
-                  field.state.meta?.errors.length > 0 &&
-                  "border-destructive focus-visible:ring-destructive"
+                  field.state.meta?.errors.length > 0
+                    ? "border-destructive focus-visible:ring-destructive"
+                    : submissionIssue
+                      ? "border-warning/60 focus-visible:!ring-0 focus-visible:!ring-offset-0"
+                      : ""
                 }`}
               />
             )}
           />
         </div>
 
-        <div className="relative z-10 min-h-5 px-layout-xs">
-          {form.state.fieldMeta.email?.errors.length > 0 && (
+        <div
+          className="relative z-10 min-h-5 w-full px-layout-xs"
+          data-testid="athena-login-status-region"
+        >
+          {form.state.fieldMeta.email?.errors.length > 0 ? (
             <span className="text-sm text-destructive">
               {form.state.fieldMeta.email?.errors.join(" ")}
             </span>
-          )}
+          ) : submissionIssue ? (
+            <div
+              id="athena-login-submission-message"
+              className="flex items-center gap-layout-xs"
+              role="alert"
+            >
+              <CircleMinus
+                aria-hidden="true"
+                className="h-4 w-4 shrink-0 text-warning"
+              />
+              <span className="min-w-0 text-sm font-medium text-foreground">
+                {submissionIssue === "not_approved"
+                  ? "Access not available"
+                  : "Code not sent. Try again."}
+              </span>
+            </div>
+          ) : null}
         </div>
 
         <LoadingButton
@@ -101,7 +174,7 @@ export function LoginForm({
           <section className="relative z-10 w-full border-t border-border pt-layout-md">
             <button
               type="button"
-              aria-label="POS sign in"
+              aria-label={posSignInLabel}
               data-testid="athena-login-pos-sign-in"
               className="group flex w-full items-center justify-between gap-layout-sm rounded-md border border-action-workflow-border bg-action-workflow-soft px-layout-md py-layout-sm text-left text-sm font-medium text-action-workflow transition-colors duration-standard ease-standard hover:bg-action-workflow-soft/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               onClick={onUsePosRecoveryCode}
@@ -110,7 +183,7 @@ export function LoginForm({
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-background text-action-workflow">
                   <KeyRound aria-hidden="true" className="h-4 w-4" />
                 </span>
-                <span>POS sign in</span>
+                <span>{posSignInLabel}</span>
               </span>
               <ArrowRight
                 aria-hidden="true"

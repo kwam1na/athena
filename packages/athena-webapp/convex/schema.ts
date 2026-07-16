@@ -1290,6 +1290,13 @@ const schema = defineSchema({
   paymentAllocation: defineTable(paymentAllocationSchema)
     .index("by_storeId", ["storeId"])
     .index("by_storeId_recordedAt", ["storeId", "recordedAt"])
+    .index("by_storeId_allocationType_direction_status_recordedAt", [
+      "storeId",
+      "allocationType",
+      "direction",
+      "status",
+      "recordedAt",
+    ])
     .index("by_storeId_businessEventKey", ["storeId", "businessEventKey"])
     .index("by_storeId_target", ["storeId", "targetType", "targetId"])
     .index("by_registerSessionId", ["registerSessionId"])

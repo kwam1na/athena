@@ -69,6 +69,34 @@ function formatCartAttributeParts(item: CartItem) {
   ].filter(Boolean);
 }
 
+function CartItemProductImage({ item }: { item: CartItem }) {
+  const [failedImageUrl, setFailedImageUrl] = useState<string | undefined>();
+  const imageUrl = item.image ?? undefined;
+  const shouldShowImage = Boolean(imageUrl && imageUrl !== failedImageUrl);
+
+  if (!shouldShowImage) {
+    return (
+      <span
+        aria-label={item.name}
+        className="text-xs text-muted-foreground"
+        data-image-fallback="true"
+        role="img"
+      >
+        <Package aria-hidden="true" className="h-5 w-5" />
+      </span>
+    );
+  }
+
+  return (
+    <img
+      src={imageUrl}
+      alt={item.name}
+      className="h-full w-full rounded object-cover"
+      onError={() => setFailedImageUrl(imageUrl)}
+    />
+  );
+}
+
 function CartItemQuantityControl({
   isCompact,
   item,
@@ -423,17 +451,7 @@ export function CartItems({
                         isCompact ? "w-12 h-12" : "w-16 h-16",
                       )}
                     >
-                      {item.image ? (
-                        <img
-                          src={item.image}
-                          alt={item.name}
-                          className="w-full h-full object-cover rounded"
-                        />
-                      ) : (
-                        <span className="text-xs text-muted-foreground">
-                          <Package className="w-5 h-5" />
-                        </span>
-                      )}
+                      <CartItemProductImage item={item} />
                     </div>
                     {readOnly && (
                       <div className="absolute -top-2 -left-2 bg-muted text-primary-background text-xs w-5 h-5 rounded-full flex items-center justify-center shadow-sm">

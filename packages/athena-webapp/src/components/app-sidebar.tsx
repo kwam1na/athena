@@ -119,6 +119,14 @@ function ContainedSidebarToggle() {
   );
 }
 
+function SidebarMenuMetadata({ value }: { value: string }) {
+  return (
+    <span className="ml-auto text-xs font-normal tabular-nums text-muted-foreground">
+      {value}
+    </span>
+  );
+}
+
 function SidebarMenuCollapsible({
   icon: Icon,
   label,
@@ -277,6 +285,36 @@ export function AppSidebar({
     },
     [sidebarSubmenuScopeKey],
   );
+
+  const openWorkCountSummary = useQuery(
+    api.operations.operationalWorkItems.getOpenWorkCountSummary,
+    activeStore?._id &&
+      hasFinancialDetailsAccess &&
+      sidebarSubmenuOpenState.operations
+      ? { storeId: activeStore._id }
+      : "skip",
+  );
+  const openWorkCountLabel =
+    openWorkCountSummary?.count === undefined
+      ? null
+      : `${openWorkCountSummary.count}${
+          openWorkCountSummary.completeness === "incomplete" ? "+" : ""
+        }`;
+  const pendingApprovalCountSummary = useQuery(
+    api.operations.operationalWorkItems.getPendingApprovalCountSummary,
+    activeStore?._id &&
+      hasFinancialDetailsAccess &&
+      sidebarSubmenuOpenState.operations
+      ? { storeId: activeStore._id }
+      : "skip",
+  );
+  const pendingApprovalCountLabel =
+    pendingApprovalCountSummary?.count &&
+    pendingApprovalCountSummary.count > 0
+      ? `${pendingApprovalCountSummary.count}${
+          pendingApprovalCountSummary.completeness === "incomplete" ? "+" : ""
+        }`
+      : null;
 
   if (!activeStore || !activeOrganization) {
     return null;
@@ -452,6 +490,9 @@ export function AppSidebar({
                         className="flex items-center"
                       >
                         <p className="font-medium">Open work</p>
+                        {openWorkCountLabel !== null ? (
+                          <SidebarMenuMetadata value={openWorkCountLabel} />
+                        ) : null}
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuSubItem>
@@ -471,6 +512,11 @@ export function AppSidebar({
                         className="flex items-center"
                       >
                         <p className="font-medium">Approvals</p>
+                        {pendingApprovalCountLabel !== null ? (
+                          <SidebarMenuMetadata
+                            value={pendingApprovalCountLabel}
+                          />
+                        ) : null}
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuSubItem>

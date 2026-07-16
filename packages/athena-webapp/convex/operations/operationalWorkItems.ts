@@ -13,6 +13,7 @@ import {
 } from "../lib/athenaUserAuth";
 import { requireSharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
 import { listOpenLocalSyncConflictsByRegisterSession } from "../cashControls/deposits";
+import { listOpenLocalSyncConflictsByRegisterSessionWithCompleteness } from "../pos/application/sync/registerSessionSyncReview";
 import {
   operationalWorkMetadataString as metadataString,
   projectLogicalOperationalWork,
@@ -22,8 +23,10 @@ import {
 const MAX_QUEUE_ITEMS = 100;
 const QUEUE_LANE_PROBE_LIMIT = 1_000;
 const ACTIVE_REPAIR_PROBE_LIMIT = 1_000;
+const OPEN_WORK_COUNT_ITEM_PROBE_LIMIT = 500;
+const OPEN_WORK_COUNT_REPAIR_PROBE_LIMIT = 100;
+const PENDING_APPROVAL_COUNT_PROBE_LIMIT = 100;
 const APPROVAL_REQUEST_PROBE_LIMIT = MAX_QUEUE_ITEMS + 1;
-const TERMINAL_WORK_ITEM_STATUSES = new Set(["completed", "cancelled"]);
 const OPEN_WORK_ITEM_STATUSES = ["open", "in_progress"] as const;
 const REGISTER_SYNC_REVIEW_REQUEST_TYPE = "register_sync_review";
 const REGISTER_SYNC_REVIEW_SUBJECT_TYPE = "register_session_sync_review";
@@ -102,6 +105,175 @@ function metadataArrayCount(
   const value = metadata?.[key];
   return Array.isArray(value) ? value.length : null;
 }
+
+export const getOpenWorkCountSummary = query({
+  args: {
+    storeId: v.id("store"),
+  },
+  handler: async (ctx, args) => {
+    const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(
+      ctx,
+      "inventory.adjust",
+      args.storeId,
+    );
+    const store = await ctx.db.get("store", args.storeId);
+    if (!store) {
+      throw new Error("Store not found.");
+    }
+
+    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(
+      ctx,
+      demoActor ? { sharedDemoCapability: "inventory.adjust" } : undefined,
+    );
+    await requireOrganizationMemberRoleWithCtx(ctx, {
+      allowedRoles: ["full_admin", "pos_only"],
+      failureMessage: "Only POS operators can view open work.",
+      organizationId: store.organizationId,
+      userId: athenaUser._id,
+    });
+
+    const rawWorkItemLanes: Array<{
+      incomplete: boolean;
+      items: Array<Doc<"operationalWorkItem">>;
+      type: string;
+    }> = [];
+    let remainingWorkItemBudget = OPEN_WORK_COUNT_ITEM_PROBE_LIMIT;
+    for (const status of OPEN_WORK_ITEM_STATUSES) {
+      for (const type of QUEUE_WORK_ITEM_TYPES) {
+        const items = await ctx.db
+          .query("operationalWorkItem")
+          .withIndex("by_storeId_type_status", (q) =>
+            q.eq("storeId", args.storeId).eq("type", type).eq("status", status),
+          )
+          .take(remainingWorkItemBudget + 1);
+        const acceptedItems = items.slice(0, remainingWorkItemBudget);
+
+        rawWorkItemLanes.push({
+          incomplete: items.length > remainingWorkItemBudget,
+          items: acceptedItems,
+          type,
+        });
+        remainingWorkItemBudget -= acceptedItems.length;
+      }
+    }
+
+    const activeOversizedRepairs: Array<Doc<"oversizedOperationalWorkRepair">> =
+      [];
+    let activeRepairReadIncomplete = false;
+    let remainingRepairBudget = OPEN_WORK_COUNT_REPAIR_PROBE_LIMIT;
+    for (const status of ["pending", "running", "paused"] as const) {
+      const repairs = await ctx.db
+        .query("oversizedOperationalWorkRepair")
+        .withIndex("by_storeId_status", (q) =>
+          q.eq("storeId", args.storeId).eq("status", status),
+        )
+        .take(remainingRepairBudget + 1);
+      const acceptedRepairs = repairs.slice(0, remainingRepairBudget);
+
+      activeRepairReadIncomplete ||= repairs.length > remainingRepairBudget;
+      activeOversizedRepairs.push(...acceptedRepairs);
+      remainingRepairBudget -= acceptedRepairs.length;
+    }
+    const workItemLanes = await Promise.all(
+      rawWorkItemLanes.map(async (lane) => ({
+        ...lane,
+        items: await filterArchivedPendingCheckoutWorkItems(ctx, lane.items),
+      })),
+    );
+    const incompleteTypes = new Set(
+      workItemLanes.filter((lane) => lane.incomplete).map((lane) => lane.type),
+    );
+    if (activeRepairReadIncomplete) {
+      incompleteTypes.add("synced_sale_inventory_review");
+    }
+
+    const logicalWork = projectLogicalOperationalWork({
+      incompleteTypes,
+      items: workItemLanes.flatMap((lane) => lane.items),
+      remediationSourceIdentitiesByGroupKey: new Map(
+        activeOversizedRepairs.map((repair) => [
+          repair.groupKey,
+          new Set(repair.sourceIdentities),
+        ]),
+      ),
+      sourceCompleteness: incompleteTypes.size > 0 ? "incomplete" : "complete",
+    });
+
+    return {
+      completeness: logicalWork.completeness,
+      count: logicalWork.observedCount,
+    };
+  },
+});
+
+export const getPendingApprovalCountSummary = query({
+  args: {
+    storeId: v.id("store"),
+  },
+  handler: async (ctx, args) => {
+    const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(
+      ctx,
+      "inventory.adjust",
+      args.storeId,
+    );
+    const store = await ctx.db.get("store", args.storeId);
+    if (!store) {
+      throw new Error("Store not found.");
+    }
+
+    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(
+      ctx,
+      demoActor ? { sharedDemoCapability: "inventory.adjust" } : undefined,
+    );
+    await requireOrganizationMemberRoleWithCtx(ctx, {
+      allowedRoles: ["full_admin", "pos_only"],
+      failureMessage: "Only POS operators can view approvals.",
+      organizationId: store.organizationId,
+      userId: athenaUser._id,
+    });
+
+    const [approvalRead, syncConflictRead] = await Promise.all([
+      (async () => {
+        let count = 0;
+        let incomplete = false;
+        let remainingBudget = PENDING_APPROVAL_COUNT_PROBE_LIMIT;
+
+        for (const requestType of QUEUE_APPROVAL_REQUEST_TYPES) {
+          const requests = await ctx.db
+            .query("approvalRequest")
+            .withIndex("by_storeId_status_requestType", (q) =>
+              q
+                .eq("storeId", args.storeId)
+                .eq("status", "pending")
+                .eq("requestType", requestType),
+            )
+            .take(remainingBudget + 1);
+          const acceptedCount = Math.min(requests.length, remainingBudget);
+
+          incomplete ||= requests.length > remainingBudget;
+          count += acceptedCount;
+          remainingBudget -= acceptedCount;
+        }
+
+        return { count, incomplete };
+      })(),
+      listOpenLocalSyncConflictsByRegisterSessionWithCompleteness(
+        ctx,
+        args.storeId,
+        { limit: PENDING_APPROVAL_COUNT_PROBE_LIMIT },
+      ),
+    ]);
+
+    return {
+      completeness:
+        approvalRead.incomplete ||
+        syncConflictRead.completeness === "incomplete"
+          ? "incomplete"
+          : "complete",
+      count: approvalRead.count + syncConflictRead.conflictsBySessionId.size,
+    };
+  },
+});
 
 function sanitizeOperationalWorkItemDetails(item: Doc<"operationalWorkItem">) {
   const metadata = item.metadata;
@@ -449,62 +621,61 @@ export const getQueueSnapshot = query({
       approvalRequestLanes,
       syncConflictsBySessionId,
       activeOversizedRepairs,
-    ] =
-      await Promise.all([
-        Promise.all(
-          OPEN_WORK_ITEM_STATUSES.flatMap((status) =>
-            QUEUE_WORK_ITEM_TYPES.map(async (type) => {
-              const items = await ctx.db
-                .query("operationalWorkItem")
-                .withIndex("by_storeId_type_status", (q) =>
-                  q
-                    .eq("storeId", args.storeId)
-                    .eq("type", type)
-                    .eq("status", status),
-                )
-                .take(QUEUE_LANE_PROBE_LIMIT + 1);
-
-              return {
-                items: items.slice(0, QUEUE_LANE_PROBE_LIMIT),
-                incomplete: items.length > QUEUE_LANE_PROBE_LIMIT,
-                overflow: items.length > MAX_QUEUE_ITEMS,
-                status,
-                type,
-              };
-            }),
-          ),
-        ),
-        Promise.all(
-          QUEUE_APPROVAL_REQUEST_TYPES.map(async (requestType) => {
-            const requests = await ctx.db
-              .query("approvalRequest")
-              .withIndex("by_storeId_status_requestType", (q) =>
+    ] = await Promise.all([
+      Promise.all(
+        OPEN_WORK_ITEM_STATUSES.flatMap((status) =>
+          QUEUE_WORK_ITEM_TYPES.map(async (type) => {
+            const items = await ctx.db
+              .query("operationalWorkItem")
+              .withIndex("by_storeId_type_status", (q) =>
                 q
                   .eq("storeId", args.storeId)
-                  .eq("status", "pending")
-                  .eq("requestType", requestType),
+                  .eq("type", type)
+                  .eq("status", status),
               )
-              .take(APPROVAL_REQUEST_PROBE_LIMIT);
+              .take(QUEUE_LANE_PROBE_LIMIT + 1);
 
             return {
-              items: requests.slice(0, MAX_QUEUE_ITEMS),
-              overflow: requests.length > MAX_QUEUE_ITEMS,
-              requestType,
+              items: items.slice(0, QUEUE_LANE_PROBE_LIMIT),
+              incomplete: items.length > QUEUE_LANE_PROBE_LIMIT,
+              overflow: items.length > MAX_QUEUE_ITEMS,
+              status,
+              type,
             };
           }),
         ),
-        listOpenLocalSyncConflictsByRegisterSession(ctx, args.storeId),
-        Promise.all(
-          (["pending", "running", "paused"] as const).map((status) =>
-            ctx.db
-              .query("oversizedOperationalWorkRepair")
-              .withIndex("by_storeId_status", (q) =>
-                q.eq("storeId", args.storeId).eq("status", status),
-              )
-              .take(ACTIVE_REPAIR_PROBE_LIMIT + 1),
-          ),
+      ),
+      Promise.all(
+        QUEUE_APPROVAL_REQUEST_TYPES.map(async (requestType) => {
+          const requests = await ctx.db
+            .query("approvalRequest")
+            .withIndex("by_storeId_status_requestType", (q) =>
+              q
+                .eq("storeId", args.storeId)
+                .eq("status", "pending")
+                .eq("requestType", requestType),
+            )
+            .take(APPROVAL_REQUEST_PROBE_LIMIT);
+
+          return {
+            items: requests.slice(0, MAX_QUEUE_ITEMS),
+            overflow: requests.length > MAX_QUEUE_ITEMS,
+            requestType,
+          };
+        }),
+      ),
+      listOpenLocalSyncConflictsByRegisterSession(ctx, args.storeId),
+      Promise.all(
+        (["pending", "running", "paused"] as const).map((status) =>
+          ctx.db
+            .query("oversizedOperationalWorkRepair")
+            .withIndex("by_storeId_status", (q) =>
+              q.eq("storeId", args.storeId).eq("status", status),
+            )
+            .take(ACTIVE_REPAIR_PROBE_LIMIT + 1),
         ),
-      ]);
+      ),
+    ]);
     const workItemLanes = await Promise.all(
       rawWorkItemLanes.map(async (lane) => {
         const items = await filterArchivedPendingCheckoutWorkItems(
@@ -527,9 +698,7 @@ export const getQueueSnapshot = query({
       (page) => page.slice(0, ACTIVE_REPAIR_PROBE_LIMIT),
     );
     const incompleteTypes = new Set(
-      workItemLanes
-        .filter((lane) => lane.incomplete)
-        .map((lane) => lane.type),
+      workItemLanes.filter((lane) => lane.incomplete).map((lane) => lane.type),
     );
     if (activeRepairReadIncomplete) {
       incompleteTypes.add("synced_sale_inventory_review");
@@ -543,8 +712,7 @@ export const getQueueSnapshot = query({
           new Set(repair.sourceIdentities),
         ]),
       ),
-      sourceCompleteness:
-        incompleteTypes.size > 0 ? "incomplete" : "complete",
+      sourceCompleteness: incompleteTypes.size > 0 ? "incomplete" : "complete",
     });
     const selectedOpenWorkGroups = args.workType
       ? logicalWork.groups.filter(
@@ -918,7 +1086,11 @@ export const getQueueSnapshot = query({
         const hasAuthoritativeMembership = group.completeness === "complete";
         const members = hasAuthoritativeMembership
           ? group.representatives.map((item) =>
-              projectOperationalWorkItemForQueue({ customerMap, item, staffMap }),
+              projectOperationalWorkItemForQueue({
+                customerMap,
+                item,
+                staffMap,
+              }),
             )
           : [];
 

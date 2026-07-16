@@ -174,6 +174,24 @@ describe("SearchResultsSection", () => {
     expect(onAddProduct).not.toHaveBeenCalled();
   });
 
+  it("replaces a failed product image with the no-image placeholder", () => {
+    renderSearchResults({
+      products: [
+        buildProduct({
+          image: "https://example.com/offline-product.jpg",
+          name: "Eyeliner Pencil",
+        }),
+      ],
+    });
+
+    fireEvent.error(screen.getByRole("img", { name: "Eyeliner Pencil" }));
+
+    expect(
+      screen.getByRole("img", { name: "Eyeliner Pencil" }),
+    ).toHaveAttribute("data-image-fallback", "true");
+    expect(screen.queryByAltText("Eyeliner Pencil")).not.toBeInTheDocument();
+  });
+
   it("adds the selected quantity from a product result", async () => {
     const user = userEvent.setup();
     const product = buildProduct({

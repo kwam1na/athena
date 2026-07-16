@@ -1766,22 +1766,28 @@ async function listDepositsForDay(
   },
 ): Promise<DailyCloseSourceRead<Doc<"paymentAllocation">>> {
   const range = { startAt: args.startAt, endAt: args.endAt };
-  const allocations = await ctx.db
+  const allocationProbe = await ctx.db
     .query("paymentAllocation")
-    .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
-    .take(DAILY_CLOSE_QUERY_LIMIT);
+    .withIndex(
+      "by_storeId_allocationType_direction_status_recordedAt",
+      (q) =>
+        q
+          .eq("storeId", args.storeId)
+          .eq("allocationType", "cash_deposit")
+          .eq("direction", "out")
+          .eq("status", "recorded")
+          .gte("recordedAt", args.startAt)
+          .lt("recordedAt", args.endAt),
+    )
+    .take(DAILY_CLOSE_QUERY_LIMIT + 1);
+  const allocations = allocationProbe.slice(0, DAILY_CLOSE_QUERY_LIMIT);
 
   return {
-    rows: allocations.filter(
-      (allocation) =>
-        allocation.allocationType === "cash_deposit" &&
-        allocation.direction === "out" &&
-        allocation.status === "recorded" &&
-        isInRange(allocation.recordedAt, args.startAt, args.endAt),
-    ),
+    rows: allocations,
     completeness: sourceCompletenessEntry({
       source: "payment_allocation",
-      readMode: "by_storeId",
+      complete: allocationProbe.length <= DAILY_CLOSE_QUERY_LIMIT,
+      readMode: "by_storeId_allocationType_direction_status_recordedAt",
       recordCount: allocations.length,
       limit: DAILY_CLOSE_QUERY_LIMIT,
       range,
