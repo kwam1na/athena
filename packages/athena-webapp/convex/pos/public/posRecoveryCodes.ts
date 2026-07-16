@@ -8,7 +8,11 @@ import {
   type MutationCtx,
   type QueryCtx,
 } from "../../_generated/server";
-import { recordOperationalEventWithCtx } from "../../operations/operationalEvents";
+import {
+  buildOperationalEvent,
+  recordOperationalEventWithCtx,
+  type RecordOperationalEventArgs,
+} from "../../operations/operationalEvents";
 import { ATHENA_AUTH_SESSION_TOTAL_DURATION_MS } from "../../authConfig";
 import {
   requireAuthenticatedAthenaUserWithCtx,
@@ -148,15 +152,121 @@ function failRecovery(): never {
   throw new Error(GENERIC_RECOVERY_FAILURE);
 }
 
+type PosRecoveryDenialReason =
+  | "auth_binding_unavailable"
+  | "invalid_recovery_code"
+  | "invalid_request"
+  | "invalid_terminal_proof"
+  | "pos_capability_unavailable"
+  | "recovery_credential_locked"
+  | "recovery_credential_revoked"
+  | "recovery_credential_scope_mismatch"
+  | "recovery_credential_unavailable"
+  | "recovery_credential_verifier_unavailable"
+  | "recovery_exchange_conflict"
+  | "service_principal_unavailable"
+  | "terminal_store_scope_mismatch"
+  | "terminal_unavailable";
+
+type PosRecoveryDenialContext = {
+  occurredAt: number;
+  organizationId?: Id<"organization">;
+  proofValidated: boolean;
+  recoveryCorrelationKey?: string;
+  storeId?: Id<"store">;
+  terminalId?: Id<"posTerminal">;
+};
+
 class PosRecoveryDeniedError extends Error {
-  constructor() {
+  readonly context: PosRecoveryDenialContext;
+  readonly reason: PosRecoveryDenialReason;
+
+  constructor(
+    reason: PosRecoveryDenialReason,
+    context: PosRecoveryDenialContext,
+  ) {
     super(GENERIC_RECOVERY_FAILURE);
     this.name = "PosRecoveryDeniedError";
+    this.reason = reason;
+    // Copy only bounded, non-secret trace fields at the denial boundary.
+    this.context = { ...context };
   }
 }
 
-function denyRecovery(): never {
-  throw new PosRecoveryDeniedError();
+function denyRecovery(
+  reason: PosRecoveryDenialReason,
+  context: PosRecoveryDenialContext,
+): never {
+  throw new PosRecoveryDeniedError(reason, context);
+}
+
+async function recordPosRecoveryDenialEvidence(
+  ctx: MutationCtx,
+  denial: PosRecoveryDeniedError,
+) {
+  const {
+    occurredAt,
+    organizationId,
+    proofValidated,
+    recoveryCorrelationKey,
+    storeId,
+    terminalId,
+  } = denial.context;
+  if (!recoveryCorrelationKey || !storeId || !terminalId) return null;
+
+  const denialAuditBucket = Math.floor(
+    occurredAt / POS_RECOVERY_FAILURE_AUDIT_BUCKET_MS,
+  );
+  const eventArgs: RecordOperationalEventArgs = {
+    eventType: "pos_service_recovery_denied",
+    message: "POS service recovery was denied.",
+    metadata: {
+      denialAuditBucket,
+      proofValidated,
+      recoveryCorrelationKey,
+    },
+    metadataDedupeKeys: proofValidated
+      ? ["recoveryCorrelationKey"]
+      : ["denialAuditBucket"],
+    ...(organizationId === undefined ? {} : { organizationId }),
+    reason: denial.reason,
+    storeId,
+    subjectId: terminalId,
+    subjectType: "posTerminal",
+    terminalId,
+  };
+
+  if (proofValidated) {
+    return recordOperationalEventWithCtx(ctx, eventArgs);
+  }
+
+  // Before proof validation, the terminal identifier is caller-controlled.
+  // Keep the denial-lane dedupe lookup bounded so invalid requests cannot make
+  // recovery scan an ever-growing terminal event history.
+  const recentEvents = await ctx.db
+    .query("operationalEvent")
+    .withIndex("by_storeId_subject", (q) =>
+      q
+        .eq("storeId", storeId)
+        .eq("subjectType", "posTerminal")
+        .eq("subjectId", terminalId),
+    )
+    .order("desc")
+    .take(50);
+  const existingEvent = recentEvents.find(
+    (event) =>
+      event.eventType === eventArgs.eventType &&
+      event.reason === eventArgs.reason &&
+      event.terminalId === terminalId &&
+      event.metadata?.denialAuditBucket === denialAuditBucket,
+  );
+  if (existingEvent) return existingEvent;
+
+  const eventId = await ctx.db.insert(
+    "operationalEvent",
+    buildOperationalEvent(eventArgs),
+  );
+  return ctx.db.get("operationalEvent", eventId);
 }
 
 function normalizeEmail(email: string) {
@@ -670,7 +780,11 @@ type PrepareRecoveryArgs = {
 
 async function getCanonicalStoreServicePrincipal(
   ctx: MutationCtx,
-  args: { organizationId: Id<"organization">; storeId: Id<"store"> },
+  args: {
+    denialContext: PosRecoveryDenialContext;
+    organizationId: Id<"organization">;
+    storeId: Id<"store">;
+  },
 ) {
   const principals = await ctx.db
     .query("servicePrincipal")
@@ -684,7 +798,7 @@ async function getCanonicalStoreServicePrincipal(
     )
     .take(2);
   if (principals.length !== 1 || principals[0].status !== "active") {
-    denyRecovery();
+    denyRecovery("service_principal_unavailable", args.denialContext);
   }
   return principals[0];
 }
@@ -692,6 +806,7 @@ async function getCanonicalStoreServicePrincipal(
 async function getCurrentStoreRecoveryCredential(
   ctx: MutationCtx,
   args: {
+    denialContext: PosRecoveryDenialContext;
     organizationId: Id<"organization">;
     servicePrincipalId: Id<"servicePrincipal">;
     storeId: Id<"store">;
@@ -701,14 +816,16 @@ async function getCurrentStoreRecoveryCredential(
     .query("posRecoveryCredential")
     .withIndex("by_storeId", (query) => query.eq("storeId", args.storeId))
     .take(2);
-  if (credentials.length !== 1) denyRecovery();
+  if (credentials.length !== 1) {
+    denyRecovery("recovery_credential_unavailable", args.denialContext);
+  }
   const credential = credentials[0];
   if (
     credential.organizationId !== args.organizationId ||
     (credential.servicePrincipalId !== undefined &&
       credential.servicePrincipalId !== args.servicePrincipalId)
   ) {
-    denyRecovery();
+    denyRecovery("recovery_credential_scope_mismatch", args.denialContext);
   }
   return credential;
 }
@@ -718,6 +835,7 @@ async function verifyCurrentRecoveryCredential(
   args: {
     code: string;
     credential: PosRecoveryCredential;
+    denialContext: PosRecoveryDenialContext;
     now: number;
   },
 ) {
@@ -734,7 +852,12 @@ async function verifyCurrentRecoveryCredential(
       metadata: { failureAuditBucket },
       metadataDedupeKeys: ["reason", "failureAuditBucket"],
     });
-    denyRecovery();
+    denyRecovery(
+      credential.status === "revoked"
+        ? "recovery_credential_revoked"
+        : "recovery_credential_locked",
+      args.denialContext,
+    );
   }
 
   if (
@@ -747,7 +870,10 @@ async function verifyCurrentRecoveryCredential(
   ) {
     // Exact-session recovery is an enforced store lane. A fast legacy
     // verifier cannot authorize it, even when its old hash happens to match.
-    denyRecovery();
+    denyRecovery(
+      "recovery_credential_verifier_unavailable",
+      args.denialContext,
+    );
   }
   const matches = await verifyPosRecoveryCodeVerifier({
     digest: credential.keyedVerifierDigest,
@@ -799,13 +925,14 @@ async function verifyCurrentRecoveryCredential(
       metadataDedupeKeys: ["reason", "failureAuditBucket"],
     });
   }
-  denyRecovery();
+  denyRecovery("invalid_recovery_code", args.denialContext);
 }
 
 async function getOrCreateStableAuthBinding(
   ctx: MutationCtx,
   args: {
     correlationId: string;
+    denialContext: PosRecoveryDenialContext;
     now: number;
     organizationId: Id<"organization">;
     servicePrincipalId: Id<"servicePrincipal">;
@@ -818,7 +945,9 @@ async function getOrCreateStableAuthBinding(
       query.eq("servicePrincipalId", args.servicePrincipalId),
     )
     .take(2);
-  if (bindings.length > 1) denyRecovery();
+  if (bindings.length > 1) {
+    denyRecovery("auth_binding_unavailable", args.denialContext);
+  }
   const existing = bindings[0];
   if (existing) {
     if (
@@ -826,7 +955,7 @@ async function getOrCreateStableAuthBinding(
       existing.organizationId !== args.organizationId ||
       existing.storeId !== args.storeId
     ) {
-      denyRecovery();
+      denyRecovery("auth_binding_unavailable", args.denialContext);
     }
     return existing;
   }
@@ -854,21 +983,40 @@ async function prepareRecoveryForAuthProviderTransactionWithCtx(
 ) {
   const recoveryCorrelationKey = args.recoveryCorrelationKey.trim();
   const terminalProof = args.terminalProof.trim();
+  const now = Date.now();
+  const denialContext: PosRecoveryDenialContext = {
+    occurredAt: now,
+    proofValidated: false,
+    ...(POS_RECOVERY_CORRELATION_KEY_PATTERN.test(recoveryCorrelationKey)
+      ? { recoveryCorrelationKey }
+      : {}),
+  };
   if (
     !terminalProof ||
     !POS_RECOVERY_CORRELATION_KEY_PATTERN.test(recoveryCorrelationKey)
   ) {
-    denyRecovery();
+    denyRecovery("invalid_request", denialContext);
   }
 
   // Authenticate the terminal before loading or mutating the shared recovery
   // credential so terminal-ID/proof spraying cannot affect its failure lane.
   const terminal = await ctx.db.get("posTerminal", args.terminalId);
-  if (!terminal || terminal.status !== "active" || !terminal.syncSecretHash) {
-    denyRecovery();
+  if (!terminal) {
+    denyRecovery("terminal_unavailable", denialContext);
+  }
+  Object.assign(denialContext, {
+    organizationId: terminal.organizationId,
+    storeId: terminal.storeId,
+    terminalId: terminal._id,
+  });
+  if (terminal.status !== "active" || !terminal.syncSecretHash) {
+    denyRecovery("terminal_unavailable", denialContext);
   }
   const submittedProofHash = await hashPosTerminalSyncSecret(terminalProof);
-  if (submittedProofHash !== terminal.syncSecretHash) denyRecovery();
+  if (submittedProofHash !== terminal.syncSecretHash) {
+    denyRecovery("invalid_terminal_proof", denialContext);
+  }
+  denialContext.proofValidated = true;
 
   const store = await ctx.db.get("store", terminal.storeId);
   if (
@@ -876,11 +1024,12 @@ async function prepareRecoveryForAuthProviderTransactionWithCtx(
     (terminal.organizationId !== undefined &&
       terminal.organizationId !== store.organizationId)
   ) {
-    denyRecovery();
+    denyRecovery("terminal_store_scope_mismatch", denialContext);
   }
+  denialContext.organizationId = store.organizationId;
 
-  const now = Date.now();
   const principal = await getCanonicalStoreServicePrincipal(ctx, {
+    denialContext,
     organizationId: store.organizationId,
     storeId: store._id,
   });
@@ -893,10 +1042,13 @@ async function prepareRecoveryForAuthProviderTransactionWithCtx(
       storeId: store._id,
     });
   } catch (error) {
-    if (error instanceof ServicePrincipalFoundationError) denyRecovery();
+    if (error instanceof ServicePrincipalFoundationError) {
+      denyRecovery("pos_capability_unavailable", denialContext);
+    }
     throw error;
   }
   const credential = await getCurrentStoreRecoveryCredential(ctx, {
+    denialContext,
     organizationId: store.organizationId,
     servicePrincipalId: principal._id,
     storeId: store._id,
@@ -904,6 +1056,7 @@ async function prepareRecoveryForAuthProviderTransactionWithCtx(
   await verifyCurrentRecoveryCredential(ctx, {
     code: args.code,
     credential,
+    denialContext,
     now,
   });
 
@@ -916,7 +1069,9 @@ async function prepareRecoveryForAuthProviderTransactionWithCtx(
       query.eq("recoveryCorrelationKey", recoveryCorrelationKey),
     )
     .take(2);
-  if (existingExchanges.length > 1) denyRecovery();
+  if (existingExchanges.length > 1) {
+    denyRecovery("recovery_exchange_conflict", denialContext);
+  }
   const existingExchange = existingExchanges[0];
   if (existingExchange) {
     const authSession = await ctx.db.get(
@@ -943,7 +1098,7 @@ async function prepareRecoveryForAuthProviderTransactionWithCtx(
       authSession.userId !== existingExchange.authUserId ||
       authSession.expirationTime <= now
     ) {
-      denyRecovery();
+      denyRecovery("recovery_exchange_conflict", denialContext);
     }
     return {
       status: "prepared" as const,
@@ -954,6 +1109,7 @@ async function prepareRecoveryForAuthProviderTransactionWithCtx(
 
   const authBinding = await getOrCreateStableAuthBinding(ctx, {
     correlationId: recoveryCorrelationKey,
+    denialContext,
     now,
     organizationId: store.organizationId,
     servicePrincipalId: principal._id,
@@ -1031,6 +1187,7 @@ export async function prepareRecoveryForAuthProviderWithCtx(
     if (error instanceof PosRecoveryDeniedError) {
       // Expected denials return from the mutation so any throttling and
       // secret-free audit writes performed earlier in the transaction commit.
+      await recordPosRecoveryDenialEvidence(ctx, error);
       return { status: "denied" as const };
     }
     throw error;

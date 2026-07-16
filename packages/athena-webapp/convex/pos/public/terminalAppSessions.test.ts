@@ -510,6 +510,66 @@ describe("exact-session POS recovery", () => {
     ).rejects.toThrow("POS session recovery could not be completed.");
   });
 
+  it("refreshes recovered migration evidence for a later valid exact session", async () => {
+    const ctx = await buildExactSessionCtx();
+    const first = await activatePreparedPosTerminalSessionWithCtx(
+      ctx as never,
+      { now: 1_000 },
+    );
+    const firstExchange = ctx.tables.posRecoveryExchange[0];
+    ctx.tables.authSessions.push({
+      _id: "auth-session-2",
+      userId: "auth-user",
+      expirationTime: 200_000,
+    });
+    ctx.tables.posRecoveryExchange.push({
+      ...firstExchange,
+      _id: "exchange-2",
+      activatedAt: undefined,
+      authSessionId: "auth-session-2",
+      lastCorrelationId: "recovery_correlation_0002",
+      posApplicationSessionBindingId: undefined,
+      preparedAt: 1_500,
+      recoveryCorrelationKey: "recovery_correlation_0002",
+      revision: 1,
+      servicePrincipalSessionId: undefined,
+      status: "prepared",
+      updatedAt: 1_500,
+    });
+    ctx.auth.getUserIdentity.mockResolvedValue({
+      subject: "auth-user|auth-session-2",
+    });
+
+    const second = await activatePreparedPosTerminalSessionWithCtx(
+      ctx as never,
+      { now: 2_000 },
+    );
+
+    expect(second.servicePrincipalSessionId).not.toBe(
+      first.servicePrincipalSessionId,
+    );
+    expect(ctx.tables.posTerminal[0].servicePrincipalRecoveryVersion).toBe(2);
+    expect(ctx.tables.posServicePrincipalMigrationTerminalEvidence[0]).toEqual(
+      expect.objectContaining({
+        credentialRevision: 1,
+        recoveryVersion: 2,
+        servicePrincipalSessionId: second.servicePrincipalSessionId,
+        status: "recovered",
+        successfulRecoveryAt: 2_000,
+      }),
+    );
+    expect(ctx.tables.servicePrincipalSession).toEqual([
+      expect.objectContaining({
+        _id: first.servicePrincipalSessionId,
+        status: "superseded",
+      }),
+      expect.objectContaining({
+        _id: second.servicePrincipalSessionId,
+        status: "active",
+      }),
+    ]);
+  });
+
   it("refreshes the current receipt only after full POS authority revalidation", async () => {
     const ctx = await buildExactSessionCtx();
     const activated = await activatePreparedPosTerminalSessionWithCtx(

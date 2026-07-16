@@ -468,6 +468,60 @@ describe("POS recovery codes", () => {
     ).resolves.toEqual({ status: "denied" });
     expect(credential.failedAttemptCount).toBe(0);
     expect(ctx.tables.posRecoveryExchange).toHaveLength(0);
+    expect(ctx.tables.operationalEvent).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          eventType: "pos_service_recovery_denied",
+          reason: "recovery_credential_verifier_unavailable",
+          metadata: expect.objectContaining({
+            proofValidated: true,
+            recoveryCorrelationKey: "legacy_correlation_0001",
+          }),
+        }),
+      ]),
+    );
+    expect(JSON.stringify(ctx.tables.operationalEvent)).not.toContain(
+      created.code,
+    );
+    expect(JSON.stringify(ctx.tables.operationalEvent)).not.toContain(
+      terminalProof,
+    );
+  });
+
+  it("records a protected capability denial without changing public recovery output", async () => {
+    const ctx = buildCtx();
+    const created = await getHandler(createOrRotateRecoveryCodeForTest)(ctx, {
+      storeId: STORE_ID,
+    });
+    const terminalProof = await seedExactRecoveryAuthority(ctx);
+    ctx.tables.servicePrincipalCapability[0].status = "revoked";
+
+    await expect(
+      prepareRecoveryForAuthProviderWithCtx(ctx as never, {
+        code: created.code,
+        recoveryCorrelationKey: "capability_denial_0001",
+        terminalId: "terminal-1",
+        terminalProof,
+      } as never),
+    ).resolves.toEqual({ status: "denied" });
+
+    expect(ctx.tables.authSessions).toHaveLength(0);
+    expect(ctx.tables.posRecoveryExchange).toHaveLength(0);
+    expect(ctx.tables.operationalEvent).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          eventType: "pos_service_recovery_denied",
+          reason: "pos_capability_unavailable",
+          metadata: expect.objectContaining({
+            proofValidated: true,
+            recoveryCorrelationKey: "capability_denial_0001",
+          }),
+        }),
+      ]),
+    );
+    const serializedEvents = JSON.stringify(ctx.tables.operationalEvent);
+    expect(serializedEvents).not.toContain(created.code);
+    expect(serializedEvents).not.toContain(terminalProof);
   });
 
   it("temporarily throttles bounded code failures only after valid terminal proof", async () => {
@@ -484,6 +538,14 @@ describe("POS recovery codes", () => {
         recoveryCorrelationKey: "invalid_proof_attempt_0001",
         terminalId: "terminal-1",
         terminalProof: "wrong-proof",
+      } as never),
+    ).resolves.toEqual({ status: "denied" });
+    await expect(
+      prepareRecoveryForAuthProviderWithCtx(ctx as never, {
+        code: "another-wrong-before-proof",
+        recoveryCorrelationKey: "invalid_proof_attempt_0002",
+        terminalId: "terminal-1",
+        terminalProof: "another-wrong-proof",
       } as never),
     ).resolves.toEqual({ status: "denied" });
     expect(credential.failedAttemptCount).toBe(0);
@@ -507,6 +569,39 @@ describe("POS recovery codes", () => {
         status: "locked",
       }),
     );
+    const denialEvents = ctx.tables.operationalEvent.filter(
+      (event) => event.eventType === "pos_service_recovery_denied",
+    );
+    expect(
+      denialEvents.filter((event) => event.reason === "invalid_terminal_proof"),
+    ).toHaveLength(1);
+    expect(
+      denialEvents.filter((event) => event.reason === "invalid_recovery_code"),
+    ).toHaveLength(5);
+    expect(denialEvents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          reason: "invalid_terminal_proof",
+          metadata: expect.objectContaining({
+            proofValidated: false,
+            recoveryCorrelationKey: "invalid_proof_attempt_0001",
+          }),
+        }),
+      ]),
+    );
+    const serializedDenials = JSON.stringify(denialEvents);
+    for (const secret of [
+      terminalProof,
+      "wrong-proof",
+      "another-wrong-proof",
+      "wrong-before-proof",
+      "another-wrong-before-proof",
+      "wrong-code-0",
+      "wrong-code-4",
+    ]) {
+      expect(serializedDenials).not.toContain(secret);
+    }
+    expect(serializedDenials).not.toMatch(/jwt|refreshToken|terminalProof/i);
   });
 
   it("never validates a recovery credential or creates Auth state for a revoked terminal", async () => {
@@ -1174,6 +1269,15 @@ function createQuery(rows: any[], queryLog: string[]) {
       return query;
     }),
     first: vi.fn(async () => currentRows[0] ?? null),
+    order: vi.fn((direction: "asc" | "desc") => {
+      currentRows = [...currentRows].sort((left, right) => {
+        const difference =
+          (left._creationTime ?? left.createdAt ?? 0) -
+          (right._creationTime ?? right.createdAt ?? 0);
+        return direction === "desc" ? -difference : difference;
+      });
+      return query;
+    }),
     take: vi.fn(async (limit: number) => currentRows.slice(0, limit)),
     withIndex: vi.fn((name: string, predicate?: Function) => {
       queryLog.push(name);

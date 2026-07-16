@@ -154,15 +154,23 @@ describe("POS recovery-code transaction behavior", () => {
       ).resolves.toEqual({ status: "denied" });
     }
 
-    const persisted = await t.run(async (ctx) => ({
-      credential: await ctx.db
-        .query("posRecoveryCredential")
-        .withIndex("by_storeId", (query) => query.eq("storeId", scope.storeId))
-        .unique(),
-      failureEvents: (await ctx.db.query("operationalEvent").take(10)).filter(
-        (event) => event.eventType === "pos_recovery_code_login_failed",
-      ),
-    }));
+    const persisted = await t.run(async (ctx) => {
+      const events = await ctx.db.query("operationalEvent").take(20);
+      return {
+        credential: await ctx.db
+          .query("posRecoveryCredential")
+          .withIndex("by_storeId", (query) =>
+            query.eq("storeId", scope.storeId),
+          )
+          .unique(),
+        denialEvents: events.filter(
+          (event) => event.eventType === "pos_service_recovery_denied",
+        ),
+        failureEvents: events.filter(
+          (event) => event.eventType === "pos_recovery_code_login_failed",
+        ),
+      };
+    });
 
     expect(persisted.credential).toEqual(
       expect.objectContaining({
@@ -179,7 +187,24 @@ describe("POS recovery-code transaction behavior", () => {
         expect.objectContaining({ reason: "throttled" }),
       ]),
     );
-    const serializedEvents = JSON.stringify(persisted.failureEvents);
+    expect(persisted.denialEvents).toHaveLength(5);
+    expect(persisted.denialEvents).toEqual(
+      expect.arrayContaining(
+        submittedCodes.map((_code, attempt) =>
+          expect.objectContaining({
+            reason: "invalid_recovery_code",
+            metadata: expect.objectContaining({
+              proofValidated: true,
+              recoveryCorrelationKey: `transaction_attempt_000${attempt}`,
+            }),
+          }),
+        ),
+      ),
+    );
+    const serializedEvents = JSON.stringify([
+      ...persisted.failureEvents,
+      ...persisted.denialEvents,
+    ]);
     expect(serializedEvents).not.toContain(terminalProof);
     for (const code of submittedCodes) {
       expect(serializedEvents).not.toContain(code);
@@ -187,5 +212,6 @@ describe("POS recovery-code transaction behavior", () => {
     expect(serializedEvents).not.toContain(
       "transaction-test-pepper-material-0000000002",
     );
+    expect(serializedEvents).not.toMatch(/jwt|refreshToken|terminalProof/i);
   });
 });

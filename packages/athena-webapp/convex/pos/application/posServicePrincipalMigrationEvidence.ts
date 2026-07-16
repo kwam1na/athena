@@ -111,16 +111,21 @@ export async function recordPosTerminalMigrationRecoveryWithCtx(
   }
 
   if (evidence.status === "recovered") {
-    if (
+    const recoveryTupleChanged =
       evidence.credentialRevision !== args.credentialRevision ||
       evidence.recoveryVersion !== args.recoveryVersion ||
       evidence.servicePrincipalSessionId !== args.servicePrincipalSessionId ||
       evidence.terminalLifecycleRevision !== terminalLifecycleRevision ||
-      evidence.terminalProofRevision !== terminalProofRevision
+      evidence.terminalProofRevision !== terminalProofRevision;
+    if (!recoveryTupleChanged) {
+      return evidence;
+    }
+    if (
+      evidence.recoveryVersion === undefined ||
+      args.recoveryVersion <= evidence.recoveryVersion
     ) {
       fail();
     }
-    return evidence;
   }
 
   await ctx.db.patch(
