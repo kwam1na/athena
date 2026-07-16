@@ -106,7 +106,11 @@ describe("Login", () => {
 
     render(<Login />);
 
-    await user.click(screen.getByRole("button", { name: /pos sign in/i }));
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Sign in to Front register",
+      }),
+    );
     await waitFor(() =>
       expect(
         screen.queryByText("Open recovery from the store login route."),

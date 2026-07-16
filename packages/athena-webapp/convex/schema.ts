@@ -1,6 +1,7 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { authTables } from "@convex-dev/auth/server";
+import { servicePrincipalTables } from "./schemas/servicePrincipals";
 import {
   appVerificationCodeSchema,
   athenaUserSchema,
@@ -238,6 +239,7 @@ import { staffMessageSchema } from "./schemas/staffMessages";
 
 const schema = defineSchema({
   ...authTables,
+  ...servicePrincipalTables,
   sharedDemoRestoreState: defineTable(sharedDemoRestoreStateSchema).index(
     "by_storeId",
     ["storeId"],

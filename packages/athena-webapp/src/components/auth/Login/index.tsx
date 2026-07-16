@@ -70,6 +70,7 @@ export function Login() {
       <LoginForm
         setStep={setStep}
         onUsePosRecoveryCode={() => setStep("posRecovery")}
+        terminalName={localTerminalSeed?.displayName}
       />
     );
   }

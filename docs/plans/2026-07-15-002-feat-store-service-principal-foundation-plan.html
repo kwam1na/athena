@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Store Service Principal Foundation Plan</title>
+  <style>
+    :root { color-scheme:dark; --bg:#101411; --panel:#171d19; --card:#121713; --ink:#edf4ed; --muted:#9eaea2; --line:#304037; --accent:#87e0a5; --blue:#8fc8ef; --warn:#f0c873; --danger:#f29a91; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.55 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    main { width:min(1160px,calc(100% - 32px)); margin:32px auto 64px; }
+    header,section { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:24px; margin:0 0 16px; }
+    h1 { margin:0 0 10px; font-size:clamp(30px,5vw,50px); line-height:1.04; letter-spacing:-.04em; }
+    h2 { margin:0 0 14px; font-size:22px; } h3 { margin:0 0 8px; font-size:16px; }
+    p { margin:0 0 12px; } p:last-child { margin-bottom:0; }
+    a { color:var(--accent); } code { color:var(--blue); }
+    .eyebrow,.meta { color:var(--muted); text-transform:uppercase; letter-spacing:.1em; font-size:12px; }
+    .lede { max-width:900px; font-size:19px; color:#dce8df; }
+    .grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
+    .two { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .card { border:1px solid var(--line); border-radius:10px; padding:16px; background:var(--card); }
+    .metric { color:var(--accent); font-size:27px; font-weight:760; letter-spacing:-.03em; }
+    .warn { color:var(--warn); } .danger { color:var(--danger); }
+    nav a { display:inline-block; margin:4px 14px 4px 0; }
+    ol,ul { margin:8px 0 0; padding-left:20px; } li { margin:6px 0; }
+    table { width:100%; border-collapse:collapse; }
+    th,td { text-align:left; vertical-align:top; border-bottom:1px solid var(--line); padding:10px 8px; }
+    th { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.08em; }
+    .phase { border-left:3px solid var(--accent); padding-left:14px; }
+    .tag { display:inline-block; border:1px solid var(--line); border-radius:999px; padding:2px 8px; color:var(--muted); font-size:12px; }
+    footer { color:var(--muted); text-align:center; padding:12px; }
+    @media (max-width:760px) { .grid,.two { grid-template-columns:1fr; } header,section { padding:18px; } table { display:block; overflow-x:auto; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">Feature · Deep plan · 15 July 2026</div>
+    <h1>Store service principals, with POS as the first consumer</h1>
+    <p class="lede">Replace Athena's global human-shaped POS account with a reusable, store-scoped non-human identity foundation. Keep POS credentials and terminal proof in a consumer adapter, then migrate store by store without leaving a legacy bypass.</p>
+    <p class="meta">Source of truth: <a href="2026-07-15-002-feat-store-service-principal-foundation-plan.md">Markdown plan</a> · Origin: <a href="../brainstorms/2026-07-15-store-service-principal-foundation-requirements.md">requirements</a></p>
+  </header>
+
+  <section>
+    <nav aria-label="Plan contents"><a href="#boundary">Boundary</a><a href="#architecture">Architecture</a><a href="#units">Units</a><a href="#proofs">Proof lanes</a><a href="#revocation">Terminal revocation</a><a href="#rollout">Rollout</a><a href="#risks">Risks</a><a href="#finish">Finish line</a></nav>
+  </section>
+
+  <section id="boundary">
+    <h2>The boundary this plan establishes</h2>
+    <div class="grid">
+      <div class="card"><div class="metric">1 store</div><p>Every principal, grant, binding, and session has one server-owned organization/store scope.</p></div>
+      <div class="card"><div class="metric">Default deny</div><p>A principal exists without authority until a closed-catalog capability is explicitly granted.</p></div>
+      <div class="card"><div class="metric">POS first</div><p>The foundation has no recovery-code or terminal semantics; POS contributes those through its adapter.</p></div>
+    </div>
+    <div class="grid two" style="margin-top:12px">
+      <div class="card"><h3>In scope</h3><ul><li>Generic principal, grant, auth-binding, session, and audit lifecycle</li><li>Store create/delete reconciliation and lifecycle hooks</li><li>Full-admin terminal enrollment</li><li>Two-phase terminal + credential recovery handoff</li><li>Server-boundary authorization inventory</li><li>Signed offline validation receipt and reconnect gate</li><li>Store-cohort migration and shared-account retirement</li></ul></div>
+      <div class="card"><h3>Outside this delivery</h3><ul><li>Second consumer</li><li>Cross-store and organization-wide principals</li><li>OAuth, API keys, and third-party developer identity</li><li>QR or recovery-code terminal enrollment</li><li>Staff, manager, drawer, and command redesign</li><li>Asymmetric browser key proof</li><li>Unrelated storefront Vite configuration</li></ul></div>
+    </div>
+  </section>
+
+  <section id="architecture">
+    <h2>Authority stays in Athena domain state</h2>
+    <div class="grid">
+      <div class="card"><span class="tag">Transport</span><h3 style="margin-top:8px">Convex Auth identity</h3><p>Establishes who presented the session. It does not carry current store authorization.</p></div>
+      <div class="card"><span class="tag">Foundation</span><h3 style="margin-top:8px">Principal + explicit grant</h3><p>Durable, store-scoped, independently revocable, and never represented as a human membership.</p></div>
+      <div class="card"><span class="tag">Consumer</span><h3 style="margin-top:8px">POS session binding</h3><p>Requires the store credential and active terminal proof while preserving staff and command gates.</p></div>
+    </div>
+    <p style="margin-top:16px"><strong>Central invariant:</strong> every protected POS call reloads current session, principal, current store existence/available lifecycle state, <code>pos.application</code> grant, credential revision, and terminal binding. A still-valid bearer token cannot override revocation.</p>
+  </section>
+
+  <section id="units">
+    <h2>Eight implementation units</h2>
+    <table>
+      <thead><tr><th>Unit</th><th>Outcome</th><th>Depends on</th></tr></thead>
+      <tbody>
+        <tr><td>U1</td><td>Consumer-neutral service-principal schemas, lifecycle, capability catalog, bindings, and sessions.</td><td>—</td></tr>
+        <tr><td>U2</td><td>Mutually exclusive human, shared-demo, and service-principal actor resolution.</td><td>U1</td></tr>
+        <tr><td>U3</td><td>Store create/delete integration, reusable lifecycle hooks, and distinct audit attribution.</td><td>U1, U2</td></tr>
+        <tr><td>U4</td><td>POS adapter, credential hardening, and full-admin-only terminal enrollment, revocation, reactivation, and repair transitions.</td><td>U2, U3</td></tr>
+        <tr><td>U5</td><td>Atomic proof exchange, authenticated activation, non-human auth handoff, and terminal/store login copy.</td><td>U2, U4</td></tr>
+        <tr><td>U6</td><td>Closed inventory and current-state authorization across every POS server boundary.</td><td>U2, U5</td></tr>
+        <tr><td>U7</td><td>Server-signed local validation receipt with bounded offline continuity and reconnect revalidation.</td><td>U5, U6</td></tr>
+        <tr><td>U8</td><td>Preview/apply backfill, cohort enforcement, global retirement, and final schema narrowing.</td><td>U3–U7</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="proofs">
+    <h2>Independent proof and authority lanes</h2>
+    <div class="grid">
+      <div class="card"><h3>Application</h3><p>Current service session + active store principal + explicit <code>pos.application</code> grant.</p></div>
+      <div class="card"><h3>Device</h3><p>Active same-store terminal plus current proof. Missing proof or cross-store collision returns to full-admin enrollment.</p></div>
+      <div class="card"><h3>Recovery</h3><p>Proven terminal first, then store credential verifier, rate/lock state, single-use pending exchange, authenticated activation, and secret-free audit.</p></div>
+      <div class="card"><h3>Operator</h3><p>Staff PIN, manager elevation, drawer/register session, and command approval remain independent.</p></div>
+      <div class="card"><h3>Offline</h3><p>A finite server-signed receipt from prior validation permits local continuity only; it cannot mint server authority.</p></div>
+      <div class="card"><h3>Lifecycle</h3><p>Store, principal, grant, credential, terminal, or session revocation each blocks its own required lane.</p></div>
+    </div>
+  </section>
+
+  <section id="revocation">
+    <h2>Revoking one terminal preserves the local-first boundary</h2>
+    <div class="grid">
+      <div class="card"><span class="tag">Online</span><h3 style="margin-top:8px">Deny the next server boundary</h3><p>The named terminal loses server authority on its next protected request. Its sibling terminals, store principal, POS capability, and recovery credential remain active.</p></div>
+      <div class="card"><span class="tag">Offline</span><h3 style="margin-top:8px">Honor only the current lease</h3><p>Local sales may continue only until the existing signed validation receipt expires. Reconnect checks revocation before upload and keeps unsynchronized records queued; mixed backlogs are either ingested normally or durably accepted for review.</p></div>
+      <div class="card"><span class="tag">Recovery</span><h3 style="margin-top:8px">Administrator reconnection only</h3><p>A proof-gated opaque intent survives email sign-in and returns a same-store full administrator to this browser. Reactivation preserves the terminal ID and ledger, rotates proof, and requires POS recovery; remote Terminal Detail cannot deliver replacement proof.</p></div>
+    </div>
+    <div class="grid two" style="margin-top:12px">
+      <div class="card"><span class="tag">Lease expired</span><h3 style="margin-top:8px">Reconnect this checkout station</h3><p>The offline access window ended. Local records are preserved. Reconnect before selling or syncing can continue.</p><p><strong>Primary action:</strong> Reconnect</p></div>
+      <div class="card"><span class="tag">Revocation confirmed</span><h3 style="margin-top:8px">This checkout station was disconnected</h3><p>Local records are preserved. A store administrator must reconnect this checkout station in POS Settings before selling or syncing can continue.</p><p><strong>Primary action:</strong> Sign in as administrator</p></div>
+    </div>
+  </section>
+
+  <section id="rollout">
+    <h2>Widen, prove, enforce, retire</h2>
+    <div class="grid">
+      <div class="card phase"><h3>1 · Shadow</h3><p>Deploy generic tables, store reconciliation hooks, actor resolver, and POS adapter without changing store or human outcomes.</p></div>
+      <div class="card phase"><h3>2 · Reconcile</h3><p>Preview/apply one principal, POS grant, and credential link per store; require one valid binding or explicit disposition per retained terminal. Auth bindings arise only from activated recovery exchanges.</p></div>
+      <div class="card phase"><h3>3 · Recover</h3><p>Enable selected cohorts and record each terminal's first successful recovery against its new principal.</p></div>
+      <div class="card phase"><h3>4 · Enforce</h3><p>Cut over only stores with complete census proof. Enforced stores never silently fall back.</p></div>
+      <div class="card phase"><h3>5 · Retire</h3><p>Stop shared issuance, invalidate legacy sessions, and disable the global account after fleet coverage.</p></div>
+      <div class="card phase"><h3>6 · Narrow</h3><p>Remove <code>posAccountId</code>, global email lookup, plaintext fields, local account constants, and compatibility branches.</p></div>
+    </div>
+    <p style="margin-top:16px" class="warn"><strong>Rollback boundary:</strong> before global retirement, an operator may explicitly return a store to its recorded compatibility mode. After retirement, rollback fixes or pauses the new path; it never recreates shared authority.</p>
+  </section>
+
+  <section id="risks">
+    <h2>Material risks and controls</h2>
+    <div class="grid two">
+      <div class="card"><h3 class="danger">Privilege confusion</h3><p>Mutually exclusive actor guards prevent service identities from falling through to email, membership, admin, or shared-demo policy.</p></div>
+      <div class="card"><h3 class="danger">Stale bearer authority</h3><p>Exact Auth-session binding, an immutable principal transport user, two-phase activation, short service sessions, and durable current-state guards make revocation effective on the next server-backed call.</p></div>
+      <div class="card"><h3 class="danger">Credential leakage</h3><p>Remove persisted plaintext, use versioned slow verification and lane throttling, normalize public failures, and keep audit secret-free.</p></div>
+      <div class="card"><h3 class="danger">Migration bypass</h3><p>Compatibility is explicit and per-store; census gates and terminal recovery evidence precede enforcement and global retirement.</p></div>
+      <div class="card"><h3 class="danger">Offline revocation gap</h3><p>Bound the local receipt and require reconnect validation before upload; preserve queued business evidence if denied, then route the terminal to administrator reconnection.</p></div>
+      <div class="card"><h3 class="danger">Terminal proof theft</h3><p>Treat the current secret as bearer proof, rotate it safely, never log it, and avoid claims of hardware binding.</p></div>
+    </div>
+  </section>
+
+  <section id="finish">
+    <h2>Final signoff gates</h2>
+    <ul>
+      <li>Every existing store has exactly one active POS-capable principal, linked credential, and migration state; every retained terminal has exactly one current principal/terminal/consumer binding or explicit disposition.</li>
+      <li>Every retained terminal has recovered against the new principal or is explicitly revoked/dispositioned.</li>
+      <li>Cross-store, unregistered, revoked, duplicate, and missing-capability cases share generic denial and create no partial session; terminal revocation preserves queued local records, leaves sibling terminals active, and offers only administrator reconnection.</li>
+      <li>Human, shared-demo, service-principal, terminal, staff, manager, drawer, and command authority remain distinct in code and audit.</li>
+      <li>No production reference to <code>pos@wigclub.store</code>, <code>POS_APP_ACCOUNT_ID_KEY</code>, the synthetic account's memberships, <code>pos_only</code> as machine authority, or persisted recovery plaintext remains after narrowing; legitimate human <code>pos_only</code> members remain supported.</li>
+      <li>The canonical Markdown plan carries exact paths, tests, migration gates, risks, and R/A/F/AE traceability.</li>
+    </ul>
+  </section>
+
+  <footer>Review artifact only. The Markdown plan is the implementation source of truth.</footer>
+</main>
+</body>
+</html>
