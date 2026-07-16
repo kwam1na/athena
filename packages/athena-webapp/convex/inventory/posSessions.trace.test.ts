@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   readActiveInventoryHoldDetailsForSession: vi.fn(),
   recordOperationalEventWithCtx: vi.fn(),
   recordRegisterSessionSale: vi.fn(),
+  requirePosApplicationAuthorityWithCtx: vi.fn(),
   requireAuthenticatedAthenaUserWithCtx: vi.fn(),
   requireOrganizationMemberRoleWithCtx: vi.fn(),
   requireStoreFullAdminAccess: vi.fn(),
@@ -37,6 +38,11 @@ vi.mock("../operations/operationalEvents", () => ({
 
 vi.mock("../stockOps/access", () => ({
   requireStoreFullAdminAccess: mocks.requireStoreFullAdminAccess,
+}));
+
+vi.mock("../pos/application/posApplicationAuthority", () => ({
+  requirePosApplicationAuthorityWithCtx:
+    mocks.requirePosApplicationAuthorityWithCtx,
 }));
 
 vi.mock("../lib/athenaUserAuth", () => ({
@@ -108,13 +114,16 @@ describe("POS session exported return contracts", () => {
     });
     const sessionIdOnlyResult = ok({ sessionId: "pos-session-1" });
 
-    assertConformsToExportedReturns(expireSessionFromOperations, ok({
-      sessionId: "pos-session-1",
-      status: "expired",
-      priorStatus: "active",
-      releasedHoldCount: 1,
-      releasedQuantity: 2,
-    }));
+    assertConformsToExportedReturns(
+      expireSessionFromOperations,
+      ok({
+        sessionId: "pos-session-1",
+        status: "expired",
+        priorStatus: "active",
+        releasedHoldCount: 1,
+        releasedQuantity: 2,
+      }),
+    );
     assertConformsToExportedReturns(createSession, sessionOperationResult);
     assertConformsToExportedReturns(
       bindSessionToRegisterSession,
@@ -123,24 +132,33 @@ describe("POS session exported return contracts", () => {
     assertConformsToExportedReturns(updateSession, sessionOperationResult);
     assertConformsToExportedReturns(holdSession, sessionOperationResult);
     assertConformsToExportedReturns(resumeSession, sessionOperationResult);
-    assertConformsToExportedReturns(completeSession, ok({
-      sessionId: "pos-session-1",
-      transactionId: "pos-transaction-1",
-      transactionNumber: "TX-001",
-    }));
+    assertConformsToExportedReturns(
+      completeSession,
+      ok({
+        sessionId: "pos-session-1",
+        transactionId: "pos-transaction-1",
+        transactionNumber: "TX-001",
+      }),
+    );
     // Idempotent replay (U8): a retried completeSession returns the original
     // sale via the same exported ok shape instead of minting a duplicate.
-    assertConformsToExportedReturns(completeSession, ok({
-      sessionId: "pos-session-1",
-      transactionId: "pos-transaction-existing",
-      transactionNumber: "TX-EXISTING",
-    }));
+    assertConformsToExportedReturns(
+      completeSession,
+      ok({
+        sessionId: "pos-session-1",
+        transactionId: "pos-transaction-existing",
+        transactionNumber: "TX-EXISTING",
+      }),
+    );
     assertConformsToExportedReturns(voidSession, sessionIdOnlyResult);
     assertConformsToExportedReturns(
       releaseSessionInventoryHoldsAndDeleteItems,
       sessionIdOnlyResult,
     );
-    assertConformsToExportedReturns(syncSessionCheckoutState, sessionOperationResult);
+    assertConformsToExportedReturns(
+      syncSessionCheckoutState,
+      sessionOperationResult,
+    );
   });
 });
 
@@ -381,10 +399,7 @@ function createMutationCtx(seed?: {
 
         apply(builder);
 
-        if (
-          tableName === "scheduledRunLedger" &&
-          indexName === "by_runKey"
-        ) {
+        if (tableName === "scheduledRunLedger" && indexName === "by_runKey") {
           const page = scheduledRunLedger.filter(
             (entry) => entry.runKey === filters.runKey,
           );
@@ -538,6 +553,10 @@ describe("pos session lifecycle trace handlers", () => {
       _id: "user-1",
     });
     mocks.requireOrganizationMemberRoleWithCtx.mockResolvedValue(undefined);
+    mocks.requirePosApplicationAuthorityWithCtx.mockResolvedValue({
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
     mocks.releaseActiveInventoryHoldsForSession.mockResolvedValue({
       releasedHoldCount: 0,
       releasedQuantity: 0,
@@ -551,6 +570,10 @@ describe("pos session lifecycle trace handlers", () => {
   });
 
   it("returns bounded active and held store session operations rows with cart, hold, operator, register, customer, and trace details", async () => {
+    mocks.requireStoreFullAdminAccess.mockResolvedValue({
+      athenaUser: { _id: "admin-1" },
+      store: { _id: "store-1" },
+    });
     const ctx = createMutationCtx({
       sessions: [
         buildSession({
@@ -1158,13 +1181,11 @@ describe("pos session lifecycle trace handlers", () => {
         },
       }),
     );
-    expect(mocks.requireAuthenticatedAthenaUserWithCtx).toHaveBeenCalledWith(ctx);
-    expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(ctx, {
-      allowedRoles: ["full_admin", "pos_only"],
-      failureMessage: "You cannot complete this POS sale.",
-      organizationId: "org-1",
-      userId: "user-1",
-    });
+    expect(mocks.requirePosApplicationAuthorityWithCtx).toHaveBeenCalledWith(
+      ctx,
+      { storeId: "store-1" },
+    );
+    expect(mocks.requireAuthenticatedAthenaUserWithCtx).not.toHaveBeenCalled();
     expect(mocks.traceRecord).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
@@ -1191,8 +1212,8 @@ describe("pos session lifecycle trace handlers", () => {
   });
 
   it("does not complete a session when store authorization fails", async () => {
-    mocks.requireOrganizationMemberRoleWithCtx.mockRejectedValueOnce(
-      new Error("You cannot complete this POS sale."),
+    mocks.requirePosApplicationAuthorityWithCtx.mockRejectedValueOnce(
+      new Error("The POS application session is no longer authorized."),
     );
     const ctx = createMutationCtx({
       sessions: [
@@ -1215,7 +1236,7 @@ describe("pos session lifecycle trace handlers", () => {
         tax: 15,
         total: 115,
       }),
-    ).rejects.toThrow("You cannot complete this POS sale.");
+    ).rejects.toThrow("no longer authorized");
 
     expect(mocks.createTransactionFromSessionHandler).not.toHaveBeenCalled();
     expect(mocks.traceRecord).not.toHaveBeenCalled();

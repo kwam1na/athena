@@ -10,6 +10,7 @@ import {
   PENDING_ATHENA_AUTH_SYNC_KEY,
 } from "~/src/lib/constants";
 import { ok, userError } from "~/shared/commandResult";
+import { POS_SERVICE_AUTH_PRESENTATION_KEY } from "~/src/components/auth/Login/posRecoveryFlow";
 
 function activeHandoff(redirectTo = "/app") {
   return JSON.stringify({ startedAt: Date.now(), redirectTo });
@@ -80,7 +81,7 @@ describe("LoginLayout", () => {
 
     mocked.useConvexAuth.mockImplementation(() => authState);
     mocked.useAuthToken.mockImplementation(() =>
-      authState.isAuthenticated ? "jwt-123" : null
+      authState.isAuthenticated ? "jwt-123" : null,
     );
     mocked.syncAuthenticatedAthenaUser
       .mockResolvedValueOnce(
@@ -88,7 +89,7 @@ describe("LoginLayout", () => {
           code: "authentication_failed",
           message: "Sign in again to continue.",
           retryable: true,
-        })
+        }),
       )
       .mockResolvedValue(ok({ _id: "user-1" }));
     vi.mocked(window.sessionStorage.getItem).mockReturnValue(activeHandoff());
@@ -102,15 +103,15 @@ describe("LoginLayout", () => {
     view.rerender(<LoginLayout />);
 
     await waitFor(() =>
-      expect(mocked.syncAuthenticatedAthenaUser).toHaveBeenCalledTimes(2)
+      expect(mocked.syncAuthenticatedAthenaUser).toHaveBeenCalledTimes(2),
     );
     expect(window.localStorage.setItem).toHaveBeenCalledWith(
       LOGGED_IN_USER_ID_KEY,
-      "user-1"
+      "user-1",
     );
     expect(window.localStorage.setItem).toHaveBeenCalledWith(
       POS_APP_ACCOUNT_ID_KEY,
-      "user-1"
+      "user-1",
     );
     expect(mocked.navigate).toHaveBeenCalledWith({ to: "/app" });
   });
@@ -127,17 +128,50 @@ describe("LoginLayout", () => {
     render(<LoginLayout />);
 
     await waitFor(() =>
-      expect(mocked.syncAuthenticatedAthenaUser).toHaveBeenCalledTimes(1)
+      expect(mocked.syncAuthenticatedAthenaUser).toHaveBeenCalledTimes(1),
     );
     expect(window.localStorage.setItem).toHaveBeenCalledWith(
       LOGGED_IN_USER_ID_KEY,
-      "user-2"
+      "user-2",
     );
     expect(window.localStorage.setItem).toHaveBeenCalledWith(
       POS_APP_ACCOUNT_ID_KEY,
-      "user-2"
+      "user-2",
     );
     expect(mocked.navigate).toHaveBeenCalledWith({ to: "/" });
+  });
+
+  it("routes an activated service session without syncing a human Athena user", async () => {
+    mocked.useConvexAuth.mockReturnValue({
+      isAuthenticated: true,
+      isLoading: false,
+    });
+    mocked.useAuthToken.mockReturnValue("service-jwt");
+    vi.mocked(window.sessionStorage.getItem).mockImplementation((key) =>
+      key === POS_SERVICE_AUTH_PRESENTATION_KEY
+        ? JSON.stringify({
+            kind: "active",
+            redirectTo: "/wigclub/store/wigclub/pos/register?drawer=front",
+            startedAt: Date.now(),
+          })
+        : null,
+    );
+
+    render(<LoginLayout />);
+
+    await waitFor(() =>
+      expect(mocked.navigate).toHaveBeenCalledWith({
+        to: "/wigclub/store/wigclub/pos/register",
+        search: { drawer: "front" },
+      }),
+    );
+    expect(mocked.syncAuthenticatedAthenaUser).not.toHaveBeenCalled();
+    expect(window.localStorage.removeItem).toHaveBeenCalledWith(
+      LOGGED_IN_USER_ID_KEY,
+    );
+    expect(window.localStorage.removeItem).toHaveBeenCalledWith(
+      POS_APP_ACCOUNT_ID_KEY,
+    );
   });
 
   it("uses the pending auth-sync redirect after the Athena user sync succeeds", async () => {
@@ -146,18 +180,20 @@ describe("LoginLayout", () => {
       isLoading: false,
     });
     mocked.useAuthToken.mockReturnValue("jwt-123");
-    mocked.syncAuthenticatedAthenaUser.mockResolvedValue(ok({ _id: "user-pos" }));
+    mocked.syncAuthenticatedAthenaUser.mockResolvedValue(
+      ok({ _id: "user-pos" }),
+    );
     vi.mocked(window.sessionStorage.getItem).mockReturnValue(
-      activeHandoff("/wigclub/store/wigclub/pos/register?drawer=front")
+      activeHandoff("/wigclub/store/wigclub/pos/register?drawer=front"),
     );
 
     render(<LoginLayout />);
 
     await waitFor(() =>
-      expect(mocked.syncAuthenticatedAthenaUser).toHaveBeenCalledTimes(1)
+      expect(mocked.syncAuthenticatedAthenaUser).toHaveBeenCalledTimes(1),
     );
     expect(window.sessionStorage.removeItem).toHaveBeenCalledWith(
-      PENDING_ATHENA_AUTH_SYNC_KEY
+      PENDING_ATHENA_AUTH_SYNC_KEY,
     );
     expect(mocked.navigate).toHaveBeenCalledWith({
       to: "/wigclub/store/wigclub/pos/register",
@@ -175,20 +211,18 @@ describe("LoginLayout", () => {
       userError({
         code: "authentication_failed",
         message: "Sign in again to continue",
-      })
+      }),
     );
     vi.mocked(window.sessionStorage.getItem).mockReturnValue(activeHandoff());
 
     render(<LoginLayout />);
 
     await waitFor(() =>
-      expect(
-        screen.getByText("Sign in again to continue")
-      ).toBeInTheDocument()
+      expect(screen.getByText("Sign in again to continue")).toBeInTheDocument(),
     );
     expect(window.localStorage.setItem).not.toHaveBeenCalledWith(
       LOGGED_IN_USER_ID_KEY,
-      undefined
+      undefined,
     );
   });
 
@@ -230,14 +264,14 @@ describe("LoginLayout", () => {
     mocked.useAuthToken.mockReturnValue("jwt-123");
     mocked.useConvexAuthIdentity.mockImplementation(() => authIdentity);
     mocked.syncAuthenticatedAthenaUser.mockReturnValue(
-      deferred.then((value) => ok(value))
+      deferred.then((value) => ok(value)),
     );
     vi.mocked(window.sessionStorage.getItem).mockReturnValue(null);
 
     const view = render(<LoginLayout />);
 
     await waitFor(() =>
-      expect(mocked.syncAuthenticatedAthenaUser).toHaveBeenCalledTimes(1)
+      expect(mocked.syncAuthenticatedAthenaUser).toHaveBeenCalledTimes(1),
     );
 
     authIdentity = null;
@@ -247,12 +281,12 @@ describe("LoginLayout", () => {
     await waitFor(() =>
       expect(window.localStorage.setItem).toHaveBeenCalledWith(
         LOGGED_IN_USER_ID_KEY,
-        "user-3"
-      )
+        "user-3",
+      ),
     );
     expect(window.localStorage.setItem).toHaveBeenCalledWith(
       POS_APP_ACCOUNT_ID_KEY,
-      "user-3"
+      "user-3",
     );
   });
 });

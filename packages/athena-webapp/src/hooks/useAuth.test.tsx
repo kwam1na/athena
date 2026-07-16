@@ -6,6 +6,7 @@ import {
   PENDING_ATHENA_AUTH_SYNC_KEY,
 } from "../lib/constants";
 import { useAuth } from "./useAuth";
+import { POS_SERVICE_AUTH_PRESENTATION_KEY } from "../components/auth/Login/posRecoveryFlow";
 
 const mocked = vi.hoisted(() => ({
   useAuthToken: vi.fn(),
@@ -237,6 +238,38 @@ describe("useAuth", () => {
       email: "manager@example.com",
     });
     expect(mocked.useQuery.mock.calls.at(-1)?.[1]).toEqual({});
+  });
+
+  it("presents an activated service session without querying or storing a human user", async () => {
+    vi.mocked(window.localStorage.getItem).mockReturnValue("stale-human-user");
+    vi.mocked(window.sessionStorage.getItem).mockImplementation((key) =>
+      key === POS_SERVICE_AUTH_PRESENTATION_KEY
+        ? JSON.stringify({
+            kind: "active",
+            redirectTo: "/wigclub/store/wigclub/pos/register",
+            startedAt: Date.now(),
+          })
+        : null,
+    );
+    mocked.useAuthToken.mockReturnValue("service-jwt");
+    mocked.useConvexAuth.mockReturnValue({
+      isAuthenticated: true,
+      isLoading: false,
+    });
+    mocked.useQuery.mockReturnValue(undefined);
+
+    const { result } = renderHook(() => useAuth());
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.actorKind).toBe("service_principal");
+    expect(result.current.user).toBeNull();
+    expect(mocked.useQuery.mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(mocked.useQuery.mock.calls.every((call) => call[1] === "skip")).toBe(
+      true,
+    );
+    expect(window.localStorage.removeItem).toHaveBeenCalledWith(
+      LOGGED_IN_USER_ID_KEY,
+    );
   });
 
   it("treats fresh pending auth sync as loading while the Convex session is settling", () => {

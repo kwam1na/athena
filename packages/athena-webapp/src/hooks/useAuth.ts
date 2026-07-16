@@ -10,6 +10,7 @@ import {
   failAthenaAuthSyncHandoff,
   getAthenaAuthSyncHandoffStatus,
 } from "../components/auth/Login/authSyncHandoff";
+import { getPosServiceAuthPresentation } from "../components/auth/Login/posRecoveryFlow";
 
 export const useAuth = () => {
   const [loggedInUserId, setLoggedInUserId] = useState<string | null>(null);
@@ -24,17 +25,31 @@ export const useAuth = () => {
     };
   }
   const { isAuthenticated, isLoading: isLoadingConvexAuth } = useConvexAuth();
+  const servicePresentation = getPosServiceAuthPresentation();
+  const hasServicePresentation = servicePresentation !== null;
+  const isServicePrincipalSession = Boolean(
+    servicePresentation?.kind === "active" && authToken && isAuthenticated,
+  );
+  const isPendingServiceAuth =
+    hasServicePresentation && !isServicePrincipalSession;
   const pendingAuthSyncStatus = getAthenaAuthSyncHandoffStatus();
-  const isPendingAuthSync = pendingAuthSyncStatus.kind === "active";
-  const currentConvexUser = useQuery(api.app.getCurrentUser);
+  const isPendingAuthSync =
+    !hasServicePresentation && pendingAuthSyncStatus.kind === "active";
+  const currentConvexUser = useQuery(
+    api.app.getCurrentUser,
+    hasServicePresentation ? "skip" : undefined,
+  );
   const isRecoveringConvexSession =
-    Boolean(authToken) && !isAuthenticated && currentConvexUser === undefined;
+    !hasServicePresentation &&
+    Boolean(authToken) &&
+    !isAuthenticated &&
+    currentConvexUser === undefined;
   const hasReadyConvexUser = Boolean(currentConvexUser);
   const isLoadingConvexUser =
     (isAuthenticated || Boolean(authToken)) && currentConvexUser === undefined;
   const authenticatedAthenaUser = useQuery(
     api.inventory.athenaUser.getAuthenticatedUser,
-    hasReadyConvexUser ? {} : "skip",
+    hasReadyConvexUser && !hasServicePresentation ? {} : "skip",
   );
   const isLoadingAthenaUser =
     hasReadyConvexUser && authenticatedAthenaUser === undefined;
@@ -91,6 +106,14 @@ export const useAuth = () => {
   }, [authToken, isAuthenticated, isLoadingConvexAuth, pendingAuthSyncTick]);
 
   useEffect(() => {
+    if (isStorageLoaded && isServicePrincipalSession) {
+      if (loggedInUserId) {
+        localStorage.removeItem(LOGGED_IN_USER_ID_KEY);
+        setLoggedInUserId(null);
+      }
+      return;
+    }
+
     if (
       !isStorageLoaded ||
       isLoadingConvexAuth ||
@@ -118,6 +141,7 @@ export const useAuth = () => {
     }
   }, [
     authenticatedAthenaUser,
+    isServicePrincipalSession,
     isLoadingConvexAuth,
     isPendingAuthSync,
     isRecoveringConvexSession,
@@ -130,17 +154,27 @@ export const useAuth = () => {
     !isStorageLoaded ||
     isLoadingConvexAuth ||
     isPendingAuthSync ||
+    isPendingServiceAuth ||
     isRecoveringConvexSession ||
-    isLoadingConvexUser ||
-    isLoadingAthenaUser;
+    (!isServicePrincipalSession && isLoadingConvexUser) ||
+    (!isServicePrincipalSession && isLoadingAthenaUser);
 
   return {
     authSessionEpoch: authSessionRef.current.epoch,
+    actorKind: isServicePrincipalSession
+      ? ("service_principal" as const)
+      : isLoading
+        ? null
+        : hasReadyConvexUser && authenticatedAthenaUser
+          ? ("human" as const)
+          : null,
     user: isLoading
       ? undefined
-      : hasReadyConvexUser
-        ? authenticatedAthenaUser
-        : null,
+      : isServicePrincipalSession
+        ? null
+        : hasReadyConvexUser
+          ? authenticatedAthenaUser
+          : null,
     isLoading,
   };
 };

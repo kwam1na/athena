@@ -1,175 +1,204 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { ComponentProps } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ATHENA_POS_RECOVERY_CODE_PROVIDER_ID } from "../../../../shared/auth";
-import {
-  ATHENA_AUTH_SYNC_FAILED_EVENT,
-  PENDING_ATHENA_AUTH_SYNC_KEY,
-} from "~/src/lib/constants";
+import { createAuthRuntimeHandoffCoordinator } from "../../../lib/auth/authRuntimeHandoff";
 import { PosRecoveryCodeForm } from "./PosRecoveryCodeForm";
-
-const mocked = vi.hoisted(() => ({
-  navigate: vi.fn(),
-  signIn: vi.fn(),
-}));
-
-vi.mock("@convex-dev/auth/react", () => ({
-  useAuthActions: () => ({ signIn: mocked.signIn }),
-}));
-
-vi.mock("@tanstack/react-router", () => ({
-  useNavigate: () => mocked.navigate,
-}));
+import type { PosRecoveryFrontendAdapter } from "./posRecoveryFlow";
 
 describe("PosRecoveryCodeForm", () => {
   beforeEach(() => {
-    mocked.navigate.mockReset();
-    mocked.signIn.mockReset();
     window.localStorage.clear();
-    window.sessionStorage.clear();
+    Object.defineProperty(window, "sessionStorage", {
+      configurable: true,
+      value: createMemoryStorage(),
+    });
   });
 
-  it("signs in the POS account and starts the shared Athena auth-sync handoff", async () => {
+  it("shows setup-required guidance without local terminal evidence", async () => {
     const user = userEvent.setup();
-    mocked.signIn.mockResolvedValue({ signingIn: true });
-
-    render(
-      <PosRecoveryCodeForm
-        orgUrlSlug="wigclub"
-        redirectTo="/wigclub/store/wigclub/pos/register"
-        storeUrlSlug="wigclub"
-        onBack={vi.fn()}
-      />,
-    );
-
-    await user.type(screen.getByLabelText(/recovery code/i), "abc-123");
-    await user.click(screen.getByRole("button", { name: /continue/i }));
-
-    await waitFor(() =>
-      expect(mocked.signIn).toHaveBeenCalledWith(
-        ATHENA_POS_RECOVERY_CODE_PROVIDER_ID,
-        {
-          code: "abc-123",
-          email: "pos@wigclub.store",
-          orgUrlSlug: "wigclub",
-          storeUrlSlug: "wigclub",
-        },
-      ),
-    );
-    expect(window.sessionStorage.setItem).toHaveBeenCalledWith(
-      PENDING_ATHENA_AUTH_SYNC_KEY,
-      expect.stringMatching(
-        /"redirectTo":"\/wigclub\/store\/wigclub\/pos\/register"/,
-      ),
-    );
-    expect(mocked.navigate).not.toHaveBeenCalled();
-    expect(window.localStorage.setItem).not.toHaveBeenCalledWith(
-      expect.any(String),
-      "abc-123",
-    );
-    expect(window.sessionStorage.setItem).not.toHaveBeenCalledWith(
-      expect.any(String),
-      "abc-123",
-    );
-  });
-
-  it("uses access-aware failure copy for rejected recovery sign-in", async () => {
-    const user = userEvent.setup();
-    mocked.signIn.mockResolvedValue({ signingIn: false });
-
-    render(
-      <PosRecoveryCodeForm
-        orgUrlSlug="wigclub"
-        storeUrlSlug="wigclub"
-        onBack={vi.fn()}
-      />,
-    );
-
-    await user.type(screen.getByLabelText(/recovery code/i), "wrong-code");
-    await user.click(screen.getByRole("button", { name: /continue/i }));
+    const onUseAdministratorEmail = vi.fn();
+    renderForm({ terminal: null, onUseAdministratorEmail });
 
     expect(
-      await screen.findByText(
-        "POS sign-in failed. Check the recovery code or ask an admin to confirm POS-only access.",
-      ),
+      screen.getByRole("heading", { name: /setup required/i }),
     ).toBeInTheDocument();
-    expect(mocked.navigate).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText(/recovery code/i)).toBeNull();
+    await user.click(
+      screen.getByRole("button", { name: /sign in as administrator/i }),
+    );
+    expect(onUseAdministratorEmail).toHaveBeenCalledTimes(1);
   });
 
-  it("reenables the form when auth sync fails after provider success", async () => {
+  it("shows store and terminal identity and never renders a POS account field", async () => {
     const user = userEvent.setup();
-    mocked.signIn.mockResolvedValue({ signingIn: true });
+    const { adapter } = renderForm();
 
-    render(
-      <PosRecoveryCodeForm storeId="store-1" onBack={vi.fn()} />,
-    );
+    expect(await screen.findByText("wigclub")).toBeInTheDocument();
+    expect(screen.getByText("Front register")).toBeInTheDocument();
+    expect(screen.queryByLabelText(/POS account/i)).toBeNull();
+    expect(screen.queryByDisplayValue("pos@wigclub.store")).toBeNull();
 
     await user.type(screen.getByLabelText(/recovery code/i), "abc-123");
     await user.click(screen.getByRole("button", { name: /continue/i }));
 
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: /continue/i })).toBeDisabled(),
+    await waitFor(() => expect(adapter.issue).toHaveBeenCalledTimes(1));
+    expect(adapter.issue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: "abc-123",
+        terminalId: "terminal-1",
+        terminalProof: "terminal-proof",
+      }),
     );
-
-    act(() => {
-      window.dispatchEvent(new Event(ATHENA_AUTH_SYNC_FAILED_EVENT));
-    });
-
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: /continue/i })).toBeEnabled(),
-    );
+    expect(
+      await screen.findByText(/checkout station signed in/i),
+    ).toBeInTheDocument();
   });
 
-  it("falls back to the authenticated app entry when the redirect target is external", async () => {
+  it("retries activation without issuing a second Auth session", async () => {
     const user = userEvent.setup();
-    mocked.signIn.mockResolvedValue({ signingIn: true });
+    const adapter = createAdapter();
+    adapter.activate = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("network"))
+      .mockResolvedValueOnce(activation);
+    renderForm({ adapter });
 
-    render(
-      <PosRecoveryCodeForm
-        orgUrlSlug="wigclub"
-        redirectTo="//attacker.example/pos"
-        storeUrlSlug="wigclub"
-        onBack={vi.fn()}
-      />,
-    );
-
-    await user.type(screen.getByLabelText(/recovery code/i), "abc-123");
+    await user.type(await screen.findByLabelText(/recovery code/i), "abc-123");
     await user.click(screen.getByRole("button", { name: /continue/i }));
+    expect(
+      await screen.findByRole("button", { name: /try again/i }),
+    ).toBeEnabled();
+    await user.click(screen.getByRole("button", { name: /try again/i }));
 
-    await waitFor(() =>
-      expect(window.sessionStorage.setItem).toHaveBeenCalledWith(
-        PENDING_ATHENA_AUTH_SYNC_KEY,
-        expect.stringMatching(/"redirectTo":"\/"/),
+    expect(
+      await screen.findByText(/checkout station signed in/i),
+    ).toBeInTheDocument();
+    expect(adapter.issue).toHaveBeenCalledTimes(1);
+    expect(adapter.activate).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries post-promotion verification without issuing or activating again", async () => {
+    const user = userEvent.setup();
+    const adapter = createAdapter();
+    adapter.assertActivatedSession = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("network"))
+      .mockResolvedValueOnce(undefined);
+    renderForm({ adapter });
+
+    await user.type(await screen.findByLabelText(/recovery code/i), "abc-123");
+    await user.click(screen.getByRole("button", { name: /continue/i }));
+    await user.click(await screen.findByRole("button", { name: /try again/i }));
+
+    expect(
+      await screen.findByText(/checkout station signed in/i),
+    ).toBeInTheDocument();
+    expect(adapter.issue).toHaveBeenCalledTimes(1);
+    expect(adapter.activate).toHaveBeenCalledTimes(1);
+    expect(adapter.assertActivatedSession).toHaveBeenCalledTimes(2);
+  });
+
+  it("routes revoked exact evidence to administrator reconnect without POS sign-in", async () => {
+    const user = userEvent.setup();
+    const adapter = createAdapter();
+    const onUseAdministratorEmail = vi.fn();
+    adapter.requestDisposition = vi.fn(async () => ({
+      disposition: "administrator_reconnect_required" as const,
+      expiresAt: Date.now() + 60_000,
+      reconnectIntentToken: "opaque-reconnect-token-123456",
+    }));
+    renderForm({ adapter, onUseAdministratorEmail });
+
+    expect(
+      await screen.findByRole("heading", { name: /station disconnected/i }),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText(/recovery code/i)).toBeNull();
+    await user.click(
+      screen.getByRole("button", { name: /sign in as administrator/i }),
+    );
+    expect(onUseAdministratorEmail).toHaveBeenCalledTimes(1);
+    expect(adapter.issue).not.toHaveBeenCalled();
+    expect(
+      JSON.parse(
+        sessionStorage.getItem("athena.posTerminalReconnectIntent.v1") ??
+          "null",
       ),
-    );
-    expect(mocked.navigate).not.toHaveBeenCalled();
-  });
-
-  it("navigates query-bearing recovery redirects with separate search params", async () => {
-    const user = userEvent.setup();
-    mocked.signIn.mockResolvedValue({ signingIn: true });
-
-    render(
-      <PosRecoveryCodeForm
-        orgUrlSlug="wigclub"
-        redirectTo="/wigclub/store/wigclub/pos/register?drawer=front"
-        storeUrlSlug="wigclub"
-        onBack={vi.fn()}
-      />,
-    );
-
-    await user.type(screen.getByLabelText(/recovery code/i), "abc-123");
-    await user.click(screen.getByRole("button", { name: /continue/i }));
-
-    await waitFor(() =>
-      expect(window.sessionStorage.setItem).toHaveBeenCalledWith(
-        PENDING_ATHENA_AUTH_SYNC_KEY,
-        expect.stringMatching(
-          /"redirectTo":"\/wigclub\/store\/wigclub\/pos\/register\?drawer=front"/,
-        ),
-      ),
-    );
-    expect(mocked.navigate).not.toHaveBeenCalled();
+    ).toEqual({
+        expiresAt: expect.any(Number),
+        reconnectIntentToken: "opaque-reconnect-token-123456",
+        version: 1,
+      });
   });
 });
+
+const activation = {
+  authorityExpiresAt: 10_000,
+  offlineAuthorityReceipt: "receipt-1",
+  posApplicationSessionBindingId: "binding-1",
+  servicePrincipalSessionId: "session-1",
+  storeId: "store-1",
+  terminalId: "terminal-1",
+};
+
+function renderForm(
+  overrides: Partial<ComponentProps<typeof PosRecoveryCodeForm>> = {},
+) {
+  const adapter = overrides.adapter ?? createAdapter();
+  const authRuntime = overrides.authRuntime ?? createCoordinator();
+  const view = render(
+    <PosRecoveryCodeForm
+      adapter={adapter}
+      authRuntime={authRuntime}
+      onBack={vi.fn()}
+      onUseAdministratorEmail={vi.fn()}
+      redirectTo="/wigclub/store/wigclub/pos"
+      terminal={{
+        browserFingerprintHash: "fingerprint-1",
+        displayName: "Front register",
+        storeName: "wigclub",
+        terminalId: "terminal-1",
+        terminalProof: "terminal-proof",
+      }}
+      {...overrides}
+    />,
+  );
+  return { adapter, authRuntime, view };
+}
+
+function createAdapter(): PosRecoveryFrontendAdapter {
+  return {
+    requestDisposition: vi.fn(async () => ({
+      disposition: "recovery_code_required" as const,
+    })),
+    issue: vi.fn(async () => undefined),
+    activate: vi.fn(async () => activation),
+    assertActivatedSession: vi.fn(async () => undefined),
+    abort: vi.fn(async () => undefined),
+  };
+}
+
+function createCoordinator() {
+  let sequence = 0;
+  return createAuthRuntimeHandoffCoordinator({
+    now: () => 1_000,
+    ownerToken: "form-test-owner",
+    randomId: () => `form-generated-${++sequence}-12345678`,
+    storage: createMemoryStorage(),
+  });
+}
+
+function createMemoryStorage(): Storage {
+  const values = new Map<string, string>();
+  return {
+    get length() {
+      return values.size;
+    },
+    clear: () => values.clear(),
+    getItem: (key) => values.get(key) ?? null,
+    key: (index) => [...values.keys()][index] ?? null,
+    removeItem: (key) => values.delete(key),
+    setItem: (key, value) => values.set(key, value),
+  };
+}

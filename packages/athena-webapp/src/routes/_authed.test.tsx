@@ -1,4 +1,10 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -438,7 +444,9 @@ describe("Authed layout", () => {
 
     expect(container).toBeEmptyDOMElement();
     expect(screen.queryByTestId("authed-outlet")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("pos-remote-assist-host")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("pos-remote-assist-host"),
+    ).not.toBeInTheDocument();
     expect(screen.queryByTestId("app-sidebar")).not.toBeInTheDocument();
     expect(
       screen.queryByRole("heading", { name: /pos terminal/i }),
@@ -484,6 +492,27 @@ describe("Authed layout", () => {
       expect(mocked.navigate).toHaveBeenCalledWith({ to: "/login" }),
     );
     expect(screen.queryByTestId("app-sidebar")).not.toBeInTheDocument();
+  });
+
+  it("renders the POS shell for a service-principal actor without human-user recovery", () => {
+    mocked.useAuth.mockReturnValue({
+      actorKind: "service_principal",
+      user: null,
+      isLoading: false,
+    });
+    mocked.useLocalPosEntryContext.mockReturnValue(readyLocalPosEntryContext());
+    mocked.useRouterState.mockImplementation(({ select }) =>
+      select({ location: { pathname: "/wigclub/store/wigclub/pos/register" } }),
+    );
+
+    render(<Layout />);
+
+    expect(screen.getByTestId("authed-outlet")).toBeInTheDocument();
+    expect(screen.getByTestId("pos-remote-assist-host")).toBeInTheDocument();
+    expect(mocked.usePosTerminalAppSessionRecovery).toHaveBeenCalledWith(
+      expect.objectContaining({ isAppUserMissing: false }),
+    );
+    expect(mocked.navigate).not.toHaveBeenCalled();
   });
 
   it("renders a blocked POS shell when Convex auth settles without terminal continuity", () => {
@@ -1393,7 +1422,9 @@ describe("Authed layout", () => {
     });
 
     await waitFor(() =>
-      expect(themeToggleButton.querySelector(".lucide-smartphone")).not.toBeNull(),
+      expect(
+        themeToggleButton.querySelector(".lucide-smartphone"),
+      ).not.toBeNull(),
     );
   });
 

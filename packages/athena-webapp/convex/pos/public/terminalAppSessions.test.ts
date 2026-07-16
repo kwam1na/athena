@@ -1,8 +1,32 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { Id } from "../../_generated/dataModel";
+import { assertConformsToExportedReturns } from "../../lib/returnValidatorContract";
 import { hashPosTerminalSyncSecret } from "../application/sync/terminalSyncSecret";
+
+const mocks = vi.hoisted(() => ({
+  issuePosOfflineAuthorityReceipt: vi.fn(async () => "offline-receipt-1"),
+  requirePosApplicationAuthorityWithCtx: vi.fn(),
+}));
+
+vi.mock("../application/offlineAuthorityReceipt", () => ({
+  issuePosOfflineAuthorityReceipt: mocks.issuePosOfflineAuthorityReceipt,
+}));
+
+vi.mock("../application/posApplicationAuthority", () => ({
+  requirePosApplicationAuthorityWithCtx:
+    mocks.requirePosApplicationAuthorityWithCtx,
+}));
+
 import {
+  abortPreparedPosTerminalSessionWithCtx,
+  abortPreparedPosTerminalSession,
+  activatePreparedPosTerminalSession,
+  activatePreparedPosTerminalSessionWithCtx,
+  cleanupExpiredPosRecoveryArtifacts,
+  getCurrentPosTerminalServiceSession,
+  refreshCurrentPosTerminalOfflineAuthorityReceipt,
+  refreshCurrentPosTerminalOfflineAuthorityReceiptWithCtx,
   validateTerminalAppSessionRecovery,
   validateTerminalAppSessionRecoveryWithCtx,
 } from "./terminalAppSessions";
@@ -20,6 +44,51 @@ const ACCOUNT_ID = "pos-account-1" as Id<"athenaUser">;
 const OTHER_ACCOUNT_ID = "pos-account-2" as Id<"athenaUser">;
 const PROOF = "terminal-proof-1";
 
+describe("current terminal service session", () => {
+  it("returns only a fully revalidated POS application authority", async () => {
+    mocks.requirePosApplicationAuthorityWithCtx.mockResolvedValueOnce({
+      actor: {
+        absoluteExpiresAt: 5_000,
+        authSessionId: "auth-session-1",
+      },
+      posApplicationSessionBindingId: "pos-binding-1",
+      offlineAuthorityReceipt: "offline-receipt-1",
+      servicePrincipalSessionId: "service-session-1",
+      storeId: STORE_ID,
+      terminalId: TERMINAL_ID,
+    });
+    const ctx = {};
+
+    const result = await getHandler(getCurrentPosTerminalServiceSession)(
+      ctx as never,
+      {},
+    );
+
+    expect(mocks.requirePosApplicationAuthorityWithCtx).toHaveBeenCalledWith(
+      ctx,
+    );
+    expect(result).toEqual({
+      authorityExpiresAt: 5_000,
+      authSessionId: "auth-session-1",
+      offlineAuthorityReceipt: "offline-receipt-1",
+      posApplicationSessionBindingId: "pos-binding-1",
+      servicePrincipalSessionId: "service-session-1",
+      storeId: STORE_ID,
+      terminalId: TERMINAL_ID,
+    });
+  });
+
+  it("normalizes stale or revoked authority failures", async () => {
+    mocks.requirePosApplicationAuthorityWithCtx.mockRejectedValueOnce(
+      new Error("terminal revoked"),
+    );
+
+    await expect(
+      getHandler(getCurrentPosTerminalServiceSession)({} as never, {}),
+    ).rejects.toThrow("POS session recovery could not be completed.");
+  });
+});
+
 describe("terminal app-session recovery validation", () => {
   it("returns a POS hub-scoped recoverable assertion for an active same-store terminal and POS-only app account", async () => {
     const ctx = await buildCtx();
@@ -27,6 +96,10 @@ describe("terminal app-session recovery validation", () => {
     const result = await validateTerminalAppSessionRecoveryWithCtx(
       ctx as never,
       buildArgs(),
+    );
+    assertConformsToExportedReturns(
+      validateTerminalAppSessionRecovery,
+      result,
     );
 
     expect(result).toEqual({
@@ -352,6 +425,178 @@ describe("terminal app-session recovery validation", () => {
   });
 });
 
+describe("exact-session POS recovery", () => {
+  it("activates only the prepared Auth pair and retains the exact result for retry", async () => {
+    const ctx = await buildExactSessionCtx();
+
+    const first = await activatePreparedPosTerminalSessionWithCtx(
+      ctx as never,
+      { now: 1_000 },
+    );
+    const second = await activatePreparedPosTerminalSessionWithCtx(
+      ctx as never,
+      { now: 1_001 },
+    );
+
+    assertConformsToExportedReturns(
+      activatePreparedPosTerminalSession,
+      first,
+    );
+    assertConformsToExportedReturns(abortPreparedPosTerminalSession, {
+      status: "aborted",
+    });
+    assertConformsToExportedReturns(getCurrentPosTerminalServiceSession, {
+      authorityExpiresAt: first.authorityExpiresAt,
+      authSessionId: "auth-session",
+      offlineAuthorityReceipt: first.offlineAuthorityReceipt,
+      posApplicationSessionBindingId:
+        first.posApplicationSessionBindingId,
+      servicePrincipalSessionId: first.servicePrincipalSessionId,
+      storeId: STORE_ID,
+      terminalId: TERMINAL_ID,
+    });
+
+    expect(second).toEqual(first);
+    expect(ctx.tables.servicePrincipalSession).toHaveLength(1);
+    expect(ctx.tables.posApplicationSessionBinding).toHaveLength(1);
+    expect(ctx.tables.posApplicationSessionBinding[0]).toEqual(
+      expect.objectContaining({
+        offlineAuthorityReceipt: "offline-receipt-1",
+      }),
+    );
+    expect(mocks.issuePosOfflineAuthorityReceipt).toHaveBeenCalledWith({
+      authorityExpiresAt: 24 * 60 * 60 * 1_000 + 1_000,
+      capabilityRevision: 1,
+      credentialRevision: 1,
+      issuedAt: 1_000,
+      posApplicationSessionBindingId:
+        first.posApplicationSessionBindingId,
+      principalLifecycleRevision: 1,
+      servicePrincipalId: "principal-1",
+      servicePrincipalSessionId: first.servicePrincipalSessionId,
+      storeId: STORE_ID,
+      terminalId: TERMINAL_ID,
+      terminalLifecycleRevision: 1,
+      terminalProofRevision: 1,
+    });
+    expect(ctx.tables.posRecoveryExchange[0]).toEqual(
+      expect.objectContaining({
+        status: "activated",
+        servicePrincipalSessionId: first.servicePrincipalSessionId,
+        posApplicationSessionBindingId:
+          first.posApplicationSessionBindingId,
+      }),
+    );
+
+    ctx.auth.getUserIdentity.mockResolvedValue({
+      subject: "auth-user|different-session",
+    });
+    await expect(
+      activatePreparedPosTerminalSessionWithCtx(ctx as never, { now: 1_002 }),
+    ).rejects.toThrow("POS session recovery could not be completed.");
+  });
+
+  it("refreshes the current receipt only after full POS authority revalidation", async () => {
+    const ctx = await buildExactSessionCtx();
+    const activated = await activatePreparedPosTerminalSessionWithCtx(
+      ctx as never,
+      { now: 1_000 },
+    );
+    mocks.requirePosApplicationAuthorityWithCtx.mockResolvedValueOnce({
+      actor: {
+        absoluteExpiresAt: activated.authorityExpiresAt,
+        authSessionId: "auth-session",
+      },
+      posApplicationSessionBindingId:
+        activated.posApplicationSessionBindingId,
+      servicePrincipalSessionId: activated.servicePrincipalSessionId,
+      storeId: STORE_ID,
+      terminalId: TERMINAL_ID,
+    });
+    mocks.issuePosOfflineAuthorityReceipt.mockResolvedValueOnce(
+      "offline-receipt-2",
+    );
+
+    const refreshed =
+      await refreshCurrentPosTerminalOfflineAuthorityReceiptWithCtx(
+        ctx as never,
+        { now: 2_000 },
+      );
+
+    assertConformsToExportedReturns(
+      refreshCurrentPosTerminalOfflineAuthorityReceipt,
+      refreshed,
+    );
+    expect(refreshed.offlineAuthorityReceipt).toBe("offline-receipt-2");
+    expect(ctx.tables.posApplicationSessionBinding[0]).toEqual(
+      expect.objectContaining({
+        offlineAuthorityReceipt: "offline-receipt-2",
+        revision: 2,
+        updatedAt: 2_000,
+      }),
+    );
+  });
+
+  it("proof-aborts before token issuance and bounded cleanup removes a later orphan refresh token", async () => {
+    const ctx = await buildExactSessionCtx();
+
+    await expect(
+      abortPreparedPosTerminalSessionWithCtx(
+        ctx as never,
+        {
+          recoveryCorrelationKey: "recovery_correlation_0001",
+          terminalId: TERMINAL_ID,
+          terminalProof: PROOF,
+        },
+        { now: 2_000 },
+      ),
+    ).resolves.toEqual({ status: "aborted" });
+    expect(ctx.tables.authSessions).toHaveLength(0);
+    expect(ctx.tables.posRecoveryExchange[0].status).toBe("aborted");
+
+    ctx.tables.authRefreshTokens.push({
+      _id: "orphan-refresh",
+      sessionId: "auth-session",
+      expirationTime: 9_999,
+    });
+    ctx.tables.posRecoveryExchange[0].expiresAt = 1_999;
+    await getHandler(cleanupExpiredPosRecoveryArtifacts)(ctx, { limit: 10 });
+    expect(ctx.tables.authRefreshTokens).toHaveLength(0);
+  });
+
+  it("requires the exact issued Auth session to abort once refresh authority exists", async () => {
+    const ctx = await buildExactSessionCtx();
+    ctx.tables.authRefreshTokens.push({
+      _id: "refresh-1",
+      sessionId: "auth-session",
+      expirationTime: 9_999,
+    });
+    ctx.auth.getUserIdentity.mockResolvedValue({
+      subject: "auth-user|different-session",
+    });
+
+    await expect(
+      abortPreparedPosTerminalSessionWithCtx(ctx as never, {
+        recoveryCorrelationKey: "recovery_correlation_0001",
+        terminalId: TERMINAL_ID,
+        terminalProof: PROOF,
+      }),
+    ).rejects.toThrow("POS session recovery could not be completed.");
+    expect(ctx.tables.authSessions).toHaveLength(1);
+
+    ctx.auth.getUserIdentity.mockResolvedValue({
+      subject: "auth-user|auth-session",
+    });
+    await expect(
+      abortPreparedPosTerminalSessionWithCtx(ctx as never, {
+        recoveryCorrelationKey: "recovery_correlation_0001",
+        terminalId: TERMINAL_ID,
+      }),
+    ).resolves.toEqual({ status: "aborted" });
+    expect(ctx.tables.authRefreshTokens).toHaveLength(0);
+  });
+});
+
 function buildArgs(overrides: Record<string, unknown> = {}) {
   return {
     accountId: ACCOUNT_ID,
@@ -473,4 +718,192 @@ async function buildCtx(seed: {
   };
 
   return ctx;
+}
+
+async function buildExactSessionCtx() {
+  let nextId = 1;
+  const terminalProofHash = await hashPosTerminalSyncSecret(PROOF);
+  const tables: Record<string, any[]> = {
+    authRefreshTokens: [],
+    authSessions: [
+      {
+        _id: "auth-session",
+        userId: "auth-user",
+        expirationTime: 100_000,
+      },
+    ],
+    operationalEvent: [],
+    posApplicationSessionBinding: [],
+    posRecoveryCredential: [
+      {
+        _id: "credential-1",
+        organizationId: ORG_ID,
+        storeId: STORE_ID,
+        servicePrincipalId: "principal-1",
+        status: "active",
+        credentialRevision: 1,
+      },
+    ],
+    posRecoveryExchange: [
+      {
+        _id: "exchange-1",
+        organizationId: ORG_ID,
+        storeId: STORE_ID,
+        servicePrincipalId: "principal-1",
+        servicePrincipalAuthBindingId: "binding-1",
+        authUserId: "auth-user",
+        authSessionId: "auth-session",
+        terminalId: TERMINAL_ID,
+        posRecoveryCredentialId: "credential-1",
+        capabilityGrantId: "grant-1",
+        recoveryCorrelationKey: "recovery_correlation_0001",
+        consumerId: "pos",
+        capabilityId: "pos.application",
+        status: "prepared",
+        revision: 1,
+        principalLifecycleRevision: 1,
+        capabilityRevision: 1,
+        credentialRevision: 1,
+        terminalLifecycleRevision: 1,
+        terminalProofRevision: 1,
+        preparedAt: 100,
+        updatedAt: 100,
+        expiresAt: 10_000,
+        lastCorrelationId: "recovery_correlation_0001",
+      },
+    ],
+    posTerminal: [
+      {
+        _id: TERMINAL_ID,
+        organizationId: ORG_ID,
+        storeId: STORE_ID,
+        status: "active",
+        syncSecretHash: terminalProofHash,
+        lifecycleRevision: 1,
+        proofRevision: 1,
+      },
+    ],
+    servicePrincipal: [
+      {
+        _id: "principal-1",
+        organizationId: ORG_ID,
+        storeId: STORE_ID,
+        stableKey: "store.service",
+        status: "active",
+        lifecycleRevision: 1,
+      },
+    ],
+    servicePrincipalAuthBinding: [
+      {
+        _id: "binding-1",
+        organizationId: ORG_ID,
+        storeId: STORE_ID,
+        servicePrincipalId: "principal-1",
+        authUserId: "auth-user",
+        status: "active",
+        revision: 1,
+      },
+    ],
+    servicePrincipalCapability: [
+      {
+        _id: "grant-1",
+        organizationId: ORG_ID,
+        storeId: STORE_ID,
+        servicePrincipalId: "principal-1",
+        consumerId: "pos",
+        capabilityId: "pos.application",
+        status: "active",
+        revision: 1,
+      },
+    ],
+    servicePrincipalSession: [],
+    store: [{ _id: STORE_ID, organizationId: ORG_ID }],
+  };
+  const auth = {
+    getUserIdentity: vi.fn(async () => ({
+      subject: "auth-user|auth-session",
+    })),
+  };
+  const db = {
+    get: vi.fn(async (tableOrId: string, maybeId?: string) => {
+      if (maybeId !== undefined) {
+        return tables[tableOrId]?.find((row) => row._id === maybeId) ?? null;
+      }
+      return (
+        Object.values(tables)
+          .flat()
+          .find((row) => row._id === tableOrId) ?? null
+      );
+    }),
+    insert: vi.fn(async (table: string, value: Record<string, unknown>) => {
+      const id = `${table}-${nextId++}`;
+      tables[table].push({ _id: id, ...value });
+      return id;
+    }),
+    patch: vi.fn(
+      async (
+        tableOrId: string,
+        idOrPatch: string | Record<string, unknown>,
+        maybePatch?: Record<string, unknown>,
+      ) => {
+        const id = typeof idOrPatch === "string" ? idOrPatch : tableOrId;
+        const update =
+          typeof idOrPatch === "string" ? maybePatch! : idOrPatch;
+        const row = Object.values(tables)
+          .flat()
+          .find((candidate) => candidate._id === id);
+        if (!row) throw new Error(`Missing row ${id}`);
+        Object.assign(row, update);
+      },
+    ),
+    delete: vi.fn(async (tableOrId: string, maybeId?: string) => {
+      const id = maybeId ?? tableOrId;
+      for (const rows of Object.values(tables)) {
+        const index = rows.findIndex((row) => row._id === id);
+        if (index >= 0) {
+          rows.splice(index, 1);
+          return;
+        }
+      }
+    }),
+    query: vi.fn((table: string) => createExactQuery(tables[table] ?? [])),
+  };
+  return { auth, db, tables };
+}
+
+function createExactQuery(rows: any[]) {
+  let currentRows = [...rows];
+  const query = {
+    collect: vi.fn(async () => currentRows),
+    filter: vi.fn((predicate: Function) => {
+      currentRows = currentRows.filter((row) =>
+        predicate({
+          and: (...values: boolean[]) => values.every(Boolean),
+          eq: (left: unknown, right: unknown) => left === right,
+          field: (name: string) => row[name],
+          or: (...values: boolean[]) => values.some(Boolean),
+        }),
+      );
+      return query;
+    }),
+    first: vi.fn(async () => currentRows[0] ?? null),
+    take: vi.fn(async (limit: number) => currentRows.slice(0, limit)),
+    withIndex: vi.fn((_name: string, predicate?: Function) => {
+      if (predicate) {
+        const indexBuilder = {
+          eq: (field: string, value: unknown) => {
+            currentRows = currentRows.filter((row) => row[field] === value);
+            return indexBuilder;
+          },
+          lte: (field: string, value: number) => {
+            currentRows = currentRows.filter((row) => row[field] <= value);
+            return indexBuilder;
+          },
+        };
+        predicate(indexBuilder);
+      }
+      return query;
+    }),
+  };
+  return query;
 }

@@ -11,8 +11,9 @@ import type { PosTerminalLoginMode } from "~/shared/posTerminalLoginMode";
 import type { PosTerminalTransactionCapability } from "~/shared/posTerminalCapability";
 import type { PosRegisterSessionActivitySkipReasonCode } from "~/shared/posRegisterSessionActivityContract";
 import { canUploadPosLocalSyncLocalEventType } from "~/shared/posLocalSyncContract";
+import type { VerifiedPosOfflineAuthorityReceipt } from "@/lib/pos/security/offlineAuthorityPublicKeys";
 
-export const POS_LOCAL_LOGICAL_RECORD_VERSION = 1;
+export const POS_LOCAL_LOGICAL_RECORD_VERSION = 2;
 
 export type PosLocalEntityKind =
   | "registerSession"
@@ -108,6 +109,8 @@ export interface PosProvisionedTerminalSeed {
   provisionedAt: number;
   schemaVersion: number;
   storeUrlSlug?: string;
+  /** Present only after the browser verifies a server-signed v1 receipt. */
+  offlineAuthorityReceipt?: VerifiedPosOfflineAuthorityReceipt;
 }
 
 export interface PosLocalEventRecord {
@@ -125,6 +128,9 @@ export interface PosLocalEventRecord {
   localTransactionId?: string;
   staffProfileId?: string;
   staffProofToken?: string;
+  offlineAuthorityReceipt?: string;
+  offlineAuthorityReceiptNonce?: string;
+  offlineAuthorityReceiptVersion?: number;
   validationMetadata?: PosLocalEventValidationMetadata;
   payload: unknown;
   createdAt: number;

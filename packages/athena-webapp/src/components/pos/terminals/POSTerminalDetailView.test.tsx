@@ -388,6 +388,153 @@ describe("POSTerminalDetailViewContent", () => {
     expect(screen.getByText("Upload failed")).toBeInTheDocument();
   });
 
+  it("confirms a terminal-scoped disconnect without exposing replacement proof", async () => {
+    const onDisconnectTerminal = vi.fn(async () => undefined);
+
+    render(
+      <POSTerminalDetailViewContent
+        detail={detail}
+        isLoading={false}
+        onDisconnectTerminal={onDisconnectTerminal}
+        storeName="Osu Store"
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Disconnect checkout station" }),
+    );
+
+    const dialog = screen.getByRole("dialog", {
+      name: "Disconnect checkout station",
+    });
+    expect(
+      within(dialog).getByText("Disconnect Front counter from Osu Store?"),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByText(
+        "Its next server request for POS access will be denied.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByText(
+        "Offline access already leased to it remains available only until the current lease expires.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByText(
+        "Unsynchronized records stay on this checkout station and are not deleted.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByText(
+        "Other checkout stations at Osu Store are unaffected.",
+      ),
+    ).toBeInTheDocument();
+    expect(within(dialog).queryByText(/proof/i)).not.toBeInTheDocument();
+
+    fireEvent.click(
+      within(dialog).getByRole("button", {
+        name: "Disconnect checkout station",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(onDisconnectTerminal).toHaveBeenCalledWith({
+        terminalId: "terminal-1",
+      }),
+    );
+    expect(mocks.toastSuccess).toHaveBeenCalledWith(
+      "Front counter was disconnected.",
+    );
+  });
+
+  it("cancels a disconnect with Escape and restores focus to the trigger", async () => {
+    const onDisconnectTerminal = vi.fn(async () => undefined);
+
+    render(
+      <POSTerminalDetailViewContent
+        detail={detail}
+        isLoading={false}
+        onDisconnectTerminal={onDisconnectTerminal}
+        storeName="Osu Store"
+      />,
+    );
+
+    const trigger = screen.getByRole("button", {
+      name: "Disconnect checkout station",
+    });
+    fireEvent.click(trigger);
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+    expect(onDisconnectTerminal).not.toHaveBeenCalled();
+    expect(trigger).toHaveFocus();
+  });
+
+  it("keeps a failed disconnect explicit and retryable", async () => {
+    const onDisconnectTerminal = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("Terminal access could not be changed."))
+      .mockResolvedValueOnce(undefined);
+
+    render(
+      <POSTerminalDetailViewContent
+        detail={detail}
+        isLoading={false}
+        onDisconnectTerminal={onDisconnectTerminal}
+        storeName="Osu Store"
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Disconnect checkout station" }),
+    );
+    fireEvent.click(
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "Disconnect checkout station",
+      }),
+    );
+
+    expect(
+      await screen.findByRole("alert", {
+        name: "",
+      }),
+    ).toHaveTextContent("Terminal access could not be changed.");
+
+    fireEvent.click(
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "Disconnect checkout station",
+      }),
+    );
+    await waitFor(() => expect(onDisconnectTerminal).toHaveBeenCalledTimes(2));
+  });
+
+  it("keeps disconnected terminal evidence inspectable without another disconnect action", () => {
+    render(
+      <POSTerminalDetailViewContent
+        detail={{
+          ...detail,
+          terminal: { ...detail.terminal, status: "revoked" },
+        }}
+        isLoading={false}
+        onDisconnectTerminal={vi.fn(async () => undefined)}
+        storeName="Osu Store"
+      />,
+    );
+
+    expect(
+      screen.getByText(
+        "This checkout station is disconnected. Its recorded health and sync evidence remain available for inspection.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Disconnect checkout station" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("Latest check-in")).toBeInTheDocument();
+  });
+
   it("shows when the terminal is not on the latest webapp version", async () => {
     render(
       <POSTerminalDetailViewContent

@@ -4,43 +4,56 @@ import { internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
 import { ATHENA_POS_RECOVERY_CODE_PROVIDER_ID } from "../../shared/auth";
 
-const verifyRecoveryCodeForAuthProviderRef = (internal as any).pos.public
-  .posRecoveryCodes.verifyRecoveryCodeForAuthProvider;
+const prepareRecoveryForAuthProviderRef = (internal as any).pos.public
+  .posRecoveryCodes.prepareRecoveryForAuthProvider;
 
-type PosRecoveryAuthorizeResult = { userId: Id<"users"> } | null;
+type PosRecoveryAuthorizeResult = {
+  userId: Id<"users">;
+  sessionId: Id<"authSessions">;
+} | null;
 
 export const PosRecoveryCode: ReturnType<typeof ConvexCredentials> =
   ConvexCredentials({
   id: ATHENA_POS_RECOVERY_CODE_PROVIDER_ID,
   authorize: async (credentials, ctx): Promise<PosRecoveryAuthorizeResult> => {
-    const email = typeof credentials.email === "string" ? credentials.email : "";
     const code = typeof credentials.code === "string" ? credentials.code : "";
-    const orgUrlSlug =
-      typeof credentials.orgUrlSlug === "string" ? credentials.orgUrlSlug : undefined;
-    const storeId =
-      typeof credentials.storeId === "string" ? credentials.storeId : undefined;
-    const storeUrlSlug =
-      typeof credentials.storeUrlSlug === "string"
-        ? credentials.storeUrlSlug
-        : undefined;
+    const recoveryCorrelationKey =
+      typeof credentials.recoveryCorrelationKey === "string"
+        ? credentials.recoveryCorrelationKey
+        : "";
+    const terminalId =
+      typeof credentials.terminalId === "string" ? credentials.terminalId : "";
+    const terminalProof =
+      typeof credentials.terminalProof === "string"
+        ? credentials.terminalProof
+        : "";
 
-    if (!email || !code || (!storeId && (!orgUrlSlug || !storeUrlSlug))) {
+    if (!code || !recoveryCorrelationKey || !terminalId || !terminalProof) {
       return null;
     }
 
     try {
+      // Recovery must originate from the isolated, empty Auth namespace. A
+      // mounted predecessor session is never allowed to prepare authority.
+      if (await ctx.auth.getUserIdentity()) return null;
+
       const result = (await ctx.runMutation(
-        verifyRecoveryCodeForAuthProviderRef,
+        prepareRecoveryForAuthProviderRef,
         {
           code,
-          email,
-          orgUrlSlug,
-          storeId: storeId as never,
-          storeUrlSlug,
+          recoveryCorrelationKey,
+          terminalId: terminalId as never,
+          terminalProof,
         },
-      )) as { authUserId: Id<"users"> };
+      )) as {
+        authSessionId: Id<"authSessions">;
+        authUserId: Id<"users">;
+      };
 
-      return { userId: result.authUserId };
+      return {
+        userId: result.authUserId,
+        sessionId: result.authSessionId,
+      };
     } catch {
       return null;
     }

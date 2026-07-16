@@ -1,0 +1,300 @@
+import {
+  ConvexAuthProvider,
+  useAuthActions,
+  type TokenStorage,
+} from "@convex-dev/auth/react";
+import { ConvexReactClient, useMutation } from "convex/react";
+import { useEffect, useMemo, useRef, useState } from "react";
+
+import { api } from "~/convex/_generated/api";
+import { convex } from "../../../lib/convexClient";
+import { ATHENA_POS_RECOVERY_CODE_PROVIDER_ID } from "../../../../shared/auth";
+import type { AuthRuntimeHandoffCoordinator } from "../../../lib/auth/authRuntimeHandoff";
+import { PosRecoveryCodeForm } from "./PosRecoveryCodeForm";
+import type {
+  PosRecoveryActivation,
+  PosRecoveryFrontendAdapter,
+} from "./posRecoveryFlow";
+import type { PosRecoveryTerminalEvidence } from "./PosRecoveryCodeForm";
+import { getDefaultPosLocalStore } from "@/lib/pos/infrastructure/local/posLocalStorageRuntime";
+import { verifyPosOfflineAuthorityReceipt } from "@/lib/pos/security/offlineAuthorityPublicKeys";
+
+const ASSERTION_ATTEMPTS = 40;
+const ASSERTION_RETRY_DELAY_MS = 50;
+
+type PendingSession = {
+  storage: TokenStorage;
+  storageNamespace: string;
+};
+
+type PendingCommand =
+  | {
+      id: number;
+      kind: "issue";
+      input: Parameters<PosRecoveryFrontendAdapter["issue"]>[0];
+      reject: (error: unknown) => void;
+      resolve: () => void;
+    }
+  | {
+      id: number;
+      kind: "activate";
+      reject: (error: unknown) => void;
+      resolve: (activation: PosRecoveryActivation) => void;
+    }
+  | {
+      id: number;
+      kind: "abort";
+      input: Parameters<PosRecoveryFrontendAdapter["abort"]>[0];
+      reject: (error: unknown) => void;
+      resolve: () => void;
+    };
+
+export function ProductionPosRecoveryCodeForm({
+  authRuntime,
+  onBack,
+  onUseAdministratorEmail,
+  redirectTo,
+  terminal,
+}: {
+  authRuntime?: AuthRuntimeHandoffCoordinator;
+  onBack: () => void;
+  onUseAdministratorEmail: () => void;
+  redirectTo?: string | null;
+  terminal: PosRecoveryTerminalEvidence | null;
+}) {
+  const runtime = useProductionPosRecoveryAdapter();
+
+  return (
+    <>
+      {runtime.pendingSession ? (
+        <PendingPosRecoverySession
+          command={runtime.command}
+          session={runtime.pendingSession}
+          settle={runtime.settle}
+        />
+      ) : null}
+      <PosRecoveryCodeForm
+        adapter={runtime.adapter}
+        authRuntime={authRuntime}
+        onBack={onBack}
+        onUseAdministratorEmail={onUseAdministratorEmail}
+        redirectTo={redirectTo}
+        terminal={terminal}
+      />
+    </>
+  );
+}
+
+function useProductionPosRecoveryAdapter() {
+  const [pendingSession, setPendingSession] = useState<PendingSession | null>(
+    null,
+  );
+  const [command, setCommand] = useState<PendingCommand | null>(null);
+  const sequenceRef = useRef(0);
+  const requestDisposition = useMutation(
+    api.pos.public.posRecoveryCodes.requestPosTerminalRecoveryDisposition,
+  );
+
+  const adapter = useMemo<PosRecoveryFrontendAdapter>(
+    () => ({
+      requestDisposition: async (input) =>
+        requestDisposition({
+          browserFingerprintHash: input.browserFingerprintHash,
+          terminalId: input.terminalId as never,
+          terminalProof: input.terminalProof,
+        }),
+      issue: (input) =>
+        new Promise<void>((resolve, reject) => {
+          setPendingSession({
+            storage: input.storage,
+            storageNamespace: input.storageNamespace,
+          });
+          setCommand({
+            id: ++sequenceRef.current,
+            input,
+            kind: "issue",
+            reject,
+            resolve,
+          });
+        }),
+      activate: () =>
+        new Promise<PosRecoveryActivation>((resolve, reject) => {
+          setCommand({
+            id: ++sequenceRef.current,
+            kind: "activate",
+            reject,
+            resolve,
+          });
+        }),
+      assertActivatedSession,
+      abort: (input) =>
+        new Promise<void>((resolve, reject) => {
+          setCommand({
+            id: ++sequenceRef.current,
+            input,
+            kind: "abort",
+            reject,
+            resolve,
+          });
+        }),
+    }),
+    [requestDisposition],
+  );
+
+  return {
+    adapter,
+    command,
+    pendingSession,
+    settle: (id: number) =>
+      setCommand((current) => (current?.id === id ? null : current)),
+  };
+}
+
+function PendingPosRecoverySession({
+  command,
+  session,
+  settle,
+}: {
+  command: PendingCommand | null;
+  session: PendingSession;
+  settle: (id: number) => void;
+}) {
+  const client = useMemo(
+    () => new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string),
+    [],
+  );
+
+  useEffect(() => () => void client.close(), [client]);
+
+  return (
+    <ConvexAuthProvider
+      client={client}
+      storage={session.storage}
+      storageNamespace={session.storageNamespace}
+    >
+      <PendingCommandRunner command={command} settle={settle} />
+    </ConvexAuthProvider>
+  );
+}
+
+function PendingCommandRunner({
+  command,
+  settle,
+}: {
+  command: PendingCommand | null;
+  settle: (id: number) => void;
+}) {
+  const { signIn } = useAuthActions();
+  const activate = useMutation(
+    api.pos.public.terminalAppSessions.activatePreparedPosTerminalSession,
+  );
+  const abort = useMutation(
+    api.pos.public.terminalAppSessions.abortPreparedPosTerminalSession,
+  );
+  const lastCommandIdRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!command || lastCommandIdRef.current === command.id) return;
+    lastCommandIdRef.current = command.id;
+
+    void (async () => {
+      try {
+        if (command.kind === "issue") {
+          const result = await signIn(ATHENA_POS_RECOVERY_CODE_PROVIDER_ID, {
+            code: command.input.code,
+            recoveryCorrelationKey: command.input.recoveryCorrelationKey,
+            terminalId: command.input.terminalId,
+            terminalProof: command.input.terminalProof,
+          });
+          if (!result.signingIn) throw new Error("pos_recovery_auth_failed");
+          command.resolve();
+        } else if (command.kind === "activate") {
+          const result = await activate({});
+          command.resolve({
+            authorityExpiresAt: result.authorityExpiresAt,
+            offlineAuthorityReceipt: result.offlineAuthorityReceipt,
+            posApplicationSessionBindingId:
+              result.posApplicationSessionBindingId,
+            servicePrincipalSessionId: result.servicePrincipalSessionId,
+            storeId: result.storeId,
+            terminalId: result.terminalId,
+          });
+        } else {
+          await abort({
+            recoveryCorrelationKey: command.input.recoveryCorrelationKey,
+            terminalId: command.input.terminalId as never,
+            terminalProof: command.input.terminalProof,
+          });
+          command.resolve();
+        }
+      } catch (error) {
+        command.reject(error);
+      } finally {
+        settle(command.id);
+      }
+    })();
+  }, [abort, activate, command, settle, signIn]);
+
+  return null;
+}
+
+async function assertActivatedSession(expected: PosRecoveryActivation) {
+  for (let attempt = 0; attempt < ASSERTION_ATTEMPTS; attempt += 1) {
+    try {
+      const current = await convex.query(
+        api.pos.public.terminalAppSessions.getCurrentPosTerminalServiceSession,
+        {},
+      );
+      if (
+        current.authorityExpiresAt === expected.authorityExpiresAt &&
+        current.offlineAuthorityReceipt === expected.offlineAuthorityReceipt &&
+        current.posApplicationSessionBindingId ===
+          expected.posApplicationSessionBindingId &&
+        current.servicePrincipalSessionId ===
+          expected.servicePrincipalSessionId &&
+        current.storeId === expected.storeId &&
+        current.terminalId === expected.terminalId
+      ) {
+        await persistActivatedOfflineAuthorityReceipt(expected);
+        return;
+      }
+    } catch {
+      // The root provider remount is asynchronous; retry against its new token.
+    }
+    await new Promise((resolve) =>
+      window.setTimeout(resolve, ASSERTION_RETRY_DELAY_MS),
+    );
+  }
+  throw new Error("pos_recovery_session_assertion_failed");
+}
+
+async function persistActivatedOfflineAuthorityReceipt(
+  activation: PosRecoveryActivation,
+) {
+  const verification = await verifyPosOfflineAuthorityReceipt({
+    envelope: activation.offlineAuthorityReceipt,
+    expectedStoreId: activation.storeId,
+    expectedTerminalId: activation.terminalId,
+  });
+  if (verification.status !== "valid") {
+    throw new Error("pos_offline_authority_receipt_invalid");
+  }
+
+  const store = getDefaultPosLocalStore();
+  const seedResult = await store.readProvisionedTerminalSeed();
+  const seed = seedResult.ok ? seedResult.value : null;
+  if (
+    !seed ||
+    seed.storeId !== activation.storeId ||
+    seed.cloudTerminalId !== activation.terminalId
+  ) {
+    throw new Error("pos_offline_authority_receipt_scope_invalid");
+  }
+  const writeResult = await store.writeProvisionedTerminalSeed({
+    ...seed,
+    offlineAuthorityReceipt: verification.receipt,
+  });
+  if (!writeResult.ok) {
+    throw new Error("pos_offline_authority_receipt_persistence_failed");
+  }
+}

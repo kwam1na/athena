@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   applyInventoryEffectWithCtx: vi.fn(),
   createOrReusePendingCheckoutItem: vi.fn(),
   findStoreSkuByBarcode: vi.fn(),
+  getServicePrincipalActorWithCtx: vi.fn(),
   refreshCatalogSummaryWithCtx: vi.fn(),
   listRegisterCatalogAvailabilitySnapshot: vi.fn(),
   listRegisterCatalogWithRevision: vi.fn(),
@@ -18,10 +19,20 @@ const mocks = vi.hoisted(() => ({
   requireAuthenticatedAthenaUserIndexedWithCtx: vi.fn(),
   requireAuthenticatedAthenaUserWithCtx: vi.fn(),
   requireOrganizationMemberRoleWithCtx: vi.fn(),
+  requirePosApplicationAuthorityWithCtx: vi.fn(),
   requireSharedDemoStoreCapabilityIfApplicable: vi.fn(),
   searchProducts: vi.fn(),
   updateOperationalWorkItemStatusWithCtx: vi.fn(),
   upsertProductSkuSearchProjection: vi.fn(),
+}));
+
+vi.mock("../../servicePrincipals/actor", () => ({
+  getServicePrincipalActorWithCtx: mocks.getServicePrincipalActorWithCtx,
+}));
+
+vi.mock("../application/posApplicationAuthority", () => ({
+  requirePosApplicationAuthorityWithCtx:
+    mocks.requirePosApplicationAuthorityWithCtx,
 }));
 
 vi.mock("../application/sync/registerCatalogRevision", () => ({
@@ -128,6 +139,7 @@ function getHandler(definition: unknown) {
 describe("POS public catalog queries", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    mocks.getServicePrincipalActorWithCtx.mockResolvedValue(null);
     mocks.requireAuthenticatedAthenaUserWithCtx.mockResolvedValue({
       _id: "athena-user-1",
     });
@@ -189,6 +201,55 @@ describe("POS public catalog queries", () => {
       skuId: "sku-1",
     });
   });
+
+  it("reads same-store catalog data with current POS application authority", async () => {
+    mocks.getServicePrincipalActorWithCtx.mockResolvedValue({
+      kind: "service_principal",
+      storeId: "store-1",
+    });
+    mocks.requirePosApplicationAuthorityWithCtx.mockResolvedValue({
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
+    mocks.searchProducts.mockResolvedValue([{ id: "sku-1" }]);
+    const ctx = buildCtx();
+
+    await expect(
+      getHandler(search)(ctx as never, {
+        storeId: "store-1",
+        searchQuery: "soap",
+      }),
+    ).resolves.toEqual([{ id: "sku-1" }]);
+    expect(mocks.requirePosApplicationAuthorityWithCtx).toHaveBeenCalledWith(
+      ctx,
+      { storeId: "store-1" },
+    );
+    expect(mocks.requireAuthenticatedAthenaUserWithCtx).not.toHaveBeenCalled();
+  });
+
+  it.each(["cross-store scope", "revoked current authority"])(
+    "denies catalog reads for %s",
+    async () => {
+      mocks.getServicePrincipalActorWithCtx.mockResolvedValue({
+        kind: "service_principal",
+        storeId: "store-1",
+      });
+      mocks.requirePosApplicationAuthorityWithCtx.mockRejectedValue(
+        new Error("The POS application session is no longer authorized."),
+      );
+      const ctx = buildCtx();
+
+      await expect(
+        getHandler(search)(ctx as never, {
+          storeId: "store-1",
+          searchQuery: "soap",
+        }),
+      ).rejects.toThrow(
+        "The POS application session is no longer authorized.",
+      );
+      expect(mocks.searchProducts).not.toHaveBeenCalled();
+    },
+  );
 
   it("validates representative public catalog returns against exported validators", () => {
     const catalogResult = {
@@ -854,6 +915,48 @@ describe("POS public catalog queries", () => {
     expect(mocks.quickAddCatalogItem).not.toHaveBeenCalled();
   });
 
+  it("quick-adds with same-store POS authority plus current staff, register, and terminal context", async () => {
+    mocks.getServicePrincipalActorWithCtx.mockResolvedValue({
+      kind: "service_principal",
+      storeId: "store-1",
+    });
+    mocks.requirePosApplicationAuthorityWithCtx.mockResolvedValue({
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
+    const ctx = buildCtx({
+      staffProfile: {
+        _id: "staff-1",
+        linkedUserId: "linked-user-1",
+        status: "active",
+        storeId: "store-1",
+      },
+    });
+
+    await getHandler(quickAddSku)(ctx as never, {
+      createdByStaffProfileId: "staff-1",
+      createdByUserId: "forged-user",
+      name: "Quick item",
+      price: 12000,
+      quantityAvailable: 1,
+      registerSessionId: "register-1",
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
+
+    expect(mocks.quickAddCatalogItem).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        createdByStaffProfileId: "staff-1",
+        createdByUserId: "linked-user-1",
+        registerSessionId: "register-1",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    );
+    expect(mocks.requireAuthenticatedAthenaUserWithCtx).not.toHaveBeenCalled();
+  });
+
   it("derives the actor from auth before creating a pending checkout item", async () => {
     const ctx = buildCtx();
 
@@ -899,6 +1002,47 @@ describe("POS public catalog queries", () => {
       storeId: "store-1",
       terminalId: "terminal-1",
     });
+  });
+
+  it("creates a pending checkout item with current POS authority while retaining register and staff checks", async () => {
+    mocks.getServicePrincipalActorWithCtx.mockResolvedValue({
+      kind: "service_principal",
+      storeId: "store-1",
+    });
+    mocks.requirePosApplicationAuthorityWithCtx.mockResolvedValue({
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
+    const ctx = buildCtx({
+      staffProfile: {
+        _id: "staff-1",
+        linkedUserId: "linked-user-1",
+        status: "active",
+        storeId: "store-1",
+      },
+    });
+
+    await getHandler(createOrReusePendingCheckoutItemForSale)(ctx as never, {
+      createdByStaffProfileId: "staff-1",
+      name: "Missing item",
+      price: 12000,
+      quantitySold: 1,
+      registerSessionId: "register-1",
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
+
+    expect(mocks.createOrReusePendingCheckoutItem).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        createdByStaffProfileId: "staff-1",
+        createdByUserId: "linked-user-1",
+        registerSessionId: "register-1",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    );
+    expect(mocks.requireAuthenticatedAthenaUserWithCtx).not.toHaveBeenCalled();
   });
 
   it("accepts active register sessions for pending checkout creation", async () => {

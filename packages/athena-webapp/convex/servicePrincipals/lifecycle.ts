@@ -2,6 +2,8 @@ import type { GenericId } from "convex/values";
 
 import type { ServicePrincipalFoundationMutationCtx } from "../schemas/servicePrincipals";
 
+export const STORE_SERVICE_PRINCIPAL_STABLE_KEY = "store.service";
+
 export type ServicePrincipalFoundationErrorCode =
   | "auth_binding_decommissioned"
   | "auth_binding_missing"

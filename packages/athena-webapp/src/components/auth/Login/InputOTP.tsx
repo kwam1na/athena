@@ -54,10 +54,12 @@ function formatRequestDelay(seconds: number) {
 export function InputOTPForm({
   email,
   onBack,
+  redirectTo,
   requestNewCodeDelaySeconds = REQUEST_NEW_CODE_DELAY_SECONDS,
 }: {
   email: string;
   onBack: () => void;
+  redirectTo?: string;
   requestNewCodeDelaySeconds?: number;
 }) {
   const form = useForm<z.infer<typeof FormSchema>>({
@@ -147,7 +149,7 @@ export function InputOTPForm({
         return;
       }
 
-      startAthenaAuthSyncHandoff();
+      startAthenaAuthSyncHandoff(redirectTo);
       setIsAuthHandoffPending(true);
       setIsSigningIn(false);
       return;

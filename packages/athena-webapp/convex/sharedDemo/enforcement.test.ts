@@ -99,13 +99,23 @@ describe("actual public shared-demo enforcement boundaries", () => {
     expect(ctx.runMutation).not.toHaveBeenCalled();
   });
 
-  it("preserves the existing normal store-removal behavior", async () => {
+  it("hands normal store removal to the lifecycle boundary after the demo clamp", async () => {
     vi.mocked(requireSharedDemoCapabilityIfApplicable).mockResolvedValueOnce(null);
-    const ctx = { db: { delete: vi.fn() } };
-    await expect(invoke(removeStore, ctx, { id: "store" })).resolves.toEqual({
-      message: "OK",
-    });
-    expect(ctx.db.delete).toHaveBeenCalledWith("store", "store");
+    const ctx = {
+      db: {
+        delete: vi.fn(),
+        get: vi.fn().mockResolvedValue(null),
+      },
+    };
+    await expect(invoke(removeStore, ctx, { id: "store" })).rejects.toThrow(
+      "Store not found.",
+    );
+    expect(requireSharedDemoCapabilityIfApplicable).toHaveBeenCalledWith(
+      ctx,
+      "administration.destructive",
+    );
+    expect(ctx.db.get).toHaveBeenCalledWith("store", "store");
+    expect(ctx.db.delete).not.toHaveBeenCalled();
   });
 
   it.each([

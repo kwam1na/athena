@@ -1547,6 +1547,9 @@ describe("usePosLocalSyncRuntimeStatus", () => {
         value: [
           buildLocalEvent({
             localEventId: "event-open",
+            offlineAuthorityReceipt: "signed-receipt-1",
+            offlineAuthorityReceiptNonce: "nonce-1",
+            offlineAuthorityReceiptVersion: 1,
             sequence: 1,
             type: "register.opened",
             uploadSequence: 1,
@@ -1592,6 +1595,16 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     await waitFor(() => expect(mocks.ingestLocalEvents).toHaveBeenCalled(), {
       timeout: 3_000,
     });
+    expect(mocks.ingestLocalEvents).toHaveBeenCalledWith(
+      expect.objectContaining({
+        events: [
+          expect.objectContaining({
+            localEventId: "event-open",
+            offlineAuthorityReceipt: "signed-receipt-1",
+          }),
+        ],
+      }),
+    );
     expect(store.writeTerminalIntegrityState).toHaveBeenCalledWith(
       expect.objectContaining({
         cloudTerminalId: "terminal-cloud-1",

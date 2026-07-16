@@ -19,5 +19,6 @@ export default defineApp({
     WALKTHROUGH_HMAC_PRIOR_KEYRING: v.optional(v.string()),
     LANDING_FUNNEL_HOURLY_LIMIT: v.optional(v.string()),
     LANDING_FUNNEL_INGRESS_DISABLED: v.optional(v.string()),
+    POS_OFFLINE_AUTHORITY_KEYS_JSON: v.optional(v.string()),
   },
 });

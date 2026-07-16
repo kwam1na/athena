@@ -1,4 +1,4 @@
-import { render, waitFor } from "@testing-library/react";
+import { act, render, waitFor } from "@testing-library/react";
 import type React from "react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -23,8 +23,16 @@ vi.mock("./appRouter", () => ({
 }));
 
 vi.mock("@convex-dev/auth/react", () => ({
-  ConvexAuthProvider: ({ children }: { children?: React.ReactNode }) => {
-    mocks.convexAuthProvider();
+  ConvexAuthProvider: ({
+    children,
+    storage,
+    storageNamespace,
+  }: {
+    children?: React.ReactNode;
+    storage?: unknown;
+    storageNamespace?: string;
+  }) => {
+    mocks.convexAuthProvider({ storage, storageNamespace });
     return <>{children}</>;
   },
 }));
@@ -97,6 +105,10 @@ vi.mock("./lib/app-update", () => ({
 }));
 
 import { App, VersionCheckerBridge } from "./App";
+import {
+  AUTH_RUNTIME_HANDOFF_JOURNAL_KEY,
+  createAuthRuntimeHandoffCoordinator,
+} from "./lib/auth/authRuntimeHandoff";
 import type { VersionCheckerUpdateDetectedEvent } from "./utils/versionChecker";
 
 describe("VersionCheckerBridge", () => {
@@ -196,8 +208,9 @@ describe("VersionCheckerBridge", () => {
 describe("App", () => {
   it("provides one process-level POS storage runtime without blocking routes", () => {
     mocks.createVersionChecker.mockReturnValue({ stop: vi.fn() });
+    const authRuntime = createTestAuthRuntime();
 
-    const view = render(<App />);
+    const view = render(<App authRuntime={authRuntime} />);
 
     expect(mocks.storageRuntimeProvider).toHaveBeenCalledWith(
       mocks.storageRuntime,
@@ -206,10 +219,71 @@ describe("App", () => {
     expect(mocks.appMessagesProvider).toHaveBeenCalledTimes(1);
     expect(mocks.updateCoordinatorProvider).toHaveBeenCalledTimes(1);
     expect(mocks.convexAuthProvider).toHaveBeenCalledTimes(1);
+    expect(mocks.convexAuthProvider).toHaveBeenCalledWith({
+      storage: expect.any(Object),
+      storageNamespace: undefined,
+    });
     expect(mocks.queryClientProvider).toHaveBeenCalledTimes(1);
     expect(view.getByText("router rendered")).toBeTruthy();
   });
+
+  it("remounts auth against the promoted namespace", () => {
+    mocks.createVersionChecker.mockReturnValue({ stop: vi.fn() });
+    const authRuntime = createTestAuthRuntime();
+    render(<App authRuntime={authRuntime} />);
+    let handle!: ReturnType<typeof authRuntime.prepareHandoff>;
+
+    act(() => {
+      handle = authRuntime.prepareHandoff();
+      authRuntime.markAuthIssued(handle);
+      authRuntime.markActivated(handle);
+      authRuntime.promoteActivated(handle);
+    });
+
+    expect(mocks.convexAuthProvider).toHaveBeenLastCalledWith({
+      storage: expect.any(Object),
+      storageNamespace: handle.pendingNamespace,
+    });
+  });
+
+  it("fails closed before mounting auth for a corrupt journal", () => {
+    const storage = createMemoryStorage();
+    storage.setItem(AUTH_RUNTIME_HANDOFF_JOURNAL_KEY, "corrupt");
+    const authRuntime = createTestAuthRuntime(storage);
+
+    const view = render(<App authRuntime={authRuntime} />);
+
+    expect(view.getByRole("alert")).toHaveTextContent(
+      "Authentication is temporarily unavailable",
+    );
+    expect(mocks.convexAuthProvider).not.toHaveBeenCalled();
+    expect(view.queryByText("router rendered")).toBeNull();
+  });
 });
+
+function createTestAuthRuntime(storage = createMemoryStorage()) {
+  let sequence = 0;
+  return createAuthRuntimeHandoffCoordinator({
+    now: () => 1_000,
+    ownerToken: "app-test-owner",
+    randomId: () => `app-generated-${++sequence}-12345678`,
+    storage,
+  });
+}
+
+function createMemoryStorage(): Storage {
+  const values = new Map<string, string>();
+  return {
+    get length() {
+      return values.size;
+    },
+    clear: () => values.clear(),
+    getItem: (key) => values.get(key) ?? null,
+    key: (index) => [...values.keys()][index] ?? null,
+    removeItem: (key) => values.delete(key),
+    setItem: (key, value) => values.set(key, value),
+  };
+}
 
 function getUpdateDetectedCallback() {
   const options = mocks.createVersionChecker.mock.calls.at(-1)?.[0];

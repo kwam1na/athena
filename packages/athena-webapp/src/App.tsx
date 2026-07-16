@@ -1,10 +1,14 @@
-import { useEffect } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { RouterProvider } from "@tanstack/react-router";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { ConvexAuthProvider } from "@convex-dev/auth/react";
 
 import { convex, queryClient, router } from "./appRouter";
 import { AppMessagesProvider } from "./lib/app-messages";
+import {
+  getDefaultAuthRuntimeHandoffCoordinator,
+  type AuthRuntimeHandoffCoordinator,
+} from "./lib/auth/authRuntimeHandoff";
 import {
   stageUpdateStaticAssets,
   UpdateCoordinatorProvider,
@@ -19,7 +23,30 @@ import {
   type VersionCheckerUpdateDetectedEvent,
 } from "./utils/versionChecker";
 
-export function App() {
+export function App({
+  authRuntime = getDefaultAuthRuntimeHandoffCoordinator(),
+}: {
+  authRuntime?: AuthRuntimeHandoffCoordinator;
+} = {}) {
+  const authSnapshot = useSyncExternalStore(
+    authRuntime.subscribe,
+    authRuntime.getSnapshot,
+    authRuntime.getSnapshot,
+  );
+
+  if (authSnapshot.status === "blocked") {
+    return (
+      <main role="alert">
+        Authentication is temporarily unavailable. Reload this page to try
+        again.
+      </main>
+    );
+  }
+
+  const tokenStorage = authRuntime.getTokenStorage(
+    authSnapshot.activeNamespace,
+  );
+
   return (
     <PosLocalStorageRuntimeProvider
       runtime={getDefaultPosLocalStorageRuntime()}
@@ -27,7 +54,14 @@ export function App() {
       <AppMessagesProvider>
         <UpdateCoordinatorProvider>
           <VersionCheckerBridge />
-          <ConvexAuthProvider client={convex}>
+          <ConvexAuthProvider
+            key={authSnapshot.providerRemountKey}
+            client={convex}
+            storage={tokenStorage}
+            {...(authSnapshot.activeNamespace === null
+              ? {}
+              : { storageNamespace: authSnapshot.activeNamespace })}
+          >
             <QueryClientProvider client={queryClient}>
               <RouterProvider router={router} />
             </QueryClientProvider>

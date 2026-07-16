@@ -170,6 +170,7 @@ import type * as marketing_walkthroughRequestRetention from "../marketing/walkth
 import type * as marketing_walkthroughRequests from "../marketing/walkthroughRequests.js";
 import type * as migrations_backfillAthenaUserNormalizedEmail from "../migrations/backfillAthenaUserNormalizedEmail.js";
 import type * as migrations_backfillStoreSchedules from "../migrations/backfillStoreSchedules.js";
+import type * as migrations_backfillStoreServicePrincipals from "../migrations/backfillStoreServicePrincipals.js";
 import type * as migrations_migrateAmountsToPesewas from "../migrations/migrateAmountsToPesewas.js";
 import type * as migrations_migratePosAmountsToPesewas from "../migrations/migratePosAmountsToPesewas.js";
 import type * as mtn_client from "../mtn/client.js";
@@ -234,7 +235,11 @@ import type * as pos_application_commands_transactionAdjustmentPlanner from "../
 import type * as pos_application_corrections_correctionEvents from "../pos/application/corrections/correctionEvents.js";
 import type * as pos_application_corrections_correctionPolicy from "../pos/application/corrections/correctionPolicy.js";
 import type * as pos_application_dto from "../pos/application/dto.js";
+import type * as pos_application_offlineAuthorityReceipt from "../pos/application/offlineAuthorityReceipt.js";
 import type * as pos_application_pendingCheckoutSkuResolution from "../pos/application/pendingCheckoutSkuResolution.js";
+import type * as pos_application_posApplicationAuthority from "../pos/application/posApplicationAuthority.js";
+import type * as pos_application_posApplicationBoundaryInventory from "../pos/application/posApplicationBoundaryInventory.js";
+import type * as pos_application_posServicePrincipal from "../pos/application/posServicePrincipal.js";
 import type * as pos_application_queries_getRegisterState from "../pos/application/queries/getRegisterState.js";
 import type * as pos_application_queries_getTransactions from "../pos/application/queries/getTransactions.js";
 import type * as pos_application_queries_listRegisterCatalog from "../pos/application/queries/listRegisterCatalog.js";
@@ -243,6 +248,7 @@ import type * as pos_application_queries_searchCatalog from "../pos/application/
 import type * as pos_application_queries_searchCustomers from "../pos/application/queries/searchCustomers.js";
 import type * as pos_application_queries_storePulse from "../pos/application/queries/storePulse.js";
 import type * as pos_application_queries_terminals from "../pos/application/queries/terminals.js";
+import type * as pos_application_security_posRecoveryCodeVerifier from "../pos/application/security/posRecoveryCodeVerifier.js";
 import type * as pos_application_sync_finalizedLineageRemediation from "../pos/application/sync/finalizedLineageRemediation.js";
 import type * as pos_application_sync_ingestLocalEvents from "../pos/application/sync/ingestLocalEvents.js";
 import type * as pos_application_sync_posRegisterSessionActivity from "../pos/application/sync/posRegisterSessionActivity.js";
@@ -257,6 +263,7 @@ import type * as pos_application_sync_staffProof from "../pos/application/sync/s
 import type * as pos_application_sync_staffProofValidation from "../pos/application/sync/staffProofValidation.js";
 import type * as pos_application_sync_terminalSyncSecret from "../pos/application/sync/terminalSyncSecret.js";
 import type * as pos_application_sync_types from "../pos/application/sync/types.js";
+import type * as pos_application_terminalLifecycle from "../pos/application/terminalLifecycle.js";
 import type * as pos_application_terminalOperationalState_collectTerminalOperationalFacts from "../pos/application/terminalOperationalState/collectTerminalOperationalFacts.js";
 import type * as pos_application_terminalOperationalState_facts from "../pos/application/terminalOperationalState/facts.js";
 import type * as pos_application_terminalOperationalState_policy from "../pos/application/terminalOperationalState/policy.js";
@@ -289,6 +296,7 @@ import type * as pos_infrastructure_repositories_terminalRepository from "../pos
 import type * as pos_infrastructure_repositories_transactionRepository from "../pos/infrastructure/repositories/transactionRepository.js";
 import type * as pos_public_catalog from "../pos/public/catalog.js";
 import type * as pos_public_customers from "../pos/public/customers.js";
+import type * as pos_public_posApplicationAccess from "../pos/public/posApplicationAccess.js";
 import type * as pos_public_posRecoveryCodes from "../pos/public/posRecoveryCodes.js";
 import type * as pos_public_register from "../pos/public/register.js";
 import type * as pos_public_sync from "../pos/public/sync.js";
@@ -436,6 +444,7 @@ import type * as schemas_pos_expenseTransaction from "../schemas/pos/expenseTran
 import type * as schemas_pos_expenseTransactionItem from "../schemas/pos/expenseTransactionItem.js";
 import type * as schemas_pos_index from "../schemas/pos/index.js";
 import type * as schemas_pos_posAmountMigrationRun from "../schemas/pos/posAmountMigrationRun.js";
+import type * as schemas_pos_posApplicationSessionBinding from "../schemas/pos/posApplicationSessionBinding.js";
 import type * as schemas_pos_posLifecycleJournal from "../schemas/pos/posLifecycleJournal.js";
 import type * as schemas_pos_posLocalStaffProof from "../schemas/pos/posLocalStaffProof.js";
 import type * as schemas_pos_posLocalSyncConflict from "../schemas/pos/posLocalSyncConflict.js";
@@ -446,13 +455,16 @@ import type * as schemas_pos_posLocalSyncMapping from "../schemas/pos/posLocalSy
 import type * as schemas_pos_posPendingCheckoutItem from "../schemas/pos/posPendingCheckoutItem.js";
 import type * as schemas_pos_posPendingCheckoutLookupAlias from "../schemas/pos/posPendingCheckoutLookupAlias.js";
 import type * as schemas_pos_posRecoveryCredential from "../schemas/pos/posRecoveryCredential.js";
+import type * as schemas_pos_posRecoveryExchange from "../schemas/pos/posRecoveryExchange.js";
 import type * as schemas_pos_posRegisterAuthorityReplicationStatus from "../schemas/pos/posRegisterAuthorityReplicationStatus.js";
 import type * as schemas_pos_posRegisterMappingAuthority from "../schemas/pos/posRegisterMappingAuthority.js";
 import type * as schemas_pos_posRegisterSessionActivity from "../schemas/pos/posRegisterSessionActivity.js";
 import type * as schemas_pos_posRegisterSessionActivityCheckpoint from "../schemas/pos/posRegisterSessionActivityCheckpoint.js";
+import type * as schemas_pos_posServicePrincipalMigration from "../schemas/pos/posServicePrincipalMigration.js";
 import type * as schemas_pos_posSession from "../schemas/pos/posSession.js";
 import type * as schemas_pos_posSessionItem from "../schemas/pos/posSessionItem.js";
 import type * as schemas_pos_posTerminal from "../schemas/pos/posTerminal.js";
+import type * as schemas_pos_posTerminalReconnectIntent from "../schemas/pos/posTerminalReconnectIntent.js";
 import type * as schemas_pos_posTerminalRecovery from "../schemas/pos/posTerminalRecovery.js";
 import type * as schemas_pos_posTerminalRuntimeStatus from "../schemas/pos/posTerminalRuntimeStatus.js";
 import type * as schemas_pos_posTransaction from "../schemas/pos/posTransaction.js";
@@ -755,6 +767,7 @@ declare const fullApi: ApiFromModules<{
   "marketing/walkthroughRequests": typeof marketing_walkthroughRequests;
   "migrations/backfillAthenaUserNormalizedEmail": typeof migrations_backfillAthenaUserNormalizedEmail;
   "migrations/backfillStoreSchedules": typeof migrations_backfillStoreSchedules;
+  "migrations/backfillStoreServicePrincipals": typeof migrations_backfillStoreServicePrincipals;
   "migrations/migrateAmountsToPesewas": typeof migrations_migrateAmountsToPesewas;
   "migrations/migratePosAmountsToPesewas": typeof migrations_migratePosAmountsToPesewas;
   "mtn/client": typeof mtn_client;
@@ -819,7 +832,11 @@ declare const fullApi: ApiFromModules<{
   "pos/application/corrections/correctionEvents": typeof pos_application_corrections_correctionEvents;
   "pos/application/corrections/correctionPolicy": typeof pos_application_corrections_correctionPolicy;
   "pos/application/dto": typeof pos_application_dto;
+  "pos/application/offlineAuthorityReceipt": typeof pos_application_offlineAuthorityReceipt;
   "pos/application/pendingCheckoutSkuResolution": typeof pos_application_pendingCheckoutSkuResolution;
+  "pos/application/posApplicationAuthority": typeof pos_application_posApplicationAuthority;
+  "pos/application/posApplicationBoundaryInventory": typeof pos_application_posApplicationBoundaryInventory;
+  "pos/application/posServicePrincipal": typeof pos_application_posServicePrincipal;
   "pos/application/queries/getRegisterState": typeof pos_application_queries_getRegisterState;
   "pos/application/queries/getTransactions": typeof pos_application_queries_getTransactions;
   "pos/application/queries/listRegisterCatalog": typeof pos_application_queries_listRegisterCatalog;
@@ -828,6 +845,7 @@ declare const fullApi: ApiFromModules<{
   "pos/application/queries/searchCustomers": typeof pos_application_queries_searchCustomers;
   "pos/application/queries/storePulse": typeof pos_application_queries_storePulse;
   "pos/application/queries/terminals": typeof pos_application_queries_terminals;
+  "pos/application/security/posRecoveryCodeVerifier": typeof pos_application_security_posRecoveryCodeVerifier;
   "pos/application/sync/finalizedLineageRemediation": typeof pos_application_sync_finalizedLineageRemediation;
   "pos/application/sync/ingestLocalEvents": typeof pos_application_sync_ingestLocalEvents;
   "pos/application/sync/posRegisterSessionActivity": typeof pos_application_sync_posRegisterSessionActivity;
@@ -842,6 +860,7 @@ declare const fullApi: ApiFromModules<{
   "pos/application/sync/staffProofValidation": typeof pos_application_sync_staffProofValidation;
   "pos/application/sync/terminalSyncSecret": typeof pos_application_sync_terminalSyncSecret;
   "pos/application/sync/types": typeof pos_application_sync_types;
+  "pos/application/terminalLifecycle": typeof pos_application_terminalLifecycle;
   "pos/application/terminalOperationalState/collectTerminalOperationalFacts": typeof pos_application_terminalOperationalState_collectTerminalOperationalFacts;
   "pos/application/terminalOperationalState/facts": typeof pos_application_terminalOperationalState_facts;
   "pos/application/terminalOperationalState/policy": typeof pos_application_terminalOperationalState_policy;
@@ -874,6 +893,7 @@ declare const fullApi: ApiFromModules<{
   "pos/infrastructure/repositories/transactionRepository": typeof pos_infrastructure_repositories_transactionRepository;
   "pos/public/catalog": typeof pos_public_catalog;
   "pos/public/customers": typeof pos_public_customers;
+  "pos/public/posApplicationAccess": typeof pos_public_posApplicationAccess;
   "pos/public/posRecoveryCodes": typeof pos_public_posRecoveryCodes;
   "pos/public/register": typeof pos_public_register;
   "pos/public/sync": typeof pos_public_sync;
@@ -1021,6 +1041,7 @@ declare const fullApi: ApiFromModules<{
   "schemas/pos/expenseTransactionItem": typeof schemas_pos_expenseTransactionItem;
   "schemas/pos/index": typeof schemas_pos_index;
   "schemas/pos/posAmountMigrationRun": typeof schemas_pos_posAmountMigrationRun;
+  "schemas/pos/posApplicationSessionBinding": typeof schemas_pos_posApplicationSessionBinding;
   "schemas/pos/posLifecycleJournal": typeof schemas_pos_posLifecycleJournal;
   "schemas/pos/posLocalStaffProof": typeof schemas_pos_posLocalStaffProof;
   "schemas/pos/posLocalSyncConflict": typeof schemas_pos_posLocalSyncConflict;
@@ -1031,13 +1052,16 @@ declare const fullApi: ApiFromModules<{
   "schemas/pos/posPendingCheckoutItem": typeof schemas_pos_posPendingCheckoutItem;
   "schemas/pos/posPendingCheckoutLookupAlias": typeof schemas_pos_posPendingCheckoutLookupAlias;
   "schemas/pos/posRecoveryCredential": typeof schemas_pos_posRecoveryCredential;
+  "schemas/pos/posRecoveryExchange": typeof schemas_pos_posRecoveryExchange;
   "schemas/pos/posRegisterAuthorityReplicationStatus": typeof schemas_pos_posRegisterAuthorityReplicationStatus;
   "schemas/pos/posRegisterMappingAuthority": typeof schemas_pos_posRegisterMappingAuthority;
   "schemas/pos/posRegisterSessionActivity": typeof schemas_pos_posRegisterSessionActivity;
   "schemas/pos/posRegisterSessionActivityCheckpoint": typeof schemas_pos_posRegisterSessionActivityCheckpoint;
+  "schemas/pos/posServicePrincipalMigration": typeof schemas_pos_posServicePrincipalMigration;
   "schemas/pos/posSession": typeof schemas_pos_posSession;
   "schemas/pos/posSessionItem": typeof schemas_pos_posSessionItem;
   "schemas/pos/posTerminal": typeof schemas_pos_posTerminal;
+  "schemas/pos/posTerminalReconnectIntent": typeof schemas_pos_posTerminalReconnectIntent;
   "schemas/pos/posTerminalRecovery": typeof schemas_pos_posTerminalRecovery;
   "schemas/pos/posTerminalRuntimeStatus": typeof schemas_pos_posTerminalRuntimeStatus;
   "schemas/pos/posTransaction": typeof schemas_pos_posTransaction;

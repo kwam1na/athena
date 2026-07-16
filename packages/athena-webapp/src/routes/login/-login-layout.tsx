@@ -1,8 +1,4 @@
-import {
-  Link,
-  Outlet,
-  useNavigate,
-} from "@tanstack/react-router";
+import { Link, Outlet, useNavigate } from "@tanstack/react-router";
 import { useConvexAuth, useMutation } from "convex/react";
 import { useEffect, useRef, useState } from "react";
 import { useAuthToken } from "@convex-dev/auth/react";
@@ -22,6 +18,10 @@ import {
   APP_ENTRY_PATH,
   PUBLIC_HOME_PATH,
 } from "~/src/lib/navigation/appEntryRoutes";
+import {
+  getPosServiceAuthPresentation,
+  POS_SERVICE_AUTH_PRESENTATION_EVENT,
+} from "~/src/components/auth/Login/posRecoveryFlow";
 
 const AUTH_SYNC_RETRY_DELAY_MS = 250;
 const AUTH_SYNC_MAX_ATTEMPTS = 60;
@@ -77,13 +77,30 @@ export function LoginLayout() {
   const { isAuthenticated, isLoading } = useConvexAuth();
   const authToken = useAuthToken();
   const syncAuthenticatedAthenaUser = useMutation(
-    api.inventory.auth.syncAuthenticatedAthenaUser
+    api.inventory.auth.syncAuthenticatedAthenaUser,
   );
   const [authSyncError, setAuthSyncError] = useState<string | null>(null);
   const [pendingAuthSyncTick, setPendingAuthSyncTick] = useState(0);
+  const [servicePresentationTick, setServicePresentationTick] = useState(0);
   const isSyncingRef = useRef(false);
+  const isServiceSessionNavigatingRef = useRef(false);
   const isMountedRef = useRef(true);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const handleServicePresentation = () => {
+      setServicePresentationTick((tick) => tick + 1);
+    };
+    window.addEventListener(
+      POS_SERVICE_AUTH_PRESENTATION_EVENT,
+      handleServicePresentation,
+    );
+    return () =>
+      window.removeEventListener(
+        POS_SERVICE_AUTH_PRESENTATION_EVENT,
+        handleServicePresentation,
+      );
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -96,21 +113,55 @@ export function LoginLayout() {
       setPendingAuthSyncTick((tick) => tick + 1);
     };
 
-    window.addEventListener(ATHENA_PENDING_AUTH_SYNC_EVENT, handlePendingAuthSync);
+    window.addEventListener(
+      ATHENA_PENDING_AUTH_SYNC_EVENT,
+      handlePendingAuthSync,
+    );
 
     return () => {
       window.removeEventListener(
         ATHENA_PENDING_AUTH_SYNC_EVENT,
-        handlePendingAuthSync
+        handlePendingAuthSync,
       );
     };
   }, []);
 
   useEffect(() => {
+    const servicePresentation = getPosServiceAuthPresentation();
+
+    if (
+      servicePresentation?.kind !== "active" ||
+      isLoading ||
+      !isAuthenticated ||
+      !authToken ||
+      isServiceSessionNavigatingRef.current
+    ) {
+      return;
+    }
+
+    isServiceSessionNavigatingRef.current = true;
+    localStorage.removeItem(LOGGED_IN_USER_ID_KEY);
+    localStorage.removeItem(POS_APP_ACCOUNT_ID_KEY);
+    navigate(
+      navigationTargetForRedirect(servicePresentation.redirectTo) as never,
+    );
+  }, [
+    authToken,
+    isAuthenticated,
+    isLoading,
+    navigate,
+    servicePresentationTick,
+  ]);
+
+  useEffect(() => {
+    if (getPosServiceAuthPresentation()) {
+      return;
+    }
+
     const handoffStatus = getAthenaAuthSyncHandoffStatus();
     const pendingAuthSync = handoffStatus.kind === "active";
     const hasLoggedInUserId = Boolean(
-      localStorage.getItem(LOGGED_IN_USER_ID_KEY)
+      localStorage.getItem(LOGGED_IN_USER_ID_KEY),
     );
     const shouldRecoverAuthenticatedSession =
       isAuthenticated && Boolean(authToken) && !hasLoggedInUserId;
@@ -128,13 +179,16 @@ export function LoginLayout() {
 
     if (isLoading || !isAuthenticated || !authToken) {
       if (pendingAuthSync) {
-        const timeoutId = window.setTimeout(() => {
-          const latestStatus = getAthenaAuthSyncHandoffStatus();
-          if (latestStatus.kind === "active") {
-            failAthenaAuthSyncHandoff();
-            setPendingAuthSyncTick((tick) => tick + 1);
-          }
-        }, Math.max(handoffStatus.expiresAt - Date.now(), 0));
+        const timeoutId = window.setTimeout(
+          () => {
+            const latestStatus = getAthenaAuthSyncHandoffStatus();
+            if (latestStatus.kind === "active") {
+              failAthenaAuthSyncHandoff();
+              setPendingAuthSyncTick((tick) => tick + 1);
+            }
+          },
+          Math.max(handoffStatus.expiresAt - Date.now(), 0),
+        );
 
         return () => window.clearTimeout(timeoutId);
       }
@@ -151,7 +205,9 @@ export function LoginLayout() {
 
       try {
         for (let attempt = 0; attempt < AUTH_SYNC_MAX_ATTEMPTS; attempt += 1) {
-          const result = await runCommand(() => syncAuthenticatedAthenaUser({}));
+          const result = await runCommand(() =>
+            syncAuthenticatedAthenaUser({}),
+          );
 
           if (result.kind === "ok") {
             const resolvedUserId =
@@ -170,8 +226,7 @@ export function LoginLayout() {
 
           finalErrorMessage = result.error.message;
           const shouldRetry =
-            result.kind === "user_error" &&
-            result.error.retryable === true;
+            result.kind === "user_error" && result.error.retryable === true;
 
           if (!shouldRetry || attempt === AUTH_SYNC_MAX_ATTEMPTS - 1) {
             break;
@@ -182,7 +237,7 @@ export function LoginLayout() {
 
         if (!userId) {
           throw new Error(
-            finalErrorMessage ?? "Could not load your Athena user profile"
+            finalErrorMessage ?? "Could not load your Athena user profile",
           );
         }
 

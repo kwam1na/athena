@@ -49,6 +49,8 @@ export type PosTerminalRuntimeAppSessionRecoveryBlockReason =
   | "app_account_disabled"
   | "app_account_not_pos_scoped"
   | "unsupported_route_scope"
+  | "pos_recovery_required"
+  | "receipt_invalid"
   | "retry_exhausted"
   | "stale_assertion";
 

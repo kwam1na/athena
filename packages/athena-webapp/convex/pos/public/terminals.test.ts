@@ -1,12 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  getServicePrincipalActorWithCtx: vi.fn(),
   acknowledgeRegisterLifecycleAuthorityService: vi.fn(),
   acknowledgeTerminalRecoveryCommandService: vi.fn(),
   claimTerminalRecoveryCommandService: vi.fn(),
   createTerminalRecoveryCommandReadRepository: vi.fn(),
   createTerminalRecoveryCommandRepository: vi.fn(),
   deleteTerminalCommand: vi.fn(),
+  disconnectPosTerminal: vi.fn(),
+  findActiveTerminalFingerprintConflict: vi.fn(),
   getTerminalHealthSummaryQuery: vi.fn(),
   getTerminalByFingerprintQuery: vi.fn(),
   getLatestRuntimeStatusForTerminal: vi.fn(),
@@ -19,6 +22,11 @@ const mocks = vi.hoisted(() => ({
   listTerminalsQuery: vi.fn(),
   previewTerminalRecoveryQuery: vi.fn(),
   registerTerminalCommand: vi.fn(),
+  reactivatePosTerminal: vi.fn(),
+  resolvePosTerminalReconnectIntent: vi.fn(),
+  recordOperationalEventWithCtx: vi.fn(),
+  reassignPosTerminal: vi.fn(),
+  rotatePosTerminalProof: vi.fn(),
   requireAuthenticatedAthenaUserWithCtx: vi.fn(),
   requireOrganizationMemberRoleWithCtx: vi.fn(),
   requireSharedDemoStoreCapabilityIfApplicable: vi.fn(),
@@ -34,6 +42,14 @@ const mocks = vi.hoisted(() => ({
   submitTerminalRuntimeStatusCommand: vi.fn(),
   updateTerminalCommand: vi.fn(),
   verifyTerminalRecoveryCommandsFromRuntime: vi.fn(),
+}));
+
+vi.mock("../../servicePrincipals/actor", () => ({
+  getServicePrincipalActorWithCtx: mocks.getServicePrincipalActorWithCtx,
+}));
+
+vi.mock("../../operations/operationalEvents", () => ({
+  recordOperationalEventWithCtx: mocks.recordOperationalEventWithCtx,
 }));
 
 vi.mock("../../lib/athenaUserAuth", () => ({
@@ -60,6 +76,17 @@ vi.mock("../application/commands/terminals", () => ({
 vi.mock("../application/commands/registerLifecycleAuthority", () => ({
   acknowledgeRegisterLifecycleAuthority:
     mocks.acknowledgeRegisterLifecycleAuthorityService,
+}));
+
+vi.mock("../application/terminalLifecycle", () => ({
+  disconnectPosTerminal: mocks.disconnectPosTerminal,
+  findActiveTerminalFingerprintConflict:
+    mocks.findActiveTerminalFingerprintConflict,
+  reactivatePosTerminal: mocks.reactivatePosTerminal,
+  resolvePosTerminalReconnectIntent:
+    mocks.resolvePosTerminalReconnectIntent,
+  reassignPosTerminal: mocks.reassignPosTerminal,
+  rotatePosTerminalProof: mocks.rotatePosTerminalProof,
 }));
 
 vi.mock("../application/queries/terminals", () => ({
@@ -118,6 +145,7 @@ import {
   deleteTerminal,
   getTerminalByFingerprint,
   getTerminalHealthSummary,
+  getTerminalReconnectIntentResolution,
   getTerminalRuntimeConfig,
   getRegisterLifecycleAuthority,
   getRegisterLifecycleAuthorityAcknowledgement,
@@ -131,7 +159,12 @@ import {
   claimTerminalRecoveryCommand,
   acknowledgeTerminalRecoveryCommand,
   disconnectRemoteAssistSession,
+  disconnectTerminal,
   registerTerminal,
+  reactivateTerminal,
+  reactivateTerminalFromReconnectIntent,
+  reassignTerminal,
+  rotateTerminalProof,
   resolveTerminalCloudRepair,
   submitTerminalRuntimeStatus,
   updateTerminal,
@@ -375,6 +408,7 @@ function buildRemoteAssistSession(overrides: Record<string, unknown> = {}) {
 describe("POS terminal public mutations", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    mocks.getServicePrincipalActorWithCtx.mockResolvedValue(null);
     mocks.requireAuthenticatedAthenaUserWithCtx.mockResolvedValue({
       _id: "athena-user-1",
     });
@@ -400,6 +434,50 @@ describe("POS terminal public mutations", () => {
       },
     });
     mocks.deleteTerminalCommand.mockResolvedValue(null);
+    mocks.disconnectPosTerminal.mockResolvedValue({
+      lifecycleRevision: 2,
+      proofRevision: 2,
+      status: "revoked",
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
+    mocks.findActiveTerminalFingerprintConflict.mockResolvedValue(null);
+    mocks.rotatePosTerminalProof.mockResolvedValue({
+      lifecycleRevision: 1,
+      proofRevision: 2,
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
+    mocks.reassignPosTerminal.mockResolvedValue({
+      lifecycleRevision: 2,
+      proofRevision: 2,
+      status: "active",
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
+    mocks.reactivatePosTerminal.mockResolvedValue({
+      lifecycleRevision: 3,
+      proofRevision: 3,
+      status: "active",
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
+    mocks.resolvePosTerminalReconnectIntent.mockResolvedValue({
+      intent: {
+        _id: "reconnect-intent-1",
+        browserFingerprintHash: "fingerprint-1",
+        expiresAt: 10_000,
+        organizationId: "org-1",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      },
+      store: { _id: "store-1", organizationId: "org-1" },
+      terminal: {
+        ...buildPublicTerminal({ status: "revoked" }),
+        organizationId: "org-1",
+      },
+    });
+    mocks.recordOperationalEventWithCtx.mockResolvedValue(null);
     mocks.updateTerminalCommand.mockResolvedValue({
       _id: "terminal-1",
       _creationTime: 1,
@@ -551,7 +629,34 @@ describe("POS terminal public mutations", () => {
     });
   });
 
-  it("derives terminal ownership from the signed-in user and allows POS store membership", async () => {
+  it("rejects service sessions from human terminal administration", async () => {
+    mocks.getServicePrincipalActorWithCtx.mockResolvedValue({
+      kind: "service_principal",
+      storeId: "store-1",
+    });
+    const ctx = buildCtx();
+
+    await expect(
+      getHandler(listTerminals)(ctx as never, { storeId: "store-1" }),
+    ).rejects.toThrow("view POS terminals");
+    expect(mocks.listTerminalsQuery).not.toHaveBeenCalled();
+
+    const enrollment = await getHandler(registerTerminal)(ctx as never, {
+      storeId: "store-1",
+      fingerprintHash: "fingerprint-1",
+      syncSecretHash: "sync-secret-1",
+      displayName: "Front register",
+      registerNumber: "1",
+      browserInfo: { userAgent: "test" },
+    });
+    expect(enrollment).toMatchObject({
+      kind: "user_error",
+      error: { code: "authorization_failed" },
+    });
+    expect(mocks.registerTerminalCommand).not.toHaveBeenCalled();
+  });
+
+  it("derives terminal ownership from a same-store full administrator", async () => {
     const ctx = buildCtx();
 
     await getHandler(registerTerminal)(ctx as never, {
@@ -566,7 +671,7 @@ describe("POS terminal public mutations", () => {
     expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
       ctx,
       expect.objectContaining({
-        allowedRoles: ["full_admin", "pos_only"],
+        allowedRoles: ["full_admin"],
         organizationId: "org-1",
         userId: "athena-user-1",
       }),
@@ -579,11 +684,10 @@ describe("POS terminal public mutations", () => {
     );
   });
 
-  it("reprovisions the demo terminal through the store-scoped daily operations boundary", async () => {
-    mocks.requireSharedDemoStoreCapabilityIfApplicable.mockResolvedValue({
-      athenaUserId: "athena-user-1",
-      storeId: "store-1",
-    });
+  it("does not let a shared-demo actor enroll or reprovision a terminal", async () => {
+    mocks.requireSharedDemoStoreCapabilityIfApplicable.mockRejectedValue(
+      new Error("This action is unavailable in the demo."),
+    );
     const ctx = buildCtx();
 
     const result = await getHandler(registerTerminal)(ctx as never, {
@@ -597,22 +701,16 @@ describe("POS terminal public mutations", () => {
 
     expect(
       mocks.requireSharedDemoStoreCapabilityIfApplicable,
-    ).toHaveBeenCalledWith(ctx, "daily_operations.write", "store-1");
+    ).toHaveBeenCalledWith(ctx, "pos.terminal.manage", "store-1");
     expect(mocks.requireAuthenticatedAthenaUserWithCtx).not.toHaveBeenCalled();
-    expect(mocks.registerTerminalCommand).toHaveBeenCalledWith(
-      ctx,
-      expect.objectContaining({
-        allowRegisterNumberChange: true,
-        registeredByUserId: "athena-user-1",
-        storeId: "store-1",
-      }),
-    );
-    expect(result).toEqual(
-      expect.objectContaining({
-        kind: "ok",
-        data: expect.objectContaining({ syncSecretHash: "sync-secret-1" }),
-      }),
-    );
+    expect(mocks.registerTerminalCommand).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "authorization_failed",
+        message: "You do not have access to register this POS terminal.",
+      },
+    });
   });
 
   it("does not register a terminal when store membership is missing", async () => {
@@ -640,6 +738,273 @@ describe("POS terminal public mutations", () => {
     expect(mocks.registerTerminalCommand).not.toHaveBeenCalled();
   });
 
+  it("requires explicit reassignment when the fingerprint is active in another store", async () => {
+    mocks.findActiveTerminalFingerprintConflict.mockResolvedValue({
+      _id: "terminal-other",
+      storeId: "store-other",
+      status: "active",
+    });
+    const result = await getHandler(registerTerminal)(buildCtx() as never, {
+      storeId: "store-1",
+      fingerprintHash: "fingerprint-1",
+      syncSecretHash: "sync-secret-1",
+      displayName: "Front register",
+      registerNumber: "1",
+      browserInfo: { userAgent: "test" },
+    });
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "validation_failed",
+        message:
+          "This browser is enrolled for another store and must be explicitly reassigned.",
+      },
+    });
+    expect(mocks.registerTerminalCommand).not.toHaveBeenCalled();
+  });
+
+  it("returns a rotated proof only after the current same-terminal proof succeeds", async () => {
+    const ctx = buildCtx({ terminal: buildPublicTerminal() });
+    const result = await getHandler(rotateTerminalProof)(ctx as never, {
+      currentSyncSecretHash: "sync-secret-1",
+      fingerprintHash: "fingerprint-1",
+      nextSyncSecretHash: "sync-secret-2",
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
+
+    assertConformsToExportedReturns(rotateTerminalProof, result);
+    expect(mocks.rotatePosTerminalProof).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        currentProofHash: SYNC_SECRET_HASH,
+        fingerprintHash: "fingerprint-1",
+        nextProofHash: expect.any(String),
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        kind: "ok",
+        data: expect.objectContaining({ syncSecretHash: "sync-secret-2" }),
+      }),
+    );
+  });
+
+  it("reactivates through full-admin plus same-browser intent and returns proof to that caller", async () => {
+    const ctx = buildCtx({
+      terminal: {
+        ...buildPublicTerminal(),
+        syncSecretHash: SYNC_SECRET_HASH,
+        status: "active",
+      },
+    });
+    const result = await getHandler(reactivateTerminal)(ctx as never, {
+      fingerprintHash: "fingerprint-1",
+      nextSyncSecretHash: "sync-secret-2",
+      reconnectIntentToken: "intent-token",
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
+
+    assertConformsToExportedReturns(reactivateTerminal, result);
+    expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({ allowedRoles: ["full_admin"] }),
+    );
+    expect(mocks.reactivatePosTerminal).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        browserFingerprintHash: "fingerprint-1",
+        intentTokenHash: expect.any(String),
+        terminalId: "terminal-1",
+      }),
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        kind: "ok",
+        data: expect.objectContaining({ syncSecretHash: "sync-secret-2" }),
+      }),
+    );
+  });
+
+  it("resolves reconnect intent metadata only for a same-organization full admin on the affected browser", async () => {
+    const ctx = buildCtx();
+
+    const result = await getHandler(getTerminalReconnectIntentResolution)(
+      ctx as never,
+      {
+        browserFingerprintHash: "fingerprint-1",
+        reconnectIntentToken: "intent-token",
+      },
+    );
+
+    assertConformsToExportedReturns(
+      getTerminalReconnectIntentResolution,
+      result,
+    );
+    expect(mocks.resolvePosTerminalReconnectIntent).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        browserFingerprintHash: "fingerprint-1",
+        intentTokenHash: expect.any(String),
+      }),
+    );
+    expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        allowedRoles: ["full_admin"],
+        organizationId: "org-1",
+        userId: "athena-user-1",
+      }),
+    );
+    expect(result).toEqual({
+      disposition: "ready",
+      displayName: "Front register",
+      expiresAt: 10_000,
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
+  });
+
+  it.each([
+    ["expired or replayed intent", "intent"],
+    ["wrong administrator organization or role", "role"],
+    ["service-principal caller", "service"],
+  ])("keeps %s reconnect resolution generic and no-change", async (_label, failure) => {
+    const ctx = buildCtx();
+    if (failure === "intent") {
+      mocks.resolvePosTerminalReconnectIntent.mockRejectedValueOnce(
+        new Error("reconnect_intent_invalid"),
+      );
+    } else if (failure === "role") {
+      mocks.requireOrganizationMemberRoleWithCtx.mockRejectedValueOnce(
+        new Error("wrong role"),
+      );
+    } else {
+      mocks.getServicePrincipalActorWithCtx.mockResolvedValueOnce({
+        kind: "service_principal",
+      });
+    }
+
+    await expect(
+      getHandler(getTerminalReconnectIntentResolution)(ctx as never, {
+        browserFingerprintHash: "fingerprint-1",
+        reconnectIntentToken: "intent-token",
+      }),
+    ).rejects.toThrow(
+      "This checkout station reconnect request is unavailable.",
+    );
+    expect(mocks.reactivatePosTerminal).not.toHaveBeenCalled();
+  });
+
+  it("reactivates the resolved exact row and returns the replacement proof only to the affected browser", async () => {
+    const ctx = buildCtx({
+      terminal: buildPublicTerminal({
+        organizationId: "org-1",
+        status: "active",
+      }),
+    });
+
+    const result = await getHandler(reactivateTerminalFromReconnectIntent)(
+      ctx as never,
+      {
+        browserFingerprintHash: "fingerprint-1",
+        nextSyncSecretHash: "replacement-proof",
+        reconnectIntentToken: "intent-token",
+      },
+    );
+
+    assertConformsToExportedReturns(
+      reactivateTerminalFromReconnectIntent,
+      result,
+    );
+    expect(mocks.reactivatePosTerminal).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        browserFingerprintHash: "fingerprint-1",
+        nextProofHash: expect.any(String),
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        kind: "ok",
+        data: expect.objectContaining({
+          _id: "terminal-1",
+          syncSecretHash: "replacement-proof",
+        }),
+      }),
+    );
+    expect(mocks.recordOperationalEventWithCtx).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        actorUserId: "athena-user-1",
+        eventType: "pos_terminal_reconnected",
+        terminalId: "terminal-1",
+      }),
+    );
+  });
+
+  it("does not rotate proof when reconnect resolution is expired, replayed, cross-org, wrong-role, or wrong-browser", async () => {
+    mocks.resolvePosTerminalReconnectIntent.mockRejectedValueOnce(
+      new Error("reconnect_intent_invalid"),
+    );
+    const result = await getHandler(reactivateTerminalFromReconnectIntent)(
+      buildCtx() as never,
+      {
+        browserFingerprintHash: "wrong-browser",
+        nextSyncSecretHash: "replacement-proof",
+        reconnectIntentToken: "expired-intent",
+      },
+    );
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "authorization_failed",
+        message: "This checkout station reconnect request is unavailable.",
+      },
+    });
+    expect(mocks.reactivatePosTerminal).not.toHaveBeenCalled();
+    expect(mocks.recordOperationalEventWithCtx).not.toHaveBeenCalled();
+  });
+
+  it("reassigns only between stores in the human administrator organization", async () => {
+    const ctx = buildCtx({ terminal: buildPublicTerminal() });
+    const result = await getHandler(reassignTerminal)(ctx as never, {
+      currentSyncSecretHash: "sync-secret-1",
+      fingerprintHash: "fingerprint-1",
+      nextSyncSecretHash: "sync-secret-2",
+      sourceStoreId: "store-1",
+      targetStoreId: "store-2",
+      terminalId: "terminal-1",
+    });
+
+    assertConformsToExportedReturns(reassignTerminal, result);
+    expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({ allowedRoles: ["full_admin"], organizationId: "org-1" }),
+    );
+    expect(mocks.reassignPosTerminal).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        sourceStoreId: "store-1",
+        targetStoreId: "store-2",
+        terminalId: "terminal-1",
+      }),
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        kind: "ok",
+        data: expect.objectContaining({ syncSecretHash: "sync-secret-2" }),
+      }),
+    );
+  });
+
   it("requires full admin membership before deleting a terminal", async () => {
     const ctx = buildCtx();
 
@@ -655,9 +1020,15 @@ describe("POS terminal public mutations", () => {
         userId: "athena-user-1",
       }),
     );
-    expect(mocks.deleteTerminalCommand).toHaveBeenCalledWith(ctx, {
-      terminalId: "terminal-1",
-    });
+    expect(mocks.disconnectPosTerminal).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        disconnectedByUserId: "athena-user-1",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    );
+    expect(disconnectTerminal).toBe(deleteTerminal);
   });
 
   it("does not delete a terminal when full admin membership is missing", async () => {
@@ -669,7 +1040,7 @@ describe("POS terminal public mutations", () => {
     await expect(
       getHandler(deleteTerminal)(ctx as never, { terminalId: "terminal-1" }),
     ).rejects.toThrow("denied");
-    expect(mocks.deleteTerminalCommand).not.toHaveBeenCalled();
+    expect(mocks.disconnectPosTerminal).not.toHaveBeenCalled();
   });
 
   it("requires full admin membership before updating a terminal", async () => {
@@ -2886,6 +3257,10 @@ function buildCtx(
             _id: "store-1",
             organizationId: "org-1",
           };
+        }
+
+        if (tableName === "store" && id === "store-2") {
+          return { _id: "store-2", organizationId: "org-1" };
         }
 
         if (tableName === "athenaUser" && id === "athena-user-1") {

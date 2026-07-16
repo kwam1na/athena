@@ -1,67 +1,41 @@
-import { useEffect, useMemo, useState } from "react";
-import { useMutation } from "convex/react";
-import type { FunctionArgs } from "convex/server";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   LOGGED_IN_USER_ID_KEY,
   POS_APP_ACCOUNT_ID_KEY,
 } from "@/lib/constants";
-import { api } from "~/convex/_generated/api";
+import {
+  POS_OFFLINE_AUTHORITY_PUBLIC_KEYS,
+  verifyPosOfflineAuthorityReceipt,
+  type PosOfflineAuthorityPublicKey,
+} from "@/lib/pos/security/offlineAuthorityPublicKeys";
 import type { Id } from "~/convex/_generated/dataModel";
 import type { PosLocalEntryContext } from "../local/localPosEntryContext";
 
 const POS_HUB_ROUTE_INTENT = "pos_hub";
-const DEFAULT_RETRY_DELAYS_MS = [500, 1_500, 3_000];
-const DEFAULT_VALIDATION_TIMEOUT_MS = 10_000;
-
-type ValidateRecoveryArgs = FunctionArgs<
-  typeof api.pos.public.terminalAppSessions.validateTerminalAppSessionRecovery
->;
-
-type RecoveryBlockedReason =
-  | "missing_terminal_proof"
-  | "terminal_not_available"
-  | "invalid_terminal_proof"
-  | "store_mismatch"
-  | "terminal_revoked"
-  | "app_account_disabled"
-  | "app_account_not_pos_scoped"
-  | "unsupported_route_scope";
 
 export type PosTerminalAppSessionRecoveryAssertion = {
-  accountId: Id<"athenaUser">;
   expiresAt: number;
   issuedAt: number;
-  recoveryAttemptId: string;
-  routeScope: typeof POS_HUB_ROUTE_INTENT;
-  storeId: Id<"store">;
-  terminalId: Id<"posTerminal">;
+  nonce: string;
+  receiptVersion: number;
+  storeId: string;
+  terminalId: string;
 };
 
-type RecoveryResult =
-  | {
-      assertion: PosTerminalAppSessionRecoveryAssertion;
-      diagnostics: { reason: "validated" };
-      status: "recoverable";
-    }
-  | {
-      diagnostics: { reason: RecoveryBlockedReason };
-      reason: RecoveryBlockedReason;
-      status: "blocked";
-    }
-  | {
-      diagnostics: { reason: "transient_failure" };
-      status: "retryable";
-    };
-
-type ValidateRecoveryMutation = (
-  args: ValidateRecoveryArgs,
-) => Promise<RecoveryResult>;
-
 export type PosTerminalAppSessionRecoveryBlockReason =
-  | RecoveryBlockedReason
+  | "app_account_disabled"
+  | "app_account_not_pos_scoped"
+  | "invalid_terminal_proof"
+  | "missing_terminal_proof"
+  | "pos_recovery_required"
+  | "receipt_invalid"
   | "retry_exhausted"
-  | "stale_assertion";
+  | "stale_assertion"
+  | "store_mismatch"
+  | "terminal_not_available"
+  | "terminal_revoked"
+  | "unsupported_route_scope";
 
 export type PosTerminalAppSessionRecoveryState =
   | {
@@ -95,38 +69,13 @@ export type PosTerminalAppSessionRecoveryInput = {
   enabled?: boolean;
   isAppUserMissing: boolean;
   localEntryContext: PosLocalEntryContext;
-  retryDelaysMs?: number[];
+  /** Legacy account IDs are migration metadata only and never authority. */
+  storedAppAccountId?: Id<"athenaUser"> | string | null;
   routeIntent?: string | null;
-  scheduleRetry?: PosTerminalAppSessionRecoveryScheduleRetry;
   scheduleValidationTimeout?: PosTerminalAppSessionRecoveryScheduleRetry;
-  storedAppAccountId?: Id<"athenaUser"> | string | null;
-  validationTimeoutMs?: number;
+  publicKeys?: readonly PosOfflineAuthorityPublicKey[];
+  now?: () => number;
 };
-
-type RecoveryTarget = {
-  args: ValidateRecoveryArgs;
-  key: string;
-  storeId: string;
-  terminalId: string;
-};
-
-type RecoveryTargetInput = {
-  enabled?: boolean;
-  isAppUserMissing: boolean;
-  orgUrlSlug?: string;
-  routeIntent?: string | null;
-  source?: "live" | "local";
-  status: PosLocalEntryContext["status"];
-  storeId?: string;
-  storedAppAccountId?: Id<"athenaUser"> | string | null;
-  storeUrlSlug?: string;
-  terminalCloudId?: string;
-  terminalLocalId?: string;
-  terminalProof?: string;
-  terminalStoreId?: string;
-};
-
-const inFlightRecoveries = new Map<string, Promise<RecoveryResult>>();
 
 const idleState: PosTerminalAppSessionRecoveryState = {
   assertion: null,
@@ -152,365 +101,127 @@ export function readStoredPosAppAccountId(): string | null {
 }
 
 export function resetPosTerminalAppSessionRecoveryRuntimeForTests() {
-  inFlightRecoveries.clear();
+  // Retained as a compatibility seam for callers that reset the old shared
+  // mutation cache. Receipt verification has no cross-hook mutable cache.
 }
 
 export function usePosTerminalAppSessionRecovery(
   input: PosTerminalAppSessionRecoveryInput,
 ): PosTerminalAppSessionRecoveryState {
-  const validateRecovery = useMutation(
-    api.pos.public.terminalAppSessions.validateTerminalAppSessionRecovery,
-  ) as ValidateRecoveryMutation;
-  const [isOnline, setIsOnline] = useState(getBrowserOnline);
   const [state, setState] =
     useState<PosTerminalAppSessionRecoveryState>(idleState);
-
-  useEffect(() => {
-    const updateOnlineStatus = () => setIsOnline(getBrowserOnline());
-
-    window.addEventListener("online", updateOnlineStatus);
-    window.addEventListener("offline", updateOnlineStatus);
-
-    return () => {
-      window.removeEventListener("online", updateOnlineStatus);
-      window.removeEventListener("offline", updateOnlineStatus);
+  const localEntry =
+    input.localEntryContext.status === "ready"
+      ? input.localEntryContext
+      : null;
+  const localStoreId = localEntry?.storeId;
+  const terminalSeedStoreId = localEntry?.terminalSeed?.storeId;
+  const terminalId = localEntry?.terminalSeed?.cloudTerminalId;
+  const receiptEnvelope =
+    localEntry?.terminalSeed?.offlineAuthorityReceipt?.envelope;
+  const target = useMemo(() => {
+    if (
+      input.enabled === false ||
+      input.routeIntent !== POS_HUB_ROUTE_INTENT ||
+      !input.isAppUserMissing ||
+      !localStoreId ||
+      !terminalSeedStoreId ||
+      !terminalId
+    ) {
+      return null;
+    }
+    if (terminalSeedStoreId !== localStoreId) {
+      return { status: "store_mismatch" as const };
+    }
+    return {
+      envelope: receiptEnvelope ?? null,
+      status: "ready" as const,
+      storeId: localStoreId,
+      terminalId,
     };
-  }, []);
-
-  const retryDelaysKey = (input.retryDelaysMs ?? DEFAULT_RETRY_DELAYS_MS).join(
-    ":",
-  );
-  const retryDelaysMs = useMemo(
-    () => input.retryDelaysMs ?? DEFAULT_RETRY_DELAYS_MS,
-    [retryDelaysKey],
-  );
-  const scheduleRetry = input.scheduleRetry ?? scheduleBrowserRetry;
-  const scheduleValidationTimeout =
-    input.scheduleValidationTimeout ?? scheduleBrowserRetry;
-  const validationTimeoutMs =
-    input.validationTimeoutMs ?? DEFAULT_VALIDATION_TIMEOUT_MS;
-  const localEntryContext = input.localEntryContext;
-  const localEntryReady =
-    localEntryContext.status === "ready" ? localEntryContext : null;
-  const localTerminalSeed = localEntryReady?.terminalSeed ?? null;
-  const target = useMemo(
-    () =>
-      resolveRecoveryTarget({
-        enabled: input.enabled,
-        isAppUserMissing: input.isAppUserMissing,
-        orgUrlSlug: localEntryReady?.orgUrlSlug,
-        routeIntent: input.routeIntent,
-        source: localEntryReady?.source,
-        status: localEntryContext.status,
-        storeId: localEntryReady?.storeId,
-        storedAppAccountId: input.storedAppAccountId,
-        storeUrlSlug: localEntryReady?.storeUrlSlug,
-        terminalCloudId: localTerminalSeed?.cloudTerminalId,
-        terminalLocalId: localTerminalSeed?.terminalId,
-        terminalProof: localTerminalSeed?.syncSecretHash,
-        terminalStoreId: localTerminalSeed?.storeId,
-      }),
-    [
-      input.enabled,
-      input.isAppUserMissing,
-      input.routeIntent,
-      input.storedAppAccountId,
-      localEntryContext.status,
-      localEntryReady?.orgUrlSlug,
-      localEntryReady?.source,
-      localEntryReady?.storeId,
-      localEntryReady?.storeUrlSlug,
-      localTerminalSeed?.cloudTerminalId,
-      localTerminalSeed?.storeId,
-      localTerminalSeed?.syncSecretHash,
-      localTerminalSeed?.terminalId,
-    ],
-  );
+  }, [
+    input.enabled,
+    input.isAppUserMissing,
+    input.routeIntent,
+    localStoreId,
+    receiptEnvelope,
+    terminalId,
+    terminalSeedStoreId,
+  ]);
+  const publicKeys = input.publicKeys ?? POS_OFFLINE_AUTHORITY_PUBLIC_KEYS;
+  const nowRef = useRef(input.now ?? Date.now);
+  const now = nowRef.current;
 
   useEffect(() => {
     let cancelled = false;
-    let cancelScheduledRetry: (() => void) | null = null;
-    let cancelAssertionExpiry: (() => void) | null = null;
-
+    let expiryTimer: ReturnType<typeof setTimeout> | undefined;
     if (!target) {
       setState(idleState);
       return;
     }
-
-    if (!isOnline) {
+    if (target.status === "store_mismatch") {
+      setState({ assertion: null, reason: "store_mismatch", status: "blocked" });
+      return;
+    }
+    if (!target.envelope) {
       setState({
         assertion: null,
-        reason: null,
-        status: "waiting_for_network",
+        reason: "pos_recovery_required",
+        status: "blocked",
       });
       return;
     }
 
-    let attemptIndex = 0;
-
-    const runAttempt = () => {
-      setState((current) =>
-        current.status === "retrying"
-          ? current
-          : { assertion: null, reason: null, status: "validating" },
-      );
-
-      runSharedRecovery(
-        target.key,
-        () => validateRecovery(target.args),
-        {
-          scheduleTimeout: scheduleValidationTimeout,
-          timeoutMs: validationTimeoutMs,
-        },
-      )
-        .then((result) => {
-          if (cancelled) return;
-
-          if (result.status === "recoverable") {
-            if (
-              !isScopedRecoveryAssertion({
-                assertion: result.assertion,
-                storeId: target.storeId,
-                terminalId: target.terminalId,
-              })
-            ) {
-              setState({
-                assertion: null,
-                reason: "stale_assertion",
-                status: "blocked",
-              });
-              return;
-            }
-
-            setState({
-              assertion: result.assertion,
-              reason: null,
-              status: "recoverable",
-            });
-            cancelAssertionExpiry?.();
-            cancelAssertionExpiry = scheduleAssertionExpiry(
-              result.assertion,
-              () => {
-                if (cancelled) return;
-
-                setState((current) =>
-                  current.status === "recoverable" &&
-                  current.assertion.recoveryAttemptId ===
-                    result.assertion.recoveryAttemptId
-                    ? {
-                        assertion: null,
-                        reason: "stale_assertion",
-                        status: "blocked",
-                      }
-                    : current,
-                );
-              },
-            );
-            return;
-          }
-
-          if (result.status === "blocked") {
-            setState({
-              assertion: null,
-              reason: result.reason,
-              status: "blocked",
-            });
-            return;
-          }
-
-          scheduleNextAttempt();
-        })
-        .catch(() => {
-          if (!cancelled) {
-            scheduleNextAttempt();
-          }
-        });
-    };
-
-    const scheduleNextAttempt = () => {
-      const retryDelayMs = retryDelaysMs[attemptIndex];
-
-      if (retryDelayMs === undefined) {
+    setState({ assertion: null, reason: null, status: "validating" });
+    void verifyPosOfflineAuthorityReceipt({
+      envelope: target.envelope,
+      expectedStoreId: target.storeId,
+      expectedTerminalId: target.terminalId,
+      now: now(),
+      publicKeys,
+    }).then((verification) => {
+      if (cancelled) return;
+      if (verification.status !== "valid") {
         setState({
           assertion: null,
-          reason: "retry_exhausted",
+          reason:
+            verification.reason === "outside_lease"
+              ? "stale_assertion"
+              : "receipt_invalid",
           status: "blocked",
         });
         return;
       }
-
-      attemptIndex += 1;
+      const { payload } = verification.receipt;
       setState({
-        assertion: null,
-        attempt: attemptIndex,
+        assertion: {
+          expiresAt: payload.expiresAt,
+          issuedAt: payload.issuedAt,
+          nonce: payload.nonce,
+          receiptVersion: payload.version,
+          storeId: payload.storeId,
+          terminalId: payload.terminalId,
+        },
         reason: null,
-        status: "retrying",
+        status: "recoverable",
       });
-      cancelScheduledRetry = scheduleRetry(retryDelayMs, () => {
-        cancelScheduledRetry = null;
-        if (cancelled) return;
-
-        if (!getBrowserOnline()) {
+      const delayMs = Math.max(0, payload.expiresAt - now() + 1);
+      expiryTimer = setTimeout(() => {
+        if (!cancelled) {
           setState({
             assertion: null,
-            reason: null,
-            status: "waiting_for_network",
+            reason: "stale_assertion",
+            status: "blocked",
           });
-          return;
         }
-
-        runAttempt();
-      });
-    };
-
-    runAttempt();
+      }, delayMs);
+    });
 
     return () => {
       cancelled = true;
-      cancelScheduledRetry?.();
-      cancelAssertionExpiry?.();
+      if (expiryTimer) clearTimeout(expiryTimer);
     };
-  }, [
-    isOnline,
-    retryDelaysMs,
-    scheduleRetry,
-    scheduleValidationTimeout,
-    target,
-    validateRecovery,
-    validationTimeoutMs,
-  ]);
+  }, [now, publicKeys, target]);
 
   return state;
-}
-
-function resolveRecoveryTarget(input: RecoveryTargetInput): RecoveryTarget | null {
-  if (input.enabled === false) return null;
-  if (input.routeIntent !== POS_HUB_ROUTE_INTENT) return null;
-  if (!input.isAppUserMissing) return null;
-  if (!input.storedAppAccountId) return null;
-  if (input.status !== "ready") return null;
-  if (!input.storeId) return null;
-  if (!input.orgUrlSlug || !input.storeUrlSlug || !input.source) return null;
-
-  if (!input.terminalStoreId) return null;
-  if (input.terminalStoreId !== input.storeId) return null;
-  if (!input.terminalProof) return null;
-
-  const terminalId = input.terminalCloudId || input.terminalLocalId;
-  if (!terminalId) return null;
-
-  const args: ValidateRecoveryArgs = {
-    accountId: input.storedAppAccountId as Id<"athenaUser">,
-    routeIntent: POS_HUB_ROUTE_INTENT,
-    storeId: input.storeId as Id<"store">,
-    terminalId: terminalId as Id<"posTerminal">,
-    terminalProof: input.terminalProof,
-    metadata: {
-      orgUrlSlug: input.orgUrlSlug,
-      source: input.source,
-      storeUrlSlug: input.storeUrlSlug,
-    },
-  };
-
-  return {
-    args,
-    key: [
-      input.storeId,
-      terminalId,
-      input.storedAppAccountId,
-      input.terminalProof,
-    ].join(":"),
-    storeId: input.storeId,
-    terminalId,
-  };
-}
-
-function runSharedRecovery(
-  key: string,
-  run: () => Promise<RecoveryResult>,
-  timeout: {
-    scheduleTimeout: PosTerminalAppSessionRecoveryScheduleRetry;
-    timeoutMs: number;
-  },
-): Promise<RecoveryResult> {
-  const existing = inFlightRecoveries.get(key);
-  if (existing) return existing;
-
-  const recovery = runWithTimeout(run, timeout).finally(() => {
-    if (inFlightRecoveries.get(key) === recovery) {
-      inFlightRecoveries.delete(key);
-    }
-  });
-
-  inFlightRecoveries.set(key, recovery);
-  return recovery;
-}
-
-function runWithTimeout(
-  run: () => Promise<RecoveryResult>,
-  timeout: {
-    scheduleTimeout: PosTerminalAppSessionRecoveryScheduleRetry;
-    timeoutMs: number;
-  },
-) {
-  let cancelTimeout: (() => void) | null = null;
-  let settled = false;
-
-  return new Promise<RecoveryResult>((resolve, reject) => {
-    cancelTimeout = timeout.scheduleTimeout(timeout.timeoutMs, () => {
-      if (settled) return;
-      settled = true;
-      reject(new Error("pos_terminal_app_session_recovery_timeout"));
-    });
-
-    run().then(
-      (result) => {
-        if (settled) return;
-        settled = true;
-        cancelTimeout?.();
-        resolve(result);
-      },
-      (error) => {
-        if (settled) return;
-        settled = true;
-        cancelTimeout?.();
-        reject(error);
-      },
-    );
-  }).finally(() => {
-    cancelTimeout?.();
-  });
-}
-
-function isScopedRecoveryAssertion(input: {
-  assertion: PosTerminalAppSessionRecoveryAssertion;
-  storeId: string;
-  terminalId: string;
-}) {
-  return (
-    input.assertion.routeScope === POS_HUB_ROUTE_INTENT &&
-    input.assertion.storeId === input.storeId &&
-    input.assertion.terminalId === input.terminalId &&
-    input.assertion.expiresAt > Date.now()
-  );
-}
-
-function getBrowserOnline() {
-  return typeof navigator === "undefined" ? true : navigator.onLine;
-}
-
-function scheduleBrowserRetry(delayMs: number, retry: () => void) {
-  const timeoutId = window.setTimeout(retry, delayMs);
-  return () => window.clearTimeout(timeoutId);
-}
-
-function scheduleAssertionExpiry(
-  assertion: PosTerminalAppSessionRecoveryAssertion,
-  expire: () => void,
-) {
-  const timeoutId = window.setTimeout(
-    expire,
-    Math.max(0, assertion.expiresAt - Date.now()),
-  );
-  return () => window.clearTimeout(timeoutId);
 }

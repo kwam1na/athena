@@ -9,14 +9,35 @@ import {
   type QueryCtx,
 } from "../../_generated/server";
 import { recordOperationalEventWithCtx } from "../../operations/operationalEvents";
+import { ATHENA_AUTH_SESSION_TOTAL_DURATION_MS } from "../../authConfig";
 import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../../lib/athenaUserAuth";
+import {
+  STORE_SERVICE_PRINCIPAL_STABLE_KEY,
+  reconcileServicePrincipalAuthBinding,
+} from "../../servicePrincipals/lifecycle";
+import {
+  POS_APPLICATION_CAPABILITY_ID,
+  POS_SERVICE_PRINCIPAL_CONSUMER_ID,
+  resolvePosApplicationCapability,
+} from "../application/posServicePrincipal";
+import { hashPosTerminalSyncSecret } from "../application/sync/terminalSyncSecret";
+import {
+  createPosRecoveryCodeVerifier,
+  verifyPosRecoveryCodeVerifier,
+} from "../application/security/posRecoveryCodeVerifier";
+import {
+  issueRevokedPosTerminalReconnectIntent,
+  PosTerminalLifecycleError,
+} from "../application/terminalLifecycle";
 
 const POS_RECOVERY_ACCOUNT_EMAIL = "pos@wigclub.store";
-const POS_RECOVERY_CODE_VERSION = 1;
 const POS_RECOVERY_FAILURE_AUDIT_BUCKET_MS = 15 * 60 * 1000;
+const POS_RECOVERY_FAILURE_WINDOW_MS = 15 * 60 * 1000;
+const POS_RECOVERY_MAX_FAILURES_PER_WINDOW = 5;
+const POS_RECOVERY_THROTTLE_LOCK_MS = 5 * 60 * 1000;
 const POS_RECOVERY_CODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
 const POS_RECOVERY_CODE_GROUP_SIZE = 4;
 const POS_RECOVERY_CODE_GROUP_COUNT = 3;
@@ -113,12 +134,18 @@ const POS_RECOVERY_CODE_WORDS = [
   "wool",
 ] as const;
 const GENERIC_RECOVERY_FAILURE = "POS recovery sign-in failed.";
+const POS_RECOVERY_EXCHANGE_TTL_MS = 5 * 60 * 1000;
+const POS_RECOVERY_CORRELATION_KEY_PATTERN = /^[A-Za-z0-9_-]{16,160}$/;
 
 type PosRecoveryCredential = Doc<"posRecoveryCredential">;
 type PosRecoveryCtx = Pick<QueryCtx, "db"> | Pick<MutationCtx, "db">;
 type PosRecoveryAccessCtx =
   | Pick<QueryCtx, "auth" | "db">
   | Pick<MutationCtx, "auth" | "db">;
+
+function failRecovery(): never {
+  throw new Error(GENERIC_RECOVERY_FAILURE);
+}
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
@@ -136,6 +163,113 @@ function randomHex(byteCount: number) {
   crypto.getRandomValues(bytes);
   return bytesToHex(bytes);
 }
+
+const posTerminalRecoveryDispositionValidator = v.union(
+  v.object({
+    disposition: v.literal("recovery_code_required"),
+  }),
+  v.object({
+    disposition: v.literal("administrator_reconnect_required"),
+    reconnectIntentToken: v.string(),
+    expiresAt: v.number(),
+  }),
+);
+
+export async function requestPosTerminalRecoveryDispositionWithCtx(
+  ctx: MutationCtx,
+  args: {
+    browserFingerprintHash: string;
+    terminalId: Id<"posTerminal">;
+    terminalProof: string;
+  },
+  options: { now?: number } = {},
+) {
+  const browserFingerprintHash = args.browserFingerprintHash.trim();
+  const terminalProof = args.terminalProof.trim();
+  if (!browserFingerprintHash || !terminalProof) failRecovery();
+  const terminal = await ctx.db.get("posTerminal", args.terminalId);
+  if (
+    !terminal ||
+    !terminal.syncSecretHash ||
+    terminal.fingerprintHash !== browserFingerprintHash
+  ) {
+    failRecovery();
+  }
+  const currentProofHash = await hashPosTerminalSyncSecret(terminalProof);
+  if (currentProofHash !== terminal.syncSecretHash) failRecovery();
+  if (terminal.status === "active") {
+    return { disposition: "recovery_code_required" as const };
+  }
+  if (terminal.status !== "revoked") failRecovery();
+
+  const now = options.now ?? Date.now();
+  const reconnectIntentToken = randomHex(32);
+  const correlationId = `terminal-reconnect-request:${terminal._id}:${now}:${randomHex(8)}`;
+  try {
+    const issued = await issueRevokedPosTerminalReconnectIntent(ctx, {
+      browserFingerprintHash,
+      correlationId,
+      currentProofHash,
+      intentTokenHash: await hashPosTerminalSyncSecret(reconnectIntentToken),
+      now,
+      terminalId: terminal._id,
+    });
+    await recordOperationalEventWithCtx(ctx, {
+      eventType: "pos_terminal_reconnect_intent_issued",
+      reason: "administrator_reconnect_required",
+      message: "A revoked checkout station requested administrator reconnection.",
+      metadata: {
+        expiresAt: issued.expiresAt,
+        reconnectIntentId: issued.reconnectIntentId,
+      },
+      metadataDedupeKeys: ["reconnectIntentId"],
+      organizationId: issued.organizationId,
+      storeId: issued.storeId,
+      subjectId: issued.terminalId,
+      subjectType: "posTerminal",
+      terminalId: issued.terminalId,
+    });
+    return {
+      disposition: "administrator_reconnect_required" as const,
+      reconnectIntentToken,
+      expiresAt: issued.expiresAt,
+    };
+  } catch (error) {
+    if (
+      error instanceof PosTerminalLifecycleError &&
+      error.code === "reconnect_intent_rate_limited"
+    ) {
+      const store = await ctx.db.get("store", terminal.storeId);
+      if (store) {
+        const rateBucket = Math.floor(now / (15 * 60 * 1_000));
+        await recordOperationalEventWithCtx(ctx, {
+          eventType: "pos_terminal_reconnect_intent_rate_limited",
+          reason: "rate_limited",
+          message: "Checkout station reconnection requests were rate limited.",
+          metadata: { rateBucket },
+          metadataDedupeKeys: ["rateBucket"],
+          organizationId: store.organizationId,
+          storeId: store._id,
+          subjectId: terminal._id,
+          subjectType: "posTerminal",
+          terminalId: terminal._id,
+        });
+      }
+    }
+    failRecovery();
+  }
+}
+
+export const requestPosTerminalRecoveryDisposition = mutation({
+  args: {
+    browserFingerprintHash: v.string(),
+    terminalId: v.id("posTerminal"),
+    terminalProof: v.string(),
+  },
+  returns: posTerminalRecoveryDispositionValidator,
+  handler: (ctx, args) =>
+    requestPosTerminalRecoveryDispositionWithCtx(ctx, args),
+});
 
 function randomIndex(max: number) {
   const maxUniformByte = Math.floor(256 / max) * max;
@@ -396,13 +530,19 @@ function publicCredentialStatus(credential: PosRecoveryCredential | null) {
     lastUsedAt: credential.lastUsedAt,
     lockedAt: credential.lockedAt,
     lockedUntil: credential.lockedUntil,
-    plaintextCode: credential.plaintextCode,
+    legacyMigrationAt: credential.legacyMigrationAt,
+    legacyMigrationStatus: credential.legacyMigrationStatus,
     posAccountId: credential.posAccountId,
     revokedAt: credential.revokedAt,
     rotatedAt: credential.rotatedAt,
     rotatedByUserId: credential.rotatedByUserId,
+    rotationRequiredAt: credential.rotationRequiredAt,
     status: credential.status,
     storeId: credential.storeId,
+    verifierKind: credential.verifierKind,
+    keyedVerifierIterations: credential.keyedVerifierIterations,
+    keyedVerifierPepperVersion: credential.keyedVerifierPepperVersion,
+    keyedVerifierVersion: credential.keyedVerifierVersion,
   };
 }
 
@@ -425,8 +565,10 @@ async function rotateCredentialWithCtx(
   });
   const now = Date.now();
   const code = generateRecoveryCode();
-  const codeSalt = randomHex(16);
-  const codeHash = await hashPosRecoveryCode({ code, salt: codeSalt });
+  const keyedVerifier = await createPosRecoveryCodeVerifier({
+    normalizedCode: normalizeRecoveryCode(code),
+    saltHex: randomHex(16),
+  });
   const existing = await getCredentialForStore(ctx, {
     posAccountId: account._id,
     storeId: args.storeId,
@@ -434,20 +576,33 @@ async function rotateCredentialWithCtx(
 
   if (existing) {
     await ctx.db.patch("posRecoveryCredential", existing._id, {
-      codeHash,
-      codeSalt,
-      codeVersion: POS_RECOVERY_CODE_VERSION,
+      codeHash: undefined,
+      codeSalt: undefined,
+      codeVersion: undefined,
+      credentialRevision: (existing.credentialRevision ?? 1) + 1,
       failedAttemptCount: 0,
       failureAuditBucket: undefined,
+      failureWindowAttemptCount: undefined,
+      failureWindowStartedAt: undefined,
       lastFailedAt: undefined,
+      keyedVerifierDigest: keyedVerifier.digest,
+      keyedVerifierIterations: keyedVerifier.iterations,
+      keyedVerifierPepperVersion: keyedVerifier.pepperVersion,
+      keyedVerifierSalt: keyedVerifier.saltHex,
+      keyedVerifierVersion: keyedVerifier.verifierVersion,
+      legacyMigrationAt: now,
+      legacyMigrationStatus: "migrated",
       lockedAt: undefined,
       lockedUntil: undefined,
-      plaintextCode: code,
+      plaintextCode: undefined,
+      plaintextRemovedAt: now,
       revokedAt: undefined,
       revokedByUserId: undefined,
+      rotationRequiredAt: undefined,
       rotatedAt: now,
       rotatedByUserId: args.actorUserId,
       status: "active",
+      verifierKind: "deployment_keyed_pbkdf2_sha256",
     });
     const credential = (await ctx.db.get(
       "posRecoveryCredential",
@@ -463,19 +618,25 @@ async function rotateCredentialWithCtx(
   }
 
   const credentialId = await ctx.db.insert("posRecoveryCredential", {
-    codeHash,
-    codeSalt,
-    codeVersion: POS_RECOVERY_CODE_VERSION,
     createdAt: now,
     createdByUserId: args.actorUserId,
     failedAttemptCount: 0,
     organizationId: store.organizationId,
-    plaintextCode: code,
     posAccountId: account._id,
+    credentialRevision: 1,
+    keyedVerifierDigest: keyedVerifier.digest,
+    keyedVerifierIterations: keyedVerifier.iterations,
+    keyedVerifierPepperVersion: keyedVerifier.pepperVersion,
+    keyedVerifierSalt: keyedVerifier.saltHex,
+    keyedVerifierVersion: keyedVerifier.verifierVersion,
+    legacyMigrationAt: now,
+    legacyMigrationStatus: "migrated",
+    plaintextRemovedAt: now,
     rotatedAt: now,
     rotatedByUserId: args.actorUserId,
     status: "active",
     storeId: args.storeId,
+    verifierKind: "deployment_keyed_pbkdf2_sha256",
   });
   const credential = (await ctx.db.get("posRecoveryCredential", credentialId))!;
   await recordRecoveryCodeEvent(ctx, {
@@ -486,6 +647,355 @@ async function rotateCredentialWithCtx(
   });
 
   return { code, credential };
+}
+
+type PrepareRecoveryArgs = {
+  code: string;
+  recoveryCorrelationKey: string;
+  terminalId: Id<"posTerminal">;
+  terminalProof: string;
+};
+
+async function getCanonicalStoreServicePrincipal(
+  ctx: MutationCtx,
+  args: { organizationId: Id<"organization">; storeId: Id<"store"> },
+) {
+  const principals = await ctx.db
+    .query("servicePrincipal")
+    .withIndex(
+      "by_organizationId_and_storeId_and_stableKey",
+      (query) =>
+        query
+          .eq("organizationId", args.organizationId)
+          .eq("storeId", args.storeId)
+          .eq("stableKey", STORE_SERVICE_PRINCIPAL_STABLE_KEY),
+    )
+    .take(2);
+  if (principals.length !== 1 || principals[0].status !== "active") {
+    failRecovery();
+  }
+  return principals[0];
+}
+
+async function getCurrentStoreRecoveryCredential(
+  ctx: MutationCtx,
+  args: {
+    organizationId: Id<"organization">;
+    servicePrincipalId: Id<"servicePrincipal">;
+    storeId: Id<"store">;
+  },
+) {
+  const credentials = await ctx.db
+    .query("posRecoveryCredential")
+    .withIndex("by_storeId", (query) => query.eq("storeId", args.storeId))
+    .take(2);
+  if (credentials.length !== 1) failRecovery();
+  const credential = credentials[0];
+  if (
+    credential.organizationId !== args.organizationId ||
+    (credential.servicePrincipalId !== undefined &&
+      credential.servicePrincipalId !== args.servicePrincipalId)
+  ) {
+    failRecovery();
+  }
+  return credential;
+}
+
+async function verifyCurrentRecoveryCredential(
+  ctx: MutationCtx,
+  args: {
+    code: string;
+    credential: PosRecoveryCredential;
+    now: number;
+  },
+) {
+  const { credential, now } = args;
+  if (
+    credential.status !== "active" ||
+    (credential.lockedUntil !== undefined && credential.lockedUntil > now)
+  ) {
+    const failureAuditBucket = getFailureAuditBucket(now);
+    await recordRecoveryCodeEvent(ctx, {
+      credential,
+      eventType: "pos_recovery_code_login_failed",
+      reason: credential.status === "revoked" ? "revoked" : "locked",
+      metadata: { failureAuditBucket },
+      metadataDedupeKeys: ["reason", "failureAuditBucket"],
+    });
+    failRecovery();
+  }
+
+  if (
+    credential.verifierKind !== "deployment_keyed_pbkdf2_sha256" ||
+    credential.keyedVerifierDigest === undefined ||
+    credential.keyedVerifierIterations === undefined ||
+    credential.keyedVerifierPepperVersion === undefined ||
+    credential.keyedVerifierSalt === undefined ||
+    credential.keyedVerifierVersion === undefined
+  ) {
+    // Exact-session recovery is an enforced store lane. A fast legacy
+    // verifier cannot authorize it, even when its old hash happens to match.
+    failRecovery();
+  }
+  const matches = await verifyPosRecoveryCodeVerifier({
+    digest: credential.keyedVerifierDigest,
+    iterations: credential.keyedVerifierIterations,
+    normalizedCode: normalizeRecoveryCode(args.code),
+    pepperVersion: credential.keyedVerifierPepperVersion,
+    saltHex: credential.keyedVerifierSalt,
+    verifierVersion: credential.keyedVerifierVersion,
+  });
+  if (matches) return;
+
+  const failureAuditBucket = getFailureAuditBucket(now);
+  const withinWindow =
+    credential.failureWindowStartedAt !== undefined &&
+    now - credential.failureWindowStartedAt < POS_RECOVERY_FAILURE_WINDOW_MS;
+  const failureWindowAttemptCount = withinWindow
+    ? (credential.failureWindowAttemptCount ?? 0) + 1
+    : 1;
+  const locked =
+    failureWindowAttemptCount >= POS_RECOVERY_MAX_FAILURES_PER_WINDOW;
+  const patch = {
+    failedAttemptCount: credential.failedAttemptCount + 1,
+    failureAuditBucket,
+    failureWindowAttemptCount,
+    failureWindowStartedAt: withinWindow
+      ? credential.failureWindowStartedAt
+      : now,
+    lastFailedAt: now,
+    ...(locked
+      ? {
+          lockedAt: now,
+          lockedUntil: now + POS_RECOVERY_THROTTLE_LOCK_MS,
+          status: "locked" as const,
+        }
+      : {}),
+  };
+  await ctx.db.patch("posRecoveryCredential", credential._id, patch);
+  if (credential.failureAuditBucket !== failureAuditBucket || locked) {
+    const nextCredential = { ...credential, ...patch };
+    await recordRecoveryCodeEvent(ctx, {
+      credential: nextCredential,
+      eventType: "pos_recovery_code_login_failed",
+      reason: locked ? "throttled" : "invalid_code",
+      metadata: {
+        failedAttemptCount: nextCredential.failedAttemptCount,
+        failureAuditBucket,
+        failureWindowAttemptCount,
+      },
+      metadataDedupeKeys: ["reason", "failureAuditBucket"],
+    });
+  }
+  failRecovery();
+}
+
+async function getOrCreateStableAuthBinding(
+  ctx: MutationCtx,
+  args: {
+    correlationId: string;
+    now: number;
+    organizationId: Id<"organization">;
+    servicePrincipalId: Id<"servicePrincipal">;
+    storeId: Id<"store">;
+  },
+) {
+  const bindings = await ctx.db
+    .query("servicePrincipalAuthBinding")
+    .withIndex("by_servicePrincipalId", (query) =>
+      query.eq("servicePrincipalId", args.servicePrincipalId),
+    )
+    .take(2);
+  if (bindings.length > 1) failRecovery();
+  const existing = bindings[0];
+  if (existing) {
+    if (
+      existing.status !== "active" ||
+      existing.organizationId !== args.organizationId ||
+      existing.storeId !== args.storeId
+    ) {
+      failRecovery();
+    }
+    return existing;
+  }
+
+  const authUserId = await ctx.db.insert("users", {});
+  const result = await reconcileServicePrincipalAuthBinding(ctx as never, {
+    authUserId,
+    correlationId: args.correlationId,
+    now: args.now,
+    organizationId: args.organizationId,
+    servicePrincipalId: args.servicePrincipalId,
+    storeId: args.storeId,
+  });
+  const created = await ctx.db.get(
+    "servicePrincipalAuthBinding",
+    result.servicePrincipalAuthBindingId,
+  );
+  if (!created) failRecovery();
+  return created;
+}
+
+export async function prepareRecoveryForAuthProviderWithCtx(
+  ctx: MutationCtx,
+  args: PrepareRecoveryArgs,
+) {
+  const recoveryCorrelationKey = args.recoveryCorrelationKey.trim();
+  const terminalProof = args.terminalProof.trim();
+  if (
+    !terminalProof ||
+    !POS_RECOVERY_CORRELATION_KEY_PATTERN.test(recoveryCorrelationKey)
+  ) {
+    failRecovery();
+  }
+
+  // Authenticate the terminal before loading or mutating the shared recovery
+  // credential so terminal-ID/proof spraying cannot affect its failure lane.
+  const terminal = await ctx.db.get("posTerminal", args.terminalId);
+  if (!terminal || terminal.status !== "active" || !terminal.syncSecretHash) {
+    failRecovery();
+  }
+  const submittedProofHash = await hashPosTerminalSyncSecret(terminalProof);
+  if (submittedProofHash !== terminal.syncSecretHash) failRecovery();
+
+  const store = await ctx.db.get("store", terminal.storeId);
+  if (
+    !store ||
+    (terminal.organizationId !== undefined &&
+      terminal.organizationId !== store.organizationId)
+  ) {
+    failRecovery();
+  }
+
+  const now = Date.now();
+  const principal = await getCanonicalStoreServicePrincipal(ctx, {
+    organizationId: store.organizationId,
+    storeId: store._id,
+  });
+  const grant = await resolvePosApplicationCapability(ctx as never, {
+    now,
+    organizationId: store.organizationId,
+    servicePrincipalId: principal._id,
+    storeId: store._id,
+  });
+  const credential = await getCurrentStoreRecoveryCredential(ctx, {
+    organizationId: store.organizationId,
+    servicePrincipalId: principal._id,
+    storeId: store._id,
+  });
+  await verifyCurrentRecoveryCredential(ctx, {
+    code: args.code,
+    credential,
+    now,
+  });
+
+  const credentialRevision = credential.credentialRevision ?? 1;
+  const terminalLifecycleRevision = terminal.lifecycleRevision ?? 1;
+  const terminalProofRevision = terminal.proofRevision ?? 1;
+  const existingExchanges = await ctx.db
+    .query("posRecoveryExchange")
+    .withIndex("by_recoveryCorrelationKey", (query) =>
+      query.eq("recoveryCorrelationKey", recoveryCorrelationKey),
+    )
+    .take(2);
+  if (existingExchanges.length > 1) failRecovery();
+  const existingExchange = existingExchanges[0];
+  if (existingExchange) {
+    const authSession = await ctx.db.get(
+      "authSessions",
+      existingExchange.authSessionId,
+    );
+    if (
+      existingExchange.status !== "prepared" ||
+      existingExchange.expiresAt <= now ||
+      existingExchange.organizationId !== store.organizationId ||
+      existingExchange.storeId !== store._id ||
+      existingExchange.terminalId !== terminal._id ||
+      existingExchange.servicePrincipalId !== principal._id ||
+      existingExchange.posRecoveryCredentialId !== credential._id ||
+      existingExchange.capabilityGrantId !== grant.grantId ||
+      existingExchange.principalLifecycleRevision !==
+        principal.lifecycleRevision ||
+      existingExchange.capabilityRevision !== grant.revision ||
+      existingExchange.credentialRevision !== credentialRevision ||
+      existingExchange.terminalLifecycleRevision !==
+        terminalLifecycleRevision ||
+      existingExchange.terminalProofRevision !== terminalProofRevision ||
+      !authSession ||
+      authSession.userId !== existingExchange.authUserId ||
+      authSession.expirationTime <= now
+    ) {
+      failRecovery();
+    }
+    return {
+      authSessionId: existingExchange.authSessionId,
+      authUserId: existingExchange.authUserId,
+    };
+  }
+
+  const authBinding = await getOrCreateStableAuthBinding(ctx, {
+    correlationId: recoveryCorrelationKey,
+    now,
+    organizationId: store.organizationId,
+    servicePrincipalId: principal._id,
+    storeId: store._id,
+  });
+  const authSessionId = await ctx.db.insert("authSessions", {
+    expirationTime: now + ATHENA_AUTH_SESSION_TOTAL_DURATION_MS,
+    userId: authBinding.authUserId,
+  });
+  await ctx.db.insert("posRecoveryExchange", {
+    organizationId: store.organizationId,
+    storeId: store._id,
+    servicePrincipalId: principal._id,
+    servicePrincipalAuthBindingId: authBinding._id,
+    authUserId: authBinding.authUserId,
+    authSessionId,
+    terminalId: terminal._id,
+    posRecoveryCredentialId: credential._id,
+    capabilityGrantId: grant.grantId,
+    recoveryCorrelationKey,
+    consumerId: POS_SERVICE_PRINCIPAL_CONSUMER_ID,
+    capabilityId: POS_APPLICATION_CAPABILITY_ID,
+    status: "prepared",
+    revision: 1,
+    principalLifecycleRevision: principal.lifecycleRevision,
+    capabilityRevision: grant.revision,
+    credentialRevision,
+    terminalLifecycleRevision,
+    terminalProofRevision,
+    preparedAt: now,
+    updatedAt: now,
+    expiresAt: now + POS_RECOVERY_EXCHANGE_TTL_MS,
+    lastCorrelationId: recoveryCorrelationKey,
+  });
+  await ctx.db.patch("posRecoveryCredential", credential._id, {
+    credentialRevision,
+    failedAttemptCount: 0,
+    failureAuditBucket: undefined,
+    failureWindowAttemptCount: undefined,
+    failureWindowStartedAt: undefined,
+    lastCorrelationId: recoveryCorrelationKey,
+    lastFailedAt: undefined,
+    lastUsedAt: now,
+    lockedAt: undefined,
+    lockedUntil: undefined,
+    servicePrincipalId: principal._id,
+    status: "active",
+    verifierKind: "deployment_keyed_pbkdf2_sha256",
+  });
+  await recordRecoveryCodeEvent(ctx, {
+    credential: { ...credential, status: "active" },
+    eventType: "pos_recovery_code_login_succeeded",
+    reason: "prepared_exact_session",
+    metadata: {
+      recoveryCorrelationKey,
+      terminalId: terminal._id,
+    },
+    metadataDedupeKeys: ["recoveryCorrelationKey"],
+  });
+
+  return { authSessionId, authUserId: authBinding.authUserId };
 }
 
 async function verifyCredentialWithCtx(
@@ -541,11 +1051,29 @@ async function verifyCredentialWithCtx(
     throw new Error(GENERIC_RECOVERY_FAILURE);
   }
 
-  const submittedHash = await hashPosRecoveryCode({
-    code: args.code,
-    salt: credential.codeSalt,
-  });
-  if (submittedHash !== credential.codeHash) {
+  const isKeyedVerifier =
+    credential.verifierKind === "deployment_keyed_pbkdf2_sha256" &&
+    credential.keyedVerifierDigest !== undefined &&
+    credential.keyedVerifierIterations !== undefined &&
+    credential.keyedVerifierPepperVersion !== undefined &&
+    credential.keyedVerifierSalt !== undefined &&
+    credential.keyedVerifierVersion !== undefined;
+  const matches = isKeyedVerifier
+    ? await verifyPosRecoveryCodeVerifier({
+        digest: credential.keyedVerifierDigest!,
+        iterations: credential.keyedVerifierIterations!,
+        normalizedCode: normalizeRecoveryCode(args.code),
+        pepperVersion: credential.keyedVerifierPepperVersion!,
+        saltHex: credential.keyedVerifierSalt!,
+        verifierVersion: credential.keyedVerifierVersion!,
+      })
+    : credential.codeHash !== undefined && credential.codeSalt !== undefined
+      ? (await hashPosRecoveryCode({
+          code: args.code,
+          salt: credential.codeSalt,
+        })) === credential.codeHash
+      : false;
+  if (!matches) {
     const failureAuditBucket = getFailureAuditBucket(now);
     const shouldRecordCredentialFailure =
       credential.failureAuditBucket !== failureAuditBucket;
@@ -581,6 +1109,8 @@ async function verifyCredentialWithCtx(
   await ctx.db.patch("posRecoveryCredential", credential._id, {
     failedAttemptCount: 0,
     failureAuditBucket: undefined,
+    failureWindowAttemptCount: undefined,
+    failureWindowStartedAt: undefined,
     lastFailedAt: undefined,
     lastUsedAt: now,
     lockedAt: undefined,
@@ -650,13 +1180,16 @@ export const revokeRecoveryCode = mutation({
     }
     const now = Date.now();
     await ctx.db.patch("posRecoveryCredential", credential._id, {
+      credentialRevision: (credential.credentialRevision ?? 1) + 1,
       plaintextCode: undefined,
+      plaintextRemovedAt: credential.plaintextRemovedAt ?? now,
       revokedAt: now,
       revokedByUserId: actor._id,
       status: "revoked",
     });
     const nextCredential = {
       ...credential,
+      credentialRevision: (credential.credentialRevision ?? 1) + 1,
       plaintextCode: undefined,
       revokedAt: now,
       status: "revoked" as const,
@@ -689,6 +1222,8 @@ export const unlockRecoveryCode = mutation({
     await ctx.db.patch("posRecoveryCredential", credential._id, {
       failedAttemptCount: 0,
       failureAuditBucket: undefined,
+      failureWindowAttemptCount: undefined,
+      failureWindowStartedAt: undefined,
       lastFailedAt: undefined,
       lockedAt: undefined,
       lockedUntil: undefined,
@@ -706,6 +1241,58 @@ export const unlockRecoveryCode = mutation({
   },
 });
 
+export async function migrateLegacyRecoveryCredentialWithCtx(
+  ctx: MutationCtx,
+  args: {
+    credentialId: Id<"posRecoveryCredential">;
+    now?: number;
+  },
+) {
+  const credential = await ctx.db.get(
+    "posRecoveryCredential",
+    args.credentialId,
+  );
+  if (!credential) {
+    return { disposition: "missing" as const };
+  }
+  if (credential.verifierKind === "deployment_keyed_pbkdf2_sha256") {
+    return { disposition: "already_keyed" as const };
+  }
+
+  const now = args.now ?? Date.now();
+  if (!credential.plaintextCode) {
+    await ctx.db.patch("posRecoveryCredential", credential._id, {
+      legacyMigrationAt: now,
+      legacyMigrationStatus: "rotation_required",
+      rotationRequiredAt: now,
+    });
+    return { disposition: "rotation_required" as const };
+  }
+
+  const verifier = await createPosRecoveryCodeVerifier({
+    normalizedCode: normalizeRecoveryCode(credential.plaintextCode),
+    saltHex: randomHex(16),
+  });
+  await ctx.db.patch("posRecoveryCredential", credential._id, {
+    codeHash: undefined,
+    codeSalt: undefined,
+    codeVersion: undefined,
+    credentialRevision: (credential.credentialRevision ?? 1) + 1,
+    keyedVerifierDigest: verifier.digest,
+    keyedVerifierIterations: verifier.iterations,
+    keyedVerifierPepperVersion: verifier.pepperVersion,
+    keyedVerifierSalt: verifier.saltHex,
+    keyedVerifierVersion: verifier.verifierVersion,
+    legacyMigrationAt: now,
+    legacyMigrationStatus: "migrated",
+    plaintextCode: undefined,
+    plaintextRemovedAt: now,
+    rotationRequiredAt: undefined,
+    verifierKind: "deployment_keyed_pbkdf2_sha256",
+  });
+  return { disposition: "migrated" as const };
+}
+
 export const verifyRecoveryCodeForAuthProvider = internalMutation({
   args: {
     code: v.string(),
@@ -715,6 +1302,16 @@ export const verifyRecoveryCodeForAuthProvider = internalMutation({
     storeUrlSlug: v.optional(v.string()),
   },
   handler: verifyCredentialWithCtx,
+});
+
+export const prepareRecoveryForAuthProvider = internalMutation({
+  args: {
+    code: v.string(),
+    recoveryCorrelationKey: v.string(),
+    terminalId: v.id("posTerminal"),
+    terminalProof: v.string(),
+  },
+  handler: prepareRecoveryForAuthProviderWithCtx,
 });
 
 export const createOrRotateRecoveryCodeForTest = internalMutation({
@@ -730,4 +1327,11 @@ export const createOrRotateRecoveryCodeForTest = internalMutation({
     });
     return { code, credential: publicCredentialStatus(credential) };
   },
+});
+
+export const migrateLegacyRecoveryCredential = internalMutation({
+  args: {
+    credentialId: v.id("posRecoveryCredential"),
+  },
+  handler: migrateLegacyRecoveryCredentialWithCtx,
 });

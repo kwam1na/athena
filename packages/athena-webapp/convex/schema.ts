@@ -83,6 +83,11 @@ import {
   posRegisterSessionActivityCheckpointSchema,
   posLifecycleJournalSchema,
   posLifecycleJournalCursorSchema,
+  posServicePrincipalMigrationCandidateSchema,
+  posServicePrincipalMigrationRunSchema,
+  posServicePrincipalMigrationStoreStateSchema,
+  posServicePrincipalMigrationTerminalEvidenceSchema,
+  posServicePrincipalConsumerTables,
 } from "./schemas/pos";
 import { posSessionSchema } from "./schemas/pos/posSession";
 import {
@@ -240,6 +245,7 @@ import { staffMessageSchema } from "./schemas/staffMessages";
 const schema = defineSchema({
   ...authTables,
   ...servicePrincipalTables,
+  ...posServicePrincipalConsumerTables,
   sharedDemoRestoreState: defineTable(sharedDemoRestoreStateSchema).index(
     "by_storeId",
     ["storeId"],
@@ -802,12 +808,37 @@ const schema = defineSchema({
     .index("by_linkedStoreFrontUserId", ["linkedStoreFrontUserId"]),
   posTerminal: defineTable(posTerminalSchema)
     .index("by_storeId", ["storeId"])
+    .index("by_fingerprintHash", ["fingerprintHash"])
     .index("by_storeId_and_fingerprintHash", ["storeId", "fingerprintHash"])
     .index("by_storeId_registerNumber", ["storeId", "registerNumber"]),
   posRecoveryCredential: defineTable(posRecoveryCredentialSchema)
     .index("by_storeId", ["storeId"])
     .index("by_storeId_posAccountId", ["storeId", "posAccountId"])
     .index("by_organizationId_status", ["organizationId", "status"]),
+  posServicePrincipalMigrationRun: defineTable(
+    posServicePrincipalMigrationRunSchema,
+  )
+    .index("by_automationIdentity_startedAt", [
+      "automationIdentity",
+      "startedAt",
+    ])
+    .index("by_operation_status", ["operation", "status"]),
+  posServicePrincipalMigrationCandidate: defineTable(
+    posServicePrincipalMigrationCandidateSchema,
+  )
+    .index("by_runId_storeId", ["runId", "storeId"])
+    .index("by_storeId_updatedAt", ["storeId", "updatedAt"]),
+  posServicePrincipalMigrationStoreState: defineTable(
+    posServicePrincipalMigrationStoreStateSchema,
+  )
+    .index("by_storeId", ["storeId"])
+    .index("by_mode_updatedAt", ["mode", "updatedAt"]),
+  posServicePrincipalMigrationTerminalEvidence: defineTable(
+    posServicePrincipalMigrationTerminalEvidenceSchema,
+  )
+    .index("by_storeId_terminalId", ["storeId", "terminalId"])
+    .index("by_storeId_status", ["storeId", "status"])
+    .index("by_terminalId", ["terminalId"]),
   posTerminalRuntimeStatus: defineTable(posTerminalRuntimeStatusSchema)
     .index("by_store_terminal", ["storeId", "terminalId"])
     .index("by_store_reportedAt", ["storeId", "reportedAt"])
