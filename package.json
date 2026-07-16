@@ -24,6 +24,7 @@
     "harness:test": "bun scripts/harness-test.ts",
     "plan-html:check": "bun scripts/validate-plan-html.ts",
     "github:pr-merge": "bun scripts/github-pr-merge.ts",
+    "operational-work:repair": "bun scripts/operational-work-repair.ts",
     "workflow:check": "bun scripts/github-workflows-check.ts",
     "pre-commit:generated-artifacts": "bun scripts/pre-commit-generated-artifacts.ts",
     "pre-push:review": "bun scripts/pre-push-review.ts",

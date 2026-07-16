@@ -333,6 +333,50 @@ describe("OperationsQueueViewContent", () => {
     ).toBeInTheDocument();
   });
 
+  it("offers a path back to all work types from a filtered empty state", async () => {
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+    const onOpenWorkSearchChange = vi.fn();
+
+    render(
+      <OperationsQueueViewContent
+        {...baseProps}
+        activeWorkflow="queue"
+        onOpenWorkSearchChange={onOpenWorkSearchChange}
+        openWorkSearch={{ workType: "catalog_setup" }}
+        workItemSummary={{
+          byType: [
+            {
+              completeness: "complete",
+              count: 1,
+              overflow: false,
+              type: "service_case",
+            },
+          ],
+          completeness: "complete",
+          count: 1,
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByText("No open catalog setup work items"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("No open work items")).not.toBeInTheDocument();
+    expect(
+      screen.getByText("There are no open items for this work type."),
+    ).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: "View all work types" }),
+    );
+
+    expect(onOpenWorkSearchChange).toHaveBeenCalledWith({
+      page: undefined,
+      workType: undefined,
+    });
+  });
+
   it("uses the open work count in the loaded route header", () => {
     render(
       <OperationsQueueViewContent
@@ -461,6 +505,10 @@ describe("OperationsQueueViewContent", () => {
       }),
     ).toHaveTextContent("Catalog setup · 1");
     expect(
+      screen.getByText("1 open catalog setup work item"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("1 open work item")).not.toBeInTheDocument();
+    expect(
       screen.getByText("Assign Catalog Category: Adore Dye"),
     ).toBeInTheDocument();
     expect(
@@ -478,6 +526,71 @@ describe("OperationsQueueViewContent", () => {
       page: undefined,
       workType: undefined,
     });
+  });
+
+  it("uses server-owned totals when selected cards are returned after the cap", async () => {
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+    const workItemSummary = {
+      byType: [
+        {
+          completeness: "complete" as const,
+          count: 101,
+          overflow: true,
+          type: "catalog_taxonomy_setup",
+        },
+        {
+          completeness: "complete" as const,
+          count: 1,
+          overflow: false,
+          type: "service_case",
+        },
+      ],
+      completeness: "complete" as const,
+      count: 102,
+    };
+    const selectedWorkItem = {
+      _id: "service-after-cap" as Id<"operationalWorkItem">,
+      approvalState: "not_required",
+      createdAt: Date.now(),
+      priority: "normal",
+      status: "open",
+      title: "Follow up service intake",
+      type: "service_case",
+    };
+
+    const { rerender } = render(
+      <OperationsQueueViewContent
+        {...baseProps}
+        activeWorkflow="queue"
+        openWorkSearch={{ workType: "service_case" }}
+        workItems={[selectedWorkItem]}
+        workItemSummary={workItemSummary}
+      />,
+    );
+
+    expect(
+      screen.getByText("1 open service case work item"),
+    ).toBeInTheDocument();
+    await user.click(
+      screen.getByRole("combobox", {
+        name: "Filter work queue by work type",
+      }),
+    );
+    expect(
+      screen.getByRole("option", { name: "Catalog setup · 101" }),
+    ).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+
+    rerender(
+      <OperationsQueueViewContent
+        {...baseProps}
+        activeWorkflow="queue"
+        workItems={[selectedWorkItem]}
+        workItemSummary={workItemSummary}
+      />,
+    );
+    expect(screen.getByText("102 open work items")).toBeInTheDocument();
   });
 
   it("shows when the open work queue is capped by the server", () => {
@@ -1320,23 +1433,45 @@ describe("OperationsQueueViewContent", () => {
         {...baseProps}
         activeWorkflow="queue"
         onResolveSyncedSaleInventoryReview={onResolveSyncedSaleInventoryReview}
+        openWorkSearch={{ workType: "synced_sale_inventory_review" }}
         workItems={[
           {
             _id: "work-item-1" as Id<"operationalWorkItem">,
             approvalState: "not_required",
             createdAt: Date.now() - 10 * 60 * 1000,
             details: { ...sharedDetails, receiptNumber: "100001" },
+            logicalGroup: {
+              completeness: "complete",
+              key: "synced_sale_inventory_review:store-1:product-sku-1",
+              memberIds: [
+                "work-item-1" as Id<"operationalWorkItem">,
+                "work-item-2" as Id<"operationalWorkItem">,
+              ],
+              members: [
+                {
+                  _id: "work-item-1" as Id<"operationalWorkItem">,
+                  approvalState: "not_required",
+                  createdAt: Date.now() - 10 * 60 * 1000,
+                  details: { ...sharedDetails, receiptNumber: "100001" },
+                  priority: "high",
+                  status: "open",
+                  title: "Review inventory for ADORE DYE",
+                  type: "synced_sale_inventory_review",
+                },
+                {
+                  _id: "work-item-2" as Id<"operationalWorkItem">,
+                  approvalState: "not_required",
+                  createdAt: Date.now() - 5 * 60 * 1000,
+                  details: { ...sharedDetails, receiptNumber: "100002" },
+                  priority: "normal",
+                  status: "open",
+                  title: "Review inventory for ADORE DYE",
+                  type: "synced_sale_inventory_review",
+                },
+              ],
+              resolutionAvailability: "available",
+            },
             priority: "high",
-            status: "open",
-            title: "Review inventory for ADORE DYE",
-            type: "synced_sale_inventory_review",
-          },
-          {
-            _id: "work-item-2" as Id<"operationalWorkItem">,
-            approvalState: "not_required",
-            createdAt: Date.now() - 5 * 60 * 1000,
-            details: { ...sharedDetails, receiptNumber: "100002" },
-            priority: "normal",
             status: "open",
             title: "Review inventory for ADORE DYE",
             type: "synced_sale_inventory_review",
@@ -1346,7 +1481,9 @@ describe("OperationsQueueViewContent", () => {
     );
 
     expect(screen.getAllByRole("article")).toHaveLength(1);
-    expect(screen.getByText("1 open work item")).toBeInTheDocument();
+    expect(
+      screen.getByText("1 open synced sale inventory work item"),
+    ).toBeInTheDocument();
     expect(
       within(
         screen.getByRole("region", { name: "Work type breakdown" }),
@@ -1376,6 +1513,329 @@ describe("OperationsQueueViewContent", () => {
       expect.objectContaining({ _id: "work-item-1" }),
       expect.objectContaining({ _id: "work-item-2" }),
     ]);
+  });
+
+  it("shows an observed lower bound and disables resolution when source membership is incomplete", () => {
+    render(
+      <OperationsQueueViewContent
+        {...baseProps}
+        activeWorkflow="queue"
+        onResolveSyncedSaleInventoryReview={vi.fn()}
+        openWorkSearch={{ workType: "synced_sale_inventory_review" }}
+        workItemSummary={{
+          byType: [
+            {
+              completeness: "incomplete",
+              count: 1,
+              overflow: false,
+              type: "synced_sale_inventory_review",
+            },
+          ],
+          completeness: "incomplete",
+          count: 1,
+        }}
+        workItems={[
+          {
+            _id: "work-item-incomplete" as Id<"operationalWorkItem">,
+            approvalState: "not_required",
+            createdAt: Date.now(),
+            details: { primaryProductSkuId: "product-sku-1" },
+            logicalGroup: {
+              completeness: "incomplete",
+              key: "synced_sale_inventory_review:store-1:product-sku-1",
+              memberIds: [],
+              members: [],
+              resolutionAvailability: "source_incomplete",
+            },
+            priority: "high",
+            status: "open",
+            title: "Review inventory for ADORE DYE",
+            type: "synced_sale_inventory_review",
+          },
+        ]}
+      />,
+    );
+
+    expect(
+      screen.getByText("1+ open synced sale inventory work item"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByText(
+        "Open Work is still loading the complete inventory review set.",
+      ),
+    ).toHaveLength(1);
+    expect(
+      screen.queryByText("More open work is available"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/Resolve visible work to continue/),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Mark reviewed" })).toBeDisabled();
+  });
+
+  it("clears a conflict after changed membership or a complete explicit-refresh response", async () => {
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+    const groupKey =
+      "synced_sale_inventory_review:store-1:product-sku-1";
+    const makeWorkItem = (id: string) => ({
+      _id: id as Id<"operationalWorkItem">,
+      approvalState: "not_required",
+      createdAt: Date.now(),
+      details: { primaryProductSkuId: "product-sku-1" },
+      priority: "high",
+      status: "open",
+      title: "Review inventory for ADORE DYE",
+      type: "synced_sale_inventory_review",
+    });
+    const makeQueueSnapshot = (memberIds: string[]) => {
+      const representative = makeWorkItem(memberIds[0]);
+
+      return {
+        approvalRequests: [],
+        workItemSummary: {
+          byType: [
+            {
+              completeness: "complete" as const,
+              count: 1,
+              overflow: false,
+              type: "synced_sale_inventory_review",
+            },
+          ],
+          completeness: "complete" as const,
+          count: 1,
+        },
+        workItems: [
+          {
+            ...representative,
+            logicalGroup: {
+              completeness: "complete" as const,
+              key: groupKey,
+              memberIds: memberIds as Id<"operationalWorkItem">[],
+              members: memberIds.map(makeWorkItem),
+              resolutionAvailability: "available" as const,
+            },
+          },
+        ],
+      };
+    };
+    let currentQueue = makeQueueSnapshot(["work-item-1"]);
+    const resolveGroup = vi.fn().mockResolvedValue({
+      error: {
+        code: "conflict",
+        message:
+          "This work changed. Review the refreshed group before marking it reviewed.",
+      },
+      kind: "user_error",
+    });
+
+    mockedHooks.useQuery.mockReset();
+    mockedHooks.useQuery.mockImplementation((functionReference) =>
+      getFunctionName(functionReference as never) ===
+      "operations/operationalWorkItems:getQueueSnapshot"
+        ? currentQueue
+        : undefined,
+    );
+    mockedHooks.useMutation.mockReset();
+    mockedHooks.useMutation.mockImplementation((functionReference) =>
+      getFunctionName(functionReference as never) ===
+      "operations/openWorkInventoryReviews:resolveSyncedSaleInventoryReviewGroup"
+        ? resolveGroup
+        : vi.fn(),
+    );
+
+    const view = render(
+      <OperationsQueueView
+        activeWorkflow="queue"
+        openWorkSearch={{ workType: "synced_sale_inventory_review" }}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Mark reviewed" }));
+
+    await waitFor(() => expect(resolveGroup).toHaveBeenCalledTimes(1));
+
+    const conflictNotice = await screen.findByText(
+      "This work changed. Review the refreshed group before marking it reviewed.",
+    );
+    const inventoryReviewTitle = screen.getByRole("link", {
+      name: "Adore Dye",
+    }).parentElement;
+
+    expect(conflictNotice).toBeInTheDocument();
+    expect(conflictNotice.parentElement).toBe(
+      inventoryReviewTitle?.parentElement,
+    );
+    expect(conflictNotice.parentElement).toHaveClass("flex-col");
+    expect(screen.getByRole("button", { name: "Mark reviewed" })).toBeDisabled();
+
+    const refreshButton = screen.getByRole("button", { name: "Refresh" });
+    const urgencyBadge = screen.getByText("High");
+
+    expect(refreshButton.parentElement).toBe(urgencyBadge.parentElement);
+    expect(refreshButton.querySelector("svg.lucide-refresh-cw")).toBeInTheDocument();
+    expect(
+      refreshButton.compareDocumentPosition(urgencyBadge) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    currentQueue = makeQueueSnapshot(["work-item-1", "work-item-2"]);
+    view.rerender(
+      <OperationsQueueView
+        activeWorkflow="queue"
+        openWorkSearch={{ workType: "synced_sale_inventory_review" }}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Mark 2 reviewed" }),
+      ).toBeEnabled(),
+    );
+    expect(
+      screen.queryByText(
+        "This work changed. Review the refreshed group before marking it reviewed.",
+      ),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Mark 2 reviewed" }));
+    await waitFor(() => expect(resolveGroup).toHaveBeenCalledTimes(2));
+    expect(
+      await screen.findByText(
+        "This work changed. Review the refreshed group before marking it reviewed.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Mark 2 reviewed" }),
+    ).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: "Refresh" }));
+    expect(mockedHooks.useQuery).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ refreshNonce: 1 }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Mark 2 reviewed" }),
+      ).toBeEnabled(),
+    );
+    expect(
+      screen.queryByText(
+        "This work changed. Review the refreshed group before marking it reviewed.",
+      ),
+    ).not.toBeInTheDocument();
+  });
+
+  it("does not disable a group when changed complete membership arrives before the conflict response", async () => {
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+    const groupKey =
+      "synced_sale_inventory_review:store-1:product-sku-1";
+    const makeWorkItem = (id: string) => ({
+      _id: id as Id<"operationalWorkItem">,
+      approvalState: "not_required",
+      createdAt: Date.now(),
+      details: { primaryProductSkuId: "product-sku-1" },
+      priority: "high",
+      status: "open",
+      title: "Review inventory for ADORE DYE",
+      type: "synced_sale_inventory_review",
+    });
+    const makeQueueSnapshot = (memberIds: string[]) => {
+      const representative = makeWorkItem(memberIds[0]);
+
+      return {
+        approvalRequests: [],
+        workItemSummary: {
+          byType: [
+            {
+              completeness: "complete" as const,
+              count: 1,
+              overflow: false,
+              type: "synced_sale_inventory_review",
+            },
+          ],
+          completeness: "complete" as const,
+          count: 1,
+        },
+        workItems: [
+          {
+            ...representative,
+            logicalGroup: {
+              completeness: "complete" as const,
+              key: groupKey,
+              memberIds: memberIds as Id<"operationalWorkItem">[],
+              members: memberIds.map(makeWorkItem),
+              oldestActionableAt: representative.createdAt,
+              resolutionAvailability: "available" as const,
+            },
+          },
+        ],
+      };
+    };
+    let currentQueue = makeQueueSnapshot(["work-item-1"]);
+    let releaseConflict: ((value: unknown) => void) | undefined;
+    const resolveGroup = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          releaseConflict = resolve;
+        }),
+    );
+
+    mockedHooks.useQuery.mockReset();
+    mockedHooks.useQuery.mockImplementation((functionReference) =>
+      getFunctionName(functionReference as never) ===
+      "operations/operationalWorkItems:getQueueSnapshot"
+        ? currentQueue
+        : undefined,
+    );
+    mockedHooks.useMutation.mockReset();
+    mockedHooks.useMutation.mockImplementation((functionReference) =>
+      getFunctionName(functionReference as never) ===
+      "operations/openWorkInventoryReviews:resolveSyncedSaleInventoryReviewGroup"
+        ? resolveGroup
+        : vi.fn(),
+    );
+
+    const view = render(
+      <OperationsQueueView
+        activeWorkflow="queue"
+        openWorkSearch={{ workType: "synced_sale_inventory_review" }}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Mark reviewed" }));
+    await waitFor(() => expect(resolveGroup).toHaveBeenCalledTimes(1));
+
+    currentQueue = makeQueueSnapshot(["work-item-1", "work-item-2"]);
+    view.rerender(
+      <OperationsQueueView
+        activeWorkflow="queue"
+        openWorkSearch={{ workType: "synced_sale_inventory_review" }}
+      />,
+    );
+    releaseConflict?.({
+      error: {
+        code: "conflict",
+        message:
+          "This work changed. Review the refreshed group before marking it reviewed.",
+      },
+      kind: "user_error",
+    });
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Mark 2 reviewed" }),
+      ).toBeEnabled(),
+    );
+    expect(
+      screen.queryByText(
+        "This work changed. Review the refreshed group before marking it reviewed.",
+      ),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Refresh" }),
+    ).not.toBeInTheDocument();
   });
 
   it("renders synced sale resolution when the affected SKU is available", () => {

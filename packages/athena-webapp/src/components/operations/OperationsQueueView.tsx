@@ -17,6 +17,7 @@ import {
   PackageCheck,
   PackageSearch,
   ReceiptText,
+  RefreshCw,
   Scissors,
   ShoppingCart,
   type LucideIcon,
@@ -136,6 +137,18 @@ type QueueWorkItem = {
     vendorName?: string | null;
   } | null;
   dueAt?: number | null;
+  logicalGroup?: {
+    completeness: "complete" | "incomplete";
+    key: string;
+    memberIds: Id<"operationalWorkItem">[];
+    members: QueueWorkItem[];
+    oldestActionableAt?: number;
+    resolutionAvailability:
+      | "available"
+      | "budget_exceeded"
+      | "remediation_in_progress"
+      | "source_incomplete";
+  };
   priority: string;
   sourceIdentity?: string;
   startedAt?: number | null;
@@ -144,16 +157,42 @@ type QueueWorkItem = {
   type: string;
 };
 
+const LOGICAL_GROUP_CHANGED_MESSAGE =
+  "This work changed. Review the refreshed group before marking it reviewed.";
+
+function logicalGroupObservationFingerprint(
+  group: NonNullable<QueueWorkItem["logicalGroup"]>,
+) {
+  return [
+    group.key,
+    group.completeness,
+    group.resolutionAvailability,
+    [...group.memberIds].map(String).sort().join(","),
+  ].join("|");
+}
+
 type QueueWorkItemMixEntry = {
+  completeness: "complete" | "incomplete";
   count: number;
   label: string;
   percent: number;
   type: string;
 };
 
-type QueueWorkItemDisplayGroup = {
-  items: QueueWorkItem[];
-  key: string;
+type QueueWorkItemSummary = {
+  byType: Array<{
+    completeness: "complete" | "incomplete";
+    count: number;
+    overflow: boolean;
+    type: string;
+  }>;
+  completeness: "complete" | "incomplete";
+  count: number;
+};
+
+type LogicalGroupConflictObservation = {
+  fingerprint: string;
+  refreshNonce: number;
 };
 
 type QueueOverflow = {
@@ -251,8 +290,26 @@ function getDefaultWorkflow(args: {
   return "stock";
 }
 
-function formatOpenWorkHeaderTitle(count: number) {
-  return `${count.toLocaleString()} open work ${count === 1 ? "item" : "items"}`;
+function formatOpenWorkHeaderTitle(
+  count: number,
+  workType?: string,
+  isLowerBound = false,
+) {
+  const displayCount = `${count.toLocaleString()}${isLowerBound ? "+" : ""}`;
+  if (!workType) {
+    return `${displayCount} open work ${count === 1 ? "item" : "items"}`;
+  }
+
+  const sentenceCaseWorkTypeLabel = getSentenceCaseWorkTypeLabel(workType);
+
+  return `${displayCount} open ${sentenceCaseWorkTypeLabel} work ${count === 1 ? "item" : "items"}`;
+}
+
+function getSentenceCaseWorkTypeLabel(workType: string) {
+  const workTypeLabel = getQueueWorkItemTypeLabel(workType);
+  return /^[A-Z]{2,}\b/.test(workTypeLabel)
+    ? workTypeLabel
+    : workTypeLabel.toLocaleLowerCase();
 }
 
 function formatApprovalsHeaderTitle(count: number) {
@@ -350,7 +407,26 @@ function getQueueWorkItemTypeLabel(type: string) {
 
 function getOpenWorkMixEntries(
   workItems: QueueWorkItem[],
+  summary?: QueueWorkItemSummary | null,
 ): QueueWorkItemMixEntry[] {
+  if (summary) {
+    return summary.byType
+      .filter((entry) => entry.count > 0)
+      .map((entry) => ({
+        completeness: entry.completeness,
+        count: entry.count,
+        label: getQueueWorkItemTypeLabel(entry.type),
+        percent:
+          summary.count > 0
+            ? Math.round((entry.count / summary.count) * 100)
+            : 0,
+        type: entry.type,
+      }))
+      .sort((left, right) => {
+        if (right.count !== left.count) return right.count - left.count;
+        return left.label.localeCompare(right.label);
+      });
+  }
   const displayGroups = groupOpenWorkItems(workItems);
   const countsByType = new Map<string, number>();
 
@@ -361,6 +437,7 @@ function getOpenWorkMixEntries(
 
   return Array.from(countsByType.entries())
     .map(([type, count]) => ({
+      completeness: "complete" as const,
       count,
       label: getQueueWorkItemTypeLabel(type),
       percent: Math.round((count / displayGroups.length) * 100),
@@ -374,36 +451,24 @@ function getOpenWorkMixEntries(
 }
 
 function groupOpenWorkItems(workItems: QueueWorkItem[]) {
-  const groups: QueueWorkItemDisplayGroup[] = [];
-  const syncedSaleGroupsBySkuId = new Map<string, QueueWorkItemDisplayGroup>();
-
-  for (const item of workItems) {
-    const productSkuId = getQueueWorkItemStockAdjustmentSkuId(item);
-
-    if (item.type !== "synced_sale_inventory_review" || !productSkuId) {
-      groups.push({ items: [item], key: item._id });
-      continue;
-    }
-
-    const existingGroup = syncedSaleGroupsBySkuId.get(productSkuId);
-    if (existingGroup) {
-      existingGroup.items.push(item);
-      continue;
-    }
-
-    const group = {
-      items: [item],
-      key: `synced-sale-inventory-${productSkuId}`,
-    };
-    syncedSaleGroupsBySkuId.set(productSkuId, group);
-    groups.push(group);
-  }
-
-  return groups;
+  return workItems.map((item) => ({
+    items: item.logicalGroup
+      ? [
+          item,
+          ...item.logicalGroup.members.filter(
+            (member) => member._id !== item._id,
+          ),
+        ]
+      : [item],
+    key: item.logicalGroup?.key ?? item._id,
+  }));
 }
 
-function formatOpenWorkMixCount(count: number) {
-  return `${count.toLocaleString()} ${count === 1 ? "item" : "items"}`;
+function formatOpenWorkMixCount(
+  count: number,
+  completeness: "complete" | "incomplete" = "complete",
+) {
+  return `${count.toLocaleString()}${completeness === "incomplete" ? "+" : ""} ${count === 1 ? "item" : "items"}`;
 }
 
 function hasOpenWorkOverflow(overflow?: QueueOverflow | null) {
@@ -853,8 +918,14 @@ function QueueWorkItemActionSlot({
   return null;
 }
 
-function OpenWorkMixSummary({ workItems }: { workItems: QueueWorkItem[] }) {
-  const mixEntries = getOpenWorkMixEntries(workItems);
+function OpenWorkMixSummary({
+  summary,
+  workItems,
+}: {
+  summary?: QueueWorkItemSummary | null;
+  workItems: QueueWorkItem[];
+}) {
+  const mixEntries = getOpenWorkMixEntries(workItems, summary);
   const headline =
     mixEntries.length === 1
       ? `All ${mixEntries[0].label}`
@@ -885,11 +956,11 @@ function OpenWorkMixSummary({ workItems }: { workItems: QueueWorkItem[] }) {
                 {entry.label}
               </span>
               <span className="shrink-0 tabular-nums text-muted-foreground">
-                {formatOpenWorkMixCount(entry.count)}
+                {formatOpenWorkMixCount(entry.count, entry.completeness)}
               </span>
             </div>
             <div
-              aria-label={`${entry.label}: ${formatOpenWorkMixCount(entry.count)}, ${entry.percent}%`}
+              aria-label={`${entry.label}: ${formatOpenWorkMixCount(entry.count, entry.completeness)}, ${entry.percent}%`}
               className="h-1.5 overflow-hidden rounded-full bg-action-workflow-soft"
               role="img"
             >
@@ -908,13 +979,15 @@ function OpenWorkMixSummary({ workItems }: { workItems: QueueWorkItem[] }) {
 function OpenWorkTypeFilter({
   onWorkTypeChange,
   selectedWorkType,
+  summary,
   workItems,
 }: {
   onWorkTypeChange: (workType?: string) => void;
   selectedWorkType?: string;
+  summary?: QueueWorkItemSummary | null;
   workItems: QueueWorkItem[];
 }) {
-  const mixEntries = getOpenWorkMixEntries(workItems);
+  const mixEntries = getOpenWorkMixEntries(workItems, summary);
 
   return (
     <div className="w-full sm:w-56">
@@ -942,6 +1015,7 @@ function OpenWorkTypeFilter({
           {mixEntries.map((entry) => (
             <SelectItem key={entry.type} value={entry.type}>
               {entry.label} · {entry.count.toLocaleString()}
+              {entry.completeness === "incomplete" ? "+" : ""}
             </SelectItem>
           ))}
         </SelectContent>
@@ -1292,16 +1366,20 @@ function QueueWorkItemCard({
 }
 
 function SyncedSaleInventoryReviewGroupCard({
+  conflictMessage,
   isResolutionDisabled,
   isResolving,
   items,
+  onRefresh,
   onResolve,
   orgUrlSlug,
   storeUrlSlug,
 }: {
+  conflictMessage?: string;
   isResolutionDisabled?: boolean;
   isResolving?: boolean;
   items: QueueWorkItem[];
+  onRefresh?: () => void;
   onResolve?: (items: QueueWorkItem[]) => void;
   orgUrlSlug?: string;
   storeUrlSlug?: string;
@@ -1314,7 +1392,9 @@ function SyncedSaleInventoryReviewGroupCard({
   const contextPresentation = getQueueWorkItemContextPresentation(
     representative.type,
   );
-  const oldestCreatedAt = Math.min(...items.map((item) => item.createdAt));
+  const oldestCreatedAt =
+    representative.logicalGroup?.oldestActionableAt ??
+    Math.min(...items.map((item) => item.createdAt));
   const collapsedMetadataEntries: OperationReviewMetadataEntry[] = [
     {
       label: "Affected sales",
@@ -1332,6 +1412,17 @@ function SyncedSaleInventoryReviewGroupCard({
   const highestPriority = items.some((item) => item.priority === "high")
     ? "High"
     : "Normal";
+  const resolutionNotice = conflictMessage
+    ? conflictMessage
+    : representative.logicalGroup?.resolutionAvailability === "budget_exceeded"
+      ? "This inventory review group needs support to complete safely."
+      : representative.logicalGroup?.resolutionAvailability ===
+          "remediation_in_progress"
+        ? "Support is completing this inventory review group."
+        : representative.logicalGroup?.resolutionAvailability ===
+            "source_incomplete"
+          ? "Open Work is still loading the complete inventory review set."
+          : null;
 
   return (
     <OperationReviewItemCard
@@ -1344,12 +1435,25 @@ function SyncedSaleInventoryReviewGroupCard({
         />
       }
       badgeSlot={
-        <Badge
-          className="border-border bg-surface text-muted-foreground shadow-sm"
-          variant="outline"
-        >
-          {highestPriority}
-        </Badge>
+        <>
+          {conflictMessage && onRefresh ? (
+            <Button
+              onClick={onRefresh}
+              size="sm"
+              type="button"
+              variant="utility"
+            >
+              <RefreshCw aria-hidden="true" />
+              Refresh
+            </Button>
+          ) : null}
+          <Badge
+            className="border-border bg-surface text-muted-foreground shadow-sm"
+            variant="outline"
+          >
+            {highestPriority}
+          </Badge>
+        </>
       }
       className={contextPresentation.cardClassName}
       collapsedMetadataEntries={collapsedMetadataEntries}
@@ -1361,6 +1465,7 @@ function SyncedSaleInventoryReviewGroupCard({
       }
       contextLabel="Synced sale inventory"
       contextLabelClassName={contextPresentation.contextLabelClassName}
+      description={resolutionNotice}
       detailsSlot={
         <div>
           <div className="flex items-baseline justify-between gap-layout-md">
@@ -1419,6 +1524,7 @@ function SyncedSaleInventoryReviewGroupCard({
         ) : null
       }
       itemId={`synced-sale-inventory-${productSkuId ?? representative._id}`}
+      stackDescription={Boolean(conflictMessage)}
       title={
         <>
           Review inventory for{" "}
@@ -1829,6 +1935,7 @@ type OperationsQueueViewContentProps = {
   approvalDecisionUnlocked?: boolean;
   approvalRequests: QueueApprovalRequest[];
   canLoadMoreInventoryItems?: boolean;
+  conflictedLogicalGroupKeys?: ReadonlySet<string>;
   cycleCountDraft?: CycleCountDraftState | null;
   cycleCountDraftSummary?: CycleCountDraftSummary | null;
   hasFullAdminAccess: boolean;
@@ -1852,6 +1959,7 @@ type OperationsQueueViewContentProps = {
   onLoadMoreInventoryItems?: () => void;
   onRequestApprovalDecisionUnlock?: () => void;
   onOpenWorkSearchChange?: (patch: OpenWorkSearchPatch) => void;
+  onRefreshOpenWork?: () => void;
   onResolveSyncedSaleInventoryReview?: (items: QueueWorkItem[]) => void;
   onDiscardCycleCountDraft?: () => Promise<NormalizedCommandResult<unknown>>;
   onRefreshCycleCountDraftLineBaseline?: (args: {
@@ -1870,6 +1978,7 @@ type OperationsQueueViewContentProps = {
   onStockAdjustmentSearchChange?: (patch: StockAdjustmentSearchPatch) => void;
   orgUrlSlug?: string;
   queueOverflow?: QueueOverflow | null;
+  workItemSummary?: QueueWorkItemSummary | null;
   showBackButton?: boolean;
   storeId?: Id<"store">;
   storeUrlSlug?: string;
@@ -1885,6 +1994,7 @@ export function OperationsQueueViewContent({
   approvalDecisionUnlocked = true,
   approvalRequests,
   canLoadMoreInventoryItems = false,
+  conflictedLogicalGroupKeys,
   cycleCountDraft,
   cycleCountDraftSummary,
   hasFullAdminAccess,
@@ -1903,6 +2013,7 @@ export function OperationsQueueViewContent({
   onLockApprovalDecisions,
   onLoadMoreInventoryItems,
   onOpenWorkSearchChange,
+  onRefreshOpenWork,
   onRequestApprovalDecisionUnlock,
   onResolveSyncedSaleInventoryReview,
   onRefreshCycleCountDraftLineBaseline,
@@ -1918,6 +2029,7 @@ export function OperationsQueueViewContent({
   openWorkSearch,
   stockAdjustmentSearch,
   workItems,
+  workItemSummary,
 }: OperationsQueueViewContentProps) {
   const requestedOpenWorkPage = openWorkSearch?.page ?? 1;
   const selectedOpenWorkType = openWorkSearch?.workType;
@@ -1946,15 +2058,32 @@ export function OperationsQueueViewContent({
     openWorkPageStart,
     openWorkPageStart + OPEN_WORK_ITEMS_PER_PAGE,
   );
-  const openWorkCount = displayGroups.length;
+  const selectedWorkTypeSummary = selectedOpenWorkType
+    ? workItemSummary?.byType.find(
+        (entry) => entry.type === selectedOpenWorkType,
+      )
+    : undefined;
+  const effectiveWorkItemSummary = selectedOpenWorkType
+    ? selectedWorkTypeSummary
+    : workItemSummary;
+  const openWorkCount = effectiveWorkItemSummary?.count ?? displayGroups.length;
+  const isOpenWorkCountLowerBound = effectiveWorkItemSummary
+    ? effectiveWorkItemSummary.completeness === "incomplete"
+    : filteredWorkItems.some(
+        (item) => item.logicalGroup?.completeness === "incomplete",
+      );
   const openWorkHeaderTitle = isLoadingQueue
     ? "Open work"
-    : formatOpenWorkHeaderTitle(openWorkCount);
+    : formatOpenWorkHeaderTitle(
+        openWorkCount,
+        selectedOpenWorkType,
+        isOpenWorkCountLowerBound,
+      );
   const openWorkHeaderDescription =
     "Service intake and stock review work that still needs progress or completion.";
   const openWorkHeaderContentKey = isLoadingQueue
     ? "open-work-loading"
-    : `open-work-${openWorkCount}`;
+    : `open-work-${selectedOpenWorkType ?? "all"}-${openWorkCount}`;
   const hasRenderedOpenWorkLoadingHeaderRef = useRef(false);
 
   if (resolvedWorkflow === "queue" && isLoadingQueue) {
@@ -1980,8 +2109,21 @@ export function OperationsQueueViewContent({
 
   const shouldAnimateApprovalsHeader =
     isLoadingQueue || hasRenderedApprovalsLoadingHeaderRef.current;
-  const openWorkOverflow = hasOpenWorkOverflow(queueOverflow);
+  const openWorkOverflow = selectedOpenWorkType
+    ? (selectedWorkTypeSummary?.overflow ?? hasOpenWorkOverflow(queueOverflow))
+    : (workItemSummary?.byType.some((entry) => entry.overflow) ??
+      hasOpenWorkOverflow(queueOverflow));
   const approvalsOverflow = Boolean(queueOverflow?.approvalRequests);
+  const totalOpenWorkCount = workItemSummary?.count ?? workItems.length;
+  const showOpenWorkEmptyState =
+    workItems.length === 0 &&
+    (Boolean(selectedOpenWorkType) || totalOpenWorkCount === 0);
+  const openWorkEmptyTitle = selectedOpenWorkType
+    ? `No open ${getSentenceCaseWorkTypeLabel(selectedOpenWorkType)} work items`
+    : "No open work items";
+  const openWorkEmptyDescription = selectedOpenWorkType
+    ? "There are no open items for this work type."
+    : "New service intakes and approval-driven stock reviews will appear here";
 
   useEffect(() => {
     setOpenWorkPage(requestedOpenWorkPage);
@@ -2081,16 +2223,25 @@ export function OperationsQueueViewContent({
               showBackButton
             />
 
-            {isLoadingQueue ? null : workItems.length === 0 ? (
+            {isLoadingQueue ? null : showOpenWorkEmptyState ? (
               <div className="flex min-h-[34rem] items-center justify-center">
                 <div className="max-w-md text-center">
                   <p className="font-display text-2xl font-medium tracking-tight text-foreground">
-                    No open work items
+                    {openWorkEmptyTitle}
                   </p>
                   <p className="mt-layout-sm text-sm leading-6 text-muted-foreground">
-                    New service intakes and approval-driven stock reviews will
-                    appear here
+                    {openWorkEmptyDescription}
                   </p>
+                  {selectedOpenWorkType ? (
+                    <Button
+                      className="mt-layout-md transition-[color,background-color,border-color,transform] duration-150 active:scale-[0.98]"
+                      onClick={() => handleOpenWorkTypeChange(undefined)}
+                      type="button"
+                      variant="utility"
+                    >
+                      View all work types
+                    </Button>
+                  ) : null}
                 </div>
               </div>
             ) : (
@@ -2103,7 +2254,10 @@ export function OperationsQueueViewContent({
                       remaining items.
                     </CappedQueueNotice>
                   ) : null}
-                  <OpenWorkMixSummary workItems={workItems} />
+                  <OpenWorkMixSummary
+                    summary={workItemSummary}
+                    workItems={workItems}
+                  />
                 </PageWorkspaceRail>
 
                 <PageWorkspaceMain
@@ -2123,6 +2277,7 @@ export function OperationsQueueViewContent({
                       <OpenWorkTypeFilter
                         onWorkTypeChange={handleOpenWorkTypeChange}
                         selectedWorkType={selectedOpenWorkType}
+                        summary={workItemSummary}
                         workItems={workItems}
                       />
                     </div>
@@ -2134,12 +2289,26 @@ export function OperationsQueueViewContent({
                         const representative = group.items[0];
                         const productSkuId =
                           getQueueWorkItemStockAdjustmentSkuId(representative);
+                        const logicalGroupConflict =
+                          representative.logicalGroup !== undefined &&
+                          conflictedLogicalGroupKeys?.has(
+                            representative.logicalGroup.key,
+                          );
 
                         return representative.type ===
                           "synced_sale_inventory_review" && productSkuId ? (
                           <SyncedSaleInventoryReviewGroupCard
+                            conflictMessage={
+                              logicalGroupConflict
+                                ? LOGICAL_GROUP_CHANGED_MESSAGE
+                                : undefined
+                            }
                             isResolutionDisabled={Boolean(
-                              isResolvingSyncedSaleInventoryReviewSkuId,
+                              isResolvingSyncedSaleInventoryReviewSkuId ||
+                                logicalGroupConflict ||
+                                (representative.logicalGroup !== undefined &&
+                                  representative.logicalGroup
+                                    .resolutionAvailability !== "available"),
                             )}
                             isResolving={
                               isResolvingSyncedSaleInventoryReviewSkuId ===
@@ -2147,6 +2316,7 @@ export function OperationsQueueViewContent({
                             }
                             items={group.items}
                             key={group.key}
+                            onRefresh={onRefreshOpenWork}
                             onResolve={onResolveSyncedSaleInventoryReview}
                             orgUrlSlug={orgUrlSlug}
                             storeUrlSlug={storeUrlSlug}
@@ -3303,17 +3473,65 @@ export function OperationsQueueView({
   const [isApprovalUnlockOpen, setIsApprovalUnlockOpen] = useState(false);
   const [approvalDecisionUnlock, setApprovalDecisionUnlock] =
     useState<ApprovalDecisionUnlock | null>(null);
+  const [conflictedLogicalGroups, setConflictedLogicalGroups] = useState<
+    Map<string, LogicalGroupConflictObservation>
+  >(() => new Map());
+  const [openWorkRefreshNonce, setOpenWorkRefreshNonce] = useState(0);
 
   const queue = useQuery(
     operationsApi.operationalWorkItems.getQueueSnapshot,
-    canQueryProtectedData ? { storeId: activeStore!._id } : "skip",
+    canQueryProtectedData
+      ? {
+          storeId: activeStore!._id,
+          ...(openWorkSearch?.workType
+            ? { workType: openWorkSearch.workType }
+            : {}),
+          ...(openWorkRefreshNonce > 0
+            ? { refreshNonce: openWorkRefreshNonce }
+            : {}),
+        }
+      : "skip",
   ) as
     | {
         approvalRequests: QueueApprovalRequest[];
         overflow?: QueueOverflow;
+        workItemSummary?: QueueWorkItemSummary;
         workItems: QueueWorkItem[];
       }
     | undefined;
+  const conflictedLogicalGroupKeys = useMemo(
+    () => new Set(conflictedLogicalGroups.keys()),
+    [conflictedLogicalGroups],
+  );
+  const latestQueueWorkItemsRef = useRef(queue?.workItems ?? []);
+  latestQueueWorkItemsRef.current = queue?.workItems ?? [];
+
+  useEffect(() => {
+    if (!queue) return;
+
+    setConflictedLogicalGroups((current) => {
+      const next = new Map(current);
+      let changed = false;
+
+      for (const [groupKey, observation] of current) {
+        const refreshedGroup = queue.workItems.find(
+          (item) => item.logicalGroup?.key === groupKey,
+        )?.logicalGroup;
+
+        if (
+          refreshedGroup?.completeness === "complete" &&
+          (logicalGroupObservationFingerprint(refreshedGroup) !==
+            observation.fingerprint ||
+            openWorkRefreshNonce > observation.refreshNonce)
+        ) {
+          next.delete(groupKey);
+          changed = true;
+        }
+      }
+
+      return changed ? next : current;
+    });
+  }, [openWorkRefreshNonce, queue]);
   const shouldLoadStockWorkspace =
     canQueryProtectedData &&
     Boolean(activeStore?._id) &&
@@ -3439,7 +3657,11 @@ export function OperationsQueueView({
     operationsApi.approvalRequests.decideApprovalRequest,
   );
   const resolveSyncedSaleInventoryReview = useMutation(
-    operationsApi.openWorkInventoryReviews.resolveSyncedSaleInventoryReview,
+    (
+      operationsApi.openWorkInventoryReviews as unknown as {
+        resolveSyncedSaleInventoryReviewGroup: Parameters<typeof useMutation>[0];
+      }
+    ).resolveSyncedSaleInventoryReviewGroup,
   );
   const resolveRegisterSessionSyncReview = useMutation(
     api.cashControls.deposits.resolveRegisterSessionSyncReview,
@@ -3807,42 +4029,57 @@ export function OperationsQueueView({
     }
 
     const productSkuId = getQueueWorkItemStockAdjustmentSkuId(items[0]);
-    if (!productSkuId) return;
+    const logicalGroup = items[0].logicalGroup;
+    if (
+      !productSkuId ||
+      !logicalGroup ||
+      logicalGroup.completeness !== "complete" ||
+      logicalGroup.resolutionAvailability !== "available"
+    ) {
+      return;
+    }
 
     setResolvingSyncedSaleInventoryReviewSkuId(productSkuId);
 
     try {
-      for (const item of items) {
-        const result = await runCommand(() =>
-          resolveSyncedSaleInventoryReview({
-            localRegisterSessionId: getQueueWorkItemStringDetail(
-              item,
-              "localRegisterSessionId",
-            ),
-            localTransactionId: getQueueWorkItemStringDetail(
-              item,
-              "localTransactionId",
-            ),
-            outcome: "completed",
-            reason: "Inventory review handled from Open Work.",
-            receiptNumber: getQueueWorkItemStringDetail(item, "receiptNumber"),
-            registerSessionId: getQueueWorkItemStringDetail(
-              item,
-              "registerSessionId",
-            ) as Id<"registerSession"> | undefined,
-            sourceId: getQueueWorkItemStringDetail(item, "sourceId") as
-              Id<"posTransaction"> | undefined,
-            storeId: activeStore._id,
-            terminalId: getQueueWorkItemStringDetail(item, "terminalId") as
-              Id<"posTerminal"> | undefined,
-            workItemId: item._id,
-          }),
-        );
+      const result = await runCommand(() =>
+        resolveSyncedSaleInventoryReview({
+          expectedMemberIds: logicalGroup.memberIds,
+          groupKey: logicalGroup.key,
+          outcome: "completed",
+          reason: "Inventory review handled from Open Work.",
+          storeId: activeStore._id,
+        }),
+      );
 
-        if (result.kind !== "ok") {
-          presentCommandToast(result);
-          return;
+      if (result.kind !== "ok") {
+        if (
+          result.kind === "user_error" &&
+          result.error.code === "conflict" &&
+          result.error.message === LOGICAL_GROUP_CHANGED_MESSAGE
+        ) {
+          setConflictedLogicalGroups((current) => {
+            const refreshedGroup = latestQueueWorkItemsRef.current.find(
+              (item) => item.logicalGroup?.key === logicalGroup.key,
+            )?.logicalGroup;
+            if (
+              refreshedGroup?.completeness === "complete" &&
+              logicalGroupObservationFingerprint(refreshedGroup) !==
+                logicalGroupObservationFingerprint(logicalGroup)
+            ) {
+              return current;
+            }
+
+            const next = new Map(current);
+            next.set(logicalGroup.key, {
+              fingerprint: logicalGroupObservationFingerprint(logicalGroup),
+              refreshNonce: openWorkRefreshNonce,
+            });
+            return next;
+          });
         }
+        presentCommandToast(result);
+        return;
       }
 
       toast.success(
@@ -3915,6 +4152,7 @@ export function OperationsQueueView({
         approvalDecisionUnlocked={Boolean(activeApprovalDecisionUnlock)}
         approvalRequests={queue?.approvalRequests ?? []}
         canLoadMoreInventoryItems={canLoadMoreInventoryItems}
+        conflictedLogicalGroupKeys={conflictedLogicalGroupKeys}
         cycleCountDraft={cycleCountDraft}
         cycleCountDraftSummary={activeCycleCountDraftSummary ?? null}
         hasFullAdminAccess={canAccessSurface}
@@ -3936,6 +4174,9 @@ export function OperationsQueueView({
         onLoadMoreInventoryItems={() => inventorySnapshotPage.loadMore(100)}
         onLockApprovalDecisions={() => setApprovalDecisionUnlock(null)}
         onOpenWorkSearchChange={onOpenWorkSearchChange}
+        onRefreshOpenWork={() =>
+          setOpenWorkRefreshNonce((current) => current + 1)
+        }
         onRefreshCycleCountDraftLineBaseline={
           handleRefreshCycleCountDraftLineBaseline
         }
@@ -3956,6 +4197,7 @@ export function OperationsQueueView({
         openWorkSearch={openWorkSearch}
         stockAdjustmentSearch={stockAdjustmentSearch}
         workItems={queue?.workItems ?? []}
+        workItemSummary={queue?.workItemSummary ?? null}
       />
       <StaffAuthenticationDialog
         copy={{

@@ -20,10 +20,16 @@ import {
 } from "../lib/athenaUserAuth";
 import { requireSharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
 import { buildPaymentTotals, transactionCashDelta } from "./paymentTotals";
+import {
+  projectLogicalOperationalWork,
+  type LogicalOperationalWorkGroup,
+  type LogicalOperationalWorkProjection,
+} from "./logicalOperationalWork";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_OPERATIONS_QUERY_LIMIT = 200;
 const MAX_OPERATIONS_LOOKAHEAD_LIMIT = MAX_OPERATIONS_QUERY_LIMIT + 1;
+const MAX_ACTIVE_REPAIR_QUERY_LIMIT = 200;
 const COMPACT_OPERATIONS_TIMELINE_LIMIT = 5;
 const COMPACT_SCHEDULED_RUN_SUMMARY_LIMIT = 3;
 const FULL_SCHEDULED_RUN_SUMMARY_LIMIT = 8;
@@ -592,7 +598,8 @@ async function listOpenQueueSnapshot(
     storeId: Id<"store">;
   },
 ) {
-  const [workItemBatches, pendingApprovalRequests] = await Promise.all([
+  const [workItemBatches, pendingApprovalRequests, activeRepairPages] =
+    await Promise.all([
     Promise.all(
       OPEN_WORK_ITEM_STATUSES.map((status) =>
         ctx.db
@@ -604,19 +611,43 @@ async function listOpenQueueSnapshot(
       ),
     ),
     listPendingApprovalRequestsSnapshot(ctx, args),
+    Promise.all(
+      (["pending", "running", "paused"] as const).map((status) =>
+        ctx.db
+          .query("oversizedOperationalWorkRepair")
+          .withIndex("by_storeId_status", (q) =>
+            q.eq("storeId", args.storeId).eq("status", status),
+          )
+          .take(MAX_ACTIVE_REPAIR_QUERY_LIMIT + 1),
+      ),
+    ),
   ]);
 
-  const openWorkItems = workItemBatches
-    .flatMap((batch) => batch)
-    .slice(0, MAX_OPERATIONS_QUERY_LIMIT);
+  const openWorkItems = workItemBatches.flatMap((batch) =>
+    batch.slice(0, MAX_OPERATIONS_QUERY_LIMIT),
+  );
+  const activeRepairReadIncomplete = activeRepairPages.some(
+    (page) => page.length > MAX_ACTIVE_REPAIR_QUERY_LIMIT,
+  );
   const hasMoreOpenWorkItems =
+    activeRepairReadIncomplete ||
     workItemBatches.some(
       (batch) => batch.length > MAX_OPERATIONS_QUERY_LIMIT,
-    ) ||
-    workItemBatches.reduce((total, batch) => total + batch.length, 0) >
-      MAX_OPERATIONS_QUERY_LIMIT;
+    );
   const hasMoreApprovalRequests =
     pendingApprovalRequests.hasMoreApprovalRequests;
+  const openWorkProjection = projectLogicalOperationalWork({
+    items: openWorkItems,
+    remediationSourceIdentitiesByGroupKey: new Map(
+      activeRepairPages.flatMap((page) =>
+        page.slice(0, MAX_ACTIVE_REPAIR_QUERY_LIMIT).map((repair) => [
+          repair.groupKey,
+          new Set(repair.sourceIdentities),
+        ]),
+      ),
+    ),
+    sourceCompleteness: hasMoreOpenWorkItems ? "incomplete" : "complete",
+  });
 
   return {
     approvalRequests: pendingApprovalRequests.approvalRequests,
@@ -624,10 +655,10 @@ async function listOpenQueueSnapshot(
       pendingApprovalRequests.approvalRequestsCountLabel,
     hasMoreApprovalRequests,
     hasMoreOpenWorkItems,
-    openWorkItems,
+    openWorkProjection,
     openWorkItemsCountLabel: hasMoreOpenWorkItems
-      ? `${MAX_OPERATIONS_QUERY_LIMIT}+`
-      : String(openWorkItems.length),
+      ? `${openWorkProjection.observedCount}+`
+      : String(openWorkProjection.observedCount),
   };
 }
 
@@ -2086,7 +2117,7 @@ function registerSessionLabel(
 
 function queueAttentionItems(args: {
   approvalRequests: Array<Doc<"approvalRequest">>;
-  openWorkItems: Array<Doc<"operationalWorkItem">>;
+  openWorkProjection: LogicalOperationalWorkProjection;
 }): DailyOperationsAttentionItem[] {
   return [
     ...args.approvalRequests.map((approval) => ({
@@ -2102,20 +2133,53 @@ function queueAttentionItems(args: {
       },
       to: "/$orgUrlSlug/store/$storeUrlSlug/operations/approvals",
     })),
-    ...args.openWorkItems.map((workItem) => ({
-      id: `operational_work_item:${workItem._id}:${workItem.status}`,
-      label: workItem.title,
-      message: "Open operational work is waiting in the queue.",
-      owner: "operations_queue" as const,
-      severity: "warning" as const,
-      source: {
-        id: workItem._id,
-        label: workItem.title,
-        type: "operational_work_item",
-      },
-      to: "/$orgUrlSlug/store/$storeUrlSlug/operations/open-work",
-    })),
+    ...(args.openWorkProjection.completeness === "incomplete"
+      ? [
+          {
+            id: "logical_operational_work:source_incomplete",
+            label: "Open Work count is still updating",
+            message:
+              "Open Work is still loading the complete inventory review set.",
+            owner: "operations_queue" as const,
+            severity: "warning" as const,
+            source: {
+              id: "source_incomplete",
+              label: "Open Work count is still updating",
+              type: "logical_operational_work",
+            },
+            to: "/$orgUrlSlug/store/$storeUrlSlug/operations/open-work",
+          },
+        ]
+      : args.openWorkProjection.groups
+          .slice(0, MAX_OPERATIONS_QUERY_LIMIT)
+          .map(logicalWorkAttentionItem)),
   ];
+}
+
+function logicalWorkAttentionItem(
+  group: LogicalOperationalWorkGroup,
+): DailyOperationsAttentionItem {
+  const workItem = group.representative;
+  const isSkuScopedSyncedSaleReview =
+    workItem.type === "synced_sale_inventory_review" &&
+    group.productSkuId !== null;
+  return {
+    id: isSkuScopedSyncedSaleReview
+      ? `logical_operational_work:${group.key}`
+      : `operational_work_item:${workItem._id}:${workItem.status}`,
+    label: workItem.title,
+    message: "Open operational work is waiting in the queue.",
+    owner: "operations_queue",
+    severity: "warning",
+    source: {
+      id: isSkuScopedSyncedSaleReview ? group.key : workItem._id,
+      label: workItem.title,
+      type: isSkuScopedSyncedSaleReview
+        ? "logical_operational_work"
+        : "operational_work_item",
+    },
+    to: "/$orgUrlSlug/store/$storeUrlSlug/operations/open-work",
+  };
 }
 
 function lifecycleCopy(status: LifecycleStatus) {
@@ -2491,7 +2555,7 @@ export async function buildDailyOperationsSnapshotWithCtx(
   attentionItems.push(
     ...queueAttentionItems({
       approvalRequests: queueCounts.approvalRequests,
-      openWorkItems: queueCounts.openWorkItems,
+      openWorkProjection: queueCounts.openWorkProjection,
     }),
   );
 
@@ -2562,7 +2626,7 @@ export async function buildDailyOperationsSnapshotWithCtx(
       queueCounts: {
         approvalCount: queueCounts.approvalRequests.length,
         approvalCountLabel: queueCounts.approvalRequestsCountLabel,
-        workItemCount: queueCounts.openWorkItems.length,
+        workItemCount: queueCounts.openWorkProjection.observedCount,
         workItemCountLabel: queueCounts.openWorkItemsCountLabel,
       },
     }),

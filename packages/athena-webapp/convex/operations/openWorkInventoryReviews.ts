@@ -1,14 +1,25 @@
 import { v } from "convex/values";
 
 import type { Doc, Id, TableNames } from "../_generated/dataModel";
-import { mutation, type MutationCtx } from "../_generated/server";
+import {
+  internalMutation,
+  mutation,
+  type MutationCtx,
+} from "../_generated/server";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
-import { recordOperationalEventWithCtx } from "./operationalEvents";
+import {
+  buildOperationalEvent,
+  recordOperationalEventWithCtx,
+} from "./operationalEvents";
+import {
+  MAX_ATOMIC_SYNCED_SALE_REVIEW_GROUP_SIZE,
+  projectLogicalOperationalWork,
+} from "./logicalOperationalWork";
 
 const SYNCED_SALE_INVENTORY_REVIEW_TYPE = "synced_sale_inventory_review";
 const INVENTORY_REVIEW_LOCAL_ID_KIND = "inventoryReviewWorkItem";
@@ -45,7 +56,131 @@ type ResolveSyncedSaleInventoryReviewArgs = {
   storeId: Id<"store">;
   terminalId?: Id<"posTerminal">;
   workItemId: Id<"operationalWorkItem">;
+  /** Server-only group path: terminal preconditions make the direct insert idempotent. */
+  writeEventDirectly?: boolean;
+  /** Server-only group path: verify all member evidence before the first write. */
+  validateOnly?: boolean;
+  validatedContext?: {
+    actorStaffProfileId?: Id<"staffProfile">;
+    actorUserId: Id<"athenaUser">;
+    latestStockUpdate: Doc<"inventoryMovement"> | null;
+    positiveStockState: Awaited<
+      ReturnType<typeof readPositiveCurrentInventoryProofWithCtx>
+    >;
+    store: Doc<"store">;
+  };
 };
+
+type InventoryReviewSourceValidationArgs = {
+  localRegisterSessionId?: string;
+  localTransactionId?: string;
+  receiptNumber?: string;
+  registerSessionId?: Id<"registerSession">;
+  sourceId?: Id<"posTransaction">;
+  storeId: Id<"store">;
+  terminalId?: Id<"posTerminal">;
+  workItem: Doc<"operationalWorkItem">;
+};
+
+export function inventoryReviewSourceValidationArgsFromWorkItem(
+  workItem: Doc<"operationalWorkItem">,
+): Omit<InventoryReviewSourceValidationArgs, "storeId" | "workItem"> {
+  const metadata = workItem.metadata ?? {};
+  return {
+    localRegisterSessionId:
+      stringMetadataValue(metadata, "localRegisterSessionId") ?? undefined,
+    localTransactionId:
+      stringMetadataValue(metadata, "localTransactionId") ?? undefined,
+    receiptNumber: stringMetadataValue(metadata, "receiptNumber") ?? undefined,
+    registerSessionId:
+      idMetadataValue<"registerSession">(metadata, "registerSessionId") ??
+      undefined,
+    sourceId:
+      idMetadataValue<"posTransaction">(metadata, "sourceId") ?? undefined,
+    terminalId:
+      idMetadataValue<"posTerminal">(metadata, "terminalId") ?? undefined,
+  };
+}
+
+export async function validateInventoryReviewSourceContextWithCtx(
+  ctx: MutationCtx,
+  args: InventoryReviewSourceValidationArgs,
+) {
+  const metadata = args.workItem.metadata ?? {};
+  const [terminal, registerSession, sale] = await Promise.all([
+    args.terminalId ? ctx.db.get("posTerminal", args.terminalId) : null,
+    args.registerSessionId
+      ? ctx.db.get("registerSession", args.registerSessionId)
+      : null,
+    args.sourceId ? ctx.db.get("posTransaction", args.sourceId) : null,
+  ]);
+
+  if (args.terminalId && (!terminal || terminal.storeId !== args.storeId)) {
+    return validationError("Terminal does not match the inventory review store.");
+  }
+  if (args.registerSessionId) {
+    if (!registerSession || registerSession.storeId !== args.storeId) {
+      return validationError(
+        "Register session does not match the inventory review terminal.",
+      );
+    }
+    if (args.terminalId && registerSession.terminalId !== args.terminalId) {
+      return validationError(
+        "Register session does not match the inventory review terminal.",
+      );
+    }
+  }
+  if (args.sourceId) {
+    if (!sale || sale.storeId !== args.storeId) {
+      return validationError("Sale does not match the inventory review context.");
+    }
+    if (
+      args.registerSessionId &&
+      sale.registerSessionId !== args.registerSessionId
+    ) {
+      return validationError("Sale does not match the inventory review context.");
+    }
+    if (args.terminalId && sale.terminalId !== args.terminalId) {
+      return validationError("Sale does not match the inventory review context.");
+    }
+  }
+  if (
+    !optionalMetadataMatches(
+      metadata,
+      "localRegisterSessionId",
+      args.localRegisterSessionId,
+    ) ||
+    !optionalMetadataMatches(
+      metadata,
+      "localTransactionId",
+      args.localTransactionId,
+    ) ||
+    !optionalMetadataMatches(
+      metadata,
+      "registerSessionId",
+      args.registerSessionId,
+    ) ||
+    !optionalMetadataMatches(metadata, "sourceId", args.sourceId) ||
+    !optionalMetadataMatches(metadata, "terminalId", args.terminalId)
+  ) {
+    return validationError("Work item metadata does not match the sale context.");
+  }
+  if (
+    args.receiptNumber &&
+    stringMetadataValue(metadata, "receiptNumber") !== args.receiptNumber
+  ) {
+    return validationError("Receipt number does not match the inventory review.");
+  }
+  if (
+    args.receiptNumber &&
+    sale &&
+    sale.transactionNumber !== args.receiptNumber
+  ) {
+    return validationError("Sale receipt does not match the inventory review.");
+  }
+
+  return ok({ registerSession, sale, terminal });
+}
 
 type ResolveSyncedSaleInventoryReviewData = {
   action: "resolved";
@@ -53,6 +188,17 @@ type ResolveSyncedSaleInventoryReviewData = {
   status: "completed" | "cancelled";
   workItemId: Id<"operationalWorkItem">;
 };
+
+type ResolveSyncedSaleInventoryReviewGroupArgs = {
+  expectedMemberIds: Array<Id<"operationalWorkItem">>;
+  groupKey: string;
+  outcome: SyncedSaleInventoryReviewOutcome;
+  reason: string;
+  storeId: Id<"store">;
+};
+
+const LOGICAL_GROUP_CHANGED_MESSAGE =
+  "This work changed. Review the refreshed group before marking it reviewed.";
 
 type AutoResolveSyncedSaleInventoryReviewsArgs = {
   actorUserId?: Id<"athenaUser">;
@@ -104,6 +250,39 @@ function optionalMetadataMatches(
   return !value || stringMetadataValue(metadata, key) === value;
 }
 
+export function isQualifyingInventoryReviewStockUpdate(
+  movement: Doc<"inventoryMovement"> | null,
+  minimumCreatedAt: number,
+) {
+  return Boolean(
+    movement &&
+      movement.sourceType === STOCK_UPDATE_SOURCE_TYPE &&
+      movement.createdAt >= minimumCreatedAt &&
+      STOCK_UPDATE_MOVEMENT_TYPES.has(movement.movementType),
+  );
+}
+
+async function readLatestInventoryReviewStockUpdateWithCtx(
+  ctx: MutationCtx,
+  args: {
+    productSkuId: Id<"productSku">;
+    storeId: Id<"store">;
+  },
+) {
+  const latestMovement = await ctx.db
+    .query("inventoryMovement")
+    .withIndex("by_storeId_productSkuId_sourceType_createdAt", (q) =>
+      q
+        .eq("storeId", args.storeId)
+        .eq("productSkuId", args.productSkuId)
+        .eq("sourceType", STOCK_UPDATE_SOURCE_TYPE),
+    )
+    .order("desc")
+    .first();
+
+  return latestMovement;
+}
+
 async function findPostReviewStockUpdateWithCtx(
   ctx: MutationCtx,
   args: {
@@ -112,24 +291,16 @@ async function findPostReviewStockUpdateWithCtx(
     storeId: Id<"store">;
   },
 ) {
-  // eslint-disable-next-line @convex-dev/no-collect-in-query -- SKU-scoped stock adjustments are bounded by one operational SKU review.
-  const movements = await ctx.db
-    .query("inventoryMovement")
-    .withIndex("by_storeId_productSkuId", (q) =>
-      q.eq("storeId", args.storeId).eq("productSkuId", args.productSkuId),
-    )
-    .collect();
-
-  return (
-    movements
-      .filter(
-        (movement) =>
-          movement.createdAt >= args.createdAt &&
-          movement.sourceType === STOCK_UPDATE_SOURCE_TYPE &&
-          STOCK_UPDATE_MOVEMENT_TYPES.has(movement.movementType),
-      )
-      .sort((left, right) => right.createdAt - left.createdAt)[0] ?? null
+  const latestMovement = await readLatestInventoryReviewStockUpdateWithCtx(
+    ctx,
+    args,
   );
+  return isQualifyingInventoryReviewStockUpdate(
+    latestMovement,
+    args.createdAt,
+  )
+    ? latestMovement
+    : null;
 }
 
 async function readPositiveCurrentInventoryProofWithCtx(
@@ -400,23 +571,31 @@ export async function resolveSyncedSaleInventoryReviewWithCtx(
     return validationError("Reason is required to resolve inventory review work.");
   }
 
-  const [athenaUser, workItem, store] = await Promise.all([
-    requireAuthenticatedAthenaUserWithCtx(ctx),
-    ctx.db.get("operationalWorkItem", args.workItemId),
-    ctx.db.get("store", args.storeId),
-  ]);
+  const workItem = await ctx.db.get("operationalWorkItem", args.workItemId);
+  const validatedContext = args.validatedContext;
+  const [athenaUser, store] = validatedContext
+    ? [
+        { _id: validatedContext.actorUserId },
+        validatedContext.store,
+      ]
+    : await Promise.all([
+        requireAuthenticatedAthenaUserWithCtx(ctx),
+        ctx.db.get("store", args.storeId),
+      ]);
   if (!store) {
     return userError({
       code: "not_found",
       message: "Store not found.",
     });
   }
-  await requireOrganizationMemberRoleWithCtx(ctx, {
-    allowedRoles: ["full_admin"],
-    failureMessage: "Only store admins can resolve inventory review work.",
-    organizationId: store.organizationId,
-    userId: athenaUser._id,
-  });
+  if (!validatedContext) {
+    await requireOrganizationMemberRoleWithCtx(ctx, {
+      allowedRoles: ["full_admin"],
+      failureMessage: "Only store admins can resolve inventory review work.",
+      organizationId: store.organizationId,
+      userId: athenaUser._id,
+    });
+  }
 
   if (!workItem || workItem.storeId !== args.storeId) {
     return userError({
@@ -437,12 +616,16 @@ export async function resolveSyncedSaleInventoryReviewWithCtx(
     return conflictError("Inventory review work is not currently resolvable.");
   }
 
-  const actorStaffProfile = await ctx.db
-    .query("staffProfile")
-    .withIndex("by_storeId_linkedUserId", (q) =>
-      q.eq("storeId", args.storeId).eq("linkedUserId", athenaUser._id),
-    )
-    .first();
+  const actorStaffProfile = validatedContext
+    ? validatedContext.actorStaffProfileId
+      ? ({ _id: validatedContext.actorStaffProfileId } as const)
+      : null
+    : await ctx.db
+        .query("staffProfile")
+        .withIndex("by_storeId_linkedUserId", (q) =>
+          q.eq("storeId", args.storeId).eq("linkedUserId", athenaUser._id),
+        )
+        .first();
 
   if (
     args.actorStaffProfileId &&
@@ -455,104 +638,47 @@ export async function resolveSyncedSaleInventoryReviewWithCtx(
 
   const actorStaffProfileId = actorStaffProfile?._id;
   const metadata = workItem.metadata ?? {};
-  const primaryProductSkuId = idMetadataValue<"productSku">(
-    metadata,
-    "primaryProductSkuId",
-  );
+  const primaryProductSkuId =
+    workItem.productSkuId ??
+    idMetadataValue<"productSku">(metadata, "primaryProductSkuId");
   if (!primaryProductSkuId) {
     return validationError(
       "Inventory review work item is missing the affected SKU.",
     );
   }
 
-  const stockUpdate = await findPostReviewStockUpdateWithCtx(ctx, {
-    createdAt: workItem.createdAt,
-    productSkuId: primaryProductSkuId,
-    storeId: args.storeId,
-  });
-  const stockState = stockUpdate
-    ? null
-    : await readPositiveCurrentInventoryProofWithCtx(ctx, {
+  const stockUpdate = validatedContext
+    ? isQualifyingInventoryReviewStockUpdate(
+        validatedContext.latestStockUpdate,
+        workItem.createdAt,
+      )
+      ? validatedContext.latestStockUpdate
+      : null
+    : await findPostReviewStockUpdateWithCtx(ctx, {
+        createdAt: workItem.createdAt,
         productSkuId: primaryProductSkuId,
         storeId: args.storeId,
       });
+  const stockState = stockUpdate
+    ? null
+    : validatedContext
+      ? validatedContext.positiveStockState
+      : await readPositiveCurrentInventoryProofWithCtx(ctx, {
+          productSkuId: primaryProductSkuId,
+          storeId: args.storeId,
+        });
   if (!stockUpdate && !stockState) {
     return validationError(
       "Update the affected SKU's stock count before marking this inventory review complete.",
     );
   }
 
-  const terminal = args.terminalId
-    ? await ctx.db.get("posTerminal", args.terminalId)
-    : null;
-  if (args.terminalId && (!terminal || terminal.storeId !== args.storeId)) {
-    return validationError("Terminal does not match the inventory review store.");
-  }
-
-  const registerSession = args.registerSessionId
-    ? await ctx.db.get("registerSession", args.registerSessionId)
-    : null;
-  if (args.registerSessionId) {
-    if (!registerSession || registerSession.storeId !== args.storeId) {
-      return validationError(
-        "Register session does not match the inventory review terminal.",
-      );
-    }
-    if (args.terminalId && registerSession.terminalId !== args.terminalId) {
-      return validationError(
-        "Register session does not match the inventory review terminal.",
-      );
-    }
-  }
-
-  const sale = args.sourceId
-    ? await ctx.db.get("posTransaction", args.sourceId)
-    : null;
-  if (args.sourceId) {
-    if (!sale || sale.storeId !== args.storeId) {
-      return validationError("Sale does not match the inventory review context.");
-    }
-    if (
-      args.registerSessionId &&
-      sale.registerSessionId !== args.registerSessionId
-    ) {
-      return validationError("Sale does not match the inventory review context.");
-    }
-    if (args.terminalId && sale.terminalId !== args.terminalId) {
-      return validationError("Sale does not match the inventory review context.");
-    }
-  }
-
-  if (
-    !optionalMetadataMatches(
-      metadata,
-      "localRegisterSessionId",
-      args.localRegisterSessionId,
-    ) ||
-    !optionalMetadataMatches(
-      metadata,
-      "localTransactionId",
-      args.localTransactionId,
-    ) ||
-    !optionalMetadataMatches(
-      metadata,
-      "registerSessionId",
-      args.registerSessionId,
-    ) ||
-    !optionalMetadataMatches(metadata, "sourceId", args.sourceId) ||
-    !optionalMetadataMatches(metadata, "terminalId", args.terminalId)
-  ) {
-    return validationError("Work item metadata does not match the sale context.");
-  }
-  if (
-    args.receiptNumber &&
-    stringMetadataValue(metadata, "receiptNumber") !== args.receiptNumber
-  ) {
-    return validationError("Receipt number does not match the inventory review.");
-  }
-  if (args.receiptNumber && sale && sale.transactionNumber !== args.receiptNumber) {
-    return validationError("Sale receipt does not match the inventory review.");
-  }
+  const sourceValidation = await validateInventoryReviewSourceContextWithCtx(
+    ctx,
+    { ...args, workItem },
+  );
+  if (sourceValidation.kind !== "ok") return sourceValidation;
+  const { registerSession, terminal } = sourceValidation.data;
 
   const resolvedAt = Date.now();
   const status = terminalStatusForOutcome(args.outcome);
@@ -634,6 +760,15 @@ export async function resolveSyncedSaleInventoryReviewWithCtx(
     },
   };
 
+  if (args.validateOnly) {
+    return ok({
+      action: "resolved",
+      outcome: args.outcome,
+      status,
+      workItemId: args.workItemId,
+    });
+  }
+
   await ctx.db.patch("operationalWorkItem", args.workItemId, {
     ...(status === "completed" ? { completedAt: resolvedAt } : {}),
     metadata: {
@@ -643,7 +778,7 @@ export async function resolveSyncedSaleInventoryReviewWithCtx(
     status,
   });
 
-  await recordOperationalEventWithCtx(ctx, {
+  const eventArgs = {
     actorStaffProfileId,
     actorUserId: athenaUser._id,
     eventType: `synced_sale_inventory_review_${status}`,
@@ -671,7 +806,12 @@ export async function resolveSyncedSaleInventoryReviewWithCtx(
       stockUpdate: resolution.stockUpdate,
       terminalAudit: "terminalAudit" in resolution ? resolution.terminalAudit : null,
     },
-  });
+  };
+  if (args.writeEventDirectly) {
+    await ctx.db.insert("operationalEvent", buildOperationalEvent(eventArgs));
+  } else {
+    await recordOperationalEventWithCtx(ctx, eventArgs);
+  }
 
   return ok({
     action: "resolved",
@@ -681,7 +821,187 @@ export async function resolveSyncedSaleInventoryReviewWithCtx(
   });
 }
 
-export const resolveSyncedSaleInventoryReview = mutation({
+export async function resolveSyncedSaleInventoryReviewGroupWithCtx(
+  ctx: MutationCtx,
+  args: ResolveSyncedSaleInventoryReviewGroupArgs,
+): Promise<CommandResult<{
+  action: "resolved_group";
+  resolvedCount: number;
+  status: "completed" | "cancelled";
+}>> {
+  if (!args.reason.trim()) {
+    return validationError("Reason is required to resolve inventory review work.");
+  }
+  if (
+    args.expectedMemberIds.length === 0 ||
+    new Set(args.expectedMemberIds).size !== args.expectedMemberIds.length
+  ) {
+    return conflictError(LOGICAL_GROUP_CHANGED_MESSAGE);
+  }
+  if (
+    args.expectedMemberIds.length >
+    MAX_ATOMIC_SYNCED_SALE_REVIEW_GROUP_SIZE
+  ) {
+    return conflictError(
+      "This inventory review group needs support to complete safely.",
+    );
+  }
+
+  const [athenaUser, store] = await Promise.all([
+    requireAuthenticatedAthenaUserWithCtx(ctx),
+    ctx.db.get("store", args.storeId),
+  ]);
+  if (!store) {
+    return userError({ code: "not_found", message: "Store not found." });
+  }
+  await requireOrganizationMemberRoleWithCtx(ctx, {
+    allowedRoles: ["full_admin"],
+    failureMessage: "Only store admins can resolve inventory review work.",
+    organizationId: store.organizationId,
+    userId: athenaUser._id,
+  });
+  const actorStaffProfile = await ctx.db
+    .query("staffProfile")
+    .withIndex("by_storeId_linkedUserId", (q) =>
+      q.eq("storeId", args.storeId).eq("linkedUserId", athenaUser._id),
+    )
+    .first();
+
+  const probeLimit = 1_000;
+  const [lanes, activeRepairPages] = await Promise.all([
+    Promise.all(
+      (["open", "in_progress"] as const).map((status) =>
+        ctx.db
+          .query("operationalWorkItem")
+          .withIndex("by_storeId_type_status", (q) =>
+            q
+              .eq("storeId", args.storeId)
+              .eq("type", SYNCED_SALE_INVENTORY_REVIEW_TYPE)
+              .eq("status", status),
+          )
+          .take(probeLimit + 1),
+      ),
+    ),
+    Promise.all(
+      (["pending", "running", "paused"] as const).map((status) =>
+        ctx.db
+          .query("oversizedOperationalWorkRepair")
+          .withIndex("by_storeId_status", (q) =>
+            q.eq("storeId", args.storeId).eq("status", status),
+          )
+          .take(probeLimit + 1),
+      ),
+    ),
+  ]);
+  if (
+    lanes.some((lane) => lane.length > probeLimit) ||
+    activeRepairPages.some((page) => page.length > probeLimit)
+  ) {
+    return conflictError(LOGICAL_GROUP_CHANGED_MESSAGE);
+  }
+  const activeRepairs = activeRepairPages.flat();
+
+  const projection = projectLogicalOperationalWork({
+    items: lanes.flat(),
+    remediationSourceIdentitiesByGroupKey: new Map(
+      activeRepairs.map((repair) => [
+        repair.groupKey,
+        new Set(repair.sourceIdentities),
+      ]),
+    ),
+    sourceCompleteness: "complete",
+  });
+  const group = projection.groups.find(
+    (candidate) => candidate.key === args.groupKey,
+  );
+  const currentMemberIds = group?.items
+    .map((item) => String(item._id))
+    .sort();
+  const expectedMemberIds = args.expectedMemberIds.map(String).sort();
+  if (
+    !group ||
+    group.resolutionAvailability !== "available" ||
+    currentMemberIds?.length !== expectedMemberIds.length ||
+    currentMemberIds.some((id, index) => id !== expectedMemberIds[index])
+  ) {
+    return conflictError(LOGICAL_GROUP_CHANGED_MESSAGE);
+  }
+
+  const productSkuId = group.productSkuId;
+  if (!productSkuId) {
+    return validationError(
+      "Inventory review work item is missing the affected SKU.",
+    );
+  }
+  const [latestStockUpdate, positiveStockState] = await Promise.all([
+    readLatestInventoryReviewStockUpdateWithCtx(ctx, {
+      productSkuId,
+      storeId: args.storeId,
+    }),
+    readPositiveCurrentInventoryProofWithCtx(ctx, {
+      productSkuId,
+      storeId: args.storeId,
+    }),
+  ]);
+
+  const memberArgs = group.items.map((item) => {
+    const metadata = item.metadata ?? {};
+    return {
+      localRegisterSessionId:
+        stringMetadataValue(metadata, "localRegisterSessionId") ?? undefined,
+      localTransactionId:
+        stringMetadataValue(metadata, "localTransactionId") ?? undefined,
+      outcome: args.outcome,
+      reason: args.reason,
+      receiptNumber:
+        stringMetadataValue(metadata, "receiptNumber") ?? undefined,
+      registerSessionId:
+        idMetadataValue<"registerSession">(metadata, "registerSessionId") ??
+        undefined,
+      sourceId:
+        idMetadataValue<"posTransaction">(metadata, "sourceId") ?? undefined,
+      storeId: args.storeId,
+      terminalId:
+        idMetadataValue<"posTerminal">(metadata, "terminalId") ?? undefined,
+      validatedContext: {
+        actorStaffProfileId: actorStaffProfile?._id,
+        actorUserId: athenaUser._id,
+        latestStockUpdate,
+        positiveStockState,
+        store,
+      },
+      workItemId: item._id,
+      writeEventDirectly: true,
+    } satisfies ResolveSyncedSaleInventoryReviewArgs;
+  });
+
+  for (const memberArg of memberArgs) {
+    const result = await resolveSyncedSaleInventoryReviewWithCtx(ctx, {
+      ...memberArg,
+      validateOnly: true,
+    });
+    if (result.kind !== "ok") {
+      return result;
+    }
+  }
+
+  for (const memberArg of memberArgs) {
+    const result = await resolveSyncedSaleInventoryReviewWithCtx(ctx, memberArg);
+    if (result.kind !== "ok") {
+      // The identical read-only validation pass above ran in this transaction.
+      // This is a defensive rollback if a future write path adds a new failure.
+      throw new Error(result.error.message);
+    }
+  }
+
+  return ok({
+    action: "resolved_group",
+    resolvedCount: group.items.length,
+    status: terminalStatusForOutcome(args.outcome),
+  });
+}
+
+export const resolveSyncedSaleInventoryReview = internalMutation({
   args: {
     actorStaffProfileId: v.optional(v.id("staffProfile")),
     localRegisterSessionId: v.optional(v.string()),
@@ -697,4 +1017,16 @@ export const resolveSyncedSaleInventoryReview = mutation({
   },
   returns: commandResultValidator(v.any()),
   handler: resolveSyncedSaleInventoryReviewWithCtx,
+});
+
+export const resolveSyncedSaleInventoryReviewGroup = mutation({
+  args: {
+    expectedMemberIds: v.array(v.id("operationalWorkItem")),
+    groupKey: v.string(),
+    outcome: syncedSaleInventoryReviewOutcomeValidator,
+    reason: v.string(),
+    storeId: v.id("store"),
+  },
+  returns: commandResultValidator(v.any()),
+  handler: resolveSyncedSaleInventoryReviewGroupWithCtx,
 });

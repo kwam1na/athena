@@ -201,7 +201,8 @@ const readySnapshot: DailyCloseSnapshot = {
   reviewItems: [
     {
       category: "voided_sale",
-      description: "Review voided sales before completing the end of day review.",
+      description:
+        "Review voided sales before completing the end of day review.",
       id: "review-void-1",
       link: {
         label: "View transaction",
@@ -667,9 +668,7 @@ describe("DailyCloseViewContent", () => {
     const checklist = screen.getByText("Close checklist").closest("div");
     expect(checklist).not.toBeNull();
     expect(
-      within(checklist as HTMLElement).getByLabelText(
-        "Resolve blockers clear",
-      ),
+      within(checklist as HTMLElement).getByLabelText("Resolve blockers clear"),
     ).toBeInTheDocument();
     expect(
       within(checklist as HTMLElement).getByLabelText(
@@ -698,7 +697,9 @@ describe("DailyCloseViewContent", () => {
     expect(
       screen.getByText("Athena prepared EOD Review for manager review."),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /complete EOD review/i })).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: /complete EOD review/i }),
+    ).toBeEnabled();
     expect(screen.queryByText("EOD Review completed")).not.toBeInTheDocument();
   });
 
@@ -814,9 +815,7 @@ describe("DailyCloseViewContent", () => {
       screen.getByText("Athena completed EOD Review under store policy."),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(
-        "Restricted close evidence is hidden for this account.",
-      ),
+      screen.getByText("Restricted close evidence is hidden for this account."),
     ).toBeInTheDocument();
     expect(
       screen.queryByText(
@@ -853,7 +852,9 @@ describe("DailyCloseViewContent", () => {
 
     expect(screen.queryByText("Expenses")).not.toBeInTheDocument();
     expect(screen.queryByText("Variance")).not.toBeInTheDocument();
-    expect(screen.queryByText("No expense transactions")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("No expense transactions"),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText("No register variances")).not.toBeInTheDocument();
   });
 
@@ -1149,9 +1150,7 @@ describe("DailyCloseViewContent", () => {
     expect(within(report).getByText("3 items")).toHaveClass(
       "text-muted-foreground",
     );
-    expect(within(report).getByText("Voided")).toHaveClass(
-      "text-destructive",
-    );
+    expect(within(report).getByText("Voided")).toHaveClass("text-destructive");
     expect(
       within(report)
         .getByText("#VOID-1")
@@ -1643,6 +1642,135 @@ describe("DailyCloseViewContent", () => {
     });
   });
 
+  it("submits every frozen member when one logical carry-forward group is selected", async () => {
+    const user = userEvent.setup();
+    const onComplete = vi.fn(async () => ok({ closeId: "close-1" }));
+    const snapshot: DailyCloseSnapshot = {
+      ...readySnapshot,
+      carryForwardItems: [
+        {
+          carryForwardWorkItemIds: ["work-1", "work-1-alias", "work-2"],
+          key: "logical-operational-work:sku-1",
+          metadata: {
+            memberCount: 3,
+            oldestActionableAt: 1_783_596_988_568,
+            priority: "high",
+            sourceCount: 2,
+            status: "open",
+            type: "synced_sale_inventory_review",
+          },
+          subject: {
+            id: "synced_sale_inventory_review:store-1:sku-1",
+            label: "Review inventory for SKU 1",
+            type: "logical_operational_work_group",
+          },
+          title: "Review inventory for SKU 1",
+        },
+      ],
+      status: "carry_forward",
+    };
+
+    renderContent(snapshot, { onComplete });
+
+    const logicalWorkCard = screen
+      .getByText("Review inventory for Sku 1")
+      .closest("article");
+
+    expect(logicalWorkCard).not.toBeNull();
+    expect(
+      within(logicalWorkCard as HTMLElement).getByText("Priority"),
+    ).toBeInTheDocument();
+    expect(
+      within(logicalWorkCard as HTMLElement).getByText("High"),
+    ).toBeInTheDocument();
+    expect(
+      within(logicalWorkCard as HTMLElement).getByText("Open since"),
+    ).toBeInTheDocument();
+    expect(
+      within(logicalWorkCard as HTMLElement).getByText("Work type"),
+    ).toBeInTheDocument();
+    expect(
+      within(logicalWorkCard as HTMLElement).getByText(
+        "Synced sale inventory",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(logicalWorkCard as HTMLElement).queryByText("Member Count"),
+    ).not.toBeInTheDocument();
+    expect(
+      within(logicalWorkCard as HTMLElement).queryByText("Source Count"),
+    ).not.toBeInTheDocument();
+    expect(
+      within(logicalWorkCard as HTMLElement).queryByText("1783596988568"),
+    ).not.toBeInTheDocument();
+    expect(
+      within(logicalWorkCard as HTMLElement).queryByRole("button", {
+        name: /show details/i,
+      }),
+    ).not.toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: /complete EOD review/i }),
+    );
+
+    await waitFor(() => {
+      expect(onComplete).toHaveBeenCalledWith(
+        expect.objectContaining({
+          carryForwardWorkItemIds: ["work-1", "work-1-alias", "work-2"],
+        }),
+      );
+    });
+  });
+
+  it("renders incomplete Open Work as a lower bound without selectable or submitted member IDs", async () => {
+    const user = userEvent.setup();
+    const onComplete = vi.fn(async () => ok({ closeId: "close-1" }));
+    const snapshot: DailyCloseSnapshot = {
+      ...readySnapshot,
+      carryForwardItems: [
+        {
+          key: "incomplete_open_work:0",
+          metadata: {
+            membershipCompleteness: "incomplete",
+            observedMemberCount: 2,
+            type: "synced_sale_inventory_review",
+          },
+          subject: {
+            id: "incomplete_open_work:0",
+            label: "Review inventory for SKU 1",
+            type: "incomplete_logical_operational_work_group",
+          },
+          title: "Review inventory for SKU 1",
+        },
+      ],
+      openWorkMembership: {
+        completeness: "incomplete",
+        observedLogicalCount: 1,
+      },
+      status: "carry_forward",
+    };
+
+    renderContent(snapshot, { onComplete });
+
+    expect(
+      screen.getAllByText("Open Work membership is incomplete."),
+    ).toHaveLength(1);
+    expect(
+      screen.getByRole("tab", { name: /Carry forward 1\+/i }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: /complete EOD review/i }),
+    );
+
+    await waitFor(() => {
+      expect(onComplete).toHaveBeenCalledWith(
+        expect.objectContaining({ carryForwardWorkItemIds: [] }),
+      );
+    });
+  });
+
   it("formats carry-forward work item copy and shows all work details", () => {
     const snapshot: DailyCloseSnapshot = {
       ...readySnapshot,
@@ -1684,6 +1812,24 @@ describe("DailyCloseViewContent", () => {
         {
           description:
             "Open operational work will carry forward after the end of day review.",
+          id: "carry-catalog-setup-1",
+          metadata: {
+            priority: "normal",
+            status: "open",
+            type: "catalog_taxonomy_setup",
+          },
+          statusLabel: "Carry forward",
+          subject: {
+            id: "carry-catalog-setup-1",
+            label:
+              "Assign catalog category: CERAVEHYDRATING FOAMING OIL",
+            type: "operational_work_item",
+          },
+          title: "Assign catalog category: CERAVEHYDRATING FOAMING OIL",
+        },
+        {
+          description:
+            "Open operational work will carry forward after the end of day review.",
           id: "carry-pending-checkout-1",
           metadata: {
             priority: "normal",
@@ -1714,6 +1860,11 @@ describe("DailyCloseViewContent", () => {
     expect(screen.getByText("Review inventory for Clogs")).toBeInTheDocument();
     expect(
       screen.getByText(
+        "Assign catalog category: Ceravehydrating Foaming Oil",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
         "Review pending checkout item: Protein Brazilian Hair Repair Mask",
       ),
     ).toBeInTheDocument();
@@ -1728,15 +1879,21 @@ describe("DailyCloseViewContent", () => {
       .getByText("Fuccin it up some more")
       .closest("article");
     expect(firstCard).not.toBeNull();
-    expect(within(firstCard as HTMLElement).getByText("Type")).toBeInTheDocument();
+    expect(
+      within(firstCard as HTMLElement).getByText("Work type"),
+    ).toBeInTheDocument();
     expect(
       within(firstCard as HTMLElement).getByText("Service case"),
     ).toBeInTheDocument();
     expect(
       within(firstCard as HTMLElement).queryByText("service_case"),
     ).not.toBeInTheDocument();
-    expect(within(firstCard as HTMLElement).getByText("Priority")).toBeInTheDocument();
-    expect(within(firstCard as HTMLElement).getByText("Normal")).toBeInTheDocument();
+    expect(
+      within(firstCard as HTMLElement).getByText("Priority"),
+    ).toBeInTheDocument();
+    expect(
+      within(firstCard as HTMLElement).getByText("Normal"),
+    ).toBeInTheDocument();
     expect(
       within(firstCard as HTMLElement).queryByRole("button", {
         name: /show details/i,
@@ -2047,9 +2204,7 @@ describe("DailyCloseViewContent", () => {
       screen.getByLabelText("Reopen reason"),
       "Cash deposit corrected.",
     );
-    await user.click(
-      screen.getByRole("button", { name: "Reopen EOD Review" }),
-    );
+    await user.click(screen.getByRole("button", { name: "Reopen EOD Review" }));
 
     expect(onReopen).toHaveBeenCalledWith({
       dailyCloseId: "daily-close-1",
@@ -2335,9 +2490,7 @@ describe("DailyCloseView", () => {
       screen.getByLabelText("Reopen reason"),
       "Cash deposit corrected.",
     );
-    await user.click(
-      screen.getByRole("button", { name: "Reopen EOD Review" }),
-    );
+    await user.click(screen.getByRole("button", { name: "Reopen EOD Review" }));
 
     expect(reopenMutation).toHaveBeenCalledWith({
       approvalProofId: undefined,

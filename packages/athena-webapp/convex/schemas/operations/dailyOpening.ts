@@ -35,6 +35,12 @@ const dailyOpeningReviewEvidenceValidator = v.object({
   metadata: v.optional(v.any()),
 });
 
+const dailyOpeningCarryForwardAcknowledgementValidator = v.object({
+  key: v.string(),
+  memberWorkItemIds: v.array(v.id("operationalWorkItem")),
+  disposition: v.union(v.literal("acknowledged"), v.literal("manager_review")),
+});
+
 export const dailyOpeningSchema = v.object({
   storeId: v.id("store"),
   organizationId: v.id("organization"),
@@ -53,17 +59,20 @@ export const dailyOpeningSchema = v.object({
   sourceSubjects: v.array(dailyOpeningSourceSubjectValidator),
   carryForwardWorkItemIds: v.array(v.id("operationalWorkItem")),
   acknowledgedItemKeys: v.array(v.string()),
+  carryForwardAcknowledgements: v.optional(
+    v.array(dailyOpeningCarryForwardAcknowledgementValidator),
+  ),
   notes: v.optional(v.string()),
   createdAt: v.number(),
   updatedAt: v.number(),
   startedAt: v.number(),
   actorUserId: v.optional(v.id("athenaUser")),
   actorStaffProfileId: v.optional(v.id("staffProfile")),
-  actorType: v.optional(
-    v.union(v.literal("human"), v.literal("automation")),
-  ),
+  actorType: v.optional(v.union(v.literal("human"), v.literal("automation"))),
   automationRunId: v.optional(v.id("automationRun")),
   automationPolicyVersion: v.optional(v.string()),
   automationDecisionReason: v.optional(v.string()),
-  managerReviewEvidence: v.optional(v.array(dailyOpeningReviewEvidenceValidator)),
+  managerReviewEvidence: v.optional(
+    v.array(dailyOpeningReviewEvidenceValidator),
+  ),
 });

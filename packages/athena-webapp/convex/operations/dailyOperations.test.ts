@@ -34,6 +34,7 @@ type TableName =
   | "onlineOrder"
   | "operationalEvent"
   | "operationalWorkItem"
+  | "oversizedOperationalWorkRepair"
   | "paymentAllocation"
   | "posLocalSyncConflict"
   | "posLocalSyncEvent"
@@ -3007,6 +3008,282 @@ describe("daily operations overview read model", () => {
         (item) => item.owner === "operations_queue",
       ),
     ).toHaveLength(3);
+  });
+
+  it("counts and surfaces synced sale inventory reviews as SKU-scoped logical work", async () => {
+    const syncedSaleReview = (args: {
+      id: string;
+      skuId?: string;
+      status?: "open" | "in_progress";
+      title: string;
+    }) => ({
+      _id: args.id,
+      approvalState: "not_required",
+      createdAt: 1,
+      metadata: args.skuId
+        ? {
+            primaryProductSkuId: args.skuId,
+            sourceId: `sale-${args.id}`,
+            sourceType: "posTransaction",
+          }
+        : {
+            sourceId: `sale-${args.id}`,
+            sourceType: "posTransaction",
+          },
+      organizationId: "org-1",
+      priority: "normal",
+      status: args.status ?? "open",
+      storeId: "store-1",
+      title: args.title,
+      type: "synced_sale_inventory_review",
+    });
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx({
+        dailyClose: [priorClose],
+        dailyOpening: [startedOpening],
+        operationalWorkItem: [
+          syncedSaleReview({
+            id: "review-sku-1-open",
+            skuId: "sku-1",
+            title: "Review first sale",
+          }),
+          syncedSaleReview({
+            id: "review-sku-1-progress",
+            skuId: "sku-1",
+            status: "in_progress",
+            title: "Review second sale",
+          }),
+          syncedSaleReview({
+            id: "review-sku-2",
+            skuId: "sku-2",
+            title: "Review third sale",
+          }),
+          syncedSaleReview({
+            id: "review-without-sku",
+            title: "Review sale without SKU",
+          }),
+          {
+            _id: "work-unrelated",
+            approvalState: "not_required",
+            createdAt: 2,
+            organizationId: "org-1",
+            priority: "normal",
+            status: "open",
+            storeId: "store-1",
+            title: "Call customer",
+            type: "customer_follow_up",
+          },
+        ],
+        store: [store],
+      }),
+      { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.lanes.find((lane) => lane.key === "queue")).toMatchObject({
+      count: 4,
+      countLabel: "4",
+      description: "4 open items.",
+      status: "needs_attention",
+    });
+    const queueAttention = snapshot.attentionItems.filter(
+      (item) => item.owner === "operations_queue",
+    );
+    expect(queueAttention).toHaveLength(4);
+    expect(queueAttention.map((item) => item.to)).toEqual([
+      "/$orgUrlSlug/store/$storeUrlSlug/operations/open-work",
+      "/$orgUrlSlug/store/$storeUrlSlug/operations/open-work",
+      "/$orgUrlSlug/store/$storeUrlSlug/operations/open-work",
+      "/$orgUrlSlug/store/$storeUrlSlug/operations/open-work",
+    ]);
+    expect(queueAttention.map((item) => item.label)).toEqual(
+      expect.arrayContaining([
+        "Review second sale",
+        "Review third sale",
+        "Review sale without SKU",
+        "Call customer",
+      ]),
+    );
+  });
+
+  it("keeps later same-SKU sales separate from active frozen repair membership", async () => {
+    const review = (id: string, transactionId: string) => ({
+      _id: id,
+      approvalState: "not_required",
+      createdAt: 1,
+      metadata: {
+        localTransactionId: transactionId,
+        primaryProductSkuId: "sku-1",
+      },
+      organizationId: "org-1",
+      priority: "normal",
+      productSkuId: "sku-1",
+      status: "open",
+      storeId: "store-1",
+      title: `Review ${transactionId}`,
+      type: "synced_sale_inventory_review",
+    });
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx({
+        dailyClose: [priorClose],
+        dailyOpening: [startedOpening],
+        operationalWorkItem: [
+          review("review-frozen", "transaction-frozen"),
+          review("review-later", "transaction-later"),
+        ],
+        oversizedOperationalWorkRepair: [
+          {
+            _id: "repair-1",
+            groupKey: "synced_sale_inventory_review:store-1:sku-1",
+            sourceIdentities: [
+              "synced_sale_inventory_review:store-1:transaction-frozen",
+            ],
+            status: "running",
+            storeId: "store-1",
+          },
+        ],
+        store: [store],
+      }),
+      { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.lanes.find((lane) => lane.key === "queue")).toMatchObject({
+      count: 2,
+      countLabel: "2",
+    });
+    expect(
+      snapshot.attentionItems.filter(
+        (item) => item.owner === "operations_queue",
+      ),
+    ).toHaveLength(2);
+  });
+
+  it("fails open-work counts closed when active repair membership is capped", async () => {
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx({
+        dailyClose: [priorClose],
+        dailyOpening: [startedOpening],
+        operationalWorkItem: [
+          {
+            _id: "review-1",
+            approvalState: "not_required",
+            createdAt: 1,
+            metadata: { primaryProductSkuId: "sku-1" },
+            organizationId: "org-1",
+            priority: "normal",
+            productSkuId: "sku-1",
+            status: "open",
+            storeId: "store-1",
+            title: "Review inventory",
+            type: "synced_sale_inventory_review",
+          },
+        ],
+        oversizedOperationalWorkRepair: Array.from(
+          { length: 201 },
+          (_, index) => ({
+            _id: `repair-${index}`,
+            groupKey: `synced_sale_inventory_review:store-1:sku-${index}`,
+            sourceIdentities: [`source-${index}`],
+            status: "pending",
+            storeId: "store-1",
+          }),
+        ),
+        store: [store],
+      }),
+      { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.lanes.find((lane) => lane.key === "queue")).toMatchObject({
+      countLabel: "1+",
+    });
+    expect(
+      snapshot.attentionItems.filter(
+        (item) => item.owner === "operations_queue",
+      ),
+    ).toEqual([
+      expect.objectContaining({ label: "Open Work count is still updating" }),
+    ]);
+  });
+
+  it("reports incomplete open work as an observed logical lower bound", async () => {
+    const operationalWorkItem = Array.from({ length: 201 }, (_, index) => ({
+      _id: `review-${index}`,
+      approvalState: "not_required",
+      createdAt: index,
+      metadata: {
+        primaryProductSkuId: "sku-1",
+        sourceId: `sale-${index}`,
+        sourceType: "posTransaction",
+      },
+      organizationId: "org-1",
+      priority: "normal",
+      status: "open",
+      storeId: "store-1",
+      title: `Review sale ${index}`,
+      type: "synced_sale_inventory_review",
+    }));
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx({
+        dailyClose: [priorClose],
+        dailyOpening: [startedOpening],
+        operationalWorkItem,
+        store: [store],
+      }),
+      { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.lanes.find((lane) => lane.key === "queue")).toMatchObject({
+      count: 1,
+      countLabel: "1+",
+      description: "1+ open item.",
+      status: "needs_attention",
+    });
+    expect(
+      snapshot.attentionItems.filter(
+        (item) => item.owner === "operations_queue",
+      ),
+    ).toEqual([
+      expect.objectContaining({
+        label: "Open Work count is still updating",
+        message: "Open Work is still loading the complete inventory review set.",
+        to: "/$orgUrlSlug/store/$storeUrlSlug/operations/open-work",
+      }),
+    ]);
+  });
+
+  it("keeps an exact logical count when each status probe is complete", async () => {
+    const operationalWorkItem = ["open", "in_progress"].flatMap((status) =>
+      Array.from({ length: 101 }, (_, index) => ({
+        _id: `${status}-${index}`,
+        approvalState: "not_required",
+        createdAt: index,
+        organizationId: "org-1",
+        priority: "normal",
+        status,
+        storeId: "store-1",
+        title: `Work ${status} ${index}`,
+        type: "customer_follow_up",
+      })),
+    );
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx({
+        dailyClose: [priorClose],
+        dailyOpening: [startedOpening],
+        operationalWorkItem,
+        store: [store],
+      }),
+      { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.lanes.find((lane) => lane.key === "queue")).toMatchObject({
+      count: 202,
+      countLabel: "202",
+      description: "202 open items.",
+    });
+    expect(
+      snapshot.attentionItems.filter(
+        (item) => item.owner === "operations_queue",
+      ),
+    ).toHaveLength(200);
   });
 
   it("carries prior-day pending approvals into the current operating day", async () => {
