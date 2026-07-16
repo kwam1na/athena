@@ -12,7 +12,7 @@ symptoms:
 root_cause: logic_error
 resolution_type: code_fix
 severity: high
-delivery_diff_fingerprint: e72ee0ef3ebbb3d517f0826cb45e249828eaef7bae4497ecc5b3b7ced726709f
+delivery_diff_fingerprint: ffb12e1d12285dae5654d92f8999a0c202f2cd0344eb74f96f29a4d8177bb9a0
 tags:
   - convex
   - performance
