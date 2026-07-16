@@ -24,11 +24,7 @@ export type RecordOperationalEventArgs = {
   metadataDedupeKeys?: string[];
   actorUserId?: Id<"athenaUser">;
   actorStaffProfileId?: Id<"staffProfile">;
-  actorType?: "human" | "automation" | "service_principal";
-  actorServicePrincipalId?: Id<"servicePrincipal">;
-  actorServicePrincipalSessionId?: Id<"servicePrincipalSession">;
-  servicePrincipalId?: Id<"servicePrincipal">;
-  servicePrincipalSessionId?: Id<"servicePrincipalSession">;
+  actorType?: "human" | "automation";
   automationRunId?: Id<"automationRun">;
   automationPolicyVersion?: string;
   automationDecisionReason?: string;
@@ -45,7 +41,6 @@ export type RecordOperationalEventArgs = {
 };
 
 export function buildOperationalEvent(args: RecordOperationalEventArgs) {
-  assertOperationalEventActorLane(args);
   const { metadataDedupeKeys: _metadataDedupeKeys, ...eventArgs } = args;
   const normalizedArgs = normalizeOperationalEventTraceFields(eventArgs);
 
@@ -60,28 +55,6 @@ export function buildOperationalEvent(args: RecordOperationalEventArgs) {
       }),
     createdAt: Date.now(),
   };
-}
-
-function assertOperationalEventActorLane(args: RecordOperationalEventArgs) {
-  const hasServiceActorReference =
-    args.actorServicePrincipalId !== undefined ||
-    args.actorServicePrincipalSessionId !== undefined;
-
-  if (args.actorType === "service_principal") {
-    if (
-      args.actorServicePrincipalId === undefined ||
-      args.actorUserId !== undefined ||
-      args.actorStaffProfileId !== undefined ||
-      args.automationRunId !== undefined
-    ) {
-      throw new Error("invalid_service_principal_actor");
-    }
-    return;
-  }
-
-  if (hasServiceActorReference) {
-    throw new Error("invalid_service_principal_actor");
-  }
 }
 
 export function normalizeOperationalEventTraceFields<
@@ -182,11 +155,7 @@ function matchesExistingEvent(
     approvalRequestId?: Id<"approvalRequest">;
     actorStaffProfileId?: Id<"staffProfile">;
     actorUserId?: Id<"athenaUser">;
-    actorType?: "human" | "automation" | "service_principal";
-    actorServicePrincipalId?: Id<"servicePrincipal">;
-    actorServicePrincipalSessionId?: Id<"servicePrincipalSession">;
-    servicePrincipalId?: Id<"servicePrincipal">;
-    servicePrincipalSessionId?: Id<"servicePrincipalSession">;
+    actorType?: "human" | "automation";
     automationDecisionReason?: string;
     automationPolicyVersion?: string;
     automationRunId?: Id<"automationRun">;
@@ -212,12 +181,6 @@ function matchesExistingEvent(
     existingEvent.actorStaffProfileId === args.actorStaffProfileId &&
     existingEvent.actorUserId === args.actorUserId &&
     existingEvent.actorType === args.actorType &&
-    existingEvent.actorServicePrincipalId === args.actorServicePrincipalId &&
-    existingEvent.actorServicePrincipalSessionId ===
-      args.actorServicePrincipalSessionId &&
-    existingEvent.servicePrincipalId === args.servicePrincipalId &&
-    existingEvent.servicePrincipalSessionId ===
-      args.servicePrincipalSessionId &&
     existingEvent.automationRunId === args.automationRunId &&
     existingEvent.automationPolicyVersion === args.automationPolicyVersion &&
     existingEvent.automationDecisionReason ===

@@ -42,13 +42,7 @@ export function buildPosLocalSyncUploadEvents(
     if (!uploadEvent) continue;
     const sequence = event.uploadSequence;
     if (typeof sequence !== "number") continue;
-    uploadEvents.push({
-      ...uploadEvent,
-      sequence,
-      ...(event.offlineAuthorityReceipt
-        ? { offlineAuthorityReceipt: event.offlineAuthorityReceipt }
-        : {}),
-    });
+    uploadEvents.push({ ...uploadEvent, sequence });
   }
 
   return uploadEvents;

@@ -27,7 +27,6 @@ const posLocalSyncEventBaseValidator = {
   localRegisterSessionId: v.string(),
   sequence: v.number(),
   occurredAt: v.number(),
-  offlineAuthorityReceipt: v.optional(v.string()),
   staffProfileId: v.id("staffProfile"),
   staffProofToken: v.optional(v.string()),
 };
@@ -198,7 +197,6 @@ export const posLocalSyncUploadEventValidator = unionFromValidators(
         sequence: v.number(),
         eventType: v.literal(contract.eventType),
         occurredAt: v.number(),
-        offlineAuthorityReceipt: v.optional(v.string()),
         staffProfileId: v.id("staffProfile"),
         staffProofToken: v.optional(v.string()),
         payload,

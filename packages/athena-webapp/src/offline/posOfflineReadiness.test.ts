@@ -7,7 +7,6 @@ describe("buildPosOfflineReadinessSummary", () => {
     const summary = buildPosOfflineReadinessSummary({
       appSession: { ready: true },
       appShell: { ready: true },
-      offlineAuthorityReceipt: { ready: true },
       availabilitySnapshot: { ready: true, ageMs: 10 * 60_000 },
       registerCatalog: { ready: true, ageMs: 20 * 60_000 },
       serviceCatalog: { ready: true, ageMs: 30 * 60_000 },
@@ -17,11 +16,10 @@ describe("buildPosOfflineReadinessSummary", () => {
 
     expect(summary.status).toBe("ready");
     expect(summary.title).toBe("Register ready for offline checkout");
-    expect(summary.readyCount).toBe(8);
+    expect(summary.readyCount).toBe(7);
     expect(summary.signals.map((signal) => signal.domain)).toEqual([
       "app_shell",
       "app_session",
-      "offline_authority",
       "terminal_seed",
       "staff_authority",
       "register_catalog",
@@ -35,7 +33,6 @@ describe("buildPosOfflineReadinessSummary", () => {
     const summary = buildPosOfflineReadinessSummary({
       appSession: { ready: true },
       appShell: { ready: true },
-      offlineAuthorityReceipt: { ready: true },
       availabilitySnapshot: { ready: true, ageMs: 49 * 60 * 60_000 },
       registerCatalog: { ready: true, ageMs: 5 * 60_000 },
       serviceCatalog: { ready: true, ageMs: 5 * 60_000 },
@@ -71,11 +68,12 @@ describe("buildPosOfflineReadinessSummary", () => {
     });
   });
 
-  it("treats a verified signed lease as support-safe local continuation", () => {
+  it("treats app-session-unverified continuation as support-safe diagnostics", () => {
     const summary = buildPosOfflineReadinessSummary({
-      appSession: { ready: true },
+      appSession: {
+        status: "local_continuation",
+      },
       appShell: { ready: true },
-      offlineAuthorityReceipt: { status: "local_continuation" },
       availabilitySnapshot: { ready: true, ageMs: 10 * 60_000 },
       registerCatalog: { ready: true, ageMs: 20 * 60_000 },
       serviceCatalog: { ready: true, ageMs: 30 * 60_000 },
@@ -86,10 +84,10 @@ describe("buildPosOfflineReadinessSummary", () => {
     expect(summary.status).toBe("ready");
     expect(summary.description).toContain("local sale continuation");
     expect(
-      summary.signals.find((signal) => signal.domain === "offline_authority"),
+      summary.signals.find((signal) => signal.domain === "app_session"),
     ).toMatchObject({
       description:
-        "The signed offline access window is active. Existing local sale capture can continue until it expires.",
+        "App session is unverified while offline. Sales can continue locally and sync later for reconciliation.",
       status: "local_continuation",
     });
   });

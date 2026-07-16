@@ -1,8 +1,8 @@
 import { createRouter } from "@tanstack/react-router";
 import { QueryClient } from "@tanstack/react-query";
+import { ConvexReactClient } from "convex/react";
 
 import { routeTree } from "./routeTree.gen";
-export { convex } from "./lib/convexClient";
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -26,3 +26,7 @@ declare module "@tanstack/react-router" {
     router: typeof router;
   }
 }
+
+export const convex = new ConvexReactClient(
+  import.meta.env.VITE_CONVEX_URL as string,
+);

@@ -11,17 +11,12 @@ import { ArrowRight, KeyRound } from "lucide-react";
 export function LoginForm({
   onUsePosRecoveryCode,
   setStep,
-  terminalName,
 }: {
   onUsePosRecoveryCode?: () => void;
   setStep: (step: { email: string }) => void;
-  terminalName?: string | null;
 }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { signIn } = useAuthActions();
-  const posSignInLabel = terminalName
-    ? `Sign in to ${terminalName}`
-    : "POS sign in";
 
   const form = useForm({
     validatorAdapter: zodValidator(),
@@ -106,7 +101,7 @@ export function LoginForm({
           <section className="relative z-10 w-full border-t border-border pt-layout-md">
             <button
               type="button"
-              aria-label={posSignInLabel}
+              aria-label="POS sign in"
               data-testid="athena-login-pos-sign-in"
               className="group flex w-full items-center justify-between gap-layout-sm rounded-md border border-action-workflow-border bg-action-workflow-soft px-layout-md py-layout-sm text-left text-sm font-medium text-action-workflow transition-colors duration-standard ease-standard hover:bg-action-workflow-soft/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               onClick={onUsePosRecoveryCode}
@@ -115,7 +110,7 @@ export function LoginForm({
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-background text-action-workflow">
                   <KeyRound aria-hidden="true" className="h-4 w-4" />
                 </span>
-                <span>{posSignInLabel}</span>
+                <span>POS sign in</span>
               </span>
               <ArrowRight
                 aria-hidden="true"

@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "@tanstack/react-router";
-import { useAuthActions } from "@convex-dev/auth/react";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReference } from "convex/server";
 import type { ComponentType, ReactNode } from "react";
@@ -8,14 +7,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingButton } from "@/components/ui/loading-button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Select,
@@ -36,20 +27,11 @@ import {
   generateBrowserFingerprint,
 } from "@/lib/browserFingerprint";
 import { toast } from "sonner";
+import { FINGERPRINT_STORAGE_KEY } from "@/lib/constants";
 import {
-  FINGERPRINT_STORAGE_KEY,
-  LOGGED_IN_USER_ID_KEY,
-  POS_APP_ACCOUNT_ID_KEY,
-} from "@/lib/constants";
-import {
-  reactivateAndProvisionPosTerminal,
   registerAndProvisionPosTerminal,
   type ProvisionedTerminalRecord,
 } from "@/lib/pos/application/registerAndProvisionPosTerminal";
-import {
-  clearPosTerminalReconnectIntent,
-  readPosTerminalReconnectIntent,
-} from "@/lib/pos/application/posTerminalReconnectIntent";
 import { usePermissions } from "@/hooks/usePermissions";
 import {
   isSharedDemoUiEnabled,
@@ -82,9 +64,6 @@ import { getOrigin } from "@/lib/navigationUtils";
 import { parseDisplayAmountInput } from "@/lib/pos/displayAmounts";
 import { toDisplayAmount } from "~/convex/lib/currency";
 import { currencyDisplaySymbol } from "~/shared/currencyFormatter";
-import { convex } from "@/lib/convexClient";
-import { isVerifiedPosOfflineAuthorityReceiptCurrent } from "@/lib/pos/security/offlineAuthorityPublicKeys";
-import { clearPosServiceAuthPresentation } from "@/components/auth/Login/posRecoveryFlow";
 
 type HealthLinkProps = {
   children: ReactNode;
@@ -689,11 +668,7 @@ function StoreHoursTimingReadout({
           </div>
         </dl>
 
-        {!readOnly &&
-        !isLoading &&
-        hasFullAdminAccess &&
-        orgUrlSlug &&
-        storeUrlSlug ? (
+        {!readOnly && !isLoading && hasFullAdminAccess && orgUrlSlug && storeUrlSlug ? (
           <HealthLink
             className="inline-flex h-control-compact items-center rounded-md bg-signal px-layout-md text-sm font-medium text-signal-foreground"
             params={{
@@ -1495,264 +1470,24 @@ function StoreDayAutomationAdminPanel({
   );
 }
 
-type PosApplicationAccessStatus = {
-  grantId?: Id<"servicePrincipalCapability">;
-  grantRevision: number;
-  principalStatus?: "active" | "disabled" | "revoked" | "decommissioned";
-  servicePrincipalId?: Id<"servicePrincipal">;
-  status: "enabled" | "revoked" | "not_configured" | "unavailable";
-};
-
-type PosApplicationAccessStatusQuery = FunctionReference<
-  "query",
-  "public",
-  { storeId: Id<"store"> },
-  PosApplicationAccessStatus
->;
-type PosApplicationAccessMutation = FunctionReference<
-  "mutation",
-  "public",
-  { expectedRevision: number; storeId: Id<"store"> },
-  PosApplicationAccessStatus
->;
-
-const posApplicationAccessApi = (
-  api as unknown as {
-    pos: {
-      public: {
-        posApplicationAccess: {
-          enableApplicationAccess: PosApplicationAccessMutation;
-          getApplicationAccessStatus: PosApplicationAccessStatusQuery;
-          revokeApplicationAccess: PosApplicationAccessMutation;
-        };
-      };
-    };
-  }
-).pos.public.posApplicationAccess;
-
-const POS_AUTHORITY_CONSEQUENCE =
-  "Active online registers lose server authority on their next request and require POS recovery. Disconnected registers can continue only within their current signed validation lease and are checked when they reconnect.";
-
-function POSApplicationAccessAdminPanel({
-  storeId,
-  storeName,
-}: {
-  storeId?: Id<"store"> | null;
-  storeName: string;
-}) {
-  const { hasFullAdminAccess, isLoading } = usePermissions();
-  const status = useQuery(
-    posApplicationAccessApi.getApplicationAccessStatus,
-    !isLoading && hasFullAdminAccess && storeId ? { storeId } : "skip",
-  );
-  const enableApplicationAccess = useMutation(
-    posApplicationAccessApi.enableApplicationAccess,
-  );
-  const revokeApplicationAccess = useMutation(
-    posApplicationAccessApi.revokeApplicationAccess,
-  );
-  const [statusOverride, setStatusOverride] =
-    useState<PosApplicationAccessStatus | null>(null);
-  const [isChanging, setIsChanging] = useState(false);
-  const [isRevokeOpen, setIsRevokeOpen] = useState(false);
-  const [message, setMessage] = useState<{
-    kind: "error" | "success";
-    text: string;
-  } | null>(null);
-  const cancelRef = useRef<HTMLButtonElement>(null);
-  const revokeTriggerRef = useRef<HTMLButtonElement>(null);
-  const currentStatus = statusOverride ?? status;
-
-  const changeAccess = async (enabled: boolean) => {
-    if (!storeId || !currentStatus) return;
-    setIsChanging(true);
-    setMessage(null);
-    try {
-      const mutation = enabled
-        ? enableApplicationAccess
-        : revokeApplicationAccess;
-      const nextStatus = await mutation({
-        expectedRevision: currentStatus.grantRevision,
-        storeId,
-      });
-      setStatusOverride(nextStatus);
-      setIsRevokeOpen(false);
-      setMessage({
-        kind: "success",
-        text: enabled
-          ? "POS application access enabled."
-          : "POS application access revoked.",
-      });
-    } catch (error) {
-      console.error(error);
-      setMessage({
-        kind: "error",
-        text: "POS application access was not changed. Refresh and try again.",
-      });
-    } finally {
-      setIsChanging(false);
-    }
-  };
-
-  if (isLoading || !hasFullAdminAccess) return null;
-
-  const statusLabel =
-    currentStatus?.status === "not_configured"
-      ? "Not enabled"
-      : currentStatus?.status === "unavailable"
-        ? "Unavailable"
-        : currentStatus?.status === "enabled"
-          ? "Enabled"
-          : currentStatus?.status === "revoked"
-            ? "Revoked"
-            : "Loading";
-  const canEnable =
-    currentStatus?.status === "revoked" ||
-    currentStatus?.status === "not_configured";
-  const canRevoke = currentStatus?.status === "enabled";
-
-  return (
-    <section className="grid gap-layout-xl border-b border-border py-layout-2xl lg:grid-cols-[17rem_minmax(0,1fr)]">
-      <div className="space-y-layout-sm">
-        <h2 className="text-2xl font-medium text-foreground">
-          POS application access
-        </h2>
-        <p className="text-sm leading-6 text-muted-foreground">
-          Control whether registered checkout stations can use server-backed POS
-          for {storeName}.
-        </p>
-      </div>
-      <div className="space-y-layout-lg">
-        <div className="flex flex-wrap gap-layout-xs">
-          <span className="inline-flex rounded-full border border-border bg-background px-layout-sm py-layout-2xs text-sm text-muted-foreground">
-            {statusLabel}
-          </span>
-          {currentStatus ? (
-            <span className="inline-flex rounded-full border border-border bg-background px-layout-sm py-layout-2xs text-sm text-muted-foreground">
-              Revision {currentStatus.grantRevision}
-            </span>
-          ) : null}
-        </div>
-
-        {currentStatus == null ? (
-          <p className="text-sm text-muted-foreground" role="status">
-            Loading POS application access.
-          </p>
-        ) : currentStatus.status === "unavailable" ? (
-          <p className="text-sm text-muted-foreground">
-            Store service authority is unavailable. Restore it before enabling
-            POS application access.
-          </p>
-        ) : (
-          <p className="text-sm leading-6 text-muted-foreground">
-            {currentStatus.status === "enabled"
-              ? "Registered checkout stations can establish and use POS application sessions."
-              : "Registered checkout stations cannot establish or renew POS application sessions."}
-          </p>
-        )}
-
-        {message ? (
-          <p
-            className={
-              message.kind === "error"
-                ? "text-sm text-danger"
-                : "text-sm text-success"
-            }
-            role={message.kind === "error" ? "alert" : "status"}
-          >
-            {message.text}
-          </p>
-        ) : null}
-
-        <div className="flex flex-wrap gap-layout-sm border-t border-border pt-layout-md">
-          <LoadingButton
-            disabled={!storeId || !canEnable || isChanging}
-            isLoading={isChanging && canEnable}
-            onClick={() => void changeAccess(true)}
-          >
-            {currentStatus?.status === "revoked"
-              ? "Re-enable application access"
-              : "Enable application access"}
-          </LoadingButton>
-          <LoadingButton
-            disabled={!storeId || !canRevoke || isChanging}
-            isLoading={isChanging && canRevoke}
-            onClick={() => setIsRevokeOpen(true)}
-            ref={revokeTriggerRef}
-            variant="outline"
-          >
-            Revoke application access
-          </LoadingButton>
-        </div>
-      </div>
-
-      <Dialog
-        open={isRevokeOpen}
-        onOpenChange={(open) => {
-          if (!isChanging) setIsRevokeOpen(open);
-        }}
-      >
-        <DialogContent
-          className="w-[min(calc(100vw-2rem),32rem)]"
-          onOpenAutoFocus={(event) => {
-            event.preventDefault();
-            cancelRef.current?.focus();
-          }}
-          onCloseAutoFocus={(event) => {
-            event.preventDefault();
-            revokeTriggerRef.current?.focus();
-          }}
-        >
-          <DialogHeader>
-            <DialogTitle>Revoke POS application access?</DialogTitle>
-            <DialogDescription>
-              This changes application access for {storeName}.{" "}
-              {POS_AUTHORITY_CONSEQUENCE}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <LoadingButton
-              disabled={isChanging}
-              onClick={() => setIsRevokeOpen(false)}
-              ref={cancelRef}
-              variant="outline"
-            >
-              Cancel
-            </LoadingButton>
-            <LoadingButton
-              disabled={isChanging}
-              isLoading={isChanging}
-              onClick={() => void changeAccess(false)}
-            >
-              Revoke application access
-            </LoadingButton>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </section>
-  );
-}
-
-type RecoveryCredentialStatus = {
-  failedAttemptCount: number;
-  lastUsedAt?: number;
-  lockedUntil?: number;
-  rotatedAt: number;
-  status: "active" | "locked" | "revoked";
-};
-
-function POSRecoveryCodeAdminPanel({
-  storeId,
-  storeName,
-}: {
-  storeId?: Id<"store"> | null;
-  storeName: string;
-}) {
+function POSRecoveryCodeAdminPanel({ storeId }: { storeId?: string | null }) {
   const { hasFullAdminAccess, isLoading } = usePermissions();
   const status = useQuery(
     api.pos.public.posRecoveryCodes.getRecoveryCodeStatus,
-    !isLoading && hasFullAdminAccess && storeId ? { storeId } : "skip",
-  ) as RecoveryCredentialStatus | null | undefined;
+    !isLoading && hasFullAdminAccess && storeId
+      ? { storeId: storeId as never }
+      : "skip",
+  ) as
+    | {
+        failedAttemptCount: number;
+        lastUsedAt?: number;
+        lockedUntil?: number;
+        plaintextCode?: string;
+        rotatedAt: number;
+        status: "active" | "locked" | "revoked";
+      }
+    | null
+    | undefined;
   const rotateRecoveryCode = useMutation(
     api.pos.public.posRecoveryCodes.rotateRecoveryCode,
   );
@@ -1762,119 +1497,69 @@ function POSRecoveryCodeAdminPanel({
   const revokeRecoveryCode = useMutation(
     api.pos.public.posRecoveryCodes.revokeRecoveryCode,
   );
-  const [confirmation, setConfirmation] = useState<"rotate" | "revoke" | null>(
-    null,
-  );
-  const [isMutating, setIsMutating] = useState(false);
+  const [isRotating, setIsRotating] = useState(false);
+  const [isUnlocking, setIsUnlocking] = useState(false);
+  const [isRevoking, setIsRevoking] = useState(false);
   const [revealedCode, setRevealedCode] = useState<string | null>(null);
-  const [acknowledged, setAcknowledged] = useState(false);
-  const [copyMessage, setCopyMessage] = useState<{
-    kind: "error" | "success";
-    text: string;
-  } | null>(null);
-  const [message, setMessage] = useState<{
-    kind: "error" | "success";
-    text: string;
-  } | null>(null);
-  const confirmCancelRef = useRef<HTMLButtonElement>(null);
-  const rotateTriggerRef = useRef<HTMLButtonElement>(null);
 
   const handleRotate = async () => {
-    if (!storeId) return;
-    setIsMutating(true);
-    setMessage(null);
+    if (!storeId) {
+      toast.error("Select a store before managing POS recovery codes");
+      return;
+    }
+    setIsRotating(true);
+    setRevealedCode(null);
     try {
-      const result = await rotateRecoveryCode({ storeId });
-      setConfirmation(null);
+      const result = await rotateRecoveryCode({ storeId: storeId as never });
       setRevealedCode(result.code);
-      setAcknowledged(false);
-      setCopyMessage(null);
+      toast.success("POS recovery code rotated");
     } catch (error) {
       console.error(error);
-      setConfirmation(null);
-      setMessage({
-        kind: "error",
-        text: "Recovery code was not changed. Try again.",
-      });
+      toast.error("Unable to rotate POS recovery code");
     } finally {
-      setIsMutating(false);
+      setIsRotating(false);
     }
   };
 
   const handleUnlock = async () => {
-    if (!storeId) return;
-    setIsMutating(true);
-    setMessage(null);
+    if (!storeId) {
+      return;
+    }
+    setIsUnlocking(true);
     try {
-      await unlockRecoveryCode({ storeId });
-      setMessage({ kind: "success", text: "Recovery code unlocked." });
+      await unlockRecoveryCode({ storeId: storeId as never });
+      toast.success("POS recovery code unlocked");
     } catch (error) {
       console.error(error);
-      setMessage({
-        kind: "error",
-        text: "Recovery code was not unlocked. Try again.",
-      });
+      toast.error("Unable to unlock POS recovery code");
     } finally {
-      setIsMutating(false);
+      setIsUnlocking(false);
     }
   };
 
   const handleRevoke = async () => {
-    if (!storeId) return;
-    setIsMutating(true);
-    setMessage(null);
-    try {
-      await revokeRecoveryCode({ storeId });
-      setConfirmation(null);
-      setMessage({ kind: "success", text: "Recovery code revoked." });
-    } catch (error) {
-      console.error(error);
-      setConfirmation(null);
-      setMessage({
-        kind: "error",
-        text: "Recovery code was not revoked. Try again.",
-      });
-    } finally {
-      setIsMutating(false);
+    if (!storeId) {
+      return;
     }
-  };
-
-  const handleCopy = async () => {
-    if (!revealedCode) return;
-    try {
-      await navigator.clipboard.writeText(revealedCode);
-      setCopyMessage({ kind: "success", text: "Recovery code copied." });
-    } catch (error) {
-      console.error(error);
-      setCopyMessage({
-        kind: "error",
-        text: "Recovery code was not copied. Copy it manually.",
-      });
-    }
-  };
-
-  const closeReveal = () => {
+    setIsRevoking(true);
     setRevealedCode(null);
-    setAcknowledged(false);
-    setCopyMessage(null);
-    setMessage({
-      kind: "success",
-      text: "Recovery code changed. It cannot be shown again.",
-    });
+    try {
+      await revokeRecoveryCode({ storeId: storeId as never });
+      toast.success("POS recovery code revoked");
+    } catch (error) {
+      console.error(error);
+      toast.error("Unable to revoke POS recovery code");
+    } finally {
+      setIsRevoking(false);
+    }
   };
 
-  if (isLoading || !hasFullAdminAccess) return null;
+  if (isLoading || !hasFullAdminAccess) {
+    return null;
+  }
 
-  const statusLabel =
-    status === undefined
-      ? "Loading"
-      : status === null
-        ? "Not configured"
-        : status.status === "active"
-          ? "Active"
-          : status.status === "locked"
-            ? "Locked"
-            : "Revoked";
+  const statusLabel = status?.status ?? "not configured";
+  const currentRecoveryCode = revealedCode ?? status?.plaintextCode ?? null;
 
   return (
     <section className="grid gap-layout-xl border-b border-border py-layout-2xl lg:grid-cols-[17rem_minmax(0,1fr)]">
@@ -1883,8 +1568,8 @@ function POSRecoveryCodeAdminPanel({
           POS recovery code
         </h2>
         <p className="text-sm leading-6 text-muted-foreground">
-          Manage the store-scoped recovery credential for {storeName}. Athena
-          shows a new code once, immediately after creation or rotation.
+          Manage the recovery code for the shared POS app account. The current
+          code stays visible to full admins.
         </p>
       </div>
 
@@ -1893,210 +1578,76 @@ function POSRecoveryCodeAdminPanel({
           <span className="inline-flex rounded-full border border-border bg-background px-layout-sm py-layout-2xs text-sm text-muted-foreground">
             {statusLabel}
           </span>
-          {status ? (
-            <>
-              <span className="inline-flex rounded-full border border-border bg-background px-layout-sm py-layout-2xs text-sm text-muted-foreground">
-                Rotated {formatRecoveryTimestamp(status.rotatedAt)}
-              </span>
-              <span className="inline-flex rounded-full border border-border bg-background px-layout-sm py-layout-2xs text-sm text-muted-foreground">
-                Used {formatRecoveryTimestamp(status.lastUsedAt)}
-              </span>
-            </>
-          ) : null}
+          <span className="inline-flex rounded-full border border-border bg-background px-layout-sm py-layout-2xs text-sm text-muted-foreground">
+            Rotated {formatRecoveryTimestamp(status?.rotatedAt)}
+          </span>
+          <span className="inline-flex rounded-full border border-border bg-background px-layout-sm py-layout-2xs text-sm text-muted-foreground">
+            Used {formatRecoveryTimestamp(status?.lastUsedAt)}
+          </span>
         </div>
 
-        {status === undefined ? (
-          <p className="text-sm text-muted-foreground" role="status">
-            Loading recovery credential.
-          </p>
-        ) : status === null ? (
-          <p className="text-sm text-muted-foreground">
-            No recovery credential is configured for this store.
-          </p>
-        ) : status.status === "locked" ? (
-          <p className="text-sm text-muted-foreground">
-            Recovery is locked after repeated failed attempts. Unlock it or
-            rotate the code before the next recovery.
-          </p>
-        ) : status.status === "revoked" ? (
-          <p className="text-sm text-muted-foreground">
-            This recovery credential is revoked. Rotate it to create a new code.
-          </p>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            The credential is active. Rotate it when access needs to change.
-          </p>
-        )}
-
-        {status ? (
-          <div className="grid gap-layout-sm text-sm text-muted-foreground sm:grid-cols-2">
-            <div>
-              <p className="font-medium text-foreground">Failed attempts</p>
-              <p>{status.failedAttemptCount}</p>
-            </div>
-            <div>
-              <p className="font-medium text-foreground">Lockout</p>
-              <p>{formatRecoveryTimestamp(status.lockedUntil)}</p>
-            </div>
+        {currentRecoveryCode ? (
+          <div
+            className="w-fit max-w-full rounded-md border border-signal/30 bg-signal/10 px-layout-md py-layout-sm"
+            role="status"
+          >
+            <p className="text-sm font-medium text-foreground">
+              Current recovery code
+            </p>
+            <p className="mt-layout-xs font-mono text-lg tracking-wide text-foreground">
+              {currentRecoveryCode}
+            </p>
+            <p className="mt-layout-xs text-sm text-muted-foreground">
+              Keep this with the field operations runbook. Rotate it when staff
+              need a new code.
+            </p>
           </div>
         ) : null}
 
-        {message ? (
-          <p
-            className={
-              message.kind === "error"
-                ? "text-sm text-danger"
-                : "text-sm text-success"
-            }
-            role={message.kind === "error" ? "alert" : "status"}
-          >
-            {message.text}
-          </p>
-        ) : null}
+        <div className="grid gap-layout-sm text-sm text-muted-foreground sm:grid-cols-3">
+          <div>
+            <p className="font-medium text-foreground">Failed attempts</p>
+            <p>{status?.failedAttemptCount ?? 0}</p>
+          </div>
+          <div>
+            <p className="font-medium text-foreground">Lockout</p>
+            <p>{formatRecoveryTimestamp(status?.lockedUntil)}</p>
+          </div>
+          <div>
+            <p className="font-medium text-foreground">Plaintext</p>
+            <p>{currentRecoveryCode ? "Visible" : "Rotate to show"}</p>
+          </div>
+        </div>
 
         <div className="flex flex-wrap gap-layout-sm border-t border-border pt-layout-md">
           <LoadingButton
-            disabled={!storeId || status === undefined || isMutating}
-            isLoading={isMutating && confirmation === "rotate"}
-            onClick={() => setConfirmation("rotate")}
-            ref={rotateTriggerRef}
+            isLoading={isRotating}
+            disabled={!storeId || isRotating}
+            onClick={handleRotate}
+            variant="default"
           >
             {status ? "Rotate recovery code" : "Create recovery code"}
           </LoadingButton>
           <LoadingButton
-            disabled={!storeId || status?.status !== "locked" || isMutating}
-            isLoading={isMutating && status?.status === "locked"}
-            onClick={() => void handleUnlock()}
+            isLoading={isUnlocking}
+            disabled={!storeId || status?.status !== "locked" || isUnlocking}
+            onClick={handleUnlock}
             variant="outline"
           >
             Unlock
           </LoadingButton>
           <LoadingButton
+            isLoading={isRevoking}
             disabled={
-              !storeId || !status || status.status === "revoked" || isMutating
+              !storeId || !status || status.status === "revoked" || isRevoking
             }
-            isLoading={isMutating && confirmation === "revoke"}
-            onClick={() => setConfirmation("revoke")}
+            onClick={handleRevoke}
             variant="outline"
           >
-            Revoke recovery code
+            Revoke
           </LoadingButton>
         </div>
       </div>
-
-      <Dialog
-        open={confirmation !== null}
-        onOpenChange={(open) => {
-          if (!open && !isMutating) setConfirmation(null);
-        }}
-      >
-        <DialogContent
-          className="w-[min(calc(100vw-2rem),32rem)]"
-          onOpenAutoFocus={(event) => {
-            event.preventDefault();
-            confirmCancelRef.current?.focus();
-          }}
-          onCloseAutoFocus={(event) => {
-            event.preventDefault();
-            rotateTriggerRef.current?.focus();
-          }}
-        >
-          <DialogHeader>
-            <DialogTitle>
-              {confirmation === "revoke"
-                ? "Revoke recovery code?"
-                : status
-                  ? "Rotate recovery code?"
-                  : "Create recovery code?"}
-            </DialogTitle>
-            <DialogDescription>
-              This changes the recovery credential for {storeName}. Existing
-              codes stop working. {POS_AUTHORITY_CONSEQUENCE}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <LoadingButton
-              disabled={isMutating}
-              onClick={() => setConfirmation(null)}
-              ref={confirmCancelRef}
-              variant="outline"
-            >
-              Cancel
-            </LoadingButton>
-            <LoadingButton
-              disabled={isMutating}
-              isLoading={isMutating}
-              onClick={() =>
-                void (confirmation === "revoke"
-                  ? handleRevoke()
-                  : handleRotate())
-              }
-            >
-              {confirmation === "revoke"
-                ? "Revoke recovery code"
-                : status
-                  ? "Rotate recovery code"
-                  : "Create recovery code"}
-            </LoadingButton>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={revealedCode !== null}
-        onOpenChange={(open) => {
-          if (!open) closeReveal();
-        }}
-      >
-        <DialogContent
-          className="w-[min(calc(100vw-2rem),32rem)]"
-          onCloseAutoFocus={(event) => {
-            event.preventDefault();
-            rotateTriggerRef.current?.focus();
-          }}
-        >
-          <DialogHeader>
-            <DialogTitle>Save the recovery code for {storeName}</DialogTitle>
-            <DialogDescription>
-              Athena cannot show this code again. {POS_AUTHORITY_CONSEQUENCE}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-layout-md">
-            <div className="rounded-md border border-signal/30 bg-signal/10 px-layout-md py-layout-sm">
-              <p className="font-mono text-lg tracking-wide text-foreground">
-                {revealedCode}
-              </p>
-            </div>
-            <LoadingButton onClick={() => void handleCopy()} variant="outline">
-              Copy recovery code
-            </LoadingButton>
-            {copyMessage ? (
-              <p
-                className={
-                  copyMessage.kind === "error"
-                    ? "text-sm text-danger"
-                    : "text-sm text-success"
-                }
-                role={copyMessage.kind === "error" ? "alert" : "status"}
-              >
-                {copyMessage.text}
-              </p>
-            ) : null}
-            <label className="flex items-start gap-layout-sm text-sm text-foreground">
-              <Checkbox
-                checked={acknowledged}
-                onCheckedChange={(checked) => setAcknowledged(checked === true)}
-              />
-              <span>I saved this recovery code in the approved location.</span>
-            </label>
-          </div>
-          <DialogFooter>
-            <LoadingButton disabled={!acknowledged} onClick={closeReveal}>
-              Done
-            </LoadingButton>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </section>
   );
 }
@@ -2108,26 +1659,6 @@ function createDefaultLocalReadinessStore() {
 }
 
 const defaultPosSettingsStoreFactory = () => getDefaultPosLocalStore();
-
-type PosTerminalReconnectResolution = {
-  disposition: "ready";
-  displayName: string;
-  expiresAt: number;
-  storeId: Id<"store">;
-  terminalId: Id<"posTerminal">;
-};
-
-type ResolvePosTerminalReconnectIntent = (input: {
-  browserFingerprintHash: string;
-  reconnectIntentToken: string;
-}) => Promise<PosTerminalReconnectResolution>;
-
-const resolvePosTerminalReconnectIntent: ResolvePosTerminalReconnectIntent =
-  (input) =>
-    convex.query(
-      api.pos.public.terminals.getTerminalReconnectIntentResolution,
-      input,
-    );
 
 function signalFromSnapshot(
   snapshot:
@@ -2206,7 +1737,6 @@ function usePosSettingsOfflineReadiness(input: {
       isAuthLoading,
     }),
     appShell: null,
-    offlineAuthorityReceipt: null,
     availabilitySnapshot: null,
     registerCatalog: null,
     serviceCatalog: null,
@@ -2232,7 +1762,6 @@ function usePosSettingsOfflineReadiness(input: {
               isAuthLoading,
             }),
             appShell,
-            offlineAuthorityReceipt: { ready: false },
             availabilitySnapshot: { ready: false },
             registerCatalog: { ready: false },
             serviceCatalog: { ready: false },
@@ -2255,7 +1784,6 @@ function usePosSettingsOfflineReadiness(input: {
               isAuthLoading,
             }),
             appShell,
-            offlineAuthorityReceipt: { ready: false },
             availabilitySnapshot: { ready: false },
             registerCatalog: { ready: false },
             serviceCatalog: { ready: false },
@@ -2308,13 +1836,6 @@ function usePosSettingsOfflineReadiness(input: {
           isAuthLoading,
         }),
         appShell,
-        offlineAuthorityReceipt: {
-          ready: isVerifiedPosOfflineAuthorityReceiptCurrent({
-            receipt: localTerminalSeed?.offlineAuthorityReceipt,
-            storeId,
-            terminalId: existingTerminal._id,
-          }),
-        },
         availabilitySnapshot: signalFromSnapshot(availabilitySnapshot),
         registerCatalog: signalFromSnapshot(registerCatalog),
         serviceCatalog: signalFromSnapshot(serviceCatalog),
@@ -2350,22 +1871,14 @@ function usePosSettingsOfflineReadiness(input: {
 }
 
 export function POSSettingsView({
-  reconnectResolver = resolvePosTerminalReconnectIntent,
   storeFactory = defaultPosSettingsStoreFactory,
 }: {
-  reconnectResolver?: ResolvePosTerminalReconnectIntent;
   storeFactory?: Parameters<
     typeof registerAndProvisionPosTerminal
   >[0]["storeFactory"];
 } = {}) {
   const { activeStore } = useGetActiveStore();
-  const navigate = useNavigate();
-  const { signOut } = useAuthActions();
   const { isLoading: isAuthLoading, user } = useAuth();
-  const {
-    hasFullAdminAccess,
-    isLoading: isPermissionsLoading,
-  } = usePermissions();
   const sharedDemoContext = useSharedDemoContext();
   const isReadOnlyDemoSurface =
     isSharedDemoUiEnabled && sharedDemoContext !== null;
@@ -2379,9 +1892,6 @@ export function POSSettingsView({
 
   const registerTerminalMutation = useMutation(
     api.inventory.posTerminal.registerTerminal,
-  );
-  const reactivateTerminalMutation = useMutation(
-    api.pos.public.terminals.reactivateTerminalFromReconnectIntent,
   );
   const [fingerprintResult, setFingerprintResult] =
     useState<BrowserFingerprintResult | null>(null);
@@ -2403,24 +1913,6 @@ export function POSSettingsView({
   const [loginModeTouched, setLoginModeTouched] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
   const [isUpdatingExisting, setIsUpdatingExisting] = useState(false);
-  const [provisionedTerminal, setProvisionedTerminal] =
-    useState<ProvisionedTerminalRecord | null>(null);
-  const [provisionedAction, setProvisionedAction] = useState<
-    "registered" | "reconnected"
-  >("registered");
-  const reconnectIntent = readPosTerminalReconnectIntent();
-  const reconnectIntentToken = reconnectIntent?.reconnectIntentToken;
-  const [reconnectState, setReconnectState] = useState<
-    | { status: "none" | "resolving" }
-    | { message: string; status: "unavailable" }
-    | { resolution: PosTerminalReconnectResolution; status: "ready" }
-    | { resolution: PosTerminalReconnectResolution; status: "reactivating" }
-  >(reconnectIntent ? { status: "resolving" } : { status: "none" });
-  const [isContinuingToRecovery, setIsContinuingToRecovery] = useState(false);
-  const [continueToRecoveryError, setContinueToRecoveryError] = useState<
-    string | null
-  >(null);
-  const stayInSettingsRef = useRef<HTMLButtonElement>(null);
   const fingerprintHash = fingerprintResult?.fingerprintHash;
 
   const currentTerminal = useQuery(
@@ -2432,68 +1924,6 @@ export function POSSettingsView({
 
   const existingTerminal = currentTerminal ?? null;
   const isRegisterNumberLocked = Boolean(existingTerminal?.registerNumber);
-
-  useEffect(() => {
-    if (!reconnectIntentToken) {
-      setReconnectState({ status: "none" });
-      return;
-    }
-    if (isPermissionsLoading || !fingerprintHash) return;
-    if (!hasFullAdminAccess) {
-      setReconnectState({
-        message:
-          "This checkout station reconnect request is unavailable. No terminal settings were changed.",
-        status: "unavailable",
-      });
-      return;
-    }
-
-    let cancelled = false;
-    setReconnectState({ status: "resolving" });
-    void Promise.all([
-      reconnectResolver({
-        browserFingerprintHash: fingerprintHash,
-        reconnectIntentToken,
-      }),
-      storeFactory().readProvisionedTerminalSeed(),
-    ])
-      .then(([resolution, seedResult]) => {
-        if (cancelled) return;
-        const seed = seedResult.ok ? seedResult.value : null;
-        if (
-          resolution.disposition !== "ready" ||
-          resolution.expiresAt <= Date.now() ||
-          resolution.storeId !== activeStore?._id ||
-          !seed ||
-          seed.terminalId !== fingerprintHash ||
-          seed.storeId !== resolution.storeId ||
-          seed.cloudTerminalId !== resolution.terminalId
-        ) {
-          throw new Error("reconnect_scope_mismatch");
-        }
-        setReconnectState({ resolution, status: "ready" });
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setReconnectState({
-            message:
-              "This checkout station reconnect request is unavailable. No terminal settings were changed.",
-            status: "unavailable",
-          });
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    activeStore?._id,
-    fingerprintHash,
-    hasFullAdminAccess,
-    isPermissionsLoading,
-    reconnectIntentToken,
-    reconnectResolver,
-    storeFactory,
-  ]);
 
   useEffect(() => {
     if (nameTouched) {
@@ -2687,11 +2117,6 @@ export function POSSettingsView({
         return;
       }
 
-      if (!existingTerminal) {
-        setProvisionedAction("registered");
-        setProvisionedTerminal(result.data);
-        setContinueToRecoveryError(null);
-      }
       toast.success(
         existingTerminal
           ? "Terminal register number configured"
@@ -2706,44 +2131,6 @@ export function POSSettingsView({
       toast.error("Unable to register terminal");
     } finally {
       setIsRegistering(false);
-    }
-  };
-
-  const handleReconnectTerminal = async () => {
-    if (
-      reconnectState.status !== "ready" ||
-      !reconnectIntentToken ||
-      !fingerprintHash
-    ) {
-      return;
-    }
-    const resolution = reconnectState.resolution;
-    setReconnectState({ resolution, status: "reactivating" });
-    try {
-      const result = await reactivateAndProvisionPosTerminal({
-        expectedStoreId: resolution.storeId,
-        expectedTerminalId: resolution.terminalId,
-        fingerprintHash,
-        reactivateTerminalMutation,
-        reconnectIntentToken,
-        storeFactory,
-      });
-      if (result.kind === "user_error") {
-        throw new Error(result.error.message);
-      }
-      clearPosTerminalReconnectIntent(reconnectIntentToken);
-      setReconnectState({ status: "none" });
-      setProvisionedAction("reconnected");
-      setProvisionedTerminal(result.data);
-      setContinueToRecoveryError(null);
-      toast.success("Checkout station reconnected");
-    } catch (error) {
-      console.error(error);
-      setReconnectState({
-        message:
-          "This checkout station reconnect request is unavailable. No terminal settings were changed.",
-        status: "unavailable",
-      });
     }
   };
 
@@ -2791,268 +2178,135 @@ export function POSSettingsView({
     }
   };
 
-  const handleContinueToPosSignIn = async () => {
-    setIsContinuingToRecovery(true);
-    setContinueToRecoveryError(null);
-    try {
-      await signOut();
-      clearPosServiceAuthPresentation();
-      localStorage.removeItem(LOGGED_IN_USER_ID_KEY);
-      localStorage.removeItem(POS_APP_ACCOUNT_ID_KEY);
-      await navigate({ to: "/login" });
-    } catch (error) {
-      console.error(error);
-      setContinueToRecoveryError(
-        "Administrator sign-out did not complete. Retry POS sign-in or stay in settings.",
-      );
-    } finally {
-      setIsContinuingToRecovery(false);
-    }
-  };
-
   return (
-    <>
-      <View hideBorder hideHeaderBottomBorder scrollMode="page">
-        <FadeIn className="container mx-auto py-layout-xl">
-          <PageWorkspace>
-            <PageLevelHeader
-              eyebrow="Point of sale"
-              showBackButton
-              title="POS settings"
-              description="Configure the register details this checkout station uses before staff start in-store sales."
-            />
+    <View hideBorder hideHeaderBottomBorder scrollMode="page">
+      <FadeIn className="container mx-auto py-layout-xl">
+        <PageWorkspace>
+          <PageLevelHeader
+            eyebrow="Point of sale"
+            showBackButton
+            title="POS settings"
+            description="Configure the register details this checkout station uses before staff start in-store sales."
+          />
 
-            {isReadOnlyDemoSurface ? (
-              <p className="mt-layout-md w-fit rounded-md border border-border bg-surface-raised px-layout-md py-layout-sm text-sm text-muted-foreground">
-                POS settings are view-only in the demo.
-              </p>
-            ) : null}
-
-            <section className="border-t border-border">
-              {reconnectState.status === "none" ? null : (
-                <section
-                  aria-labelledby="terminal-reconnect-title"
-                  className="grid gap-layout-xl border-b border-border py-layout-2xl lg:grid-cols-[17rem_minmax(0,1fr)]"
-                >
-                  <div className="space-y-layout-sm">
-                    <h2
-                      className="text-2xl font-medium text-foreground"
-                      id="terminal-reconnect-title"
-                    >
-                      Reconnect checkout station
-                    </h2>
-                    <p className="text-sm leading-6 text-muted-foreground">
-                      Restore this browser's existing checkout station. Athena
-                      will keep the same terminal record and issue fresh local
-                      proof.
-                    </p>
-                  </div>
-                  <div className="space-y-layout-md">
-                    {reconnectState.status === "resolving" ? (
-                      <p role="status">Checking reconnect access…</p>
-                    ) : reconnectState.status === "unavailable" ? (
-                      <p className="text-sm text-danger" role="alert">
-                        {reconnectState.message}
-                      </p>
-                    ) : reconnectState.status === "ready" ||
-                      reconnectState.status === "reactivating" ? (
-                      <>
-                        <p className="text-sm text-foreground">
-                          {reconnectState.resolution.displayName} is ready for
-                          administrator reconnection.
-                        </p>
-                        <LoadingButton
-                          disabled={reconnectState.status === "reactivating"}
-                          isLoading={reconnectState.status === "reactivating"}
-                          onClick={() => void handleReconnectTerminal()}
-                        >
-                          Reconnect this checkout station
-                        </LoadingButton>
-                      </>
-                    ) : null}
-                  </div>
-                </section>
-              )}
-              <FingerprintRegistrationCard
-                displayName={displayName}
-                onDisplayNameChange={(value) => {
-                  setNameTouched(true);
-                  setDisplayName(value);
-                }}
-                registerNumber={registerNumber}
-                onRegisterNumberChange={(value) => {
-                  setRegisterNumberTouched(true);
-                  setRegisterNumber(value);
-                }}
-                transactionCapability={transactionCapability}
-                onTransactionCapabilityChange={(value) => {
-                  setTransactionCapabilityTouched(true);
-                  setTransactionCapability(value);
-                }}
-                loginMode={loginMode}
-                onLoginModeChange={(value) => {
-                  setLoginModeTouched(true);
-                  setLoginMode(value);
-                }}
-                canRegister={registrationState.canRegister}
-                onRegister={handleRegisterTerminal}
-                isRegistering={isRegistering}
-                isExistingTerminal={registrationState.isExistingTerminal}
-                isRegisterNumberLocked={isRegisterNumberLocked}
-                canUpdateExisting={registrationState.canUpdateExisting}
-                onUpdateExisting={handleUpdateExistingTerminal}
-                isUpdatingExisting={isUpdatingExisting}
-                fingerprintError={
-                  !isFingerprintLoading ? fingerprintError : null
-                }
-                existingTerminalName={registrationState.existingTerminalName}
-                existingTerminalRegisterNumber={
-                  registrationState.existingTerminalRegisterNumber
-                }
-                offlineReadiness={offlineReadiness}
-                readOnly={isReadOnlyDemoSurface}
-              />
-            </section>
-
-            <StoreDayAutomationAdminPanel
-              readOnly={isReadOnlyDemoSurface}
-              storeId={activeStore?._id ?? null}
-            />
-
-            <StoreHoursTimingReadout
-              orgUrlSlug={routeParams?.orgUrlSlug}
-              readOnly={isReadOnlyDemoSurface}
-              storeId={activeStore?._id ?? null}
-              storeUrlSlug={routeParams?.storeUrlSlug}
-            />
-
-            <RegisterCloseoutApprovalPolicyAdminPanel
-              currency={activeStore?.currency ?? "GHS"}
-              readOnly={isReadOnlyDemoSurface}
-              storeId={activeStore?._id ?? null}
-            />
-
-            <EodCompletionAutomationAdminPanel
-              currency={activeStore?.currency ?? "GHS"}
-              readOnly={isReadOnlyDemoSurface}
-              storeId={activeStore?._id ?? null}
-            />
-
-            {isReadOnlyDemoSurface ? null : (
-              <>
-                <POSApplicationAccessAdminPanel
-                  storeId={activeStore?._id ?? null}
-                  storeName={activeStore?.name ?? "this store"}
-                />
-                <POSRecoveryCodeAdminPanel
-                  storeId={activeStore?._id ?? null}
-                  storeName={activeStore?.name ?? "this store"}
-                />
-              </>
-            )}
-
-            <section className="grid gap-layout-xl border-b border-border py-layout-2xl lg:grid-cols-[17rem_minmax(0,1fr)]">
-              <div className="space-y-layout-sm">
-                <h2 className="text-2xl font-medium text-foreground">
-                  Terminal health
-                </h2>
-                <p className="text-sm leading-6 text-muted-foreground">
-                  Use the health console when you need the full roster, sync
-                  evidence, review work, or support notes for other checkout
-                  stations.
-                </p>
-              </div>
-
-              <div className="flex flex-col items-start gap-layout-sm">
-                <p className="text-sm text-muted-foreground">
-                  This settings page only changes the current checkout station.
-                </p>
-                {!isReadOnlyDemoSurface &&
-                routeParams?.orgUrlSlug &&
-                routeParams.storeUrlSlug ? (
-                  <HealthLink
-                    className="inline-flex h-control-compact items-center rounded-md bg-signal px-layout-md text-sm font-medium text-signal-foreground"
-                    params={{
-                      orgUrlSlug: routeParams.orgUrlSlug,
-                      storeUrlSlug: routeParams.storeUrlSlug,
-                      ...(existingTerminal
-                        ? { terminalId: String(existingTerminal._id) }
-                        : {}),
-                    }}
-                    search={{ o: getOrigin() }}
-                    to={
-                      existingTerminal
-                        ? "/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/$terminalId"
-                        : "/$orgUrlSlug/store/$storeUrlSlug/pos/terminals"
-                    }
-                  >
-                    Open terminal health
-                  </HealthLink>
-                ) : !isReadOnlyDemoSurface ? (
-                  <p className="text-sm text-muted-foreground">
-                    Select a store before opening terminal health.
-                  </p>
-                ) : null}
-              </div>
-            </section>
-          </PageWorkspace>
-        </FadeIn>
-      </View>
-      <Dialog
-        open={provisionedTerminal !== null}
-        onOpenChange={(open) => {
-          if (!open && !isContinuingToRecovery) {
-            setProvisionedTerminal(null);
-            setContinueToRecoveryError(null);
-          }
-        }}
-      >
-        <DialogContent
-          className="w-[min(calc(100vw-2rem),32rem)]"
-          onOpenAutoFocus={(event) => {
-            event.preventDefault();
-            stayInSettingsRef.current?.focus();
-          }}
-        >
-          <DialogHeader>
-            <DialogTitle>Checkout station ready</DialogTitle>
-            <DialogDescription>
-              {provisionedTerminal?.displayName ?? "This checkout station"} is
-              {provisionedAction === "reconnected" ? " reconnected" : " registered"}
-              {" for "}
-              {activeStore?.name ?? "this store"}. POS recovery is still
-              required before staff can sign in.
-            </DialogDescription>
-          </DialogHeader>
-          {continueToRecoveryError ? (
-            <p className="text-sm text-danger" role="alert">
-              {continueToRecoveryError}
+          {isReadOnlyDemoSurface ? (
+            <p className="mt-layout-md w-fit rounded-md border border-border bg-surface-raised px-layout-md py-layout-sm text-sm text-muted-foreground">
+              POS settings are view-only in the demo.
             </p>
           ) : null}
-          <DialogFooter>
-            <LoadingButton
-              disabled={isContinuingToRecovery}
-              onClick={() => {
-                setProvisionedTerminal(null);
-                setContinueToRecoveryError(null);
+
+          <section className="border-t border-border">
+            <FingerprintRegistrationCard
+              displayName={displayName}
+              onDisplayNameChange={(value) => {
+                setNameTouched(true);
+                setDisplayName(value);
               }}
-              ref={stayInSettingsRef}
-              variant="outline"
-            >
-              Stay in settings
-            </LoadingButton>
-            <LoadingButton
-              disabled={isContinuingToRecovery}
-              isLoading={isContinuingToRecovery}
-              onClick={() => void handleContinueToPosSignIn()}
-            >
-              {continueToRecoveryError
-                ? "Retry POS sign-in"
-                : "Continue to POS sign-in"}
-            </LoadingButton>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
+              registerNumber={registerNumber}
+              onRegisterNumberChange={(value) => {
+                setRegisterNumberTouched(true);
+                setRegisterNumber(value);
+              }}
+              transactionCapability={transactionCapability}
+              onTransactionCapabilityChange={(value) => {
+                setTransactionCapabilityTouched(true);
+                setTransactionCapability(value);
+              }}
+              loginMode={loginMode}
+              onLoginModeChange={(value) => {
+                setLoginModeTouched(true);
+                setLoginMode(value);
+              }}
+              canRegister={registrationState.canRegister}
+              onRegister={handleRegisterTerminal}
+              isRegistering={isRegistering}
+              isExistingTerminal={registrationState.isExistingTerminal}
+              isRegisterNumberLocked={isRegisterNumberLocked}
+              canUpdateExisting={registrationState.canUpdateExisting}
+              onUpdateExisting={handleUpdateExistingTerminal}
+              isUpdatingExisting={isUpdatingExisting}
+              fingerprintError={!isFingerprintLoading ? fingerprintError : null}
+              existingTerminalName={registrationState.existingTerminalName}
+              existingTerminalRegisterNumber={
+                registrationState.existingTerminalRegisterNumber
+              }
+              offlineReadiness={offlineReadiness}
+              readOnly={isReadOnlyDemoSurface}
+            />
+          </section>
+
+          <StoreDayAutomationAdminPanel
+            readOnly={isReadOnlyDemoSurface}
+            storeId={activeStore?._id ?? null}
+          />
+
+          <StoreHoursTimingReadout
+            orgUrlSlug={routeParams?.orgUrlSlug}
+            readOnly={isReadOnlyDemoSurface}
+            storeId={activeStore?._id ?? null}
+            storeUrlSlug={routeParams?.storeUrlSlug}
+          />
+
+          <RegisterCloseoutApprovalPolicyAdminPanel
+            currency={activeStore?.currency ?? "GHS"}
+            readOnly={isReadOnlyDemoSurface}
+            storeId={activeStore?._id ?? null}
+          />
+
+          <EodCompletionAutomationAdminPanel
+            currency={activeStore?.currency ?? "GHS"}
+            readOnly={isReadOnlyDemoSurface}
+            storeId={activeStore?._id ?? null}
+          />
+
+          {isReadOnlyDemoSurface ? null : (
+            <POSRecoveryCodeAdminPanel storeId={activeStore?._id ?? null} />
+          )}
+
+          <section className="grid gap-layout-xl border-b border-border py-layout-2xl lg:grid-cols-[17rem_minmax(0,1fr)]">
+            <div className="space-y-layout-sm">
+              <h2 className="text-2xl font-medium text-foreground">
+                Terminal health
+              </h2>
+              <p className="text-sm leading-6 text-muted-foreground">
+                Use the health console when you need the full roster, sync
+                evidence, review work, or support notes for other checkout
+                stations.
+              </p>
+            </div>
+
+            <div className="flex flex-col items-start gap-layout-sm">
+              <p className="text-sm text-muted-foreground">
+                This settings page only changes the current checkout station.
+              </p>
+              {!isReadOnlyDemoSurface && routeParams?.orgUrlSlug && routeParams.storeUrlSlug ? (
+                <HealthLink
+                  className="inline-flex h-control-compact items-center rounded-md bg-signal px-layout-md text-sm font-medium text-signal-foreground"
+                  params={{
+                    orgUrlSlug: routeParams.orgUrlSlug,
+                    storeUrlSlug: routeParams.storeUrlSlug,
+                    ...(existingTerminal
+                      ? { terminalId: String(existingTerminal._id) }
+                      : {}),
+                  }}
+                  search={{ o: getOrigin() }}
+                  to={
+                    existingTerminal
+                      ? "/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/$terminalId"
+                      : "/$orgUrlSlug/store/$storeUrlSlug/pos/terminals"
+                  }
+                >
+                  Open terminal health
+                </HealthLink>
+              ) : !isReadOnlyDemoSurface ? (
+                <p className="text-sm text-muted-foreground">
+                  Select a store before opening terminal health.
+                </p>
+              ) : null}
+            </div>
+          </section>
+        </PageWorkspace>
+      </FadeIn>
+    </View>
   );
 }

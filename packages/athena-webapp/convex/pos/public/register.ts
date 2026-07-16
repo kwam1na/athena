@@ -7,8 +7,6 @@ import {
 } from "../../lib/athenaUserAuth";
 import { getRegisterState } from "../application/queries/getRegisterState";
 import { openDrawer as openDrawerCommand } from "../application/commands/register";
-import { getServicePrincipalActorWithCtx } from "../../servicePrincipals/actor";
-import { requirePosApplicationAuthorityWithCtx } from "../application/posApplicationAuthority";
 
 const registerSessionSummaryValidator = v.object({
   _id: v.id("registerSession"),
@@ -71,20 +69,6 @@ export const getState = query({
       return null;
     }
 
-    const serviceActor = await getServicePrincipalActorWithCtx(ctx);
-    if (serviceActor) {
-      const authority = await requirePosApplicationAuthorityWithCtx(ctx, {
-        storeId: args.storeId,
-      });
-      if (args.terminalId && args.terminalId !== authority.terminalId) {
-        throw new Error("The POS application session is no longer authorized.");
-      }
-      return getRegisterState(ctx, {
-        ...args,
-        terminalId: authority.terminalId,
-      });
-    }
-
     const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
     await requireOrganizationMemberRoleWithCtx(ctx, {
       allowedRoles: ["full_admin", "pos_only"],
@@ -107,16 +91,5 @@ export const openDrawer = mutation({
     notes: v.optional(v.string()),
   },
   returns: registerSessionCommandResultValidator,
-  handler: async (ctx, args) => {
-    const serviceActor = await getServicePrincipalActorWithCtx(ctx);
-    if (serviceActor) {
-      const authority = await requirePosApplicationAuthorityWithCtx(ctx, {
-        storeId: args.storeId,
-      });
-      if (authority.terminalId !== args.terminalId) {
-        throw new Error("The POS application session is no longer authorized.");
-      }
-    }
-    return openDrawerCommand(ctx, args);
-  },
+  handler: async (ctx, args) => openDrawerCommand(ctx, args),
 });

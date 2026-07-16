@@ -3,7 +3,6 @@ import { v } from "convex/values";
 export const posLocalSyncConflictTypeValidator = v.union(
   v.literal("duplicate_local_id"),
   v.literal("inventory"),
-  v.literal("offline_authority"),
   v.literal("payment"),
   v.literal("permission"),
   v.literal("server_rejected"),

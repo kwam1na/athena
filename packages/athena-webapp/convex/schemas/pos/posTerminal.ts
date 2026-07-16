@@ -12,7 +12,6 @@ const loginModeValidator = v.union(
 );
 
 export const posTerminalSchema = v.object({
-  organizationId: v.optional(v.id("organization")),
   storeId: v.id("store"),
   fingerprintHash: v.string(),
   syncSecretHash: v.optional(v.string()),
@@ -31,15 +30,5 @@ export const posTerminalSchema = v.object({
     colorDepth: v.optional(v.number()),
   }),
   registeredAt: v.number(),
-  lifecycleRevision: v.optional(v.number()),
-  proofRevision: v.optional(v.number()),
-  disconnectedAt: v.optional(v.number()),
-  disconnectedByUserId: v.optional(v.id("athenaUser")),
-  reactivatedAt: v.optional(v.number()),
-  reactivatedByUserId: v.optional(v.id("athenaUser")),
-  proofRotatedAt: v.optional(v.number()),
-  lastServicePrincipalRecoveryAt: v.optional(v.number()),
-  servicePrincipalRecoveryVersion: v.optional(v.number()),
-  lastCorrelationId: v.optional(v.string()),
   status: v.union(v.literal("active"), v.literal("revoked"), v.literal("lost")),
 });

@@ -23,7 +23,6 @@ import {
   startRemoteAssistSession,
 } from "./application/sessionService";
 import type { RemoteAssistSession } from "./application/types";
-import { createRemoteAssistReadRepository } from "./infrastructure/remoteAssistReadRepository";
 import { createRemoteAssistRepository } from "./infrastructure/remoteAssistRepository";
 
 const remoteAssistClientReturnValidator = v.object({
@@ -93,7 +92,7 @@ export const getClientByRuntime = query({
       userId: athenaUser._id,
     });
 
-    const repository = createRemoteAssistReadRepository(ctx);
+    const repository = createRemoteAssistRepository(ctx);
     return repository.getClientByRuntime(args);
   },
 });
@@ -105,7 +104,7 @@ export const getCurrentSessionByClient = query({
   returns: v.union(remoteAssistSessionReturnValidator, v.null()),
   handler: async (ctx, args) => {
     const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
-    const repository = createRemoteAssistReadRepository(ctx);
+    const repository = createRemoteAssistRepository(ctx);
     const client = await repository.getClient(args.clientId);
     if (!client) {
       return null;

@@ -6,22 +6,11 @@ import {
 import { POS_LOCAL_SYNC_EVENT_CONTRACT } from "../../../shared/posLocalSyncContract";
 
 const mocks = vi.hoisted(() => ({
-  getServicePrincipalActorWithCtx: vi.fn(),
-  requirePosApplicationAuthorityWithCtx: vi.fn(),
   requireAuthenticatedAthenaUserWithCtx: vi.fn(),
   requireOrganizationMemberRoleWithCtx: vi.fn(),
   ingestLocalEventsWithCtx: vi.fn(),
   ingestRegisterSessionActivityWithCtx: vi.fn(),
   resolveLocalSyncReviewWithCtx: vi.fn(),
-}));
-
-vi.mock("../../servicePrincipals/actor", () => ({
-  getServicePrincipalActorWithCtx: mocks.getServicePrincipalActorWithCtx,
-}));
-
-vi.mock("../application/posApplicationAuthority", () => ({
-  requirePosApplicationAuthorityWithCtx:
-    mocks.requirePosApplicationAuthorityWithCtx,
 }));
 
 vi.mock("../../lib/athenaUserAuth", () => ({
@@ -66,11 +55,6 @@ describe("POS local sync public mutation", () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
-    mocks.getServicePrincipalActorWithCtx.mockResolvedValue(null);
-    mocks.requirePosApplicationAuthorityWithCtx.mockResolvedValue({
-      storeId: "store-1",
-      terminalId: "terminal-1",
-    });
     mocks.requireAuthenticatedAthenaUserWithCtx.mockResolvedValue({
       _id: "athena-user-1",
     });
@@ -104,63 +88,6 @@ describe("POS local sync public mutation", () => {
         },
       },
     });
-  });
-
-  it("accepts current same-store POS application authority without human membership", async () => {
-    mocks.getServicePrincipalActorWithCtx.mockResolvedValue({
-      kind: "service_principal",
-      storeId: "store-1",
-    });
-    const ctx = buildCtx();
-
-    await getHandler(ingestLocalEvents)(ctx as never, {
-      storeId: "store-1",
-      terminalId: "terminal-1",
-      syncSecretHash: "sync-secret-1",
-      submittedAt: 123,
-      events: [buildEvent()],
-    });
-
-    expect(mocks.requirePosApplicationAuthorityWithCtx).toHaveBeenCalledWith(
-      ctx,
-      { storeId: "store-1" },
-    );
-    expect(mocks.requireAuthenticatedAthenaUserWithCtx).not.toHaveBeenCalled();
-    expect(mocks.requireOrganizationMemberRoleWithCtx).not.toHaveBeenCalled();
-    expect(mocks.ingestLocalEventsWithCtx).toHaveBeenCalledWith(
-      ctx,
-      expect.objectContaining({
-        enforceOfflineAuthorityReceipt: true,
-      }),
-    );
-    expect(mocks.ingestLocalEventsWithCtx.mock.calls[0]?.[1]).not.toHaveProperty(
-      "submittedByUserId",
-    );
-  });
-
-  it("denies cross-terminal POS application authority before ingestion", async () => {
-    mocks.getServicePrincipalActorWithCtx.mockResolvedValue({
-      kind: "service_principal",
-      storeId: "store-1",
-    });
-    mocks.requirePosApplicationAuthorityWithCtx.mockResolvedValue({
-      storeId: "store-1",
-      terminalId: "terminal-2",
-    });
-    const ctx = buildCtx();
-
-    const result = await getHandler(ingestLocalEvents)(ctx as never, {
-      storeId: "store-1",
-      terminalId: "terminal-1",
-      syncSecretHash: "sync-secret-1",
-      events: [],
-    });
-
-    expect(result).toMatchObject({
-      kind: "user_error",
-      error: { code: "authorization_failed" },
-    });
-    expect(mocks.ingestLocalEventsWithCtx).not.toHaveBeenCalled();
   });
 
   it("returns authorization_failed when the caller cannot sync the store", async () => {

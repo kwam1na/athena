@@ -4,58 +4,45 @@ import { internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
 import { ATHENA_POS_RECOVERY_CODE_PROVIDER_ID } from "../../shared/auth";
 
-const prepareRecoveryForAuthProviderRef = (internal as any).pos.public
-  .posRecoveryCodes.prepareRecoveryForAuthProvider;
+const verifyRecoveryCodeForAuthProviderRef = (internal as any).pos.public
+  .posRecoveryCodes.verifyRecoveryCodeForAuthProvider;
 
-type PosRecoveryAuthorizeResult = {
-  userId: Id<"users">;
-  sessionId: Id<"authSessions">;
-} | null;
+type PosRecoveryAuthorizeResult = { userId: Id<"users"> } | null;
 
 export const PosRecoveryCode: ReturnType<typeof ConvexCredentials> =
   ConvexCredentials({
   id: ATHENA_POS_RECOVERY_CODE_PROVIDER_ID,
   authorize: async (credentials, ctx): Promise<PosRecoveryAuthorizeResult> => {
+    const email = typeof credentials.email === "string" ? credentials.email : "";
     const code = typeof credentials.code === "string" ? credentials.code : "";
-    const recoveryCorrelationKey =
-      typeof credentials.recoveryCorrelationKey === "string"
-        ? credentials.recoveryCorrelationKey
-        : "";
-    const terminalId =
-      typeof credentials.terminalId === "string" ? credentials.terminalId : "";
-    const terminalProof =
-      typeof credentials.terminalProof === "string"
-        ? credentials.terminalProof
-        : "";
+    const orgUrlSlug =
+      typeof credentials.orgUrlSlug === "string" ? credentials.orgUrlSlug : undefined;
+    const storeId =
+      typeof credentials.storeId === "string" ? credentials.storeId : undefined;
+    const storeUrlSlug =
+      typeof credentials.storeUrlSlug === "string"
+        ? credentials.storeUrlSlug
+        : undefined;
 
-    if (!code || !recoveryCorrelationKey || !terminalId || !terminalProof) {
+    if (!email || !code || (!storeId && (!orgUrlSlug || !storeUrlSlug))) {
       return null;
     }
 
-    // Recovery must originate from the isolated, empty Auth namespace. A
-    // mounted predecessor session is never allowed to prepare authority.
-    if (await ctx.auth.getUserIdentity()) return null;
+    try {
+      const result = (await ctx.runMutation(
+        verifyRecoveryCodeForAuthProviderRef,
+        {
+          code,
+          email,
+          orgUrlSlug,
+          storeId: storeId as never,
+          storeUrlSlug,
+        },
+      )) as { authUserId: Id<"users"> };
 
-    const result = (await ctx.runMutation(
-      prepareRecoveryForAuthProviderRef,
-      {
-        code,
-        recoveryCorrelationKey,
-        terminalId: terminalId as never,
-        terminalProof,
-      },
-    )) as
-      | {
-          status: "prepared";
-          authSessionId: Id<"authSessions">;
-          authUserId: Id<"users">;
-        }
-      | { status: "denied" };
-
-    if (result.status === "denied") return null;
-    return {
-      userId: result.authUserId,
-      sessionId: result.authSessionId,
-    };
+      return { userId: result.authUserId };
+    } catch {
+      return null;
+    }
   },
 });

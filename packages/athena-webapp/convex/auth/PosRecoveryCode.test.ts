@@ -14,32 +14,27 @@ vi.mock("@convex-dev/auth/providers/ConvexCredentials", () => ({
 import { PosRecoveryCode } from "./PosRecoveryCode";
 
 const AUTH_USER_ID = "auth-user-pos" as Id<"users">;
-const AUTH_SESSION_ID = "auth-session-pos" as Id<"authSessions">;
-const TERMINAL_ID = "terminal-1" as Id<"posTerminal">;
 
 describe("PosRecoveryCode auth provider", () => {
   it("registers the Athena POS recovery-code provider id", () => {
     expect(PosRecoveryCode.id).toBe(ATHENA_POS_RECOVERY_CODE_PROVIDER_ID);
   });
 
-  it("returns null when exact terminal recovery credentials are missing", async () => {
-    const ctx = {
-      auth: { getUserIdentity: vi.fn(async () => null) },
-      runMutation: vi.fn(),
-    };
+  it("returns null when required credentials or store scope are missing", async () => {
+    const ctx = { runMutation: vi.fn() };
 
     await expect(
       PosRecoveryCode.authorize(
-        { code: "abc-123", terminalId: TERMINAL_ID },
+        { code: "abc-123", email: "pos@wigclub.store" },
         ctx as never,
       ),
     ).resolves.toBeNull();
     await expect(
       PosRecoveryCode.authorize(
         {
-          recoveryCorrelationKey: "recovery-correlation-1",
-          terminalId: TERMINAL_ID,
-          terminalProof: "terminal-proof",
+          email: "pos@wigclub.store",
+          orgUrlSlug: "wigclub",
+          storeUrlSlug: "wigclub",
         },
         ctx as never,
       ),
@@ -47,85 +42,35 @@ describe("PosRecoveryCode auth provider", () => {
     expect(ctx.runMutation).not.toHaveBeenCalled();
   });
 
-  it("maps preparation to the exact Convex Auth user and session", async () => {
+  it("maps successful internal verification to Convex Auth user identity", async () => {
     const ctx = {
-      auth: { getUserIdentity: vi.fn(async () => null) },
-      runMutation: vi.fn(async () => ({
-        status: "prepared",
-        authSessionId: AUTH_SESSION_ID,
-        authUserId: AUTH_USER_ID,
-      })),
+      runMutation: vi.fn(async () => ({ authUserId: AUTH_USER_ID })),
     };
 
     await expect(
       PosRecoveryCode.authorize(
         {
           code: "abc-123",
-          recoveryCorrelationKey: "recovery-correlation-1",
-          terminalId: TERMINAL_ID,
-          terminalProof: "terminal-proof",
+          email: "pos@wigclub.store",
+          orgUrlSlug: "wigclub",
+          storeUrlSlug: "wigclub",
         },
         ctx as never,
       ),
-    ).resolves.toEqual({
-      userId: AUTH_USER_ID,
-      sessionId: AUTH_SESSION_ID,
-    });
+    ).resolves.toEqual({ userId: AUTH_USER_ID });
     expect(ctx.runMutation).toHaveBeenCalledWith(expect.anything(), {
       code: "abc-123",
-      recoveryCorrelationKey: "recovery-correlation-1",
-      terminalId: TERMINAL_ID,
-      terminalProof: "terminal-proof",
+      email: "pos@wigclub.store",
+      orgUrlSlug: "wigclub",
+      storeId: undefined,
+      storeUrlSlug: "wigclub",
     });
   });
 
-  it("rejects recovery when an Auth session is already attached", async () => {
+  it("returns null when internal verification rejects", async () => {
     const ctx = {
-      auth: {
-        getUserIdentity: vi.fn(async () => ({ subject: "user|session" })),
-      },
-      runMutation: vi.fn(),
-    };
-
-    await expect(
-      PosRecoveryCode.authorize(
-        {
-          code: "abc-123",
-          recoveryCorrelationKey: "recovery-correlation-1",
-          terminalId: TERMINAL_ID,
-          terminalProof: "terminal-proof",
-        },
-        ctx as never,
-      ),
-    ).resolves.toBeNull();
-    expect(ctx.runMutation).not.toHaveBeenCalled();
-  });
-
-  it("maps a committed recovery denial to null", async () => {
-    const ctx = {
-      auth: { getUserIdentity: vi.fn(async () => null) },
-      runMutation: vi.fn(async () => ({ status: "denied" })),
-    };
-
-    await expect(
-      PosRecoveryCode.authorize(
-        {
-          code: "abc-123",
-          recoveryCorrelationKey: "recovery-correlation-1",
-          terminalId: TERMINAL_ID,
-          terminalProof: "terminal-proof",
-        },
-        ctx as never,
-      ),
-    ).resolves.toBeNull();
-  });
-
-  it("does not normalize unexpected preparation failures", async () => {
-    const unexpected = new Error("database unavailable");
-    const ctx = {
-      auth: { getUserIdentity: vi.fn(async () => null) },
       runMutation: vi.fn(async () => {
-        throw unexpected;
+        throw new Error("POS recovery sign-in failed.");
       }),
     };
 
@@ -133,12 +78,11 @@ describe("PosRecoveryCode auth provider", () => {
       PosRecoveryCode.authorize(
         {
           code: "abc-123",
-          recoveryCorrelationKey: "recovery-correlation-1",
-          terminalId: TERMINAL_ID,
-          terminalProof: "terminal-proof",
+          email: "pos@wigclub.store",
+          storeId: "store-1",
         },
         ctx as never,
       ),
-    ).rejects.toBe(unexpected);
+    ).resolves.toBeNull();
   });
 });

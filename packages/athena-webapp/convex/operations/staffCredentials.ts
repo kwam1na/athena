@@ -28,8 +28,6 @@ import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
-import { requirePosApplicationAuthorityWithCtx } from "../pos/application/posApplicationAuthority";
-import { getServicePrincipalActorWithCtx } from "../servicePrincipals/actor";
 import { requireStoreMemberAccessWithCtx } from "../lib/storeMemberAccess";
 import {
   requireSharedDemoCapabilityIfApplicable,
@@ -70,7 +68,10 @@ const localStaffAuthorityRecordValidator = v.object({
 });
 
 export type StaffCredentialStatus =
-  "pending" | "active" | "suspended" | "revoked";
+  | "pending"
+  | "active"
+  | "suspended"
+  | "revoked";
 type StaffCredentialReaderCtx = Pick<QueryCtx, "db"> | Pick<MutationCtx, "db">;
 type PublicStaffCredential = Omit<
   Doc<"staffCredential">,
@@ -225,13 +226,8 @@ async function requireStaffAuthenticationStoreAccessWithCtx(
   ctx: MutationCtx,
   storeId: Id<"store">,
 ) {
-  const serviceActor = await getServicePrincipalActorWithCtx(ctx);
-  if (serviceActor) {
-    await requirePosApplicationAuthorityWithCtx(ctx, { storeId });
-    return;
-  }
   await requireStoreMemberAccessWithCtx(ctx, {
-    allowedRoles: ["full_admin"],
+    allowedRoles: ["full_admin", "pos_only"],
     demoAccess: { kind: "read" },
     failureMessage:
       "You do not have access to authenticate staff for this store.",
@@ -309,18 +305,18 @@ async function requirePosTerminalAuthorityWithCtx(
     terminalId: Id<"posTerminal">;
   },
 ): Promise<PosTerminalAuthorizationResult> {
+  const terminal = await ctx.db.get("posTerminal", args.terminalId);
+  if (!terminal || terminal.storeId !== args.storeId || terminal.status !== "active") {
+    return terminalAuthorizationFailedResult();
+  }
+
   try {
-    const authority = await requirePosApplicationAuthorityWithCtx(ctx, {
+    const { store } = await requireStoreMemberAccessWithCtx(ctx, {
+      allowedRoles: ["full_admin", "pos_only"],
+      demoAccess: { kind: "read" },
+      failureMessage: "You do not have access to this POS terminal.",
       storeId: args.storeId,
     });
-    if (authority.terminalId !== args.terminalId) {
-      return terminalAuthorizationFailedResult();
-    }
-    const [store, terminal] = await Promise.all([
-      ctx.db.get("store", authority.storeId),
-      ctx.db.get("posTerminal", authority.terminalId),
-    ]);
-    if (!store || !terminal) return terminalAuthorizationFailedResult();
 
     return ok({ store, terminal });
   } catch {
@@ -692,10 +688,7 @@ export async function updateStaffCredentialWithCtx(
 
   await ctx.db.patch("staffCredential", existingCredential._id, updates);
 
-  const credential = await ctx.db.get(
-    "staffCredential",
-    existingCredential._id,
-  );
+  const credential = await ctx.db.get("staffCredential", existingCredential._id);
   if (!credential) return null;
   return toPublicStaffCredential(credential);
 }
@@ -746,7 +739,8 @@ export async function authenticateStaffCredentialWithCtx(
   if (!activeCredential.pinHash || activeCredential.pinHash !== args.pinHash) {
     const failedAuthenticationAttempts =
       (activeCredential.failedAuthenticationAttempts ?? 0) + 1;
-    const shouldLock = failedAuthenticationAttempts >= STAFF_AUTH_FAILURE_LIMIT;
+    const shouldLock =
+      failedAuthenticationAttempts >= STAFF_AUTH_FAILURE_LIMIT;
 
     await ctx.db.patch("staffCredential", activeCredential._id, {
       failedAuthenticationAttempts,
@@ -867,10 +861,11 @@ export async function authenticateStaffCredentialForTerminalWithCtx(
         session.expiresAt > now &&
         session.terminalId !== args.terminalId,
     );
-    const activeExpenseSessionsOnOtherTerminals = activeExpenseSessions.filter(
-      (session) =>
-        session.expiresAt > now && session.terminalId !== args.terminalId,
-    );
+    const activeExpenseSessionsOnOtherTerminals =
+      activeExpenseSessions.filter(
+        (session) =>
+          session.expiresAt > now && session.terminalId !== args.terminalId,
+      );
 
     if (
       activeSessionsOnOtherTerminals.length > 0 ||
@@ -1391,8 +1386,7 @@ export const refreshTerminalStaffAuthority = mutation({
       ) {
         continue;
       }
-      const roles =
-        activePosRolesByStaffProfileId.get(assignment.staffProfileId) ?? [];
+      const roles = activePosRolesByStaffProfileId.get(assignment.staffProfileId) ?? [];
       roles.push(assignment.role);
       activePosRolesByStaffProfileId.set(assignment.staffProfileId, roles);
     }

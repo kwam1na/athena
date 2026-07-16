@@ -2,15 +2,26 @@ import { useEffect, useMemo, useState } from "react";
 import { LoginForm } from "./LoginForm";
 import { InputOTPForm } from "./InputOTP";
 import { PosRecoveryCodeForm } from "./PosRecoveryCodeForm";
-import { ProductionPosRecoveryCodeForm } from "./PosRecoveryFrontendAdapter";
 import { useSearch } from "@tanstack/react-router";
 import type { PosProvisionedTerminalSeed } from "@/lib/pos/application/posLocalStoreTypes";
 import { getDefaultPosLocalStore } from "@/lib/pos/infrastructure/local/posLocalStorageRuntime";
 import { isPosOnlyTerminalLoginMode } from "~/shared/posTerminalLoginMode";
-import type { AuthRuntimeHandoffCoordinator } from "../../../lib/auth/authRuntimeHandoff";
-import type { PosRecoveryFrontendAdapter } from "./posRecoveryFlow";
-import { getPosTerminalReconnectSettingsRedirect } from "@/lib/pos/application/posTerminalReconnectIntent";
-import { generateBrowserFingerprint } from "@/lib/browserFingerprint";
+
+const POS_ROUTE_PATTERN =
+  /^\/(?<orgUrlSlug>[^/]+)\/store\/(?<storeUrlSlug>[^/]+)\/pos(?:\/.*)?$/;
+
+function getPosRouteScope(redirectTo?: string) {
+  const match = redirectTo?.match(POS_ROUTE_PATTERN);
+  const groups = match?.groups;
+  if (!groups?.orgUrlSlug || !groups.storeUrlSlug) {
+    return null;
+  }
+
+  return {
+    orgUrlSlug: groups.orgUrlSlug,
+    storeUrlSlug: groups.storeUrlSlug,
+  };
+}
 
 function getPosRedirectFromSeed(seed: PosProvisionedTerminalSeed | null) {
   if (!seed?.orgUrlSlug || !seed.storeUrlSlug) return null;
@@ -18,25 +29,15 @@ function getPosRedirectFromSeed(seed: PosProvisionedTerminalSeed | null) {
   return `/${seed.orgUrlSlug}/store/${seed.storeUrlSlug}/pos`;
 }
 
-export function Login({
-  authRuntime,
-  recoveryAdapter,
-}: {
-  authRuntime?: AuthRuntimeHandoffCoordinator;
-  recoveryAdapter?: PosRecoveryFrontendAdapter;
-} = {}) {
+export function Login() {
   const [step, setStep] = useState<
     "signIn" | "posRecovery" | { email: string }
   >("signIn");
   const [localTerminalSeed, setLocalTerminalSeed] =
     useState<PosProvisionedTerminalSeed | null>(null);
-  const [browserFingerprintHash, setBrowserFingerprintHash] = useState<
-    string | null
-  >(null);
-  const [isTerminalEvidenceLoading, setIsTerminalEvidenceLoading] =
-    useState(true);
   const search = useSearch({ strict: false }) as
-    { redirectTo?: string } | undefined;
+    { redirectTo?: string; storeId?: string } | undefined;
+  const posRouteScope = getPosRouteScope(search?.redirectTo);
   const localPosRedirect = useMemo(
     () => getPosRedirectFromSeed(localTerminalSeed),
     [localTerminalSeed],
@@ -50,25 +51,13 @@ export function Login({
         await getDefaultPosLocalStore().readProvisionedTerminalSeed();
 
       if (!cancelled && result.ok) {
-        const seed = result.value;
-        setLocalTerminalSeed(seed);
-        if (seed) {
-          try {
-            const fingerprint = await generateBrowserFingerprint();
-            if (!cancelled) {
-              setBrowserFingerprintHash(fingerprint.fingerprintHash);
-            }
-          } catch {
-            if (!cancelled) setBrowserFingerprintHash(null);
-          }
-        }
-        if (isPosOnlyTerminalLoginMode(seed?.loginMode)) {
+        setLocalTerminalSeed(result.value);
+        if (isPosOnlyTerminalLoginMode(result.value?.loginMode)) {
           setStep((current) =>
             current === "signIn" ? "posRecovery" : current,
           );
         }
       }
-      if (!cancelled) setIsTerminalEvidenceLoading(false);
     })();
 
     return () => {
@@ -76,46 +65,28 @@ export function Login({
     };
   }, []);
 
-  if (isTerminalEvidenceLoading) {
-    return <p role="status">Checking this checkout station…</p>;
-  }
-
   if (step === "signIn") {
     return (
       <LoginForm
         setStep={setStep}
         onUsePosRecoveryCode={() => setStep("posRecovery")}
-        terminalName={localTerminalSeed?.displayName}
       />
     );
   }
   if (step === "posRecovery") {
-    const props = {
-      authRuntime,
-      terminal: localTerminalSeed
-        ? {
-          displayName: localTerminalSeed.displayName,
-          storeName: localTerminalSeed.storeUrlSlug ?? "This store",
-          browserFingerprintHash: browserFingerprintHash ?? "",
-          terminalId: localTerminalSeed.cloudTerminalId,
-            terminalProof: localTerminalSeed.syncSecretHash,
-          }
-        : null,
-      redirectTo: search?.redirectTo ?? localPosRedirect,
-      onBack: () => setStep("signIn"),
-      onUseAdministratorEmail: () => setStep("signIn"),
-    };
-    return recoveryAdapter ? (
-      <PosRecoveryCodeForm adapter={recoveryAdapter} {...props} />
-    ) : (
-      <ProductionPosRecoveryCodeForm {...props} />
+    return (
+      <PosRecoveryCodeForm
+        orgUrlSlug={
+          posRouteScope?.orgUrlSlug ?? localTerminalSeed?.orgUrlSlug ?? null
+        }
+        redirectTo={search?.redirectTo ?? localPosRedirect}
+        storeId={search?.storeId ?? localTerminalSeed?.storeId ?? null}
+        storeUrlSlug={
+          posRouteScope?.storeUrlSlug ?? localTerminalSeed?.storeUrlSlug ?? null
+        }
+        onBack={() => setStep("signIn")}
+      />
     );
   }
-  return (
-    <InputOTPForm
-      email={step.email}
-      onBack={() => setStep("signIn")}
-      redirectTo={getPosTerminalReconnectSettingsRedirect(localTerminalSeed)}
-    />
-  );
+  return <InputOTPForm email={step.email} onBack={() => setStep("signIn")} />;
 }
