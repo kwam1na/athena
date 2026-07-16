@@ -102,9 +102,9 @@ async function openPosRecoveryForm(page: Page) {
   });
 
   await expect(page.getByRole("heading", { name: /log in/i })).toBeVisible();
-  await page.getByRole("button", { name: /pos sign in/i }).click();
+  await page.getByTestId("athena-login-pos-sign-in").click();
   await expect(page.getByRole("heading", { name: /pos recovery/i })).toBeVisible();
-  await expect(page.getByLabel(/pos account/i)).toBeVisible();
+  await expect(page.getByText(/with the recovery code/i)).toBeVisible();
   await expect(page.getByLabel(/recovery code/i)).toBeVisible();
 }
 
