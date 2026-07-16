@@ -7,10 +7,6 @@ import { resolveReportingCalendarReferenceWithCtx } from "../../../reporting/ope
 import { projectLocalSyncEvent } from "./projectLocalEvents";
 import { patchRegisterSessionActivityFromLocalSyncWithCtx } from "./posRegisterSessionActivity";
 import { hashPosLocalStaffProofToken } from "./staffProof";
-import {
-  verifyPosOfflineAuthorityReceiptForEvent,
-  type OfflineAuthorityReceiptVerification,
-} from "../offlineAuthorityReceipt";
 import type {
   LocalSyncConflictRecord,
   LocalSyncCursorIdentity,
@@ -32,7 +28,6 @@ export type PosLocalSyncBatchInput = {
   terminalId: Id<"posTerminal">;
   submittedByUserId?: Id<"athenaUser">;
   submittedAt: number;
-  enforceOfflineAuthorityReceipt?: boolean;
   events: PosLocalSyncEventInput[];
 };
 
@@ -139,12 +134,6 @@ type IngestionDependencies = {
   projectionRepository: SyncProjectionRepository;
   now: () => number;
   serverClock?: ServerClockAuthority;
-  offlineAuthorityVerifier?: (args: {
-    eventOccurredAt: number;
-    receipt?: string;
-    storeId: string;
-    terminalId: string;
-  }) => Promise<OfflineAuthorityReceiptVerification>;
 };
 
 type ServerClockAttribution = Pick<
@@ -231,8 +220,6 @@ async function assessServerClock(
 
 const TERMINAL_NOT_PROVISIONED_MESSAGE =
   "This terminal is not provisioned for POS sync.";
-const OFFLINE_AUTHORITY_REVIEW_SUMMARY =
-  "Offline POS authority needs review before this event can be reconciled.";
 const TERMINAL_INGESTION_PROJECTION_OPTIONS = {
   allowReviewedInventorySaleProjection: true,
   trustStoredStaffProof: true,
@@ -283,45 +270,6 @@ export function createLocalSyncIngestionService(
         });
       }
 
-      const orderedEvents = [...batch.events].sort(
-        (left, right) => left.sequence - right.sequence,
-      );
-      const offlineAuthorityByEvent = new Map<
-        PosLocalSyncEventInput,
-        OfflineAuthorityReceiptVerification
-      >();
-      if (batch.enforceOfflineAuthorityReceipt) {
-        if (!dependencies.offlineAuthorityVerifier) {
-          return userError({
-            code: "unavailable",
-            message: "Offline POS authority could not be verified. Try again.",
-            retryable: true,
-          });
-        }
-        for (const event of orderedEvents) {
-          const verification = await dependencies.offlineAuthorityVerifier({
-            eventOccurredAt: event.occurredAt,
-            receipt: event.offlineAuthorityReceipt,
-            storeId: batch.storeId,
-            terminalId: batch.terminalId,
-          });
-          offlineAuthorityByEvent.set(event, verification);
-          if (verification.disposition === "infrastructure_failure") {
-            return userError({
-              code: "unavailable",
-              message: "Offline POS authority could not be verified. Try again.",
-              retryable: true,
-            });
-          }
-          if (verification.disposition === "rejected") {
-            return userError({
-              code: "authorization_failed",
-              message: "Offline POS authority is not valid for this upload.",
-            });
-          }
-        }
-      }
-
       const cursorIds = new Set(
         batch.events.map(
           (event) => getLocalSyncCursorIdentity(event).localSyncCursorId,
@@ -342,7 +290,9 @@ export function createLocalSyncIngestionService(
               cursor: cursorIdentity,
             });
 
-      for (const event of orderedEvents) {
+      for (const event of [...batch.events].sort(
+        (left, right) => left.sequence - right.sequence,
+      )) {
         cursorIdentity = getLocalSyncCursorIdentity(event);
         const existing = await dependencies.repository.findEvent({
           storeId: batch.storeId,
@@ -351,54 +301,6 @@ export function createLocalSyncIngestionService(
         });
 
         if (existing) {
-          if (existing.status === "conflicted") {
-            const existingConflicts =
-              await dependencies.repository.listConflictsForEvent({
-                storeId: batch.storeId,
-                terminalId: batch.terminalId,
-                localEventId: existing.localEventId,
-              });
-            const hasOfflineAuthorityReview = existingConflicts.some(
-              (conflict) => conflict.conflictType === "offline_authority",
-            );
-            const hasStableServerRejectedReview =
-              batch.enforceOfflineAuthorityReceipt &&
-              existingConflicts.some(
-                (conflict) => conflict.conflictType === "server_rejected",
-              );
-            if (hasOfflineAuthorityReview || hasStableServerRejectedReview) {
-              const matchesOriginal = hasOfflineAuthorityReview
-                ? (() => {
-                    const retryParseResult = parseLocalSyncEvent(
-                      dependencies.repository,
-                      event,
-                    );
-                    return (
-                      retryParseResult.ok &&
-                      isSameLocalEvent(existing, retryParseResult.event)
-                    );
-                  })()
-                : isSameLocalEvent(existing, event);
-              if (!matchesOriginal) {
-                return userError({
-                  code: "validation_failed",
-                  message:
-                    "POS sync event retry does not match the original local event.",
-                });
-              }
-              accepted.push({
-                localEventId: existing.localEventId,
-                sequence: existing.sequence,
-                status: "conflicted",
-              });
-              conflicts.push(...existingConflicts);
-              acceptedThroughSequence = advanceAcceptedThroughSequence(
-                acceptedThroughSequence,
-                existing,
-              );
-              continue;
-            }
-          }
           if (
             existing.status !== "held" ||
             existing.heldReason !== "out_of_order"
@@ -410,35 +312,6 @@ export function createLocalSyncIngestionService(
                   message:
                     "POS sync event retry does not match the original local event.",
                 });
-              }
-              if (batch.enforceOfflineAuthorityReceipt) {
-                const existingConflicts =
-                  await dependencies.repository.listConflictsForEvent({
-                    storeId: batch.storeId,
-                    terminalId: batch.terminalId,
-                    localEventId: existing.localEventId,
-                  });
-                const reviewConflicts = existingConflicts.filter(
-                  (conflict) => conflict.status === "needs_review",
-                );
-                if (reviewConflicts.length > 0) {
-                  await dependencies.repository.patchEvent(existing._id, {
-                    acceptedAt: existing.acceptedAt ?? dependencies.now(),
-                    status: "conflicted",
-                    submittedAt: batch.submittedAt,
-                  });
-                  accepted.push({
-                    localEventId: existing.localEventId,
-                    sequence: existing.sequence,
-                    status: "conflicted",
-                  });
-                  conflicts.push(...reviewConflicts);
-                  acceptedThroughSequence = advanceAcceptedThroughSequence(
-                    acceptedThroughSequence,
-                    { sequence: existing.sequence, status: "conflicted" },
-                  );
-                }
-                continue;
               }
             } else {
               const retryParseResult = parseLocalSyncEvent(
@@ -660,96 +533,20 @@ export function createLocalSyncIngestionService(
                 createdAt: dependencies.now(),
               });
             conflicts.push(serverRejectedConflict);
-            if (batch.enforceOfflineAuthorityReceipt) {
-              await dependencies.repository.patchEvent(rejectedEvent._id, {
-                acceptedAt: rejectedEvent.acceptedAt ?? dependencies.now(),
-                status: "conflicted",
-              });
-              accepted.push({
-                localEventId: rejectedEvent.localEventId,
-                sequence: rejectedEvent.sequence,
-                status: "conflicted",
-              });
-              acceptedThroughSequence = advanceAcceptedThroughSequence(
-                acceptedThroughSequence,
-                { sequence: event.sequence, status: "conflicted" },
-              );
-            }
           }
-          if (!batch.enforceOfflineAuthorityReceipt) {
-            accepted.push({
-              localEventId: rejectedEvent.localEventId,
-              sequence: rejectedEvent.sequence,
-              status: "rejected",
-            });
-            acceptedThroughSequence = advanceAcceptedThroughSequence(
-              acceptedThroughSequence,
-              { sequence: event.sequence, status: "rejected" },
-            );
-          }
+          accepted.push({
+            localEventId: rejectedEvent.localEventId,
+            sequence: rejectedEvent.sequence,
+            status: "rejected",
+          });
+          acceptedThroughSequence = advanceAcceptedThroughSequence(
+            acceptedThroughSequence,
+            { sequence: event.sequence, status: "rejected" },
+          );
           continue;
         }
 
         const parsedEvent = preparedEvent.event;
-        const offlineAuthority = offlineAuthorityByEvent.get(event);
-        if (offlineAuthority?.disposition === "needs_review") {
-          const acceptedAt = existing?.acceptedAt ?? dependencies.now();
-          const syncEvent =
-            existing ??
-            (await dependencies.repository.createEvent(
-              await buildLocalSyncEventRecordInput(batch, event, {
-                payload: parsedEvent.payload,
-                status: "conflicted",
-                acceptedAt,
-              }),
-            ));
-          if (existing) {
-            await dependencies.repository.patchEvent(existing._id, {
-              payload: parsedEvent.payload,
-              status: "conflicted",
-              submittedAt: batch.submittedAt,
-              acceptedAt,
-              heldReason: undefined,
-            });
-          }
-          const reviewConflict = await dependencies.repository.createConflict({
-            storeId: batch.storeId,
-            terminalId: batch.terminalId,
-            localRegisterSessionId:
-              getLocalSyncCursorIdentity(event).localSyncCursorId,
-            localEventId: event.localEventId,
-            sequence: event.sequence,
-            conflictType: "offline_authority",
-            status: "needs_review",
-            summary: OFFLINE_AUTHORITY_REVIEW_SUMMARY,
-            details: {
-              reason: offlineAuthority.reason,
-              localEventId: event.localEventId,
-              ...(offlineAuthority.payload
-                ? {
-                    receiptVersion: offlineAuthority.payload.version,
-                    receiptNonce: offlineAuthority.payload.nonce,
-                    keyVersion: offlineAuthority.payload.keyVersion,
-                  }
-                : {}),
-            },
-            createdAt: acceptedAt,
-          });
-          await dependencies.repository.patchEvent(syncEvent._id, {
-            status: "conflicted",
-          });
-          accepted.push({
-            localEventId: event.localEventId,
-            sequence: event.sequence,
-            status: "conflicted",
-          });
-          conflicts.push(reviewConflict);
-          acceptedThroughSequence = advanceAcceptedThroughSequence(
-            acceptedThroughSequence,
-            { sequence: event.sequence, status: "conflicted" },
-          );
-          continue;
-        }
         const acceptedAt = existing?.acceptedAt ?? dependencies.now();
         // U9: derive server-authoritative clock attribution exactly once, at first
         // ingest. Retries reuse the persisted values so the outcome is stable and
@@ -2153,9 +1950,6 @@ export async function ingestLocalEventsWithCtx(
     repository,
     projectionRepository: repository,
     now: () => Date.now(),
-    ...(batch.enforceOfflineAuthorityReceipt
-      ? { offlineAuthorityVerifier: verifyPosOfflineAuthorityReceiptForEvent }
-      : {}),
     serverClock: {
       futureSkewToleranceMs: POS_INGEST_FUTURE_SKEW_TOLERANCE_MS,
       resolveOperatingDate: async ({ occurrenceAt, storeId }) => {

@@ -1,10 +1,5 @@
 import { v } from "convex/values";
-import {
-  mutation,
-  query,
-  type MutationCtx,
-  type QueryCtx,
-} from "../_generated/server";
+import { mutation, query, type MutationCtx, type QueryCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import {
   runRemoveSessionItemCommand,
@@ -13,7 +8,10 @@ import {
 import { collectSessionItemsFromPages } from "../pos/infrastructure/repositories/sessionCommandRepository";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import { ok, userError } from "../../shared/commandResult";
-import { requirePosApplicationAuthorityWithCtx } from "../pos/application/posApplicationAuthority";
+import {
+  requireAuthenticatedAthenaUserWithCtx,
+  requireOrganizationMemberRoleWithCtx,
+} from "../lib/athenaUserAuth";
 
 const SESSION_ITEMS_PAGE_SIZE = 200;
 
@@ -26,10 +24,7 @@ const operationDataValidator = v.object({
   expiresAt: v.number(),
 });
 
-function userErrorFromSessionItemFailure(result: {
-  status: string;
-  message: string;
-}) {
+function userErrorFromSessionItemFailure(result: { status: string; message: string }) {
   switch (result.status) {
     case "notFound":
       return userError({
@@ -66,12 +61,21 @@ async function requireSessionItemStoreAccess(
     });
   }
 
-  const authority = await requirePosApplicationAuthorityWithCtx(ctx, {
-    storeId: session.storeId,
-  });
-  if (authority.terminalId !== session.terminalId) {
-    throw new Error("The POS application session is no longer authorized.");
+  const store = await ctx.db.get("store", session.storeId);
+  if (!store) {
+    return userError({
+      code: "not_found",
+      message: "Store not found.",
+    });
   }
+
+  const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+  await requireOrganizationMemberRoleWithCtx(ctx, {
+    allowedRoles: ["full_admin", "pos_only"],
+    failureMessage: "You cannot change this POS sale.",
+    organizationId: store.organizationId,
+    userId: athenaUser._id,
+  });
 
   return null;
 }
@@ -103,7 +107,7 @@ export const getSessionItems = query({
       areProcessingFeesAbsorbed: v.optional(v.boolean()),
       createdAt: v.number(),
       updatedAt: v.number(),
-    }),
+    })
   ),
   handler: async (ctx, args) => {
     const accessError = await requireSessionItemStoreAccess(

@@ -1178,26 +1178,6 @@ describe("syncContract", () => {
       },
     ]);
   });
-
-  it("uploads the exact signed receipt while keeping local receipt metadata out of the wire payload", () => {
-    const event = buildLocalEvent({
-      offlineAuthorityReceipt: "signed-receipt-1",
-      offlineAuthorityReceiptNonce: "nonce-1",
-      offlineAuthorityReceiptVersion: 1,
-    });
-
-    expect(buildPosLocalSyncUploadEvents([event], [event])).toEqual([
-      expect.objectContaining({
-        localEventId: "event-1",
-        offlineAuthorityReceipt: "signed-receipt-1",
-      }),
-    ]);
-    const serialized = JSON.stringify(
-      buildPosLocalSyncUploadEvents([event], [event]),
-    );
-    expect(serialized).not.toContain("offlineAuthorityReceiptNonce");
-    expect(serialized).not.toContain("offlineAuthorityReceiptVersion");
-  });
 });
 
 function buildLocalEvent(

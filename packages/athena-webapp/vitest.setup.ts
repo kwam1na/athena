@@ -13,11 +13,6 @@ vi.mock("react-hot-toast", () => ({
 
 // Mock Convex hooks
 vi.mock("convex/react", () => ({
-  ConvexReactClient: class MockConvexReactClient {
-    constructor(..._args: unknown[]) {}
-
-    close = vi.fn();
-  },
   useQuery: vi.fn(),
   useMutation: vi.fn(),
   useAction: vi.fn(),

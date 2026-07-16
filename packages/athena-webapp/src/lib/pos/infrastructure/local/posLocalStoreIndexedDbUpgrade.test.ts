@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it } from "vitest";
 import { IDBFactory } from "fake-indexeddb";
 
 import {
-  POS_LOCAL_LOGICAL_RECORD_VERSION,
   POS_LOCAL_STORE_SCHEMA_VERSION,
   createIndexedDbPosLocalStorageAdapter,
   createPosLocalStore,
@@ -67,7 +66,7 @@ describe("IndexedDB POS layout upgrade", () => {
     legacy.close();
     await expect(store.initializeStorage()).resolves.toEqual({
       ok: true,
-      value: { logicalRecordVersion: POS_LOCAL_LOGICAL_RECORD_VERSION },
+      value: { logicalRecordVersion: 1 },
     });
   });
 

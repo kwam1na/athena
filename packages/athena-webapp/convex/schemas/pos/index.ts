@@ -26,17 +26,3 @@ export * from "./posRegisterSessionActivityCheckpoint";
 export * from "./posRegisterMappingAuthority";
 export * from "./posRegisterAuthorityReplicationStatus";
 export * from "./posLifecycleJournal";
-export * from "./posApplicationSessionBinding";
-export * from "./posRecoveryExchange";
-export * from "./posTerminalReconnectIntent";
-export * from "./posServicePrincipalMigration";
-
-import { posApplicationSessionBindingTable } from "./posApplicationSessionBinding";
-import { posRecoveryExchangeTable } from "./posRecoveryExchange";
-import { posTerminalReconnectIntentTable } from "./posTerminalReconnectIntent";
-
-export const posServicePrincipalConsumerTables = {
-  posApplicationSessionBinding: posApplicationSessionBindingTable,
-  posRecoveryExchange: posRecoveryExchangeTable,
-  posTerminalReconnectIntent: posTerminalReconnectIntentTable,
-};

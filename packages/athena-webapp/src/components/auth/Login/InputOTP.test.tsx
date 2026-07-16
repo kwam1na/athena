@@ -79,29 +79,6 @@ describe("InputOTPForm", () => {
     expect(mocked.navigate).not.toHaveBeenCalled();
   });
 
-  it("carries the browser-local reconnect route through normal administrator auth", async () => {
-    const user = userEvent.setup();
-    mocked.signIn.mockResolvedValue({ signingIn: true });
-
-    render(
-      <InputOTPForm
-        email="manager@example.com"
-        onBack={vi.fn()}
-        redirectTo="/acme/store/downtown/pos/settings?reconnect=current-station"
-      />,
-    );
-    await user.type(screen.getByLabelText(/verification code/i), "123456");
-
-    await waitFor(() =>
-      expect(window.sessionStorage.setItem).toHaveBeenCalledWith(
-        PENDING_ATHENA_AUTH_SYNC_KEY,
-        expect.stringContaining(
-          '"redirectTo":"/acme/store/downtown/pos/settings?reconnect=current-station"',
-        ),
-      ),
-    );
-  });
-
   it("surfaces invalid verification codes to the operator", async () => {
     const user = userEvent.setup();
 

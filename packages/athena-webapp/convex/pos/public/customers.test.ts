@@ -1,8 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  getServicePrincipalActorWithCtx: vi.fn(),
-  requirePosApplicationAuthorityWithCtx: vi.fn(),
   requireAuthenticatedAthenaUserWithCtx: vi.fn(),
   requireOrganizationMemberRoleWithCtx: vi.fn(),
   searchCustomers: vi.fn(),
@@ -18,15 +16,6 @@ const mocks = vi.hoisted(() => ({
   linkToGuest: vi.fn(),
   resolveStoreFrontUserMatch: vi.fn(),
   resolveGuestMatch: vi.fn(),
-}));
-
-vi.mock("../../servicePrincipals/actor", () => ({
-  getServicePrincipalActorWithCtx: mocks.getServicePrincipalActorWithCtx,
-}));
-
-vi.mock("../application/posApplicationAuthority", () => ({
-  requirePosApplicationAuthorityWithCtx:
-    mocks.requirePosApplicationAuthorityWithCtx,
 }));
 
 vi.mock("../../lib/athenaUserAuth", () => ({
@@ -113,7 +102,6 @@ function buildCtx(
 describe("pos public customers authorization", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    mocks.getServicePrincipalActorWithCtx.mockResolvedValue(null);
     mocks.requireAuthenticatedAthenaUserWithCtx.mockResolvedValue({
       _id: "athena-user-1",
     });
@@ -125,52 +113,6 @@ describe("pos public customers authorization", () => {
     mocks.createCustomer.mockResolvedValue({ kind: "ok", data: {} });
     mocks.updateCustomer.mockResolvedValue({ kind: "ok", data: null });
     mocks.findByStoreFrontUser.mockResolvedValue({ _id: "customer-1" });
-  });
-
-  it("accepts a current same-store POS application session without human membership", async () => {
-    mocks.getServicePrincipalActorWithCtx.mockResolvedValue({
-      kind: "service_principal",
-      storeId: "store-1",
-    });
-    mocks.requirePosApplicationAuthorityWithCtx.mockResolvedValue({
-      storeId: "store-1",
-      terminalId: "terminal-1",
-    });
-    const ctx = buildCtx();
-
-    await expect(
-      getHandler(searchCustomers)(ctx as never, {
-        storeId: "store-1",
-        searchQuery: "ada",
-      }),
-    ).resolves.toEqual([{ _id: "customer-1" }]);
-    expect(mocks.requirePosApplicationAuthorityWithCtx).toHaveBeenCalledWith(
-      ctx,
-      { storeId: "store-1" },
-    );
-    expect(mocks.requireAuthenticatedAthenaUserWithCtx).not.toHaveBeenCalled();
-  });
-
-  it.each([
-    "The POS application session is no longer authorized.",
-    "The POS terminal has been revoked.",
-  ])("denies cross-store or revoked current authority: %s", async (message) => {
-    mocks.getServicePrincipalActorWithCtx.mockResolvedValue({
-      kind: "service_principal",
-      storeId: "store-1",
-    });
-    mocks.requirePosApplicationAuthorityWithCtx.mockRejectedValue(
-      new Error(message),
-    );
-    const ctx = buildCtx();
-
-    await expect(
-      getHandler(searchCustomers)(ctx as never, {
-        storeId: "store-1",
-        searchQuery: "ada",
-      }),
-    ).rejects.toThrow(message);
-    expect(mocks.searchCustomers).not.toHaveBeenCalled();
   });
 
   it("searches customers for a same-org member", async () => {

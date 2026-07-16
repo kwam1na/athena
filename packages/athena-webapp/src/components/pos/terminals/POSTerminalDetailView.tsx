@@ -27,16 +27,6 @@ import { NoPermissionView } from "@/components/states/no-permission/NoPermission
 import { ProtectedAdminSignInView } from "@/components/states/signed-out/ProtectedAdminSignInView";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import {
   Tooltip,
@@ -159,9 +149,6 @@ const REMOTE_ASSIST_PRESENCE_FRESHNESS_MS = 2 * 60 * 1000;
 type POSTerminalDetailViewContentProps = {
   detail: TerminalHealthDetail | null;
   isLoading: boolean;
-  onDisconnectTerminal?: (args: {
-    terminalId: Id<"posTerminal"> | string;
-  }) => Promise<void>;
   onIssueTerminalRecoveryCommand?: (args: {
     action: TerminalRecoveryAction;
     terminalId: Id<"posTerminal"> | string;
@@ -190,7 +177,6 @@ type POSTerminalDetailViewContentProps = {
   queryUnavailable?: boolean;
   remoteAssistClient?: RemoteAssistClientSummary | null;
   remoteAssistSession?: RemoteAssistSessionSummary | null;
-  storeName?: string;
   storeUrlSlug?: string;
 };
 
@@ -251,117 +237,6 @@ function DetailPanel({
       </div>
       {children}
     </section>
-  );
-}
-
-function DisconnectTerminalPanel({
-  detail,
-  onDisconnectTerminal,
-  storeName,
-}: {
-  detail: TerminalHealthDetail;
-  onDisconnectTerminal?: POSTerminalDetailViewContentProps["onDisconnectTerminal"];
-  storeName: string;
-}) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [isDisconnecting, setIsDisconnecting] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  if (!onDisconnectTerminal) return null;
-
-  const isActive = detail.terminal.status === "active";
-
-  async function handleDisconnect() {
-    if (!isActive || isDisconnecting) return;
-
-    setIsDisconnecting(true);
-    setErrorMessage(null);
-    try {
-      await onDisconnectTerminal!({ terminalId: detail.terminal._id });
-      setIsOpen(false);
-      toast.success(`${detail.terminal.displayName} was disconnected.`);
-    } catch (error) {
-      setErrorMessage(
-        error instanceof Error && error.message
-          ? error.message
-          : "Unable to disconnect this checkout station. Try again.",
-      );
-    } finally {
-      setIsDisconnecting(false);
-    }
-  }
-
-  return (
-    <DetailPanel
-      icon={<Trash2 className="h-4 w-4" />}
-      title="Checkout station access"
-    >
-      <div className="space-y-layout-sm">
-        <p className="text-sm text-muted-foreground">
-          {isActive
-            ? "Disconnect this checkout station when it should no longer request POS access for this store."
-            : "This checkout station is disconnected. Its recorded health and sync evidence remain available for inspection."}
-        </p>
-        {isActive ? (
-          <Dialog
-            open={isOpen}
-            onOpenChange={(open) => {
-              if (isDisconnecting) return;
-              setIsOpen(open);
-              if (!open) setErrorMessage(null);
-            }}
-          >
-            <DialogTrigger asChild>
-              <Button variant="destructive">Disconnect checkout station</Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Disconnect checkout station</DialogTitle>
-                <DialogDescription>
-                  Disconnect {detail.terminal.displayName} from {storeName}?
-                </DialogDescription>
-              </DialogHeader>
-
-              <ul className="list-disc space-y-2 pl-5 text-sm text-muted-foreground">
-                <li>Its next server request for POS access will be denied.</li>
-                <li>
-                  Offline access already leased to it remains available only
-                  until the current lease expires.
-                </li>
-                <li>
-                  Unsynchronized records stay on this checkout station and are
-                  not deleted.
-                </li>
-                <li>Other checkout stations at {storeName} are unaffected.</li>
-              </ul>
-
-              {errorMessage ? (
-                <p role="alert" className="text-sm text-destructive">
-                  {errorMessage}
-                </p>
-              ) : null}
-
-              <DialogFooter>
-                <DialogClose asChild>
-                  <Button disabled={isDisconnecting} variant="outline">
-                    Cancel
-                  </Button>
-                </DialogClose>
-                <Button
-                  disabled={isDisconnecting}
-                  onClick={() => void handleDisconnect()}
-                  variant="destructive"
-                >
-                  {isDisconnecting
-                    ? "Disconnecting…"
-                    : "Disconnect checkout station"}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        ) : null}
-      </div>
-    </DetailPanel>
   );
 }
 
@@ -3066,7 +2941,6 @@ export function POSTerminalDetailViewContent({
   canStartRemoteAssist = false,
   detail,
   isLoading,
-  onDisconnectTerminal,
   onEndRemoteAssist,
   onIssueTerminalRecoveryCommand,
   onResolveTerminalCloudRepair,
@@ -3077,7 +2951,6 @@ export function POSTerminalDetailViewContent({
   queryUnavailable = false,
   remoteAssistClient,
   remoteAssistSession,
-  storeName,
   storeUrlSlug,
 }: POSTerminalDetailViewContentProps) {
   if (queryUnavailable) {
@@ -3171,11 +3044,6 @@ export function POSTerminalDetailViewContent({
                 syncEvidence={detail.syncEvidence}
               />
               <SupportNotesSection runtimeStatus={runtimeStatus} />
-              <DisconnectTerminalPanel
-                detail={detail}
-                onDisconnectTerminal={onDisconnectTerminal}
-                storeName={storeName ?? storeUrlSlug ?? "the selected store"}
-              />
             </main>
           </div>
         </PageWorkspace>
@@ -3242,9 +3110,6 @@ export function POSTerminalDetailView() {
   );
   const issueTerminalRecoveryCommand = useMutation(
     api.pos.public.terminals.issueTerminalRecoveryCommand,
-  );
-  const disconnectTerminal = useMutation(
-    api.pos.public.terminals.disconnectTerminal,
   );
   const updateTerminal = useMutation(api.pos.public.terminals.updateTerminal);
   const startRemoteAssistSession = useMutation(remoteAssistApi.startSession);
@@ -3375,16 +3240,6 @@ export function POSTerminalDetailView() {
     });
   }
 
-  async function onDisconnectTerminal({
-    terminalId,
-  }: {
-    terminalId: Id<"posTerminal"> | string;
-  }): Promise<void> {
-    await disconnectTerminal({
-      terminalId: terminalId as Id<"posTerminal">,
-    });
-  }
-
   if (isLoadingAccess) {
     return null;
   }
@@ -3418,9 +3273,6 @@ export function POSTerminalDetailView() {
       detail={detail ?? null}
       canStartRemoteAssist={canManageTerminalHealth}
       isLoading={detail === undefined}
-      onDisconnectTerminal={
-        canManageTerminalHealth ? onDisconnectTerminal : undefined
-      }
       onIssueTerminalRecoveryCommand={
         canManageTerminalHealth ? onIssueTerminalRecoveryCommand : undefined
       }
@@ -3443,7 +3295,6 @@ export function POSTerminalDetailView() {
       queryUnavailable={detail === null && !params.terminalId}
       remoteAssistClient={remoteAssistClient ?? null}
       remoteAssistSession={remoteAssistSession ?? null}
-      storeName={activeStore.name}
       storeUrlSlug={params.storeUrlSlug}
     />
   );

@@ -57,41 +57,6 @@ describe("POS local store initialization", () => {
     });
   });
 
-  it("widens v1 terminal seeds without synthesizing offline authority", async () => {
-    const adapter = createMemoryPosLocalStorageAdapter({
-      logicalRecordVersion: 1,
-      schemaVersion: 9,
-    });
-    await adapter.transaction("readwrite", ["terminalSeed"], (transaction) =>
-      transaction.put("terminalSeed", "current", {
-        cloudTerminalId: "terminal-1",
-        displayName: "Front",
-        provisionedAt: 1,
-        schemaVersion: 1,
-        storeId: "store-1",
-        syncSecretHash: "legacy-proof",
-        terminalId: "fingerprint-1",
-      }),
-    );
-    const store = createPosLocalStore({ adapter });
-
-    await expect(store.initializeStorage()).resolves.toEqual({
-      ok: true,
-      value: { logicalRecordVersion: POS_LOCAL_LOGICAL_RECORD_VERSION },
-    });
-    const seed = await store.readProvisionedTerminalSeed();
-    expect(seed).toMatchObject({
-      ok: true,
-      value: {
-        cloudTerminalId: "terminal-1",
-        schemaVersion: POS_LOCAL_LOGICAL_RECORD_VERSION,
-      },
-    });
-    expect(seed.ok ? seed.value : null).not.toHaveProperty(
-      "offlineAuthorityReceipt",
-    );
-  });
-
   it("rolls back the legacy transform and marker when migration fails", async () => {
     const base = createMemoryPosLocalStorageAdapter({ schemaVersion: 9 });
     await base.transaction("readwrite", ["events"], (transaction) =>

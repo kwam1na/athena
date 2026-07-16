@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="e23c9d4678e65189e493ca2f1e57a5004da9315fdda782f083671e2763814fba">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Revert: store service principals (#666)</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; max-width: 60rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.6; color: #1a1a1a; }
+  h1, h2 { line-height: 1.25; }
+  code { background: #f2f2f2; padding: 0.1em 0.35em; border-radius: 4px; font-size: 0.92em; }
+  section { margin: 2rem 0; }
+  .meta { color: #555; font-size: 0.9rem; }
+  fieldset { border: 1px solid #ccc; border-radius: 6px; margin: 1rem 0; padding: 0.75rem 1rem; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #111; color: #eee; }
+    code { background: #222; }
+    .meta { color: #aaa; }
+    fieldset { border-color: #444; }
+  }
+</style>
+</head>
+<body>
+<h1>Landed-change report — Revert "store service principals with POS as first consumer" (#666)</h1>
+<p class="meta">Date: 2026-07-16 · Branch: <code>revert-666-service-principals</code> · Reverts: <code>2c4a4a5f</code> · Restores tree of: <code>70b64a7a</code></p>
+
+<section>
+<h2>What changed</h2>
+<p>
+This is a pure <code>git revert</code> of the squash commit for PR #666, which introduced
+store-scoped service principals with POS as the first consumer (service-principal sessions,
+POS recovery-code browser sign-in, offline authority receipts, terminal binding, migration
+controls). The feature changes POS access behavior broadly enough that the release will be
+staged deliberately instead of landing all at once. No production deploy, migration, or
+cutover had been executed, and the production offline trust registry was still fail-closed
+(empty), so no production state depends on the reverted code.
+</p>
+<p>
+Three behavior-neutral pieces of #666 are deliberately <strong>retained</strong> rather than
+reverted: (1) the remote-assist read-isolation fix (<code>remoteAssistReadRepository</code> and
+its query call-sites in <code>remoteAssist/public.ts</code> and
+<code>pos/public/terminals.ts:getRuntimeRemoteAssistSession</code>), which keeps Convex query
+handlers read-only; (2) its accompanying tests; and (3) new return-contract assertions added
+to the restored <code>posSessionItems</code> and <code>terminalAppSessions</code> sibling tests.
+None of these touch the service-principal access model.
+</p>
+<p>
+Re-application path: revert this commit, or cherry-pick <code>2c4a4a5f</code>
+(tagged <code>pre-revert/service-principals</code>).
+</p>
+</section>
+
+<section>
+<h2>Subagent Evidence</h2>
+<p>Verification was performed mechanically rather than by re-reviewing 165 files:</p>
+<ul>
+  <li><code>git cat-file -p 2c4a4a5f</code> — single parent (<code>70b64a7a</code>), confirming a squash commit revertible without <code>-m</code>.</li>
+  <li><code>git diff 70b64a7a HEAD --quiet</code> after the initial pure revert — exit 0: byte-identical to pre-#666 main, which passed the full CI suite when it was the tip. The retained read-isolation fix and added contract tests are the only deviations from that tree, and each is additive or test-only except the one-line repository swap in <code>getRuntimeRemoteAssistSession</code>.</li>
+  <li>Targeted vitest runs pass for the amended suites (<code>posSessionItems</code>, <code>terminalAppSessions</code>, <code>remoteAssist/public</code>); <code>harness:inferential-review</code> reports no actionable findings.</li>
+  <li>Working tree was clean and main matched <code>origin/main</code> before the revert was created.</li>
+  <li>Known follow-up recorded in the solution note: dev Convex deployments that exercised the feature hold rows (e.g. <code>operationalEvent.actorType = "service_principal"</code>) that the restored schema rejects; those rows must be cleared before running <code>convex dev</code> on this code.</li>
+</ul>
+</section>
+
+<section>
+<h2>Quiz: Pass Required</h2>
+<form id="changeQuiz">
+  <fieldset>
+    <legend>1. What does this change do to the code?</legend>
+    <label><input type="radio" name="q1" value="a" /> Modifies the service-principal feature in place</label><br />
+    <label><input type="radio" name="q1" value="b" /> Restores the tree to exactly the pre-#666 state (70b64a7a)</label><br />
+    <label><input type="radio" name="q1" value="c" /> Deletes POS entirely</label>
+  </fieldset>
+  <fieldset>
+    <legend>2. Why is the revert safe for production?</legend>
+    <label><input type="radio" name="q2" value="a" /> Production never deployed, migrated, or cut over to the feature, and the offline trust registry stayed empty</label><br />
+    <label><input type="radio" name="q2" value="b" /> Production data was manually migrated back</label><br />
+    <label><input type="radio" name="q2" value="c" /> It is not safe</label>
+  </fieldset>
+  <fieldset>
+    <legend>3. What must happen before running <code>convex dev</code> against the reverted code?</legend>
+    <label><input type="radio" name="q3" value="a" /> Nothing</label><br />
+    <label><input type="radio" name="q3" value="b" /> Clear dev-deployment rows created by the feature (e.g. service_principal operationalEvent rows) that violate the restored schema</label><br />
+    <label><input type="radio" name="q3" value="c" /> Rotate all production keys</label>
+  </fieldset>
+  <p><strong>Answer key:</strong> 1 — b · 2 — a · 3 — b</p>
+</form>
+</section>
+
+<section>
+<h2>Re-application checklist (future)</h2>
+<ul>
+  <li>Cherry-pick <code>2c4a4a5f</code> (or revert this revert) onto a feature branch; resolve drift against then-current main.</li>
+  <li>Re-apply the post-merge reliability fixes reviewed on 2026-07-16: non-throwing <code>getCurrentPosTerminalServiceSession</code>, status-based promotion polling with backoff, stale-handoff lease reclaim in the recovery flows, and the service-principal lane for the register closeout mutations.</li>
+  <li>Clear stale dev-deployment data from the first rollout before re-migrating.</li>
+  <li>Stage the rollout using the feature's own preview/cutover gates.</li>
+</ul>
+</section>
+</body>
+</html>

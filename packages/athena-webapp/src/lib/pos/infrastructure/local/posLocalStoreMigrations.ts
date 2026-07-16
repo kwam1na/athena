@@ -4,12 +4,6 @@ export type PosLocalLogicalMigrationStep = Readonly<{
   to: number;
 }>;
 
-export const POS_LOCAL_OFFLINE_AUTHORITY_RECEIPT_MIGRATION = Object.freeze({
-  from: 1,
-  id: "v2-offline-authority-receipt",
-  to: 2,
-}) satisfies PosLocalLogicalMigrationStep;
-
 export interface PosLocalLogicalMigrationPort {
   readLogicalRecordVersion(): Promise<number>;
   /** The engine applies the transformation and version marker as one native commit. */

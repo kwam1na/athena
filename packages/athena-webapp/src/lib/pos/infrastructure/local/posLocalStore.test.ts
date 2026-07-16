@@ -73,33 +73,6 @@ function buildCashierPresenceRecord(overrides = {}) {
   };
 }
 
-function buildVerifiedOfflineAuthorityReceipt() {
-  return {
-    envelope: "receipt-envelope-1",
-    payload: {
-      audience: "athena.pos.offline" as const,
-      capabilityId: "pos.application" as const,
-      capabilityRevision: 3,
-      credentialRevision: 5,
-      expiresAt: 61_000,
-      issuedAt: 1_000,
-      issuer: "athena-test",
-      keyVersion: 1,
-      nonce: "receipt-nonce-1",
-      posApplicationSessionBindingId: "binding-1",
-      principalLifecycleRevision: 2,
-      servicePrincipalId: "principal-1",
-      servicePrincipalSessionId: "session-1",
-      storeId: "store_cloud_1",
-      terminalId: "terminal-cloud-1",
-      terminalLifecycleRevision: 7,
-      terminalProofRevision: 11,
-      version: 1 as const,
-    },
-    verifiedAt: 1_500,
-  };
-}
-
 function buildAvailabilityRow(
   overrides: Partial<PosRegisterCatalogAvailabilityRowDto> = {},
 ): PosRegisterCatalogAvailabilityRowDto {
@@ -2677,18 +2650,7 @@ describe("posLocalStore", () => {
   it("persists app-session/cloud-validation uncertainty metadata through local review without storing unsafe details", async () => {
     const store = createPosLocalStore({
       adapter: createMemoryPosLocalStorageAdapter(),
-      clock: () => 2_000,
       createLocalId: () => "local-event-1",
-    });
-    await store.writeProvisionedTerminalSeed({
-      cloudTerminalId: "terminal-cloud-1",
-      displayName: "Front register",
-      offlineAuthorityReceipt: buildVerifiedOfflineAuthorityReceipt(),
-      provisionedAt: 1_000,
-      schemaVersion: POS_LOCAL_LOGICAL_RECORD_VERSION,
-      storeId: "store_cloud_1",
-      syncSecretHash: "sync-secret-1",
-      terminalId: "local-terminal-1",
     });
 
     await expect(
@@ -2715,9 +2677,6 @@ describe("posLocalStore", () => {
     ).resolves.toEqual({
       ok: true,
       value: expect.objectContaining({
-        offlineAuthorityReceipt: "receipt-envelope-1",
-        offlineAuthorityReceiptNonce: "receipt-nonce-1",
-        offlineAuthorityReceiptVersion: 1,
         validationMetadata: {
           flags: ["app-session-unverified", "cloud-validation-uncertain"],
           observedAt: 2_000,
@@ -2765,40 +2724,6 @@ describe("posLocalStore", () => {
     expect(serializedMetadata).not.toContain("customer@example.com");
     expect(serializedMetadata).not.toContain("payments");
     expect(serializedMetadata).not.toContain("raw-terminal-proof");
-  });
-
-  it("refuses offline local capture after the verified receipt lease expires", async () => {
-    const store = createPosLocalStore({
-      adapter: createMemoryPosLocalStorageAdapter(),
-      clock: () => 61_001,
-      createLocalId: () => "local-event-1",
-    });
-    await store.writeProvisionedTerminalSeed({
-      cloudTerminalId: "terminal-cloud-1",
-      displayName: "Front register",
-      offlineAuthorityReceipt: buildVerifiedOfflineAuthorityReceipt(),
-      provisionedAt: 1_000,
-      schemaVersion: POS_LOCAL_LOGICAL_RECORD_VERSION,
-      storeId: "store_cloud_1",
-      syncSecretHash: "sync-secret-1",
-      terminalId: "local-terminal-1",
-    });
-
-    await expect(
-      store.appendEvent({
-        type: "transaction.completed",
-        terminalId: "local-terminal-1",
-        storeId: "store_cloud_1",
-        localRegisterSessionId: "register-1",
-        staffProfileId: "staff-1",
-        validationMetadata: {
-          flags: ["app-session-unverified"],
-          uploadDeferredUntil: "app-session-validated",
-        },
-        payload: {},
-      }),
-    ).resolves.toMatchObject({ ok: false, error: { code: "write_failed" } });
-    await expect(store.listEvents()).resolves.toEqual({ ok: true, value: [] });
   });
 
   it("persists upload proof on pending uploadable events so offline sync survives reload", async () => {

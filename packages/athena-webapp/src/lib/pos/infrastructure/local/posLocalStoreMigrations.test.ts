@@ -1,21 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 
-import {
-  POS_LOCAL_OFFLINE_AUTHORITY_RECEIPT_MIGRATION,
-  runPosLocalStoreMigrations,
-} from "./posLocalStoreMigrations";
+import { runPosLocalStoreMigrations } from "./posLocalStoreMigrations";
 
 describe("runPosLocalStoreMigrations", () => {
-  it("declares a v2 receipt migration without manufacturing authority", () => {
-    expect(POS_LOCAL_OFFLINE_AUTHORITY_RECEIPT_MIGRATION).toEqual({
-      from: 1,
-      id: "v2-offline-authority-receipt",
-      to: 2,
-    });
-    expect(POS_LOCAL_OFFLINE_AUTHORITY_RECEIPT_MIGRATION).not.toHaveProperty(
-      "offlineAuthorityReceipt",
-    );
-  });
   it("runs ordered migrations atomically and exactly once", async () => {
     const applied: string[] = [];
     let version = 1;

@@ -30,7 +30,10 @@ import {
 import { onlineCompletionIdempotencyKey } from "../pos/application/commands/completeTransaction";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import { ok, userError } from "../../shared/commandResult";
-import { requirePosApplicationAuthorityWithCtx } from "../pos/application/posApplicationAuthority";
+import {
+  requireAuthenticatedAthenaUserWithCtx,
+  requireOrganizationMemberRoleWithCtx,
+} from "../lib/athenaUserAuth";
 import { isPosUsableRegisterSessionStatus } from "../../shared/registerSessionStatus";
 import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
 import { requireStoreFullAdminAccess } from "../stockOps/access";
@@ -153,29 +156,6 @@ function userErrorFromValidationMessage(message: string) {
 
 function isUsableRegisterSession(registerSession: { status: string }) {
   return isPosUsableRegisterSessionStatus(registerSession.status);
-}
-
-async function requirePosSessionAuthority(
-  ctx: MutationCtx | QueryCtx,
-  session: { storeId: Id<"store">; terminalId: Id<"posTerminal"> },
-) {
-  const authority = await requirePosApplicationAuthorityWithCtx(ctx, {
-    storeId: session.storeId,
-  });
-  if (authority.terminalId !== session.terminalId) {
-    throw new Error("The POS application session is no longer authorized.");
-  }
-  return authority;
-}
-
-async function requirePosSessionByIdAuthority(
-  ctx: MutationCtx | QueryCtx,
-  sessionId: Id<"posSession">,
-) {
-  const session = await ctx.db.get("posSession", sessionId);
-  if (!session) return null;
-  await requirePosSessionAuthority(ctx, session);
-  return session;
 }
 
 function registerSessionMatchesIdentity(
@@ -791,7 +771,6 @@ export const getStoreActiveSessionOperations = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    await requireStoreFullAdminAccess(ctx, args.storeId);
     const now = Date.now();
     const boundedLimit = Math.max(
       1,
@@ -950,38 +929,68 @@ export const getStoreSessions = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const authority = await requirePosApplicationAuthorityWithCtx(ctx, {
-      storeId: args.storeId,
-    });
-    if (args.terminalId && args.terminalId !== authority.terminalId) {
-      throw new Error("The POS application session is no longer authorized.");
-    }
     const { storeId, status, limit = 50 } = args;
-    const terminalId = authority.terminalId;
     const boundedLimit = Math.min(limit, SESSION_QUERY_CANDIDATE_LIMIT);
 
     let sessionsQuery;
+    let indexedTerminalFilter = false;
+    let indexedStaffFilter = false;
 
-    if (status) {
+    if (status && args.terminalId) {
+      indexedTerminalFilter = true;
       sessionsQuery = ctx.db
         .query("posSession")
         .withIndex("by_storeId_status_terminalId", (q) =>
           q
             .eq("storeId", storeId)
             .eq("status", status)
-            .eq("terminalId", terminalId),
+            .eq("terminalId", args.terminalId!),
+        );
+    } else if (status && args.staffProfileId) {
+      indexedStaffFilter = true;
+      sessionsQuery = ctx.db
+        .query("posSession")
+        .withIndex("by_storeId_status_staffProfileId", (q) =>
+          q
+            .eq("storeId", storeId)
+            .eq("status", status)
+            .eq("staffProfileId", args.staffProfileId!),
+        );
+    } else if (args.terminalId) {
+      indexedTerminalFilter = true;
+      sessionsQuery = ctx.db
+        .query("posSession")
+        .withIndex("by_storeId_terminalId", (q) =>
+          q.eq("storeId", storeId).eq("terminalId", args.terminalId!),
+        );
+    } else if (args.staffProfileId) {
+      indexedStaffFilter = true;
+      sessionsQuery = ctx.db
+        .query("posSession")
+        .withIndex("by_storeId_staffProfileId", (q) =>
+          q.eq("storeId", storeId).eq("staffProfileId", args.staffProfileId!),
+        );
+    } else if (status) {
+      sessionsQuery = ctx.db
+        .query("posSession")
+        .withIndex("by_storeId_and_status", (q) =>
+          q.eq("storeId", storeId).eq("status", status),
         );
     } else {
       sessionsQuery = ctx.db
         .query("posSession")
-        .withIndex("by_storeId_terminalId", (q) =>
-          q.eq("storeId", storeId).eq("terminalId", terminalId),
-        );
+        .withIndex("by_storeId", (q) => q.eq("storeId", storeId));
     }
 
     let sessions = await sessionsQuery.order("desc").take(boundedLimit);
 
-    if (args.staffProfileId) {
+    if (args.terminalId && !indexedTerminalFilter) {
+      sessions = sessions.filter(
+        (session) => session.terminalId === args.terminalId,
+      );
+    }
+
+    if (args.staffProfileId && !indexedStaffFilter) {
       sessions = sessions.filter(
         (session) => session.staffProfileId === args.staffProfileId,
       );
@@ -1012,7 +1021,7 @@ export const getStoreSessions = query({
 export const getSessionById = query({
   args: { sessionId: v.id("posSession") },
   handler: async (ctx, args) => {
-    const session = await requirePosSessionByIdAuthority(ctx, args.sessionId);
+    const session = await ctx.db.get("posSession", args.sessionId);
     if (!session) return null;
 
     const customer = await loadSessionCustomer(ctx, session);
@@ -1038,12 +1047,6 @@ export const createSession = mutation({
   },
   returns: commandResultValidator(sessionOperationDataValidator),
   handler: async (ctx, args) => {
-    const authority = await requirePosApplicationAuthorityWithCtx(ctx, {
-      storeId: args.storeId,
-    });
-    if (authority.terminalId !== args.terminalId) {
-      throw new Error("The POS application session is no longer authorized.");
-    }
     const result = await runStartSessionCommand(ctx, args);
 
     if (result.status === "ok") {
@@ -1062,7 +1065,6 @@ export const bindSessionToRegisterSession = mutation({
   },
   returns: commandResultValidator(sessionOperationDataValidator),
   handler: async (ctx, args) => {
-    await requirePosSessionByIdAuthority(ctx, args.sessionId);
     const result = await runBindSessionToRegisterSessionCommand(ctx, args);
 
     if (result.status === "ok") {
@@ -1096,7 +1098,6 @@ export const updateSession = mutation({
     const { sessionId, ...updates } = args;
     const now = Date.now();
     const currentSession = await ctx.db.get("posSession", sessionId);
-    if (currentSession) await requirePosSessionAuthority(ctx, currentSession);
     const previousSession = currentSession
       ? {
           ...currentSession,
@@ -1183,7 +1184,6 @@ export const holdSession = mutation({
   },
   returns: commandResultValidator(sessionOperationDataValidator),
   handler: async (ctx, args) => {
-    await requirePosSessionByIdAuthority(ctx, args.sessionId);
     const result = await runHoldSessionCommand(ctx, args);
 
     if (result.status === "ok") {
@@ -1203,10 +1203,6 @@ export const resumeSession = mutation({
   },
   returns: commandResultValidator(sessionOperationDataValidator),
   handler: async (ctx, args) => {
-    const session = await requirePosSessionByIdAuthority(ctx, args.sessionId);
-    if (session && session.terminalId !== args.terminalId) {
-      throw new Error("The POS application session is no longer authorized.");
-    }
     const result = await runResumeSessionCommand(ctx, args);
 
     if (result.status === "ok") {
@@ -1246,7 +1242,6 @@ export const completeSession = mutation({
         message: "Session not found.",
       });
     }
-    await requirePosSessionAuthority(ctx, session);
 
     // Check if session has expired before completing
     const now = Date.now();
@@ -1270,6 +1265,22 @@ export const completeSession = mutation({
         message: "This session is not associated with your cashier.",
       });
     }
+
+    const store = await ctx.db.get("store", session.storeId);
+    if (!store) {
+      return userError({
+        code: "not_found",
+        message: "Store not found.",
+      });
+    }
+
+    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+    await requireOrganizationMemberRoleWithCtx(ctx, {
+      allowedRoles: ["full_admin", "pos_only"],
+      failureMessage: "You cannot complete this POS sale.",
+      organizationId: store.organizationId,
+      userId: athenaUser._id,
+    });
 
     const transactionResult = await createTransactionFromSessionHandler(ctx, {
       sessionId: args.sessionId,
@@ -1393,7 +1404,6 @@ export const voidSession = mutation({
         message: "Session not found.",
       });
     }
-    await requirePosSessionAuthority(ctx, session);
 
     // Query all items for this session
     const items = await ctx.db
@@ -1465,7 +1475,6 @@ export const releaseSessionInventoryHoldsAndDeleteItems = mutation({
         message: "Session not found.",
       });
     }
-    await requirePosSessionAuthority(ctx, session);
 
     if (args.checkoutStateVersion <= (session.checkoutStateVersion ?? 0)) {
       return ok({ sessionId: args.sessionId });
@@ -1572,15 +1581,6 @@ export const syncSessionCheckoutState = mutation({
   },
   returns: commandResultValidator(sessionOperationDataValidator),
   handler: async (ctx, args) => {
-    const session = await ctx.db.get("posSession", args.sessionId);
-    if (!session) {
-      return userError({
-        code: "not_found",
-        message: "Session not found.",
-      });
-    }
-    await requirePosSessionAuthority(ctx, session);
-
     const validation = await validateSessionActive(
       ctx.db,
       args.sessionId,
@@ -1591,6 +1591,14 @@ export const syncSessionCheckoutState = mutation({
       return userErrorFromValidationMessage(
         validation.message || "Session is not active.",
       );
+    }
+
+    const session = await ctx.db.get("posSession", args.sessionId);
+    if (!session) {
+      return userError({
+        code: "not_found",
+        message: "Session not found.",
+      });
     }
 
     const currentCheckoutStateVersion = session.checkoutStateVersion ?? 0;
@@ -1647,12 +1655,6 @@ export const getActiveSession = query({
     registerNumber: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const authority = await requirePosApplicationAuthorityWithCtx(ctx, {
-      storeId: args.storeId,
-    });
-    if (authority.terminalId !== args.terminalId) {
-      throw new Error("The POS application session is no longer authorized.");
-    }
     const now = Date.now();
     const activeSessions = args.staffProfileId
       ? await ctx.db
@@ -1837,7 +1839,6 @@ export const cleanupOldSessions = mutation({
     olderThanDays: v.optional(v.number()), // Default 30 days
   },
   handler: async (ctx, args) => {
-    await requireStoreFullAdminAccess(ctx, args.storeId);
     const cutoffTime =
       Date.now() - (args.olderThanDays || 30) * 24 * 60 * 60 * 1000;
 
@@ -1870,16 +1871,6 @@ export const expireAllSessionsForStaff = mutation({
     terminalId: v.id("posTerminal"),
   },
   handler: async (ctx, args) => {
-    const terminal = await ctx.db.get("posTerminal", args.terminalId);
-    if (!terminal) {
-      throw new Error("The POS application session is no longer authorized.");
-    }
-    const authority = await requirePosApplicationAuthorityWithCtx(ctx, {
-      storeId: terminal.storeId,
-    });
-    if (authority.terminalId !== args.terminalId) {
-      throw new Error("The POS application session is no longer authorized.");
-    }
     const now = Date.now();
     const [activeSessions, heldSessions] = await Promise.all([
       ctx.db
@@ -1899,11 +1890,7 @@ export const expireAllSessionsForStaff = mutation({
 
     await Promise.all(
       sessions
-        .filter(
-          (session) =>
-            session.storeId === authority.storeId &&
-            session.terminalId !== args.terminalId,
-        )
+        .filter((session) => session.terminalId !== args.terminalId)
         .map((session) => expirePosSessionNow(ctx, session, now)),
     );
 

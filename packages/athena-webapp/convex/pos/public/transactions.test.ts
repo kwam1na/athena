@@ -21,9 +21,7 @@ import {
 import type { Id } from "../../_generated/dataModel";
 import { assertConformsToExportedReturns } from "../../lib/returnValidatorContract";
 import * as athenaUserAuth from "../../lib/athenaUserAuth";
-import * as servicePrincipalActor from "../../servicePrincipals/actor";
 import * as sharedDemoActor from "../../sharedDemo/actor";
-import * as posApplicationAuthority from "../application/posApplicationAuthority";
 import * as correctionCommands from "../application/commands/correctTransaction";
 import * as itemAdjustmentCommands from "../application/commands/adjustTransactionItems";
 import * as completeTransactionCommands from "../application/commands/completeTransaction";
@@ -36,12 +34,6 @@ vi.mock("../../lib/athenaUserAuth", () => ({
 }));
 vi.mock("../../sharedDemo/actor", () => ({
   requireSharedDemoStoreCapabilityIfApplicable: vi.fn(),
-}));
-vi.mock("../../servicePrincipals/actor", () => ({
-  getServicePrincipalActorWithCtx: vi.fn(),
-}));
-vi.mock("../application/posApplicationAuthority", () => ({
-  requirePosApplicationAuthorityWithCtx: vi.fn(),
 }));
 
 vi.mock("../application/queries/getTransactions", () => ({
@@ -96,9 +88,6 @@ function getHandler(definition: unknown) {
 
 beforeEach(() => {
   vi.resetAllMocks();
-  vi.mocked(
-    servicePrincipalActor.getServicePrincipalActorWithCtx,
-  ).mockResolvedValue(null);
 });
 
 describe("POS public transaction query validators", () => {
@@ -590,58 +579,6 @@ describe("POS public transaction read and correction authorization", () => {
     };
   }
 
-  it("reads same-store transactions with current POS application authority", async () => {
-    vi.mocked(
-      servicePrincipalActor.getServicePrincipalActorWithCtx,
-    ).mockResolvedValue({ kind: "service_principal" } as never);
-    vi.mocked(
-      posApplicationAuthority.requirePosApplicationAuthorityWithCtx,
-    ).mockResolvedValue({
-      storeId: "store-1",
-      terminalId: "terminal-1",
-    } as never);
-    vi.mocked(transactionQueries.getTransactionsByStore).mockResolvedValue([
-      { _id: "txn-1" },
-    ] as never);
-    const ctx = createTransactionAuthCtx();
-
-    await expect(
-      getHandler(getTransactionsByStore)(ctx as never, {
-        storeId: "store-1",
-      }),
-    ).resolves.toEqual([{ _id: "txn-1" }]);
-    expect(
-      posApplicationAuthority.requirePosApplicationAuthorityWithCtx,
-    ).toHaveBeenCalledWith(ctx, { storeId: "store-1" });
-    expect(
-      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
-    ).not.toHaveBeenCalled();
-  });
-
-  it.each(["cross-store scope", "revoked current authority"])(
-    "denies transaction reads for %s",
-    async () => {
-      vi.mocked(
-        servicePrincipalActor.getServicePrincipalActorWithCtx,
-      ).mockResolvedValue({ kind: "service_principal" } as never);
-      vi.mocked(
-        posApplicationAuthority.requirePosApplicationAuthorityWithCtx,
-      ).mockRejectedValue(
-        new Error("The POS application session is no longer authorized."),
-      );
-      const ctx = createTransactionAuthCtx();
-
-      await expect(
-        getHandler(getTransactionsByStore)(ctx as never, {
-          storeId: "store-1",
-        }),
-      ).rejects.toThrow(
-        "The POS application session is no longer authorized.",
-      );
-      expect(transactionQueries.getTransactionsByStore).not.toHaveBeenCalled();
-    },
-  );
-
   it("requires store membership before returning completed transactions", async () => {
     vi.mocked(transactionQueries.getCompletedTransactions).mockResolvedValue([
       {
@@ -1053,54 +990,6 @@ describe("legacy POS public checkout mutations", () => {
       },
     };
   }
-
-  it("completes a same-store sale with current POS authority while preserving register and staff context", async () => {
-    vi.mocked(
-      servicePrincipalActor.getServicePrincipalActorWithCtx,
-    ).mockResolvedValue({ kind: "service_principal" } as never);
-    vi.mocked(
-      posApplicationAuthority.requirePosApplicationAuthorityWithCtx,
-    ).mockResolvedValue({
-      storeId: "store-1",
-      terminalId: "terminal-1",
-    } as never);
-    vi.mocked(
-      completeTransactionCommands.completeTransaction,
-    ).mockResolvedValue({
-      kind: "ok",
-      data: {
-        transactionId: "txn-1",
-        transactionItems: [],
-        transactionNumber: "POS-001",
-      },
-    } as never);
-    const ctx = createCtx();
-    const args = {
-      items: [],
-      payments: [{ method: "cash", amount: 0 }],
-      registerSessionId: "register-1" as Id<"registerSession">,
-      staffProfileId: "staff-1" as Id<"staffProfile">,
-      storeId: "store-1" as Id<"store">,
-      subtotal: 0,
-      tax: 0,
-      terminalId: "terminal-1" as Id<"posTerminal">,
-      total: 0,
-    };
-
-    await expect(
-      getHandler(completeTransaction)(ctx as never, args),
-    ).resolves.toMatchObject({ kind: "ok" });
-    expect(
-      posApplicationAuthority.requirePosApplicationAuthorityWithCtx,
-    ).toHaveBeenCalledWith(ctx, { storeId: "store-1" });
-    expect(completeTransactionCommands.completeTransaction).toHaveBeenCalledWith(
-      ctx,
-      args,
-    );
-    expect(
-      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
-    ).not.toHaveBeenCalled();
-  });
 
   it("limits direct completeTransaction to full admins before invoking the command", async () => {
     vi.mocked(

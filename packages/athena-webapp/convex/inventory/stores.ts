@@ -5,7 +5,6 @@ import {
   internalMutation,
   mutation,
   query,
-  type MutationCtx,
 } from "../_generated/server";
 import { v } from "convex/values";
 import { storeSchema } from "../schemas/inventory";
@@ -25,178 +24,10 @@ import { getSharedDemoActorWithCtx, requireSharedDemoCapabilityIfApplicable } fr
 import { ok, userError } from "../../shared/commandResult";
 import { requireNonDemoFoundationMutation } from "../sharedDemo/foundation";
 import { commandResultValidator } from "../lib/commandResultValidators";
-import {
-  requireAuthenticatedAthenaUserWithCtx,
-  requireOrganizationMemberRoleWithCtx,
-} from "../lib/athenaUserAuth";
-import { getAuthenticatedActorWithCtx } from "../lib/authenticatedActor";
-import type { ServicePrincipalFoundationMutationCtx } from "../schemas/servicePrincipals";
-import {
-  decommissionServicePrincipalAuthBinding,
-  reconcileServicePrincipal,
-  STORE_SERVICE_PRINCIPAL_STABLE_KEY,
-  transitionServicePrincipal,
-} from "../servicePrincipals/lifecycle";
-import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
+import { requireAuthenticatedAthenaUserWithCtx } from "../lib/athenaUserAuth";
 
 const entity = "store";
 const CONFIG_MIGRATION_PAGE_SIZE = 50;
-
-type StoreMutationCtx = Parameters<typeof getAuthenticatedActorWithCtx>[0] & {
-  db: MutationCtx["db"];
-};
-
-function servicePrincipalFoundationCtx(
-  ctx: StoreMutationCtx,
-): ServicePrincipalFoundationMutationCtx {
-  return ctx as unknown as ServicePrincipalFoundationMutationCtx;
-}
-
-async function requireStoreLifecycleFullAdmin(
-  ctx: StoreMutationCtx,
-  args: {
-    createdByUserId?: Doc<"athenaUser">["_id"];
-    organizationId: Doc<"organization">["_id"];
-  },
-) {
-  const actor = await getAuthenticatedActorWithCtx(ctx);
-  if (
-    actor?.kind !== "human" ||
-    (args.createdByUserId !== undefined &&
-      actor.athenaUserId !== args.createdByUserId)
-  ) {
-    throw new Error("A full administrator is required for this store.");
-  }
-  await requireOrganizationMemberRoleWithCtx(ctx, {
-    allowedRoles: ["full_admin"],
-    failureMessage: "A full administrator is required for this store.",
-    organizationId: args.organizationId,
-    userId: actor.athenaUserId,
-  });
-  return actor;
-}
-
-export async function createStoreWithLifecycleWithCtx(
-  ctx: StoreMutationCtx,
-  args: Omit<Doc<"store">, "_creationTime" | "_id">,
-  options: { now?: number } = {},
-) {
-  requireNonDemoFoundationMutation({ organizationId: args.organizationId });
-  const actor = await requireStoreLifecycleFullAdmin(ctx, {
-    createdByUserId: args.createdByUserId,
-    organizationId: args.organizationId,
-  });
-  const now = options.now ?? Date.now();
-  const storeId = await ctx.db.insert("store", args);
-  const principal = await reconcileServicePrincipal(
-    servicePrincipalFoundationCtx(ctx),
-    {
-      organizationId: args.organizationId,
-      storeId,
-      correlationId: `store-create:${storeId}`,
-      now,
-      stableKey: STORE_SERVICE_PRINCIPAL_STABLE_KEY,
-    },
-  );
-  await recordOperationalEventWithCtx(ctx as MutationCtx, {
-    actorType: "human",
-    actorUserId: actor.athenaUserId,
-    eventType: "service_principal.reconciled",
-    message: "Store service authority was reconciled.",
-    organizationId: args.organizationId,
-    servicePrincipalId: principal.servicePrincipalId,
-    storeId,
-    subjectId: String(principal.servicePrincipalId),
-    subjectType: "service_principal",
-  });
-  return ctx.db.get("store", storeId);
-}
-
-export async function decommissionStoreServicePrincipalWithCtx(
-  ctx: StoreMutationCtx,
-  args: {
-    actorUserId: Doc<"athenaUser">["_id"];
-    store: Doc<"store">;
-  },
-  options: { now?: number } = {},
-) {
-  const now = options.now ?? Date.now();
-  const foundationCtx = servicePrincipalFoundationCtx(ctx);
-  const principals = await foundationCtx.db
-    .query("servicePrincipal")
-    .withIndex(
-      "by_organizationId_and_storeId_and_stableKey",
-      (query) =>
-        query
-          .eq("organizationId", args.store.organizationId)
-          .eq("storeId", args.store._id)
-          .eq("stableKey", STORE_SERVICE_PRINCIPAL_STABLE_KEY),
-    )
-    .take(2);
-  if (principals.length > 1) throw new Error("duplicate_principal");
-  const principal = principals[0];
-  if (!principal) return null;
-
-  const bindings = await foundationCtx.db
-    .query("servicePrincipalAuthBinding")
-    .withIndex("by_servicePrincipalId", (query) =>
-      query.eq("servicePrincipalId", principal._id),
-    )
-    .take(2);
-  if (bindings.length > 1) throw new Error("auth_binding_duplicated");
-  const binding = bindings[0];
-  if (binding) {
-    await decommissionServicePrincipalAuthBinding(foundationCtx, {
-      correlationId: `store-delete:${args.store._id}`,
-      expectedRevision: binding.revision,
-      now,
-      servicePrincipalAuthBindingId: binding._id,
-    });
-  }
-  await transitionServicePrincipal(foundationCtx, {
-    correlationId: `store-delete:${args.store._id}`,
-    expectedRevision: principal.lifecycleRevision,
-    nextStatus: "decommissioned",
-    now,
-    servicePrincipalId: principal._id,
-  });
-  await recordOperationalEventWithCtx(ctx as MutationCtx, {
-    actorType: "human",
-    actorUserId: args.actorUserId,
-    eventType: "service_principal.decommissioned",
-    message: "Store service authority was decommissioned.",
-    organizationId: args.store.organizationId,
-    servicePrincipalId: principal._id,
-    storeId: args.store._id,
-    subjectId: String(principal._id),
-    subjectType: "service_principal",
-  });
-  return { servicePrincipalId: principal._id };
-}
-
-export async function removeStoreWithLifecycleWithCtx(
-  ctx: StoreMutationCtx,
-  args: { id: Doc<"store">["_id"] },
-  options: { now?: number } = {},
-) {
-  requireNonDemoFoundationMutation({ storeId: args.id });
-  await requireSharedDemoCapabilityIfApplicable(
-    ctx,
-    "administration.destructive",
-  );
-  const store = await ctx.db.get("store", args.id);
-  if (!store) throw new Error("Store not found.");
-  const actor = await requireStoreLifecycleFullAdmin(ctx, {
-    organizationId: store.organizationId,
-  });
-  await decommissionStoreServicePrincipalWithCtx(
-    ctx,
-    { actorUserId: actor.athenaUserId, store },
-    options,
-  );
-  await ctx.db.delete("store", args.id);
-  return { message: "OK" };
-}
 
 const toV2OnlyConfig = (existingConfig: unknown) => {
   const normalized = toV2Config(existingConfig);
@@ -366,7 +197,10 @@ export const getByIdOrSlug = internalQuery({
 export const create = mutation({
   args: storeSchema,
   handler: async (ctx, args) => {
-    return createStoreWithLifecycleWithCtx(ctx, args);
+    requireNonDemoFoundationMutation({ organizationId: args.organizationId });
+    const id = await ctx.db.insert(entity, args);
+
+    return await ctx.db.get("store", id);
   },
 });
 
@@ -388,7 +222,11 @@ export const remove = mutation({
     id: v.id(entity),
   },
   handler: async (ctx, args) => {
-    return removeStoreWithLifecycleWithCtx(ctx, args);
+    requireNonDemoFoundationMutation({ storeId: args.id });
+    await requireSharedDemoCapabilityIfApplicable(ctx, "administration.destructive");
+    await ctx.db.delete("store", args.id);
+
+    return { message: "OK" };
   },
 });
 

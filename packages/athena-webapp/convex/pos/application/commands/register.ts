@@ -5,8 +5,6 @@ import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../../../lib/athenaUserAuth";
-import { getServicePrincipalActorWithCtx } from "../../../servicePrincipals/actor";
-import { requirePosApplicationAuthorityWithCtx } from "../posApplicationAuthority";
 import type { PosCashDrawerSummary } from "../../domain/types";
 import { mapRegisterSessionToCashDrawerSummary } from "../../infrastructure/repositories/registerSessionRepository";
 import {
@@ -66,6 +64,7 @@ export async function openDrawer(
     notes?: string;
   },
 ): Promise<OpenDrawerResult> {
+  const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
   const store: Doc<"store"> | null = await ctx.runQuery(
     internal.inventory.stores.findById,
     {
@@ -80,25 +79,12 @@ export async function openDrawer(
     });
   }
 
-  const serviceActor = await getServicePrincipalActorWithCtx(ctx);
-  let openedByUserId: Id<"athenaUser"> | undefined;
-  if (serviceActor) {
-    const authority = await requirePosApplicationAuthorityWithCtx(ctx, {
-      storeId: args.storeId,
-    });
-    if (authority.terminalId !== args.terminalId) {
-      throw new Error("The POS application session is no longer authorized.");
-    }
-  } else {
-    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
-    await requireOrganizationMemberRoleWithCtx(ctx, {
-      allowedRoles: ["full_admin", "pos_only"],
-      failureMessage: "You cannot open a register drawer for this store.",
-      organizationId: store.organizationId,
-      userId: athenaUser._id,
-    });
-    openedByUserId = athenaUser._id;
-  }
+  await requireOrganizationMemberRoleWithCtx(ctx, {
+    allowedRoles: ["full_admin", "pos_only"],
+    failureMessage: "You cannot open a register drawer for this store.",
+    organizationId: store.organizationId,
+    userId: athenaUser._id,
+  });
 
   const terminal = await ctx.db.get("posTerminal", args.terminalId);
   if (!terminal || terminal.storeId !== args.storeId) {
@@ -140,12 +126,10 @@ export async function openDrawer(
     });
   }
 
-  const normalizedTerminalRegisterNumber = normalizeRegisterNumber(
-    terminal.registerNumber,
-  );
-  const normalizedRequestedRegisterNumber = normalizeRegisterNumber(
-    args.registerNumber,
-  );
+  const normalizedTerminalRegisterNumber =
+    normalizeRegisterNumber(terminal.registerNumber);
+  const normalizedRequestedRegisterNumber =
+    normalizeRegisterNumber(args.registerNumber);
 
   if (!normalizedTerminalRegisterNumber) {
     return userError({
@@ -176,7 +160,7 @@ export async function openDrawer(
         organizationId: store.organizationId,
         terminalId: args.terminalId,
         registerNumber: resolvedRegisterNumber,
-        openedByUserId,
+        openedByUserId: athenaUser._id,
         openedByStaffProfileId: args.staffProfileId,
         openingFloat: args.openingFloat,
         notes: args.notes,
