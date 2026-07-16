@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="058a2f944c7f73cdc92138720e79a57a2b1146de2b57c592d3984d9bf1c1e437" data-athena-report-base="70b64a7a3f2b4be6ffc73156dde7b36d27cd7c66" data-athena-report-head="8e6a47fca442ec481a21ae6ff22673a00d2764af">
+<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="c454b7bca33ac30975ada71d95782b2da771812a2eb8793cae9048368280d8ac" data-athena-report-base="70b64a7a3f2b4be6ffc73156dde7b36d27cd7c66" data-athena-report-head="5415dafd4fe87fc3ed8083c6ea682f00f74e4941">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -80,7 +80,7 @@
       <header>
         <h1>Store service principals: identity without implicit authority</h1>
         <p class="lede">A delivery-candidate guide to Athena&#x27;s consumer-neutral machine identity foundation and its first POS implementation.</p>
-        <div class="meta"><span class="pill">Delivery candidate</span><span class="pill">Branch: codex/v26-1071-1079-store-service-principals</span><span class="pill">Candidate source head: 8e6a47fc</span><span class="pill">Base: 70b64a7a</span><span class="pill">Linear: V26-1071 through V26-1079</span><span class="pill">PR and merge pending</span><span class="pill">Root alignment pending</span><span class="pill">No production deploy</span></div>
+        <div class="meta"><span class="pill">Delivery candidate</span><span class="pill">Branch: codex/v26-1071-1079-store-service-principals</span><span class="pill">Candidate source head: 5415dafd</span><span class="pill">Base: 70b64a7a</span><span class="pill">Linear: V26-1071 through V26-1079</span><span class="pill">PR and merge pending</span><span class="pill">Root alignment pending</span><span class="pill">No production deploy</span></div>
       </header>
       <section class="panel"><h2>Executive summary</h2>
 <p>Athena&#x27;s POS application authentication was anchored to one shared, human-shaped account even though recovery credentials and terminals were store-scoped. This candidate introduces the replacement architecture and application path through first-class store service principals: durable non-human identities that begin with no authority. Store migration and legacy retirement remain gated future operations.</p>
@@ -164,10 +164,10 @@ Staff, manager, drawer, register, and command authority remain additional gates.
 <li>Package TypeScript typecheck passed.</li>
 <li>Changed Convex lint, pagination sensor, and return-validator contract passed.</li>
 <li>git diff --check and the durable-learning fingerprint gate passed.</li>
-<li>Graphify rebuilt to 10,835 nodes, 13,275 edges, and 2,584 communities.</li>
+<li>Graphify rebuilt to 10,836 nodes, 13,277 edges, and 2,584 communities.</li>
 <li>Focused tests cover lifecycle/catalog/actor rules, exact-session handoff, current-state authority, terminal reconnect, recovery hardening, offline receipts, sync cursors, migration conflicts, route behavior, and admin/login UI.</li>
 <li>The merge gate identified and the candidate corrected one query-to-write-capable repository reachability issue by splitting Remote Assist read access into a QueryCtx-safe repository; focused tests, return-validator proof, changed Convex lint, and inferential review pass on the correction.</li>
-<li>The first multi-lens review identified and the candidate corrected four lifecycle boundaries: exact migration-recovery evidence, transactional persistence of denied-attempt counters and audit, browser handoff serialization and reload recovery, and complete non-starving cleanup of aborted Auth artifacts.</li>
+<li>Multi-lens review identified and the candidate corrected six lifecycle boundaries: exact and repeat migration-recovery evidence, transactional persistence of denied-attempt counters, protected secret-free denial-lane evidence, browser handoff serialization and reload recovery, and complete non-starving cleanup of aborted Auth artifacts.</li>
 <li>Final multi-lens design/security/data, framework/Auth/Convex feasibility, and adversarial scope/local-first review is pending on the exact final commit.</li>
 </ul>
 </section>
