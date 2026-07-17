@@ -280,9 +280,9 @@ export const ingestLocalEvents = mutation({
 
     if (
       result.kind === "ok" &&
-      shouldScheduleRegisterCloseoutVarianceAlerts()
+      shouldScheduleRegisterCloseoutNotifications()
     ) {
-      await scheduleRegisterCloseoutVarianceAlerts(ctx, {
+      await scheduleRegisterCloseoutNotifications(ctx, {
         events: args.events,
         mappings: result.data.mappings,
       });
@@ -292,11 +292,11 @@ export const ingestLocalEvents = mutation({
   },
 });
 
-function shouldScheduleRegisterCloseoutVarianceAlerts() {
+function shouldScheduleRegisterCloseoutNotifications() {
   return process.env.STAGE === "prod";
 }
 
-async function scheduleRegisterCloseoutVarianceAlerts(
+async function scheduleRegisterCloseoutNotifications(
   ctx: MutationCtx,
   args: {
     events: Array<{ eventType: string; localEventId: string }>;
@@ -339,21 +339,45 @@ async function scheduleRegisterCloseoutVarianceAlerts(
       isFreshVarianceReviewForCloseout(request, mapping.localEventId),
     );
 
-    if (!approvalRequest) continue;
+    if (approvalRequest) {
+      await ctx.db.patch("approvalRequest", approvalRequest._id, {
+        metadata: {
+          ...(approvalRequest.metadata ?? {}),
+          varianceNotificationScheduledAt: Date.now(),
+        },
+      });
+      await ctx.scheduler.runAfter(
+        0,
+        internal.operations.registerCloseoutVarianceEmail
+          .sendRegisterCloseoutVarianceAlertToAdmins,
+        { approvalRequestId: approvalRequest._id },
+      );
+      continue;
+    }
 
-    await ctx.db.patch("approvalRequest", approvalRequest._id, {
-      metadata: {
-        ...(approvalRequest.metadata ?? {}),
-        varianceNotificationScheduledAt: Date.now(),
-      },
+    const registerSession = await ctx.db.get(
+      "registerSession",
+      registerSessionId,
+    );
+    if (
+      !registerSession ||
+      registerSession.status !== "closed" ||
+      typeof registerSession.countedCash !== "number" ||
+      registerSession.countedCash - registerSession.expectedCash !== 0 ||
+      registerSession.closeoutNotificationLocalEventId === mapping.localEventId
+    ) {
+      continue;
+    }
+
+    await ctx.db.patch("registerSession", registerSessionId, {
+      closeoutNotificationLocalEventId: mapping.localEventId,
+      closeoutNotificationScheduledAt: Date.now(),
     });
     await ctx.scheduler.runAfter(
       0,
       internal.operations.registerCloseoutVarianceEmail
-        .sendRegisterCloseoutVarianceAlertToAdmins,
-      {
-        approvalRequestId: approvalRequest._id,
-      },
+        .sendRegisterCloseoutMatchReportToAdmins,
+      { registerSessionId },
     );
   }
 }

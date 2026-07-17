@@ -28,7 +28,8 @@ describe("RegisterCloseoutVarianceAlert", () => {
     const html = await render(<RegisterCloseoutVarianceAlert {...baseProps} />);
 
     expect(html).toContain("Athena cash controls");
-    expect(html).toContain("max-width:620px;background-color:#ffffff");
+    expect(html).toContain("max-width:640px;background-color:#ffffff");
+    expect(html).toContain("border-left:3px solid #dc4438");
     expect(html).toContain("Wigclub East Legon");
     expect(html).toContain("Front counter / Register 2");
     expect(html).toContain("Friday, July 3");
@@ -39,7 +40,11 @@ describe("RegisterCloseoutVarianceAlert", () => {
     expect(html).toContain("GH₵-42.18");
     expect(html).toContain("color:#dc4438");
     expect(html).toContain("Review register closeout");
-    expect(html).toContain("lucide-arrow-up-right");
+    expect(html).toContain("background-color:#1b1c1f");
+    expect(html).toContain("↗");
+    expect(html).not.toContain("lucide-");
+    expect(html).not.toContain("<svg");
+    expect(html).not.toContain("border-radius:999px");
     expect(html).toContain(
       "Variance exceeded the closeout approval threshold.",
     );
@@ -57,7 +62,30 @@ describe("RegisterCloseoutVarianceAlert", () => {
 
     expect(html).toContain("Cash over");
     expect(html).toContain("color:#b66b00");
+    expect(html).toContain("border-left:3px solid #b66b00");
     expect(html).not.toContain("Cash short");
+  });
+
+  it("renders an exact-match closeout as a calm completion report", async () => {
+    const html = await render(
+      <RegisterCloseoutVarianceAlert
+        {...baseProps}
+        countedCash="GH₵1,244.00"
+        expectedCash="GH₵1,244.00"
+        reason={undefined}
+        variance="GH₵0.00"
+        varianceDirection="matched"
+      />,
+    );
+
+    expect(html).toContain("Closed with an exact cash match");
+    expect(html).toContain("Cash matched");
+    expect(html).toContain("No review is required");
+    expect(html).toContain("border-left:3px solid #2d7d4f");
+    expect(html).toContain("View register closeout");
+    expect(html).not.toContain("Submitted with cash variance");
+    expect(html).not.toContain("Review register closeout");
+    expect(html).not.toContain("Review reason");
   });
 
   it("formats raw stored variance amounts in review reasons with the store currency", async () => {

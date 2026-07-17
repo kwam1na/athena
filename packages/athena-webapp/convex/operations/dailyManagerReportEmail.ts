@@ -49,6 +49,7 @@ type DailyCloseReportSnapshot = {
     status: "blocked" | "needs_review" | "ready";
   };
   reviewedItems: DailyCloseReportItem[];
+  priorDaySummary?: Record<string, unknown> | null;
   summary: Record<string, unknown>;
 };
 
@@ -75,10 +76,7 @@ type RegisterCashPositionSummary = {
 };
 
 type DailyManagerReportSendStatus =
-  | "applied"
-  | "prepared"
-  | "skipped"
-  | "failed";
+  "applied" | "prepared" | "skipped" | "failed";
 type PreparedDailyCloseSnapshot = Awaited<
   ReturnType<typeof buildDailyCloseSnapshotWithCtx>
 >;
@@ -288,88 +286,91 @@ function actionRequiredDeliveryDedupeKey(args: {
   ].join(":");
 }
 
-export const reserveActionRequiredDailyManagerReportDelivery = internalMutation({
-  args: {
-    automationRunId: v.id("automationRun"),
-    recipientEmail: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const run = await ctx.db.get("automationRun", args.automationRunId);
+export const reserveActionRequiredDailyManagerReportDelivery = internalMutation(
+  {
+    args: {
+      automationRunId: v.id("automationRun"),
+      recipientEmail: v.string(),
+    },
+    handler: async (ctx, args) => {
+      const run = await ctx.db.get("automationRun", args.automationRunId);
 
-    if (
-      !run ||
-      run.action !== "eod.auto_complete" ||
-      (run.outcome !== "skipped" && run.outcome !== "failed")
-    ) {
-      return null;
-    }
+      if (
+        !run ||
+        run.action !== "eod.auto_complete" ||
+        (run.outcome !== "skipped" && run.outcome !== "failed")
+      ) {
+        return null;
+      }
 
-    const now = Date.now();
-    const recipientEmail = args.recipientEmail.trim().toLowerCase();
-    const dedupeKey = actionRequiredDeliveryDedupeKey({
-      operatingDate: run.operatingDate,
-      recipientEmail,
-      storeId: run.storeId,
-    });
-    const existing = await ctx.db
-      .query("automationNotificationDelivery")
-      .withIndex("by_dedupeKey", (q) => q.eq("dedupeKey", dedupeKey))
-      .unique();
+      const now = Date.now();
+      const recipientEmail = args.recipientEmail.trim().toLowerCase();
+      const dedupeKey = actionRequiredDeliveryDedupeKey({
+        operatingDate: run.operatingDate,
+        recipientEmail,
+        storeId: run.storeId,
+      });
+      const existing = await ctx.db
+        .query("automationNotificationDelivery")
+        .withIndex("by_dedupeKey", (q) => q.eq("dedupeKey", dedupeKey))
+        .unique();
 
-    if (
-      existing?.status === "sent" ||
-      (existing?.status === "pending" &&
-        typeof existing.leaseExpiresAt === "number" &&
-        existing.leaseExpiresAt > now)
-    ) {
-      return null;
-    }
+      if (
+        existing?.status === "sent" ||
+        (existing?.status === "pending" &&
+          typeof existing.leaseExpiresAt === "number" &&
+          existing.leaseExpiresAt > now)
+      ) {
+        return null;
+      }
 
-    if (existing) {
-      await ctx.db.patch("automationNotificationDelivery", existing._id, {
-        attemptCount: existing.attemptCount + 1,
+      if (existing) {
+        await ctx.db.patch("automationNotificationDelivery", existing._id, {
+          attemptCount: existing.attemptCount + 1,
+          automationRunId: run._id,
+          failedAt: undefined,
+          leaseExpiresAt: now + ACTION_REQUIRED_DELIVERY_LEASE_MS,
+          status: "pending",
+          updatedAt: now,
+        });
+        return existing._id;
+      }
+
+      return ctx.db.insert("automationNotificationDelivery", {
+        action: run.action,
+        attemptCount: 1,
         automationRunId: run._id,
-        failedAt: undefined,
+        createdAt: now,
+        dedupeKey,
+        domain: run.domain,
         leaseExpiresAt: now + ACTION_REQUIRED_DELIVERY_LEASE_MS,
+        notificationKind: "eod_action_required",
+        operatingDate: run.operatingDate,
+        organizationId: run.organizationId,
+        recipientEmail,
         status: "pending",
+        storeId: run.storeId,
         updatedAt: now,
       });
-      return existing._id;
-    }
+    },
+  },
+);
 
-    return ctx.db.insert("automationNotificationDelivery", {
-      action: run.action,
-      attemptCount: 1,
-      automationRunId: run._id,
-      createdAt: now,
-      dedupeKey,
-      domain: run.domain,
-      leaseExpiresAt: now + ACTION_REQUIRED_DELIVERY_LEASE_MS,
-      notificationKind: "eod_action_required",
-      operatingDate: run.operatingDate,
-      organizationId: run.organizationId,
-      recipientEmail,
-      status: "pending",
-      storeId: run.storeId,
-      updatedAt: now,
-    });
-  },
-});
-
-export const markActionRequiredDailyManagerReportDeliverySent = internalMutation({
-  args: {
-    deliveryId: v.id("automationNotificationDelivery"),
-  },
-  handler: async (ctx, args) => {
-    const now = Date.now();
-    await ctx.db.patch("automationNotificationDelivery", args.deliveryId, {
-      leaseExpiresAt: undefined,
-      sentAt: now,
-      status: "sent",
-      updatedAt: now,
-    });
-  },
-});
+export const markActionRequiredDailyManagerReportDeliverySent =
+  internalMutation({
+    args: {
+      deliveryId: v.id("automationNotificationDelivery"),
+    },
+    handler: async (ctx, args) => {
+      const now = Date.now();
+      await ctx.db.patch("automationNotificationDelivery", args.deliveryId, {
+        leaseExpiresAt: undefined,
+        sentAt: now,
+        status: "sent",
+        updatedAt: now,
+      });
+    },
+  });
 
 export const markActionRequiredDailyManagerReportDeliveryFailed =
   internalMutation({
@@ -640,6 +641,7 @@ function buildDailyManagerReportPayload(args: {
     ...snapshot.summary,
     ...(args.cashPositionSummary ?? {}),
   };
+  const priorDaySummary = snapshot.priorDaySummary ?? undefined;
   const operatingDate = snapshot.closeMetadata.operatingDate;
   const reportUrl = `${resolveAppUrl()}/${args.store.slug}/store/${args.store.slug}/operations/daily-close?operatingDate=${encodeURIComponent(operatingDate)}`;
   return {
@@ -663,12 +665,12 @@ function buildDailyManagerReportPayload(args: {
         ? undefined
         : "The day closed after required items were reviewed.",
     reportUrl,
-    reviewedItems: buildReviewedItems(snapshot, money),
+    reviewedItems: buildReviewedItems(snapshot, money, priorDaySummary),
     carryForwardItems: buildCarryForwardItems(snapshot),
     blockers: buildBlockers(snapshot),
-    summaryMetrics: buildSummaryMetrics(summary, money),
-    cashMetrics: buildCashMetrics(summary, money),
-    paymentTotals: buildPaymentTotals(summary, money),
+    summaryMetrics: buildSummaryMetrics(summary, money, priorDaySummary),
+    cashMetrics: buildCashMetrics(summary, money, priorDaySummary),
+    paymentTotals: buildPaymentTotals(summary, money, priorDaySummary),
     notes: snapshot.closeMetadata.notes ?? args.dailyClose.notes,
   };
 }
@@ -704,16 +706,14 @@ function buildOpenDailyManagerReportPayload(args: {
     ...args.snapshot.summary,
     ...(args.cashPositionSummary ?? {}),
   };
+  const priorDaySummary = args.snapshot.priorDaySummary ?? undefined;
   const reportUrl = `${resolveAppUrl()}/${args.store.slug}/store/${args.store.slug}/operations/daily-close?operatingDate=${encodeURIComponent(args.snapshot.operatingDate)}`;
 
   return {
     operatingDateValue: args.snapshot.operatingDate,
     storeName: args.store.name,
     operatingDate: formatOperatingDate(args.snapshot.operatingDate),
-    completedAt: formatCompletedAt(
-      args.statusAt,
-      args.completedTimezone,
-    ),
+    completedAt: formatCompletedAt(args.statusAt, args.completedTimezone),
     completedBy: "Athena",
     storeCurrency,
     status: args.status,
@@ -721,9 +721,9 @@ function buildOpenDailyManagerReportPayload(args: {
     reviewedItems: buildPreparedReviewItems(args.snapshot),
     carryForwardItems: buildPreparedCarryForwardItems(args.snapshot),
     blockers: buildPreparedBlockers(args.snapshot),
-    summaryMetrics: buildSummaryMetrics(summary, money),
-    cashMetrics: buildCashMetrics(summary, money),
-    paymentTotals: buildPaymentTotals(summary, money),
+    summaryMetrics: buildSummaryMetrics(summary, money, priorDaySummary),
+    cashMetrics: buildCashMetrics(summary, money, priorDaySummary),
+    paymentTotals: buildPaymentTotals(summary, money, priorDaySummary),
     notes:
       args.status === "prepared"
         ? "EOD Review is waiting for manager review."
@@ -821,6 +821,7 @@ async function buildRegisterCashPositionSummary(
 function buildReviewedItems(
   snapshot: DailyCloseReportSnapshot,
   money: (amount: number) => string,
+  priorDaySummary?: Record<string, unknown>,
 ): DailyManagerReportItem[] {
   const summary = snapshot.summary;
   const items: DailyManagerReportItem[] = [];
@@ -844,9 +845,34 @@ function buildReviewedItems(
       title: "Cash variance",
       message: `${registerVarianceCount} register variance${registerVarianceCount === 1 ? "" : "s"} reviewed.`,
       metrics: [
-        { label: "Expected", value: money(expected) },
-        { label: "Counted", value: money(counted) },
-        { label: varianceLabel, value: money(Math.abs(netCashVariance)) },
+        {
+          comparison: comparisonFromSummary(
+            expected,
+            priorDaySummary,
+            "expectedCashTotal",
+          ),
+          label: "Expected",
+          value: money(expected),
+        },
+        {
+          comparison: comparisonFromSummary(
+            counted,
+            priorDaySummary,
+            "countedCashTotal",
+          ),
+          label: "Counted",
+          value: money(counted),
+        },
+        {
+          comparison: comparisonFromSummary(
+            netCashVariance,
+            priorDaySummary,
+            "netCashVariance",
+            { absolute: true },
+          ),
+          label: varianceLabel,
+          value: money(Math.abs(netCashVariance)),
+        },
       ],
       meta: "Reviewed during close",
       tone: netCashVariance === 0 ? "neutral" : "warning",
@@ -927,24 +953,50 @@ function buildPreparedBlockers(
   }));
 }
 
-function buildPaymentTotals(
+export function buildPaymentTotals(
   summary: Record<string, unknown>,
   money: (amount: number) => string,
+  priorDaySummary?: Record<string, unknown>,
 ): DailyManagerReportPaymentTotal[] {
   const paymentTotals = summary.paymentTotals;
+  const priorPaymentTotals = Array.isArray(priorDaySummary?.paymentTotals)
+    ? priorDaySummary.paymentTotals.filter(isPaymentTotal)
+    : undefined;
 
   if (!Array.isArray(paymentTotals)) return [];
 
-  return paymentTotals.filter(isPaymentTotal).map((paymentTotal) => ({
-    method: formatPaymentMethod(paymentTotal.method),
-    amount: money(paymentTotal.amount),
-    transactionCount: paymentTotal.transactionCount,
-  }));
+  return paymentTotals.filter(isPaymentTotal).map((paymentTotal) => {
+    const priorPaymentTotal = priorPaymentTotals?.find(
+      (candidate) =>
+        normalizePaymentMethod(candidate.method) ===
+        normalizePaymentMethod(paymentTotal.method),
+    );
+
+    return {
+      method: formatPaymentMethod(paymentTotal.method),
+      amount: money(paymentTotal.amount),
+      amountComparison: priorPaymentTotals
+        ? formatPriorDayComparison(
+            paymentTotal.amount,
+            priorPaymentTotal?.amount ?? 0,
+          )
+        : undefined,
+      transactionCount: paymentTotal.transactionCount,
+      transactionCountComparison:
+        priorPaymentTotals && typeof paymentTotal.transactionCount === "number"
+          ? formatPriorDayComparison(
+              paymentTotal.transactionCount,
+              priorPaymentTotal?.transactionCount ?? 0,
+            )
+          : undefined,
+    };
+  });
 }
 
 export function buildSummaryMetrics(
   summary: Record<string, unknown>,
   money: (amount: number) => string,
+  priorDaySummary?: Record<string, unknown>,
 ): DailyManagerReportMetric[] {
   const voidedTransactionCount = numberFromSummary(
     summary,
@@ -955,17 +1007,37 @@ export function buildSummaryMetrics(
     {
       label: "Sales",
       value: money(numberFromSummary(summary, "salesTotal")),
+      comparison: comparisonFromSummary(
+        numberFromSummary(summary, "salesTotal"),
+        priorDaySummary,
+        "salesTotal",
+      ),
       detail: countLabel(
         numberFromSummary(summary, "transactionCount"),
         "transaction",
+      ),
+      detailComparison: comparisonFromSummary(
+        numberFromSummary(summary, "transactionCount"),
+        priorDaySummary,
+        "transactionCount",
       ),
     },
     {
       label: "Expenses",
       value: money(numberFromSummary(summary, "expenseTotal")),
+      comparison: comparisonFromSummary(
+        numberFromSummary(summary, "expenseTotal"),
+        priorDaySummary,
+        "expenseTotal",
+      ),
       detail: countLabel(
         numberFromSummary(summary, "expenseTransactionCount"),
         "report",
+      ),
+      detailComparison: comparisonFromSummary(
+        numberFromSummary(summary, "expenseTransactionCount"),
+        priorDaySummary,
+        "expenseTransactionCount",
       ),
     },
     ...(voidedTransactionCount > 0
@@ -973,6 +1045,11 @@ export function buildSummaryMetrics(
           {
             label: "Voids",
             value: String(voidedTransactionCount),
+            comparison: comparisonFromSummary(
+              voidedTransactionCount,
+              priorDaySummary,
+              "voidedTransactionCount",
+            ),
           },
         ]
       : []),
@@ -982,6 +1059,7 @@ export function buildSummaryMetrics(
 export function buildCashMetrics(
   summary: Record<string, unknown>,
   money: (amount: number) => string,
+  priorDaySummary?: Record<string, unknown>,
 ): DailyManagerReportMetric[] {
   const expectedCash = numberFromSummary(summary, "expectedCashTotal");
   const netCashVariance = numberFromSummary(summary, "netCashVariance");
@@ -995,14 +1073,30 @@ export function buildCashMetrics(
     {
       label: "Expected cash",
       value: money(expectedCash),
+      comparison: comparisonFromSummary(
+        expectedCash,
+        priorDaySummary,
+        "expectedCashTotal",
+      ),
     },
     {
       label: "Counted cash",
       value: money(countedCash),
+      comparison: comparisonFromSummary(
+        countedCash,
+        priorDaySummary,
+        "countedCashTotal",
+      ),
     },
     {
       label: "Net variance",
       value: money(netCashVariance),
+      comparison: comparisonFromSummary(
+        netCashVariance,
+        priorDaySummary,
+        "netCashVariance",
+        { absolute: true },
+      ),
     },
   ];
 }
@@ -1040,6 +1134,38 @@ function numberFromSummaryWithFallback(
   return typeof value === "number" ? value : fallback;
 }
 
+function comparisonFromSummary(
+  currentValue: number,
+  priorDaySummary: Record<string, unknown> | undefined,
+  key: string,
+  options?: { absolute?: boolean },
+) {
+  if (!priorDaySummary) return undefined;
+
+  return formatPriorDayComparison(
+    currentValue,
+    numberFromSummary(priorDaySummary, key),
+    options,
+  );
+}
+
+function formatPriorDayComparison(
+  currentValue: number,
+  priorValue: number,
+  options?: { absolute?: boolean },
+) {
+  const current = options?.absolute ? Math.abs(currentValue) : currentValue;
+  const prior = options?.absolute ? Math.abs(priorValue) : priorValue;
+
+  if (prior === 0) return "No activity on prior day";
+  if (current === prior) return "In line with prior day";
+
+  const percentage = Math.round(
+    (Math.abs(current - prior) / Math.abs(prior)) * 100,
+  );
+  return `${percentage}% ${current > prior ? "higher" : "lower"} vs prior day`;
+}
+
 function countLabel(count: number, singular: string) {
   return `${count} ${singular}${count === 1 ? "" : "s"}`;
 }
@@ -1052,6 +1178,13 @@ function formatPaymentMethod(method: string) {
   return method
     .replace(/[_-]+/g, " ")
     .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function normalizePaymentMethod(method: string) {
+  return method
+    .trim()
+    .replace(/[\s_-]+/g, " ")
+    .toLowerCase();
 }
 
 function formatOperatingDate(operatingDate: string) {

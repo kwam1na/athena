@@ -1881,6 +1881,7 @@ function ResolvedPOSRegisterViewContent({
   const isAwaitingCashierAuth = Boolean(viewModel.authDialog?.open);
   const isStaffSignedIn =
     viewModel.debug?.staffSignedIn === true || Boolean(viewModel.cashierCard);
+  const isTerminalOnline = viewModel.debug?.online ?? true;
   const isResolvingCashierPresence =
     cashierPresenceRestore.status === "pending" && !isStaffSignedIn;
   const onboardingState =
@@ -2345,13 +2346,13 @@ function ResolvedPOSRegisterViewContent({
                 <FadeIn className="flex items-center gap-2 self-center">
                   <div
                     aria-label={
-                      isStaffSignedIn ? "Staff signed in" : "No staff signed in"
+                      isTerminalOnline ? "Terminal online" : "Terminal offline"
                     }
                     className={cn(
                       "h-2 w-2 rounded-full",
-                      isStaffSignedIn
+                      isTerminalOnline
                         ? "animate-pulse bg-success"
-                        : "bg-background",
+                        : "bg-muted-foreground/40",
                     )}
                   />
                 </FadeIn>
@@ -2359,7 +2360,9 @@ function ResolvedPOSRegisterViewContent({
                 <p className="text-lg font-semibold leading-none text-foreground">
                   {viewModel.header.title}
                 </p>
-                {isPosWorkflow ? (
+                {isPosWorkflow &&
+                (isTerminalOnline ||
+                  localCloseoutSyncStatus?.status !== "synced") ? (
                   <RegisterSyncStatusChip
                     isRegisterOperable={isRegisterOperable}
                     syncStatus={localCloseoutSyncStatus}

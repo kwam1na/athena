@@ -538,6 +538,7 @@ describe("AppSidebar capability gates", () => {
       "self-start",
       "md:flex",
     );
+    expect(toggle).not.toHaveAttribute("title");
     fireEvent.click(toggle);
     expect(mocks.toggleSidebar).toHaveBeenCalledTimes(1);
   });

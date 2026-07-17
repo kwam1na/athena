@@ -8,6 +8,7 @@ import { ADMIN_EMAILS } from "../constants/email";
 import schema from "../schema";
 import {
   buildCashMetrics,
+  buildPaymentTotals,
   buildSummaryMetrics,
   resolveAppUrl,
   sendDailyManagerReportToAdminsForDateWithCtx,
@@ -116,6 +117,134 @@ describe("daily manager report email URLs", () => {
       { label: "Expected cash", value: "GHS 178000" },
       { label: "Counted cash", value: "GHS 208000" },
       { label: "Net variance", value: "GHS 30000" },
+    ]);
+  });
+
+  it("compares every operating summary metric with the prior day", () => {
+    const money = (amount: number) => `GHS ${amount}`;
+
+    expect(
+      buildSummaryMetrics(
+        {
+          expenseTotal: 400,
+          expenseTransactionCount: 3,
+          salesTotal: 12000,
+          transactionCount: 10,
+          voidedTransactionCount: 2,
+        },
+        money,
+        {
+          expenseTotal: 500,
+          expenseTransactionCount: 2,
+          salesTotal: 10000,
+          transactionCount: 8,
+          voidedTransactionCount: 1,
+        },
+      ),
+    ).toEqual([
+      {
+        comparison: "20% higher vs prior day",
+        detail: "10 transactions",
+        detailComparison: "25% higher vs prior day",
+        label: "Sales",
+        value: "GHS 12000",
+      },
+      {
+        comparison: "20% lower vs prior day",
+        detail: "3 reports",
+        detailComparison: "50% higher vs prior day",
+        label: "Expenses",
+        value: "GHS 400",
+      },
+      {
+        comparison: "100% higher vs prior day",
+        label: "Voids",
+        value: "2",
+      },
+    ]);
+  });
+
+  it("compares cash variance by magnitude and handles a quiet prior day", () => {
+    const money = (amount: number) => `GHS ${amount}`;
+
+    expect(
+      buildCashMetrics(
+        {
+          countedCashTotal: 208000,
+          expectedCashTotal: 178000,
+          netCashVariance: 30000,
+        },
+        money,
+        {
+          countedCashTotal: 200000,
+          expectedCashTotal: 200000,
+          netCashVariance: -60000,
+        },
+      ),
+    ).toEqual([
+      {
+        comparison: "11% lower vs prior day",
+        label: "Expected cash",
+        value: "GHS 178000",
+      },
+      {
+        comparison: "4% higher vs prior day",
+        label: "Counted cash",
+        value: "GHS 208000",
+      },
+      {
+        comparison: "50% lower vs prior day",
+        label: "Net variance",
+        value: "GHS 30000",
+      },
+    ]);
+
+    expect(
+      buildCashMetrics(
+        {
+          countedCashTotal: 100,
+          expectedCashTotal: 100,
+          netCashVariance: 0,
+        },
+        money,
+        {
+          countedCashTotal: 0,
+          expectedCashTotal: 0,
+          netCashVariance: 0,
+        },
+      ).map((metric) => metric.comparison),
+    ).toEqual([
+      "No activity on prior day",
+      "No activity on prior day",
+      "No activity on prior day",
+    ]);
+  });
+
+  it("compares payment amounts and transaction counts with the prior day", () => {
+    const money = (amount: number) => `GHS ${amount}`;
+
+    expect(
+      buildPaymentTotals(
+        {
+          paymentTotals: [
+            { amount: 1200, method: "mobile_money", transactionCount: 6 },
+          ],
+        },
+        money,
+        {
+          paymentTotals: [
+            { amount: 1000, method: "mobile-money", transactionCount: 4 },
+          ],
+        },
+      ),
+    ).toEqual([
+      {
+        amount: "GHS 1200",
+        amountComparison: "20% higher vs prior day",
+        method: "Mobile Money",
+        transactionCount: 6,
+        transactionCountComparison: "50% higher vs prior day",
+      },
     ]);
   });
 
@@ -280,9 +409,7 @@ describe("daily manager report email URLs", () => {
     expect(body.html).toContain("Manager action required");
     expect(body.html).toContain("Athena EOD alert");
     expect(body.html).not.toContain("Athena daily report");
-    expect(body.html).toContain(
-      "Athena did not close this operating day.",
-    );
+    expect(body.html).toContain("Athena did not close this operating day.");
     expect(body.html).toContain("Open EOD Review");
     expect(body.html).not.toContain(
       "No follow-up needed for this operating day.",

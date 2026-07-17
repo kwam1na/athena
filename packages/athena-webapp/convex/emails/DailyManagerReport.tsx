@@ -11,7 +11,6 @@ import {
   Section,
   Text,
 } from "@react-email/components";
-import { ArrowUpRight } from "lucide-react";
 import { currencyFormatter } from "../utils";
 
 type DailyReportStatus =
@@ -35,6 +34,8 @@ export interface DailyManagerReportMetric {
   label: string;
   value: string;
   detail?: string;
+  comparison?: string;
+  detailComparison?: string;
 }
 
 export interface DailyManagerReportItem {
@@ -48,7 +49,9 @@ export interface DailyManagerReportItem {
 export interface DailyManagerReportPaymentTotal {
   method: string;
   amount: string;
+  amountComparison?: string;
   transactionCount?: number;
+  transactionCountComparison?: string;
 }
 
 export interface DailyManagerReportProps {
@@ -236,7 +239,7 @@ export default function DailyManagerReport({
             </Text>
           </Section>
 
-          <Section style={styles.statusPanel}>
+          <Section style={statusPanelStyleFor(copy.tone)}>
             <Row>
               <Column style={styles.statusColumn}>
                 <Text style={styles.statusLabel}>Status</Text>
@@ -249,7 +252,7 @@ export default function DailyManagerReport({
               </Column>
               {showStatusBadge && (
                 <Column style={styles.badgeColumn}>
-                  <StatusBadge>{attentionSummary}</StatusBadge>
+                  <StatusBadge tone={copy.tone}>{attentionSummary}</StatusBadge>
                 </Column>
               )}
             </Row>
@@ -315,17 +318,16 @@ export default function DailyManagerReport({
           )}
 
           <Section style={styles.actionSection}>
-            <Button href={reportUrl} style={styles.button}>
+            <Button
+              href={reportUrl}
+              style={actionRequired ? styles.buttonPrimary : styles.button}
+            >
               <span style={styles.buttonLabel}>
                 {actionRequired ? "Open EOD Review" : "View EOD Review"}
               </span>
-              <ArrowUpRight
-                aria-hidden="true"
-                color={colors.foreground}
-                size={14}
-                strokeWidth={2}
-                style={styles.buttonIcon}
-              />
+              <span aria-hidden="true" style={styles.buttonIcon}>
+                ↗
+              </span>
             </Button>
           </Section>
         </Container>
@@ -479,8 +481,18 @@ function SectionHeading({
   );
 }
 
-function StatusBadge({ children }: { children: ReactNode }) {
-  return <Text style={styles.statusIndicator}>{children}</Text>;
+function StatusBadge({
+  children,
+  tone,
+}: {
+  children: ReactNode;
+  tone: AttentionTone;
+}) {
+  return (
+    <Text style={{ ...styles.statusIndicator, color: toneColors[tone] }}>
+      {children}
+    </Text>
+  );
 }
 
 function EmptyState({ children }: { children: ReactNode }) {
@@ -517,8 +529,9 @@ function AttentionMetricGrid({
       <Row>
         {metrics.slice(0, 3).map((metric) => (
           <Column key={metric.label} style={styles.attentionMetricColumn}>
-            <Text style={styles.attentionMetricValue}>{metric.value}</Text>
             <Text style={styles.attentionMetricLabel}>{metric.label}</Text>
+            <Text style={styles.attentionMetricValue}>{metric.value}</Text>
+            <MetricComparison comparison={metric.comparison} />
           </Column>
         ))}
       </Row>
@@ -535,11 +548,19 @@ function OperatingSummaryGrid({
     <Section style={styles.operatingGrid}>
       {metrics.map((metric) => (
         <Section key={metric.label} style={styles.operatingMetric}>
+          <Text style={styles.operatingLabel}>{metric.label}</Text>
           <Text style={styles.operatingValue}>{metric.value}</Text>
-          <Text style={styles.operatingDetail}>
-            {metric.label}
-            {metric.detail ? ` | ${metric.detail}` : ""}
-          </Text>
+          {metric.detail ? (
+            <Text style={styles.operatingDetail}>{metric.detail}</Text>
+          ) : null}
+          <MetricComparison
+            comparison={metric.comparison}
+            detailComparison={metric.detailComparison}
+            detailLabel={comparisonDetailLabel(metric.detail)}
+            primaryLabel={
+              metric.detail ? metric.label.toLowerCase() : undefined
+            }
+          />
         </Section>
       ))}
     </Section>
@@ -563,11 +584,19 @@ function SummaryMetricGrid({
         <Row key={`summary-row-${rowIndex}`} style={styles.summaryGridRow}>
           {row.map((metric) => (
             <Column key={metric.label} style={styles.summaryGridColumn}>
+              <Text style={styles.summaryLabel}>{metric.label}</Text>
               <Text style={summaryValueStyleFor(metric)}>{metric.value}</Text>
-              <Text style={styles.summaryDetail}>
-                {metric.label}
-                {metric.detail ? ` | ${metric.detail}` : ""}
-              </Text>
+              {metric.detail ? (
+                <Text style={styles.summaryDetail}>{metric.detail}</Text>
+              ) : null}
+              <MetricComparison
+                comparison={metric.comparison}
+                detailComparison={metric.detailComparison}
+                detailLabel={comparisonDetailLabel(metric.detail)}
+                primaryLabel={
+                  metric.detail ? metric.label.toLowerCase() : undefined
+                }
+              />
             </Column>
           ))}
           {row.length < 2 &&
@@ -616,8 +645,15 @@ function PaymentTotalsGrid({
         <Row key={`payment-row-${rowIndex}`} style={styles.paymentGridRow}>
           {row.map((payment) => (
             <Column key={payment.method} style={styles.paymentGridColumn}>
+              <Text style={styles.paymentLabel}>{payment.method}</Text>
               <Text style={styles.paymentAmount}>{payment.amount}</Text>
               <PaymentMeta payment={payment} />
+              <MetricComparison
+                comparison={payment.amountComparison}
+                detailComparison={payment.transactionCountComparison}
+                detailLabel="transactions"
+                primaryLabel="amount"
+              />
             </Column>
           ))}
           {row.length < 2 &&
@@ -636,12 +672,73 @@ function PaymentTotalsGrid({
 function PaymentMeta({ payment }: { payment: DailyManagerReportPaymentTotal }) {
   const count =
     typeof payment.transactionCount === "number"
-      ? `${payment.transactionCount} ${payment.method} transaction${
+      ? `${payment.transactionCount} transaction${
           payment.transactionCount === 1 ? "" : "s"
         }`
-      : `${payment.method} transactions`;
+      : "Transactions";
 
   return <Text style={styles.paymentDetail}>{count}</Text>;
+}
+
+function MetricComparison({
+  comparison,
+  detailComparison,
+  detailLabel = "transactions",
+  primaryLabel,
+}: {
+  comparison?: string;
+  detailComparison?: string;
+  detailLabel?: string;
+  primaryLabel?: string;
+}) {
+  const parts = [
+    comparison ? compactComparison(comparison, primaryLabel) : null,
+    detailComparison
+      ? compactComparison(detailComparison, detailLabel.toLowerCase())
+      : null,
+  ].filter((part): part is string => Boolean(part));
+
+  if (parts.length === 0) return null;
+
+  const hasStandalonePriorDayCopy = parts.some((part) =>
+    /prior day/i.test(part),
+  );
+
+  return (
+    <Text style={styles.metricComparison}>
+      {parts.join("  ·  ")}
+      {hasStandalonePriorDayCopy ? "" : " vs prior day"}
+    </Text>
+  );
+}
+
+function compactComparison(comparison: string, label?: string) {
+  if (/^no activity on prior day$/i.test(comparison)) {
+    return label ? `No ${label} on prior day` : comparison;
+  }
+
+  const compact = comparison.replace(/\s+vs prior day$/i, "");
+  if (/^in line$/i.test(compact)) {
+    return label ? `${capitalize(label)} in line` : compact;
+  }
+
+  const direction = /\bhigher\b/i.test(compact)
+    ? "↑"
+    : /\blower\b/i.test(compact)
+      ? "↓"
+      : "";
+  const percentage = compact.replace(/\s+(higher|lower)$/i, "");
+  const labeled = label ? `${percentage} ${label}` : percentage;
+
+  return direction ? `${direction} ${labeled}` : labeled;
+}
+
+function comparisonDetailLabel(detail?: string) {
+  return detail?.replace(/^\d+\s+/, "").toLowerCase();
+}
+
+function capitalize(value: string) {
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 const fontSans =
@@ -650,33 +747,47 @@ const fontNumeric =
   "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif";
 
 const colors = {
-  background: "#fcfcfb",
-  border: "#dde0e5",
+  background: "#f6f6f4",
+  border: "#e2e3e6",
   danger: "#dc4438",
   dangerSoft: "#fff1ef",
-  foreground: "#1d2430",
-  muted: "#666b73",
+  foreground: "#1b1c1f",
+  muted: "#6f737b",
   raised: "#ffffff",
   signal: "#b02a59",
   success: "#347957",
   successSoft: "#eff8f3",
-  surface: "#f8f8f7",
+  surface: "#f8f8f6",
   warning: "#b66b00",
   warningSoft: "#fff7e6",
   workflow: "#454fa3",
   workflowSoft: "#f1f3ff",
 };
 
+const toneColors: Record<AttentionTone, string> = {
+  danger: colors.danger,
+  neutral: colors.workflow,
+  success: colors.success,
+  warning: colors.warning,
+};
+
+function statusPanelStyleFor(tone: AttentionTone): CSSProperties {
+  return {
+    ...styles.statusPanel,
+    borderLeft: `3px solid ${toneColors[tone]}`,
+  };
+}
+
 const styles: Record<string, CSSProperties> = {
   actionSection: {
-    padding: "28px 28px 34px",
+    padding: "24px 32px 32px",
     textAlign: "right",
   },
   attentionItem: {
-    padding: "0 0 28px",
+    padding: "0 0 20px",
   },
   attentionList: {
-    marginTop: "22px",
+    marginTop: "18px",
   },
   attentionMetricColumn: {
     padding: "0 18px 0 0",
@@ -684,25 +795,34 @@ const styles: Record<string, CSSProperties> = {
     width: "33.333%",
   },
   attentionMetricGrid: {
-    marginTop: "14px",
+    marginTop: "12px",
   },
   attentionMetricLabel: {
     color: colors.muted,
-    fontSize: "11px",
-    lineHeight: "16px",
-    margin: "4px 0 0",
+    fontSize: "10px",
+    fontWeight: 600,
+    letterSpacing: "0.04em",
+    lineHeight: "15px",
+    margin: "0 0 5px",
+    textTransform: "uppercase",
     whiteSpace: "nowrap",
   },
   attentionMetricValue: {
     color: colors.foreground,
     fontFamily: fontNumeric,
     fontFeatureSettings: "'tnum' 1, 'lnum' 1",
-    fontSize: "22px",
+    fontSize: "21px",
     fontVariantNumeric: "tabular-nums",
-    fontWeight: 300,
-    lineHeight: "28px",
+    fontWeight: 400,
+    lineHeight: "26px",
     margin: 0,
     whiteSpace: "nowrap",
+  },
+  metricComparison: {
+    color: colors.muted,
+    fontSize: "10.5px",
+    lineHeight: "16px",
+    margin: "8px 0 0",
   },
   badgeColumn: {
     textAlign: "right",
@@ -714,16 +834,29 @@ const styles: Record<string, CSSProperties> = {
     color: colors.foreground,
     fontFamily: fontSans,
     margin: 0,
-    padding: "28px 0",
+    padding: "36px 0",
   },
   button: {
     backgroundColor: "transparent",
     border: `1px solid ${colors.border}`,
-    borderRadius: "4px",
+    borderRadius: "6px",
     color: colors.foreground,
     display: "inline-block",
     fontFamily: fontSans,
-    fontSize: "14px",
+    fontSize: "13px",
+    fontWeight: 600,
+    lineHeight: "20px",
+    padding: "10px 14px",
+    textDecoration: "none",
+  },
+  buttonPrimary: {
+    backgroundColor: colors.foreground,
+    border: `1px solid ${colors.foreground}`,
+    borderRadius: "6px",
+    color: colors.raised,
+    display: "inline-block",
+    fontFamily: fontSans,
+    fontSize: "13px",
     fontWeight: 600,
     lineHeight: "20px",
     padding: "10px 14px",
@@ -731,44 +864,46 @@ const styles: Record<string, CSSProperties> = {
   },
   buttonIcon: {
     display: "inline-block",
+    fontFamily: fontSans,
+    fontSize: "14px",
+    fontWeight: 700,
+    lineHeight: "14px",
     marginLeft: "8px",
-    verticalAlign: "-2px",
+    verticalAlign: "1px",
   },
   buttonLabel: {
     verticalAlign: "middle",
   },
   emptyState: {
-    backgroundColor: colors.surface,
-    border: `1px solid ${colors.border}`,
-    borderRadius: "6px",
+    borderLeft: `2px solid ${colors.border}`,
     color: colors.muted,
-    fontSize: "14px",
-    lineHeight: "20px",
-    margin: "10px 0 0",
-    padding: "14px 16px",
+    fontSize: "13px",
+    lineHeight: "19px",
+    margin: "12px 0 0",
+    padding: "1px 0 1px 12px",
   },
   eyebrow: {
     color: colors.muted,
-    fontSize: "11px",
+    fontSize: "10px",
     fontWeight: 700,
-    letterSpacing: "0.08em",
-    lineHeight: "16px",
-    margin: "0 0 8px",
+    letterSpacing: "0.11em",
+    lineHeight: "15px",
+    margin: "0 0 10px",
     textTransform: "uppercase",
   },
   header: {
-    padding: "28px 28px 18px",
+    padding: "36px 32px 24px",
   },
   itemMessage: {
     color: colors.foreground,
-    fontSize: "14px",
-    lineHeight: "21px",
-    margin: "9px 0 0",
+    fontSize: "13px",
+    lineHeight: "20px",
+    margin: "7px 0 0",
   },
   itemTitle: {
     color: colors.foreground,
-    fontSize: "14px",
-    fontWeight: 700,
+    fontSize: "13px",
+    fontWeight: 600,
     lineHeight: "20px",
     margin: 0,
   },
@@ -777,7 +912,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: "12px",
     fontWeight: 400,
     lineHeight: "18px",
-    margin: "6px 0 0",
+    margin: "5px 0 0",
   },
   mutedLine: {
     color: colors.muted,
@@ -797,7 +932,7 @@ const styles: Record<string, CSSProperties> = {
   noteSection: {
     backgroundColor: colors.surface,
     borderTop: `1px solid ${colors.border}`,
-    padding: "26px 28px",
+    padding: "24px 32px",
   },
   noteText: {
     color: colors.foreground,
@@ -809,23 +944,33 @@ const styles: Record<string, CSSProperties> = {
     color: colors.muted,
     fontSize: "12px",
     lineHeight: "18px",
-    margin: "12px 0 0",
+    margin: "6px 0 0",
     whiteSpace: "nowrap",
   },
   operatingGrid: {
-    marginTop: "24px",
+    marginTop: "20px",
   },
   operatingMetric: {
-    marginBottom: "72px",
+    marginBottom: "42px",
+  },
+  operatingLabel: {
+    color: colors.muted,
+    fontSize: "10px",
+    fontWeight: 600,
+    letterSpacing: "0.06em",
+    lineHeight: "15px",
+    margin: "0 0 7px",
+    textTransform: "uppercase",
   },
   operatingValue: {
     color: colors.foreground,
     fontFamily: fontNumeric,
     fontFeatureSettings: "'tnum' 1, 'lnum' 1",
-    fontSize: "52px",
+    fontSize: "44px",
     fontVariantNumeric: "tabular-nums",
-    fontWeight: 300,
-    lineHeight: "56px",
+    fontWeight: 400,
+    letterSpacing: "-0.025em",
+    lineHeight: "48px",
     margin: 0,
     whiteSpace: "nowrap",
   },
@@ -833,21 +978,22 @@ const styles: Record<string, CSSProperties> = {
     color: colors.foreground,
     fontFamily: fontNumeric,
     fontFeatureSettings: "'tnum' 1, 'lnum' 1",
-    fontSize: "36px",
+    fontSize: "30px",
     fontVariantNumeric: "tabular-nums",
-    fontWeight: 300,
-    lineHeight: "40px",
+    fontWeight: 400,
+    letterSpacing: "-0.02em",
+    lineHeight: "36px",
     margin: 0,
   },
   paymentDetail: {
     color: colors.muted,
     fontSize: "11px",
     lineHeight: "16px",
-    margin: "12px 0 0",
+    margin: "5px 0 0",
     whiteSpace: "nowrap",
   },
   paymentGrid: {
-    marginTop: "18px",
+    marginTop: "16px",
   },
   paymentGridColumn: {
     padding: "0 20px 0 0",
@@ -855,10 +1001,19 @@ const styles: Record<string, CSSProperties> = {
     width: "50%",
   },
   paymentGridRow: {
-    marginBottom: "40px",
+    marginBottom: "30px",
+  },
+  paymentLabel: {
+    color: colors.muted,
+    fontSize: "10px",
+    fontWeight: 600,
+    letterSpacing: "0.05em",
+    lineHeight: "15px",
+    margin: "0 0 6px",
+    textTransform: "uppercase",
   },
   section: {
-    padding: "26px 28px 22px",
+    padding: "24px 32px",
   },
   sectionDetail: {
     color: colors.muted,
@@ -870,48 +1025,50 @@ const styles: Record<string, CSSProperties> = {
     textAlign: "right",
   },
   sectionHeading: {
-    marginBottom: "12px",
+    marginBottom: "10px",
   },
   sectionTitle: {
     color: colors.foreground,
     fontSize: "15px",
-    fontWeight: 750,
+    fontWeight: 700,
     lineHeight: "21px",
     margin: 0,
   },
   sectionTitleQuiet: {
     color: colors.muted,
-    fontSize: "12px",
-    fontWeight: 500,
-    letterSpacing: "0.02em",
-    lineHeight: "18px",
+    fontSize: "10px",
+    fontWeight: 700,
+    letterSpacing: "0.08em",
+    lineHeight: "15px",
     margin: 0,
+    textTransform: "uppercase",
   },
   separatedSection: {
     borderTop: `1px solid ${colors.border}`,
-    padding: "34px 28px 28px",
+    padding: "28px 32px 24px",
   },
   shell: {
     backgroundColor: colors.raised,
     border: `1px solid ${colors.border}`,
     borderRadius: "8px",
     margin: "0 auto",
-    maxWidth: "620px",
+    maxWidth: "640px",
     overflow: "hidden",
   },
   unborderedShell: {
     backgroundColor: colors.raised,
     margin: "0 auto",
-    maxWidth: "620px",
+    maxWidth: "640px",
     overflow: "hidden",
   },
   statusIndicator: {
-    color: colors.foreground,
-    fontSize: "12px",
-    fontWeight: 500,
-    lineHeight: "18px",
+    fontSize: "10px",
+    fontWeight: 700,
+    letterSpacing: "0.06em",
+    lineHeight: "15px",
     margin: "1px 0 0",
     textAlign: "right",
+    textTransform: "uppercase",
   },
   statusColumn: {
     verticalAlign: "top",
@@ -929,43 +1086,45 @@ const styles: Record<string, CSSProperties> = {
     backgroundColor: colors.surface,
     borderBottom: `1px solid ${colors.border}`,
     borderTop: `1px solid ${colors.border}`,
-    padding: "18px 28px",
+    padding: "20px 32px 21px 29px",
   },
   statusSummary: {
     color: colors.muted,
-    fontSize: "14px",
-    lineHeight: "20px",
-    margin: "7px 0 0",
+    fontSize: "13px",
+    lineHeight: "19px",
+    margin: "6px 0 0",
   },
   statusTitle: {
     color: colors.foreground,
-    fontSize: "24px",
-    fontWeight: 500,
-    lineHeight: "30px",
+    fontSize: "20px",
+    fontWeight: 600,
+    letterSpacing: "-0.01em",
+    lineHeight: "26px",
     margin: "5px 0 0",
   },
   subtitle: {
     color: colors.muted,
-    fontSize: "14px",
-    lineHeight: "20px",
+    fontSize: "13px",
+    lineHeight: "19px",
     margin: "0",
   },
   title: {
     color: colors.foreground,
-    fontSize: "28px",
-    fontWeight: 500,
-    lineHeight: "34px",
-    margin: "0 0 8px",
+    fontSize: "32px",
+    fontWeight: 600,
+    letterSpacing: "-0.025em",
+    lineHeight: "37px",
+    margin: "0 0 7px",
   },
   summaryDetail: {
     color: colors.muted,
     fontSize: "11px",
     lineHeight: "16px",
-    margin: "12px 0 0",
+    margin: "5px 0 0",
     whiteSpace: "nowrap",
   },
   summaryGrid: {
-    marginTop: "18px",
+    marginTop: "16px",
   },
   summaryGridColumn: {
     padding: "0 20px 0 0",
@@ -973,35 +1132,26 @@ const styles: Record<string, CSSProperties> = {
     width: "50%",
   },
   summaryGridRow: {
-    marginBottom: "40px",
+    marginBottom: "30px",
+  },
+  summaryLabel: {
+    color: colors.muted,
+    fontSize: "10px",
+    fontWeight: 600,
+    letterSpacing: "0.05em",
+    lineHeight: "15px",
+    margin: "0 0 6px",
+    textTransform: "uppercase",
   },
   summaryValue: {
     color: colors.foreground,
     fontFamily: fontNumeric,
     fontFeatureSettings: "'tnum' 1, 'lnum' 1",
-    fontSize: "36px",
+    fontSize: "30px",
     fontVariantNumeric: "tabular-nums",
-    fontWeight: 300,
-    lineHeight: "40px",
+    fontWeight: 400,
+    letterSpacing: "-0.02em",
+    lineHeight: "36px",
     margin: 0,
-  },
-};
-
-const toneStyles: Record<AttentionTone, CSSProperties> = {
-  danger: {
-    backgroundColor: colors.dangerSoft,
-    color: colors.danger,
-  },
-  neutral: {
-    backgroundColor: colors.workflowSoft,
-    color: colors.workflow,
-  },
-  success: {
-    backgroundColor: colors.successSoft,
-    color: colors.success,
-  },
-  warning: {
-    backgroundColor: colors.warningSoft,
-    color: colors.warning,
   },
 };

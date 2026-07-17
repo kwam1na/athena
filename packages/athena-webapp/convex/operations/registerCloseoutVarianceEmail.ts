@@ -30,6 +30,18 @@ type SentRegisterCloseoutVarianceAlert = {
   storeName: string;
 };
 
+type RegisterCloseoutMatchPayload = RegisterCloseoutVarianceAlertProps & {
+  registerSessionId: Id<"registerSession">;
+  storeId: Id<"store">;
+};
+
+type SentRegisterCloseoutMatchReport = {
+  recipientEmail: string;
+  registerSessionId: Id<"registerSession">;
+  status: number;
+  storeName: string;
+};
+
 type CloseoutVarianceMetadata = {
   closeoutOccurredAt?: number;
   countedCash?: number;
@@ -125,6 +137,79 @@ export const getRegisterCloseoutVarianceAlertPayload = internalQuery({
   },
 });
 
+export const getRegisterCloseoutMatchReportPayload = internalQuery({
+  args: {
+    registerSessionId: v.id("registerSession"),
+  },
+  handler: async (ctx, args): Promise<RegisterCloseoutMatchPayload> => {
+    const registerSession = await ctx.db.get(
+      "registerSession",
+      args.registerSessionId,
+    );
+    if (
+      !registerSession ||
+      registerSession.status !== "closed" ||
+      typeof registerSession.countedCash !== "number" ||
+      registerSession.countedCash - registerSession.expectedCash !== 0
+    ) {
+      throw new Error("Exact-match register closeout was not found.");
+    }
+
+    const [store, submittedBy] = await Promise.all([
+      ctx.db.get("store", registerSession.storeId),
+      registerSession.closedByStaffProfileId
+        ? ctx.db.get("staffProfile", registerSession.closedByStaffProfileId)
+        : Promise.resolve(null),
+    ]);
+    if (!store) {
+      throw new Error("Register closeout context was not found.");
+    }
+
+    const closeoutOccurredAt =
+      registerSession.closedAt ?? registerSession._creationTime;
+    const [organization, terminal, closeoutScheduleContext] = await Promise.all([
+      ctx.db.get("organization", store.organizationId),
+      registerSession.terminalId
+        ? ctx.db.get("posTerminal", registerSession.terminalId)
+        : Promise.resolve(null),
+      getStoreScheduleContextForStoreAtWithCtx(ctx, {
+        at: closeoutOccurredAt,
+        storeId: store._id,
+      }).then((result) => result.context),
+    ]);
+    const currency = store.currency || "GHS";
+    const money = currencyFormatter(currency);
+
+    return {
+      countedCash: money.format(toDisplayAmount(registerSession.countedCash)),
+      currency,
+      expectedCash: money.format(toDisplayAmount(registerSession.expectedCash)),
+      operatingDate: formatRegisterCloseoutVarianceAlertOperatingDate({
+        closeoutScheduleContext,
+        closeoutOperatingDate: registerSession.closeoutOperatingDate,
+        openedOperatingDate: registerSession.openedOperatingDate,
+      }),
+      registerLabel: formatRegisterLabel({ registerSession, terminal }),
+      registerSessionId: registerSession._id,
+      reviewUrl: buildRegisterReviewUrl({
+        organization,
+        registerSessionId: registerSession._id,
+        store,
+      }),
+      storeId: store._id,
+      storeName: store.name,
+      submittedAt: formatSubmittedAt(
+        closeoutOccurredAt,
+        closeoutScheduleContext,
+      ),
+      submittedBy: submittedBy?.fullName ?? "POS operator",
+      variance: money.format(0),
+      varianceDirection: "matched",
+      notes: registerSession.notes,
+    };
+  },
+});
+
 export function formatRegisterCloseoutVarianceAlertReason(
   currency: string,
   reason?: string | null,
@@ -192,6 +277,46 @@ export const sendRegisterCloseoutVarianceAlertToAdmins = internalAction({
   },
   handler: (ctx, args) =>
     sendRegisterCloseoutVarianceAlertToAdminsWithCtx(ctx, args),
+});
+
+export async function sendRegisterCloseoutMatchReportToAdminsWithCtx(
+  ctx: Pick<ActionCtx, "runQuery">,
+  args: { registerSessionId: Id<"registerSession"> },
+): Promise<SentRegisterCloseoutMatchReport[]> {
+  const payload: RegisterCloseoutMatchPayload = await ctx.runQuery(
+    internal.operations.registerCloseoutVarianceEmail
+      .getRegisterCloseoutMatchReportPayload,
+    { registerSessionId: args.registerSessionId },
+  );
+  const sentReports: SentRegisterCloseoutMatchReport[] = [];
+
+  for (const recipient of ADMIN_EMAILS) {
+    const response = await sendRegisterCloseoutVarianceAlertEmail({
+      ...payload,
+      recipientEmail: recipient.email,
+      recipientName: recipient.name,
+      subject: `${payload.storeName} register closed - ${payload.registerLabel} - ${payload.operatingDate}`,
+    });
+
+    if (!response.ok) {
+      throw new Error(await response.text());
+    }
+
+    sentReports.push({
+      recipientEmail: recipient.email,
+      registerSessionId: payload.registerSessionId,
+      status: response.status,
+      storeName: payload.storeName,
+    });
+  }
+
+  return sentReports;
+}
+
+export const sendRegisterCloseoutMatchReportToAdmins = internalAction({
+  args: { registerSessionId: v.id("registerSession") },
+  handler: (ctx, args) =>
+    sendRegisterCloseoutMatchReportToAdminsWithCtx(ctx, args),
 });
 
 function readCloseoutVarianceMetadata(

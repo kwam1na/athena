@@ -107,7 +107,6 @@ function ContainedSidebarToggle() {
     <button
       type="button"
       aria-label={label}
-      title={label}
       onClick={toggleSidebar}
       className={cn(
         "mt-layout-xs hidden h-9 w-[var(--sidebar-width-icon)] shrink-0 items-center justify-center self-start rounded-lg border border-sidebar-border/70 bg-sidebar text-sidebar-foreground shadow-surface transition-[background-color,border-color,color,transform] duration-fast ease-standard hover:border-sidebar-border hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring active:scale-[0.96] md:flex",

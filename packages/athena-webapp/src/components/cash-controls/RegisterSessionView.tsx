@@ -4268,7 +4268,10 @@ export function RegisterSessionViewContent({
             />
           }
           trailingContent={
-            <div className="flex shrink-0 flex-wrap items-start justify-end gap-2">
+            <div
+              className="flex w-full shrink-0 flex-col items-stretch gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-start sm:justify-end"
+              data-testid="register-session-header-actions"
+            >
               {canViewFinancialDetails &&
               registerSession &&
               orgUrlSlug &&
