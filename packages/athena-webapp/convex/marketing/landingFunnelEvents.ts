@@ -8,7 +8,7 @@ const deviceValidator = v.optional(v.union(v.literal("mobile"), v.literal("deskt
 const sourceValidator = v.optional(v.union(v.literal("direct"), v.literal("search"), v.literal("social"), v.literal("referral"), v.literal("unknown")));
 
 export async function appendFunnelEventWithCtx(ctx: MutationCtx, args: {
-  event: "page_view" | "walkthrough_cta" | "form_start" | "durable_acceptance";
+  event: "page_view" | "walkthrough_cta" | "demo_cta" | "form_start" | "durable_acceptance";
   occurredAt: number;
   device?: "mobile" | "desktop" | "tablet" | "unknown";
   source?: "direct" | "search" | "social" | "referral" | "unknown";
@@ -18,7 +18,7 @@ export async function appendFunnelEventWithCtx(ctx: MutationCtx, args: {
 }
 
 export async function appendFunnelAggregateWithCtx(ctx: MutationCtx, args: {
-  event: "page_view" | "walkthrough_cta" | "form_start" | "durable_acceptance" | "qualified" | "not_qualified" | "unknown";
+  event: "page_view" | "walkthrough_cta" | "demo_cta" | "form_start" | "durable_acceptance" | "qualified" | "not_qualified" | "unknown";
   occurredAt: number;
   device?: "mobile" | "desktop" | "tablet" | "unknown";
   source?: "direct" | "search" | "social" | "referral" | "unknown";
@@ -34,7 +34,7 @@ export async function appendFunnelAggregateWithCtx(ctx: MutationCtx, args: {
 }
 
 export const appendPublic = internalMutation({
-  args: { event: v.union(v.literal("page_view"), v.literal("walkthrough_cta"), v.literal("form_start")), occurredAt: v.number(), device: deviceValidator, source: sourceValidator },
+  args: { event: v.union(v.literal("page_view"), v.literal("walkthrough_cta"), v.literal("demo_cta"), v.literal("form_start")), occurredAt: v.number(), device: deviceValidator, source: sourceValidator },
   handler: async (ctx, args) => {
     if (env.LANDING_FUNNEL_INGRESS_DISABLED === "true") {
       return { accepted: true as const, recorded: false as const };

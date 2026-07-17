@@ -29,36 +29,66 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 
 describe("landing route", () => {
-  it("renders the public product entry at its dedicated route", async () => {
+  it("tells the one-day story and funnels to the demo", async () => {
     const user = userEvent.setup();
     render(<Index />);
 
     expect(screen.getByRole("heading", {
-      name: /see today's sales\. know what needs attention\./i,
+      name: /one person\. a whole store\. fully in view\./i,
     })).toBeInTheDocument();
-    expect(screen.getByRole("heading", {
-      name: /today is only the beginning/i,
-    })).toBeInTheDocument();
-    expect(screen.getByRole("heading", {
-      name: /see which products shaped the day/i,
-    })).toBeInTheDocument();
-    expect(screen.getByRole("heading", {
-      name: /decide what needs your attention next/i,
-    })).toBeInTheDocument();
-    expect(screen.getByText(/in-person and online sales stay connected/i)).toBeInTheDocument();
-    expect(screen.getByText(/give your team room to work/i)).toBeInTheDocument();
 
+    // The five workspace acts, in day order, pinned to timestamps.
+    expect(screen.getAllByText(/8:47 AM/).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByRole("heading", { name: /start ready, not scrambling/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /one place to stand while the day moves/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /sales don't wait for the internet/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /every sale lands twice/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /know what's in every drawer/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /close the day with a clear conscience/i })).toBeInTheDocument();
+
+    // The automation reveal pays off the hero's objection.
+    expect(screen.getByRole("heading", { name: /but i'm just one person/i })).toBeInTheDocument();
+    expect(screen.getByText(/you were never running it alone/i)).toBeInTheDocument();
+
+    // The traced sale reconciles across POS, the sync bridge, and the books.
+    const saleAmounts = screen.getAllByText("GH₵385");
+    expect(saleAmounts.length).toBeGreaterThanOrEqual(2);
+
+    // Demo is the primary CTA (header, hero, closing band) and walkthrough is
+    // demoted but present.
+    const demoLinks = screen.getAllByRole("link", { name: /try the demo/i });
+    expect(demoLinks).toHaveLength(3);
+    for (const link of demoLinks) {
+      expect(link).toHaveAttribute("href", "/demo");
+    }
     const walkthroughLinks = screen.getAllByRole("link", {
       name: /request a walkthrough/i,
     });
-    expect(walkthroughLinks).toHaveLength(3);
+    expect(walkthroughLinks.length).toBeGreaterThanOrEqual(1);
     expect(walkthroughLinks[0]).toHaveAttribute("href", "/walkthrough");
     expect(screen.getByRole("link", { name: /sign in/i })).toHaveAttribute(
       "href",
       "/login",
     );
 
+    expect(mocked.emitLandingFunnelEvent).toHaveBeenCalledWith("page_view");
+    await user.click(demoLinks[0]);
+    expect(mocked.emitLandingFunnelEvent).toHaveBeenCalledWith("demo_cta");
     await user.click(walkthroughLinks[0]);
     expect(mocked.emitLandingFunnelEvent).toHaveBeenCalledWith("walkthrough_cta");
+  });
+
+  it("renders the finished scene compositions without animation infrastructure", () => {
+    // jsdom has no IntersectionObserver, matching the reduced-motion path:
+    // scenes must show their final frames statically.
+    render(<Index />);
+
+    expect(screen.getByText(/opening handoff is complete\. the store day is ready to run\./i)).toBeInTheDocument();
+    expect(screen.getByText(/sale completed · receipt #0041 · cash/i)).toBeInTheDocument();
+    expect(screen.getByText(/offline — sales continue/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/pending sync/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText(/expected in drawer/i)).toBeInTheDocument();
+    expect(screen.getByText(/athena completed eod review under store policy\./i)).toBeInTheDocument();
+    expect(screen.getByText(/carried to tomorrow's opening/i)).toBeInTheDocument();
   });
 });

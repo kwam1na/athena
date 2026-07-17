@@ -1,9 +1,10 @@
 import { v } from "convex/values";
 
-export const landingFunnelEventName = v.union(v.literal("page_view"), v.literal("walkthrough_cta"), v.literal("form_start"), v.literal("durable_acceptance"));
+export const landingFunnelEventName = v.union(v.literal("page_view"), v.literal("walkthrough_cta"), v.literal("demo_cta"), v.literal("form_start"), v.literal("durable_acceptance"));
 export const landingFunnelAggregateEventName = v.union(
   v.literal("page_view"),
   v.literal("walkthrough_cta"),
+  v.literal("demo_cta"),
   v.literal("form_start"),
   v.literal("durable_acceptance"),
   v.literal("qualified"),
