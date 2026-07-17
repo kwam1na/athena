@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="feffb7070e864ba604a3d45dc03c1136fd594f087c2b360b01230fdc827e804f" data-athena-report-base="origin/main" data-athena-report-head="f3148c6b">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Daily Operations Closeout Reporting</title>
+    <style>
+      :root {
+        --ink: #1f2933;
+        --muted: #596674;
+        --line: #d9e2ec;
+        --paper: #ffffff;
+        --soft: #f6f8fb;
+        --accent: #1d4ed8;
+        --accent-soft: #dbeafe;
+        --good: #166534;
+        --bad: #b91c1c;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--soft);
+        color: var(--ink);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        line-height: 1.55;
+      }
+      main { max-width: 1120px; margin: 0 auto; padding: 48px 24px 72px; }
+      header { border-bottom: 1px solid var(--line); margin-bottom: 28px; padding-bottom: 28px; }
+      h1, h2, h3 { line-height: 1.18; letter-spacing: 0; }
+      h1 { font-size: 42px; max-width: 880px; margin: 0 0 16px; }
+      h2 { font-size: 28px; margin: 0 0 16px; }
+      p { margin: 0 0 14px; }
+      .lede { color: var(--muted); font-size: 18px; max-width: 880px; }
+      .meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+      .pill { border: 1px solid var(--line); border-radius: 999px; background: var(--paper); color: var(--muted); font-size: 13px; padding: 6px 10px; }
+      .panel { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; margin: 18px 0; padding: 22px; }
+      code { background: #eef2f7; border: 1px solid #d8dee8; border-radius: 5px; padding: 1px 5px; }
+      pre { overflow: auto; background: #111827; color: #e5e7eb; border-radius: 8px; padding: 16px; }
+      pre code { background: transparent; border: 0; color: inherit; padding: 0; }
+      table { width: 100%; border-collapse: collapse; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+      th, td { border-bottom: 1px solid var(--line); padding: 11px 12px; text-align: left; vertical-align: top; }
+      th { background: #eef2f7; color: var(--muted); font-size: 13px; text-transform: uppercase; }
+      tr:last-child td { border-bottom: 0; }
+      .quiz-question { border-top: 1px solid var(--line); padding: 18px 0; }
+      .quiz-question:first-child { border-top: 0; }
+      fieldset { border: 0; margin: 0; padding: 0; }
+      legend { font-weight: 700; margin-bottom: 10px; }
+      label { display: block; border: 1px solid var(--line); border-radius: 8px; background: #fbfdff; margin: 8px 0; padding: 10px 12px; cursor: pointer; }
+      @media (hover: hover) and (pointer: fine) {
+        label:hover { border-color: #b6c5d8; }
+      }
+      button {
+        appearance: none;
+        border: 0;
+        border-radius: 8px;
+        background: var(--accent);
+        color: #ffffff;
+        cursor: pointer;
+        font-weight: 700;
+        padding: 11px 16px;
+        transition: transform 140ms cubic-bezier(0.23, 1, 0.32, 1);
+      }
+      button:active { transform: scale(0.97); }
+      button.secondary { background: #475569; }
+      .quiz-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
+      #quizResult { font-weight: 700; }
+      .answer-detail { display: none; border-top: 1px dashed var(--line); color: var(--muted); margin-top: 10px; padding-top: 10px; }
+      .answer-detail.visible { display: block; }
+      .correct { border-color: #86efac !important; background: #f0fdf4 !important; }
+      .incorrect { border-color: #fecaca !important; background: #fef2f2 !important; }
+      @media (prefers-reduced-motion: reduce) { button { transition-duration: 0ms; } }
+      @media (max-width: 820px) { h1 { font-size: 32px; } main { padding: 32px 16px 56px; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Daily Operations Closeout Reporting</h1>
+        <p class="lede">Delivery candidate: report the right closeout outcome, retain operational context, and export the complete open-work inventory set.</p>
+        <div class="meta"><span class="pill">Delivery candidate</span><span class="pill">Candidate commit f3148c6b</span><span class="pill">PR pending</span><span class="pill">Merge pending</span><span class="pill">Root alignment pending</span><span class="pill">Production deploy pending</span></div>
+      </header>
+      <section class="panel"><h2>Executive Summary</h2>
+<p>This candidate makes register closeout reporting outcome-aware. A newly projected closeout with a variance keeps the existing manager-review alert path, while an exact cash match sends an administrative completion report.</p>
+<p>The same batch improves daily-manager comparisons, operator-facing email hierarchy, Daily Operations and Cash Controls context, POS status copy, and the ability to export every relevant open-work SKU to a client-side PDF.</p>
+</section>
+<section class="panel"><h2>Mental Model: One Closeout, Two Outcomes</h2>
+<p>The POS sync projection owns the decision to schedule a notification after a register_closed event. The event is not an invitation to resend arbitrary email; it is a single closeout outcome with a specific, deduped notification owner.</p>
+<ul>
+<li>Variance: a fresh pending variance review receives the existing approval-request notification marker and variance alert.</li>
+<li>Exact match: the register session receives the local closeout-event marker before the completion report is scheduled.</li>
+<li>Both paths only schedule in production; templates and previews remain safe to render outside production.</li>
+</ul>
+<pre><code>register_closed sync
+  variance + pending review -&gt; approval request marker -&gt; variance alert
+  exact match -&gt; register session event marker -&gt; match completion report</code></pre>
+</section>
+<section class="panel"><h2>What Changed Across the Operator Flow</h2>
+<p>Daily Close now retains prior completed-day summary data so the daily manager report can compare sales, expenses, voids, cash metrics, reviewed variances, and payment totals instead of presenting an isolated day.</p>
+<p>Daily Operations keeps open-register context visible, gives past, present, and future store days appropriate activity empty states, and separates automation and historical workflow context. Cash Controls and POS receive smaller status and responsive-layout corrections.</p>
+<p>Open Work can build an on-demand PDF from all logical inventory-review SKU groups, rather than only the current visible page. The export carries product names, barcodes, category, price, and variants; it does not mutate inventory.</p>
+</section>
+<section class="panel"><h2>Failure Boundaries</h2>
+<p>A match-report payload rejects a missing, non-closed, non-exact, or count-less register session. The dedupe marker is written before scheduling, so repeating the same sync event cannot resend an alert.</p>
+<p>That deliberate dedupe also means a downstream send failure is not retried by replaying the same event; recovery needs a new closeout event, reopen path, or operational intervention. The report preserves this limitation rather than overstating reliability.</p>
+<p>The PDF export is browser-side. Font, barcode, or jsPDF failures surface the existing generic export failure toast; invalid barcode rendering falls back to a missing-barcode label.</p>
+</section>
+<section class="panel"><h2>Validation and Delivery Status</h2>
+<p>The delivery session recorded <code>bun run test --</code> across 14 focused Vitest files: 358 tests passed, covering closeout scheduling and dedupe, email payload/rendering, daily-manager comparisons, operations layouts, PDF helpers/export, and POS presentation. The one initial failure was a stale test expectation for a display SKU where the intentional export contract provides barcode and product name; the assertion was corrected.</p>
+<p>Graphify was rebuilt. The first broad delivery gate passed before commit; the final gate identified required documentation artifacts. Candidate commit <code>f3148c6b</code> contains the product batch; this report and the final solution-note fingerprint are pending commit before the final gate rerun. No PR, merge, root alignment, CI record, or production deployment has occurred yet.</p>
+</section>
+<section class="panel"><h2>Next-Time Guidance</h2>
+
+<ul>
+<li>Keep notification scheduling near the POS projection boundary and use one marker per notification owner.</li>
+<li>Keep production send gating outside templates so previews stay safe and useful.</li>
+<li>When a closeout field is shown in email and operations UI, prefer the same persisted closeout facts and shared review-reason formatting.</li>
+<li>For an export that represents a logical work set, derive rows from the full loaded identifier set rather than the current pagination window.</li>
+</ul>
+</section>
+
+<section class="panel">
+  <h2>Key Files</h2>
+  <table>
+    <thead><tr><th>File</th><th>Why It Matters</th></tr></thead>
+    <tbody><tr><td><code>packages/athena-webapp/convex/pos/public/sync.ts</code></td><td>Schedules production-only variance or exact-match notifications and stores the relevant dedupe marker.</td></tr>
+<tr><td><code>packages/athena-webapp/convex/operations/registerCloseoutVarianceEmail.ts</code></td><td>Builds and sends the exact-match completion payload through the established admin-recipient delivery path.</td></tr>
+<tr><td><code>packages/athena-webapp/convex/operations/dailyManagerReportEmail.ts</code></td><td>Builds daily-manager comparisons from persisted daily-close data.</td></tr>
+<tr><td><code>packages/athena-webapp/src/components/operations/DailyOperationsView.tsx</code></td><td>Places current activity, automation, historical workflow, and open-register context in the operator flow.</td></tr>
+<tr><td><code>packages/athena-webapp/src/components/operations/openWorkInventoryReport.ts</code></td><td>Creates the on-demand inventory review PDF and its barcode/font presentation.</td></tr>
+<tr><td><code>docs/solutions/design-patterns/athena-register-closeout-variance-alerts-and-ops-ia-2026-07-08.md</code></td><td>Captures the shared closeout notification and operator-context pattern for future work.</td></tr></tbody>
+  </table>
+</section>
+
+
+<section class="panel">
+  <h2>Subagent Evidence</h2>
+  <ul><li><strong>Session context reviewer:</strong> Verified the explicit finish line, transfer into the worktree, validation history, no-PR status, and the local-only launch-config exclusion.</li>
+<li><strong>Delivered diff reviewer:</strong> Mapped the closeout notification split, daily-report comparison path, operations/PDF behavior, generated artifacts, and residual delivery risks.</li>
+<li><strong>Report reviewer:</strong> Confirmed the outcome boundaries and quiz; the candidate-versus-uncommitted-artifact distinction was clarified before final validation.</li></ul>
+</section>
+
+
+<section id="quiz" class="panel">
+  <h2>Quiz: Pass Required</h2>
+  <p>You must score at least 8 out of 10 to pass.</p>
+  <form id="changeQuiz" data-threshold="8">
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>1. Which closeout outcome uses the existing approval-review alert path?</legend>
+    <label><input type="radio" name="q1" value="0" /> Any exact cash match</label>
+<label><input type="radio" name="q1" value="1" /> A variance with a fresh pending review</label>
+<label><input type="radio" name="q1" value="2" /> Every closed register session</label>
+  </fieldset>
+  <div class="answer-detail">Variance notifications remain tied to the fresh pending variance-review path.</div>
+</div>
+
+<div class="quiz-question" data-answer="0">
+  <fieldset>
+    <legend>2. Where is exact-match notification deduplication recorded?</legend>
+    <label><input type="radio" name="q2" value="0" /> On the register session with the local closeout event</label>
+<label><input type="radio" name="q2" value="1" /> In the browser PDF cache</label>
+<label><input type="radio" name="q2" value="2" /> Only in the MailerSend response</label>
+  </fieldset>
+  <div class="answer-detail">The register session records the event marker before the completion report is scheduled.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>3. Why are notifications gated by STAGE === prod?</legend>
+    <label><input type="radio" name="q3" value="0" /> To make templates unavailable in preview</label>
+<label><input type="radio" name="q3" value="1" /> To prevent operational sends while preserving safe previews</label>
+<label><input type="radio" name="q3" value="2" /> To move email rendering into the browser</label>
+  </fieldset>
+  <div class="answer-detail">The send scheduler is production-only; templates and previews can still render elsewhere.</div>
+</div>
+
+<div class="quiz-question" data-answer="2">
+  <fieldset>
+    <legend>4. What does a repeat of the same exact-match sync event do after the marker is stored?</legend>
+    <label><input type="radio" name="q4" value="0" /> Resends the report</label>
+<label><input type="radio" name="q4" value="1" /> Queues a variance review</label>
+<label><input type="radio" name="q4" value="2" /> Suppresses another report</label>
+  </fieldset>
+  <div class="answer-detail">The event marker intentionally deduplicates retries of that same closeout.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>5. What happens if the scheduled exact-match delivery later fails?</legend>
+    <label><input type="radio" name="q5" value="0" /> The same sync replay automatically retries it</label>
+<label><input type="radio" name="q5" value="1" /> Recovery needs a new event/reopen path or operational intervention</label>
+<label><input type="radio" name="q5" value="2" /> The PDF export repairs the delivery</label>
+  </fieldset>
+  <div class="answer-detail">There is no delivery ledger or same-event retry after the dedupe marker is written.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>6. What new comparison context does the daily manager report use?</legend>
+    <label><input type="radio" name="q6" value="0" /> Only the current open drawers</label>
+<label><input type="radio" name="q6" value="1" /> The prior completed-day summary</label>
+<label><input type="radio" name="q6" value="2" /> The browser session history</label>
+  </fieldset>
+  <div class="answer-detail">The daily-close snapshot carries prior completed-day facts for metric and payment comparisons.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>7. Which inventory items does the PDF export include?</legend>
+    <label><input type="radio" name="q7" value="0" /> Only the visible page</label>
+<label><input type="radio" name="q7" value="1" /> All logical open-work SKU groups loaded for the report</label>
+<label><input type="radio" name="q7" value="2" /> Every store product regardless of work</label>
+  </fieldset>
+  <div class="answer-detail">The export is scoped to the full relevant work set, not the current pagination window.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>8. Does exporting the inventory PDF change stock records?</legend>
+    <label><input type="radio" name="q8" value="0" /> Yes, it marks items reviewed</label>
+<label><input type="radio" name="q8" value="1" /> No, it is a client-side read/export</label>
+<label><input type="radio" name="q8" value="2" /> Only when a barcode is missing</label>
+  </fieldset>
+  <div class="answer-detail">The report derives and exports rows without mutating inventory.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>9. Which status is accurate when this report was created?</legend>
+    <label><input type="radio" name="q9" value="0" /> Merged and deployed</label>
+<label><input type="radio" name="q9" value="1" /> PR, merge, root alignment, and deploy are pending</label>
+<label><input type="radio" name="q9" value="2" /> The worktree is already aligned to merged main</label>
+  </fieldset>
+  <div class="answer-detail">This is a delivery-candidate report; its PR and post-merge finish line have not happened yet.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>10. What evidence still has to pass after this report is added?</legend>
+    <label><input type="radio" name="q10" value="0" /> Only a screenshot review</label>
+<label><input type="radio" name="q10" value="1" /> The final repository merge-grade delivery gate and then PR checks</label>
+<label><input type="radio" name="q10" value="2" /> No further validation</label>
+  </fieldset>
+  <div class="answer-detail">The final pr:athena gate must validate the documentation artifacts before push, followed by GitHub PR checks.</div>
+</div>
+
+    <div class="quiz-actions">
+      <button type="button" id="gradeQuiz">Grade quiz</button>
+      <button type="button" class="secondary" id="resetQuiz">Reset</button>
+      <span id="quizResult" aria-live="polite"></span>
+    </div>
+  </form>
+</section>
+
+    </main>
+    <script>
+      const questions = Array.from(document.querySelectorAll(".quiz-question"));
+      const result = document.getElementById("quizResult");
+      const form = document.getElementById("changeQuiz");
+      const threshold = Number(form.dataset.threshold || 0);
+      function clearGrades() {
+        questions.forEach((question) => {
+          question.classList.remove("correct", "incorrect");
+          question.querySelector(".answer-detail").classList.remove("visible");
+        });
+        result.textContent = "";
+        result.style.color = "";
+      }
+      document.getElementById("gradeQuiz").addEventListener("click", () => {
+        clearGrades();
+        let score = 0;
+        questions.forEach((question, index) => {
+          const selected = document.querySelector(`input[name="q${index + 1}"]:checked`);
+          const isCorrect = selected && Number(selected.value) === Number(question.dataset.answer);
+          if (isCorrect) score += 1;
+          question.classList.add(isCorrect ? "correct" : "incorrect");
+          question.querySelector(".answer-detail").classList.add("visible");
+        });
+        const passed = score >= threshold;
+        result.textContent = passed
+          ? `Passed: ${score}/${questions.length}.`
+          : `Not passed: ${score}/${questions.length}. Review the report and try again.`;
+        result.style.color = passed ? "var(--good)" : "var(--bad)";
+      });
+      document.getElementById("resetQuiz").addEventListener("click", () => {
+        form.reset();
+        clearGrades();
+      });
+    </script>
+  </body>
+</html>
