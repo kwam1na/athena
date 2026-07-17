@@ -30,7 +30,7 @@ export function CashControlsScene() {
     <div ref={rootRef}>
       <figure
         aria-label="The Cash Controls dashboard after closeout: the closed register session with its approved five-cedi shortage and the recorded end-of-day deposit."
-        className="relative mx-auto w-full max-w-4xl overflow-hidden rounded-xl border border-border bg-background p-layout-md text-left text-foreground shadow-overlay sm:p-layout-lg"
+        className="relative mx-auto w-full overflow-hidden rounded-xl border border-border bg-background p-layout-md text-left text-foreground shadow-overlay sm:p-layout-lg"
       >
         <span className="absolute right-layout-md top-layout-md font-numeric text-xs text-muted-foreground">
           5:40 PM

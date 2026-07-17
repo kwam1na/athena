@@ -33,7 +33,7 @@ export function DailyOperationsScene() {
         eyebrow="Store Ops"
         title="Daily Operations"
         meta={<span className="font-numeric text-xs text-muted-foreground">11:20 AM</span>}
-        className="max-w-4xl"
+        className="max-w-none"
       >
         <WorkspaceExhibit>
           <div data-pulse-embed>

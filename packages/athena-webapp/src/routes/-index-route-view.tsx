@@ -80,7 +80,7 @@ function StoryAct({
   if (layout === "stacked") {
     return (
       <section className="flex min-h-svh items-center border-t border-border/70 px-layout-md py-layout-2xl sm:px-layout-xl">
-        <div className="mx-auto w-full max-w-6xl space-y-layout-xl">
+        <div className="mx-auto w-full max-w-7xl space-y-layout-xl">
           <ActCopy {...copyProps} className="max-w-2xl" />
           {children}
         </div>
@@ -182,7 +182,7 @@ export function Index() {
         </StoryAct>
 
         <section className="flex min-h-svh items-center border-t border-border/70 bg-surface px-layout-md py-layout-2xl sm:px-layout-xl">
-          <div className="mx-auto w-full max-w-6xl">
+          <div className="mx-auto w-full max-w-7xl">
             <div className="max-w-2xl">
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-signal">
                 <span className="font-numeric">3:14 PM</span>

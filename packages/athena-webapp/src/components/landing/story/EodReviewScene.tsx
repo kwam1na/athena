@@ -41,7 +41,7 @@ export function EodReviewScene() {
         eyebrow="Store Ops"
         title="EOD Review"
         meta={<span className="font-numeric text-xs text-muted-foreground">8:03 PM</span>}
-        className="max-w-4xl"
+        className="max-w-none"
       >
         <WorkspaceExhibit>
           <div data-eod-embed className="space-y-layout-md">
