@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 
-import { AuthenticatedLayout } from "./_authed";
+import { AuthenticatedLayout } from "./-authenticated-layout";
 
 const mocked = vi.hoisted(() => ({
   navigationShortcuts: vi.fn(),

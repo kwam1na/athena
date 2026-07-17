@@ -9,7 +9,7 @@ vi.mock("@tanstack/react-router", () => ({
   createFileRoute: mocked.createFileRoute,
 }));
 
-vi.mock("./app", () => ({
+vi.mock("./-app-entry-route", () => ({
   AppEntryRoute: mocked.AppEntryRoute,
 }));
 

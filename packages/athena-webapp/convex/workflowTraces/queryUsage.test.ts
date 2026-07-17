@@ -133,7 +133,13 @@ function createTestCtx(seed?: Partial<WorkflowTraceTables>) {
   let idCounter = 100;
 
   const db = {
-    insert(tableName: keyof WorkflowTraceTables, value: Record<string, unknown>) {
+    get: async () => null,
+    normalizeId: (_tableName: string, id: string) =>
+      id.startsWith("register-session-") ? id : null,
+    insert(
+      tableName: keyof WorkflowTraceTables,
+      value: Record<string, unknown>,
+    ) {
       idCounter += 1;
       const row = {
         _id: `${tableName}:${idCounter}`,
@@ -170,7 +176,9 @@ function createTestCtx(seed?: Partial<WorkflowTraceTables>) {
       return {
         withIndex(
           indexName: string,
-          apply: (builder: { eq(field: string, value: unknown): typeof builder }) => void,
+          apply: (builder: {
+            eq(field: string, value: unknown): typeof builder;
+          }) => void,
         ) {
           const filters: Array<{ field: string; value: unknown }> = [];
           const builder = {
@@ -184,7 +192,10 @@ function createTestCtx(seed?: Partial<WorkflowTraceTables>) {
 
           const rows = tables[tableName]
             .filter((row) =>
-              filters.every((filter) => row[filter.field as keyof typeof row] === filter.value)
+              filters.every(
+                (filter) =>
+                  row[filter.field as keyof typeof row] === filter.value,
+              ),
             )
             .sort((left, right) =>
               compareByFields(
@@ -218,9 +229,37 @@ function createTestCtx(seed?: Partial<WorkflowTraceTables>) {
 function createAdminTraceReadCtx(
   seed?: Partial<WorkflowTraceTables>,
   role = "full_admin",
+  identitySeed?: {
+    registerSessions?: Array<{
+      _id: string;
+      registerNumber?: string;
+      storeId: string;
+      terminalId?: string;
+    }>;
+    terminals?: Array<{
+      _id: string;
+      displayName: string;
+      storeId: string;
+    }>;
+  },
 ) {
   const ctx = createTestCtx(seed);
   const baseQuery = ctx.db.query.bind(ctx.db);
+  const registerSessions = identitySeed?.registerSessions ?? [
+    {
+      _id: "register-session-1",
+      registerNumber: "07",
+      storeId: "store-a",
+      terminalId: "terminal-1",
+    },
+  ];
+  const terminals = identitySeed?.terminals ?? [
+    {
+      _id: "terminal-1",
+      displayName: "Olorin",
+      storeId: "store-a",
+    },
+  ];
   const db = {
     ...ctx.db,
     get: async (tableName: string, id: string) => {
@@ -230,6 +269,14 @@ function createAdminTraceReadCtx(
 
       if (tableName === "store" && id === "store-a") {
         return { _id: id, organizationId: "org-1" };
+      }
+
+      if (tableName === "registerSession") {
+        return registerSessions.find((session) => session._id === id) ?? null;
+      }
+
+      if (tableName === "posTerminal") {
+        return terminals.find((terminal) => terminal._id === id) ?? null;
       }
 
       return null;
@@ -432,18 +479,21 @@ describe("workflow trace core and public helpers", () => {
       source: "workflow.shared",
       eventKey: " Submission-123:Started ",
     });
-    const replayedEventId = await appendWorkflowTraceEventWithCtx(ctx as never, {
-      storeId,
-      traceId: "repair_order:job-42",
-      workflowType: "repair_order",
-      kind: "milestone",
-      step: "repair_order_started",
-      status: "started",
-      message: "Repair order started again",
-      occurredAt: 110,
-      source: "workflow.shared",
-      eventKey: "submission-123:started",
-    });
+    const replayedEventId = await appendWorkflowTraceEventWithCtx(
+      ctx as never,
+      {
+        storeId,
+        traceId: "repair_order:job-42",
+        workflowType: "repair_order",
+        kind: "milestone",
+        step: "repair_order_started",
+        status: "started",
+        message: "Repair order started again",
+        occurredAt: 110,
+        source: "workflow.shared",
+        eventKey: "submission-123:started",
+      },
+    );
     await appendWorkflowTraceEventWithCtx(ctx as never, {
       storeId,
       traceId: "repair_order:job-42",
@@ -458,10 +508,9 @@ describe("workflow trace core and public helpers", () => {
 
     expect(replayedEventId).toBe(firstEventId);
     expect(ctx.tables.workflowTraceEvent).toHaveLength(2);
-    expect(ctx.tables.workflowTraceEvent.map((event) => event.sequence)).toEqual([
-      1,
-      2,
-    ]);
+    expect(
+      ctx.tables.workflowTraceEvent.map((event) => event.sequence),
+    ).toEqual([1, 2]);
     expect(ctx.tables.workflowTraceEvent[0]?.eventKey).toBe(
       "submission-123:started",
     );
@@ -658,6 +707,163 @@ describe("workflow trace core and public helpers", () => {
     ).resolves.toMatchObject({
       header: {
         traceId: "repair_order:job-42",
+      },
+    });
+  });
+
+  it("includes register and terminal identity for register-session trace headers", async () => {
+    authMock.getAuthUserId.mockResolvedValue("auth-user-1");
+    const storeId = "store-a" as Id<"store">;
+    const ctx = createAdminTraceReadCtx();
+
+    await createWorkflowTraceWithCtx(ctx as never, {
+      storeId,
+      traceId: "register_session:register-session-1",
+      workflowType: "register_session",
+      title: "Register session 07",
+      status: "blocked",
+      health: "healthy",
+      startedAt: 100,
+      primaryLookupType: "register_session_id",
+      primaryLookupValue: "register-session-1",
+      primarySubjectType: "register_session",
+      primarySubjectId: "register-session-1",
+    });
+
+    await expect(
+      getWorkflowTraceViewByIdWithCtx(ctx as never, {
+        storeId,
+        traceId: "register_session:register-session-1",
+      }),
+    ).resolves.toMatchObject({
+      header: {
+        registerSession: {
+          _id: "register-session-1",
+          registerNumber: "07",
+          terminalName: "Olorin",
+        },
+      },
+    });
+  });
+
+  it("falls back to the legacy register-session lookup when the subject is missing or stale", async () => {
+    authMock.getAuthUserId.mockResolvedValue("auth-user-1");
+    const storeId = "store-a" as Id<"store">;
+    const ctx = createAdminTraceReadCtx(undefined, "full_admin", {
+      registerSessions: [
+        {
+          _id: "register-session-stale",
+          registerNumber: "99",
+          storeId: "store-b",
+          terminalId: "terminal-stale",
+        },
+        {
+          _id: "register-session-1",
+          registerNumber: "07",
+          storeId: "store-a",
+          terminalId: "terminal-1",
+        },
+      ],
+    });
+
+    await createWorkflowTraceWithCtx(ctx as never, {
+      storeId,
+      traceId: "register_session:register-session-1",
+      workflowType: "register_session",
+      title: "Register session 07",
+      status: "blocked",
+      health: "healthy",
+      startedAt: 100,
+      primaryLookupType: "register_session_id",
+      primaryLookupValue: "register-session-1",
+      primarySubjectType: "register_session",
+      primarySubjectId: "register-session-stale",
+    });
+
+    await expect(
+      getWorkflowTraceViewByIdWithCtx(ctx as never, {
+        storeId,
+        traceId: "register_session:register-session-1",
+      }),
+    ).resolves.toMatchObject({
+      header: {
+        registerSession: {
+          _id: "register-session-1",
+          registerNumber: "07",
+          terminalName: "Olorin",
+        },
+      },
+    });
+
+    await createWorkflowTraceWithCtx(ctx as never, {
+      storeId,
+      traceId: "register_session:legacy-register-session-1",
+      workflowType: "register_session",
+      title: "Register session 07",
+      status: "blocked",
+      health: "healthy",
+      startedAt: 100,
+      primaryLookupType: "register_session_id",
+      primaryLookupValue: "register-session-1",
+    });
+
+    await expect(
+      getWorkflowTraceViewByIdWithCtx(ctx as never, {
+        storeId,
+        traceId: "register_session:legacy-register-session-1",
+      }),
+    ).resolves.toMatchObject({
+      header: {
+        registerSession: {
+          _id: "register-session-1",
+        },
+      },
+    });
+  });
+
+  it("returns null register identity when every candidate belongs to another store", async () => {
+    authMock.getAuthUserId.mockResolvedValue("auth-user-1");
+    const storeId = "store-a" as Id<"store">;
+    const ctx = createAdminTraceReadCtx(undefined, "full_admin", {
+      registerSessions: [
+        {
+          _id: "register-session-cross-store",
+          registerNumber: "99",
+          storeId: "store-b",
+          terminalId: "terminal-cross-store",
+        },
+      ],
+      terminals: [
+        {
+          _id: "terminal-cross-store",
+          displayName: "Foreign terminal",
+          storeId: "store-b",
+        },
+      ],
+    });
+
+    await createWorkflowTraceWithCtx(ctx as never, {
+      storeId,
+      traceId: "register_session:cross-store",
+      workflowType: "register_session",
+      title: "Register session 99",
+      status: "blocked",
+      health: "healthy",
+      startedAt: 100,
+      primaryLookupType: "register_session_id",
+      primaryLookupValue: "register-session-cross-store",
+      primarySubjectType: "register_session",
+      primarySubjectId: "register-session-cross-store",
+    });
+
+    await expect(
+      getWorkflowTraceViewByIdWithCtx(ctx as never, {
+        storeId,
+        traceId: "register_session:cross-store",
+      }),
+    ).resolves.toMatchObject({
+      header: {
+        registerSession: null,
       },
     });
   });

@@ -1446,11 +1446,13 @@ function LaneCard({
 }
 
 function OpenRegisterSessionsPanel({
+  hasLeadingContent = false,
   operatingDate,
   orgUrlSlug,
   sessions,
   storeUrlSlug,
 }: {
+  hasLeadingContent?: boolean;
   operatingDate: string;
   orgUrlSlug: string;
   sessions: DailyOperationsSnapshot["attentionItems"];
@@ -1461,7 +1463,9 @@ function OpenRegisterSessionsPanel({
   return (
     <section
       aria-labelledby="open-register-sessions-heading"
-      className="border-t border-border/70 pt-layout-md"
+      className={cn(
+        hasLeadingContent && "border-t border-border/70 pt-layout-md",
+      )}
     >
       <div className="flex items-baseline gap-layout-sm">
         <WalletCards
@@ -1478,7 +1482,7 @@ function OpenRegisterSessionsPanel({
           {sessions.length} open
         </p>
       </div>
-      <div className="mt-layout-sm flex min-w-0 flex-col divide-y divide-border/70">
+      <div className="mt-layout-sm flex w-full max-w-md min-w-0 flex-col divide-y divide-border/70">
         {sessions.map((session) => {
           const sessionLabel =
             session.registerSession?.displayLabel ??
@@ -1787,6 +1791,7 @@ function AutomationStatusPanel({
           })}
         </div>
         <OpenRegisterSessionsPanel
+          hasLeadingContent
           operatingDate={operatingDate}
           orgUrlSlug={orgUrlSlug}
           sessions={openRegisterSessions}

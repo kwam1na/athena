@@ -362,13 +362,18 @@ describe("RegisterSessionViewContent", () => {
 
     const header = screen.getByTestId("register-session-page-header");
     expect(header).toHaveTextContent(
-      /Register 3\s*\/\s*Front counter\s*synced\s*Closing/,
+      /Register 3\s*\/\s*Front counter\s*synced\s*·\s*Closing/,
     );
     expect(header).toHaveTextContent("Closing");
     expect(header).toHaveTextContent("synced");
     expect(within(header).getByText("synced").parentElement).toHaveClass(
       "text-success",
     );
+    expect(
+      within(header)
+        .getByText("synced")
+        .parentElement?.querySelector('[aria-hidden="true"]'),
+    ).toHaveClass("motion-safe:animate-pulse");
     expect(screen.getAllByText("Register 3").length).toBeGreaterThan(0);
     expect(screen.getByText("Session")).toBeInTheDocument();
     expect(screen.getByText("Code")).toBeInTheDocument();
@@ -449,7 +454,7 @@ describe("RegisterSessionViewContent", () => {
     expect(screen.queryByText("Record cash deposit")).not.toBeInTheDocument();
     expect(screen.queryByText("BANK-339")).not.toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: "View trace" }),
+      screen.getByRole("link", { name: "View register history" }),
     ).toBeInTheDocument();
     expect(screen.getByTestId("register-session-page-header")).toHaveClass(
       "h-auto",
@@ -462,8 +467,41 @@ describe("RegisterSessionViewContent", () => {
     expect(screen.getByTestId("register-session-page-header")).not.toHaveClass(
       "bg-background",
     );
-    expect(screen.getByRole("link", { name: "View trace" })).not.toHaveClass(
-      "w-full",
+    expect(
+      screen.getByRole("link", { name: "View register history" }),
+    ).not.toHaveClass("w-full");
+  });
+
+  it("combines sync and active register state in one inline status", () => {
+    render(
+      <RegisterSessionViewContent
+        actorStaffProfileId="staff-1"
+        actorUserId="user-1"
+        currency="USD"
+        isLoading={false}
+        onRecordDeposit={vi.fn()}
+        {...closeoutHandlers}
+        registerSessionSnapshot={activeSnapshot}
+        orgUrlSlug="wigclub"
+        storeUrlSlug="wigclub"
+      />,
+    );
+
+    const activeStatus = within(
+      screen.getByTestId("register-session-page-header"),
+    ).getByText("Active").parentElement;
+
+    expect(activeStatus).toHaveClass("inline-flex", "text-success");
+    expect(activeStatus).toHaveTextContent(/synced\s*·\s*Active/);
+    expect(within(activeStatus!).getByText("Active")).toHaveClass(
+      "text-success",
+    );
+    expect(activeStatus).not.toHaveClass("rounded-full", "border", "bg-muted");
+    expect(activeStatus?.querySelector('[aria-hidden="true"]')).toHaveClass(
+      "size-1.5",
+      "rounded-full",
+      "bg-success",
+      "motion-safe:animate-pulse",
     );
   });
 
@@ -581,7 +619,7 @@ describe("RegisterSessionViewContent", () => {
       screen.queryByRole("link", { name: "POS activity" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("link", { name: "View trace" }),
+      screen.queryByRole("link", { name: "View register history" }),
     ).not.toBeInTheDocument();
     expect(screen.queryByText("Deposit history")).not.toBeInTheDocument();
     expect(screen.queryByText("Record cash deposit")).not.toBeInTheDocument();
@@ -627,6 +665,11 @@ describe("RegisterSessionViewContent", () => {
             source: "pos_sync_evidence",
           },
           isDone: true,
+          registerSession: {
+            _id: "reg-3",
+            registerNumber: "3",
+            terminalName: "Front counter",
+          },
           page: [
             {
               _id: "activity-1",
@@ -736,18 +779,45 @@ describe("RegisterSessionViewContent", () => {
       />,
     );
 
-    expect(screen.getAllByText("POS activity").length).toBeGreaterThan(0);
     expect(
-      screen.getByText(
-        "This terminal has not reported later local activity to the cloud. The log shows only evidence the cloud has received.",
-      ),
-    ).toBeInTheDocument();
+      screen.getByTestId("register-session-page-header"),
+    ).toHaveTextContent(/Register 3\s*\/\s*Front counter\s*\/\s*POS activity/);
+    expect(
+      screen.getByTestId("register-session-page-header"),
+    ).not.toHaveTextContent(/synced|Active/);
+    expect(screen.getByText("/ POS activity")).toHaveClass(
+      "text-xs",
+      "text-muted-foreground",
+      "sm:text-sm",
+    );
+    expect(screen.getByText("/ POS activity")).not.toHaveClass("font-medium");
+    const coverageCopy = screen.getByText(
+      "Only reported activity appears here. Recent activity may take a moment to appear.",
+    );
+    expect(coverageCopy).toHaveClass(
+      "text-xs",
+      "leading-5",
+      "text-muted-foreground/70",
+    );
     expect(screen.queryByText("1 sale")).not.toBeInTheDocument();
     expect(screen.queryByText("0 cart")).not.toBeInTheDocument();
     expect(
       screen.getByText("Terminal reporting uncertain"),
     ).toBeInTheDocument();
-    expect(screen.getByText("Sequence 12")).toBeInTheDocument();
+    const coverageSummary = screen.getByTestId("activity-coverage-summary");
+    expect(coverageSummary).toHaveClass("grid", "gap-x-8");
+    expect(
+      within(coverageSummary).getByText("Coverage").parentElement,
+    ).not.toHaveClass("rounded-md", "border", "bg-muted/20");
+    expect(
+      within(coverageSummary).getByText("Last status update"),
+    ).toBeInTheDocument();
+    expect(
+      within(coverageSummary).queryByText("Reported through"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("columnheader", { name: "Sequence" }),
+    ).not.toBeInTheDocument();
     expect(screen.getByText("1 need attention")).toBeInTheDocument();
     expect(screen.getByText("Sale completed")).toBeInTheDocument();
     const receiptLink = screen.getByRole("link", { name: "#R-12" });
@@ -846,7 +916,7 @@ describe("RegisterSessionViewContent", () => {
       ).parentElement,
     ).toHaveClass("text-warning");
     expect(
-      screen.getByRole("link", { name: /view trace/i }),
+      screen.getByRole("link", { name: "View register history" }),
     ).toBeInTheDocument();
     expect(screen.queryByText("Needs review")).not.toBeInTheDocument();
   });
@@ -2702,8 +2772,25 @@ describe("RegisterSessionViewContent", () => {
     );
 
     expect(screen.getAllByText("Closed").length).toBeGreaterThan(0);
+    expect(
+      screen.getByRole("heading", { name: "Drawer closed" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "The final count is saved and this drawer is no longer accepting sales.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Count and close drawer" }),
+    ).not.toBeInTheDocument();
+    const closedHeaderStatus = within(
+      screen.getByTestId("register-session-page-header"),
+    ).getByText("Closed").parentElement;
+    expect(
+      closedHeaderStatus?.querySelector('[aria-hidden="true"]'),
+    ).not.toHaveClass("motion-safe:animate-pulse");
     const completedCloseoutPanel = screen
-      .getByText("Closeout complete")
+      .getByRole("heading", { name: "Drawer closed" })
       .closest("div.rounded-lg");
 
     expect(completedCloseoutPanel).toBeInstanceOf(HTMLElement);
@@ -2749,8 +2836,8 @@ describe("RegisterSessionViewContent", () => {
     );
 
     const closedCloseoutPanel = screen
-      .getByText("Closeout complete")
-      .closest("div");
+      .getByRole("heading", { name: "Drawer closed" })
+      .closest("div.rounded-lg");
 
     expect(closedCloseoutPanel).toBeInTheDocument();
     expect(

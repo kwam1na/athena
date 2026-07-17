@@ -99,7 +99,9 @@ describe("buildRegisterSessionActivityPage", () => {
       events: [event],
       isDone: true,
       mappingsByLocalEventId: new Map(),
-      staffNamesById: new Map([["staff-1" as Id<"staffProfile">, "Ama Mensah"]]),
+      staffNamesById: new Map([
+        ["staff-1" as Id<"staffProfile">, "Ama Mensah"],
+      ]),
       terminalName: "Front counter",
     });
 
@@ -167,9 +169,11 @@ describe("listRegisterSessionActivity", () => {
   });
 
   it("shared-demo-pos-activity uses the store-clamped cash capability", async () => {
-    sharedDemoMocks.requireSharedDemoStoreCapabilityIfApplicable.mockResolvedValue({
-      storeId: "store-1",
-    });
+    sharedDemoMocks.requireSharedDemoStoreCapabilityIfApplicable.mockResolvedValue(
+      {
+        storeId: "store-1",
+      },
+    );
     const handler = getHandler(listRegisterSessionActivity);
     const ctx = {
       db: {
@@ -185,19 +189,23 @@ describe("listRegisterSessionActivity", () => {
       },
     };
 
-    await handler(ctx, {
+    const page = (await handler(ctx, {
       paginationOpts: { cursor: null, numItems: 10 },
       registerSessionId: "session-1" as Id<"registerSession">,
       storeId: "store-1" as Id<"store">,
-    });
+    })) as RegisterSessionActivityPage;
 
     expect(
       sharedDemoMocks.requireSharedDemoStoreCapabilityIfApplicable,
     ).toHaveBeenCalledWith(ctx, "cash.control.write", "store-1");
-    expect(authMocks.requireAuthenticatedAthenaUserWithCtx).toHaveBeenCalledWith(
-      ctx,
-      { sharedDemoCapability: "cash.control.write" },
-    );
+    expect(
+      authMocks.requireAuthenticatedAthenaUserWithCtx,
+    ).toHaveBeenCalledWith(ctx, { sharedDemoCapability: "cash.control.write" });
+    expect(page.registerSession).toEqual({
+      _id: "session-1",
+      registerNumber: null,
+      terminalName: null,
+    });
   });
 
   it("requires full-admin organization membership before returning activity", async () => {
@@ -228,9 +236,7 @@ describe("listRegisterSessionActivity", () => {
       storeId: "store-1" as Id<"store">,
     });
 
-    expect(
-      authMocks.requireOrganizationMemberRoleWithCtx,
-    ).toHaveBeenCalledWith(
+    expect(authMocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
       ctx,
       expect.objectContaining({
         allowedRoles: ["full_admin"],
@@ -325,12 +331,17 @@ describe("listRegisterSessionActivity", () => {
           if (table === "registerSession") {
             return {
               _id: "session-1",
+              registerNumber: "07",
               storeId: "store-1",
               terminalId: "terminal-1",
             };
           }
           if (table === "posTerminal") {
-            return { _id: id, displayName: "Front counter" };
+            return {
+              _id: id,
+              displayName: "Front counter",
+              storeId: "store-1",
+            };
           }
           if (table === "staffProfile") {
             return {
@@ -344,24 +355,26 @@ describe("listRegisterSessionActivity", () => {
           return null;
         }),
         query: vi.fn((table: string) => ({
-          withIndex: vi.fn((_index: string, callback: (q: never) => unknown) => {
-            const q = {
-              eq: () => q,
-              gt: () => q,
-            };
-            callback(q as never);
-            return {
-              order: (direction: string) => {
-                orderCalls.push(direction);
-                return {
-                  take: async (limit: number) =>
-                    (tableRows[table] ?? []).slice(0, limit),
-                };
-              },
-              take: async (limit: number) =>
-                (tableRows[table] ?? []).slice(0, limit),
-            };
-          }),
+          withIndex: vi.fn(
+            (_index: string, callback: (q: never) => unknown) => {
+              const q = {
+                eq: () => q,
+                gt: () => q,
+              };
+              callback(q as never);
+              return {
+                order: (direction: string) => {
+                  orderCalls.push(direction);
+                  return {
+                    take: async (limit: number) =>
+                      (tableRows[table] ?? []).slice(0, limit),
+                  };
+                },
+                take: async (limit: number) =>
+                  (tableRows[table] ?? []).slice(0, limit),
+              };
+            },
+          ),
         })),
       },
     };
@@ -376,6 +389,11 @@ describe("listRegisterSessionActivity", () => {
     expect(page.integration).toEqual({
       activityReadModelAvailable: true,
       source: "activity_read_model",
+    });
+    expect(page.registerSession).toEqual({
+      _id: "session-1",
+      registerNumber: "07",
+      terminalName: "Front counter",
     });
     expect(page.summary).toMatchObject({
       coverageState: "reported",
@@ -407,46 +425,58 @@ describe("listRegisterSessionActivity", () => {
           if (table === "registerSession") {
             return {
               _id: id,
+              registerNumber: "07",
               storeId: "store-1",
               terminalId: "terminal-1",
             };
           }
           if (table === "posTerminal") {
-            return { _id: id, displayName: "Front counter" };
+            return {
+              _id: id,
+              displayName: "Other store terminal",
+              storeId: "store-2",
+            };
           }
           return null;
         }),
         query: vi.fn((table: string) => ({
-          withIndex: vi.fn((_index: string, callback: (q: never) => unknown) => {
-            const q = {
-              eq: () => q,
-              lt: (field: string, value: number) => {
-                cursorComparisons.push({ field, value });
-                return q;
-              },
-            };
-            callback(q as never);
-            return {
-              order: (direction: string) => {
-                orderCalls.push(direction);
-                return {
-                  take: async () => [],
-                };
-              },
-              take: async () => [],
-            };
-          }),
+          withIndex: vi.fn(
+            (_index: string, callback: (q: never) => unknown) => {
+              const q = {
+                eq: () => q,
+                lt: (field: string, value: number) => {
+                  cursorComparisons.push({ field, value });
+                  return q;
+                },
+              };
+              callback(q as never);
+              return {
+                order: (direction: string) => {
+                  orderCalls.push(direction);
+                  return {
+                    take: async () => [],
+                  };
+                },
+                take: async () => [],
+              };
+            },
+          ),
         })),
       },
     };
 
-    await handler(ctx, {
+    const page = (await handler(ctx, {
       paginationOpts: { cursor: "12", numItems: 10 },
       registerSessionId: "session-1" as Id<"registerSession">,
       storeId: "store-1" as Id<"store">,
-    });
+    })) as RegisterSessionActivityPage;
 
     expect(orderCalls).toContain("desc");
+    expect(page.registerSession).toEqual({
+      _id: "session-1",
+      registerNumber: "07",
+      terminalName: null,
+    });
     expect(cursorComparisons).toContainEqual({
       field: "localSequence",
       value: 12,

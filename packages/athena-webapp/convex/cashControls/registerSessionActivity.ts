@@ -43,10 +43,7 @@ const ATTENTION_STATUSES = [
 type ActivityCategory = (typeof ACTIVITY_CATEGORIES)[number];
 type AttentionStatus = (typeof ATTENTION_STATUSES)[number];
 type CoverageState =
-  | "reported"
-  | "partially_reported"
-  | "unreported"
-  | "unknown_terminal_state";
+  "reported" | "partially_reported" | "unreported" | "unknown_terminal_state";
 
 type SyncEvidenceEvent = Doc<"posLocalSyncEvent">;
 type SyncEvidenceConflict = Doc<"posLocalSyncConflict">;
@@ -99,6 +96,11 @@ export type RegisterSessionActivityPage = {
     source: "activity_read_model" | "pos_sync_evidence";
   };
   isDone: boolean;
+  registerSession?: {
+    _id: Id<"registerSession">;
+    registerNumber: string | null;
+    terminalName: string | null;
+  };
   page: RegisterSessionActivityRow[];
   summary: {
     attentionCounts: Record<AttentionStatus, number>;
@@ -144,12 +146,18 @@ function buildContinueCursor(rows: RegisterSessionActivityRow[]) {
     : String(lastRow.sequence);
 }
 
-function stringDetail(details: Record<string, unknown> | undefined, key: string) {
+function stringDetail(
+  details: Record<string, unknown> | undefined,
+  key: string,
+) {
   const value = details?.[key];
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-function numberDetail(details: Record<string, unknown> | undefined, key: string) {
+function numberDetail(
+  details: Record<string, unknown> | undefined,
+  key: string,
+) {
   const value = details?.[key];
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
@@ -158,7 +166,9 @@ function arrayDetail(value: unknown) {
   return Array.isArray(value) ? value : [];
 }
 
-function eventCategory(eventType: SyncEvidenceEvent["eventType"]): ActivityCategory {
+function eventCategory(
+  eventType: SyncEvidenceEvent["eventType"],
+): ActivityCategory {
   switch (eventType) {
     case "register_opened":
       return "register";
@@ -199,7 +209,9 @@ function eventLabel(eventType: SyncEvidenceEvent["eventType"]) {
   }
 }
 
-function statusPresentation(status: SyncEvidenceEvent["status"] | ActivityReadModelStatus) {
+function statusPresentation(
+  status: SyncEvidenceEvent["status"] | ActivityReadModelStatus,
+) {
   switch (status) {
     case "terminal_reported":
       return {
@@ -430,7 +442,9 @@ function latestActivityStatusTime(activity: ActivityReadModelRow) {
   );
 }
 
-function toLink(mapping: SyncEvidenceMapping): RegisterSessionActivityRow["evidenceLinks"][number] | null {
+function toLink(
+  mapping: SyncEvidenceMapping,
+): RegisterSessionActivityRow["evidenceLinks"][number] | null {
   if (mapping.cloudTable === "posTransaction") {
     return {
       id: mapping.cloudId,
@@ -439,7 +453,10 @@ function toLink(mapping: SyncEvidenceMapping): RegisterSessionActivityRow["evide
     };
   }
 
-  if (mapping.localIdKind === "closeout" || mapping.cloudTable === "registerSession") {
+  if (
+    mapping.localIdKind === "closeout" ||
+    mapping.cloudTable === "registerSession"
+  ) {
     return {
       id: mapping.cloudId,
       label: "Closeout evidence",
@@ -574,7 +591,10 @@ function buildActivityReadModelPage(args: {
   });
 
   for (const checkpoint of args.checkpoints) {
-    latestCloudStatusAt = Math.max(latestCloudStatusAt ?? 0, checkpoint.updatedAt);
+    latestCloudStatusAt = Math.max(
+      latestCloudStatusAt ?? 0,
+      checkpoint.updatedAt,
+    );
   }
 
   const reportedThroughSequence = args.checkpoints.reduce<number | null>(
@@ -592,7 +612,9 @@ function buildActivityReadModelPage(args: {
   );
   const maxRowSequence = page.reduce<number | null>(
     (maxSequence, row) =>
-      row.sequence === null ? maxSequence : Math.max(maxSequence ?? 0, row.sequence),
+      row.sequence === null
+        ? maxSequence
+        : Math.max(maxSequence ?? 0, row.sequence),
     null,
   );
   const coverageState: CoverageState =
@@ -659,7 +681,8 @@ export function buildRegisterSessionActivityPage(args: {
         (link): link is RegisterSessionActivityRow["evidenceLinks"][number] =>
           link !== null,
       );
-    const conflict = args.conflictsByLocalEventId.get(event.localEventId) ?? null;
+    const conflict =
+      args.conflictsByLocalEventId.get(event.localEventId) ?? null;
 
     return {
       _id: event._id,
@@ -681,7 +704,10 @@ export function buildRegisterSessionActivityPage(args: {
 
   for (const conflict of args.conflictsByLocalEventId.values()) {
     if (conflict.resolvedAt) {
-      latestCloudStatusAt = Math.max(latestCloudStatusAt ?? 0, conflict.resolvedAt);
+      latestCloudStatusAt = Math.max(
+        latestCloudStatusAt ?? 0,
+        conflict.resolvedAt,
+      );
     }
   }
 
@@ -700,7 +726,9 @@ export function buildRegisterSessionActivityPage(args: {
   );
   const maxRowSequence = page.reduce<number | null>(
     (maxSequence, row) =>
-      row.sequence === null ? maxSequence : Math.max(maxSequence ?? 0, row.sequence),
+      row.sequence === null
+        ? maxSequence
+        : Math.max(maxSequence ?? 0, row.sequence),
     null,
   );
   const coverageState: CoverageState =
@@ -770,11 +798,14 @@ async function requireFullAdminRegisterSessionAccess(
   return { registerSession, store };
 }
 
-async function listLocalSessionMappings(ctx: QueryCtx, args: {
-  registerSessionId: Id<"registerSession">;
-  storeId: Id<"store">;
-  terminalId: Id<"posTerminal">;
-}) {
+async function listLocalSessionMappings(
+  ctx: QueryCtx,
+  args: {
+    registerSessionId: Id<"registerSession">;
+    storeId: Id<"store">;
+    terminalId: Id<"posTerminal">;
+  },
+) {
   return ctx.db
     .query("posLocalSyncMapping")
     .withIndex("by_store_terminal_cloud", (q) =>
@@ -787,12 +818,15 @@ async function listLocalSessionMappings(ctx: QueryCtx, args: {
     .take(LOCAL_SESSION_MAPPING_LIMIT);
 }
 
-async function listReadModelActivity(ctx: QueryCtx, args: {
-  cursorSequence: number | null;
-  pageSize: number;
-  registerSessionId: Id<"registerSession">;
-  storeId: Id<"store">;
-}) {
+async function listReadModelActivity(
+  ctx: QueryCtx,
+  args: {
+    cursorSequence: number | null;
+    pageSize: number;
+    registerSessionId: Id<"registerSession">;
+    storeId: Id<"store">;
+  },
+) {
   const query = ctx.db
     .query("posRegisterSessionActivity")
     .withIndex("by_store_registerSession_sequence", (q) => {
@@ -809,25 +843,33 @@ async function listReadModelActivity(ctx: QueryCtx, args: {
   return query.take(args.pageSize + 1);
 }
 
-async function listReadModelCheckpoints(ctx: QueryCtx, args: {
-  registerSessionId: Id<"registerSession">;
-  storeId: Id<"store">;
-}) {
+async function listReadModelCheckpoints(
+  ctx: QueryCtx,
+  args: {
+    registerSessionId: Id<"registerSession">;
+    storeId: Id<"store">;
+  },
+) {
   return ctx.db
     .query("posRegisterSessionActivityCheckpoint")
     .withIndex("by_store_registerSession", (q) =>
-      q.eq("storeId", args.storeId).eq("registerSessionId", args.registerSessionId),
+      q
+        .eq("storeId", args.storeId)
+        .eq("registerSessionId", args.registerSessionId),
     )
     .take(20);
 }
 
-async function listEventsForLocalSessions(ctx: QueryCtx, args: {
-  cursorSequence: number | null;
-  localRegisterSessionIds: string[];
-  pageSize: number;
-  storeId: Id<"store">;
-  terminalId: Id<"posTerminal">;
-}) {
+async function listEventsForLocalSessions(
+  ctx: QueryCtx,
+  args: {
+    cursorSequence: number | null;
+    localRegisterSessionIds: string[];
+    pageSize: number;
+    storeId: Id<"store">;
+    terminalId: Id<"posTerminal">;
+  },
+) {
   const eventsById = new Map<Id<"posLocalSyncEvent">, SyncEvidenceEvent>();
 
   for (const localRegisterSessionId of args.localRegisterSessionIds) {
@@ -858,11 +900,14 @@ async function listEventsForLocalSessions(ctx: QueryCtx, args: {
     .slice(0, args.pageSize + 1);
 }
 
-async function listCursorsForLocalSessions(ctx: QueryCtx, args: {
-  localRegisterSessionIds: string[];
-  storeId: Id<"store">;
-  terminalId: Id<"posTerminal">;
-}) {
+async function listCursorsForLocalSessions(
+  ctx: QueryCtx,
+  args: {
+    localRegisterSessionIds: string[];
+    storeId: Id<"store">;
+    terminalId: Id<"posTerminal">;
+  },
+) {
   const cursors: SyncEvidenceCursor[] = [];
 
   for (const localRegisterSessionId of args.localRegisterSessionIds) {
@@ -900,7 +945,10 @@ async function listEventMappings(ctx: QueryCtx, events: SyncEvidenceEvent[]) {
   return new Map(entries);
 }
 
-async function listActivityMappings(ctx: QueryCtx, activities: ActivityReadModelRow[]) {
+async function listActivityMappings(
+  ctx: QueryCtx,
+  activities: ActivityReadModelRow[],
+) {
   const entries = await Promise.all(
     activities.map(async (activity) => {
       const mappings = await ctx.db
@@ -948,7 +996,10 @@ async function listEventConflicts(ctx: QueryCtx, events: SyncEvidenceEvent[]) {
   );
 }
 
-async function listActivityConflicts(ctx: QueryCtx, activities: ActivityReadModelRow[]) {
+async function listActivityConflicts(
+  ctx: QueryCtx,
+  activities: ActivityReadModelRow[],
+) {
   const entries = await Promise.all(
     activities.map(async (activity) => {
       const conflicts = await ctx.db
@@ -998,7 +1049,10 @@ async function listStaffNames(ctx: QueryCtx, events: SyncEvidenceEvent[]) {
   );
 }
 
-async function listActivityStaffNames(ctx: QueryCtx, activities: ActivityReadModelRow[]) {
+async function listActivityStaffNames(
+  ctx: QueryCtx,
+  activities: ActivityReadModelRow[],
+) {
   const storeIdByStaffId = new Map<Id<"staffProfile">, Id<"store">>();
   for (const activity of activities) {
     if (activity.staffProfileId) {
@@ -1025,10 +1079,27 @@ async function listActivityStaffNames(ctx: QueryCtx, activities: ActivityReadMod
 async function getTerminalName(
   ctx: QueryCtx,
   terminalId: Id<"posTerminal"> | undefined,
+  storeId: Id<"store">,
 ) {
   if (!terminalId) return null;
   const terminal = await ctx.db.get("posTerminal", terminalId);
+  if (terminal?.storeId !== storeId) return null;
   return terminal?.displayName?.trim() || null;
+}
+
+function attachRegisterSessionHeader(
+  page: RegisterSessionActivityPage,
+  registerSession: Doc<"registerSession">,
+  terminalName: string | null,
+) {
+  return {
+    ...page,
+    registerSession: {
+      _id: registerSession._id,
+      registerNumber: registerSession.registerNumber ?? null,
+      terminalName,
+    },
+  } satisfies RegisterSessionActivityPage;
 }
 
 export const listRegisterSessionActivity = query({
@@ -1043,56 +1114,65 @@ export const listRegisterSessionActivity = query({
       args,
     );
 
+    const terminalName = await getTerminalName(
+      ctx,
+      registerSession.terminalId,
+      registerSession.storeId,
+    );
+
     if (!registerSession.terminalId) {
-      return buildRegisterSessionActivityPage({
-        conflictsByLocalEventId: new Map(),
-        cursors: [],
-        events: [],
-        isDone: true,
-        mappingsByLocalEventId: new Map(),
-        staffNamesById: new Map(),
-        terminalName: null,
-      });
+      return attachRegisterSessionHeader(
+        buildRegisterSessionActivityPage({
+          conflictsByLocalEventId: new Map(),
+          cursors: [],
+          events: [],
+          isDone: true,
+          mappingsByLocalEventId: new Map(),
+          staffNamesById: new Map(),
+          terminalName: null,
+        }),
+        registerSession,
+        null,
+      );
     }
 
     const pageSize = clampPageSize(args.paginationOpts.numItems);
     const cursorSequence = parseSequenceCursor(args.paginationOpts.cursor);
-    const [activityRowsWithExtra, activityCheckpoints, terminalName] =
-      await Promise.all([
-        listReadModelActivity(ctx, {
-          cursorSequence,
-          pageSize,
-          registerSessionId: args.registerSessionId,
-          storeId: args.storeId,
-        }),
-        listReadModelCheckpoints(ctx, {
-          registerSessionId: args.registerSessionId,
-          storeId: args.storeId,
-        }),
-        getTerminalName(ctx, registerSession.terminalId),
-      ]);
+    const [activityRowsWithExtra, activityCheckpoints] = await Promise.all([
+      listReadModelActivity(ctx, {
+        cursorSequence,
+        pageSize,
+        registerSessionId: args.registerSessionId,
+        storeId: args.storeId,
+      }),
+      listReadModelCheckpoints(ctx, {
+        registerSessionId: args.registerSessionId,
+        storeId: args.storeId,
+      }),
+    ]);
     const activityRows = activityRowsWithExtra.slice(0, pageSize);
 
     if (activityRows.length > 0 || activityCheckpoints.length > 0) {
-      const [
-        mappingsByLocalEventId,
-        conflictsByLocalEventId,
-        staffNamesById,
-      ] = await Promise.all([
-        listActivityMappings(ctx, activityRows),
-        listActivityConflicts(ctx, activityRows),
-        listActivityStaffNames(ctx, activityRows),
-      ]);
+      const [mappingsByLocalEventId, conflictsByLocalEventId, staffNamesById] =
+        await Promise.all([
+          listActivityMappings(ctx, activityRows),
+          listActivityConflicts(ctx, activityRows),
+          listActivityStaffNames(ctx, activityRows),
+        ]);
 
-      return buildActivityReadModelPage({
-        activities: activityRows,
-        checkpoints: activityCheckpoints,
-        conflictsByLocalEventId,
-        isDone: activityRowsWithExtra.length <= pageSize,
-        mappingsByLocalEventId,
-        staffNamesById,
+      return attachRegisterSessionHeader(
+        buildActivityReadModelPage({
+          activities: activityRows,
+          checkpoints: activityCheckpoints,
+          conflictsByLocalEventId,
+          isDone: activityRowsWithExtra.length <= pageSize,
+          mappingsByLocalEventId,
+          staffNamesById,
+          terminalName,
+        }),
+        registerSession,
         terminalName,
-      });
+      );
     }
 
     const registerSessionMappings = await listLocalSessionMappings(ctx, {
@@ -1132,14 +1212,18 @@ export const listRegisterSessionActivity = query({
         listStaffNames(ctx, events),
       ]);
 
-    return buildRegisterSessionActivityPage({
-      conflictsByLocalEventId,
-      cursors,
-      events,
-      isDone: eventsWithExtra.length <= pageSize,
-      mappingsByLocalEventId,
-      staffNamesById,
+    return attachRegisterSessionHeader(
+      buildRegisterSessionActivityPage({
+        conflictsByLocalEventId,
+        cursors,
+        events,
+        isDone: eventsWithExtra.length <= pageSize,
+        mappingsByLocalEventId,
+        staffNamesById,
+        terminalName,
+      }),
+      registerSession,
       terminalName,
-    });
+    );
   },
 });
