@@ -2,7 +2,23 @@ import { v } from "convex/values";
 
 import type { Id } from "../_generated/dataModel";
 import { internalMutation, type MutationCtx } from "../_generated/server";
-import { upsertProductSkuSearchProjection } from "../inventory/skuSearch";
+import {
+  SHARED_DEMO_CATEGORY,
+  SHARED_DEMO_OPENING_MESSAGE,
+  SHARED_DEMO_PICKUP_ORDER,
+  SHARED_DEMO_PRODUCTS,
+  SHARED_DEMO_STAFF_STORY,
+  SHARED_DEMO_STORE_IDENTITY,
+  SHARED_DEMO_SUBCATEGORIES,
+  SHARED_DEMO_TERMINAL_DISPLAY_NAME,
+  sharedDemoPickupOrderAmount,
+  sharedDemoProductBySku,
+  type SharedDemoSubcategoryKey,
+} from "../../shared/sharedDemoStory";
+import {
+  removeProductSkuSearchProjection,
+  upsertProductSkuSearchProjection,
+} from "../inventory/skuSearch";
 import {
   createStaffCredentialWithCtx,
   getStaffCredentialByStaffProfileIdWithCtx,
@@ -48,8 +64,8 @@ export const SHARED_DEMO_SEED = {
   timeZone: SHARED_DEMO_TIME_ZONE,
 } as const;
 
-export const SHARED_DEMO_CASHIER_USERNAME = "ama";
-export const SHARED_DEMO_MANAGER_USERNAME = "kofi";
+export const SHARED_DEMO_CASHIER_USERNAME = SHARED_DEMO_STAFF_STORY.cashier.username;
+export const SHARED_DEMO_MANAGER_USERNAME = SHARED_DEMO_STAFF_STORY.manager.username;
 export const SHARED_DEMO_STAFF_PIN_HASH =
   "4e98d5fe6eb03fb40d229e19013fc8b1505fdbacebcb225b409d75f656acc82b";
 
@@ -89,8 +105,6 @@ export function sharedDemoBootstrapSeedMatches(input: {
   }>;
   staffProfiles: Array<{ fullName: string; staffCode?: string; status: string }>;
 }) {
-  const [product] = input.products;
-  const [sku] = input.productSkus;
   const [order] = input.orders;
   const [item] = input.orderItems;
   const [session] = input.registerSessions;
@@ -108,24 +122,42 @@ export function sharedDemoBootstrapSeedMatches(input: {
             credential.lastAuthenticatedAt === undefined,
         ),
     );
-  return input.products.length === 1 && product?.slug === "demo-fresh-milk" &&
-    product.name === "Fresh Milk 1L" && product.inventoryCount === 24 && product.quantityAvailable === 24 &&
-    input.productSkus.length === 1 && sku?.sku === "DEMO-MILK-1L" && sku.price === 2500 &&
-    sku.unitCost === 1800 && sku.inventoryCount === 24 && sku.quantityAvailable === 24 &&
-    input.orders.length === 1 && order?.orderNumber === "DEMO-ORDER-001" && order.status === "ready" &&
-    order.amount === 2500 && order.paymentDue === 2500 && order.hasVerifiedPayment === true &&
-    input.orderItems.length === 1 && item?.productSku === "DEMO-MILK-1L" && item.quantity === 1 &&
-    item.price === 2500 && item.isReady === true && input.registerSessions.length === 1 &&
+  const orderAmount = sharedDemoPickupOrderAmount();
+  const catalogIsPristine =
+    input.products.length === SHARED_DEMO_PRODUCTS.length &&
+    input.productSkus.length === SHARED_DEMO_PRODUCTS.length &&
+    SHARED_DEMO_PRODUCTS.every(
+      (storyProduct) =>
+        input.products.some(
+          (candidate) =>
+            candidate.slug === storyProduct.slug &&
+            candidate.name === storyProduct.name &&
+            candidate.inventoryCount === storyProduct.inventoryCount &&
+            candidate.quantityAvailable === storyProduct.inventoryCount,
+        ) &&
+        input.productSkus.some(
+          (candidate) =>
+            candidate.sku === storyProduct.sku &&
+            candidate.price === storyProduct.price &&
+            candidate.unitCost === storyProduct.unitCost &&
+            candidate.inventoryCount === storyProduct.inventoryCount &&
+            candidate.quantityAvailable === storyProduct.inventoryCount,
+        ),
+    );
+  return catalogIsPristine &&
+    input.orders.length === 1 && order?.orderNumber === SHARED_DEMO_PICKUP_ORDER.orderNumber && order.status === "ready" &&
+    order.amount === orderAmount && order.paymentDue === orderAmount && order.hasVerifiedPayment === true &&
+    input.orderItems.length === 1 && item?.productSku === SHARED_DEMO_PICKUP_ORDER.sku && item.quantity === SHARED_DEMO_PICKUP_ORDER.quantity &&
+    item.price === orderAmount && item.isReady === true && input.registerSessions.length === 1 &&
     session?.registerNumber === SHARED_DEMO_REGISTER_NUMBER && session.status === "active" &&
     session.openingFloat === SHARED_DEMO_CASH_SEED.openingFloat &&
     session.expectedCash === calculateSharedDemoExpectedCash(SHARED_DEMO_CASH_SEED) &&
-    input.messageBodies.length === 1 && input.messageBodies[0] ===
-      "Ama: Morning stock count is complete. The pickup order is ready at the counter." &&
+    input.messageBodies.length === 1 && input.messageBodies[0] === SHARED_DEMO_OPENING_MESSAGE &&
     input.openingCount === 1 && input.seedEventCount === 1 &&
     input.staffProfiles.length === 3 &&
-    input.staffProfiles.some((profile) => profile.fullName === "Demo Owner" && profile.status === "active") &&
-    input.staffProfiles.some((profile) => profile.staffCode === SHARED_DEMO_CASHIER_STAFF_CODE && profile.fullName === "Ama Mensah" && profile.status === "active") &&
-    input.staffProfiles.some((profile) => profile.staffCode === SHARED_DEMO_MANAGER_STAFF_CODE && profile.fullName === "Kofi Asante" && profile.status === "active") &&
+    input.staffProfiles.some((profile) => profile.fullName === SHARED_DEMO_STAFF_STORY.owner.fullName && profile.status === "active") &&
+    input.staffProfiles.some((profile) => profile.staffCode === SHARED_DEMO_CASHIER_STAFF_CODE && profile.fullName === SHARED_DEMO_STAFF_STORY.cashier.fullName && profile.status === "active") &&
+    input.staffProfiles.some((profile) => profile.staffCode === SHARED_DEMO_MANAGER_STAFF_CODE && profile.fullName === SHARED_DEMO_STAFF_STORY.manager.fullName && profile.status === "active") &&
     credentialsArePristine &&
     input.posTransactionCount === 0 && input.inventoryMovementCount === 0;
 }
@@ -138,9 +170,9 @@ export const SHARED_DEMO_PRISTINE_TABLE_COUNTS: Record<string, number> = {
   onlineOrder: 1,
   onlineOrderItem: 1,
   operationalEvent: 1,
-  product: 1,
-  productSku: 1,
-  productSkuSearch: 1,
+  product: SHARED_DEMO_PRODUCTS.length,
+  productSku: SHARED_DEMO_PRODUCTS.length,
+  productSkuSearch: SHARED_DEMO_PRODUCTS.length,
   registerSession: 1,
   staffCredential: 2,
   staffMessage: 1,
@@ -264,10 +296,10 @@ async function ensureDemoStaffAccessWithCtx(
   if (!manager) {
     const managerId = await ctx.db.insert("staffProfile", {
       createdByUserId: args.ownerUserId,
-      firstName: "Kofi",
-      fullName: "Kofi Asante",
-      jobTitle: "Store Manager",
-      lastName: "Asante",
+      firstName: SHARED_DEMO_STAFF_STORY.manager.firstName,
+      fullName: SHARED_DEMO_STAFF_STORY.manager.fullName,
+      jobTitle: SHARED_DEMO_STAFF_STORY.manager.jobTitle,
+      lastName: SHARED_DEMO_STAFF_STORY.manager.lastName,
       memberRole: "full_admin",
       organizationId: args.organizationId,
       staffCode: SHARED_DEMO_MANAGER_STAFF_CODE,
@@ -303,6 +335,214 @@ async function ensureDemoStaffAccessWithCtx(
     username: SHARED_DEMO_MANAGER_USERNAME,
   });
   return { cashier, manager };
+}
+
+async function reconcileSharedDemoCatalogWithCtx(
+  ctx: MutationCtx,
+  args: { ownerUserId: Id<"athenaUser">; organizationId: Id<"organization">; storeId: Id<"store"> },
+) {
+  const categories = await ctx.db
+    .query("category")
+    .withIndex("by_storeId_slug", (q) => q.eq("storeId", args.storeId))
+    .take(50);
+  let category = categories.find((row) => row.slug === SHARED_DEMO_CATEGORY.slug) ?? categories[0];
+  if (!category) {
+    const categoryId = await ctx.db.insert("category", {
+      name: SHARED_DEMO_CATEGORY.name,
+      showOnStorefront: true,
+      slug: SHARED_DEMO_CATEGORY.slug,
+      storeId: args.storeId,
+    });
+    const createdCategory = await ctx.db.get("category", categoryId);
+    if (!createdCategory) throw new Error("Demo category is missing.");
+    category = createdCategory;
+  } else if (category.name !== SHARED_DEMO_CATEGORY.name || category.slug !== SHARED_DEMO_CATEGORY.slug) {
+    await ctx.db.patch("category", category._id, {
+      name: SHARED_DEMO_CATEGORY.name,
+      slug: SHARED_DEMO_CATEGORY.slug,
+    });
+  }
+
+  const subcategories = await ctx.db
+    .query("subcategory")
+    .withIndex("by_categoryId_slug", (q) => q.eq("categoryId", category._id))
+    .take(50);
+  const claimed = new Set<string>();
+  const subcategoryIds = new Map<SharedDemoSubcategoryKey, Id<"subcategory">>();
+  for (const target of SHARED_DEMO_SUBCATEGORIES) {
+    const existing =
+      subcategories.find((row) => row.slug === target.slug) ??
+      subcategories.find((row) => !claimed.has(String(row._id)) && !SHARED_DEMO_SUBCATEGORIES.some((entry) => entry.slug === row.slug));
+    if (existing) {
+      claimed.add(String(existing._id));
+      if (existing.name !== target.name || existing.slug !== target.slug) {
+        await ctx.db.patch("subcategory", existing._id, { name: target.name, slug: target.slug });
+      }
+      subcategoryIds.set(target.key, existing._id);
+      continue;
+    }
+    subcategoryIds.set(
+      target.key,
+      await ctx.db.insert("subcategory", {
+        categoryId: category._id,
+        name: target.name,
+        slug: target.slug,
+        storeId: args.storeId,
+      }),
+    );
+  }
+
+  const products = await ctx.db
+    .query("product")
+    .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+    .take(500);
+  const productSkus = await ctx.db
+    .query("productSku")
+    .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+    .take(500);
+  const storySlugs = new Set(SHARED_DEMO_PRODUCTS.map((entry) => entry.slug));
+  const storySkus = new Set(SHARED_DEMO_PRODUCTS.map((entry) => entry.sku));
+  for (const row of productSkus) {
+    if (row.sku && storySkus.has(row.sku)) continue;
+    await removeProductSkuSearchProjection(ctx, row._id);
+    await ctx.db.delete("productSku", row._id);
+  }
+  for (const row of products) {
+    if (storySlugs.has(row.slug)) continue;
+    await ctx.db.delete("product", row._id);
+  }
+
+  const identityBySku = new Map<string, { productId: Id<"product">; productSkuId: Id<"productSku"> }>();
+  for (const storyProduct of SHARED_DEMO_PRODUCTS) {
+    const subcategoryId = subcategoryIds.get(storyProduct.subcategoryKey);
+    if (!subcategoryId) throw new Error("Demo subcategory is missing.");
+    const existingProduct = products.find((row) => row.slug === storyProduct.slug);
+    const productDocument = {
+      availability: "live" as const,
+      categoryId: category._id,
+      createdByUserId: args.ownerUserId,
+      currency: SHARED_DEMO_STORE_IDENTITY.currency,
+      inventoryCount: storyProduct.inventoryCount,
+      isVisible: true,
+      name: storyProduct.name,
+      organizationId: args.organizationId,
+      posVisible: true,
+      quantityAvailable: storyProduct.inventoryCount,
+      slug: storyProduct.slug,
+      storeId: args.storeId,
+      subcategoryId,
+    };
+    const productId = existingProduct
+      ? (await ctx.db.patch("product", existingProduct._id, productDocument), existingProduct._id)
+      : await ctx.db.insert("product", productDocument);
+    const existingSku = productSkus.find((row) => row.sku === storyProduct.sku);
+    const skuDocument = {
+      images: [] as string[],
+      inventoryCount: storyProduct.inventoryCount,
+      isVisible: true,
+      posVisible: true,
+      price: storyProduct.price,
+      productId,
+      productName: storyProduct.name,
+      quantityAvailable: storyProduct.inventoryCount,
+      sku: storyProduct.sku,
+      storeId: args.storeId,
+      unitCost: storyProduct.unitCost,
+    };
+    const productSkuId = existingSku
+      ? (await ctx.db.patch("productSku", existingSku._id, skuDocument), existingSku._id)
+      : await ctx.db.insert("productSku", skuDocument);
+    await upsertProductSkuSearchProjection(ctx, productSkuId);
+    identityBySku.set(storyProduct.sku, { productId, productSkuId });
+  }
+  return identityBySku;
+}
+
+async function migrateSharedDemoStoryWithCtx(
+  ctx: MutationCtx,
+  args: { ownerUserId: Id<"athenaUser">; organizationId: Id<"organization">; storeId: Id<"store"> },
+) {
+  await ctx.db.patch("organization", args.organizationId, {
+    name: SHARED_DEMO_STORE_IDENTITY.organizationName,
+  });
+  await ctx.db.patch("store", args.storeId, {
+    name: SHARED_DEMO_STORE_IDENTITY.storeName,
+  });
+  await ctx.db.patch("athenaUser", args.ownerUserId, {
+    firstName: SHARED_DEMO_STAFF_STORY.owner.firstName,
+    lastName: SHARED_DEMO_STAFF_STORY.owner.lastName,
+  });
+
+  const staffProfiles = await ctx.db
+    .query("staffProfile")
+    .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+    .take(100);
+  const staffPatches: Array<{ profile: (typeof staffProfiles)[number] | undefined; story: { firstName: string; fullName: string; jobTitle: string; lastName: string } }> = [
+    { profile: staffProfiles.find((row) => row.linkedUserId === args.ownerUserId), story: SHARED_DEMO_STAFF_STORY.owner },
+    { profile: staffProfiles.find((row) => row.staffCode === SHARED_DEMO_CASHIER_STAFF_CODE), story: SHARED_DEMO_STAFF_STORY.cashier },
+    { profile: staffProfiles.find((row) => row.staffCode === SHARED_DEMO_MANAGER_STAFF_CODE), story: SHARED_DEMO_STAFF_STORY.manager },
+  ];
+  for (const { profile, story } of staffPatches) {
+    if (!profile) continue;
+    await ctx.db.patch("staffProfile", profile._id, {
+      firstName: story.firstName,
+      fullName: story.fullName,
+      jobTitle: story.jobTitle,
+      lastName: story.lastName,
+    });
+  }
+
+  const messages = await ctx.db
+    .query("staffMessage")
+    .withIndex("by_storeId_createdAt", (q) => q.eq("storeId", args.storeId))
+    .take(10);
+  if (messages[0] && messages[0].body !== SHARED_DEMO_OPENING_MESSAGE) {
+    await ctx.db.patch("staffMessage", messages[0]._id, { body: SHARED_DEMO_OPENING_MESSAGE });
+  }
+
+  const terminals = await ctx.db
+    .query("posTerminal")
+    .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+    .take(50);
+  for (const terminal of terminals) {
+    if (terminal.registerNumber === SHARED_DEMO_REGISTER_NUMBER && terminal.displayName !== SHARED_DEMO_TERMINAL_DISPLAY_NAME) {
+      await ctx.db.patch("posTerminal", terminal._id, { displayName: SHARED_DEMO_TERMINAL_DISPLAY_NAME });
+    }
+  }
+
+  const identityBySku = await reconcileSharedDemoCatalogWithCtx(ctx, args);
+  const orderProduct = sharedDemoProductBySku(SHARED_DEMO_PICKUP_ORDER.sku);
+  const orderIdentity = identityBySku.get(SHARED_DEMO_PICKUP_ORDER.sku);
+  if (!orderIdentity) throw new Error("Demo pickup order product is missing.");
+  const orderAmount = sharedDemoPickupOrderAmount();
+  const orders = await ctx.db
+    .query("onlineOrder")
+    .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+    .take(20);
+  const pickupOrder = orders.find((row) => row.orderNumber === SHARED_DEMO_PICKUP_ORDER.orderNumber);
+  if (!pickupOrder) throw new Error("Demo order is missing.");
+  await ctx.db.patch("onlineOrder", pickupOrder._id, {
+    amount: orderAmount,
+    paymentDue: orderAmount,
+  });
+  const orderItems = await ctx.db
+    .query("onlineOrderItem")
+    .withIndex("by_orderId", (q) => q.eq("orderId", pickupOrder._id))
+    .take(20);
+  for (const orderItem of orderItems) {
+    await ctx.db.patch("onlineOrderItem", orderItem._id, {
+      price: orderProduct.price,
+      productId: orderIdentity.productId,
+      productName: orderProduct.name,
+      productSku: orderProduct.sku,
+      productSkuId: orderIdentity.productSkuId,
+      quantity: SHARED_DEMO_PICKUP_ORDER.quantity,
+    });
+  }
+  const checkoutSession = await ctx.db.get("checkoutSession", pickupOrder.checkoutSessionId);
+  if (checkoutSession && checkoutSession.amount !== orderAmount) {
+    await ctx.db.patch("checkoutSession", pickupOrder.checkoutSessionId, { amount: orderAmount });
+  }
 }
 
 export const provisionSharedDemo = internalMutation({
@@ -343,8 +583,10 @@ export const provisionSharedDemo = internalMutation({
         const orderItems = demoOrder
           ? await ctx.db.query("onlineOrderItem").withIndex("by_orderId", (q) => q.eq("orderId", demoOrder._id)).take(500)
           : [];
-        const demoSku = productSkus.find((sku) => sku.sku === "DEMO-MILK-1L");
-        if (demoSku) await upsertProductSkuSearchProjection(ctx, demoSku._id);
+        for (const storyProduct of SHARED_DEMO_PRODUCTS) {
+          const demoSku = productSkus.find((sku) => sku.sku === storyProduct.sku);
+          if (demoSku) await upsertProductSkuSearchProjection(ctx, demoSku._id);
+        }
         await rollSharedDemoOpeningBaselineWithCtx(ctx, {
           now,
           storeId: existingStore._id,
@@ -391,6 +633,11 @@ export const provisionSharedDemo = internalMutation({
           baselineVersion: state.baselineVersion,
           skipTables: sharedDemoMigrationSkipTables(state.baselineVersion),
         });
+        await migrateSharedDemoStoryWithCtx(ctx, {
+          organizationId: existingOrganization._id,
+          ownerUserId: owner._id,
+          storeId: existingStore._id,
+        });
         const orders = await ctx.db
           .query("onlineOrder")
           .withIndex("by_storeId", (q) => q.eq("storeId", existingStore._id))
@@ -412,7 +659,7 @@ export const provisionSharedDemo = internalMutation({
           isPODOrder: false,
           paymentCollected: undefined,
           paymentCollectedAt: undefined,
-          paymentDue: 2500,
+          paymentDue: sharedDemoPickupOrderAmount(),
           paymentMethod: demoCardPaymentMethod,
           podPaymentMethod: undefined,
         });
@@ -545,7 +792,7 @@ export const provisionSharedDemo = internalMutation({
               platform: "shared_demo",
               userAgent: "Athena Demo",
             },
-            displayName: "Demo Front Register",
+            displayName: SHARED_DEMO_TERMINAL_DISPLAY_NAME,
             fingerprintHash: "shared-demo-terminal",
             heartbeatEnabled: false,
             loginMode: "pos_only",
@@ -644,12 +891,12 @@ export const provisionSharedDemo = internalMutation({
     const ownerUserId = await ctx.db.insert("athenaUser", {
       email: SHARED_DEMO_SEED.ownerEmail,
       normalizedEmail: SHARED_DEMO_SEED.ownerEmail,
-      firstName: "Demo",
-      lastName: "Owner",
+      firstName: SHARED_DEMO_STAFF_STORY.owner.firstName,
+      lastName: SHARED_DEMO_STAFF_STORY.owner.lastName,
     });
     const organizationId = await ctx.db.insert("organization", {
       createdByUserId: ownerUserId,
-      name: "Athena Demo Market",
+      name: SHARED_DEMO_STORE_IDENTITY.organizationName,
       slug: SHARED_DEMO_SEED.organizationSlug,
     });
     await ctx.db.patch("athenaUser", ownerUserId, { organizationId });
@@ -657,18 +904,18 @@ export const provisionSharedDemo = internalMutation({
     const storeId = await ctx.db.insert("store", {
       config: { sharedDemo: true, timeZone: SHARED_DEMO_SEED.timeZone },
       createdByUserId: ownerUserId,
-      currency: "GHS",
-      name: "Athena Demo Market — Central",
+      currency: SHARED_DEMO_STORE_IDENTITY.currency,
+      name: SHARED_DEMO_STORE_IDENTITY.storeName,
       organizationId,
       slug: SHARED_DEMO_SEED.storeSlug,
     });
     const ownerStaffId = await ctx.db.insert("staffProfile", {
-      createdByUserId: ownerUserId, firstName: "Demo", fullName: "Demo Owner", jobTitle: "Owner",
-      lastName: "Owner", linkedUserId: ownerUserId, memberRole: "full_admin", organizationId, status: "active", storeId,
+      createdByUserId: ownerUserId, firstName: SHARED_DEMO_STAFF_STORY.owner.firstName, fullName: SHARED_DEMO_STAFF_STORY.owner.fullName, jobTitle: SHARED_DEMO_STAFF_STORY.owner.jobTitle,
+      lastName: SHARED_DEMO_STAFF_STORY.owner.lastName, linkedUserId: ownerUserId, memberRole: "full_admin", organizationId, status: "active", storeId,
     });
     await ctx.db.insert("staffProfile", {
-      createdByUserId: ownerUserId, firstName: "Ama", fullName: "Ama Mensah", jobTitle: "Cashier",
-      lastName: "Mensah", memberRole: "pos_only", organizationId, staffCode: SHARED_DEMO_CASHIER_STAFF_CODE, status: "active", storeId,
+      createdByUserId: ownerUserId, firstName: SHARED_DEMO_STAFF_STORY.cashier.firstName, fullName: SHARED_DEMO_STAFF_STORY.cashier.fullName, jobTitle: SHARED_DEMO_STAFF_STORY.cashier.jobTitle,
+      lastName: SHARED_DEMO_STAFF_STORY.cashier.lastName, memberRole: "pos_only", organizationId, staffCode: SHARED_DEMO_CASHIER_STAFF_CODE, status: "active", storeId,
     });
     const { manager } = await ensureDemoStaffAccessWithCtx(ctx, {
       now,
@@ -678,26 +925,42 @@ export const provisionSharedDemo = internalMutation({
     });
     await ctx.db.insert("staffMessage", {
       authorUserId: ownerUserId,
-      body: "Ama: Morning stock count is complete. The pickup order is ready at the counter.",
+      body: SHARED_DEMO_OPENING_MESSAGE,
       createdAt: now - 2_700_000,
       organizationId,
       storeId,
       updatedAt: now - 2_700_000,
     });
-    const categoryId = await ctx.db.insert("category", { name: "Groceries", showOnStorefront: true, slug: "demo-groceries", storeId });
-    const subcategoryId = await ctx.db.insert("subcategory", { categoryId, name: "Dairy", slug: "demo-dairy", storeId });
-    const productId = await ctx.db.insert("product", {
-      availability: "live", categoryId, createdByUserId: ownerUserId, currency: "GHS", inventoryCount: 24,
-      isVisible: true, name: "Fresh Milk 1L", organizationId, posVisible: true, quantityAvailable: 24,
-      slug: "demo-fresh-milk", storeId, subcategoryId,
-    });
-    const productSkuId = await ctx.db.insert("productSku", {
-      images: [], inventoryCount: 24, isVisible: true, posVisible: true, price: 2500, productId,
-      productName: "Fresh Milk 1L", quantityAvailable: 24, sku: "DEMO-MILK-1L", storeId, unitCost: 1800,
-    });
-    await upsertProductSkuSearchProjection(ctx, productSkuId);
+    const categoryId = await ctx.db.insert("category", { name: SHARED_DEMO_CATEGORY.name, showOnStorefront: true, slug: SHARED_DEMO_CATEGORY.slug, storeId });
+    const subcategoryIds = new Map<SharedDemoSubcategoryKey, Id<"subcategory">>();
+    for (const subcategory of SHARED_DEMO_SUBCATEGORIES) {
+      subcategoryIds.set(
+        subcategory.key,
+        await ctx.db.insert("subcategory", { categoryId, name: subcategory.name, slug: subcategory.slug, storeId }),
+      );
+    }
+    const identityBySku = new Map<string, { productId: Id<"product">; productSkuId: Id<"productSku"> }>();
+    for (const storyProduct of SHARED_DEMO_PRODUCTS) {
+      const subcategoryId = subcategoryIds.get(storyProduct.subcategoryKey);
+      if (!subcategoryId) throw new Error("Demo subcategory is missing.");
+      const productId = await ctx.db.insert("product", {
+        availability: "live", categoryId, createdByUserId: ownerUserId, currency: SHARED_DEMO_STORE_IDENTITY.currency, inventoryCount: storyProduct.inventoryCount,
+        isVisible: true, name: storyProduct.name, organizationId, posVisible: true, quantityAvailable: storyProduct.inventoryCount,
+        slug: storyProduct.slug, storeId, subcategoryId,
+      });
+      const productSkuId = await ctx.db.insert("productSku", {
+        images: [], inventoryCount: storyProduct.inventoryCount, isVisible: true, posVisible: true, price: storyProduct.price, productId,
+        productName: storyProduct.name, quantityAvailable: storyProduct.inventoryCount, sku: storyProduct.sku, storeId, unitCost: storyProduct.unitCost,
+      });
+      await upsertProductSkuSearchProjection(ctx, productSkuId);
+      identityBySku.set(storyProduct.sku, { productId, productSkuId });
+    }
+    const orderProduct = sharedDemoProductBySku(SHARED_DEMO_PICKUP_ORDER.sku);
+    const orderIdentity = identityBySku.get(SHARED_DEMO_PICKUP_ORDER.sku);
+    if (!orderIdentity) throw new Error("Demo pickup order product is missing.");
+    const orderAmount = sharedDemoPickupOrderAmount();
     const terminalId = await ctx.db.insert("posTerminal", {
-      browserInfo: { platform: "shared_demo", userAgent: "Athena Demo" }, displayName: "Demo Front Register",
+      browserInfo: { platform: "shared_demo", userAgent: "Athena Demo" }, displayName: SHARED_DEMO_TERMINAL_DISPLAY_NAME,
       fingerprintHash: "shared-demo-terminal", heartbeatEnabled: false, loginMode: "pos_only", registerNumber: SHARED_DEMO_REGISTER_NUMBER,
       registeredAt: now, registeredByUserId: ownerUserId, status: "active", storeId,
       syncSecretHash: await hashPosTerminalSyncSecret("shared-demo-non-secret-terminal-seed"), transactionCapability: "products_and_services",
@@ -712,23 +975,23 @@ export const provisionSharedDemo = internalMutation({
     const guestId = await ctx.db.insert("guest", { creationOrigin: "shared_demo", marker: "shared-demo-customer", organizationId, storeId });
     const bagId = await ctx.db.insert("bag", { items: [], storeFrontUserId: guestId, storeId, updatedAt: now });
     const checkoutSessionId = await ctx.db.insert("checkoutSession", {
-      amount: 2500, bagId, billingDetails: null, customerDetails: null, deliveryDetails: null, deliveryFee: 0,
+      amount: orderAmount, bagId, billingDetails: null, customerDetails: null, deliveryDetails: null, deliveryFee: 0,
       deliveryInstructions: null, deliveryMethod: "pickup", deliveryOption: null, discount: null, expiresAt: now + 86_400_000,
       hasCompletedCheckoutSession: true, hasCompletedPayment: true, hasVerifiedPayment: true, isFinalizingPayment: false,
       isPODOrder: false, paymentMethod: { bank: "Demo Bank", brand: "Visa", channel: "card", last4: "4242", type: "online_payment" },
       pickupLocation: "Demo counter", storeFrontUserId: guestId, storeId,
     });
     const orderId = await ctx.db.insert("onlineOrder", {
-      amount: 2500, bagId, billingDetails: null, checkoutSessionId,
+      amount: orderAmount, bagId, billingDetails: null, checkoutSessionId,
       customerDetails: { email: "customer@shared-demo.athena.invalid", firstName: "Demo", lastName: "Customer", phoneNumber: "0000000000" },
       deliveryDetails: null, deliveryFee: 0, deliveryInstructions: null, deliveryMethod: "pickup", deliveryOption: null,
-      discount: null, externalTransactionId: "shared-demo-card-payment-001", hasVerifiedPayment: true, isPODOrder: false, orderNumber: "DEMO-ORDER-001",
-      paymentDue: 2500, paymentMethod: { bank: "Demo Bank", brand: "Visa", channel: "card", last4: "4242", type: "online_payment" },
+      discount: null, externalTransactionId: "shared-demo-card-payment-001", hasVerifiedPayment: true, isPODOrder: false, orderNumber: SHARED_DEMO_PICKUP_ORDER.orderNumber,
+      paymentDue: orderAmount, paymentMethod: { bank: "Demo Bank", brand: "Visa", channel: "card", last4: "4242", type: "online_payment" },
       pickupLocation: "Demo counter", readyAt: now - 1_800_000, status: "ready",
       storeFrontUserId: guestId, storeId, updatedAt: now,
     });
     await ctx.db.patch("checkoutSession", checkoutSessionId, { placedOrderId: orderId });
-    await ctx.db.insert("onlineOrderItem", { isReady: true, orderId, price: 2500, productId, productName: "Fresh Milk 1L", productSku: "DEMO-MILK-1L", productSkuId, quantity: 1, storeFrontUserId: guestId });
+    await ctx.db.insert("onlineOrderItem", { isReady: true, orderId, price: orderProduct.price, productId: orderIdentity.productId, productName: orderProduct.name, productSku: orderProduct.sku, productSkuId: orderIdentity.productSkuId, quantity: SHARED_DEMO_PICKUP_ORDER.quantity, storeFrontUserId: guestId });
     await ctx.db.insert("dailyOpening", buildSharedDemoOpeningBaseline({
       actorStaffProfileId: ownerStaffId,
       actorUserId: ownerUserId,

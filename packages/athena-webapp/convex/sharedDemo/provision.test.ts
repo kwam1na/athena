@@ -3,6 +3,14 @@ import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 
 import {
+  SHARED_DEMO_OPENING_MESSAGE,
+  SHARED_DEMO_PICKUP_ORDER,
+  SHARED_DEMO_PRODUCTS,
+  SHARED_DEMO_STAFF_STORY,
+  SHARED_DEMO_STORE_IDENTITY,
+  sharedDemoPickupOrderAmount,
+} from "../../shared/sharedDemoStory";
+import {
   calculateSharedDemoExpectedCash,
   SHARED_DEMO_CASHIER_USERNAME,
   SHARED_DEMO_CASH_SEED,
@@ -41,8 +49,8 @@ describe("shared demo provisioning", () => {
       .update("athena-pos-cashier-pin-salt-v1" + "1111")
       .digest("hex");
 
-    expect(SHARED_DEMO_CASHIER_USERNAME).toBe("ama");
-    expect(SHARED_DEMO_MANAGER_USERNAME).toBe("kofi");
+    expect(SHARED_DEMO_CASHIER_USERNAME).toBe("efua");
+    expect(SHARED_DEMO_MANAGER_USERNAME).toBe("kwabena");
     expect(SHARED_DEMO_STAFF_PIN_HASH).toBe(expectedPinHash);
     expect(source).toContain("createStaffCredentialWithCtx");
     expect(source).toContain('role: "cashier"');
@@ -53,16 +61,41 @@ describe("shared demo provisioning", () => {
     );
   });
 
+  it("tells the Osu Studio artisanal story", () => {
+    expect(SHARED_DEMO_STORE_IDENTITY.organizationName).toBe("Osu Studio");
+    expect(SHARED_DEMO_STORE_IDENTITY.storeName).toBe("Osu Studio — Atelier");
+    expect(SHARED_DEMO_STORE_IDENTITY.currency).toBe("GHS");
+    expect(SHARED_DEMO_PRODUCTS).toHaveLength(8);
+    const kente = SHARED_DEMO_PRODUCTS.find((product) => product.sku === "DEMO-KENTE-SCARF");
+    expect(kente).toMatchObject({ name: "Kente Scarf", price: 35000 });
+    const soap = SHARED_DEMO_PRODUCTS.find((product) => product.sku === "DEMO-SOAP-BAR");
+    expect(soap).toMatchObject({ name: "Black Soap Bar", price: 3500 });
+    expect(new Set(SHARED_DEMO_PRODUCTS.map((product) => product.sku)).size).toBe(8);
+    expect(new Set(SHARED_DEMO_PRODUCTS.map((product) => product.slug)).size).toBe(8);
+    expect(SHARED_DEMO_PRODUCTS.every((product) => product.unitCost < product.price)).toBe(true);
+    expect(sharedDemoPickupOrderAmount()).toBe(3500);
+    expect(SHARED_DEMO_STAFF_STORY.cashier.fullName).toBe("Efua Tetteh");
+    expect(SHARED_DEMO_STAFF_STORY.manager.fullName).toBe("Kwabena Osei");
+    expect(SHARED_DEMO_OPENING_MESSAGE.startsWith("Efua:")).toBe(true);
+  });
+
   it("refuses to capture a missing-state baseline when marker rows have drifted", () => {
+    const orderAmount = sharedDemoPickupOrderAmount();
     const seed = {
       inventoryMovementCount: 0,
-      messageBodies: ["Ama: Morning stock count is complete. The pickup order is ready at the counter."],
+      messageBodies: [SHARED_DEMO_OPENING_MESSAGE],
       openingCount: 1,
-      orderItems: [{ isReady: true, price: 2500, productSku: "DEMO-MILK-1L", quantity: 1 }],
-      orders: [{ amount: 2500, hasVerifiedPayment: true, orderNumber: "DEMO-ORDER-001", paymentDue: 2500, status: "ready" }],
+      orderItems: [{ isReady: true, price: orderAmount, productSku: SHARED_DEMO_PICKUP_ORDER.sku, quantity: 1 }],
+      orders: [{ amount: orderAmount, hasVerifiedPayment: true, orderNumber: "DEMO-ORDER-001", paymentDue: orderAmount, status: "ready" }],
       posTransactionCount: 0,
-      productSkus: [{ inventoryCount: 24, price: 2500, quantityAvailable: 24, sku: "DEMO-MILK-1L", unitCost: 1800 }],
-      products: [{ inventoryCount: 24, name: "Fresh Milk 1L", quantityAvailable: 24, slug: "demo-fresh-milk" }],
+      productSkus: SHARED_DEMO_PRODUCTS.map((product) => ({
+        inventoryCount: product.inventoryCount, price: product.price, quantityAvailable: product.inventoryCount,
+        sku: product.sku, unitCost: product.unitCost,
+      })),
+      products: SHARED_DEMO_PRODUCTS.map((product) => ({
+        inventoryCount: product.inventoryCount, name: product.name,
+        quantityAvailable: product.inventoryCount, slug: product.slug,
+      })),
       registerSessions: [{ expectedCash: 5000, openingFloat: 5000, registerNumber: "DEMO-01", status: "active" }],
       seedEventCount: 1,
       staffCredentials: [
@@ -70,15 +103,20 @@ describe("shared demo provisioning", () => {
         { pinHash: SHARED_DEMO_STAFF_PIN_HASH, status: "active", username: SHARED_DEMO_MANAGER_USERNAME },
       ],
       staffProfiles: [
-        { fullName: "Demo Owner", status: "active" },
-        { fullName: "Ama Mensah", staffCode: "DEMO-001", status: "active" },
-        { fullName: "Kofi Asante", staffCode: "DEMO-002", status: "active" },
+        { fullName: "Studio Owner", status: "active" },
+        { fullName: "Efua Tetteh", staffCode: "DEMO-001", status: "active" },
+        { fullName: "Kwabena Osei", staffCode: "DEMO-002", status: "active" },
       ],
     };
     expect(sharedDemoBootstrapSeedMatches(seed)).toBe(true);
     expect(sharedDemoBootstrapSeedMatches({
       ...seed,
-      productSkus: [{ ...seed.productSkus[0]!, quantityAvailable: 7 }],
+      productSkus: [{ ...seed.productSkus[0]!, quantityAvailable: 7 }, ...seed.productSkus.slice(1)],
+    })).toBe(false);
+    expect(sharedDemoBootstrapSeedMatches({
+      ...seed,
+      products: seed.products.slice(0, 7),
+      productSkus: seed.productSkus.slice(0, 7),
     })).toBe(false);
     expect(sharedDemoBootstrapSeedMatches({ ...seed, posTransactionCount: 1 })).toBe(false);
     expect(sharedDemoBootstrapSeedMatches({
@@ -89,6 +127,9 @@ describe("shared demo provisioning", () => {
       ],
     })).toBe(false);
     expect(SHARED_DEMO_PRISTINE_TABLE_COUNTS.staffCredential).toBe(2);
+    expect(SHARED_DEMO_PRISTINE_TABLE_COUNTS.product).toBe(8);
+    expect(SHARED_DEMO_PRISTINE_TABLE_COUNTS.productSku).toBe(8);
+    expect(SHARED_DEMO_PRISTINE_TABLE_COUNTS.productSkuSearch).toBe(8);
     expect(sharedDemoPristineTableCountsMatch({
       ...SHARED_DEMO_PRISTINE_TABLE_COUNTS,
     })).toBe(true);
