@@ -1126,6 +1126,12 @@ describe("DailyCloseViewContent", () => {
     renderContent(readySnapshot);
 
     const report = await screen.findByRole("dialog");
+    const reportBody = within(report).getByTestId("transaction-report-body");
+    expect(reportBody).toHaveClass("bg-surface-raised");
+    expect(reportBody).not.toHaveClass("bg-background/60");
+    const reportTable = within(report).getByTestId("transaction-report-table");
+    expect(reportTable).toHaveClass("bg-background/60");
+    expect(reportTable).not.toHaveClass("bg-surface-raised");
 
     expect(
       within(report).getByText(
@@ -1136,7 +1142,14 @@ describe("DailyCloseViewContent", () => {
     expect(within(report).getByText("Staff")).toBeInTheDocument();
     expect(within(report).getByText("Payment")).toBeInTheDocument();
     expect(within(report).getByText("Completed")).toBeInTheDocument();
-    expect(within(report).getByText("Amount")).toBeInTheDocument();
+    expect(within(report).queryByText("Amount")).not.toBeInTheDocument();
+    const reportHeader = within(report).getByTestId(
+      "transaction-report-header",
+    );
+    expect(
+      Array.from(reportHeader.children).map((column) => column.textContent),
+    ).toEqual(["Item", "Staff", "Payment", "Completed"]);
+    expect(reportHeader.children[3]).toHaveClass("text-right");
     expect(within(report).queryByText("POS sale")).not.toBeInTheDocument();
     expect(within(report).getByText("#TXN-1")).toBeInTheDocument();
     expect(within(report).getByText("2 items")).toHaveClass(
@@ -1158,12 +1171,47 @@ describe("DailyCloseViewContent", () => {
     ).toHaveClass("bg-destructive/5");
     expect(within(report).getAllByText("Kofi Mensah")).toHaveLength(2);
     expect(within(report).getByText("Akosua Mensah")).toBeInTheDocument();
-    expect(within(report).getByText("Cash, Mobile Money")).toBeInTheDocument();
-    expect(within(report).getByText("Expense")).toBeInTheDocument();
+    expect(
+      within(report).getByLabelText("Cash, Mobile Money"),
+    ).toBeInTheDocument();
+    expect(within(report).getByLabelText("Expense")).toBeInTheDocument();
     expect(report.querySelector(".lucide-wallet-cards")).not.toBeNull();
     expect(report.querySelector(".lucide-file-text")).not.toBeNull();
     expect(within(report).getByText("GH₵495")).toBeInTheDocument();
     expect(within(report).getByText("GH₵125")).toBeInTheDocument();
+    const firstTransactionRow = within(report)
+      .getByRole("link", { name: "#TXN-1" })
+      .closest("[data-transaction-report-row]");
+    expect(firstTransactionRow).not.toBeNull();
+    expect(
+      Array.from(firstTransactionRow!.children).map((column) =>
+        column.getAttribute("data-transaction-report-column"),
+      ),
+    ).toEqual(["item", "staff", "payment", "completed"]);
+    const paymentColumn = firstTransactionRow!.children[2];
+    expect(
+      Array.from(paymentColumn.children).map((part) =>
+        part.getAttribute("data-transaction-report-payment-part"),
+      ),
+    ).toEqual(["amount", "method"]);
+    const paymentMethodIcon = within(
+      paymentColumn as HTMLElement,
+    ).getByLabelText("Cash, Mobile Money");
+    expect(
+      within(paymentColumn as HTMLElement).queryByText("Cash, Mobile Money"),
+    ).not.toBeInTheDocument();
+    const paymentAmount = within(paymentColumn as HTMLElement).getByText(
+      "GH₵495",
+    );
+    expect(paymentAmount).toHaveClass("font-numeric", "leading-6");
+    expect(paymentAmount).not.toHaveClass("font-semibold");
+    expect(
+      within(paymentColumn as HTMLElement).queryByText("·"),
+    ).not.toBeInTheDocument();
+    expect(paymentMethodIcon).not.toHaveAttribute("tabindex");
+    expect(paymentMethodIcon).not.toHaveAttribute("aria-describedby");
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    expect(firstTransactionRow!.children[3]).toHaveClass("md:text-right");
     expect(
       within(report).getByRole("link", { name: "#TXN-1" }),
     ).toHaveAttribute(

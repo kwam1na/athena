@@ -20,7 +20,7 @@ vi.mock("@tanstack/react-router", () => ({
   ),
 }));
 
-import { WalkthroughPage } from "./walkthrough";
+import { WalkthroughPage } from "./-walkthrough-page";
 
 describe("walkthrough route", () => {
   it("uses the public shell without recounting its self-link as a landing CTA", async () => {

@@ -1,8 +1,8 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { SharedDemoEntry } from "./demo";
-import { getSharedDemoEntryPresentation } from "./demoPresentation";
+import { SharedDemoEntry } from "./-shared-demo-entry";
+import { getSharedDemoEntryPresentation } from "./-demo-presentation";
 
 const mocked = vi.hoisted(() => ({
   issueTicket: vi.fn(),

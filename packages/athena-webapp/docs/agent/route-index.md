@@ -6,10 +6,16 @@ This route index enumerates the current files under `src/routes` so agents can o
 
 ## Top-level entries
 
+- [`src/routes/-app-entry-route.tsx`](../../src/routes/-app-entry-route.tsx)
 - [`src/routes/-authed-layout.tsx`](../../src/routes/-authed-layout.tsx)
+- [`src/routes/-authenticated-layout.tsx`](../../src/routes/-authenticated-layout.tsx)
+- [`src/routes/-demo-presentation.ts`](../../src/routes/-demo-presentation.ts)
 - [`src/routes/-index-route-view.tsx`](../../src/routes/-index-route-view.tsx)
+- [`src/routes/-privacy-page.tsx`](../../src/routes/-privacy-page.tsx)
 - [`src/routes/-public-layout.tsx`](../../src/routes/-public-layout.tsx)
 - [`src/routes/-root-page-search.ts`](../../src/routes/-root-page-search.ts)
+- [`src/routes/-shared-demo-entry.tsx`](../../src/routes/-shared-demo-entry.tsx)
+- [`src/routes/-walkthrough-page.tsx`](../../src/routes/-walkthrough-page.tsx)
 - [`src/routes/__root.test.ts`](../../src/routes/__root.test.ts)
 - [`src/routes/__root.tsx`](../../src/routes/__root.tsx)
 - [`src/routes/_authed-shell.test.tsx`](../../src/routes/_authed-shell.test.tsx)
@@ -19,7 +25,6 @@ This route index enumerates the current files under `src/routes` so agents can o
 - [`src/routes/app.tsx`](../../src/routes/app.tsx)
 - [`src/routes/demo.test.tsx`](../../src/routes/demo.test.tsx)
 - [`src/routes/demo.tsx`](../../src/routes/demo.tsx)
-- [`src/routes/demoPresentation.ts`](../../src/routes/demoPresentation.ts)
 - [`src/routes/index.test.tsx`](../../src/routes/index.test.tsx)
 - [`src/routes/index.tsx`](../../src/routes/index.tsx)
 - [`src/routes/join-team.index.tsx`](../../src/routes/join-team.index.tsx)

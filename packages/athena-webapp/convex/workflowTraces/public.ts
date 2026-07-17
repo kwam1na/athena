@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 
-import type { Id } from "../_generated/dataModel";
+import type { Doc, Id } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
 import { query } from "../_generated/server";
 import { normalizeWorkflowTraceLookupValue } from "../../shared/workflowTrace";
@@ -119,6 +119,70 @@ async function assertDefaultWorkflowTraceAccess(
   await requireFullAdminOrManagerElevationTraceAccess(ctx, args);
 }
 
+async function getRegisterSessionTraceIdentity(
+  ctx: QueryCtx,
+  trace: Pick<
+    Doc<"workflowTrace">,
+    | "storeId"
+    | "workflowType"
+    | "primaryLookupType"
+    | "primaryLookupValue"
+    | "primarySubjectType"
+    | "primarySubjectId"
+  >,
+) {
+  if (trace.workflowType !== "register_session") {
+    return null;
+  }
+
+  const registerSessionIds: string[] = [];
+  if (
+    trace.primarySubjectType === "register_session" &&
+    trace.primarySubjectId
+  ) {
+    registerSessionIds.push(trace.primarySubjectId);
+  }
+  if (
+    trace.primaryLookupType === "register_session_id" &&
+    !registerSessionIds.includes(trace.primaryLookupValue)
+  ) {
+    registerSessionIds.push(trace.primaryLookupValue);
+  }
+
+  for (const registerSessionId of registerSessionIds) {
+    const normalizedRegisterSessionId = ctx.db.normalizeId(
+      "registerSession",
+      registerSessionId,
+    );
+    if (!normalizedRegisterSessionId) {
+      continue;
+    }
+
+    const registerSession = await ctx.db.get(
+      "registerSession",
+      normalizedRegisterSessionId,
+    );
+    if (!registerSession || registerSession.storeId !== trace.storeId) {
+      continue;
+    }
+
+    const terminal = registerSession.terminalId
+      ? await ctx.db.get("posTerminal", registerSession.terminalId)
+      : null;
+
+    return {
+      _id: registerSession._id,
+      registerNumber: registerSession.registerNumber ?? null,
+      terminalName:
+        terminal?.storeId === trace.storeId
+          ? terminal.displayName.trim() || null
+          : null,
+    };
+  }
+
+  return null;
+}
+
 export async function getWorkflowTraceViewByIdWithCtx(
   ctx: QueryCtx,
   args: {
@@ -139,7 +203,7 @@ export async function getWorkflowTraceViewByIdWithCtx(
   const trace = await ctx.db
     .query("workflowTrace")
     .withIndex("by_storeId_traceId", (q) =>
-      q.eq("storeId", args.storeId).eq("traceId", args.traceId)
+      q.eq("storeId", args.storeId).eq("traceId", args.traceId),
     )
     .unique();
 
@@ -160,12 +224,22 @@ export async function getWorkflowTraceViewByIdWithCtx(
     });
   }
 
-  const events = await listWorkflowTraceEventsWithCtx(ctx as never, {
-    storeId: args.storeId,
-    traceId: trace.traceId,
-  });
+  const [events, registerSession] = await Promise.all([
+    listWorkflowTraceEventsWithCtx(ctx as never, {
+      storeId: args.storeId,
+      traceId: trace.traceId,
+    }),
+    getRegisterSessionTraceIdentity(ctx, trace),
+  ]);
+  const view = buildWorkflowTraceViewModel({ trace, events });
 
-  return buildWorkflowTraceViewModel({ trace, events });
+  return {
+    ...view,
+    header: {
+      ...view.header,
+      registerSession,
+    },
+  };
 }
 
 export const getWorkflowTraceViewById = query({
@@ -209,7 +283,7 @@ export async function getWorkflowTraceViewByLookupWithCtx(
         .eq("storeId", args.storeId)
         .eq("workflowType", args.workflowType)
         .eq("lookupType", args.lookupType)
-        .eq("lookupValue", normalizeWorkflowTraceLookupValue(args.lookupValue))
+        .eq("lookupValue", normalizeWorkflowTraceLookupValue(args.lookupValue)),
     )
     .unique();
 

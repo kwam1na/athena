@@ -21,7 +21,7 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 
 import { WALKTHROUGH_PRIVACY_NOTICE_STATUS } from "@/lib/marketing/walkthroughPrivacy";
-import { PrivacyPage } from "./privacy";
+import { PrivacyPage } from "./-privacy-page";
 
 describe("walkthrough privacy route", () => {
   it("documents collection, access, retention, provider processing, and subject requests", () => {

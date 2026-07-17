@@ -645,7 +645,7 @@ export type DailyCloseCompletionAttribution = NonNullable<
   DailyCloseSnapshot["completedClose"]
 >;
 
-export function getDailyCloseCompletionAttributionDetail(
+function getDailyCloseCompletionAttributionDetail(
   completedClose?: DailyCloseCompletionAttribution | null,
   carryForwardCount = 0,
 ) {
@@ -2832,8 +2832,14 @@ function TransactionReportAction({
             </SheetDescription>
           </SheetHeader>
 
-          <div className="min-h-0 flex-1 overflow-y-auto bg-background/60 p-layout-lg md:p-layout-xl">
-            <div className="overflow-hidden rounded-lg border border-border bg-surface-raised shadow-surface">
+          <div
+            className="min-h-0 flex-1 overflow-y-auto bg-surface-raised p-layout-lg md:p-layout-xl"
+            data-testid="transaction-report-body"
+          >
+            <div
+              className="overflow-hidden rounded-lg border border-border bg-background/60 shadow-surface"
+              data-testid="transaction-report-table"
+            >
               {items.length === 0 ? (
                 <p className="p-layout-lg text-sm text-muted-foreground">
                   No POS or expense transactions were recorded for this
@@ -2841,12 +2847,14 @@ function TransactionReportAction({
                 </p>
               ) : (
                 <div className="divide-y divide-border">
-                  <div className="hidden grid-cols-[minmax(10rem,1.25fr)_minmax(8rem,0.9fr)_minmax(10rem,1fr)_minmax(10rem,0.9fr)_minmax(7rem,0.7fr)] gap-layout-lg px-layout-xl py-layout-md text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground md:grid">
+                  <div
+                    className="hidden grid-cols-[minmax(10rem,1.25fr)_minmax(8rem,0.9fr)_minmax(12rem,1.25fr)_minmax(10rem,0.9fr)] gap-layout-lg px-layout-xl py-layout-md text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground md:grid"
+                    data-testid="transaction-report-header"
+                  >
                     <span>Item</span>
                     <span>Staff</span>
                     <span>Payment</span>
-                    <span>Completed</span>
-                    <span className="text-right">Amount</span>
+                    <span className="text-right">Completed</span>
                   </div>
                   {items.map((item) => {
                     const payment = getTransactionReportPayment(item);
@@ -2854,7 +2862,7 @@ function TransactionReportAction({
                     return (
                       <div
                         className={cn(
-                          "grid grid-cols-1 gap-layout-sm px-layout-xl py-layout-md text-sm md:grid-cols-[minmax(10rem,1.25fr)_minmax(8rem,0.9fr)_minmax(10rem,1fr)_minmax(10rem,0.9fr)_minmax(7rem,0.7fr)] md:items-center md:gap-layout-lg",
+                          "grid grid-cols-1 gap-layout-sm px-layout-xl py-layout-md text-sm md:grid-cols-[minmax(10rem,1.25fr)_minmax(8rem,0.9fr)_minmax(12rem,1.25fr)_minmax(10rem,0.9fr)] md:items-center md:gap-layout-lg",
                           item.category === "voided_sale"
                             ? "bg-destructive/5"
                             : null,
@@ -2862,30 +2870,50 @@ function TransactionReportAction({
                         data-transaction-report-row=""
                         key={getItemId(item)}
                       >
-                        <div className="min-w-0">
+                        <div
+                          className="min-w-0"
+                          data-transaction-report-column="item"
+                        >
                           <TransactionReportIdentifierLink
                             item={item}
                             orgUrlSlug={orgUrlSlug}
                             storeUrlSlug={storeUrlSlug}
                           />
                         </div>
-                        <div className="min-w-0 text-muted-foreground md:text-foreground">
+                        <div
+                          className="min-w-0 text-muted-foreground md:text-foreground"
+                          data-transaction-report-column="staff"
+                        >
                           {getTransactionReportStaff(item)}
                         </div>
-                        <div className="flex min-w-0 items-center gap-layout-xs leading-6 text-muted-foreground md:text-foreground">
-                          <TransactionReportPaymentIcon payment={payment} />
-                          <span className="min-w-0">{payment}</span>
-                        </div>
-                        <div className="min-w-0 font-numeric leading-6 text-muted-foreground tabular-nums md:text-foreground">
-                          {getTransactionReportTime(item)}
-                        </div>
-                        <div className="font-numeric font-semibold text-foreground tabular-nums md:text-right">
-                          <FinancialValue
-                            canView={canViewFinancialDetails}
-                            label="Transaction amount"
+                        <div
+                          className="flex min-w-0 items-center gap-layout-sm text-muted-foreground md:text-foreground"
+                          data-transaction-report-column="payment"
+                        >
+                          <span
+                            className="font-numeric leading-6 text-foreground tabular-nums"
+                            data-transaction-report-payment-part="amount"
                           >
-                            {getTransactionReportAmount(item, currency)}
-                          </FinancialValue>
+                            <FinancialValue
+                              canView={canViewFinancialDetails}
+                              label="Transaction amount"
+                            >
+                              {getTransactionReportAmount(item, currency)}
+                            </FinancialValue>
+                          </span>
+                          <span
+                            aria-label={payment}
+                            className="inline-flex shrink-0 items-center"
+                            data-transaction-report-payment-part="method"
+                          >
+                            <TransactionReportPaymentIcon payment={payment} />
+                          </span>
+                        </div>
+                        <div
+                          className="min-w-0 font-numeric leading-6 text-muted-foreground tabular-nums md:text-right md:text-foreground"
+                          data-transaction-report-column="completed"
+                        >
+                          {getTransactionReportTime(item)}
                         </div>
                       </div>
                     );

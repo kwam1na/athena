@@ -2586,6 +2586,10 @@ describe("DailyOperationsViewContent", () => {
       "hover:underline",
     );
     expect(registerSessionLink).not.toHaveClass("hover:text-primary");
+    expect(registerSessionLink.closest("article")?.parentElement).toHaveClass(
+      "w-full",
+      "max-w-md",
+    );
     const automationBand = screen
       .getByRole("heading", { name: "Athena automation" })
       .closest("section");
@@ -2600,6 +2604,24 @@ describe("DailyOperationsViewContent", () => {
     ).toHaveAttribute(
       "href",
       "/wigclub/store/osu/cash-controls?o=%252Fwigclub%252Fstore%252Fosu%252Foperations",
+    );
+  });
+
+  it("omits the divider when open register sessions render on their own", () => {
+    renderContent({
+      ...blockedSnapshot,
+      automationStatuses: [],
+      operatingDate: getCurrentLocalOperatingDate(),
+    });
+
+    const registerSessionsPanel = screen
+      .getByRole("heading", { name: "Open register sessions" })
+      .closest("section");
+
+    expect(screen.queryByText("Athena automation")).not.toBeInTheDocument();
+    expect(registerSessionsPanel).not.toHaveClass(
+      "border-t",
+      "pt-layout-md",
     );
   });
 

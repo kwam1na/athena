@@ -3,9 +3,12 @@ import { Circle } from "lucide-react";
 import type { Id } from "~/convex/_generated/dataModel";
 
 import View from "../View";
-import PageHeader, { NavigateBackButton } from "../common/PageHeader";
+import { ComposedPageHeader } from "../common/PageHeader";
 import { FadeIn } from "../common/FadeIn";
-import { Badge } from "../ui/badge";
+import {
+  RegisterSessionIdentity,
+  type RegisterSessionIdentityModel,
+} from "../common/RegisterSessionIdentity";
 import { NotFoundView } from "../states/not-found/NotFoundView";
 import {
   Tooltip,
@@ -21,6 +24,7 @@ export type WorkflowTraceHeaderModel = {
   health: string;
   primaryLookupType: string;
   primaryLookupValue: string;
+  registerSession?: RegisterSessionIdentityModel | null;
   status: string;
   summary?: string;
   title: string;
@@ -49,26 +53,6 @@ function formatTraceLabel(value: string) {
   return capitalizeWords(value.replaceAll("_", " ").replaceAll("-", " "));
 }
 
-function getStatusTone(status: string) {
-  switch (status.toLowerCase()) {
-    case "healthy":
-    case "succeeded":
-    case "success":
-      return "border-emerald-300 bg-emerald-50 text-emerald-700";
-    case "partial":
-    case "warning":
-      return "border-amber-300 bg-amber-50 text-amber-700";
-    case "failed":
-    case "error":
-      return "border-red-300 bg-red-50 text-red-700";
-    case "running":
-    case "started":
-      return "border-sky-300 bg-sky-50 text-sky-700";
-    default:
-      return "border-slate-300 bg-slate-50 text-slate-700";
-  }
-}
-
 function formatTraceTimestamp(timestamp: number) {
   return new Intl.DateTimeFormat(undefined, {
     dateStyle: "medium",
@@ -84,9 +68,7 @@ function RelativeTraceTimestamp({ timestamp }: { timestamp: number }) {
     <TooltipProvider delayDuration={150}>
       <Tooltip>
         <TooltipTrigger asChild>
-          <span className="cursor-default">
-            {relativeTimestamp}
-          </span>
+          <span className="cursor-default">{relativeTimestamp}</span>
         </TooltipTrigger>
         <TooltipContent className="px-2 py-1 text-xs">
           {fullTimestamp}
@@ -102,36 +84,23 @@ export function WorkflowTraceHeader({
   header: WorkflowTraceHeaderModel;
 }) {
   return (
-    <PageHeader>
-      <div className="flex items-center justify-between w-full">
-        <div className="flex items-center gap-2">
-          <NavigateBackButton />
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              {header.summary && <p className="text-sm">{header.summary}</p>}
-              <Badge variant="outline" className={getStatusTone(header.status)}>
-                {formatTraceLabel(header.status)}
-              </Badge>
-              <Badge variant="outline" className={getStatusTone(header.health)}>
-                {formatTraceLabel(header.health)}
-              </Badge>
-            </div>
-          </div>
+    <ComposedPageHeader
+      className="h-auto min-h-16 items-start gap-3 border-b border-border px-4 py-3 sm:items-center sm:border-0 sm:py-4"
+      leadingContent={
+        <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+          {header.registerSession ? (
+            <RegisterSessionIdentity registerSession={header.registerSession} />
+          ) : (
+            <h1 className="min-w-0 truncate text-base font-semibold leading-5 text-foreground sm:text-sm">
+              {header.title}
+            </h1>
+          )}
+          <span className="whitespace-nowrap text-xs text-muted-foreground sm:text-sm">
+            / History
+          </span>
         </div>
-
-        <div className="max-w-xl flex items-center gap-4 text-right">
-          <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-            Primary lookup
-          </p>
-          <p className="text-sm font-medium">
-            {formatTraceLabel(header.primaryLookupType)}
-          </p>
-          <p className="text-sm text-muted-foreground">
-            {header.primaryLookupValue}
-          </p>
-        </div>
-      </div>
-    </PageHeader>
+      }
+    />
   );
 }
 
@@ -206,7 +175,7 @@ export function WorkflowTraceView({
 
   return (
     <View header={<WorkflowTraceHeader header={workflowTrace.header} />}>
-      <FadeIn className="space-y-8">
+      <FadeIn>
         <WorkflowTraceTimeline events={workflowTrace.events} />
       </FadeIn>
     </View>

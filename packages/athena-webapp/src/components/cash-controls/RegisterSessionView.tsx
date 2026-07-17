@@ -72,6 +72,8 @@ import { FadeIn } from "../common/FadeIn";
 import { FinancialValue } from "../common/FinancialValue";
 import { ListPagination } from "../common/ListPagination";
 import { ComposedPageHeader } from "../common/PageHeader";
+import { RegisterSessionIdentity } from "../common/RegisterSessionIdentity";
+import { formatRegisterHeaderName } from "../common/registerSessionIdentityPresentation";
 import { EmptyState } from "../states/empty/empty-state";
 import { NoPermissionView } from "../states/no-permission/NoPermissionView";
 import { ProtectedAdminSignInView } from "../states/signed-out/ProtectedAdminSignInView";
@@ -91,12 +93,7 @@ import {
 import { Textarea } from "../ui/textarea";
 import { WorkflowTraceRouteLink } from "../traces/WorkflowTraceRouteLink";
 import { Accordion, AccordionContent, AccordionItem } from "../ui/accordion";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "../ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "../ui/sheet";
 import { ItemsBreakdown } from "../store-pulse/StorePulseSummaryView";
 import {
   buildPosSyncStatusPresentation,
@@ -277,6 +274,10 @@ type RegisterSessionActivity = {
     source: "activity_read_model" | "pos_sync_evidence";
   };
   isDone: boolean;
+  registerSession: Pick<
+    RegisterSessionDetail,
+    "_id" | "registerNumber" | "terminalName"
+  >;
   page: Array<{
     _id: string;
     actorStaffName: string | null;
@@ -681,18 +682,18 @@ function formatActivityCoverageState(
 
 function getActivityCoverageCopy(activity: RegisterSessionActivity | null) {
   if (!activity) {
-    return "POS activity is loading from cloud evidence.";
+    return "Loading register activity.";
   }
 
   if (activity.summary.coverageState === "unreported") {
-    return "No cloud-reported POS activity for this session. Later local activity from the terminal may still arrive after it reports.";
+    return "No activity reported yet. Recent activity may take a moment to appear.";
   }
 
   if (activity.summary.coverageState === "unknown_terminal_state") {
-    return "This terminal has not reported later local activity to the cloud. The log shows only evidence the cloud has received.";
+    return "Only reported activity appears here. Recent activity may take a moment to appear.";
   }
 
-  return "The cloud has POS sync evidence for this register session. Activity that has not uploaded from the terminal is not visible here yet.";
+  return "Recent register activity may take a moment to appear.";
 }
 
 function getActivityBadgeClass(
@@ -829,8 +830,6 @@ export function RegisterSessionActivitySection({
     currentPage * REGISTER_SESSION_ACTIVITY_PAGE_SIZE,
   );
   const attentionCount = getActivityAttentionCount(activity ?? null);
-  const reportedThroughSequence =
-    activity?.summary.reportedThroughSequence ?? null;
   const lastReportedAt = activity?.summary.lastActivityReportedAt ?? null;
   const latestCloudStatusAt = activity?.summary.latestCloudStatusAt ?? null;
 
@@ -852,7 +851,7 @@ export function RegisterSessionActivitySection({
     <section className="order-2 space-y-layout-md rounded-lg border border-border bg-surface-raised p-layout-md">
       <div className="flex flex-col gap-layout-md lg:flex-row lg:items-start lg:justify-between">
         <div className="space-y-1">
-          <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
+          <p className="max-w-3xl text-xs leading-5 text-muted-foreground/70">
             {getActivityCoverageCopy(activity ?? null)}
           </p>
         </div>
@@ -871,48 +870,35 @@ export function RegisterSessionActivitySection({
         </Badge>
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-md border border-border/70 bg-muted/20 px-3 py-2">
-          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-            Coverage
-          </p>
-          <p className="mt-1 text-sm font-medium text-foreground">
+      <dl
+        className="grid gap-x-8 gap-y-4 px-1 py-1 sm:grid-cols-3"
+        data-testid="activity-coverage-summary"
+      >
+        <div className="min-w-0">
+          <dt className="text-xs text-muted-foreground">Coverage</dt>
+          <dd className="mt-1 text-sm font-medium text-foreground">
             {activity
               ? formatActivityCoverageState(activity.summary.coverageState)
               : "Loading"}
-          </p>
+          </dd>
         </div>
-        <div className="rounded-md border border-border/70 bg-muted/20 px-3 py-2">
-          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-            Reported through
-          </p>
-          <p className="mt-1 font-numeric text-sm tabular-nums text-foreground">
-            {reportedThroughSequence === null
-              ? "Not reported"
-              : `Sequence ${reportedThroughSequence}`}
-          </p>
-        </div>
-        <div className="rounded-md border border-border/70 bg-muted/20 px-3 py-2">
-          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-            Last report
-          </p>
-          <p className="mt-1 text-sm text-foreground">
+        <div className="min-w-0">
+          <dt className="text-xs text-muted-foreground">Last report</dt>
+          <dd className="mt-1 font-numeric text-sm tabular-nums text-foreground">
             {lastReportedAt === null
               ? "Not available"
               : formatTimestamp(lastReportedAt)}
-          </p>
+          </dd>
         </div>
-        <div className="rounded-md border border-border/70 bg-muted/20 px-3 py-2">
-          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-            Latest cloud status
-          </p>
-          <p className="mt-1 text-sm text-foreground">
+        <div className="min-w-0">
+          <dt className="text-xs text-muted-foreground">Last status update</dt>
+          <dd className="mt-1 font-numeric text-sm tabular-nums text-foreground">
             {latestCloudStatusAt === null
               ? "Not available"
               : formatTimestamp(latestCloudStatusAt)}
-          </p>
+          </dd>
         </div>
-      </div>
+      </dl>
 
       <div className="flex flex-wrap gap-2">
         {ACTIVITY_FILTERS.map((option) => {
@@ -955,9 +941,6 @@ export function RegisterSessionActivitySection({
           <Table>
             <TableHeader>
               <TableRow className="border-b border-border hover:bg-transparent">
-                <TableHead className="w-[92px] text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                  Sequence
-                </TableHead>
                 <TableHead className="min-w-[160px] text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
                   Activity
                 </TableHead>
@@ -978,9 +961,6 @@ export function RegisterSessionActivitySection({
                   className="border-b border-border/70"
                   key={getActivityRowKey(row, index)}
                 >
-                  <TableCell className="font-numeric text-sm tabular-nums text-muted-foreground">
-                    {row.sequence === null ? "N/A" : row.sequence}
-                  </TableCell>
                   <TableCell>
                     <div className="space-y-1">
                       <p className="font-medium text-foreground">{row.label}</p>
@@ -1048,9 +1028,17 @@ export function RegisterSessionActivityViewContent({
         <ComposedPageHeader
           className="h-auto min-h-16 items-start gap-3 border-b border-border px-4 py-3 sm:items-center sm:border-0 sm:py-4"
           leadingContent={
-            <h1 className="text-base font-semibold leading-5 text-foreground sm:text-sm">
-              POS activity
-            </h1>
+            <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+              <RegisterSessionIdentity
+                fallbackTitle="POS activity"
+                registerSession={activity?.registerSession}
+              />
+              {activity?.registerSession ? (
+                <span className="whitespace-nowrap text-xs text-muted-foreground sm:text-sm">
+                  / POS activity
+                </span>
+              ) : null}
+            </div>
           }
         />
       }
@@ -1130,25 +1118,6 @@ function getPrimaryPaymentMethod(methods?: string[] | null) {
   }
 
   return normalizedMethods[0] ?? null;
-}
-
-function formatRegisterName(registerNumber?: string | null) {
-  const trimmedRegisterNumber = registerNumber?.trim();
-  return trimmedRegisterNumber ? trimmedRegisterNumber : "Unnamed register";
-}
-
-function formatRegisterHeaderName(registerNumber?: string | null) {
-  const registerName = formatRegisterName(registerNumber);
-
-  if (/^register\b/i.test(registerName)) {
-    return registerName;
-  }
-
-  if (registerName === "Unnamed register") {
-    return "Register detail";
-  }
-
-  return `Register ${registerName}`;
 }
 
 function formatRegisterCloseoutSubjectLabel(registerNumber?: string | null) {
@@ -1298,6 +1267,83 @@ function formatHeaderSyncStatus(syncStatus: PosSyncStatusPresentation) {
       : syncStatus.label;
 
   return label.toLocaleLowerCase();
+}
+
+type RegisterSessionHeaderIdentityProps = {
+  fallbackTitle?: string;
+  registerSession?: Pick<
+    RegisterSessionDetail,
+    "_id" | "localSyncStatus" | "registerNumber" | "status" | "terminalName"
+  > | null;
+  statusLabel?: string;
+  syncStatus?: PosSyncStatusPresentation;
+};
+
+function RegisterSessionHeaderIdentity({
+  fallbackTitle = "Register detail",
+  registerSession,
+  statusLabel,
+  syncStatus: suppliedSyncStatus,
+}: RegisterSessionHeaderIdentityProps) {
+  const syncStatus =
+    suppliedSyncStatus ??
+    buildPosSyncStatusPresentation(registerSession?.localSyncStatus ?? {});
+  const lifecycleLabel = registerSession
+    ? (statusLabel ?? formatStatusLabel(registerSession.status))
+    : "";
+  const isActive = Boolean(
+    registerSession && ["active", "open"].includes(registerSession.status),
+  );
+  const isLive = Boolean(
+    registerSession &&
+    ["active", "open", "closing"].includes(registerSession.status),
+  );
+
+  return (
+    <div className="flex min-w-0 flex-1 flex-col gap-2.5 sm:flex-row sm:items-baseline sm:gap-4">
+      <div className="flex min-w-0 flex-wrap items-baseline gap-x-4 gap-y-0.5">
+        <RegisterSessionIdentity
+          fallbackTitle={fallbackTitle}
+          registerSession={registerSession}
+        />
+        {registerSession ? (
+          <motion.span
+            animate={{ opacity: 1, y: 0 }}
+            className={cn(
+              "inline-flex min-w-0 items-baseline gap-1.5 whitespace-nowrap text-xs font-medium leading-5 sm:text-sm",
+              getSyncStatusTextClass(syncStatus.tone),
+            )}
+            initial={{ opacity: 0, y: 2 }}
+            key={`sync-${registerSession._id}-${syncStatus.status}-${syncStatus.label}`}
+            transition={{ ...HEADER_METADATA_TRANSITION, delay: 0.01 }}
+          >
+            <span
+              aria-hidden="true"
+              className={cn(
+                "size-1.5 shrink-0 translate-y-[-0.08em] rounded-full",
+                getSyncStatusDotClass(syncStatus.tone),
+                isLive && "motion-safe:animate-pulse",
+              )}
+            />
+            <span className="truncate">
+              {formatHeaderSyncStatus(syncStatus)}
+            </span>
+            <span aria-hidden="true" className="text-muted-foreground/50">
+              ·
+            </span>
+            <span
+              className={cn(
+                "truncate",
+                isActive ? "text-success" : "text-muted-foreground",
+              )}
+            >
+              {lifecycleLabel}
+            </span>
+          </motion.span>
+        ) : null}
+      </div>
+    </div>
+  );
 }
 
 function formatReviewItemCount(count: number) {
@@ -3833,9 +3879,6 @@ export function RegisterSessionViewContent({
     hasPendingCashCorrections &&
     !needsCloseoutCorrection &&
     !isReopenedCloseoutCorrection;
-  const headerTitle = registerSession
-    ? formatRegisterHeaderName(registerSession.registerNumber)
-    : "Register detail";
   const syncStatus = buildPosSyncStatusPresentation({
     ...registerSession?.localSyncStatus,
     reconciliationItems:
@@ -3911,8 +3954,6 @@ export function RegisterSessionViewContent({
             };
   const canResolveSyncReview =
     syncStatus.status === "needs_review" && Boolean(onResolveSyncReview);
-  const headerTerminalName = registerSession?.terminalName?.trim();
-
   function requestResolveSyncReview(
     decision: "approved" | "rejected",
     options: ResolveSyncReviewDecisionOptions = {},
@@ -4220,76 +4261,11 @@ export function RegisterSessionViewContent({
         <ComposedPageHeader
           className="h-auto min-h-16 items-start gap-3 border-b border-border px-4 py-3 sm:items-center sm:border-0 sm:py-4"
           leadingContent={
-            <div className="flex min-w-0 flex-1 flex-col gap-2.5 sm:flex-row sm:items-baseline sm:gap-4">
-              <div className="flex min-w-0 flex-wrap items-baseline gap-x-4 gap-y-0.5">
-                <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
-                  <h1 className="min-w-0 truncate text-base font-semibold leading-5 text-foreground sm:text-sm">
-                    {headerTitle}
-                  </h1>
-                  {headerTerminalName ? (
-                    <motion.span
-                      animate={{ opacity: 1, y: 0 }}
-                      className="min-w-0 truncate text-xs text-muted-foreground sm:text-sm"
-                      initial={{ opacity: 0, y: 2 }}
-                      key={`terminal-${registerSession?._id}-${headerTerminalName}`}
-                      transition={{
-                        ...HEADER_METADATA_TRANSITION,
-                      }}
-                    >
-                      / {headerTerminalName}
-                    </motion.span>
-                  ) : null}
-                </div>
-                {registerSession ? (
-                  <motion.span
-                    animate={{ opacity: 1, y: 0 }}
-                    className={cn(
-                      "inline-flex min-w-0 items-baseline gap-1.5 whitespace-nowrap text-xs font-medium leading-5 sm:text-sm",
-                      getSyncStatusTextClass(syncStatus.tone),
-                    )}
-                    initial={{ opacity: 0, y: 2 }}
-                    key={`sync-${registerSession._id}-${syncStatus.status}-${syncStatus.label}`}
-                    transition={{
-                      ...HEADER_METADATA_TRANSITION,
-                      delay: 0.01,
-                    }}
-                  >
-                    <span
-                      aria-hidden="true"
-                      className={cn(
-                        "size-1.5 shrink-0 translate-y-[-0.08em] rounded-full",
-                        getSyncStatusDotClass(syncStatus.tone),
-                      )}
-                    />
-                    <span className="truncate">
-                      {formatHeaderSyncStatus(syncStatus)}
-                    </span>
-                  </motion.span>
-                ) : null}
-              </div>
-              {registerSession ? (
-                <div className="flex min-w-0 flex-wrap items-baseline gap-2.5">
-                  <motion.div
-                    animate={{ opacity: 1, y: 0 }}
-                    className="inline-flex items-baseline leading-5"
-                    initial={{ opacity: 0, y: 2 }}
-                    key={`register-status-${registerSession._id}-${registerStatusLabel}`}
-                    transition={{
-                      ...HEADER_METADATA_TRANSITION,
-                      delay: 0.02,
-                    }}
-                  >
-                    <Badge
-                      className="border-border bg-muted text-muted-foreground"
-                      size="sm"
-                      variant="outline"
-                    >
-                      {registerStatusLabel}
-                    </Badge>
-                  </motion.div>
-                </div>
-              ) : null}
-            </div>
+            <RegisterSessionHeaderIdentity
+              registerSession={registerSession}
+              statusLabel={registerStatusLabel}
+              syncStatus={syncStatus}
+            />
           }
           trailingContent={
             <div className="flex shrink-0 flex-wrap items-start justify-end gap-2">
@@ -4328,8 +4304,8 @@ export function RegisterSessionViewContent({
                     className="inline-flex items-center gap-1.5"
                     traceId={registerSession.workflowTraceId}
                   >
-                    <span aria-hidden="true">Trace</span>
-                    <span className="sr-only">View trace</span>
+                    <span aria-hidden="true">History</span>
+                    <span className="sr-only">View register history</span>
                     <ArrowUpRight className="h-3.5 w-3.5" />
                   </WorkflowTraceRouteLink>
                 </Button>
@@ -4751,12 +4727,16 @@ export function RegisterSessionViewContent({
                           <h2 className="font-display text-xl font-semibold text-foreground">
                             {isRegisterCloseoutSyncReview
                               ? "Closeout review pending"
-                              : "Count and close drawer"}
+                              : registerSession?.status === "closed"
+                                ? "Drawer closed"
+                                : "Count and close drawer"}
                           </h2>
                           <p className="text-sm text-muted-foreground">
                             {isRegisterCloseoutSyncReview
                               ? "Synced count is waiting for review."
-                              : "Submit the cash count, then resolve any variance approval before closing."}
+                              : registerSession?.status === "closed"
+                                ? "The final count is saved and this drawer is no longer accepting sales."
+                                : "Submit the cash count, then resolve any variance approval before closing."}
                           </p>
                         </div>
 
@@ -4802,15 +4782,13 @@ export function RegisterSessionViewContent({
                           </div>
                         ) : registerSession?.status === "closed" ||
                           registerSession?.status === "closeout_rejected" ? (
-                          <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-4">
-                            <div className="flex items-center justify-between gap-3">
-                              <p className="text-sm font-medium text-foreground">
-                                {registerSession.status === "closeout_rejected"
-                                  ? "Closeout rejected"
-                                  : "Closeout complete"}
-                              </p>
-                              {registerSession.status ===
-                              "closeout_rejected" ? (
+                          <div className="space-y-4 border-t border-border/70 pt-4">
+                            {registerSession.status ===
+                            "closeout_rejected" ? (
+                              <div className="flex items-center justify-between gap-3">
+                                <p className="text-sm font-medium text-foreground">
+                                  Closeout rejected
+                                </p>
                                 <Badge
                                   className="border-border bg-muted text-muted-foreground"
                                   size="sm"
@@ -4818,8 +4796,8 @@ export function RegisterSessionViewContent({
                                 >
                                   Rejected
                                 </Badge>
-                              ) : null}
-                            </div>
+                              </div>
+                            ) : null}
                             {canViewFinancialDetails ? (
                               <dl
                                 className={cn(
@@ -4885,21 +4863,22 @@ export function RegisterSessionViewContent({
                                 {pendingCashVoidText}
                               </p>
                             ) : null}
-                            <div className="space-y-3 border-t border-border/70 pt-3">
-                              <p className="text-sm leading-relaxed text-muted-foreground">
+                            <div className="space-y-2 border-t border-border/70 pt-3">
+                              <p className="text-xs leading-5 text-muted-foreground">
                                 {registerSession.status === "closeout_rejected"
                                   ? "Manager approval is required to reopen this rejected closeout before a corrected count can be submitted."
                                   : "Reopen the closeout to submit a corrected count. The saved closeout stays in the drawer history."}
                               </p>
                               <LoadingButton
-                                className="w-full justify-center"
+                                className="-ml-3 w-fit justify-start text-muted-foreground hover:text-foreground"
                                 disabled={pendingCloseoutAction === "reopen"}
                                 isLoading={pendingCloseoutAction === "reopen"}
                                 onClick={() =>
                                   void handleReopenClosedCloseout()
                                 }
+                                size="sm"
                                 type="button"
-                                variant="outline"
+                                variant="ghost"
                               >
                                 <RotateCcw className="h-3.5 w-3.5" />
                                 Reopen closeout

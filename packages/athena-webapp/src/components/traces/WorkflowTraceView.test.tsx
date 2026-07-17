@@ -18,8 +18,13 @@ vi.mock("@/hooks/useGetTerminal", () => ({
 }));
 
 vi.mock("../common/PageHeader", () => ({
+  ComposedPageHeader: ({
+    leadingContent,
+  }: {
+    leadingContent: React.ReactNode;
+  }) => <div data-testid="workflow-trace-page-header">{leadingContent}</div>,
   default: ({ children }: { children: React.ReactNode }) => (
-    <div>{children}</div>
+    <div data-testid="workflow-trace-page-header">{children}</div>
   ),
   NavigateBackButton: () => null,
 }));
@@ -36,7 +41,7 @@ describe("WorkflowTraceView", () => {
     vi.restoreAllMocks();
   });
 
-  it("renders the trace title, health and status badges, and ordered timeline messages", () => {
+  it("renders a lightweight register trace header, quiet diagnostics, and ordered timeline messages", () => {
     mockedHooks.useQuery.mockReturnValue({
       events: [
         {
@@ -63,6 +68,57 @@ describe("WorkflowTraceView", () => {
         },
       ],
       header: {
+        health: "healthy",
+        primaryLookupType: "register_session_id",
+        primaryLookupValue: "register-session-42",
+        registerSession: {
+          _id: "register-session-42",
+          registerNumber: "07",
+          terminalName: "Olorin",
+        },
+        status: "blocked",
+        summary: "Trace for register session 07",
+        title: "Register session 07",
+        traceId: "register_session:register-session-42",
+        workflowType: "register_session",
+      },
+    });
+
+    render(
+      <WorkflowTraceView
+        storeId={"store-1" as Id<"store">}
+        traceId="register_session:register-session-42"
+      />,
+    );
+
+    expect(mockedHooks.useQuery).toHaveBeenCalledWith(expect.anything(), {
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      traceId: "register_session:register-session-42",
+    });
+    expect(screen.getByTestId("workflow-trace-page-header")).toHaveTextContent(
+      /Register 07\s*\/\s*Olorin\s*\/\s*History/,
+    );
+    expect(
+      screen.getByTestId("workflow-trace-page-header"),
+    ).not.toHaveTextContent(
+      /Blocked|Healthy|Primary lookup|Register Session Id/,
+    );
+    expect(
+      screen.queryByRole("region", { name: "History details" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("State: Blocked")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Health: Healthy")).not.toBeInTheDocument();
+    const listItems = screen.getAllByRole("listitem");
+    expect(listItems).toHaveLength(2);
+    expect(listItems[0]).toHaveTextContent("Workflow started");
+    expect(listItems[1]).toHaveTextContent("Repair order persisted");
+  });
+
+  it("renders a generic trace title with the history suffix", () => {
+    mockedHooks.useQuery.mockReturnValue({
+      events: [],
+      header: {
         health: "partial",
         primaryLookupType: "reference_number",
         primaryLookupValue: "JOB-42",
@@ -81,17 +137,9 @@ describe("WorkflowTraceView", () => {
       />,
     );
 
-    expect(mockedHooks.useQuery).toHaveBeenCalledWith(expect.anything(), {
-      storeId: "store-1",
-      terminalId: "terminal-1",
-      traceId: "repair_order:job-42",
-    });
-    expect(screen.getAllByText("Succeeded").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Partial").length).toBeGreaterThan(0);
-    const listItems = screen.getAllByRole("listitem");
-    expect(listItems).toHaveLength(2);
-    expect(listItems[0]).toHaveTextContent("Workflow started");
-    expect(listItems[1]).toHaveTextContent("Repair order persisted");
+    expect(screen.getByTestId("workflow-trace-page-header")).toHaveTextContent(
+      /Repair order JOB-42\s*\/\s*History/,
+    );
   });
 });
 

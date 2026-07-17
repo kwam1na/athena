@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { AppEntryDispatcher, AppEntryRoute } from "./app";
+import { AppEntryDispatcher, AppEntryRoute } from "./-app-entry-route";
 
 const mocked = vi.hoisted(() => ({
   navigate: vi.fn(),
