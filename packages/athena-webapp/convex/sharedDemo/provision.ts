@@ -392,6 +392,9 @@ async function reconcileSharedDemoCatalogWithCtx(
     );
   }
 
+  // Replace the catalog wholesale rather than patching rows in place: SKU
+  // inventory fields are owned by the reporting pipeline, and the pickup
+  // order is repointed at the fresh identities right after this runs.
   const products = await ctx.db
     .query("product")
     .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
@@ -400,15 +403,11 @@ async function reconcileSharedDemoCatalogWithCtx(
     .query("productSku")
     .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
     .take(500);
-  const storySlugs = new Set(SHARED_DEMO_PRODUCTS.map((entry) => entry.slug));
-  const storySkus = new Set(SHARED_DEMO_PRODUCTS.map((entry) => entry.sku));
   for (const row of productSkus) {
-    if (row.sku && storySkus.has(row.sku)) continue;
     await removeProductSkuSearchProjection(ctx, row._id);
     await ctx.db.delete("productSku", row._id);
   }
   for (const row of products) {
-    if (storySlugs.has(row.slug)) continue;
     await ctx.db.delete("product", row._id);
   }
 
@@ -416,8 +415,7 @@ async function reconcileSharedDemoCatalogWithCtx(
   for (const storyProduct of SHARED_DEMO_PRODUCTS) {
     const subcategoryId = subcategoryIds.get(storyProduct.subcategoryKey);
     if (!subcategoryId) throw new Error("Demo subcategory is missing.");
-    const existingProduct = products.find((row) => row.slug === storyProduct.slug);
-    const productDocument = {
+    const productId = await ctx.db.insert("product", {
       availability: "live" as const,
       categoryId: category._id,
       createdByUserId: args.ownerUserId,
@@ -431,12 +429,8 @@ async function reconcileSharedDemoCatalogWithCtx(
       slug: storyProduct.slug,
       storeId: args.storeId,
       subcategoryId,
-    };
-    const productId = existingProduct
-      ? (await ctx.db.patch("product", existingProduct._id, productDocument), existingProduct._id)
-      : await ctx.db.insert("product", productDocument);
-    const existingSku = productSkus.find((row) => row.sku === storyProduct.sku);
-    const skuDocument = {
+    });
+    const productSkuId = await ctx.db.insert("productSku", {
       images: [] as string[],
       inventoryCount: storyProduct.inventoryCount,
       isVisible: true,
@@ -448,10 +442,7 @@ async function reconcileSharedDemoCatalogWithCtx(
       sku: storyProduct.sku,
       storeId: args.storeId,
       unitCost: storyProduct.unitCost,
-    };
-    const productSkuId = existingSku
-      ? (await ctx.db.patch("productSku", existingSku._id, skuDocument), existingSku._id)
-      : await ctx.db.insert("productSku", skuDocument);
+    });
     await upsertProductSkuSearchProjection(ctx, productSkuId);
     identityBySku.set(storyProduct.sku, { productId, productSkuId });
   }
