@@ -14,7 +14,7 @@ applies_when:
   - "A cash-control summary needs sales or item context without changing financial authority"
 related_components: ["convex", "cash-controls", "daily-operations", "pos-transactions"]
 tags: [register-session, cash-controls, daily-operations, transactions, operator-context]
-delivery_diff_fingerprint: 853fb788d93e866c6e53476670527182214b6dd23c708e5bcada66044fe5eb5f
+delivery_diff_fingerprint: e584836e93209d09a8baf2b3e29928af5d584a68f87ce39abe6cf261e1dd8b7b
 ---
 
 # Register session context across operations surfaces
