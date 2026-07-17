@@ -16,16 +16,12 @@ import { emitLandingFunnelEvent } from "@/lib/marketing/landingFunnelClient";
 import { DEMO_PATH, WALKTHROUGH_PATH } from "@/lib/navigation/appEntryRoutes";
 import { PublicLayout } from "./-public-layout";
 
-function DemoCtaButton({ subdued = false }: { subdued?: boolean }) {
+function DemoCtaButton() {
   return (
     <Link
       to={DEMO_PATH}
       onClick={() => emitLandingFunnelEvent("demo_cta")}
-      className={`inline-flex min-h-12 items-center justify-center rounded-md px-layout-lg text-sm font-semibold transition-[background-color,transform] duration-standard ease-standard active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
-        subdued
-          ? "border border-border bg-background text-foreground hover:bg-surface"
-          : "bg-signal text-signal-foreground hover:bg-signal/90"
-      }`}
+      className="inline-flex min-h-12 items-center justify-center rounded-md bg-signal px-layout-lg text-sm font-semibold text-signal-foreground transition-[background-color,transform] duration-standard ease-standard hover:bg-signal/90 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
     >
       Try the demo
       <ArrowRight className="ml-layout-sm h-4 w-4" aria-hidden="true" />
@@ -33,42 +29,72 @@ function DemoCtaButton({ subdued = false }: { subdued?: boolean }) {
   );
 }
 
-function StoryAct({
+function ActCopy({
   time,
   workspace,
   title,
   copy,
   automation,
-  children,
-  reversed = false,
+  className,
 }: {
   automation?: string;
-  children: ReactNode;
+  className?: string;
   copy: string;
-  reversed?: boolean;
   time: string;
   title: string;
   workspace: string;
 }) {
   return (
-    <section className="border-t border-border/70 px-layout-md py-layout-3xl sm:px-layout-xl">
+    <div className={className ?? "max-w-xl"}>
+      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-signal">
+        <span className="font-numeric">{time}</span>
+        <span aria-hidden="true"> · </span>
+        {workspace}
+      </p>
+      <h2 className="mt-layout-sm font-display text-4xl font-light leading-[1.02] text-foreground sm:text-5xl">
+        {title}
+      </h2>
+      <p className="mt-layout-md text-lg leading-8 text-muted-foreground">{copy}</p>
+      {automation ? <AutomationBeat>{automation}</AutomationBeat> : null}
+    </div>
+  );
+}
+
+// Each act owns a full viewport: compact scenes sit beside their copy, dense
+// workspace exhibits get the full width beneath it.
+function StoryAct({
+  layout = "split",
+  reversed = false,
+  children,
+  ...copyProps
+}: {
+  automation?: string;
+  children: ReactNode;
+  copy: string;
+  layout?: "split" | "stacked";
+  reversed?: boolean;
+  time: string;
+  title: string;
+  workspace: string;
+}) {
+  if (layout === "stacked") {
+    return (
+      <section className="flex min-h-svh items-center border-t border-border/70 px-layout-md py-layout-2xl sm:px-layout-xl">
+        <div className="mx-auto w-full max-w-6xl space-y-layout-xl">
+          <ActCopy {...copyProps} className="max-w-2xl" />
+          {children}
+        </div>
+      </section>
+    );
+  }
+  return (
+    <section className="flex min-h-svh items-center border-t border-border/70 px-layout-md py-layout-2xl sm:px-layout-xl">
       <div
         className={`mx-auto grid w-full max-w-7xl items-center gap-layout-2xl lg:grid-cols-2 ${
           reversed ? "lg:[&>*:first-child]:order-2" : ""
         }`}
       >
-        <div className="max-w-xl">
-          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-signal">
-            <span className="font-numeric">{time}</span>
-            <span aria-hidden="true"> · </span>
-            {workspace}
-          </p>
-          <h2 className="mt-layout-sm font-display text-4xl font-light leading-[1.02] text-foreground sm:text-5xl">
-            {title}
-          </h2>
-          <p className="mt-layout-md text-lg leading-8 text-muted-foreground">{copy}</p>
-          {automation ? <AutomationBeat>{automation}</AutomationBeat> : null}
-        </div>
+        <ActCopy {...copyProps} />
         {children}
       </div>
     </section>
@@ -84,7 +110,7 @@ export function Index() {
   return (
     <PublicLayout trackFunnelCtas>
       <main>
-        <section className="relative overflow-hidden bg-background px-layout-md py-layout-3xl sm:px-layout-xl lg:py-[6.5rem]">
+        <section className="relative flex min-h-[calc(100svh-4rem)] items-center overflow-hidden bg-background px-layout-md py-layout-2xl sm:px-layout-xl">
           <div
             className="absolute inset-0 bg-[radial-gradient(circle_at_82%_12%,hsl(var(--signal)/0.08),transparent_38%)]"
             aria-hidden="true"
@@ -134,12 +160,12 @@ export function Index() {
         </StoryAct>
 
         <StoryAct
+          layout="stacked"
           time="11:20 AM"
           workspace="Daily Operations"
           title="One place to stand while the day moves."
           copy="Sales, registers, and anything that needs attention share one view — the place you glance between everything else you're doing."
           automation="Athena watches the day and routes each signal to the workflow that owns the next action."
-          reversed
         >
           <DailyOperationsScene />
         </StoryAct>
@@ -150,12 +176,13 @@ export function Index() {
           title="Sales don't wait for the internet."
           copy="Every sale is recorded on the register first — instantly, on the device. When the connection drops, the counter keeps moving; the sale is safe locally and syncs on its own when the network returns."
           automation="Nothing to export, nothing to re-enter, nothing to remember."
+          reversed
         >
           <PosSaleScene />
         </StoryAct>
 
-        <section className="border-t border-border/70 bg-surface px-layout-md py-layout-3xl sm:px-layout-xl">
-          <div className="mx-auto w-full max-w-5xl">
+        <section className="flex min-h-svh items-center border-t border-border/70 bg-surface px-layout-md py-layout-2xl sm:px-layout-xl">
+          <div className="mx-auto w-full max-w-6xl">
             <div className="max-w-2xl">
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-signal">
                 <span className="font-numeric">3:14 PM</span>
@@ -179,6 +206,7 @@ export function Index() {
         </section>
 
         <StoryAct
+          layout="stacked"
           time="5:40 PM"
           workspace="Cash Controls"
           title="Know what's in every drawer."
@@ -189,17 +217,17 @@ export function Index() {
         </StoryAct>
 
         <StoryAct
+          layout="stacked"
           time="8:03 PM"
           workspace="EOD Review"
           title="Close the day with a clear conscience."
           copy="The close runs under store policy: totals settled, the drawer accounted for, and the one thing that needs judgment flagged for you. Anything unfinished carries forward — tomorrow's opening is already prepared."
           automation="Athena prepared the close; you settle what needs judgment."
-          reversed
         >
           <EodReviewScene />
         </StoryAct>
 
-        <section className="border-t border-border bg-surface px-layout-md py-layout-3xl sm:px-layout-xl">
+        <section className="flex min-h-svh items-center border-t border-border bg-surface px-layout-md py-layout-2xl sm:px-layout-xl">
           <div className="mx-auto grid w-full max-w-7xl items-center gap-layout-2xl lg:grid-cols-2">
             <div className="max-w-xl">
               <p className="flex items-center gap-layout-sm text-xs font-semibold uppercase tracking-[0.22em] text-signal">
@@ -219,8 +247,8 @@ export function Index() {
           </div>
         </section>
 
-        <section className="border-t border-border bg-background px-layout-md py-layout-3xl sm:px-layout-xl">
-          <div className="mx-auto flex max-w-7xl flex-col gap-layout-xl lg:flex-row lg:items-end lg:justify-between">
+        <section className="flex min-h-svh items-center border-t border-border bg-background px-layout-md py-layout-2xl sm:px-layout-xl">
+          <div className="mx-auto flex w-full max-w-7xl flex-col gap-layout-xl lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-3xl">
               <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
                 Open the store you just read about

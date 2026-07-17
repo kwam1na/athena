@@ -1,106 +1,53 @@
 import { useCallback } from "react";
 import { createTimeline, stagger } from "animejs";
-import { Check, Landmark } from "lucide-react";
 
-import { demoStaff, demoStore, drawer, formatDemoMoney } from "./demoDay";
-import { WorkspaceFrame } from "./SceneChrome";
-import { animateAmount, useSceneAnimation } from "./useSceneAnimation";
+import { CashControlsDashboardContent } from "@/components/cash-controls/CashControlsDashboard";
 
-// Closeout at the drawer: counted meets expected, the small variance is
-// surfaced and approved, and the deposit leaves the drawer.
+import { demoStore } from "./demoDay";
+import { cashDashboardSnapshot } from "./demoDayFixtures";
+import { WorkspaceExhibit } from "./SceneChrome";
+import { useSceneAnimation } from "./useSceneAnimation";
+
+// The real Cash Controls dashboard at closeout: the product's
+// CashControlsDashboardContent rendering the story day's closed register
+// session, its approved variance, and the recorded deposit.
 export function CashControlsScene() {
   const rootRef = useSceneAnimation(
     useCallback((root: HTMLElement) => {
-      const timeline = createTimeline({
-        defaults: { duration: 450, ease: "outQuad" },
-      });
-      timeline.add(root.querySelectorAll("[data-cash-metric]"), {
+      createTimeline({
+        defaults: { duration: 550, ease: "outQuad" },
+      }).add(root.querySelectorAll("[data-cash-embed] > div > *"), {
         delay: stagger(160),
         opacity: { from: 0 },
-        translateY: { from: 10 },
-      });
-      animateAmount(root.querySelector("[data-cash-expected]"), {
-        delay: 150,
-        format: (value) => formatDemoMoney(Math.round(value / 100) * 100),
-        to: drawer.expectedCash,
-      });
-      animateAmount(root.querySelector("[data-cash-counted]"), {
-        delay: 300,
-        format: (value) => formatDemoMoney(Math.round(value / 100) * 100),
-        to: drawer.countedCash,
-      });
-      timeline.add(
-        root.querySelectorAll("[data-cash-variance]"),
-        { ease: "outBack", opacity: { from: 0 }, scale: { from: 0.75 } },
-        "+=200",
-      );
-      timeline.add(root.querySelectorAll("[data-cash-approved]"), {
-        opacity: { from: 0 },
-        translateX: { from: -10 },
-      });
-      timeline.add(root.querySelectorAll("[data-cash-deposit]"), {
-        opacity: { from: 0 },
-        translateX: { from: -10 },
+        translateY: { from: 14 },
       });
     }, []),
   );
 
-  const varianceLabel = `Short ${formatDemoMoney(Math.abs(drawer.variance))}`;
-
+  // The dashboard brings its own workspace header, so the frame here is
+  // chromeless — just the card, a timestamp, and the exhibit.
   return (
     <div ref={rootRef}>
-      <WorkspaceFrame
-        ariaLabel="A register session closing out in Cash Controls."
-        eyebrow="Cash Ops"
-        title="Register sessions"
-        meta={<span className="font-numeric text-xs text-muted-foreground">5:40 PM</span>}
+      <figure
+        aria-label="The Cash Controls dashboard after closeout: the closed register session with its approved five-cedi shortage and the recorded end-of-day deposit."
+        className="relative mx-auto w-full max-w-4xl overflow-hidden rounded-xl border border-border bg-background p-layout-md text-left text-foreground shadow-overlay sm:p-layout-lg"
       >
-        <p className="text-sm text-muted-foreground">
-          Register {demoStore.registerNumber} · opened 8:47 AM · {demoStaff.cashierFirstName}
-        </p>
-
-        <div className="mt-layout-md grid grid-cols-2 gap-layout-sm">
-          <div data-cash-metric className="rounded-md bg-surface p-layout-sm">
-            <p className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-              Expected
-            </p>
-            <p data-cash-expected className="mt-1 font-numeric text-xl text-foreground">
-              {formatDemoMoney(drawer.expectedCash)}
-            </p>
+        <span className="absolute right-layout-md top-layout-md font-numeric text-xs text-muted-foreground">
+          5:40 PM
+        </span>
+        <WorkspaceExhibit>
+          <div data-cash-embed>
+            <CashControlsDashboardContent
+              currency={demoStore.currency}
+              dashboardSnapshot={cashDashboardSnapshot}
+              hasFinancialDetailsAccess
+              isLoading={false}
+              orgUrlSlug="demo"
+              storeUrlSlug="central"
+            />
           </div>
-          <div data-cash-metric className="rounded-md bg-surface p-layout-sm">
-            <p className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-              Counted
-            </p>
-            <p className="mt-1 flex items-center gap-layout-sm">
-              <span data-cash-counted className="font-numeric text-xl text-foreground">
-                {formatDemoMoney(drawer.countedCash)}
-              </span>
-              <span
-                data-cash-variance
-                className="rounded-full bg-warning/10 px-layout-sm py-layout-xs text-[11px] font-medium text-warning-foreground"
-              >
-                {varianceLabel}
-              </span>
-            </p>
-          </div>
-        </div>
-
-        <ul className="mt-layout-md space-y-layout-sm text-sm">
-          <li data-cash-approved className="flex items-center gap-layout-sm text-foreground">
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-success/10 text-success">
-              <Check className="h-3.5 w-3.5" aria-hidden="true" />
-            </span>
-            Variance reviewed and approved · {demoStaff.managerFirstName}
-          </li>
-          <li data-cash-deposit className="flex items-center gap-layout-sm text-foreground">
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-signal/10 text-signal">
-              <Landmark className="h-3.5 w-3.5" aria-hidden="true" />
-            </span>
-            Deposit recorded · {formatDemoMoney(drawer.depositAmount)}
-          </li>
-        </ul>
-      </WorkspaceFrame>
+        </WorkspaceExhibit>
+      </figure>
     </div>
   );
 }

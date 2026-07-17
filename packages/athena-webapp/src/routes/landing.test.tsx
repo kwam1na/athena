@@ -13,6 +13,43 @@ vi.mock("@/lib/marketing/landingFunnelClient", () => ({
   emitLandingFunnelEvent: mocked.emitLandingFunnelEvent,
 }));
 
+// The POS cart exhibit resolves the store currency through this hook; on the
+// public landing page there is no active store and it falls back to GHS.
+vi.mock("@/hooks/useGetActiveStore", () => ({
+  default: () => ({ activeStore: null, isLoadingStores: false }),
+  useGetStores: () => undefined,
+}));
+
+// The embedded read-only report renders a back button whose hook walks the
+// auth/org chain; the landing page never navigates back from an exhibit.
+vi.mock("@/hooks/use-navigate-back", () => ({
+  useNavigateBack: () => () => undefined,
+}));
+
+// jsdom lacks ResizeObserver; the embedded store-pulse chart needs it.
+class ResizeObserverStub {
+  disconnect() {}
+  observe() {}
+  unobserve() {}
+}
+window.ResizeObserver = window.ResizeObserver ?? (ResizeObserverStub as unknown as typeof ResizeObserver);
+
+// jsdom has no matchMedia; the embedded workspace components use it for
+// responsive variants.
+Object.defineProperty(window, "matchMedia", {
+  value: (query: string) => ({
+    addEventListener: () => undefined,
+    addListener: () => undefined,
+    dispatchEvent: () => false,
+    matches: false,
+    media: query,
+    onchange: null,
+    removeEventListener: () => undefined,
+    removeListener: () => undefined,
+  }),
+  writable: true,
+});
+
 vi.mock("@tanstack/react-router", () => ({
   Link: ({ children, onClick, to, ...props }: {
     children: ReactNode;
@@ -26,6 +63,11 @@ vi.mock("@tanstack/react-router", () => ({
       {children}
     </a>
   ),
+  useLocation: () => ({ pathname: "/landing" }),
+  useNavigate: () => () => undefined,
+  useParams: () => ({}),
+  useRouter: () => ({ history: { back: () => undefined } }),
+  useSearch: () => ({}),
 }));
 
 describe("landing route", () => {
@@ -80,15 +122,19 @@ describe("landing route", () => {
 
   it("renders the finished scene compositions without animation infrastructure", () => {
     // jsdom has no IntersectionObserver, matching the reduced-motion path:
-    // scenes must show their final frames statically.
+    // scenes must show their final frames statically — including the real
+    // workspace components rendered from fixture data.
     render(<Index />);
 
     expect(screen.getByText(/opening handoff is complete\. the store day is ready to run\./i)).toBeInTheDocument();
     expect(screen.getByText(/sale completed · receipt #0041 · cash/i)).toBeInTheDocument();
     expect(screen.getByText(/offline — sales continue/i)).toBeInTheDocument();
     expect(screen.getAllByText(/pending sync/i).length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText(/expected in drawer/i)).toBeInTheDocument();
-    expect(screen.getByText(/athena completed eod review under store policy\./i)).toBeInTheDocument();
-    expect(screen.getByText(/carried to tomorrow's opening/i)).toBeInTheDocument();
+    // Real StorePulseSummaryView exhibit (Daily Operations).
+    expect(screen.getByText(/top items so far/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/how customers paid/i).length).toBeGreaterThanOrEqual(1);
+    // Real RegisterSessionActivitySection exhibit (sync bridge).
+    expect(screen.getAllByText(/expected in drawer/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText(/carried to tomorrow's opening handoff/i)).toBeInTheDocument();
   });
 });
