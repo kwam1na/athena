@@ -1,5 +1,19 @@
 import "@testing-library/jest-dom";
+import { configure } from "@testing-library/react";
 import { vi, beforeEach } from "vitest";
+
+// Under the heavy parallel CI coverage run, the async effects behind
+// `waitFor` / `findBy*` assertions can take longer than Testing Library's
+// 1000ms default to settle, producing intermittent timeouts even though the
+// assertion itself would pass (e.g. the POS local-sync runtime seeding a
+// drawer through a chain of awaited store reads). Give async utilities more
+// headroom in CI only; local runs keep the short default for fast feedback.
+// `waitFor` still resolves as soon as its callback passes, so this does not
+// slow the happy path — it only raises the ceiling before a timeout is
+// declared.
+if (process.env.CI) {
+  configure({ asyncUtilTimeout: 5000 });
+}
 
 // Mock toast notifications
 vi.mock("react-hot-toast", () => ({
