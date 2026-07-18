@@ -27,7 +27,8 @@ Core token map:
 | Working surface       | `--surface`                          | card and panel plane                   |
 | Raised surface        | `--surface-raised`                   | dialogs, inspectors, important panels  |
 | Shell                 | `--shell` / `--shell-foreground`     | deep navigation and structural framing |
-| Primary action signal | `--signal` / `--signal-foreground`   | one action accent                      |
+| Primary accent        | `--primary` / `--primary-foreground` | emphasized actions and interactive accents |
+| Primary tonal surface | `--primary-soft` / `--primary-border` | selected and contextual surfaces       |
 | Strong neutral action | `--action-neutral-strong` / `--action-neutral-strong-foreground` | high-emphasis neutral commands |
 | Success               | `--success` / `--success-foreground` | completed or healthy state             |
 | Warning               | `--warning` / `--warning-foreground` | pending risk or degraded state         |
@@ -38,7 +39,7 @@ Core token map:
 | Overlay shadow        | `--shadow-overlay`                   | stronger modal or shell elevation      |
 
 Tailwind aliases are already wired for these roles: `bg-background`, `text-foreground`,
-`bg-surface`, `bg-surface-raised`, `bg-shell`, `bg-signal`, `text-muted-foreground`,
+`bg-surface`, `bg-surface-raised`, `bg-shell`, `bg-primary`, `text-muted-foreground`,
 `border-border`, `shadow-surface`, and `shadow-overlay`.
 
 ## Radius
@@ -62,11 +63,13 @@ unless the chosen value is promoted to `--radius` in `src/index.css`.
 ## Color
 
 Use semantic color roles, not raw hues. Athena should not become a one-note palette: the base
-canvas is neutral, the shell is dark, and `--signal` is the primary warm accent.
+canvas is neutral, the shell is dark, and `--primary` is the app's blue accent.
 
 Rules:
 
-- Keep primary actions on `bg-signal text-signal-foreground`.
+- Keep primary actions on `bg-primary text-primary-foreground`.
+- Use `bg-primary-soft`, `border-primary-border`, and `text-primary` for selected
+  or contextual surfaces that need a quieter treatment of the same accent.
 - Use `bg-surface` and `bg-surface-raised` for cards, panels, and inspectors.
 - Use `text-muted-foreground` for helper copy and secondary metadata.
 - Use success, warning, and danger tokens only for state, never decoration.

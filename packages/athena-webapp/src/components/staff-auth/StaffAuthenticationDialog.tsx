@@ -100,7 +100,7 @@ export function StaffAuthenticationDialog({
   open,
   presentation = "dialog",
   returnTriggerLabel,
-  submitButtonVariant = "workflow",
+  submitButtonVariant = "default",
 }: StaffAuthenticationDialogProps) {
   const sharedDemoContext = useSharedDemoContext();
   const [mode, setMode] = useState<StaffAuthMode>("authenticate");

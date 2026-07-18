@@ -52,7 +52,7 @@ export function EodReviewScene() {
         </WorkspaceExhibit>
         <p
           data-eod-loop
-          className="mt-layout-md flex items-center gap-1 border-t border-border pt-layout-md text-sm font-medium text-signal"
+          className="mt-layout-md flex items-center gap-1 border-t border-border pt-layout-md text-sm font-medium text-primary"
         >
           {carryForward.itemName} ({carryForward.remaining} left) carried to tomorrow&apos;s
           Opening Handoff · 8:47 AM

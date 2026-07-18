@@ -1650,7 +1650,7 @@ function POSOnboardingWorkspace({
             })}
             to="/$orgUrlSlug/store/$storeUrlSlug/pos/settings"
             search={{ o: getOrigin() }}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-action-commit px-4 text-sm font-medium text-action-commit-foreground transition-colors hover:bg-action-commit/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             Open register setup
             <ArrowRight className="h-4 w-4" />
@@ -1678,7 +1678,7 @@ function POSOnboardingWorkspace({
             })}
             to="/$orgUrlSlug/store/$storeUrlSlug/members"
             search={{ o: getOrigin() }}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-action-commit px-4 text-sm font-medium text-action-commit-foreground transition-colors hover:bg-action-commit/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             Manage staff
             <ArrowRight className="h-4 w-4" />
@@ -1715,7 +1715,7 @@ function POSOnboardingWorkspace({
                     "rounded-lg border p-layout-md transition-colors",
                     step.isComplete && "border-border bg-surface",
                     step.isCurrent &&
-                      "border-action-commit/40 bg-background shadow-sm",
+                      "border-primary/40 bg-background shadow-sm",
                     isWaiting &&
                       "border-transparent bg-transparent py-layout-sm opacity-55",
                   )}
@@ -1728,7 +1728,7 @@ function POSOnboardingWorkspace({
                           "border-success/30 bg-success/10 text-success",
                         step.isCurrent &&
                           !step.isComplete &&
-                          "border-action-commit/30 bg-action-neutral-soft text-action-commit",
+                          "border-primary/30 bg-action-neutral-soft text-primary",
                         isWaiting &&
                           "h-8 w-8 border-border/60 bg-transparent text-muted-foreground",
                       )}

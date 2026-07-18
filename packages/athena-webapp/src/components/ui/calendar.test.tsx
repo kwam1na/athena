@@ -20,8 +20,8 @@ describe("Calendar", () => {
 
     expect(selectedDay).toHaveAttribute("aria-selected", "true");
     expect(selectedDay.querySelector("button")).toHaveClass(
-      "data-[selected-single=true]:bg-action-workflow",
-      "data-[selected-single=true]:text-action-workflow-foreground"
+      "data-[selected-single=true]:bg-primary",
+      "data-[selected-single=true]:text-primary-foreground"
     );
   });
 

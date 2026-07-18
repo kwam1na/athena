@@ -38,8 +38,10 @@
     --card-foreground: 222 28% 16%;
     --popover: 40 42% 99%;
     --popover-foreground: 222 28% 16%;
-    --primary: 338 62% 43%;
-    --primary-foreground: 336 100% 98%;
+    --primary: 232 42% 45%;
+    --primary-foreground: 232 100% 98%;
+    --primary-soft: 232 58% 96%;
+    --primary-border: 232 38% 82%;
     --secondary: 210 21% 92%;
     --secondary-foreground: 222 28% 16%;
     --muted: 36 30% 91%;
@@ -63,8 +65,6 @@
     --legacy-neutral-900: var(--foreground);
     --shell: 223 34% 14%;
     --shell-foreground: 35 42% 95%;
-    --signal: 338 62% 43%;
-    --signal-foreground: 336 100% 98%;
     --transaction-signal: 26 73% 48%;
     --transaction-signal-foreground: 35 100% 97%;
     --comparison-primary: 35 79% 42%;
@@ -75,14 +75,6 @@
     --comparison-secondary-foreground: 202 58% 14%;
     --comparison-secondary-soft: 202 65% 96%;
     --comparison-secondary-border: 201 45% 82%;
-    --action-commit: 338 62% 43%;
-    --action-commit-foreground: 336 100% 98%;
-    --action-commit-soft: 338 72% 96%;
-    --action-commit-border: 338 42% 82%;
-    --action-workflow: 232 42% 45%;
-    --action-workflow-foreground: 232 100% 98%;
-    --action-workflow-soft: 232 58% 96%;
-    --action-workflow-border: 232 38% 82%;
     --action-neutral: 225 18% 35%;
     --action-neutral-soft: 225 20% 96%;
     --action-neutral-strong: var(--foreground);
@@ -97,8 +89,8 @@
     --danger: 4 71% 54%;
     --danger-foreground: 0 0% 98%;
 
-    --chart-1: 338 62% 43%;
-    --chart-2: 232 42% 45%;
+    --chart-1: 232 42% 45%;
+    --chart-2: 338 62% 43%;
     --chart-3: 156 40% 34%;
     --chart-4: 37 82% 59%;
     --chart-5: 278 34% 48%;
@@ -126,12 +118,12 @@
 
     --sidebar-background: var(--background);
     --sidebar-foreground: var(--foreground);
-    --sidebar-primary: var(--signal);
-    --sidebar-primary-foreground: var(--signal-foreground);
+    --sidebar-primary: var(--primary);
+    --sidebar-primary-foreground: var(--primary-foreground);
     --sidebar-accent: 220 20% 96%;
     --sidebar-accent-foreground: var(--foreground);
     --sidebar-border: 220 16% 88%;
-    --sidebar-ring: var(--signal);
+    --sidebar-ring: var(--primary);
   }
 
   .dark {
@@ -145,8 +137,10 @@
     --card-foreground: 36 24% 94%;
     --popover: 0 0% 12%;
     --popover-foreground: 36 24% 94%;
-    --primary: 336 68% 67%;
+    --primary: 235 58% 72%;
     --primary-foreground: 0 0% 10%;
+    --primary-soft: 232 18% 21%;
+    --primary-border: 233 32% 42%;
     --secondary: 0 0% 16%;
     --secondary-foreground: 36 24% 94%;
     --muted: 0 0% 15%;
@@ -170,8 +164,6 @@
     --legacy-neutral-900: 36 24% 94%;
     --shell: 0 0% 7%;
     --shell-foreground: 36 24% 94%;
-    --signal: 336 68% 67%;
-    --signal-foreground: 0 0% 10%;
     --transaction-signal: 31 88% 66%;
     --transaction-signal-foreground: 0 0% 10%;
     --comparison-primary: 38 90% 63%;
@@ -182,14 +174,6 @@
     --comparison-secondary-foreground: 0 0% 10%;
     --comparison-secondary-soft: 202 20% 18%;
     --comparison-secondary-border: 201 34% 34%;
-    --action-commit: 336 68% 67%;
-    --action-commit-foreground: 0 0% 10%;
-    --action-commit-soft: 336 20% 21%;
-    --action-commit-border: 336 34% 42%;
-    --action-workflow: 235 58% 72%;
-    --action-workflow-foreground: 0 0% 10%;
-    --action-workflow-soft: 232 18% 21%;
-    --action-workflow-border: 233 32% 42%;
     --action-neutral: 0 0% 76%;
     --action-neutral-soft: 0 0% 20%;
     --action-neutral-strong: var(--shell);
@@ -204,8 +188,8 @@
     --danger: 6 79% 64%;
     --danger-foreground: 0 0% 10%;
 
-    --chart-1: 336 68% 67%;
-    --chart-2: 235 58% 72%;
+    --chart-1: 235 58% 72%;
+    --chart-2: 336 68% 67%;
     --chart-3: 157 43% 46%;
     --chart-4: 40 92% 65%;
     --chart-5: 281 54% 70%;
@@ -215,8 +199,8 @@
 
     --sidebar-background: var(--shell);
     --sidebar-foreground: var(--shell-foreground);
-    --sidebar-primary: var(--signal);
-    --sidebar-primary-foreground: var(--signal-foreground);
+    --sidebar-primary: var(--primary);
+    --sidebar-primary-foreground: var(--primary-foreground);
     --sidebar-accent: 0 0% 17%;
     --sidebar-accent-foreground: 36 24% 94%;
     --sidebar-border: 0 0% 20%;
@@ -233,8 +217,10 @@
     --card-foreground: 36 34% 95%;
     --popover: 223 18% 13%;
     --popover-foreground: 36 34% 95%;
-    --primary: 336 72% 68%;
+    --primary: 235 64% 72%;
     --primary-foreground: 222 30% 12%;
+    --primary-soft: 232 24% 22%;
+    --primary-border: 233 36% 44%;
     --secondary: 223 15% 17%;
     --secondary-foreground: 36 34% 95%;
     --muted: 223 13% 16%;
@@ -258,8 +244,6 @@
     --legacy-neutral-900: 36 34% 95%;
     --shell: 222 38% 8%;
     --shell-foreground: 36 30% 94%;
-    --signal: 336 72% 68%;
-    --signal-foreground: 222 30% 12%;
     --transaction-signal: 31 91% 67%;
     --transaction-signal-foreground: 222 30% 12%;
     --comparison-primary: 38 92% 64%;
@@ -270,14 +254,6 @@
     --comparison-secondary-foreground: 222 30% 12%;
     --comparison-secondary-soft: 202 28% 19%;
     --comparison-secondary-border: 201 41% 36%;
-    --action-commit: 336 72% 68%;
-    --action-commit-foreground: 222 30% 12%;
-    --action-commit-soft: 336 24% 22%;
-    --action-commit-border: 336 38% 44%;
-    --action-workflow: 235 64% 72%;
-    --action-workflow-foreground: 222 30% 12%;
-    --action-workflow-soft: 232 24% 22%;
-    --action-workflow-border: 233 36% 44%;
     --action-neutral: 225 18% 76%;
     --action-neutral-soft: 225 17% 22%;
     --action-neutral-strong: var(--shell);
@@ -292,8 +268,8 @@
     --danger: 6 79% 64%;
     --danger-foreground: 222 30% 12%;
 
-    --chart-1: 336 72% 68%;
-    --chart-2: 235 64% 72%;
+    --chart-1: 235 64% 72%;
+    --chart-2: 336 72% 68%;
     --chart-3: 157 43% 46%;
     --chart-4: 40 94% 66%;
     --chart-5: 281 58% 70%;
@@ -303,8 +279,8 @@
 
     --sidebar-background: var(--shell);
     --sidebar-foreground: var(--shell-foreground);
-    --sidebar-primary: var(--signal);
-    --sidebar-primary-foreground: var(--signal-foreground);
+    --sidebar-primary: var(--primary);
+    --sidebar-primary-foreground: var(--primary-foreground);
     --sidebar-accent: 223 20% 18%;
     --sidebar-accent-foreground: 36 30% 94%;
     --sidebar-border: 223 15% 20%;
@@ -330,7 +306,7 @@
   }
 
   ::selection {
-    background: hsl(var(--signal) / 0.2);
+    background: hsl(var(--primary) / 0.2);
     color: hsl(var(--foreground));
   }
 
@@ -736,7 +712,7 @@
   .dark .bg-pink-100,
   .dark .bg-rose-50,
   .dark .bg-rose-100 {
-    background-color: hsl(var(--action-workflow-soft));
+    background-color: hsl(var(--primary-soft));
   }
 
   .dark .text-purple-500,
@@ -751,7 +727,7 @@
   .dark .text-rose-600,
   .dark .text-rose-700,
   .dark .text-rose-800 {
-    color: hsl(var(--action-workflow));
+    color: hsl(var(--primary));
   }
 
   .dark .border-purple-100,
@@ -763,7 +739,7 @@
   .dark .border-rose-100,
   .dark .border-rose-200,
   .dark .border-rose-300 {
-    border-color: hsl(var(--action-workflow-border));
+    border-color: hsl(var(--primary-border));
   }
 }
 

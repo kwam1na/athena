@@ -260,7 +260,7 @@ function ServiceSearchResults({
                           {serviceModeLabels[service.serviceMode]}
                         </span>
                         {isAlreadyAdded ? (
-                          <span className="rounded-full border border-action-workflow-border bg-action-workflow-soft px-2 py-0.5 text-[11px] font-medium text-action-workflow">
+                          <span className="rounded-full border border-primary-border bg-primary-soft px-2 py-0.5 text-[11px] font-medium text-primary">
                             Already added
                           </span>
                         ) : null}

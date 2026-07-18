@@ -69,7 +69,7 @@ describe("SearchResultsSection", () => {
       "aria-keyshortcuts",
       "Meta+Enter Control+Enter",
     );
-    expect(addVariantButton).toHaveClass("bg-action-workflow");
+    expect(addVariantButton).toHaveClass("bg-primary");
     expect(screen.getByText("⌘+↵")).toBeInTheDocument();
   });
 
@@ -96,7 +96,7 @@ describe("SearchResultsSection", () => {
       "aria-keyshortcuts",
       "Meta+Enter Control+Enter",
     );
-    expect(quickAddButton).toHaveClass("bg-action-workflow");
+    expect(quickAddButton).toHaveClass("bg-primary");
     expect(screen.getByText("⌘+↵")).toBeInTheDocument();
   });
 
@@ -247,7 +247,7 @@ describe("SearchResultsSection", () => {
 
     const price = screen.getByText(/95\.00/);
     expect(price).toHaveClass("text-xl", "font-semibold", "bg-muted/70");
-    expect(price).not.toHaveClass("bg-action-commit");
+    expect(price).not.toHaveClass("bg-primary");
   });
 
   it("uses the soft commit treatment for product add actions", () => {
@@ -261,8 +261,8 @@ describe("SearchResultsSection", () => {
     });
 
     expect(screen.getByRole("button", { name: /^add$/i })).toHaveClass(
-      "bg-action-commit-soft",
-      "text-action-commit",
+      "bg-primary-soft",
+      "text-primary",
     );
   });
 

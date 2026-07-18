@@ -78,7 +78,7 @@ export function OpeningHandoffScene() {
                 <span className="text-foreground">{item.label}</span>
                 {item.carried ? (
                   <Badge
-                    className="ml-auto hidden whitespace-nowrap border-transparent bg-signal/10 font-medium text-signal sm:inline-flex"
+                    className="ml-auto hidden whitespace-nowrap border-transparent bg-primary/10 font-medium text-primary sm:inline-flex"
                     variant="outline"
                   >
                     Carried forward

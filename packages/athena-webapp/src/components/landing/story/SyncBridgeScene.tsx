@@ -148,7 +148,7 @@ export function SyncBridgeScene() {
         <ArrowDown className="h-5 w-5 text-muted-foreground lg:hidden" />
         <span
           data-bridge-chip
-          className="absolute inline-flex items-center whitespace-nowrap rounded-full bg-signal px-layout-sm py-layout-xs text-xs font-semibold text-signal-foreground shadow-surface"
+          className="absolute inline-flex items-center whitespace-nowrap rounded-full bg-primary px-layout-sm py-layout-xs text-xs font-semibold text-primary-foreground shadow-surface"
         >
           Sale · {formatDemoMoney(tracedSale.total)}
         </span>

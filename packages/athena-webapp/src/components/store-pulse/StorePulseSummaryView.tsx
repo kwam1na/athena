@@ -138,7 +138,7 @@ const storePulseWindowCopy: Record<
 const salesPulseChartConfig = {
   value: {
     label: "Store pulse",
-    color: "hsl(var(--action-workflow))",
+    color: "hsl(var(--primary))",
   },
 } satisfies ChartConfig;
 
@@ -746,7 +746,7 @@ export function PaymentMethodsPanel({
                     <span className="inline-flex min-w-0 items-center gap-2 font-medium text-foreground">
                       <PaymentIcon
                         aria-hidden="true"
-                        className="h-4 w-4 shrink-0 text-action-workflow"
+                        className="h-4 w-4 shrink-0 text-primary"
                       />
                       <span className="truncate">{payment.label}</span>
                     </span>
@@ -754,9 +754,9 @@ export function PaymentMethodsPanel({
                       {formatPaymentSharePercent(paymentShare)}
                     </span>
                   </div>
-                  <div className="h-1.5 overflow-hidden rounded-full bg-action-workflow-soft">
+                  <div className="h-1.5 overflow-hidden rounded-full bg-primary-soft">
                     <div
-                      className="h-full rounded-full bg-action-workflow"
+                      className="h-full rounded-full bg-primary"
                       style={{ width: `${Math.max(4, paymentShare)}%` }}
                     />
                   </div>
@@ -1031,7 +1031,7 @@ export function StorePulseSummaryView({
             >
               {storePulseWindowOptions.map((option) => (
                 <TabsTrigger
-                  className="min-h-8 px-3 data-[state=active]:bg-action-workflow-soft data-[state=active]:text-action-workflow data-[state=active]:shadow-none"
+                  className="min-h-8 px-3 data-[state=active]:bg-primary-soft data-[state=active]:text-primary data-[state=active]:shadow-none"
                   key={option.value}
                   size="sm"
                   value={option.value}

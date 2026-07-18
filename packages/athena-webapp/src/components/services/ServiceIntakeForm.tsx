@@ -433,7 +433,7 @@ export function ServiceIntakeForm({
           disabled={isSubmitting}
           onClick={onSubmit}
           type="button"
-          variant="workflow"
+          variant="default"
         >
           {isSubmitting ? "Creating intake..." : "Create intake"}
         </Button>

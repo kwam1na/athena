@@ -1500,10 +1500,10 @@ export function ProcurementViewContent({
                                             className={cn(
                                               "flex flex-col gap-layout-sm rounded-md border bg-surface px-3 py-2 transition-colors sm:flex-row sm:items-center sm:justify-between",
                                               isReceivingActive
-                                                ? "border-action-workflow-border bg-action-workflow-soft/40"
+                                                ? "border-primary-border bg-primary-soft/40"
                                                 : selectedPurchaseOrderId ===
                                                     purchaseOrder.purchaseOrderId
-                                                  ? "border-action-workflow-border bg-action-workflow-soft/30"
+                                                  ? "border-primary-border bg-primary-soft/30"
                                                   : "border-border",
                                             )}
                                             key={purchaseOrder.purchaseOrderId}
@@ -1586,7 +1586,7 @@ export function ProcurementViewContent({
                                                       action.nextStatus ===
                                                       "cancelled"
                                                         ? "utility"
-                                                        : "workflow-soft"
+                                                        : "primary-soft"
                                                     }
                                                   >
                                                     {action.label}
@@ -1614,7 +1614,7 @@ export function ProcurementViewContent({
                                                   variant={
                                                     isReceivingActive
                                                       ? "utility"
-                                                      : "workflow-soft"
+                                                      : "primary-soft"
                                                   }
                                                 >
                                                   {isReceivingActive
@@ -1645,7 +1645,7 @@ export function ProcurementViewContent({
                                   variant={
                                     canAddAnotherPurchaseOrder
                                       ? "utility"
-                                      : "workflow-soft"
+                                      : "primary-soft"
                                   }
                                 >
                                   {draftActionLabel}
@@ -1798,7 +1798,7 @@ export function ProcurementViewContent({
                         className={cn(
                           "rounded-lg border bg-background p-layout-md text-left transition-colors hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                           selectedPurchaseOrderId === purchaseOrder._id
-                            ? "border-action-workflow-border bg-action-workflow-soft/30"
+                            ? "border-primary-border bg-primary-soft/30"
                             : "border-border",
                         )}
                         key={purchaseOrder._id}
@@ -2007,7 +2007,7 @@ export function ProcurementViewContent({
                   draftHasInvalidQuantity
                 }
                 onClick={handleCreateDraftPurchaseOrders}
-                variant="workflow"
+                variant="default"
               >
                 Create draft purchase orders
               </Button>

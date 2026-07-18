@@ -21,7 +21,7 @@ function DemoCtaButton() {
     <Link
       to={DEMO_PATH}
       onClick={() => emitLandingFunnelEvent("demo_cta")}
-      className="inline-flex min-h-12 items-center justify-center rounded-md bg-signal px-layout-lg text-sm font-semibold text-signal-foreground transition-[background-color,transform] duration-standard ease-standard hover:bg-signal/90 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      className="inline-flex min-h-12 items-center justify-center rounded-md bg-primary px-layout-lg text-sm font-semibold text-primary-foreground transition-[background-color,transform] duration-standard ease-standard hover:bg-primary/90 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
     >
       Try the demo
       <ArrowRight className="ml-layout-sm h-4 w-4" aria-hidden="true" />
@@ -46,7 +46,7 @@ function ActCopy({
 }) {
   return (
     <div className={className ?? "max-w-xl"}>
-      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-signal">
+      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">
         <span className="font-numeric">{time}</span>
         <span aria-hidden="true"> · </span>
         {workspace}
@@ -116,7 +116,7 @@ export function Index() {
       <main>
         <section className="relative flex min-h-[calc(100svh-4rem)] items-center overflow-hidden bg-background px-layout-md py-layout-2xl sm:px-layout-xl">
           <div
-            className="absolute inset-0 bg-[radial-gradient(circle_at_82%_12%,hsl(var(--signal)/0.08),transparent_38%)]"
+            className="absolute inset-0 bg-[radial-gradient(circle_at_82%_12%,hsl(var(--primary)/0.08),transparent_38%)]"
             aria-hidden="true"
           />
           <div className="relative mx-auto grid w-full max-w-7xl items-center gap-layout-2xl lg:grid-cols-[0.9fr_1.1fr]">
@@ -177,7 +177,7 @@ export function Index() {
         <section className="flex min-h-svh items-center border-t border-border/70 bg-surface px-layout-md py-layout-2xl sm:px-layout-xl">
           <div className="mx-auto w-full max-w-7xl">
             <div className="max-w-2xl">
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-signal">
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">
                 <span className="font-numeric">3:14 PM</span>
                 <span aria-hidden="true"> · </span>
                 …and in your books
@@ -224,7 +224,7 @@ export function Index() {
         <section className="flex min-h-svh items-center border-t border-border bg-surface px-layout-md py-layout-2xl sm:px-layout-xl">
           <div className="mx-auto grid w-full max-w-7xl items-center gap-layout-2xl lg:grid-cols-2">
             <div className="max-w-xl">
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-signal">
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">
                 The day, replayed
               </p>
               <h2 className="mt-layout-sm font-display text-4xl font-light leading-[1.02] text-foreground sm:text-5xl">

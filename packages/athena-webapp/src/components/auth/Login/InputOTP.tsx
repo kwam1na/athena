@@ -256,9 +256,9 @@ export function InputOTPForm({
             isLoading={isSigningIn}
             disabled={isSigningIn || isAuthHandoffPending}
             type="submit"
-            variant="workflow"
+            variant="default"
             data-testid="athena-login-otp-submit"
-            className="group relative z-10 h-control-standard w-fit px-layout-lg shadow-[0_16px_34px_-22px_hsl(var(--signal)/0.72)]"
+            className="group relative z-10 h-control-standard w-fit px-layout-lg shadow-[0_16px_34px_-22px_hsl(var(--primary)/0.72)]"
           >
             Continue
             <ArrowRight className="h-4 w-4 transition-transform duration-standard ease-emphasized group-hover:translate-x-1 group-focus-visible:translate-x-1" />
@@ -273,7 +273,7 @@ export function InputOTPForm({
               <button
                 type="button"
                 data-testid="athena-login-request-code"
-                className="text-signal underline-offset-4 transition-colors duration-standard ease-standard hover:text-signal/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                className="text-primary underline-offset-4 transition-colors duration-standard ease-standard hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 disabled={isRequestingNewCode}
                 onClick={handleRequestNewCode}
               >

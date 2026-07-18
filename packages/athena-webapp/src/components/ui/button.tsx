@@ -9,14 +9,9 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default:
-          "bg-action-commit text-action-commit-foreground hover:bg-action-commit/90",
-        "commit-soft":
-          "border border-action-commit-border bg-action-commit-soft text-action-commit hover:bg-action-commit-soft/75",
-        workflow:
-          "bg-action-workflow text-action-workflow-foreground hover:bg-action-workflow/90",
-        "workflow-soft":
-          "border border-action-workflow-border bg-action-workflow-soft text-action-workflow hover:bg-action-workflow-soft/75",
+        default: "bg-primary text-primary-foreground hover:bg-primary/90",
+        "primary-soft":
+          "border border-primary-border bg-primary-soft text-primary hover:bg-primary-soft/75",
         utility:
           "border border-border bg-background text-action-neutral hover:bg-action-neutral-soft hover:text-action-neutral",
         "utility-strong":
@@ -28,7 +23,7 @@ const buttonVariants = cva(
         secondary:
           "bg-secondary text-secondary-foreground hover:bg-secondary/80",
         ghost: "hover:bg-accent hover:text-accent-foreground",
-        link: "text-action-commit underline-offset-4 hover:underline",
+        link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
         default: "h-10 px-4 py-2",

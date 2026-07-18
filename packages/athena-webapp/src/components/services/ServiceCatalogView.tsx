@@ -396,7 +396,7 @@ export function ServiceCatalogViewContent({
                     disabled={isSaving}
                     onClick={handleSubmit}
                     type="button"
-                    variant="workflow"
+                    variant="default"
                   >
                     {editingId ? "Save changes" : "Create service"}
                   </Button>

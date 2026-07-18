@@ -598,7 +598,7 @@ function LegacyImportTrustPreview({
         <div
           className={`flex flex-col gap-3 rounded-md border bg-muted/15 px-3 py-3 transition-[border-color,box-shadow] duration-150 ease-out sm:flex-row sm:items-center sm:justify-between ${
             isFinalized
-              ? "border-action-workflow-border shadow-sm"
+              ? "border-primary-border shadow-sm"
               : "border-border"
           }`}
         >
@@ -617,7 +617,7 @@ function LegacyImportTrustPreview({
                   </span>
                 ) : null}
                 {isFinalized && linkedTarget ? (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-medium leading-4 text-action-workflow">
+                  <span className="inline-flex items-center gap-1 text-[11px] font-medium leading-4 text-primary">
                     <Check className="h-3.5 w-3.5" />
                     Linked SKU
                   </span>
@@ -685,13 +685,13 @@ function LegacyImportTrustPreview({
                 role="status"
                 aria-live="polite"
               >
-                <Check className="h-3.5 w-3.5 text-action-workflow" />
+                <Check className="h-3.5 w-3.5 text-primary" />
                 Linked to catalog
               </div>
             ) : isFinalized ? (
               <div
                 aria-label="Trusted inventory finalized"
-                className="inline-flex min-h-10 items-center rounded-md px-3 text-action-workflow"
+                className="inline-flex min-h-10 items-center rounded-md px-3 text-primary"
                 role="status"
                 aria-live="polite"
               >
@@ -701,7 +701,7 @@ function LegacyImportTrustPreview({
               <Button
                 type="button"
                 size="sm"
-                variant="workflow-soft"
+                variant="primary-soft"
                 className="min-h-10 active:scale-[0.96] transition-transform"
                 disabled={isCtaDisabled}
                 onClick={handleClick}
@@ -1001,7 +1001,7 @@ function PendingCheckoutLinkDialog({
                           priceState.canLink
                             ? "hover:bg-muted/50 focus:bg-muted/50"
                             : "cursor-not-allowed opacity-60"
-                        } ${selected ? "bg-action-workflow/10" : ""}`}
+                        } ${selected ? "bg-primary/10" : ""}`}
                         disabled={!priceState.canLink}
                         onClick={() => {
                           setSelectedProduct(product);
@@ -1061,7 +1061,7 @@ function PendingCheckoutLinkDialog({
           </Button>
           <Button
             type="button"
-            variant="workflow"
+            variant="default"
             onClick={handleLink}
             disabled={!selectedProduct || isLinking}
           >

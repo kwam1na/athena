@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReference } from "convex/server";
+import { ArrowUpRight } from "lucide-react";
 import type { ComponentType, ReactNode } from "react";
+import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -103,38 +105,38 @@ const terminalCapabilityOptions: Array<{
   label: string;
   description: string;
 }> = [
-  {
-    value: "products_and_services",
-    label: "Product SKUs and services",
-    description: "Use this register for retail items and service work.",
-  },
-  {
-    value: "products_only",
-    label: "Product SKUs only",
-    description: "Use this register for retail items only.",
-  },
-  {
-    value: "services_only",
-    label: "Services only",
-    description: "Use this register for service work only.",
-  },
-];
+    {
+      value: "products_and_services",
+      label: "Product SKUs and services",
+      description: "Use this register for retail items and service work.",
+    },
+    {
+      value: "products_only",
+      label: "Product SKUs only",
+      description: "Use this register for retail items only.",
+    },
+    {
+      value: "services_only",
+      label: "Services only",
+      description: "Use this register for service work only.",
+    },
+  ];
 const terminalLoginModeOptions: Array<{
   value: PosTerminalLoginMode;
   label: string;
   description: string;
 }> = [
-  {
-    value: "standard",
-    label: "Standard login",
-    description: "Show email code first. POS sign in stays available.",
-  },
-  {
-    value: "pos_only",
-    label: "POS only",
-    description: "Show POS sign in first. Email code remains secondary.",
-  },
-];
+    {
+      value: "standard",
+      label: "Standard login",
+      description: "Show email code first. POS sign in stays available.",
+    },
+    {
+      value: "pos_only",
+      label: "POS only",
+      description: "Show POS sign in first. Email code remains secondary.",
+    },
+  ];
 
 type FingerprintRegistrationCardProps = {
   displayName: string;
@@ -267,7 +269,7 @@ function FingerprintRegistrationCard({
           >
             {terminalCapabilityOptions.map((option) => (
               <label
-                className="flex min-h-[6.5rem] cursor-pointer flex-col gap-layout-xs rounded-md border border-border bg-background p-layout-sm text-sm transition-colors has-[:checked]:border-action-commit has-[:checked]:bg-action-neutral-soft"
+                className="flex min-h-[6.5rem] cursor-pointer flex-col gap-layout-xs rounded-md border border-border bg-background p-layout-sm text-sm transition-colors has-[:checked]:border-primary has-[:checked]:bg-action-neutral-soft"
                 key={option.value}
               >
                 <span className="flex items-start gap-layout-xs">
@@ -299,7 +301,7 @@ function FingerprintRegistrationCard({
           >
             {terminalLoginModeOptions.map((option) => (
               <label
-                className="flex min-h-[5.75rem] cursor-pointer flex-col gap-layout-xs rounded-md border border-border bg-background p-layout-sm text-sm transition-colors has-[:checked]:border-action-commit has-[:checked]:bg-action-neutral-soft"
+                className="flex min-h-[5.75rem] cursor-pointer flex-col gap-layout-xs rounded-md border border-border bg-background p-layout-sm text-sm transition-colors has-[:checked]:border-primary has-[:checked]:bg-action-neutral-soft"
                 key={option.value}
               >
                 <span className="flex items-start gap-layout-xs">
@@ -341,7 +343,7 @@ function FingerprintRegistrationCard({
               onClick={onUpdateExisting}
               isLoading={isUpdatingExisting}
               disabled={readOnly || !canUpdateExisting || isUpdatingExisting}
-              variant="default"
+              variant="primary-soft"
             >
               Save terminal settings
             </LoadingButton>
@@ -350,7 +352,7 @@ function FingerprintRegistrationCard({
               onClick={onRegister}
               isLoading={isRegistering}
               disabled={readOnly || !canRegister || isRegistering}
-              variant="default"
+              variant="primary-soft"
             >
               {primaryActionLabel}
             </LoadingButton>
@@ -409,7 +411,7 @@ type StoreDayAutomationPolicy = {
   localStartMinutes?: number | null;
   mode?: AutomationPolicyMode | null;
   openingBlockerHandling?:
-    "skip_when_blocked" | "start_with_manager_review" | null;
+  "skip_when_blocked" | "start_with_manager_review" | null;
   operatingTimezoneOffsetMinutes?: number | null;
 };
 
@@ -619,15 +621,15 @@ function StoreHoursTimingReadout({
     scheduleContext?.currentWindow ?? scheduleContext?.nextWindow ?? null;
   const openingTiming = currentOrNextWindow?.localStartLabel
     ? `Opening at ${formatStoreHoursTimeLabel(
-        currentOrNextWindow.localStartLabel,
-      )}`
+      currentOrNextWindow.localStartLabel,
+    )}`
     : scheduleContext?.phase === "closed"
       ? "Store is closed today."
       : "Opening timing is waiting for Store Hours.";
   const eodTiming = currentOrNextWindow?.localEndLabel
     ? `EOD after ${formatStoreHoursTimeLabel(
-        currentOrNextWindow.localEndLabel,
-      )}`
+      currentOrNextWindow.localEndLabel,
+    )}`
     : "EOD timing is waiting for Store Hours.";
   const timezone =
     scheduleContext?.timezone ??
@@ -669,16 +671,18 @@ function StoreHoursTimingReadout({
         </dl>
 
         {!readOnly && !isLoading && hasFullAdminAccess && orgUrlSlug && storeUrlSlug ? (
-          <HealthLink
-            className="inline-flex h-control-compact items-center rounded-md bg-signal px-layout-md text-sm font-medium text-signal-foreground"
-            params={{
-              orgUrlSlug,
-              storeUrlSlug,
-            }}
-            to="/$orgUrlSlug/store/$storeUrlSlug/configuration"
-          >
-            Open Store Hours
-          </HealthLink>
+          <Button asChild size="sm" variant="outline">
+            <HealthLink
+              params={{
+                orgUrlSlug,
+                storeUrlSlug,
+              }}
+              to="/$orgUrlSlug/store/$storeUrlSlug/configuration"
+            >
+              Open Store Hours
+              <ArrowUpRight aria-hidden="true" />
+            </HealthLink>
+          </Button>
         ) : null}
       </div>
     </section>
@@ -844,7 +848,7 @@ function RegisterCloseoutApprovalPolicyAdminPanel({
             disabled={readOnly || !canSave}
             isLoading={isSaving}
             onClick={handleSave}
-            variant="default"
+            variant="primary-soft"
           >
             Save closeout approval policy
           </LoadingButton>
@@ -912,12 +916,12 @@ function EodCompletionAutomationAdminPanel({
   )
     ? EOD_COMPLETION_OFFSET_OPTIONS
     : [
-        ...EOD_COMPLETION_OFFSET_OPTIONS,
-        {
-          value: String(completionOffsetMinutes),
-          label: selectedCompletionOffsetLabel,
-        },
-      ].sort((left, right) => Number(left.value) - Number(right.value));
+      ...EOD_COMPLETION_OFFSET_OPTIONS,
+      {
+        value: String(completionOffsetMinutes),
+        label: selectedCompletionOffsetLabel,
+      },
+    ].sort((left, right) => Number(left.value) - Number(right.value));
   const storeCloseLabel = formatStoreHoursTimeLabel(
     currentOrNextWindow?.localEndLabel,
   );
@@ -1093,7 +1097,7 @@ function EodCompletionAutomationAdminPanel({
             },
           ].map((option) => (
             <label
-              className="flex min-h-[6.5rem] cursor-pointer flex-col gap-layout-xs rounded-md border border-border bg-background p-layout-sm text-sm transition-colors has-[:checked]:border-action-commit has-[:checked]:bg-action-neutral-soft"
+              className="flex min-h-[6.5rem] cursor-pointer flex-col gap-layout-xs rounded-md border border-border bg-background p-layout-sm text-sm transition-colors has-[:checked]:border-primary has-[:checked]:bg-action-neutral-soft"
               key={option.value}
               onMouseDown={
                 readOnly
@@ -1241,7 +1245,7 @@ function EodCompletionAutomationAdminPanel({
             disabled={readOnly || !canSave}
             isLoading={isSaving}
             onClick={handleSave}
-            variant="default"
+            variant="primary-soft"
           >
             Save EOD completion automation
           </LoadingButton>
@@ -1295,9 +1299,9 @@ function StoreDayAutomationAdminPanel({
   )
     ? AUTOMATION_START_OFFSET_OPTIONS
     : [
-        ...AUTOMATION_START_OFFSET_OPTIONS,
-        { value: String(startOffsetMinutes), label: selectedStartOffsetLabel },
-      ].sort((left, right) => Number(left.value) - Number(right.value));
+      ...AUTOMATION_START_OFFSET_OPTIONS,
+      { value: String(startOffsetMinutes), label: selectedStartOffsetLabel },
+    ].sort((left, right) => Number(left.value) - Number(right.value));
   const storeOpeningLabel = formatStoreHoursTimeLabel(
     currentOrNextWindow?.localStartLabel,
   );
@@ -1460,7 +1464,7 @@ function StoreDayAutomationAdminPanel({
             disabled={readOnly || !canSave}
             isLoading={isSaving}
             onClick={handleSave}
-            variant="default"
+            variant="primary-soft"
           >
             Save store-day automation
           </LoadingButton>
@@ -1479,13 +1483,13 @@ function POSRecoveryCodeAdminPanel({ storeId }: { storeId?: string | null }) {
       : "skip",
   ) as
     | {
-        failedAttemptCount: number;
-        lastUsedAt?: number;
-        lockedUntil?: number;
-        plaintextCode?: string;
-        rotatedAt: number;
-        status: "active" | "locked" | "revoked";
-      }
+      failedAttemptCount: number;
+      lastUsedAt?: number;
+      lockedUntil?: number;
+      plaintextCode?: string;
+      rotatedAt: number;
+      status: "active" | "locked" | "revoked";
+    }
     | null
     | undefined;
   const rotateRecoveryCode = useMutation(
@@ -1588,7 +1592,7 @@ function POSRecoveryCodeAdminPanel({ storeId }: { storeId?: string | null }) {
 
         {currentRecoveryCode ? (
           <div
-            className="w-fit max-w-full rounded-md border border-signal/30 bg-signal/10 px-layout-md py-layout-sm"
+            className="w-fit max-w-full rounded-md border border-primary/30 bg-primary/10 px-layout-md py-layout-sm"
             role="status"
           >
             <p className="text-sm font-medium text-foreground">
@@ -1624,7 +1628,7 @@ function POSRecoveryCodeAdminPanel({ storeId }: { storeId?: string | null }) {
             isLoading={isRotating}
             disabled={!storeId || isRotating}
             onClick={handleRotate}
-            variant="default"
+            variant="primary-soft"
           >
             {status ? "Rotate recovery code" : "Create recovery code"}
           </LoadingButton>
@@ -1804,26 +1808,26 @@ function usePosSettingsOfflineReadiness(input: {
         store
           .readProvisionedTerminalSeed?.()
           .catch(() => ({ ok: false as const })) ??
-          Promise.resolve({ ok: true as const, value: null }),
+        Promise.resolve({ ok: true as const, value: null }),
         store
           .getStaffAuthorityReadiness?.({
             storeId,
             terminalId: existingTerminal._id,
           })
           .catch(() => ({ ok: false as const })) ??
-          Promise.resolve({ ok: true as const, value: "missing" as const }),
+        Promise.resolve({ ok: true as const, value: "missing" as const }),
         store
           .readRegisterCatalogSnapshot?.({ storeId })
           .catch(() => ({ ok: false as const })) ??
-          Promise.resolve({ ok: true as const, value: null }),
+        Promise.resolve({ ok: true as const, value: null }),
         store
           .readRegisterServiceCatalogSnapshot?.({ storeId })
           .catch(() => ({ ok: false as const })) ??
-          Promise.resolve({ ok: true as const, value: null }),
+        Promise.resolve({ ok: true as const, value: null }),
         store
           .readRegisterAvailabilitySnapshot?.({ storeId })
           .catch(() => ({ ok: false as const })) ??
-          Promise.resolve({ ok: true as const, value: null }),
+        Promise.resolve({ ok: true as const, value: null }),
       ]);
 
       if (cancelled) return;
@@ -1885,9 +1889,9 @@ export function POSSettingsView({
   const appSessionRecovery = usePosTerminalAppSessionRecoveryRuntimeInput();
   const routeParams = useParams({ strict: false }) as
     | {
-        orgUrlSlug?: string;
-        storeUrlSlug?: string;
-      }
+      orgUrlSlug?: string;
+      storeUrlSlug?: string;
+    }
     | undefined;
 
   const registerTerminalMutation = useMutation(
@@ -2280,24 +2284,26 @@ export function POSSettingsView({
                 This settings page only changes the current checkout station.
               </p>
               {!isReadOnlyDemoSurface && routeParams?.orgUrlSlug && routeParams.storeUrlSlug ? (
-                <HealthLink
-                  className="inline-flex h-control-compact items-center rounded-md bg-signal px-layout-md text-sm font-medium text-signal-foreground"
-                  params={{
-                    orgUrlSlug: routeParams.orgUrlSlug,
-                    storeUrlSlug: routeParams.storeUrlSlug,
-                    ...(existingTerminal
-                      ? { terminalId: String(existingTerminal._id) }
-                      : {}),
-                  }}
-                  search={{ o: getOrigin() }}
-                  to={
-                    existingTerminal
-                      ? "/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/$terminalId"
-                      : "/$orgUrlSlug/store/$storeUrlSlug/pos/terminals"
-                  }
-                >
-                  Open terminal health
-                </HealthLink>
+                <Button asChild size="sm" variant="outline">
+                  <HealthLink
+                    params={{
+                      orgUrlSlug: routeParams.orgUrlSlug,
+                      storeUrlSlug: routeParams.storeUrlSlug,
+                      ...(existingTerminal
+                        ? { terminalId: String(existingTerminal._id) }
+                        : {}),
+                    }}
+                    search={{ o: getOrigin() }}
+                    to={
+                      existingTerminal
+                        ? "/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/$terminalId"
+                        : "/$orgUrlSlug/store/$storeUrlSlug/pos/terminals"
+                    }
+                  >
+                    Open terminal health
+                    <ArrowUpRight aria-hidden="true" />
+                  </HealthLink>
+                </Button>
               ) : !isReadOnlyDemoSurface ? (
                 <p className="text-sm text-muted-foreground">
                   Select a store before opening terminal health.

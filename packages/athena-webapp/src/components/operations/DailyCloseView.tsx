@@ -529,7 +529,7 @@ function getStatusLabelClassName(status: DailyCloseStatus) {
     status === "blocked" && "bg-danger/10 text-danger",
     status === "needs_review" && "bg-warning/15 text-warning-foreground",
     status === "carry_forward" &&
-      "bg-action-workflow-soft text-action-workflow",
+      "bg-primary-soft text-primary",
     (status === "ready" || status === "completed") &&
       "bg-success/10 text-success",
   );
@@ -540,7 +540,7 @@ function getStatusRailIconClassName(status: DailyCloseStatus) {
     status === "blocked" && "bg-danger/10 text-danger",
     status === "needs_review" && "bg-warning/15 text-warning-foreground",
     status === "carry_forward" &&
-      "bg-action-workflow-soft text-action-workflow",
+      "bg-primary-soft text-primary",
     (status === "ready" || status === "completed") &&
       "bg-success/10 text-success",
   );
@@ -734,7 +734,7 @@ function getStatusRailBadgeClassName(status: DailyCloseStatus) {
   return cn(
     status === "blocked" && "text-danger",
     status === "needs_review" && "text-warning",
-    status === "carry_forward" && "text-action-workflow",
+    status === "carry_forward" && "text-primary",
     (status === "ready" || status === "completed") && "text-success",
   );
 }
@@ -746,7 +746,7 @@ function getBucketCountClassName(status: BucketStatus) {
     status === "review" &&
       "border-warning/30 bg-warning/15 text-warning-foreground",
     status === "carry-forward" &&
-      "border-action-workflow/20 bg-action-workflow-soft text-action-workflow",
+      "border-primary/20 bg-primary-soft text-primary",
     status === "ready" && "border-success/20 bg-success/10 text-success",
   );
 }
@@ -2549,7 +2549,7 @@ function BucketSection({
     status === "blocked" && "bg-danger/10 text-danger",
     status === "review" && "bg-warning/15 text-warning-foreground",
     status === "carry-forward" &&
-      "bg-action-workflow-soft text-action-workflow",
+      "bg-primary-soft text-primary",
     status === "ready" && "bg-success/10 text-success",
   );
   const Icon =
@@ -3362,7 +3362,7 @@ function CompletionRail({
     {
       isClear: snapshot.carryForwardItems.length === 0,
       label: "Carry forward",
-      tone: "workflow",
+      tone: "primary",
       value: formatChecklistCount(
         snapshot.carryForwardItems.length,
         "item",
@@ -3373,7 +3373,7 @@ function CompletionRail({
           ? "$1+"
           : "$1",
       ),
-      valueTone: snapshot.carryForwardItems.length > 0 ? "workflow" : "plain",
+      valueTone: snapshot.carryForwardItems.length > 0 ? "primary" : "plain",
     },
   ];
 
@@ -3437,7 +3437,7 @@ function CompletionRail({
                       "h-2 w-2 shrink-0 rounded-full",
                       item.tone === "danger" && "bg-danger",
                       item.tone === "warning" && "bg-warning",
-                      item.tone === "workflow" && "bg-action-workflow",
+                      item.tone === "primary" && "bg-primary",
                       item.tone === "success" && "bg-success",
                       item.tone === "muted" && "bg-muted-foreground/35",
                     )}
@@ -3449,7 +3449,7 @@ function CompletionRail({
                     "shrink-0 text-right font-medium text-foreground",
                     item.valueTone === "danger" && "text-danger",
                     item.valueTone === "warning" && "text-warning",
-                    item.valueTone === "workflow" && "text-action-workflow",
+                    item.valueTone === "primary" && "text-primary",
                   )}
                 >
                   {item.isClear ? (
@@ -3537,7 +3537,7 @@ function CompletionRail({
               isLoading={isCompleting}
               onClick={onComplete}
               type="button"
-              variant="workflow"
+              variant="default"
             >
               Complete EOD Review
             </LoadingButton>

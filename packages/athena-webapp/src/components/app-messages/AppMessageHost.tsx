@@ -19,7 +19,7 @@ import {
 import { cn } from "@/lib/utils";
 
 const actionButtonClassName =
-  "min-h-10 shrink-0 px-layout-md text-action-commit hover:bg-action-commit-soft hover:text-action-commit";
+  "min-h-10 shrink-0 px-layout-md text-primary hover:bg-primary-soft hover:text-primary";
 
 export function AppMessageHost() {
   const messages = useAppMessages();
@@ -97,7 +97,7 @@ export function AppMessageHost() {
         <Button
           aria-label={ghostButtonLabel}
           className={cn(
-            "min-h-10 rounded-full border border-action-workflow-border bg-action-workflow-soft text-sm font-semibold text-action-workflow shadow-surface backdrop-blur transition-colors hover:bg-action-workflow-soft/75 hover:text-action-workflow",
+            "min-h-10 rounded-full border border-primary-border bg-primary-soft text-sm font-semibold text-primary shadow-surface backdrop-blur transition-colors hover:bg-primary-soft/75 hover:text-primary",
             isCollapsedSidebarGhost ? "size-10 px-0" : "px-layout-md",
           )}
           disabled={!presentedAction || presentedAction.disabled}

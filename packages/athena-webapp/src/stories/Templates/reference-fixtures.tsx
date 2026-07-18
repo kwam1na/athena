@@ -201,7 +201,7 @@ function MetricTile({ delta, detail, label, value }: Metric) {
         <p className="font-display text-[clamp(1.7rem,2.8vw,2.35rem)] leading-none tracking-[-0.04em] text-foreground">
           {value}
         </p>
-        <span className="rounded-full bg-[hsl(var(--signal)/0.12)] px-3 py-1 text-xs font-semibold text-[hsl(var(--signal))]">
+        <span className="rounded-full bg-[hsl(var(--primary)/0.12)] px-3 py-1 text-xs font-semibold text-[hsl(var(--primary))]">
           {delta}
         </span>
       </div>
@@ -213,7 +213,7 @@ function MetricTile({ delta, detail, label, value }: Metric) {
 function LaneCard({ detail, meta, title, tone = "neutral" }: Lane) {
   const toneStyles: Record<NonNullable<Lane["tone"]>, string> = {
     neutral: "bg-background text-foreground",
-    signal: "bg-[hsl(var(--signal)/0.12)] text-[hsl(var(--signal))]",
+    signal: "bg-[hsl(var(--primary)/0.12)] text-[hsl(var(--primary))]",
     success: "bg-[hsl(var(--success)/0.14)] text-[hsl(var(--success))]",
     warning: "bg-[hsl(var(--warning)/0.16)] text-[hsl(var(--warning-foreground))]",
   };
@@ -247,7 +247,7 @@ function MiniTrendChart() {
           <div
             className={cn(
               "w-full rounded-t-full",
-              index > 6 ? "bg-[hsl(var(--signal))]" : "bg-[hsl(var(--signal)/0.32)]",
+              index > 6 ? "bg-[hsl(var(--primary))]" : "bg-[hsl(var(--primary)/0.32)]",
             )}
             style={{ height: `${height}%` } as CSSProperties}
           />
@@ -352,7 +352,7 @@ export function DashboardWorkspaceTemplate() {
                   </span>
                 </div>
                 <div className="mt-3 flex items-center gap-3 text-sm text-muted-foreground">
-                  <Sparkles className="h-4 w-4 text-[hsl(var(--signal))]" />
+                  <Sparkles className="h-4 w-4 text-[hsl(var(--primary))]" />
                   Dashboard reference is fully static.
                 </div>
               </div>
@@ -595,7 +595,7 @@ export function SettingsWorkspaceTemplate() {
             <div className="grid gap-3">
               <div className="rounded-[calc(var(--radius)*1.1)] border border-border bg-background p-layout-sm">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[hsl(var(--signal)/0.12)] text-[hsl(var(--signal))]">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[hsl(var(--primary)/0.12)] text-[hsl(var(--primary))]">
                     <Settings2 className="h-4 w-4" />
                   </div>
                   <div>

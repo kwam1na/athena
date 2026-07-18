@@ -232,7 +232,7 @@ export const UserInsightsSection = () => {
       ) : (
         <div className="px-layout-md py-layout-md">
           <div className="rounded-lg border border-dashed border-border bg-background px-layout-md py-layout-lg">
-            <Sparkles className="h-5 w-5 text-action-workflow" />
+            <Sparkles className="h-5 w-5 text-primary" />
             <h3 className="mt-layout-sm text-sm font-medium text-foreground">
               No customer readout yet
             </h3>

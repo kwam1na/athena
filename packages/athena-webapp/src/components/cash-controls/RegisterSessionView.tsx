@@ -908,7 +908,7 @@ export function RegisterSessionActivitySection({
               className={cn(
                 "inline-flex h-8 items-center rounded-md border px-3 text-xs font-medium transition-colors",
                 isActive
-                  ? "border-action-workflow-border bg-action-workflow-soft text-action-workflow hover:bg-action-workflow-soft/75"
+                  ? "border-primary-border bg-primary-soft text-primary hover:bg-primary-soft/75"
                   : "border-border bg-surface text-muted-foreground hover:bg-muted/50 hover:text-foreground",
               )}
               key={option.id}
@@ -2147,7 +2147,7 @@ function RegisterSyncReviewItemDecisionList({
                     }
                     size="sm"
                     type="button"
-                    variant="workflow"
+                    variant="default"
                   >
                     {labels.approveLabel}
                   </LoadingButton>
@@ -2981,7 +2981,7 @@ function RegisterSessionSyncNotice({
                     onClick={() => onReviewDecision?.("approved")}
                     size="sm"
                     type="button"
-                    variant="workflow"
+                    variant="default"
                   >
                     {actionCopy.approveLabel}
                   </LoadingButton>
@@ -4237,7 +4237,7 @@ export function RegisterSessionViewContent({
             isLoading={pendingCloseoutAction === "approved"}
             onClick={() => void handleReviewCloseout("approved")}
             type="button"
-            variant="workflow"
+            variant="default"
           >
             Approve variance
           </LoadingButton>
@@ -4577,11 +4577,11 @@ export function RegisterSessionViewContent({
                                   {canViewFinancialDetails ? (
                                     <div
                                       aria-label={`${formatPaymentMethod(payment.method)}: ${payment.share}% of session sales`}
-                                      className="mt-2 h-1 overflow-hidden rounded-full bg-action-workflow-soft"
+                                      className="mt-2 h-1 overflow-hidden rounded-full bg-primary-soft"
                                       role="img"
                                     >
                                       <div
-                                        className="h-full rounded-full bg-action-workflow"
+                                        className="h-full rounded-full bg-primary"
                                         style={{ width: `${payment.share}%` }}
                                       />
                                     </div>
@@ -4989,7 +4989,7 @@ export function RegisterSessionViewContent({
                                   }
                                   onClick={() => void handleFinalizeCloseout()}
                                   type="button"
-                                  variant="workflow"
+                                  variant="default"
                                 >
                                   Finalize closeout
                                 </LoadingButton>
@@ -5108,7 +5108,7 @@ export function RegisterSessionViewContent({
                                     }
                                     onClick={() => void handleSubmitCloseout()}
                                     type="button"
-                                    variant="workflow"
+                                    variant="default"
                                   >
                                     Submit closeout
                                   </LoadingButton>
@@ -5337,7 +5337,7 @@ export function RegisterSessionViewContent({
                                 void handleSubmitOpeningFloatCorrection()
                               }
                               type="button"
-                              variant="workflow"
+                              variant="default"
                             >
                               Submit
                             </LoadingButton>

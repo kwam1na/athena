@@ -464,7 +464,7 @@ function getSessionActionTone(session: CashControlsDashboardSession) {
     return "text-warning";
   }
 
-  return "text-signal";
+  return "text-primary";
 }
 
 function WorkflowSummaryItem({
@@ -560,8 +560,8 @@ function DrawerSessionCard({
   return (
     <Link
       className={cn(
-        "group block rounded-lg border bg-surface-raised p-layout-md shadow-surface transition-colors hover:border-signal/50 hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-        variant === "primary" ? "border-signal/35" : "border-border",
+        "group block rounded-lg border bg-surface-raised p-layout-md shadow-surface transition-colors hover:border-primary/50 hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        variant === "primary" ? "border-primary/35" : "border-border",
       )}
       params={{
         orgUrlSlug,
@@ -829,10 +829,10 @@ function DrawerSessionLane({
           {browserSessions.length ? (
             <div
               aria-label="Drawers on this browser"
-              className="rounded-xl border border-signal/30 bg-signal/5 p-layout-sm shadow-surface"
+              className="rounded-xl border border-primary/30 bg-primary/5 p-layout-sm shadow-surface"
               role="group"
             >
-              <div className="mb-layout-xs flex items-center gap-1.5 px-layout-2xs text-signal">
+              <div className="mb-layout-xs flex items-center gap-1.5 px-layout-2xs text-primary">
                 <Monitor aria-hidden className="h-3.5 w-3.5" />
                 <p className="text-[11px] font-medium uppercase tracking-[0.16em]">
                   This browser
@@ -912,7 +912,7 @@ function ClosedSessionsSummary({
         <div className="space-y-layout-sm">
           {previewSessions.map((session) => (
             <Link
-              className="block rounded-lg border border-border bg-surface-raised px-layout-md py-layout-sm shadow-surface transition-colors hover:border-signal/50 hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="block rounded-lg border border-border bg-surface-raised px-layout-md py-layout-sm shadow-surface transition-colors hover:border-primary/50 hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               key={session._id}
               params={{
                 orgUrlSlug,
@@ -1449,7 +1449,7 @@ export function CashControlsDashboardContent({
                   <div className="inline-flex items-center gap-2 rounded-md border border-border bg-surface-raised px-layout-sm py-layout-xs text-sm text-muted-foreground">
                     <span
                       aria-hidden
-                      className="h-2 w-2 rounded-full bg-signal"
+                      className="h-2 w-2 rounded-full bg-primary"
                     />
                     Live drawers, variances, and session history
                   </div>

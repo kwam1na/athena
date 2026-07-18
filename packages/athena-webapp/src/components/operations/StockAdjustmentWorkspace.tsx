@@ -3170,7 +3170,7 @@ export function StockAdjustmentWorkspaceContent({
                     ariaPressed={isUnavailableScopeSelectionActive}
                     className={
                       isUnavailableScopeSelectionActive
-                        ? "border-action-workflow-border bg-action-workflow-soft"
+                        ? "border-primary-border bg-primary-soft"
                         : undefined
                     }
                     disabled={inventoryState.unavailableUnits === 0}
@@ -3202,7 +3202,7 @@ export function StockAdjustmentWorkspaceContent({
                       disabled={!storeId || !user?._id}
                       onClick={() => setIsQuickAddOpen(true)}
                       type="button"
-                      variant="workflow"
+                      variant="default"
                     >
                       <PackagePlus className="h-4 w-4" />
                       Quick add
@@ -3270,7 +3270,7 @@ export function StockAdjustmentWorkspaceContent({
                             aria-pressed={isSelected}
                             className={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${
                               isSelected
-                                ? "border-action-workflow-border bg-action-workflow-soft text-foreground"
+                                ? "border-primary-border bg-primary-soft text-foreground"
                                 : "border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
                             }`}
                             key={category.key}
@@ -3299,7 +3299,7 @@ export function StockAdjustmentWorkspaceContent({
                     >
                       <span
                         aria-hidden="true"
-                        className="h-1.5 w-1.5 rounded-full bg-action-workflow"
+                        className="h-1.5 w-1.5 rounded-full bg-primary"
                       />
                       <span className="font-medium text-foreground">
                         {stockAdjustmentAutoLoadStatus.label}
@@ -3328,7 +3328,7 @@ export function StockAdjustmentWorkspaceContent({
                 {isShowingCategoryMismatchRows ? (
                   <section
                     aria-label="Search matches in other categories"
-                    className="mb-layout-md flex flex-col gap-layout-sm rounded-md border border-action-workflow-border bg-action-workflow-soft px-layout-md py-layout-sm sm:flex-row sm:items-center sm:justify-between"
+                    className="mb-layout-md flex flex-col gap-layout-sm rounded-md border border-primary-border bg-primary-soft px-layout-md py-layout-sm sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-foreground">
@@ -3642,7 +3642,7 @@ export function StockAdjustmentWorkspaceContent({
                 </div>
 
                 <LoadingButton
-                  variant={"workflow"}
+                  variant={"default"}
                   className="w-full"
                   disabled={
                     adjustmentType === "cycle_count" &&

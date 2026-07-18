@@ -425,7 +425,7 @@ vi.mock("../../ui/button", () => ({
   }: {
     asChild?: boolean;
     children?: React.ReactNode;
-    variant?: "workflow";
+    variant?: "default";
   } & React.ButtonHTMLAttributes<HTMLButtonElement>) =>
     asChild ? (
       <>{children}</>
@@ -433,7 +433,7 @@ vi.mock("../../ui/button", () => ({
       <button
         className={[
           className,
-          variant === "workflow" ? "bg-action-workflow" : undefined,
+          variant === "default" ? "bg-primary" : undefined,
         ]
           .filter(Boolean)
           .join(" ")}
@@ -1514,7 +1514,7 @@ describe("TransactionView", () => {
     );
     expect(
       screen.getByRole("button", { name: "Submit payment update" }),
-    ).toHaveClass("bg-action-workflow");
+    ).toHaveClass("bg-primary");
     await user.click(
       screen.getByRole("button", { name: "Submit payment update" }),
     );
@@ -1754,7 +1754,7 @@ describe("TransactionView", () => {
       screen.queryByText("Same-amount payment method update"),
     ).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Payment method" })).not.toHaveClass(
-      "bg-action-workflow",
+      "bg-primary",
     );
   });
 
@@ -2436,7 +2436,7 @@ describe("TransactionView", () => {
     );
     expect(
       screen.getByRole("button", { name: "Submit item adjustment" }),
-    ).toHaveClass("bg-action-workflow");
+    ).toHaveClass("bg-primary");
     await user.click(
       screen.getByRole("button", { name: "Submit item adjustment" }),
     );

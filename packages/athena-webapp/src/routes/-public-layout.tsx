@@ -29,7 +29,7 @@ export function PublicLayout({
         >
           <Link
             to={PUBLIC_HOME_PATH}
-            className="font-display text-base font-light tracking-[0.18em] text-foreground transition-colors duration-standard ease-standard hover:text-signal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="font-display text-base font-light tracking-[0.18em] text-foreground transition-colors duration-standard ease-standard hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             athena
           </Link>
@@ -63,7 +63,7 @@ export function PublicLayout({
                   ? () => emitLandingFunnelEvent("demo_cta")
                   : undefined
               }
-              className="inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-md bg-signal px-layout-sm text-sm font-medium text-signal-foreground transition-colors duration-standard ease-standard hover:bg-signal/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:px-layout-md"
+              className="inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-md bg-primary px-layout-sm text-sm font-medium text-primary-foreground transition-colors duration-standard ease-standard hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:px-layout-md"
             >
               Try the demo
             </Link>

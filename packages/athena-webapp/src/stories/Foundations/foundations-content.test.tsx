@@ -35,7 +35,7 @@ describe("AthenaFoundationsPage", () => {
     ).toBeInTheDocument();
 
     expect(screen.getAllByText(/shell \/ ink/i)).not.toHaveLength(0);
-    expect(screen.getAllByText(/signal \/ action/i)).not.toHaveLength(0);
+    expect(screen.getAllByText(/primary \/ action/i)).not.toHaveLength(0);
     expect(screen.getByText(/display sans/i)).toBeInTheDocument();
     expect(screen.getByText(/operational numerics/i)).toBeInTheDocument();
     expect(screen.getByText(/standard workspace/i)).toBeInTheDocument();
@@ -62,10 +62,11 @@ describe("AthenaFoundationsPage", () => {
     expect(indexCss).toContain("--sidebar-border: 220 16% 88%;");
     expect(indexCss).toContain("--border: 220 16% 88%;");
     expect(indexCss).toContain("--input: 220 16% 88%;");
-    expect(indexCss).toContain("--action-commit: 338 62% 43%;");
-    expect(indexCss).toContain("--action-commit-soft: 338 72% 96%;");
-    expect(indexCss).toContain("--action-workflow: 232 42% 45%;");
-    expect(indexCss).toContain("--action-workflow-soft: 232 58% 96%;");
+    expect(indexCss).toContain("--primary: 232 42% 45%;");
+    expect(indexCss).toContain("--primary-soft: 232 58% 96%;");
+    expect(indexCss).toContain("--primary-border: 232 38% 82%;");
+    expect(indexCss).not.toContain("--signal:");
+    expect(indexCss).not.toMatch(/--action-(commit|workflow):/);
     expect(indexCss).toContain("--action-neutral-strong: var(--foreground);");
   });
 });

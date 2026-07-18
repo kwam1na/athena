@@ -299,7 +299,7 @@ function PosTerminalBlockedShell({
         </p>
         {actionHref && copy.action ? (
           <a
-            className={cn(buttonVariants({ variant: "workflow" }), "mt-6")}
+            className={cn(buttonVariants({ variant: "default" }), "mt-6")}
             href={actionHref}
           >
             <span>{copy.action.label}</span>
@@ -327,7 +327,7 @@ function PosTerminalSignInGate({ redirectTo }: { redirectTo: string }) {
           Sign in again to continue using this register.
         </p>
         <a
-          className={cn(buttonVariants({ variant: "workflow" }), "mt-6")}
+          className={cn(buttonVariants({ variant: "default" }), "mt-6")}
           href={actionHref}
         >
           <span>Sign in to POS</span>
@@ -482,7 +482,7 @@ function UserMenu({
               <Badge
                 variant="outline"
                 size="sm"
-                className="hidden max-w-fit shrink-0 gap-1 border-action-workflow-border bg-action-workflow-soft text-action-workflow md:inline-flex"
+                className="hidden max-w-fit shrink-0 gap-1 border-primary-border bg-primary-soft text-primary md:inline-flex"
               >
                 <ShieldCheck aria-hidden="true" className="h-3 w-3 shrink-0" />
                 <span className="truncate">

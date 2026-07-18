@@ -153,7 +153,7 @@ export function AppShellExhibit({
           <div className="min-w-0 overflow-hidden rounded-lg px-layout-xs py-layout-2xs">
             <div className="flex min-w-0 flex-1 items-center gap-2">
               <p className="font-medium">athena</p>
-              <span className="hidden shrink-0 rounded-full border border-action-workflow-border bg-action-workflow-soft px-1.5 py-px text-[10px] font-medium uppercase leading-none text-action-workflow min-[430px]:inline-flex">
+              <span className="hidden shrink-0 rounded-full border border-primary-border bg-primary-soft px-1.5 py-px text-[10px] font-medium uppercase leading-none text-primary min-[430px]:inline-flex">
                 demo
               </span>
               <p className="hidden text-muted-foreground sm:block">/</p>

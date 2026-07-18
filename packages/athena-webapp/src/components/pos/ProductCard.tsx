@@ -93,7 +93,7 @@ export function ProductCard({
       className={`group flex flex-col gap-4 rounded-lg border p-4 transition-all duration-200 sm:flex-row sm:items-center ${
         !isAvailable
           ? "cursor-not-allowed border-border/70 bg-surface/80 opacity-95"
-          : "border-border bg-surface/80 hover:border-signal/30 hover:shadow-surface"
+          : "border-border bg-surface/80 hover:border-primary/30 hover:shadow-surface"
       }`}
       onClick={handleAddSelectedQuantity}
     >
@@ -223,7 +223,7 @@ export function ProductCard({
             <div className="ml-3 flex border-l border-border/80 pl-3">
               <Button
                 type="button"
-                variant="commit-soft"
+                variant="primary-soft"
                 size="sm"
                 className="h-11 px-4"
                 disabled={!isAvailable}

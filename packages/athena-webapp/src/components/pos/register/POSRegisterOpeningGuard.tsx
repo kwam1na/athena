@@ -764,7 +764,7 @@ function StoreDayNotStartedState({
               isLoading={isStarting}
               onClick={() => setIsStaffAuthOpen(true)}
               type="button"
-              variant="workflow"
+              variant="default"
             >
               Start day
               <CheckCircle2 className="h-4 w-4" />

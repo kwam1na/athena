@@ -230,10 +230,10 @@ export const PaymentsAddedList = ({
     : projectedRemainingDue;
   const summaryToneClass = hasProjectedChangeDue
     ? "border-green-200 bg-green-50"
-    : "border-signal/20 bg-signal/5";
+    : "border-primary/20 bg-primary/5";
   const summaryLabelClass = hasProjectedChangeDue
     ? "text-green-700"
-    : "text-signal";
+    : "text-primary";
   const showSaleSummary = balanceDue !== undefined;
   const isMinimized = variant === "minimized";
   const showPaymentControls =

@@ -80,7 +80,7 @@ describe("StaffAuthenticationDialog", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Authenticate to continue.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Continue" })).toHaveClass(
-      "bg-action-workflow",
+      "bg-primary",
     );
   });
 

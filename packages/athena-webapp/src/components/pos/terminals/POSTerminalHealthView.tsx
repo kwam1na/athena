@@ -531,7 +531,7 @@ export function POSTerminalHealthViewContent({
                           className={cn(
                             "rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface",
                             isCurrentBrowserTerminal
-                              ? "bg-action-workflow-soft/10"
+                              ? "bg-primary-soft/10"
                               : null,
                           )}
                           key={summary.terminal._id}
@@ -553,7 +553,7 @@ export function POSTerminalHealthViewContent({
                                 </Link>
                                 {isCurrentBrowserTerminal ? (
                                   <Badge
-                                    className="inline-flex shrink-0 items-center gap-layout-xs border-action-workflow-border text-action-workflow"
+                                    className="inline-flex shrink-0 items-center gap-layout-xs border-primary-border text-primary"
                                     variant="outline"
                                   >
                                     <MonitorCheck

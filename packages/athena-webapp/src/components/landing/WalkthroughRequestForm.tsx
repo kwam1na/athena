@@ -294,7 +294,7 @@ export function WalkthroughRequestForm({
           type="submit"
           disabled={isPending || !submissionEnabled}
           aria-busy={isPending}
-          className="mt-layout-sm min-h-11 bg-signal text-signal-foreground hover:bg-signal/90"
+          className="mt-layout-sm min-h-11 bg-primary text-primary-foreground hover:bg-primary/90"
         >
           {isPending ? "Sending request…" : "Request a walkthrough"}
         </Button>
@@ -358,7 +358,7 @@ function WalkthroughConfirmation({
       <div className="flex flex-wrap items-center gap-layout-sm">
         <Link
           to="/"
-          className="inline-flex min-h-11 items-center justify-center rounded-md bg-signal px-layout-md text-sm font-medium text-signal-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          className="inline-flex min-h-11 items-center justify-center rounded-md bg-primary px-layout-md text-sm font-medium text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
           Back to Athena overview
         </Link>

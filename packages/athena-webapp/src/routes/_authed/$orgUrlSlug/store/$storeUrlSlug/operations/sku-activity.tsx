@@ -153,7 +153,7 @@ function SkuActivitySearchForm({
         className="gap-layout-xs md:w-auto"
         onClick={onButtonClick}
         type={buttonType}
-        variant="workflow"
+        variant="default"
       >
         <Search className="h-4 w-4" />
         {buttonLabel}

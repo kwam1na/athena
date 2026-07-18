@@ -313,7 +313,7 @@ function ServiceEditForm({
           disabled={isSaving}
           onClick={onSave}
           type="button"
-          variant="workflow"
+          variant="default"
         >
           Save changes
         </Button>
@@ -561,7 +561,7 @@ export function ServicesWorkspaceViewContent({
                             className={cn(
                               "space-y-layout-md rounded-md border border-border bg-background p-layout-md text-left transition-colors hover:border-action-neutral focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                               isSelected
-                                ? "border-action-workflow bg-action-workflow-soft/40"
+                                ? "border-primary bg-primary-soft/40"
                                 : null,
                             )}
                             key={item._id}
@@ -686,7 +686,7 @@ export function ServicesWorkspaceViewContent({
                         className="w-full justify-center"
                         onClick={handleEdit}
                         type="button"
-                        variant="workflow"
+                        variant="default"
                       >
                         <Pencil aria-hidden="true" />
                         Edit service

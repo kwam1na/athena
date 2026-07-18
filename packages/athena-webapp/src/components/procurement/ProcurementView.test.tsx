@@ -674,7 +674,7 @@ describe("ProcurementViewContent", () => {
 
     expect(addPurchaseOrderButton).toHaveClass("w-[160px]");
     expect(addPurchaseOrderButton).toHaveClass("text-action-neutral");
-    expect(addPurchaseOrderButton).not.toHaveClass("text-action-workflow");
+    expect(addPurchaseOrderButton).not.toHaveClass("text-primary");
 
     await user.click(addPurchaseOrderButton);
 
@@ -1257,8 +1257,8 @@ describe("ProcurementViewContent", () => {
     expect(
       within(silkPressRow).getByText("PO-001").closest(".rounded-md"),
     ).toHaveClass(
-      "border-action-workflow-border",
-      "bg-action-workflow-soft/40",
+      "border-primary-border",
+      "bg-primary-soft/40",
     );
     const receivingSection = screen
       .getByText("Receiving form for po-1")

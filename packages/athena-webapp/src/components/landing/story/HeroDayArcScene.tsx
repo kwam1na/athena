@@ -53,7 +53,7 @@ export function HeroDayArcScene() {
         <div className="relative h-px bg-border">
           <div
             data-arc-line
-            className="absolute inset-0 origin-left bg-signal/70"
+            className="absolute inset-0 origin-left bg-primary/70"
             aria-hidden="true"
           />
         </div>
@@ -62,7 +62,7 @@ export function HeroDayArcScene() {
             <li key={moment.key} className="flex w-16 flex-col items-center text-center sm:w-24">
               <span
                 data-arc-dot
-                className="h-[9px] w-[9px] rounded-full bg-signal"
+                className="h-[9px] w-[9px] rounded-full bg-primary"
                 aria-hidden="true"
               />
               <span data-arc-label className="mt-layout-sm block">

@@ -169,8 +169,8 @@ export function PosRecoveryCodeForm({
           isLoading={isSigningIn}
           disabled={!canSubmit}
           type="submit"
-          variant="workflow"
-          className="group relative z-10 h-control-standard w-fit shadow-[0_16px_34px_-22px_hsl(var(--signal)/0.72)]"
+          variant="default"
+          className="group relative z-10 h-control-standard w-fit shadow-[0_16px_34px_-22px_hsl(var(--primary)/0.72)]"
         >
           Continue
           <ArrowRight className="h-4 w-4 transition-transform duration-standard ease-emphasized group-hover:translate-x-1 group-focus-visible:translate-x-1" />

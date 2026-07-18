@@ -1481,22 +1481,22 @@ export function OrderSummary({
                 disabled={disabled || !onCompletionBlockAction}
                 onClick={onCompletionBlockAction}
                 className={cn(
-                  "flex w-full items-center gap-3 rounded-xl border border-action-workflow-border bg-action-workflow-soft px-3.5 py-3 text-left text-action-workflow transition-colors hover:bg-action-workflow-soft/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-default disabled:hover:bg-action-workflow-soft",
+                  "flex w-full items-center gap-3 rounded-xl border border-primary-border bg-primary-soft px-3.5 py-3 text-left text-primary transition-colors hover:bg-primary-soft/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-default disabled:hover:bg-primary-soft",
                   !shouldDockPaymentButtons && "col-span-2",
                 )}
               >
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/70 text-action-workflow">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/70 text-primary">
                   <UserPlus className="h-4 w-4" aria-hidden="true" />
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block text-sm font-semibold">
                     {completionBlockTitle}
                   </span>
-                  <span className="mt-0.5 block text-xs leading-5 text-action-workflow/80">
+                  <span className="mt-0.5 block text-xs leading-5 text-primary/80">
                     {completionBlockDetail}
                   </span>
                 </span>
-                <span className="shrink-0 rounded-md border border-action-workflow-border/80 bg-white/70 px-2.5 py-1 text-xs font-semibold text-action-workflow">
+                <span className="shrink-0 rounded-md border border-primary-border/80 bg-white/70 px-2.5 py-1 text-xs font-semibold text-primary">
                   Find/add
                 </span>
               </button>

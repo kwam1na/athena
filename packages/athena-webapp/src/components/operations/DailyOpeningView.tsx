@@ -892,7 +892,7 @@ function getBucketCountClassName(status: BucketStatus) {
     status === "review" &&
       "border-warning/30 bg-warning/15 text-warning-foreground",
     status === "carry-forward" &&
-      "border-action-workflow/20 bg-action-workflow-soft text-action-workflow",
+      "border-primary/20 bg-primary-soft text-primary",
     status === "ready" && "border-success/20 bg-success/10 text-success",
   );
 }
@@ -1143,7 +1143,7 @@ function OpeningItemCard({
           <input
             aria-label={`Acknowledge ${title}`}
             checked={Boolean(selected)}
-            className="mt-1 h-4 w-4 rounded border-border text-signal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="mt-1 h-4 w-4 rounded border-border text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             onChange={(event) => onSelectedChange?.(event.target.checked)}
             type="checkbox"
           />
@@ -1203,7 +1203,7 @@ function BucketSection({
     status === "blocked" && "bg-danger/10 text-danger",
     status === "review" && "bg-warning/15 text-warning-foreground",
     status === "carry-forward" &&
-      "bg-action-workflow-soft text-action-workflow",
+      "bg-primary-soft text-primary",
     status === "ready" && "bg-success/10 text-success",
   );
   const Icon =
@@ -1421,9 +1421,9 @@ function OpeningRail({
     {
       isClear: snapshot.carryForwardItems.length === 0,
       label: "Carry forward",
-      tone: "workflow",
+      tone: "primary",
       value: formatCount(snapshot.carryForwardItems.length, "item", "None"),
-      valueTone: snapshot.carryForwardItems.length > 0 ? "workflow" : "plain",
+      valueTone: snapshot.carryForwardItems.length > 0 ? "primary" : "plain",
     },
   ];
 
@@ -1487,7 +1487,7 @@ function OpeningRail({
                       "h-2 w-2 shrink-0 rounded-full",
                       item.tone === "danger" && "bg-danger",
                       item.tone === "warning" && "bg-warning",
-                      item.tone === "workflow" && "bg-action-workflow",
+                      item.tone === "primary" && "bg-primary",
                       item.tone === "success" && "bg-success",
                     )}
                   />
@@ -1498,7 +1498,7 @@ function OpeningRail({
                     "shrink-0 text-right font-medium text-foreground",
                     item.valueTone === "danger" && "text-danger",
                     item.valueTone === "warning" && "text-warning",
-                    item.valueTone === "workflow" && "text-action-workflow",
+                    item.valueTone === "primary" && "text-primary",
                   )}
                 >
                   {item.isClear ? (
@@ -1606,7 +1606,7 @@ function OpeningRail({
               isLoading={isStarting}
               onClick={onStartDay}
               type="button"
-              variant="workflow"
+              variant="default"
             >
               Start Day
             </LoadingButton>
