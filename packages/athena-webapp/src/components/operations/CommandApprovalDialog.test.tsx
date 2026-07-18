@@ -199,7 +199,7 @@ describe("CommandApprovalDialog", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Approve and continue" }),
-    ).toHaveClass("bg-action-workflow");
+    ).toHaveClass("bg-primary");
   });
 
   it("formats closeout variance approval copy as stored currency", () => {

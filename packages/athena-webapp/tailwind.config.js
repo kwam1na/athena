@@ -61,6 +61,8 @@ export default {
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
+          soft: "hsl(var(--primary-soft))",
+          border: "hsl(var(--primary-border))",
         },
         secondary: {
           DEFAULT: "hsl(var(--secondary))",
@@ -87,10 +89,6 @@ export default {
           DEFAULT: "hsl(var(--shell))",
           foreground: "hsl(var(--shell-foreground))",
         },
-        signal: {
-          DEFAULT: "hsl(var(--signal))",
-          foreground: "hsl(var(--signal-foreground))",
-        },
         "transaction-signal": {
           DEFAULT: "hsl(var(--transaction-signal))",
           foreground: "hsl(var(--transaction-signal-foreground))",
@@ -108,14 +106,6 @@ export default {
           border: "hsl(var(--comparison-secondary-border))",
         },
         action: {
-          commit: "hsl(var(--action-commit))",
-          "commit-foreground": "hsl(var(--action-commit-foreground))",
-          "commit-soft": "hsl(var(--action-commit-soft))",
-          "commit-border": "hsl(var(--action-commit-border))",
-          workflow: "hsl(var(--action-workflow))",
-          "workflow-foreground": "hsl(var(--action-workflow-foreground))",
-          "workflow-soft": "hsl(var(--action-workflow-soft))",
-          "workflow-border": "hsl(var(--action-workflow-border))",
           neutral: "hsl(var(--action-neutral))",
           "neutral-soft": "hsl(var(--action-neutral-soft))",
           "neutral-strong": "hsl(var(--action-neutral-strong))",

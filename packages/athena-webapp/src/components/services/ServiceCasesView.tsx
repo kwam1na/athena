@@ -473,7 +473,7 @@ export function ServiceCasesViewContent({
                   disabled={isSaving}
                   onClick={handleCreateCase}
                   type="button"
-                  variant="workflow"
+                  variant="default"
                 >
                   Create service case
                 </Button>
@@ -506,7 +506,7 @@ export function ServiceCasesViewContent({
                     <button
                       className={`w-full rounded-md border bg-background p-3 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                         serviceCase._id === selectedCaseId
-                          ? "border-signal"
+                          ? "border-primary"
                           : "border-border"
                       }`}
                       key={serviceCase._id}
@@ -707,7 +707,7 @@ export function ServiceCasesViewContent({
                               toast.success("Payment recorded");
                             }}
                             type="button"
-                            variant="workflow"
+                            variant="default"
                           >
                             Record payment
                           </Button>
@@ -765,7 +765,7 @@ export function ServiceCasesViewContent({
                               toast.success("Service case updated");
                             }}
                             type="button"
-                            variant="workflow"
+                            variant="default"
                           >
                             Update status
                           </Button>
@@ -854,7 +854,7 @@ export function ServiceCasesViewContent({
                               toast.success("Line item added");
                             }}
                             type="button"
-                            variant="workflow"
+                            variant="default"
                           >
                             Add line item
                           </Button>
@@ -911,7 +911,7 @@ export function ServiceCasesViewContent({
                               toast.success("Material usage recorded");
                             }}
                             type="button"
-                            variant="workflow"
+                            variant="default"
                           >
                             Record material usage
                           </Button>

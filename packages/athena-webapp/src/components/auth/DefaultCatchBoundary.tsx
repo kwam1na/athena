@@ -59,7 +59,7 @@ export function DefaultCatchBoundary({ error }: ErrorComponentProps) {
 
         <div className="flex flex-col items-start gap-2 sm:flex-row sm:flex-wrap">
           {isExpiredDemoSession ? (
-            <Button asChild className={actionClassName} variant="workflow">
+            <Button asChild className={actionClassName} variant="default">
               <Link to="/demo">
                 <RotateCcw aria-hidden="true" className="h-4 w-4" />
                 Open demo again
@@ -93,7 +93,7 @@ export function DefaultCatchBoundary({ error }: ErrorComponentProps) {
                 router.invalidate();
               }}
               className={actionClassName}
-              variant="workflow"
+              variant="default"
             >
               Try again
             </Button>

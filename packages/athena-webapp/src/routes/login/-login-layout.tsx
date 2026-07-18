@@ -240,7 +240,7 @@ export function LoginLayout() {
       <div className="absolute left-layout-xl top-layout-xl z-20">
         <Link
           to={PUBLIC_HOME_PATH}
-          className="flex h-10 items-center justify-center rounded-md px-layout-sm font-display text-base font-light tracking-[0.18em] text-foreground transition-colors duration-standard ease-standard hover:text-signal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          className="flex h-10 items-center justify-center rounded-md px-layout-sm font-display text-base font-light tracking-[0.18em] text-foreground transition-colors duration-standard ease-standard hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
           athena
         </Link>

@@ -270,7 +270,7 @@ export function RegisterCustomerAttribution({
               className="h-8 px-3 text-xs"
               disabled={disabled}
               onClick={() => setIsExpanded(true)}
-              variant="workflow-soft"
+              variant="primary-soft"
             >
               <Search className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
               Find or add customer

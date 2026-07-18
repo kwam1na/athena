@@ -126,7 +126,7 @@ export function SearchResultsSection({
             <Button
               type="button"
               size="sm"
-              variant="workflow"
+              variant="default"
               className="mt-5"
               aria-keyshortcuts="Meta+Enter Control+Enter"
               onClick={() => onQuickAddProduct?.()}
@@ -163,7 +163,7 @@ export function SearchResultsSection({
             <Button
               type="button"
               size="sm"
-              variant="workflow"
+              variant="default"
               className="w-full sm:w-auto"
               aria-keyshortcuts="Meta+Enter Control+Enter"
               onClick={() => onQuickAddProduct(variantSourceProduct)}

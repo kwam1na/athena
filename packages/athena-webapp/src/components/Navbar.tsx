@@ -24,7 +24,7 @@ export const AppHeader = () => {
       {showDevIndicator ? (
         <span
           aria-label="Development environment"
-          className="hidden shrink-0 rounded-full border border-action-workflow-border bg-action-workflow-soft px-1.5 py-px text-[10px] font-medium uppercase leading-none text-action-workflow min-[430px]:inline-flex"
+          className="hidden shrink-0 rounded-full border border-primary-border bg-primary-soft px-1.5 py-px text-[10px] font-medium uppercase leading-none text-primary min-[430px]:inline-flex"
           title="Development environment"
         >
           dev

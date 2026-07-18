@@ -448,7 +448,7 @@ describe("RegisterSessionViewContent", () => {
     expect(screen.getByText("Counted cash ($)")).toBeInTheDocument();
     expect(screen.getByLabelText("Closeout counted cash")).toHaveValue("171");
     expect(screen.getByRole("button", { name: "Submit closeout" })).toHaveClass(
-      "bg-action-workflow",
+      "bg-primary",
     );
     expect(screen.queryByText("Deposit history")).not.toBeInTheDocument();
     expect(screen.queryByText("Record cash deposit")).not.toBeInTheDocument();
@@ -3841,7 +3841,7 @@ describe("RegisterSessionViewContent", () => {
     expect(screen.getByText("$10")).toBeInTheDocument();
     expect(screen.getByText("Corrected amount ($)")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Submit" })).toHaveClass(
-      "bg-action-workflow",
+      "bg-primary",
     );
     expect(
       screen
@@ -4324,7 +4324,7 @@ describe("RegisterSessionViewContent", () => {
     const approveVarianceButton = screen.getByRole("button", {
       name: "Approve variance",
     });
-    expect(approveVarianceButton).toHaveClass("bg-action-workflow");
+    expect(approveVarianceButton).toHaveClass("bg-primary");
     await user.click(approveVarianceButton);
     await user.click(
       screen.getByRole("button", {

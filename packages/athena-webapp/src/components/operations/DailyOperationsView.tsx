@@ -1247,10 +1247,10 @@ function getPrimaryActionEmphasis(status: PrimaryActionEmphasisStatus) {
       return {
         Icon: null,
         className: cn(
-          "border-action-workflow-border bg-action-workflow-soft text-action-workflow shadow-[0_1px_0_hsl(var(--action-workflow)/0.10)] hover:border-action-workflow/45 hover:bg-action-workflow-soft/75 hover:text-action-workflow",
+          "border-primary-border bg-primary-soft text-primary shadow-[0_1px_0_hsl(var(--primary)/0.10)] hover:border-primary/45 hover:bg-primary-soft/75 hover:text-primary",
           sharedClassName,
         ),
-        iconClassName: "text-action-workflow",
+        iconClassName: "text-primary",
       };
     case "historical_operating":
       return {
@@ -2660,7 +2660,7 @@ function DailyOperationsWeekMetricsPreview({
       </div>
       <div
         aria-label="Load analytics for week at a glance"
-        className="group relative cursor-pointer overflow-x-auto rounded-lg border border-border bg-surface-raised p-layout-sm shadow-surface transition-[box-shadow] duration-200 ease-out hover:shadow-sm focus:outline-none focus-visible:border-action-workflow-border focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-within:border-action-workflow-border focus-within:shadow-sm"
+        className="group relative cursor-pointer overflow-x-auto rounded-lg border border-border bg-surface-raised p-layout-sm shadow-surface transition-[box-shadow] duration-200 ease-out hover:shadow-sm focus:outline-none focus-visible:border-primary-border focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-within:border-primary-border focus-within:shadow-sm"
         onClick={() => {
           if (!isLoading) onRequest();
         }}
@@ -2680,7 +2680,7 @@ function DailyOperationsWeekMetricsPreview({
               className={cn(
                 "w-[10.5rem] shrink-0 snap-start rounded-md border px-layout-sm py-layout-sm text-left text-muted-foreground md:w-auto",
                 metric.isSelected
-                  ? "border-action-workflow-border bg-action-workflow-soft ring-1 ring-inset ring-action-workflow-border"
+                  ? "border-primary-border bg-primary-soft ring-1 ring-inset ring-primary-border"
                   : "border-transparent",
               )}
               key={metric.operatingDate || index}
@@ -2888,7 +2888,7 @@ function DailyOperationsStorePulsePreviewList({
   const panelClassName =
     variant === "canvas"
       ? "group relative cursor-pointer transition-[background-color] duration-200 ease-out hover:bg-surface/45 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-within:bg-surface/45"
-      : "group relative cursor-pointer rounded-lg border border-border bg-surface-raised shadow-surface transition-[box-shadow] duration-200 ease-out hover:shadow-sm focus:outline-none focus-visible:border-action-workflow-border focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-within:border-action-workflow-border focus-within:shadow-sm";
+      : "group relative cursor-pointer rounded-lg border border-border bg-surface-raised shadow-surface transition-[box-shadow] duration-200 ease-out hover:shadow-sm focus:outline-none focus-visible:border-primary-border focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-within:border-primary-border focus-within:shadow-sm";
   const rowClassName =
     variant === "canvas"
       ? "grid gap-2 py-layout-sm sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center"
@@ -3253,12 +3253,12 @@ function WeekMetricsStrip({
             const cardClassName = cn(
               "w-[10.5rem] shrink-0 snap-start rounded-md border px-layout-sm py-layout-sm text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:w-auto",
               metric.isSelected
-                ? "border-action-workflow-border bg-action-workflow-soft text-foreground ring-1 ring-inset ring-action-workflow-border"
+                ? "border-primary-border bg-primary-soft text-foreground ring-1 ring-inset ring-primary-border"
                 : "border-transparent text-muted-foreground",
               isFutureDate
                 ? "cursor-not-allowed opacity-60"
                 : metric.isSelected
-                  ? "hover:bg-action-workflow-soft"
+                  ? "hover:bg-primary-soft"
                   : "hover:bg-background",
             );
             const content = (

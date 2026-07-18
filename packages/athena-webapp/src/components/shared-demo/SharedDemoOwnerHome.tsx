@@ -27,7 +27,7 @@ export function SharedDemoOwnerHome({ routes }: { routes: SharedDemoRoutes }) {
   return (
     <main className="mx-auto w-full max-w-7xl overflow-auto px-layout-xs py-layout-md sm:px-layout-md md:py-layout-xl">
       <section aria-labelledby="shared-demo-heading" className="border-b border-border pb-layout-xl">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-signal">Owner view · Demo</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Owner view · Demo</p>
         <h1 id="shared-demo-heading" className="mt-layout-sm font-display text-4xl font-light leading-tight text-foreground sm:text-5xl">
           See what is happening today
         </h1>
@@ -49,7 +49,7 @@ export function SharedDemoOwnerHome({ routes }: { routes: SharedDemoRoutes }) {
         <div className="mt-layout-lg grid gap-layout-sm md:grid-cols-2">
           {workflows.map(([title, detail, Icon, route]) => (
             <Link key={route} to={routes[route]} className="group flex min-h-20 items-center gap-layout-md rounded-lg border border-border bg-background p-layout-md text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
-              <Icon aria-hidden="true" className="h-5 w-5 shrink-0 text-signal" />
+              <Icon aria-hidden="true" className="h-5 w-5 shrink-0 text-primary" />
               <span><span className="block font-medium text-foreground">{title}</span><span className="mt-layout-2xs block text-sm leading-6 text-muted-foreground">{detail}</span></span>
             </Link>
           ))}

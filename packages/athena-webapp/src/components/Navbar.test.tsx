@@ -50,9 +50,9 @@ describe("AppHeader", () => {
       "/",
     );
     expect(screen.getByLabelText("Development environment")).toHaveClass(
-      "border-action-workflow-border",
-      "bg-action-workflow-soft",
-      "text-action-workflow",
+      "border-primary-border",
+      "bg-primary-soft",
+      "text-primary",
     );
     expect(screen.getByTestId("organization-switcher")).toHaveClass(
       "max-w-[10.75rem]",

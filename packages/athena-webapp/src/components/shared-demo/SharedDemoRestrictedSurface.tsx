@@ -6,7 +6,7 @@ export function SharedDemoRestrictedSurface({ homeHref }: { homeHref: string }) 
       aria-labelledby="shared-demo-restricted-title"
       className="mx-auto my-layout-xl w-full max-w-2xl border-y border-border py-layout-xl"
     >
-      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-signal">
+      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">
         Demo boundary
       </p>
       <h1
@@ -21,7 +21,7 @@ export function SharedDemoRestrictedSurface({ homeHref }: { homeHref: string }) 
         sales, stock, cash, fulfillment, team coordination, and daily work.
       </p>
       <Link
-        className="mt-layout-lg inline-flex min-h-11 items-center font-semibold text-signal underline-offset-4 hover:underline"
+        className="mt-layout-lg inline-flex min-h-11 items-center font-semibold text-primary underline-offset-4 hover:underline"
         to={homeHref}
       >
         Return to owner view

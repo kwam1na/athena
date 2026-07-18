@@ -371,7 +371,7 @@ function SourceList({
             className={cn(
               "group w-full bg-background px-layout-md py-layout-lg text-left transition-[background-color,transform] duration-150 ease-out active:scale-[0.998] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
               source.isSelected
-                ? "bg-action-workflow-soft/55 hover:bg-action-workflow-soft/70"
+                ? "bg-primary-soft/55 hover:bg-primary-soft/70"
                 : "hover:bg-muted/40",
             )}
             onClick={() =>

@@ -347,7 +347,7 @@ export function HomepageProductPickerDialog({
                             className={cn(
                               "rounded-md border px-2.5 py-1 text-xs font-medium transition-colors",
                               isSelected
-                                ? "border-action-workflow-border bg-action-workflow-soft text-foreground"
+                                ? "border-primary-border bg-primary-soft text-foreground"
                                 : "border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground",
                             )}
                             key={category.key}
@@ -473,7 +473,7 @@ export function HomepageProductPickerDialog({
                               {getProductAvailabilityLabel(product)}
                             </span>
                           ) : null}
-                          <span className="inline-flex items-center gap-1 rounded-md bg-action-workflow-soft px-layout-sm py-layout-2xs text-xs font-medium text-action-workflow">
+                          <span className="inline-flex items-center gap-1 rounded-md bg-primary-soft px-layout-sm py-layout-2xs text-xs font-medium text-primary">
                             <PackagePlus className="h-3 w-3" />
                             {pendingSelectionKey === selectionKey
                               ? "Saving..."
@@ -559,7 +559,7 @@ export function HomepageProductPickerDialog({
                           <span className="rounded-full border border-border bg-surface px-layout-sm py-layout-2xs text-xs text-muted-foreground">
                             {getSkuAvailabilityLabel(sku)}
                           </span>
-                          <span className="inline-flex items-center gap-1 rounded-md bg-action-workflow-soft px-layout-sm py-layout-2xs text-xs font-medium text-action-workflow">
+                          <span className="inline-flex items-center gap-1 rounded-md bg-primary-soft px-layout-sm py-layout-2xs text-xs font-medium text-primary">
                             <PackagePlus className="h-3 w-3" />
                             {pendingSelectionKey === selectionKey
                               ? "Saving..."

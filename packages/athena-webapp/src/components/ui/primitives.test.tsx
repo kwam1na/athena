@@ -68,7 +68,7 @@ describe("primitive sizing and token semantics", () => {
     ).toHaveClass("text-sm", "text-muted-foreground");
   });
 
-  it("uses action tokens for primary actions and signal tokens for badges", () => {
+  it("uses primary tokens for actions and badges", () => {
     render(
       <>
         <Button>Save sale</Button>
@@ -77,16 +77,16 @@ describe("primitive sizing and token semantics", () => {
     );
 
     expect(screen.getByRole("button", { name: "Save sale" })).toHaveClass(
-      "bg-action-commit",
-      "text-action-commit-foreground",
+      "bg-primary",
+      "text-primary-foreground",
     );
     expect(screen.getByText("Ready")).toHaveClass(
-      "bg-signal",
-      "text-signal-foreground",
+      "bg-primary",
+      "text-primary-foreground",
     );
   });
 
-  it("uses signal tokens for selection controls", () => {
+  it("uses primary tokens for selection controls", () => {
     render(
       <>
         <Checkbox aria-label="Confirmed" defaultChecked />
@@ -98,15 +98,17 @@ describe("primitive sizing and token semantics", () => {
     );
 
     expect(screen.getByRole("checkbox", { name: "Confirmed" })).toHaveClass(
-      "border-signal",
-      "data-[state=checked]:bg-signal",
+      "border-primary",
+      "data-[state=checked]:bg-primary",
     );
     expect(screen.getByRole("switch", { name: "Active" })).toHaveClass(
-      "data-[state=checked]:bg-signal",
+      "data-[state=checked]:bg-primary",
     );
     expect(screen.getByRole("radio", { name: "Cash" })).toHaveClass(
-      "border-signal",
-      "text-signal",
+      "appearance-none",
+      "border-primary",
+      "checked:bg-primary",
+      "text-primary",
     );
   });
 

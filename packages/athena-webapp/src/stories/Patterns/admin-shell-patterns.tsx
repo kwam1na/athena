@@ -111,7 +111,7 @@ function PatternShell({
   className?: string;
 }) {
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_hsl(var(--signal)/0.16),_transparent_34%),radial-gradient(circle_at_top_right,_hsl(var(--primary)/0.12),_transparent_28%),linear-gradient(180deg,_hsl(var(--background)),_hsl(var(--background))_45%,_hsl(var(--muted)/0.18))] p-4 text-foreground md:p-8">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_hsl(var(--primary)/0.16),_transparent_34%),radial-gradient(circle_at_top_right,_hsl(var(--primary)/0.12),_transparent_28%),linear-gradient(180deg,_hsl(var(--background)),_hsl(var(--background))_45%,_hsl(var(--muted)/0.18))] p-4 text-foreground md:p-8">
       <div
         className={cn(
           "mx-auto flex min-h-[calc(100vh-2rem)] w-full max-w-7xl overflow-hidden rounded-[2rem] border border-border bg-background/96 shadow-[0_24px_80px_-24px_hsl(var(--foreground)/0.22)] md:min-h-[calc(100vh-4rem)]",
@@ -171,7 +171,7 @@ function PatternSidebarItem({
       className={cn(
         "flex items-center justify-between rounded-2xl px-3 py-2.5 transition-colors",
         active
-          ? "bg-[hsl(var(--signal)/0.16)] text-shell-foreground"
+          ? "bg-[hsl(var(--primary)/0.16)] text-shell-foreground"
           : "text-shell-foreground/78 hover:bg-white/6 hover:text-shell-foreground",
       )}
     >
@@ -179,7 +179,7 @@ function PatternSidebarItem({
         <span
           className={cn(
             "flex h-9 w-9 items-center justify-center rounded-xl border border-white/8",
-            active ? "bg-[hsl(var(--signal))] text-[hsl(var(--signal-foreground))]" : "bg-white/5 text-shell-foreground/80",
+            active ? "bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]" : "bg-white/5 text-shell-foreground/80",
           )}
         >
           <Icon className="h-4 w-4" />
@@ -215,7 +215,7 @@ function PatternSidebar() {
     <aside className="flex h-full w-full flex-col bg-shell text-shell-foreground shadow-overlay">
       <div className="border-b border-white/8 p-5">
         <div className="flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[hsl(var(--signal))] text-[hsl(var(--signal-foreground))] shadow-[0_12px_24px_-10px_hsl(var(--signal)/0.65)]">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] shadow-[0_12px_24px_-10px_hsl(var(--primary)/0.65)]">
             <Sparkles className="h-5 w-5" />
           </div>
           <div className="space-y-0.5">
@@ -333,7 +333,7 @@ function PatternHeader() {
         </div>
 
         <div className="flex flex-wrap gap-2 border-t border-border/70 pt-4">
-          <Badge className="rounded-full bg-[hsl(var(--signal)/0.15)] text-[hsl(var(--signal))] hover:bg-[hsl(var(--signal)/0.15)]">
+          <Badge className="rounded-full bg-[hsl(var(--primary)/0.15)] text-[hsl(var(--primary))] hover:bg-[hsl(var(--primary)/0.15)]">
             Shift open
           </Badge>
           <Badge variant="outline" className="rounded-full">

@@ -2775,7 +2775,7 @@ function RemoteAssistPanel({
             }
             onClick={handleStartRemoteAssist}
             type="button"
-            variant="workflow"
+            variant="default"
           >
             <MonitorUp aria-hidden="true" className="mr-2 h-4 w-4" />
             {isStarting ? "Starting" : "Start session"}

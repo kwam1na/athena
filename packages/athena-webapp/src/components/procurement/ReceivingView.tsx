@@ -358,7 +358,7 @@ export function ReceivingView({
           className="w-full"
           isLoading={isSubmitting}
           onClick={handleSubmit}
-          variant="workflow"
+          variant="default"
         >
           Record receiving batch
         </LoadingButton>

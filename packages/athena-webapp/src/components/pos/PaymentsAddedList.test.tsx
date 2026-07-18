@@ -86,10 +86,10 @@ describe("PaymentsAddedList", () => {
         stripWhitespace(currencyFormatter.format(0)),
       );
       expect(getSummaryPanel()).toHaveClass(
-        "border-signal/20",
-        "bg-signal/5",
+        "border-primary/20",
+        "bg-primary/5",
       );
-      expect(label).toHaveClass("text-signal");
+      expect(label).toHaveClass("text-primary");
     },
   );
 

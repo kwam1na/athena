@@ -44,15 +44,15 @@ function renderGate(overrides: Partial<RegisterDrawerGateState> = {}) {
 }
 
 describe("RegisterDrawerGate", () => {
-  it("uses workflow styling for opening the drawer", () => {
+  it("uses primary styling for opening the drawer", () => {
     renderGate();
 
     expect(screen.getByRole("button", { name: "Open drawer" })).toHaveClass(
-      "bg-action-workflow",
+      "bg-primary",
     );
   });
 
-  it("uses workflow styling for opening float corrections", () => {
+  it("uses primary styling for opening float corrections", () => {
     renderGate({
       correctedOpeningFloat: "5",
       correctionReason: "Opening count was corrected.",
@@ -61,7 +61,7 @@ describe("RegisterDrawerGate", () => {
     });
 
     expect(screen.getByRole("button", { name: "Save correction" })).toHaveClass(
-      "bg-action-workflow",
+      "bg-primary",
     );
   });
 
@@ -407,7 +407,7 @@ describe("RegisterDrawerGate", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Open replacement drawer" }),
-    ).toHaveClass("bg-action-workflow");
+    ).toHaveClass("bg-primary");
   });
 
   it("gives authority persistence failures a dedicated retry action", async () => {

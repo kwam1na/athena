@@ -857,7 +857,7 @@ export function QuickAddProductDialog({
                   </div>
                   <Button
                     type="button"
-                    variant="workflow"
+                    variant="default"
                     size="sm"
                     className="h-9 w-full justify-center"
                     onClick={handleAttachBarcode}
@@ -1111,7 +1111,7 @@ export function QuickAddProductDialog({
             <Button
               type="submit"
               disabled={isSaving}
-              variant="workflow"
+              variant="default"
             >
               {isQuickAddSaving ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

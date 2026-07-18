@@ -30,7 +30,7 @@ function CashControlsButton({
 }: {
   className?: string;
   registerSessionId?: string;
-  variant?: "default" | "ghost" | "workflow";
+  variant?: "default" | "ghost";
 }) {
   return (
     <Button asChild className={className} type="button" variant={variant}>
@@ -192,7 +192,7 @@ export function RegisterDrawerGate({
               isLoading={Boolean(drawerGate.isClearingSale)}
               onClick={() => void drawerGate.onClearSale?.()}
               type="button"
-              variant="workflow"
+              variant="default"
             >
               Clear sale
             </LoadingButton>
@@ -381,7 +381,7 @@ export function RegisterDrawerGate({
               disabled={Boolean(drawerGate.isCorrectingOpeningFloat)}
               isLoading={Boolean(drawerGate.isCorrectingOpeningFloat)}
               type="submit"
-              variant="workflow"
+              variant="default"
             >
               Save correction
             </LoadingButton>
@@ -531,7 +531,7 @@ export function RegisterDrawerGate({
                   isLoading={Boolean(drawerGate.isSubmitting)}
                   onClick={handleSubmitButtonClick}
                   type="button"
-                  variant="workflow"
+                  variant="default"
                 >
                   {drawerGate.closeoutSecondaryActionLabel ??
                     "Open replacement drawer"}
@@ -542,7 +542,7 @@ export function RegisterDrawerGate({
                 <CashControlsButton
                   className="w-full sm:w-auto"
                   registerSessionId={drawerGate.cashControlsRegisterSessionId}
-                  variant="workflow"
+                  variant="default"
                 />
               ) : null}
 
@@ -689,7 +689,7 @@ export function RegisterDrawerGate({
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                 <LoadingButton
                   className="w-full sm:w-auto"
-                  variant={"workflow"}
+                  variant={"default"}
                   disabled={Boolean(drawerGate.isCloseoutSubmitting)}
                   isLoading={Boolean(drawerGate.isCloseoutSubmitting)}
                   type="submit"
@@ -833,7 +833,7 @@ export function RegisterDrawerGate({
               drawerGate.isSubmitting || drawerGate.canOpenDrawer === false
             }
             type="submit"
-            variant="workflow"
+            variant="default"
           >
             {drawerGate.isSubmitting
               ? "Opening drawer"

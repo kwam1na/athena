@@ -187,7 +187,7 @@ function FullWidthOperationsExample() {
             {[54, 72, 48, 86, 64, 92, 76, 88].map((height, index) => (
               <div
                 key={`${height}-${index}`}
-                className="rounded-t-md bg-[hsl(var(--signal)/0.55)]"
+                className="rounded-t-md bg-[hsl(var(--primary)/0.55)]"
                 style={{ height: `${height}%` }}
               />
             ))}

@@ -68,10 +68,10 @@ const COLOR_ROLES: readonly ColorRole[] = [
     detail: "Warm neutral canvas that softens contrast without losing scan speed.",
   },
   {
-    label: "Signal / action",
-    token: "--signal",
-    foregroundToken: "--signal-foreground",
-    detail: "Single-action accent for primary buttons, focus, and key decisions.",
+    label: "Primary / action",
+    token: "--primary",
+    foregroundToken: "--primary-foreground",
+    detail: "Canonical accent for primary buttons, focus, and key decisions.",
   },
   {
     label: "Success / trust",
@@ -269,9 +269,9 @@ function SpaceTokenRow({ detail, label, token }: SpaceToken) {
         {label}
       </div>
       <div className="flex items-center gap-3">
-        <span className="h-3 w-3 rounded-full bg-signal" />
+        <span className="h-3 w-3 rounded-full bg-primary" />
         <span
-          className="block rounded-full bg-signal/25"
+          className="block rounded-full bg-primary/25"
           style={{ height: "0.5rem", width: `var(${token})` }}
         />
       </div>
@@ -306,7 +306,7 @@ function DensityCard({
               </p>
             </div>
             <button
-              className="rounded-full bg-signal px-4 text-sm font-semibold text-signal-foreground opacity-80"
+              className="rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground opacity-80"
               disabled
               style={{ height: `var(${controlToken})` }}
               type="button"
@@ -354,7 +354,7 @@ function MotionCard({ animationClassName, detail, durationToken, label }: Motion
         </span>
       </div>
       <div className="mt-4 overflow-hidden rounded-full bg-shell/10 p-1">
-        <div className={cn("h-3 w-1/3 rounded-full bg-signal", animationClassName)} />
+        <div className={cn("h-3 w-1/3 rounded-full bg-primary", animationClassName)} />
       </div>
     </div>
   );

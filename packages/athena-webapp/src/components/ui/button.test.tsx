@@ -21,24 +21,20 @@ describe("Button", () => {
   it("renders semantic action variants", () => {
     render(
       <>
-        <Button variant="commit-soft">Add item</Button>
-        <Button variant="workflow">Correct</Button>
-        <Button variant="workflow-soft">Selected correction</Button>
+        <Button>Correct</Button>
+        <Button variant="primary-soft">Selected correction</Button>
         <Button variant="utility">View receipt</Button>
         <Button variant="utility-strong">Print receipt</Button>
       </>
     );
 
-    expect(screen.getByRole("button", { name: "Add item" })).toHaveClass(
-      "bg-action-commit-soft",
-      "text-action-commit",
-    );
     expect(screen.getByRole("button", { name: "Correct" })).toHaveClass(
-      "bg-action-workflow",
+      "bg-primary",
+      "text-primary-foreground",
     );
     expect(
       screen.getByRole("button", { name: "Selected correction" }),
-    ).toHaveClass("bg-action-workflow-soft");
+    ).toHaveClass("border-primary-border", "bg-primary-soft", "text-primary");
     expect(screen.getByRole("button", { name: "View receipt" })).toHaveClass(
       "text-action-neutral",
     );

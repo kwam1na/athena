@@ -2338,10 +2338,10 @@ describe("DailyOperationsViewContent", () => {
       name: "Start EOD Review",
     });
     expect(activeEodReviewLink).toHaveClass(
-      "border-action-workflow-border",
-      "bg-action-workflow-soft",
-      "text-action-workflow",
-      "hover:text-action-workflow",
+      "border-primary-border",
+      "bg-primary-soft",
+      "text-primary",
+      "hover:text-primary",
       "active:scale-[0.98]",
     );
     expect(activeEodReviewLink.querySelectorAll("svg")).toHaveLength(1);

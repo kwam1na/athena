@@ -1591,7 +1591,7 @@ export function TransactionView() {
                             }}
                             type="button"
                             variant={
-                              correctionPanelOpen ? "workflow" : "outline"
+                              correctionPanelOpen ? "default" : "outline"
                             }
                           >
                             Update
@@ -1870,7 +1870,7 @@ export function TransactionView() {
                           type="button"
                           variant={
                             selectedCorrection === "payment_method"
-                              ? "workflow-soft"
+                              ? "primary-soft"
                               : "outline"
                           }
                         >
@@ -1941,7 +1941,7 @@ export function TransactionView() {
                                   requestCorrectionSubmit("payment_method")
                                 }
                                 type="button"
-                                variant="workflow"
+                                variant="default"
                               >
                                 Submit payment update
                               </Button>
@@ -1974,7 +1974,7 @@ export function TransactionView() {
                           type="button"
                           variant={
                             selectedCorrection === "line_items"
-                              ? "workflow-soft"
+                              ? "primary-soft"
                               : "outline"
                           }
                         >
@@ -2220,7 +2220,7 @@ export function TransactionView() {
                               requestCorrectionSubmit("line_items")
                             }
                             type="button"
-                            variant="workflow"
+                            variant="default"
                           >
                             Submit item adjustment
                           </Button>

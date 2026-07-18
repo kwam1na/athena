@@ -21,12 +21,10 @@ const APP_COLOR_TOKENS: AppColorTokenStyle = {
   "--app-shell": "223 34% 14%",
   "--app-shell-text": "35 42% 95%",
 
-  "--app-action-commit": "338 62% 43%",
-  "--app-action-commit-text": "336 100% 98%",
-  "--app-action-workflow": "232 42% 45%",
-  "--app-action-workflow-text": "232 100% 98%",
-  "--app-action-workflow-soft": "232 58% 96%",
-  "--app-action-workflow-border": "232 38% 82%",
+  "--app-primary": "232 42% 45%",
+  "--app-primary-text": "232 100% 98%",
+  "--app-primary-soft": "232 58% 96%",
+  "--app-primary-border": "232 38% 82%",
   "--app-action-neutral": "215 18% 37%",
   "--app-action-neutral-soft": "220 20% 96%",
 
@@ -39,8 +37,8 @@ const APP_COLOR_TOKENS: AppColorTokenStyle = {
   "--app-info": "205 56% 38%",
   "--app-info-soft": "204 68% 95%",
 
-  "--app-data-1": "338 62% 43%",
-  "--app-data-2": "232 42% 45%",
+  "--app-data-1": "232 42% 45%",
+  "--app-data-2": "338 62% 43%",
   "--app-data-3": "156 40% 34%",
   "--app-data-4": "37 82% 59%",
   "--app-data-5": "278 34% 48%",
@@ -102,20 +100,20 @@ const CORE_ROLES: ColorRole[] = [
 
 const ACTION_ROLES: ColorRole[] = [
   {
-    name: "Commit",
-    token: "--action-commit",
-    value: "338 62% 43%",
-    textToken: "--action-commit-foreground",
-    description: "Final or high-consequence action.",
-    use: "Submit correction, complete sale, close drawer, confirm.",
+    name: "Primary",
+    token: "--primary",
+    value: "232 42% 45%",
+    textToken: "--primary-foreground",
+    description: "The canonical emphasized action.",
+    use: "Create, save, navigate, select, submit, and confirm.",
   },
   {
-    name: "Workflow",
-    token: "--action-workflow",
-    value: "232 42% 45%",
-    textToken: "--action-workflow-foreground",
-    description: "Enter, inspect, or navigate a reversible tool state.",
-    use: "Correct, view trace, selected correction, lookup workflows.",
+    name: "Primary soft",
+    token: "--primary-soft",
+    value: "232 58% 96%",
+    textToken: "--primary",
+    description: "A tonal treatment of the primary action family.",
+    use: "Selected controls and contextual action surfaces.",
   },
   {
     name: "Neutral",
@@ -158,8 +156,8 @@ const STATUS_ROLES: ColorRole[] = [
 ];
 
 const DATA_ROLES: ColorRole[] = [
-  { name: "Data 1", token: "--chart-1", value: "338 62% 43%", description: "Primary business measure.", use: "Revenue or primary metric." },
-  { name: "Data 2", token: "--chart-2", value: "232 42% 45%", description: "Secondary comparison measure.", use: "Orders, sessions, or conversion." },
+  { name: "Data 1", token: "--chart-1", value: "232 42% 45%", description: "Primary business measure.", use: "Revenue or primary metric." },
+  { name: "Data 2", token: "--chart-2", value: "338 62% 43%", description: "Secondary comparison measure.", use: "Orders, sessions, or conversion." },
   { name: "Data 3", token: "--chart-3", value: "156 40% 34%", description: "Positive operational measure.", use: "Completion, retention, stock health." },
   { name: "Data 4", token: "--chart-4", value: "37 82% 59%", description: "Attention measure.", use: "Pending, review, variance." },
   { name: "Data 5", token: "--chart-5", value: "278 34% 48%", description: "Tertiary distinction.", use: "Optional segment in dense charts." },
@@ -216,18 +214,16 @@ function AppButton({
   tone,
 }: {
   children: string;
-  tone: "commit" | "workflow" | "workflowSoft" | "neutral" | "danger";
+  tone: "primary" | "primarySoft" | "neutral" | "danger";
 }) {
   const className =
-    tone === "commit"
-      ? "border-[hsl(var(--app-action-commit))] bg-[hsl(var(--app-action-commit))] text-[hsl(var(--app-action-commit-text))] hover:bg-[hsl(var(--app-action-commit)/0.9)]"
-      : tone === "workflow"
-        ? "border-[hsl(var(--app-action-workflow))] bg-[hsl(var(--app-action-workflow))] text-[hsl(var(--app-action-workflow-text))] hover:bg-[hsl(var(--app-action-workflow)/0.9)]"
-        : tone === "workflowSoft"
-          ? "border-[hsl(var(--app-action-workflow-border))] bg-[hsl(var(--app-action-workflow-soft))] text-[hsl(var(--app-action-workflow))] hover:bg-[hsl(var(--app-action-workflow-soft)/0.74)]"
-          : tone === "danger"
-            ? "border-[hsl(var(--app-danger))] bg-[hsl(var(--app-danger))] text-white hover:bg-[hsl(var(--app-danger)/0.9)]"
-            : "border-[hsl(var(--app-border))] bg-[hsl(var(--app-surface))] text-[hsl(var(--app-action-neutral))] hover:bg-[hsl(var(--app-action-neutral-soft))]";
+    tone === "primary"
+      ? "border-[hsl(var(--app-primary))] bg-[hsl(var(--app-primary))] text-[hsl(var(--app-primary-text))] hover:bg-[hsl(var(--app-primary)/0.9)]"
+      : tone === "primarySoft"
+        ? "border-[hsl(var(--app-primary-border))] bg-[hsl(var(--app-primary-soft))] text-[hsl(var(--app-primary))] hover:bg-[hsl(var(--app-primary-soft)/0.74)]"
+        : tone === "danger"
+          ? "border-[hsl(var(--app-danger))] bg-[hsl(var(--app-danger))] text-white hover:bg-[hsl(var(--app-danger)/0.9)]"
+          : "border-[hsl(var(--app-border))] bg-[hsl(var(--app-surface))] text-[hsl(var(--app-action-neutral))] hover:bg-[hsl(var(--app-action-neutral-soft))]";
 
   return (
     <button
@@ -293,7 +289,7 @@ function ProductFitExample() {
               </div>
             </dl>
             <div className="grid grid-cols-2 gap-3">
-              <AppButton tone="workflow">Correct</AppButton>
+              <AppButton tone="primary">Correct</AppButton>
               <AppButton tone="neutral">View receipt</AppButton>
             </div>
           </div>
@@ -303,14 +299,14 @@ function ProductFitExample() {
               <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-[hsl(var(--app-text-muted))]">
                 Direct corrections
               </p>
-              <AppButton tone="workflowSoft">Customer attribution</AppButton>
+              <AppButton tone="primarySoft">Customer attribution</AppButton>
               <div className="rounded-lg border border-[hsl(var(--app-border))] bg-[hsl(var(--app-surface-subtle))] p-4">
                 <p className="text-sm font-medium">Customer correction</p>
                 <p className="mt-1 text-sm leading-6 text-[hsl(var(--app-text-muted))]">
                   Staff sign-in and customer lookup will update attribution only.
                 </p>
                 <div className="mt-3">
-                  <AppButton tone="commit">Submit customer correction</AppButton>
+                  <AppButton tone="primary">Submit customer correction</AppButton>
                 </div>
               </div>
               <AppButton tone="neutral">Payment method</AppButton>
@@ -352,7 +348,7 @@ function AppColorSystemPage() {
     >
       <StorybookSection
         title="System rule"
-        description="Colors should communicate role before mood. A user should be able to tell whether something is a surface, a workflow action, a final commit, a status, or a data series without decoding the local feature."
+        description="Colors should communicate role before mood. A user should be able to tell whether something is a surface, a primary action, a status, or a data series without decoding the local feature."
       >
         <div className="grid gap-4 md:grid-cols-3">
           <StorybookCallout title="Foundation">
@@ -360,8 +356,8 @@ function AppColorSystemPage() {
             readable, and consistent across admin workflows.
           </StorybookCallout>
           <StorybookCallout title="Actions">
-            Split reversible workflow actions from final commit actions. This
-            keeps orange from becoming the only way to say “important.”
+            One primary family carries emphasized actions and selections. Its
+            soft treatment preserves hierarchy without creating a second role.
           </StorybookCallout>
           <StorybookCallout title="Status and data">
             Status colors describe state. Chart colors describe comparison. They
@@ -379,14 +375,14 @@ function AppColorSystemPage() {
 
       <StorybookSection
         title="Action roles"
-        description="This is the core change: keep warm signal for final commits, add a cooler workflow role for reversible mode changes and selections."
+        description="The workflow blue is now the app primary. Its soft and border treatments support selected and contextual surfaces."
       >
         <SwatchGrid roles={ACTION_ROLES} />
         <TokenScope>
           <div className="flex flex-wrap gap-2">
-            <AppButton tone="commit">Submit correction</AppButton>
-            <AppButton tone="workflow">Correct</AppButton>
-            <AppButton tone="workflowSoft">Selected correction</AppButton>
+            <AppButton tone="primary">Submit correction</AppButton>
+            <AppButton tone="primary">Correct</AppButton>
+            <AppButton tone="primarySoft">Selected correction</AppButton>
             <AppButton tone="neutral">View receipt</AppButton>
             <AppButton tone="danger">Void transaction</AppButton>
           </div>

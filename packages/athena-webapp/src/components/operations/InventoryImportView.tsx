@@ -531,9 +531,9 @@ export function InventoryImportView({
   const needsReviewMetricProps =
     overlaySummary.review > 0
       ? {
-          className: "border-action-workflow-border bg-action-workflow-soft/60",
-          labelClassName: "text-action-workflow",
-          valueClassName: "text-action-workflow",
+          className: "border-primary-border bg-primary-soft/60",
+          labelClassName: "text-primary",
+          valueClassName: "text-primary",
         }
       : {};
   const matchesOverlayStatusFilter = useCallback(
@@ -1174,7 +1174,7 @@ export function InventoryImportView({
                           className={cn(
                             "h-8",
                             isSelected &&
-                              "border-action-workflow-border bg-action-workflow-soft text-action-workflow hover:bg-action-workflow-soft/80",
+                              "border-primary-border bg-primary-soft text-primary hover:bg-primary-soft/80",
                           )}
                           key={filter.value}
                           onClick={() => setOverlayFilter(filter.value)}
@@ -1220,7 +1220,7 @@ export function InventoryImportView({
                         isLoading={isSavingReviewVersion}
                         onClick={handleSaveReviewVersion}
                         type="button"
-                        variant="workflow"
+                        variant="default"
                       >
                         <Save className="h-4 w-4" />
                         Save for import handoff
@@ -1237,7 +1237,7 @@ export function InventoryImportView({
                         isLoading={isStagingReviewForPos}
                         onClick={handleStageReviewRowsForPos}
                         type="button"
-                        variant="workflow"
+                        variant="default"
                       >
                         <UploadCloud className="h-4 w-4" />
                         Make available in POS
@@ -1278,7 +1278,7 @@ export function InventoryImportView({
                         isLoading={isSavingReviewVersion}
                         onClick={handleSaveReviewVersion}
                         type="button"
-                        variant="workflow"
+                        variant="default"
                       >
                         <Save className="h-4 w-4" />
                         Save for import handoff
@@ -1319,7 +1319,7 @@ export function InventoryImportView({
                         isLoading={isSavingReviewVersion}
                         onClick={handleSaveReviewVersion}
                         type="button"
-                        variant="workflow"
+                        variant="default"
                       >
                         <Save className="h-4 w-4" />
                         Save for import handoff
@@ -1582,7 +1582,7 @@ export function InventoryImportView({
                       disabled={!hasValidRows || isInventorySkuContextLoading}
                       onClick={handleEnterReviewMode}
                       type="button"
-                      variant="workflow"
+                      variant="default"
                     >
                       Review inventory changes
                       <ArrowRight className="ml-2 h-4 w-4" />
@@ -2028,7 +2028,7 @@ function DraftChoiceButton({
       className={cn(
         "h-7 px-2.5 text-xs",
         isSelected &&
-          "border-action-workflow-border bg-action-workflow-soft text-action-workflow hover:bg-action-workflow-soft/80",
+          "border-primary-border bg-primary-soft text-primary hover:bg-primary-soft/80",
       )}
       onClick={onClick}
       size="sm"
@@ -2121,7 +2121,7 @@ function InventoryReviewIdentity({
 
   return (
     <Link
-      className="min-w-0 rounded-sm outline-none transition-colors hover:text-action-workflow focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      className="min-w-0 rounded-sm outline-none transition-colors hover:text-primary focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
       params={(params) => ({
         ...params,
         orgUrlSlug: params.orgUrlSlug!,

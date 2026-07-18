@@ -173,7 +173,7 @@ export function IntelligenceDebugView({
     <section className="border-t border-border/70 bg-surface-raised/60 px-layout-md py-layout-sm">
       <button
         aria-expanded={expanded}
-        className="flex w-full items-center justify-between gap-layout-md rounded-md px-1 py-1 text-left transition-colors duration-standard ease-standard hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action-workflow/40"
+        className="flex w-full items-center justify-between gap-layout-md rounded-md px-1 py-1 text-left transition-colors duration-standard ease-standard hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
         onClick={onToggle}
         type="button"
       >

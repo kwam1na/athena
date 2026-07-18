@@ -355,7 +355,7 @@ export function ServiceAppointmentsViewContent({
                     disabled={isSaving}
                     onClick={handleSubmit}
                     type="button"
-                    variant="workflow"
+                    variant="default"
                   >
                     Schedule appointment
                   </Button>
@@ -500,7 +500,7 @@ export function ServiceAppointmentsViewContent({
                           }}
                           size="sm"
                           type="button"
-                          variant="workflow"
+                          variant="default"
                         >
                           Convert to walk-in
                         </Button>

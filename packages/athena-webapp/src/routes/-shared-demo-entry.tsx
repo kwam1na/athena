@@ -71,7 +71,7 @@ export function SharedDemoEntry() {
   return (
     <main className="flex min-h-svh items-center justify-center bg-app-canvas px-layout-md py-layout-xl">
       <section aria-labelledby="demo-entry-title" className="w-full max-w-lg border-y border-border bg-background py-layout-xl text-center sm:px-layout-lg">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-signal">Athena demo</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Athena demo</p>
         <h1 id="demo-entry-title" className="mt-layout-md font-display text-4xl font-light text-foreground">
           {presentation.title}
         </h1>

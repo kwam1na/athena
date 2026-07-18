@@ -508,8 +508,8 @@ function getQueueWorkItemContextPresentation(type: string) {
       cardClassName: "bg-surface-raised hover:border-border",
       Icon: ShoppingCart,
       iconClassName:
-        "border-action-workflow-border bg-action-workflow-soft text-action-workflow",
-      contextLabelClassName: "text-action-workflow",
+        "border-primary-border bg-primary-soft text-primary",
+      contextLabelClassName: "text-primary",
     };
   }
 
@@ -518,8 +518,8 @@ function getQueueWorkItemContextPresentation(type: string) {
       cardClassName: "bg-surface-raised hover:border-border",
       Icon: PackageSearch,
       iconClassName:
-        "border-action-workflow-border bg-action-workflow-soft text-action-workflow",
-      contextLabelClassName: "text-action-workflow",
+        "border-primary-border bg-primary-soft text-primary",
+      contextLabelClassName: "text-primary",
     };
   }
 
@@ -550,8 +550,8 @@ function getQueueWorkItemContextPresentation(type: string) {
       cardClassName: "bg-surface-raised hover:border-border",
       Icon: PackageCheck,
       iconClassName:
-        "border-action-workflow-border bg-action-workflow-soft text-action-workflow",
-      contextLabelClassName: "text-action-workflow",
+        "border-primary-border bg-primary-soft text-primary",
+      contextLabelClassName: "text-primary",
     };
   }
 
@@ -568,8 +568,8 @@ function getQueueWorkItemContextPresentation(type: string) {
     cardClassName: "bg-surface-raised hover:border-border",
     Icon: ClipboardCheck,
     iconClassName:
-      "border-action-workflow-border bg-action-workflow-soft text-action-workflow",
-    contextLabelClassName: "text-action-workflow",
+      "border-primary-border bg-primary-soft text-primary",
+    contextLabelClassName: "text-primary",
   };
 }
 
@@ -966,11 +966,11 @@ function OpenWorkMixSummary({
             </div>
             <div
               aria-label={`${entry.label}: ${formatOpenWorkMixCount(entry.count, entry.completeness)}, ${entry.percent}%`}
-              className="h-1.5 overflow-hidden rounded-full bg-action-workflow-soft"
+              className="h-1.5 overflow-hidden rounded-full bg-primary-soft"
               role="img"
             >
               <div
-                className="h-full rounded-full bg-action-workflow"
+                className="h-full rounded-full bg-primary"
                 style={{ width: `${entry.percent}%` }}
               />
             </div>
@@ -2519,7 +2519,7 @@ export function OperationsQueueViewContent({
                             onClick={onRequestApprovalDecisionUnlock}
                             size="sm"
                             type="button"
-                            variant="workflow-soft"
+                            variant="primary-soft"
                           >
                             <LockOpen className="w-2 h-2" />
                             Unlock approvals
@@ -2635,7 +2635,7 @@ export function OperationsQueueViewContent({
                                     {typeof request.metadata
                                       ?.largestAbsoluteDelta === "number" ? (
                                       <Badge
-                                        className="border-action-workflow-border bg-action-workflow-soft text-action-workflow shadow-sm"
+                                        className="border-primary-border bg-primary-soft text-primary shadow-sm"
                                         variant="outline"
                                       >
                                         Max variance{" "}
@@ -3439,7 +3439,7 @@ export function OperationsQueueViewContent({
                                         })
                                       }
                                       size="sm"
-                                      variant="workflow-soft"
+                                      variant="primary-soft"
                                     >
                                       {approvalCopy.approveLabel}
                                     </LoadingButton>

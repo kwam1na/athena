@@ -44,7 +44,7 @@ export function AutomationRevealScene() {
             </span>
             <span
               data-reveal-spark
-              className="h-2 w-2 shrink-0 rounded-full bg-signal"
+              className="h-2 w-2 shrink-0 rounded-full bg-primary"
               aria-hidden="true"
             />
             <span className="text-foreground">{moment.label}</span>

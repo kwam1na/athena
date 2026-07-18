@@ -198,8 +198,8 @@ describe("UpdateReadyBanner", () => {
       name: "New Athena version available",
     });
     expect(applyingButton).toHaveClass(
-      "bg-action-workflow-soft",
-      "text-action-workflow",
+      "bg-primary-soft",
+      "text-primary",
     );
     fireEvent.click(applyingButton);
     fireEvent.click(applyingButton);
@@ -225,7 +225,7 @@ describe("UpdateReadyBanner", () => {
     expect(updateButton).toHaveClass(
       "size-10",
       "px-0",
-      "bg-action-workflow-soft",
+      "bg-primary-soft",
     );
     expect(updateButton).not.toHaveTextContent("New Athena version available");
     expect(updateButton.querySelector("svg")).toBeInTheDocument();

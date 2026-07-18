@@ -163,9 +163,9 @@ export function LoginForm({
         <LoadingButton
           isLoading={isSubmitting}
           type="submit"
-          variant="workflow"
+          variant="default"
           data-testid="athena-login-email-submit"
-          className="group relative z-10 h-control-standard w-fit shadow-[0_16px_34px_-22px_hsl(var(--signal)/0.72)]"
+          className="group relative z-10 h-control-standard w-fit shadow-[0_16px_34px_-22px_hsl(var(--primary)/0.72)]"
         >
           Continue
           <ArrowRight className="h-4 w-4 transition-transform duration-standard ease-emphasized group-hover:translate-x-1 group-focus-visible:translate-x-1" />
@@ -176,11 +176,11 @@ export function LoginForm({
               type="button"
               aria-label={posSignInLabel}
               data-testid="athena-login-pos-sign-in"
-              className="group flex w-full items-center justify-between gap-layout-sm rounded-md border border-action-workflow-border bg-action-workflow-soft px-layout-md py-layout-sm text-left text-sm font-medium text-action-workflow transition-colors duration-standard ease-standard hover:bg-action-workflow-soft/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="group flex w-full items-center justify-between gap-layout-sm rounded-md border border-primary-border bg-primary-soft px-layout-md py-layout-sm text-left text-sm font-medium text-primary transition-colors duration-standard ease-standard hover:bg-primary-soft/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               onClick={onUsePosRecoveryCode}
             >
               <span className="inline-flex min-w-0 items-center gap-layout-sm">
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-background text-action-workflow">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-background text-primary">
                   <KeyRound aria-hidden="true" className="h-4 w-4" />
                 </span>
                 <span>{posSignInLabel}</span>

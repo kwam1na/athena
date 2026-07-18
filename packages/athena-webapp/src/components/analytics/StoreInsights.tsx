@@ -173,7 +173,7 @@ export default function StoreInsights({ storeId }: StoreInsightsProps) {
           <div className="space-y-layout-lg">
             <section className="space-y-layout-sm">
               <div className="flex items-center gap-2">
-                <Lightbulb className="h-4 w-4 text-action-workflow" />
+                <Lightbulb className="h-4 w-4 text-primary" />
                 <h3 className="text-sm font-medium text-foreground">
                   Recommendations
                 </h3>
@@ -220,7 +220,7 @@ export default function StoreInsights({ storeId }: StoreInsightsProps) {
       ) : (
         <div className="grid gap-layout-lg px-layout-md py-layout-lg lg:grid-cols-[minmax(0,1fr)_18rem]">
           <div className="flex min-h-40 flex-col justify-center rounded-lg border border-dashed border-border bg-background px-layout-md py-layout-lg">
-            <Sparkles className="h-5 w-5 text-action-workflow" />
+            <Sparkles className="h-5 w-5 text-primary" />
             <h3 className="mt-layout-sm text-base font-medium text-foreground">
               No store readout yet
             </h3>
@@ -288,7 +288,7 @@ function DeviceDistribution({
       </div>
       <div className="mt-layout-sm h-2 overflow-hidden rounded-full bg-muted">
         <div
-          className="h-full rounded-full bg-action-workflow"
+          className="h-full rounded-full bg-primary"
           style={{ width: `${desktopShare}%` }}
         />
       </div>
