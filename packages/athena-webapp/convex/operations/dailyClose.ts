@@ -298,6 +298,7 @@ type DailyCloseReportSnapshot = {
     carryForwardWorkItemIds: Id<"operationalWorkItem">[];
   };
   readiness: DailyCloseReadiness;
+  priorDaySummary?: Record<string, unknown>;
   summary: Record<string, unknown>;
   reviewedItems: DailyCloseItem[];
   carryForwardItems: DailyCloseItem[];
@@ -1768,16 +1769,14 @@ async function listDepositsForDay(
   const range = { startAt: args.startAt, endAt: args.endAt };
   const allocationProbe = await ctx.db
     .query("paymentAllocation")
-    .withIndex(
-      "by_storeId_allocationType_direction_status_recordedAt",
-      (q) =>
-        q
-          .eq("storeId", args.storeId)
-          .eq("allocationType", "cash_deposit")
-          .eq("direction", "out")
-          .eq("status", "recorded")
-          .gte("recordedAt", args.startAt)
-          .lt("recordedAt", args.endAt),
+    .withIndex("by_storeId_allocationType_direction_status_recordedAt", (q) =>
+      q
+        .eq("storeId", args.storeId)
+        .eq("allocationType", "cash_deposit")
+        .eq("direction", "out")
+        .eq("status", "recorded")
+        .gte("recordedAt", args.startAt)
+        .lt("recordedAt", args.endAt),
     )
     .take(DAILY_CLOSE_QUERY_LIMIT + 1);
   const allocations = allocationProbe.slice(0, DAILY_CLOSE_QUERY_LIMIT);
@@ -1958,6 +1957,9 @@ function buildDailyCloseReportSnapshot(args: {
       carryForwardWorkItemIds: args.carryForwardWorkItemIds,
     },
     readiness: args.readiness,
+    ...(args.snapshot.priorDaySummary
+      ? { priorDaySummary: args.snapshot.priorDaySummary }
+      : {}),
     summary: args.summary,
     reviewedItems: snapshotReviewedItems(args.snapshot, args.reviewedItemKeys),
     carryForwardItems: carryForwardItems.map(

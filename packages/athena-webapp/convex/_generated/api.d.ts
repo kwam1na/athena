@@ -48,6 +48,7 @@ import type * as customerMessaging_whatsappConfig from "../customerMessaging/wha
 import type * as devPatchBadTransaction from "../devPatchBadTransaction.js";
 import type * as emails_DailyManagerReport from "../emails/DailyManagerReport.js";
 import type * as emails_DailyManagerReportBordered from "../emails/DailyManagerReportBordered.js";
+import type * as emails_DailyManagerReportComparisonPreview from "../emails/DailyManagerReportComparisonPreview.js";
 import type * as emails_DailyManagerReportUnbordered from "../emails/DailyManagerReportUnbordered.js";
 import type * as emails_DiscountCode from "../emails/DiscountCode.js";
 import type * as emails_DiscountReminder from "../emails/DiscountReminder.js";
@@ -56,7 +57,9 @@ import type * as emails_FeedbackRequest from "../emails/FeedbackRequest.js";
 import type * as emails_NewOrderAdmin from "../emails/NewOrderAdmin.js";
 import type * as emails_OrderEmail from "../emails/OrderEmail.js";
 import type * as emails_PosReceiptEmail from "../emails/PosReceiptEmail.js";
+import type * as emails_RegisterCloseoutMatchReportPreview from "../emails/RegisterCloseoutMatchReportPreview.js";
 import type * as emails_RegisterCloseoutVarianceAlert from "../emails/RegisterCloseoutVarianceAlert.js";
+import type * as emails_RegisterCloseoutVarianceAlertPreview from "../emails/RegisterCloseoutVarianceAlertPreview.js";
 import type * as emails_VerificationCode from "../emails/VerificationCode.js";
 import type * as emails_WalkthroughRequestNotification from "../emails/WalkthroughRequestNotification.js";
 import type * as env from "../env.js";
@@ -625,6 +628,7 @@ declare const fullApi: ApiFromModules<{
   devPatchBadTransaction: typeof devPatchBadTransaction;
   "emails/DailyManagerReport": typeof emails_DailyManagerReport;
   "emails/DailyManagerReportBordered": typeof emails_DailyManagerReportBordered;
+  "emails/DailyManagerReportComparisonPreview": typeof emails_DailyManagerReportComparisonPreview;
   "emails/DailyManagerReportUnbordered": typeof emails_DailyManagerReportUnbordered;
   "emails/DiscountCode": typeof emails_DiscountCode;
   "emails/DiscountReminder": typeof emails_DiscountReminder;
@@ -633,7 +637,9 @@ declare const fullApi: ApiFromModules<{
   "emails/NewOrderAdmin": typeof emails_NewOrderAdmin;
   "emails/OrderEmail": typeof emails_OrderEmail;
   "emails/PosReceiptEmail": typeof emails_PosReceiptEmail;
+  "emails/RegisterCloseoutMatchReportPreview": typeof emails_RegisterCloseoutMatchReportPreview;
   "emails/RegisterCloseoutVarianceAlert": typeof emails_RegisterCloseoutVarianceAlert;
+  "emails/RegisterCloseoutVarianceAlertPreview": typeof emails_RegisterCloseoutVarianceAlertPreview;
   "emails/VerificationCode": typeof emails_VerificationCode;
   "emails/WalkthroughRequestNotification": typeof emails_WalkthroughRequestNotification;
   env: typeof env;

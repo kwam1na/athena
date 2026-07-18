@@ -12,6 +12,7 @@ import {
   ArrowUpRight,
   CalendarClock,
   ClipboardCheck,
+  Download,
   Lock,
   LockOpen,
   PackageCheck,
@@ -80,6 +81,10 @@ import {
   type OperationReviewMetadataEntry,
 } from "./OperationReviewItemCard";
 import { OperationsSummaryMetric } from "./OperationsSummaryMetric";
+import {
+  buildOpenWorkInventoryReportRows,
+  exportOpenWorkInventoryPdf,
+} from "./openWorkInventoryReport";
 
 const operationsApi = api.operations;
 const stockOpsApi = api.stockOps;
@@ -1940,6 +1945,7 @@ type OperationsQueueViewContentProps = {
   cycleCountDraftSummary?: CycleCountDraftSummary | null;
   hasFullAdminAccess: boolean;
   inventoryItems: InventorySnapshotItem[];
+  inventoryReportItems?: InventorySnapshotItem[];
   inventoryUnitSummary?: InventoryUnitSummary | null;
   isCycleCountDraftSaving?: boolean;
   isDecidingApprovalRequestId?: string | null;
@@ -1981,11 +1987,75 @@ type OperationsQueueViewContentProps = {
   workItemSummary?: QueueWorkItemSummary | null;
   showBackButton?: boolean;
   storeId?: Id<"store">;
+  storeName?: string;
   storeUrlSlug?: string;
   openWorkSearch?: OpenWorkSearchState;
   stockAdjustmentSearch?: StockAdjustmentSearchState;
   workItems: QueueWorkItem[];
 };
+
+function OpenWorkInventoryExportButton({
+  inventoryItems,
+  productSkuIds,
+  storeId,
+  storeName,
+}: {
+  inventoryItems?: InventorySnapshotItem[];
+  productSkuIds: Id<"productSku">[];
+  storeId: Id<"store">;
+  storeName?: string;
+}) {
+  const [isExporting, setIsExporting] = useState(false);
+  const queriedInventoryItems = useQuery(
+    stockOpsApi.adjustments.listInventorySnapshotForProductSkus,
+    inventoryItems === undefined
+      ? {
+          productSkuIds,
+          storeId,
+        }
+      : "skip",
+  ) as InventorySnapshotItem[] | undefined;
+  const rows = useMemo(() => {
+    const resolvedInventoryItems =
+      inventoryItems ??
+      (Array.isArray(queriedInventoryItems) ? queriedInventoryItems : []);
+
+    return buildOpenWorkInventoryReportRows(
+      productSkuIds,
+      resolvedInventoryItems,
+    );
+  }, [inventoryItems, productSkuIds, queriedInventoryItems]);
+  const isLoading =
+    inventoryItems === undefined && queriedInventoryItems === undefined;
+
+  const handleExport = useCallback(async () => {
+    if (rows.length === 0 || isExporting) return;
+
+    setIsExporting(true);
+    try {
+      await exportOpenWorkInventoryPdf({ rows, storeName });
+      toast.success("Inventory PDF exported.");
+    } catch {
+      toast.error("The inventory PDF could not be exported. Try again.");
+    } finally {
+      setIsExporting(false);
+    }
+  }, [isExporting, rows, storeName]);
+
+  return (
+    <Button
+      aria-label="Export inventory report"
+      disabled={isLoading || rows.length === 0 || isExporting}
+      onClick={handleExport}
+      size="sm"
+      type="button"
+      variant="outline"
+    >
+      <Download aria-hidden="true" className="h-4 w-4" />
+      Export inventory report
+    </Button>
+  );
+}
 
 export function OperationsQueueViewContent({
   activeWorkflow,
@@ -1999,6 +2069,7 @@ export function OperationsQueueViewContent({
   cycleCountDraftSummary,
   hasFullAdminAccess,
   inventoryItems,
+  inventoryReportItems,
   inventoryUnitSummary,
   isCycleCountDraftSaving,
   isDecidingApprovalRequestId,
@@ -2025,6 +2096,7 @@ export function OperationsQueueViewContent({
   queueOverflow,
   showBackButton = false,
   storeId,
+  storeName,
   storeUrlSlug,
   openWorkSearch,
   stockAdjustmentSearch,
@@ -2046,6 +2118,19 @@ export function OperationsQueueViewContent({
   const displayGroups = useMemo(
     () => groupOpenWorkItems(filteredWorkItems),
     [filteredWorkItems],
+  );
+  const inventoryReportProductSkuIds = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          groupOpenWorkItems(workItems)
+            .map((group) =>
+              getQueueWorkItemStockAdjustmentSkuId(group.items[0]),
+            )
+            .filter(Boolean),
+        ),
+      ) as Id<"productSku">[],
+    [workItems],
   );
   const openWorkPageCount = Math.max(
     1,
@@ -2274,12 +2359,22 @@ export function OperationsQueueViewContent({
                           Open items
                         </h2>
                       </div>
-                      <OpenWorkTypeFilter
-                        onWorkTypeChange={handleOpenWorkTypeChange}
-                        selectedWorkType={selectedOpenWorkType}
-                        summary={workItemSummary}
-                        workItems={workItems}
-                      />
+                      <div className="flex flex-col gap-layout-sm sm:flex-row sm:items-end">
+                        {inventoryReportProductSkuIds.length > 0 && storeId ? (
+                          <OpenWorkInventoryExportButton
+                            inventoryItems={inventoryReportItems}
+                            productSkuIds={inventoryReportProductSkuIds}
+                            storeId={storeId}
+                            storeName={storeName}
+                          />
+                        ) : null}
+                        <OpenWorkTypeFilter
+                          onWorkTypeChange={handleOpenWorkTypeChange}
+                          selectedWorkType={selectedOpenWorkType}
+                          summary={workItemSummary}
+                          workItems={workItems}
+                        />
+                      </div>
                     </div>
                   </div>
 
@@ -2305,10 +2400,10 @@ export function OperationsQueueViewContent({
                             }
                             isResolutionDisabled={Boolean(
                               isResolvingSyncedSaleInventoryReviewSkuId ||
-                                logicalGroupConflict ||
-                                (representative.logicalGroup !== undefined &&
-                                  representative.logicalGroup
-                                    .resolutionAvailability !== "available"),
+                              logicalGroupConflict ||
+                              (representative.logicalGroup !== undefined &&
+                                representative.logicalGroup
+                                  .resolutionAvailability !== "available"),
                             )}
                             isResolving={
                               isResolvingSyncedSaleInventoryReviewSkuId ===
@@ -3659,7 +3754,9 @@ export function OperationsQueueView({
   const resolveSyncedSaleInventoryReview = useMutation(
     (
       operationsApi.openWorkInventoryReviews as unknown as {
-        resolveSyncedSaleInventoryReviewGroup: Parameters<typeof useMutation>[0];
+        resolveSyncedSaleInventoryReviewGroup: Parameters<
+          typeof useMutation
+        >[0];
       }
     ).resolveSyncedSaleInventoryReviewGroup,
   );
@@ -4193,6 +4290,7 @@ export function OperationsQueueView({
         queueOverflow={queue?.overflow ?? null}
         showBackButton={typeof search.o === "string" && search.o.length > 0}
         storeId={activeStore._id}
+        storeName={activeStore.name}
         storeUrlSlug={routeParams?.storeUrlSlug}
         openWorkSearch={openWorkSearch}
         stockAdjustmentSearch={stockAdjustmentSearch}

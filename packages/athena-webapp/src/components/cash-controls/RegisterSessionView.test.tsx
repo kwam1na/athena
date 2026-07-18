@@ -467,9 +467,14 @@ describe("RegisterSessionViewContent", () => {
     expect(screen.getByTestId("register-session-page-header")).not.toHaveClass(
       "bg-background",
     );
-    expect(
-      screen.getByRole("link", { name: "View register history" }),
-    ).not.toHaveClass("w-full");
+    expect(screen.getByTestId("register-session-header-actions")).toHaveClass(
+      "w-full",
+      "flex-col",
+      "items-stretch",
+      "sm:w-auto",
+      "sm:flex-row",
+      "sm:items-start",
+    );
   });
 
   it("combines sync and active register state in one inline status", () => {

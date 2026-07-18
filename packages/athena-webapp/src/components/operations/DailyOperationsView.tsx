@@ -24,10 +24,10 @@ import {
   ChevronRight,
   CircleAlert,
   Clock3,
+  Coins,
   History,
   PackageSearch,
   RefreshCw,
-  WalletCards,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -348,8 +348,7 @@ export type DailyOperationsSnapshot = {
 
 type DailyOperationsViewContentProps = {
   cachedPriorWeekBoundaryMetric?:
-    | DailyOperationsSnapshot["weekMetrics"][number]
-    | null;
+    DailyOperationsSnapshot["weekMetrics"][number] | null;
   cachedWeekAnalyticsFetchedAt?: number;
   cachedWeekMetrics?: DailyOperationsSnapshot["weekMetrics"];
   cachedWeekStorePulse?: StorePulseSummary | null;
@@ -404,8 +403,7 @@ type CachedWeekAnalytics = {
   fetchedAt: number;
   metrics: DailyOperationsSnapshot["weekMetrics"];
   priorWeekBoundaryMetric?:
-    | DailyOperationsSnapshot["weekMetrics"][number]
-    | null;
+    DailyOperationsSnapshot["weekMetrics"][number] | null;
   storePulse?: StorePulseSummary | null;
 };
 
@@ -432,8 +430,7 @@ type DailyOperationsTimelinePreviewSnapshot =
 type DailyOperationsWeekAnalyticsSnapshot = {
   operatingDate: string;
   priorWeekBoundaryMetric?:
-    | DailyOperationsSnapshot["weekMetrics"][number]
-    | null;
+    DailyOperationsSnapshot["weekMetrics"][number] | null;
   weekEndOperatingDate: string;
   weekMetrics: DailyOperationsSnapshot["weekMetrics"];
 };
@@ -1171,8 +1168,7 @@ function getPriorComparisonMetric(
   snapshot: DailyOperationsSnapshot,
   cachedWeekMetrics?: DailyOperationsSnapshot["weekMetrics"],
   cachedPriorWeekBoundaryMetric?:
-    | DailyOperationsSnapshot["weekMetrics"][number]
-    | null,
+    DailyOperationsSnapshot["weekMetrics"][number] | null,
 ) {
   const previousOperatingDate = getPreviousOperatingDate(
     snapshot.operatingDate,
@@ -1184,9 +1180,7 @@ function getPriorComparisonMetric(
     return snapshot.priorDayMetric;
   }
 
-  if (
-    cachedPriorWeekBoundaryMetric?.operatingDate === previousOperatingDate
-  ) {
+  if (cachedPriorWeekBoundaryMetric?.operatingDate === previousOperatingDate) {
     return cachedPriorWeekBoundaryMetric;
   }
 
@@ -1446,16 +1440,16 @@ function LaneCard({
 }
 
 function OpenRegisterSessionsPanel({
-  hasLeadingContent = false,
   operatingDate,
   orgUrlSlug,
   sessions,
+  showTopRule = false,
   storeUrlSlug,
 }: {
-  hasLeadingContent?: boolean;
   operatingDate: string;
   orgUrlSlug: string;
   sessions: DailyOperationsSnapshot["attentionItems"];
+  showTopRule?: boolean;
   storeUrlSlug: string;
 }) {
   if (sessions.length === 0) return null;
@@ -1463,12 +1457,10 @@ function OpenRegisterSessionsPanel({
   return (
     <section
       aria-labelledby="open-register-sessions-heading"
-      className={cn(
-        hasLeadingContent && "border-t border-border/70 pt-layout-md",
-      )}
+      className={cn(showTopRule && "border-t border-border/70 pt-layout-md")}
     >
       <div className="flex items-baseline gap-layout-sm">
-        <WalletCards
+        <Coins
           aria-hidden="true"
           className="h-4 w-4 shrink-0 self-center text-muted-foreground"
         />
@@ -1490,18 +1482,22 @@ function OpenRegisterSessionsPanel({
             session.label;
 
           return (
-            <article className="py-layout-sm first:pt-0 last:pb-0" key={session.id}>
+            <article
+              className="py-layout-sm first:pt-0 last:pb-0"
+              key={session.id}
+            >
               <Link
                 aria-label={`Open register session ${sessionLabel}`}
                 className="inline-flex min-w-0 items-center gap-layout-xs rounded-sm text-sm font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 params={buildParams(orgUrlSlug, storeUrlSlug, session.params)}
-                search={{
-                  ...(session.search ?? {}),
-                  ...getWorkflowSearch(session.to ?? "", operatingDate),
-                } as never}
+                search={
+                  {
+                    ...(session.search ?? {}),
+                    ...getWorkflowSearch(session.to ?? "", operatingDate),
+                  } as never
+                }
                 to={
-                  session.to ??
-                  "/$orgUrlSlug/store/$storeUrlSlug/cash-controls"
+                  session.to ?? "/$orgUrlSlug/store/$storeUrlSlug/cash-controls"
                 }
               >
                 <span className="truncate">{sessionLabel}</span>
@@ -1511,6 +1507,127 @@ function OpenRegisterSessionsPanel({
           );
         })}
       </div>
+    </section>
+  );
+}
+
+function getRecentActivityEmptyState(operatingDate: string) {
+  const currentOperatingDate = getLocalOperatingDate();
+
+  if (operatingDate < currentOperatingDate) {
+    return {
+      description: "No operational activity was recorded for this store day.",
+      title: "No activity recorded",
+    };
+  }
+
+  if (operatingDate > currentOperatingDate) {
+    return {
+      description:
+        "Operational activity will appear here once this store day begins.",
+      title: "Store day not started",
+    };
+  }
+
+  return {
+    description:
+      "Operational activity will appear here as the store day progresses.",
+    title: "No activity yet",
+  };
+}
+
+function getActivityLabel(operatingDate: string) {
+  return operatingDate === getLocalOperatingDate()
+    ? "Recent activity"
+    : "Activity for this day";
+}
+
+function StoreDayActivityPanel({
+  hasMoreTimelineEvents,
+  isLoadingTimelinePreviewSnapshot,
+  isLoadingTimelineSnapshot,
+  onRequestTimelineSnapshot,
+  onShowMore,
+  operatingDate,
+  orgUrlSlug,
+  storeUrlSlug,
+  timeline,
+}: {
+  hasMoreTimelineEvents: boolean;
+  isLoadingTimelinePreviewSnapshot: boolean;
+  isLoadingTimelineSnapshot: boolean;
+  onRequestTimelineSnapshot?: () => void;
+  onShowMore: () => void;
+  operatingDate: string;
+  orgUrlSlug: string;
+  storeUrlSlug: string;
+  timeline?: DailyOperationsSnapshot["timeline"];
+}) {
+  const activityLabel = getActivityLabel(operatingDate);
+  const emptyState = getRecentActivityEmptyState(operatingDate);
+  const showTimelineHeading =
+    isLoadingTimelinePreviewSnapshot || Boolean(timeline?.length);
+
+  return (
+    <section
+      aria-label={activityLabel}
+      className="min-w-0 px-layout-md py-layout-sm"
+    >
+      {showTimelineHeading ? (
+        <h3 className="flex shrink-0 items-center gap-layout-xs text-sm font-medium text-foreground">
+          <Clock3
+            aria-hidden="true"
+            className="h-3.5 w-3.5 text-muted-foreground"
+          />
+          {activityLabel}
+        </h3>
+      ) : null}
+      <div
+        className={cn(
+          "space-y-layout-md",
+          showTimelineHeading && "mt-layout-md",
+        )}
+      >
+        {isLoadingTimelinePreviewSnapshot && !timeline ? (
+          Array.from({ length: TIMELINE_PREVIEW_LIMIT }).map((_, index) => (
+            <div className="space-y-2" key={index}>
+              <span className="block h-3 w-16 rounded-sm bg-muted" />
+              <span className="block h-4 w-full rounded-sm bg-muted" />
+              <span className="block h-4 w-2/3 rounded-sm bg-muted" />
+            </div>
+          ))
+        ) : !timeline || timeline.length === 0 ? (
+          <EmptyState
+            description={emptyState.description}
+            title={emptyState.title}
+          />
+        ) : (
+          timeline.map((event) => (
+            <TimelineEventItem
+              event={event}
+              key={event.id}
+              orgUrlSlug={orgUrlSlug}
+              storeUrlSlug={storeUrlSlug}
+            />
+          ))
+        )}
+      </div>
+      {hasMoreTimelineEvents ? (
+        <Button
+          aria-busy={isLoadingTimelineSnapshot}
+          className="mt-layout-md"
+          disabled={isLoadingTimelineSnapshot}
+          onClick={() => {
+            onRequestTimelineSnapshot?.();
+            onShowMore();
+          }}
+          size="sm"
+          type="button"
+          variant="outline"
+        >
+          Show more
+        </Button>
+      ) : null}
     </section>
   );
 }
@@ -1655,9 +1772,7 @@ function DailyOperationsTopBandShell({
 function AutomationStatusPanel({
   carryForwardCount,
   completedClose,
-  operatingDate,
   orgUrlSlug,
-  openRegisterSessions = [],
   showStatuses = true,
   snapshot,
   storeUrlSlug,
@@ -1665,9 +1780,7 @@ function AutomationStatusPanel({
 }: {
   carryForwardCount?: number | null;
   completedClose?: DailyOperationsCompletedCloseAttribution | null;
-  operatingDate: string;
   orgUrlSlug: string;
-  openRegisterSessions?: DailyOperationsSnapshot["attentionItems"];
   showStatuses?: boolean;
   snapshot: DailyOperationsSnapshot;
   storeUrlSlug: string;
@@ -1790,13 +1903,6 @@ function AutomationStatusPanel({
             );
           })}
         </div>
-        <OpenRegisterSessionsPanel
-          hasLeadingContent
-          operatingDate={operatingDate}
-          orgUrlSlug={orgUrlSlug}
-          sessions={openRegisterSessions}
-          storeUrlSlug={storeUrlSlug}
-        />
       </DailyOperationsTopBandShell>
     );
   }
@@ -3140,7 +3246,7 @@ function WeekMetricsStrip({
           </div>
         </div>
       </div>
-      <div className="overflow-x-auto rounded-lg border border-border bg-surface-raised p-layout-sm shadow-surface">
+      <div className="overflow-x-auto">
         <div className="flex min-w-max snap-x gap-layout-xs md:grid md:min-w-[42rem] md:grid-cols-7">
           {metrics.map((metric) => {
             const isFutureDate = metric.operatingDate > currentOperatingDate;
@@ -3166,7 +3272,11 @@ function WeekMetricsStrip({
                       Reopened
                     </span>
                   ) : metric.isClosed ? (
-                    <span className="rounded-full bg-success/10 px-1.5 py-0.5 text-[10px] font-medium text-success">
+                    <span className="inline-flex items-center gap-1 text-[10px] font-medium text-muted-foreground">
+                      <span
+                        aria-hidden="true"
+                        className="h-1 w-1 rounded-full bg-success/70"
+                      />
                       Closed
                     </span>
                   ) : null}
@@ -3344,15 +3454,14 @@ export function DailyOperationsViewContent({
     snapshot?.completedClose?.actorType === "automation";
   const shouldShowCurrentAutomationBand = Boolean(
     !isHistoricalDate &&
-      ((shouldShowAutomationStatuses &&
-        snapshot &&
-        getVisibleAutomationStatuses(snapshot).length > 0) ||
-        hasAutomationCompletion),
+    ((shouldShowAutomationStatuses &&
+      snapshot &&
+      getVisibleAutomationStatuses(snapshot).length > 0) ||
+      hasAutomationCompletion),
   );
-  const shouldShowTopStatusStack = snapshot
-    ? shouldShowHistoricalWorkflowPanel ||
-      (hasAutomationCompletion && !shouldShowCurrentAutomationBand)
-    : false;
+  const shouldShowHistoricalAutomationCompletion = Boolean(
+    hasAutomationCompletion && !shouldShowCurrentAutomationBand,
+  );
   const primaryActionEmphasisStatus = snapshot
     ? getPrimaryActionEmphasisStatus({
         isHistoricalDate,
@@ -3374,13 +3483,13 @@ export function DailyOperationsViewContent({
     : [];
   const pendingApprovalsLane = getPendingApprovalsLaneFromLanes(operationLanes);
   const snapshotOpenRegisterSessions = !isHistoricalDate
-    ? snapshot?.attentionItems.filter(
+    ? (snapshot?.attentionItems.filter(
         (item) =>
           item.source.type === "register_session" &&
           item.registerSession?.isOpenedForOperatingDate === true &&
           item.params?.sessionId !== undefined &&
           item.to !== undefined,
-      ) ?? []
+      ) ?? [])
     : [];
   const openRegisterSessions =
     openRegisterSessionsSnapshot &&
@@ -3403,6 +3512,14 @@ export function DailyOperationsViewContent({
         }))
       : snapshotOpenRegisterSessions;
   const actionableLanes = operationLanes.filter(isActionableLane);
+  const hasAutomationReviewEvidence = Boolean(
+    snapshot?.automationStatuses?.some(
+      (status) =>
+        status.lane === "opening" &&
+        status.outcome === "applied" &&
+        (status.reviewEvidence?.length ?? 0) > 0,
+    ),
+  );
   const weekMetricsForDisplay = cachedWeekMetrics ?? snapshot?.weekMetrics;
   const hasHydratedWeekAnalytics =
     cachedWeekMetrics !== undefined ||
@@ -3572,9 +3689,7 @@ export function DailyOperationsViewContent({
                         snapshot.completedClose?.carryForwardCount
                       }
                       completedClose={snapshot.completedClose}
-                      operatingDate={snapshot.operatingDate}
                       orgUrlSlug={orgUrlSlug}
-                      openRegisterSessions={openRegisterSessions}
                       showStatuses={shouldShowAutomationStatuses}
                       snapshot={snapshot}
                       storeUrlSlug={storeUrlSlug}
@@ -3589,28 +3704,35 @@ export function DailyOperationsViewContent({
                     ) : null}
                   </>
                 ) : null}
-                {shouldShowTopStatusStack ? (
+
+                {shouldShowHistoricalWorkflowPanel ||
+                shouldShowHistoricalAutomationCompletion ? (
                   <section className="space-y-layout-md">
                     {shouldShowHistoricalWorkflowPanel ? (
                       <HistoricalWorkflowPanel snapshot={snapshot} />
                     ) : null}
-                    <DailyOperationsCompletionAttributionNotice
-                      carryForwardCount={
-                        snapshot.completedClose?.carryForwardCount
-                      }
-                      completedClose={snapshot.completedClose}
-                    />
+                    {shouldShowHistoricalAutomationCompletion ? (
+                      <DailyOperationsCompletionAttributionNotice
+                        carryForwardCount={
+                          snapshot.completedClose?.carryForwardCount
+                        }
+                        completedClose={snapshot.completedClose}
+                      />
+                    ) : null}
                   </section>
                 ) : null}
 
-                {!shouldShowCurrentAutomationBand ? (
-                  <OpenRegisterSessionsPanel
-                    operatingDate={snapshot.operatingDate}
-                    orgUrlSlug={orgUrlSlug}
-                    sessions={openRegisterSessions}
-                    storeUrlSlug={storeUrlSlug}
-                  />
-                ) : null}
+                <OpenRegisterSessionsPanel
+                  operatingDate={snapshot.operatingDate}
+                  orgUrlSlug={orgUrlSlug}
+                  sessions={openRegisterSessions}
+                  showTopRule={
+                    shouldShowCurrentAutomationBand ||
+                    shouldShowHistoricalWorkflowPanel ||
+                    shouldShowHistoricalAutomationCompletion
+                  }
+                  storeUrlSlug={storeUrlSlug}
+                />
 
                 <div className="grid gap-layout-md [grid-template-columns:repeat(auto-fit,minmax(min(14rem,100%),1fr))] md:gap-layout-lg">
                   <OperationsSummaryMetric
@@ -3848,60 +3970,22 @@ export function DailyOperationsViewContent({
                 </PageWorkspaceMain>
 
                 <PageWorkspaceRail className="xl:col-start-2 xl:row-span-2 xl:row-start-1">
-                  <section
-                    aria-label="Store-day timeline"
-                    className="rounded-lg border border-border bg-surface p-layout-md shadow-surface"
-                  >
-                    <h3 className="flex items-center gap-layout-xs font-medium text-foreground">
-                      <Clock3 aria-hidden="true" className="h-4 w-4" />
-                      Store-day timeline
-                    </h3>
-                    <div className="mt-layout-md space-y-layout-md">
-                      {isLoadingTimelinePreviewSnapshot && !previewTimeline ? (
-                        Array.from({ length: TIMELINE_PREVIEW_LIMIT }).map(
-                          (_, index) => (
-                            <div className="space-y-2" key={index}>
-                              <span className="block h-3 w-16 rounded-sm bg-muted" />
-                              <span className="block h-4 w-full rounded-sm bg-muted" />
-                              <span className="block h-4 w-2/3 rounded-sm bg-muted" />
-                            </div>
-                          ),
-                        )
-                      ) : !previewTimeline || previewTimeline.length === 0 ? (
-                        <EmptyState
-                          description="No operational events have been recorded for this store day."
-                          title="No timeline yet"
-                        />
-                      ) : (
-                        previewTimeline.map((event) => (
-                          <TimelineEventItem
-                            event={event}
-                            key={event.id}
-                            orgUrlSlug={orgUrlSlug}
-                            storeUrlSlug={storeUrlSlug}
-                          />
-                        ))
-                      )}
-                    </div>
-                    {hasMoreTimelineEvents ? (
-                      <Button
-                        className="mt-layout-md w-full"
-                        disabled={isLoadingTimelineSnapshot}
-                        onClick={() => {
-                          onRequestTimelineSnapshot?.();
-                          setTimelineSheetOpen(true);
-                        }}
-                        size="sm"
-                        type="button"
-                        variant="outline"
-                      >
-                        {isLoadingTimelineSnapshot
-                          ? "Loading timeline"
-                          : "Show more"}
-                      </Button>
-                    ) : null}
-                  </section>
-                  {!isMobile ? (
+                  <StoreDayActivityPanel
+                    hasMoreTimelineEvents={hasMoreTimelineEvents}
+                    isLoadingTimelinePreviewSnapshot={
+                      isLoadingTimelinePreviewSnapshot ?? false
+                    }
+                    isLoadingTimelineSnapshot={
+                      isLoadingTimelineSnapshot ?? false
+                    }
+                    onRequestTimelineSnapshot={onRequestTimelineSnapshot}
+                    onShowMore={() => setTimelineSheetOpen(true)}
+                    operatingDate={snapshot.operatingDate}
+                    orgUrlSlug={orgUrlSlug}
+                    storeUrlSlug={storeUrlSlug}
+                    timeline={previewTimeline}
+                  />
+                  {!isMobile && hasAutomationReviewEvidence ? (
                     <AutomationReviewEvidencePanel
                       orgUrlSlug={orgUrlSlug}
                       snapshot={snapshot}
@@ -3954,7 +4038,9 @@ export function DailyOperationsViewContent({
                   side="right"
                 >
                   <SheetHeader className="border-b border-border px-layout-lg py-layout-md">
-                    <SheetTitle>Store-day timeline</SheetTitle>
+                    <SheetTitle>
+                      {getActivityLabel(snapshot.operatingDate)}
+                    </SheetTitle>
                     <SheetDescription>
                       All recorded events for{" "}
                       {formatOperatingDateWithWeekday(snapshot.operatingDate)}.
@@ -4202,7 +4288,8 @@ function DailyOperationsConnectedView({
       : "skip",
   ) as DailyOperationsAutomationSnapshot | undefined;
   const openRegisterSessionsSnapshot = useExpectedDailyOperationsQuery(
-    getDailyOperationsOpenRegisterSessionsSnapshot ?? getDailyOperationsSnapshot,
+    getDailyOperationsOpenRegisterSessionsSnapshot ??
+      getDailyOperationsSnapshot,
     getDailyOperationsOpenRegisterSessionsSnapshot && canQueryProtectedData
       ? snapshotArgs
       : "skip",
@@ -4289,19 +4376,16 @@ function DailyOperationsConnectedView({
           storePulse: cachedTodayRefreshSnapshot.storePulse,
           weekMetrics: cachedWeekMetrics ?? snapshot.weekMetrics,
         })
-      : cachedWeekAnalytics?.storePulse ??
+      : (cachedWeekAnalytics?.storePulse ??
         (snapshot && cachedWeekMetrics
           ? buildWeekMetricStorePulseSummary({
               ...snapshot,
               weekMetrics: cachedWeekMetrics,
             })
-          : undefined);
+          : undefined));
 
   useEffect(() => {
-    if (
-      weekAnalyticsCacheKey === "skip" ||
-      !queriedWeekAnalyticsSnapshot
-    ) {
+    if (weekAnalyticsCacheKey === "skip" || !queriedWeekAnalyticsSnapshot) {
       return;
     }
 
@@ -4330,10 +4414,7 @@ function DailyOperationsConnectedView({
   }, [queriedWeekAnalyticsSnapshot, weekAnalyticsCacheKey]);
 
   useEffect(() => {
-    if (
-      weekAnalyticsCacheKey === "skip" ||
-      !detailSnapshot
-    ) {
+    if (weekAnalyticsCacheKey === "skip" || !detailSnapshot) {
       return;
     }
 

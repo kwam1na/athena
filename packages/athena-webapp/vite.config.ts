@@ -24,6 +24,26 @@ export default defineConfig(({ mode }) => ({
           if (id.includes("node_modules")) {
             const normalizedId = id.split(path.sep).join("/");
 
+            // Keep the on-demand PDF exporter out of the generic vendor
+            // bucket. These packages are sizeable enough that grouping them
+            // together would recreate the chunk-size warning even though the
+            // report itself is loaded lazily.
+            if (normalizedId.includes("/node_modules/jspdf/")) {
+              return "pdf-vendor";
+            }
+            if (normalizedId.includes("/node_modules/html2canvas/")) {
+              return "html-canvas-vendor";
+            }
+            if (normalizedId.includes("/node_modules/canvg/")) {
+              return "svg-canvas-vendor";
+            }
+            if (normalizedId.includes("/node_modules/dompurify/")) {
+              return "sanitization-vendor";
+            }
+            if (normalizedId.includes("/node_modules/fflate/")) {
+              return "compression-vendor";
+            }
+
             if (
               normalizedId.includes("/node_modules/react/") ||
               normalizedId.includes("/node_modules/react-dom/") ||
