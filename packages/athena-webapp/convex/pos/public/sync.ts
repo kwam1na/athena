@@ -31,6 +31,7 @@ import {
   posRegisterSessionActivitySkipCodeValidator,
 } from "../../schemas/pos/posRegisterSessionActivity";
 import { ingestRegisterSessionActivityWithCtx } from "../application/sync/posRegisterSessionActivity";
+import { patchRegisterSessionWithAuthority } from "../../operations/registerSessionAuthorityRevision";
 import {
   MAX_LOCAL_SYNC_REVIEW_EVENTS,
   resolveLocalSyncReviewWithCtx,
@@ -369,7 +370,7 @@ async function scheduleRegisterCloseoutNotifications(
       continue;
     }
 
-    await ctx.db.patch("registerSession", registerSessionId, {
+    await patchRegisterSessionWithAuthority(ctx, registerSessionId, {
       closeoutNotificationLocalEventId: mapping.localEventId,
       closeoutNotificationScheduledAt: Date.now(),
     });
