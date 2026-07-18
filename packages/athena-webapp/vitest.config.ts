@@ -8,6 +8,12 @@ export default defineConfig({
     globals: true,
     mockReset: true,
     clearMocks: true,
+    // In CI, use the dot reporter so the main thread spends less time rendering
+    // per-task reporter output. That keeps the event loop responsive enough for
+    // worker->main task-update RPCs to complete, avoiding the intermittent
+    // `[vitest-worker]: Timeout calling "onTaskUpdate"` failure on this large
+    // suite. Locally, keep the richer default reporter.
+    reporters: process.env.CI ? ["dot"] : ["default"],
     include: [
       "src/**/*.test.{ts,tsx}",
       "convex/**/*.test.{ts,tsx}",
@@ -16,7 +22,16 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reportsDirectory: "./coverage",
-      reporter: ["text-summary", "json-summary", "html", "lcov"],
+      // The `html` reporter walks and writes an HTML tree for every included
+      // file (with `all: true`, that is the whole 600+ file source set) in one
+      // synchronous end-of-run burst on the main thread — long enough to stall
+      // the worker->main `onTaskUpdate` RPC past its timeout and fail the run.
+      // CI only consumes the machine summaries (json-summary + lcov via the
+      // coverage-policy scripts), so drop the html report there and keep it for
+      // local humans.
+      reporter: process.env.CI
+        ? ["text-summary", "json-summary", "lcov"]
+        : ["text-summary", "json-summary", "html", "lcov"],
       all: true,
       include: [
         "src/**/*.{ts,tsx}",
