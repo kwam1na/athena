@@ -30,11 +30,12 @@ import { runCommand } from "~/src/lib/errors/runCommand";
 import { ok } from "~/shared/commandResult";
 import type { OnlineOrder, OnlineOrderItem } from "~/types";
 
-type DisplayOrderItem = OnlineOrderItem & {
+type DisplayOrderItem = NonNullable<OnlineOrder["items"]>[number] &
+  Pick<OnlineOrderItem, "_id"> & {
   currentInventoryCount?: number;
   isLowStock?: boolean;
   isOutOfStock?: boolean;
-};
+  };
 
 type FormattedOrderItem = Omit<DisplayOrderItem, "price"> & {
   price: string;
@@ -78,13 +79,14 @@ function OrderItem({
   };
 
   const handleReturnItemToStock = async () => {
-    if (!order.externalTransactionId) return;
+    const externalTransactionId = order.externalTransactionId;
+    if (!externalTransactionId) return;
 
     try {
       setIsUpdatingOrderItem(true);
       const result = await runCommand(async () => {
         await returnItemToStock({
-          externalTransactionId: order.externalTransactionId,
+          externalTransactionId,
           onlineOrderItemIds: [item._id],
         });
 
@@ -100,12 +102,15 @@ function OrderItem({
   };
 
   const handleRequestFeedback = async () => {
+    const customerEmail = order.customerDetails.email;
+    if (!customerEmail) return;
+
     try {
       setIsRequestingFeedback(true);
       const result = await runCommand(() =>
         requestFeedback({
           productSkuId: item.productSkuId,
-          customerEmail: order.customerDetails.email,
+          customerEmail,
           customerName: order.customerDetails.firstName,
           orderId: order._id,
           orderItemId: item._id,
@@ -255,7 +260,10 @@ function OrderItem({
                   onClick={() => handleUpdateOrderItem(true)}
                   variant="outline"
                   className="border-success/20 bg-success/10 text-success hover:bg-success/15 hover:text-success"
-                  disabled={item.quantity > item.currentInventoryCount}
+                  disabled={
+                    item.currentInventoryCount !== undefined &&
+                    item.quantity > item.currentInventoryCount
+                  }
                 >
                   <Check className="h-4 w-4 mr-2 text-success" />
                   Ready
@@ -339,7 +347,8 @@ export function OrderItemsView() {
 
   const formatter = currencyFormatter(activeStore.currency);
 
-  const itemsFormatted = order.items?.map((item) => {
+  const displayItems = (order.items ?? []) as DisplayOrderItem[];
+  const itemsFormatted = displayItems.map((item) => {
     return {
       ...item,
       price:

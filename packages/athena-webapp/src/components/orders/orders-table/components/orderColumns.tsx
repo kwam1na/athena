@@ -130,7 +130,7 @@ export const orderColumns: ColumnDef<OnlineOrder>[] = [
           })}
           search={{ orderStatus: s, o: getOrigin() }}
         >
-          {customer?.email}
+          {typeof customer?.email === "string" ? customer.email : null}
         </Link>
       );
     },
