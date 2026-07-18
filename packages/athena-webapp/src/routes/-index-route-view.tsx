@@ -112,7 +112,7 @@ export function Index() {
   }, []);
 
   return (
-    <PublicLayout trackFunnelCtas>
+    <PublicLayout trackFunnelCtas hideSecondaryNav>
       <main>
         <section className="relative flex min-h-[calc(100svh-4rem)] items-center overflow-hidden bg-background px-layout-md py-layout-2xl sm:px-layout-xl">
           <div
