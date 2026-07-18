@@ -1,6 +1,5 @@
 import { useCallback } from "react";
 import { createTimeline, stagger } from "animejs";
-import { Sparkles } from "lucide-react";
 
 import { automationMoments, dayMoments } from "./demoDay";
 import { useSceneAnimation } from "./useSceneAnimation";
@@ -45,10 +44,9 @@ export function AutomationRevealScene() {
             </span>
             <span
               data-reveal-spark
-              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-signal/10 text-signal"
-            >
-              <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
-            </span>
+              className="h-2 w-2 shrink-0 rounded-full bg-signal"
+              aria-hidden="true"
+            />
             <span className="text-foreground">{moment.label}</span>
           </li>
         ))}

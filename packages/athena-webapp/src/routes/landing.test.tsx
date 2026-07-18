@@ -96,28 +96,23 @@ describe("landing route", () => {
     const saleAmounts = screen.getAllByText("GH₵385");
     expect(saleAmounts.length).toBeGreaterThanOrEqual(2);
 
-    // Demo is the primary CTA (header, hero, closing band) and walkthrough is
-    // demoted but present.
+    // Demo is the sole CTA (header, hero, closing band); the walkthrough and
+    // sign-in links have been removed from the marketing page.
     const demoLinks = screen.getAllByRole("link", { name: /try the demo/i });
     expect(demoLinks).toHaveLength(3);
     for (const link of demoLinks) {
       expect(link).toHaveAttribute("href", "/demo");
     }
-    const walkthroughLinks = screen.getAllByRole("link", {
-      name: /request a walkthrough/i,
-    });
-    expect(walkthroughLinks.length).toBeGreaterThanOrEqual(1);
-    expect(walkthroughLinks[0]).toHaveAttribute("href", "/walkthrough");
-    expect(screen.getByRole("link", { name: /sign in/i })).toHaveAttribute(
-      "href",
-      "/login",
-    );
+    expect(
+      screen.queryByRole("link", { name: /request a walkthrough/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: /sign in/i }),
+    ).not.toBeInTheDocument();
 
     expect(mocked.emitLandingFunnelEvent).toHaveBeenCalledWith("page_view");
     await user.click(demoLinks[0]);
     expect(mocked.emitLandingFunnelEvent).toHaveBeenCalledWith("demo_cta");
-    await user.click(walkthroughLinks[0]);
-    expect(mocked.emitLandingFunnelEvent).toHaveBeenCalledWith("walkthrough_cta");
   });
 
   it("renders the finished scene compositions without animation infrastructure", () => {

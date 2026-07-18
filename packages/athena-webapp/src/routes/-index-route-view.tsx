@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
-import { ArrowRight, Sparkles } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 
 import { AutomationRevealScene } from "@/components/landing/story/AutomationRevealScene";
 import { CashControlsScene } from "@/components/landing/story/CashControlsScene";
@@ -13,7 +13,7 @@ import { SyncBridgeScene } from "@/components/landing/story/SyncBridgeScene";
 import { AutomationBeat } from "@/components/landing/story/SceneChrome";
 import { useForcedLightTheme } from "@/components/landing/story/useForcedLightTheme";
 import { emitLandingFunnelEvent } from "@/lib/marketing/landingFunnelClient";
-import { DEMO_PATH, WALKTHROUGH_PATH } from "@/lib/navigation/appEntryRoutes";
+import { DEMO_PATH } from "@/lib/navigation/appEntryRoutes";
 import { PublicLayout } from "./-public-layout";
 
 function DemoCtaButton() {
@@ -65,10 +65,12 @@ function ActCopy({
 function StoryAct({
   layout = "split",
   reversed = false,
+  background,
   children,
   ...copyProps
 }: {
   automation?: string;
+  background?: string;
   children: ReactNode;
   copy: string;
   layout?: "split" | "stacked";
@@ -79,7 +81,9 @@ function StoryAct({
 }) {
   if (layout === "stacked") {
     return (
-      <section className="flex min-h-svh items-center border-t border-border/70 px-layout-md py-layout-2xl sm:px-layout-xl">
+      <section
+        className={`flex min-h-svh items-center border-t border-border/70 px-layout-md py-layout-2xl sm:px-layout-xl ${background ?? ""}`}
+      >
         <div className="mx-auto w-full max-w-7xl space-y-layout-xl">
           <ActCopy {...copyProps} className="max-w-2xl" />
           {children}
@@ -133,17 +137,6 @@ export function Index() {
                   No signup. A working store, open in seconds.
                 </span>
               </div>
-              <p className="mt-layout-md text-sm text-muted-foreground">
-                Prefer a guided tour?{" "}
-                <Link
-                  to={WALKTHROUGH_PATH}
-                  onClick={() => emitLandingFunnelEvent("walkthrough_cta")}
-                  className="underline underline-offset-4 transition-colors duration-standard ease-standard hover:text-foreground"
-                >
-                  Request a walkthrough
-                </Link>
-                .
-              </p>
             </div>
             <HeroDayArcScene />
           </div>
@@ -207,6 +200,7 @@ export function Index() {
 
         <StoryAct
           layout="stacked"
+          background="bg-app-canvas"
           time="5:40 PM"
           workspace="Cash Controls"
           title="Know what's in every drawer."
@@ -230,8 +224,7 @@ export function Index() {
         <section className="flex min-h-svh items-center border-t border-border bg-surface px-layout-md py-layout-2xl sm:px-layout-xl">
           <div className="mx-auto grid w-full max-w-7xl items-center gap-layout-2xl lg:grid-cols-2">
             <div className="max-w-xl">
-              <p className="flex items-center gap-layout-sm text-xs font-semibold uppercase tracking-[0.22em] text-signal">
-                <Sparkles className="h-4 w-4" aria-hidden="true" />
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-signal">
                 The day, replayed
               </p>
               <h2 className="mt-layout-sm font-display text-4xl font-light leading-[1.02] text-foreground sm:text-5xl">

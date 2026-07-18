@@ -5,7 +5,7 @@ import { CashControlsDashboardContent } from "@/components/cash-controls/CashCon
 
 import { demoStore } from "./demoDay";
 import { cashDashboardSnapshot } from "./demoDayFixtures";
-import { WorkspaceExhibit } from "./SceneChrome";
+import { AppShellExhibit, WorkspaceExhibit } from "./SceneChrome";
 import { useSceneAnimation } from "./useSceneAnimation";
 
 // The real Cash Controls dashboard at closeout: the product's
@@ -24,17 +24,15 @@ export function CashControlsScene() {
     }, []),
   );
 
-  // The dashboard brings its own workspace header, so the frame here is
-  // chromeless — just the card, a timestamp, and the exhibit.
+  // Presented the way the owner uses it: the real dashboard inside a browser
+  // window wearing the app's shell.
   return (
     <div ref={rootRef}>
-      <figure
-        aria-label="The Cash Controls dashboard after closeout: the closed register session with its approved five-cedi shortage and the recorded end-of-day deposit."
-        className="relative mx-auto w-full overflow-hidden rounded-xl border border-border bg-background p-layout-md text-left text-foreground shadow-overlay sm:p-layout-lg"
+      <AppShellExhibit
+        activeRailIcon="cash"
+        ariaLabel="The Cash Controls dashboard mid-closeout, shown in the app as the owner sees it: the register session in review with its five-cedi shortage surfaced and the closeout deposit recorded."
+        zoom={0.9}
       >
-        <span className="absolute right-layout-md top-layout-md font-numeric text-xs text-muted-foreground">
-          5:40 PM
-        </span>
         <WorkspaceExhibit>
           <div data-cash-embed>
             <CashControlsDashboardContent
@@ -47,7 +45,7 @@ export function CashControlsScene() {
             />
           </div>
         </WorkspaceExhibit>
-      </figure>
+      </AppShellExhibit>
     </div>
   );
 }

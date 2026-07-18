@@ -2,10 +2,7 @@ import { useCallback } from "react";
 import { createTimeline, stagger } from "animejs";
 import { ArrowRight } from "lucide-react";
 
-import {
-  DailyCloseCompletionAttributionNotice,
-  DailyCloseReadOnlyReport,
-} from "@/components/operations/DailyCloseView";
+import { DailyCloseReadOnlyReport } from "@/components/operations/DailyCloseView";
 
 import { carryForward, demoStore } from "./demoDay";
 import { eodSnapshot } from "./demoDayFixtures";
@@ -45,10 +42,6 @@ export function EodReviewScene() {
       >
         <WorkspaceExhibit>
           <div data-eod-embed className="space-y-layout-md">
-            <DailyCloseCompletionAttributionNotice
-              carryForwardCount={eodSnapshot.readiness?.carryForwardCount ?? 0}
-              completedClose={eodSnapshot.completedClose}
-            />
             <DailyCloseReadOnlyReport
               currency={demoStore.currency}
               orgUrlSlug="demo"
