@@ -42,10 +42,16 @@ import { ActivityView } from "./ActivityView";
 import { getOrderState, getPickupActionState } from "./utils";
 import { OrderStatus } from "./OrderStatus";
 import { EmailStatusView } from "./EmailStatusView";
-import { ComposedPageHeader } from "../common/PageHeader";
+import { NavigateBackButton } from "../common/PageHeader";
+import {
+  PageWorkspace,
+  PageWorkspaceGrid,
+  PageWorkspaceMain,
+  PageWorkspaceRail,
+} from "../common/PageLevelHeader";
+import { FadeIn } from "../common/FadeIn";
 import { useAuth } from "~/src/hooks/useAuth";
 import { useSharedDemoContext } from "~/src/hooks/useSharedDemoContext";
-import { ReturnExchangeView } from "./ReturnExchangeView";
 import { presentCommandToast } from "~/src/lib/errors/presentCommandToast";
 import { runCommand } from "~/src/lib/errors/runCommand";
 
@@ -102,10 +108,8 @@ export function RefundOptions() {
   const formatter = currencyFormatter(activeStore.currency);
 
   const itemsTotal =
-    order.items?.reduce(
-      (acc, item) => acc + item.price * item.quantity,
-      0,
-    ) || 0;
+    order.items?.reduce((acc, item) => acc + item.price * item.quantity, 0) ||
+    0;
 
   const alertTitle =
     refundOptions.type == "items"
@@ -301,8 +305,7 @@ const Header = () => {
     (order.isPODOrder || order.paymentMethod?.type === "payment_on_delivery");
 
   const canPerformInitialTransition =
-    (order.items?.some((item) => !item.isRefunded) &&
-      hasIssuedRefund) ||
+    (order.items?.some((item) => !item.isRefunded) && hasIssuedRefund) ||
     isOrderOpen;
 
   const orderDate = new Date(order._creationTime);
@@ -344,213 +347,241 @@ const Header = () => {
         </div>
       </ActionModal>
 
-      <ComposedPageHeader
-        leadingContent={
-          <>
-            <p className="text-sm">{`Order #${order?.orderNumber}`}</p>
+      <header className="flex flex-col gap-layout-xl lg:flex-row lg:items-end lg:justify-between">
+        <div className="min-w-0 space-y-layout-lg">
+          <NavigateBackButton />
 
-            <div className="text-xs">
+          <div className="min-w-0 space-y-layout-sm">
+            <div className="flex flex-wrap items-center gap-layout-sm">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                Online order
+              </p>
               <OrderStatus order={order} />
             </div>
-
-            <p className="text-xs text-muted-foreground">
-              {`created ${orderDate.toDateString()}, ${orderDate.toLocaleTimeString()} (${getRelativeTime(order._creationTime)})`}
+            <h1 className="font-display text-4xl leading-none tracking-[-0.04em] text-foreground sm:text-5xl">
+              Order #{order.orderNumber}
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              Created{" "}
+              {orderDate.toLocaleDateString(undefined, {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+              })}{" "}
+              at{" "}
+              {orderDate.toLocaleTimeString(undefined, {
+                hour: "numeric",
+                minute: "2-digit",
+              })}{" "}
+              · {getRelativeTime(order._creationTime)}
             </p>
-          </>
-        }
-        trailingContent={
-          <div className="flex gap-4">
-            {/* Cancel button - only show for open orders */}
-            {isOrderOpen && (
-              <Button
-                variant="outline"
-                onClick={() =>
-                  setCancelOrderState({
-                    showModal: true,
-                    returnToStock: true,
-                  })
-                }
-                className="text-red-700 hover:text-red-500 hover:bg-red-100 bg-red-50"
-              >
-                <XCircle className="h-4 w-4 mr-1" />
-                <p className="text-sm">Cancel Order</p>
-              </Button>
-            )}
-
-            {isDelivery && canPerformInitialTransition && (
-              <LoadingButton
-                isLoading={isUpdatingOrder}
-                disabled={!isReady}
-                onClick={() =>
-                  handleUpdateOrder({ status: "ready-for-delivery" })
-                }
-                variant={"outline"}
-              >
-                <Truck className="h-4 w-4 mr-1" />
-                <p className="text-sm">&rarr; Ready for delivery</p>
-              </LoadingButton>
-            )}
-
-            {isDelivery && isOrderReady && (
-              <LoadingButton
-                isLoading={isUpdatingOrder}
-                disabled={!isReady}
-                onClick={() =>
-                  handleUpdateOrder({ status: "out-for-delivery" })
-                }
-                variant={"outline"}
-              >
-                <Truck className="h-4 w-4 mr-1" />
-                <p className="text-sm">&rarr; Out for delivery</p>
-              </LoadingButton>
-            )}
-
-            {isOrderOutForDelivery && (
-              <LoadingButton
-                isLoading={isUpdatingOrder}
-                disabled={!isReady}
-                onClick={() => handleUpdateOrder({ status: "delivered" })}
-                variant={"outline"}
-              >
-                <Truck className="h-4 w-4 mr-1" />
-                <p className="text-sm">&rarr; Delivered</p>
-              </LoadingButton>
-            )}
-
-            {isPickup && canPerformInitialTransition && (
-              <LoadingButton
-                isLoading={isUpdatingOrder}
-                disabled={!isReady}
-                onClick={() =>
-                  handleUpdateOrder({ status: "ready-for-pickup" })
-                }
-                variant={"outline"}
-              >
-                <Store className="h-4 w-4 mr-1" />
-                <p className="text-sm">&rarr; Ready for pickup</p>
-              </LoadingButton>
-            )}
-
-            {canMarkPickupException && (
-              <LoadingButton
-                isLoading={isUpdatingOrder}
-                disabled={!isReady}
-                onClick={() =>
-                  handleUpdateOrder(
-                    { status: "pickup-exception" },
-                    {
-                      errorMessage: "Failed to record pickup exception",
-                      successMessage: "Pickup exception recorded",
-                    },
-                  )
-                }
-                variant={"outline"}
-                className="text-amber-700 hover:text-amber-700 hover:bg-amber-50"
-              >
-                <AlertCircleIcon className="h-4 w-4 mr-1" />
-                <p className="text-sm">&rarr; Pickup exception</p>
-              </LoadingButton>
-            )}
-
-            {isPickup && canResolvePickupException && (
-              <LoadingButton
-                isLoading={isUpdatingOrder}
-                disabled={!isReady}
-                onClick={() =>
-                  handleUpdateOrder(
-                    { status: "ready-for-pickup" },
-                    {
-                      errorMessage:
-                        "Failed to return order to ready for pickup",
-                      successMessage: "Order returned to ready for pickup",
-                    },
-                  )
-                }
-                variant={"outline"}
-              >
-                <Store className="h-4 w-4 mr-1" />
-                <p className="text-sm">&rarr; Back to ready</p>
-              </LoadingButton>
-            )}
-
-            {canMarkPickupException && (
-              <LoadingButton
-                isLoading={isUpdatingOrder}
-                disabled={!isReady}
-                onClick={() =>
-                  handleUpdateOrder(
-                    needsPickupPaymentCollection
-                      ? {
-                          paymentCollected: true,
-                          paymentCollectedAt: Date.now(),
-                          status: "picked-up",
-                        }
-                      : { status: "picked-up" },
-                    {
-                      errorMessage: needsPickupPaymentCollection
-                        ? "Failed to collect payment and complete pickup"
-                        : "Failed to mark order as picked up",
-                      successMessage: needsPickupPaymentCollection
-                        ? sharedDemo
-                          ? "Order marked as picked up. No payment was collected."
-                          : "Payment collected and order marked as picked up"
-                        : "Order marked as picked up",
-                    },
-                  )
-                }
-                variant={"outline"}
-              >
-                <Store className="h-4 w-4 mr-1" />
-                <p className="text-sm">
-                  {needsPickupPaymentCollection && isPODPickupOrder
-                    ? sharedDemo
-                      ? "\u2192 Mark picked up (payment simulated)"
-                      : "\u2192 Collect payment & mark picked up"
-                    : "\u2192 Picked up"}
-                </p>
-              </LoadingButton>
-            )}
           </div>
-        }
-      />
+        </div>
+
+        <div className="flex flex-wrap gap-layout-sm lg:justify-end">
+          {/* Cancel button - only show for open orders */}
+          {isOrderOpen && (
+            <Button
+              variant="outline"
+              onClick={() =>
+                setCancelOrderState({
+                  showModal: true,
+                  returnToStock: true,
+                })
+              }
+              className="text-red-700 hover:bg-red-100 hover:text-red-500 active:scale-[0.98]"
+            >
+              <XCircle className="h-4 w-4 mr-1" />
+              <p className="text-sm">Cancel Order</p>
+            </Button>
+          )}
+
+          {isDelivery && canPerformInitialTransition && (
+            <LoadingButton
+              isLoading={isUpdatingOrder}
+              disabled={!isReady}
+              onClick={() =>
+                handleUpdateOrder({ status: "ready-for-delivery" })
+              }
+              variant={"outline"}
+            >
+              <Truck className="h-4 w-4 mr-1" />
+              <p className="text-sm">&rarr; Ready for delivery</p>
+            </LoadingButton>
+          )}
+
+          {isDelivery && isOrderReady && (
+            <LoadingButton
+              isLoading={isUpdatingOrder}
+              disabled={!isReady}
+              onClick={() => handleUpdateOrder({ status: "out-for-delivery" })}
+              variant={"outline"}
+            >
+              <Truck className="h-4 w-4 mr-1" />
+              <p className="text-sm">&rarr; Out for delivery</p>
+            </LoadingButton>
+          )}
+
+          {isOrderOutForDelivery && (
+            <LoadingButton
+              isLoading={isUpdatingOrder}
+              disabled={!isReady}
+              onClick={() => handleUpdateOrder({ status: "delivered" })}
+              variant={"outline"}
+            >
+              <Truck className="h-4 w-4 mr-1" />
+              <p className="text-sm">&rarr; Delivered</p>
+            </LoadingButton>
+          )}
+
+          {isPickup && canPerformInitialTransition && (
+            <LoadingButton
+              isLoading={isUpdatingOrder}
+              disabled={!isReady}
+              onClick={() => handleUpdateOrder({ status: "ready-for-pickup" })}
+              variant={"outline"}
+            >
+              <Store className="h-4 w-4 mr-1" />
+              <p className="text-sm">&rarr; Ready for pickup</p>
+            </LoadingButton>
+          )}
+
+          {canMarkPickupException && (
+            <LoadingButton
+              isLoading={isUpdatingOrder}
+              disabled={!isReady}
+              onClick={() =>
+                handleUpdateOrder(
+                  { status: "pickup-exception" },
+                  {
+                    errorMessage: "Failed to record pickup exception",
+                    successMessage: "Pickup exception recorded",
+                  },
+                )
+              }
+              variant={"outline"}
+              className="text-amber-700 hover:text-amber-700 hover:bg-amber-50"
+            >
+              <AlertCircleIcon className="h-4 w-4 mr-1" />
+              <p className="text-sm">&rarr; Pickup exception</p>
+            </LoadingButton>
+          )}
+
+          {isPickup && canResolvePickupException && (
+            <LoadingButton
+              isLoading={isUpdatingOrder}
+              disabled={!isReady}
+              onClick={() =>
+                handleUpdateOrder(
+                  { status: "ready-for-pickup" },
+                  {
+                    errorMessage: "Failed to return order to ready for pickup",
+                    successMessage: "Order returned to ready for pickup",
+                  },
+                )
+              }
+              variant={"outline"}
+            >
+              <Store className="h-4 w-4 mr-1" />
+              <p className="text-sm">&rarr; Back to ready</p>
+            </LoadingButton>
+          )}
+
+          {canMarkPickupException && (
+            <LoadingButton
+              isLoading={isUpdatingOrder}
+              disabled={!isReady}
+              onClick={() =>
+                handleUpdateOrder(
+                  needsPickupPaymentCollection
+                    ? {
+                        paymentCollected: true,
+                        paymentCollectedAt: Date.now(),
+                        status: "picked-up",
+                      }
+                    : { status: "picked-up" },
+                  {
+                    errorMessage: needsPickupPaymentCollection
+                      ? "Failed to collect payment and complete pickup"
+                      : "Failed to mark order as picked up",
+                    successMessage: needsPickupPaymentCollection
+                      ? sharedDemo
+                        ? "Order marked as picked up. No payment was collected."
+                        : "Payment collected and order marked as picked up"
+                      : "Order marked as picked up",
+                  },
+                )
+              }
+              variant={"outline"}
+            >
+              <Store className="h-4 w-4 mr-1" />
+              <p className="text-sm">
+                {needsPickupPaymentCollection && isPODPickupOrder
+                  ? sharedDemo
+                    ? "\u2192 Mark picked up (payment simulated)"
+                    : "\u2192 Collect payment & mark picked up"
+                  : "\u2192 Picked up"}
+              </p>
+            </LoadingButton>
+          )}
+        </div>
+      </header>
     </>
+  );
+};
+
+const OrderWorkspace = () => {
+  const { order } = useOnlineOrder();
+
+  if (!order) return null;
+
+  return (
+    <FadeIn className="h-full">
+      <View hideBorder scrollMode="page">
+        <div className="mx-auto w-full max-w-[1440px] px-layout-md py-layout-xl sm:px-layout-xl lg:px-layout-2xl lg:py-layout-2xl">
+          <PageWorkspace>
+            <Header />
+
+            <PageWorkspaceGrid className="xl:grid-cols-[minmax(0,1fr)_320px]">
+              <PageWorkspaceMain>
+                <OrderItemsView />
+
+                <section className="rounded-lg border border-border bg-surface-raised p-layout-lg shadow-surface md:p-layout-xl [&>section]:bg-transparent">
+                  <ActivityView />
+                </section>
+              </PageWorkspaceMain>
+
+              <PageWorkspaceRail>
+                <section className="rounded-lg border border-border bg-surface-raised p-layout-lg shadow-surface [&>section]:bg-transparent">
+                  <OrderDetailsView />
+                </section>
+
+                <section className="rounded-lg border border-border bg-surface-raised p-layout-lg shadow-surface [&>section]:bg-transparent">
+                  <PickupDetailsView />
+                  <div className="my-layout-lg border-t border-border" />
+                  <CustomerDetailsView />
+                </section>
+
+                <section className="rounded-lg border border-border bg-surface-raised p-layout-lg shadow-surface [&>section]:bg-transparent">
+                  <EmailStatusView />
+                </section>
+
+                <section className="rounded-lg border border-border bg-surface-raised p-layout-lg shadow-surface [&>section]:bg-transparent">
+                  <RefundsView />
+                </section>
+              </PageWorkspaceRail>
+            </PageWorkspaceGrid>
+          </PageWorkspace>
+        </div>
+      </View>
+    </FadeIn>
   );
 };
 
 export const OrderView = () => {
   return (
     <OnlineOrderProvider>
-      <View header={<Header />}>
-        <div className="container mx-auto w-full p-8 space-y-12 pb-24">
-          {/* <Alerts /> */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <div className="space-y-8">
-              <div className="grid grid-cols-1 gap-8">
-                <OrderDetailsView />
-                <EmailStatusView />
-              </div>
-            </div>
-
-            <OrderItemsView />
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <div className="space-y-8">
-              <div className="grid grid-cols-1 gap-8">
-                <PickupDetailsView />
-                <CustomerDetailsView />
-              </div>
-            </div>
-
-            <div className="space-y-8">
-              <ReturnExchangeView />
-              <RefundsView />
-            </div>
-          </div>
-
-          <ActivityView />
-        </div>
-      </View>
+      <OrderWorkspace />
     </OnlineOrderProvider>
   );
 };

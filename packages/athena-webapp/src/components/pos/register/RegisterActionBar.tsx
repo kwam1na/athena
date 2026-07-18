@@ -1,8 +1,4 @@
-import {
-  ArrowRightIcon,
-  BanknoteIcon,
-  LockKeyhole,
-} from "lucide-react";
+import { ArrowRightIcon, BanknoteIcon, LockKeyhole } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 
 import type {
@@ -36,13 +32,11 @@ export function RegisterActionBar({
 }: RegisterActionBarProps) {
   const clearOnlyRecoveryGate = Boolean(
     drawerGate?.mode === "recovery" &&
-      drawerGate.onClearSale &&
-      !drawerGate.onSubmit,
+    drawerGate.onClearSale &&
+    !drawerGate.onSubmit,
   );
   const drawerRecoveryGate =
-    drawerGate?.mode === "recovery" && drawerGate.onSubmit
-      ? drawerGate
-      : null;
+    drawerGate?.mode === "recovery" && drawerGate.onSubmit ? drawerGate : null;
 
   return (
     <div className="flex flex-wrap items-center justify-end gap-4">
@@ -61,79 +55,79 @@ export function RegisterActionBar({
             !registerInfo.hasTerminal && "animate-pulse text-danger",
           )}
         >
-        <RegisterActions
-          customerName={registerInfo.customerName}
-          registerNumber={registerInfo.registerLabel}
-          hasTerminal={registerInfo.hasTerminal}
-        />
-        {drawerRecoveryGate ? (
-          <div className="flex items-center gap-2 border-l border-border pl-3">
-            <p className="text-xs font-medium text-muted-foreground">
-              Drawer closed
-            </p>
-            <Button
-              className="h-10"
-              disabled={
-                drawerRecoveryGate.isSubmitting ||
-                drawerRecoveryGate.canOpenDrawer === false
-              }
-              onClick={() => void drawerRecoveryGate.onSubmit?.()}
-              type="button"
-              variant="outline"
-            >
-              Open drawer
-            </Button>
-          </div>
-        ) : closeoutControl ? (
-          <>
-            {closeoutControl.canShowOpeningFloatCorrection ? (
+          <RegisterActions
+            customerName={registerInfo.customerName}
+            registerNumber={registerInfo.registerLabel}
+            hasTerminal={registerInfo.hasTerminal}
+          />
+          {drawerRecoveryGate ? (
+            <div className="flex items-center gap-2 border-l border-border pl-3">
+              <p className="text-xs font-medium text-muted-foreground">
+                Drawer closed
+              </p>
               <Button
                 className="h-10"
-                disabled={!closeoutControl.canCorrectOpeningFloat}
-                onClick={closeoutControl.onRequestOpeningFloatCorrection}
+                disabled={
+                  drawerRecoveryGate.isSubmitting ||
+                  drawerRecoveryGate.canOpenDrawer === false
+                }
+                onClick={() => void drawerRecoveryGate.onSubmit?.()}
                 type="button"
                 variant="outline"
               >
-                <BanknoteIcon className="mr-2 h-4 w-4" />
-                Float
+                Open drawer
               </Button>
-            ) : null}
-            <Button
-              className="h-10"
-              disabled={!closeoutControl.canCloseout}
-              onClick={closeoutControl.onRequestCloseout}
-              type="button"
-              variant="outline"
+            </div>
+          ) : closeoutControl ? (
+            <>
+              {closeoutControl.canShowOpeningFloatCorrection ? (
+                <Button
+                  className="h-10"
+                  disabled={!closeoutControl.canCorrectOpeningFloat}
+                  onClick={closeoutControl.onRequestOpeningFloatCorrection}
+                  type="button"
+                  variant="outline"
+                >
+                  <BanknoteIcon className="mr-2 h-4 w-4" />
+                  Float
+                </Button>
+              ) : null}
+              <Button
+                className="h-10"
+                disabled={!closeoutControl.canCloseout}
+                onClick={closeoutControl.onRequestCloseout}
+                type="button"
+                variant="outline"
+              >
+                <LockKeyhole className="mr-2 h-4 w-4" />
+                Closeout
+              </Button>
+            </>
+          ) : null}
+          {!registerInfo.hasTerminal && (
+            <Link
+              params={(params) => ({
+                ...params,
+                orgUrlSlug: params.orgUrlSlug!,
+                storeUrlSlug: params.storeUrlSlug!,
+              })}
+              to="/$orgUrlSlug/store/$storeUrlSlug/pos/settings"
+              search={{
+                o: getOrigin(),
+              }}
+              className="flex h-10 items-center gap-2 px-3"
             >
-              <LockKeyhole className="mr-2 h-4 w-4" />
-              Closeout
-            </Button>
-          </>
-        ) : null}
-        {!registerInfo.hasTerminal && (
-          <Link
-            params={(params) => ({
-              ...params,
-              orgUrlSlug: params.orgUrlSlug!,
-              storeUrlSlug: params.storeUrlSlug!,
-            })}
-            to="/$orgUrlSlug/store/$storeUrlSlug/pos/settings"
-            search={{
-              o: getOrigin(),
-            }}
-            className="flex h-10 items-center gap-2 px-3"
-          >
-            <p className="text-sm font-semibold">Configure</p>
-            <ArrowRightIcon className="w-4 h-4" />
-          </Link>
-        )}
+              <p className="text-sm font-semibold">Configure</p>
+              <ArrowRightIcon className="w-4 h-4" />
+            </Link>
+          )}
         </div>
       ) : null}
     </div>
   );
 }
 
-function RegisterCashierControl({
+export function RegisterCashierControl({
   cashierCard,
   disabled = false,
 }: {

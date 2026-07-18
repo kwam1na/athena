@@ -75,7 +75,15 @@ import {
   type ApprovalRetryArgs,
 } from "./useApprovedCommand";
 import { toApprovalRequesterBindingArg } from "./approvalRequesterBinding";
-import { OperationReviewWorkspace } from "./OperationReviewWorkspace";
+import {
+  OperationReviewBucketBody,
+  OperationReviewBucketHeader,
+  OperationReviewBucketShell,
+  OperationReviewBucketTabsList,
+  OperationReviewBucketTabTrigger,
+  OperationReviewRailShell,
+  OperationReviewWorkspace,
+} from "./OperationReviewWorkspace";
 import { OperationReviewItemCard } from "./OperationReviewItemCard";
 import { OperationsSummaryMetric } from "./OperationsSummaryMetric";
 import { formatOperationsMetricHelper } from "./operationsMetricFormatting";
@@ -523,24 +531,46 @@ function formatRegisterVarianceCount(value: number) {
   return `${value} register variances`;
 }
 
-function getStatusLabelClassName(status: DailyCloseStatus) {
+function getStatusSignatureClassName(status: DailyCloseStatus) {
   return cn(
-    "inline-flex w-fit items-center rounded-md px-layout-sm py-1 text-base font-medium",
-    status === "blocked" && "bg-danger/10 text-danger",
-    status === "needs_review" && "bg-warning/15 text-warning-foreground",
-    status === "carry_forward" &&
-      "bg-primary-soft text-primary",
-    (status === "ready" || status === "completed") &&
-      "bg-success/10 text-success",
+    "inline-flex min-h-10 w-fit items-center gap-layout-sm",
+    status === "blocked" && "text-danger",
+    status === "needs_review" && "text-warning-foreground",
+    status === "carry_forward" && "text-primary",
+    (status === "ready" || status === "completed") && "text-success",
   );
+}
+
+function getStatusSignatureIconClassName(status: DailyCloseStatus) {
+  return cn(
+    "inline-flex size-5 shrink-0 items-center justify-center",
+    status === "blocked" && "text-danger",
+    status === "needs_review" && "text-warning-foreground",
+    status === "carry_forward" && "text-primary",
+    (status === "ready" || status === "completed") && "text-success",
+  );
+}
+
+function DailyCloseStatusIcon({ status }: { status: DailyCloseStatus }) {
+  const Icon =
+    status === "blocked"
+      ? Ban
+      : status === "needs_review"
+        ? ClipboardCheck
+        : status === "carry_forward"
+          ? RotateCcw
+          : status === "completed"
+            ? CheckCircle2
+            : Check;
+
+  return <Icon aria-hidden="true" className="size-4" />;
 }
 
 function getStatusRailIconClassName(status: DailyCloseStatus) {
   return cn(
     status === "blocked" && "bg-danger/10 text-danger",
     status === "needs_review" && "bg-warning/15 text-warning-foreground",
-    status === "carry_forward" &&
-      "bg-primary-soft text-primary",
+    status === "carry_forward" && "bg-primary-soft text-primary",
     (status === "ready" || status === "completed") &&
       "bg-success/10 text-success",
   );
@@ -554,12 +584,21 @@ function DailyCloseStatusTitle({
   title: string;
 }) {
   return (
-    <h2 className={getStatusLabelClassName(status)}>
-      {status === "completed" ? (
-        <SuccessCheckIcon className="-ml-0.5 mr-1.5" />
-      ) : null}
-      {title}
-    </h2>
+    <div
+      className={getStatusSignatureClassName(status)}
+      data-status={status}
+      data-testid="daily-close-status-signature"
+    >
+      <span
+        className={getStatusSignatureIconClassName(status)}
+        data-testid="daily-close-status-icon"
+      >
+        <DailyCloseStatusIcon status={status} />
+      </span>
+      <h2 className="text-base font-semibold leading-tight tracking-[-0.01em] text-foreground">
+        {title}
+      </h2>
+    </div>
   );
 }
 
@@ -732,10 +771,11 @@ function SuccessCheckIcon({
 
 function getStatusRailBadgeClassName(status: DailyCloseStatus) {
   return cn(
-    status === "blocked" && "text-danger",
-    status === "needs_review" && "text-warning",
-    status === "carry_forward" && "text-primary",
-    (status === "ready" || status === "completed") && "text-success",
+    status === "blocked" && "bg-danger/10 text-danger",
+    status === "needs_review" && "bg-warning/15 text-warning-foreground",
+    status === "carry_forward" && "bg-primary-soft text-primary",
+    (status === "ready" || status === "completed") &&
+      "bg-success/10 text-success",
   );
 }
 
@@ -1037,6 +1077,25 @@ function getItemContextLabel(item: DailyCloseItem) {
     : item.subject?.type
       ? humanizeMetadataLabel(item.subject.type)
       : "Close item";
+}
+
+function getDailyCloseRowHeading(item: DailyCloseItem, title: string) {
+  const itemType = normalizeMetadataLabel(
+    item.category ?? item.subject?.type ?? "",
+  );
+  const normalizedTitle = normalizeMetadataLabel(title);
+
+  if (itemType === "registersession") {
+    if (normalizedTitle === "registersessionclosed") {
+      return "Closed register session";
+    }
+
+    if (normalizedTitle === "registersessionisstillopen") {
+      return "Open register session";
+    }
+  }
+
+  return title;
 }
 
 function isOperationalWorkItem(item: DailyCloseItem) {
@@ -2332,10 +2391,11 @@ function ItemLink({
   if (!link) return null;
 
   const label = link.label ?? "Open source";
+  const variant = label === "View session" ? "ghost" : "utility";
 
   if (link.href) {
     return (
-      <Button asChild size="sm" variant="utility">
+      <Button asChild size="sm" variant={variant}>
         <a href={link.href}>
           <ArrowUpRight aria-hidden="true" />
           {label}
@@ -2346,7 +2406,7 @@ function ItemLink({
 
   if (link.to) {
     return (
-      <Button asChild size="sm" variant="utility">
+      <Button asChild size="sm" variant={variant}>
         <Link
           params={
             {
@@ -2398,6 +2458,7 @@ function DailyCloseItemCard({
   const contextLabel = getItemContextLabel(item);
   const description = getItemDescription(item);
   const title = formatDailyCloseItemTitle(item.title);
+  const rowHeading = getDailyCloseRowHeading(item, title);
   const showCollapsedDescription = shouldShowCollapsedDescription(description);
   const rawMetadataEntries = getMetadataEntries(
     canViewFinancialDetails,
@@ -2414,9 +2475,17 @@ function DailyCloseItemCard({
       )
     : rawMetadataEntries;
   const showMetadataDetails = !isOperationalWorkItem(item);
-  const collapsedMetadataEntries = showMetadataDetails
+  const defaultCollapsedMetadataEntries = showMetadataDetails
     ? getCollapsedMetadataEntries(metadataEntries)
     : metadataEntries;
+  const isRegisterSession =
+    normalizeMetadataLabel(item.category ?? item.subject?.type ?? "") ===
+    "registersession";
+  const collapsedMetadataEntries = isRegisterSession
+    ? defaultCollapsedMetadataEntries
+        .filter((entry) => normalizeMetadataLabel(entry.label) !== "status")
+        .slice(0, 3)
+    : defaultCollapsedMetadataEntries;
   const hasSourceLink = Boolean(item.link);
   const sourceAction = hasSourceLink ? (
     <ItemLink
@@ -2439,11 +2508,13 @@ function DailyCloseItemCard({
         ) : null
       }
       collapsedMetadataEntries={collapsedMetadataEntries}
+      combinedHeading={rowHeading}
       contextLabel={contextLabel}
       description={description}
       headerActionSlot={sourceAction}
       itemId={itemId}
       metadataEntries={showMetadataDetails ? metadataEntries : []}
+      presentation="list"
       selectionSlot={
         selectable ? (
           <Checkbox
@@ -2456,6 +2527,7 @@ function DailyCloseItemCard({
       }
       badgeSlot={badgeSlot}
       showCollapsedDescription={showCollapsedDescription}
+      stackDescription
       title={title}
     />
   );
@@ -2548,8 +2620,7 @@ function BucketSection({
     "flex h-10 w-10 shrink-0 items-center justify-center rounded-md",
     status === "blocked" && "bg-danger/10 text-danger",
     status === "review" && "bg-warning/15 text-warning-foreground",
-    status === "carry-forward" &&
-      "bg-primary-soft text-primary",
+    status === "carry-forward" && "bg-primary-soft text-primary",
     status === "ready" && "bg-success/10 text-success",
   );
   const Icon =
@@ -2574,12 +2645,8 @@ function BucketSection({
   };
 
   return (
-    <section
-      aria-label={ariaLabel}
-      className="overflow-hidden rounded-lg border border-border bg-surface-raised shadow-surface"
-      role="region"
-    >
-      <div className="flex flex-col gap-layout-sm border-b border-border px-layout-md py-layout-md md:flex-row md:items-start md:justify-between">
+    <OperationReviewBucketShell aria-label={ariaLabel}>
+      <OperationReviewBucketHeader>
         <div className="flex items-center gap-layout-sm">
           <div className={iconClassName}>
             <Icon className="h-4 w-4" />
@@ -2598,9 +2665,9 @@ function BucketSection({
             {items.length}
           </Badge>
         ) : null}
-      </div>
+      </OperationReviewBucketHeader>
 
-      <div className="space-y-layout-md bg-surface p-layout-md">
+      <OperationReviewBucketBody hasItems={items.length > 0}>
         {items.length === 0 ? (
           <p className="rounded-lg border border-dashed border-border bg-surface-raised p-layout-md text-sm text-muted-foreground shadow-sm">
             {emptyText}
@@ -2659,7 +2726,7 @@ function BucketSection({
             );
           })
         )}
-      </div>
+      </OperationReviewBucketBody>
       {items.length > DAILY_CLOSE_ITEMS_PER_PAGE ? (
         <ListPagination
           onPageChange={handlePageChange}
@@ -2669,7 +2736,7 @@ function BucketSection({
           totalItems={items.length}
         />
       ) : null}
-    </section>
+    </OperationReviewBucketShell>
   );
 }
 
@@ -2718,13 +2785,9 @@ function BucketTabs({
       }}
       value={value}
     >
-      <TabsList
-        aria-label="End-of-day review buckets"
-        className="h-auto w-full flex-wrap justify-start gap-1 border border-border bg-surface-raised p-1 text-muted-foreground shadow-surface"
-      >
+      <OperationReviewBucketTabsList aria-label="End-of-day review buckets">
         {buckets.map((bucket) => (
-          <TabsTrigger
-            className="min-h-9 gap-2 px-3 data-[state=active]:bg-background"
+          <OperationReviewBucketTabTrigger
             key={bucket.value}
             value={bucket.value}
           >
@@ -2738,9 +2801,9 @@ function BucketTabs({
               {bucket.items.length}
               {bucket.countIsLowerBound ? "+" : null}
             </span>
-          </TabsTrigger>
+          </OperationReviewBucketTabTrigger>
         ))}
-      </TabsList>
+      </OperationReviewBucketTabsList>
 
       {buckets.map((bucket) => (
         <TabsContent className="mt-0" key={bucket.value} value={bucket.value}>
@@ -3379,7 +3442,7 @@ function CompletionRail({
 
   return (
     <PageWorkspaceRail>
-      <aside className="rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface">
+      <OperationReviewRailShell>
         <div className="flex items-center justify-between gap-layout-md">
           <div className="flex min-w-0 items-center gap-layout-sm">
             <div
@@ -3390,6 +3453,8 @@ function CompletionRail({
             >
               {isBlocked ? (
                 <Ban className="h-4 w-4" />
+              ) : isCompleted ? (
+                <CheckCircle2 className="h-4 w-4" />
               ) : (
                 <ListChecks className="h-4 w-4" />
               )}
@@ -3400,7 +3465,7 @@ function CompletionRail({
           </div>
           <p
             className={cn(
-              "shrink-0 text-sm font-semibold",
+              "shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold",
               getStatusRailBadgeClassName(status),
             )}
           >
@@ -3411,7 +3476,7 @@ function CompletionRail({
           {copy.description}
         </p>
 
-        <div className="mt-layout-md border-t border-border pt-layout-md">
+        <div className="mt-layout-lg border-t border-border/80 pt-layout-md">
           <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
             Operating date
           </p>
@@ -3420,7 +3485,7 @@ function CompletionRail({
           </p>
         </div>
 
-        <div className="mt-layout-md border-t border-border pt-layout-md">
+        <div className="mt-layout-lg border-t border-border/80 pt-layout-md">
           <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
             Close checklist
           </p>
@@ -3467,10 +3532,13 @@ function CompletionRail({
         </div>
 
         {isCompleted && snapshot.completedClose ? (
-          <div className="mt-layout-md rounded-lg border border-success/30 bg-success/10 p-layout-sm">
-            <p className="text-sm font-medium text-success">
-              Close record saved
-            </p>
+          <div className="mt-layout-lg rounded-lg border border-border/80 bg-surface p-layout-md shadow-sm">
+            <div className="flex items-center gap-layout-sm">
+              <SuccessCheckIcon />
+              <p className="text-sm font-semibold text-foreground">
+                Close record saved
+              </p>
+            </div>
             <p className="mt-1 text-sm leading-6 text-muted-foreground">
               {snapshot.completedClose.actorType === "automation"
                 ? "Completed by Athena under store policy."
@@ -3489,7 +3557,7 @@ function CompletionRail({
               </p>
             ) : null}
             {canReopen ? (
-              <div className="mt-layout-md space-y-layout-sm border-t border-success/30 pt-layout-md">
+              <div className="mt-layout-md space-y-layout-sm border-t border-border/80 pt-layout-md">
                 <label
                   className="text-sm font-medium text-foreground"
                   htmlFor="daily-close-reopen-reason"
@@ -3557,7 +3625,7 @@ function CompletionRail({
             {commandMessage.message}
           </div>
         ) : null}
-      </aside>
+      </OperationReviewRailShell>
     </PageWorkspaceRail>
   );
 }

@@ -297,6 +297,15 @@ vi.mock("@/components/pos/CashierAuthDialog", () => ({
 }));
 
 vi.mock("./RegisterActionBar", () => ({
+  RegisterCashierControl: ({
+    cashierCard,
+  }: {
+    cashierCard?: { cashierName?: string } | null;
+  }) => (
+    <div data-testid="register-cashier-control">
+      Cashier {cashierCard?.cashierName ?? "Unassigned"}
+    </div>
+  ),
   RegisterActionBar: ({
     cashierCard,
     closeoutControl,
@@ -946,7 +955,9 @@ describe("POSRegisterView", () => {
     const { POSRegisterView } = await import("./POSRegisterView");
     render(<POSRegisterView />);
 
-    expect(screen.getByLabelText("Terminal offline")).toBeInTheDocument();
+    expect(screen.getByTestId("terminal-status-slot")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Terminal offline")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Terminal online")).not.toBeInTheDocument();
     expect(
       screen.queryByText("Support sync diagnostics"),
     ).not.toBeInTheDocument();
@@ -3002,6 +3013,11 @@ describe("POSRegisterView", () => {
       ),
     ).not.toBeInTheDocument();
     expect(screen.getByText("cart-items")).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId("register-workspace-sidebar")).getByTestId(
+        "cart-items-compact",
+      ),
+    ).toBeInTheDocument();
     expect(screen.queryByText("register-action-bar")).not.toBeInTheDocument();
     expect(
       screen.queryByText("register-customer-panel"),
@@ -3010,6 +3026,76 @@ describe("POSRegisterView", () => {
       screen.queryByText("register-checkout-panel"),
     ).not.toBeInTheDocument();
     expect(screen.queryByText("Drawer closed")).not.toBeInTheDocument();
+  });
+
+  it("aligns the expense rail with the register summary and cashier hierarchy", async () => {
+    mockUseRegisterViewModel.mockReturnValue({
+      hasActiveStore: true,
+      header: {
+        title: "Expense",
+        isSessionActive: false,
+      },
+      registerInfo: {
+        customerName: "Ama Serwa",
+        registerLabel: "Expenses",
+        hasTerminal: true,
+      },
+      customerPanel: {},
+      productEntry: {
+        disabled: false,
+        showProductLookup: false,
+        productSearchQuery: "bone",
+        setProductSearchQuery: vi.fn(),
+        onBarcodeSubmit: vi.fn(),
+        onAddProduct: vi.fn(),
+        setShowProductLookup: vi.fn(),
+      },
+      cart: {
+        items: [
+          {
+            id: "expense-item-1",
+            name: "Wigclub Scarf",
+            price: 1000,
+            quantity: 2,
+            productId: "product-1",
+            skuId: "sku-1",
+          },
+        ],
+      },
+      checkout: {
+        currency: "GHS",
+        isTransactionCompleted: false,
+        total: 2000,
+      },
+      sessionPanel: null,
+      cashierCard: {
+        cashierName: "Ato K.",
+        onSignOut: vi.fn(),
+      },
+      drawerGate: null,
+      authDialog: {
+        open: false,
+      },
+      onNavigateBack: vi.fn(),
+    });
+
+    const { POSRegisterView } = await import("./POSRegisterView");
+    render(<POSRegisterView workflowMode="expense" />);
+
+    expect(screen.getByTestId("register-cashier-control")).toHaveTextContent(
+      "Cashier Ato K.",
+    );
+    expect(screen.getByLabelText("Terminal online")).toBeInTheDocument();
+    expect(screen.getByLabelText("product search input")).toBeEnabled();
+    const summary = screen.getByRole("region", { name: "Expense summary" });
+    expect(summary).toHaveClass("min-h-[6.5rem]");
+    expect(within(summary).getByText("Items")).toBeInTheDocument();
+    expect(within(summary).getByText("2")).toBeInTheDocument();
+    expect(within(summary).getByText("Total")).toBeInTheDocument();
+    expect(within(summary).getByText("GH₵20")).toHaveClass("text-3xl");
+    expect(screen.getByTestId("expense-completion-shell")).toHaveClass(
+      "justify-end",
+    );
   });
 
   it("falls back to the injected expense view model workflow when mode prop is omitted", async () => {
@@ -3140,8 +3226,9 @@ describe("POSRegisterView", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Wigclub Scarf")).toBeInTheDocument();
     expect(screen.getByText("expense-completion-panel")).toBeInTheDocument();
-    expect(screen.getByText("Cashier")).toBeInTheDocument();
-    expect(screen.getByText("Unassigned")).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("register-cashier-control"),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByText("register-checkout-panel"),
     ).not.toBeInTheDocument();
@@ -3191,11 +3278,18 @@ describe("POSRegisterView", () => {
     const authDialog = screen.getByText("cashier-auth-dialog");
 
     expect(authDialog).toBeInTheDocument();
+    expect(screen.getByTestId("terminal-status-slot")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Terminal online")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Terminal offline")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("region", { name: "Expense summary" }),
+    ).not.toBeInTheDocument();
     expect(authDialog.parentElement).not.toHaveClass("lg:col-span-2");
     expect(screen.getByText("cart-items")).toBeInTheDocument();
     expect(screen.getByText("expense-completion-panel")).toBeInTheDocument();
-    expect(screen.getByText("Cashier")).toBeInTheDocument();
-    expect(screen.getByText("Unassigned")).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("register-cashier-control"),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByText("Ready for expense entry"),
     ).not.toBeInTheDocument();

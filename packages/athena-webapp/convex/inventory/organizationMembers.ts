@@ -22,16 +22,34 @@ export const getAll = query({
     )
   ),
   handler: async (ctx, args) => {
-    const members = await ctx.db
-      .query(entity)
-      .filter((q) => q.eq(q.field("organizationId"), args.organizationId))
-      .collect();
+    const members = [];
+    for await (const member of ctx.db
+      .query("organizationMember")
+      .withIndex("by_organizationId_userId", (q) =>
+        q.eq("organizationId", args.organizationId),
+      )) {
+      members.push(member);
+    }
 
     const res = await Promise.all(
-      members.map((member) => ctx.db.get(member.userId))
+      members.map((member) => ctx.db.get("athenaUser", member.userId))
     );
 
-    return res.filter((o) => !!o);
+    // Project each athenaUser to exactly the validated shape. Returning the raw
+    // doc leaks whatever columns the table happens to carry (e.g.
+    // `normalizedEmail`), which the return validator rejects and which the
+    // members UI does not need.
+    return res
+      .filter((user): user is NonNullable<typeof user> => !!user)
+      .map((user) => ({
+        _id: user._id,
+        _creationTime: user._creationTime,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        phoneNumber: user.phoneNumber,
+        organizationId: user.organizationId,
+      }));
   },
 });
 
@@ -148,14 +166,13 @@ export const migrateExistingMembersToFullAdmin = internalMutation({
     updatedCount: v.number(),
   }),
   handler: async (ctx) => {
-    const allMembers = await ctx.db.query(entity).collect();
     let updatedCount = 0;
 
-    for (const member of allMembers) {
+    for await (const member of ctx.db.query("organizationMember")) {
       // Check if role is already set to a valid value
       if (member.role !== "full_admin" && member.role !== "pos_only") {
         // Update to full_admin for existing members
-        await ctx.db.patch(member._id, {
+        await ctx.db.patch("organizationMember", member._id, {
           role: "full_admin",
         });
         updatedCount++;

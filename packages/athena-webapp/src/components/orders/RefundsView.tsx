@@ -32,12 +32,6 @@ import { presentCommandToast } from "~/src/lib/errors/presentCommandToast";
 import { runCommand } from "~/src/lib/errors/runCommand";
 import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
 import type { Id } from "~/convex/_generated/dataModel";
-import { WorkflowTraceRouteLink } from "../traces/WorkflowTraceRouteLink";
-
-type RefundTraceRecord = {
-  id?: string;
-  workflowTraceId?: string;
-};
 
 export function RefundsView() {
   const { order } = useOnlineOrder();
@@ -78,17 +72,8 @@ export function RefundsView() {
     state.includeDeliveryFee,
   );
   const availableItems = getAvailableItems(order);
-  const refundTraceLinks = ((order.refunds ?? []) as RefundTraceRecord[]).filter(
-    (refund): refund is RefundTraceRecord & { workflowTraceId: string } =>
-      Boolean(refund.workflowTraceId),
-  );
 
   const canRefund = netAmount > 0;
-
-  const refundText =
-    refundAmount > 0
-      ? `Refund ${formatStoredAmount(formatter, refundAmount)}`
-      : "Refund";
 
   const handleRefundOrder = async () => {
     // Validate before submitting
@@ -204,7 +189,7 @@ export function RefundsView() {
       fullHeight={false}
       lockDocumentScroll={false}
       className="w-full"
-      header={<p className="text-sm text-muted-foreground">Refund</p>}
+      header={<p className="text-base font-medium text-foreground">Refund</p>}
     >
       <ActionModal
         isOpen={state.showModal}
@@ -253,82 +238,106 @@ export function RefundsView() {
         </div>
       </ActionModal>
 
-      <div className="py-4 space-y-6">
+      <div className="space-y-layout-xl pt-layout-md">
         {/* Amount summary */}
-        <div className="bg-muted/50 rounded-lg p-4 space-y-2 text-sm">
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Original amount:</span>
-            <span>{formatStoredAmount(formatter, order.amount)}</span>
+        <div className="space-y-layout-md rounded-lg bg-muted/50 p-layout-md">
+          <div className="flex items-baseline justify-between gap-layout-sm text-sm">
+            <span className="text-muted-foreground">Original amount</span>
+            <span className="font-medium">
+              {formatStoredAmount(formatter, order.amount)}
+            </span>
           </div>
           {amountRefunded > 0 && (
             <>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Already refunded:</span>
+              <div className="flex items-baseline justify-between gap-layout-sm text-sm">
+                <span className="text-muted-foreground">Already refunded</span>
                 <span className="text-destructive">
                   -{formatStoredAmount(formatter, amountRefunded)}
                 </span>
               </div>
-              {refundTraceLinks.length > 0 ? (
-                <div className="flex flex-wrap justify-end gap-2 text-xs">
-                  {refundTraceLinks.map((refund, index) => (
-                    <WorkflowTraceRouteLink
-                      className="font-medium text-primary"
-                      key={refund.id ?? refund.workflowTraceId}
-                      traceId={refund.workflowTraceId}
-                    >
-                      {refundTraceLinks.length === 1
-                        ? "View refund trace"
-                        : `Refund trace ${index + 1}`}
-                    </WorkflowTraceRouteLink>
-                  ))}
-                </div>
-              ) : null}
             </>
           )}
-          <div className="flex justify-between font-medium pt-2 border-t">
-            <span>Available to refund:</span>
-            <span>{formatStoredAmount(formatter, netAmount)}</span>
+          <div className="space-y-1 border-t border-border pt-layout-md">
+            <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+              Available to refund
+            </p>
+            <p className="text-2xl font-semibold tracking-[-0.02em] text-foreground">
+              {formatStoredAmount(formatter, netAmount)}
+            </p>
           </div>
         </div>
 
         {/* Refund options */}
-        <div className="space-y-4">
-          <p className="text-sm font-medium">Select refund option:</p>
+        <div className="space-y-layout-md">
+          <div className="space-y-1">
+            <p className="text-sm font-medium text-foreground">Refund option</p>
+            <p className="text-xs leading-5 text-muted-foreground">
+              Choose what should be returned to the customer.
+            </p>
+          </div>
 
           <RadioGroup
+            className="space-y-layout-sm"
             value={state.mode || ""}
             onValueChange={(value: string) =>
               dispatch({ type: "SET_MODE", mode: value as RefundMode })
             }
           >
-            <div className="flex items-center space-x-2">
-              <RadioGroupItem value="entire-order" id="entire-order" />
-              <Label htmlFor="entire-order" className="cursor-pointer">
-                Entire order
-                <span className="ml-2 text-xs text-muted-foreground">
-                  (Refund all {availableItems.length} items -{" "}
-                  {formatStoredAmount(formatter, netAmount)})
+            <div className="flex items-start gap-layout-sm rounded-lg border border-border p-layout-sm transition-colors hover:bg-muted/50 active:bg-muted">
+              <RadioGroupItem
+                className="mt-0.5 shrink-0"
+                value="entire-order"
+                id="entire-order"
+              />
+              <Label
+                htmlFor="entire-order"
+                className="min-w-0 flex-1 cursor-pointer space-y-1 leading-none"
+              >
+                <span className="block text-sm font-medium text-foreground">
+                  Entire order
+                </span>
+                <span className="block text-xs leading-5 text-muted-foreground">
+                  Refund all {availableItems.length} items ·{" "}
+                  {formatStoredAmount(formatter, netAmount)}
                 </span>
               </Label>
             </div>
 
-            <div className="flex items-center space-x-2">
-              <RadioGroupItem value="partial" id="partial" />
-              <Label htmlFor="partial" className="cursor-pointer">
-                Partial refund
-                <span className="ml-2 text-xs text-muted-foreground">
-                  (Select specific items)
+            <div className="flex items-start gap-layout-sm rounded-lg border border-border p-layout-sm transition-colors hover:bg-muted/50 active:bg-muted">
+              <RadioGroupItem
+                className="mt-0.5 shrink-0"
+                value="partial"
+                id="partial"
+              />
+              <Label
+                htmlFor="partial"
+                className="min-w-0 flex-1 cursor-pointer space-y-1 leading-none"
+              >
+                <span className="block text-sm font-medium text-foreground">
+                  Partial refund
+                </span>
+                <span className="block text-xs leading-5 text-muted-foreground">
+                  Select specific items to refund.
                 </span>
               </Label>
             </div>
 
             {amountRefunded > 0 && (
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="remaining" id="remaining" />
-                <Label htmlFor="remaining" className="cursor-pointer">
-                  Remaining balance
-                  <span className="ml-2 text-xs text-muted-foreground">
-                    ({formatStoredAmount(formatter, netAmount)})
+              <div className="flex items-start gap-layout-sm rounded-lg border border-border p-layout-sm transition-colors hover:bg-muted/50 active:bg-muted">
+                <RadioGroupItem
+                  className="mt-0.5 shrink-0"
+                  value="remaining"
+                  id="remaining"
+                />
+                <Label
+                  htmlFor="remaining"
+                  className="min-w-0 flex-1 cursor-pointer space-y-1 leading-none"
+                >
+                  <span className="block text-sm font-medium text-foreground">
+                    Remaining balance
+                  </span>
+                  <span className="block text-xs leading-5 text-muted-foreground">
+                    Refund {formatStoredAmount(formatter, netAmount)}.
                   </span>
                 </Label>
               </div>
@@ -415,11 +424,16 @@ export function RefundsView() {
 
         {/* Refund preview and action */}
         {state.mode && (
-          <div className="flex items-center justify-between pt-4 border-t">
+          <div className="space-y-layout-md border-t border-border pt-layout-lg">
             <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">Refund amount</p>
-              <p className="text-2xl font-semibold">
+              <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                Refund amount
+              </p>
+              <p className="text-2xl font-semibold tracking-[-0.02em] text-foreground">
                 {formatStoredAmount(formatter, refundAmount)}
+              </p>
+              <p className="text-xs leading-5 text-muted-foreground">
+                You’ll confirm this amount before it is processed.
               </p>
             </div>
 
@@ -427,10 +441,10 @@ export function RefundsView() {
               variant="outline"
               disabled={refundAmount <= 0 || isRefundingOrder}
               onClick={() => dispatch({ type: "SHOW_MODAL" })}
-              className="min-w-[140px]"
+              className="w-full active:scale-[0.98]"
             >
               <RotateCcw className="h-4 w-4 mr-2" />
-              {refundText}
+              Review refund
             </Button>
           </div>
         )}

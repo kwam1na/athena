@@ -21,6 +21,16 @@ describe("OrderStatus", () => {
     const pill = label.closest("div.inline-flex");
 
     expect(pill).not.toBeNull();
-    expect(pill).toHaveClass("bg-amber-100", "text-amber-700");
+    expect(pill).toHaveClass("bg-warning/10", "text-warning");
+  });
+
+  it("uses theme-aware success tokens for completed orders", () => {
+    render(<OrderStatus order={{ status: "delivered" }} />);
+
+    const label = screen.getByText("Delivered");
+    const pill = label.closest("div.inline-flex");
+
+    expect(pill).not.toBeNull();
+    expect(pill).toHaveClass("bg-success/10", "text-success");
   });
 });

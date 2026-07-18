@@ -20,7 +20,7 @@ const baseOrder = {
       isRestocked: false,
       price: 4_500,
       productId: "product-1",
-      productName: "Curly Closure",
+      productName: "curly closure",
       productSku: "SKU-RETURN-1",
       productSkuId: "sku-1",
       quantity: 2,
@@ -59,6 +59,7 @@ describe("ReturnExchangeViewContent", () => {
     expect(screen.getByText("GH₵25")).toBeInTheDocument();
     expect(screen.getByText("2 x GH₵45")).toBeInTheDocument();
     expect(screen.getByText("1 x GH₵60")).toBeInTheDocument();
+    expect(screen.getByText("Curly Closure")).toBeInTheDocument();
     expect(screen.queryByText(/GH₵4,500/)).not.toBeInTheDocument();
   });
 
@@ -79,9 +80,7 @@ describe("ReturnExchangeViewContent", () => {
       screen.getByRole("heading", { name: /return & exchange/i }),
     ).toBeInTheDocument();
 
-    await user.click(
-      screen.getByRole("checkbox", { name: /curly closure/i }),
-    );
+    await user.click(screen.getByRole("checkbox", { name: /curly closure/i }));
     await user.click(screen.getByRole("button", { name: /process return/i }));
 
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
@@ -106,9 +105,7 @@ describe("ReturnExchangeViewContent", () => {
       />,
     );
 
-    await user.click(
-      screen.getByRole("checkbox", { name: /curly closure/i }),
-    );
+    await user.click(screen.getByRole("checkbox", { name: /curly closure/i }));
     await user.click(
       screen.getByRole("switch", {
         name: /return accepted items back into stock/i,
@@ -150,9 +147,7 @@ describe("ReturnExchangeViewContent", () => {
       />,
     );
 
-    await user.click(
-      screen.getByRole("checkbox", { name: /curly closure/i }),
-    );
+    await user.click(screen.getByRole("checkbox", { name: /curly closure/i }));
     await user.click(screen.getByRole("button", { name: /process return/i }));
 
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
@@ -182,8 +177,14 @@ describe("ReturnExchangeViewContent", () => {
     await user.click(screen.getByRole("checkbox", { name: /frontal unit/i }));
     await user.click(screen.getByLabelText(/exchange for a new item/i));
     await user.type(screen.getByLabelText(/replacement sku id/i), "sku-9");
-    await user.type(screen.getByLabelText(/replacement product id/i), "product-9");
-    await user.type(screen.getByLabelText(/replacement product name/i), "Loose Wave Bundle");
+    await user.type(
+      screen.getByLabelText(/replacement product id/i),
+      "product-9",
+    );
+    await user.type(
+      screen.getByLabelText(/replacement product name/i),
+      "Loose Wave Bundle",
+    );
     await user.clear(screen.getByLabelText(/replacement quantity/i));
     await user.type(screen.getByLabelText(/replacement quantity/i), "1");
     await user.clear(screen.getByLabelText(/replacement unit price/i));
@@ -223,7 +224,10 @@ describe("ReturnExchangeViewContent", () => {
     await user.click(screen.getByRole("checkbox", { name: /frontal unit/i }));
     await user.click(screen.getByLabelText(/exchange for a new item/i));
     await user.type(screen.getByLabelText(/replacement sku id/i), "sku-9");
-    await user.type(screen.getByLabelText(/replacement product name/i), "Loose Wave Bundle");
+    await user.type(
+      screen.getByLabelText(/replacement product name/i),
+      "Loose Wave Bundle",
+    );
     await user.clear(screen.getByLabelText(/replacement unit price/i));
     await user.type(screen.getByLabelText(/replacement unit price/i), "-12");
     await user.click(screen.getByRole("button", { name: /process exchange/i }));

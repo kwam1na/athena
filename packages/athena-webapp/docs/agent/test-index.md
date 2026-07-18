@@ -79,6 +79,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`convex/inventory/featuredItem.test.ts`](../../convex/inventory/featuredItem.test.ts)
 - [`convex/inventory/helpers/inventoryHolds.test.ts`](../../convex/inventory/helpers/inventoryHolds.test.ts)
 - [`convex/inventory/inviteCode.test.ts`](../../convex/inventory/inviteCode.test.ts)
+- [`convex/inventory/organizationMembers.test.ts`](../../convex/inventory/organizationMembers.test.ts)
 - [`convex/inventory/posQueryCleanup.test.ts`](../../convex/inventory/posQueryCleanup.test.ts)
 - [`convex/inventory/posSessionItems.test.ts`](../../convex/inventory/posSessionItems.test.ts)
 - [`convex/inventory/posSessions.trace.test.ts`](../../convex/inventory/posSessions.trace.test.ts)

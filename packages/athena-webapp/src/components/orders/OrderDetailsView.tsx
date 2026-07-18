@@ -10,10 +10,7 @@ import {
 } from "lucide-react";
 import View from "../View";
 import { useOnlineOrder } from "~/src/contexts/OnlineOrderContext";
-import {
-  currencyFormatter,
-  getRelativeTime,
-} from "~/src/lib/utils";
+import { currencyFormatter, getRelativeTime } from "~/src/lib/utils";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import { Badge } from "../ui/badge";
 import { useAction, useMutation, useQuery } from "convex/react";
@@ -59,7 +56,7 @@ const VerifiedBadge = ({
   return (
     <Badge
       variant={"outline"}
-      className="bg-green-50 text-green-600 flex items-center gap-2"
+      className="flex items-center gap-2 border-success/20 bg-success/10 text-success"
     >
       <p className="text-xs">{status}</p>
       {withCheck && <Check className="h-4 w-4" />}
@@ -229,8 +226,8 @@ export function OrderDetailsView() {
           <p className="text-sm text-sm text-muted-foreground">Payment</p>{" "}
           {order.hasVerifiedPayment && (
             <div className="flex gap-1 items-center">
-              <BadgeCheckIcon className={`w-3 h-3 text-green-700`} />
-              <p className="text-xs font-medium text-green-700">Verified</p>
+              <BadgeCheckIcon className="h-3 w-3 text-success" />
+              <p className="text-xs font-medium text-success">Verified</p>
             </div>
           )}
         </div>
@@ -271,7 +268,7 @@ export function OrderDetailsView() {
                 {order.paymentCollected ? (
                   <Badge
                     variant="outline"
-                    className="bg-green-50 text-green-600 flex items-center gap-2"
+                    className="flex items-center gap-2 border-success/20 bg-success/10 text-success"
                   >
                     <CircleCheck className="w-3 h-3" />
                     <p className="text-xs">Payment Collected</p>

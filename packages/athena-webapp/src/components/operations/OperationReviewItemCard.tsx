@@ -14,6 +14,7 @@ type OperationReviewItemCardProps = {
   badgeSlot?: ReactNode;
   className?: string;
   collapsedMetadataEntries?: OperationReviewMetadataEntry[];
+  combinedHeading?: ReactNode;
   contextIcon?: ReactNode;
   contextLabel: string;
   contextLabelClassName?: string;
@@ -22,6 +23,7 @@ type OperationReviewItemCardProps = {
   headerActionSlot?: ReactNode;
   itemId: string;
   metadataEntries?: OperationReviewMetadataEntry[];
+  presentation?: "card" | "list";
   selectionSlot?: ReactNode;
   showCollapsedDescription?: boolean;
   stackDescription?: boolean;
@@ -33,6 +35,7 @@ export function OperationReviewItemCard({
   badgeSlot,
   className,
   collapsedMetadataEntries,
+  combinedHeading,
   contextIcon,
   contextLabel,
   contextLabelClassName,
@@ -41,6 +44,7 @@ export function OperationReviewItemCard({
   headerActionSlot,
   itemId,
   metadataEntries = [],
+  presentation = "card",
   selectionSlot,
   showCollapsedDescription = true,
   stackDescription = false,
@@ -58,6 +62,10 @@ export function OperationReviewItemCard({
     <Button
       aria-controls={detailsId}
       aria-expanded={isExpanded}
+      className={cn(
+        presentation === "list" &&
+          "border-transparent bg-transparent px-2 text-muted-foreground transition-[color,background-color,transform] duration-fast ease-standard active:scale-[0.98] hover:bg-background hover:text-foreground motion-reduce:transform-none motion-reduce:transition-none",
+      )}
       onClick={() => setIsExpanded((current) => !current)}
       size="sm"
       type="button"
@@ -65,7 +73,10 @@ export function OperationReviewItemCard({
     >
       <ChevronDown
         aria-hidden="true"
-        className={cn("transition-transform", isExpanded && "rotate-180")}
+        className={cn(
+          "transition-transform duration-fast ease-standard motion-reduce:transition-none",
+          isExpanded && "rotate-180",
+        )}
       />
       {isExpanded ? "Hide details" : "Show details"}
     </Button>
@@ -74,25 +85,43 @@ export function OperationReviewItemCard({
   return (
     <article
       className={cn(
-        "relative overflow-hidden rounded-lg border border-border/80 bg-surface-raised p-layout-md shadow-surface transition-[border-color,box-shadow] duration-standard ease-standard hover:border-border",
+        "relative overflow-hidden",
+        presentation === "card" &&
+          "rounded-lg border border-border/80 bg-surface-raised p-layout-md shadow-surface transition-[border-color,box-shadow] duration-standard ease-standard hover:border-border",
+        presentation === "list" &&
+          cn(
+            "border-b border-border/70 px-layout-md py-layout-lg transition-colors duration-fast ease-standard last:border-b-0",
+            isExpanded
+              ? "bg-muted/20"
+              : "bg-transparent hover:bg-muted/15",
+          ),
         className,
       )}
     >
-      <div className="flex flex-col gap-layout-md md:flex-row md:items-start md:justify-between">
+      <div
+        className={cn(
+          "flex flex-col md:flex-row md:justify-between",
+          presentation === "card"
+            ? "gap-layout-md md:items-start"
+            : "gap-layout-sm md:items-center",
+        )}
+      >
         <div className="flex min-w-0 gap-layout-sm">
           {selectionSlot}
           <div className="min-w-0 flex-1 space-y-layout-xs">
-            <div className="flex flex-wrap items-center gap-2">
-              {contextIcon}
-              <p
-                className={cn(
-                  "text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground",
-                  contextLabelClassName,
-                )}
-              >
-                {contextLabel}
-              </p>
-            </div>
+            {combinedHeading ? null : (
+              <div className="flex flex-wrap items-center gap-2">
+                {contextIcon}
+                <p
+                  className={cn(
+                    "text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground",
+                    contextLabelClassName,
+                  )}
+                >
+                  {contextLabel}
+                </p>
+              </div>
+            )}
             <div
               className={cn(
                 "flex gap-y-layout-xs",
@@ -101,7 +130,9 @@ export function OperationReviewItemCard({
                   : "flex-wrap items-baseline gap-x-layout-md",
               )}
             >
-              <p className="font-medium leading-6 text-foreground">{title}</p>
+              <p className="font-medium leading-6 text-foreground">
+                {combinedHeading ?? title}
+              </p>
               {description && showCollapsedDescription ? (
                 <p className="text-sm leading-6 text-muted-foreground">
                   {description}
@@ -124,7 +155,14 @@ export function OperationReviewItemCard({
       </div>
 
       {summaryEntries.length > 0 && !isExpanded ? (
-        <dl className="mt-layout-sm grid gap-x-layout-lg gap-y-layout-sm border-t border-border/70 pt-layout-sm text-sm sm:grid-cols-2 lg:grid-cols-4">
+        <dl
+          className={cn(
+            "grid gap-x-layout-lg gap-y-layout-sm border-t border-border/60 text-sm sm:grid-cols-2 lg:grid-cols-4",
+            presentation === "list"
+              ? "mt-layout-md pt-layout-md"
+              : "mt-layout-sm pt-layout-sm",
+          )}
+        >
           {summaryEntries.map((entry) => (
             <div key={`${itemId}-summary-${entry.label}`} className="min-w-0">
               <dt className="text-xs text-muted-foreground">{entry.label}</dt>

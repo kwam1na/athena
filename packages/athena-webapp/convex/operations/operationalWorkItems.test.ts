@@ -262,6 +262,37 @@ describe("getPendingApprovalCountSummary", () => {
     });
   });
 
+  it("does not let resolved sync-conflict history make an exact approval count incomplete", async () => {
+    const ctx = createQueueContext({
+      approvalRequests: [
+        approvalRequest({
+          _id: "approval-1" as Id<"approvalRequest">,
+          requestType: "inventory_adjustment_review",
+        }),
+      ],
+      syncConflicts: Array.from({ length: 101 }, (_, index) => ({
+        _id: `sync-conflict-resolved-${index}`,
+        conflictType: "permission",
+        createdAt: index,
+        details: {},
+        localEventId: `event-resolved-${index}`,
+        sequence: index,
+        status: "resolved",
+        storeId: "store-1",
+        summary: "Resolved register sync review.",
+      })),
+    });
+
+    const result = await getHandler(getPendingApprovalCountSummary)(ctx, {
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(result).toEqual({
+      completeness: "complete",
+      count: 1,
+    });
+  });
+
   it("propagates incomplete sync-conflict evidence into the approval summary", async () => {
     const ctx = createQueueContext({
       syncConflicts: Array.from({ length: 101 }, (_, index) => ({

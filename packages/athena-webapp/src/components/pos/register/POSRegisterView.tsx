@@ -2,7 +2,6 @@ import { ComposedPageHeader } from "@/components/common/PageHeader";
 import { FadeIn } from "@/components/common/FadeIn";
 import { CommandApprovalDialog } from "@/components/operations/CommandApprovalDialog";
 import { CashierAuthDialog } from "@/components/pos/CashierAuthDialog";
-import { CashierView } from "@/components/pos/CashierView";
 import { CartItems } from "@/components/pos/CartItems";
 import {
   ProductEntry,
@@ -60,7 +59,7 @@ import { APP_UPDATE_APPLY_ACTION_ID } from "@/lib/app-update";
 import { currencyFormatter } from "~/shared/currencyFormatter";
 import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
 
-import { RegisterActionBar } from "./RegisterActionBar";
+import { RegisterActionBar, RegisterCashierControl } from "./RegisterActionBar";
 import { RegisterCheckoutPanel } from "./RegisterCheckoutPanel";
 import { RegisterCustomerPanel } from "./RegisterCustomerPanel";
 import { RegisterDrawerGate } from "./RegisterDrawerGate";
@@ -264,6 +263,42 @@ function RegisterSaleSummaryStrip({
         </p>
         <p className="text-3xl font-semibold leading-none text-foreground">
           {formatStoredAmount(formatter, balanceDue)}
+        </p>
+      </div>
+    </section>
+  );
+}
+
+function ExpenseSummaryStrip({
+  itemCount,
+  total,
+  currency,
+}: {
+  itemCount: number;
+  total: number;
+  currency?: string | null;
+}) {
+  const formatter = currencyFormatter(currency ?? "GHS");
+
+  return (
+    <section
+      aria-label="Expense summary"
+      className="grid min-h-[6.5rem] shrink-0 overflow-hidden rounded-lg border border-border/80 bg-surface shadow-surface sm:grid-cols-2"
+    >
+      <div className="flex min-w-0 flex-col justify-center gap-2 border-b border-border/70 px-5 py-5 sm:border-b-0 sm:border-r">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+          Items
+        </p>
+        <p className="text-3xl font-semibold leading-none text-foreground">
+          {itemCount}
+        </p>
+      </div>
+      <div className="flex min-w-0 flex-col justify-center gap-2 px-5 py-5">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+          Total
+        </p>
+        <p className="text-3xl font-semibold leading-none text-foreground">
+          {formatStoredAmount(formatter, total)}
         </p>
       </div>
     </section>
@@ -1935,8 +1970,11 @@ function ResolvedPOSRegisterViewContent({
     !isAwaitingCashierAuth &&
     !shouldShowOnboarding &&
     !isResolvingRegisterSetup;
+  const hasWorkflowSearchContext = isPosWorkflow
+    ? isSessionActive
+    : isStaffSignedIn;
   const isHeaderProductSearchSupported =
-    isSessionActive &&
+    hasWorkflowSearchContext &&
     canSearchProducts &&
     terminalCanSearchAnyCatalog &&
     !viewModel.productEntry.disabled;
@@ -2343,19 +2381,28 @@ function ResolvedPOSRegisterViewContent({
           leadingContent={
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-8">
               <div className="flex shrink-0 items-baseline gap-3">
-                <FadeIn className="flex items-center gap-2 self-center">
-                  <div
-                    aria-label={
-                      isTerminalOnline ? "Terminal online" : "Terminal offline"
-                    }
-                    className={cn(
-                      "h-2 w-2 rounded-full",
-                      isTerminalOnline
-                        ? "animate-pulse bg-success"
-                        : "bg-muted-foreground/40",
-                    )}
-                  />
-                </FadeIn>
+                <span
+                  className="flex h-2 w-2 shrink-0 items-center justify-center self-center"
+                  data-testid="terminal-status-slot"
+                >
+                  {isStaffSignedIn ? (
+                    <FadeIn className="flex h-2 w-2 items-center justify-center">
+                      <span
+                        aria-label={
+                          isTerminalOnline
+                            ? "Terminal online"
+                            : "Terminal offline"
+                        }
+                        className={cn(
+                          "h-2 w-2 rounded-full",
+                          isTerminalOnline
+                            ? "animate-pulse bg-success"
+                            : "bg-muted-foreground/40",
+                        )}
+                      />
+                    </FadeIn>
+                  ) : null}
+                </span>
 
                 <p className="text-lg font-semibold leading-none text-foreground">
                   {viewModel.header.title}
@@ -2404,10 +2451,15 @@ function ResolvedPOSRegisterViewContent({
             </div>
           }
           trailingContent={
-            (canSearchProducts &&
-              isPosWorkflow &&
-              !isLocallyClosedPendingSync) ||
-            shouldShowDrawerRecoveryActionBar ? (
+            !isPosWorkflow ? (
+              viewModel.cashierCard ? (
+                <RegisterCashierControl
+                  cashierCard={viewModel.cashierCard}
+                  disabled={isAwaitingCashierAuth}
+                />
+              ) : undefined
+            ) : (canSearchProducts && !isLocallyClosedPendingSync) ||
+              shouldShowDrawerRecoveryActionBar ? (
               <RegisterActionBar
                 cashierCard={viewModel.cashierCard}
                 closeoutControl={viewModel.closeoutControl}
@@ -2587,6 +2639,21 @@ function ResolvedPOSRegisterViewContent({
                 )}
               >
                 <div className="scrollbar-hide flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain pr-1">
+                  {!isPosWorkflow && isStaffSignedIn ? (
+                    <ExpenseSummaryStrip
+                      currency={workspaceSidebarCheckout.currency}
+                      itemCount={cartItemCount}
+                      total={
+                        shouldPreviewCompletedExpenseItems
+                          ? (viewModel.checkout.completedTransactionData
+                              ?.total ??
+                            workspaceSidebarCheckout.total ??
+                            0)
+                          : (workspaceSidebarCheckout.total ?? 0)
+                      }
+                    />
+                  ) : null}
+
                   {shouldRenderCartSidebar ? (
                     <CartItems
                       cartItems={workspaceSidebarCartItems}
@@ -2612,6 +2679,9 @@ function ResolvedPOSRegisterViewContent({
 
                   {shouldRenderCheckoutPanel ? (
                     <div
+                      data-testid={
+                        !isPosWorkflow ? "expense-completion-shell" : undefined
+                      }
                       className={cn(
                         "rounded-lg bg-surface p-4",
                         shouldShowLookupCartSplit ||
@@ -2619,6 +2689,7 @@ function ResolvedPOSRegisterViewContent({
                           viewModel.checkout.isTransactionCompleted
                           ? "flex min-h-0 flex-1 flex-col overflow-hidden"
                           : "shrink-0",
+                        !isPosWorkflow && "justify-end",
                       )}
                     >
                       {isPosWorkflow ? (
@@ -2638,20 +2709,6 @@ function ResolvedPOSRegisterViewContent({
                       ) : (
                         <ExpenseCompletionPanel checkout={viewModel.checkout} />
                       )}
-                    </div>
-                  ) : null}
-
-                  {!isPosWorkflow ? (
-                    <div className="shrink-0">
-                      <CashierView
-                        cashierName={
-                          viewModel.cashierCard?.cashierName ?? "Unassigned"
-                        }
-                        isSignInRequired={
-                          isAwaitingCashierAuth || !viewModel.cashierCard
-                        }
-                        onSignOut={viewModel.cashierCard?.onSignOut}
-                      />
                     </div>
                   ) : null}
                 </div>

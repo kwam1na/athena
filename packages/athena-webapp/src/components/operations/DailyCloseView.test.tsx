@@ -391,7 +391,7 @@ describe("DailyCloseViewContent", () => {
     renderContent(blockedSnapshot);
 
     const blockerCard = screen
-      .getByText("Register session is still open")
+      .getByText("Open register session")
       .closest("article");
     expect(blockerCard).not.toBeNull();
 
@@ -399,6 +399,8 @@ describe("DailyCloseViewContent", () => {
       "link",
       { name: /view session/i },
     );
+    expect(viewSessionLink).toHaveClass("hover:bg-accent");
+    expect(viewSessionLink).not.toHaveClass("border");
     const showDetailsButton = within(blockerCard as HTMLElement).getByRole(
       "button",
       { name: /show details/i },
@@ -411,14 +413,12 @@ describe("DailyCloseViewContent", () => {
       await user.click(detailsButton);
     }
 
-    expect(
-      screen.getByText("Register session is still open"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Open register session")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /view session/i })).toHaveAttribute(
       "href",
       "/wigclub/store/osu/cash-controls/registers/session-1?o=%252F",
     );
-    expect(screen.getByText("Register Session")).toBeInTheDocument();
+    expect(screen.queryByText("Register Session")).not.toBeInTheDocument();
     expect(screen.queryByText("Register 1")).not.toBeInTheDocument();
     expect(
       screen.getAllByText((_, element) =>
@@ -529,6 +529,86 @@ describe("DailyCloseViewContent", () => {
     ).toBeInTheDocument();
   });
 
+  it("presents close items on a cardless canvas with register status on demand", async () => {
+    const user = userEvent.setup();
+
+    renderContent({
+      ...readySnapshot,
+      blockers: [],
+      carryForwardItems: [],
+      reviewItems: [],
+    });
+
+    const readySection = screen.getByRole("region", {
+      name: "Ready close items",
+    });
+    expect(
+      screen.getByRole("tablist", { name: "End-of-day review buckets" }),
+    ).toHaveClass(
+      "rounded-lg",
+      "border",
+      "border-border",
+      "bg-surface-raised",
+      "shadow-none",
+    );
+    const registerItem = within(readySection)
+      .getByText("Register closeouts complete")
+      .closest("article");
+
+    expect(readySection).toHaveClass("rounded-lg", "border", "border-border");
+    expect(readySection).not.toHaveClass("shadow-surface");
+    expect(registerItem).not.toBeNull();
+    expect(registerItem?.parentElement).toHaveClass(
+      "space-y-layout-sm",
+      "p-layout-sm",
+    );
+    expect(registerItem).toHaveClass("border-b", "bg-transparent");
+    expect(registerItem).not.toHaveClass("rounded-md", "shadow-surface");
+    expect(registerItem).not.toHaveClass("shadow-surface");
+    expect(
+      within(registerItem as HTMLElement).queryByText("Status"),
+    ).not.toBeInTheDocument();
+
+    await user.click(
+      within(registerItem as HTMLElement).getByRole("button", {
+        name: /show details/i,
+      }),
+    );
+
+    expect(
+      within(registerItem as HTMLElement).getByText("Status"),
+    ).toBeInTheDocument();
+  });
+
+  it("combines the generic closed register type and state into one heading", () => {
+    renderContent({
+      ...readySnapshot,
+      blockers: [],
+      carryForwardItems: [],
+      readyItems: [
+        {
+          ...readySnapshot.readyItems[0],
+          title: "Register session closed",
+        },
+      ],
+      reviewItems: [],
+    });
+
+    const registerItem = screen
+      .getByText("Closed register session")
+      .closest("article");
+
+    expect(registerItem).not.toBeNull();
+    expect(
+      within(registerItem as HTMLElement).queryByText("Register Session"),
+    ).not.toBeInTheDocument();
+    expect(
+      within(registerItem as HTMLElement).queryByText(
+        "Register session closed",
+      ),
+    ).not.toBeInTheDocument();
+  });
+
   it("shows ready summary totals and enables completion", async () => {
     const user = userEvent.setup();
 
@@ -583,6 +663,9 @@ describe("DailyCloseViewContent", () => {
       .getByText("Completed sale")
       .closest("article");
     expect(saleItem).not.toBeNull();
+    expect(
+      within(saleItem as HTMLElement).queryByText("Sale"),
+    ).not.toBeInTheDocument();
     await user.click(
       within(saleItem as HTMLElement).getByRole("button", {
         name: /show details/i,
@@ -621,6 +704,9 @@ describe("DailyCloseViewContent", () => {
       .getByText("Completed expense")
       .closest("article");
     expect(expenseItem).not.toBeNull();
+    expect(
+      within(expenseItem as HTMLElement).queryByText("Expense"),
+    ).not.toBeInTheDocument();
     await user.click(
       within(expenseItem as HTMLElement).getByRole("button", {
         name: /show details/i,
@@ -682,6 +768,33 @@ describe("DailyCloseViewContent", () => {
     expect(within(checklist as HTMLElement).queryByText("None")).toBeNull();
   });
 
+  it("uses one stable status signature across every close state", () => {
+    const states = [
+      ["blocked", "Close has blockers"],
+      ["needs_review", "Review required"],
+      ["carry_forward", "Follow-ups ready"],
+      ["ready", "Ready to close"],
+      ["completed", "EOD Review completed"],
+    ] as const;
+
+    for (const [status, title] of states) {
+      const { unmount } = renderContent({
+        ...readySnapshot,
+        status,
+      });
+      const signature = screen.getByTestId("daily-close-status-signature");
+
+      expect(signature).toHaveAttribute("data-status", status);
+      expect(signature).toHaveClass("min-h-10");
+      expect(within(signature).getByText(title)).toBeInTheDocument();
+      expect(
+        within(signature).getByTestId("daily-close-status-icon"),
+      ).toBeInTheDocument();
+
+      unmount();
+    }
+  });
+
   it("shows Athena preparation status without claiming EOD Review is complete", () => {
     renderContent({
       ...readySnapshot,
@@ -718,6 +831,17 @@ describe("DailyCloseViewContent", () => {
     });
 
     expect(screen.getByText("EOD Review completed")).toBeInTheDocument();
+    const completionRail = screen.getByText("Close status").closest("aside");
+    expect(completionRail).toHaveClass(
+      "rounded-lg",
+      "border",
+      "border-border",
+      "bg-transparent",
+    );
+    expect(completionRail).not.toHaveClass(
+      "bg-surface-raised",
+      "shadow-surface",
+    );
     expect(screen.queryByText("Athena automation")).not.toBeInTheDocument();
     expect(
       screen.queryByText("Athena checked EOD Review. No change was made."),
@@ -1535,9 +1659,7 @@ describe("DailyCloseViewContent", () => {
       ),
     ).not.toBeInTheDocument();
     expect(screen.getAllByText("Manager only")).not.toHaveLength(0);
-    expect(
-      screen.getByText("Register session is still open"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Open register session")).toBeInTheDocument();
     expect(screen.getByText("2 cash transactions")).toBeInTheDocument();
   });
 
@@ -1738,9 +1860,7 @@ describe("DailyCloseViewContent", () => {
       within(logicalWorkCard as HTMLElement).getByText("Work type"),
     ).toBeInTheDocument();
     expect(
-      within(logicalWorkCard as HTMLElement).getByText(
-        "Synced sale inventory",
-      ),
+      within(logicalWorkCard as HTMLElement).getByText("Synced sale inventory"),
     ).toBeInTheDocument();
     expect(
       within(logicalWorkCard as HTMLElement).queryByText("Member Count"),
@@ -1869,8 +1989,7 @@ describe("DailyCloseViewContent", () => {
           statusLabel: "Carry forward",
           subject: {
             id: "carry-catalog-setup-1",
-            label:
-              "Assign catalog category: CERAVEHYDRATING FOAMING OIL",
+            label: "Assign catalog category: CERAVEHYDRATING FOAMING OIL",
             type: "operational_work_item",
           },
           title: "Assign catalog category: CERAVEHYDRATING FOAMING OIL",
@@ -1907,9 +2026,7 @@ describe("DailyCloseViewContent", () => {
     expect(screen.getByText("Fuccin it up some more")).toBeInTheDocument();
     expect(screen.getByText("Review inventory for Clogs")).toBeInTheDocument();
     expect(
-      screen.getByText(
-        "Assign catalog category: Ceravehydrating Foaming Oil",
-      ),
+      screen.getByText("Assign catalog category: Ceravehydrating Foaming Oil"),
     ).toBeInTheDocument();
     expect(
       screen.getByText(
@@ -1922,6 +2039,23 @@ describe("DailyCloseViewContent", () => {
     expect(
       screen.queryByText("Review inventory for clogs"),
     ).not.toBeInTheDocument();
+
+    const inventoryReviewRow = screen
+      .getByText("Review inventory for Clogs")
+      .closest("article");
+    expect(inventoryReviewRow).not.toBeNull();
+    const inventoryReviewHeading = within(
+      inventoryReviewRow as HTMLElement,
+    ).getByText("Review inventory for Clogs");
+    expect(inventoryReviewHeading.parentElement).toHaveClass(
+      "flex-col",
+      "items-start",
+    );
+    expect(
+      within(inventoryReviewRow as HTMLElement).getByText(
+        "Open operational work will carry forward after the end of day review.",
+      ),
+    ).toBeInTheDocument();
 
     const firstCard = screen
       .getByText("Fuccin it up some more")

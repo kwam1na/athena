@@ -8,7 +8,7 @@ import {
 import { capitalizeFirstLetter, slugToWords } from "~/src/lib/utils";
 import { Badge } from "../ui/badge";
 
-export const OrderStatus = ({ order }: { order: any }) => {
+export const OrderStatus = ({ order }: { order: { status: string } }) => {
   const showCheck =
     order.status.includes("ready") ||
     order.status == "out-for-delivery" ||
@@ -23,18 +23,18 @@ export const OrderStatus = ({ order }: { order: any }) => {
       variant="outline"
       className={`rounded-md border-transparent px-2 py-1 ${
         order.status.includes("refunded")
-          ? "bg-red-100 text-red-600"
+          ? "bg-danger/10 text-danger"
           : order.status === "cancelled"
-            ? "bg-red-100 text-red-600"
+            ? "bg-danger/10 text-danger"
             : order.status === "pickup-exception"
-              ? "bg-amber-100 text-amber-700"
-            : order.status === "delivered" || order.status === "picked-up"
-              ? "bg-green-100 text-green-600"
-              : order.status === "out-for-delivery"
-                ? "bg-blue-100 text-blue-600"
-                : order.status.includes("ready")
-                  ? "bg-emerald-100 text-emerald-600"
-                  : "bg-zinc-100 text-zinc-600"
+              ? "bg-warning/10 text-warning"
+              : order.status === "delivered" || order.status === "picked-up"
+                ? "bg-success/10 text-success"
+                : order.status === "out-for-delivery"
+                  ? "bg-primary/10 text-primary"
+                  : order.status.includes("ready")
+                    ? "bg-success/10 text-success"
+                    : "bg-muted text-muted-foreground"
       }`}
     >
       <div className="flex items-center">

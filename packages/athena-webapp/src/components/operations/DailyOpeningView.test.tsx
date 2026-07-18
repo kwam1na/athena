@@ -372,6 +372,33 @@ describe("DailyOpeningViewContent", () => {
   it("shows ready state and enables Start Day without drawer controls", () => {
     renderContent(readySnapshot);
 
+    expect(
+      screen.getByRole("tablist", { name: "Opening Handoff buckets" }),
+    ).toHaveClass(
+      "rounded-lg",
+      "border",
+      "border-border",
+      "bg-surface-raised",
+      "shadow-none",
+    );
+    const readySection = screen.getByRole("region", {
+      name: "Ready opening items",
+    });
+    expect(readySection).toHaveClass(
+      "min-w-0",
+      "rounded-lg",
+      "border",
+      "border-border",
+    );
+    expect(readySection).not.toHaveClass("bg-surface-raised", "shadow-surface");
+    const openingRail = screen.getByText("Opening status").closest("aside");
+    expect(openingRail).toHaveClass(
+      "rounded-lg",
+      "border",
+      "border-border",
+      "bg-transparent",
+    );
+    expect(openingRail).not.toHaveClass("bg-surface-raised", "shadow-surface");
     expect(screen.getByText("Ready to start")).toBeInTheDocument();
     expect(screen.getByText("Prior close complete")).toBeInTheDocument();
     expect(screen.getByText("Completed At")).toBeInTheDocument();
@@ -436,9 +463,7 @@ describe("DailyOpeningViewContent", () => {
     expect(screen.queryByText("1 blocker")).toBeNull();
   });
 
-  it("renders pending approval metadata as operator-facing detail", async () => {
-    const user = userEvent.setup();
-
+  it("renders pending approval metadata as operator-facing detail", () => {
     window.history.pushState(
       {},
       "",
@@ -510,7 +535,9 @@ describe("DailyOpeningViewContent", () => {
     expect(screen.getByText("Mobile Money")).toBeInTheDocument();
     expect(screen.getByText("Requested method")).toBeInTheDocument();
     expect(screen.getByText("Cash")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /show details/i }));
+    expect(
+      screen.queryByRole("button", { name: /show details/i }),
+    ).not.toBeInTheDocument();
     expect(screen.getByText("Amount")).toBeInTheDocument();
     expect(screen.getByText("GHS 1,715.00")).toBeInTheDocument();
     expect(screen.getByText("Requester note")).toBeInTheDocument();
@@ -571,6 +598,15 @@ describe("DailyOpeningViewContent", () => {
     const startButton = screen.getByRole("button", { name: /start day/i });
     expect(screen.getByText("Ready with attention")).toBeInTheDocument();
     expect(startButton).toBeDisabled();
+    expect(
+      screen.getByRole("heading", { name: "Handoff acknowledgements" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("0 of 2")).toBeInTheDocument();
+    expect(
+      screen.getByRole("progressbar", {
+        name: "Handoff acknowledgement progress",
+      }),
+    ).toHaveAttribute("aria-valuenow", "0");
 
     await user.click(
       screen.getByRole("checkbox", {
@@ -578,6 +614,7 @@ describe("DailyOpeningViewContent", () => {
       }),
     );
     expect(startButton).toBeDisabled();
+    expect(screen.getByText("1 of 2")).toBeInTheDocument();
 
     await user.click(screen.getByRole("tab", { name: /carry forward/i }));
     await user.click(
@@ -598,6 +635,71 @@ describe("DailyOpeningViewContent", () => {
         startAt: attentionSnapshot.startAt,
       });
     });
+  });
+
+  it("selects and clears every handoff acknowledgement from the rail", async () => {
+    const user = userEvent.setup();
+
+    renderContent(attentionSnapshot);
+
+    const startButton = screen.getByRole("button", { name: /start day/i });
+    const selectAllButton = screen.getByRole("button", {
+      name: "Select all 2 handoff items",
+    });
+
+    expect(startButton).toBeDisabled();
+    await user.click(selectAllButton);
+
+    expect(screen.getByText("2 of 2")).toBeInTheDocument();
+    expect(startButton).toBeEnabled();
+    for (const checkbox of screen.getAllByRole("checkbox")) {
+      expect(checkbox).toBeChecked();
+    }
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Clear all 2 handoff items",
+      }),
+    );
+
+    expect(screen.getByText("0 of 2")).toBeInTheDocument();
+    expect(startButton).toBeDisabled();
+    for (const checkbox of screen.getAllByRole("checkbox")) {
+      expect(checkbox).not.toBeChecked();
+    }
+  });
+
+  it("normalizes product names in the handoff acknowledgement list", () => {
+    renderContent({
+      ...attentionSnapshot,
+      carryForwardItems: [
+        {
+          category: "carry_forward",
+          id: "carry-inventory-review-1",
+          key: "carry-inventory-review-1",
+          title: "Review inventory for JEBA HAIR DEODORIZER",
+        },
+      ],
+      reviewItems: [],
+      summary: {
+        blockerCount: 0,
+        carryForwardCount: 1,
+        readyCount: 1,
+        reviewCount: 0,
+      },
+    });
+
+    expect(
+      screen.getByRole("checkbox", {
+        name: "Acknowledge Review inventory for Jeba Hair Deodorizer",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByText("Review inventory for Jeba Hair Deodorizer"),
+    ).not.toHaveLength(0);
+    expect(
+      screen.queryByText("Review inventory for JEBA HAIR DEODORIZER"),
+    ).not.toBeInTheDocument();
   });
 
   it("paginates opening tab content in five-item pages", async () => {
@@ -1049,12 +1151,12 @@ describe("DailyOpeningViewContent", () => {
     ).toBeInTheDocument();
   });
 
-  it("formats carry-forward work item copy and groups source action with details", () => {
+  it("formats carry-forward work item copy without a redundant details disclosure", () => {
     const snapshot: DailyOpeningSnapshot = {
       ...readySnapshot,
       carryForwardItems: [
         {
-          category: "operational_work_item",
+          category: "carry_forward",
           description:
             "Open operational work will carry forward after the opening handoff.",
           id: "carry-service-case-1",
@@ -1081,9 +1183,11 @@ describe("DailyOpeningViewContent", () => {
             to: "/$orgUrlSlug/store/$storeUrlSlug/operations/open-work",
           },
           metadata: {
+            frozenMemberCount: 1,
             priority: "high",
             status: "open",
             type: "synced_sale_inventory_review",
+            unresolvedMemberCount: 1,
           },
           title: "Review inventory for slides",
         },
@@ -1134,26 +1238,33 @@ describe("DailyOpeningViewContent", () => {
 
     renderContent(snapshot);
 
-    expect(screen.getByText("Tokin")).toBeInTheDocument();
-    expect(screen.getByText("Review inventory for Slides")).toBeInTheDocument();
+    expect(screen.getAllByText("Tokin")).toHaveLength(2);
+    expect(screen.getAllByText("Review inventory for Slides")).toHaveLength(2);
     expect(
-      screen.getByText(
+      screen.getAllByText(
         "Review pending checkout item: Protein Brazilian Hair Repair Mask",
       ),
-    ).toBeInTheDocument();
+    ).toHaveLength(2);
     expect(
-      screen.getByText(
+      screen.getAllByText(
         "Assign catalog category: Ceravehydrating Foaming Oil",
       ),
-    ).toBeInTheDocument();
+    ).toHaveLength(2);
     expect(screen.getByText("Service case")).toBeInTheDocument();
     expect(screen.getAllByText("Normal")).toHaveLength(3);
     expect(screen.getAllByText("Open")).toHaveLength(4);
     expect(screen.queryByText("service_case")).not.toBeInTheDocument();
+    expect(screen.queryByText("Frozen Member Count")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Unresolved Member Count"),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText("normal")).not.toBeInTheDocument();
     expect(screen.queryByText("open")).not.toBeInTheDocument();
 
-    const firstCard = screen.getByText("Tokin").closest("article");
+    const firstCard = screen
+      .getAllByText("Tokin")
+      .find((element) => element.closest("article"))
+      ?.closest("article");
     expect(firstCard).not.toBeNull();
 
     const viewOpenWorkLink = within(firstCard as HTMLElement).getByRole(
