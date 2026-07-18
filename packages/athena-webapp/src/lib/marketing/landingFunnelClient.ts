@@ -1,6 +1,7 @@
 export type PublicLandingFunnelEvent =
   | "page_view"
   | "walkthrough_cta"
+  | "demo_cta"
   | "form_start";
 
 const emittedEvents = new Set<PublicLandingFunnelEvent>();

@@ -8,7 +8,7 @@ import {
 } from "../../../../marketing/walkthroughConfig";
 import { readBoundedBody } from "./boundedBody";
 
-const events = new Set(["page_view", "walkthrough_cta", "form_start"]);
+const events = new Set(["page_view", "walkthrough_cta", "demo_cta", "form_start"]);
 const devices = new Set(["mobile", "desktop", "tablet", "unknown"]);
 const sources = new Set(["direct", "search", "social", "referral", "unknown"]);
 const landingFunnelEventRoutes: HonoWithConvex<ActionCtx> = new Hono();
@@ -29,7 +29,7 @@ landingFunnelEventRoutes.post("/", async (c) => {
   if (!bytes) return c.json({ error: { code: "request_rejected" } }, 413);
   let body: Record<string, unknown>;
   try { const parsed: unknown = JSON.parse(new TextDecoder().decode(bytes)); if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error(); body = parsed as Record<string, unknown>; } catch { return c.json({ error: { code: "request_rejected" } }, 400); }
-  const event = typeof body.event === "string" && events.has(body.event) ? body.event as "page_view" | "walkthrough_cta" | "form_start" : null;
+  const event = typeof body.event === "string" && events.has(body.event) ? body.event as "page_view" | "walkthrough_cta" | "demo_cta" | "form_start" : null;
   const device = typeof body.device === "string" && devices.has(body.device) ? body.device as "mobile" | "desktop" | "tablet" | "unknown" : "unknown";
   const source = typeof body.source === "string" && sources.has(body.source) ? body.source as "direct" | "search" | "social" | "referral" | "unknown" : "unknown";
   if (!event || Object.keys(body).some((key) => !["event", "device", "source"].includes(key))) return c.json({ error: { code: "request_rejected" } }, 400);
