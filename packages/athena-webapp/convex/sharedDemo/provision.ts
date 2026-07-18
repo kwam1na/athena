@@ -81,8 +81,8 @@ export function sharedDemoMigrationSkipTables(baselineVersion: number) {
 export function validateSharedDemoSeed(seed: typeof SHARED_DEMO_SEED) {
   const errors: string[] = [];
   if (new Set(seed.domains).size !== 6) errors.push("six domains required");
-  if (!seed.ownerEmail.endsWith(".invalid"))
-    errors.push("synthetic email required");
+  if (seed.ownerEmail !== "store@osustudio.com")
+    errors.push("Osu Studio owner email required");
   if (!seed.organizationSlug || !seed.storeSlug)
     errors.push("stable slugs required");
   return errors;

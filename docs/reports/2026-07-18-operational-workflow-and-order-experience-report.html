@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="7375794f82394e565b86017f3a6294e6f4d8564960308528fec07ddac624c7c9" data-athena-report-base="origin/main" data-athena-report-head="codex/ship-root-dirty-20260718">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Operational Workflow and Order Experience Delivery</title>
+    <style>
+      :root {
+        --ink: #1f2933;
+        --muted: #596674;
+        --line: #d9e2ec;
+        --paper: #ffffff;
+        --soft: #f6f8fb;
+        --accent: #1d4ed8;
+        --accent-soft: #dbeafe;
+        --good: #166534;
+        --bad: #b91c1c;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--soft);
+        color: var(--ink);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        line-height: 1.55;
+      }
+      main { max-width: 1120px; margin: 0 auto; padding: 48px 24px 72px; }
+      header { border-bottom: 1px solid var(--line); margin-bottom: 28px; padding-bottom: 28px; }
+      h1, h2, h3 { line-height: 1.18; letter-spacing: 0; }
+      h1 { font-size: 42px; max-width: 880px; margin: 0 0 16px; }
+      h2 { font-size: 28px; margin: 0 0 16px; }
+      p { margin: 0 0 14px; }
+      .lede { color: var(--muted); font-size: 18px; max-width: 880px; }
+      .meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+      .pill { border: 1px solid var(--line); border-radius: 999px; background: var(--paper); color: var(--muted); font-size: 13px; padding: 6px 10px; }
+      .panel { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; margin: 18px 0; padding: 22px; }
+      code { background: #eef2f7; border: 1px solid #d8dee8; border-radius: 5px; padding: 1px 5px; }
+      pre { overflow: auto; background: #111827; color: #e5e7eb; border-radius: 8px; padding: 16px; }
+      pre code { background: transparent; border: 0; color: inherit; padding: 0; }
+      table { width: 100%; border-collapse: collapse; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+      th, td { border-bottom: 1px solid var(--line); padding: 11px 12px; text-align: left; vertical-align: top; }
+      th { background: #eef2f7; color: var(--muted); font-size: 13px; text-transform: uppercase; }
+      tr:last-child td { border-bottom: 0; }
+      .quiz-question { border-top: 1px solid var(--line); padding: 18px 0; }
+      .quiz-question:first-child { border-top: 0; }
+      fieldset { border: 0; margin: 0; padding: 0; }
+      legend { font-weight: 700; margin-bottom: 10px; }
+      label { display: block; border: 1px solid var(--line); border-radius: 8px; background: #fbfdff; margin: 8px 0; padding: 10px 12px; cursor: pointer; }
+      @media (hover: hover) and (pointer: fine) {
+        label:hover { border-color: #b6c5d8; }
+      }
+      button {
+        appearance: none;
+        border: 0;
+        border-radius: 8px;
+        background: var(--accent);
+        color: #ffffff;
+        cursor: pointer;
+        font-weight: 700;
+        padding: 11px 16px;
+        transition: transform 140ms cubic-bezier(0.23, 1, 0.32, 1);
+      }
+      button:active { transform: scale(0.97); }
+      button.secondary { background: #475569; }
+      .quiz-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
+      #quizResult { font-weight: 700; }
+      .answer-detail { display: none; border-top: 1px dashed var(--line); color: var(--muted); margin-top: 10px; padding-top: 10px; }
+      .answer-detail.visible { display: block; }
+      .correct { border-color: #86efac !important; background: #f0fdf4 !important; }
+      .incorrect { border-color: #fecaca !important; background: #fef2f2 !important; }
+      @media (prefers-reduced-motion: reduce) { button { transition-duration: 0ms; } }
+      @media (max-width: 820px) { h1 { font-size: 32px; } main { padding: 32px 16px 56px; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Operational Workflow and Order Experience Delivery</h1>
+        <p class="lede">Delivery candidate on codex/ship-root-dirty-20260718. It clarifies daily operations, POS expense handling, order workflows, and shared-demo consistency without changing production state.</p>
+        <div class="meta"><span class="pill">Delivery candidate</span><span class="pill">Branch: codex/ship-root-dirty-20260718</span><span class="pill">Source: bf70a0a2 plus delivery-gate fixes</span><span class="pill">Merge: pending</span><span class="pill">Root alignment: pending</span><span class="pill">Production deploy: skipped by request</span></div>
+      </header>
+      <section class="panel"><h2>Executive Summary</h2>
+<p>This candidate makes daily operations easier to scan and act on, keeps POS expense work focused on the signed-in cashier, and gives order, refund, and return workflows a consistent workspace hierarchy.</p>
+<p>It also tightens two backend boundaries: organization members are projected to their declared public shape through an indexed query, and sync-review completeness is based on conflicted events linked to resolved conflicts rather than arbitrary resolved history.</p>
+</section>
+<section class="panel"><h2>Mental Model</h2>
+<p>Daily Operations is a routing and visibility surface. Cash Controls and Open Work remain the authoritative places for cash and review resolution. The UI changes make that routing clearer while keeping existing commands, closeout policy, and order state transitions intact.</p>
+<ul>
+<li>Daily Opening: visible acknowledgement progress and bulk acknowledgement controls, while Start Day remains gated.</li>
+<li>Daily Close: clearer register-specific status and a flatter review rail, with details still available on demand.</li>
+<li>Orders: payment method and amount are co-located; refund and return surfaces keep their existing commands but present their choices more clearly.</li>
+<li>POS expenses: cashier context moves into the header and the cart rail owns the single visible total.</li>
+</ul>
+</section>
+<section class="panel"><h2>Failure Boundaries</h2>
+<p>The change does not broaden public APIs or alter drawer, closeout, refund, return, or order-transition policy. The shared-demo owner deliberately uses store@osustudio.com, and its validator now asserts that explicit product identity rather than applying a generic synthetic-email rule. Sync lookup fan-out is bounded per review limit, so unusually large conflict histories remain an operational scale boundary rather than an unbounded read.</p>
+</section>
+<section class="panel"><h2>Validation Evidence</h2>
+
+<ul>
+<li>186 focused tests passed across the touched operations, POS, order, and Convex test files, including shared-demo provisioning.</li>
+<li>TypeScript passed. Changed-file Convex lint and return-validator contract validation passed in the final delivery-gate rerun.</li>
+<li>Changed-file frontend lint passed with no errors and 3 existing non-blocking warnings.</li>
+<li>Graphify artifacts were rebuilt. The first pre-push attempt identified the required solution note and this report before any remote push occurred; both are validated candidate artifacts awaiting commit and push.</li>
+</ul>
+</section>
+<section class="panel"><h2>Next-Time Guidance</h2>
+<p>For a similarly broad Athena batch, run changed-file lint before push, add return-contract proof whenever a public Convex projection changes, run the affected shared-demo test instead of relying only on adjacent UI tests, rebuild Graphify, and include both the solution note and candidate report before the pre-push integration gate.</p>
+</section>
+
+<section class="panel">
+  <h2>Key Files</h2>
+  <table>
+    <thead><tr><th>File</th><th>Why It Matters</th></tr></thead>
+    <tbody><tr><td><code>packages/athena-webapp/src/components/operations/DailyOpeningView.tsx</code></td><td>Shows acknowledgement progress and bulk controls while preserving the start-day gate.</td></tr>
+<tr><td><code>packages/athena-webapp/src/components/operations/DailyCloseView.tsx</code></td><td>Clarifies closeout review status and register session context.</td></tr>
+<tr><td><code>packages/athena-webapp/src/components/pos/register/POSRegisterView.tsx</code></td><td>Moves expense cashier context into the header and removes duplicate total presentation.</td></tr>
+<tr><td><code>packages/athena-webapp/src/components/orders/orders-table/components/orderColumns.tsx</code></td><td>Co-locates payment amount and method icon in the order list.</td></tr>
+<tr><td><code>packages/athena-webapp/convex/inventory/organizationMembers.ts</code></td><td>Uses the organization membership index and returns only the validator-safe member shape.</td></tr>
+<tr><td><code>packages/athena-webapp/convex/pos/application/sync/registerSessionSyncReview.ts</code></td><td>Derives review completeness from conflicted events and bounded linked-conflict reads.</td></tr>
+<tr><td><code>packages/athena-webapp/convex/sharedDemo/provision.ts</code></td><td>Keeps the shared-demo story coherent while enforcing its explicit Osu Studio owner identity.</td></tr></tbody>
+  </table>
+</section>
+
+
+<section class="panel">
+  <h2>Subagent Evidence</h2>
+  <ul><li><strong>Session context explorer:</strong> Confirmed the requested merge, root-alignment, and no-production-deploy finish line; summarized completed local gates and the initial pre-push documentation stop.</li>
+<li><strong>Delivered diff explorer:</strong> Mapped the 34-file candidate across operations, POS, orders, Convex, and shared demo; identified the shared-demo seed invariant mismatch before delivery.</li></ul>
+</section>
+
+
+<section id="quiz" class="panel">
+  <h2>Quiz: Pass Required</h2>
+  <p>You must score at least 8 out of 10 to pass.</p>
+  <form id="changeQuiz" data-threshold="8">
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>1. What remains authoritative for cash closeout and review resolution?</legend>
+    <label><input type="radio" name="q1" value="0" /> Daily Operations alone</label>
+<label><input type="radio" name="q1" value="1" /> Cash Controls and Open Work</label>
+<label><input type="radio" name="q1" value="2" /> The order detail screen</label>
+  </fieldset>
+  <div class="answer-detail">Daily Operations routes and surfaces work. Cash Controls and Open Work retain authority.</div>
+</div>
+
+<div class="quiz-question" data-answer="0">
+  <fieldset>
+    <legend>2. What still gates Start Day after the opening UI changes?</legend>
+    <label><input type="radio" name="q2" value="0" /> Completion of all required handoff acknowledgements</label>
+<label><input type="radio" name="q2" value="1" /> The payment column</label>
+<label><input type="radio" name="q2" value="2" /> The shared-demo migration</label>
+  </fieldset>
+  <div class="answer-detail">The new controls make acknowledgements faster, but Start Day still requires every required handoff acknowledgement.</div>
+</div>
+
+<div class="quiz-question" data-answer="2">
+  <fieldset>
+    <legend>3. How does the order table now present payment information?</legend>
+    <label><input type="radio" name="q3" value="0" /> In a separate payment-method column</label>
+<label><input type="radio" name="q3" value="1" /> By removing the amount</label>
+<label><input type="radio" name="q3" value="2" /> By co-locating amount and a method icon</label>
+  </fieldset>
+  <div class="answer-detail">The separate payment-method column is removed and the amount carries the payment icon.</div>
+</div>
+
+<div class="quiz-question" data-answer="0">
+  <fieldset>
+    <legend>4. Why does organizationMembers project a narrow member object?</legend>
+    <label><input type="radio" name="q4" value="0" /> To avoid exposing raw document fields and meet the declared return validator</label>
+<label><input type="radio" name="q4" value="1" /> To bypass authorization</label>
+<label><input type="radio" name="q4" value="2" /> To make indexes unnecessary</label>
+  </fieldset>
+  <div class="answer-detail">The projection provides only the declared UI shape and avoids leaking incidental raw fields.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>5. What does the sync-review change use as its completeness signal?</legend>
+    <label><input type="radio" name="q5" value="0" /> All resolved conflicts in a store</label>
+<label><input type="radio" name="q5" value="1" /> Conflicted events with linked resolved conflicts</label>
+<label><input type="radio" name="q5" value="2" /> A client-side timer</label>
+  </fieldset>
+  <div class="answer-detail">The probe starts from conflicted events and looks up their linked conflict records.</div>
+</div>
+
+<div class="quiz-question" data-answer="0">
+  <fieldset>
+    <legend>6. What owner-email invariant applies to the shared demo?</legend>
+    <label><input type="radio" name="q6" value="0" /> It must use store@osustudio.com</label>
+<label><input type="radio" name="q6" value="1" /> It must end in .invalid</label>
+<label><input type="radio" name="q6" value="2" /> It must use a personal address</label>
+  </fieldset>
+  <div class="answer-detail">The seed validator intentionally enforces the expected Osu Studio owner identity.</div>
+</div>
+
+<div class="quiz-question" data-answer="2">
+  <fieldset>
+    <legend>7. What production action is part of this delivery?</legend>
+    <label><input type="radio" name="q7" value="0" /> Deploy all runtime surfaces</label>
+<label><input type="radio" name="q7" value="1" /> Deploy only Convex</label>
+<label><input type="radio" name="q7" value="2" /> No production deploy</label>
+  </fieldset>
+  <div class="answer-detail">The user explicitly requested that production deploys be skipped.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>8. What validation did this delivery add for its changed public Convex projection?</legend>
+    <label><input type="radio" name="q8" value="0" /> Only a typecheck</label>
+<label><input type="radio" name="q8" value="1" /> A representative exported-return contract test</label>
+<label><input type="radio" name="q8" value="2" /> A browser screenshot</label>
+  </fieldset>
+  <div class="answer-detail">This delivery added executable return-validator contract proof for the changed membership projection.</div>
+</div>
+
+<div class="quiz-question" data-answer="0">
+  <fieldset>
+    <legend>9. What generated artifact step accompanies code changes in this repository?</legend>
+    <label><input type="radio" name="q9" value="0" /> Rebuild Graphify</label>
+<label><input type="radio" name="q9" value="1" /> Delete graphify-out</label>
+<label><input type="radio" name="q9" value="2" /> Ignore graph artifacts</label>
+  </fieldset>
+  <div class="answer-detail">Graphify is rebuilt and refreshed artifacts are delivered with the change.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>10. Which finish-line step remains pending for this delivery candidate?</legend>
+    <label><input type="radio" name="q10" value="0" /> Production deployment</label>
+<label><input type="radio" name="q10" value="1" /> Local root alignment after merge</label>
+<label><input type="radio" name="q10" value="2" /> Adding a production deploy</label>
+  </fieldset>
+  <div class="answer-detail">After merge, local root alignment remains pending. Production deployment is explicitly out of scope.</div>
+</div>
+
+    <div class="quiz-actions">
+      <button type="button" id="gradeQuiz">Grade quiz</button>
+      <button type="button" class="secondary" id="resetQuiz">Reset</button>
+      <span id="quizResult" aria-live="polite"></span>
+    </div>
+  </form>
+</section>
+
+    </main>
+    <script>
+      const questions = Array.from(document.querySelectorAll(".quiz-question"));
+      const result = document.getElementById("quizResult");
+      const form = document.getElementById("changeQuiz");
+      const threshold = Number(form.dataset.threshold || 0);
+      function clearGrades() {
+        questions.forEach((question) => {
+          question.classList.remove("correct", "incorrect");
+          question.querySelector(".answer-detail").classList.remove("visible");
+        });
+        result.textContent = "";
+        result.style.color = "";
+      }
+      document.getElementById("gradeQuiz").addEventListener("click", () => {
+        clearGrades();
+        let score = 0;
+        questions.forEach((question, index) => {
+          const selected = document.querySelector(`input[name="q${index + 1}"]:checked`);
+          const isCorrect = selected && Number(selected.value) === Number(question.dataset.answer);
+          if (isCorrect) score += 1;
+          question.classList.add(isCorrect ? "correct" : "incorrect");
+          question.querySelector(".answer-detail").classList.add("visible");
+        });
+        const passed = score >= threshold;
+        result.textContent = passed
+          ? `Passed: ${score}/${questions.length}.`
+          : `Not passed: ${score}/${questions.length}. Review the report and try again.`;
+        result.style.color = passed ? "var(--good)" : "var(--bad)";
+      });
+      document.getElementById("resetQuiz").addEventListener("click", () => {
+        form.reset();
+        clearGrades();
+      });
+    </script>
+  </body>
+</html>
