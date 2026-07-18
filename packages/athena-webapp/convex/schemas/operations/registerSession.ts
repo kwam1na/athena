@@ -66,6 +66,8 @@ export const registerSessionSchema = v.object({
   closedByUserId: v.optional(v.id("athenaUser")),
   closedByStaffProfileId: v.optional(v.id("staffProfile")),
   closedAt: v.optional(v.number()),
+  closeoutNotificationLocalEventId: v.optional(v.string()),
+  closeoutNotificationScheduledAt: v.optional(v.number()),
   managerApprovalRequestId: v.optional(v.id("approvalRequest")),
   notes: v.optional(v.string()),
   // U10: deterministic idempotency marker for the cedis→pesewas migration of the

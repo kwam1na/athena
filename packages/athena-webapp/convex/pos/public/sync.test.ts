@@ -233,6 +233,128 @@ describe("POS local sync public mutation", () => {
     );
   });
 
+  it("schedules an admin report for a fresh exact-match register closeout in prod", async () => {
+    process.env.STAGE = "prod";
+    const ctx = buildCtx({
+      registerSessions: [
+        {
+          _id: "register-session-1",
+          countedCash: 124400,
+          expectedCash: 124400,
+          status: "closed",
+          variance: 0,
+        },
+      ],
+    });
+    mocks.ingestLocalEventsWithCtx.mockResolvedValue({
+      kind: "ok",
+      data: {
+        accepted: [],
+        held: [],
+        mappings: [
+          {
+            cloudId: "register-session-1",
+            cloudTable: "registerSession",
+            localEventId: "event-closeout-1",
+            localIdKind: "closeout",
+          },
+        ],
+        conflicts: [],
+        syncCursor: {
+          localRegisterSessionId: "local-register-1",
+          acceptedThroughSequence: 2,
+        },
+      },
+    });
+
+    await getHandler(ingestLocalEvents)(ctx as never, {
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      syncSecretHash: "sync-secret-1",
+      events: [
+        {
+          localEventId: "event-closeout-1",
+          localRegisterSessionId: "local-register-1",
+          sequence: 2,
+          eventType: "register_closed",
+          occurredAt: 123,
+          staffProfileId: "staff-1",
+          payload: { countedCash: 124400 },
+        },
+      ],
+    });
+
+    expect(ctx.db.patch).toHaveBeenCalledWith(
+      "registerSession",
+      "register-session-1",
+      {
+        closeoutNotificationLocalEventId: "event-closeout-1",
+        closeoutNotificationScheduledAt: expect.any(Number),
+      },
+    );
+    expect(ctx.scheduler.runAfter).toHaveBeenCalledWith(
+      0,
+      expect.anything(),
+      { registerSessionId: "register-session-1" },
+    );
+  });
+
+  it("does not reschedule an exact-match report for the same closeout event", async () => {
+    process.env.STAGE = "prod";
+    const ctx = buildCtx({
+      registerSessions: [
+        {
+          _id: "register-session-1",
+          closeoutNotificationLocalEventId: "event-closeout-1",
+          countedCash: 124400,
+          expectedCash: 124400,
+          status: "closed",
+          variance: 0,
+        },
+      ],
+    });
+    mocks.ingestLocalEventsWithCtx.mockResolvedValue({
+      kind: "ok",
+      data: {
+        accepted: [],
+        held: [],
+        mappings: [
+          {
+            cloudId: "register-session-1",
+            cloudTable: "registerSession",
+            localEventId: "event-closeout-1",
+            localIdKind: "closeout",
+          },
+        ],
+        conflicts: [],
+        syncCursor: {
+          localRegisterSessionId: "local-register-1",
+          acceptedThroughSequence: 2,
+        },
+      },
+    });
+
+    await getHandler(ingestLocalEvents)(ctx as never, {
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      syncSecretHash: "sync-secret-1",
+      events: [
+        {
+          localEventId: "event-closeout-1",
+          localRegisterSessionId: "local-register-1",
+          sequence: 2,
+          eventType: "register_closed",
+          occurredAt: 123,
+          staffProfileId: "staff-1",
+          payload: { countedCash: 124400 },
+        },
+      ],
+    });
+
+    expect(ctx.db.patch).not.toHaveBeenCalled();
+    expect(ctx.scheduler.runAfter).not.toHaveBeenCalled();
+  });
+
   it("does not schedule a variance alert outside prod", async () => {
     process.env.STAGE = "dev";
     const ctx = buildCtx({
@@ -1293,6 +1415,7 @@ function buildCtx(
       requestType: string;
       status: string;
     }>;
+    registerSessions?: Array<Record<string, unknown> & { _id: string }>;
     missingTerminal?: boolean;
     staffLinkedUserId?: string;
     terminalRegisteredByUserId?: string;
@@ -1305,6 +1428,12 @@ function buildCtx(
   return {
     db: {
       get: vi.fn(async (tableName: string, id: string) => {
+        if (tableName === "registerSession") {
+          return (
+            options.registerSessions?.find((session) => session._id === id) ??
+            null
+          );
+        }
         if (tableName === "store" && id === "store-1" && !options.missingStore) {
           return {
             _id: "store-1",

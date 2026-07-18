@@ -1,15 +1,16 @@
 ---
 title: Register Closeout Variance Alerts and Operations IA
 date: 2026-07-08
-last_updated: 2026-07-08
+last_updated: 2026-07-17
 category: design-patterns
 module: Athena operations email and dashboards
 problem_type: design_pattern
 component: email_processing
 resolution_type: code_fix
 severity: medium
+delivery_diff_fingerprint: 7809923038bcc2170cfc30e966e5856e43ad3c6d7e82ce2384c122c204831e20
 applies_when:
-  - Adding operator alerts for register closeout variance events
+  - Adding operator reports for register closeout outcomes
   - Refining Daily Operations or Cash Controls surfaces around closeout review
   - Formatting backend-generated register closeout review reasons for operators
 tags: [register-closeout, variance-alerts, operations-ia, email, cash-controls]
@@ -29,8 +30,8 @@ unclear review actions.
 
 ## Solution
 
-Treat closeout variance alerting as one operational path with a production gate
-and shared review facts.
+Treat closeout reporting as one operational path with a production gate and
+shared closeout facts.
 
 - Build the email payload from the register closeout facts that operators
   review: operating date, expected cash, counted cash, net variance, register
@@ -41,8 +42,11 @@ and shared review facts.
   stored minor-unit variance, run them through the shared review-reason
   formatter with the store currency before they reach email previews, sent
   MailerSend payloads, Daily Operations, or Cash Controls UI.
-- Trigger the email from the POS public sync path only after closeout projection
-  creates a non-zero variance that has not already been marked as emailed.
+- Trigger the email from the POS public sync path only after closeout projection.
+  For a non-zero variance, keep the notification marker on the approval request.
+  For an exact match, mark the register session with the close event ID before
+  scheduling the completion report. This prevents sync retries from resending
+  while allowing a later reopened-and-closed event to produce a new report.
 - Gate the scheduling helper on `process.env.STAGE === "prod"` so dev, tests,
   and preview environments can render templates without sending operational
   alerts.
@@ -61,11 +65,11 @@ For dashboard IA, prefer one primary job per surface:
 
 ## Why This Matters
 
-Operator alerts are production behavior, not just presentation. A variance email
-sent in the wrong environment creates noise, while a missing alert can hide a
-cash-control exception. Keeping the trigger, template, dashboard copy, and cash
-math tied to the same closeout facts reduces drift between the email and the
-review surfaces.
+Operator reports are production behavior, not just presentation. A closeout
+email sent in the wrong environment creates noise, while a missing variance
+alert can hide a cash-control exception. Keeping matched and variance outcomes
+tied to the same trigger, template family, and cash facts reduces drift between
+the email and the review surfaces.
 
 The same applies to IA. Compact tiles are useful only when they keep the
 decision visible. Truncating blocker copy or forcing a desktop table into a
@@ -75,9 +79,9 @@ metadata instead of squeezed table columns.
 
 ## Prevention
 
-- Add tests at each boundary: email rendering, payload construction, sync
-  scheduling, daily report cash totals, Daily Operations actions, and Cash
-  Controls responsive presentation.
+- Add tests at each boundary: matched and variance email rendering, payload
+  construction, per-close-event sync scheduling and deduplication, daily report
+  cash totals, Daily Operations actions, and Cash Controls presentation.
 - Keep production-only alert gates near the scheduler, not inside the email
   template. Templates should remain previewable in local development.
 - When adding cash metrics, choose a single source of truth and test a

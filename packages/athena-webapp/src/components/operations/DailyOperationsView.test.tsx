@@ -1091,9 +1091,35 @@ describe("DailyOperationsViewContent", () => {
     expect(screen.getByText("1 expense transaction")).toBeInTheDocument();
     expect(screen.queryByText("Variance")).not.toBeInTheDocument();
     expect(screen.queryByText("No register variances")).not.toBeInTheDocument();
-    expect(
-      screen.getByRole("heading", { name: "Week at a glance" }),
-    ).toBeInTheDocument();
+    const weekAtAGlance = screen.getByRole("heading", {
+      name: "Week at a glance",
+    });
+    expect(weekAtAGlance).toBeInTheDocument();
+    expect(weekAtAGlance.closest("section")?.lastElementChild).not.toHaveClass(
+      "rounded-lg",
+      "border",
+      "bg-surface-raised",
+      "p-layout-sm",
+      "shadow-surface",
+    );
+    const closedStatus = screen.getAllByText("Closed")[0];
+    expect(closedStatus).toHaveClass(
+      "inline-flex",
+      "text-[10px]",
+      "text-muted-foreground",
+    );
+    expect(closedStatus).not.toHaveClass(
+      "rounded-full",
+      "bg-success/10",
+      "px-1.5",
+      "py-0.5",
+      "text-success",
+    );
+    expect(closedStatus?.querySelector("[aria-hidden='true']")).toHaveClass(
+      "h-1",
+      "w-1",
+      "bg-success/70",
+    );
     expect(screen.getByText("Week sales")).toBeInTheDocument();
     expect(screen.getByText("GH₵17,461")).toBeInTheDocument();
     expect(
@@ -1530,6 +1556,11 @@ describe("DailyOperationsViewContent", () => {
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(
+      attributionBand!.compareDocumentPosition(
+        screen.getByRole("region", { name: "Activity for this day" }),
+      ) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
       screen
         .getByRole("heading", { name: "Athena automation" })
         .compareDocumentPosition(
@@ -1564,7 +1595,6 @@ describe("DailyOperationsViewContent", () => {
     const attributionBand = screen
       .getByText("Athena completed EOD Review under store policy.")
       .closest("section");
-    const statusStack = attributionBand?.parentElement;
 
     expect(
       screen.queryByRole("heading", { name: "Historical store-day view" }),
@@ -1575,10 +1605,9 @@ describe("DailyOperationsViewContent", () => {
       ),
     ).not.toBeInTheDocument();
     expect(attributionBand).not.toBeNull();
-    expect(statusStack).not.toBeNull();
     expect(attributionBand).toHaveClass("px-layout-md", "py-layout-sm");
     expect(
-      statusStack!.compareDocumentPosition(screen.getByText("Net sales")) &
+      attributionBand!.compareDocumentPosition(screen.getByText("Net sales")) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
   });
@@ -1656,6 +1685,9 @@ describe("DailyOperationsViewContent", () => {
     );
 
     const storePulse = screen.getByRole("region", { name: "Store pulse" });
+    expect(storePulse.parentElement?.parentElement).not.toHaveClass(
+      "xl:col-span-2",
+    );
     const chart = within(storePulse).getByTestId("store-pulse-chart");
     const chartContainer = within(storePulse).getByTestId(
       "store-pulse-chart-container",
@@ -1718,7 +1750,7 @@ describe("DailyOperationsViewContent", () => {
     expect(
       within(storePulse).getByLabelText("Total items sold: 3"),
     ).toBeInTheDocument();
-    expect(screen.getByLabelText("Store-day timeline")).toBeInTheDocument();
+    expect(screen.getByLabelText("Activity for this day")).toBeInTheDocument();
     expect(within(storePulse).queryByRole("tablist")).not.toBeInTheDocument();
     expect(
       within(storePulse).queryByText("Average sale"),
@@ -1841,7 +1873,7 @@ describe("DailyOperationsViewContent", () => {
     const openingReview = screen
       .getByRole("heading", { name: "Opening review" })
       .closest("section");
-    const timeline = screen.getByLabelText("Store-day timeline");
+    const timeline = screen.getByLabelText("Recent activity");
     const workflowSection = screen
       .getByRole("heading", { name: "Store-day follow-up" })
       .closest("section");
@@ -2382,8 +2414,17 @@ describe("DailyOperationsViewContent", () => {
     expect(
       screen
         .getByRole("heading", { name: "Incomplete store-day close" })
-        .compareDocumentPosition(screen.getByText("Net sales")) &
+        .compareDocumentPosition(
+          screen.getByText("Net sales"),
+        ) &
         Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      screen
+        .getByRole("heading", { name: "Incomplete store-day close" })
+        .compareDocumentPosition(
+          screen.getByRole("region", { name: "Activity for this day" }),
+        ) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(
       screen.getByText(
@@ -2570,7 +2611,15 @@ describe("DailyOperationsViewContent", () => {
       "w-4",
       "text-muted-foreground",
     );
-    expect(registerSessionsPanel).toHaveClass("border-t", "pt-layout-md");
+    expect(registerSessionsPanel).toHaveClass(
+      "border-t",
+      "pt-layout-md",
+    );
+    expect(registerSessionsPanel).not.toHaveClass(
+      "xl:border-l",
+      "xl:border-t-0",
+      "xl:pl-layout-lg",
+    );
     expect(registerSessionsPanel).not.toHaveClass(
       "rounded-lg",
       "bg-background/60",
@@ -2593,7 +2642,32 @@ describe("DailyOperationsViewContent", () => {
     const automationBand = screen
       .getByRole("heading", { name: "Athena automation" })
       .closest("section");
-    expect(automationBand).toContainElement(registerSessionsPanel);
+    const timeline = screen.getByRole("region", {
+      name: "Recent activity",
+    });
+    const netSalesMetric = screen.getByText("Today's net sales");
+    const weekAtAGlance = screen.getByRole("heading", {
+      name: "Week at a glance",
+    });
+
+    expect(timeline.parentElement?.tagName).toBe("ASIDE");
+    expect(timeline).toHaveClass("py-layout-sm");
+    expect(timeline).not.toHaveClass(
+      "rounded-lg",
+      "border",
+      "bg-surface",
+      "shadow-surface",
+    );
+    expect(automationBand?.compareDocumentPosition(registerSessionsPanel!)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(registerSessionsPanel?.compareDocumentPosition(netSalesMetric)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(weekAtAGlance.compareDocumentPosition(timeline)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(automationBand).not.toContainElement(registerSessionsPanel);
     expect(
       screen.queryByRole("link", {
         name: "Open register session Codex / Register 2",
@@ -2607,7 +2681,7 @@ describe("DailyOperationsViewContent", () => {
     );
   });
 
-  it("omits the divider when open register sessions render on their own", () => {
+  it("keeps open register sessions stacked above metrics when automation is absent", () => {
     renderContent({
       ...blockedSnapshot,
       automationStatuses: [],
@@ -2619,10 +2693,14 @@ describe("DailyOperationsViewContent", () => {
       .closest("section");
 
     expect(screen.queryByText("Athena automation")).not.toBeInTheDocument();
-    expect(registerSessionsPanel).not.toHaveClass(
-      "border-t",
-      "pt-layout-md",
-    );
+    expect(registerSessionsPanel).not.toBeNull();
+    expect(registerSessionsPanel).not.toHaveClass("border-t");
+    expect(registerSessionsPanel).not.toHaveClass("pt-layout-md");
+    expect(
+      registerSessionsPanel!.compareDocumentPosition(
+        screen.getByText("Today's net sales"),
+      ) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it("keeps attention items out of the right rail", () => {
@@ -2701,7 +2779,52 @@ describe("DailyOperationsViewContent", () => {
     expect(screen.queryByText("Complete EOD Review")).not.toBeInTheDocument();
   });
 
-  it("previews the five most recent timeline events and opens the full list in a sheet", () => {
+  it("uses time-aware recent activity empty states", () => {
+    let view = renderContent({
+      ...operatingSnapshot,
+      timeline: [],
+    });
+
+    expect(screen.getByText("No activity recorded")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "No operational activity was recorded for this store day.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Activity for this day" }),
+    ).not.toBeInTheDocument();
+    view.unmount();
+
+    view = renderContent({
+      ...operatingSnapshot,
+      operatingDate: getCurrentLocalOperatingDate(),
+      timeline: [],
+    });
+
+    expect(screen.getByText("No activity yet")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Operational activity will appear here as the store day progresses.",
+      ),
+    ).toBeInTheDocument();
+    view.unmount();
+
+    renderContent({
+      ...operatingSnapshot,
+      operatingDate: "2999-01-01",
+      timeline: [],
+    });
+
+    expect(screen.getByText("Store day not started")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Operational activity will appear here once this store day begins.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("previews the five most recent timeline events beside the chart and opens the full list in a sheet", () => {
     renderContent(timelineOverflowSnapshot, {
       timelineSnapshot: {
         operatingDate: timelineOverflowSnapshot.operatingDate,
@@ -2710,10 +2833,26 @@ describe("DailyOperationsViewContent", () => {
     });
 
     const timeline = screen.getByRole("region", {
-      name: "Store-day timeline",
+      name: "Activity for this day",
+    });
+    const activityHeading = within(timeline).getByRole("heading", {
+      name: "Activity for this day",
     });
 
+    expect(activityHeading).toHaveClass(
+      "shrink-0",
+      "text-sm",
+      "font-medium",
+      "text-foreground",
+    );
+    expect(activityHeading.querySelector("svg")).toHaveClass(
+      "h-3.5",
+      "w-3.5",
+      "text-muted-foreground",
+    );
+
     expect(within(timeline).getByText("Timeline event 1")).toBeInTheDocument();
+    expect(timeline.parentElement?.tagName).toBe("ASIDE");
     expect(within(timeline).getByText("Timeline event 5")).toBeInTheDocument();
     expect(
       within(timeline).queryByText("Timeline event 6"),
@@ -2724,7 +2863,7 @@ describe("DailyOperationsViewContent", () => {
     );
 
     expect(screen.getByRole("dialog")).toBeInTheDocument();
-    expect(screen.getAllByText("Store-day timeline")).not.toHaveLength(0);
+    expect(screen.getAllByText("Activity for this day")).not.toHaveLength(0);
     expect(
       screen.getByText("All recorded events for Friday, May 8, 2026."),
     ).toBeInTheDocument();
@@ -2740,7 +2879,7 @@ describe("DailyOperationsViewContent", () => {
     });
 
     const timeline = screen.getByRole("region", {
-      name: "Store-day timeline",
+      name: "Activity for this day",
     });
 
     expect(
@@ -2754,6 +2893,23 @@ describe("DailyOperationsViewContent", () => {
     expect(onRequestTimelineSnapshot).toHaveBeenCalledTimes(1);
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(screen.getByText("Timeline loading")).toBeInTheDocument();
+  });
+
+  it("keeps the Show more label stable while timeline detail loads", () => {
+    renderContent(compactTimelineOverflowSnapshot, {
+      isLoadingTimelineSnapshot: true,
+    });
+
+    const timeline = screen.getByRole("region", {
+      name: "Activity for this day",
+    });
+    const showMoreButton = within(timeline).getByRole("button", {
+      name: "Show more",
+    });
+
+    expect(showMoreButton).toBeDisabled();
+    expect(showMoreButton).toHaveAttribute("aria-busy", "true");
+    expect(within(timeline).queryByText("Loading timeline")).not.toBeInTheDocument();
   });
 
   it("links quick-add product names to the product detail page with origin search", () => {
@@ -3716,7 +3872,7 @@ describe("DailyOperationsView", () => {
     render(<DailyOperationsView />);
 
     const timeline = screen.getByRole("region", {
-      name: "Store-day timeline",
+      name: "Activity for this day",
     });
 
     fireEvent.click(
@@ -3821,7 +3977,7 @@ describe("DailyOperationsView", () => {
     render(<DailyOperationsView />);
 
     const timeline = screen.getByRole("region", {
-      name: "Store-day timeline",
+      name: "Activity for this day",
     });
 
     expect(

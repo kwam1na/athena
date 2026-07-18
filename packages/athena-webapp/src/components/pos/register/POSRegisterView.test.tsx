@@ -946,7 +946,7 @@ describe("POSRegisterView", () => {
     const { POSRegisterView } = await import("./POSRegisterView");
     render(<POSRegisterView />);
 
-    expect(screen.getByLabelText("No staff signed in")).toBeInTheDocument();
+    expect(screen.getByLabelText("Terminal offline")).toBeInTheDocument();
     expect(
       screen.queryByText("Support sync diagnostics"),
     ).not.toBeInTheDocument();
@@ -1170,7 +1170,7 @@ describe("POSRegisterView", () => {
     const { POSRegisterView } = await import("./POSRegisterView");
     render(<POSRegisterView />);
 
-    expect(screen.getByLabelText("Staff signed in")).toBeInTheDocument();
+    expect(screen.getByLabelText("Terminal online")).toBeInTheDocument();
     expect(
       screen.queryByText("Support sync diagnostics"),
     ).not.toBeInTheDocument();
@@ -1523,6 +1523,74 @@ describe("POSRegisterView", () => {
     await userEvent.click(retrySyncButton);
 
     expect(onRetrySync).toHaveBeenCalled();
+  });
+
+  it("uses terminal connectivity for the header dot and hides synced while offline", async () => {
+    mockUseRegisterViewModel.mockReturnValue({
+      hasActiveStore: true,
+      debug: {
+        activeStoreSource: "live",
+        authDialogOpen: false,
+        cashierPresence: "restored",
+        hasLiveActiveStore: true,
+        localStaffAuthorityStatus: "ready",
+        localEntryStatus: "ready",
+        online: false,
+        staffSignedIn: true,
+        syncFlow: {
+          eventAppendToken: 1,
+          source: "none",
+          staffProof: "present",
+          status: "synced",
+        },
+        terminalSource: "live",
+      },
+      header: {
+        title: "POS",
+        isSessionActive: true,
+      },
+      registerInfo: {
+        registerLabel: "Front Counter",
+        hasTerminal: true,
+      },
+      customerPanel: {},
+      productEntry: {
+        disabled: false,
+        productSearchQuery: "",
+        setProductSearchQuery: vi.fn(),
+        onBarcodeSubmit: vi.fn(),
+      },
+      cart: {
+        items: [],
+      },
+      checkout: {
+        isTransactionCompleted: false,
+      },
+      sessionPanel: {},
+      cashierCard: {},
+      closeoutControl: null,
+      authDialog: {
+        open: false,
+      },
+      drawerGate: null,
+      syncStatus: {
+        description: "Register activity is synced.",
+        label: "Synced",
+        pendingEventCount: 0,
+        reconciliationItems: [],
+        status: "synced",
+        tone: "success",
+      },
+      onNavigateBack: vi.fn(),
+    });
+
+    const { POSRegisterView } = await import("./POSRegisterView");
+    render(<POSRegisterView />);
+
+    expect(screen.getByLabelText("Terminal offline")).toHaveClass(
+      "bg-muted-foreground/40",
+    );
+    expect(screen.queryByText("synced")).not.toBeInTheDocument();
   });
 
   it("shows restrained copy while restored cashier access is validating", async () => {

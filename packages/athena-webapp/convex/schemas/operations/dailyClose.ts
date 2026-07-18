@@ -100,6 +100,7 @@ const dailyCloseReportSnapshotValidator = v.object({
     carryForwardCount: v.number(),
     readyCount: v.number(),
   }),
+  priorDaySummary: v.optional(v.record(v.string(), v.any())),
   summary: v.record(v.string(), v.any()),
   reviewedItems: v.array(dailyCloseReportItemValidator),
   carryForwardItems: v.array(dailyCloseReportItemValidator),

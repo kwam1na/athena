@@ -11,7 +11,6 @@ import {
   Section,
   Text,
 } from "@react-email/components";
-import { ArrowUpRight } from "lucide-react";
 import { toDisplayAmount } from "../lib/currency";
 import { currencyFormatter } from "../utils";
 import { formatStoredReviewReason } from "../../shared/reviewReasonFormatter";
@@ -32,7 +31,7 @@ export interface RegisterCloseoutVarianceAlertProps {
   countedCash: string;
   currency?: string;
   variance: string;
-  varianceDirection: "over" | "short";
+  varianceDirection: "matched" | "over" | "short";
   reason?: string;
   notes?: string;
   reviewUrl: string;
@@ -71,13 +70,22 @@ export default function RegisterCloseoutVarianceAlert({
   notes,
   reviewUrl,
 }: RegisterCloseoutVarianceAlertProps) {
-  const previewText = `${storeName}: ${registerLabel} closeout submitted with ${variance} variance.`;
-  const varianceLabel =
-    varianceDirection === "over"
+  const isMatched = varianceDirection === "matched";
+  const previewText = isMatched
+    ? `${storeName}: ${registerLabel} closed with an exact cash match.`
+    : `${storeName}: ${registerLabel} closeout submitted with ${variance} variance.`;
+  const varianceLabel = isMatched
+    ? "Cash matched"
+    : varianceDirection === "over"
       ? "Cash over"
       : varianceDirection === "short"
         ? "Cash short"
         : "Cash variance";
+  const varianceColor = isMatched
+    ? colors.success
+    : varianceDirection === "short"
+      ? colors.danger
+      : colors.warning;
   const reasonFormatter = currencyFormatter(currency ?? "GHS");
   const formattedReason = formatStoredReviewReason(reason, (amount) =>
     reasonFormatter.format(toDisplayAmount(amount)),
@@ -103,19 +111,28 @@ export default function RegisterCloseoutVarianceAlert({
             </Text>
           </Section>
 
-          <Section style={styles.statusPanel}>
+          <Section
+            style={{
+              ...styles.statusPanel,
+              borderLeft: `3px solid ${varianceColor}`,
+            }}
+          >
             <Row>
               <Column style={styles.statusColumn}>
                 <Text style={styles.statusLabel}>Register closeout</Text>
                 <Text style={styles.statusTitle}>
-                  Submitted with cash variance
+                  {isMatched
+                    ? "Closed with an exact cash match"
+                    : "Submitted with cash variance"}
                 </Text>
                 <Text style={styles.statusSummary}>
-                  Review the closeout before finalizing this register session.
+                  {isMatched
+                    ? "Expected and counted cash match. No review is required."
+                    : "Review the closeout before finalizing this register session."}
                 </Text>
               </Column>
               <Column style={styles.badgeColumn}>
-                <StatusBadge>{varianceLabel}</StatusBadge>
+                <StatusBadge color={varianceColor}>{varianceLabel}</StatusBadge>
               </Column>
             </Row>
           </Section>
@@ -125,7 +142,7 @@ export default function RegisterCloseoutVarianceAlert({
             <SummaryMetricGrid metrics={metrics} />
           </Section>
 
-          {formattedReason ? (
+          {!isMatched && formattedReason ? (
             <Section style={styles.separatedSection}>
               <SectionHeading title="Review reason" />
               <Text style={styles.reasonText}>{formattedReason}</Text>
@@ -140,15 +157,15 @@ export default function RegisterCloseoutVarianceAlert({
           ) : null}
 
           <Section style={styles.actionSection}>
-            <Button href={reviewUrl} style={styles.button}>
-              <span style={styles.buttonLabel}>Review register closeout</span>
-              <ArrowUpRight
-                aria-hidden="true"
-                color={colors.foreground}
-                size={14}
-                strokeWidth={2}
-                style={styles.buttonIcon}
-              />
+            <Button href={reviewUrl} style={styles.buttonPrimary}>
+              <span style={styles.buttonLabel}>
+                {isMatched
+                  ? "View register closeout"
+                  : "Review register closeout"}
+              </span>
+              <span aria-hidden="true" style={styles.buttonIcon}>
+                ↗
+              </span>
             </Button>
           </Section>
         </Container>
@@ -167,8 +184,14 @@ function SectionHeading({ title }: { title: string }) {
   );
 }
 
-function StatusBadge({ children }: { children: ReactNode }) {
-  return <Text style={styles.statusIndicator}>{children}</Text>;
+function StatusBadge({
+  children,
+  color,
+}: {
+  children: ReactNode;
+  color: string;
+}) {
+  return <Text style={{ ...styles.statusIndicator, color }}>{children}</Text>;
 }
 
 function SummaryMetricGrid({
@@ -176,19 +199,28 @@ function SummaryMetricGrid({
 }: {
   metrics: RegisterCloseoutVarianceAlertMetric[];
 }) {
+  const rows: RegisterCloseoutVarianceAlertMetric[][] = [];
+
+  for (let index = 0; index < metrics.length; index += 2) {
+    rows.push(metrics.slice(index, index + 2));
+  }
+
   return (
     <Section style={styles.summaryGrid}>
-      <Row style={styles.summaryGridRow}>
-        {metrics.map((metric) => (
-          <Column key={metric.label} style={styles.summaryGridColumn}>
-            <Text style={summaryValueStyleFor(metric)}>{metric.value}</Text>
-            <Text style={styles.summaryDetail}>
-              {metric.label}
-              {metric.detail ? ` | ${metric.detail}` : ""}
-            </Text>
-          </Column>
-        ))}
-      </Row>
+      {rows.map((row, rowIndex) => (
+        <Row key={`summary-row-${rowIndex}`} style={styles.summaryGridRow}>
+          {row.map((metric) => (
+            <Column key={metric.label} style={styles.summaryGridColumn}>
+              <Text style={styles.summaryLabel}>{metric.label}</Text>
+              <Text style={summaryValueStyleFor(metric)}>{metric.value}</Text>
+              {metric.detail ? (
+                <Text style={styles.summaryDetail}>{metric.detail}</Text>
+              ) : null}
+            </Column>
+          ))}
+          {row.length < 2 ? <Column style={styles.summaryGridColumn} /> : null}
+        </Row>
+      ))}
     </Section>
   );
 }
@@ -211,42 +243,42 @@ const fontNumeric =
   "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif";
 
 const colors = {
-  background: "#fcfcfb",
-  border: "#dde0e5",
+  background: "#f6f6f4",
+  border: "#e2e3e6",
   danger: "#dc4438",
-  foreground: "#1d2430",
-  muted: "#666b73",
+  foreground: "#1b1c1f",
+  muted: "#6f737b",
   raised: "#ffffff",
-  surface: "#f8f8f7",
+  success: "#2d7d4f",
+  surface: "#f8f8f6",
   warning: "#b66b00",
-  workflowSoft: "#f1f3ff",
 };
 
 const styles: Record<string, CSSProperties> = {
   actionSection: {
-    padding: "28px 28px 34px",
+    padding: "24px 32px 32px",
     textAlign: "right",
   },
   badgeColumn: {
     textAlign: "right",
     verticalAlign: "top",
-    width: "132px",
+    width: "124px",
   },
   body: {
     backgroundColor: colors.background,
     color: colors.foreground,
     fontFamily: fontSans,
     margin: 0,
-    padding: "28px 0",
+    padding: "36px 0",
   },
-  button: {
-    backgroundColor: "transparent",
-    border: `1px solid ${colors.border}`,
-    borderRadius: "4px",
-    color: colors.foreground,
+  buttonPrimary: {
+    backgroundColor: colors.foreground,
+    border: `1px solid ${colors.foreground}`,
+    borderRadius: "6px",
+    color: colors.raised,
     display: "inline-block",
     fontFamily: fontSans,
-    fontSize: "14px",
+    fontSize: "13px",
     fontWeight: 600,
     lineHeight: "20px",
     padding: "10px 14px",
@@ -254,155 +286,172 @@ const styles: Record<string, CSSProperties> = {
   },
   buttonIcon: {
     display: "inline-block",
+    fontFamily: fontSans,
+    fontSize: "14px",
+    fontWeight: 700,
+    lineHeight: "14px",
     marginLeft: "8px",
-    verticalAlign: "-2px",
+    verticalAlign: "1px",
   },
   buttonLabel: {
     verticalAlign: "middle",
   },
   eyebrow: {
     color: colors.muted,
-    fontSize: "11px",
+    fontSize: "10px",
     fontWeight: 700,
-    letterSpacing: "0.08em",
-    lineHeight: "16px",
-    margin: "0 0 8px",
+    letterSpacing: "0.11em",
+    lineHeight: "15px",
+    margin: "0 0 10px",
     textTransform: "uppercase",
   },
   header: {
-    padding: "28px 28px 18px",
+    padding: "36px 32px 24px",
   },
   noteLabel: {
     color: colors.muted,
-    fontSize: "11px",
+    fontSize: "10px",
     fontWeight: 700,
-    letterSpacing: "0.04em",
-    lineHeight: "16px",
+    letterSpacing: "0.08em",
+    lineHeight: "15px",
     margin: 0,
     textTransform: "uppercase",
   },
   noteSection: {
+    backgroundColor: colors.surface,
     borderTop: `1px solid ${colors.border}`,
-    padding: "24px 28px 0",
+    padding: "24px 32px",
   },
   noteText: {
     color: colors.foreground,
-    fontSize: "14px",
-    lineHeight: "22px",
-    margin: "8px 0 0",
+    fontSize: "13px",
+    lineHeight: "20px",
+    margin: "9px 0 0",
   },
   reasonText: {
     color: colors.foreground,
-    fontSize: "14px",
-    lineHeight: "22px",
-    margin: "10px 0 0",
+    fontSize: "13px",
+    lineHeight: "20px",
+    margin: "9px 0 0",
   },
   section: {
-    padding: "24px 28px 24px",
+    padding: "28px 32px 24px",
   },
   sectionHeading: {
     margin: 0,
   },
   sectionTitleQuiet: {
-    color: colors.foreground,
-    fontSize: "14px",
+    color: colors.muted,
+    fontSize: "10px",
     fontWeight: 700,
-    lineHeight: "20px",
+    letterSpacing: "0.08em",
+    lineHeight: "15px",
     margin: 0,
+    textTransform: "uppercase",
   },
   separatedSection: {
     borderTop: `1px solid ${colors.border}`,
-    padding: "24px 28px 24px",
+    padding: "24px 32px",
   },
   statusColumn: {
     verticalAlign: "top",
   },
   statusIndicator: {
-    backgroundColor: colors.workflowSoft,
-    border: `1px solid ${colors.border}`,
-    borderRadius: "999px",
-    color: colors.foreground,
-    display: "inline-block",
-    fontSize: "12px",
+    fontSize: "10px",
     fontWeight: 700,
-    lineHeight: "18px",
-    margin: 0,
-    padding: "5px 10px",
+    letterSpacing: "0.06em",
+    lineHeight: "15px",
+    margin: "1px 0 0",
+    textAlign: "right",
+    textTransform: "uppercase",
     whiteSpace: "nowrap",
   },
   statusLabel: {
     color: colors.muted,
-    fontSize: "11px",
+    fontSize: "10px",
     fontWeight: 700,
-    letterSpacing: "0.04em",
-    lineHeight: "16px",
-    margin: "0 0 8px",
+    letterSpacing: "0.06em",
+    lineHeight: "15px",
+    margin: 0,
     textTransform: "uppercase",
   },
   statusPanel: {
     backgroundColor: colors.surface,
-    borderTop: `1px solid ${colors.border}`,
     borderBottom: `1px solid ${colors.border}`,
-    padding: "22px 28px",
+    borderTop: `1px solid ${colors.border}`,
+    padding: "20px 32px 21px 29px",
   },
   statusSummary: {
     color: colors.muted,
-    fontSize: "14px",
-    lineHeight: "21px",
-    margin: "8px 0 0",
+    fontSize: "13px",
+    lineHeight: "19px",
+    margin: "6px 0 0",
   },
   statusTitle: {
     color: colors.foreground,
-    fontSize: "24px",
+    fontSize: "20px",
     fontWeight: 600,
-    lineHeight: "30px",
-    margin: 0,
+    letterSpacing: "-0.01em",
+    lineHeight: "26px",
+    margin: "5px 0 0",
   },
   subtitle: {
     color: colors.muted,
-    fontSize: "14px",
-    lineHeight: "21px",
+    fontSize: "13px",
+    lineHeight: "19px",
     margin: 0,
   },
   summaryDetail: {
     color: colors.muted,
-    fontSize: "12px",
-    lineHeight: "18px",
-    margin: "6px 0 0",
+    fontSize: "11px",
+    lineHeight: "16px",
+    margin: "5px 0 0",
     whiteSpace: "nowrap",
   },
   summaryGrid: {
-    marginTop: "16px",
+    marginTop: "18px",
   },
   summaryGridColumn: {
-    padding: "0 18px 0 0",
+    padding: "0 20px 0 0",
     verticalAlign: "top",
-    width: "33.333%",
+    width: "50%",
   },
   summaryGridRow: {
-    margin: 0,
+    marginBottom: "30px",
+  },
+  summaryLabel: {
+    color: colors.muted,
+    fontSize: "10px",
+    fontWeight: 600,
+    letterSpacing: "0.05em",
+    lineHeight: "15px",
+    margin: "0 0 6px",
+    textTransform: "uppercase",
   },
   summaryValue: {
     color: colors.foreground,
     fontFamily: fontNumeric,
     fontFeatureSettings: "'tnum' 1, 'lnum' 1",
-    fontSize: "22px",
+    fontSize: "30px",
     fontVariantNumeric: "tabular-nums",
-    fontWeight: 300,
-    lineHeight: "28px",
+    fontWeight: 400,
+    letterSpacing: "-0.02em",
+    lineHeight: "36px",
     margin: 0,
     whiteSpace: "nowrap",
   },
   title: {
     color: colors.foreground,
-    fontSize: "30px",
+    fontSize: "32px",
     fontWeight: 600,
-    letterSpacing: "0",
-    lineHeight: "36px",
-    margin: 0,
+    letterSpacing: "-0.025em",
+    lineHeight: "37px",
+    margin: "0 0 7px",
   },
   unborderedShell: {
     backgroundColor: colors.raised,
-    maxWidth: "620px",
+    margin: "0 auto",
+    maxWidth: "640px",
+    overflow: "hidden",
   },
 };

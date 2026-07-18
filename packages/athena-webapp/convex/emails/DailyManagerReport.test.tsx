@@ -39,9 +39,9 @@ describe("DailyManagerReport", () => {
     const html = await render(<DailyManagerReport {...baseProps} />);
 
     expect(html).toContain("Athena daily report");
-    expect(html).toContain("max-width:620px;background-color:#ffffff");
+    expect(html).toContain("max-width:640px;background-color:#ffffff");
     expect(html).not.toContain(
-      "max-width:620px;background-color:#ffffff;border:1px solid #dde0e5;border-radius:8px",
+      "max-width:640px;background-color:#ffffff;border:1px solid #e2e3e6;border-radius:8px",
     );
     expect(html).toContain("Completed under policy");
     expect(html).toContain("Athena completed EOD Review under store policy.");
@@ -51,7 +51,9 @@ describe("DailyManagerReport", () => {
     expect(html).toContain("1 report");
     expect(html).not.toContain("1 reports");
     expect(html).toContain("View EOD Review");
-    expect(html).toContain("lucide-arrow-up-right");
+    expect(html).toContain("↗");
+    expect(html).not.toContain("lucide-");
+    expect(html).not.toContain("<svg");
     expect(html).not.toContain("Athena keeps the full close record");
   });
 
@@ -62,7 +64,7 @@ describe("DailyManagerReport", () => {
 
     expect(html).toContain("Athena daily report");
     expect(html).toContain(
-      "max-width:620px;background-color:#ffffff;border:1px solid #dde0e5;border-radius:8px",
+      "max-width:640px;background-color:#ffffff;border:1px solid #e2e3e6;border-radius:8px",
     );
   });
 
@@ -152,9 +154,9 @@ describe("DailyManagerReport", () => {
     );
 
     expect(html).toContain("GH₵1,201.82");
-    expect(html).toContain("18 Cash transactions");
-    expect(html).toContain("52 Card transactions");
-    expect(html).toContain("14 Mobile money transactions");
+    expect(html).toContain("18 transactions");
+    expect(html).toContain("52 transactions");
+    expect(html).toContain("14 transactions");
     expect(html).not.toContain("lucide-banknote");
     expect(html).not.toContain("lucide-credit-card");
     expect(html).not.toContain("lucide-smartphone");
@@ -165,6 +167,44 @@ describe("DailyManagerReport", () => {
     expect(html.indexOf("Cash position")).toBeLessThan(
       html.indexOf("Payment mix"),
     );
+  });
+
+  it("renders prior-day comparisons for every reported amount and count", async () => {
+    const html = await render(
+      <DailyManagerReport
+        {...baseProps}
+        summaryMetrics={[
+          {
+            comparison: "20% higher vs prior day",
+            detail: "10 transactions",
+            detailComparison: "25% higher vs prior day",
+            label: "Sales",
+            value: ghs.format(12000),
+          },
+        ]}
+        cashMetrics={[
+          {
+            comparison: "11% lower vs prior day",
+            label: "Expected cash",
+            value: ghs.format(1780),
+          },
+        ]}
+        paymentTotals={[
+          {
+            amount: ghs.format(1200),
+            amountComparison: "20% higher vs prior day",
+            method: "Mobile money",
+            transactionCount: 6,
+            transactionCountComparison: "50% higher vs prior day",
+          },
+        ]}
+      />,
+    );
+
+    expect(html).toContain("↑ 20% sales");
+    expect(html).toContain("↑ 25% transactions");
+    expect(html).toContain("↓ 11%");
+    expect(html).toContain("↑ 50% transactions");
   });
 
   it("color codes net variance in the cash position section", async () => {

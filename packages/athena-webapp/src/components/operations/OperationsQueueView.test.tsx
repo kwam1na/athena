@@ -32,6 +32,10 @@ const mockedToast = vi.hoisted(() => ({
   success: vi.fn(),
 }));
 
+const mockedInventoryReport = vi.hoisted(() => ({
+  exportOpenWorkInventoryPdf: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("@tanstack/react-router", () => ({
   Link: ({
     children,
@@ -101,6 +105,11 @@ vi.mock("@/hooks/usePermissions", () => ({
 
 vi.mock("sonner", () => ({
   toast: mockedToast,
+}));
+
+vi.mock("./openWorkInventoryReport", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./openWorkInventoryReport")>()),
+  exportOpenWorkInventoryPdf: mockedInventoryReport.exportOpenWorkInventoryPdf,
 }));
 
 vi.mock("@/lib/security/pinHash", () => ({
@@ -526,6 +535,71 @@ describe("OperationsQueueViewContent", () => {
       page: undefined,
       workType: undefined,
     });
+  });
+
+  it("exports every loaded synced-sale inventory product, not only the visible page", async () => {
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+    const workItems = Array.from({ length: 6 }, (_, index) => ({
+      _id: `work-item-${index + 1}` as Id<"operationalWorkItem">,
+      approvalState: "not_required",
+      createdAt: Date.now() - index * 60_000,
+      details: {
+        primaryProductSkuId: `product-sku-${index + 1}` as Id<"productSku">,
+      },
+      priority: "high",
+      status: "open",
+      title: `Review inventory for Product ${index + 1}`,
+      type: "synced_sale_inventory_review",
+    }));
+    const inventoryReportItems = Array.from({ length: 6 }, (_, index) => ({
+      _id: `product-sku-${index + 1}` as Id<"productSku">,
+      barcode: `60344300000${index + 1}`,
+      inventoryCount: 2,
+      price: (index + 1) * 10_000,
+      productCategory: "Wigs",
+      productName: `Product ${index + 1}`,
+      quantityAvailable: 2,
+      sku: `WIG-${index + 1}`,
+    }));
+
+    render(
+      <OperationsQueueViewContent
+        {...baseProps}
+        activeWorkflow="queue"
+        inventoryReportItems={inventoryReportItems}
+        storeName="Wigclub"
+        workItems={workItems}
+      />,
+    );
+
+    const exportButton = screen.getByRole("button", {
+      name: "Export inventory report",
+    });
+    expect(exportButton).toHaveTextContent("Export inventory report");
+
+    await user.click(exportButton);
+
+    expect(
+      mockedInventoryReport.exportOpenWorkInventoryPdf,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        rows: expect.arrayContaining([
+          expect.objectContaining({
+            barcode: "603443000001",
+            name: "Product 1",
+          }),
+          expect.objectContaining({
+            barcode: "603443000006",
+            name: "Product 6",
+          }),
+        ]),
+        storeName: "Wigclub",
+      }),
+    );
+    expect(
+      mockedInventoryReport.exportOpenWorkInventoryPdf.mock.calls[0]?.[0].rows,
+    ).toHaveLength(6);
   });
 
   it("uses server-owned totals when selected cards are returned after the cap", async () => {
@@ -1570,14 +1644,15 @@ describe("OperationsQueueViewContent", () => {
     expect(
       screen.queryByText(/Resolve visible work to continue/),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Mark reviewed" })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Mark reviewed" }),
+    ).toBeDisabled();
   });
 
   it("clears a conflict after changed membership or a complete explicit-refresh response", async () => {
     const { default: userEvent } = await import("@testing-library/user-event");
     const user = userEvent.setup();
-    const groupKey =
-      "synced_sale_inventory_review:store-1:product-sku-1";
+    const groupKey = "synced_sale_inventory_review:store-1:product-sku-1";
     const makeWorkItem = (id: string) => ({
       _id: id as Id<"operationalWorkItem">,
       approvalState: "not_required",
@@ -1667,13 +1742,17 @@ describe("OperationsQueueViewContent", () => {
       inventoryReviewTitle?.parentElement,
     );
     expect(conflictNotice.parentElement).toHaveClass("flex-col");
-    expect(screen.getByRole("button", { name: "Mark reviewed" })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Mark reviewed" }),
+    ).toBeDisabled();
 
     const refreshButton = screen.getByRole("button", { name: "Refresh" });
     const urgencyBadge = screen.getByText("High");
 
     expect(refreshButton.parentElement).toBe(urgencyBadge.parentElement);
-    expect(refreshButton.querySelector("svg.lucide-refresh-cw")).toBeInTheDocument();
+    expect(
+      refreshButton.querySelector("svg.lucide-refresh-cw"),
+    ).toBeInTheDocument();
     expect(
       refreshButton.compareDocumentPosition(urgencyBadge) &
         Node.DOCUMENT_POSITION_FOLLOWING,
@@ -1729,8 +1808,7 @@ describe("OperationsQueueViewContent", () => {
   it("does not disable a group when changed complete membership arrives before the conflict response", async () => {
     const { default: userEvent } = await import("@testing-library/user-event");
     const user = userEvent.setup();
-    const groupKey =
-      "synced_sale_inventory_review:store-1:product-sku-1";
+    const groupKey = "synced_sale_inventory_review:store-1:product-sku-1";
     const makeWorkItem = (id: string) => ({
       _id: id as Id<"operationalWorkItem">,
       approvalState: "not_required",

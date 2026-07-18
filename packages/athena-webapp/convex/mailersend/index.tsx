@@ -1,8 +1,8 @@
 import { render } from "@react-email/components";
 import { capitalizeWords } from "../utils";
 import VerificationCode from "../emails/VerificationCode";
-import OrderEmail from "../emails/OrderEmail";
-import NewOrderAdmin from "../emails/NewOrderAdmin";
+import { OrderEmail } from "../emails/OrderEmail";
+import { NewOrderAdmin } from "../emails/NewOrderAdmin";
 import FeedbackRequest from "../emails/FeedbackRequest";
 import DiscountCode from "../emails/DiscountCode";
 import DiscountReminder from "../emails/DiscountReminder";

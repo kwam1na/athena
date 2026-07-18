@@ -623,7 +623,7 @@ describe("end-of-day review backend foundation", () => {
     ).not.toHaveBeenCalled();
   });
 
-  it("keeps daily close command results aligned with exported return validators", () => {
+  it("keeps daily close completion and carry-forward results aligned with exported return validators", () => {
     expect(() =>
       assertConformsToExportedReturns(completeDailyClose, {
         kind: "user_error",
@@ -631,6 +631,17 @@ describe("end-of-day review backend foundation", () => {
           code: "precondition_failed",
           message: "EOD Review cannot be completed while blocker items remain.",
           metadata: { blockerCount: 1 },
+        },
+      }),
+    ).not.toThrow();
+
+    expect(() =>
+      assertConformsToExportedReturns(resolveDailyCloseCarryForward, {
+        kind: "user_error",
+        error: {
+          code: "precondition_failed",
+          message: "Resolve the carry-forward item before completing EOD Review.",
+          metadata: { workItemId: "work-item-1" },
         },
       }),
     ).not.toThrow();
