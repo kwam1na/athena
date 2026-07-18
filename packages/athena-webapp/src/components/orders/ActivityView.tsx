@@ -10,7 +10,6 @@ import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import { Circle } from "lucide-react";
 import { useMemo } from "react";
 import { getProductName } from "~/src/lib/productUtils";
-import { WorkflowTraceRouteLink } from "../traces/WorkflowTraceRouteLink";
 
 // Types
 export enum ActivityType {
@@ -42,10 +41,7 @@ type FeedbackRequestAction = {
   productName: string;
 };
 type Activity =
-  | RefundAction
-  | TransitionAction
-  | CreatedAction
-  | FeedbackRequestAction;
+  RefundAction | TransitionAction | CreatedAction | FeedbackRequestAction;
 
 type ActivityOrderRefund = {
   amount: number;
@@ -162,20 +158,9 @@ function ActivityItem({
             </div>
           )}
         </div>
-        {activity.date || order.workflowTraceId ? (
+        {activity.date ? (
           <div className="ml-4 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
-            {activity.date ? <span>{getRelativeTime(activity.date)}</span> : null}
-            {order.workflowTraceId ? (
-              <>
-                {activity.date ? <span>·</span> : null}
-                <WorkflowTraceRouteLink
-                  className="font-medium text-primary"
-                  traceId={order.workflowTraceId}
-                >
-                  View trace
-                </WorkflowTraceRouteLink>
-              </>
-            ) : null}
+            <span>{getRelativeTime(activity.date)}</span>
           </div>
         ) : null}
       </div>

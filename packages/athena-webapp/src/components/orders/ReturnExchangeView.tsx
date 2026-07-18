@@ -21,7 +21,7 @@ import { runCommand } from "~/src/lib/errors/runCommand";
 import { currencyFormatter, getRelativeTime } from "~/src/lib/utils";
 import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
 import type { Id } from "~/convex/_generated/dataModel";
-import { WorkflowTraceRouteLink } from "../traces/WorkflowTraceRouteLink";
+import { getProductName } from "~/src/lib/productUtils";
 
 export type ReturnExchangePayload = {
   operationType: "exchange" | "return";
@@ -33,10 +33,7 @@ export type ReturnExchangePayload = {
     unitPrice: number;
   }>;
   returnDisposition?:
-    | "non_restocked"
-    | "damaged"
-    | "missing"
-    | "financial_only";
+    "non_restocked" | "damaged" | "missing" | "financial_only";
   restockReturnedItems: boolean;
   returnItemIds: string[];
 };
@@ -67,11 +64,7 @@ type ReturnExchangeOrderItem = {
   productSku?: string;
   quantity: number;
   returnDisposition?:
-    | "sellable"
-    | "non_restocked"
-    | "damaged"
-    | "missing"
-    | "financial_only";
+    "sellable" | "non_restocked" | "damaged" | "missing" | "financial_only";
   workflowTraceId?: string;
 };
 
@@ -112,13 +105,12 @@ export function ReturnExchangeViewContent({
   const [restockReturnedItems, setRestockReturnedItems] = useState(true);
   const [returnDisposition, setReturnDisposition] =
     useState<NonSellableReturnDisposition>("non_restocked");
-  const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
+  const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(
+    new Set(),
+  );
   const [validationError, setValidationError] = useState<string | null>(null);
 
   const formatter = currencyFormatter(currency);
-  const latestReturnTraceId = activity.find(
-    (event) => event.workflowTraceId,
-  )?.workflowTraceId;
   const availableItems =
     order?.items?.filter(
       (item): item is ReturnExchangeOrderItem & { _id: string } =>
@@ -168,7 +160,11 @@ export function ReturnExchangeViewContent({
       const quantity = Number(replacementQuantity);
       const unitPrice = parseDisplayAmountInput(replacementUnitPrice);
 
-      if (!replacementProductSkuId || !replacementProductName || !replacementUnitPrice) {
+      if (
+        !replacementProductSkuId ||
+        !replacementProductName ||
+        !replacementUnitPrice
+      ) {
         setValidationError("Provide the replacement item details");
         return;
       }
@@ -212,14 +208,6 @@ export function ReturnExchangeViewContent({
             Record completed storefront returns and exchange-to-new-item flows.
           </p>
         </div>
-        {latestReturnTraceId ? (
-          <WorkflowTraceRouteLink
-            className="shrink-0 text-xs font-medium text-primary"
-            traceId={latestReturnTraceId}
-          >
-            View trace
-          </WorkflowTraceRouteLink>
-        ) : null}
       </div>
 
       <div className="grid gap-3 md:grid-cols-3">
@@ -277,21 +265,14 @@ export function ReturnExchangeViewContent({
                     onCheckedChange={() => toggleItem(item._id)}
                   />
                   <Label className="cursor-pointer" htmlFor={checkboxId}>
-                    {item.productName ?? item.productSku}
+                    {getProductName(item) || item.productSku}
                   </Label>
                 </div>
                 <div className="text-right">
                   <p className="text-sm text-muted-foreground">
-                    {item.quantity} x {formatStoredAmount(formatter, item.price)}
+                    {item.quantity} x{" "}
+                    {formatStoredAmount(formatter, item.price)}
                   </p>
-                  {item.workflowTraceId ?? order.workflowTraceId ? (
-                    <WorkflowTraceRouteLink
-                      className="text-xs font-medium text-primary"
-                      traceId={item.workflowTraceId ?? order.workflowTraceId!}
-                    >
-                      View trace
-                    </WorkflowTraceRouteLink>
-                  ) : null}
                 </div>
               </div>
             );
@@ -303,12 +284,15 @@ export function ReturnExchangeViewContent({
         <div>
           <p className="text-sm font-medium">Flow</p>
           <p className="text-sm text-muted-foreground">
-            Choose whether staff are completing a straight return or an exchange.
+            Choose whether staff are completing a straight return or an
+            exchange.
           </p>
         </div>
         <RadioGroup
           className="gap-3"
-          onValueChange={(value) => setOperationType(value as "exchange" | "return")}
+          onValueChange={(value) =>
+            setOperationType(value as "exchange" | "return")
+          }
           value={operationType}
         >
           <div className="flex items-center gap-3">
@@ -328,12 +312,16 @@ export function ReturnExchangeViewContent({
             <Label htmlFor="replacement-sku-id">Replacement SKU ID</Label>
             <Input
               id="replacement-sku-id"
-              onChange={(event) => setReplacementProductSkuId(event.target.value)}
+              onChange={(event) =>
+                setReplacementProductSkuId(event.target.value)
+              }
               value={replacementProductSkuId}
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="replacement-product-id">Replacement product ID</Label>
+            <Label htmlFor="replacement-product-id">
+              Replacement product ID
+            </Label>
             <Input
               id="replacement-product-id"
               onChange={(event) => setReplacementProductId(event.target.value)}
@@ -341,10 +329,14 @@ export function ReturnExchangeViewContent({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="replacement-product-name">Replacement product name</Label>
+            <Label htmlFor="replacement-product-name">
+              Replacement product name
+            </Label>
             <Input
               id="replacement-product-name"
-              onChange={(event) => setReplacementProductName(event.target.value)}
+              onChange={(event) =>
+                setReplacementProductName(event.target.value)
+              }
               value={replacementProductName}
             />
           </div>
@@ -358,7 +350,9 @@ export function ReturnExchangeViewContent({
             />
           </div>
           <div className="space-y-2 md:col-span-2">
-            <Label htmlFor="replacement-unit-price">Replacement unit price</Label>
+            <Label htmlFor="replacement-unit-price">
+              Replacement unit price
+            </Label>
             <Input
               id="replacement-unit-price"
               onChange={(event) => setReplacementUnitPrice(event.target.value)}
@@ -453,17 +447,6 @@ export function ReturnExchangeViewContent({
                   <p className="text-sm font-medium">{event.message}</p>
                   <div className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
                     <span>{getRelativeTime(event.createdAt)}</span>
-                    {event.workflowTraceId ? (
-                      <>
-                        <span>·</span>
-                        <WorkflowTraceRouteLink
-                          className="font-medium text-primary"
-                          traceId={event.workflowTraceId}
-                        >
-                          View trace
-                        </WorkflowTraceRouteLink>
-                      </>
-                    ) : null}
                   </div>
                 </div>
               </div>
@@ -495,9 +478,9 @@ export function ReturnExchangeView() {
       setIsSubmitting(true);
       const result = await runCommand(() =>
         processReturnExchange({
-            orderId: order._id,
-            operationType: payload.operationType,
-            replacementItems: payload.replacementItems.map((item) => ({
+          orderId: order._id,
+          operationType: payload.operationType,
+          replacementItems: payload.replacementItems.map((item) => ({
             productId: item.productId as Id<"product"> | undefined,
             productName: item.productName,
             productSkuId: item.productSkuId as Id<"productSku">,
@@ -544,7 +527,9 @@ export function ReturnExchangeView() {
       fullHeight={false}
       lockDocumentScroll={false}
       className="w-full"
-      header={<p className="text-sm text-muted-foreground">Return & Exchange</p>}
+      header={
+        <p className="text-sm text-muted-foreground">Return & Exchange</p>
+      }
     >
       <div className="py-4">
         <ReturnExchangeViewContent

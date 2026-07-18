@@ -107,6 +107,34 @@ describe("ExpenseCompletionPanel", () => {
     expect(mocks.printReceipt).not.toHaveBeenCalled();
   });
 
+  it("does not repeat the active expense total below the cart rail", () => {
+    render(
+      <ExpenseCompletionPanel
+        checkout={buildCheckout({
+          cartItems: [
+            {
+              id: "expense-item-1" as Id<"expenseSessionItem">,
+              name: "Nicca",
+              barcode: "123",
+              sku: "NIC-1",
+              price: 6500,
+              quantity: 2,
+              productId: "product-1" as Id<"product">,
+              skuId: "sku-1" as Id<"productSku">,
+            },
+          ],
+          completedTransactionData: undefined,
+          isTransactionCompleted: false,
+        })}
+      />,
+    );
+
+    expect(screen.queryByText("Total Value")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Complete expense" }),
+    ).toBeInTheDocument();
+  });
+
   it("allows staff to intentionally print the receipt", async () => {
     render(<ExpenseCompletionPanel checkout={buildCheckout()} />);
 

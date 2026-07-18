@@ -228,10 +228,7 @@ export function AppSidebar({
     activeStore?._id ? { storeId: activeStore._id } : "skip",
   );
 
-  const {
-    hasFinancialDetailsAccess,
-    hasFullAdminAccess,
-  } = usePermissions();
+  const { hasFinancialDetailsAccess, hasFullAdminAccess } = usePermissions();
   const isOperationsRoute = location.pathname.includes("/operations");
   const isOrdersRoute = location.pathname.includes("/orders");
   const isProductsRoute = location.pathname.includes("/products");
@@ -294,7 +291,8 @@ export function AppSidebar({
       : "skip",
   );
   const openWorkCountLabel =
-    openWorkCountSummary?.count === undefined
+    openWorkCountSummary?.count === undefined ||
+    openWorkCountSummary.count === 0
       ? null
       : `${openWorkCountSummary.count}${
           openWorkCountSummary.completeness === "incomplete" ? "+" : ""
@@ -308,8 +306,7 @@ export function AppSidebar({
       : "skip",
   );
   const pendingApprovalCountLabel =
-    pendingApprovalCountSummary?.count &&
-    pendingApprovalCountSummary.count > 0
+    pendingApprovalCountSummary?.count && pendingApprovalCountSummary.count > 0
       ? `${pendingApprovalCountSummary.count}${
           pendingApprovalCountSummary.completeness === "incomplete" ? "+" : ""
         }`
@@ -775,9 +772,7 @@ export function AppSidebar({
                 icon={Tag}
                 label="Products"
                 open={sidebarSubmenuOpenState.products}
-                onOpenChange={(open) =>
-                  setSidebarSubmenuOpen("products", open)
-                }
+                onOpenChange={(open) => setSidebarSubmenuOpen("products", open)}
                 onClick={() => {
                   void navigate({
                     to: "/$orgUrlSlug/store/$storeUrlSlug/products",
@@ -816,32 +811,32 @@ export function AppSidebar({
 
                 {unresolvedProductCount !== undefined &&
                   unresolvedProductCount > 0 && (
-                  <SidebarMenuSub>
-                    <SidebarMenuSubItem>
-                      <SidebarMenuButton
-                        disabled={!hasFinancialDetailsAccess}
-                        asChild
-                      >
-                        <Link
-                          to="/$orgUrlSlug/store/$storeUrlSlug/products/unresolved"
-                          params={(p) => ({
-                            ...p,
-                            orgUrlSlug: activeOrganization?.slug,
-                            storeUrlSlug: activeStore?.slug,
-                          })}
-                          className="flex items-center justify-between"
+                    <SidebarMenuSub>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuButton
+                          disabled={!hasFinancialDetailsAccess}
+                          asChild
                         >
-                          <div className="flex items-center">
-                            <AlertOctagon className="w-4 h-4 mr-2" />
-                            <p className="font-medium">Unresolved</p>
-                          </div>
-                          <p className="text-xs font-medium">
-                            {unresolvedProductCount}
-                          </p>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuSubItem>
-                  </SidebarMenuSub>
+                          <Link
+                            to="/$orgUrlSlug/store/$storeUrlSlug/products/unresolved"
+                            params={(p) => ({
+                              ...p,
+                              orgUrlSlug: activeOrganization?.slug,
+                              storeUrlSlug: activeStore?.slug,
+                            })}
+                            className="flex items-center justify-between"
+                          >
+                            <div className="flex items-center">
+                              <AlertOctagon className="w-4 h-4 mr-2" />
+                              <p className="font-medium">Unresolved</p>
+                            </div>
+                            <p className="text-xs font-medium">
+                              {unresolvedProductCount}
+                            </p>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuSubItem>
+                    </SidebarMenuSub>
                   )}
 
                 {/* <SidebarMenuSub>
@@ -868,38 +863,38 @@ export function AppSidebar({
                 <>
                   {/* Bulk operations section */}
                   <SidebarMenuItem>
-                <SidebarMenuButton disabled={!hasFullAdminAccess} asChild>
-                  <Link
-                    to="/$orgUrlSlug/store/$storeUrlSlug/bulk-operations"
-                    params={(p) => ({
-                      ...p,
-                      orgUrlSlug: activeOrganization?.slug,
-                      storeUrlSlug: activeStore?.slug,
-                    })}
-                    className="flex items-center"
-                  >
-                    <Layers className="w-4 h-4" />
-                    <p className="font-medium">Bulk Operations</p>
-                  </Link>
-                </SidebarMenuButton>
+                    <SidebarMenuButton disabled={!hasFullAdminAccess} asChild>
+                      <Link
+                        to="/$orgUrlSlug/store/$storeUrlSlug/bulk-operations"
+                        params={(p) => ({
+                          ...p,
+                          orgUrlSlug: activeOrganization?.slug,
+                          storeUrlSlug: activeStore?.slug,
+                        })}
+                        className="flex items-center"
+                      >
+                        <Layers className="w-4 h-4" />
+                        <p className="font-medium">Bulk Operations</p>
+                      </Link>
+                    </SidebarMenuButton>
                   </SidebarMenuItem>
 
                   {/* Promo codes section */}
                   <SidebarMenuItem>
-                <SidebarMenuButton disabled={!hasFullAdminAccess} asChild>
-                  <Link
-                    to="/$orgUrlSlug/store/$storeUrlSlug/promo-codes"
-                    params={(p) => ({
-                      ...p,
-                      orgUrlSlug: activeOrganization?.slug,
-                      storeUrlSlug: activeStore?.slug,
-                    })}
-                    className="flex items-center"
-                  >
-                    <BadgePercent className="w-4 h-4" />
-                    <p className="font-medium">Promo codes</p>
-                  </Link>
-                </SidebarMenuButton>
+                    <SidebarMenuButton disabled={!hasFullAdminAccess} asChild>
+                      <Link
+                        to="/$orgUrlSlug/store/$storeUrlSlug/promo-codes"
+                        params={(p) => ({
+                          ...p,
+                          orgUrlSlug: activeOrganization?.slug,
+                          storeUrlSlug: activeStore?.slug,
+                        })}
+                        className="flex items-center"
+                      >
+                        <BadgePercent className="w-4 h-4" />
+                        <p className="font-medium">Promo codes</p>
+                      </Link>
+                    </SidebarMenuButton>
                   </SidebarMenuItem>
                 </>
               ) : null}
@@ -940,81 +935,81 @@ export function AppSidebar({
                     setSidebarSubmenuOpen("storefront", open)
                   }
                 >
-                <SidebarMenuSub>
-                  <SidebarMenuSubItem>
-                    <SidebarMenuButton disabled={!hasFullAdminAccess} asChild>
-                      <Link
-                        to="/$orgUrlSlug/store/$storeUrlSlug/assets"
-                        params={(p) => ({
-                          ...p,
-                          orgUrlSlug: activeOrganization?.slug,
-                          storeUrlSlug: activeStore?.slug,
-                        })}
-                        className="flex items-center"
-                      >
-                        <Image className="w-4 h-4" />
-                        <p className="font-medium">Assets</p>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuSubItem>
-                </SidebarMenuSub>
+                  <SidebarMenuSub>
+                    <SidebarMenuSubItem>
+                      <SidebarMenuButton disabled={!hasFullAdminAccess} asChild>
+                        <Link
+                          to="/$orgUrlSlug/store/$storeUrlSlug/assets"
+                          params={(p) => ({
+                            ...p,
+                            orgUrlSlug: activeOrganization?.slug,
+                            storeUrlSlug: activeStore?.slug,
+                          })}
+                          className="flex items-center"
+                        >
+                          <Image className="w-4 h-4" />
+                          <p className="font-medium">Assets</p>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuSubItem>
+                  </SidebarMenuSub>
 
-                <SidebarMenuSub>
-                  <SidebarMenuSubItem>
-                    <SidebarMenuButton disabled={!hasFullAdminAccess} asChild>
-                      <Link
-                        to="/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions"
-                        params={(p) => ({
-                          ...p,
-                          orgUrlSlug: activeOrganization?.slug,
-                          storeUrlSlug: activeStore?.slug,
-                        })}
-                        className="flex items-center"
-                      >
-                        <ShoppingCart className="w-4 h-4" />
-                        <p className="font-medium">Checkout sessions</p>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuSubItem>
-                </SidebarMenuSub>
+                  <SidebarMenuSub>
+                    <SidebarMenuSubItem>
+                      <SidebarMenuButton disabled={!hasFullAdminAccess} asChild>
+                        <Link
+                          to="/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions"
+                          params={(p) => ({
+                            ...p,
+                            orgUrlSlug: activeOrganization?.slug,
+                            storeUrlSlug: activeStore?.slug,
+                          })}
+                          className="flex items-center"
+                        >
+                          <ShoppingCart className="w-4 h-4" />
+                          <p className="font-medium">Checkout sessions</p>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuSubItem>
+                  </SidebarMenuSub>
 
-                <SidebarMenuSub>
-                  <SidebarMenuSubItem>
-                    <SidebarMenuButton disabled={!hasFullAdminAccess} asChild>
-                      <Link
-                        to="/$orgUrlSlug/store/$storeUrlSlug/configuration"
-                        params={(p) => ({
-                          ...p,
-                          orgUrlSlug: activeOrganization?.slug,
-                          storeUrlSlug: activeStore?.slug,
-                        })}
-                        className="flex items-center"
-                      >
-                        <CogIcon className="w-4 h-4" />
-                        <p className="font-medium">Configuration</p>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuSubItem>
-                </SidebarMenuSub>
+                  <SidebarMenuSub>
+                    <SidebarMenuSubItem>
+                      <SidebarMenuButton disabled={!hasFullAdminAccess} asChild>
+                        <Link
+                          to="/$orgUrlSlug/store/$storeUrlSlug/configuration"
+                          params={(p) => ({
+                            ...p,
+                            orgUrlSlug: activeOrganization?.slug,
+                            storeUrlSlug: activeStore?.slug,
+                          })}
+                          className="flex items-center"
+                        >
+                          <CogIcon className="w-4 h-4" />
+                          <p className="font-medium">Configuration</p>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuSubItem>
+                  </SidebarMenuSub>
 
-                <SidebarMenuSub>
-                  <SidebarMenuSubItem>
-                    <SidebarMenuButton disabled={!hasFullAdminAccess} asChild>
-                      <Link
-                        to="/$orgUrlSlug/store/$storeUrlSlug/bags"
-                        params={(p) => ({
-                          ...p,
-                          orgUrlSlug: activeOrganization?.slug,
-                          storeUrlSlug: activeStore?.slug,
-                        })}
-                        className="flex items-center"
-                      >
-                        <ShoppingBasket className="w-4 h-4" />
-                        <p className="font-medium">User bags</p>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuSubItem>
-                </SidebarMenuSub>
+                  <SidebarMenuSub>
+                    <SidebarMenuSubItem>
+                      <SidebarMenuButton disabled={!hasFullAdminAccess} asChild>
+                        <Link
+                          to="/$orgUrlSlug/store/$storeUrlSlug/bags"
+                          params={(p) => ({
+                            ...p,
+                            orgUrlSlug: activeOrganization?.slug,
+                            storeUrlSlug: activeStore?.slug,
+                          })}
+                          className="flex items-center"
+                        >
+                          <ShoppingBasket className="w-4 h-4" />
+                          <p className="font-medium">User bags</p>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuSubItem>
+                  </SidebarMenuSub>
                 </SidebarMenuCollapsible>
               ) : null}
             </SidebarMenu>
@@ -1098,57 +1093,61 @@ export function AppSidebar({
           </SidebarGroup>
         </PermissionGate>
 
-        {!isSharedDemo ? <PermissionGate requires="full_admin">
-          <SidebarGroup>
-            <SidebarGroupLabel>Organization</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild>
-                    <Link
-                      to="/$orgUrlSlug/store/$storeUrlSlug/members"
-                      params={(p) => ({
-                        ...p,
-                        orgUrlSlug: activeOrganization?.slug,
-                        storeUrlSlug: activeStore?.slug,
-                      })}
-                      className="flex items-center"
-                    >
-                      <Users className="w-4 h-4" />
-                      <p className="font-medium">Members</p>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        </PermissionGate> : null}
+        {!isSharedDemo ? (
+          <PermissionGate requires="full_admin">
+            <SidebarGroup>
+              <SidebarGroupLabel>Organization</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild>
+                      <Link
+                        to="/$orgUrlSlug/store/$storeUrlSlug/members"
+                        params={(p) => ({
+                          ...p,
+                          orgUrlSlug: activeOrganization?.slug,
+                          storeUrlSlug: activeStore?.slug,
+                        })}
+                        className="flex items-center"
+                      >
+                        <Users className="w-4 h-4" />
+                        <p className="font-medium">Members</p>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </PermissionGate>
+        ) : null}
 
-        {!isSharedDemo ? <PermissionGate requires="full_admin">
-          <SidebarGroup>
-            <SidebarGroupLabel>App</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild>
-                    <Link
-                      to="/$orgUrlSlug/store/$storeUrlSlug/app-settings"
-                      params={(p) => ({
-                        ...p,
-                        orgUrlSlug: activeOrganization?.slug,
-                        storeUrlSlug: activeStore?.slug,
-                      })}
-                      className="flex items-center"
-                    >
-                      <CogIcon className="w-4 h-4" />
-                      <p className="font-medium">Settings</p>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        </PermissionGate> : null}
+        {!isSharedDemo ? (
+          <PermissionGate requires="full_admin">
+            <SidebarGroup>
+              <SidebarGroupLabel>App</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild>
+                      <Link
+                        to="/$orgUrlSlug/store/$storeUrlSlug/app-settings"
+                        params={(p) => ({
+                          ...p,
+                          orgUrlSlug: activeOrganization?.slug,
+                          storeUrlSlug: activeStore?.slug,
+                        })}
+                        className="flex items-center"
+                      >
+                        <CogIcon className="w-4 h-4" />
+                        <p className="font-medium">Settings</p>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </PermissionGate>
+        ) : null}
       </SidebarContent>
       {isContainedShell ? <ContainedSidebarToggle /> : <SidebarRail />}
     </Sidebar>

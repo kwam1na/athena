@@ -54,8 +54,16 @@ import { Checkbox } from "../ui/checkbox";
 import { Label } from "../ui/label";
 import { LoadingButton } from "../ui/loading-button";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
-import { OperationReviewWorkspace } from "./OperationReviewWorkspace";
+import { Tabs, TabsContent } from "../ui/tabs";
+import {
+  OperationReviewBucketBody,
+  OperationReviewBucketHeader,
+  OperationReviewBucketShell,
+  OperationReviewBucketTabsList,
+  OperationReviewBucketTabTrigger,
+  OperationReviewRailShell,
+  OperationReviewWorkspace,
+} from "./OperationReviewWorkspace";
 import { OperationReviewItemCard } from "./OperationReviewItemCard";
 import { OperationsSummaryMetric } from "./OperationsSummaryMetric";
 import {
@@ -469,13 +477,6 @@ function getItemContextLabel(item: DailyOpeningItem) {
       : "Opening item";
 }
 
-function isOperationalWorkItem(item: DailyOpeningItem) {
-  return (
-    normalizeMetadataLabel(item.category ?? "") === "operationalworkitem" ||
-    normalizeMetadataLabel(item.subject?.type ?? "") === "operationalworkitem"
-  );
-}
-
 function formatMetadataValue(value: ReactNode, currency: string) {
   if (typeof value === "number") {
     return new Intl.NumberFormat([], {
@@ -586,6 +587,15 @@ function formatMetadataDisplayValue({
   return formattedValue;
 }
 
+const technicalOpeningMetadataLabels = new Set([
+  "frozenmembercount",
+  "unresolvedmembercount",
+]);
+
+function isOperatorFacingOpeningMetadata(label: string) {
+  return !technicalOpeningMetadataLabels.has(normalizeMetadataLabel(label));
+}
+
 function getMetadataEntries(
   item: DailyOpeningItem,
   currency: string,
@@ -596,7 +606,11 @@ function getMetadataEntries(
 
   if (Array.isArray(item.metadata)) {
     return item.metadata
-      .filter((entry) => entry.label !== "transactionId")
+      .filter(
+        (entry) =>
+          entry.label !== "transactionId" &&
+          isOperatorFacingOpeningMetadata(entry.label),
+      )
       .map((entry) => ({
         label: entry.label,
         value: formatMetadataDisplayValue({
@@ -612,7 +626,11 @@ function getMetadataEntries(
 
   return Object.entries(item.metadata)
     .filter(
-      ([, value]) => value !== null && value !== undefined && value !== "",
+      ([label, value]) =>
+        isOperatorFacingOpeningMetadata(label) &&
+        value !== null &&
+        value !== undefined &&
+        value !== "",
     )
     .map(([label, value]) => ({
       label: getMetadataLabel(item, label),
@@ -1113,7 +1131,6 @@ function OpeningItemCard({
     orgUrlSlug,
     storeUrlSlug,
   );
-  const showMetadataDetails = !isOperationalWorkItem(item);
 
   return (
     <OperationReviewItemCard
@@ -1126,18 +1143,15 @@ function OpeningItemCard({
       }
       badgeSlot={
         item.statusLabel ? (
-          <Badge className="shadow-sm" variant="outline">
-            {item.statusLabel}
-          </Badge>
+          <Badge variant="outline">{item.statusLabel}</Badge>
         ) : null
       }
+      combinedHeading={title}
       contextLabel={contextLabel}
-      collapsedMetadataEntries={
-        showMetadataDetails ? undefined : metadataEntries
-      }
+      collapsedMetadataEntries={metadataEntries}
       description={description}
       itemId={itemId}
-      metadataEntries={showMetadataDetails ? metadataEntries : []}
+      presentation="list"
       selectionSlot={
         requiresAcknowledgement ? (
           <input
@@ -1150,6 +1164,7 @@ function OpeningItemCard({
         ) : null
       }
       showCollapsedDescription={showCollapsedDescription}
+      stackDescription
       title={title}
     />
   );
@@ -1202,8 +1217,7 @@ function BucketSection({
     "flex h-10 w-10 shrink-0 items-center justify-center rounded-md",
     status === "blocked" && "bg-danger/10 text-danger",
     status === "review" && "bg-warning/15 text-warning-foreground",
-    status === "carry-forward" &&
-      "bg-primary-soft text-primary",
+    status === "carry-forward" && "bg-primary-soft text-primary",
     status === "ready" && "bg-success/10 text-success",
   );
   const Icon =
@@ -1216,12 +1230,8 @@ function BucketSection({
           : CheckCircle2;
 
   return (
-    <section
-      aria-label={ariaLabel}
-      className="overflow-hidden rounded-lg border border-border bg-surface-raised shadow-surface"
-      role="region"
-    >
-      <div className="flex flex-col gap-layout-sm border-b border-border px-layout-md py-layout-md md:flex-row md:items-start md:justify-between">
+    <OperationReviewBucketShell aria-label={ariaLabel}>
+      <OperationReviewBucketHeader>
         <div className="flex items-center gap-layout-sm">
           <div className={iconClassName}>
             <Icon className="h-4 w-4" />
@@ -1238,9 +1248,9 @@ function BucketSection({
         <Badge className={getBucketCountClassName(status)} variant="outline">
           {items.length}
         </Badge>
-      </div>
+      </OperationReviewBucketHeader>
 
-      <div className="space-y-layout-md bg-surface p-layout-md">
+      <OperationReviewBucketBody hasItems={items.length > 0}>
         {items.length === 0 ? (
           <p className="rounded-lg border border-dashed border-border bg-surface-raised p-layout-md text-sm text-muted-foreground shadow-sm">
             {emptyText}
@@ -1271,7 +1281,7 @@ function BucketSection({
             );
           })
         )}
-      </div>
+      </OperationReviewBucketBody>
       {items.length > OPENING_REVIEW_ITEMS_PER_PAGE ? (
         <ListPagination
           onPageChange={handlePageChange}
@@ -1281,7 +1291,7 @@ function BucketSection({
           totalItems={items.length}
         />
       ) : null}
-    </section>
+    </OperationReviewBucketShell>
   );
 }
 
@@ -1319,13 +1329,9 @@ function BucketTabs({
       }}
       value={value}
     >
-      <TabsList
-        aria-label="Opening Handoff buckets"
-        className="h-auto w-full flex-wrap justify-start gap-1 border border-border bg-surface-raised p-1 text-muted-foreground shadow-surface"
-      >
+      <OperationReviewBucketTabsList aria-label="Opening Handoff buckets">
         {buckets.map((bucket) => (
-          <TabsTrigger
-            className="min-h-9 gap-2 px-3 data-[state=active]:bg-background"
+          <OperationReviewBucketTabTrigger
             key={bucket.value}
             value={bucket.value}
           >
@@ -1338,9 +1344,9 @@ function BucketTabs({
             >
               {bucket.items.length}
             </span>
-          </TabsTrigger>
+          </OperationReviewBucketTabTrigger>
         ))}
-      </TabsList>
+      </OperationReviewBucketTabsList>
 
       {buckets.map((bucket) => (
         <TabsContent className="mt-0" key={bucket.value} value={bucket.value}>
@@ -1403,6 +1409,24 @@ function OpeningRail({
   const copy = statusCopy[status];
   const acknowledgementComplete =
     acknowledgedCount >= requiredAcknowledgementCount;
+  const boundedAcknowledgedCount = Math.min(
+    acknowledgedCount,
+    requiredAcknowledgementCount,
+  );
+  const acknowledgementProgress =
+    requiredAcknowledgementCount > 0
+      ? (boundedAcknowledgedCount / requiredAcknowledgementCount) * 100
+      : 100;
+  const acknowledgementKeys = acknowledgementItems.map(getAcknowledgementKey);
+  const toggleAllAcknowledgements = () => {
+    const acknowledgementKeySet = new Set(acknowledgementKeys);
+
+    onAcknowledgedKeysChange(
+      acknowledgementComplete
+        ? acknowledgedKeys.filter((key) => !acknowledgementKeySet.has(key))
+        : Array.from(new Set([...acknowledgedKeys, ...acknowledgementKeys])),
+    );
+  };
   const checklistItems = [
     {
       isClear: snapshot.blockers.length === 0,
@@ -1429,7 +1453,7 @@ function OpeningRail({
 
   return (
     <PageWorkspaceRail>
-      <aside className="rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface">
+      <OperationReviewRailShell>
         <div className="flex items-center justify-between gap-layout-md">
           <div className="flex min-w-0 items-center gap-layout-sm">
             <div
@@ -1516,26 +1540,88 @@ function OpeningRail({
         </div>
 
         {requiredAcknowledgementCount > 0 && !isStarted ? (
-          <div className="mt-layout-md rounded-lg border border-warning/30 bg-warning/15 p-layout-sm text-sm leading-6 text-muted-foreground">
-            <p>
-              Acknowledge {requiredAcknowledgementCount} handoff{" "}
-              {requiredAcknowledgementCount === 1 ? "item" : "items"} before
-              starting the store day.
-            </p>
-            <div className="mt-layout-sm space-y-layout-xs">
+          <section
+            aria-labelledby="opening-handoff-acknowledgements-title"
+            className={cn(
+              "mt-layout-md overflow-hidden rounded-lg border bg-muted/15",
+              acknowledgementComplete
+                ? "border-success/30"
+                : "border-warning/30",
+            )}
+          >
+            <div className="flex items-start justify-between gap-layout-sm px-layout-sm py-layout-sm">
+              <div className="min-w-0">
+                <h3
+                  className="text-sm font-semibold leading-5 text-foreground"
+                  id="opening-handoff-acknowledgements-title"
+                >
+                  Handoff acknowledgements
+                </h3>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  Review each item before starting the store day.
+                </p>
+              </div>
+              <div className="flex shrink-0 flex-col items-end gap-1">
+                <span
+                  className={cn(
+                    "rounded-full border px-2 py-0.5 font-numeric text-xs font-semibold tabular-nums",
+                    acknowledgementComplete
+                      ? "border-success/30 bg-success/10 text-success"
+                      : "border-warning/30 bg-warning/10 text-warning-foreground",
+                  )}
+                >
+                  {boundedAcknowledgedCount} of {requiredAcknowledgementCount}
+                </span>
+                <Button
+                  aria-label={`${acknowledgementComplete ? "Clear" : "Select"} all ${requiredAcknowledgementCount} handoff ${requiredAcknowledgementCount === 1 ? "item" : "items"}`}
+                  className="h-auto px-2 py-1 text-xs text-muted-foreground transition-[color,background-color,transform] duration-fast ease-standard active:scale-[0.97] hover:text-foreground motion-reduce:transform-none motion-reduce:transition-none"
+                  onClick={toggleAllAcknowledgements}
+                  size="sm"
+                  type="button"
+                  variant="ghost"
+                >
+                  {acknowledgementComplete ? "Clear all" : "Select all"}
+                </Button>
+              </div>
+            </div>
+            <div
+              aria-label="Handoff acknowledgement progress"
+              aria-valuemax={requiredAcknowledgementCount}
+              aria-valuemin={0}
+              aria-valuenow={boundedAcknowledgedCount}
+              className="h-1 bg-muted"
+              role="progressbar"
+            >
+              <div
+                className={cn(
+                  "h-full transition-[width,background-color] duration-standard ease-standard motion-reduce:transition-none",
+                  acknowledgementComplete ? "bg-success" : "bg-warning",
+                )}
+                style={{ width: `${acknowledgementProgress}%` }}
+              />
+            </div>
+            <div className="max-h-[min(42rem,calc(100vh-24rem))] overflow-y-auto overscroll-contain border-t border-border/60">
               {acknowledgementItems.map((item) => {
                 const acknowledgementKey = getAcknowledgementKey(item);
                 const checkboxId = `daily-opening-acknowledgement-${acknowledgementKey.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+                const displayTitle = formatOpeningItemTitle(item.title);
+                const isAcknowledged =
+                  acknowledgedKeys.includes(acknowledgementKey);
 
                 return (
                   <div
-                    className="flex items-start gap-layout-xs rounded-md border border-warning/30 bg-surface-raised/70 p-layout-xs"
+                    className={cn(
+                      "flex items-start gap-layout-sm border-b border-border/60 px-layout-sm transition-[background-color,transform] duration-fast ease-standard last:border-b-0 active:scale-[0.99] motion-reduce:transform-none motion-reduce:transition-none",
+                      isAcknowledged
+                        ? "bg-primary/10"
+                        : "bg-transparent hover:bg-muted/35",
+                    )}
                     key={acknowledgementKey}
                   >
                     <Checkbox
-                      aria-label={`Acknowledge ${item.title}`}
-                      checked={acknowledgedKeys.includes(acknowledgementKey)}
-                      className="mt-0.5"
+                      aria-label={`Acknowledge ${displayTitle}`}
+                      checked={isAcknowledged}
+                      className="mt-[0.875rem]"
                       id={checkboxId}
                       onCheckedChange={(checked) => {
                         onAcknowledgedKeysChange(
@@ -1548,16 +1634,16 @@ function OpeningRail({
                       }}
                     />
                     <Label
-                      className="cursor-pointer text-sm font-medium leading-5"
+                      className="min-w-0 flex-1 cursor-pointer py-layout-sm pr-layout-sm text-sm font-medium leading-5"
                       htmlFor={checkboxId}
                     >
-                      {item.title}
+                      {displayTitle}
                     </Label>
                   </div>
                 );
               })}
             </div>
-          </div>
+          </section>
         ) : null}
 
         {isStarted && snapshot.startedOpening ? (
@@ -1626,7 +1712,7 @@ function OpeningRail({
             {commandMessage.message}
           </div>
         ) : null}
-      </aside>
+      </OperationReviewRailShell>
     </PageWorkspaceRail>
   );
 }

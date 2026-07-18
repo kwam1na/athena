@@ -808,7 +808,7 @@ export async function listOpenLocalSyncConflictsByRegisterSessionWithCompletenes
         registerSessionIds: options.registerSessionIds!,
       })
     : { needsReviewConflicts: [], rejectedEvents: [], resolvedConflicts: [] };
-  const [needsReviewConflictProbe, resolvedConflictProbe, rejectedEventProbe] =
+  const [needsReviewConflictProbe, conflictedEventProbe, rejectedEventProbe] =
     hasTargetRegisterSessions
       ? [[], [], []]
       : await Promise.all([
@@ -819,9 +819,9 @@ export async function listOpenLocalSyncConflictsByRegisterSessionWithCompletenes
             )
             .take(syncConflictLimit + 1),
           ctx.db
-            .query("posLocalSyncConflict")
+            .query("posLocalSyncEvent")
             .withIndex("by_store_status", (q) =>
-              q.eq("storeId", storeId).eq("status", "resolved"),
+              q.eq("storeId", storeId).eq("status", "conflicted"),
             )
             .take(syncConflictLimit + 1),
           options.includeRejectedEvidence
@@ -836,17 +836,34 @@ export async function listOpenLocalSyncConflictsByRegisterSessionWithCompletenes
   const readIncomplete =
     !hasTargetRegisterSessions &&
     (needsReviewConflictProbe.length > syncConflictLimit ||
-      resolvedConflictProbe.length > syncConflictLimit ||
+      conflictedEventProbe.length > syncConflictLimit ||
       rejectedEventProbe.length > syncConflictLimit);
   const cappedNeedsReviewConflicts = needsReviewConflictProbe.slice(
     0,
     syncConflictLimit,
   );
-  const cappedResolvedConflicts = resolvedConflictProbe.slice(
+  const cappedConflictedEvents = conflictedEventProbe.slice(
     0,
     syncConflictLimit,
   );
   const cappedRejectedEvents = rejectedEventProbe.slice(0, syncConflictLimit);
+  const cappedResolvedConflicts = (
+    await Promise.all(
+      [...cappedConflictedEvents, ...cappedRejectedEvents].map((event) =>
+        ctx.db
+          .query("posLocalSyncConflict")
+          .withIndex("by_store_terminal_localEvent", (q) =>
+            q
+              .eq("storeId", event.storeId)
+              .eq("terminalId", event.terminalId)
+              .eq("localEventId", event.localEventId),
+          )
+          .take(syncConflictLimit + 1),
+      ),
+    )
+  ).flatMap((conflicts) =>
+    conflicts.filter((conflict) => conflict.status === "resolved"),
+  );
   const needsReviewConflicts = uniqueById([
     ...cappedNeedsReviewConflicts,
     ...targetedFacts.needsReviewConflicts,

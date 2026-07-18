@@ -1,13 +1,9 @@
 import {
-  Ban,
   Check,
-  Hand,
   PackageCheck,
   RotateCcw,
-  StopCircle,
   XCircle,
   MessageSquare,
-  AlertTriangle,
 } from "lucide-react";
 import View from "../View";
 import { useOnlineOrder } from "~/src/contexts/OnlineOrderContext";
@@ -20,23 +16,38 @@ import {
 } from "~/src/lib/utils";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { useAction, useMutation, useQuery } from "convex/react";
+import { useAction, useMutation } from "convex/react";
 import { api } from "~/convex/_generated/api";
 import { LoadingButton } from "../ui/loading-button";
 import { getOrderState } from "./utils";
-import { Separator } from "../ui/separator";
 import { OrderSummary } from "./OrderSummary";
 import { toast } from "sonner";
-import { CheckCircledIcon } from "@radix-ui/react-icons";
 import { useAuth } from "~/src/hooks/useAuth";
-import { Badge } from "../ui/badge";
 import { LowStockStatus, OutOfStockStatus } from "../product/ProductStock";
 import { toDisplayAmount } from "~/convex/lib/currency";
 import { presentCommandToast } from "~/src/lib/errors/presentCommandToast";
 import { runCommand } from "~/src/lib/errors/runCommand";
 import { ok } from "~/shared/commandResult";
+import type { OnlineOrder, OnlineOrderItem } from "~/types";
 
-function OrderItem({ item, order }: { item: any; order: any }) {
+type DisplayOrderItem = NonNullable<OnlineOrder["items"]>[number] &
+  Pick<OnlineOrderItem, "_id"> & {
+  currentInventoryCount?: number;
+  isLowStock?: boolean;
+  isOutOfStock?: boolean;
+  };
+
+type FormattedOrderItem = Omit<DisplayOrderItem, "price"> & {
+  price: string;
+};
+
+function OrderItem({
+  item,
+  order,
+}: {
+  item: FormattedOrderItem;
+  order: OnlineOrder;
+}) {
   const [isUpdatingOrderItem, setIsUpdatingOrderItem] = useState(false);
   const [isRequestingFeedback, setIsRequestingFeedback] = useState(false);
   const { user } = useAuth();
@@ -68,13 +79,14 @@ function OrderItem({ item, order }: { item: any; order: any }) {
   };
 
   const handleReturnItemToStock = async () => {
-    if (!order.externalTransactionId) return;
+    const externalTransactionId = order.externalTransactionId;
+    if (!externalTransactionId) return;
 
     try {
       setIsUpdatingOrderItem(true);
       const result = await runCommand(async () => {
         await returnItemToStock({
-          externalTransactionId: order.externalTransactionId,
+          externalTransactionId,
           onlineOrderItemIds: [item._id],
         });
 
@@ -90,12 +102,15 @@ function OrderItem({ item, order }: { item: any; order: any }) {
   };
 
   const handleRequestFeedback = async () => {
+    const customerEmail = order.customerDetails.email;
+    if (!customerEmail) return;
+
     try {
       setIsRequestingFeedback(true);
       const result = await runCommand(() =>
         requestFeedback({
           productSkuId: item.productSkuId,
-          customerEmail: order.customerDetails.email,
+          customerEmail,
           customerName: order.customerDetails.firstName,
           orderId: order._id,
           orderItemId: item._id,
@@ -132,7 +147,7 @@ function OrderItem({ item, order }: { item: any; order: any }) {
   } = getOrderState(order);
 
   return (
-    <div className="flex gap-8">
+    <article className="grid gap-layout-md py-layout-lg last:pb-0 sm:grid-cols-[auto_minmax(0,1fr)]">
       <Link
         to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug"
         params={(prev) => ({
@@ -154,18 +169,18 @@ function OrderItem({ item, order }: { item: any; order: any }) {
               <img
                 src={item.productImage}
                 alt={item.productName || "product image"}
-                className="w-24 h-24 aspect-square object-cover rounded-lg"
+                className="h-20 w-20 aspect-square rounded-lg border border-border object-cover sm:h-24 sm:w-24"
               />
-              <div className="absolute -top-2 -right-2 bg-primary/70 text-primary-foreground text-xs w-4 h-4 rounded-full flex items-center justify-center">
+              <div className="absolute -top-2 -right-2 bg-muted text-primary-background text-xs w-4 h-4 rounded-full flex items-center justify-center">
                 {item.quantity}
               </div>
             </div>
           </div>
         ) : (
-          <div className="w-24 h-24 bg-gray-100 rounded-lg" />
+          <div className="h-20 w-20 rounded-lg border border-border bg-muted sm:h-24 sm:w-24" />
         )}
       </Link>
-      <div className="space-y-8">
+      <div className="min-w-0 space-y-layout-md">
         <Link
           to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug"
           params={(prev) => ({
@@ -180,7 +195,7 @@ function OrderItem({ item, order }: { item: any; order: any }) {
             ),
             variant: item.productSku,
           }}
-          className="space-y-2"
+          className="block space-y-2 rounded-md outline-none transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-ring"
         >
           <p className="text-sm">{getProductName(item)}</p>
           <p className="text-xs text-muted-foreground">{item.productSku}</p>
@@ -193,7 +208,7 @@ function OrderItem({ item, order }: { item: any; order: any }) {
           )}
         </Link>
 
-        <div className="space-y-2">
+        <div className="flex flex-wrap items-center gap-x-layout-md gap-y-layout-xs">
           {/* Stock Status Warnings */}
 
           {hasOrderTransitioned && !item.isRefunded && (
@@ -244,10 +259,13 @@ function OrderItem({ item, order }: { item: any; order: any }) {
                   isLoading={isUpdatingOrderItem}
                   onClick={() => handleUpdateOrderItem(true)}
                   variant="outline"
-                  className="text-green-700 bg-gray-50 hover:text-green-700"
-                  disabled={item.quantity > item.currentInventoryCount}
+                  className="border-success/20 bg-success/10 text-success hover:bg-success/15 hover:text-success"
+                  disabled={
+                    item.currentInventoryCount !== undefined &&
+                    item.quantity > item.currentInventoryCount
+                  }
                 >
-                  <Check className="h-4 w-4 mr-2 text-green-700" />
+                  <Check className="h-4 w-4 mr-2 text-success" />
                   Ready
                 </LoadingButton>
               )}
@@ -257,9 +275,9 @@ function OrderItem({ item, order }: { item: any; order: any }) {
                   isLoading={isUpdatingOrderItem}
                   onClick={() => handleUpdateOrderItem(false)}
                   variant="outline"
-                  className="text-red-700 bg-gray-50 hover:text-red-700"
+                  className="border-danger/20 bg-danger/10 text-danger hover:bg-danger/15 hover:text-danger"
                 >
-                  <XCircle className="h-4 w-4 mr-2 text-red-700" />
+                  <XCircle className="h-4 w-4 mr-2 text-danger" />
                   Not ready
                 </LoadingButton>
               )}
@@ -289,7 +307,7 @@ function OrderItem({ item, order }: { item: any; order: any }) {
           <p className="text-xs">Restock to inventory</p>
         </LoadingButton>
       )}
-    </div>
+    </article>
   );
 }
 
@@ -329,7 +347,8 @@ export function OrderItemsView() {
 
   const formatter = currencyFormatter(activeStore.currency);
 
-  const itemsFormatted = order?.items?.map((item: any) => {
+  const displayItems = (order.items ?? []) as DisplayOrderItem[];
+  const itemsFormatted = displayItems.map((item) => {
     return {
       ...item,
       price:
@@ -340,27 +359,31 @@ export function OrderItemsView() {
   });
 
   const itemsCount =
-    order?.items?.reduce((acc: number, item: any) => acc + item.quantity, 0) ||
-    0;
+    order.items?.reduce((acc, item) => acc + item.quantity, 0) || 0;
 
-  const isFullyRestocked = order?.items?.every((item: any) => item.isRestocked);
+  const isFullyRestocked = order.items?.every((item) => item.isRestocked);
 
-  const isFullyRefunded = order?.items?.every((item: any) => item.isRefunded);
+  const isFullyRefunded = order.items?.every((item) => item.isRefunded);
 
-  const elementsCount = order?.items?.length || 0;
+  const elementsCount = order.items?.length || 0;
 
   return (
     <View
-      hideBorder
-      hideHeaderBottomBorder
       fullHeight={false}
       lockDocumentScroll={false}
-      className="w-full"
+      className="w-full bg-transparent"
+      contentClassName="bg-surface-raised shadow-surface"
+      headerClassName="px-layout-lg py-layout-md md:px-layout-xl"
       header={
-        <div className="flex items-center gap-8">
-          <p className="text-sm text-sm text-muted-foreground">
-            {itemsCount > 1 ? `${itemsCount} items` : `${itemsCount} item`}
-          </p>
+        <div className="flex items-center gap-layout-md">
+          <div>
+            <p className="text-base font-medium text-foreground">
+              Purchased items
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {itemsCount > 1 ? `${itemsCount} items` : `${itemsCount} item`}
+            </p>
+          </div>
 
           {elementsCount > 1 && !isFullyRestocked && isFullyRefunded && (
             <LoadingButton
@@ -376,14 +399,14 @@ export function OrderItemsView() {
         </div>
       }
     >
-      <div className="py-4 space-y-16">
-        {itemsFormatted?.map((item: any) => (
+      <div className="divide-y divide-border px-layout-lg md:px-layout-xl">
+        {itemsFormatted?.map((item) => (
           <OrderItem key={item._id} item={item} order={order} />
         ))}
 
-        <Separator />
-
-        <OrderSummary />
+        <div className="py-layout-lg">
+          <OrderSummary />
+        </div>
       </div>
     </View>
   );

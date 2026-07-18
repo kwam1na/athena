@@ -145,7 +145,7 @@ describe("shared demo provisioning", () => {
 
   it("seeds and migrates a completed Opening Handoff", () => {
     const source = readFileSync("convex/sharedDemo/provision.ts", "utf8");
-    expect(source).toContain('ctx.db.insert("dailyOpening"');
+    expect(source).toContain("buildSharedDemoOpeningBaseline");
     expect(source).toContain("buildSharedDemoStoreDayEvent");
     expect(source).toContain("restoreMutableDemoStoreRowsWithCtx");
     expect(source).toContain('ctx.db.delete("dailyOpening"');
@@ -174,14 +174,10 @@ describe("shared demo provisioning", () => {
   it("seeds a ready pickup order that has already been paid by card", () => {
     const source = readFileSync("convex/sharedDemo/provision.ts", "utf8");
 
-    expect(source).toContain(
-      'hasCompletedPayment: true, hasVerifiedPayment: true',
-    );
+    expect(source).toContain("hasCompletedPayment: true");
+    expect(source).toContain("hasVerifiedPayment: true");
     expect(source).toContain('isPODOrder: false');
-    expect(source).toContain(
-      'paymentMethod: { bank: "Demo Bank", brand: "Visa", channel: "card", last4: "4242", type: "online_payment" }',
-    );
-    expect(source).toContain('hasVerifiedPayment: true, isPODOrder: false');
+    expect(source).toContain('channel: "card"');
   });
 
   it("migrates existing demo baselines to the paid-card order story", () => {

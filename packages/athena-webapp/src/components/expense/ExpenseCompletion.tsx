@@ -27,7 +27,6 @@ interface ExpenseCompletionProps {
 
 export function ExpenseCompletion({
   cartItems,
-  totalValue,
   onComplete,
   isCompleting,
   isCompleted,
@@ -145,48 +144,17 @@ export function ExpenseCompletion({
   }
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-24">
-        <div className="p-4 bg-gray-50 rounded-lg">
-          <div className="flex justify-between items-center">
-            <span className="text-sm font-medium text-gray-700">
-              Total Value
-            </span>
-            <span className="text-4xl font-bold text-gray-900">
-              {formatter.format(toDisplayAmount(totalValue))}
-            </span>
-          </div>
-          {/* <p className="text-xs text-gray-500 mt-1">
-            {cartItems.length} item{cartItems.length !== 1 ? "s" : ""}
-          </p> */}
-        </div>
-
-        {/* <div className="space-y-2">
-          <Label htmlFor="expense-notes">Notes (Optional)</Label>
-          <Textarea
-            id="expense-notes"
-            placeholder="Enter reason for expense..."
-            value={notes}
-            onChange={(e) => onNotesChange(e.target.value)}
-            rows={4}
-            className="resize-none"
-          />
-        </div> */}
-
-        <Button
-          onClick={onComplete}
-          disabled={!isCompleted && (isCompleting || cartItems.length === 0)}
-          className="w-full p-8 bg-green-500 text-white hover:text-white hover:bg-green-600"
-          variant="outline"
-          size="lg"
-        >
-          {isCompleted
-            ? "Start new expense"
-            : isCompleting
-              ? "Recording expense..."
-              : "Complete expense"}
-        </Button>
-      </div>
-    </div>
+    <Button
+      onClick={onComplete}
+      disabled={!isCompleted && (isCompleting || cartItems.length === 0)}
+      className="h-20 w-full rounded-xl bg-success px-6 text-base font-semibold text-success-foreground shadow-sm hover:bg-success/90 hover:text-success-foreground"
+      size="lg"
+    >
+      {isCompleted
+        ? "Start new expense"
+        : isCompleting
+          ? "Recording expense..."
+          : "Complete expense"}
+    </Button>
   );
 }

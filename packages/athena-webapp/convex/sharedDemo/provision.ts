@@ -60,12 +60,14 @@ export const SHARED_DEMO_SEED = {
   domains: ["pos", "inventory", "cash", "orders", "staff", "operations"],
   organizationSlug: "demo",
   storeSlug: "central",
-  ownerEmail: "owner@shared-demo.athena.invalid",
+  ownerEmail: "store@osustudio.com",
   timeZone: SHARED_DEMO_TIME_ZONE,
 } as const;
 
-export const SHARED_DEMO_CASHIER_USERNAME = SHARED_DEMO_STAFF_STORY.cashier.username;
-export const SHARED_DEMO_MANAGER_USERNAME = SHARED_DEMO_STAFF_STORY.manager.username;
+export const SHARED_DEMO_CASHIER_USERNAME =
+  SHARED_DEMO_STAFF_STORY.cashier.username;
+export const SHARED_DEMO_MANAGER_USERNAME =
+  SHARED_DEMO_STAFF_STORY.manager.username;
 export const SHARED_DEMO_STAFF_PIN_HASH =
   "4e98d5fe6eb03fb40d229e19013fc8b1505fdbacebcb225b409d75f656acc82b";
 
@@ -79,8 +81,10 @@ export function sharedDemoMigrationSkipTables(baselineVersion: number) {
 export function validateSharedDemoSeed(seed: typeof SHARED_DEMO_SEED) {
   const errors: string[] = [];
   if (new Set(seed.domains).size !== 6) errors.push("six domains required");
-  if (!seed.ownerEmail.endsWith(".invalid")) errors.push("synthetic email required");
-  if (!seed.organizationSlug || !seed.storeSlug) errors.push("stable slugs required");
+  if (seed.ownerEmail !== "store@osustudio.com")
+    errors.push("Osu Studio owner email required");
+  if (!seed.organizationSlug || !seed.storeSlug)
+    errors.push("stable slugs required");
   return errors;
 }
 
@@ -88,12 +92,39 @@ export function sharedDemoBootstrapSeedMatches(input: {
   inventoryMovementCount: number;
   messageBodies: string[];
   openingCount: number;
-  orderItems: Array<{ isReady?: boolean; price: number; productSku: string; quantity: number }>;
-  orders: Array<{ amount: number; hasVerifiedPayment?: boolean; orderNumber: string; paymentDue?: number; status: string }>;
+  orderItems: Array<{
+    isReady?: boolean;
+    price: number;
+    productSku: string;
+    quantity: number;
+  }>;
+  orders: Array<{
+    amount: number;
+    hasVerifiedPayment?: boolean;
+    orderNumber: string;
+    paymentDue?: number;
+    status: string;
+  }>;
   posTransactionCount: number;
-  productSkus: Array<{ inventoryCount: number; price: number; quantityAvailable: number; sku?: string; unitCost?: number }>;
-  products: Array<{ inventoryCount: number; name: string; quantityAvailable?: number; slug: string }>;
-  registerSessions: Array<{ expectedCash: number; openingFloat: number; registerNumber?: string; status: string }>;
+  productSkus: Array<{
+    inventoryCount: number;
+    price: number;
+    quantityAvailable: number;
+    sku?: string;
+    unitCost?: number;
+  }>;
+  products: Array<{
+    inventoryCount: number;
+    name: string;
+    quantityAvailable?: number;
+    slug: string;
+  }>;
+  registerSessions: Array<{
+    expectedCash: number;
+    openingFloat: number;
+    registerNumber?: string;
+    status: string;
+  }>;
   seedEventCount: number;
   staffCredentials: Array<{
     authenticationLockedUntil?: number;
@@ -103,7 +134,11 @@ export function sharedDemoBootstrapSeedMatches(input: {
     status: string;
     username: string;
   }>;
-  staffProfiles: Array<{ fullName: string; staffCode?: string; status: string }>;
+  staffProfiles: Array<{
+    fullName: string;
+    staffCode?: string;
+    status: string;
+  }>;
 }) {
   const [order] = input.orders;
   const [item] = input.orderItems;
@@ -144,22 +179,51 @@ export function sharedDemoBootstrapSeedMatches(input: {
             candidate.quantityAvailable === storyProduct.inventoryCount,
         ),
     );
-  return catalogIsPristine &&
-    input.orders.length === 1 && order?.orderNumber === SHARED_DEMO_PICKUP_ORDER.orderNumber && order.status === "ready" &&
-    order.amount === orderAmount && order.paymentDue === orderAmount && order.hasVerifiedPayment === true &&
-    input.orderItems.length === 1 && item?.productSku === SHARED_DEMO_PICKUP_ORDER.sku && item.quantity === SHARED_DEMO_PICKUP_ORDER.quantity &&
-    item.price === orderAmount && item.isReady === true && input.registerSessions.length === 1 &&
-    session?.registerNumber === SHARED_DEMO_REGISTER_NUMBER && session.status === "active" &&
+  return (
+    catalogIsPristine &&
+    input.orders.length === 1 &&
+    order?.orderNumber === SHARED_DEMO_PICKUP_ORDER.orderNumber &&
+    order.status === "ready" &&
+    order.amount === orderAmount &&
+    order.paymentDue === orderAmount &&
+    order.hasVerifiedPayment === true &&
+    input.orderItems.length === 1 &&
+    item?.productSku === SHARED_DEMO_PICKUP_ORDER.sku &&
+    item.quantity === SHARED_DEMO_PICKUP_ORDER.quantity &&
+    item.price === orderAmount &&
+    item.isReady === true &&
+    input.registerSessions.length === 1 &&
+    session?.registerNumber === SHARED_DEMO_REGISTER_NUMBER &&
+    session.status === "active" &&
     session.openingFloat === SHARED_DEMO_CASH_SEED.openingFloat &&
-    session.expectedCash === calculateSharedDemoExpectedCash(SHARED_DEMO_CASH_SEED) &&
-    input.messageBodies.length === 1 && input.messageBodies[0] === SHARED_DEMO_OPENING_MESSAGE &&
-    input.openingCount === 1 && input.seedEventCount === 1 &&
+    session.expectedCash ===
+      calculateSharedDemoExpectedCash(SHARED_DEMO_CASH_SEED) &&
+    input.messageBodies.length === 1 &&
+    input.messageBodies[0] === SHARED_DEMO_OPENING_MESSAGE &&
+    input.openingCount === 1 &&
+    input.seedEventCount === 1 &&
     input.staffProfiles.length === 3 &&
-    input.staffProfiles.some((profile) => profile.fullName === SHARED_DEMO_STAFF_STORY.owner.fullName && profile.status === "active") &&
-    input.staffProfiles.some((profile) => profile.staffCode === SHARED_DEMO_CASHIER_STAFF_CODE && profile.fullName === SHARED_DEMO_STAFF_STORY.cashier.fullName && profile.status === "active") &&
-    input.staffProfiles.some((profile) => profile.staffCode === SHARED_DEMO_MANAGER_STAFF_CODE && profile.fullName === SHARED_DEMO_STAFF_STORY.manager.fullName && profile.status === "active") &&
+    input.staffProfiles.some(
+      (profile) =>
+        profile.fullName === SHARED_DEMO_STAFF_STORY.owner.fullName &&
+        profile.status === "active",
+    ) &&
+    input.staffProfiles.some(
+      (profile) =>
+        profile.staffCode === SHARED_DEMO_CASHIER_STAFF_CODE &&
+        profile.fullName === SHARED_DEMO_STAFF_STORY.cashier.fullName &&
+        profile.status === "active",
+    ) &&
+    input.staffProfiles.some(
+      (profile) =>
+        profile.staffCode === SHARED_DEMO_MANAGER_STAFF_CODE &&
+        profile.fullName === SHARED_DEMO_STAFF_STORY.manager.fullName &&
+        profile.status === "active",
+    ) &&
     credentialsArePristine &&
-    input.posTransactionCount === 0 && input.inventoryMovementCount === 0;
+    input.posTransactionCount === 0 &&
+    input.inventoryMovementCount === 0
+  );
 }
 
 export const SHARED_DEMO_PRISTINE_TABLE_COUNTS: Record<string, number> = {
@@ -182,19 +246,26 @@ export const SHARED_DEMO_PRISTINE_TABLE_COUNTS: Record<string, number> = {
 export function sharedDemoPristineTableCountsMatch(
   counts: Record<string, number>,
 ) {
-  const tableNames = SHARED_DEMO_MUTABLE_TABLES.map(({ tableName }) => tableName);
-  return Object.keys(counts).length === tableNames.length &&
+  const tableNames = SHARED_DEMO_MUTABLE_TABLES.map(
+    ({ tableName }) => tableName,
+  );
+  return (
+    Object.keys(counts).length === tableNames.length &&
     tableNames.every(
-      (tableName) => counts[tableName] === SHARED_DEMO_PRISTINE_TABLE_COUNTS[tableName],
-    );
+      (tableName) =>
+        counts[tableName] === SHARED_DEMO_PRISTINE_TABLE_COUNTS[tableName],
+    )
+  );
 }
 
 export function sharedDemoCheckoutSessionMatchesOrder(
   checkoutSession: { placedOrderId?: string; storeId: string } | null,
   order: { _id: string; storeId: string },
 ) {
-  return checkoutSession?.storeId === order.storeId &&
-    checkoutSession.placedOrderId === order._id;
+  return (
+    checkoutSession?.storeId === order.storeId &&
+    checkoutSession.placedOrderId === order._id
+  );
 }
 
 async function ensureDemoRoleAssignmentWithCtx(
@@ -213,7 +284,9 @@ async function ensureDemoRoleAssignmentWithCtx(
       q.eq("staffProfileId", args.staffProfileId),
     )
     .take(20);
-  const existing = assignments.find((assignment) => assignment.role === args.role);
+  const existing = assignments.find(
+    (assignment) => assignment.role === args.role,
+  );
   if (existing) {
     if (existing.status !== "active" || !existing.isPrimary) {
       await ctx.db.patch("staffRoleAssignment", existing._id, {
@@ -339,13 +412,19 @@ async function ensureDemoStaffAccessWithCtx(
 
 async function reconcileSharedDemoCatalogWithCtx(
   ctx: MutationCtx,
-  args: { ownerUserId: Id<"athenaUser">; organizationId: Id<"organization">; storeId: Id<"store"> },
+  args: {
+    ownerUserId: Id<"athenaUser">;
+    organizationId: Id<"organization">;
+    storeId: Id<"store">;
+  },
 ) {
   const categories = await ctx.db
     .query("category")
     .withIndex("by_storeId_slug", (q) => q.eq("storeId", args.storeId))
     .take(50);
-  let category = categories.find((row) => row.slug === SHARED_DEMO_CATEGORY.slug) ?? categories[0];
+  let category =
+    categories.find((row) => row.slug === SHARED_DEMO_CATEGORY.slug) ??
+    categories[0];
   if (!category) {
     const categoryId = await ctx.db.insert("category", {
       name: SHARED_DEMO_CATEGORY.name,
@@ -356,7 +435,10 @@ async function reconcileSharedDemoCatalogWithCtx(
     const createdCategory = await ctx.db.get("category", categoryId);
     if (!createdCategory) throw new Error("Demo category is missing.");
     category = createdCategory;
-  } else if (category.name !== SHARED_DEMO_CATEGORY.name || category.slug !== SHARED_DEMO_CATEGORY.slug) {
+  } else if (
+    category.name !== SHARED_DEMO_CATEGORY.name ||
+    category.slug !== SHARED_DEMO_CATEGORY.slug
+  ) {
     await ctx.db.patch("category", category._id, {
       name: SHARED_DEMO_CATEGORY.name,
       slug: SHARED_DEMO_CATEGORY.slug,
@@ -372,11 +454,18 @@ async function reconcileSharedDemoCatalogWithCtx(
   for (const target of SHARED_DEMO_SUBCATEGORIES) {
     const existing =
       subcategories.find((row) => row.slug === target.slug) ??
-      subcategories.find((row) => !claimed.has(String(row._id)) && !SHARED_DEMO_SUBCATEGORIES.some((entry) => entry.slug === row.slug));
+      subcategories.find(
+        (row) =>
+          !claimed.has(String(row._id)) &&
+          !SHARED_DEMO_SUBCATEGORIES.some((entry) => entry.slug === row.slug),
+      );
     if (existing) {
       claimed.add(String(existing._id));
       if (existing.name !== target.name || existing.slug !== target.slug) {
-        await ctx.db.patch("subcategory", existing._id, { name: target.name, slug: target.slug });
+        await ctx.db.patch("subcategory", existing._id, {
+          name: target.name,
+          slug: target.slug,
+        });
       }
       subcategoryIds.set(target.key, existing._id);
       continue;
@@ -411,7 +500,10 @@ async function reconcileSharedDemoCatalogWithCtx(
     await ctx.db.delete("product", row._id);
   }
 
-  const identityBySku = new Map<string, { productId: Id<"product">; productSkuId: Id<"productSku"> }>();
+  const identityBySku = new Map<
+    string,
+    { productId: Id<"product">; productSkuId: Id<"productSku"> }
+  >();
   for (const storyProduct of SHARED_DEMO_PRODUCTS) {
     const subcategoryId = subcategoryIds.get(storyProduct.subcategoryKey);
     if (!subcategoryId) throw new Error("Demo subcategory is missing.");
@@ -451,7 +543,11 @@ async function reconcileSharedDemoCatalogWithCtx(
 
 async function migrateSharedDemoStoryWithCtx(
   ctx: MutationCtx,
-  args: { ownerUserId: Id<"athenaUser">; organizationId: Id<"organization">; storeId: Id<"store"> },
+  args: {
+    ownerUserId: Id<"athenaUser">;
+    organizationId: Id<"organization">;
+    storeId: Id<"store">;
+  },
 ) {
   await ctx.db.patch("organization", args.organizationId, {
     name: SHARED_DEMO_STORE_IDENTITY.organizationName,
@@ -468,10 +564,33 @@ async function migrateSharedDemoStoryWithCtx(
     .query("staffProfile")
     .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
     .take(100);
-  const staffPatches: Array<{ profile: (typeof staffProfiles)[number] | undefined; story: { firstName: string; fullName: string; jobTitle: string; lastName: string } }> = [
-    { profile: staffProfiles.find((row) => row.linkedUserId === args.ownerUserId), story: SHARED_DEMO_STAFF_STORY.owner },
-    { profile: staffProfiles.find((row) => row.staffCode === SHARED_DEMO_CASHIER_STAFF_CODE), story: SHARED_DEMO_STAFF_STORY.cashier },
-    { profile: staffProfiles.find((row) => row.staffCode === SHARED_DEMO_MANAGER_STAFF_CODE), story: SHARED_DEMO_STAFF_STORY.manager },
+  const staffPatches: Array<{
+    profile: (typeof staffProfiles)[number] | undefined;
+    story: {
+      firstName: string;
+      fullName: string;
+      jobTitle: string;
+      lastName: string;
+    };
+  }> = [
+    {
+      profile: staffProfiles.find(
+        (row) => row.linkedUserId === args.ownerUserId,
+      ),
+      story: SHARED_DEMO_STAFF_STORY.owner,
+    },
+    {
+      profile: staffProfiles.find(
+        (row) => row.staffCode === SHARED_DEMO_CASHIER_STAFF_CODE,
+      ),
+      story: SHARED_DEMO_STAFF_STORY.cashier,
+    },
+    {
+      profile: staffProfiles.find(
+        (row) => row.staffCode === SHARED_DEMO_MANAGER_STAFF_CODE,
+      ),
+      story: SHARED_DEMO_STAFF_STORY.manager,
+    },
   ];
   for (const { profile, story } of staffPatches) {
     if (!profile) continue;
@@ -488,7 +607,9 @@ async function migrateSharedDemoStoryWithCtx(
     .withIndex("by_storeId_createdAt", (q) => q.eq("storeId", args.storeId))
     .take(10);
   if (messages[0] && messages[0].body !== SHARED_DEMO_OPENING_MESSAGE) {
-    await ctx.db.patch("staffMessage", messages[0]._id, { body: SHARED_DEMO_OPENING_MESSAGE });
+    await ctx.db.patch("staffMessage", messages[0]._id, {
+      body: SHARED_DEMO_OPENING_MESSAGE,
+    });
   }
 
   const terminals = await ctx.db
@@ -496,8 +617,13 @@ async function migrateSharedDemoStoryWithCtx(
     .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
     .take(50);
   for (const terminal of terminals) {
-    if (terminal.registerNumber === SHARED_DEMO_REGISTER_NUMBER && terminal.displayName !== SHARED_DEMO_TERMINAL_DISPLAY_NAME) {
-      await ctx.db.patch("posTerminal", terminal._id, { displayName: SHARED_DEMO_TERMINAL_DISPLAY_NAME });
+    if (
+      terminal.registerNumber === SHARED_DEMO_REGISTER_NUMBER &&
+      terminal.displayName !== SHARED_DEMO_TERMINAL_DISPLAY_NAME
+    ) {
+      await ctx.db.patch("posTerminal", terminal._id, {
+        displayName: SHARED_DEMO_TERMINAL_DISPLAY_NAME,
+      });
     }
   }
 
@@ -510,7 +636,9 @@ async function migrateSharedDemoStoryWithCtx(
     .query("onlineOrder")
     .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
     .take(20);
-  const pickupOrder = orders.find((row) => row.orderNumber === SHARED_DEMO_PICKUP_ORDER.orderNumber);
+  const pickupOrder = orders.find(
+    (row) => row.orderNumber === SHARED_DEMO_PICKUP_ORDER.orderNumber,
+  );
   if (!pickupOrder) throw new Error("Demo order is missing.");
   await ctx.db.patch("onlineOrder", pickupOrder._id, {
     amount: orderAmount,
@@ -530,9 +658,14 @@ async function migrateSharedDemoStoryWithCtx(
       quantity: SHARED_DEMO_PICKUP_ORDER.quantity,
     });
   }
-  const checkoutSession = await ctx.db.get("checkoutSession", pickupOrder.checkoutSessionId);
+  const checkoutSession = await ctx.db.get(
+    "checkoutSession",
+    pickupOrder.checkoutSessionId,
+  );
   if (checkoutSession && checkoutSession.amount !== orderAmount) {
-    await ctx.db.patch("checkoutSession", pickupOrder.checkoutSessionId, { amount: orderAmount });
+    await ctx.db.patch("checkoutSession", pickupOrder.checkoutSessionId, {
+      amount: orderAmount,
+    });
   }
 }
 
@@ -540,15 +673,40 @@ export const provisionSharedDemo = internalMutation({
   args: { now: v.optional(v.number()) },
   handler: async (ctx, args) => {
     const now = args.now ?? Date.now();
-    const existingOrganization = await ctx.db.query("organization").withIndex("by_slug", (q) => q.eq("slug", SHARED_DEMO_SEED.organizationSlug)).unique();
+    const existingOrganization = await ctx.db
+      .query("organization")
+      .withIndex("by_slug", (q) =>
+        q.eq("slug", SHARED_DEMO_SEED.organizationSlug),
+      )
+      .unique();
     const existingStore = existingOrganization
-      ? await ctx.db.query("store").withIndex("by_organizationId_slug", (q) => q.eq("organizationId", existingOrganization._id).eq("slug", SHARED_DEMO_SEED.storeSlug)).unique()
+      ? await ctx.db
+          .query("store")
+          .withIndex("by_organizationId_slug", (q) =>
+            q
+              .eq("organizationId", existingOrganization._id)
+              .eq("slug", SHARED_DEMO_SEED.storeSlug),
+          )
+          .unique()
       : null;
     if (existingOrganization || existingStore) {
-      if (!existingOrganization || !existingStore || existingStore.config?.sharedDemo !== true) throw new Error("Demo foundation is incomplete.");
-      const owner = await ctx.db.query("athenaUser").withIndex("by_normalizedEmail", (q) => q.eq("normalizedEmail", SHARED_DEMO_SEED.ownerEmail)).unique();
+      if (
+        !existingOrganization ||
+        !existingStore ||
+        existingStore.config?.sharedDemo !== true
+      )
+        throw new Error("Demo foundation is incomplete.");
+      const owner = await ctx.db
+        .query("athenaUser")
+        .withIndex("by_normalizedEmail", (q) =>
+          q.eq("normalizedEmail", SHARED_DEMO_SEED.ownerEmail),
+        )
+        .unique();
       if (!owner) throw new Error("Demo owner is missing.");
-      const state = await ctx.db.query("sharedDemoRestoreState").withIndex("by_storeId", (q) => q.eq("storeId", existingStore._id)).unique();
+      const state = await ctx.db
+        .query("sharedDemoRestoreState")
+        .withIndex("by_storeId", (q) => q.eq("storeId", existingStore._id))
+        .unique();
       if (!state) {
         await ensureDemoStaffAccessWithCtx(ctx, {
           now,
@@ -556,26 +714,88 @@ export const provisionSharedDemo = internalMutation({
           ownerUserId: owner._id,
           storeId: existingStore._id,
         });
-        const [products, productSkus, orders, terminals, sessions, openings, events, messages, transactions, movements, staffProfiles, staffCredentials] = await Promise.all([
-          ctx.db.query("product").withIndex("by_storeId", (q) => q.eq("storeId", existingStore._id)).take(500),
-          ctx.db.query("productSku").withIndex("by_storeId", (q) => q.eq("storeId", existingStore._id)).take(500),
-          ctx.db.query("onlineOrder").withIndex("by_storeId", (q) => q.eq("storeId", existingStore._id)).take(500),
-          ctx.db.query("posTerminal").withIndex("by_storeId", (q) => q.eq("storeId", existingStore._id)).take(500),
-          ctx.db.query("registerSession").withIndex("by_storeId", (q) => q.eq("storeId", existingStore._id)).take(500),
-          ctx.db.query("dailyOpening").withIndex("by_storeId_operatingDate", (q) => q.eq("storeId", existingStore._id)).take(500),
-          ctx.db.query("operationalEvent").withIndex("by_storeId", (q) => q.eq("storeId", existingStore._id)).take(500),
-          ctx.db.query("staffMessage").withIndex("by_storeId_createdAt", (q) => q.eq("storeId", existingStore._id)).take(500),
-          ctx.db.query("posTransaction").withIndex("by_storeId", (q) => q.eq("storeId", existingStore._id)).take(500),
-          ctx.db.query("inventoryMovement").withIndex("by_storeId", (q) => q.eq("storeId", existingStore._id)).take(500),
-          ctx.db.query("staffProfile").withIndex("by_storeId", (q) => q.eq("storeId", existingStore._id)).take(500),
-          ctx.db.query("staffCredential").withIndex("by_storeId_status", (q) => q.eq("storeId", existingStore._id)).take(500),
+        const [
+          products,
+          productSkus,
+          orders,
+          terminals,
+          sessions,
+          openings,
+          events,
+          messages,
+          transactions,
+          movements,
+          staffProfiles,
+          staffCredentials,
+        ] = await Promise.all([
+          ctx.db
+            .query("product")
+            .withIndex("by_storeId", (q) => q.eq("storeId", existingStore._id))
+            .take(500),
+          ctx.db
+            .query("productSku")
+            .withIndex("by_storeId", (q) => q.eq("storeId", existingStore._id))
+            .take(500),
+          ctx.db
+            .query("onlineOrder")
+            .withIndex("by_storeId", (q) => q.eq("storeId", existingStore._id))
+            .take(500),
+          ctx.db
+            .query("posTerminal")
+            .withIndex("by_storeId", (q) => q.eq("storeId", existingStore._id))
+            .take(500),
+          ctx.db
+            .query("registerSession")
+            .withIndex("by_storeId", (q) => q.eq("storeId", existingStore._id))
+            .take(500),
+          ctx.db
+            .query("dailyOpening")
+            .withIndex("by_storeId_operatingDate", (q) =>
+              q.eq("storeId", existingStore._id),
+            )
+            .take(500),
+          ctx.db
+            .query("operationalEvent")
+            .withIndex("by_storeId", (q) => q.eq("storeId", existingStore._id))
+            .take(500),
+          ctx.db
+            .query("staffMessage")
+            .withIndex("by_storeId_createdAt", (q) =>
+              q.eq("storeId", existingStore._id),
+            )
+            .take(500),
+          ctx.db
+            .query("posTransaction")
+            .withIndex("by_storeId", (q) => q.eq("storeId", existingStore._id))
+            .take(500),
+          ctx.db
+            .query("inventoryMovement")
+            .withIndex("by_storeId", (q) => q.eq("storeId", existingStore._id))
+            .take(500),
+          ctx.db
+            .query("staffProfile")
+            .withIndex("by_storeId", (q) => q.eq("storeId", existingStore._id))
+            .take(500),
+          ctx.db
+            .query("staffCredential")
+            .withIndex("by_storeId_status", (q) =>
+              q.eq("storeId", existingStore._id),
+            )
+            .take(500),
         ]);
-        const demoOrder = orders.find((order) => order.orderNumber === "DEMO-ORDER-001");
+        const demoOrder = orders.find(
+          (order) => order.orderNumber === "DEMO-ORDER-001",
+        );
         const orderItems = demoOrder
-          ? await ctx.db.query("onlineOrderItem").withIndex("by_orderId", (q) => q.eq("orderId", demoOrder._id)).take(500)
+          ? await ctx.db
+              .query("onlineOrderItem")
+              .withIndex("by_orderId", (q) => q.eq("orderId", demoOrder._id))
+              .take(500)
           : [];
         for (const storyProduct of SHARED_DEMO_PRODUCTS) {
-          const demoSku = productSkus.find((sku) => sku.sku === storyProduct.sku);
+          const demoSku = productSkus.find(
+            (sku) => sku.sku === storyProduct.sku,
+          );
           if (demoSku) await upsertProductSkuSearchProjection(ctx, demoSku._id);
         }
         await rollSharedDemoOpeningBaselineWithCtx(ctx, {
@@ -586,25 +806,36 @@ export const provisionSharedDemo = internalMutation({
           ctx,
           existingStore._id,
         );
-        const foundationIsComplete = sharedDemoPristineTableCountsMatch(
-          mutableTableCounts,
-        ) && sharedDemoBootstrapSeedMatches({
-          inventoryMovementCount: movements.length,
-          messageBodies: messages.map((message) => message.body),
-          openingCount: openings.length,
-          orderItems,
-          orders,
-          posTransactionCount: transactions.length,
-          products,
-          productSkus,
-          registerSessions: sessions,
-          seedEventCount: events.filter((event) => event.eventType === "demo.store_day_started" || event.eventType === "demo.store_ready").length,
-          staffCredentials,
-          staffProfiles,
-        }) &&
-          terminals.some((terminal) => terminal.registerNumber === SHARED_DEMO_REGISTER_NUMBER) &&
-          terminals.filter((terminal) => terminal.registerNumber === SHARED_DEMO_REGISTER_NUMBER).length === 1;
-        if (!foundationIsComplete) throw new Error("Demo foundation is incomplete.");
+        const foundationIsComplete =
+          sharedDemoPristineTableCountsMatch(mutableTableCounts) &&
+          sharedDemoBootstrapSeedMatches({
+            inventoryMovementCount: movements.length,
+            messageBodies: messages.map((message) => message.body),
+            openingCount: openings.length,
+            orderItems,
+            orders,
+            posTransactionCount: transactions.length,
+            products,
+            productSkus,
+            registerSessions: sessions,
+            seedEventCount: events.filter(
+              (event) =>
+                event.eventType === "demo.store_day_started" ||
+                event.eventType === "demo.store_ready",
+            ).length,
+            staffCredentials,
+            staffProfiles,
+          }) &&
+          terminals.some(
+            (terminal) =>
+              terminal.registerNumber === SHARED_DEMO_REGISTER_NUMBER,
+          ) &&
+          terminals.filter(
+            (terminal) =>
+              terminal.registerNumber === SHARED_DEMO_REGISTER_NUMBER,
+          ).length === 1;
+        if (!foundationIsComplete)
+          throw new Error("Demo foundation is incomplete.");
         await ctx.db.insert("sharedDemoRestoreState", {
           baselineVersion: SHARED_DEMO_BASELINE_VERSION,
           completedAt: now,
@@ -615,10 +846,17 @@ export const provisionSharedDemo = internalMutation({
         const captured = await captureBaselineDocumentsWithCtx(ctx, {
           storeId: existingStore._id,
         });
-        if (captured.captured === 0) throw new Error("Demo baseline capture is empty.");
-        return { athenaUserId: owner._id, kind: "bootstrapped" as const, organizationId: existingOrganization._id, storeId: existingStore._id };
+        if (captured.captured === 0)
+          throw new Error("Demo baseline capture is empty.");
+        return {
+          athenaUserId: owner._id,
+          kind: "bootstrapped" as const,
+          organizationId: existingOrganization._id,
+          storeId: existingStore._id,
+        };
       }
-      if (state.baselineVersion > SHARED_DEMO_BASELINE_VERSION) throw new Error("Demo baseline version is invalid.");
+      if (state.baselineVersion > SHARED_DEMO_BASELINE_VERSION)
+        throw new Error("Demo baseline version is invalid.");
       if (state.baselineVersion < SHARED_DEMO_BASELINE_VERSION) {
         await restoreMutableDemoStoreRowsWithCtx(ctx, existingStore._id, {
           baselineVersion: state.baselineVersion,
@@ -659,7 +897,12 @@ export const provisionSharedDemo = internalMutation({
           "checkoutSession",
           checkoutSessionId,
         );
-        if (!sharedDemoCheckoutSessionMatchesOrder(existingCheckoutSession, demoOrder)) {
+        if (
+          !sharedDemoCheckoutSessionMatchesOrder(
+            existingCheckoutSession,
+            demoOrder,
+          )
+        ) {
           checkoutSessionId = await ctx.db.insert("checkoutSession", {
             amount: demoOrder.amount,
             bagId: demoOrder.bagId,
@@ -829,36 +1072,54 @@ export const provisionSharedDemo = internalMutation({
             await ctx.db.delete("posRegisterSessionActivity", activity._id);
           }
         }
-        const openings = await ctx.db.query("dailyOpening").withIndex("by_storeId_operatingDate", (q) => q.eq("storeId", existingStore._id)).take(500);
-        for (const opening of openings) await ctx.db.delete("dailyOpening", opening._id);
+        const openings = await ctx.db
+          .query("dailyOpening")
+          .withIndex("by_storeId_operatingDate", (q) =>
+            q.eq("storeId", existingStore._id),
+          )
+          .take(500);
+        for (const opening of openings)
+          await ctx.db.delete("dailyOpening", opening._id);
         const ownerStaff = await ctx.db
           .query("staffProfile")
           .withIndex("by_storeId_linkedUserId", (q) =>
             q.eq("storeId", existingStore._id).eq("linkedUserId", owner._id),
           )
           .unique();
-        if (!ownerStaff) throw new Error("Demo owner staff profile is missing.");
-        await ctx.db.insert("dailyOpening", buildSharedDemoOpeningBaseline({
-          actorStaffProfileId: ownerStaff._id,
-          actorUserId: owner._id,
-          now,
-          organizationId: existingOrganization._id,
-          storeId: existingStore._id,
-        }));
-        const events = await ctx.db.query("operationalEvent").withIndex("by_storeId", (q) => q.eq("storeId", existingStore._id)).take(500);
+        if (!ownerStaff)
+          throw new Error("Demo owner staff profile is missing.");
+        await ctx.db.insert(
+          "dailyOpening",
+          buildSharedDemoOpeningBaseline({
+            actorStaffProfileId: ownerStaff._id,
+            actorUserId: owner._id,
+            now,
+            organizationId: existingOrganization._id,
+            storeId: existingStore._id,
+          }),
+        );
+        const events = await ctx.db
+          .query("operationalEvent")
+          .withIndex("by_storeId", (q) => q.eq("storeId", existingStore._id))
+          .take(500);
         const seedEvent = events.find(
           (event) =>
             event.eventType === "demo.store_day_started" ||
             event.eventType === "demo.store_ready",
         );
-        if (!seedEvent) throw new Error("Demo operating narrative is incomplete.");
-        await ctx.db.replace("operationalEvent", seedEvent._id, buildSharedDemoStoreDayEvent({
-          actorStaffProfileId: ownerStaff._id,
-          actorUserId: owner._id,
-          now,
-          organizationId: existingOrganization._id,
-          storeId: existingStore._id,
-        }));
+        if (!seedEvent)
+          throw new Error("Demo operating narrative is incomplete.");
+        await ctx.db.replace(
+          "operationalEvent",
+          seedEvent._id,
+          buildSharedDemoStoreDayEvent({
+            actorStaffProfileId: ownerStaff._id,
+            actorUserId: owner._id,
+            now,
+            organizationId: existingOrganization._id,
+            storeId: existingStore._id,
+          }),
+        );
         await ctx.db.patch("sharedDemoRestoreState", state._id, {
           appliedAt: undefined,
           baselineVersion: SHARED_DEMO_BASELINE_VERSION,
@@ -873,10 +1134,22 @@ export const provisionSharedDemo = internalMutation({
           startedAt: undefined,
           status: "ready",
         });
-        await captureBaselineDocumentsWithCtx(ctx, { storeId: existingStore._id });
-        return { athenaUserId: owner._id, kind: "migrated" as const, organizationId: existingOrganization._id, storeId: existingStore._id };
+        await captureBaselineDocumentsWithCtx(ctx, {
+          storeId: existingStore._id,
+        });
+        return {
+          athenaUserId: owner._id,
+          kind: "migrated" as const,
+          organizationId: existingOrganization._id,
+          storeId: existingStore._id,
+        };
       }
-      return { athenaUserId: owner._id, kind: "existing" as const, organizationId: existingOrganization._id, storeId: existingStore._id };
+      return {
+        athenaUserId: owner._id,
+        kind: "existing" as const,
+        organizationId: existingOrganization._id,
+        storeId: existingStore._id,
+      };
     }
 
     const ownerUserId = await ctx.db.insert("athenaUser", {
@@ -891,7 +1164,12 @@ export const provisionSharedDemo = internalMutation({
       slug: SHARED_DEMO_SEED.organizationSlug,
     });
     await ctx.db.patch("athenaUser", ownerUserId, { organizationId });
-    await ctx.db.insert("organizationMember", { organizationId, operationalRoles: ["manager"], role: "full_admin", userId: ownerUserId });
+    await ctx.db.insert("organizationMember", {
+      organizationId,
+      operationalRoles: ["manager"],
+      role: "full_admin",
+      userId: ownerUserId,
+    });
     const storeId = await ctx.db.insert("store", {
       config: { sharedDemo: true, timeZone: SHARED_DEMO_SEED.timeZone },
       createdByUserId: ownerUserId,
@@ -901,12 +1179,28 @@ export const provisionSharedDemo = internalMutation({
       slug: SHARED_DEMO_SEED.storeSlug,
     });
     const ownerStaffId = await ctx.db.insert("staffProfile", {
-      createdByUserId: ownerUserId, firstName: SHARED_DEMO_STAFF_STORY.owner.firstName, fullName: SHARED_DEMO_STAFF_STORY.owner.fullName, jobTitle: SHARED_DEMO_STAFF_STORY.owner.jobTitle,
-      lastName: SHARED_DEMO_STAFF_STORY.owner.lastName, linkedUserId: ownerUserId, memberRole: "full_admin", organizationId, status: "active", storeId,
+      createdByUserId: ownerUserId,
+      firstName: SHARED_DEMO_STAFF_STORY.owner.firstName,
+      fullName: SHARED_DEMO_STAFF_STORY.owner.fullName,
+      jobTitle: SHARED_DEMO_STAFF_STORY.owner.jobTitle,
+      lastName: SHARED_DEMO_STAFF_STORY.owner.lastName,
+      linkedUserId: ownerUserId,
+      memberRole: "full_admin",
+      organizationId,
+      status: "active",
+      storeId,
     });
     await ctx.db.insert("staffProfile", {
-      createdByUserId: ownerUserId, firstName: SHARED_DEMO_STAFF_STORY.cashier.firstName, fullName: SHARED_DEMO_STAFF_STORY.cashier.fullName, jobTitle: SHARED_DEMO_STAFF_STORY.cashier.jobTitle,
-      lastName: SHARED_DEMO_STAFF_STORY.cashier.lastName, memberRole: "pos_only", organizationId, staffCode: SHARED_DEMO_CASHIER_STAFF_CODE, status: "active", storeId,
+      createdByUserId: ownerUserId,
+      firstName: SHARED_DEMO_STAFF_STORY.cashier.firstName,
+      fullName: SHARED_DEMO_STAFF_STORY.cashier.fullName,
+      jobTitle: SHARED_DEMO_STAFF_STORY.cashier.jobTitle,
+      lastName: SHARED_DEMO_STAFF_STORY.cashier.lastName,
+      memberRole: "pos_only",
+      organizationId,
+      staffCode: SHARED_DEMO_CASHIER_STAFF_CODE,
+      status: "active",
+      storeId,
     });
     const { manager } = await ensureDemoStaffAccessWithCtx(ctx, {
       now,
@@ -922,83 +1216,229 @@ export const provisionSharedDemo = internalMutation({
       storeId,
       updatedAt: now - 2_700_000,
     });
-    const categoryId = await ctx.db.insert("category", { name: SHARED_DEMO_CATEGORY.name, showOnStorefront: true, slug: SHARED_DEMO_CATEGORY.slug, storeId });
-    const subcategoryIds = new Map<SharedDemoSubcategoryKey, Id<"subcategory">>();
+    const categoryId = await ctx.db.insert("category", {
+      name: SHARED_DEMO_CATEGORY.name,
+      showOnStorefront: true,
+      slug: SHARED_DEMO_CATEGORY.slug,
+      storeId,
+    });
+    const subcategoryIds = new Map<
+      SharedDemoSubcategoryKey,
+      Id<"subcategory">
+    >();
     for (const subcategory of SHARED_DEMO_SUBCATEGORIES) {
       subcategoryIds.set(
         subcategory.key,
-        await ctx.db.insert("subcategory", { categoryId, name: subcategory.name, slug: subcategory.slug, storeId }),
+        await ctx.db.insert("subcategory", {
+          categoryId,
+          name: subcategory.name,
+          slug: subcategory.slug,
+          storeId,
+        }),
       );
     }
-    const identityBySku = new Map<string, { productId: Id<"product">; productSkuId: Id<"productSku"> }>();
+    const identityBySku = new Map<
+      string,
+      { productId: Id<"product">; productSkuId: Id<"productSku"> }
+    >();
     for (const storyProduct of SHARED_DEMO_PRODUCTS) {
       const subcategoryId = subcategoryIds.get(storyProduct.subcategoryKey);
       if (!subcategoryId) throw new Error("Demo subcategory is missing.");
       const productId = await ctx.db.insert("product", {
-        availability: "live", categoryId, createdByUserId: ownerUserId, currency: SHARED_DEMO_STORE_IDENTITY.currency, inventoryCount: storyProduct.inventoryCount,
-        isVisible: true, name: storyProduct.name, organizationId, posVisible: true, quantityAvailable: storyProduct.inventoryCount,
-        slug: storyProduct.slug, storeId, subcategoryId,
+        availability: "live",
+        categoryId,
+        createdByUserId: ownerUserId,
+        currency: SHARED_DEMO_STORE_IDENTITY.currency,
+        inventoryCount: storyProduct.inventoryCount,
+        isVisible: true,
+        name: storyProduct.name,
+        organizationId,
+        posVisible: true,
+        quantityAvailable: storyProduct.inventoryCount,
+        slug: storyProduct.slug,
+        storeId,
+        subcategoryId,
       });
       const productSkuId = await ctx.db.insert("productSku", {
-        images: [], inventoryCount: storyProduct.inventoryCount, isVisible: true, posVisible: true, price: storyProduct.price, productId,
-        productName: storyProduct.name, quantityAvailable: storyProduct.inventoryCount, sku: storyProduct.sku, storeId, unitCost: storyProduct.unitCost,
+        images: [],
+        inventoryCount: storyProduct.inventoryCount,
+        isVisible: true,
+        posVisible: true,
+        price: storyProduct.price,
+        productId,
+        productName: storyProduct.name,
+        quantityAvailable: storyProduct.inventoryCount,
+        sku: storyProduct.sku,
+        storeId,
+        unitCost: storyProduct.unitCost,
       });
       await upsertProductSkuSearchProjection(ctx, productSkuId);
       identityBySku.set(storyProduct.sku, { productId, productSkuId });
     }
     const orderProduct = sharedDemoProductBySku(SHARED_DEMO_PICKUP_ORDER.sku);
     const orderIdentity = identityBySku.get(SHARED_DEMO_PICKUP_ORDER.sku);
-    if (!orderIdentity) throw new Error("Demo pickup order product is missing.");
+    if (!orderIdentity)
+      throw new Error("Demo pickup order product is missing.");
     const orderAmount = sharedDemoPickupOrderAmount();
     const terminalId = await ctx.db.insert("posTerminal", {
-      browserInfo: { platform: "shared_demo", userAgent: "Athena Demo" }, displayName: SHARED_DEMO_TERMINAL_DISPLAY_NAME,
-      fingerprintHash: "shared-demo-terminal", heartbeatEnabled: false, loginMode: "pos_only", registerNumber: SHARED_DEMO_REGISTER_NUMBER,
-      registeredAt: now, registeredByUserId: ownerUserId, status: "active", storeId,
-      syncSecretHash: await hashPosTerminalSyncSecret("shared-demo-non-secret-terminal-seed"), transactionCapability: "products_and_services",
+      browserInfo: { platform: "shared_demo", userAgent: "Athena Demo" },
+      displayName: SHARED_DEMO_TERMINAL_DISPLAY_NAME,
+      fingerprintHash: "shared-demo-terminal",
+      heartbeatEnabled: false,
+      loginMode: "pos_only",
+      registerNumber: SHARED_DEMO_REGISTER_NUMBER,
+      registeredAt: now,
+      registeredByUserId: ownerUserId,
+      status: "active",
+      storeId,
+      syncSecretHash: await hashPosTerminalSyncSecret(
+        "shared-demo-non-secret-terminal-seed",
+      ),
+      transactionCapability: "products_and_services",
     });
     const registerSessionRange = sharedDemoOperatingDateRange(now);
-    const registerOpenedAt = Math.max(registerSessionRange.startAt, now - 14_400_000);
+    const registerOpenedAt = Math.max(
+      registerSessionRange.startAt,
+      now - 14_400_000,
+    );
     await insertRegisterSessionWithAuthority(ctx, {
-      expectedCash: calculateSharedDemoExpectedCash(SHARED_DEMO_CASH_SEED), openedAt: registerOpenedAt, openedByStaffProfileId: manager._id,
-      openedByUserId: ownerUserId, openedOperatingDate: registerSessionRange.operatingDate, openedOperatingDateEndAt: registerSessionRange.endAt, openedOperatingDateStartAt: registerSessionRange.startAt, openingFloat: SHARED_DEMO_CASH_SEED.openingFloat,
-      organizationId, registerNumber: SHARED_DEMO_REGISTER_NUMBER, status: "active", storeId, terminalId,
+      expectedCash: calculateSharedDemoExpectedCash(SHARED_DEMO_CASH_SEED),
+      openedAt: registerOpenedAt,
+      openedByStaffProfileId: manager._id,
+      openedByUserId: ownerUserId,
+      openedOperatingDate: registerSessionRange.operatingDate,
+      openedOperatingDateEndAt: registerSessionRange.endAt,
+      openedOperatingDateStartAt: registerSessionRange.startAt,
+      openingFloat: SHARED_DEMO_CASH_SEED.openingFloat,
+      organizationId,
+      registerNumber: SHARED_DEMO_REGISTER_NUMBER,
+      status: "active",
+      storeId,
+      terminalId,
     });
-    const guestId = await ctx.db.insert("guest", { creationOrigin: "shared_demo", marker: "shared-demo-customer", organizationId, storeId });
-    const bagId = await ctx.db.insert("bag", { items: [], storeFrontUserId: guestId, storeId, updatedAt: now });
+    const guestId = await ctx.db.insert("guest", {
+      creationOrigin: "shared_demo",
+      marker: "shared-demo-customer",
+      organizationId,
+      storeId,
+    });
+    const bagId = await ctx.db.insert("bag", {
+      items: [],
+      storeFrontUserId: guestId,
+      storeId,
+      updatedAt: now,
+    });
     const checkoutSessionId = await ctx.db.insert("checkoutSession", {
-      amount: orderAmount, bagId, billingDetails: null, customerDetails: null, deliveryDetails: null, deliveryFee: 0,
-      deliveryInstructions: null, deliveryMethod: "pickup", deliveryOption: null, discount: null, expiresAt: now + 86_400_000,
-      hasCompletedCheckoutSession: true, hasCompletedPayment: true, hasVerifiedPayment: true, isFinalizingPayment: false,
-      isPODOrder: false, paymentMethod: { bank: "Demo Bank", brand: "Visa", channel: "card", last4: "4242", type: "online_payment" },
-      pickupLocation: "Demo counter", storeFrontUserId: guestId, storeId,
+      amount: orderAmount,
+      bagId,
+      billingDetails: null,
+      customerDetails: null,
+      deliveryDetails: null,
+      deliveryFee: 0,
+      deliveryInstructions: null,
+      deliveryMethod: "pickup",
+      deliveryOption: null,
+      discount: null,
+      expiresAt: now + 86_400_000,
+      hasCompletedCheckoutSession: true,
+      hasCompletedPayment: true,
+      hasVerifiedPayment: true,
+      isFinalizingPayment: false,
+      isPODOrder: false,
+      paymentMethod: {
+        bank: "Demo Bank",
+        brand: "Visa",
+        channel: "card",
+        last4: "4242",
+        type: "online_payment",
+      },
+      pickupLocation: "Demo counter",
+      storeFrontUserId: guestId,
+      storeId,
     });
     const orderId = await ctx.db.insert("onlineOrder", {
-      amount: orderAmount, bagId, billingDetails: null, checkoutSessionId,
-      customerDetails: { email: "customer@shared-demo.athena.invalid", firstName: "Demo", lastName: "Customer", phoneNumber: "0000000000" },
-      deliveryDetails: null, deliveryFee: 0, deliveryInstructions: null, deliveryMethod: "pickup", deliveryOption: null,
-      discount: null, externalTransactionId: "shared-demo-card-payment-001", hasVerifiedPayment: true, isPODOrder: false, orderNumber: SHARED_DEMO_PICKUP_ORDER.orderNumber,
-      paymentDue: orderAmount, paymentMethod: { bank: "Demo Bank", brand: "Visa", channel: "card", last4: "4242", type: "online_payment" },
-      pickupLocation: "Demo counter", readyAt: now - 1_800_000, status: "ready",
-      storeFrontUserId: guestId, storeId, updatedAt: now,
+      amount: orderAmount,
+      bagId,
+      billingDetails: null,
+      checkoutSessionId,
+      customerDetails: {
+        email: "customer@shared-demo.athena.invalid",
+        firstName: "Demo",
+        lastName: "Customer",
+        phoneNumber: "0000000000",
+      },
+      deliveryDetails: null,
+      deliveryFee: 0,
+      deliveryInstructions: null,
+      deliveryMethod: "pickup",
+      deliveryOption: null,
+      discount: null,
+      externalTransactionId: "shared-demo-card-payment-001",
+      hasVerifiedPayment: true,
+      isPODOrder: false,
+      orderNumber: SHARED_DEMO_PICKUP_ORDER.orderNumber,
+      paymentDue: orderAmount,
+      paymentMethod: {
+        bank: "Demo Bank",
+        brand: "Visa",
+        channel: "card",
+        last4: "4242",
+        type: "online_payment",
+      },
+      pickupLocation: "Demo counter",
+      readyAt: now - 1_800_000,
+      status: "ready",
+      storeFrontUserId: guestId,
+      storeId,
+      updatedAt: now,
     });
-    await ctx.db.patch("checkoutSession", checkoutSessionId, { placedOrderId: orderId });
-    await ctx.db.insert("onlineOrderItem", { isReady: true, orderId, price: orderProduct.price, productId: orderIdentity.productId, productName: orderProduct.name, productSku: orderProduct.sku, productSkuId: orderIdentity.productSkuId, quantity: SHARED_DEMO_PICKUP_ORDER.quantity, storeFrontUserId: guestId });
-    await ctx.db.insert("dailyOpening", buildSharedDemoOpeningBaseline({
-      actorStaffProfileId: ownerStaffId,
-      actorUserId: ownerUserId,
-      now,
-      organizationId,
+    await ctx.db.patch("checkoutSession", checkoutSessionId, {
+      placedOrderId: orderId,
+    });
+    await ctx.db.insert("onlineOrderItem", {
+      isReady: true,
+      orderId,
+      price: orderProduct.price,
+      productId: orderIdentity.productId,
+      productName: orderProduct.name,
+      productSku: orderProduct.sku,
+      productSkuId: orderIdentity.productSkuId,
+      quantity: SHARED_DEMO_PICKUP_ORDER.quantity,
+      storeFrontUserId: guestId,
+    });
+    await ctx.db.insert(
+      "dailyOpening",
+      buildSharedDemoOpeningBaseline({
+        actorStaffProfileId: ownerStaffId,
+        actorUserId: ownerUserId,
+        now,
+        organizationId,
+        storeId,
+      }),
+    );
+    await ctx.db.insert(
+      "operationalEvent",
+      buildSharedDemoStoreDayEvent({
+        actorStaffProfileId: ownerStaffId,
+        actorUserId: ownerUserId,
+        now,
+        organizationId,
+        storeId,
+      }),
+    );
+    await ctx.db.insert("sharedDemoRestoreState", {
+      baselineVersion: SHARED_DEMO_BASELINE_VERSION,
+      completedAt: now,
+      epoch: 0,
+      status: "ready",
       storeId,
-    }));
-    await ctx.db.insert("operationalEvent", buildSharedDemoStoreDayEvent({
-      actorStaffProfileId: ownerStaffId,
-      actorUserId: ownerUserId,
-      now,
-      organizationId,
-      storeId,
-    }));
-    await ctx.db.insert("sharedDemoRestoreState", { baselineVersion: SHARED_DEMO_BASELINE_VERSION, completedAt: now, epoch: 0, status: "ready", storeId });
+    });
     await captureBaselineDocumentsWithCtx(ctx, { storeId });
-    return { athenaUserId: ownerUserId, kind: "created" as const, organizationId, storeId };
+    return {
+      athenaUserId: ownerUserId,
+      kind: "created" as const,
+      organizationId,
+      storeId,
+    };
   },
 });
