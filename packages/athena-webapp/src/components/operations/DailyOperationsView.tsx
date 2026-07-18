@@ -28,7 +28,6 @@ import {
   History,
   PackageSearch,
   RefreshCw,
-  WalletCards,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 

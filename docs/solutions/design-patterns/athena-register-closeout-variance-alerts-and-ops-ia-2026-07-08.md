@@ -8,7 +8,7 @@ problem_type: design_pattern
 component: email_processing
 resolution_type: code_fix
 severity: medium
-delivery_diff_fingerprint: 7982edd8b2ef45af2af441a78f66241ea32ee0630e1ba203dcb466afae3b94d9
+delivery_diff_fingerprint: 7809923038bcc2170cfc30e966e5856e43ad3c6d7e82ce2384c122c204831e20
 applies_when:
   - Adding operator reports for register closeout outcomes
   - Refining Daily Operations or Cash Controls surfaces around closeout review
