@@ -11,7 +11,7 @@ applies_when:
   - Shipping a broad Athena webapp change that touches Convex and operator UI surfaces
   - Changing a public Convex return validator or query projection
 tags: [convex, delivery-gates, return-contracts, graphify]
-delivery_diff_fingerprint: 7375794f82394e565b86017f3a6294e6f4d8564960308528fec07ddac624c7c9
+delivery_diff_fingerprint: a425e839aff561d3af21510129500e214489e66842d5c75d5c392c5eb2e670bb
 ---
 
 # Athena Cross-Layer Delivery Needs Bounded Reads and Contract Proof

@@ -846,9 +846,10 @@ export async function listOpenLocalSyncConflictsByRegisterSessionWithCompletenes
     0,
     syncConflictLimit,
   );
+  const cappedRejectedEvents = rejectedEventProbe.slice(0, syncConflictLimit);
   const cappedResolvedConflicts = (
     await Promise.all(
-      cappedConflictedEvents.map((event) =>
+      [...cappedConflictedEvents, ...cappedRejectedEvents].map((event) =>
         ctx.db
           .query("posLocalSyncConflict")
           .withIndex("by_store_terminal_localEvent", (q) =>
@@ -863,7 +864,6 @@ export async function listOpenLocalSyncConflictsByRegisterSessionWithCompletenes
   ).flatMap((conflicts) =>
     conflicts.filter((conflict) => conflict.status === "resolved"),
   );
-  const cappedRejectedEvents = rejectedEventProbe.slice(0, syncConflictLimit);
   const needsReviewConflicts = uniqueById([
     ...cappedNeedsReviewConflicts,
     ...targetedFacts.needsReviewConflicts,
