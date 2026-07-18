@@ -394,6 +394,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/components/homepage/ShopLookImageUploader.test.tsx`](../../src/components/homepage/ShopLookImageUploader.test.tsx)
 - [`src/components/join-team/index.test.tsx`](../../src/components/join-team/index.test.tsx)
 - [`src/components/landing/WalkthroughRequestForm.test.tsx`](../../src/components/landing/WalkthroughRequestForm.test.tsx)
+- [`src/components/landing/story/demoDay.test.ts`](../../src/components/landing/story/demoDay.test.ts)
 - [`src/components/operations/CommandApprovalDialog.test.tsx`](../../src/components/operations/CommandApprovalDialog.test.tsx)
 - [`src/components/operations/DailyCloseHistoryView.test.tsx`](../../src/components/operations/DailyCloseHistoryView.test.tsx)
 - [`src/components/operations/DailyCloseView.test.tsx`](../../src/components/operations/DailyCloseView.test.tsx)

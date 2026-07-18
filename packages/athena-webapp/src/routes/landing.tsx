@@ -10,7 +10,7 @@ export const Route = createFileRoute("/landing")({
       },
       {
         name: "description",
-        content: "See today's sales, understand what moved, and keep the history behind your business close.",
+        content: "Follow one day in an owner-led store — opening, sales, cash, and close — then walk the same day yourself in the live demo.",
       },
     ],
   }),

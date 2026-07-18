@@ -19,12 +19,12 @@ describe("shared demo public contract", () => {
       storeId: "store-1",
       staff: {
         activeRoles: ["cashier"],
-        displayName: "Ama Mensah",
+        displayName: "Efua Tetteh",
         staffProfileId: "staff-1",
       },
       terminal: {
         _id: "terminal-1",
-        displayName: "Demo Front Register",
+        displayName: "Studio Front Register",
         loginMode: "pos_only",
         registerNumber: "DEMO-01",
         status: "active",
@@ -52,7 +52,7 @@ describe("shared demo public contract", () => {
         staffProfileId: "staff-manager",
         status: "active",
       },
-      managerDisplayName: "Kofi Asante",
+      managerDisplayName: "Kwabena Osei",
       openedAt: 1,
       operatingDate: "2026-07-14",
       registerNumber: "213305",
@@ -80,7 +80,7 @@ describe("shared demo public contract", () => {
         staffProfiles: [
           {
             _id: "staff-1",
-            fullName: "Ama Mensah",
+            fullName: "Efua Tetteh",
             staffCode: "DEMO-001",
             status: "active",
             storeId: "store-1",
@@ -90,7 +90,7 @@ describe("shared demo public contract", () => {
         terminals: [
           {
             _id: "terminal-1",
-            displayName: "Demo Front Register",
+            displayName: "Studio Front Register",
             registerNumber: "DEMO-01",
             status: "active",
             storeId: "store-1",
