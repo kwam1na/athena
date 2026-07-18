@@ -14,7 +14,7 @@ applies_when:
   - Keeping demo/marketing copy in sync with the store the demo actually opens
 tags: [landing-page, demo-store, marketing, exhibits, animation, design-pattern]
 related_components: [athena-webapp, landing, sharedDemo, cash-controls, daily-operations]
-delivery_diff_fingerprint: c7a4e3d136d2322f13cd839e646481ce2848ced88453c00277a516573604a4ed
+delivery_diff_fingerprint: 69174afbe7b3d8fc842800aa953feb4ba1a0a1fe8a27b4a2c56187c8cf656552
 ---
 
 # Landing Story Told With Real Product Components As Exhibits
