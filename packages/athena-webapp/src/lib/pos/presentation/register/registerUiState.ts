@@ -310,6 +310,44 @@ export interface RegisterUpdateApplyBlockerState {
 export const REGISTER_UPDATE_APPLY_BLOCKER_PRIORITY: UpdateApplyBlockerPriority =
   "critical-workflow";
 
+/**
+ * Whether a register lifecycle-authority persistence failure should block the drawer
+ * (surface the "Drawer status not saved" gate).
+ *
+ * A `candidate_invalid` failure is transient during a drawer open: opening a replacement
+ * drawer briefly re-derives ambiguous authority candidates while the just-closed session's
+ * "current" cloud mapping and the newly opened session coexist for a render. While that open
+ * has not settled (`hasPendingOptimisticDrawerOpen` — the open is in flight, or an optimistic
+ * local session has not yet been confirmed by the projected read model), the failure is
+ * suppressed so the gate does not flash before the register reaches its ready state.
+ *
+ * Genuine failures (`write_failed`, `snapshot_invalid`, `mapping_invalidated`) always block,
+ * and a persistent `candidate_invalid` resurfaces once the open settles and this guard
+ * releases.
+ */
+export function hasBlockingAuthorityPersistenceFailure(input: {
+  hasPendingOptimisticDrawerOpen: boolean;
+  reason?:
+    | "candidate_invalid"
+    | "mapping_invalidated"
+    | "snapshot_invalid"
+    | "write_failed";
+  status: "idle" | "applying" | "ready" | "failed";
+}): boolean {
+  if (input.status !== "failed") {
+    return false;
+  }
+
+  if (
+    input.reason === "candidate_invalid" &&
+    input.hasPendingOptimisticDrawerOpen
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
 export interface RegisterOperationalIdleInput {
   hasActiveSaleWork: boolean;
   hasCheckoutMutationInFlight: boolean;

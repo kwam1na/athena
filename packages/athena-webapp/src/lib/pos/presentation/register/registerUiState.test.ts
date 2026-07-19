@@ -3,7 +3,67 @@ import { describe, expect, it } from "vitest";
 import {
   buildRegisterOperationalIdleState,
   buildRegisterUpdateApplyBlockerState,
+  hasBlockingAuthorityPersistenceFailure,
 } from "./registerUiState";
+
+describe("hasBlockingAuthorityPersistenceFailure", () => {
+  it("never blocks when persistence has not failed", () => {
+    for (const status of ["idle", "applying", "ready"] as const) {
+      expect(
+        hasBlockingAuthorityPersistenceFailure({
+          hasPendingOptimisticDrawerOpen: true,
+          status,
+        }),
+      ).toBe(false);
+    }
+  });
+
+  it("suppresses the transient candidate_invalid failure while a drawer open is pending", () => {
+    // The flash case: replacement drawer just opened, read model not yet settled.
+    expect(
+      hasBlockingAuthorityPersistenceFailure({
+        hasPendingOptimisticDrawerOpen: true,
+        reason: "candidate_invalid",
+        status: "failed",
+      }),
+    ).toBe(false);
+  });
+
+  it("surfaces candidate_invalid once the open has settled", () => {
+    expect(
+      hasBlockingAuthorityPersistenceFailure({
+        hasPendingOptimisticDrawerOpen: false,
+        reason: "candidate_invalid",
+        status: "failed",
+      }),
+    ).toBe(true);
+  });
+
+  it("never suppresses genuine persistence failures, even during a pending open", () => {
+    for (const reason of [
+      "write_failed",
+      "snapshot_invalid",
+      "mapping_invalidated",
+    ] as const) {
+      expect(
+        hasBlockingAuthorityPersistenceFailure({
+          hasPendingOptimisticDrawerOpen: true,
+          reason,
+          status: "failed",
+        }),
+      ).toBe(true);
+    }
+  });
+
+  it("blocks a failure with no reason", () => {
+    expect(
+      hasBlockingAuthorityPersistenceFailure({
+        hasPendingOptimisticDrawerOpen: true,
+        status: "failed",
+      }),
+    ).toBe(true);
+  });
+});
 
 describe("buildRegisterOperationalIdleState", () => {
   it.each([
