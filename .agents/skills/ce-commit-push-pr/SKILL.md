@@ -146,7 +146,15 @@ If the PR check returned `state: OPEN`, note the URL -- this is the existing-PR 
    )"
    ```
 
-### Step 5: Push
+### Step 5: Run merge validation, then push
+
+Run the repository's PR-equivalent validation command before pushing when this workflow is responsible for a merge-ready delivery. Resolve that command from project instructions and package scripts; prefer its ordering over an independently assembled checklist of full tests, builds, linters, or audits. Cheap prerequisite failures must surface before expensive provider suites.
+
+For Athena, the command is `bun run pr:athena` from the repository root. A current reusable proof for the exact tree may allow the repository workflow to avoid duplicate work, but a missing proof is a reason to run the command now, not to defer validation to the pre-push hook.
+
+If the PR-equivalent command fails, classify and repair the failure using the repository guidance below before attempting a push. Do not run a broad leaf suite first unless the authoritative command explicitly directs that repair.
+
+After merge validation passes:
 
 ```bash
 git push -u origin HEAD

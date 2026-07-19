@@ -5,6 +5,7 @@
 - Read [docs/agent/architecture.md](./docs/agent/architecture.md) before changing router, auth-shell, or Convex boundaries.
 - Read [docs/agent/design.md](./docs/agent/design.md) before changing Athena UI, Storybook stories, design tokens, or visual component patterns.
 - Use [docs/agent/testing.md](./docs/agent/testing.md) to choose the smallest honest validation set.
+- Use `bun run pr:athena` from the repo root as the merge-ready validation authority. Run focused package sensors while iterating, but do not assemble them into a substitute final gate.
 - Use [docs/agent/code-map.md](./docs/agent/code-map.md) when tracing ownership across `src/` and `convex/`.
 - Before changing Convex code in this package, read the Convex AI guide. The canonical guide lives at [../../convex/_generated/ai/guidelines.md](../../convex/_generated/ai/guidelines.md), and this package also keeps an approved local mirror at [convex/_generated/ai/guidelines.md](./convex/_generated/ai/guidelines.md) for package-scoped agents.
 - For product-copy changes, follow the repo guide at [../../docs/product-copy-tone.md](../../docs/product-copy-tone.md) and normalize operator-facing system text instead of surfacing raw backend phrasing.

@@ -27,7 +27,11 @@ Key boundaries to keep in mind:
 - Stock adjustments, purchase-order workflows, replenishment guidance, and receiving now converge under `convex/stockOps/*` plus the operator views in `src/components/operations` and `src/components/procurement`; approval, adjustment, and receiving commands in this slice now follow the shared command-result contract instead of leaking thrown backend text into queue and procurement toasts.
 - Omnichannel returns, exchanges, order updates, refunds, review moderation, and follow-up history now converge under `convex/storeFront/*` plus the operator views in `src/components/orders`, `src/components/reviews`, and `src/components/users`; treat [convex/storeFront/onlineOrder.ts](../../convex/storeFront/onlineOrder.ts), [convex/storeFront/payment.ts](../../convex/storeFront/payment.ts), [convex/storeFront/reviews.ts](../../convex/storeFront/reviews.ts), and [convex/storeFront/onlineOrderUtilFns.ts](../../convex/storeFront/onlineOrderUtilFns.ts) as the command-result boundary for this slice.
 
-Common validation commands:
+Merge-ready validation:
+
+- Run `bun run pr:athena` from the repository root first. It owns the ordered prerequisite, documentation, generated-artifact, provider, review, and proof checks. Do not compose the commands below into a substitute merge gate or run an independent full package suite first.
+
+Focused and diagnostic validation commands:
 
 - `bun run --filter '@athena/webapp' test`
 - `bun run --filter '@athena/webapp' audit:convex`
