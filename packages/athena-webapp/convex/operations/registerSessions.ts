@@ -1087,14 +1087,6 @@ export const reopenClosedRegisterSessionCloseout = internalMutation({
       throw new Error("Only closed register sessions can be reopened for correction.");
     }
 
-    if (session.terminalId) {
-      await findConflictingRegisterSession(ctx, {
-        storeId: session.storeId,
-        terminalId: session.terminalId,
-        registerNumber: session.registerNumber,
-      });
-    }
-
     await patchRegisterSessionWithAuthority(
       ctx,
       args.registerSessionId,

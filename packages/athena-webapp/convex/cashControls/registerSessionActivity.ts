@@ -62,9 +62,15 @@ export type RegisterSessionActivityRow = {
     label: string;
     type: "closeout" | "expense" | "review" | "sync" | "transaction";
   }>;
+  item: {
+    label: string;
+    quantity: number | null;
+    unitPrice: number | null;
+  } | null;
   label: string;
   localEventId: string | null;
   localRegisterSessionId: string | null;
+  openingFloat: number | null;
   occurredAt: number;
   reportedAt: number | null;
   sequence: number | null;
@@ -166,6 +172,10 @@ function arrayDetail(value: unknown) {
   return Array.isArray(value) ? value : [];
 }
 
+function countLabel(count: number, singular: string) {
+  return `${count} ${singular}${count === 1 ? "" : "s"}`;
+}
+
 function eventCategory(
   eventType: SyncEvidenceEvent["eventType"],
 ): ActivityCategory {
@@ -188,14 +198,20 @@ function eventCategory(
   }
 }
 
-function eventLabel(eventType: SyncEvidenceEvent["eventType"]) {
+function eventLabel(
+  eventType: SyncEvidenceEvent["eventType"],
+  payload?: Record<string, unknown>,
+) {
   switch (eventType) {
     case "register_opened":
       return "Register opened";
     case "store_day_started":
       return "Store day started";
     case "pending_checkout_item_defined":
-      return "Cart item added";
+      return numberDetail(payload, "quantity") === 0 ||
+        numberDetail(payload, "quantitySold") === 0
+        ? "Cart item removed"
+        : "Cart item added";
     case "sale_completed":
       return "Sale completed";
     case "register_closed":
@@ -288,7 +304,9 @@ function buildEventSummary(event: SyncEvidenceEvent) {
   switch (event.eventType) {
     case "register_opened": {
       const registerNumber = stringDetail(payload, "registerNumber");
-      const openingFloat = numberDetail(payload, "openingFloat");
+      const openingFloat =
+        numberDetail(payload, "openingFloat") ??
+        numberDetail(payload, "expectedCash");
       return [
         registerNumber ? `Register ${registerNumber}` : null,
         openingFloat === null ? null : "Opening float recorded",
@@ -299,7 +317,7 @@ function buildEventSummary(event: SyncEvidenceEvent) {
     case "pending_checkout_item_defined": {
       const name = stringDetail(payload, "name");
       const quantity = numberDetail(payload, "quantitySold");
-      return [name, quantity === null ? null : `${quantity} item(s)`]
+      return [name, quantity === null ? null : countLabel(quantity, "item")]
         .filter(Boolean)
         .join(" - ");
     }
@@ -317,8 +335,8 @@ function buildEventSummary(event: SyncEvidenceEvent) {
       return [
         receiptNumber ? `Receipt ${receiptNumber}` : null,
         total === null ? null : "Total recorded",
-        itemCount ? `${itemCount} item(s)` : null,
-        serviceCount ? `${serviceCount} service(s)` : null,
+        itemCount ? countLabel(itemCount, "sale line") : null,
+        serviceCount ? countLabel(serviceCount, "service") : null,
       ]
         .filter(Boolean)
         .join(" - ");
@@ -357,7 +375,9 @@ function fallbackActivityLabel(activity: ActivityReadModelRow) {
     case "cart.cleared":
       return "Cart cleared";
     case "cart.item.added":
-      return "Cart item added";
+      return activity.metadata.quantity === 0
+        ? "Cart item removed"
+        : "Cart item added";
     case "pending.checkout.item.defined":
       return "Checkout item defined";
     case "cart.service.added":
@@ -406,24 +426,64 @@ function fallbackActivityLabel(activity: ActivityReadModelRow) {
 
 function buildActivitySummary(activity: ActivityReadModelRow) {
   const metadata = activity.metadata;
+  const paymentMethod =
+    typeof metadata.paymentMethods === "string"
+      ? metadata.paymentMethods
+      : typeof metadata.paymentMethodLabel === "string"
+      ? metadata.paymentMethodLabel
+      : typeof metadata.paymentMethod === "string"
+        ? metadata.paymentMethod
+        : null;
   const parts = [
+    typeof metadata.itemLabel === "string" ? metadata.itemLabel : null,
+    typeof metadata.productSku === "string"
+      ? `SKU ${metadata.productSku}`
+      : null,
+    typeof metadata.quantity === "number" ? `Qty ${metadata.quantity}` : null,
     typeof metadata.receiptNumber === "string"
       ? `Receipt ${metadata.receiptNumber}`
       : null,
     typeof metadata.itemCount === "number"
-      ? `${metadata.itemCount} item(s)`
+      ? activity.category === "sale"
+        ? countLabel(metadata.itemCount, "sale line")
+        : countLabel(metadata.itemCount, "item")
       : null,
     typeof metadata.serviceCount === "number"
-      ? `${metadata.serviceCount} service(s)`
+      ? countLabel(metadata.serviceCount, "service")
       : null,
     typeof metadata.paymentCount === "number"
-      ? `${metadata.paymentCount} payment(s)`
+      ? countLabel(metadata.paymentCount, "payment")
       : null,
-    typeof metadata.paymentMethod === "string" ? metadata.paymentMethod : null,
+    paymentMethod,
     typeof metadata.reasonCode === "string" ? metadata.reasonCode : null,
   ].filter(Boolean);
 
   return parts.join(" - ") || null;
+}
+
+function buildItemDetails(metadata: {
+  itemLabel?: unknown;
+  quantity?: unknown;
+  unitPrice?: unknown;
+}) {
+  const label =
+    typeof metadata.itemLabel === "string" && metadata.itemLabel.trim()
+      ? metadata.itemLabel.trim()
+      : null;
+
+  if (!label) return null;
+
+  return {
+    label,
+    quantity:
+      typeof metadata.quantity === "number" && Number.isFinite(metadata.quantity)
+        ? metadata.quantity
+        : null,
+    unitPrice:
+      typeof metadata.unitPrice === "number" && Number.isFinite(metadata.unitPrice)
+        ? metadata.unitPrice
+        : null,
+  };
 }
 
 function latestEventStatusTime(event: SyncEvidenceEvent) {
@@ -566,6 +626,10 @@ function buildActivityReadModelPage(args: {
       );
     const conflict =
       args.conflictsByLocalEventId.get(activity.localEventId) ?? null;
+    const openingFloat =
+      activity.eventType === "register.opened"
+        ? (activity.metadata.openingFloat ?? activity.metadata.expectedCash)
+        : null;
 
     return {
       _id: activity._id,
@@ -577,9 +641,11 @@ function buildActivityReadModelPage(args: {
         [...addDirectActivityLinks(activity), ...mappingLinks],
         conflict,
       ),
+      item: buildItemDetails(activity.metadata),
       label: fallbackActivityLabel(activity),
       localEventId: activity.localEventId,
       localRegisterSessionId: activity.localRegisterSessionId,
+      openingFloat: typeof openingFloat === "number" ? openingFloat : null,
       occurredAt: activity.occurredAt,
       reportedAt: activity.reportedAt,
       sequence: activity.localSequence,
@@ -689,9 +755,19 @@ export function buildRegisterSessionActivityPage(args: {
       actorStaffName: args.staffNamesById.get(event.staffProfileId) ?? null,
       category,
       evidenceLinks: addConflictLink(links, conflict),
-      label: eventLabel(event.eventType),
+      item: buildItemDetails({
+        itemLabel: stringDetail(event.payload, "productName") ?? stringDetail(event.payload, "name"),
+        quantity: numberDetail(event.payload, "quantity") ?? numberDetail(event.payload, "quantitySold"),
+        unitPrice: numberDetail(event.payload, "unitPrice") ?? numberDetail(event.payload, "price"),
+      }),
+      label: eventLabel(event.eventType, event.payload),
       localEventId: event.localEventId,
       localRegisterSessionId: event.localRegisterSessionId,
+      openingFloat:
+        event.eventType === "register_opened"
+          ? (numberDetail(event.payload, "openingFloat") ??
+            numberDetail(event.payload, "expectedCash"))
+          : null,
       occurredAt: event.occurredAt,
       reportedAt: event.acceptedAt ?? event.submittedAt ?? null,
       sequence: event.sequence,

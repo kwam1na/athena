@@ -63,6 +63,7 @@ export type PosRegisterSessionActivityMetadata = {
   openingFloat?: number;
   paymentCount?: number;
   paymentMethodLabel?: string;
+  paymentMethods?: string;
   previousAmount?: number;
   productSku?: string;
   quantity?: number;
@@ -326,6 +327,7 @@ function sanitizeMetadataForLocalEvent(
         amount: finiteNumber(payload.amount),
         paymentCount: arrayLength(payload.payments),
         paymentMethodLabel: labelFromToken(payload.paymentMethod),
+        paymentMethods: paymentMethodsSummary(payload.payments),
         previousAmount: finiteNumber(payload.previousAmount),
         stage: safeToken(payload.stage),
         totalPaid: sumAmountArray(payload.payments),
@@ -354,6 +356,7 @@ function sanitizeMetadataForLocalEvent(
         itemCount: arrayLength(payload.items),
         localReceiptNumber: safeLabel(payload.localReceiptNumber),
         paymentCount: arrayLength(payload.payments),
+        paymentMethods: paymentMethodsSummary(payload.payments),
         receiptNumber: safeLabel(payload.receiptNumber),
         serviceLineCount: arrayLength(payload.serviceLines),
         subtotal: finiteNumber(totals.subtotal),
@@ -440,6 +443,20 @@ function labelFromToken(value: unknown) {
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
+}
+
+function paymentMethodsSummary(value: unknown) {
+  if (!Array.isArray(value)) return undefined;
+
+  const labels = Array.from(
+    new Set(
+      value
+        .map((payment) => labelFromToken(asRecord(payment).method))
+        .filter((label): label is string => Boolean(label)),
+    ),
+  );
+
+  return labels.length ? safeLabel(labels.join(", ")) : undefined;
 }
 
 function cashDirection(value: unknown) {

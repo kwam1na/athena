@@ -119,6 +119,51 @@ describe("buildRegisterSessionActivityPage", () => {
     });
   });
 
+  it("labels completed-sale counts as sale lines", () => {
+    const page = buildRegisterSessionActivityPage({
+      conflictsByLocalEventId: new Map(),
+      cursors: [],
+      events: [
+        baseEvent({
+          payload: {
+            items: [{ quantity: 4 }, { quantity: 3 }],
+            receiptNumber: "135507",
+            serviceLines: [],
+            totals: { total: 1000 },
+          },
+        }),
+      ],
+      isDone: true,
+      mappingsByLocalEventId: new Map(),
+      staffNamesById: new Map(),
+      terminalName: "Front counter",
+    });
+
+    expect(page.page[0]?.summary).toBe("Receipt 135507 - Total recorded - 2 sale lines");
+  });
+
+  it("includes the opening float for register-opened activity", () => {
+    const page = buildRegisterSessionActivityPage({
+      conflictsByLocalEventId: new Map(),
+      cursors: [],
+      events: [
+        baseEvent({
+          eventType: "register_opened",
+          payload: { expectedCash: 5000, registerNumber: "3" },
+        }),
+      ],
+      isDone: true,
+      mappingsByLocalEventId: new Map(),
+      staffNamesById: new Map(),
+      terminalName: "Front counter",
+    });
+
+    expect(page.page[0]).toMatchObject({
+      openingFloat: 5000,
+      summary: "Register 3 - Opening float recorded",
+    });
+  });
+
   it("deduplicates evidence links that point to the same cloud record", () => {
     const page = buildRegisterSessionActivityPage({
       conflictsByLocalEventId: new Map(),
@@ -283,18 +328,22 @@ describe("listRegisterSessionActivity", () => {
     ).rejects.toThrow("You do not have access to POS activity.");
   });
 
-  it("returns activity read-model rows with scoped staff names and checkpoint coverage", async () => {
+  it("returns cart and payment details from activity read-model rows", async () => {
     const handler = getHandler(listRegisterSessionActivity);
     const activity = {
       _creationTime: 1,
       _id: "activity-1",
       activityKey: "local:store-1:terminal-1:event-1",
-      category: "cash",
-      eventType: "cash.movement_recorded",
+      category: "cart",
+      eventType: "cart.item_added",
       localEventId: "event-1",
       localRegisterSessionId: "local-register-1",
       localSequence: 12,
-      metadata: { amount: 1000, direction: "in" },
+      metadata: {
+        itemLabel: "Lace Front",
+        productSku: "LACE-1",
+        quantity: 0,
+      },
       occurredAt: 100,
       receivedAt: 110,
       reportedAt: 105,
@@ -303,6 +352,19 @@ describe("listRegisterSessionActivity", () => {
       storeId: "store-1",
       terminalId: "terminal-1",
       updatedAt: 120,
+    };
+    const paymentActivity = {
+      ...activity,
+      _id: "activity-payment",
+      activityKey: "local:store-1:terminal-1:event-payment",
+      category: "payment",
+      eventType: "session.payments_updated",
+      localEventId: "event-payment",
+      localSequence: 11,
+      metadata: {
+        paymentCount: 2,
+        paymentMethods: "Cash, Mobile Money",
+      },
     };
     const checkpoint = {
       _creationTime: 1,
@@ -318,7 +380,7 @@ describe("listRegisterSessionActivity", () => {
     const tableRows: Record<string, unknown[]> = {
       posLocalSyncConflict: [],
       posLocalSyncMapping: [],
-      posRegisterSessionActivity: [activity],
+      posRegisterSessionActivity: [activity, paymentActivity],
       posRegisterSessionActivityCheckpoint: [checkpoint],
     };
     const orderCalls: string[] = [];
@@ -399,16 +461,22 @@ describe("listRegisterSessionActivity", () => {
       coverageState: "reported",
       reportedThroughSequence: 12,
     });
-    expect(page.summary.attentionCounts.mapping_pending).toBe(1);
-    expect(page.summary.categoryCounts.cash).toBe(1);
+    expect(page.summary.attentionCounts.mapping_pending).toBe(2);
+    expect(page.summary.categoryCounts.cart).toBe(1);
+    expect(page.summary.categoryCounts.payment).toBe(1);
     expect(page.page[0]).toMatchObject({
       actorStaffName: null,
-      label: "Cash movement recorded",
+      label: "Cart item removed",
       sequence: 12,
       status: {
         label: "Waiting for session mapping",
       },
+      summary: "Lace Front - SKU LACE-1 - Qty 0",
       terminalName: "Front counter",
+    });
+    expect(page.page[1]).toMatchObject({
+      label: "Payment updated",
+      summary: "2 payments - Cash, Mobile Money",
     });
   });
 

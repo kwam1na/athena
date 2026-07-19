@@ -287,9 +287,15 @@ type RegisterSessionActivity = {
       label: string;
       type: "closeout" | "expense" | "review" | "sync" | "transaction";
     }>;
+    item?: {
+      label: string;
+      quantity: number | null;
+      unitPrice: number | null;
+    } | null;
     label: string;
     localEventId: string | null;
     localRegisterSessionId: string | null;
+    openingFloat?: number | null;
     occurredAt: number;
     reportedAt: number | null;
     sequence: number | null;
@@ -522,6 +528,7 @@ type RegisterSessionViewContentProps = {
 
 type RegisterSessionActivityViewContentProps = {
   activity?: RegisterSessionActivity | null;
+  currency?: string;
   filter?: RegisterSessionActivityFilter;
   isLoading: boolean;
   onFilterChange?: (filter: RegisterSessionActivityFilter) => void;
@@ -632,15 +639,11 @@ const ACTIVITY_FILTERS: Array<{
   label: string;
 }> = [
   { id: "all", label: "All" },
-  { id: "register", label: "Register" },
   { id: "sale", label: "Sale" },
   { id: "cart", label: "Cart" },
   { id: "payment", label: "Payment" },
-  { id: "service", label: "Service" },
   { id: "cash", label: "Cash" },
-  { id: "expense", label: "Expense" },
   { id: "closeout", label: "Closeout" },
-  { id: "sync_review", label: "Sync/review" },
   { id: "attention", label: "Needs attention" },
 ];
 
@@ -696,18 +699,18 @@ function getActivityCoverageCopy(activity: RegisterSessionActivity | null) {
   return "Recent register activity may take a moment to appear.";
 }
 
-function getActivityBadgeClass(
+function getActivityStatusDotClass(
   tone: RegisterSessionActivity["page"][number]["status"]["tone"],
 ) {
   switch (tone) {
     case "success":
-      return "border-success/20 bg-success/10 text-success";
+      return "bg-success";
     case "warning":
-      return "border-warning/20 bg-warning/10 text-warning";
+      return "bg-warning";
     case "destructive":
-      return "border-destructive/20 bg-destructive/10 text-destructive";
+      return "bg-danger";
     case "default":
-      return "border-border bg-muted text-muted-foreground";
+      return "bg-muted-foreground";
   }
 }
 
@@ -757,9 +760,28 @@ function parseActivityFilterSearchValue(
 
 function renderActivitySummary(
   row: RegisterSessionActivity["page"][number],
+  currency: string,
   orgUrlSlug?: string,
   storeUrlSlug?: string,
 ) {
+  if (row.item) {
+    return (
+      <p className="text-xs leading-5 text-muted-foreground">
+        {[
+          capitalizeWords(row.item.label),
+          row.item.unitPrice === null
+            ? null
+            : formatCurrency(currency, row.item.unitPrice),
+          row.item.quantity === null || row.item.quantity === 0
+            ? null
+            : `Qty ${row.item.quantity}`,
+        ]
+          .filter(Boolean)
+          .join(" · ")}
+      </p>
+    );
+  }
+
   const receiptSummary =
     row.category === "sale" ? parseReceiptActivitySummary(row.summary) : null;
   const transactionLink = row.evidenceLinks.find(
@@ -788,6 +810,14 @@ function renderActivitySummary(
     );
   }
 
+  if (row.openingFloat !== null && row.openingFloat !== undefined) {
+    return (
+      <p className="text-xs leading-5 text-muted-foreground">
+        {row.summary ?? "Opening float recorded"}: {formatCurrency(currency, row.openingFloat)}
+      </p>
+    );
+  }
+
   return row.summary ? (
     <p className="text-xs leading-5 text-muted-foreground">{row.summary}</p>
   ) : null;
@@ -795,6 +825,7 @@ function renderActivitySummary(
 
 export function RegisterSessionActivitySection({
   activity,
+  currency = "USD",
   filter: controlledFilter,
   onFilterChange,
   onPageChange,
@@ -803,6 +834,7 @@ export function RegisterSessionActivitySection({
   storeUrlSlug,
 }: {
   activity?: RegisterSessionActivity | null;
+  currency?: string;
   filter?: RegisterSessionActivityFilter;
   onFilterChange?: (filter: RegisterSessionActivityFilter) => void;
   onPageChange?: (page: number) => void;
@@ -855,19 +887,14 @@ export function RegisterSessionActivitySection({
             {getActivityCoverageCopy(activity ?? null)}
           </p>
         </div>
-        <Badge
-          className={cn(
-            "w-fit",
-            attentionCount > 0
-              ? "border-warning/20 bg-warning/10 text-warning"
-              : "border-border bg-muted text-muted-foreground",
-          )}
-          variant="outline"
-        >
-          {attentionCount > 0
-            ? `${attentionCount} need attention`
-            : "No attention flags"}
-        </Badge>
+        {attentionCount > 0 ? (
+          <Badge
+            className="w-fit border-warning/20 bg-warning/10 text-warning"
+            variant="outline"
+          >
+            {attentionCount} need attention
+          </Badge>
+        ) : null}
       </div>
 
       <dl
@@ -964,28 +991,22 @@ export function RegisterSessionActivitySection({
                   <TableCell>
                     <div className="space-y-1">
                       <p className="font-medium text-foreground">{row.label}</p>
-                      {renderActivitySummary(row, orgUrlSlug, storeUrlSlug)}
-                      {row.evidenceLinks.length > 0 ? (
-                        <div className="flex flex-wrap gap-1.5">
-                          {row.evidenceLinks.map((link, index) => (
-                            <span
-                              className="rounded-sm border border-border bg-muted/40 px-1.5 py-0.5 text-[11px] text-muted-foreground"
-                              key={`${row._id}:${link.type}:${link.id}:${index}`}
-                            >
-                              {link.label}
-                            </span>
-                          ))}
-                        </div>
-                      ) : null}
+                      {renderActivitySummary(
+                        row,
+                        currency,
+                        orgUrlSlug,
+                        storeUrlSlug,
+                      )}
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge
-                      className={getActivityBadgeClass(row.status.tone)}
-                      variant="outline"
-                    >
+                    <span className="inline-flex items-center gap-2 whitespace-nowrap text-sm text-muted-foreground">
+                      <span
+                        aria-hidden="true"
+                        className={`h-1.5 w-1.5 shrink-0 rounded-full ${getActivityStatusDotClass(row.status.tone)}`}
+                      />
                       {row.status.label}
-                    </Badge>
+                    </span>
                   </TableCell>
                   <TableCell className="hidden text-sm text-muted-foreground lg:table-cell">
                     {row.actorStaffName ?? "N/A"}
@@ -1014,6 +1035,7 @@ export function RegisterSessionActivitySection({
 
 export function RegisterSessionActivityViewContent({
   activity,
+  currency = "USD",
   filter,
   isLoading,
   onFilterChange,
@@ -1048,6 +1070,7 @@ export function RegisterSessionActivityViewContent({
           {isLoading ? null : (
             <RegisterSessionActivitySection
               activity={activity}
+              currency={currency}
               filter={filter}
               onFilterChange={onFilterChange}
               onPageChange={onPageChange}
@@ -4511,7 +4534,9 @@ export function RegisterSessionViewContent({
                               Completed sales
                             </p>
                             <p className="mt-1 font-numeric text-lg tabular-nums text-foreground">
-                              {financialPosition.transactionCount.toLocaleString()}
+                              {financialPosition.transactionCount === 0
+                                ? "-"
+                                : financialPosition.transactionCount.toLocaleString()}
                             </p>
                           </div>
                           <div>
@@ -4519,12 +4544,16 @@ export function RegisterSessionViewContent({
                               Average sale
                             </p>
                             <p className="mt-1 font-numeric text-lg tabular-nums text-foreground">
-                              <CashControlsFinancialValue
-                                amount={financialPosition.averageTransaction}
-                                canView={canViewFinancialDetails}
-                                currency={currency}
-                                label="Average register sale"
-                              />
+                              {financialPosition.transactionCount === 0 ? (
+                                "-"
+                              ) : (
+                                <CashControlsFinancialValue
+                                  amount={financialPosition.averageTransaction}
+                                  canView={canViewFinancialDetails}
+                                  currency={currency}
+                                  label="Average register sale"
+                                />
+                              )}
                             </p>
                           </div>
                         </div>
@@ -4788,18 +4817,9 @@ export function RegisterSessionViewContent({
                           <div className="space-y-4 border-t border-border/70 pt-4">
                             {registerSession.status ===
                             "closeout_rejected" ? (
-                              <div className="flex items-center justify-between gap-3">
-                                <p className="text-sm font-medium text-foreground">
-                                  Closeout rejected
-                                </p>
-                                <Badge
-                                  className="border-border bg-muted text-muted-foreground"
-                                  size="sm"
-                                  variant="outline"
-                                >
-                                  Rejected
-                                </Badge>
-                              </div>
+                              <p className="text-sm font-medium text-foreground">
+                                Closeout rejected
+                              </p>
                             ) : null}
                             {canViewFinancialDetails ? (
                               <dl
@@ -4997,7 +5017,10 @@ export function RegisterSessionViewContent({
                             ) : null}
 
                             {!canFinalizeCloseout && !isWaitingOnVoidReview ? (
-                              <details className="group border-t border-border/70 pt-layout-xs">
+                              <details
+                                className="group border-t border-border/70 pt-layout-xs"
+                                open={isReopenedCloseoutCorrection}
+                              >
                                 <summary className="flex cursor-pointer list-none items-center justify-between gap-layout-md rounded-md px-1 py-2 text-xs font-medium text-muted-foreground transition-[color,transform] duration-fast ease-standard hover:text-foreground active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 [&::-webkit-details-marker]:hidden">
                                   <span>Closeout details</span>
                                   <ChevronDown
@@ -5495,13 +5518,15 @@ export function RegisterSessionViewContent({
                           Items breakdown
                         </Button>
                       ) : null}
-                      <Badge
-                        className="border-border bg-muted text-muted-foreground"
-                        variant="outline"
-                      >
-                        {transactions.length}{" "}
-                        {transactions.length === 1 ? "sale" : "sales"}
-                      </Badge>
+                      {transactions.length > 0 ? (
+                        <Badge
+                          className="border-border bg-muted text-muted-foreground"
+                          variant="outline"
+                        >
+                          {transactions.length}{" "}
+                          {transactions.length === 1 ? "sale" : "sales"}
+                        </Badge>
+                      ) : null}
                     </div>
                   </div>
 
@@ -5537,7 +5562,7 @@ export function RegisterSessionViewContent({
                     <div className="order-2 flex min-h-[260px] items-center justify-center rounded-lg border border-dashed border-border bg-muted/25">
                       <EmptyState
                         icon={
-                          <Receipt className="h-12 w-12 text-muted-foreground" />
+                          <WalletCards className="h-12 w-12 text-muted-foreground" />
                         }
                         description="Completed POS sales linked to this register will appear here"
                         title="No linked transactions"
@@ -6383,6 +6408,7 @@ export function RegisterSessionActivityView() {
   return (
     <RegisterSessionActivityViewContent
       activity={registerSessionActivity ?? null}
+      currency={activeStore.currency || "USD"}
       filter={filter}
       isLoading={registerSessionActivity === undefined}
       onFilterChange={handleFilterChange}

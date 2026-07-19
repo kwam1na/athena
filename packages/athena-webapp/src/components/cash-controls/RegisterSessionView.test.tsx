@@ -477,6 +477,42 @@ describe("RegisterSessionViewContent", () => {
     );
   });
 
+  it("uses the wallet cards icon when there are no linked transactions", () => {
+    render(
+      <RegisterSessionViewContent
+        actorUserId="user-1"
+        currency="USD"
+        isLoading={false}
+        onRecordDeposit={vi.fn()}
+        {...closeoutHandlers}
+        registerSessionSnapshot={{
+          ...baseSnapshot,
+          financialPosition: {
+            averageTransaction: 0,
+            paymentMix: [],
+            totalSales: 0,
+            transactionCount: 0,
+          },
+        }}
+        orgUrlSlug="wigclub"
+        storeUrlSlug="wigclub"
+      />,
+    );
+
+    expect(
+      document.querySelector("svg.lucide-wallet-cards"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/^0 sales$/)).not.toBeInTheDocument();
+    expect(
+      within(screen.getByText("Completed sales").parentElement!).getByText(
+        "-",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByText("Average sale").parentElement!).getByText("-"),
+    ).toBeInTheDocument();
+  });
+
   it("combines sync and active register state in one inline status", () => {
     render(
       <RegisterSessionViewContent
@@ -679,7 +715,7 @@ describe("RegisterSessionViewContent", () => {
             {
               _id: "activity-1",
               actorStaffName: "Ama Mensah",
-              category: "sale",
+              category: "sale" as const,
               evidenceLinks: [
                 {
                   id: "txn-1",
@@ -705,7 +741,7 @@ describe("RegisterSessionViewContent", () => {
             {
               _id: "activity-2",
               actorStaffName: "Kojo Mensimah",
-              category: "closeout",
+              category: "closeout" as const,
               evidenceLinks: [],
               label: "Closeout started",
               localEventId: "local-event-2",
@@ -725,11 +761,24 @@ describe("RegisterSessionViewContent", () => {
             ...Array.from({ length: 9 }, (_, index) => ({
               _id: `activity-extra-${index + 1}`,
               actorStaffName: "Ama Mensah",
-              category: "cart" as const,
+              category:
+                index === 0
+                  ? ("register" as const)
+                  : index === 1
+                    ? ("payment" as const)
+                    : ("cart" as const),
               evidenceLinks: [],
-              label: index === 8 ? "Later cart activity" : "Cart item added",
+              label:
+                index === 8
+                  ? "Later cart activity"
+                  : index === 0
+                    ? "Register opened"
+                    : index === 1
+                      ? "Payment updated"
+                      : "Cart item added",
               localEventId: `local-extra-${index + 1}`,
               localRegisterSessionId: "local-session-1",
+              openingFloat: index === 0 ? 5000 : null,
               occurredAt:
                 new Date("2026-04-21T18:05:00.000Z").getTime() + index,
               reportedAt:
@@ -741,7 +790,12 @@ describe("RegisterSessionViewContent", () => {
                 label: "Reported by terminal",
                 tone: "default" as const,
               },
-              summary: null,
+              summary:
+                index === 0
+                  ? "Register 3 - Opening float recorded"
+                  : index === 1
+                    ? "1 payment(s) - Cash"
+                    : null,
               terminalName: "Front counter",
             })),
           ],
@@ -749,7 +803,7 @@ describe("RegisterSessionViewContent", () => {
             attentionCounts: {
               activity_patch_failed: 0,
               conflicted: 0,
-              held: 1,
+              held: 0,
               manager_applied: 0,
               manager_rejected: 0,
               mapping_pending: 0,
@@ -823,7 +877,7 @@ describe("RegisterSessionViewContent", () => {
     expect(
       screen.queryByRole("columnheader", { name: "Sequence" }),
     ).not.toBeInTheDocument();
-    expect(screen.getByText("1 need attention")).toBeInTheDocument();
+    expect(screen.queryByText("No attention flags")).not.toBeInTheDocument();
     expect(screen.getByText("Sale completed")).toBeInTheDocument();
     const receiptLink = screen.getByRole("link", { name: "#R-12" });
     expect(receiptLink).toHaveAttribute(
@@ -835,6 +889,26 @@ describe("RegisterSessionViewContent", () => {
       "Receipt #R-12 - 1 item(s) - 1 payment(s)",
     );
     expect(screen.getByText("Closeout started")).toBeInTheDocument();
+    expect(
+      screen.getByText("Register 3 - Opening float recorded: $50"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Payment updated")).toBeInTheDocument();
+    expect(screen.getByText("1 payment(s) - Cash")).toBeInTheDocument();
+    expect(screen.queryByText("Transaction")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sale" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cart" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Payment" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cash" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Closeout" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Register" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Service" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Expense" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Sync/review" })).not.toBeInTheDocument();
+    expect(screen.getByText("Projected")).toHaveClass(
+      "inline-flex",
+      "items-center",
+      "gap-2",
+    );
     expect(screen.getByText("Showing 1-10 of 11")).toBeInTheDocument();
     expect(screen.queryByText("Later cart activity")).not.toBeInTheDocument();
 
@@ -3101,6 +3175,7 @@ describe("RegisterSessionViewContent", () => {
     );
 
     expect(screen.getAllByText("Closeout rejected").length).toBeGreaterThan(0);
+    expect(screen.queryByText(/^Rejected$/)).not.toBeInTheDocument();
     expect(
       screen.queryByText("Manager approval pending"),
     ).not.toBeInTheDocument();
@@ -4033,6 +4108,9 @@ describe("RegisterSessionViewContent", () => {
     expect(screen.getByText("Previous submitted closeout")).toBeInTheDocument();
     expect(screen.getAllByText("GH₵171").length).toBeGreaterThan(0);
     expect(screen.getAllByText("GH₵176").length).toBeGreaterThan(0);
+    expect(
+      screen.getByText("Closeout details").closest("details"),
+    ).toHaveAttribute("open");
     expect(screen.getByLabelText("Closeout counted cash")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Submit closeout" }),

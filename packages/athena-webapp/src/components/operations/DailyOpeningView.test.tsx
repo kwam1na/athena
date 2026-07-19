@@ -455,6 +455,13 @@ describe("DailyOpeningViewContent", () => {
     });
 
     expect(screen.getByText("Store day started")).toBeInTheDocument();
+    expect(screen.getByTestId("daily-opening-status-signature")).toHaveClass(
+      "min-h-10",
+      "text-success",
+    );
+    expect(
+      screen.getByTestId("daily-opening-status-icon"),
+    ).toHaveClass("size-5", "text-success");
     expect(screen.getByText("No hard blockers")).toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: /blocked/i })).toBeNull();
     expect(
