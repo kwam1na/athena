@@ -13,7 +13,7 @@ applies_when:
   - Detecting state transitions (healthy→degraded) without an alert-state table
   - Deduplicating batched client uploads without per-item index reads
 tags: [pos, observability, telemetry, alerts, convex, read-amplification, local-first]
-delivery_diff_fingerprint: 280ec64a392ff6c0dac1f7851c3c7598c468e16770d380d902bd12f09a3f5a72
+delivery_diff_fingerprint: c734e389ceabd5582b145577d0d21e37067a6d791bac249ba1e89cfd231c78b7
 ---
 
 # POS Observability via Write-Riding Telemetry and Edge-Triggered Alerts
