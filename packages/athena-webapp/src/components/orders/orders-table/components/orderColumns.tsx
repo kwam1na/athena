@@ -14,6 +14,7 @@ import {
 import { OrderStatus } from "../../OrderStatus";
 import { getOrigin } from "~/src/lib/navigationUtils";
 import type { FormattedOnlineOrder } from "../../Orders";
+import { OrderCustomerCell } from "./OrderCustomerCell";
 
 export const orderColumns: ColumnDef<OnlineOrder>[] = [
   {
@@ -115,25 +116,7 @@ export const orderColumns: ColumnDef<OnlineOrder>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Customer" />
     ),
-    cell: ({ row }) => {
-      const customer = row.getValue("customerDetails") as Record<string, unknown>;
-      const s = window.location.pathname.split("/").pop();
-
-      return (
-        <Link
-          to="/$orgUrlSlug/store/$storeUrlSlug/users/$userId"
-          params={(prev) => ({
-            ...prev,
-            orgUrlSlug: prev.orgUrlSlug!,
-            storeUrlSlug: prev.storeUrlSlug!,
-            userId: row.original.storeFrontUserId,
-          })}
-          search={{ orderStatus: s, o: getOrigin() }}
-        >
-          {typeof customer?.email === "string" ? customer.email : null}
-        </Link>
-      );
-    },
+    cell: OrderCustomerCell,
     enableSorting: false,
     enableHiding: false,
   },

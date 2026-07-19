@@ -18,7 +18,7 @@ export function getSharedDemoEntryPresentation({
     };
   }
   return {
-    detail: "No account or credentials are needed. This may take a few seconds.",
-    title: "Opening the demo store…",
+    detail: null,
+    title: "Opening demo store",
   };
 }

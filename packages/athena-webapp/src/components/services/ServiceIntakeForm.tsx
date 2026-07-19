@@ -66,6 +66,7 @@ type ServiceIntakeFormProps = {
   catalogOptions: ServiceIntakeCatalogOption[];
   customerResults: ServiceIntakeCustomerResult[];
   form: ServiceIntakeFormState;
+  isActionDisabled?: boolean;
   isSubmitting: boolean;
   onChange: <K extends keyof ServiceIntakeFormState>(
     field: K,
@@ -171,6 +172,7 @@ export function ServiceIntakeForm({
   catalogOptions,
   customerResults,
   form,
+  isActionDisabled = false,
   isSubmitting,
   onChange,
   onSelectCustomer,
@@ -430,7 +432,7 @@ export function ServiceIntakeForm({
 
       <div className="flex justify-end">
         <Button
-          disabled={isSubmitting}
+          disabled={isActionDisabled || isSubmitting}
           onClick={onSubmit}
           type="button"
           variant="default"

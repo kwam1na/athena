@@ -10,6 +10,7 @@ import {
   resetBrowserExperience,
   selectSharedDemoRegisterBootstrapRecords,
 } from "./public";
+import { SHARED_DEMO_REGISTER_NUMBER } from "./config";
 
 describe("shared demo public contract", () => {
   it("accepts context and restore result envelopes", () => {
@@ -26,7 +27,7 @@ describe("shared demo public contract", () => {
         _id: "terminal-1",
         displayName: "Studio Front Register",
         loginMode: "pos_only",
-        registerNumber: "DEMO-01",
+        registerNumber: SHARED_DEMO_REGISTER_NUMBER,
         status: "active",
         transactionCapability: "products_and_services",
       },
@@ -67,6 +68,10 @@ describe("shared demo public contract", () => {
     expect(source).toContain("export const requestManualRestore = mutation");
     expect(source).toContain("export const resetBrowserExperience = mutation");
     expect(source).toContain("args: { idempotencyKey: v.string() }");
+    expect(source).toContain(
+      'args: { expectedEpoch: v.number(), terminalId: v.id("posTerminal") }',
+    );
+    expect(source).toContain("assertSharedDemoWriteEpoch(");
     expect(source).toContain("beginRestoreLeaseWithCtx(ctx");
     expect(source).toContain("cleanupTerminalId: terminalCleanupRequested ? args.terminalId : undefined");
     expect(source).toContain("terminalDeleted: false");
@@ -91,7 +96,7 @@ describe("shared demo public contract", () => {
           {
             _id: "terminal-1",
             displayName: "Studio Front Register",
-            registerNumber: "DEMO-01",
+            registerNumber: SHARED_DEMO_REGISTER_NUMBER,
             status: "active",
             storeId: "store-1",
           },

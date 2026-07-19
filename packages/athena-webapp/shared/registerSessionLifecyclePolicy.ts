@@ -239,7 +239,8 @@ export function canOpenReplacementDrawerForLocalBlock(input: {
   if (!input.saleBlockReason) return true;
   if (
     input.saleBlockReason === "drawer_authority" &&
-    input.drawerAuthorityReason === "cloud_closed"
+    (input.drawerAuthorityReason === "cloud_closed" ||
+      input.drawerAuthorityReason === "cloud_session_missing")
   ) {
     return true;
   }

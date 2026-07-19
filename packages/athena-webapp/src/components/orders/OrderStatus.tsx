@@ -8,7 +8,13 @@ import {
 import { capitalizeFirstLetter, slugToWords } from "~/src/lib/utils";
 import { Badge } from "../ui/badge";
 
-export const OrderStatus = ({ order }: { order: { status: string } }) => {
+type OrderStatusProps = {
+  order: {
+    status: string;
+  };
+};
+
+export const OrderStatus = ({ order }: OrderStatusProps) => {
   const showCheck =
     order.status.includes("ready") ||
     order.status == "out-for-delivery" ||
@@ -27,14 +33,14 @@ export const OrderStatus = ({ order }: { order: { status: string } }) => {
           : order.status === "cancelled"
             ? "bg-danger/10 text-danger"
             : order.status === "pickup-exception"
-              ? "bg-warning/10 text-warning"
+              ? "bg-warning/10 text-warning-foreground"
               : order.status === "delivered" || order.status === "picked-up"
                 ? "bg-success/10 text-success"
                 : order.status === "out-for-delivery"
-                  ? "bg-primary/10 text-primary"
+                  ? "bg-primary-soft text-primary"
                   : order.status.includes("ready")
                     ? "bg-success/10 text-success"
-                    : "bg-muted text-muted-foreground"
+                    : "bg-muted/50 text-foreground"
       }`}
     >
       <div className="flex items-center">

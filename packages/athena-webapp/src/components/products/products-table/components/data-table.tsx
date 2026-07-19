@@ -3,6 +3,7 @@ import {
   ColumnFiltersState,
   OnChangeFn,
   PaginationState,
+  Row,
   SortingState,
   VisibilityState,
   flexRender,
@@ -27,12 +28,14 @@ import {
 import { DataTablePagination } from "./data-table-pagination";
 import { DataTableToolbar } from "./data-table-toolbar";
 import { AddProductCommand } from "./add-product-command";
-import { useEffect, useState } from "react";
+import { KeyboardEvent, MouseEvent, useEffect, useState } from "react";
+import { cn } from "~/src/lib/utils";
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
   onPageIndexChange?: (pageIndex: number) => void;
+  onRowClick?: (row: Row<TData>) => void;
   pageIndex?: number;
   showToolbar?: boolean;
 }
@@ -43,6 +46,7 @@ export function DataTable<TData, TValue>({
   columns,
   data,
   onPageIndexChange,
+  onRowClick,
   pageIndex,
   showToolbar = true,
 }: DataTableProps<TData, TValue>) {
@@ -113,6 +117,37 @@ export function DataTable<TData, TValue>({
     getFacetedUniqueValues: getFacetedUniqueValues(),
   });
 
+  const handleRowClick = (
+    event: MouseEvent<HTMLTableRowElement>,
+    row: Row<TData>,
+  ) => {
+    const target = event.target;
+
+    if (target instanceof Element) {
+      const interactiveAncestor = target.closest(
+        "a, button, input, select, textarea, [role='button'], [role='link'], [role='menuitem'], [contenteditable='true']",
+      );
+
+      if (interactiveAncestor && interactiveAncestor !== event.currentTarget) {
+        return;
+      }
+    }
+
+    onRowClick?.(row);
+  };
+
+  const handleRowKeyDown = (
+    event: KeyboardEvent<HTMLTableRowElement>,
+    row: Row<TData>,
+  ) => {
+    if (event.target !== event.currentTarget || event.key !== "Enter") {
+      return;
+    }
+
+    event.preventDefault();
+    onRowClick?.(row);
+  };
+
   // React.useEffect(() => {
   //   table.getColumn("subcategoryId")?.toggleVisibility(false);
   // }, [table]);
@@ -148,8 +183,24 @@ export function DataTable<TData, TValue>({
             {table.getRowModel().rows?.length ? (
               table.getRowModel().rows.map((row) => (
                 <TableRow
+                  className={cn(
+                    onRowClick &&
+                      "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                  )}
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
+                  onClick={
+                    onRowClick
+                      ? (event) => handleRowClick(event, row)
+                      : undefined
+                  }
+                  onKeyDown={
+                    onRowClick
+                      ? (event) => handleRowKeyDown(event, row)
+                      : undefined
+                  }
+                  role={onRowClick ? "link" : undefined}
+                  tabIndex={onRowClick ? 0 : undefined}
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>

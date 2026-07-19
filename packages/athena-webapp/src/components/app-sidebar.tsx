@@ -574,23 +574,24 @@ export function AppSidebar({
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
-              {/* Homepage section */}
-              <SidebarMenuItem>
-                <SidebarMenuButton disabled={!hasFullAdminAccess} asChild>
-                  <Link
-                    to="/$orgUrlSlug/store/$storeUrlSlug/home"
-                    params={(p) => ({
-                      ...p,
-                      orgUrlSlug: activeOrganization?.slug,
-                      storeUrlSlug: activeStore?.slug,
-                    })}
-                    className="flex items-center"
-                  >
-                    <Store className="w-4 h-4" />
-                    <p className="font-medium">Homepage</p>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
+              {!isSharedDemo ? (
+                <SidebarMenuItem>
+                  <SidebarMenuButton disabled={!hasFullAdminAccess} asChild>
+                    <Link
+                      to="/$orgUrlSlug/store/$storeUrlSlug/home"
+                      params={(p) => ({
+                        ...p,
+                        orgUrlSlug: activeOrganization?.slug,
+                        storeUrlSlug: activeStore?.slug,
+                      })}
+                      className="flex items-center"
+                    >
+                      <Store className="w-4 h-4" />
+                      <p className="font-medium">Homepage</p>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ) : null}
 
               {/* Orders section */}
               <SidebarMenuCollapsible

@@ -35,6 +35,9 @@ const routerMocks = vi.hoisted(() => ({
   navigate: vi.fn(),
   search: {} as Record<string, unknown>,
 }));
+const sharedDemoMocks = vi.hoisted(() => ({
+  context: null as null | { kind: "shared_demo" },
+}));
 
 class ResizeObserverStub {
   observe() {}
@@ -141,6 +144,10 @@ vi.mock("~/src/hooks/usePOSProducts", () => ({
   usePOSQuickAddProductSku: () => quickAddProductSkuMock,
 }));
 
+vi.mock("~/src/hooks/useSharedDemoContext", () => ({
+  useSharedDemoContext: () => sharedDemoMocks.context,
+}));
+
 describe("Products", () => {
   beforeEach(() => {
     quickAddProductSkuMock.mockReset();
@@ -158,8 +165,32 @@ describe("Products", () => {
       productCount: 0,
     };
     mockedProducts.skuSearchResults = [];
+    sharedDemoMocks.context = null;
     routerMocks.navigate.mockReset();
     routerMocks.search = {};
+  });
+
+  it("hides full product creation and archived products in the shared demo", () => {
+    sharedDemoMocks.context = { kind: "shared_demo" };
+
+    render(<Products />);
+
+    expect(
+      screen.queryByRole("button", { name: "New Product" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Archived products" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /quick add/i })).toBeVisible();
+  });
+
+  it("keeps product creation and archived products outside the shared demo", () => {
+    render(<Products />);
+
+    expect(screen.getByRole("button", { name: "New Product" })).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Archived products" }),
+    ).toBeVisible();
   });
 
   it("quick adds a product with variants from the products workspace", async () => {

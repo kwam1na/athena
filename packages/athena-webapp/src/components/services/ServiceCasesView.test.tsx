@@ -93,6 +93,26 @@ describe("ServiceCasesViewContent", () => {
     vi.clearAllMocks();
   });
 
+  it("keeps fields interactive while disabling every demo CTA", () => {
+    render(<ServiceCasesViewContent {...baseProps} isSharedDemo />);
+
+    expect(
+      screen.getByText(
+        "This workspace is for interaction only in the demo. Actions are disabled.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText(/service title/i)).toBeEnabled();
+    for (const name of [
+      /create service case/i,
+      /record payment/i,
+      /update status/i,
+      /add line item/i,
+      /record material usage/i,
+    ]) {
+      expect(screen.getByRole("button", { name })).toBeDisabled();
+    }
+  });
+
   it("validates required walk-in case fields before creating", async () => {
     const user = userEvent.setup();
     const onCreateCase = vi.fn().mockResolvedValue({ kind: "ok", data: null });

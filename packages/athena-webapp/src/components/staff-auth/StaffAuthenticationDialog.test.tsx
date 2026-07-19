@@ -67,8 +67,8 @@ describe("StaffAuthenticationDialog", () => {
     );
 
     expect(screen.getByText("Demo staff sign-in")).toBeInTheDocument();
-    expect(screen.getByText("kofi")).toBeInTheDocument();
-    expect(screen.getByText("ama")).toBeInTheDocument();
+    expect(screen.getByText("kay")).toBeInTheDocument();
+    expect(screen.getByText("efua")).toBeInTheDocument();
     expect(screen.getByText("1111")).toBeInTheDocument();
   });
 

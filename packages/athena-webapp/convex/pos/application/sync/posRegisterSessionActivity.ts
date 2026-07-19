@@ -1,5 +1,7 @@
 import type { Doc, Id } from "../../../_generated/dataModel";
-import type { MutationCtx } from "../../../_generated/server";
+import { internal } from "../../../_generated/api";
+import { internalMutation, type MutationCtx } from "../../../_generated/server";
+import { v } from "convex/values";
 import {
   ok,
   userError,
@@ -91,6 +93,7 @@ type RegisterSessionActivityCheckpointInput = Omit<
 >;
 
 export type RegisterSessionActivityIngestionRepository = {
+  normalizeRegisterSessionId(value: string): Id<"registerSession"> | null;
   getTerminal(
     terminalId: Id<"posTerminal">,
   ): Promise<TerminalBindingRecord | null>;
@@ -118,6 +121,7 @@ export type RegisterSessionActivityIngestionRepository = {
     patch: Partial<RegisterSessionActivityRecordInput>,
   ): Promise<void>;
   listMappingPendingActivity(args: {
+    limit: number;
     storeId: Id<"store">;
     terminalId: Id<"posTerminal">;
     localRegisterSessionId: string;
@@ -163,6 +167,11 @@ export type RegisterSessionActivityIngestionResult = {
 type Dependencies = {
   repository: RegisterSessionActivityIngestionRepository;
   now: () => number;
+  scheduleMappingPendingContinuation?: (args: {
+    storeId: Id<"store">;
+    terminalId: Id<"posTerminal">;
+    localRegisterSessionId: string;
+  }) => Promise<unknown>;
 };
 
 const TERMINAL_AUTHORIZATION_MESSAGE =
@@ -170,6 +179,9 @@ const TERMINAL_AUTHORIZATION_MESSAGE =
 const TERMINAL_SESSION_BINDING_MESSAGE =
   "POS activity report is not bound to this terminal session.";
 const MAX_METADATA_STRING_LENGTH = 120;
+const MAPPING_PENDING_RECONCILIATION_BATCH_SIZE = 100;
+const continueMappingPendingRef: any = (internal as any).pos.application.sync
+  .posRegisterSessionActivity.continueRegisterSessionActivityMappingPending;
 
 const ALLOWED_METADATA_KEYS_BY_CATEGORY = {
   register: new Set(["expectedCash", "openingFloat", "registerNumber"]),
@@ -298,6 +310,27 @@ export function createRegisterSessionActivityIngestionService(
       );
       if (resolvedSession.kind === "error") return resolvedSession.result;
 
+      if (
+        resolvedSession.registerSessionId &&
+        resolvedSession.bindingSource === "direct_id"
+      ) {
+        const reconciliation = await bindMappingPendingActivity({
+          repository: dependencies.repository,
+          registerSessionId: resolvedSession.registerSessionId,
+          storeId: report.storeId,
+          terminalId: report.terminalId,
+          localRegisterSessionId: report.localRegisterSessionId,
+          now: dependencies.now,
+        });
+        if (reconciliation.hasMore) {
+          await dependencies.scheduleMappingPendingContinuation?.({
+            storeId: report.storeId,
+            terminalId: report.terminalId,
+            localRegisterSessionId: report.localRegisterSessionId,
+          });
+        }
+      }
+
       const now = dependencies.now();
       const accepted: RegisterSessionActivityIngestionResult["accepted"] = [];
       const skipped: RegisterSessionActivityIngestionResult["skipped"] = [];
@@ -410,13 +443,19 @@ export function createRegisterSessionActivityIngestionService(
       storeId: Id<"store">;
       terminalId: Id<"posTerminal">;
       localRegisterSessionId: string;
-    }): Promise<{ resolved: number }> {
-      const mapping =
-        await dependencies.repository.findRegisterSessionMapping(args);
-      if (!mapping) return { resolved: 0 };
+    }): Promise<{ hasMore: boolean; resolved: number }> {
+      const mapping = await dependencies.repository.findRegisterSessionMapping(
+        args,
+      );
+      const registerSessionId =
+        mapping?.registerSessionId ??
+        dependencies.repository.normalizeRegisterSessionId(
+          args.localRegisterSessionId,
+        );
+      if (!registerSessionId) return { hasMore: false, resolved: 0 };
 
       const registerSession = await dependencies.repository.getRegisterSession(
-        mapping.registerSessionId,
+        registerSessionId,
       );
       if (
         !registerSession ||
@@ -424,41 +463,19 @@ export function createRegisterSessionActivityIngestionService(
         (registerSession.terminalId !== undefined &&
           registerSession.terminalId !== args.terminalId)
       ) {
-        return { resolved: 0 };
+        return { hasMore: false, resolved: 0 };
       }
 
-      let resolved = 0;
-      while (true) {
-        const pending =
-          await dependencies.repository.listMappingPendingActivity(args);
-        if (pending.length === 0) break;
-
-        for (const activity of pending) {
-          const syncEvent =
-            await dependencies.repository.findSyncEventByLocalEvent({
-              storeId: activity.storeId,
-              terminalId: activity.terminalId,
-              localEventId: activity.localEventId,
-            });
-          await dependencies.repository.patchActivity(activity._id, {
-            registerSessionId: mapping.registerSessionId,
-            relatedSyncEventId: syncEvent?._id,
-            status: toActivityStatusFromSyncStatus(syncEvent?.status),
-            updatedAt: dependencies.now(),
-          });
-          resolved += 1;
-        }
+      const result = await bindMappingPendingActivity({
+        repository: dependencies.repository,
+        registerSessionId,
+        ...args,
+        now: dependencies.now,
+      });
+      if (result.hasMore) {
+        await dependencies.scheduleMappingPendingContinuation?.(args);
       }
-
-      const checkpoint = await dependencies.repository.findCheckpoint(args);
-      if (checkpoint) {
-        await dependencies.repository.patchCheckpoint(checkpoint._id, {
-          registerSessionId: mapping.registerSessionId,
-          updatedAt: dependencies.now(),
-        });
-      }
-
-      return { resolved };
+      return result;
     },
   };
 }
@@ -466,10 +483,13 @@ export function createRegisterSessionActivityIngestionService(
 export async function ingestRegisterSessionActivityWithCtx(
   ctx: MutationCtx,
   report: RegisterSessionActivityReportInput,
-) {
+): Promise<CommandResult<RegisterSessionActivityIngestionResult>> {
   return createRegisterSessionActivityIngestionService({
     repository: createConvexRegisterSessionActivityRepository(ctx),
     now: () => Date.now(),
+    scheduleMappingPendingContinuation: async (args): Promise<void> => {
+      await ctx.scheduler.runAfter(0, continueMappingPendingRef, args);
+    },
   }).ingestReport(report);
 }
 
@@ -480,12 +500,34 @@ export async function resolveRegisterSessionActivityMappingPendingWithCtx(
     terminalId: Id<"posTerminal">;
     localRegisterSessionId: string;
   },
-) {
+): Promise<{ hasMore: boolean; resolved: number }> {
   return createRegisterSessionActivityIngestionService({
     repository: createConvexRegisterSessionActivityRepository(ctx),
     now: () => Date.now(),
+    scheduleMappingPendingContinuation: async (
+      continuationArgs,
+    ): Promise<void> => {
+      await ctx.scheduler.runAfter(
+        0,
+        continueMappingPendingRef,
+        continuationArgs,
+      );
+    },
   }).resolveMappingPending(args);
 }
+
+export const continueRegisterSessionActivityMappingPending = internalMutation({
+  args: {
+    localRegisterSessionId: v.string(),
+    storeId: v.id("store"),
+    terminalId: v.id("posTerminal"),
+  },
+  returns: v.null(),
+  handler: async (ctx, args): Promise<null> => {
+    await resolveRegisterSessionActivityMappingPendingWithCtx(ctx, args);
+    return null;
+  },
+});
 
 export async function patchRegisterSessionActivityFromLocalSyncWithCtx(
   ctx: MutationCtx,
@@ -501,18 +543,13 @@ export async function patchRegisterSessionActivityFromLocalSyncWithCtx(
     terminalId: Id<"posTerminal">;
   },
 ) {
-  const service = createRegisterSessionActivityIngestionService({
-    repository: createConvexRegisterSessionActivityRepository(ctx),
-    now: () => Date.now(),
-  });
-
   const registerMappings = args.mappings.filter(
     (mapping) =>
       mapping.localIdKind === "registerSession" &&
       mapping.cloudTable === "registerSession",
   );
   for (const mapping of registerMappings) {
-    await service.resolveMappingPending({
+    await resolveRegisterSessionActivityMappingPendingWithCtx(ctx, {
       storeId: args.storeId,
       terminalId: args.terminalId,
       localRegisterSessionId: mapping.localRegisterSessionId,
@@ -638,7 +675,11 @@ async function resolveRegisterSessionBinding(
   report: RegisterSessionActivityReportInput,
   terminal: TerminalBindingRecord,
 ): Promise<
-  | { kind: "ok"; registerSessionId?: Id<"registerSession"> }
+  | {
+      bindingSource?: "direct_id" | "mapping";
+      kind: "ok";
+      registerSessionId?: Id<"registerSession">;
+    }
   | { kind: "error"; result: CommandResult<RegisterSessionActivityIngestionResult> }
 > {
   const mapping = await repository.findRegisterSessionMapping({
@@ -646,10 +687,14 @@ async function resolveRegisterSessionBinding(
     terminalId: report.terminalId,
     localRegisterSessionId: report.localRegisterSessionId,
   });
-  if (!mapping) return { kind: "ok" };
+  const directRegisterSessionId = repository.normalizeRegisterSessionId(
+    report.localRegisterSessionId,
+  );
+  const registerSessionId = mapping?.registerSessionId ?? directRegisterSessionId;
+  if (!registerSessionId) return { kind: "ok" };
 
   const registerSession = await repository.getRegisterSession(
-    mapping.registerSessionId,
+    registerSessionId,
   );
   if (
     !registerSession ||
@@ -669,9 +714,51 @@ async function resolveRegisterSessionBinding(
   }
 
   return {
+    bindingSource: mapping ? "mapping" : "direct_id",
     kind: "ok",
-    registerSessionId: mapping.registerSessionId,
+    registerSessionId,
   };
+}
+
+async function bindMappingPendingActivity(args: {
+  repository: RegisterSessionActivityIngestionRepository;
+  registerSessionId: Id<"registerSession">;
+  storeId: Id<"store">;
+  terminalId: Id<"posTerminal">;
+  localRegisterSessionId: string;
+  now: () => number;
+}) {
+  const pending = await args.repository.listMappingPendingActivity({
+    ...args,
+    limit: MAPPING_PENDING_RECONCILIATION_BATCH_SIZE + 1,
+  });
+  const batch = pending.slice(0, MAPPING_PENDING_RECONCILIATION_BATCH_SIZE);
+  for (const activity of batch) {
+      const syncEvent = await args.repository.findSyncEventByLocalEvent({
+        storeId: activity.storeId,
+        terminalId: activity.terminalId,
+        localEventId: activity.localEventId,
+      });
+      await args.repository.patchActivity(activity._id, {
+        registerSessionId: args.registerSessionId,
+        relatedSyncEventId: syncEvent?._id,
+        status: toActivityStatusFromSyncStatus(syncEvent?.status),
+        updatedAt: args.now(),
+      });
+  }
+  const hasMore =
+    pending.length > MAPPING_PENDING_RECONCILIATION_BATCH_SIZE;
+
+  const checkpoint = await args.repository.findCheckpoint(args);
+  if (checkpoint) {
+    await args.repository.patchCheckpoint(checkpoint._id, {
+      mappingReconciliationPending: hasMore,
+      registerSessionId: args.registerSessionId,
+      updatedAt: args.now(),
+    });
+  }
+
+  return { hasMore, resolved: batch.length };
 }
 
 async function resolveActivityStaffProfileId(
@@ -829,6 +916,9 @@ function createConvexRegisterSessionActivityRepository(
   ctx: MutationCtx,
 ): RegisterSessionActivityIngestionRepository {
   return {
+    normalizeRegisterSessionId(value) {
+      return ctx.db.normalizeId("registerSession", value);
+    },
     async getTerminal(terminalId) {
       return (await ctx.db.get("posTerminal", terminalId)) as TerminalBindingRecord | null;
     },
@@ -890,7 +980,7 @@ function createConvexRegisterSessionActivityRepository(
             .eq("localRegisterSessionId", args.localRegisterSessionId)
             .eq("status", "mapping_pending"),
         )
-        .take(250);
+        .take(args.limit);
     },
     async findSyncEventByLocalEvent(args) {
       return await ctx.db

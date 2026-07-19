@@ -22,6 +22,7 @@ import {
   isRegisterSessionSaleUsable,
 } from "../../../../shared/registerSessionLifecyclePolicy";
 import { POS_USABLE_REGISTER_SESSION_STATUSES } from "../../../../shared/registerSessionStatus";
+import { POS_REGISTER_NUMBER_CONFLICT_KIND } from "../../../../shared/posTerminalRegistrationError";
 
 import {
   getTerminalByFingerprint,
@@ -42,11 +43,6 @@ const TERMINAL_REACTIVATION_REPROVISION_MESSAGE =
   "Re-provision this terminal before returning it to service.";
 const TERMINAL_REGISTER_SESSION_LOOKUP_LIMIT = 25;
 
-const REGISTER_TERMINAL_VALIDATION_MESSAGES = new Set([
-  REGISTER_NUMBER_REQUIRED_MESSAGE,
-  REGISTER_NUMBER_UNIQUE_MESSAGE,
-]);
-
 function normalizeRegisterNumber(value?: string): string | undefined {
   const registerNumber = value?.trim();
   return registerNumber && registerNumber.length > 0
@@ -61,7 +57,15 @@ function mapRegisterTerminalError(
     return undefined;
   }
 
-  if (REGISTER_TERMINAL_VALIDATION_MESSAGES.has(error.message)) {
+  if (error.message === REGISTER_NUMBER_UNIQUE_MESSAGE) {
+    return userError({
+      code: "conflict",
+      message: error.message,
+      metadata: { conflictKind: POS_REGISTER_NUMBER_CONFLICT_KIND },
+    });
+  }
+
+  if (error.message === REGISTER_NUMBER_REQUIRED_MESSAGE) {
     return userError({
       code: "validation_failed",
       message: error.message,
@@ -398,6 +402,7 @@ type DrawerAuthorityStatus = "healthy" | "blocked";
 type DrawerAuthorityReason =
   | "authority_unknown"
   | "cloud_closed"
+  | "cloud_session_missing"
   | "lifecycle_rejected";
 
 type DrawerAuthorityDirective = {
@@ -1184,6 +1189,7 @@ const drawerAuthorityStatuses = new Set<DrawerAuthorityStatus>([
 const drawerAuthorityReasons = new Set<DrawerAuthorityReason | undefined>([
   "authority_unknown",
   "cloud_closed",
+  "cloud_session_missing",
   "lifecycle_rejected",
 ]);
 

@@ -109,6 +109,29 @@ describe("ServiceAppointmentsViewContent", () => {
     vi.clearAllMocks();
   });
 
+  it("keeps fields interactive while disabling every demo CTA", () => {
+    render(<ServiceAppointmentsViewContent {...baseProps} isSharedDemo />);
+
+    expect(
+      screen.getByText(
+        "This workspace is for interaction only in the demo. Actions are disabled.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText(/search existing customers/i)).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: /schedule appointment/i }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: /reschedule closure repair/i }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: /cancel closure repair/i }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: /convert closure repair/i }),
+    ).toBeDisabled();
+  });
+
   it("validates required appointment fields before scheduling", async () => {
     const user = userEvent.setup();
     const onCreateAppointment = vi.fn().mockResolvedValue({ kind: "ok", data: null });

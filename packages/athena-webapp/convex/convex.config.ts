@@ -4,6 +4,7 @@ import { v } from "convex/values";
 export default defineApp({
   env: {
     MAILERSEND_API_KEY: v.optional(v.string()),
+    R2_PUBLIC_URL: v.optional(v.string()),
     WALKTHROUGH_ALLOWED_ORIGINS: v.optional(v.string()),
     WALKTHROUGH_ALLOW_LOCAL_ORIGINS: v.optional(v.string()),
     WALKTHROUGH_NOTIFICATION_RECIPIENT: v.optional(v.string()),

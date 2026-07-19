@@ -29,6 +29,7 @@ import {
   type ReportingIngressLineInput,
 } from "../reporting/ingress";
 import { canonicalReportingBusinessEventKey } from "../reporting/factIdentity";
+import { requireReadySharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
 
 export const SERVICE_CASE_STATUSES = [
   "intake",
@@ -439,6 +440,11 @@ export async function createServiceCaseWithCtx(
   ctx: MutationCtx,
   args: Parameters<typeof buildServiceCase>[0]
 ) {
+  await requireReadySharedDemoStoreCapabilityIfApplicable(
+    ctx,
+    "service.cases.manage",
+    args.storeId,
+  );
   const existingServiceCase = await ctx.db
     .query("serviceCase")
     .withIndex("by_operationalWorkItemId", (q) =>
@@ -673,6 +679,11 @@ export const addServiceCaseLineItem = mutation({
     }
 
     const { serviceCase, workItem } = serviceCaseContext.data;
+    await requireReadySharedDemoStoreCapabilityIfApplicable(
+      ctx,
+      "service.cases.manage",
+      serviceCase.storeId,
+    );
     const lineItemResult = buildServiceCaseLineItem(args);
     if (lineItemResult.kind === "user_error") {
       return lineItemResult;
@@ -737,6 +748,11 @@ export const recordServiceInventoryUsage = mutation({
     }
 
     const { serviceCase, store, workItem } = serviceCaseContext.data;
+    await requireReadySharedDemoStoreCapabilityIfApplicable(
+      ctx,
+      "service.cases.manage",
+      serviceCase.storeId,
+    );
     const usageType = args.usageType ?? "consumed";
     const now = Date.now();
     const productSku = await ctx.db.get("productSku", args.productSkuId);
@@ -912,6 +928,11 @@ export const recordServicePayment = mutation({
     }
 
     const { serviceCase, workItem } = serviceCaseContext.data;
+    await requireReadySharedDemoStoreCapabilityIfApplicable(
+      ctx,
+      "billing.manage",
+      serviceCase.storeId,
+    );
     const collectedInStore = args.collectedInStore ?? true;
     const resolvedRegisterSessionId = collectedInStore
       ? await resolveRegisterSessionForInStoreCollectionWithCtx(ctx, {
@@ -996,6 +1017,11 @@ export const updateServiceCaseStatus = mutation({
     }
 
     const { serviceCase, store, workItem } = serviceCaseContext.data;
+    await requireReadySharedDemoStoreCapabilityIfApplicable(
+      ctx,
+      "service.cases.manage",
+      serviceCase.storeId,
+    );
 
     const statusTransitionResult = assertValidServiceCaseStatusTransition(
       serviceCase.status,
@@ -1194,6 +1220,11 @@ export const createWalkInServiceCase = mutation({
     storeId: v.id("store"),
   },
   handler: async (ctx, args) => {
+    await requireReadySharedDemoStoreCapabilityIfApplicable(
+      ctx,
+      "service.cases.manage",
+      args.storeId,
+    );
     const store = await ctx.db.get("store", args.storeId);
 
     if (!store) {

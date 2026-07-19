@@ -1,6 +1,7 @@
 ---
 title: Repo Validation Reruns Need Explicit Proof Or Parent Ownership
 date: 2026-05-07
+last_updated: 2026-07-18
 category: harness
 module: repo
 problem_type: validation_noise
@@ -12,6 +13,7 @@ tags:
   - pre-push
   - pr-validation
   - ci-parity
+delivery_diff_fingerprint: d0092bd6fc5b6625cca578a2214d584436307f365f8beeff5ab92f196b783d12
 ---
 
 # Repo Validation Reruns Need Explicit Proof Or Parent Ownership
@@ -29,6 +31,12 @@ push repeats the full local pre-push suite even though the head and base have
 not changed. Removing reruns blindly would weaken a fail-closed guardrail:
 rebases, dirty generated artifacts, changed validation wiring, or an advanced
 `origin/main` all need a fresh run.
+
+Long validation ladders can also produce enough inherited terminal output to
+exhaust an agent or CI transport. The validator may finish green while the
+outer `git push` receives `SIGPIPE` before it writes the remote ref. Retrying
+with ad hoc shell redirection avoids the immediate symptom but leaves every
+future push exposed to the same transport limit.
 
 ## Solution
 
@@ -58,6 +66,15 @@ of reusing a stale proof. Proof recording refuses mixed states with unstaged or
 untracked files, because those files were not guaranteed to become the pushed
 commit tree.
 
+Keep the validation process unchanged, but bound the hook's terminal surface.
+The tracked Husky hook redirects the complete `pre-push:review` stream to a
+unique temporary log and waits on the same child process. It emits a heartbeat
+every 10 seconds. Success prints only the step/handoff summary and deletes the
+log; failure prints the final 200 lines, retains the full log path, and exits
+with the child's exact status. Interrupt signals terminate the child and retain
+the log. Because the validator writes to a regular file instead of the caller's
+possibly truncated pipe, a transport cutoff cannot send it `SIGPIPE`.
+
 ## Prevention
 
 - Keep standalone harness commands fail-closed; only parent commands that
@@ -74,3 +91,6 @@ commit tree.
   are present.
 - When repeated validation feels noisy, add a characterization test before
   removing any command from the ladder.
+- Keep hook output bounded without weakening the underlying command. Preserve
+  the full failure log, a useful tail, heartbeat visibility, signal cleanup,
+  and exact child exit status.

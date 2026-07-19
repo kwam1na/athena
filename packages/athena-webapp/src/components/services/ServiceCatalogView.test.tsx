@@ -72,6 +72,26 @@ describe("ServiceCatalogViewContent", () => {
     vi.clearAllMocks();
   });
 
+  it("keeps fields interactive while disabling every demo CTA", () => {
+    render(<ServiceCatalogViewContent {...baseProps} isSharedDemo />);
+
+    expect(
+      screen.getByText(
+        "This workspace is for interaction only in the demo. Actions are disabled.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText(/service name/i)).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: /create service/i }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: /edit closure repair/i }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: /archive closure repair/i }),
+    ).toBeDisabled();
+  });
+
   it("validates required catalog fields before creating", async () => {
     const user = userEvent.setup();
     const onCreate = vi.fn().mockResolvedValue({ kind: "ok", data: null });

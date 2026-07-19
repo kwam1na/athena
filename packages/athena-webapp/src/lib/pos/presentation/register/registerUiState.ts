@@ -449,6 +449,7 @@ export interface RegisterCashierPresenceRestoreState {
 
 export interface RegisterViewModel {
   workflowMode?: RegisterWorkflowMode;
+  isSharedDemo?: boolean;
   hasActiveStore: boolean;
   debug?: {
     activeStoreSource: "live" | "local" | "missing";

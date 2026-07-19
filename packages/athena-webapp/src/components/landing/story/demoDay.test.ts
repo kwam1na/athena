@@ -61,7 +61,7 @@ describe("landing demo day continuity", () => {
     }
     expect(topItemsTotal).toBeLessThanOrEqual(dayTotals.netSales);
     expect(topItemsQuantity).toBeLessThanOrEqual(dayTotals.itemsSold);
-    const kente = SHARED_DEMO_PRODUCTS.find((entry) => entry.sku === "DEMO-KENTE-SCARF");
+    const kente = SHARED_DEMO_PRODUCTS.find((entry) => entry.slug === "demo-kente-scarf");
     expect(carryForward.remaining).toBe(kente!.inventoryCount - 2);
   });
 

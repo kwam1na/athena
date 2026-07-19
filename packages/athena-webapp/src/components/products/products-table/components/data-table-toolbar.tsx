@@ -9,6 +9,7 @@ import { useGetSubcategories } from "~/src/hooks/useGetSubcategories";
 import { getOrigin } from "~/src/lib/navigationUtils";
 import { useGetCategories } from "~/src/hooks/useGetCategories";
 import { usePermissions } from "~/src/hooks/usePermissions";
+import { useSharedDemoContext } from "~/src/hooks/useSharedDemoContext";
 
 interface DataTableToolbarProps<TData> {
   table: Table<TData>;
@@ -43,6 +44,7 @@ export function DataTableToolbar<TData>({
     ?.sort((a, b) => a.label.localeCompare(b.label));
 
   const { hasFullAdminAccess } = usePermissions();
+  const isSharedDemo = Boolean(useSharedDemoContext());
 
   return (
     <div className="flex items-center justify-between">
@@ -85,7 +87,7 @@ export function DataTableToolbar<TData>({
           )}
         </div>
 
-        {hasFullAdminAccess && (
+        {hasFullAdminAccess && !isSharedDemo && (
           <Link
             to="/$orgUrlSlug/store/$storeUrlSlug/products/new"
             params={(prev) => ({

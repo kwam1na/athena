@@ -1,5 +1,10 @@
 import { v } from "convex/values";
-import { mutation, query, type MutationCtx, type QueryCtx } from "../_generated/server";
+import {
+  mutation,
+  query,
+  type MutationCtx,
+  type QueryCtx,
+} from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import {
   runRemoveSessionItemCommand,
@@ -12,6 +17,7 @@ import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
+import { requireStoreMemberAccessWithCtx } from "../lib/storeMemberAccess";
 
 const SESSION_ITEMS_PAGE_SIZE = 200;
 
@@ -24,7 +30,10 @@ const operationDataValidator = v.object({
   expiresAt: v.number(),
 });
 
-function userErrorFromSessionItemFailure(result: { status: string; message: string }) {
+function userErrorFromSessionItemFailure(result: {
+  status: string;
+  message: string;
+}) {
   switch (result.status) {
     case "notFound":
       return userError({
@@ -80,6 +89,27 @@ async function requireSessionItemStoreAccess(
   return null;
 }
 
+async function requireSessionItemReadAccess(
+  ctx: QueryCtx,
+  sessionId: Id<"posSession">,
+) {
+  const session = await ctx.db.get("posSession", sessionId);
+  if (!session) {
+    return userError({
+      code: "not_found",
+      message: "POS session not found.",
+    });
+  }
+
+  await requireStoreMemberAccessWithCtx(ctx, {
+    allowedRoles: ["full_admin", "pos_only"],
+    demoAccess: { kind: "read" },
+    failureMessage: "You cannot view this POS sale.",
+    storeId: session.storeId,
+  });
+  return null;
+}
+
 // Get all items for a session
 export const getSessionItems = query({
   args: { sessionId: v.id("posSession") },
@@ -107,10 +137,10 @@ export const getSessionItems = query({
       areProcessingFeesAbsorbed: v.optional(v.boolean()),
       createdAt: v.number(),
       updatedAt: v.number(),
-    })
+    }),
   ),
   handler: async (ctx, args) => {
-    const accessError = await requireSessionItemStoreAccess(
+    const accessError = await requireSessionItemReadAccess(
       ctx,
       args.sessionId,
     );

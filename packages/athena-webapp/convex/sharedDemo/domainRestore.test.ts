@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import {
+  planBaselineDocumentPromotion,
   planDomainRestore,
   remapDocumentIds,
   requireBoundedBatch,
@@ -11,6 +12,48 @@ import {
 } from "./domainRestore";
 
 describe("shared demo domain restore registry", () => {
+  it("promotes metadata-only baseline documents without replacing POS sync snapshots", () => {
+    const rows = [
+      {
+        _id: "baseline-credential",
+        baselineVersion: 16,
+        document: { staffProfileId: "manager-1", username: "kwabena" },
+        documentId: "credential-1",
+        tableName: "staffCredential",
+      },
+      {
+        _id: "baseline-sync-cursor",
+        baselineVersion: 16,
+        document: { acceptedThroughSequence: 8 },
+        documentId: "cursor-1",
+        tableName: "posLocalSyncCursor",
+      },
+    ];
+
+    expect(
+      planBaselineDocumentPromotion({
+        fromVersion: 16,
+        rows,
+        toVersion: 17,
+        transformDocument: (row) =>
+          row.tableName === "staffCredential"
+            ? { ...row.document, username: "kay" }
+            : row.document,
+      }),
+    ).toEqual([
+      {
+        baselineVersion: 17,
+        document: { staffProfileId: "manager-1", username: "kay" },
+        rowId: "baseline-credential",
+      },
+      {
+        baselineVersion: 17,
+        document: { acceptedThroughSequence: 8 },
+        rowId: "baseline-sync-cursor",
+      },
+    ]);
+  });
+
   it("covers mutable tables and descendants for every approved demo domain", () => {
     expect([...new Set(SHARED_DEMO_MUTABLE_TABLES.map((entry) => entry.domain))]).toEqual([
       "pos", "inventory", "cash", "orders", "operations", "reporting", "staff",

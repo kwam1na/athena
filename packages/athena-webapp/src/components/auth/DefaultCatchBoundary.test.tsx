@@ -111,6 +111,27 @@ describe("DefaultCatchBoundary", () => {
     expect(mocked.invalidate).toHaveBeenCalledTimes(1);
   });
 
+  it("reloads the app when a route module failed to load", () => {
+    const reloadPage = vi.fn();
+
+    render(
+      <DefaultCatchBoundary
+        error={
+          new TypeError(
+            "Failed to fetch dynamically imported module: http://localhost:5173/open-work.tsx?tsr-split=component",
+          )
+        }
+        reloadPage={reloadPage}
+        reset={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Reload app" }));
+
+    expect(reloadPage).toHaveBeenCalledTimes(1);
+    expect(mocked.invalidate).not.toHaveBeenCalled();
+  });
+
   it.each([
     "The demo session has expired. Open the demo again.",
     "The shared demo session has expired. Open the demo again.",

@@ -1048,9 +1048,15 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
                 reason: "stale" as const,
               };
             }
+            const incomingAuthority = toServerAuthority(input.observation);
             const decision = reconcileRegisterLifecycleServerAuthority(
-              current?.serverAuthority,
-              toServerAuthority(input.observation),
+              restoreVerifiedRedactedAuthoritySubject({
+                current: current?.serverAuthority,
+                expected: input.expectedMapping,
+                incoming: incomingAuthority,
+                mapping,
+              }),
+              incomingAuthority,
             );
             if (decision.disposition !== "applied") return decision;
 
@@ -3463,9 +3469,17 @@ function normalizeDrawerAuthorityState(
             message:
               "Drawer setup changed. Open a current drawer before selling.",
           }
-        : state.reason === "lifecycle_rejected"
-          ? { message: "Drawer sync needs review before selling can continue." }
-          : {}),
+        : state.reason === "cloud_session_missing"
+          ? {
+              message:
+                "The previous drawer is no longer available. Open a new drawer before selling.",
+            }
+          : state.reason === "lifecycle_rejected"
+            ? {
+                message:
+                  "Drawer sync needs review before selling can continue.",
+              }
+            : {}),
   };
 }
 
@@ -3499,6 +3513,7 @@ function mergeDrawerAuthorityState(
         ...(incoming.message ? { message: incoming.message } : {}),
         observedAt: incoming.observedAt,
         ...(incoming.reason === "cloud_closed" ||
+        incoming.reason === "cloud_session_missing" ||
         incoming.reason === "authority_unknown"
           ? { reason: incoming.reason }
           : {}),
@@ -3597,7 +3612,12 @@ function registerAuthorityMappingMatchesExpectation(input: {
   observation: PosRegisterLifecycleAuthorityObservation;
 }) {
   if (input.observation.source === "dedicated_snapshot" && !input.expected) {
-    return false;
+    return (
+      !input.mapping &&
+      Boolean(input.observation.cloudRegisterSessionId) &&
+      input.observation.cloudRegisterSessionId ===
+        input.observation.localRegisterSessionId
+    );
   }
   if (!input.expected) {
     return (
@@ -3654,6 +3674,28 @@ function registerAuthorityMappingMatchesExpectation(input: {
     return false;
   }
   return true;
+}
+
+function restoreVerifiedRedactedAuthoritySubject(input: {
+  current?: PosRegisterLifecycleServerAuthority;
+  expected?: { cloudRegisterSessionId?: string };
+  incoming: PosRegisterLifecycleServerAuthority;
+  mapping?: PosLocalCloudMapping;
+}): PosRegisterLifecycleServerAuthority | undefined {
+  const cloudRegisterSessionId = input.incoming.cloudRegisterSessionId;
+  if (
+    !input.current ||
+    input.current.classification !== "repair_required" ||
+    input.current.cloudRegisterSessionId ||
+    !cloudRegisterSessionId ||
+    input.expected?.cloudRegisterSessionId !== cloudRegisterSessionId ||
+    input.mapping?.entity !== "registerSession" ||
+    input.mapping.cloudId !== cloudRegisterSessionId
+  ) {
+    return input.current;
+  }
+
+  return { ...input.current, cloudRegisterSessionId };
 }
 
 function toSafeAuthorityMessage(

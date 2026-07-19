@@ -122,11 +122,14 @@ will actually reach for:
 | `bun run pr:athena` | The full delivery ladder; records reusable pre-push proof. |
 | `bun run graphify:check` | Freshness gate for tracked graph artifacts. |
 
-Two behaviors are worth knowing up front:
+Three behaviors are worth knowing up front:
 
 - **Repair is fail-closed.** Hooks will regenerate stale docs and graph
   artifacts for you, then **stop**, so you review and commit the repair instead
   of pushing a stale ref.
+- **Pre-push output is bounded.** The hook keeps complete validation output in
+  a unique temporary log while the terminal receives heartbeats, a concise
+  success summary, or byte-capped failure diagnostics with the retained path.
 - **Substantial changes need a solution note.** `compound:check` blocks
   behavior-bearing work that does not also add a note under `docs/solutions/`.
   Small edits, test-only changes, and docs-only changes pass without one.

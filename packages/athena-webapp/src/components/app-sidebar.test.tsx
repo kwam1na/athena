@@ -259,6 +259,15 @@ describe("AppSidebar capability gates", () => {
     expect(screen.queryByRole("button", { name: /storefront/i })).toBeNull();
   });
 
+  it("hides Homepage from the shared demo menu", () => {
+    mocks.usePermissions.mockReturnValue(fullAdminPermissions);
+    mocks.useSharedDemoContext.mockReturnValue({ kind: "shared_demo" });
+
+    render(<AppSidebar />);
+
+    expect(screen.queryByRole("link", { name: /homepage/i })).toBeNull();
+  });
+
   it("renders unresolved catalog work from a trustworthy summary", () => {
     mocks.pathname = "/org/store/main/products";
     mocks.usePermissions.mockReturnValue(fullAdminPermissions);

@@ -5,6 +5,7 @@ import type { Id } from "../_generated/dataModel";
 import { v } from "convex/values";
 import { toSlug } from "../utils";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
+import { requireReadySharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
 
 type ServiceCatalogPricingModel =
   | "fixed"
@@ -327,6 +328,11 @@ export const createServiceCatalogItem = mutation({
     storeId: v.id("store"),
   },
   handler: async (ctx, args) => {
+    await requireReadySharedDemoStoreCapabilityIfApplicable(
+      ctx,
+      "service.catalog.manage",
+      args.storeId,
+    );
     const catalogItemResult = buildServiceCatalogItem(args);
     if (catalogItemResult.kind === "user_error") {
       return catalogItemResult;
@@ -392,6 +398,12 @@ export const updateServiceCatalogItem = mutation({
         message: "Service catalog item not found.",
       });
     }
+
+    await requireReadySharedDemoStoreCapabilityIfApplicable(
+      ctx,
+      "service.catalog.manage",
+      existingCatalogItem.storeId,
+    );
 
     const nextBasePrice =
       args.basePrice === null
@@ -476,6 +488,12 @@ export const archiveServiceCatalogItem = mutation({
         message: "Service catalog item not found.",
       });
     }
+
+    await requireReadySharedDemoStoreCapabilityIfApplicable(
+      ctx,
+      "service.catalog.manage",
+      existingCatalogItem.storeId,
+    );
 
     await ctx.db.patch("serviceCatalog", args.serviceCatalogId, {
       status: "archived",

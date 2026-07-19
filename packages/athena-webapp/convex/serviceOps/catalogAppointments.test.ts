@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Id } from "../_generated/dataModel";
 import * as athenaUserAuth from "../lib/athenaUserAuth";
+import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
 import {
   buildPosServiceCatalogRow,
   buildServiceCatalogItem,
   listPosServiceCatalogSnapshotWithCtx,
+  listPosServiceCatalogSnapshot,
   normalizeServiceCatalogNameKey,
 } from "./catalog";
 import {
@@ -104,6 +106,7 @@ describe("service catalog and appointment helpers", () => {
         status: "active",
       }),
     ]);
+    assertConformsToExportedReturns(listPosServiceCatalogSnapshot, rows);
   });
 
   it("normalizes service catalog names case-insensitively for uniqueness", () => {

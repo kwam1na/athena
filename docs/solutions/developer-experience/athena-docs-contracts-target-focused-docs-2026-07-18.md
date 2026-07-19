@@ -12,7 +12,7 @@ applies_when:
   - Splitting a large README into focused docs
   - A docs check fails because content moved to a different file
 tags: [harness, documentation, readme, sensors, docs-contracts]
-delivery_diff_fingerprint: fa8123077a676427973ee2f27b7527254d049c8729ddd7935943f85ecf1b3445
+delivery_diff_fingerprint: d0092bd6fc5b6625cca578a2214d584436307f365f8beeff5ab92f196b783d12
 ---
 
 # Docs Contracts Should Target Focused Docs, Not README Prose

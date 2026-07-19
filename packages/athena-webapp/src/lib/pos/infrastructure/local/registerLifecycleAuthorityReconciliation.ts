@@ -65,6 +65,11 @@ export function reconcileRegisterLifecycleServerAuthority(
   if (incoming.cloudRegisterSessionId !== current.cloudRegisterSessionId) {
     return { disposition: "rejected", reason: "cursor_conflict" };
   }
+  if (incoming.classification === "stale_cloud_subject") {
+    return sameAuthorityPayload(current, incoming)
+      ? { disposition: "noop", reason: "duplicate" }
+      : { disposition: "applied", reason: "committed", value: incoming };
+  }
   if (incoming.cursor.lifecycleRevision < current.cursor.lifecycleRevision) {
     return { disposition: "noop", reason: "stale" };
   }

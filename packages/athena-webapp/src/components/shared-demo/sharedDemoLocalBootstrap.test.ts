@@ -1,13 +1,28 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  getSharedDemoRegisterNumberCandidates,
   getSharedDemoTerminalName,
   getSharedDemoRegisterNumber,
   getSharedDemoRestoreEpochStorageKey,
+  isSharedDemoRegisterNumber,
   planSharedDemoLocalBootstrap,
+  provisionSharedDemoRegister,
+  resolveSharedDemoRestoreBootstrapStatus,
   resolveSharedDemoRegisterBootstrapAction,
   resetSharedDemoFirstVisitBrowserState,
 } from "./sharedDemoLocalBootstrap";
+
+describe("resolveSharedDemoRestoreBootstrapStatus", () => {
+  it("waits for an active restore to finish before resetting local POS state", () => {
+    expect(resolveSharedDemoRestoreBootstrapStatus(undefined)).toBe("waiting");
+    expect(resolveSharedDemoRestoreBootstrapStatus("restoring")).toBe(
+      "waiting",
+    );
+    expect(resolveSharedDemoRestoreBootstrapStatus("failed")).toBe("failed");
+    expect(resolveSharedDemoRestoreBootstrapStatus("ready")).toBe("ready");
+  });
+});
 
 describe("planSharedDemoLocalBootstrap", () => {
   it("reuses terminal foundation when the current restore epoch is already applied", () => {
@@ -121,9 +136,87 @@ describe("resolveSharedDemoRegisterBootstrapAction", () => {
 });
 
 describe("getSharedDemoRegisterNumber", () => {
-  it("creates a stable numeric register number from the browser fingerprint", () => {
-    expect(getSharedDemoRegisterNumber("7d5339abcdef")).toBe("213305");
-    expect(getSharedDemoRegisterNumber("7d5339abcdef")).toMatch(/^\d{6}$/);
+  it("creates stable two-digit register candidates from the browser fingerprint", () => {
+    const candidates = getSharedDemoRegisterNumberCandidates("7d5339abcdef");
+
+    expect(getSharedDemoRegisterNumber("7d5339abcdef")).toBe("25");
+    expect(candidates).toHaveLength(98);
+    expect(new Set(candidates)).toHaveLength(98);
+    expect(candidates.every((candidate) => /^\d{2}$/.test(candidate))).toBe(
+      true,
+    );
+    expect(isSharedDemoRegisterNumber("25")).toBe(true);
+    expect(isSharedDemoRegisterNumber("01")).toBe(false);
+    expect(isSharedDemoRegisterNumber("213305")).toBe(false);
+  });
+
+  it("tries the next two-digit register when the preferred number is occupied", async () => {
+    const attempts: string[] = [];
+    const result = await provisionSharedDemoRegister({
+      fingerprintHash: "7d5339abcdef",
+      provision: async (registerNumber) => {
+        attempts.push(registerNumber);
+        return attempts.length === 1
+          ? {
+              kind: "user_error" as const,
+              error: {
+                code: "conflict",
+                message: "Register number 25 is occupied.",
+                metadata: { conflictKind: "register_number_conflict" },
+              },
+            }
+          : { kind: "ok" as const, data: { registerNumber } };
+      },
+    });
+
+    expect(attempts).toEqual(["25", "26"]);
+    expect(result).toEqual({
+      kind: "ok",
+      data: { registerNumber: "26" },
+    });
+  });
+
+  it("does not retry terminal errors unrelated to register-number conflicts", async () => {
+    const attempts: string[] = [];
+    const result = await provisionSharedDemoRegister({
+      fingerprintHash: "7d5339abcdef",
+      provision: async (registerNumber) => {
+        attempts.push(registerNumber);
+        return {
+          kind: "user_error" as const,
+          error: {
+            code: "authorization_failed",
+            message: "You do not have access to register this terminal.",
+          },
+        };
+      },
+    });
+
+    expect(attempts).toEqual(["25"]);
+    expect(result.kind).toBe("user_error");
+  });
+
+  it("does not retry a persistent generic conflict for the same terminal", async () => {
+    const attempts: string[] = [];
+    const result = await provisionSharedDemoRegister({
+      fingerprintHash: "7d5339abcdef",
+      provision: async (registerNumber) => {
+        attempts.push(registerNumber);
+        return {
+          kind: "user_error" as const,
+          error: {
+            code: "conflict" as const,
+            message: "This terminal is already bound to another register.",
+          },
+        };
+      },
+    });
+
+    expect(attempts).toEqual(["25"]);
+    expect(result).toMatchObject({
+      kind: "user_error",
+      error: { code: "conflict" },
+    });
   });
 });
 

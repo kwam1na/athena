@@ -120,7 +120,7 @@ as a release blocker.
 ## Provisioning
 
 Run the internal `sharedDemo/provision:provisionSharedDemo` mutation once on the
-approved QA/dev deployment. It is idempotent by the stable organization/store
+approved deployment. It is idempotent by the stable organization/store
 slugs and returns the Athena user, organization, and store IDs required by the
 runtime configuration. It creates the synthetic owner and cashier, catalog and
 stock, terminal/register and cash posture, completed sale and line item,

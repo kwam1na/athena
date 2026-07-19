@@ -71,6 +71,15 @@ describe("online order checkout money wiring", () => {
 });
 
 describe("online order lifecycle workflow tracing", () => {
+  it("keeps cross-store demo fulfillment on the typed denial boundary", () => {
+    const source = getSource("./onlineOrder.ts");
+
+    expect(source).toContain("denySharedDemoAction();");
+    expect(source).not.toContain(
+      'throw new Error("This action is unavailable in the demo.")',
+    );
+  });
+
   it("records order creation traces after checkout session order creation", () => {
     const source = getSource("./helpers/onlineOrder.ts");
 

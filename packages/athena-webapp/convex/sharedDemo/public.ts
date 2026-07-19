@@ -3,7 +3,9 @@ import { v } from "convex/values";
 import { mutation, query } from "../_generated/server";
 import { requireSharedDemoActorWithCtx } from "./actor";
 import {
+  assertSharedDemoWriteEpoch,
   beginRestoreLeaseWithCtx,
+  requireCurrentSharedDemoBaseline,
 } from "./restore";
 import { bindSharedDemoRegisterBaselineWithCtx } from "./registerBaseline";
 import { hashPosTerminalSyncSecret } from "../pos/application/sync/terminalSyncSecret";
@@ -277,7 +279,7 @@ export const resetBrowserExperience = mutation({
 });
 
 export const bindRegisterBaselineToTerminal = mutation({
-  args: { terminalId: v.id("posTerminal") },
+  args: { expectedEpoch: v.number(), terminalId: v.id("posTerminal") },
   returns: v.object({
     bootstrap: v.object({
       cloudRegisterSessionId: v.id("registerSession"),
@@ -298,6 +300,14 @@ export const bindRegisterBaselineToTerminal = mutation({
   }),
   handler: async (ctx, args) => {
     const actor = await requireSharedDemoActorWithCtx(ctx);
+    const restoreState = await ctx.db
+      .query("sharedDemoRestoreState")
+      .withIndex("by_storeId", (q) => q.eq("storeId", actor.storeId))
+      .unique();
+    assertSharedDemoWriteEpoch(
+      requireCurrentSharedDemoBaseline(restoreState),
+      args.expectedEpoch,
+    );
     const terminal = await ctx.db.get("posTerminal", args.terminalId);
     if (!terminal || terminal.storeId !== actor.storeId) {
       throw new Error("The demo register is unavailable on this browser.");

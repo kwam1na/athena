@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   requireAuthenticatedAthenaUserWithCtx: vi.fn(),
   requireOrganizationMemberRoleWithCtx: vi.fn(),
+  requireStoreMemberAccessWithCtx: vi.fn(),
   getRegisterState: vi.fn(),
   openDrawerCommand: vi.fn(),
 }));
@@ -12,6 +13,10 @@ vi.mock("../../lib/athenaUserAuth", () => ({
     mocks.requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx:
     mocks.requireOrganizationMemberRoleWithCtx,
+}));
+
+vi.mock("../../lib/storeMemberAccess", () => ({
+  requireStoreMemberAccessWithCtx: mocks.requireStoreMemberAccessWithCtx,
 }));
 
 vi.mock("../application/queries/getRegisterState", () => ({
@@ -76,6 +81,22 @@ describe("pos public register.getState authorization", () => {
     mocks.requireOrganizationMemberRoleWithCtx.mockResolvedValue({
       role: "pos_only",
     });
+    mocks.requireStoreMemberAccessWithCtx.mockImplementation(
+      async (ctx, args) => {
+        const athenaUser =
+          await mocks.requireAuthenticatedAthenaUserWithCtx(ctx);
+        const membership = await mocks.requireOrganizationMemberRoleWithCtx(
+          ctx,
+          {
+            allowedRoles: args.allowedRoles,
+            failureMessage: args.failureMessage,
+            organizationId: "org-1",
+            userId: athenaUser._id,
+          },
+        );
+        return { athenaUser, membership, store: { _id: args.storeId } };
+      },
+    );
     mocks.getRegisterState.mockResolvedValue({ phase: "ready" });
   });
 

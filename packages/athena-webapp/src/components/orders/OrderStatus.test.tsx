@@ -21,13 +21,23 @@ describe("OrderStatus", () => {
     const pill = label.closest("div.inline-flex");
 
     expect(pill).not.toBeNull();
-    expect(pill).toHaveClass("bg-warning/10", "text-warning");
+    expect(pill).toHaveClass("bg-warning/10", "text-warning-foreground");
   });
 
   it("uses theme-aware success tokens for completed orders", () => {
     render(<OrderStatus order={{ status: "delivered" }} />);
 
     const label = screen.getByText("Delivered");
+    const pill = label.closest("div.inline-flex");
+
+    expect(pill).not.toBeNull();
+    expect(pill).toHaveClass("bg-success/10", "text-success");
+  });
+
+  it("uses theme-aware success colors for ready orders", () => {
+    render(<OrderStatus order={{ status: "ready" }} />);
+
+    const label = screen.getByText("Ready");
     const pill = label.closest("div.inline-flex");
 
     expect(pill).not.toBeNull();

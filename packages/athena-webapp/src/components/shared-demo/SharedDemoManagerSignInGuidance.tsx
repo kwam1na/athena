@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { SHARED_DEMO_STAFF_STORY } from "~/shared/sharedDemoStory";
 
 export function SharedDemoManagerSignInGuidance({
   className,
@@ -16,8 +17,10 @@ export function SharedDemoManagerSignInGuidance({
         Demo staff sign-in
       </p>
       <p className="mt-1 text-sm leading-6 text-muted-foreground">
-        Use <strong>kofi</strong> for manager access or <strong>ama</strong> for
-        cashier access. Both use PIN <strong>1111</strong>.
+        Use <strong>{SHARED_DEMO_STAFF_STORY.cashier.username}</strong> for
+        cashier access or{" "}
+        <strong>{SHARED_DEMO_STAFF_STORY.manager.username}</strong> for manager
+        access. Both use PIN <strong>1111</strong>.
       </p>
     </section>
   );

@@ -26,6 +26,10 @@ vi.mock("@/hooks/useProtectedAdminPageState", () => ({
   useProtectedAdminPageState: mockedHooks.useProtectedAdminPageState,
 }));
 
+vi.mock("~/src/hooks/useSharedDemoContext", () => ({
+  useSharedDemoContext: () => null,
+}));
+
 const mockedToast = vi.hoisted(() => ({
   error: vi.fn(),
   success: vi.fn(),

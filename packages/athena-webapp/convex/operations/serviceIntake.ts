@@ -14,6 +14,7 @@ import {
 } from "../lib/athenaUserAuth";
 import { ok, userError } from "../../shared/commandResult";
 import { validateServiceIntakeInput } from "../../shared/serviceIntake";
+import { requireReadySharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
 
 export { validateServiceIntakeInput } from "../../shared/serviceIntake";
 
@@ -215,6 +216,11 @@ export const createServiceIntake = mutation({
     storeId: v.id("store"),
   },
   handler: async (ctx, args) => {
+    await requireReadySharedDemoStoreCapabilityIfApplicable(
+      ctx,
+      "service.intake.write",
+      args.storeId,
+    );
     const validationErrors = validateServiceIntakeInput({
       assignedStaffProfileId: args.assignedStaffProfileId,
       customerFullName: args.customerFullName,

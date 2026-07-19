@@ -289,7 +289,10 @@ export function useRegisterLifecycleAuthorityRuntime(input: {
         terminalId: terminalSeed.terminalId,
       }).then(async (outcome) => {
         if (cancelled || generation !== applyGeneration.current) return;
-        if (!outcome.seeded) {
+        if (
+          !outcome.seeded &&
+          outcome.seedResult !== "already_seeded"
+        ) {
           setPersistence({ reason: "write_failed", status: "failed" });
           onAdvisoryOutcomeRef.current?.({
             appliedCount: 0,
@@ -445,7 +448,9 @@ async function applySnapshot(input: {
       return { appliedCount, reason: "snapshot_invalid", status: "failed" };
     }
     if (authority.classification === "unmapped") continue;
-    if (authority.classification === "repair_required") sawRepair = true;
+    if (isRegisterLifecycleRepairClassification(authority.classification)) {
+      sawRepair = true;
+    }
 
     let result: Awaited<
       ReturnType<
@@ -482,7 +487,7 @@ async function applySnapshot(input: {
       appliedCount += 1;
       input.onOutcome(
         authority,
-        authority.classification === "repair_required"
+        isRegisterLifecycleRepairClassification(authority.classification)
           ? "repair_required"
           : "applied",
       );
@@ -496,7 +501,7 @@ async function applySnapshot(input: {
     } else if (result.value.disposition === "noop") {
       input.onOutcome(
         authority,
-        authority.classification === "repair_required"
+        isRegisterLifecycleRepairClassification(authority.classification)
           ? "repair_required"
           : "already_current",
       );
@@ -536,10 +541,21 @@ function toObservation(
           reason:
             authority.classification === "sale_blocked"
               ? ("cloud_closed" as const)
-              : ("authority_unknown" as const),
+              : authority.classification === "stale_cloud_subject"
+                ? ("cloud_session_missing" as const)
+                : ("authority_unknown" as const),
         }
       : {}),
     source: "dedicated_snapshot" as const,
     status: blocked ? ("blocked" as const) : ("healthy" as const),
   };
+}
+
+function isRegisterLifecycleRepairClassification(
+  classification: RegisterLifecycleAuthoritySnapshot["results"][number]["classification"],
+) {
+  return (
+    classification === "repair_required" ||
+    classification === "stale_cloud_subject"
+  );
 }

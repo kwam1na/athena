@@ -6,6 +6,10 @@ vi.mock("./actor", () => ({ getSharedDemoActorWithCtx: vi.fn() }));
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { getAuthenticatedAthenaUserWithCtx } from "../lib/athenaUserAuth";
 import { getSharedDemoActorWithCtx } from "./actor";
+import {
+  SHARED_DEMO_ACTION_DENIED_CODE,
+  SHARED_DEMO_ACTION_DENIED_MESSAGE,
+} from "../../shared/sharedDemoActionError";
 
 describe("shared demo explicit Athena identity adapter", () => {
   beforeEach(() => {
@@ -41,6 +45,11 @@ describe("shared demo explicit Athena identity adapter", () => {
       getAuthenticatedAthenaUserWithCtx(ctx, {
         sharedDemoCapability: "identity.manage",
       }),
-    ).rejects.toThrow("unavailable in the demo");
+    ).rejects.toMatchObject({
+      data: {
+        code: SHARED_DEMO_ACTION_DENIED_CODE,
+        message: SHARED_DEMO_ACTION_DENIED_MESSAGE,
+      },
+    });
   });
 });

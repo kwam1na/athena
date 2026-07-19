@@ -103,6 +103,20 @@ describe("ServiceIntakeViewContent", () => {
     vi.clearAllMocks();
   });
 
+  it("keeps fields interactive while disabling the demo CTA", () => {
+    render(<ServiceIntakeViewContent {...baseProps} isSharedDemo />);
+
+    expect(
+      screen.getByText(
+        "This workspace is for interaction only in the demo. Actions are disabled.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText(/customer name/i)).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: /create intake/i }),
+    ).toBeDisabled();
+  });
+
   it("shows validation errors before submitting an incomplete intake", async () => {
     const user = userEvent.setup();
     const onCreateIntake = vi.fn().mockResolvedValue(undefined);

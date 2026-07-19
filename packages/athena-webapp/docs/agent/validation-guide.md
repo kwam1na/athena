@@ -6,7 +6,7 @@ Use this decision guide to answer “what should I run for this change?” based
 
 ## Shared demo admission, restore, and orientation edits
 
-Touched surfaces: `docs/shared-demo-backend-coverage.md`, `convex/sharedDemo`, `convex/auth.ts`, `convex/auth/SharedDemoTicket.ts`, `convex/crons.ts`, `convex/http.ts`, `src/components/shared-demo`, `src/routes/demo.tsx`, `src/routes/_authed.tsx`
+Touched surfaces: `assets/shared-demo-products`, `docs/shared-demo-backend-coverage.md`, `convex/sharedDemo`, `convex/auth.ts`, `convex/auth/SharedDemoTicket.ts`, `convex/crons.ts`, `convex/http.ts`, `src/components/shared-demo`, `src/routes/demo.tsx`, `src/routes/_authed.tsx`
 
 Run:
 
@@ -21,7 +21,7 @@ Behavior scenarios:
 
 - `athena-admin-shell-boot`
 
-Use this when the development-only shared demo changes admission, shared-store authority, restore semantics, effect restrictions, or the owner-oriented application shell. It validates the server boundary, credentialless entry, orientation layer, and generated application contracts together.
+Use this when the configured shared demo changes admission, shared-store authority, restore semantics, effect restrictions, or the owner-oriented application shell. It validates the server boundary, credentialless entry, orientation layer, and generated application contracts together.
 
 ## Route or UI-only edits
 

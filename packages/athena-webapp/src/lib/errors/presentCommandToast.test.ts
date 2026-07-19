@@ -57,6 +57,22 @@ describe("presentCommandToast", () => {
     expect(mocks.toastError).toHaveBeenCalledWith("Please try again.");
   });
 
+  it("renders a normalized shared-demo denial instead of the generic fallback", () => {
+    presentCommandToast({
+      kind: "user_error",
+      error: {
+        code: "authorization_failed",
+        message: "This action isn't allowed in the demo.",
+        retryable: false,
+      },
+    });
+
+    expect(mocks.toastError).toHaveBeenCalledWith(
+      "This action isn't allowed in the demo.",
+    );
+    expect(mocks.toastError).not.toHaveBeenCalledWith("Please try again.");
+  });
+
   it("shows approval guidance instead of generic failure copy", () => {
     presentCommandToast({
       kind: "approval_required",

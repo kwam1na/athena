@@ -298,6 +298,7 @@ export const HARNESS_APP_REGISTRY = [
       {
         title: "Shared demo admission, restore, and orientation edits",
         touchedPaths: [
+          "assets/shared-demo-products",
           "docs/shared-demo-backend-coverage.md",
           "convex/sharedDemo",
           "convex/auth.ts",
@@ -325,7 +326,7 @@ export const HARNESS_APP_REGISTRY = [
           { kind: "script", script: "build" },
         ],
         behaviorScenarios: ["athena-admin-shell-boot"],
-        note: "Use this when the development-only shared demo changes admission, shared-store authority, restore semantics, effect restrictions, or the owner-oriented application shell. It validates the server boundary, credentialless entry, orientation layer, and generated application contracts together.",
+        note: "Use this when the configured shared demo changes admission, shared-store authority, restore semantics, effect restrictions, or the owner-oriented application shell. It validates the server boundary, credentialless entry, orientation layer, and generated application contracts together.",
       },
       {
         title: "Route or UI-only edits",

@@ -946,73 +946,76 @@ describe("createLocalCommandGateway", () => {
     });
   });
 
-  it("opens a replacement drawer when the mapped local drawer is cloud-closed", async () => {
-    const store = createPosLocalStore({
-      adapter: createMemoryPosLocalStorageAdapter(),
-      clock: () => 10_000,
-    });
-    await store.appendEvent({
-      type: "register.opened",
-      terminalId: "terminal-1",
-      storeId: "store-1",
-      registerNumber: "1",
-      localRegisterSessionId: "local-register-1",
-      staffProfileId: "staff-1",
-      payload: {
+  it.each(["cloud_closed", "cloud_session_missing"] as const)(
+    "opens a replacement drawer when the mapped local drawer is %s",
+    async (drawerAuthorityReason) => {
+      const store = createPosLocalStore({
+        adapter: createMemoryPosLocalStorageAdapter(),
+        clock: () => 10_000,
+      });
+      await store.appendEvent({
+        type: "register.opened",
+        terminalId: "terminal-1",
+        storeId: "store-1",
+        registerNumber: "1",
         localRegisterSessionId: "local-register-1",
-        openingFloat: 100,
-      },
-    });
-    await store.writeLocalCloudMapping({
-      entity: "registerSession",
-      localId: "local-register-1",
-      cloudId: "cloud-register-1",
-      mappedAt: 10_001,
-    });
-    await store.writeDrawerAuthorityState({
-      cloudRegisterSessionId: "cloud-register-1",
-      localRegisterSessionId: "local-register-1",
-      observedAt: 10_010,
-      reason: "cloud_closed",
-      status: "blocked",
-      storeId: "store-1",
-      terminalId: "terminal-1",
-    });
-    const gateway = createLocalCommandGateway({
-      store,
-      clock: () => 20_000,
-      createLocalId: (kind) => `${kind}-2`,
-    });
-
-    const result = await gateway.openDrawer({
-      storeId: "store-1" as never,
-      terminalId: "terminal-1" as never,
-      staffProfileId: "staff-1" as never,
-      registerNumber: "1",
-      openingFloat: 500,
-    });
-
-    expect(result).toMatchObject({
-      kind: "ok",
-      data: {
-        localRegisterSessionId: "local-register-session-2",
-        openingFloat: 500,
-      },
-    });
-    await expect(store.listEvents()).resolves.toMatchObject({
-      ok: true,
-      value: [
-        expect.objectContaining({
+        staffProfileId: "staff-1",
+        payload: {
           localRegisterSessionId: "local-register-1",
-          type: "register.opened",
-        }),
-        expect.objectContaining({
+          openingFloat: 100,
+        },
+      });
+      await store.writeLocalCloudMapping({
+        entity: "registerSession",
+        localId: "local-register-1",
+        cloudId: "cloud-register-1",
+        mappedAt: 10_001,
+      });
+      await store.writeDrawerAuthorityState({
+        cloudRegisterSessionId: "cloud-register-1",
+        localRegisterSessionId: "local-register-1",
+        observedAt: 10_010,
+        reason: drawerAuthorityReason,
+        status: "blocked",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      });
+      const gateway = createLocalCommandGateway({
+        store,
+        clock: () => 20_000,
+        createLocalId: (kind) => `${kind}-2`,
+      });
+
+      const result = await gateway.openDrawer({
+        storeId: "store-1" as never,
+        terminalId: "terminal-1" as never,
+        staffProfileId: "staff-1" as never,
+        registerNumber: "1",
+        openingFloat: 500,
+      });
+
+      expect(result).toMatchObject({
+        kind: "ok",
+        data: {
           localRegisterSessionId: "local-register-session-2",
-          type: "register.opened",
-        }),
-      ],
-    });
-  });
+          openingFloat: 500,
+        },
+      });
+      await expect(store.listEvents()).resolves.toMatchObject({
+        ok: true,
+        value: [
+          expect.objectContaining({
+            localRegisterSessionId: "local-register-1",
+            type: "register.opened",
+          }),
+          expect.objectContaining({
+            localRegisterSessionId: "local-register-session-2",
+            type: "register.opened",
+          }),
+        ],
+      });
+    },
+  );
 
   it("opens a replacement drawer when a submitted closeout is under lifecycle review", async () => {
     const store = createPosLocalStore({

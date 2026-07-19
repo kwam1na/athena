@@ -5,6 +5,7 @@ import type { Id } from "../_generated/dataModel";
 const mocks = vi.hoisted(() => ({
   requireAuthenticatedAthenaUserWithCtx: vi.fn(),
   requireOrganizationMemberRoleWithCtx: vi.fn(),
+  requireStoreMemberAccessWithCtx: vi.fn(),
   runRemoveSessionItemCommand: vi.fn(),
   runUpsertSessionItemCommand: vi.fn(),
 }));
@@ -16,19 +17,24 @@ vi.mock("../lib/athenaUserAuth", () => ({
     mocks.requireOrganizationMemberRoleWithCtx,
 }));
 
+vi.mock("../lib/storeMemberAccess", () => ({
+  requireStoreMemberAccessWithCtx: mocks.requireStoreMemberAccessWithCtx,
+}));
+
 vi.mock("../pos/application/commands/sessionCommands", () => ({
   runRemoveSessionItemCommand: mocks.runRemoveSessionItemCommand,
   runUpsertSessionItemCommand: mocks.runUpsertSessionItemCommand,
 }));
 
-vi.mock(
-  "../pos/infrastructure/repositories/sessionCommandRepository",
-  () => ({
-    collectSessionItemsFromPages: vi.fn(),
-  }),
-);
+vi.mock("../pos/infrastructure/repositories/sessionCommandRepository", () => ({
+  collectSessionItemsFromPages: vi.fn(),
+}));
 
-import { addOrUpdateItem, getSessionItems, removeItem } from "./posSessionItems";
+import {
+  addOrUpdateItem,
+  getSessionItems,
+  removeItem,
+} from "./posSessionItems";
 import { collectSessionItemsFromPages } from "../pos/infrastructure/repositories/sessionCommandRepository";
 import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
 
@@ -37,12 +43,32 @@ function getHandler(definition: unknown) {
 }
 
 describe("posSessionItems public mutations", () => {
+  it("keeps the empty cart read contract stable", () => {
+    assertConformsToExportedReturns(getSessionItems, []);
+  });
+
   beforeEach(() => {
     vi.resetAllMocks();
     mocks.requireAuthenticatedAthenaUserWithCtx.mockResolvedValue({
       _id: "user-1",
     });
     mocks.requireOrganizationMemberRoleWithCtx.mockResolvedValue(undefined);
+    mocks.requireStoreMemberAccessWithCtx.mockImplementation(
+      async (ctx, args) => {
+        const athenaUser =
+          await mocks.requireAuthenticatedAthenaUserWithCtx(ctx);
+        const membership = await mocks.requireOrganizationMemberRoleWithCtx(
+          ctx,
+          {
+            allowedRoles: args.allowedRoles,
+            failureMessage: args.failureMessage,
+            organizationId: "org-1",
+            userId: athenaUser._id,
+          },
+        );
+        return { athenaUser, membership, store: { _id: args.storeId } };
+      },
+    );
     mocks.runUpsertSessionItemCommand.mockResolvedValue({
       data: {
         expiresAt: 1,
@@ -80,13 +106,18 @@ describe("posSessionItems public mutations", () => {
       kind: "ok",
     });
 
-    expect(mocks.requireAuthenticatedAthenaUserWithCtx).toHaveBeenCalledWith(ctx);
-    expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(ctx, {
-      allowedRoles: ["full_admin", "pos_only"],
-      failureMessage: "You cannot change this POS sale.",
-      organizationId: "org-1",
-      userId: "user-1",
-    });
+    expect(mocks.requireAuthenticatedAthenaUserWithCtx).toHaveBeenCalledWith(
+      ctx,
+    );
+    expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
+      ctx,
+      {
+        allowedRoles: ["full_admin", "pos_only"],
+        failureMessage: "You cannot change this POS sale.",
+        organizationId: "org-1",
+        userId: "user-1",
+      },
+    );
     expect(mocks.runUpsertSessionItemCommand).toHaveBeenCalledWith(
       ctx,
       expect.objectContaining({
@@ -137,12 +168,15 @@ describe("posSessionItems public mutations", () => {
     });
 
     expect(rows).toHaveLength(1);
-    expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(ctx, {
-      allowedRoles: ["full_admin", "pos_only"],
-      failureMessage: "You cannot change this POS sale.",
-      organizationId: "org-1",
-      userId: "user-1",
-    });
+    expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
+      ctx,
+      {
+        allowedRoles: ["full_admin", "pos_only"],
+        failureMessage: "You cannot view this POS sale.",
+        organizationId: "org-1",
+        userId: "user-1",
+      },
+    );
   });
 
   it("proves public exports conform to their return validators", () => {
