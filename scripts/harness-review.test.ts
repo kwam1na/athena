@@ -7,7 +7,9 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   buildGitProcessEnv,
   getChangedFilesForHarnessReview,
+  packageValidationIsProvided,
   parseHarnessReviewArgs,
+  repoOwnedValidationIsProvided,
   resolveHarnessReviewShell,
   runHarnessReview,
 } from "./harness-review";
@@ -1779,6 +1781,41 @@ describe("runHarnessReview", () => {
       "@athena/webapp:lint:convex:changed",
       "@athena/webapp:test",
     ]);
+  });
+});
+
+describe("validation provider scopes", () => {
+  it("treats both providers as covering the repo-owned validation set", () => {
+    expect(
+      repoOwnedValidationIsProvided({ repoValidationProvidedBy: "pr:athena" })
+    ).toBe(true);
+    expect(
+      repoOwnedValidationIsProvided({
+        validationProvidedBy: "athena-pr-tests",
+      })
+    ).toBe(true);
+  });
+
+  it("treats only the workflow provider as covering package validation", () => {
+    expect(
+      packageValidationIsProvided({ validationProvidedBy: "athena-pr-tests" })
+    ).toBe(true);
+    expect(packageValidationIsProvided({})).toBe(false);
+  });
+
+  it("keeps package validation running under the local pr:athena provider", () => {
+    // This is the distinction between the two near-identically named flags:
+    // pr:athena runs the repo-owned commands itself, but still delegates
+    // package selection to review. Only the CI provider prunes both scopes.
+    const localProvider = { repoValidationProvidedBy: "pr:athena" } as const;
+
+    expect(repoOwnedValidationIsProvided(localProvider)).toBe(true);
+    expect(packageValidationIsProvided(localProvider)).toBe(false);
+  });
+
+  it("suppresses neither scope for standalone fail-closed review", () => {
+    expect(repoOwnedValidationIsProvided({})).toBe(false);
+    expect(packageValidationIsProvided({})).toBe(false);
   });
 });
 

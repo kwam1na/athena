@@ -274,6 +274,7 @@ composing explicit phases:
 
 ```sh
 bun run pr:athena:prepare
+bun run pr:athena:preflight
 bun run pr:athena:validate
 bun run pr:athena:record-proof
 bun run pr:athena:scorecard
@@ -283,6 +284,13 @@ bun run pr:athena:scorecard
 stops before the heavy ladder if unstaged or untracked files remain. It does not
 stage new files automatically; stage intended new files explicitly and rerun the
 prepare step before spending the full validation cycle.
+
+`pr:athena:preflight` then aggregates validation-map coverage, live harness
+audit, audit-fixture consistency, and harness-script sibling-test policy before
+provider validation starts. Its failure report names the registry source,
+generated-doc repair, fixture and sibling-test files, and the focused
+verification command, so a preflight failure is actionable without reading the
+sensor source.
 
 `pr:athena:validate` runs the main repo ladder in two halves. The provider half
 runs Convex audits, architecture checks, and coverage; if those commands pass,
@@ -388,3 +396,190 @@ touches validation wiring. In those cases rerunning is the fail-closed policy.
 The pre-push handoff line separates `validation=<passed|skipped>` from
 `proof=<status>` so a successful validation rerun is not confused with proof
 reuse.
+
+## Command And Artifact Reference
+
+This section is the lookup table for the commands and outputs described above.
+The narrative sections explain why a sensor exists; this section records what to
+type and where the output lands.
+
+### Repo-Level Commands
+
+| Command | Purpose |
+| --- | --- |
+| `bun run harness:generate` | Regenerate the generated agent docs from the registry and live filesystem. |
+| `bun run harness:check` | Verify generated harness docs, links, and validation maps are present and fresh. |
+| `bun run harness:test` | Run the harness implementation tests. |
+| `bun run harness:audit` | Audit harness coverage across registered surfaces. |
+| `bun run harness:self-review --base origin/main` | Deterministic branch review against the base. |
+| `bun run harness:review --base origin/main` | Touched-surface validation review; fail-closed when run standalone. |
+| `bun run harness:inferential-review` | Higher-level review pass; deterministic lane is blocking. |
+| `bun run harness:behavior --list` | List available runtime behavior scenarios. |
+| `bun run harness:behavior --scenario <name>` | Run one runtime behavior scenario. |
+| `bun run harness:runtime-trends` | Aggregate `[harness:behavior:report]` lines from stdin into trend telemetry. |
+| `bun run harness:scorecard` | Emit the deterministic quality snapshot. |
+| `bun run harness:janitor` | Report drift; `--repair` applies safe repairs, then rechecks. |
+| `bun run architecture:check` | Run architecture boundary checks. |
+| `bun run compound:check` | Enforce the solution-note delivery guardrail. |
+| `bun run delivery:documentation-check` | Combined solution-note and landed-change-report policy check. |
+| `bun run graphify:check` | Freshness gate for tracked graphify artifacts. |
+| `bun run graphify:rebuild` | Repair path for stale graphify artifacts. |
+| `bun run pre-push:review` | The pre-push gate; also runnable by hand. |
+| `bun run pr:athena` | The full delivery ladder (see phases below). |
+
+`harness:test` selects `.test.ts` files from the top level of the repo-root
+`scripts/` directory only. The scan is non-recursive, so nested trees — including
+cloned worktrees under `worktrees/` — are never picked up. Use
+`bun run harness:test -- --dry-run` to print the selected files without running
+them.
+
+The repo pins Bun through `packageManager` in `package.json` (`bun@1.1.29`
+today). Every GitHub Actions job sets up Bun with `bun-version-file: package.json`,
+so CI and local harness runs read the same declared version.
+
+### Delivery Ladder Phases
+
+`pr:athena` delegates to `pr:athena:delivery-run`, which composes:
+
+| Phase | Command | Notes |
+| --- | --- | --- |
+| Prepare | `pr:athena:prepare` | Dependency check, generated-artifact repair, then blocks if unstaged or untracked files would prevent reusable proof. |
+| Preflight | `pr:athena:preflight` | Validation-map coverage, live harness audit, audit-fixture consistency, and harness-script sibling-test policy. |
+| Validate | `pr:athena:validate` | Provider half (docs check, workflow check, Convex audit and lint, frontend lint, architecture, `tsc --noEmit`, coverage), then writes provider evidence, then the review half (harness review, inferential review, audit, graphify check). |
+| Record proof | `pr:athena:record-proof` | Records the git-private proof for the validated tree. |
+| Scorecard | `pr:athena:scorecard` | Runs against the current delivery-run ledger. |
+
+Inside the ladder, `harness:review` is called with
+`--repo-validation-provided-by pr:athena` plus a `--provider-evidence` path,
+because the repo-owned validation commands already ran directly.
+
+The two provider flags are similarly named but differ in **scope**, and passing
+the wrong one silently changes how much work review skips:
+
+| Flag | Scope |
+| --- | --- |
+| `--repo-validation-provided-by pr:athena` | Narrow. Suppresses only the repo-owned validation set. Package validation still runs, because `pr:athena` leaves package selection to review. |
+| `--validation-provided-by athena-pr-tests` | Broad. Suppresses the repo-owned set *and* prunes package commands the PR workflow runs as separate jobs, leaving validation-map checks and behavior scenarios. |
+
+Neither is a legacy alias of the other. Standalone `harness:review` and
+`pre-push:review` pass neither flag and stay fail-closed.
+
+### Inferential Review Modes
+
+The deterministic lane always runs and is the blocking source of truth. The
+semantic shadow lane is opt-in:
+
+```sh
+HARNESS_INFERENTIAL_SEMANTIC_MODE=shadow bun run harness:inferential-review
+HARNESS_INFERENTIAL_SEMANTIC_MODE=shadow bun run harness:inferential-review --persist-history
+```
+
+The shadow lane calls the Anthropic API. When `ANTHROPIC_API_KEY` is not
+configured it records a `skipped` status rather than failing the deterministic
+lane. `HARNESS_INFERENTIAL_ANTHROPIC_MODEL` overrides the default model.
+
+## Behavior Scenario Reference
+
+`bun run harness:behavior --list` prints these from the registry, and
+`harness:check` keeps this section in sync with it. Bundled scenarios include:
+
+| Scenario | Covers |
+| --- | --- |
+| `sample-runtime-smoke` | Minimal local app boot, browser click, signal propagation, teardown. |
+| `athena-admin-shell-boot` | Admin-shell fixture with deterministic auth bootstrap. |
+| `athena-convex-storefront-composition` | Authenticated shell driving a Convex-backed storefront route composition. |
+| `athena-convex-storefront-failure-visibility` | Convex composition failures stay visible in browser state. |
+| `athena-qa-live-smoke` | Live QA surface; fails on blank app, page errors, failed same-origin requests, or 5xx resources. |
+| `valkey-proxy-local-request-response` | Local Valkey proxy round trip with an in-memory client. |
+| `storefront-backend-first-load` | First-load backend requests; fails on direct Convex browser traffic, CORS/preflight failures, or non-2xx API responses. |
+| `storefront-checkout-bootstrap` | Checkout bootstrap UI and runtime signals. |
+| `storefront-checkout-validation-blocker` | Invalid checkout-session routing surfaces the validation blocker. |
+| `storefront-checkout-verification-recovery` | Paystack-origin redirect and verification recovery to checkout complete. |
+
+Add `--record-video` to persist browser evidence under
+`artifacts/harness-behavior/videos/<scenario>/<run-stamp>/`.
+
+Scenario thresholds live in `scripts/harness-behavior-scenarios.ts`:
+
+- `runtimeSignals[].minMatches` / `runtimeSignals[].maxMatches` — expected match
+  counts for a named runtime signal.
+- `thresholds.latency.maxTotalDurationMs` — ceiling for the whole run.
+- `thresholds.latency.maxPhaseDurationMs` — a per-phase map, not a single value.
+  Phases are `boot`, `readiness`, `browser`, `runtime`, `assertion`, and
+  `cleanup`. Scenarios share preset budgets, so storefront scenarios allow a much
+  longer boot than the sample runtime does.
+
+## Artifacts And CI Reference
+
+`harness:check` reads the scenario list above by scanning from its marker to the
+next `##` heading, so this heading also bounds that scan. Keep it at `##` level:
+scenario-shaped names in backticks below it would otherwise be read as part of
+the scenario list.
+
+### Artifacts
+
+Tracked, freshness-gated graphify artifacts:
+
+- `graphify-out/GRAPH_REPORT.md`
+- `graphify-out/graph.json`
+- `graphify-out/wiki/index.md`
+- `graphify-out/wiki/packages/*.md`
+
+`graphify-out/graph.html` is committed but sits outside the freshness gate. See
+[Graphify](./graphify.md) for the artifact and Python-runtime details.
+
+Local and CI evidence outputs, all git-ignored:
+
+| Path | Written by |
+| --- | --- |
+| `artifacts/harness-scorecard/latest.json` | `harness:scorecard` |
+| `artifacts/harness-inferential-review/latest.json` | `harness:inferential-review` |
+| `artifacts/harness-inferential-review/history/<run-stamp>.json` | `harness:inferential-review --persist-history` |
+| `artifacts/harness-behavior/trends/latest.json` | `harness:runtime-trends` |
+| `artifacts/harness-behavior/trends/history/<run-stamp>.json` | `harness:runtime-trends --persist-history` |
+| `artifacts/harness-behavior/videos/<scenario>/<run-stamp>/` | `harness:behavior --record-video` |
+| `artifacts/harness-delivery-runs/` | `pr:athena` delivery-run ledger and provider evidence |
+| `artifacts/harness-contract-preflight/latest.json` | `pr:athena:preflight` |
+| `graphify-out/cache/` | `graphify:rebuild` |
+
+These are ignored on purpose. `graphify-out/cache/` is a large local
+acceleration cache, and the `artifacts/harness-*` paths are machine-generated
+evidence, not reviewable source.
+
+### GitHub Actions Wiring
+
+`.github/workflows/athena-pr-tests.yml` runs on pull requests, on a weekly
+schedule (Mondays 14:00 UTC), and on manual dispatch.
+
+- The `harness-validation` job runs self-review, review with
+  `--validation-provided-by athena-pr-tests`, docs check, architecture check,
+  audit, inferential review in `shadow` mode, scorecard, and graphify freshness.
+- The `harness-janitor` job runs only on schedule or manual dispatch. It runs the
+  janitor in report mode, persists inferential history, persists runtime trend
+  history, and regenerates the telemetry scorecard.
+- Manual dispatch accepts literal `[harness:behavior:report]` lines as an input,
+  which the janitor job pipes into `harness:runtime-trends --persist-history`.
+- Both jobs upload their artifacts with `if: always()` so failures stay
+  inspectable.
+
+### Git Hooks
+
+Run `bun install` (or `bun run prepare`) after cloning to point Git at the
+tracked hooks in `.husky/`. Worktrees inherit the repo config, so using the
+tracked `.husky` directory avoids the missing generated shim problem that a
+`.husky/_` layout produces.
+
+- `pre-commit:generated-artifacts` runs `harness:generate` and
+  `graphify:rebuild`, then stages the tracked generated outputs so the commit
+  includes refreshed artifacts.
+- `pre-push:review` starts with `graphify:check`, then
+  `delivery:documentation-check`, then the rest of the local suite. If tracked
+  graphify artifacts are stale it rebuilds once, rechecks, and stops so the
+  repaired artifacts can be reviewed and committed. If `harness:self-review` or
+  `harness:review` is blocked by stale generated docs, it runs `harness:generate`
+  once, retries, and then blocks for the same reason.
+
+For repo-harness edits such as `scripts/harness-app-registry.ts`, keep
+`bun run harness:review --base origin/main` and
+`bun run harness:inferential-review` in the local ladder so a missing sibling
+test like `scripts/harness-app-registry.test.ts` fails before push.

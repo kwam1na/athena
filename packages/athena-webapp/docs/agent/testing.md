@@ -1,5 +1,7 @@
 # Athena Webapp Testing
 
+Use the package commands in this guide for focused iteration and diagnosis. Once a branch is merge-ready, run `bun run pr:athena` from the repository root before any independently assembled broad suite. Its ordering intentionally checks inexpensive prerequisites such as delivery documentation before coverage and other expensive validation, then records proof for pre-push reuse.
+
 Use the repo-root harness commands together:
 
 - `bun run harness:check` validates the docs themselves: required files, links, path references, and documented test commands.

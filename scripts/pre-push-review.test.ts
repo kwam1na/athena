@@ -1095,59 +1095,75 @@ describe("repo harness ergonomics", () => {
     );
   });
 
-  it("documents harness implementation tests as a repo-level command", async () => {
-    const readme = await readFile(path.join(ROOT_DIR, "README.md"), "utf8");
+  // These docs contracts assert on docs/harness.md and docs/graphify.md rather
+  // than README.md. The README is a short overview that links out; the harness
+  // and graphify docs are the canonical references. They also assert on command
+  // and artifact tokens rather than whole sentences, so the docs can be reworded
+  // without a test edit while the delivery contract stays documented.
+  it("documents the harness delivery commands in the harness doc", async () => {
+    const harnessDoc = await readFile(
+      path.join(ROOT_DIR, "docs/harness.md"),
+      "utf8",
+    );
 
-    expect(readme).toContain("bun run harness:test");
-    expect(readme).toContain("bun run harness:inferential-review");
-    expect(readme).toContain("HARNESS_INFERENTIAL_SEMANTIC_MODE=shadow");
-    expect(readme).toContain("--persist-history");
-    expect(readme).toContain("bun run harness:self-review --base origin/main");
+    expect(harnessDoc).toContain("bun run harness:test");
+    expect(harnessDoc).toContain("bun run harness:inferential-review");
+    expect(harnessDoc).toContain("HARNESS_INFERENTIAL_SEMANTIC_MODE=shadow");
+    expect(harnessDoc).toContain("--persist-history");
+    expect(harnessDoc).toContain(
+      "bun run harness:self-review --base origin/main",
+    );
   });
 
-  it("documents graphify setup and tracked artifact policy in the README", async () => {
+  it("keeps the README pointing at the focused docs", async () => {
     const readme = await readFile(path.join(ROOT_DIR, "README.md"), "utf8");
 
-    expect(readme).toContain(
-      "`pre-commit:generated-artifacts` automatically runs `bun run harness:generate` and `bun run graphify:rebuild`",
+    expect(readme).toContain("./docs/harness.md");
+    expect(readme).toContain("./docs/graphify.md");
+    expect(readme).toContain("./docs/deployment/vps-production.md");
+    expect(readme).toContain("./packages/AGENTS.md");
+    expect(readme).toContain("./graphify-out/wiki/index.md");
+  });
+
+  it("documents the generated-artifact repair flow in the harness doc", async () => {
+    const harnessDoc = await readFile(
+      path.join(ROOT_DIR, "docs/harness.md"),
+      "utf8",
     );
-    expect(readme).toContain(
-      "`bun run pr:athena:prepare` starts with that same generated-artifact repair step",
+
+    // The delivery ladder phases and the fail-closed repair path.
+    expect(harnessDoc).toContain("pre-commit:generated-artifacts");
+    expect(harnessDoc).toContain("pr:athena:prepare");
+    expect(harnessDoc).toContain("pr:athena:validate");
+    expect(harnessDoc).toContain("pr:athena:record-proof");
+    expect(harnessDoc).toContain("bun run harness:generate");
+    expect(harnessDoc).toContain("bun run graphify:check");
+    expect(harnessDoc).toContain("delivery:documentation-check");
+
+    // Evidence artifact paths that agents need in order to find run output.
+    expect(harnessDoc).toContain("artifacts/harness-inferential-review/history/");
+    expect(harnessDoc).toContain("artifacts/harness-behavior/trends/history/");
+
+    // Token presence alone would pass on a doc that described the opposite
+    // behavior, so also assert the two concepts a reader must come away with:
+    // repair is fail-closed, and a stale ref must not reach CI.
+    expect(harnessDoc).toMatch(/fail-closed repair/i);
+    expect(harnessDoc).toMatch(/blocks?[^.]*\breview(ed)?\b[^.]*commit/i);
+  });
+
+  it("documents graphify setup and tracked artifact policy in the graphify doc", async () => {
+    const graphifyDoc = await readFile(
+      path.join(ROOT_DIR, "docs/graphify.md"),
+      "utf8",
     );
-    expect(readme).toContain(
-      "`bun run pr:athena:validate` runs the heavy validation ladder",
-    );
-    expect(readme).toContain(
-      "`bun run pr:athena:record-proof` records the reusable pre-push proof",
-    );
-    expect(readme).toContain(
-      "If `harness:self-review` or `harness:review` gets blocked by stale generated harness docs",
-    );
-    expect(readme).toContain(
-      "Blocks so you can review, commit, and push the repaired generated docs instead of sending a stale ref to CI.",
-    );
-    expect(readme).toContain(
-      "`pre-push:review` starts with `bun run graphify:check`",
-    );
-    expect(readme).toContain(
-      "then runs `bun run delivery:documentation-check`",
-    );
-    expect(readme).toContain(
-      "reports solution-note and landed-change-report policy failures together",
-    );
-    expect(readme).toContain(
-      "runs `bun run graphify:rebuild` once, reruns `bun run graphify:check`, and then stops",
-    );
-    expect(readme).toContain("bun run graphify:check");
-    expect(readme).toContain("bun run graphify:rebuild");
-    expect(readme).toContain("bun run harness:generate");
-    expect(readme).toContain(".graphify_python");
-    expect(readme).toContain(".graphify-requirements.txt");
-    expect(readme).toContain("graphify-out/GRAPH_REPORT.md");
-    expect(readme).toContain("graphify-out/graph.json");
-    expect(readme).toContain("graphify-out/cache");
-    expect(readme).toContain("artifacts/harness-inferential-review/history/");
-    expect(readme).toContain("artifacts/harness-behavior/trends/history/");
+
+    expect(graphifyDoc).toContain("bun run graphify:check");
+    expect(graphifyDoc).toContain("bun run graphify:rebuild");
+    expect(graphifyDoc).toContain(".graphify_python");
+    expect(graphifyDoc).toContain(".graphify-requirements.txt");
+    expect(graphifyDoc).toContain("graphify-out/GRAPH_REPORT.md");
+    expect(graphifyDoc).toContain("graphify-out/graph.json");
+    expect(graphifyDoc).toContain("graphify-out/cache");
   });
 
   it("ignores the generated graphify cache directory", async () => {

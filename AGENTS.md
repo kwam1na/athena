@@ -33,6 +33,8 @@ bun run test -- path/to/file.test.ts -t "test name"
 
 Use package-relative paths with that command, for example `convex/cashControls/deposits.test.ts`.
 
+Focused tests are iteration sensors, not a merge gate. At a merge-ready boundary, run `bun run pr:athena` before assembling or running an independent broad validation suite. The repository command owns prerequisite ordering, documentation and generated-artifact checks, expensive provider validation, and reusable pre-push proof.
+
 ## skills
 
 Athena vendors its agent skill system under `.agents/`.
