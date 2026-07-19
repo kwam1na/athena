@@ -1783,24 +1783,12 @@ export function useRegisterViewModel(): RegisterViewModel {
   const hasLifecycleReviewDrawerBlock =
     localDrawerAuthorityReason === "lifecycle_rejected";
   const hasLocalSaleAuthorityBlock = Boolean(localSaleAuthorityBlockReason);
-  // Opening a (replacement) drawer briefly re-derives ambiguous authority candidates —
-  // the just-closed session's "current" cloud mapping and the newly opened session coexist
-  // for a render — which momentarily reports `candidate_invalid`. The optimistic local
-  // session already makes the register operable, but this transient would flash the
-  // "Drawer status not saved" gate before the local read model settles. Suppress only that
-  // transient: while the open is in flight, or an optimistic session hasn't yet been
-  // confirmed by the projected read model. Genuine failures (write_failed, snapshot_invalid,
-  // mapping_invalidated) are never suppressed, and a persistent candidate_invalid resurfaces
-  // once the read model catches up and this guard releases.
-  const hasPendingOptimisticDrawerOpen =
-    isOpeningDrawer ||
-    Boolean(
-      localOperableRegisterSession &&
-        localOperableRegisterSession.localRegisterSessionId !==
-          projectedLocalRegisterSession?.localRegisterSessionId,
-    );
+  // Opening a (replacement) drawer re-settles cloud register authority across two snapshots;
+  // the first pass reports a transitional `mapping_invalidated` / `candidate_invalid` before
+  // the settled pass succeeds. Those re-settles are not save failures, so they must not flash
+  // the "Drawer status not saved" gate — only a genuine failure (write_failed / snapshot_invalid)
+  // should. See hasBlockingAuthorityPersistenceFailure.
   const hasAuthorityPersistenceFailure = hasBlockingAuthorityPersistenceFailure({
-    hasPendingOptimisticDrawerOpen,
     reason:
       registerLifecycleAuthorityPersistence.status === "failed"
         ? registerLifecycleAuthorityPersistence.reason

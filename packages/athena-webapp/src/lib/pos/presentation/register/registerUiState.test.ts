@@ -9,59 +9,32 @@ import {
 describe("hasBlockingAuthorityPersistenceFailure", () => {
   it("never blocks when persistence has not failed", () => {
     for (const status of ["idle", "applying", "ready"] as const) {
+      expect(hasBlockingAuthorityPersistenceFailure({ status })).toBe(false);
+    }
+  });
+
+  it("never blocks a transitional authority re-settle", () => {
+    // The flash case: opening a replacement drawer re-settles cloud authority against a
+    // transitional snapshot. These reasons are not save failures and must not surface the gate.
+    for (const reason of ["mapping_invalidated", "candidate_invalid"] as const) {
       expect(
-        hasBlockingAuthorityPersistenceFailure({
-          hasPendingOptimisticDrawerOpen: true,
-          status,
-        }),
+        hasBlockingAuthorityPersistenceFailure({ reason, status: "failed" }),
       ).toBe(false);
     }
   });
 
-  it("suppresses the transient candidate_invalid failure while a drawer open is pending", () => {
-    // The flash case: replacement drawer just opened, read model not yet settled.
-    expect(
-      hasBlockingAuthorityPersistenceFailure({
-        hasPendingOptimisticDrawerOpen: true,
-        reason: "candidate_invalid",
-        status: "failed",
-      }),
-    ).toBe(false);
-  });
-
-  it("surfaces candidate_invalid once the open has settled", () => {
-    expect(
-      hasBlockingAuthorityPersistenceFailure({
-        hasPendingOptimisticDrawerOpen: false,
-        reason: "candidate_invalid",
-        status: "failed",
-      }),
-    ).toBe(true);
-  });
-
-  it("never suppresses genuine persistence failures, even during a pending open", () => {
-    for (const reason of [
-      "write_failed",
-      "snapshot_invalid",
-      "mapping_invalidated",
-    ] as const) {
+  it("blocks genuine persistence failures", () => {
+    for (const reason of ["write_failed", "snapshot_invalid"] as const) {
       expect(
-        hasBlockingAuthorityPersistenceFailure({
-          hasPendingOptimisticDrawerOpen: true,
-          reason,
-          status: "failed",
-        }),
+        hasBlockingAuthorityPersistenceFailure({ reason, status: "failed" }),
       ).toBe(true);
     }
   });
 
   it("blocks a failure with no reason", () => {
-    expect(
-      hasBlockingAuthorityPersistenceFailure({
-        hasPendingOptimisticDrawerOpen: true,
-        status: "failed",
-      }),
-    ).toBe(true);
+    expect(hasBlockingAuthorityPersistenceFailure({ status: "failed" })).toBe(
+      true,
+    );
   });
 });
 

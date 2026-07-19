@@ -314,19 +314,20 @@ export const REGISTER_UPDATE_APPLY_BLOCKER_PRIORITY: UpdateApplyBlockerPriority 
  * Whether a register lifecycle-authority persistence failure should block the drawer
  * (surface the "Drawer status not saved" gate).
  *
- * A `candidate_invalid` failure is transient during a drawer open: opening a replacement
- * drawer briefly re-derives ambiguous authority candidates while the just-closed session's
- * "current" cloud mapping and the newly opened session coexist for a render. While that open
- * has not settled (`hasPendingOptimisticDrawerOpen` — the open is in flight, or an optimistic
- * local session has not yet been confirmed by the projected read model), the failure is
- * suppressed so the gate does not flash before the register reaches its ready state.
+ * `mapping_invalidated` and `candidate_invalid` are transitional cloud-authority *re-settles*,
+ * not save failures. Opening a (replacement) drawer re-applies authority across two snapshots,
+ * and the first pass — against a transitional snapshot where the just-closed session's
+ * "current" mapping and the newly opened session coexist — reports one of these before the
+ * settled pass succeeds. `mapping_invalidated` means a newer authority superseded this mapping
+ * and `candidate_invalid` means candidates are momentarily ambiguous; in both cases the drawer
+ * is saved locally and the "Drawer status not saved" / Retry gate is the wrong, flashing
+ * surface (a genuinely superseded session is instead surfaced through the lifecycle/sync-review
+ * path, and a genuinely missing drawer through the startup/recovery gates).
  *
- * Genuine failures (`write_failed`, `snapshot_invalid`, `mapping_invalidated`) always block,
- * and a persistent `candidate_invalid` resurfaces once the open settles and this guard
- * releases.
+ * Only `write_failed` and `snapshot_invalid` are genuine persistence failures the operator
+ * should retry, so only those block.
  */
 export function hasBlockingAuthorityPersistenceFailure(input: {
-  hasPendingOptimisticDrawerOpen: boolean;
   reason?:
     | "candidate_invalid"
     | "mapping_invalidated"
@@ -339,8 +340,8 @@ export function hasBlockingAuthorityPersistenceFailure(input: {
   }
 
   if (
-    input.reason === "candidate_invalid" &&
-    input.hasPendingOptimisticDrawerOpen
+    input.reason === "candidate_invalid" ||
+    input.reason === "mapping_invalidated"
   ) {
     return false;
   }
