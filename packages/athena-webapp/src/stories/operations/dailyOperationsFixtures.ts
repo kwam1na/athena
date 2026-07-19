@@ -12,39 +12,21 @@
  */
 
 import type { DailyOperationsViewContentProps } from "@/components/operations/DailyOperationsView";
-import type { Id } from "~/convex/_generated/dataModel";
 
-/** Saturday. The week runs Sunday 2026-07-12 → Saturday 2026-07-18. */
-const OPERATING_DATE = "2026-07-18";
+import {
+  DAY_END,
+  DAY_START,
+  LINK_PARAMS as linkParams,
+  momentAt as at,
+  OPERATING_DATE,
+  ORG_URL_SLUG,
+  REGISTER_DISPLAY_LABEL,
+  STORE_ID,
+  STORE_URL_SLUG,
+} from "./operationsFixtureContext";
 
 /** Mid-afternoon, so the day reads as still trading rather than wrapped up. */
 export const BUSY_SATURDAY_CLOCK = new Date(2026, 6, 18, 15, 20);
-
-const STORE_ID = "demo-store-osu-atelier" as Id<"store">;
-// Matches the shared demo store's actual route params, so links in the fixture resolve
-// against the session a capture is taken in.
-const ORG_URL_SLUG = "demo";
-const STORE_URL_SLUG = "central";
-
-const DAY_START = new Date(2026, 6, 18, 0, 0).getTime();
-const DAY_END = new Date(2026, 6, 19, 0, 0).getTime();
-
-/** Minutes past local midnight → epoch millis, for readable timeline authoring. */
-function at(hour: number, minute: number) {
-  return new Date(2026, 6, 18, hour, minute).getTime();
-}
-
-const linkParams = {
-  orgUrlSlug: ORG_URL_SLUG,
-  storeUrlSlug: STORE_URL_SLUG,
-};
-
-/**
- * Register sessions display as `{terminalName} / Register {registerNumber}` — see
- * `formatTerminalRegisterLinkLabel` in convex/operations/dailyOperations.ts. Values are
- * the shared demo store's terminal name and register number.
- */
-const REGISTER_DISPLAY_LABEL = "Studio Front Register / Register 01";
 
 /**
  * A week that builds toward the weekend — quiet Sunday, steady midweek, a strong
