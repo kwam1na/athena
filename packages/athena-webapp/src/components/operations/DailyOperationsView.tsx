@@ -352,7 +352,7 @@ export type DailyOperationsSnapshot = {
   weekSnapshots?: DailyOperationsSnapshot[];
 };
 
-type DailyOperationsViewContentProps = {
+export type DailyOperationsViewContentProps = {
   cachedPriorWeekBoundaryMetric?:
     DailyOperationsSnapshot["weekMetrics"][number] | null;
   cachedWeekAnalyticsFetchedAt?: number;
@@ -4605,8 +4605,21 @@ function DailyOperationsConnectedView({
   );
 }
 
-export function DailyOperationsView() {
+export function DailyOperationsView({
+  fixture,
+}: {
+  /**
+   * Renders the workspace from a supplied prop bag instead of Convex, for screenshot
+   * fixtures. When set, no snapshot query runs. Development only — see
+   * `src/stories/operations`.
+   */
+  fixture?: DailyOperationsViewContentProps;
+} = {}) {
   const dailyOperationsApi = getDailyOperationsApi();
+
+  if (fixture) {
+    return <DailyOperationsViewContent {...fixture} />;
+  }
 
   if (!dailyOperationsApi.getDailyOperationsSnapshot) {
     return <DailyOperationsApiPendingView />;

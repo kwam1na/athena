@@ -186,7 +186,7 @@ type StartDayArgs = {
 
 type BucketStatus = "blocked" | "carry-forward" | "ready" | "review";
 
-type DailyOpeningViewContentProps = {
+export type DailyOpeningViewContentProps = {
   currency: string;
   hasFullAdminAccess: boolean;
   isAuthenticated: boolean;
@@ -2274,8 +2274,21 @@ function DailyOpeningConnectedView({
   );
 }
 
-export function DailyOpeningView() {
+export function DailyOpeningView({
+  fixture,
+}: {
+  /**
+   * Renders the workspace from a supplied prop bag instead of Convex, for screenshot
+   * fixtures. When set, no snapshot query runs. Development only — see
+   * `src/stories/operations`.
+   */
+  fixture?: DailyOpeningViewContentProps;
+} = {}) {
   const dailyOpeningApi = getDailyOpeningApi();
+
+  if (fixture) {
+    return <DailyOpeningViewContent {...fixture} />;
+  }
 
   if (
     !dailyOpeningApi.getDailyOpeningSnapshot ||

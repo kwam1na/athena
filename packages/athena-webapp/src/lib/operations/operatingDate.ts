@@ -8,13 +8,36 @@
  * search param when present.
  */
 
+let operatingClockOverride: Date | null = null;
+
+/**
+ * Pins what these helpers treat as "now", so a fixture can render as the current day.
+ *
+ * Screenshot fixtures only — the operations workspaces derive "today" from the browser
+ * clock in ~30 module-level call sites, so an override is the only practical seam short
+ * of threading a `now` through all of them. Pass `null` to restore the real clock.
+ *
+ * Callers are responsible for gating this to development; the mechanism is deliberately
+ * unguarded so it stays testable.
+ */
+export function setOperatingClockOverride(date: Date | null) {
+  operatingClockOverride = date ? new Date(date.getTime()) : null;
+}
+
+/** The current instant, honouring any override set by `setOperatingClockOverride`. */
+export function getOperatingClockNow() {
+  return operatingClockOverride
+    ? new Date(operatingClockOverride.getTime())
+    : new Date();
+}
+
 /**
  * The store-local calendar day for `date`, as `YYYY-MM-DD`.
  *
  * Shifts by the local UTC offset before formatting so the ISO slice yields the local
  * day rather than the UTC one.
  */
-export function getLocalOperatingDate(date = new Date()) {
+export function getLocalOperatingDate(date = getOperatingClockNow()) {
   const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
 
   return localDate.toISOString().slice(0, 10);
@@ -25,7 +48,7 @@ export function getLocalOperatingDate(date = new Date()) {
  *
  * `startAt`/`endAt` are epoch millis and are sent to the server as the snapshot range.
  */
-export function getLocalOperatingDateRange(date = new Date()) {
+export function getLocalOperatingDateRange(date = getOperatingClockNow()) {
   const localStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
   const localEnd = new Date(
     date.getFullYear(),

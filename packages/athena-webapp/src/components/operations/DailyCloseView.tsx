@@ -325,7 +325,7 @@ type BucketConfig = {
   value: BucketStatus;
 };
 
-type DailyCloseViewContentProps = {
+export type DailyCloseViewContentProps = {
   canViewSummaryComparisons?: boolean;
   currency: string;
   hasFinancialDetailsAccess: boolean;
@@ -4716,8 +4716,21 @@ function DailyCloseConnectedView({
   );
 }
 
-export function DailyCloseView() {
+export function DailyCloseView({
+  fixture,
+}: {
+  /**
+   * Renders the workspace from a supplied prop bag instead of Convex, for screenshot
+   * fixtures. When set, no snapshot query runs. Development only — see
+   * `src/stories/operations`.
+   */
+  fixture?: DailyCloseViewContentProps;
+} = {}) {
   const dailyCloseApi = getDailyCloseApi();
+
+  if (fixture) {
+    return <DailyCloseViewContent {...fixture} />;
+  }
 
   if (
     !dailyCloseApi.getDailyCloseSnapshot ||
