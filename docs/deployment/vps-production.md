@@ -26,6 +26,42 @@ This runbook captures the production VPS shape for `wigclub.store` and the steps
 
 Do not expose the cache proxy through the VPS public interface. The service has cache read, write, and invalidation endpoints, so the expected runtime boundary is loopback plus Cloudflare Tunnel.
 
+## Prerequisites
+
+This runbook is the authoritative deployment reference, including for an agent
+driving the deploy. Before starting, the VPS and external accounts need the
+access that cannot be created from inside the repo:
+
+- **Root SSH access:** reachable as `root`, either through an SSH alias such as
+  `ssh-do` or a direct `ssh root@<vps-ip>` target.
+- **Ubuntu with `apt`:** the bootstrap script assumes a fresh Ubuntu-style VPS.
+  It installs nginx, git, Node.js 22, PM2, Valkey, rsync, and related packages.
+- **Cloudflare Tunnel credential or token:** either the tunnel credential JSON
+  for `/etc/cloudflared/` or the dashboard's tunnel install token. These secrets
+  must stay out of the repo.
+- **Cloudflare DNS and tunnel permissions:** needed only to create or update
+  hostname routes such as `athena-qa.wigclub.store`. Otherwise create those
+  routes before handing over.
+- **GitHub deploy key registration:** the VPS SSH key can be generated on the
+  box, but a human or GitHub-authorized agent must add the public key to the
+  `kwam1na/athena` repo as a deploy key before
+  `scripts/deploy-vps.sh check-git` can pass.
+- **Convex deploy auth:** required only for `scripts/deploy-vps.sh convex-prod`.
+  Static app deploys and QA can point at existing Convex deployments.
+
+With those in place, the usual first run is:
+
+```bash
+scripts/setup-production-vps.sh
+scripts/deploy-vps.sh check-git
+scripts/deploy-vps.sh all
+```
+
+The setup script owns the nginx bootstrap. It writes the Athena config to
+`/etc/nginx/conf.d/wigclub.conf` and disables Ubuntu's default enabled site; the
+nginx verification commands to run before checking Cloudflare are in
+[nginx Configuration](#nginx-configuration).
+
 ## Bootstrap A New VPS
 
 Run the setup script as `root` on a fresh Ubuntu VPS:

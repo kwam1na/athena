@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="fa8123077a676427973ee2f27b7527254d049c8729ddd7935943f85ecf1b3445" data-athena-report-base="origin/main" data-athena-report-head="docs/readme-focused-docs">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>README Restructure and Docs Contract Retargeting</title>
+    <style>
+      :root {
+        --ink: #1f2933;
+        --muted: #596674;
+        --line: #d9e2ec;
+        --paper: #ffffff;
+        --soft: #f6f8fb;
+        --accent: #1d4ed8;
+        --accent-soft: #dbeafe;
+        --good: #166534;
+        --bad: #b91c1c;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--soft);
+        color: var(--ink);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        line-height: 1.55;
+      }
+      main { max-width: 1120px; margin: 0 auto; padding: 48px 24px 72px; }
+      header { border-bottom: 1px solid var(--line); margin-bottom: 28px; padding-bottom: 28px; }
+      h1, h2, h3 { line-height: 1.18; letter-spacing: 0; }
+      h1 { font-size: 42px; max-width: 880px; margin: 0 0 16px; }
+      h2 { font-size: 28px; margin: 0 0 16px; }
+      h3 { font-size: 19px; margin: 22px 0 10px; }
+      p { margin: 0 0 14px; }
+      .lede { color: var(--muted); font-size: 18px; max-width: 880px; }
+      .meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+      .pill { border: 1px solid var(--line); border-radius: 999px; background: var(--paper); color: var(--muted); font-size: 13px; padding: 6px 10px; }
+      .panel { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; margin: 18px 0; padding: 22px; }
+      code { background: #eef2f7; border: 1px solid #d8dee8; border-radius: 5px; padding: 1px 5px; }
+      pre { overflow: auto; background: #111827; color: #e5e7eb; border-radius: 8px; padding: 16px; }
+      pre code { background: transparent; border: 0; color: inherit; padding: 0; }
+      table { width: 100%; border-collapse: collapse; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+      th, td { border-bottom: 1px solid var(--line); padding: 11px 12px; text-align: left; vertical-align: top; }
+      th { background: #eef2f7; color: var(--muted); font-size: 13px; text-transform: uppercase; }
+      tr:last-child td { border-bottom: 0; }
+      ul, ol { margin: 0 0 14px; padding-left: 22px; }
+      li { margin-bottom: 7px; }
+      .callout { border-left: 3px solid var(--accent); background: var(--accent-soft); border-radius: 0 8px 8px 0; padding: 14px 16px; margin: 16px 0; }
+      .quiz-question { border-top: 1px solid var(--line); padding: 18px 0; }
+      .quiz-question:first-child { border-top: 0; }
+      fieldset { border: 0; margin: 0; padding: 0; }
+      legend { font-weight: 700; margin-bottom: 10px; }
+      label { display: block; border: 1px solid var(--line); border-radius: 8px; background: #fbfdff; margin: 8px 0; padding: 10px 12px; cursor: pointer; }
+      @media (hover: hover) and (pointer: fine) {
+        label:hover { border-color: #b6c5d8; }
+      }
+      button {
+        appearance: none;
+        border: 0;
+        border-radius: 8px;
+        background: var(--accent);
+        color: #ffffff;
+        cursor: pointer;
+        font-weight: 700;
+        padding: 11px 16px;
+      }
+      button.secondary { background: #e2e8f0; color: var(--ink); }
+      .quiz-actions { display: flex; align-items: center; gap: 12px; margin-top: 18px; }
+      .answer-detail { display: none; color: var(--muted); font-size: 14px; margin-top: 8px; }
+      .answer-detail.visible { display: block; }
+      .quiz-question.correct { background: #f0fdf4; border-radius: 8px; padding-left: 12px; padding-right: 12px; }
+      .quiz-question.incorrect { background: #fef2f2; border-radius: 8px; padding-left: 12px; padding-right: 12px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>README Restructure and Docs Contract Retargeting</h1>
+        <p class="lede">The Athena README went from 334 lines to 150 by moving reference detail into focused docs. The hard part was not editing prose — it was discovering that three harness contracts <em>required</em> that detail to live in the README, and retargeting them to follow the content.</p>
+        <div class="meta"><span class="pill">Delivery candidate</span><span class="pill">Branch: docs/readme-focused-docs</span><span class="pill">Base: origin/main</span><span class="pill">Merge: pending</span><span class="pill">Root alignment: pending</span><span class="pill">Production deploy: not applicable</span></div>
+      </header>
+
+      <section class="panel"><h2>Executive Summary</h2>
+        <p>The README was a 334-line wall of text. Roughly 200 of those lines were harness and graphify reference material: command lists, artifact paths, proof status values, behavior scenario names, threshold config keys, and CI wiring. The product description was buried under delivery tooling detail.</p>
+        <p>This change moves that material into focused docs — <code>docs/harness.md</code> gains a command and artifact reference, <code>docs/graphify.md</code> is new, and <code>docs/deployment/vps-production.md</code> absorbs the VPS access prerequisites. The README becomes an overview that links out.</p>
+        <p>The non-obvious part: the README had not grown by neglect. Three harness contracts pinned that content in place, so any attempt to slim it failed <code>harness:check</code>, <code>harness:audit</code>, and <code>harness:test</code>. Those contracts were retargeted at the docs that now own the content, and the prose-level assertions were loosened to token-level assertions so the docs can be reworded without a test edit.</p>
+      </section>
+
+      <section class="panel"><h2>Problem And Context</h2>
+        <p>Three mechanisms kept reference detail in the README:</p>
+        <ol>
+          <li><code>RUNTIME_SCENARIO_DOCS</code> in <code>scripts/harness-check.ts</code> listed <code>README.md</code> as a doc that must carry the runtime behavior scenario list, kept in sync with the scenario registry.</li>
+          <li>Two tests in <code>scripts/pre-push-review.test.ts</code> asserted roughly 25 <strong>verbatim sentences</strong> in the README, for example <code>"`bun run pr:athena:prepare` starts with that same generated-artifact repair step"</code>.</li>
+          <li>Fixture repos in <code>scripts/harness-check.test.ts</code> and <code>scripts/harness-audit.test.ts</code> modelled the README as the scenario-list home, so the audit failed when the real README stopped matching that shape.</li>
+        </ol>
+        <p>The effect was ratchet-like. Every new harness capability appended a paragraph to the README, and no paragraph could be removed without editing a test. The README was structurally required to grow.</p>
+      </section>
+
+      <section class="panel"><h2>Mental Model</h2>
+        <p>A documentation contract has two parts: <em>which file</em> must contain something, and <em>how tightly</em> the content is specified.</p>
+        <p>Both were wrong here. The file was the README, which should be an orientation surface rather than a reference. And the specification was whole sentences, which makes the assertion break on any rewording — so the cheapest way to satisfy it is always to append rather than revise.</p>
+        <div class="callout"><strong>The rule this change encodes:</strong> point docs contracts at the doc that owns the topic, and assert on tokens (command names, artifact paths, config keys) rather than sentences. A test that breaks on rewording is too tight; a test that only checks a file mentions something is still meaningful.</div>
+      </section>
+
+      <section class="panel"><h2>Before And After</h2>
+        <h3>Before</h3>
+        <pre><code>README.md (334 lines)
+  product overview          ~45 lines
+  setup                     ~15 lines
+  VPS prerequisites         ~50 lines
+  harness reference        ~150 lines   &lt;- gated by 3 contracts
+  graphify reference        ~35 lines   &lt;- gated by 1 test
+
+docs/harness.md            388 lines    concepts, but no command reference
+docs/graphify.md           (did not exist)</code></pre>
+        <h3>After</h3>
+        <pre><code>README.md (150 lines)
+  product overview + honest status
+  setup, docs index, backend shape
+  daily operations vocabulary
+  delivery gates summary       -> links out
+
+docs/harness.md            575 lines    + Command And Artifact Reference
+docs/graphify.md           109 lines    new: commands, artifacts, python runtime
+docs/deployment/
+  vps-production.md                     + Prerequisites section</code></pre>
+      </section>
+
+      <section class="panel">
+        <h2>Key Files</h2>
+        <table>
+          <thead><tr><th>File</th><th>Why it matters</th></tr></thead>
+          <tbody>
+            <tr><td><code>README.md</code></td><td>Rewritten as an overview: what Athena is, an honest status table naming what is missing, setup, a documentation index, backend shape, daily-ops vocabulary, and delivery gates.</td></tr>
+            <tr><td><code>docs/harness.md</code></td><td>Gains the command table, delivery ladder phases, inferential review modes, behavior scenarios, artifact paths, CI wiring, and Git hooks. Now the canonical harness reference.</td></tr>
+            <tr><td><code>docs/graphify.md</code></td><td>New. Commands, tracked vs ignored artifacts, and the Python interpreter resolution order including the fallback path.</td></tr>
+            <tr><td><code>docs/deployment/vps-production.md</code></td><td>Gains a <code>Prerequisites</code> section with the access that cannot be created from inside the repo.</td></tr>
+            <tr><td><code>scripts/harness-check.ts</code></td><td><code>RUNTIME_SCENARIO_DOCS</code> now points at <code>docs/harness.md</code> instead of <code>README.md</code>. This is the contract retarget.</td></tr>
+            <tr><td><code>scripts/harness-review.ts</code></td><td>Documents the two similarly-named provider flags and extracts two named predicates. Pure refactor — no behavior change.</td></tr>
+            <tr><td><code>scripts/pre-push-review.test.ts</code></td><td>Docs contracts now read <code>docs/harness.md</code> and <code>docs/graphify.md</code>, assert tokens rather than sentences, and a new test asserts the README links to each focused doc.</td></tr>
+            <tr><td><code>scripts/harness-check.test.ts</code></td><td>Fixture writes a minimal <code>docs/harness.md</code>; two new tests lock in that the harness doc is gated and the README is not.</td></tr>
+            <tr><td><code>scripts/harness-audit.test.ts</code></td><td>Fixture updated to the same shape so the audit models the new docs layout.</td></tr>
+            <tr><td><code>scripts/harness-review.test.ts</code></td><td>New <code>validation provider scopes</code> block pinning the asymmetry between the two provider flags.</td></tr>
+            <tr><td><code>docs/solutions/developer-experience/athena-docs-contracts-target-focused-docs-2026-07-18.md</code></td><td>The durable note so the next agent does not re-derive why the README grew.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="panel"><h2>Corrections Found By Grounding</h2>
+        <p>Rewriting from the code rather than copying the old prose surfaced four claims that had been carried forward inaccurately:</p>
+        <table>
+          <thead><tr><th>Claim</th><th>Reality</th></tr></thead>
+          <tbody>
+            <tr><td><code>thresholds.latency.maxPhaseDurationMs</code> read as a single value</td><td>It is a per-phase map with six keys: <code>boot</code>, <code>readiness</code>, <code>browser</code>, <code>runtime</code>, <code>assertion</code>, <code>cleanup</code>.</td></tr>
+            <tr><td>Local-only artifact list</td><td>Omitted <code>artifacts/harness-delivery-runs/</code>, which is git-ignored and written by every <code>pr:athena</code> run.</td></tr>
+            <tr><td>Tracked graphify artifacts</td><td><code>graphify-out/graph.html</code> is committed but deliberately outside <code>TRACKED_GRAPHIFY_ARTIFACTS</code>, so it is not freshness-gated.</td></tr>
+            <tr><td><code>pr:athena</code> has four phases</td><td>It has five. <code>preflight</code> runs between prepare and validate and was missing from <code>docs/harness.md</code>.</td></tr>
+          </tbody>
+        </table>
+        <p>Separately, <code>.graphify_python</code> pins <code>/opt/homebrew/bin/python3.10</code>, which does not exist on the development machine. Every local rebuild silently takes the <code>python3</code> fallback and prints a warning. <code>docs/graphify.md</code> documents the real four-step resolution order rather than the previous "default <code>python3</code>" claim.</p>
+      </section>
+
+      <section class="panel"><h2>What Intentionally Did Not Change</h2>
+        <ul>
+          <li><strong>No runtime or product behavior.</strong> This change touches documentation, harness sensors, and tests only. No Convex function, route, or component is modified.</li>
+          <li><strong>The provider flags themselves.</strong> <code>--repo-validation-provided-by</code> and <code>--validation-provided-by</code> keep their names and values. Only comments, extracted predicates, and error-message text changed, because both flags are wired into <code>package.json</code> and the CI workflow.</li>
+          <li><strong>The scenario list is still gated.</strong> It moved to <code>docs/harness.md</code>; it was not made optional.</li>
+          <li><strong>No new architecture doc.</strong> The README links to <code>packages/athena-webapp/docs/agent/architecture.md</code>, which is richer than any summary would be.</li>
+          <li><strong>Unrelated working-tree changes stayed behind.</strong> Seventeen modified cash-controls and register-session files under <code>packages/athena-webapp</code> were left on the root checkout and are not part of this branch.</li>
+        </ul>
+      </section>
+
+      <section class="panel"><h2>Review Findings Acted On</h2>
+        <p>A read-only diff analyst reviewed this branch before delivery and found three issues that were fixed rather than noted:</p>
+        <table>
+          <thead><tr><th>Finding</th><th>Response</th></tr></thead>
+          <tbody>
+            <tr><td><strong>The README's links to the new focused docs were not sensor-enforced.</strong> <code>collectReadmeLinkErrors</code> required only the graphify wiki index and packages router. <code>docs/graphify.md</code> had no sensor contract at all, so a rename would leave a dead README link uncaught.</td><td>Added <code>docs/harness.md</code> and <code>docs/graphify.md</code> to the required README link set, with a test asserting both are reported when missing.</td></tr>
+            <tr><td><strong>The scenario-section extractor was left on a hair trigger.</strong> <code>extractRuntimeScenarioSection</code> stops at <code>##</code> but not <code>###</code>. With the list under a <code>###</code> subsection, the scan ran to end of file and swallowed the artifact and CI sections.</td><td>Promoted the list to <code>## Behavior Scenario Reference</code> followed by <code>## Artifacts And CI Reference</code>, which bounds the scan. Documented the constraint in both the doc and the solution note.</td></tr>
+            <tr><td><strong>Token-only assertions lost semantic pinning.</strong> The previous sentence assertions pinned the fail-closed repair behavior; bare tokens would pass on a doc describing the opposite.</td><td>Kept token assertions for churn resistance, and added two concept assertions covering fail-closed repair and the review-then-commit block.</td></tr>
+          </tbody>
+        </table>
+        <p>The analyst also flagged that it had not exhaustively diffed all 322 deleted README lines against the destination docs. That gap was closed separately with a scripted check over 22 facts from the old README; all are present in a destination doc, and the three initial misses were line-wrap artifacts in the check itself, not real losses.</p>
+      </section>
+
+      <section class="panel"><h2>Validation Evidence</h2>
+        <table>
+          <thead><tr><th>Check</th><th>Result</th></tr></thead>
+          <tbody>
+            <tr><td><code>bun run harness:test</code></td><td>516 pass, 0 fail (41 files)</td></tr>
+            <tr><td><code>bun run harness:check</code></td><td>Harness docs check passed</td></tr>
+            <tr><td><code>bun run pr:athena:preflight</code></td><td>Harness contract preflight passed</td></tr>
+            <tr><td><code>bun run graphify:check</code></td><td>Artifacts fresh after clean rebuild in the worktree</td></tr>
+            <tr><td><code>bun run delivery:documentation-check</code></td><td>Solution note accepted with matching diff fingerprint</td></tr>
+            <tr><td>Doc link resolution</td><td>All relative links in README, harness, graphify, and deployment docs resolve</td></tr>
+            <tr><td>Typecheck</td><td>60 pre-existing errors before and after; none introduced</td></tr>
+          </tbody>
+        </table>
+        <p>Two failures were surfaced by the harness during the change and fixed rather than worked around. The sibling-test policy blocked the <code>harness-review.ts</code> edit until <code>harness-review.test.ts</code> gained matching coverage, and the docs contracts blocked the README rewrite until the sensors were retargeted and the fixtures updated.</p>
+        <p>The graphify artifacts were rebuilt in a clean worktree rather than reused from the root checkout, because the root rebuild had absorbed the seventeen unrelated package changes: 10672 nodes there versus 10666 here.</p>
+      </section>
+
+      <section class="panel"><h2>Next-Time Guidance</h2>
+        <ul>
+          <li>When a docs sensor blocks a restructure, check whether the sensor's <em>target</em> is still correct before restoring content to satisfy it.</li>
+          <li>Write docs assertions against tokens, not sentences. If a test would break on rewording, it will cause the doc to grow instead of improve.</li>
+          <li>Reserve README assertions for links and orientation.</li>
+          <li>Verify doc claims against source before copying them into a new home. Four inaccuracies here had survived because prose was moved rather than re-derived.</li>
+          <li>When the working tree carries unrelated changes, build generated artifacts in a clean worktree so they do not encode work you are not shipping.</li>
+        </ul>
+      </section>
+
+      <section class="panel">
+        <h2>Subagent Evidence</h2>
+        <ul>
+          <li><strong>Delivered diff analyst</strong> (read-only explorer over the worktree): produced the changed-file map, confirmed the <code>harness-review.ts</code> predicate extraction is behavior-preserving, and stress-tested whether retargeting <code>RUNTIME_SCENARIO_DOCS</code> or loosening the prose assertions weakens any guarantee.</li>
+          <li><strong>Report reviewer</strong> (read-only): reviewed this report for unsupported claims and quiz quality before delivery.</li>
+          <li><strong>Session context</strong>: supplied directly by the delivery conversation, which contains the full grounding trail — sensor discovery, the two harness-caught failures, and the user decision to retarget the sensor rather than duplicate the scenario list.</li>
+        </ul>
+      </section>
+
+      <section id="quiz" class="panel">
+        <h2>Quiz: Pass Required</h2>
+        <p>You must score at least 8 out of 10 to pass.</p>
+        <form id="changeQuiz" data-threshold="8">
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>1. Why had the README grown to 334 lines?</legend>
+    <label><input type="radio" name="q1" value="0" /> Nobody had taken the time to edit it</label>
+<label><input type="radio" name="q1" value="1" /> Harness contracts required the reference detail to live there, so it could only be appended to</label>
+<label><input type="radio" name="q1" value="2" /> It was generated from the harness registry</label>
+  </fieldset>
+  <div class="answer-detail">Three contracts pinned content to README.md, so slimming it failed harness:check, harness:audit, and harness:test. The growth was structural, not editorial neglect.</div>
+</div>
+
+<div class="quiz-question" data-answer="2">
+  <fieldset>
+    <legend>2. Where does the canonical runtime behavior scenario list live after this change?</legend>
+    <label><input type="radio" name="q2" value="0" /> README.md</label>
+<label><input type="radio" name="q2" value="1" /> Nowhere; it is no longer gated</label>
+<label><input type="radio" name="q2" value="2" /> docs/harness.md, via RUNTIME_SCENARIO_DOCS</label>
+  </fieldset>
+  <div class="answer-detail">RUNTIME_SCENARIO_DOCS in scripts/harness-check.ts now names docs/harness.md. The list is still synced against the scenario registry; only its home moved.</div>
+</div>
+
+<div class="quiz-question" data-answer="0">
+  <fieldset>
+    <legend>3. How did the docs contracts in pre-push-review.test.ts change?</legend>
+    <label><input type="radio" name="q3" value="0" /> They target the focused docs and assert command/artifact tokens instead of verbatim sentences</label>
+<label><input type="radio" name="q3" value="1" /> They were deleted as redundant</label>
+<label><input type="radio" name="q3" value="2" /> They now assert on the graphify graph.json contents</label>
+  </fieldset>
+  <div class="answer-detail">Sentence-level assertions force append-only growth. Token assertions keep the contract meaningful while allowing the prose to be rewritten.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>4. What is the difference between the two harness-review provider flags?</legend>
+    <label><input type="radio" name="q4" value="0" /> They are aliases; one is a legacy name</label>
+<label><input type="radio" name="q4" value="1" /> --repo-validation-provided-by suppresses only repo-owned commands; --validation-provided-by also prunes package commands</label>
+<label><input type="radio" name="q4" value="2" /> One sets the base ref, the other sets the provider evidence path</label>
+  </fieldset>
+  <div class="answer-detail">They differ in scope, and the longer name is the narrower flag. Under the local pr:athena provider, package validation still runs.</div>
+</div>
+
+<div class="quiz-question" data-answer="2">
+  <fieldset>
+    <legend>5. Did the harness-review.ts change alter behavior?</legend>
+    <label><input type="radio" name="q5" value="0" /> Yes, it changed which commands are pruned in CI</label>
+<label><input type="radio" name="q5" value="1" /> Yes, it renamed both CLI flags</label>
+<label><input type="radio" name="q5" value="2" /> No; the predicates are exact extractions of the original conditions</label>
+  </fieldset>
+  <div class="answer-detail">repoOwnedValidationIsProvided and packageValidationIsProvided reproduce the original comparisons exactly. Only comments, structure, and error-message text changed.</div>
+</div>
+
+<div class="quiz-question" data-answer="0">
+  <fieldset>
+    <legend>6. What is <code>thresholds.latency.maxPhaseDurationMs</code>?</legend>
+    <label><input type="radio" name="q6" value="0" /> A per-phase map with keys like boot, readiness, browser, runtime, assertion, cleanup</label>
+<label><input type="radio" name="q6" value="1" /> A single millisecond ceiling applied to every phase</label>
+<label><input type="radio" name="q6" value="2" /> A percentage of maxTotalDurationMs</label>
+  </fieldset>
+  <div class="answer-detail">The old README described it as a scalar. Scenarios share preset budgets, so storefront scenarios allow a far longer boot than the sample runtime.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>7. What is the status of <code>graphify-out/graph.html</code>?</legend>
+    <label><input type="radio" name="q7" value="0" /> Git-ignored like the cache directory</label>
+<label><input type="radio" name="q7" value="1" /> Committed, but outside TRACKED_GRAPHIFY_ARTIFACTS so it is not freshness-gated</label>
+<label><input type="radio" name="q7" value="2" /> Tracked and gated like graph.json</label>
+  </fieldset>
+  <div class="answer-detail">It is a browsable convenience view. It can lag the gated artifacts without failing graphify:check.</div>
+</div>
+
+<div class="quiz-question" data-answer="2">
+  <fieldset>
+    <legend>8. What happens when <code>.graphify_python</code> names an interpreter that does not exist?</legend>
+    <label><input type="radio" name="q8" value="0" /> graphify:rebuild fails immediately</label>
+<label><input type="radio" name="q8" value="1" /> The tracked artifacts are silently left stale</label>
+<label><input type="radio" name="q8" value="2" /> It warns and falls back to python3</label>
+  </fieldset>
+  <div class="answer-detail">resolveGraphifyPython falls back to python3 and prints a warning. The committed value is a macOS Homebrew path that is absent on the development machine, so this is the normal local path.</div>
+</div>
+
+<div class="quiz-question" data-answer="0">
+  <fieldset>
+    <legend>9. Why were the graphify artifacts rebuilt in the worktree rather than copied from the root checkout?</legend>
+    <label><input type="radio" name="q9" value="0" /> The root rebuild had absorbed seventeen unrelated package changes present in that working tree</label>
+<label><input type="radio" name="q9" value="1" /> The root checkout uses a different graphify version</label>
+<label><input type="radio" name="q9" value="2" /> Graphify artifacts cannot be copied between trees</label>
+  </fieldset>
+  <div class="answer-detail">The root tree carried unrelated cash-controls work, giving 10672 nodes versus 10666 in the clean worktree. Shipping that graph would encode changes not in this branch.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>10. What should you do when a docs sensor blocks a restructure?</legend>
+    <label><input type="radio" name="q10" value="0" /> Restore the content to the file the sensor names</label>
+<label><input type="radio" name="q10" value="1" /> Check whether the sensor's target is still correct, and retarget it if the content has a better home</label>
+<label><input type="radio" name="q10" value="2" /> Delete the sensor</label>
+  </fieldset>
+  <div class="answer-detail">Restoring content satisfies the sensor but preserves the ratchet. Deleting it loses the guarantee. Retargeting keeps the invariant and makes it a statement of intent about which doc owns the topic.</div>
+</div>
+
+          <div class="quiz-actions">
+            <button type="button" id="gradeQuiz">Grade quiz</button>
+            <button type="button" class="secondary" id="resetQuiz">Reset</button>
+            <span id="quizResult" aria-live="polite"></span>
+          </div>
+        </form>
+      </section>
+
+    </main>
+    <script>
+      const questions = Array.from(document.querySelectorAll(".quiz-question"));
+      const result = document.getElementById("quizResult");
+      const form = document.getElementById("changeQuiz");
+      const threshold = Number(form.dataset.threshold || 0);
+      function clearGrades() {
+        questions.forEach((question) => {
+          question.classList.remove("correct", "incorrect");
+          question.querySelector(".answer-detail").classList.remove("visible");
+        });
+        result.textContent = "";
+        result.style.color = "";
+      }
+      document.getElementById("gradeQuiz").addEventListener("click", () => {
+        clearGrades();
+        let score = 0;
+        questions.forEach((question, index) => {
+          const selected = document.querySelector(`input[name="q${index + 1}"]:checked`);
+          const isCorrect = selected && Number(selected.value) === Number(question.dataset.answer);
+          if (isCorrect) score += 1;
+          question.classList.add(isCorrect ? "correct" : "incorrect");
+          question.querySelector(".answer-detail").classList.add("visible");
+        });
+        const passed = score >= threshold;
+        result.textContent = passed
+          ? `Passed: ${score}/${questions.length}.`
+          : `Not passed: ${score}/${questions.length}. Review the report and try again.`;
+        result.style.color = passed ? "var(--good)" : "var(--bad)";
+      });
+      document.getElementById("resetQuiz").addEventListener("click", () => {
+        form.reset();
+        clearGrades();
+      });
+    </script>
+  </body>
+</html>

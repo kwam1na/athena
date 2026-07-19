@@ -21,8 +21,12 @@ const RUNTIME_SCENARIO_SECTION_MARKERS = [
   "Current shared scenarios include",
   "Bundled scenarios include",
 ] as const;
+const HARNESS_DOC_PATH = "docs/harness.md" as const;
+const GRAPHIFY_DOC_PATH = "docs/graphify.md" as const;
+// The canonical runtime scenario list lives in the harness doc, not the README.
+// The README stays a short overview that links out to focused docs.
 const RUNTIME_SCENARIO_DOCS = [
-  "README.md",
+  HARNESS_DOC_PATH,
   "packages/athena-webapp/docs/agent/testing.md",
   "packages/valkey-proxy-server/docs/agent/testing.md",
   "packages/storefront-webapp/docs/agent/testing.md",
@@ -608,12 +612,18 @@ async function collectTestingDocErrors(
 }
 
 function collectReadmeLinkErrors(filePath: string, linkTargets: Set<string>) {
+  // The README is an overview that routes to focused docs. Require the links
+  // that make the reference material reachable, so moving detail out of the
+  // README cannot leave it undiscoverable. Link targets are also existence
+  // checked, so a renamed doc fails here instead of leaving a dead link.
   return collectMissingRequiredLinkErrors(
     filePath,
     linkTargets,
     [
       toRelativeLinkTarget(filePath, GRAPHIFY_WIKI_INDEX_PATH),
       toRelativeLinkTarget(filePath, PACKAGES_AGENTS_PATH),
+      toRelativeLinkTarget(filePath, HARNESS_DOC_PATH),
+      toRelativeLinkTarget(filePath, GRAPHIFY_DOC_PATH),
     ],
     "README graphify"
   );
