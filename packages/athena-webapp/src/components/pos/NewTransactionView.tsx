@@ -17,7 +17,7 @@ import {
   Receipt,
   CreditCard,
 } from "lucide-react";
-import { Link, useNavigate, useParams } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { useGetActiveOrganization } from "@/hooks/useGetOrganizations";
 
 const Navigation = () => {
