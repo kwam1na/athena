@@ -313,8 +313,7 @@ describe("OrderSummary completed transaction summary", () => {
     expect(onReceiptPrinted).toHaveBeenCalledWith(transactionId);
     await waitFor(() => {
       expect(consoleWarn).toHaveBeenCalledWith(
-        "Failed to record receipt print",
-        expect.any(Error),
+        expect.stringContaining("Failed to record receipt print"),
       );
     });
 

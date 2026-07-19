@@ -257,8 +257,6 @@ export function validateSession(
 ): ValidationResult {
   const errors: string[] = [];
 
-  console.log("session in validateSession", session);
-
   if (!session) {
     errors.push("No active session found");
   } else {

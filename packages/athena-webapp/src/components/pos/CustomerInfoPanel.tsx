@@ -67,8 +67,6 @@ export function CustomerInfoPanel({
   };
 
   const handleSelectCustomer = (customer: POSCustomerSummary) => {
-    console.log("🔄 Selecting customer:", customer);
-
     const nextCustomerInfo = {
       customerProfileId: customer.customerProfileId,
       name: customer.name,
@@ -82,9 +80,6 @@ export function CustomerInfoPanel({
     setSearchQuery("");
 
     // Keep the panel open so user can see the edit button and customer details
-    // onOpenChange(false); // Removed this line
-
-    console.log("✅ Customer selected, panel staying open for editing");
   };
 
   const handleCreateCustomer = async () => {

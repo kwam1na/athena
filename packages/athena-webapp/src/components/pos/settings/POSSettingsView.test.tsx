@@ -1075,9 +1075,7 @@ describe("registerAndProvisionPosTerminal", () => {
       await screen.findByText("Store-day automation settings were not saved."),
     ).toBeInTheDocument();
     expect(consoleError).toHaveBeenCalledWith(
-      expect.objectContaining({
-        message: "internal duplicate_policy stack",
-      }),
+      expect.stringContaining("internal duplicate_policy stack"),
     );
     expect(screen.queryByText(/duplicate_policy/)).not.toBeInTheDocument();
   });
@@ -1108,9 +1106,7 @@ describe("registerAndProvisionPosTerminal", () => {
       ),
     ).toBeInTheDocument();
     expect(consoleError).toHaveBeenCalledWith(
-      expect.objectContaining({
-        message: "internal threshold_policy stack",
-      }),
+      expect.stringContaining("internal threshold_policy stack"),
     );
     expect(screen.queryByText(/threshold_policy/)).not.toBeInTheDocument();
   });

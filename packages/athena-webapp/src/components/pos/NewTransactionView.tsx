@@ -1,3 +1,4 @@
+import { logger } from "@/lib/logger";
 import { useState } from "react";
 import View from "../View";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
@@ -82,7 +83,7 @@ export function NewTransactionView() {
         },
       });
     } catch (error) {
-      console.error("Failed to start transaction:", error);
+      logger.error("Failed to start transaction", error instanceof Error ? error : { error: String(error) });
     } finally {
       setIsStarting(false);
     }

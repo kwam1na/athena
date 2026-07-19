@@ -1,3 +1,4 @@
+import { logger } from "@/lib/logger";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { render } from "@react-email/components";
 import {
@@ -732,12 +733,12 @@ export function OrderSummary({
       const transactionId = receiptPrintTransactionId;
       if (transactionId && onReceiptPrinted) {
         void Promise.resolve(onReceiptPrinted(transactionId)).catch((error) => {
-          console.warn("Failed to record receipt print", error);
+          logger.warn("Failed to record receipt print", { error: String(error) });
         });
       }
       return true;
     } catch (error) {
-      console.error("Error in handlePrintReceipt:", error);
+      logger.error("Error in handlePrintReceipt", error instanceof Error ? error : { error: String(error) });
       return false;
     }
   }, [

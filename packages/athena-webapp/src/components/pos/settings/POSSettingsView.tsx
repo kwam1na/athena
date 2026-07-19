@@ -1,3 +1,4 @@
+import { logger } from "@/lib/logger";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
@@ -765,7 +766,7 @@ function RegisterCloseoutApprovalPolicyAdminPanel({
       });
       toast.success("Closeout approval policy saved.");
     } catch (error) {
-      console.error(error);
+      logger.error("POS settings operation failed", error instanceof Error ? error : { error: String(error) });
       setMessage({
         kind: "error",
         text: "Closeout approval policy was not saved.",
@@ -1033,7 +1034,7 @@ function EodCompletionAutomationAdminPanel({
       });
       toast.success("EOD completion automation settings saved.");
     } catch (error) {
-      console.error(error);
+      logger.error("POS settings operation failed", error instanceof Error ? error : { error: String(error) });
       setMessage({
         kind: "error",
         text: "EOD completion automation settings were not saved.",
@@ -1363,7 +1364,7 @@ function StoreDayAutomationAdminPanel({
       });
       toast.success("Store-day automation settings saved.");
     } catch (error) {
-      console.error(error);
+      logger.error("POS settings operation failed", error instanceof Error ? error : { error: String(error) });
       setMessage({
         kind: "error",
         text: "Store-day automation settings were not saved.",
@@ -1518,7 +1519,7 @@ function POSRecoveryCodeAdminPanel({ storeId }: { storeId?: string | null }) {
       setRevealedCode(result.code);
       toast.success("POS recovery code rotated");
     } catch (error) {
-      console.error(error);
+      logger.error("POS settings operation failed", error instanceof Error ? error : { error: String(error) });
       toast.error("Unable to rotate POS recovery code");
     } finally {
       setIsRotating(false);
@@ -1534,7 +1535,7 @@ function POSRecoveryCodeAdminPanel({ storeId }: { storeId?: string | null }) {
       await unlockRecoveryCode({ storeId: storeId as never });
       toast.success("POS recovery code unlocked");
     } catch (error) {
-      console.error(error);
+      logger.error("POS settings operation failed", error instanceof Error ? error : { error: String(error) });
       toast.error("Unable to unlock POS recovery code");
     } finally {
       setIsUnlocking(false);
@@ -1551,7 +1552,7 @@ function POSRecoveryCodeAdminPanel({ storeId }: { storeId?: string | null }) {
       await revokeRecoveryCode({ storeId: storeId as never });
       toast.success("POS recovery code revoked");
     } catch (error) {
-      console.error(error);
+      logger.error("POS settings operation failed", error instanceof Error ? error : { error: String(error) });
       toast.error("Unable to revoke POS recovery code");
     } finally {
       setIsRevoking(false);
@@ -2000,7 +2001,7 @@ export function POSSettingsView({
           }
         }
       } catch (error) {
-        console.error("Failed to read stored fingerprint", error);
+        logger.error("Failed to read stored fingerprint", error instanceof Error ? error : { error: String(error) });
       }
 
       try {
@@ -2013,7 +2014,7 @@ export function POSSettingsView({
           );
         }
       } catch (error) {
-        console.error(error);
+        logger.error("POS settings operation failed", error instanceof Error ? error : { error: String(error) });
         if (!cancelled) {
           setFingerprintError(
             error instanceof Error
@@ -2131,7 +2132,7 @@ export function POSSettingsView({
       setLoginModeTouched(false);
       setTransactionCapabilityTouched(false);
     } catch (error) {
-      console.error(error);
+      logger.error("POS settings operation failed", error instanceof Error ? error : { error: String(error) });
       toast.error("Unable to register terminal");
     } finally {
       setIsRegistering(false);
@@ -2175,7 +2176,7 @@ export function POSSettingsView({
       setTransactionCapabilityTouched(false);
       toast.success("Terminal settings saved");
     } catch (error) {
-      console.error(error);
+      logger.error("POS settings operation failed", error instanceof Error ? error : { error: String(error) });
       toast.error("Unable to save terminal settings");
     } finally {
       setIsUpdatingExisting(false);

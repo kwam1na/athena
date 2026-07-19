@@ -365,7 +365,10 @@ export default function PointOfSaleView() {
           {/* POS Features Grid */}
           <div>
             {/* <h2 className="text-2xl font-semibold mb-6">POS Features</h2> */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div
+              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+              data-testid="athena-pos-hub-ready"
+            >
               {posFeatures
                 .filter((f) => f.available)
                 .map((feature) => {
