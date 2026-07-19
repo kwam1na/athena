@@ -11,7 +11,7 @@ applies_when:
   - Shipping a broad Athena webapp change that touches Convex and operator UI surfaces
   - Changing a public Convex return validator or query projection
 tags: [convex, delivery-gates, return-contracts, graphify]
-delivery_diff_fingerprint: 7d2f9a71d0b862ffb2da5af69a76b725a7d0ba0e9244ff2398cf3834c7e1047c
+delivery_diff_fingerprint: e5291f03c136ae601259f366889e33d9dcad41fbafbe5c733098c9c19ea87309
 ---
 
 # Athena Cross-Layer Delivery Needs Bounded Reads and Contract Proof
@@ -37,6 +37,9 @@ than post-implementation chores:
   return value changes shape.
 - Rebuild Graphify after code changes, then include the refreshed artifacts in
   the delivery commit.
+- At the merge-ready boundary, run `bun run pr:athena` before assembling a
+  broad package-validation checklist. Its ordered provider gate checks delivery
+  documentation before coverage and records reusable pre-push proof.
 
 ```ts
 const members = [];
@@ -63,8 +66,10 @@ synthetic-email rule.
 
 ## Prevention
 
-- Run `bun run lint:convex:changed`, `bun run lint:frontend:changed`, and
-  `bun run typecheck` from `packages/athena-webapp` before attempting a push.
+- During implementation, run the focused tests and changed-file sensors owned
+  by the touched surface. Once the branch is merge-ready, run `bun run
+  pr:athena` from the repository root before any independent full package suite
+  or push attempt.
 - When a public Convex module changes, add a sibling contract test for every
   exported return validator flagged by the harness.
 - For substantial source changes, add the solution note and landed-change
