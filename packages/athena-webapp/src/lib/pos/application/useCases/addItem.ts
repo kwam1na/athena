@@ -9,6 +9,6 @@ export async function addItem(input: {
   try {
     return mapCommandResult(await input.gateway.addItem(input.command));
   } catch (error) {
-    return mapThrownError(error);
+    return mapThrownError(error, "addItem");
   }
 }

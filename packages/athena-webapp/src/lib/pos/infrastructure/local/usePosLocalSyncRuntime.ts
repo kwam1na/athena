@@ -8,6 +8,7 @@ import {
   getInitialRuntimeBuildMetadata,
   type AthenaWebappRuntimeBuildMetadata,
 } from "@/lib/runtimeBuildMetadata";
+import { snapshotPosRuntimeCounters } from "@/lib/pos/infrastructure/telemetry/runtimeCounters";
 import { isLocalPinVerifierMetadata } from "@/lib/security/localPinVerifier";
 import { isNonBlockingRegisterLifecycleReviewEvent } from "~/shared/registerSessionLifecyclePolicy";
 import {
@@ -184,6 +185,7 @@ export type PosLocalRuntimeSyncDebug = {
   lastFailure?: string | null;
   lastHeldEventCount?: number;
   lastReviewEventCount?: number;
+  heldWithoutProgress?: boolean;
   lastTrigger?: PosLocalSyncTrigger;
   lastTriggerAt?: number;
   lastTriggerPriority?: "high" | "normal";
@@ -691,7 +693,14 @@ export function usePosLocalSyncRuntimeStatus(input: {
           onHeldWithoutProgress: drainIncludesReviewEvents(options)
             ? undefined
             : (_heldEventIds, { consecutiveCount }) => {
-                if (shouldStop() || consecutiveCount !== 1) {
+                if (shouldStop()) {
+                  return;
+                }
+                setDebug((current) => ({
+                  ...current,
+                  heldWithoutProgress: true,
+                }));
+                if (consecutiveCount !== 1) {
                   return;
                 }
                 // Give a held successor of a stuck needs_review precursor a
@@ -888,6 +897,10 @@ export function usePosLocalSyncRuntimeStatus(input: {
               lastHeldEventCount: result.data.held.length,
               lastReviewEventCount:
                 reviewEventIds.length + rejectedEventIds.length,
+              // A drain with no held events means the held gap made progress.
+              ...(result.data.held.length === 0
+                ? { heldWithoutProgress: false }
+                : {}),
             }));
             const localReviewEventIds = collectReviewLocalEventIds(
               latestEvents.value.events,
@@ -1092,7 +1105,10 @@ export function usePosLocalSyncRuntimeStatus(input: {
 
   const runtimeStatusSyncDebug = useMemo<PosTerminalRuntimeSyncDebugInput>(
     () => ({
+      backoffUntil: debug.schedulerBackoffUntil,
       failedEventCount: debug.failedEventCount,
+      heldEventCount: debug.lastHeldEventCount,
+      heldWithoutProgress: debug.heldWithoutProgress,
       lastFailure: debug.lastFailure,
       lastTrigger: debug.lastTrigger,
       localOnlyEventCount: debug.localOnlyEventCount,
@@ -1105,7 +1121,9 @@ export function usePosLocalSyncRuntimeStatus(input: {
     }),
     [
       debug.failedEventCount,
+      debug.heldWithoutProgress,
       debug.lastFailure,
+      debug.lastHeldEventCount,
       debug.lastTrigger,
       debug.localOnlyEventCount,
       debug.nextPendingUploadSequence,
@@ -1113,6 +1131,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
       debug.pendingUploadEventCount,
       debug.reviewEvents,
       debug.reviewEventCount,
+      debug.schedulerBackoffUntil,
       debug.schedulerRunning,
     ],
   );
@@ -1145,6 +1164,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
         input.staffAuthorityStatus ?? runtimeReadiness.staffAuthorityStatus,
       staffProfileId,
       syncDebug: runtimeStatusSyncDebug,
+      runtimeCounters: snapshotPosRuntimeCounters(),
       terminalIntegrity: runtimeReadiness.terminalIntegrity,
       terminalSeed: runtimeReadiness.terminalSeed,
     }),

@@ -1,5 +1,9 @@
 import type { Doc, Id } from "../../../_generated/dataModel";
 import type { MutationCtx } from "../../../_generated/server";
+import { internal } from "../../../_generated/api";
+import { buildOperationalEvent } from "../../../operations/operationalEvents";
+import { redactSensitiveDiagnosticText } from "../diagnosticRedaction";
+import { resolveTerminalHealthAlertTransitions } from "../terminalRuntime/terminalHealthAlerts";
 import {
   ok,
   userError,
@@ -299,6 +303,17 @@ export type TerminalRuntimeStatusInput = {
     schemaVersion?: number;
     terminalSeedReady: boolean;
     failureMessage?: string;
+    engineReadiness?: Doc<"posTerminalRuntimeStatus">["localStore"]["engineReadiness"];
+    healthFreshness?: Doc<"posTerminalRuntimeStatus">["localStore"]["healthFreshness"];
+    healthObservedAt?: number;
+    lastSuccessfulDurableCommitAt?: number;
+    ledgerPressure?: Doc<"posTerminalRuntimeStatus">["localStore"]["ledgerPressure"];
+    maintenance?: Doc<"posTerminalRuntimeStatus">["localStore"]["maintenance"];
+    migration?: Doc<"posTerminalRuntimeStatus">["localStore"]["migration"];
+    persistence?: Doc<"posTerminalRuntimeStatus">["localStore"]["persistence"];
+    pressure?: Doc<"posTerminalRuntimeStatus">["localStore"]["pressure"];
+    quotaBytes?: number;
+    usageBytes?: number;
   };
   sync: {
     status: Doc<"posTerminalRuntimeStatus">["sync"]["status"];
@@ -315,7 +330,11 @@ export type TerminalRuntimeStatusInput = {
     lastSyncedSequence?: number;
     lastTrigger?: string;
     lastFailureMessage?: string;
+    backoffUntil?: number;
+    heldEventCount?: number;
+    heldWithoutProgress?: boolean;
   };
+  runtimeCounters?: Record<string, number>;
   staffAuthority: {
     status: Doc<"posTerminalRuntimeStatus">["staffAuthority"]["status"];
     staffProfileId?: Id<"staffProfile">;
@@ -451,15 +470,6 @@ type AppUpdateBlockerCode =
 
 const TERMINAL_NOT_ACTIVE_FOR_STORE_MESSAGE =
   "This terminal is not active for this store.";
-const REDACTED_DIAGNOSTIC_VALUE = "[redacted]";
-const SENSITIVE_DIAGNOSTIC_PATTERNS = [
-  /\bauthorization\s*:\s*[^,;]+/gi,
-  /\b(?:authorization\s*:\s*)?bearer\s+[^,\s;]+/gi,
-  /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g,
-  /(?:\+?\d[\d\s().-]{7,}\d)/g,
-  /\b(?:staffProofToken|proofToken|syncSecret|syncSecretHash|token|secret|password|authorization|bearer|cookie|session)[\w-]*\s*[:=]\s*[^,\s;]+/gi,
-  /\b(?:sk|pk|ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{12,}\b/g,
-];
 
 export async function submitTerminalRuntimeStatus(
   ctx: MutationCtx,
@@ -529,6 +539,21 @@ export async function submitTerminalRuntimeStatus(
         args.status.localStore.failureMessage,
         500,
       ),
+      engineReadiness: args.status.localStore.engineReadiness,
+      healthFreshness: args.status.localStore.healthFreshness,
+      healthObservedAt: positiveTimestamp(
+        args.status.localStore.healthObservedAt,
+      ),
+      lastSuccessfulDurableCommitAt: positiveTimestamp(
+        args.status.localStore.lastSuccessfulDurableCommitAt,
+      ),
+      ledgerPressure: args.status.localStore.ledgerPressure,
+      maintenance: args.status.localStore.maintenance,
+      migration: args.status.localStore.migration,
+      persistence: args.status.localStore.persistence,
+      pressure: args.status.localStore.pressure,
+      quotaBytes: positiveCount(args.status.localStore.quotaBytes),
+      usageBytes: positiveCount(args.status.localStore.usageBytes),
     }),
     sync: omitUndefined({
       status: args.status.sync.status,
@@ -555,6 +580,15 @@ export async function submitTerminalRuntimeStatus(
         args.status.sync.lastFailureMessage,
         500,
       ),
+      backoffUntil: positiveTimestamp(args.status.sync.backoffUntil),
+      heldEventCount: positiveCount(args.status.sync.heldEventCount),
+      heldWithoutProgress:
+        typeof args.status.sync.heldWithoutProgress === "boolean"
+          ? args.status.sync.heldWithoutProgress
+          : undefined,
+    }),
+    ...omitUndefined({
+      runtimeCounters: cleanRuntimeCounters(args.status.runtimeCounters),
     }),
     staffAuthority: omitUndefined({
       status: args.status.staffAuthority.status,
@@ -588,6 +622,52 @@ export async function submitTerminalRuntimeStatus(
       reportedAt,
       receivedAt,
     });
+  }
+
+  // Health alerting rides on this write: the previous row came back from the
+  // upsert (which reads it regardless), so transition detection costs zero
+  // additional reads. Only an actual edge into a degraded condition — rare by
+  // construction (edge trigger + cooldown) — pays one patch, one insert, and
+  // one scheduled email action.
+  const healthAlertTransitions = resolveTerminalHealthAlertTransitions({
+    previous: runtimeStatusWrite.previous,
+    next: { localStore: args.status.localStore, sync: args.status.sync },
+    now: receivedAt,
+  });
+  if (healthAlertTransitions.conditionsToAlert.length > 0) {
+    await ctx.db.patch(
+      "posTerminalRuntimeStatus",
+      runtimeStatusWrite.runtimeStatusId,
+      { healthAlerts: healthAlertTransitions.healthAlerts },
+    );
+    await ctx.db.insert(
+      "operationalEvent",
+      buildOperationalEvent({
+        storeId: args.storeId,
+        eventType: "pos_terminal_health_alert",
+        subjectType: "posTerminal",
+        subjectId: args.terminalId,
+        subjectLabel: terminal.displayName,
+        terminalId: args.terminalId,
+        actorType: "automation",
+        message: `Terminal "${terminal.displayName}" needs attention: ${healthAlertTransitions.conditionsToAlert.join(", ")}`,
+        metadata: {
+          conditions: healthAlertTransitions.conditionsToAlert.join(","),
+          source: "terminal-heartbeat",
+        },
+      }),
+    );
+    await ctx.scheduler.runAfter(
+      0,
+      internal.operations.posTerminalHealthAlertEmail
+        .sendPosTerminalHealthAlertToAdmins,
+      {
+        storeId: args.storeId,
+        terminalId: args.terminalId,
+        conditions: healthAlertTransitions.conditionsToAlert,
+        observedAt: receivedAt,
+      },
+    );
   }
 
   const drawerAuthorityDirective = await buildRuntimeDrawerAuthorityDirective(
@@ -994,10 +1074,7 @@ function cleanDiagnosticMessage(value: string | undefined, maxLength: number) {
     return undefined;
   }
 
-  return SENSITIVE_DIAGNOSTIC_PATTERNS.reduce(
-    (message, pattern) => message.replace(pattern, REDACTED_DIAGNOSTIC_VALUE),
-    cleaned,
-  );
+  return redactSensitiveDiagnosticText(cleaned);
 }
 
 function cleanTerminalIntegrity(
@@ -1194,6 +1271,28 @@ function nonNegativeInteger(value: number | undefined) {
   return Number.isSafeInteger(value) && value !== undefined && value >= 0
     ? value
     : 0;
+}
+
+const RUNTIME_COUNTER_MAX_KEYS = 30;
+
+function cleanRuntimeCounters(
+  counters: Record<string, number> | undefined,
+): Record<string, number> | undefined {
+  if (!counters) {
+    return undefined;
+  }
+  const cleaned: Record<string, number> = {};
+  for (const [key, value] of Object.entries(counters)) {
+    if (Object.keys(cleaned).length >= RUNTIME_COUNTER_MAX_KEYS) {
+      break;
+    }
+    const count = positiveCount(value);
+    if (count === undefined || key.length === 0 || key.length > 80) {
+      continue;
+    }
+    cleaned[key] = count;
+  }
+  return Object.keys(cleaned).length > 0 ? cleaned : undefined;
 }
 
 function omitUndefined<T extends Record<string, unknown>>(input: T) {

@@ -82,6 +82,7 @@ import {
   posRegisterSessionActivityCheckpointSchema,
   posLifecycleJournalSchema,
   posLifecycleJournalCursorSchema,
+  posClientEventSchema,
 } from "./schemas/pos";
 import { posSessionSchema } from "./schemas/pos/posSession";
 import {
@@ -1131,6 +1132,15 @@ const schema = defineSchema({
       "status",
     ])
     .index("by_store_activityKey", ["storeId", "activityKey"]),
+  posClientEvent: defineTable(posClientEventSchema)
+    .index("by_store_clientEvent", ["storeId", "clientEventId"])
+    .index("by_store_received", ["storeId", "receivedAt"])
+    .index("by_store_level_received", ["storeId", "level", "receivedAt"])
+    .index("by_store_terminal_received", [
+      "storeId",
+      "terminalId",
+      "receivedAt",
+    ]),
   posRegisterSessionActivityCheckpoint: defineTable(
     posRegisterSessionActivityCheckpointSchema,
   )

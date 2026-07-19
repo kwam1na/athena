@@ -1,5 +1,6 @@
 import type { PosTerminalRuntimeStatusPayload } from "./terminalRuntimeStatus";
 import { projectTerminalRuntimeMaterial } from "~/shared/pos/terminalRuntimeMaterial";
+import { incrementPosRuntimeCounter } from "@/lib/pos/infrastructure/telemetry/runtimeCounters";
 
 export const RUNTIME_STATUS_FRESHNESS_WAKEUP_INTERVAL_MS = 30_000;
 // Keep below the 2 minute terminal-health freshness boundary.
@@ -177,6 +178,7 @@ export function startRuntimeStatusLeaderLease(
         storage?.setItem(materialKey, JSON.stringify(message));
       } catch {
         // Broadcast/storage are duplicate-suppression transports only.
+        incrementPosRuntimeCounter("runtimeStatus.materialWriteFailed");
       }
     },
     isLeader,
@@ -237,6 +239,7 @@ function writeRuntimeStatusLeaderLease(
     storage?.setItem(key, JSON.stringify(lease));
   } catch {
     // Without durable storage this remains best-effort duplicate suppression.
+    incrementPosRuntimeCounter("runtimeStatus.leaseWriteFailed");
   }
 }
 

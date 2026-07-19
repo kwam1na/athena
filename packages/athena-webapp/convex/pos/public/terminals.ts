@@ -162,6 +162,7 @@ const runtimeStatusInputValidator = v.object({
   snapshots: posTerminalRuntimeSnapshotsValidator,
   terminalIntegrity: v.optional(posTerminalRuntimeTerminalIntegrityValidator),
   drawerAuthority: v.optional(posTerminalRuntimeDrawerAuthorityValidator),
+  runtimeCounters: v.optional(v.record(v.string(), v.number())),
 });
 
 const runtimeStatusWriteResultValidator = v.object({
@@ -801,6 +802,18 @@ function stripRuntimeStatusInput(
       schemaVersion: status.localStore.schemaVersion,
       terminalSeedReady: status.localStore.terminalSeedReady,
       failureMessage: status.localStore.failureMessage,
+      engineReadiness: status.localStore.engineReadiness,
+      healthFreshness: status.localStore.healthFreshness,
+      healthObservedAt: status.localStore.healthObservedAt,
+      lastSuccessfulDurableCommitAt:
+        status.localStore.lastSuccessfulDurableCommitAt,
+      ledgerPressure: status.localStore.ledgerPressure,
+      maintenance: status.localStore.maintenance,
+      migration: status.localStore.migration,
+      persistence: status.localStore.persistence,
+      pressure: status.localStore.pressure,
+      quotaBytes: status.localStore.quotaBytes,
+      usageBytes: status.localStore.usageBytes,
     },
     sync: {
       status: status.sync.status,
@@ -815,7 +828,11 @@ function stripRuntimeStatusInput(
       lastSyncedSequence: status.sync.lastSyncedSequence,
       lastTrigger: status.sync.lastTrigger,
       lastFailureMessage: status.sync.lastFailureMessage,
+      backoffUntil: status.sync.backoffUntil,
+      heldEventCount: status.sync.heldEventCount,
+      heldWithoutProgress: status.sync.heldWithoutProgress,
     },
+    runtimeCounters: status.runtimeCounters,
     staffAuthority: {
       status: status.staffAuthority.status,
       staffProfileId: status.staffAuthority.staffProfileId,

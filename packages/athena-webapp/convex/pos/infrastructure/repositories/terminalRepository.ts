@@ -133,6 +133,9 @@ export async function upsertLatestRuntimeStatusWithOutcome(
 ): Promise<{
   didWrite: boolean;
   materialChanged: boolean;
+  // The previous row is read here regardless; returning it lets callers make
+  // transition decisions (e.g. health alerts) without a second read.
+  previous: Doc<"posTerminalRuntimeStatus"> | null;
   recoveryVerificationCursor?: string;
   runtimeStatusId: Id<"posTerminalRuntimeStatus">;
 }> {
@@ -146,6 +149,7 @@ export async function upsertLatestRuntimeStatusWithOutcome(
       return {
         didWrite: false,
         materialChanged: false,
+        previous: existing,
         recoveryVerificationCursor: existing.recoveryVerificationCursor,
         runtimeStatusId: existing._id,
       };
@@ -160,6 +164,7 @@ export async function upsertLatestRuntimeStatusWithOutcome(
       return {
         didWrite: false,
         materialChanged: false,
+        previous: existing,
         recoveryVerificationCursor: existing.recoveryVerificationCursor,
         runtimeStatusId: existing._id,
       };
@@ -169,6 +174,7 @@ export async function upsertLatestRuntimeStatusWithOutcome(
     return {
       didWrite: true,
       materialChanged,
+      previous: existing,
       recoveryVerificationCursor: existing.recoveryVerificationCursor,
       runtimeStatusId: existing._id,
     };
@@ -177,6 +183,7 @@ export async function upsertLatestRuntimeStatusWithOutcome(
   return {
     didWrite: true,
     materialChanged: true,
+    previous: null,
     runtimeStatusId: await ctx.db.insert(
       "posTerminalRuntimeStatus",
       omitUndefined(input),
@@ -224,6 +231,9 @@ function mergeRuntimeStatusPatch(
 ) {
   return {
     ...input,
+    // Alert timestamps are server-stamped after the fact and never arrive in
+    // terminal check-ins; carry them forward so a heartbeat cannot erase them.
+    healthAlerts: input.healthAlerts ?? existing.healthAlerts,
     appUpdate:
       input.appUpdate !== undefined || existing.appUpdate === undefined
         ? input.appUpdate

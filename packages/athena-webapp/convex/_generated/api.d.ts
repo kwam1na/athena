@@ -57,6 +57,7 @@ import type * as emails_FeedbackRequest from "../emails/FeedbackRequest.js";
 import type * as emails_NewOrderAdmin from "../emails/NewOrderAdmin.js";
 import type * as emails_OrderEmail from "../emails/OrderEmail.js";
 import type * as emails_PosReceiptEmail from "../emails/PosReceiptEmail.js";
+import type * as emails_PosTerminalHealthAlert from "../emails/PosTerminalHealthAlert.js";
 import type * as emails_RegisterCloseoutMatchReportPreview from "../emails/RegisterCloseoutMatchReportPreview.js";
 import type * as emails_RegisterCloseoutVarianceAlert from "../emails/RegisterCloseoutVarianceAlert.js";
 import type * as emails_RegisterCloseoutVarianceAlertPreview from "../emails/RegisterCloseoutVarianceAlertPreview.js";
@@ -205,6 +206,7 @@ import type * as operations_operationalWorkItems from "../operations/operational
 import type * as operations_oversizedOperationalWorkRepair from "../operations/oversizedOperationalWorkRepair.js";
 import type * as operations_paymentAllocations from "../operations/paymentAllocations.js";
 import type * as operations_paymentTotals from "../operations/paymentTotals.js";
+import type * as operations_posTerminalHealthAlertEmail from "../operations/posTerminalHealthAlertEmail.js";
 import type * as operations_registerCloseoutVarianceEmail from "../operations/registerCloseoutVarianceEmail.js";
 import type * as operations_registerSessionAuthorityRevision from "../operations/registerSessionAuthorityRevision.js";
 import type * as operations_registerSessionCloseoutGate from "../operations/registerSessionCloseoutGate.js";
@@ -236,6 +238,7 @@ import type * as pos_application_commands_terminals from "../pos/application/com
 import type * as pos_application_commands_transactionAdjustmentPlanner from "../pos/application/commands/transactionAdjustmentPlanner.js";
 import type * as pos_application_corrections_correctionEvents from "../pos/application/corrections/correctionEvents.js";
 import type * as pos_application_corrections_correctionPolicy from "../pos/application/corrections/correctionPolicy.js";
+import type * as pos_application_diagnosticRedaction from "../pos/application/diagnosticRedaction.js";
 import type * as pos_application_dto from "../pos/application/dto.js";
 import type * as pos_application_pendingCheckoutSkuResolution from "../pos/application/pendingCheckoutSkuResolution.js";
 import type * as pos_application_queries_getRegisterState from "../pos/application/queries/getRegisterState.js";
@@ -269,6 +272,7 @@ import type * as pos_application_terminalRecovery_resolveTerminalCloudRepair fro
 import type * as pos_application_terminalRecovery_terminalCommandService from "../pos/application/terminalRecovery/terminalCommandService.js";
 import type * as pos_application_terminalRecovery_types from "../pos/application/terminalRecovery/types.js";
 import type * as pos_application_terminalRuntime_postRuntimeStatusSideEffects from "../pos/application/terminalRuntime/postRuntimeStatusSideEffects.js";
+import type * as pos_application_terminalRuntime_terminalHealthAlerts from "../pos/application/terminalRuntime/terminalHealthAlerts.js";
 import type * as pos_domain_errors from "../pos/domain/errors.js";
 import type * as pos_domain_sessionRules from "../pos/domain/sessionRules.js";
 import type * as pos_domain_terminalSyncEvidence from "../pos/domain/terminalSyncEvidence.js";
@@ -295,6 +299,7 @@ import type * as pos_public_customers from "../pos/public/customers.js";
 import type * as pos_public_posRecoveryCodes from "../pos/public/posRecoveryCodes.js";
 import type * as pos_public_register from "../pos/public/register.js";
 import type * as pos_public_sync from "../pos/public/sync.js";
+import type * as pos_public_telemetry from "../pos/public/telemetry.js";
 import type * as pos_public_terminalAppSessions from "../pos/public/terminalAppSessions.js";
 import type * as pos_public_terminals from "../pos/public/terminals.js";
 import type * as pos_public_transactions from "../pos/public/transactions.js";
@@ -440,6 +445,7 @@ import type * as schemas_pos_expenseTransaction from "../schemas/pos/expenseTran
 import type * as schemas_pos_expenseTransactionItem from "../schemas/pos/expenseTransactionItem.js";
 import type * as schemas_pos_index from "../schemas/pos/index.js";
 import type * as schemas_pos_posAmountMigrationRun from "../schemas/pos/posAmountMigrationRun.js";
+import type * as schemas_pos_posClientEvent from "../schemas/pos/posClientEvent.js";
 import type * as schemas_pos_posLifecycleJournal from "../schemas/pos/posLifecycleJournal.js";
 import type * as schemas_pos_posLocalStaffProof from "../schemas/pos/posLocalStaffProof.js";
 import type * as schemas_pos_posLocalSyncConflict from "../schemas/pos/posLocalSyncConflict.js";
@@ -637,6 +643,7 @@ declare const fullApi: ApiFromModules<{
   "emails/NewOrderAdmin": typeof emails_NewOrderAdmin;
   "emails/OrderEmail": typeof emails_OrderEmail;
   "emails/PosReceiptEmail": typeof emails_PosReceiptEmail;
+  "emails/PosTerminalHealthAlert": typeof emails_PosTerminalHealthAlert;
   "emails/RegisterCloseoutMatchReportPreview": typeof emails_RegisterCloseoutMatchReportPreview;
   "emails/RegisterCloseoutVarianceAlert": typeof emails_RegisterCloseoutVarianceAlert;
   "emails/RegisterCloseoutVarianceAlertPreview": typeof emails_RegisterCloseoutVarianceAlertPreview;
@@ -785,6 +792,7 @@ declare const fullApi: ApiFromModules<{
   "operations/oversizedOperationalWorkRepair": typeof operations_oversizedOperationalWorkRepair;
   "operations/paymentAllocations": typeof operations_paymentAllocations;
   "operations/paymentTotals": typeof operations_paymentTotals;
+  "operations/posTerminalHealthAlertEmail": typeof operations_posTerminalHealthAlertEmail;
   "operations/registerCloseoutVarianceEmail": typeof operations_registerCloseoutVarianceEmail;
   "operations/registerSessionAuthorityRevision": typeof operations_registerSessionAuthorityRevision;
   "operations/registerSessionCloseoutGate": typeof operations_registerSessionCloseoutGate;
@@ -816,6 +824,7 @@ declare const fullApi: ApiFromModules<{
   "pos/application/commands/transactionAdjustmentPlanner": typeof pos_application_commands_transactionAdjustmentPlanner;
   "pos/application/corrections/correctionEvents": typeof pos_application_corrections_correctionEvents;
   "pos/application/corrections/correctionPolicy": typeof pos_application_corrections_correctionPolicy;
+  "pos/application/diagnosticRedaction": typeof pos_application_diagnosticRedaction;
   "pos/application/dto": typeof pos_application_dto;
   "pos/application/pendingCheckoutSkuResolution": typeof pos_application_pendingCheckoutSkuResolution;
   "pos/application/queries/getRegisterState": typeof pos_application_queries_getRegisterState;
@@ -849,6 +858,7 @@ declare const fullApi: ApiFromModules<{
   "pos/application/terminalRecovery/terminalCommandService": typeof pos_application_terminalRecovery_terminalCommandService;
   "pos/application/terminalRecovery/types": typeof pos_application_terminalRecovery_types;
   "pos/application/terminalRuntime/postRuntimeStatusSideEffects": typeof pos_application_terminalRuntime_postRuntimeStatusSideEffects;
+  "pos/application/terminalRuntime/terminalHealthAlerts": typeof pos_application_terminalRuntime_terminalHealthAlerts;
   "pos/domain/errors": typeof pos_domain_errors;
   "pos/domain/sessionRules": typeof pos_domain_sessionRules;
   "pos/domain/terminalSyncEvidence": typeof pos_domain_terminalSyncEvidence;
@@ -875,6 +885,7 @@ declare const fullApi: ApiFromModules<{
   "pos/public/posRecoveryCodes": typeof pos_public_posRecoveryCodes;
   "pos/public/register": typeof pos_public_register;
   "pos/public/sync": typeof pos_public_sync;
+  "pos/public/telemetry": typeof pos_public_telemetry;
   "pos/public/terminalAppSessions": typeof pos_public_terminalAppSessions;
   "pos/public/terminals": typeof pos_public_terminals;
   "pos/public/transactions": typeof pos_public_transactions;
@@ -1020,6 +1031,7 @@ declare const fullApi: ApiFromModules<{
   "schemas/pos/expenseTransactionItem": typeof schemas_pos_expenseTransactionItem;
   "schemas/pos/index": typeof schemas_pos_index;
   "schemas/pos/posAmountMigrationRun": typeof schemas_pos_posAmountMigrationRun;
+  "schemas/pos/posClientEvent": typeof schemas_pos_posClientEvent;
   "schemas/pos/posLifecycleJournal": typeof schemas_pos_posLifecycleJournal;
   "schemas/pos/posLocalStaffProof": typeof schemas_pos_posLocalStaffProof;
   "schemas/pos/posLocalSyncConflict": typeof schemas_pos_posLocalSyncConflict;

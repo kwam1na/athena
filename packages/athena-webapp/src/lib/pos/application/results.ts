@@ -1,5 +1,6 @@
 import type { CommandResult, UserErrorCode } from "~/shared/commandResult";
 import { GENERIC_UNEXPECTED_ERROR_MESSAGE } from "~/shared/commandResult";
+import { reportPosUnexpectedError } from "./errorTelemetry";
 
 const KNOWN_THROWN_USER_MESSAGES = [
   "A register session is already open for this terminal",
@@ -101,6 +102,7 @@ export function mapCommandResult<TData>(
 
 export function mapThrownError<TData = never>(
   error: unknown,
+  operation?: string,
 ): PosUseCaseResult<TData> {
   const thrownMessage =
     error instanceof Error
@@ -111,6 +113,16 @@ export function mapThrownError<TData = never>(
   const knownMessage = KNOWN_THROWN_USER_MESSAGES.find((message) =>
     thrownMessage.includes(message),
   );
+
+  // The user sees a generic message for unrecognized errors, but the raw
+  // failure still reaches telemetry so it stays diagnosable remotely.
+  if (!knownMessage) {
+    reportPosUnexpectedError({
+      message: "POS use case threw an unexpected error",
+      operation,
+      error,
+    });
+  }
 
   return {
     ok: false,

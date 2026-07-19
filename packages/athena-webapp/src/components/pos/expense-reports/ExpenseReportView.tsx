@@ -1,3 +1,4 @@
+import { logger } from "@/lib/logger";
 import { useMemo } from "react";
 import { useParams } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
@@ -111,7 +112,7 @@ export function ExpenseReportView() {
 
       printReceipt(receiptHtml);
     } catch (error) {
-      console.error("Error printing expense receipt:", error);
+      logger.error("Error printing expense receipt", error instanceof Error ? error : { error: String(error) });
     }
   };
 

@@ -11,6 +11,6 @@ export async function completeTransaction(input: {
       await input.gateway.completeTransaction(input.command),
     );
   } catch (error) {
-    return mapThrownError(error);
+    return mapThrownError(error, "completeTransaction");
   }
 }

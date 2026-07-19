@@ -1,12 +1,11 @@
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import * as Collapsible from "@radix-ui/react-collapsible";
 import {
   User,
   Search,
-  Plus,
   UserPlus,
   Clock,
   Package,
@@ -46,7 +45,7 @@ export function CustomerInfoPanel({
   const { activeStore } = useGetActiveStore();
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearch, setShowSearch] = useState(false);
-  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [, setShowCreateForm] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<CustomerInfo>({
     name: "",
@@ -67,8 +66,6 @@ export function CustomerInfoPanel({
   };
 
   const handleSelectCustomer = (customer: POSCustomerSummary) => {
-    console.log("🔄 Selecting customer:", customer);
-
     const nextCustomerInfo = {
       customerProfileId: customer.customerProfileId,
       name: customer.name,
@@ -82,9 +79,6 @@ export function CustomerInfoPanel({
     setSearchQuery("");
 
     // Keep the panel open so user can see the edit button and customer details
-    // onOpenChange(false); // Removed this line
-
-    console.log("✅ Customer selected, panel staying open for editing");
   };
 
   const handleCreateCustomer = async () => {

@@ -217,6 +217,41 @@ describe("terminalRuntimeStatus", () => {
     expect(JSON.stringify(status)).not.toContain("payments");
   });
 
+  it("reports sync backoff, held progress, and runtime counters in check-ins", () => {
+    const status = buildPosTerminalRuntimeStatus({
+      clock: () => 2_000,
+      events: [],
+      source: "sync-runtime",
+      syncDebug: {
+        backoffUntil: 5_000,
+        heldEventCount: 2,
+        heldWithoutProgress: true,
+      },
+      runtimeCounters: { "storageHealth.probeFailed": 3 },
+    });
+
+    expect(status.sync.backoffUntil).toBe(5_000);
+    expect(status.sync.heldEventCount).toBe(2);
+    expect(status.sync.heldWithoutProgress).toBe(true);
+    expect(status.runtimeCounters).toEqual({
+      "storageHealth.probeFailed": 3,
+    });
+  });
+
+  it("omits expired backoff windows and empty runtime counters", () => {
+    const status = buildPosTerminalRuntimeStatus({
+      clock: () => 2_000,
+      events: [],
+      source: "sync-runtime",
+      syncDebug: { backoffUntil: 1_000, heldWithoutProgress: false },
+      runtimeCounters: {},
+    });
+
+    expect(status.sync.backoffUntil).toBeUndefined();
+    expect(status.sync.heldWithoutProgress).toBe(false);
+    expect(status.runtimeCounters).toBeUndefined();
+  });
+
   it("does not advance the server-confirmed high-water past an unconfirmed local resolution", () => {
     const status = buildPosTerminalRuntimeStatus({
       browserInfo: { online: true },

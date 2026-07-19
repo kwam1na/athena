@@ -9,6 +9,6 @@ export async function holdSession(input: {
   try {
     return mapCommandResult(await input.gateway.holdSession(input.command));
   } catch (error) {
-    return mapThrownError(error);
+    return mapThrownError(error, "holdSession");
   }
 }

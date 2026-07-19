@@ -916,6 +916,16 @@ export function classifyTerminalHealth(
     };
   }
 
+  if (sync?.heldWithoutProgress) {
+    return {
+      description:
+        primaryReason?.summary ??
+        "Held activity on this terminal is not making progress. Resolve the outstanding review or contact support.",
+      label: "Sync stuck",
+      toneClassName: "border-danger/30 bg-danger/10 text-danger",
+    };
+  }
+
   if (
     runtimeStatus.localStore?.available === false ||
     runtimeStatus.localStore?.engineReadiness === "unavailable"

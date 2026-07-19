@@ -203,6 +203,9 @@ export const posTerminalRuntimeSyncValidator = v.object({
   lastSyncedSequence: v.optional(v.number()),
   lastTrigger: v.optional(v.string()),
   lastFailureMessage: v.optional(v.string()),
+  backoffUntil: v.optional(v.number()),
+  heldEventCount: v.optional(v.number()),
+  heldWithoutProgress: v.optional(v.boolean()),
 });
 
 export const posTerminalRuntimeStaffAuthorityValidator = v.object({
@@ -312,4 +315,10 @@ export const posTerminalRuntimeStatusSchema = v.object({
   terminalIntegrity: v.optional(posTerminalRuntimeTerminalIntegrityValidator),
   drawerAuthority: v.optional(posTerminalRuntimeDrawerAuthorityValidator),
   recoveryVerificationCursor: v.optional(v.string()),
+  // Best-effort counters from silent-catch rails (storage probes, leader
+  // election); names are client-defined, values are non-negative totals.
+  runtimeCounters: v.optional(v.record(v.string(), v.number())),
+  // Server-stamped per-condition alert timestamps (edge-triggered health
+  // alerting rides on this row instead of a separate alert-state table).
+  healthAlerts: v.optional(v.record(v.string(), v.number())),
 });

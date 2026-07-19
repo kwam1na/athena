@@ -154,6 +154,7 @@ describe("terminalRepository runtime status", () => {
     );
 
     expect(result).toEqual({
+      previous: expect.anything(),
       didWrite: false,
       materialChanged: false,
       runtimeStatusId: "runtime-status-1",
@@ -245,6 +246,7 @@ describe("terminalRepository runtime status", () => {
     );
 
     expect(result).toEqual({
+      previous: expect.anything(),
       didWrite: true,
       materialChanged: false,
       runtimeStatusId: "runtime-status-1",
@@ -275,6 +277,7 @@ describe("terminalRepository runtime status", () => {
     );
 
     expect(result).toEqual({
+      previous: expect.anything(),
       didWrite: true,
       materialChanged: true,
       runtimeStatusId: "runtime-status-1",
@@ -312,6 +315,7 @@ describe("terminalRepository runtime status", () => {
     );
 
     expect(result).toEqual({
+      previous: expect.anything(),
       didWrite: false,
       materialChanged: false,
       runtimeStatusId: "runtime-status-1",
@@ -336,6 +340,7 @@ describe("terminalRepository runtime status", () => {
     );
 
     expect(result).toEqual({
+      previous: expect.anything(),
       didWrite: false,
       materialChanged: false,
       runtimeStatusId: "runtime-status-1",
@@ -364,6 +369,7 @@ describe("terminalRepository runtime status", () => {
     );
 
     expect(result).toEqual({
+      previous: expect.anything(),
       didWrite: true,
       materialChanged: false,
       runtimeStatusId: "runtime-status-1",
@@ -391,6 +397,7 @@ describe("terminalRepository runtime status", () => {
     );
 
     expect(result).toEqual({
+      previous: expect.anything(),
       didWrite: true,
       materialChanged: false,
       runtimeStatusId: "runtime-status-1",

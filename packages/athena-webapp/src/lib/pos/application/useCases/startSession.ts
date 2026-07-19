@@ -9,6 +9,6 @@ export async function startSession(input: {
   try {
     return mapCommandResult(await input.gateway.startSession(input.command));
   } catch (error) {
-    return mapThrownError(error);
+    return mapThrownError(error, "startSession");
   }
 }

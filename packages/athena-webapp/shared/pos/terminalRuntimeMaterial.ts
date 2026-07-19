@@ -69,6 +69,15 @@ function projectLocalStore(value: RuntimeSection) {
   return stripUndefined({
     available: value.available,
     terminalSeedReady: value.terminalSeedReady,
+    // Storage-degradation signals are material: a pressure or migration state
+    // change should publish promptly instead of waiting for the freshness
+    // republish window.
+    engineReadiness: value.engineReadiness,
+    ledgerPressure: value.ledgerPressure,
+    maintenance: value.maintenance,
+    migration: value.migration,
+    persistence: value.persistence,
+    pressure: value.pressure,
   });
 }
 
@@ -93,6 +102,7 @@ function projectSync(value: RuntimeSection) {
     reviewEventCount,
     reviewEvents: reviewEventCount > 0 ? value.reviewEvents : undefined,
     status: value.status,
+    heldWithoutProgress: value.heldWithoutProgress,
   });
 }
 

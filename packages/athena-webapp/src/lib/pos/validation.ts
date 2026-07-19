@@ -257,8 +257,6 @@ export function validateSession(
 ): ValidationResult {
   const errors: string[] = [];
 
-  console.log("session in validateSession", session);
-
   if (!session) {
     errors.push("No active session found");
   } else {
@@ -305,7 +303,7 @@ export function validateSession(
  */
 function isValidPhone(phone: string): boolean {
   // Remove common formatting characters
-  const cleaned = phone.replace(/[\s\-\(\)\.]/g, "");
+  const cleaned = phone.replace(/[\s\-().]/g, "");
   // Check if it's a reasonable phone number length (7-15 digits)
   return /^\d{7,15}$/.test(cleaned);
 }

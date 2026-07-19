@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="4adcfd354d3b18dbf3e695cc846fe1ef1d53e2b35d5127e7a931ab71b12ea11f" data-athena-report-base="origin/main" data-athena-report-head="codex/pos-telemetry-phase1">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>POS Observability v1: Offline-Durable Telemetry, Heartbeat Health, and Edge-Triggered Alerts</title>
+    <style>
+      :root {
+        --ink: #1f2933;
+        --muted: #596674;
+        --line: #d9e2ec;
+        --paper: #ffffff;
+        --soft: #f6f8fb;
+        --accent: #1d4ed8;
+        --accent-soft: #dbeafe;
+        --good: #166534;
+        --bad: #b91c1c;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--soft); color: var(--ink); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.55; }
+      main { max-width: 1120px; margin: 0 auto; padding: 48px 24px 72px; }
+      header { border-bottom: 1px solid var(--line); margin-bottom: 28px; padding-bottom: 28px; }
+      h1, h2, h3 { line-height: 1.18; }
+      h1 { font-size: 40px; max-width: 900px; margin: 0 0 16px; }
+      h2 { font-size: 28px; margin: 0 0 16px; }
+      h3 { font-size: 19px; margin: 22px 0 10px; }
+      p { margin: 0 0 14px; }
+      .lede { color: var(--muted); font-size: 18px; max-width: 900px; }
+      .meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+      .pill { border: 1px solid var(--line); border-radius: 999px; background: var(--paper); color: var(--muted); font-size: 13px; padding: 6px 10px; }
+      .panel { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; margin: 18px 0; padding: 22px; }
+      code { background: #eef2f7; border: 1px solid #d8dee8; border-radius: 5px; padding: 1px 5px; }
+      table { width: 100%; border-collapse: collapse; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+      th, td { border-bottom: 1px solid var(--line); padding: 11px 12px; text-align: left; vertical-align: top; }
+      th { background: #eef2f7; color: var(--muted); font-size: 13px; text-transform: uppercase; }
+      tr:last-child td { border-bottom: 0; }
+      ul, ol { margin: 0 0 14px; padding-left: 22px; }
+      li { margin-bottom: 7px; }
+      .callout { border-left: 3px solid var(--accent); background: var(--accent-soft); border-radius: 0 8px 8px 0; padding: 14px 16px; margin: 16px 0; }
+      .quiz-question { border-top: 1px solid var(--line); padding: 18px 0; }
+      .quiz-question:first-child { border-top: 0; }
+      fieldset { border: 0; margin: 0; padding: 0; }
+      legend { font-weight: 700; margin-bottom: 10px; }
+      label { display: block; border: 1px solid var(--line); border-radius: 8px; background: #fbfdff; margin: 8px 0; padding: 10px 12px; cursor: pointer; }
+      button { appearance: none; border: 0; border-radius: 8px; background: var(--accent); color: #ffffff; cursor: pointer; font-weight: 700; padding: 11px 16px; }
+      button.secondary { background: #e2e8f0; color: var(--ink); }
+      .quiz-actions { display: flex; align-items: center; gap: 12px; margin-top: 18px; }
+      .answer-detail { display: none; color: var(--muted); font-size: 14px; margin-top: 8px; }
+      .answer-detail.visible { display: block; }
+      .quiz-question.correct { background: #f0fdf4; border-radius: 8px; padding-left: 12px; padding-right: 12px; }
+      .quiz-question.incorrect { background: #fef2f2; border-radius: 8px; padding-left: 12px; padding-right: 12px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>POS Observability v1: Offline-Durable Telemetry, Heartbeat Health, and Edge-Triggered Alerts</h1>
+        <p class="lede">Before this branch, a failing POS terminal was invisible: errors died at the terminal's console, the server discarded every storage-health field terminals reported, and nobody got alerted until store staff called. This delivery adds remote observability in four phases — under a hard constraint that nothing may poll the database.</p>
+        <div class="meta"><span class="pill">Delivery candidate</span><span class="pill">Branch: codex/pos-telemetry-phase1</span><span class="pill">Base: origin/main</span><span class="pill">Merge: pending</span><span class="pill">Root alignment: pending</span><span class="pill">Production deploy: pending (dev deployment updated)</span></div>
+      </header>
+
+      <section class="panel"><h2>Executive Summary</h2>
+        <ul>
+          <li><strong>Phase 1:</strong> POS client errors now buffer in a durable localStorage ring (survives reloads and offline periods) and drain to a new <code>posClientEvent</code> Convex table. <code>mapThrownError</code> still shows users a generic message but tees the raw error to telemetry, so "unexpected error" is finally diagnosable.</li>
+          <li><strong>Phase 2:</strong> The terminal heartbeat's storage-health telemetry was being <em>discarded at the server boundary</em> despite the client building it, the schema storing it, and the UI having rendering branches for it. Reconnected, plus new sync-stall signals (<code>backoffUntil</code>, <code>heldEventCount</code>, <code>heldWithoutProgress</code>) and counters for silent-catch rails.</li>
+          <li><strong>Phase 3:</strong> Edge-triggered health alerts (<code>storage_critical</code>, <code>sync_stuck</code>) ride the heartbeat write itself — zero additional reads — and email admins via MailerSend on entry into a degraded condition, with a 6-hour anti-flap cooldown.</li>
+          <li><strong>Phase 4:</strong> Operational contract documented (<code>docs/operations/pos-observability-v1.md</code>), a Checkly readiness selector on the POS hub, console hygiene, and — from independent diff review — a redaction fix so client error text is scrubbed of secrets/PII before persisting.</li>
+        </ul>
+      </section>
+
+      <section class="panel"><h2>Problem And Context</h2>
+        <p>The POS app is local-first: an IndexedDB event ledger, a sync scheduler with exponential backoff, and cross-tab leader election keep sales flowing offline. Local observability was good — toasts, typed command results, a sync-status chip. Remote observability was absent: <code>logger.ts</code> ended at <code>console.*</code>, checkout errors were flattened to one generic message before anyone could see the cause, and ~30 deliberate silent catches guarded exactly the rails (storage probes, migrations, leader election) whose failure makes an offline register unsafe.</p>
+        <p>The binding constraint: the deployment is under an active database-IO containment effort (<code>docs/operations/convex-io-containment-observation.md</code>), which forbids recurring observation reads, polling crons, and read-heavy telemetry. Every signal in this delivery had to ride a write that was already happening.</p>
+      </section>
+
+      <section class="panel"><h2>Mental Model</h2>
+        <p>Think of three rails, all push-based, none polling:</p>
+        <ol>
+          <li><strong>The black box recorder</strong> (phase 1): everything bad that happens on a terminal is written to a small durable ring buffer on-device, and shipped to the cloud whenever connectivity allows. Offline failures are the ones you most need — so the transport must survive offline.</li>
+          <li><strong>The pulse</strong> (phase 2): the terminal already checks in every ~110 seconds. The check-in now carries the vital signs that used to be dropped on the floor: storage pressure, migration state, sync stall indicators, and counters from the silent-catch rails.</li>
+          <li><strong>The alarm</strong> (phase 3): the server compares each pulse to the previous one — which it was already reading — and only a <em>transition into</em> a severe condition rings the bell. Steady-state (healthy or degraded) costs nothing extra.</li>
+        </ol>
+        <div class="callout">The recurring design move: never create a new read to observe something — find the write that already happens and attach the observation to it.</div>
+      </section>
+
+      <section class="panel"><h2>Before And After</h2>
+        <h3>Client error on the checkout path</h3>
+        <p><strong>Before:</strong> thrown error → <code>mapThrownError</code> → generic "unexpected error" toast → detail lost forever.<br/>
+        <strong>After:</strong> same toast, but the raw error (with operation name) lands in the durable buffer → drains to <code>posClientEvent</code> → queryable per store/level via <code>listClientEvents</code>.</p>
+        <h3>Storage degradation</h3>
+        <p><strong>Before:</strong> client measured pressure/migration/persistence, sent it in every heartbeat, and <code>stripRuntimeStatusInput</code> deleted it; the terminal-health UI's storage branches never fired on fresh data.<br/>
+        <strong>After:</strong> persisted end-to-end; degradation state changes are "material," so they publish promptly; entering <code>storage_critical</code> emails admins once.</p>
+        <h3>Stuck sync</h3>
+        <p><strong>Before:</strong> the drain scheduler's held-without-progress escalation existed only as local state.<br/>
+        <strong>After:</strong> it reaches the heartbeat, renders as a "Sync stuck" badge and "Sync retry" / "Oldest unsynced" rows in the fleet views, and triggers a <code>sync_stuck</code> alert edge.</p>
+      </section>
+
+      <section class="panel">
+        <h2>Key Files</h2>
+        <table>
+          <thead><tr><th>File</th><th>Why it matters</th></tr></thead>
+          <tbody>
+            <tr><td><code>src/lib/pos/infrastructure/telemetry/telemetryBuffer.ts</code></td><td>Durable 200-event localStorage ring with in-memory fallback; never throws; mints client idempotency ids.</td></tr>
+            <tr><td><code>src/lib/pos/infrastructure/telemetry/usePosClientTelemetryDrain.ts</code></td><td>30s/reconnect drain (≤50/batch), window error + unhandled-rejection capture, 2-minute failure backoff.</td></tr>
+            <tr><td><code>convex/pos/public/telemetry.ts</code></td><td>Ingest with FIFO-prefix dedupe (one index read per fresh batch), redaction, truncation; plus the <code>listClientEvents</code> read side.</td></tr>
+            <tr><td><code>src/lib/pos/application/results.ts</code> + <code>errorTelemetry.ts</code></td><td>Generic user message preserved; raw error teed to telemetry via an app-layer sink registered from infrastructure.</td></tr>
+            <tr><td><code>convex/pos/public/terminals.ts</code> (strip)</td><td>The severed seam: storage-health and sync-stall fields now pass through instead of being whitelisted away.</td></tr>
+            <tr><td><code>convex/pos/infrastructure/repositories/terminalRepository.ts</code></td><td>Upsert returns the previous row it already read; the merge carries <code>healthAlerts</code> forward so heartbeats can't erase alert stamps.</td></tr>
+            <tr><td><code>convex/pos/application/terminalRuntime/terminalHealthAlerts.ts</code></td><td>Pure classifier + edge/cooldown transition resolver — the whole alert policy, unit-tested in isolation.</td></tr>
+            <tr><td><code>convex/pos/application/commands/terminals.ts</code></td><td>Alert wiring on the heartbeat write: patch stamps, one raw <code>operationalEvent</code> insert (the <code>recordOperationalEventWithCtx</code> helper collects the full subject history as its dedupe — a read the edge trigger makes unnecessary), one scheduled email action.</td></tr>
+            <tr><td><code>convex/operations/posTerminalHealthAlertEmail.ts</code> + <code>convex/emails/PosTerminalHealthAlert.tsx</code></td><td>MailerSend admin email mirroring the closeout-variance alert pattern.</td></tr>
+            <tr><td><code>convex/pos/application/diagnosticRedaction.ts</code></td><td>Shared secrets/PII scrubbing used by both the heartbeat diagnostics and the client-event ingest.</td></tr>
+            <tr><td><code>src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.ts</code></td><td>Forwards scheduler backoff, held counts, and held-without-progress state (set on escalation, cleared on progress) into the heartbeat.</td></tr>
+            <tr><td><code>src/components/pos/terminals/*</code></td><td>Fleet UI: "Sync stuck" classification, "Oldest unsynced" (warns past 1h) and "Sync retry" rows.</td></tr>
+            <tr><td><code>docs/operations/pos-observability-v1.md</code></td><td>The operational contract: signal inventory, read budgets, alert semantics, deliberate omissions.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="panel"><h2>What Intentionally Did Not Change</h2>
+        <ul>
+          <li><strong>User-facing error messages stay generic.</strong> Only telemetry gets the raw detail.</li>
+          <li><strong>Silent catches keep swallowing.</strong> They now increment counters, but behavior is unchanged — best-effort rails remain best-effort.</li>
+          <li><strong><code>/health</code> stays shallow.</strong> The production observability runbook contracts it as a zero-read liveness ping polled by Cloudflare every minute; deepening it would add recurring reads and break the documented contract.</li>
+          <li><strong>No <code>operationalEvent</code> per held/conflicted sync event.</strong> Those outcomes already persist as <code>posRegisterSessionActivity</code> rows.</li>
+          <li><strong>No offline-terminal cron.</strong> Absence detection requires recurring scans; staleness stays visible on demand in the terminal health views.</li>
+          <li><strong>No server capture of invariant throws.</strong> A Convex throw rolls back the transaction — nothing can be written — but the error reaches the client, where phase-1 telemetry records it.</li>
+        </ul>
+      </section>
+
+      <section class="panel"><h2>Risks And Review Notes</h2>
+        <ul>
+          <li><strong>Persistent outages alert exactly once.</strong> Edge-triggering means a terminal stuck in <code>storage_critical</code> for a day never re-nags. Intended, but operationally significant.</li>
+          <li><strong>Multi-tab dedupe correctness depends on FIFO-prefix draining.</strong> Concurrent tab drains serialize via Convex OCC on the dedupe index; a future change to buffer ordering or partial removal would break the single-read fast path.</li>
+          <li><strong>Wider material signature → more heartbeat writes under churn.</strong> Storage-degradation oscillation now publishes per transition instead of coalescing into the freshness window.</li>
+          <li><strong>Alert classification compares raw input vs the stored (cleaned) previous row.</strong> Benign today because cleaning doesn't touch alert-relevant enums; a latent trap if it ever does.</li>
+          <li><strong><code>posClientEvent</code> rows carry no <code>terminalId</code> yet</strong> — the drain host only wires <code>storeId</code>; device correlation is via fingerprint hash. The terminal-scoped index is ready when a terminal-aware drain lands.</li>
+          <li><strong>No retention job on <code>posClientEvent</code>.</strong> If volume grows, attach retention to an existing daily cleanup cron rather than adding a new one.</li>
+        </ul>
+      </section>
+
+      <section class="panel"><h2>Validation Evidence</h2>
+        <ul>
+          <li>Full affected suites green at each phase; final state: <strong>166 test files / 2,896 tests passing</strong> plus the phase-4 additions, <code>tsc --noEmit</code> clean.</li>
+          <li>New test coverage: ingest dedupe/replay/redaction/auth (15 tests), buffer durability/ring/fallback (7), error-sink semantics (4), alert classification + edge/cooldown (10), heartbeat persist + alert wiring in the command (2 new + updated), payload build for new sync fields (2), runtime counters (2).</li>
+          <li>Tests caught two real bugs pre-commit: a cooldown inversion that suppressed first-ever alerts, and 62 component-test failures that forced the telemetry host from views to route components.</li>
+          <li>Convex functions deployed to the dev deployment via <code>bunx convex dev --once</code> after each server change (generated API committed from real codegen, not hand-edits).</li>
+          <li>Deployment/root alignment: pending — this is a delivery candidate; <code>bun run pr:athena</code> is the merge gate and this report is one of its required artifacts.</li>
+        </ul>
+      </section>
+
+      <section class="panel"><h2>Next-Time Guidance</h2>
+        <ul>
+          <li>Audit the seam before building: phase 2's biggest win was deleting a server-side strip, not writing new telemetry.</li>
+          <li>When reads are constrained, find the write that already happens and ride it; return what a repository already read instead of re-reading.</li>
+          <li>Any sink for free-form terminal error text must go through <code>diagnosticRedaction</code> — the review that caught the missing redaction is the reason that module exists.</li>
+          <li>Worktrees initialize with an <code>anonymous:</code> local Convex deployment; copy the main checkout's <code>.env.local</code> before running codegen.</li>
+        </ul>
+      </section>
+
+      <section class="panel">
+        <h2>Subagent Evidence</h2>
+        <ul>
+          <li><strong>POS surface mapper</strong> (read-only explorer, phase 0): mapped the POS app's flows, error-handling patterns, silent catches, and local-first persistence — the reading that grounded the four-phase plan.</li>
+          <li><strong>Observability inventory</strong> (read-only explorer, phase 0): swept the repo for existing telemetry (custom Convex event tables, dormant PostHog, MailerSend, Checkly/Cloudflare doc-only monitoring) and identified the gaps.</li>
+          <li><strong>Runtime-status pipeline analyst</strong> (read-only explorer, phase 2): produced the field-level map that revealed the server-side strip discarding client storage-health telemetry.</li>
+          <li><strong>Alert-infrastructure analyst</strong> (read-only explorer, phase 3): mapped <code>operationalEvent</code>'s read-heavy dedupe, the closeout-variance email pattern, cron inventory, and the IO-containment constraints that shaped the alert design.</li>
+          <li><strong>Delivered-diff analyst</strong> (read-only explorer, phase 4): independently analyzed the branch diff — its findings include the redaction asymmetry (fixed in the final commit), the unused <code>terminalId</code> wiring, and the material-signature write-volume caveat, all reflected in this report.</li>
+          <li><strong>Session context</strong>: supplied directly by the delivery conversation, which contains the full trail — the initial observability reading, the low-DB-reads directive and its retrofit onto phase 1, and every verification loop.</li>
+        </ul>
+      </section>
+
+      <section id="quiz" class="panel">
+        <h2>Quiz: Pass Required</h2>
+        <p>You must score at least 8 out of 10 to pass.</p>
+        <form id="changeQuiz" data-threshold="8">
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>1. What happens to a POS client error that occurs while the terminal is offline?</legend>
+    <label><input type="radio" name="q1" value="0" /> It is lost — telemetry requires connectivity</label>
+<label><input type="radio" name="q1" value="1" /> It is appended to a durable localStorage ring buffer and drains after reconnect</label>
+<label><input type="radio" name="q1" value="2" /> It is written straight into IndexedDB alongside sale events</label>
+  </fieldset>
+  <div class="answer-detail">The buffer survives reloads and offline periods (200-event ring, in-memory fallback). Offline is when the most diagnostic failures happen, so the transport had to be offline-durable.</div>
+</div>
+
+<div class="quiz-question" data-answer="2">
+  <fieldset>
+    <legend>2. How does the client-event ingest dedupe a fresh 50-event batch?</legend>
+    <label><input type="radio" name="q2" value="0" /> One index read per event</label>
+<label><input type="radio" name="q2" value="1" /> A server-side hash of the whole batch</label>
+<label><input type="radio" name="q2" value="2" /> One index read on the first event — a replayed FIFO-prefix batch always starts with the same event</label>
+  </fieldset>
+  <div class="answer-detail">The client only removes events after an acked commit and always drains a FIFO prefix, so replay detection needs only the first event's id. Per-event reads happen only on a detected replay; concurrent tabs serialize via OCC.</div>
+</div>
+
+<div class="quiz-question" data-answer="0">
+  <fieldset>
+    <legend>3. After this change, what does a cashier see when a checkout throws an unrecognized error?</legend>
+    <label><input type="radio" name="q3" value="0" /> The same generic message as before — only telemetry receives the raw error and operation name</label>
+<label><input type="radio" name="q3" value="1" /> The raw error message, now that telemetry exists</label>
+<label><input type="radio" name="q3" value="2" /> A toast with an error reference code</label>
+  </fieldset>
+  <div class="answer-detail">mapThrownError's user-facing behavior is intentionally unchanged; the fix was that the detail was previously destroyed entirely, not that users should see it.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>4. Why were the terminal-health UI's storage-degradation branches dead before phase 2?</legend>
+    <label><input type="radio" name="q4" value="0" /> The client never measured storage health</label>
+<label><input type="radio" name="q4" value="1" /> stripRuntimeStatusInput on the server whitelisted away every storage-health field the client sent</label>
+<label><input type="radio" name="q4" value="2" /> The schema could not store the fields</label>
+  </fieldset>
+  <div class="answer-detail">Client built it, schema accepted it, UI rendered it — the strip in convex/pos/public/terminals.ts was the single severed seam. Most of phase 2 was reconnection, not construction.</div>
+</div>
+
+<div class="quiz-question" data-answer="2">
+  <fieldset>
+    <legend>5. Why does health-alert transition detection cost zero additional database reads?</legend>
+    <label><input type="radio" name="q5" value="0" /> Alerts are computed client-side</label>
+<label><input type="radio" name="q5" value="1" /> A dedicated alert-state table is cached in memory</label>
+<label><input type="radio" name="q5" value="2" /> The runtime-status upsert already reads the previous row; the repository now returns it to the command</label>
+  </fieldset>
+  <div class="answer-detail">The previous row was always read for merge/coalescing decisions. Returning it made healthy→degraded comparison free, and per-condition alert timestamps live on the same row.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>6. A terminal enters storage_critical and stays there for two days. How many alert emails go out?</legend>
+    <label><input type="radio" name="q6" value="0" /> One every 6 hours</label>
+<label><input type="radio" name="q6" value="1" /> Exactly one — alerts fire on entry into a condition, and the cooldown only governs re-entry after recovery</label>
+<label><input type="radio" name="q6" value="2" /> One per heartbeat until resolved</label>
+  </fieldset>
+  <div class="answer-detail">Edge-triggered semantics: persistence is not a new edge. The 6h cooldown suppresses flapping (recover-then-degrade cycles), not steady state. Operators should know there is no re-nag.</div>
+</div>
+
+<div class="quiz-question" data-answer="0">
+  <fieldset>
+    <legend>7. Why does the alert path insert operationalEvent rows via raw buildOperationalEvent instead of recordOperationalEventWithCtx?</legend>
+    <label><input type="radio" name="q7" value="0" /> The helper's dedupe collects the full subject history per write — read amplification the edge trigger already makes unnecessary</label>
+<label><input type="radio" name="q7" value="1" /> The helper is internal-only and unreachable from POS code</label>
+<label><input type="radio" name="q7" value="2" /> Raw inserts bypass schema validation for speed</label>
+  </fieldset>
+  <div class="answer-detail">recordOperationalEventWithCtx does a .collect() of every prior event for the subject as idempotent-replay dedupe. Edge-triggering + cooldown already dedupe, so the raw insert (an existing repo precedent) avoids the read.</div>
+</div>
+
+<div class="quiz-question" data-answer="2">
+  <fieldset>
+    <legend>8. Why is there no server-side capture of invariant throws (e.g. in sync ingest)?</legend>
+    <label><input type="radio" name="q8" value="0" /> Throws are too rare to matter</label>
+<label><input type="radio" name="q8" value="1" /> They are captured — into posClientEvent by a server hook</label>
+<label><input type="radio" name="q8" value="2" /> A Convex throw rolls back the transaction, so nothing can be written; the error reaches the client, where phase-1 telemetry records it</label>
+  </fieldset>
+  <div class="answer-detail">In-band capture is structurally impossible. The client-side rail is the invariant-throw channel: the thrown message crosses to the caller, hits mapThrownError, and lands in the buffer.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>9. Why is there no cron detecting offline terminals?</legend>
+    <label><input type="radio" name="q9" value="0" /> Convex does not support crons</label>
+<label><input type="radio" name="q9" value="1" /> Absence detection requires recurring scans, which the IO-containment rules forbid; staleness is shown on demand in the fleet views</label>
+<label><input type="radio" name="q9" value="2" /> Cloudflare's /health check already covers it</label>
+  </fieldset>
+  <div class="answer-detail">You cannot ride a write that never arrives. Under the no-polling constraint, "no check-in for N minutes" renders when an operator opens terminal health, instead of a scheduled scan paying reads around the clock.</div>
+</div>
+
+<div class="quiz-question" data-answer="0">
+  <fieldset>
+    <legend>10. What did the independent delivered-diff review catch, and what was the fix?</legend>
+    <label><input type="radio" name="q10" value="0" /> The client-event ingest persisted raw error text with no redaction; the heartbeat's scrubbing was extracted into a shared diagnosticRedaction module and applied to messages, stacks, and metadata</label>
+<label><input type="radio" name="q10" value="1" /> The cooldown was inverted; it was rewritten to re-alert hourly</label>
+<label><input type="radio" name="q10" value="2" /> The dedupe index was missing; it was added to the schema</label>
+  </fieldset>
+  <div class="answer-detail">The heartbeat path already scrubbed secrets/PII from diagnostic text, but the new ingest — which carries far more free-form error text — did not. The asymmetry was fixed in the final commit and captured as a Prevention rule in the solution note.</div>
+</div>
+
+          <div class="quiz-actions">
+            <button type="button" id="gradeQuiz">Grade quiz</button>
+            <button type="button" class="secondary" id="resetQuiz">Reset</button>
+            <span id="quizResult" aria-live="polite"></span>
+          </div>
+        </form>
+      </section>
+
+    </main>
+    <script>
+      const questions = Array.from(document.querySelectorAll(".quiz-question"));
+      const result = document.getElementById("quizResult");
+      const form = document.getElementById("changeQuiz");
+      const threshold = Number(form.dataset.threshold || 0);
+      function clearGrades() {
+        questions.forEach((question) => {
+          question.classList.remove("correct", "incorrect");
+          question.querySelector(".answer-detail").classList.remove("visible");
+        });
+        result.textContent = "";
+        result.style.color = "";
+      }
+      document.getElementById("gradeQuiz").addEventListener("click", () => {
+        clearGrades();
+        let score = 0;
+        questions.forEach((question, index) => {
+          const selected = document.querySelector(`input[name="q${index + 1}"]:checked`);
+          const isCorrect = selected && Number(selected.value) === Number(question.dataset.answer);
+          if (isCorrect) score += 1;
+          question.classList.add(isCorrect ? "correct" : "incorrect");
+          question.querySelector(".answer-detail").classList.add("visible");
+        });
+        const passed = score >= threshold;
+        result.textContent = passed
+          ? `Passed: ${score}/${questions.length}.`
+          : `Not passed: ${score}/${questions.length}. Review the report and try again.`;
+        result.style.color = passed ? "var(--good)" : "var(--bad)";
+      });
+      document.getElementById("resetQuiz").addEventListener("click", () => {
+        form.reset();
+        clearGrades();
+      });
+    </script>
+  </body>
+</html>

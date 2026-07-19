@@ -1,3 +1,4 @@
+import { logger } from "@/lib/logger";
 import { useCallback, useMemo, useState } from "react";
 import type { RegisterCheckoutState } from "@/lib/pos/presentation/register/registerUiState";
 import { ExpenseCompletion } from "@/components/expense/ExpenseCompletion";
@@ -73,7 +74,7 @@ export function ExpenseCompletionPanel({
       printReceipt(receiptHtml);
       return true;
     } catch (error) {
-      console.error("Error printing expense receipt:", error);
+      logger.error("Error printing expense receipt", error instanceof Error ? error : { error: String(error) });
       return false;
     }
   }, [

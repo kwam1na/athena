@@ -481,6 +481,19 @@ function RuntimeReportGroup({
           value={formatUploadQueue(runtimeStatus)}
         />
         <RailSignalRow
+          label="Oldest unsynced"
+          tone={getOldestUnsyncedTone(runtimeStatus)}
+          value={formatOldestUnsynced(runtimeStatus)}
+        />
+        {runtimeStatus?.sync.heldWithoutProgress ||
+        typeof runtimeStatus?.sync.backoffUntil === "number" ? (
+          <RailSignalRow
+            label="Sync retry"
+            tone="warning"
+            value={formatSyncRetryState(runtimeStatus)}
+          />
+        ) : null}
+        <RailSignalRow
           label="Local review"
           tone={
             (runtimeStatus?.sync.reviewEventCount ?? 0) > 0
@@ -568,6 +581,44 @@ function formatUploadQueue(runtimeStatus: TerminalRuntimeStatus | null) {
   }
 
   return `${uploadable} uploadable / ${pending} pending`;
+}
+
+const OLDEST_UNSYNCED_WARNING_MS = 60 * 60_000;
+
+function formatOldestUnsynced(runtimeStatus: TerminalRuntimeStatus | null) {
+  if (!runtimeStatus) {
+    return "Not reported";
+  }
+  const oldestPendingEventAt = runtimeStatus.sync.oldestPendingEventAt;
+  if (!oldestPendingEventAt) {
+    return "Clear";
+  }
+  return formatAge(Date.now() - oldestPendingEventAt);
+}
+
+function getOldestUnsyncedTone(runtimeStatus: TerminalRuntimeStatus | null) {
+  const oldestPendingEventAt = runtimeStatus?.sync.oldestPendingEventAt;
+  if (!oldestPendingEventAt) {
+    return "neutral" as const;
+  }
+  return Date.now() - oldestPendingEventAt > OLDEST_UNSYNCED_WARNING_MS
+    ? ("warning" as const)
+    : ("neutral" as const);
+}
+
+function formatSyncRetryState(runtimeStatus: TerminalRuntimeStatus) {
+  if (runtimeStatus.sync.heldWithoutProgress) {
+    const heldCount = runtimeStatus.sync.heldEventCount;
+    return heldCount
+      ? `Held without progress (${heldCount} item${heldCount === 1 ? "" : "s"})`
+      : "Held without progress";
+  }
+  const backoffUntil = runtimeStatus.sync.backoffUntil;
+  if (typeof backoffUntil === "number" && backoffUntil > Date.now()) {
+    const minutes = Math.max(1, Math.round((backoffUntil - Date.now()) / 60_000));
+    return `Backing off, next retry in ${minutes} minute${minutes === 1 ? "" : "s"}`;
+  }
+  return "Retrying";
 }
 
 function formatLocalReviewCount(runtimeStatus: TerminalRuntimeStatus | null) {
