@@ -34,12 +34,20 @@ export function useExpenseLocalRuntime(input: {
   syncEnabled?: boolean;
   terminalId?: Id<"posTerminal"> | null;
 }) {
+  // `eventAppendToken` is the sync runtime's *trigger* — it must be bumped only by real
+  // local event appends, never by the runtime's own settle callback, or the runtime would
+  // re-arm itself into an infinite drain loop. `localReadRefreshToken` carries the
+  // settle-refresh signal instead, mirroring the register runtime's two-token split.
   const [eventAppendToken, setEventAppendToken] = useState(0);
+  const [localReadRefreshToken, setLocalReadRefreshToken] = useState(0);
   const localStore = useMemo(() => getExpenseLocalStore(), []);
   const storeFactory = useCallback(() => localStore, [localStore]);
 
   const noteEventAppended = useCallback(() => {
     setEventAppendToken((current) => current + 1);
+  }, []);
+  const noteLocalReadRefresh = useCallback(() => {
+    setLocalReadRefreshToken((current) => current + 1);
   }, []);
 
   useEffect(() => {
@@ -63,9 +71,9 @@ export function useExpenseLocalRuntime(input: {
     drainOnAppend: syncEnabled,
     eventAppendToken,
     mode: "status-only",
-    onLocalEventsChanged: syncEnabled
-      ? notifyExpenseLocalEventAppended
-      : undefined,
+    // A background settle refreshes the local read model but is NOT a new append, so it
+    // must not feed back into the sync trigger (`eventAppendToken`).
+    onLocalEventsChanged: syncEnabled ? noteLocalReadRefresh : undefined,
     source: "sync-runtime",
     staffProfileId: syncEnabled ? input.staffProfileId : null,
     storeFactory,
@@ -75,7 +83,11 @@ export function useExpenseLocalRuntime(input: {
 
   return {
     expenseLocalGateway,
-    eventAppendToken,
+    // Consumers watch this as a single "local state changed" signal: it advances on both
+    // real appends and background settles. Both counters only increment, so the sum
+    // strictly increases whenever either fires. The sync runtime is fed the raw
+    // append-only token above, so exposing the combined value here cannot re-arm it.
+    eventAppendToken: eventAppendToken + localReadRefreshToken,
     localStore,
     noteEventAppended,
     syncRuntime,

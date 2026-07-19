@@ -214,11 +214,20 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
       storeId: store.storeId,
       terminalId: store.terminalId,
     });
-  const listLocalExpenseEvents = (
-    localStore as {
-      listEvents?: typeof localStore.listEvents;
-    }
-  ).listEvents;
+  // `localStore` is a Proxy facade whose `get` trap returns a *new* function on every
+  // property access (see createPosLocalStoreRuntimePort). Reading `.listEvents` inline on
+  // each render therefore produced a fresh reference, churning the read effect's
+  // dependency array into an infinite render loop. Capture a single stable reference,
+  // keyed on the stable `localStore`.
+  const listLocalExpenseEvents = useMemo(() => {
+    const candidate = (
+      localStore as {
+        listEvents?: typeof localStore.listEvents;
+      }
+    ).listEvents;
+
+    return typeof candidate === "function" ? candidate : undefined;
+  }, [localStore]);
   const [localExpenseReadState, setLocalExpenseReadState] = useState<{
     activeSession: ExpenseLocalSessionReadModel | null;
     loaded: boolean;
