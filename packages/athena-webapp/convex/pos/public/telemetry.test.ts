@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Doc, Id } from "../../_generated/dataModel";
+import { assertConformsToExportedReturns } from "../../lib/returnValidatorContract";
 import {
   POS_CLIENT_EVENT_MAX_BATCH,
   POS_CLIENT_EVENT_MAX_MESSAGE_LENGTH,
@@ -399,6 +400,46 @@ describe("listClientEvents", () => {
     const result = await handler(ctx, { storeId: STORE_ID });
 
     expect(result).toEqual([]);
+  });
+});
+
+describe("return contracts", () => {
+  it("recordClientEvents results conform to the exported returns validator", () => {
+    assertConformsToExportedReturns(recordClientEvents, {
+      kind: "ok",
+      data: { accepted: 2, duplicates: 1 },
+    });
+    assertConformsToExportedReturns(recordClientEvents, {
+      kind: "user_error",
+      error: {
+        code: "authorization_failed",
+        message: "You do not have access to report POS telemetry.",
+      },
+    });
+  });
+
+  it("listClientEvents rows conform to the exported returns validator", () => {
+    assertConformsToExportedReturns(listClientEvents, [
+      {
+        _id: "evt-1" as Id<"posClientEvent">,
+        _creationTime: 1,
+        storeId: STORE_ID,
+        terminalId: TERMINAL_ID,
+        terminalFingerprint: "fp-hash",
+        localRegisterSessionId: "local-register-1",
+        clientEventId: "client-event-1",
+        level: "error",
+        flow: "checkout",
+        message: "Checkout failed",
+        errorName: "Error",
+        errorMessage: "boom",
+        errorStack: "Error: boom",
+        appVersion: "1.2.3",
+        metadata: { attempt: 2, offline: true },
+        occurredAt: 900,
+        receivedAt: 950,
+      },
+    ]);
   });
 });
 

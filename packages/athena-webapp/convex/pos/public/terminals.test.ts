@@ -1974,6 +1974,16 @@ describe("POS terminal public mutations", () => {
       previewTerminalRecovery as never,
       buildTerminalHealthSummaryResult().recoveryPreview,
     );
+    // A heartbeat that carried the new storage/sync telemetry fields still
+    // returns the same directive-free write-outcome contract.
+    assertConformsToExportedReturns(submitTerminalRuntimeStatus as never, {
+      kind: "ok",
+      data: {
+        terminalId: "terminal-1",
+        reportedAt: 100,
+        receivedAt: 200,
+      },
+    });
     assertConformsToExportedReturns(submitTerminalRuntimeStatus as never, {
       kind: "ok",
       data: {
