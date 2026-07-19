@@ -89,8 +89,12 @@ export type TerminalRuntimeStatus = {
     status: "blocked" | "healthy" | string;
   };
   storeId?: Id<"store"> | string;
+  runtimeCounters?: Record<string, number>;
   sync: {
+    backoffUntil?: number;
     failedEventCount: number;
+    heldEventCount?: number;
+    heldWithoutProgress?: boolean;
     lastFailureMessage?: string;
     lastSyncedSequence?: number;
     lastTrigger?: string;

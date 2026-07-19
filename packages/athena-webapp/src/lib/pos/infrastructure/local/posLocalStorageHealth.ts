@@ -1,3 +1,5 @@
+import { incrementPosRuntimeCounter } from "@/lib/pos/infrastructure/telemetry/runtimeCounters";
+
 export type PosLocalStoragePersistence =
   "granted" | "denied" | "unsupported" | "unknown";
 
@@ -107,6 +109,7 @@ export async function observePosLocalStorageHealth(options: {
     persistence = persisted ? "granted" : "denied";
     estimate = observedEstimate;
   } catch {
+    incrementPosRuntimeCounter("storageHealth.probeFailed");
     return base;
   }
 

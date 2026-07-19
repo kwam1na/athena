@@ -88,7 +88,10 @@ export type PosTerminalRuntimeStaffAuthorityStatus =
   ReportTerminalRuntimeStatusPayload["staffAuthority"]["status"];
 
 export type PosTerminalRuntimeSyncDebugInput = {
+  backoffUntil?: number | null;
   failedEventCount?: number;
+  heldEventCount?: number;
+  heldWithoutProgress?: boolean;
   lastFailure?: string | null;
   lastTrigger?: PosLocalSyncTrigger;
   localOnlyEventCount?: number;
@@ -212,6 +215,7 @@ export type PosTerminalRuntimeStatusInput = {
   staffAuthorityStatus?: PosLocalStaffAuthorityReadiness | "unknown";
   staffProfileId?: string | null;
   syncDebug?: PosTerminalRuntimeSyncDebugInput;
+  runtimeCounters?: Record<string, number>;
   terminalIntegrity?: PosTerminalIntegrityState | null;
   terminalSeed?: PosProvisionedTerminalSeed | null;
 };
@@ -481,7 +485,20 @@ export function buildPosTerminalRuntimeStatus(
       ...(sync.oldestPendingEventAt !== undefined
         ? { oldestPendingEventAt: sync.oldestPendingEventAt }
         : {}),
+      ...(typeof input.syncDebug?.backoffUntil === "number" &&
+      input.syncDebug.backoffUntil > now
+        ? { backoffUntil: input.syncDebug.backoffUntil }
+        : {}),
+      ...(input.syncDebug?.heldEventCount !== undefined
+        ? { heldEventCount: input.syncDebug.heldEventCount }
+        : {}),
+      ...(input.syncDebug?.heldWithoutProgress !== undefined
+        ? { heldWithoutProgress: input.syncDebug.heldWithoutProgress }
+        : {}),
     },
+    ...(input.runtimeCounters && Object.keys(input.runtimeCounters).length > 0
+      ? { runtimeCounters: input.runtimeCounters }
+      : {}),
     ...(input.terminalIntegrity && input.terminalIntegrity.status !== "healthy"
       ? {
           terminalIntegrity: {

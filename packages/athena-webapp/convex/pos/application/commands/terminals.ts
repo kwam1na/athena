@@ -295,6 +295,17 @@ export type TerminalRuntimeStatusInput = {
     schemaVersion?: number;
     terminalSeedReady: boolean;
     failureMessage?: string;
+    engineReadiness?: Doc<"posTerminalRuntimeStatus">["localStore"]["engineReadiness"];
+    healthFreshness?: Doc<"posTerminalRuntimeStatus">["localStore"]["healthFreshness"];
+    healthObservedAt?: number;
+    lastSuccessfulDurableCommitAt?: number;
+    ledgerPressure?: Doc<"posTerminalRuntimeStatus">["localStore"]["ledgerPressure"];
+    maintenance?: Doc<"posTerminalRuntimeStatus">["localStore"]["maintenance"];
+    migration?: Doc<"posTerminalRuntimeStatus">["localStore"]["migration"];
+    persistence?: Doc<"posTerminalRuntimeStatus">["localStore"]["persistence"];
+    pressure?: Doc<"posTerminalRuntimeStatus">["localStore"]["pressure"];
+    quotaBytes?: number;
+    usageBytes?: number;
   };
   sync: {
     status: Doc<"posTerminalRuntimeStatus">["sync"]["status"];
@@ -311,7 +322,11 @@ export type TerminalRuntimeStatusInput = {
     lastSyncedSequence?: number;
     lastTrigger?: string;
     lastFailureMessage?: string;
+    backoffUntil?: number;
+    heldEventCount?: number;
+    heldWithoutProgress?: boolean;
   };
+  runtimeCounters?: Record<string, number>;
   staffAuthority: {
     status: Doc<"posTerminalRuntimeStatus">["staffAuthority"]["status"];
     staffProfileId?: Id<"staffProfile">;
@@ -524,6 +539,21 @@ export async function submitTerminalRuntimeStatus(
         args.status.localStore.failureMessage,
         500,
       ),
+      engineReadiness: args.status.localStore.engineReadiness,
+      healthFreshness: args.status.localStore.healthFreshness,
+      healthObservedAt: positiveTimestamp(
+        args.status.localStore.healthObservedAt,
+      ),
+      lastSuccessfulDurableCommitAt: positiveTimestamp(
+        args.status.localStore.lastSuccessfulDurableCommitAt,
+      ),
+      ledgerPressure: args.status.localStore.ledgerPressure,
+      maintenance: args.status.localStore.maintenance,
+      migration: args.status.localStore.migration,
+      persistence: args.status.localStore.persistence,
+      pressure: args.status.localStore.pressure,
+      quotaBytes: positiveCount(args.status.localStore.quotaBytes),
+      usageBytes: positiveCount(args.status.localStore.usageBytes),
     }),
     sync: omitUndefined({
       status: args.status.sync.status,
@@ -550,6 +580,15 @@ export async function submitTerminalRuntimeStatus(
         args.status.sync.lastFailureMessage,
         500,
       ),
+      backoffUntil: positiveTimestamp(args.status.sync.backoffUntil),
+      heldEventCount: positiveCount(args.status.sync.heldEventCount),
+      heldWithoutProgress:
+        typeof args.status.sync.heldWithoutProgress === "boolean"
+          ? args.status.sync.heldWithoutProgress
+          : undefined,
+    }),
+    ...omitUndefined({
+      runtimeCounters: cleanRuntimeCounters(args.status.runtimeCounters),
     }),
     staffAuthority: omitUndefined({
       status: args.status.staffAuthority.status,
@@ -1188,6 +1227,28 @@ function nonNegativeInteger(value: number | undefined) {
   return Number.isSafeInteger(value) && value !== undefined && value >= 0
     ? value
     : 0;
+}
+
+const RUNTIME_COUNTER_MAX_KEYS = 30;
+
+function cleanRuntimeCounters(
+  counters: Record<string, number> | undefined,
+): Record<string, number> | undefined {
+  if (!counters) {
+    return undefined;
+  }
+  const cleaned: Record<string, number> = {};
+  for (const [key, value] of Object.entries(counters)) {
+    if (Object.keys(cleaned).length >= RUNTIME_COUNTER_MAX_KEYS) {
+      break;
+    }
+    const count = positiveCount(value);
+    if (count === undefined || key.length === 0 || key.length > 80) {
+      continue;
+    }
+    cleaned[key] = count;
+  }
+  return Object.keys(cleaned).length > 0 ? cleaned : undefined;
 }
 
 function omitUndefined<T extends Record<string, unknown>>(input: T) {

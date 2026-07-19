@@ -525,6 +525,82 @@ describe("submitTerminalRuntimeStatus", () => {
     );
   });
 
+  it("persists storage health, sync backoff, held progress, and runtime counters", async () => {
+    vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
+    vi.mocked(upsertLatestRuntimeStatusWithOutcome).mockResolvedValue({
+      didWrite: true,
+      materialChanged: true,
+      runtimeStatusId: "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
+    });
+
+    const base = buildRuntimeStatus();
+    const result = await submitTerminalRuntimeStatus(
+      { db: null as never } as never,
+      {
+        storeId: "store-1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        status: {
+          ...base,
+          localStore: {
+            ...base.localStore,
+            engineReadiness: "ready" as const,
+            healthFreshness: "fresh" as const,
+            healthObservedAt: 95,
+            lastSuccessfulDurableCommitAt: 80,
+            ledgerPressure: "warning" as const,
+            maintenance: "idle" as const,
+            migration: "idle" as const,
+            persistence: "granted" as const,
+            pressure: "critical" as const,
+            quotaBytes: 1000.7,
+            usageBytes: 950.2,
+          },
+          sync: {
+            ...base.sync,
+            backoffUntil: 500,
+            heldEventCount: 3,
+            heldWithoutProgress: true,
+          },
+          runtimeCounters: {
+            "storageHealth.probeFailed": 2,
+            "": 5,
+            negative: -1,
+            unfinished: Number.NaN,
+          },
+        },
+      },
+    );
+
+    expect(result.kind).toBe("ok");
+    expect(
+      vi.mocked(upsertLatestRuntimeStatusWithOutcome),
+    ).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        localStore: expect.objectContaining({
+          engineReadiness: "ready",
+          healthFreshness: "fresh",
+          healthObservedAt: 95,
+          lastSuccessfulDurableCommitAt: 80,
+          ledgerPressure: "warning",
+          maintenance: "idle",
+          migration: "idle",
+          persistence: "granted",
+          pressure: "critical",
+          quotaBytes: 1000,
+          usageBytes: 950,
+        }),
+        sync: expect.objectContaining({
+          backoffUntil: 500,
+          heldEventCount: 3,
+          heldWithoutProgress: true,
+        }),
+        // Invalid counter entries (empty key, negative, NaN) are dropped.
+        runtimeCounters: { "storageHealth.probeFailed": 2 },
+      }),
+    );
+  });
+
   it("preserves closeout-rejected active register status in runtime status", async () => {
     vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
     vi.mocked(upsertLatestRuntimeStatusWithOutcome).mockResolvedValue({
