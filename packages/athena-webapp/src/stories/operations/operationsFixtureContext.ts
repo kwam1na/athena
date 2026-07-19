@@ -52,6 +52,30 @@ export const DEMO_STAFF = {
 export const REGISTER_DISPLAY_LABEL = "Studio Front Register / Register 01";
 
 /**
+ * The carry-forward work item threaded through the Daily Operations stock nudge, the EOD
+ * Review close, and the next Opening Handoff.
+ *
+ * A carry-forward row's title is the underlying operational work item's own `title` — for
+ * an inventory follow-up the real template is `Review inventory for {product}` (see
+ * `projectLocalEvents.ts`); there is no "restock"/"reorder" title in the product. The
+ * work item type is likewise the real `synced_sale_inventory_review`.
+ *
+ * Because a synced-sale inventory review carries a product SKU, the product projects it as
+ * a single-member *logical work group* rather than a bare work item (see the branch at
+ * `dailyClose.ts` / `dailyOpening.ts` guarding on `synced_sale_inventory_review` +
+ * `productSkuId`). That is why `subject.type` is `logical_operational_work_group` and the
+ * metadata carries `oldestActionableAt` — EOD Review renders that as "Open since" and drops
+ * status.
+ */
+export const KENTE_CARRY_FORWARD = {
+  groupKey: "synced_sale_inventory_review:kente-scarf",
+  priority: "normal",
+  status: "open",
+  title: "Review inventory for Kente Scarf",
+  workItemType: "synced_sale_inventory_review",
+} as const;
+
+/**
  * The operating day's headline totals, shared so Daily Operations and EOD Review agree on
  * what Saturday earned. Cash + card + mobile money sum to `salesTotal`; the transaction
  * counts sum to `transactionCount`.

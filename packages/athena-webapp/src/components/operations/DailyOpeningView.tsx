@@ -537,6 +537,11 @@ function formatMetadataDisplayValue({
 
 const technicalOpeningMetadataLabels = new Set([
   "frozenmembercount",
+  // Logical work-group internals: not operator-facing, and they render as bogus currency
+  // in the numeric metadata formatter. EOD Review already omits these from carry-forward
+  // rows; keep Opening Handoff consistent.
+  "membercount",
+  "sourcecount",
   "unresolvedmembercount",
 ]);
 

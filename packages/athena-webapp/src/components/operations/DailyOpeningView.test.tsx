@@ -709,6 +709,54 @@ describe("DailyOpeningViewContent", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("hides group-internal member and source counts on carry-forward rows", () => {
+    window.history.pushState(
+      {},
+      "",
+      "/wigclub/store/osu/operations/opening?tab=carry-forward",
+    );
+    mockedRouter.search = { tab: "carry-forward" };
+
+    renderContent({
+      ...attentionSnapshot,
+      carryForwardItems: [
+        {
+          category: "carry_forward",
+          id: "carry_forward_group:0",
+          key: "carry_forward_group:0",
+          metadata: {
+            memberCount: 1,
+            oldestActionableAt: Date.UTC(2026, 6, 17, 19, 15),
+            priority: "normal",
+            sourceCount: 1,
+            status: "open",
+            type: "synced_sale_inventory_review",
+          },
+          subject: {
+            id: "synced_sale_inventory_review:kente-scarf",
+            label: "Review inventory for Kente Scarf",
+            type: "logical_operational_work_group",
+          },
+          title: "Review inventory for Kente Scarf",
+        },
+      ],
+      reviewItems: [],
+      summary: {
+        blockerCount: 0,
+        carryForwardCount: 1,
+        readyCount: 1,
+        reviewCount: 0,
+      },
+    });
+
+    expect(screen.queryByText("Member Count")).not.toBeInTheDocument();
+    expect(screen.queryByText("Source Count")).not.toBeInTheDocument();
+    // Operator-facing metadata still renders (Opening humanizes oldestActionableAt to
+    // "Oldest Actionable At"; the "Open since" label is EOD Review's rewrite).
+    expect(screen.getAllByText("Priority").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Oldest Actionable At").length).toBeGreaterThan(0);
+  });
+
   it("paginates opening tab content in five-item pages", async () => {
     const user = userEvent.setup();
     const carryForwardItems = Array.from({ length: 7 }, (_, index) => ({

@@ -22,6 +22,7 @@ import {
   DAY_END,
   DAY_START,
   DEMO_STAFF,
+  KENTE_CARRY_FORWARD,
   LINK_PARAMS,
   momentAt,
   OPERATING_DATE,
@@ -65,31 +66,48 @@ const priorCloseReadyItem: DailyOpeningItem = {
   title: "Prior EOD Review completed",
 };
 
+/** When the Kente inventory review became actionable — flagged at the prior day's close,
+ * so it reads as carried into this morning's opening. */
+const KENTE_OPEN_SINCE = new Date(2026, 6, 17, 19, 15).getTime();
+
 /**
- * The Kente scarf carry-forward that EOD Review handed to opening — the same thread the
+ * The Kente scarf carry-forward from the prior close — the same low-stock thread the
  * Daily Operations timeline and EOD Review fixtures reference.
- * Copy follows `carryForwardItem` in convex/operations/dailyOpening.ts (title is the work
- * item's own title).
+ *
+ * A synced-sale inventory review with a product SKU projects as a single-member logical
+ * work group, so this follows the group branch of `legacyLogicalCarryForwardItem` in
+ * convex/operations/dailyOpening.ts: `subject.type` is `logical_operational_work_group`,
+ * the message speaks of a "work group", and the metadata carries `oldestActionableAt`.
+ * The builder sets no `statusLabel` or `description`.
  */
 const kenteCarryForwardItem: DailyOpeningItem = {
   category: "carry_forward",
-  id: "carry_forward:0",
-  key: "carry_forward:0",
+  id: "carry_forward_group:0",
+  key: "carry_forward_group:0",
   link: {
     label: "View open work",
     params: LINK_PARAMS,
     to: "/$orgUrlSlug/store/$storeUrlSlug/operations/open-work",
   },
   message:
-    "This unresolved carry-forward item remains open and must be acknowledged for Opening.",
-  metadata: { priority: "medium", status: "open" },
+    "This unresolved prior-close work group must be acknowledged for Opening.",
+  // memberCount / sourceCount are group-internal; the workspace filters them out of the
+  // row (they are not operator-facing). Kept here as real snapshot data.
+  metadata: {
+    memberCount: 1,
+    oldestActionableAt: KENTE_OPEN_SINCE,
+    priority: KENTE_CARRY_FORWARD.priority,
+    sourceCount: 1,
+    status: KENTE_CARRY_FORWARD.status,
+    type: KENTE_CARRY_FORWARD.workItemType,
+  },
   severity: "carry_forward",
   subject: {
-    id: "work-kente-restock",
-    label: "Restock Kente Scarf",
-    type: "operational_work_item",
+    id: KENTE_CARRY_FORWARD.groupKey,
+    label: KENTE_CARRY_FORWARD.title,
+    type: "logical_operational_work_group",
   },
-  title: "Restock Kente Scarf before tomorrow's opening",
+  title: KENTE_CARRY_FORWARD.title,
 };
 
 /**
