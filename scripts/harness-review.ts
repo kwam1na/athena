@@ -39,9 +39,32 @@ type LoadedReviewTarget = {
 
 type HarnessReviewLogger = Pick<Console, "log" | "error">;
 
+/**
+ * Two parent runners can tell harness review that some commands already ran.
+ * They are separate flags because they suppress different scopes, and the
+ * narrower one is the local flag despite having the longer name.
+ *
+ * `--repo-validation-provided-by pr:athena` (narrow, local):
+ *   Suppresses only the repo-owned validation set selected for repo-owned
+ *   changed files. Package validation commands still run, because `pr:athena`
+ *   runs the repo-owned commands directly but leaves package selection to
+ *   review.
+ *
+ * `--validation-provided-by athena-pr-tests` (broad, CI):
+ *   Suppresses the repo-owned set *and* prunes the package commands that the
+ *   PR workflow already runs as separate jobs — see
+ *   `isAthenaPrTestsProvidedCommand`. Only validation-map checks and behavior
+ *   scenarios are left.
+ *
+ * Neither flag is a legacy alias of the other; passing the wrong one silently
+ * changes how much work review skips. Standalone review passes neither and
+ * stays fail-closed.
+ */
 type ParsedHarnessReviewArgs = {
   baseRef?: string;
+  /** Narrow: repo-owned commands only. Set by the local `pr:athena` ladder. */
   repoValidationProvidedBy?: "pr:athena";
+  /** Broad: repo-owned commands plus workflow-provided package commands. */
   validationProvidedBy?: "athena-pr-tests";
   providerEvidencePath?: string;
 };
@@ -54,10 +77,36 @@ type HarnessReviewOptions = {
   runPackageScript?: (workspace: string, script: string) => Promise<void>;
   runRawCommand?: (command: string) => Promise<void>;
   runHarnessBehaviorScenario?: (scenario: string) => Promise<void>;
+  /** See {@link ParsedHarnessReviewArgs} for how these two flags differ. */
   repoValidationProvidedBy?: "pr:athena";
   validationProvidedBy?: "athena-pr-tests";
   providerEvidencePath?: string;
 };
+
+/**
+ * Both flags suppress the repo-owned validation set. Read as: "a parent runner
+ * already ran `harness:test`, `delivery:documentation-check`, `test:coverage`,
+ * and `harness:inferential-review` for this same head and base."
+ */
+export function repoOwnedValidationIsProvided(options: {
+  repoValidationProvidedBy?: "pr:athena";
+  validationProvidedBy?: "athena-pr-tests";
+}) {
+  return (
+    options.repoValidationProvidedBy === "pr:athena" ||
+    options.validationProvidedBy === "athena-pr-tests"
+  );
+}
+
+/**
+ * Only the CI flag additionally prunes package commands. The local `pr:athena`
+ * ladder does not, so package validation still runs there.
+ */
+export function packageValidationIsProvided(options: {
+  validationProvidedBy?: "athena-pr-tests";
+}) {
+  return options.validationProvidedBy === "athena-pr-tests";
+}
 
 type LocalProviderCapability =
   | "harness-doc-freshness"
@@ -931,8 +980,7 @@ export async function runHarnessReview(
   }
 
   const unprunedCommands = [
-    ...(options.repoValidationProvidedBy === "pr:athena" ||
-    options.validationProvidedBy === "athena-pr-tests"
+    ...(repoOwnedValidationIsProvided(options)
       ? []
       : repoValidation.selectedCommands.map((command) => ({
           kind: "raw" as const,
@@ -941,7 +989,7 @@ export async function runHarnessReview(
     ...selectedCommands,
   ].filter(
     (command) =>
-      options.validationProvidedBy !== "athena-pr-tests" ||
+      !packageValidationIsProvided(options) ||
       !isAthenaPrTestsProvidedCommand(command)
   );
 
@@ -968,8 +1016,7 @@ export async function runHarnessReview(
   });
 
   if (
-    (options.repoValidationProvidedBy === "pr:athena" ||
-      options.validationProvidedBy === "athena-pr-tests") &&
+    repoOwnedValidationIsProvided(options) &&
     repoValidation.selectedCommands.length > 0
   ) {
     logger.log(
@@ -978,7 +1025,7 @@ export async function runHarnessReview(
   }
 
   if (
-    options.validationProvidedBy === "athena-pr-tests" &&
+    packageValidationIsProvided(options) &&
     selectedCommands.length > unprunedCommands.length
   ) {
     logger.log(
@@ -1060,7 +1107,7 @@ export function parseHarnessReviewArgs(
       const value = argv[index + 1]?.trim();
       if (value !== "pr:athena") {
         throw new Error(
-          "Missing or invalid value for --repo-validation-provided-by. Supported value: pr:athena"
+          "Missing or invalid value for --repo-validation-provided-by. Supported value: pr:athena. This flag suppresses only the repo-owned validation set; package validation still runs. For the broader CI mode that also prunes workflow-provided package commands, use --validation-provided-by athena-pr-tests."
         );
       }
       repoValidationProvidedBy = value;
@@ -1072,7 +1119,7 @@ export function parseHarnessReviewArgs(
       const value = arg.slice("--repo-validation-provided-by=".length).trim();
       if (value !== "pr:athena") {
         throw new Error(
-          "Missing or invalid value for --repo-validation-provided-by. Supported value: pr:athena"
+          "Missing or invalid value for --repo-validation-provided-by. Supported value: pr:athena. This flag suppresses only the repo-owned validation set; package validation still runs. For the broader CI mode that also prunes workflow-provided package commands, use --validation-provided-by athena-pr-tests."
         );
       }
       repoValidationProvidedBy = value;
@@ -1083,7 +1130,7 @@ export function parseHarnessReviewArgs(
       const value = argv[index + 1]?.trim();
       if (value !== "athena-pr-tests") {
         throw new Error(
-          "Missing or invalid value for --validation-provided-by. Supported value: athena-pr-tests"
+          "Missing or invalid value for --validation-provided-by. Supported value: athena-pr-tests. This flag suppresses the repo-owned validation set and prunes package commands the PR workflow runs separately. For the narrower local pr:athena mode, use --repo-validation-provided-by pr:athena."
         );
       }
       validationProvidedBy = value;
@@ -1095,7 +1142,7 @@ export function parseHarnessReviewArgs(
       const value = arg.slice("--validation-provided-by=".length).trim();
       if (value !== "athena-pr-tests") {
         throw new Error(
-          "Missing or invalid value for --validation-provided-by. Supported value: athena-pr-tests"
+          "Missing or invalid value for --validation-provided-by. Supported value: athena-pr-tests. This flag suppresses the repo-owned validation set and prunes package commands the PR workflow runs separately. For the narrower local pr:athena mode, use --repo-validation-provided-by pr:athena."
         );
       }
       validationProvidedBy = value;

@@ -25,6 +25,25 @@ async function createFixtureRepo() {
       "",
       "Start with [the Graphify wiki index](./graphify-out/wiki/index.md) for repo and package navigation.",
       "Use [the packages router](./packages/AGENTS.md) for operational package entry docs.",
+      "Read [the harness doc](./docs/harness.md) for delivery gates and runtime scenarios.",
+      "Read [the graphify doc](./docs/graphify.md) for the knowledge graph.",
+      "",
+    ].join("\n"),
+    rootDir
+  );
+
+  await write(
+    "docs/graphify.md",
+    ["# Graphify Knowledge Graph", "", "Graph docs.", ""].join("\n"),
+    rootDir
+  );
+
+  // The canonical runtime scenario list lives in the harness doc; the README
+  // only links to it.
+  await write(
+    "docs/harness.md",
+    [
+      "# Repo Harness And Sensors",
       "",
       "List runtime behavior scenarios with `bun run harness:behavior --list`.",
       "Bundled scenarios include:",

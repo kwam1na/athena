@@ -56,6 +56,25 @@ async function createFixtureRepo() {
       "",
       "Start with [the Graphify wiki index](./graphify-out/wiki/index.md) for repo and package navigation.",
       "Use [the packages router](./packages/AGENTS.md) for operational package entry docs.",
+      "Read [the harness doc](./docs/harness.md) for delivery gates and runtime scenarios.",
+      "Read [the graphify doc](./docs/graphify.md) for the knowledge graph.",
+      "",
+    ].join("\n"),
+    rootDir
+  );
+
+  await write(
+    "docs/graphify.md",
+    ["# Graphify Knowledge Graph", "", "Graph docs.", ""].join("\n"),
+    rootDir
+  );
+
+  // The canonical runtime scenario list lives in the harness doc; the README
+  // only links to it.
+  await write(
+    "docs/harness.md",
+    [
+      "# Repo Harness And Sensors",
       "",
       "List runtime behavior scenarios with `bun run harness:behavior --list`.",
       "Bundled scenarios include:",
@@ -594,31 +613,36 @@ describe("validateHarnessDocs", () => {
 
   it("reports missing graphify links from the README", async () => {
     const rootDir = await createFixtureRepo();
+    await write("README.md", ["# athena", ""].join("\n"), rootDir);
+
+    await expect(validateHarnessDocs(rootDir)).resolves.toContain(
+      "Missing required README graphify link in README.md: ./graphify-out/wiki/index.md"
+    );
+  });
+
+  it("requires the README to link the focused harness and graphify docs", async () => {
+    // The README routes to the docs that own the reference detail. Without
+    // these links, moving content out of the README leaves it undiscoverable.
+    const rootDir = await createFixtureRepo();
     await write(
       "README.md",
       [
         "# athena",
         "",
-        "List runtime behavior scenarios with `bun run harness:behavior --list`.",
-      "Bundled scenarios include:",
-      "",
-      "- `sample-runtime-smoke`",
-      "- `athena-admin-shell-boot`",
-      "- `athena-convex-storefront-composition`",
-      "- `athena-convex-storefront-failure-visibility`",
-      "- `athena-qa-live-smoke`",
-      "- `valkey-proxy-local-request-response`",
-      "- `storefront-backend-first-load`",
-      "- `storefront-checkout-bootstrap`",
-      "- `storefront-checkout-validation-blocker`",
-      "- `storefront-checkout-verification-recovery`",
+        "Start with [the Graphify wiki index](./graphify-out/wiki/index.md) for repo and package navigation.",
+        "Use [the packages router](./packages/AGENTS.md) for operational package entry docs.",
         "",
       ].join("\n"),
       rootDir
     );
 
-    await expect(validateHarnessDocs(rootDir)).resolves.toContain(
-      "Missing required README graphify link in README.md: ./graphify-out/wiki/index.md"
+    const errors = await validateHarnessDocs(rootDir);
+
+    expect(errors).toContain(
+      "Missing required README graphify link in README.md: ./docs/harness.md"
+    );
+    expect(errors).toContain(
+      "Missing required README graphify link in README.md: ./docs/graphify.md"
     );
   });
 
@@ -848,5 +872,47 @@ describe("validateHarnessDocs", () => {
     await expect(validateHarnessDocs(rootDir)).resolves.toContain(
       "Runtime behavior scenario docs drift in packages/athena-webapp/docs/agent/testing.md: missing `athena-admin-shell-boot`, `athena-convex-storefront-composition`, `athena-convex-storefront-failure-visibility`, `athena-qa-live-smoke`, `storefront-backend-first-load`, `storefront-checkout-bootstrap`, `storefront-checkout-validation-blocker`, `storefront-checkout-verification-recovery`, `valkey-proxy-local-request-response`. Run `bun run harness:behavior --list` and sync this list to scripts/harness-behavior-scenarios.ts."
     );
+  });
+
+  it("gates the runtime scenario list in the harness doc", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "docs/harness.md",
+      [
+        "# Repo Harness And Sensors",
+        "",
+        "Bundled scenarios include:",
+        "- `sample-runtime-smoke`",
+        "",
+      ].join("\n"),
+      rootDir
+    );
+
+    await expect(validateHarnessDocs(rootDir)).resolves.toContain(
+      "Runtime behavior scenario docs drift in docs/harness.md: missing `athena-admin-shell-boot`, `athena-convex-storefront-composition`, `athena-convex-storefront-failure-visibility`, `athena-qa-live-smoke`, `storefront-backend-first-load`, `storefront-checkout-bootstrap`, `storefront-checkout-validation-blocker`, `storefront-checkout-verification-recovery`, `valkey-proxy-local-request-response`. Run `bun run harness:behavior --list` and sync this list to scripts/harness-behavior-scenarios.ts."
+    );
+  });
+
+  it("does not require the runtime scenario list in the README", async () => {
+    const rootDir = await createFixtureRepo();
+    // The README is a short overview that links to focused docs. It should pass
+    // without carrying the scenario list, which now lives in docs/harness.md.
+    await write(
+      "README.md",
+      [
+        "# athena",
+        "",
+        "Start with [the Graphify wiki index](./graphify-out/wiki/index.md) for repo and package navigation.",
+        "Use [the packages router](./packages/AGENTS.md) for operational package entry docs.",
+        "",
+      ].join("\n"),
+      rootDir
+    );
+
+    const errors = await validateHarnessDocs(rootDir);
+
+    expect(
+      errors.filter((error) => error.includes("runtime behavior scenario"))
+    ).toEqual([]);
   });
 });
