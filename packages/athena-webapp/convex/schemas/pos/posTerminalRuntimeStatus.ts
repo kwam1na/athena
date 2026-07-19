@@ -317,4 +317,7 @@ export const posTerminalRuntimeStatusSchema = v.object({
   // Best-effort counters from silent-catch rails (storage probes, leader
   // election); names are client-defined, values are non-negative totals.
   runtimeCounters: v.optional(v.record(v.string(), v.number())),
+  // Server-stamped per-condition alert timestamps (edge-triggered health
+  // alerting rides on this row instead of a separate alert-state table).
+  healthAlerts: v.optional(v.record(v.string(), v.number())),
 });

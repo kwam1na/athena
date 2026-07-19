@@ -431,6 +431,7 @@ describe("submitTerminalRuntimeStatus", () => {
   it("upserts one redacted latest runtime status record per terminal", async () => {
     vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
     vi.mocked(upsertLatestRuntimeStatusWithOutcome).mockResolvedValue({
+      previous: null,
       didWrite: true,
       materialChanged: true,
       runtimeStatusId: "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
@@ -528,14 +529,19 @@ describe("submitTerminalRuntimeStatus", () => {
   it("persists storage health, sync backoff, held progress, and runtime counters", async () => {
     vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
     vi.mocked(upsertLatestRuntimeStatusWithOutcome).mockResolvedValue({
+      previous: null,
       didWrite: true,
       materialChanged: true,
       runtimeStatusId: "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
     });
+    const alertCtx = {
+      db: { insert: vi.fn(), patch: vi.fn() },
+      scheduler: { runAfter: vi.fn() },
+    };
 
     const base = buildRuntimeStatus();
     const result = await submitTerminalRuntimeStatus(
-      { db: null as never } as never,
+      alertCtx as never,
       {
         storeId: "store-1" as Id<"store">,
         terminalId: "terminal-1" as Id<"posTerminal">,
@@ -599,11 +605,80 @@ describe("submitTerminalRuntimeStatus", () => {
         runtimeCounters: { "storageHealth.probeFailed": 2 },
       }),
     );
+
+    // The degraded heartbeat (critical pressure + held-without-progress) is an
+    // alert edge: alert timestamps stamped, operational event recorded, and
+    // one admin email scheduled.
+    expect(alertCtx.db.patch).toHaveBeenCalledWith(
+      "posTerminalRuntimeStatus",
+      "runtime-status-1",
+      {
+        healthAlerts: {
+          storage_critical: 200,
+          sync_stuck: 200,
+        },
+      },
+    );
+    expect(alertCtx.db.insert).toHaveBeenCalledWith(
+      "operationalEvent",
+      expect.objectContaining({
+        eventType: "pos_terminal_health_alert",
+        subjectType: "posTerminal",
+        subjectId: "terminal-1",
+        terminalId: "terminal-1",
+        storeId: "store-1",
+      }),
+    );
+    expect(alertCtx.scheduler.runAfter).toHaveBeenCalledWith(
+      0,
+      expect.anything(),
+      {
+        storeId: "store-1",
+        terminalId: "terminal-1",
+        conditions: ["storage_critical", "sync_stuck"],
+        observedAt: 200,
+      },
+    );
+  });
+
+  it("does not re-alert while a degraded condition persists", async () => {
+    vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
+    const base = buildRuntimeStatus();
+    const degradedStatus = {
+      ...base,
+      localStore: { ...base.localStore, pressure: "critical" as const },
+    };
+    vi.mocked(upsertLatestRuntimeStatusWithOutcome).mockResolvedValue({
+      previous: {
+        localStore: { available: true, pressure: "critical" },
+        sync: { heldWithoutProgress: false },
+        healthAlerts: { storage_critical: 150 },
+      } as never,
+      didWrite: true,
+      materialChanged: false,
+      runtimeStatusId: "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
+    });
+    const alertCtx = {
+      db: { insert: vi.fn(), patch: vi.fn() },
+      scheduler: { runAfter: vi.fn() },
+    };
+
+    const result = await submitTerminalRuntimeStatus(alertCtx as never, {
+      storeId: "store-1" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+      status: degradedStatus,
+    });
+
+    expect(result.kind).toBe("ok");
+    expect(alertCtx.db.patch).not.toHaveBeenCalled();
+    expect(alertCtx.db.insert).not.toHaveBeenCalled();
+    expect(alertCtx.scheduler.runAfter).not.toHaveBeenCalled();
   });
 
   it("preserves closeout-rejected active register status in runtime status", async () => {
     vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
     vi.mocked(upsertLatestRuntimeStatusWithOutcome).mockResolvedValue({
+      previous: null,
       didWrite: true,
       materialChanged: true,
       runtimeStatusId: "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
@@ -639,6 +714,7 @@ describe("submitTerminalRuntimeStatus", () => {
   it("persists support-safe app-session recovery status in runtime status", async () => {
     vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
     vi.mocked(upsertLatestRuntimeStatusWithOutcome).mockResolvedValue({
+      previous: null,
       didWrite: true,
       materialChanged: true,
       runtimeStatusId: "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
@@ -669,6 +745,7 @@ describe("submitTerminalRuntimeStatus", () => {
 
   it("uses a trusted terminal proof without re-reading the terminal", async () => {
     vi.mocked(upsertLatestRuntimeStatusWithOutcome).mockResolvedValue({
+      previous: null,
       didWrite: true,
       materialChanged: true,
       runtimeStatusId: "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
@@ -714,6 +791,7 @@ describe("submitTerminalRuntimeStatus", () => {
   it("returns a cloud-closed drawer authority directive when the mapped cloud register is no longer usable", async () => {
     vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
     vi.mocked(upsertLatestRuntimeStatusWithOutcome).mockResolvedValue({
+      previous: null,
       didWrite: true,
       materialChanged: true,
       runtimeStatusId: "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
@@ -765,6 +843,7 @@ describe("submitTerminalRuntimeStatus", () => {
   it("skips broad register-session scans when runtime cloud drawer is already usable", async () => {
     vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
     vi.mocked(upsertLatestRuntimeStatusWithOutcome).mockResolvedValue({
+      previous: null,
       didWrite: true,
       materialChanged: true,
       runtimeStatusId: "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
@@ -808,6 +887,7 @@ describe("submitTerminalRuntimeStatus", () => {
   it("skips directive reads for coalesced runtime status duplicates", async () => {
     vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
     vi.mocked(upsertLatestRuntimeStatusWithOutcome).mockResolvedValue({
+      previous: null,
       didWrite: false,
       materialChanged: false,
       runtimeStatusId: "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
@@ -853,6 +933,7 @@ describe("submitTerminalRuntimeStatus", () => {
   it("preserves runtime directives for freshness-only runtime status writes", async () => {
     vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
     vi.mocked(upsertLatestRuntimeStatusWithOutcome).mockResolvedValue({
+      previous: null,
       didWrite: true,
       materialChanged: false,
       runtimeStatusId: "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
@@ -908,6 +989,7 @@ describe("submitTerminalRuntimeStatus", () => {
   it("returns an active register session directive when cloud has a usable drawer but runtime does not", async () => {
     vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
     vi.mocked(upsertLatestRuntimeStatusWithOutcome).mockResolvedValue({
+      previous: null,
       didWrite: true,
       materialChanged: true,
       runtimeStatusId: "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
@@ -984,6 +1066,7 @@ describe("submitTerminalRuntimeStatus", () => {
   it("does not direct a terminal to a usable drawer for another register number", async () => {
     vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
     vi.mocked(upsertLatestRuntimeStatusWithOutcome).mockResolvedValue({
+      previous: null,
       didWrite: true,
       materialChanged: true,
       runtimeStatusId: "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
@@ -1038,6 +1121,7 @@ describe("submitTerminalRuntimeStatus", () => {
   it("skips newer incompatible register sessions when an older compatible session exists", async () => {
     vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
     vi.mocked(upsertLatestRuntimeStatusWithOutcome).mockResolvedValue({
+      previous: null,
       didWrite: true,
       materialChanged: true,
       runtimeStatusId: "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
@@ -1102,6 +1186,7 @@ describe("submitTerminalRuntimeStatus", () => {
   it("can direct a terminal to a compatible legacy drawer without a register number", async () => {
     vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
     vi.mocked(upsertLatestRuntimeStatusWithOutcome).mockResolvedValue({
+      previous: null,
       didWrite: true,
       materialChanged: true,
       runtimeStatusId: "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
@@ -1173,6 +1258,7 @@ describe("submitTerminalRuntimeStatus", () => {
   it("returns an active register session directive when runtime is stuck on a closed cloud drawer", async () => {
     vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
     vi.mocked(upsertLatestRuntimeStatusWithOutcome).mockResolvedValue({
+      previous: null,
       didWrite: true,
       materialChanged: true,
       runtimeStatusId: "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
@@ -1269,6 +1355,7 @@ describe("submitTerminalRuntimeStatus", () => {
   it("returns a cloud-closed drawer authority directive for closing local runtime evidence", async () => {
     vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
     vi.mocked(upsertLatestRuntimeStatusWithOutcome).mockResolvedValue({
+      previous: null,
       didWrite: true,
       materialChanged: true,
       runtimeStatusId: "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
@@ -1316,6 +1403,7 @@ describe("submitTerminalRuntimeStatus", () => {
   it("ignores malformed cloud register ids in runtime drawer authority evidence", async () => {
     vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
     vi.mocked(upsertLatestRuntimeStatusWithOutcome).mockResolvedValue({
+      previous: null,
       didWrite: true,
       materialChanged: true,
       runtimeStatusId: "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
@@ -1357,6 +1445,7 @@ describe("submitTerminalRuntimeStatus", () => {
   it("persists sanitized app-update runtime evidence", async () => {
     vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
     vi.mocked(upsertLatestRuntimeStatusWithOutcome).mockResolvedValue({
+      previous: null,
       didWrite: true,
       materialChanged: true,
       runtimeStatusId: "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
@@ -1417,6 +1506,7 @@ describe("submitTerminalRuntimeStatus", () => {
   it("clears stale app-update evidence when older clients omit it", async () => {
     vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
     vi.mocked(upsertLatestRuntimeStatusWithOutcome).mockResolvedValue({
+      previous: null,
       didWrite: true,
       materialChanged: true,
       runtimeStatusId: "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
@@ -1441,6 +1531,7 @@ describe("submitTerminalRuntimeStatus", () => {
   it("clears stale app-session recovery status when runtime check-ins omit it", async () => {
     vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
     vi.mocked(upsertLatestRuntimeStatusWithOutcome).mockResolvedValue({
+      previous: null,
       didWrite: true,
       materialChanged: true,
       runtimeStatusId: "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
@@ -1465,6 +1556,7 @@ describe("submitTerminalRuntimeStatus", () => {
   it("clears stale terminal diagnostics when runtime check-ins omit them", async () => {
     vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
     vi.mocked(upsertLatestRuntimeStatusWithOutcome).mockResolvedValue({
+      previous: null,
       didWrite: true,
       materialChanged: true,
       runtimeStatusId: "runtime-status-1" as Id<"posTerminalRuntimeStatus">,

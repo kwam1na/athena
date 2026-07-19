@@ -1,5 +1,8 @@
 import type { Doc, Id } from "../../../_generated/dataModel";
 import type { MutationCtx } from "../../../_generated/server";
+import { internal } from "../../../_generated/api";
+import { buildOperationalEvent } from "../../../operations/operationalEvents";
+import { resolveTerminalHealthAlertTransitions } from "../terminalRuntime/terminalHealthAlerts";
 import {
   ok,
   userError,
@@ -622,6 +625,52 @@ export async function submitTerminalRuntimeStatus(
       reportedAt,
       receivedAt,
     });
+  }
+
+  // Health alerting rides on this write: the previous row came back from the
+  // upsert (which reads it regardless), so transition detection costs zero
+  // additional reads. Only an actual edge into a degraded condition — rare by
+  // construction (edge trigger + cooldown) — pays one patch, one insert, and
+  // one scheduled email action.
+  const healthAlertTransitions = resolveTerminalHealthAlertTransitions({
+    previous: runtimeStatusWrite.previous,
+    next: { localStore: args.status.localStore, sync: args.status.sync },
+    now: receivedAt,
+  });
+  if (healthAlertTransitions.conditionsToAlert.length > 0) {
+    await ctx.db.patch(
+      "posTerminalRuntimeStatus",
+      runtimeStatusWrite.runtimeStatusId,
+      { healthAlerts: healthAlertTransitions.healthAlerts },
+    );
+    await ctx.db.insert(
+      "operationalEvent",
+      buildOperationalEvent({
+        storeId: args.storeId,
+        eventType: "pos_terminal_health_alert",
+        subjectType: "posTerminal",
+        subjectId: args.terminalId,
+        subjectLabel: terminal.displayName,
+        terminalId: args.terminalId,
+        actorType: "automation",
+        message: `Terminal "${terminal.displayName}" needs attention: ${healthAlertTransitions.conditionsToAlert.join(", ")}`,
+        metadata: {
+          conditions: healthAlertTransitions.conditionsToAlert.join(","),
+          source: "terminal-heartbeat",
+        },
+      }),
+    );
+    await ctx.scheduler.runAfter(
+      0,
+      internal.operations.posTerminalHealthAlertEmail
+        .sendPosTerminalHealthAlertToAdmins,
+      {
+        storeId: args.storeId,
+        terminalId: args.terminalId,
+        conditions: healthAlertTransitions.conditionsToAlert,
+        observedAt: receivedAt,
+      },
+    );
   }
 
   const drawerAuthorityDirective = await buildRuntimeDrawerAuthorityDirective(

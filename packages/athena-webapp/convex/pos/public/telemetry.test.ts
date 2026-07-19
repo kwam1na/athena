@@ -197,6 +197,52 @@ describe("recordClientEvents", () => {
     expect(inserted).toHaveLength(0);
   });
 
+  it("performs a single dedupe read for a fresh batch", async () => {
+    const { ctx } = createCtx();
+
+    await handler(ctx, {
+      storeId: STORE_ID,
+      events: [
+        baseEvent(),
+        baseEvent({ clientEventId: "client-event-2" }),
+        baseEvent({ clientEventId: "client-event-3" }),
+      ],
+    });
+
+    expect(ctx.db.query).toHaveBeenCalledTimes(1);
+  });
+
+  it("accepts appended events when a replayed batch carries new tail entries", async () => {
+    const { ctx, inserted } = createCtx({
+      existingEvents: [
+        {
+          _id: "existing" as Id<"posClientEvent">,
+          _creationTime: 1,
+          storeId: STORE_ID,
+          clientEventId: "client-event-1",
+          level: "error",
+          flow: "checkout",
+          message: "Checkout failed",
+          metadata: {},
+          occurredAt: 900,
+          receivedAt: 950,
+        } as StoredEvent,
+      ],
+    });
+
+    const result = await handler(ctx, {
+      storeId: STORE_ID,
+      events: [baseEvent(), baseEvent({ clientEventId: "client-event-2" })],
+    });
+
+    expect(result).toEqual({
+      kind: "ok",
+      data: { accepted: 1, duplicates: 1 },
+    });
+    expect(inserted).toHaveLength(1);
+    expect(inserted[0]).toMatchObject({ clientEventId: "client-event-2" });
+  });
+
   it("caps a batch at the max batch size", async () => {
     const { ctx, inserted } = createCtx();
     const events = Array.from({ length: POS_CLIENT_EVENT_MAX_BATCH + 10 }, (_, i) =>

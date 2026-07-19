@@ -146,16 +146,28 @@ export const recordClientEvents = mutation({
       0,
       POS_CLIENT_EVENT_MAX_BATCH,
     );
-    let accepted = 0;
-    let duplicates = 0;
-    for (const event of events) {
-      const existing = await ctx.db
+    // Read-optimized dedupe: the client drains its buffer as a FIFO prefix and
+    // only removes events after an acked commit, so a replayed batch always
+    // starts with the same first event. One index read on the first event
+    // covers the common path; only a detected replay (ack lost after commit)
+    // pays per-event reads. Concurrent tab drains serialize via OCC on the
+    // same index read, so the losing mutation retries into the replay path.
+    const isDuplicate = async (event: ClientEventInput) =>
+      (await ctx.db
         .query("posClientEvent")
         .withIndex("by_store_clientEvent", (q) =>
           q.eq("storeId", args.storeId).eq("clientEventId", event.clientEventId),
         )
-        .unique();
-      if (existing) {
+        .unique()) !== null;
+    const replayedBatch =
+      events.length > 0 ? await isDuplicate(events[0]) : false;
+    let accepted = 0;
+    let duplicates = 0;
+    let checkedFirst = false;
+    for (const event of events) {
+      const knownDuplicate = !checkedFirst && replayedBatch;
+      checkedFirst = true;
+      if (knownDuplicate || (replayedBatch && (await isDuplicate(event)))) {
         duplicates += 1;
         continue;
       }
