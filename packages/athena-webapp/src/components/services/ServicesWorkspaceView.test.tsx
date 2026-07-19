@@ -83,6 +83,31 @@ describe("ServicesWorkspaceViewContent", () => {
     window.scrollTo = vi.fn();
   });
 
+  it("keeps exploration interactive while disabling every demo CTA", () => {
+    render(
+      <ServicesWorkspaceViewContent
+        catalogManagementHref="/wigclub/store/wigclub/services/catalog-management"
+        currency="GHS"
+        isSharedDemo
+        items={baseItems}
+        onUpdate={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByText(
+        "This workspace is for interaction only in the demo. Actions are disabled.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText(/search services/i)).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: /manage catalog/i }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: /edit service/i }),
+    ).toBeDisabled();
+  });
+
   it("shows service metrics, cards, and selected service details", () => {
     render(
       <ServicesWorkspaceViewContent

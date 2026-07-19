@@ -34,6 +34,7 @@ import type { Product } from "~/types";
 import type { Id } from "~/convex/_generated/dataModel";
 import { api } from "~/convex/_generated/api";
 import { SkuSearchFilterBar } from "../stock-ops/SkuSearchFilterBar";
+import { useSharedDemoContext } from "~/src/hooks/useSharedDemoContext";
 
 const PRODUCT_SEARCH_PAGE_SIZE = 10;
 
@@ -54,6 +55,7 @@ function getProductSearchPageIndex(page: number | string | undefined) {
 
 export default function Products() {
   const categories = useGetCategories();
+  const isSharedDemo = Boolean(useSharedDemoContext());
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [quickAddInitialName, setQuickAddInitialName] = useState("");
   const [quickAddInitialLookupCode, setQuickAddInitialLookupCode] =
@@ -299,20 +301,22 @@ export default function Products() {
                       <PlusIcon className="h-4 w-4" />
                       Quick add
                     </Button>
-                    <Link
-                      to={"/$orgUrlSlug/store/$storeUrlSlug/products/new"}
-                      params={(prev) => ({
-                        ...prev,
-                        orgUrlSlug: prev.orgUrlSlug!,
-                        storeUrlSlug: prev.storeUrlSlug!,
-                      })}
-                      search={{ o: getOrigin() }}
-                    >
-                      <Button variant="ghost">
-                        <PlusIcon className="h-4 w-4" />
-                        New Product
-                      </Button>
-                    </Link>
+                    {!isSharedDemo ? (
+                      <Link
+                        to={"/$orgUrlSlug/store/$storeUrlSlug/products/new"}
+                        params={(prev) => ({
+                          ...prev,
+                          orgUrlSlug: prev.orgUrlSlug!,
+                          storeUrlSlug: prev.storeUrlSlug!,
+                        })}
+                        search={{ o: getOrigin() }}
+                      >
+                        <Button variant="ghost">
+                          <PlusIcon className="h-4 w-4" />
+                          New Product
+                        </Button>
+                      </Link>
+                    ) : null}
                   </>
                 ) : null
               }
@@ -475,22 +479,24 @@ export default function Products() {
                 </p>
               </div>
             </div>
-            <div className="mt-layout-md flex flex-col gap-2 border-t border-border/70 pt-layout-md">
-              <Link
-                to={"/$orgUrlSlug/store/$storeUrlSlug/products/archived"}
-                params={(prev) => ({
-                  ...prev,
-                  orgUrlSlug: prev.orgUrlSlug!,
-                  storeUrlSlug: prev.storeUrlSlug!,
-                })}
-                search={{ o: getOrigin() }}
-              >
-                <Button variant="ghost" className="w-full justify-start">
-                  <ArchiveIcon className="h-4 w-4" />
-                  Archived products
-                </Button>
-              </Link>
-            </div>
+            {!isSharedDemo ? (
+              <div className="mt-layout-md flex flex-col gap-2 border-t border-border/70 pt-layout-md">
+                <Link
+                  to={"/$orgUrlSlug/store/$storeUrlSlug/products/archived"}
+                  params={(prev) => ({
+                    ...prev,
+                    orgUrlSlug: prev.orgUrlSlug!,
+                    storeUrlSlug: prev.storeUrlSlug!,
+                  })}
+                  search={{ o: getOrigin() }}
+                >
+                  <Button variant="ghost" className="w-full justify-start">
+                    <ArchiveIcon className="h-4 w-4" />
+                    Archived products
+                  </Button>
+                </Link>
+              </div>
+            ) : null}
           </section>
         </PageWorkspaceRail>
       </PageWorkspaceGrid>

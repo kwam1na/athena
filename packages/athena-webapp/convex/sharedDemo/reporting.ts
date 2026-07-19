@@ -1,6 +1,7 @@
 import type { Doc, Id } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
 import { getSharedDemoActorWithCtx } from "./actor";
+import { denySharedDemoAction } from "./policy";
 
 export function summarizeSharedDemoReport(input: {
   orderItems: Array<Array<Pick<Doc<"onlineOrderItem">, "quantity">>>;
@@ -31,7 +32,7 @@ export async function getSharedDemoReportsOverviewWithCtx(
   const actor = await getSharedDemoActorWithCtx(ctx);
   if (!actor) return null;
   if (actor.storeId !== args.storeId) {
-    throw new Error("This action is unavailable in the demo.");
+    denySharedDemoAction();
   }
 
   const [transactions, deliveredOrders, pickedUpOrders] = await Promise.all([

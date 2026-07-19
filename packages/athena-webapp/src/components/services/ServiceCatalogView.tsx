@@ -52,6 +52,8 @@ import {
   serviceStatusLabels,
   validateServiceCatalogForm,
 } from "./serviceCatalogForm";
+import { useSharedDemoContext } from "~/src/hooks/useSharedDemoContext";
+import { ServiceWorkspaceDemoNotice } from "./ServiceWorkspaceDemoNotice";
 
 const serviceStatusBadgeClasses: Record<ServiceCatalogItem["status"], string> =
   {
@@ -68,6 +70,7 @@ type ServiceCatalogViewContentProps = {
   currency: string;
   hasFullAdminAccess: boolean;
   isLoadingPermissions: boolean;
+  isSharedDemo?: boolean;
   isSaving: boolean;
   items: ServiceCatalogItem[];
   onArchive: (serviceCatalogId: string) => Promise<void>;
@@ -84,6 +87,7 @@ export function ServiceCatalogViewContent({
   currency,
   hasFullAdminAccess,
   isLoadingPermissions,
+  isSharedDemo = false,
   isSaving,
   items,
   onArchive,
@@ -188,6 +192,7 @@ export function ServiceCatalogViewContent({
             title="Catalog Management"
             description="Maintain the services staff can book or run, including duration, pricing, deposits, and approval rules."
           />
+          <ServiceWorkspaceDemoNotice isSharedDemo={isSharedDemo} />
 
           <PageWorkspaceGrid className="xl:grid-cols-[minmax(0,1fr)_380px]">
             <PageWorkspaceRail>
@@ -393,7 +398,7 @@ export function ServiceCatalogViewContent({
 
                 <div className="flex justify-start gap-3">
                   <Button
-                    disabled={isSaving}
+                    disabled={isSharedDemo || isSaving}
                     onClick={handleSubmit}
                     type="button"
                     variant="default"
@@ -402,6 +407,7 @@ export function ServiceCatalogViewContent({
                   </Button>
                   {editingId ? (
                     <Button
+                      disabled={isSharedDemo}
                       onClick={handleReset}
                       type="button"
                       variant="outline"
@@ -470,6 +476,7 @@ export function ServiceCatalogViewContent({
                         <div className="flex gap-2 border-t border-border/70 pt-layout-sm">
                           <Button
                             aria-label={`Edit ${item.name}`}
+                            disabled={isSharedDemo}
                             onClick={() => handleEdit(item)}
                             size="sm"
                             type="button"
@@ -479,6 +486,7 @@ export function ServiceCatalogViewContent({
                           </Button>
                           <Button
                             aria-label={`Archive ${item.name}`}
+                            disabled={isSharedDemo}
                             onClick={() => onArchive(item._id)}
                             size="sm"
                             type="button"
@@ -494,16 +502,28 @@ export function ServiceCatalogViewContent({
                         <p className="text-sm text-muted-foreground">
                           {`Showing ${visibleServiceCatalogItems.length} of ${items.length} services.`}
                         </p>
-                        <Button asChild size="sm" variant="utility">
-                          <Link
+                        {isSharedDemo ? (
+                          <Button
                             aria-label="Open all services workspace"
-                            search={{ o: getOrigin() } as never}
-                            to={servicesWorkspaceHref as never}
+                            disabled
+                            size="sm"
+                            variant="utility"
                           >
                             All services
                             <ArrowUpRight aria-hidden="true" />
-                          </Link>
-                        </Button>
+                          </Button>
+                        ) : (
+                          <Button asChild size="sm" variant="utility">
+                            <Link
+                              aria-label="Open all services workspace"
+                              search={{ o: getOrigin() } as never}
+                              to={servicesWorkspaceHref as never}
+                            >
+                              All services
+                              <ArrowUpRight aria-hidden="true" />
+                            </Link>
+                          </Button>
+                        )}
                       </div>
                     ) : null}
                   </div>
@@ -526,6 +546,7 @@ export function ServiceCatalogView() {
     isLoadingAccess,
   } = useProtectedAdminPageState();
   const [isSaving, setIsSaving] = useState(false);
+  const isSharedDemo = Boolean(useSharedDemoContext());
   const { orgUrlSlug, storeUrlSlug } = useParams({ strict: false }) as {
     orgUrlSlug?: string;
     storeUrlSlug?: string;
@@ -591,6 +612,7 @@ export function ServiceCatalogView() {
       currency={activeStore.currency}
       hasFullAdminAccess={hasFullAdminAccess}
       isLoadingPermissions={false}
+      isSharedDemo={isSharedDemo}
       isSaving={isSaving}
       items={items ?? []}
       onArchive={(serviceCatalogId) =>

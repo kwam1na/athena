@@ -266,6 +266,7 @@ export const posTerminalRuntimeTerminalIntegrityReasonValidator = v.union(
 export const posTerminalRuntimeDrawerAuthorityReasonValidator = v.union(
   v.literal("authority_unknown"),
   v.literal("cloud_closed"),
+  v.literal("cloud_session_missing"),
   v.literal("lifecycle_rejected"),
 );
 

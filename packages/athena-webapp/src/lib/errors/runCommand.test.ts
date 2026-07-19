@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ConvexError } from "convex/values";
 
 import { ok, userError } from "~/shared/commandResult";
 
@@ -76,6 +77,44 @@ describe("runCommand", () => {
   it("normalizes thrown faults to generic fallback copy", async () => {
     const result = await runCommand(async () => {
       throw new Error("[CONVEX] exploded with internal details");
+    });
+
+    expect(result).toEqual({
+      kind: "unexpected_error",
+      error: {
+        title: "Something went wrong",
+        message: "Please try again.",
+        traceId: undefined,
+      },
+    });
+  });
+
+  it("preserves the safe shared-demo denial from a typed backend error", async () => {
+    const result = await runCommand(async () => {
+      throw new ConvexError({
+        code: "shared_demo_action_denied",
+        message: "This action isn't allowed in the demo.",
+      });
+    });
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "authorization_failed",
+        title: "Action unavailable",
+        message: "This action isn't allowed in the demo.",
+        retryable: false,
+      },
+    });
+    expect(console.error).not.toHaveBeenCalled();
+  });
+
+  it("does not expose unrecognized backend error data", async () => {
+    const result = await runCommand(async () => {
+      throw new ConvexError({
+        code: "internal_failure",
+        message: "Sensitive backend detail",
+      });
     });
 
     expect(result).toEqual({

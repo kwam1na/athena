@@ -12,6 +12,7 @@ const mockedProducts = vi.hoisted(() => ({
     slug: string;
   }>,
   products: undefined as Product[] | undefined,
+  sharedDemoContext: null as null | { kind: "shared_demo" },
   routeSearch: {
     categorySlug: "beverages",
     o: "/wigclub/store/wigclub/products",
@@ -32,6 +33,10 @@ vi.mock("~/src/hooks/useGetProducts", () => ({
 
 vi.mock("~/src/hooks/useGetCategories", () => ({
   useGetCategories: () => mockedProducts.categories,
+}));
+
+vi.mock("~/src/hooks/useSharedDemoContext", () => ({
+  useSharedDemoContext: () => mockedProducts.sharedDemoContext,
 }));
 
 vi.mock("~/src/hooks/usePermissions", () => ({
@@ -66,6 +71,7 @@ describe("ProductsListView", () => {
   beforeEach(() => {
     mockedProducts.categories = [];
     mockedProducts.products = undefined;
+    mockedProducts.sharedDemoContext = null;
     mockedProducts.routeSearch = {
       categorySlug: "beverages",
       o: "/wigclub/store/wigclub/products",
@@ -116,5 +122,80 @@ describe("ProductsListView", () => {
     expect(
       screen.queryByRole("region", { name: "Pending checkout review" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("restricts category management controls in the shared demo", () => {
+    mockedProducts.categories = [
+      {
+        _id: "category-1",
+        name: "Beverages",
+        slug: "beverages",
+      },
+    ];
+    mockedProducts.products = [
+      {
+        _id: "product-1",
+        _creationTime: 1,
+        availability: "live",
+        categoryId: "category-1",
+        createdByUserId: "user-1",
+        currency: "GHS",
+        inventoryCount: 1,
+        name: "Batik Tote Bag",
+        organizationId: "organization-1",
+        quantityAvailable: 1,
+        slug: "batik-tote-bag",
+        skus: [],
+        storeId: "store-1",
+        subcategoryId: "subcategory-1",
+      } as Product,
+    ];
+    mockedProducts.sharedDemoContext = { kind: "shared_demo" };
+
+    render(<ProductsListView />);
+
+    expect(
+      screen.getByRole("switch", { name: "Show category on storefront" }),
+    ).toBeDisabled();
+    expect(
+      screen.queryByRole("button", { name: "Clear cache" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps category management controls available outside the shared demo", () => {
+    mockedProducts.categories = [
+      {
+        _id: "category-1",
+        name: "Beverages",
+        slug: "beverages",
+      },
+    ];
+    mockedProducts.products = [
+      {
+        _id: "product-1",
+        _creationTime: 1,
+        availability: "live",
+        categoryId: "category-1",
+        createdByUserId: "user-1",
+        currency: "GHS",
+        inventoryCount: 1,
+        name: "Batik Tote Bag",
+        organizationId: "organization-1",
+        quantityAvailable: 1,
+        slug: "batik-tote-bag",
+        skus: [],
+        storeId: "store-1",
+        subcategoryId: "subcategory-1",
+      } as Product,
+    ];
+
+    render(<ProductsListView />);
+
+    expect(
+      screen.getByRole("switch", { name: "Show category on storefront" }),
+    ).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: "Clear cache" }),
+    ).toBeInTheDocument();
   });
 });

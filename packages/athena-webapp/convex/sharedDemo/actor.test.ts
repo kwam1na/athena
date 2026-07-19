@@ -16,9 +16,7 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 describe("shared demo actor resolution", () => {
   beforeEach(() => {
     vi.stubEnv("ATHENA_SHARED_DEMO_ENABLED", "true");
-    vi.stubEnv("ATHENA_DEPLOYMENT_ENVIRONMENT", "qa");
-    vi.stubEnv("ATHENA_DEPLOYMENT_ID", "qa-1");
-    vi.stubEnv("ATHENA_SHARED_DEMO_DEPLOYMENT_ALLOWLIST", "qa-1");
+    vi.stubEnv("STAGE", "qa");
   });
   it("resolves the server-owned demo store while admission is active", async () => {
     vi.mocked(getAuthUserId).mockResolvedValue("auth-user" as never);
@@ -148,7 +146,7 @@ describe("shared demo actor resolution", () => {
     } as never;
     await expect(
       requireSharedDemoCapabilityIfApplicable(demoCtx, "exports.generate"),
-    ).rejects.toThrow("This action is unavailable in the demo.");
+    ).rejects.toThrow("This action isn't allowed in the demo.");
   });
 
   it("clamps an allowed demo capability to the server-owned store", async () => {
@@ -175,7 +173,7 @@ describe("shared demo actor resolution", () => {
         "pos.sale.complete",
         "other-store" as never,
       ),
-    ).rejects.toThrow("unavailable in the demo");
+    ).rejects.toThrow("isn't allowed in the demo");
   });
 
   it("clamps demo reads without requiring a write capability", async () => {
@@ -201,6 +199,6 @@ describe("shared demo actor resolution", () => {
         demoCtx,
         "other-store" as never,
       ),
-    ).rejects.toThrow("unavailable in the demo");
+    ).rejects.toThrow("isn't allowed in the demo");
   });
 });

@@ -1063,7 +1063,7 @@ describe("workflow trace core and public helpers", () => {
         storeId,
         traceId: "sensitive_workflow:case-42",
       }),
-    ).rejects.toThrow("This action is unavailable in the demo.");
+    ).rejects.toThrow("This action isn't allowed in the demo.");
   });
 
   it("routes lookup reads through the same workflow authorizer as direct trace reads", async () => {

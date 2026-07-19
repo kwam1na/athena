@@ -15,7 +15,17 @@ import {
 } from "~/shared/commandResult";
 import { getRecoveryHomePath } from "@/lib/navigation/appEntryRoutes";
 
-export function DefaultCatchBoundary({ error }: ErrorComponentProps) {
+type DefaultCatchBoundaryProps = ErrorComponentProps & {
+  reloadPage?: () => void;
+};
+
+const ROUTE_MODULE_LOAD_ERROR_PATTERN =
+  /failed to fetch dynamically imported module|error loading dynamically imported module|importing a module script failed|chunkloaderror|loading chunk \d+ failed/i;
+
+export function DefaultCatchBoundary({
+  error,
+  reloadPage = () => window.location.reload(),
+}: DefaultCatchBoundaryProps) {
   const router = useRouter();
   const isRoot = useMatch({
     strict: false,
@@ -26,6 +36,9 @@ export function DefaultCatchBoundary({ error }: ErrorComponentProps) {
   });
   const recoveryHomePath = getRecoveryHomePath(pathname);
   const isExpiredDemoSession = /(?:shared )?demo session has expired/i.test(
+    error.message,
+  );
+  const isRouteModuleLoadError = ROUTE_MODULE_LOAD_ERROR_PATTERN.test(
     error.message,
   );
   const actionClassName =
@@ -52,6 +65,8 @@ export function DefaultCatchBoundary({ error }: ErrorComponentProps) {
             <p className="text-sm leading-6 text-muted-foreground md:text-lg md:leading-7">
               {isExpiredDemoSession
                 ? "Open the demo again to start a fresh session and continue exploring Athena."
+                : isRouteModuleLoadError
+                  ? "The app could not load this page. Reload Athena to reconnect and try again."
                 : `${GENERIC_UNEXPECTED_ERROR_MESSAGE} If the problem keeps happening, go back and retry the action.`}
             </p>
           </div>
@@ -90,12 +105,20 @@ export function DefaultCatchBoundary({ error }: ErrorComponentProps) {
           {!isExpiredDemoSession ? (
             <Button
               onClick={() => {
-                router.invalidate();
+                if (isRouteModuleLoadError) {
+                  reloadPage();
+                  return;
+                }
+
+                void router.invalidate();
               }}
               className={actionClassName}
               variant="default"
             >
-              Try again
+              {isRouteModuleLoadError ? (
+                <RotateCcw aria-hidden="true" className="h-4 w-4" />
+              ) : null}
+              {isRouteModuleLoadError ? "Reload app" : "Try again"}
             </Button>
           ) : null}
         </div>

@@ -1,4 +1,6 @@
 import { FINGERPRINT_STORAGE_KEY } from "@/lib/constants";
+import type { UserError } from "~/shared/commandResult";
+import { isPosRegisterNumberConflict } from "~/shared/posTerminalRegistrationError";
 
 type SharedDemoLocalResetStore = {
   resetSharedDemoFirstVisitState?: () => Promise<
@@ -11,6 +13,14 @@ type SharedDemoBrowserStorage = Pick<
   Storage,
   "getItem" | "removeItem" | "setItem"
 >;
+
+export function resolveSharedDemoRestoreBootstrapStatus(
+  status?: "failed" | "ready" | "restoring",
+): "failed" | "ready" | "waiting" {
+  if (status === "ready") return "ready";
+  if (status === "failed") return "failed";
+  return "waiting";
+}
 
 export function getSharedDemoRestoreEpochStorageKey(storeId: string) {
   return `athena:shared-demo:restore-epoch:v5:${storeId}`;
@@ -33,14 +43,68 @@ export async function resetSharedDemoFirstVisitBrowserState(input: {
   input.storage.removeItem(FINGERPRINT_STORAGE_KEY);
 }
 
-export function getSharedDemoRegisterNumber(fingerprintHash: string) {
+const SHARED_DEMO_REGISTER_NUMBER_COUNT = 98;
+const SHARED_DEMO_FIRST_BROWSER_REGISTER_NUMBER = 2;
+type SharedDemoRegisterProvisionResult<TData> =
+  | { kind: "ok"; data: TData }
+  | {
+      kind: "user_error";
+      error: Pick<UserError, "code" | "message" | "metadata">;
+    };
+
+export function getSharedDemoRegisterNumberCandidates(fingerprintHash: string) {
   const fingerprintPrefix = fingerprintHash.slice(0, 6);
   const numericFingerprint = Number.parseInt(fingerprintPrefix, 16);
-  const stableRegisterNumber = Number.isFinite(numericFingerprint)
-    ? (numericFingerprint % 900_000) + 100_000
-    : 100_000;
+  const initialRegisterIndex = Number.isFinite(numericFingerprint)
+    ? numericFingerprint % SHARED_DEMO_REGISTER_NUMBER_COUNT
+    : 0;
 
-  return String(stableRegisterNumber);
+  return Array.from(
+    { length: SHARED_DEMO_REGISTER_NUMBER_COUNT },
+    (_, offset) =>
+      String(
+        ((initialRegisterIndex + offset) %
+          SHARED_DEMO_REGISTER_NUMBER_COUNT) +
+          SHARED_DEMO_FIRST_BROWSER_REGISTER_NUMBER,
+      ).padStart(2, "0"),
+  );
+}
+
+export function getSharedDemoRegisterNumber(fingerprintHash: string) {
+  return getSharedDemoRegisterNumberCandidates(fingerprintHash)[0] ?? "02";
+}
+
+export function isSharedDemoRegisterNumber(
+  registerNumber?: string | null,
+) {
+  return /^(?:0[2-9]|[1-9]\d)$/.test(registerNumber ?? "");
+}
+
+export async function provisionSharedDemoRegister<TData>(input: {
+  fingerprintHash: string;
+  provision: (
+    registerNumber: string,
+  ) => Promise<SharedDemoRegisterProvisionResult<TData>>;
+}): Promise<SharedDemoRegisterProvisionResult<TData>> {
+  for (const registerNumber of getSharedDemoRegisterNumberCandidates(
+    input.fingerprintHash,
+  )) {
+    const result = await input.provision(registerNumber);
+    if (
+      result.kind === "ok" ||
+      !isPosRegisterNumberConflict(result.error)
+    ) {
+      return result;
+    }
+  }
+
+  return {
+    kind: "user_error",
+    error: {
+      code: "unavailable",
+      message: "No two-digit register numbers are available in this demo store.",
+    },
+  };
 }
 
 const SHARED_DEMO_TERMINAL_NAMES = [

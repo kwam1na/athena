@@ -7,6 +7,7 @@ import {
 import type { Doc, Id } from "../_generated/dataModel";
 import { v } from "convex/values";
 import { requireSharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
+import { requireSharedDemoRegisterSessionSyncReview } from "../sharedDemo/policy";
 import { requireReadySharedDemoWriteWithCtx } from "../sharedDemo/restore";
 import {
   buildRegisterSessionCloseoutReview,
@@ -216,7 +217,7 @@ type ResolveRegisterSessionSyncReviewResult = {
 async function requireCashControlsStoreAccess(
   ctx: QueryCtx | MutationCtx,
   storeId: Id<"store">,
-  options?: { allowSharedDemoDeposit?: boolean },
+  options?: { allowSharedDemoCashControl?: boolean },
 ) {
   const store = await ctx.db.get("store", storeId);
   if (!store) {
@@ -225,7 +226,7 @@ async function requireCashControlsStoreAccess(
 
   const athenaUser = await requireAuthenticatedAthenaUserWithCtx(
     ctx,
-    options?.allowSharedDemoDeposit
+    options?.allowSharedDemoCashControl
       ? { sharedDemoCapability: "cash.control.write" }
       : undefined,
   );
@@ -1093,7 +1094,7 @@ export const getDashboardSnapshot = query({
   },
   handler: async (ctx, args) => {
     await requireCashControlsStoreAccess(ctx, args.storeId, {
-      allowSharedDemoDeposit: true,
+      allowSharedDemoCashControl: true,
     });
 
     const [
@@ -1186,7 +1187,7 @@ export const getRegisterSessionSnapshot = query({
   },
   handler: async (ctx, args) => {
     const { store } = await requireCashControlsStoreAccess(ctx, args.storeId, {
-      allowSharedDemoDeposit: true,
+      allowSharedDemoCashControl: true,
     });
     const registerSession = await ctx.db.get(
       "registerSession",
@@ -1442,7 +1443,7 @@ export const recordRegisterSessionDeposit = mutation({
       const { athenaUser } = await requireCashControlsStoreAccess(
         ctx,
         args.storeId,
-        { allowSharedDemoDeposit: true },
+        { allowSharedDemoCashControl: true },
       );
       athenaUserId = athenaUser._id;
     } catch {
@@ -1646,9 +1647,18 @@ export const resolveRegisterSessionSyncReview = mutation({
     ctx,
     args,
   ): Promise<CommandResult<ResolveRegisterSessionSyncReviewResult>> => {
+    const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(
+      ctx,
+      "cash.control.write",
+      args.storeId,
+    );
+    if (demoActor) {
+      await requireReadySharedDemoWriteWithCtx(ctx, { storeId: args.storeId });
+    }
     const { athenaUser, store } = await requireCashControlsStoreAccess(
       ctx,
       args.storeId,
+      { allowSharedDemoCashControl: true },
     );
     const registerSession = await ctx.db.get(
       "registerSession",
@@ -1756,6 +1766,15 @@ export const resolveRegisterSessionSyncReview = mutation({
         registerSession,
         projectedCount: 0,
         resolvedCount: 0,
+      });
+    }
+
+    if (demoActor) {
+      requireSharedDemoRegisterSessionSyncReview({
+        decision,
+        reviewKinds: conflicts.map(
+          (conflict) => classifyRegisterSessionSyncReview(conflict).reviewKind,
+        ),
       });
     }
 

@@ -1,6 +1,30 @@
-import { describe, expect, it } from "vitest";
+import { renderHook } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 
-import { mapRegisterStateDto } from "./registerGateway";
+const queryMocks = vi.hoisted(() => ({
+  useQuery: vi.fn(),
+}));
+
+vi.mock("convex/react", () => ({
+  useQuery: queryMocks.useQuery,
+}));
+
+vi.mock("~/convex/_generated/api", () => ({
+  api: {
+    pos: {
+      public: {
+        register: { getState: "getState" },
+        terminals: { getTerminalByFingerprint: "getTerminalByFingerprint" },
+      },
+    },
+  },
+}));
+
+import {
+  mapRegisterStateDto,
+  useConvexTerminalByFingerprint,
+} from "./registerGateway";
+import type { Id } from "~/convex/_generated/dataModel";
 
 describe("mapRegisterStateDto", () => {
   it("maps the server dto into the browser register state shape", () => {
@@ -52,5 +76,28 @@ describe("mapRegisterStateDto", () => {
         registerSessionId: "drawer-1",
       }),
     );
+  });
+});
+
+describe("useConvexTerminalByFingerprint", () => {
+  it("preserves terminal identity across unrelated rerenders", () => {
+    const terminal = {
+      _id: "terminal-1",
+      displayName: "Front Counter",
+      status: "active",
+    };
+    queryMocks.useQuery.mockReturnValue(terminal);
+
+    const { result, rerender } = renderHook(() =>
+      useConvexTerminalByFingerprint({
+        fingerprintHash: "fingerprint-1",
+        storeId: "store-1" as Id<"store">,
+      }),
+    );
+    const firstResult = result.current;
+
+    rerender();
+
+    expect(result.current).toBe(firstResult);
   });
 });

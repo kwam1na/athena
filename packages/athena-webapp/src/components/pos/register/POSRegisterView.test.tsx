@@ -737,6 +737,7 @@ describe("POSRegisterView", () => {
 
   it("surfaces product-only lookup without service actions", async () => {
     mockUseRegisterViewModel.mockReturnValue({
+      isSharedDemo: true,
       hasActiveStore: true,
       header: {
         title: "POS",
@@ -803,16 +804,33 @@ describe("POSRegisterView", () => {
     });
 
     const { POSRegisterView } = await import("./POSRegisterView");
-    render(<POSRegisterView />);
+    const { rerender } = render(<POSRegisterView />);
 
     expect(screen.getByText("lookup-kind-products")).toBeInTheDocument();
     expect(screen.getByText("Ready for product lookup")).toBeInTheDocument();
     expect(screen.getByText("Barcode")).toBeInTheDocument();
     expect(screen.getByText("Product search")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Try Black Soap Bar, Batik Tote Bag, or Kente Scarf.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /search for black soap bar/i }),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText("Service search")).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "mock-add-service" }),
     ).not.toBeInTheDocument();
+
+    rerender(<POSRegisterView workflowMode="expense" />);
+
+    expect(screen.getByText("Ready for expense entry")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Try Black Soap Bar, Batik Tote Bag, or Kente Scarf.",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("returns focus to the header product search after adding a service", async () => {
@@ -2112,6 +2130,11 @@ describe("POSRegisterView", () => {
     const { POSRegisterView } = await import("./POSRegisterView");
     render(<POSRegisterView />);
 
+    expect(
+      screen.queryByText(
+        "Try Black Soap Bar, Batik Tote Bag, or Kente Scarf.",
+      ),
+    ).not.toBeInTheDocument();
     await userEvent.click(screen.getByTestId("product-lookup-empty-state"));
 
     expect(setShowProductLookup).toHaveBeenCalledWith(true);
@@ -3096,6 +3119,14 @@ describe("POSRegisterView", () => {
     expect(screen.getByTestId("expense-completion-shell")).toHaveClass(
       "justify-end",
     );
+    expect(screen.getByTestId("expense-completion-shell")).not.toHaveClass(
+      "flex-1",
+    );
+    expect(
+      within(screen.getByTestId("register-workspace-sidebar")).getByTestId(
+        "cart-items-compact",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("falls back to the injected expense view model workflow when mode prop is omitted", async () => {

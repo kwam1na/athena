@@ -489,18 +489,6 @@ export function useRegisterViewModel(): RegisterViewModel {
   staffProofTokenRef.current = staffProofToken;
   const [localAuthenticatedStaff, setLocalAuthenticatedStaff] =
     useState<LocalAuthenticatedStaff>(null);
-
-  useEffect(() => {
-    if (!sharedDemoStaff) return;
-    staffProfileIdRef.current = sharedDemoStaff.staffProfileId;
-    staffProofTokenRef.current = null;
-    setStaffProfileId(sharedDemoStaff.staffProfileId);
-    setStaffProofToken(null);
-    setLocalAuthenticatedStaff({
-      activeRoles: sharedDemoStaff.activeRoles,
-      displayName: sharedDemoStaff.displayName,
-    });
-  }, [sharedDemoStaff]);
   const [cashierPresenceRestore, setCashierPresenceRestore] =
     useState<CashierPresenceRestoreState>({ status: "pending" });
   const [
@@ -1008,14 +996,6 @@ export function useRegisterViewModel(): RegisterViewModel {
         return;
       }
 
-      if (sharedDemoStaff) {
-        setCashierPresenceRestore({
-          displayName: sharedDemoStaff.displayName,
-          status: "restored",
-        });
-        return;
-      }
-
       if (staffProfileIdRef.current) {
         setCashierPresenceRestore({ status: "restored" });
         return;
@@ -1170,7 +1150,6 @@ export function useRegisterViewModel(): RegisterViewModel {
     activeStoreOrganizationId,
     localStore,
     terminal?._id,
-    sharedDemoStaff,
   ]);
 
   useEffect(() => {
@@ -1874,10 +1853,14 @@ export function useRegisterViewModel(): RegisterViewModel {
       ? usableActiveRegisterSession
       : null;
   const isClosedDrawerSaleRecovery = Boolean(
-    localDrawerAuthorityReason === "cloud_closed" && hasInProgressSaleDraft,
+    (localDrawerAuthorityReason === "cloud_closed" ||
+      localDrawerAuthorityReason === "cloud_session_missing") &&
+    hasInProgressSaleDraft,
   );
   const isClosedDrawerReplacement = Boolean(
-    localDrawerAuthorityReason === "cloud_closed" && !hasInProgressSaleDraft,
+    (localDrawerAuthorityReason === "cloud_closed" ||
+      localDrawerAuthorityReason === "cloud_session_missing") &&
+    !hasInProgressSaleDraft,
   );
   const drawerGateMode:
     | "initialSetup"
@@ -5598,6 +5581,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     closeoutApprovalRunner.approvalDialog as RegisterCommandApprovalDialogState | null;
 
   return {
+    isSharedDemo: Boolean(sharedDemoContext || sharedDemoStaff),
     hasActiveStore: Boolean(activeStoreId),
     debug: {
       activeStoreSource: activeStore

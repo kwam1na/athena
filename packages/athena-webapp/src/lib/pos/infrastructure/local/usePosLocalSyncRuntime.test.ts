@@ -3076,6 +3076,130 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     });
   });
 
+  it("re-drains pending register events when the demo epoch becomes available", async () => {
+    const store = {
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [
+          buildLocalEvent({
+            localEventId: "event-open",
+            payload: {
+              openingFloat: 100,
+              status: "open",
+            },
+            sequence: 1,
+            type: "register.opened",
+            uploadSequence: 1,
+          }),
+        ],
+      })),
+      markEventsSynced: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-1",
+          displayName: "Front",
+          provisionedAt: 1,
+          schemaVersion: 1,
+          syncSecretHash: "sync-secret-1",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+    };
+    mocks.ingestLocalEvents
+      .mockResolvedValueOnce({
+        kind: "user_error",
+        error: {
+          code: "precondition_failed",
+          message: "The demo register is refreshing. Try again shortly.",
+          retryable: true,
+        },
+      })
+      .mockResolvedValueOnce({
+        kind: "ok",
+        data: {
+          accepted: [
+            {
+              localEventId: "event-open",
+              sequence: 1,
+              status: "projected",
+            },
+          ],
+          held: [],
+          mappings: [],
+          conflicts: [],
+          syncCursor: {
+            localRegisterSessionId: "register-1",
+            acceptedThroughSequence: 1,
+          },
+        },
+      });
+    const storeFactory = () => store as never;
+    const initialProps: {
+      eventAppendToken: number;
+      expectedDemoEpoch?: number;
+    } = {
+      eventAppendToken: 0,
+      expectedDemoEpoch: undefined,
+    };
+
+    const { result, rerender } = renderHook(
+      ({
+        eventAppendToken,
+        expectedDemoEpoch,
+      }: {
+        eventAppendToken: number;
+        expectedDemoEpoch?: number;
+      }) =>
+        usePosLocalSyncRuntimeStatus({
+          drainOnAppend: true,
+          eventAppendToken,
+          expectedDemoEpoch,
+          mode: "status-only",
+          storeFactory,
+          storeId: "store-1",
+          terminalId: "terminal-cloud-1",
+        }),
+      { initialProps },
+    );
+
+    await waitFor(() =>
+      expect(result.current?.debug?.lastTrigger).toBe("route-entry"),
+    );
+    expect(mocks.ingestLocalEvents).not.toHaveBeenCalled();
+
+    rerender({ eventAppendToken: 1, expectedDemoEpoch: undefined });
+
+    await waitFor(() =>
+      expect(mocks.ingestLocalEvents).toHaveBeenCalledTimes(1),
+    );
+
+    rerender({ eventAppendToken: 1, expectedDemoEpoch: 135 });
+
+    await waitFor(() =>
+      expect(mocks.ingestLocalEvents).toHaveBeenCalledTimes(2),
+    );
+    expect(mocks.ingestLocalEvents).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        expectedDemoEpoch: 135,
+        events: [
+          expect.objectContaining({
+            eventType: "register_opened",
+            localEventId: "event-open",
+          }),
+        ],
+      }),
+    );
+    expect(store.markEventsSynced).toHaveBeenCalledWith(
+      ["event-open"],
+      { uploaded: true },
+    );
+  });
+
   it("publishes runtime check-ins best-effort without blocking local sync upload", async () => {
     mocks.reportTerminalRuntimeStatus.mockRejectedValue(
       new Error("Terminal status endpoint unavailable"),
@@ -4027,14 +4151,14 @@ describe("usePosLocalSyncRuntimeStatus", () => {
       cloudId: "cloud-register-1",
       mappedAt: expect.any(Number),
     });
-    expect(onLocalEventsChanged).toHaveBeenCalled();
+    expect(onLocalEventsChanged).toHaveBeenCalledTimes(1);
     await waitFor(() =>
       expect(result.current?.debug?.activeRegisterSessionRepair).toMatchObject({
         directive: expect.objectContaining({
           localRegisterSessionId: "cloud-register-1",
           status: "active",
         }),
-        seedResult: "seeded",
+        seedResult: "already_seeded",
       }),
     );
   });

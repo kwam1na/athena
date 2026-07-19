@@ -4,6 +4,7 @@ import { v } from "convex/values";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import { requireStoreFullAdminAccess } from "./access";
+import { requireReadySharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
 
 const MAX_VENDORS = 200;
 
@@ -75,6 +76,11 @@ export async function createVendorWithCtx(
   ctx: MutationCtx,
   args: CreateVendorArgs,
 ) {
+  await requireReadySharedDemoStoreCapabilityIfApplicable(
+    ctx,
+    "procurement.manage",
+    args.storeId,
+  );
   const { athenaUser, store } = await requireStoreFullAdminAccess(
     ctx,
     args.storeId,

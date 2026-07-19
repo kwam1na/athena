@@ -64,6 +64,38 @@ describe("reconcileRegisterLifecycleServerAuthority", () => {
     ).toEqual({ disposition: "rejected", reason: "cursor_conflict" });
   });
 
+  it("applies an exact stale-cloud tombstone without relaxing subject conflicts", () => {
+    const current = versioned({
+      classification: "sale_usable",
+      reason: undefined,
+      status: "healthy",
+    });
+    const staleCloudSubject = versioned({
+      classification: "stale_cloud_subject",
+      reason: "authority_unknown",
+      status: "blocked",
+    });
+
+    expect(
+      reconcileRegisterLifecycleServerAuthority(
+        current,
+        staleCloudSubject,
+      ),
+    ).toMatchObject({
+      disposition: "applied",
+      value: staleCloudSubject,
+    });
+    expect(
+      reconcileRegisterLifecycleServerAuthority(
+        current,
+        {
+          ...staleCloudSubject,
+          cloudRegisterSessionId: "cloud-register-2",
+        },
+      ),
+    ).toEqual({ disposition: "rejected", reason: "cursor_conflict" });
+  });
+
   it("treats equal cursors and payloads as duplicate but conflicting payloads as invalid", () => {
     const current = versioned();
     expect(

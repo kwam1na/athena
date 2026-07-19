@@ -91,6 +91,10 @@ beforeEach(() => {
 });
 
 describe("POS public transaction query validators", () => {
+  it("keeps the empty completed-sale list contract stable", () => {
+    assertConformsToExportedReturns(getCompletedTransactions, []);
+  });
+
   it("validates representative public transaction results against exported return validators", () => {
     const validationError = {
       kind: "user_error" as const,

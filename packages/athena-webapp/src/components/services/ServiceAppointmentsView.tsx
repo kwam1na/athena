@@ -31,6 +31,8 @@ import {
 } from "@/lib/errors/runCommand";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
+import { useSharedDemoContext } from "~/src/hooks/useSharedDemoContext";
+import { ServiceWorkspaceDemoNotice } from "./ServiceWorkspaceDemoNotice";
 
 type CustomerResult = {
   _id: string;
@@ -75,6 +77,7 @@ type ServiceAppointmentsViewContentProps = {
   customerResults: CustomerResult[];
   hasFullAdminAccess: boolean;
   isLoadingPermissions: boolean;
+  isSharedDemo?: boolean;
   isSaving: boolean;
   onCancelAppointment: (args: {
     appointmentId: string;
@@ -121,6 +124,7 @@ export function ServiceAppointmentsViewContent({
   customerResults,
   hasFullAdminAccess,
   isLoadingPermissions,
+  isSharedDemo = false,
   isSaving,
   onCancelAppointment,
   onConvertAppointment,
@@ -207,6 +211,7 @@ export function ServiceAppointmentsViewContent({
             title="Appointments"
             description="Schedule service bookings, adjust appointment times, and convert confirmed work into service cases."
           />
+          <ServiceWorkspaceDemoNotice isSharedDemo={isSharedDemo} />
 
           <PageWorkspaceGrid className="xl:grid-cols-[minmax(0,1fr)_380px]">
             <PageWorkspaceRail>
@@ -352,7 +357,7 @@ export function ServiceAppointmentsViewContent({
 
                 <div className="flex justify-start">
                   <Button
-                    disabled={isSaving}
+                    disabled={isSharedDemo || isSaving}
                     onClick={handleSubmit}
                     type="button"
                     variant="default"
@@ -430,6 +435,7 @@ export function ServiceAppointmentsViewContent({
                       <div className="flex flex-wrap gap-2">
                         <Button
                           aria-label={`Reschedule ${appointment.serviceCatalogName ?? "appointment"}`}
+                          disabled={isSharedDemo}
                           onClick={async () => {
                             const parsedStartAt = parseDateTimeLocal(
                               rescheduleTimes[appointment._id] ?? "",
@@ -466,6 +472,7 @@ export function ServiceAppointmentsViewContent({
                         </Button>
                         <Button
                           aria-label={`Cancel ${appointment.serviceCatalogName ?? "appointment"}`}
+                          disabled={isSharedDemo}
                           onClick={async () => {
                             setValidationErrors([]);
                             const result = await onCancelAppointment({
@@ -486,6 +493,7 @@ export function ServiceAppointmentsViewContent({
                         </Button>
                         <Button
                           aria-label={`Convert ${appointment.serviceCatalogName ?? "appointment"}`}
+                          disabled={isSharedDemo}
                           onClick={async () => {
                             setValidationErrors([]);
                             const result = await onConvertAppointment({
@@ -526,6 +534,7 @@ export function ServiceAppointmentsView() {
     isLoadingAccess,
   } = useProtectedAdminPageState();
   const [searchQuery, setSearchQuery] = useState("");
+  const isSharedDemo = Boolean(useSharedDemoContext());
   const [isSaving, setIsSaving] = useState(false);
   const deferredSearchQuery = useDeferredValue(searchQuery);
 
@@ -609,6 +618,7 @@ export function ServiceAppointmentsView() {
       customerResults={customerResults ?? []}
       hasFullAdminAccess={hasFullAdminAccess}
       isLoadingPermissions={false}
+      isSharedDemo={isSharedDemo}
       isSaving={isSaving}
       onCancelAppointment={(args) =>
         withSaveState(() =>

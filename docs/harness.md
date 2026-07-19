@@ -95,7 +95,10 @@ Tracked graphify outputs include:
 ### Git Hooks And CI
 
 Local Git hooks are tracked under `.husky/`. The important path is the pre-push
-hook, which runs `bun run pre-push:review`.
+hook, which runs `bun run pre-push:review` behind a bounded-output wrapper. The
+wrapper writes the full child stream to a temporary log, emits periodic
+heartbeats, removes the log after success, and retains it with a 200-line tail
+after failure. Validation still runs fail-closed with its original exit code.
 
 GitHub Actions runs the repo harness in `.github/workflows/athena-pr-tests.yml`.
 CI repeats the important sensors so local success and remote review stay aligned.

@@ -58,6 +58,7 @@ import { useAppActionBlocker } from "@/lib/app-messages";
 import { APP_UPDATE_APPLY_ACTION_ID } from "@/lib/app-update";
 import { currencyFormatter } from "~/shared/currencyFormatter";
 import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
+import { sharedDemoProductBySlug } from "~/shared/sharedDemoStory";
 
 import { RegisterActionBar, RegisterCashierControl } from "./RegisterActionBar";
 import { RegisterCheckoutPanel } from "./RegisterCheckoutPanel";
@@ -65,6 +66,13 @@ import { RegisterCustomerPanel } from "./RegisterCustomerPanel";
 import { RegisterDrawerGate } from "./RegisterDrawerGate";
 import { ExpenseCompletionPanel } from "./ExpenseCompletionPanel";
 import { getOrigin, reloadWindow } from "~/src/lib/navigationUtils";
+
+const sharedDemoProductLookupSuggestions = [
+  sharedDemoProductBySlug("demo-black-soap"),
+  sharedDemoProductBySlug("demo-batik-tote"),
+  sharedDemoProductBySlug("demo-kente-scarf"),
+] as const;
+const SHARED_DEMO_PRODUCT_LOOKUP_GUIDANCE = `Try ${sharedDemoProductLookupSuggestions[0].name}, ${sharedDemoProductLookupSuggestions[1].name}, or ${sharedDemoProductLookupSuggestions[2].name}.`;
 
 function useCollapseSidebarForPosFlow() {
   const { isMobile, open, setOpen } = useSidebar();
@@ -104,6 +112,7 @@ function ProductLookupEmptyState({
   canQuickAddProduct = false,
   onActivate,
   onQuickAddProduct,
+  demoProductGuidance,
   workflowMode,
 }: {
   canSearchProducts?: boolean;
@@ -111,6 +120,7 @@ function ProductLookupEmptyState({
   canQuickAddProduct?: boolean;
   onActivate?: () => void | Promise<void>;
   onQuickAddProduct?: () => void;
+  demoProductGuidance?: string;
   workflowMode: RegisterWorkflowMode;
 }) {
   const isExpenseWorkflow = workflowMode === "expense";
@@ -138,7 +148,11 @@ function ProductLookupEmptyState({
   }, [onActivate]);
   const handleKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLDivElement>) => {
-      if (!onActivate || (event.key !== "Enter" && event.key !== " ")) {
+      if (
+        event.target !== event.currentTarget ||
+        !onActivate ||
+        (event.key !== "Enter" && event.key !== " ")
+      ) {
         return;
       }
 
@@ -183,6 +197,11 @@ function ProductLookupEmptyState({
           <p className="text-sm text-muted-foreground">{description}</p>
         </div>
       </div>
+      {demoProductGuidance ? (
+        <p className="mt-4 rounded-md border border-border/70 bg-muted/40 px-3 py-2 text-xs font-medium leading-relaxed text-foreground/80 shadow-xs">
+          {demoProductGuidance}
+        </p>
+      ) : null}
       <div className="mt-5 flex flex-wrap items-center justify-center gap-2 text-xs text-muted-foreground">
         {canSearchProducts ? (
           <span className="inline-flex items-center gap-1 rounded-full border border-border bg-surface px-3 py-1">
@@ -2042,7 +2061,7 @@ function ResolvedPOSRegisterViewContent({
   const shouldRenderCartSidebar =
     shouldRenderSaleSurface &&
     !shouldShowLookupCartSplit &&
-    !hasLookupIntent &&
+    (!hasLookupIntent || !isPosWorkflow) &&
     !shouldShowOnboarding &&
     !isResolvingCashierPresence &&
     !isResolvingRegisterSetup;
@@ -2558,6 +2577,11 @@ function ResolvedPOSRegisterViewContent({
                       }
                       canSearchProducts={terminalCanSearchProducts}
                       canSearchServices={terminalCanSearchServices}
+                      demoProductGuidance={
+                        viewModel.isSharedDemo && terminalCanSearchProducts
+                          ? SHARED_DEMO_PRODUCT_LOOKUP_GUIDANCE
+                          : undefined
+                      }
                       onActivate={
                         canActivateProductLookup
                           ? handleProductLookupEmptyStateActivate
@@ -2603,6 +2627,11 @@ function ResolvedPOSRegisterViewContent({
                       }
                       canSearchProducts={terminalCanSearchProducts}
                       canSearchServices={terminalCanSearchServices}
+                      demoProductGuidance={
+                        viewModel.isSharedDemo && terminalCanSearchProducts
+                          ? SHARED_DEMO_PRODUCT_LOOKUP_GUIDANCE
+                          : undefined
+                      }
                       onActivate={
                         canActivateProductLookup
                           ? handleProductLookupEmptyStateActivate
@@ -2685,7 +2714,7 @@ function ResolvedPOSRegisterViewContent({
                       className={cn(
                         "rounded-lg bg-surface p-4",
                         shouldShowLookupCartSplit ||
-                          hasLookupIntent ||
+                          (isPosWorkflow && hasLookupIntent) ||
                           viewModel.checkout.isTransactionCompleted
                           ? "flex min-h-0 flex-1 flex-col overflow-hidden"
                           : "shrink-0",

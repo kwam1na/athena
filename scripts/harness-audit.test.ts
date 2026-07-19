@@ -1199,6 +1199,11 @@ async function createFixtureRepo() {
     "# Shared demo backend coverage\n",
     rootDir
   );
+  await write(
+    "packages/athena-webapp/assets/shared-demo-products/demo-product.webp",
+    "fixture\n",
+    rootDir
+  );
   await write("packages/athena-webapp/convex/auth.ts", "export {};\n", rootDir);
   await write(
     "packages/athena-webapp/convex/auth/SharedDemoTicket.ts",

@@ -7,6 +7,7 @@ import {
   decideSharedDemoEffect,
   requireSharedDemoCapability,
   requireSharedDemoOrderFulfillmentUpdate,
+  requireSharedDemoRegisterSessionSyncReview,
   SHARED_DEMO_PUBLIC_FUNCTION_INVENTORY,
   validateSharedDemoCoverage,
 } from "./policy";
@@ -36,7 +37,7 @@ describe("shared demo policy", () => {
     expect(requireSharedDemoCapability("pos.sale.complete")).toBe("pos.sale.complete");
     expect(requireSharedDemoCapability("reports.read")).toBe("reports.read");
     expect(() => requireSharedDemoCapability("billing.update" as never)).toThrow(
-      "This action is unavailable in the demo.",
+      "This action isn't allowed in the demo.",
     );
   });
 
@@ -135,7 +136,29 @@ describe("shared demo policy", () => {
       { status: "delivered", paymentCollected: true },
     ]) {
       expect(() => requireSharedDemoOrderFulfillmentUpdate(update)).toThrow(
-        "This action is unavailable in the demo.",
+        "This action isn't allowed in the demo.",
+      );
+    }
+  });
+
+  it("allows only duplicate register-opening rejection through demo sync review", () => {
+    expect(() =>
+      requireSharedDemoRegisterSessionSyncReview({
+        decision: "rejected",
+        reviewKinds: ["duplicate_register_open", "duplicate_register_open"],
+      }),
+    ).not.toThrow();
+
+    for (const review of [
+      { decision: "approved" as const, reviewKinds: ["duplicate_register_open"] },
+      { decision: "rejected" as const, reviewKinds: [] },
+      {
+        decision: "rejected" as const,
+        reviewKinds: ["duplicate_register_open", "inventory_review"],
+      },
+    ]) {
+      expect(() => requireSharedDemoRegisterSessionSyncReview(review)).toThrow(
+        "This action isn't allowed in the demo.",
       );
     }
   });

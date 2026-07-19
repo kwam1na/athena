@@ -160,6 +160,30 @@ type BaselineDocumentRow = {
   documentId: string;
 };
 
+export function planBaselineDocumentPromotion<
+  T extends BaselineDocumentRow & { _id: unknown; tableName: string },
+>(args: {
+  fromVersion: number;
+  rows: T[];
+  toVersion: number;
+  transformDocument?: (row: T) => Record<string, unknown>;
+}) {
+  if (args.rows.some((row) => row.baselineVersion !== args.fromVersion)) {
+    throw new Error("Demo baseline promotion version mismatch.");
+  }
+  return args.rows.map(
+    (row): {
+      baselineVersion: number;
+      document: Record<string, unknown>;
+      rowId: T["_id"];
+    } => ({
+      baselineVersion: args.toVersion,
+      document: args.transformDocument?.(row) ?? row.document,
+      rowId: row._id,
+    }),
+  );
+}
+
 export function planDomainRestore(args: {
   baseline: RestoreRow[];
   current: RestoreRow[];
@@ -455,6 +479,40 @@ export async function captureBaselineDocumentsWithCtx(
       }
     }
     return { captured };
+}
+
+export async function promoteBaselineDocumentsWithCtx(
+  ctx: MutationCtx,
+  args: {
+    fromVersion: number;
+    storeId: Id<"store">;
+    transformDocument?: (row: {
+      document: Record<string, unknown>;
+      documentId: string;
+      tableName: string;
+    }) => Record<string, unknown>;
+  },
+) {
+  const rows = await ctx.db
+    .query("sharedDemoBaselineDocument")
+    .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+    .take(2_001);
+  if (rows.length > 2_000) {
+    throw new Error("Demo baseline document capacity exceeded.");
+  }
+  const patches = planBaselineDocumentPromotion({
+    fromVersion: args.fromVersion,
+    rows,
+    toVersion: SHARED_DEMO_BASELINE_VERSION,
+    transformDocument: args.transformDocument,
+  });
+  for (const patch of patches) {
+    await ctx.db.patch("sharedDemoBaselineDocument", patch.rowId, {
+      baselineVersion: patch.baselineVersion,
+      document: patch.document,
+    });
+  }
+  return { promoted: patches.length };
 }
 
 export const captureBaselineDocuments = internalMutation({

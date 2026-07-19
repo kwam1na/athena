@@ -1,21 +1,18 @@
 import {
   Check,
-  Circle,
   Banknote,
   Smartphone,
   Clock,
   CircleCheck,
-  X,
   BadgeCheckIcon,
 } from "lucide-react";
 import View from "../View";
 import { useOnlineOrder } from "~/src/contexts/OnlineOrderContext";
-import { currencyFormatter, getRelativeTime } from "~/src/lib/utils";
+import { currencyFormatter } from "~/src/lib/utils";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import { Badge } from "../ui/badge";
-import { useAction, useMutation, useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "~/convex/_generated/api";
-import { useEffect, useState } from "react";
 import { Button } from "../ui/button";
 import { toast } from "sonner";
 import { useAuth } from "~/src/hooks/useAuth";
@@ -23,28 +20,6 @@ import { getAmountPaidForOrder } from "./utils";
 import { toDisplayAmount } from "~/convex/lib/currency";
 import { presentCommandToast } from "~/src/lib/errors/presentCommandToast";
 import { runCommand } from "~/src/lib/errors/runCommand";
-
-interface ExternalTransaction {
-  id: string;
-  amount: number;
-  currency: string;
-  status: string;
-  createdAt: string;
-  reference: string;
-  formattedAmount: string;
-}
-
-interface PaystackTransaction {
-  id: string;
-  amount: number;
-  currency: string;
-  status: string;
-  createdAt: string;
-  reference: string;
-  metadata: {
-    checkout_session_id?: string;
-  };
-}
 
 const VerifiedBadge = ({
   status,
@@ -64,65 +39,6 @@ const VerifiedBadge = ({
   );
 };
 
-const ExternalTransaction = ({
-  transaction,
-}: {
-  transaction: ExternalTransaction;
-}) => {
-  const map = {
-    success: "Succeeded",
-    failed: "Failed",
-    pending: "Pending",
-    abandoned: "Abandoned",
-    cancelled: "Cancelled",
-    refunded: "Refunded",
-  };
-
-  const statusColor = {
-    success: "text-green-700",
-    failed: "text-red-700",
-    pending: "text-yellow-700",
-    abandoned: "text-gray-700",
-    cancelled: "text-red-700",
-    refunded: "text-red-700",
-  };
-
-  return (
-    <div className="space-y-2">
-      <div className="w-full flex gap-2">
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            {transaction.status === "success" ? (
-              <Check
-                className={`w-3 h-3 ${statusColor[transaction.status as keyof typeof statusColor]}`}
-              />
-            ) : transaction.status === "failed" ? (
-              <X
-                className={`w-3 h-3 ${statusColor[transaction.status as keyof typeof statusColor]}`}
-              />
-            ) : (
-              <Circle
-                className={`w-2.5 h-2.5 ${statusColor[transaction.status as keyof typeof statusColor]}`}
-              />
-            )}
-            <p
-              className={`text-sm ${statusColor[transaction.status as keyof typeof statusColor]}`}
-            >
-              {map[transaction.status as keyof typeof map]}
-            </p>
-            <span className="text-sm font-medium">{transaction.reference}</span>
-            <span className="text-sm">{transaction.formattedAmount}</span>
-            {/* <StatusBadge status={transaction.status} /> */}
-          </div>
-          <p className="text-xs text-muted-foreground">
-            {getRelativeTime(new Date(transaction.createdAt).getTime())}
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 export function OrderDetailsView() {
   const { order } = useOnlineOrder();
   const { activeStore } = useGetActiveStore();
@@ -130,46 +46,7 @@ export function OrderDetailsView() {
 
   const formatter = currencyFormatter(activeStore?.currency || "GHS");
 
-  const listTransactions = useAction(
-    api.storeFront.paystackActions.getAllTransactions,
-  );
-
   const updateOrder = useMutation(api.storeFront.onlineOrder.update);
-
-  const [, setExternalTransactions] = useState<ExternalTransaction[]>([]);
-
-  useEffect(() => {
-    const fetchTransactions = async () => {
-      const transactions = await listTransactions({
-        customerEmail: order?.customerDetails.email,
-        sameDay: order?._creationTime,
-      });
-
-      setExternalTransactions(
-        transactions.data
-          .filter(
-            (transaction: PaystackTransaction) =>
-              transaction.metadata.checkout_session_id ==
-              order?.checkoutSessionId,
-          )
-          .map((transaction: PaystackTransaction) => {
-            return {
-              id: transaction.id,
-              amount: transaction.amount,
-              currency: transaction.currency,
-              status: transaction.status,
-              createdAt: transaction.createdAt,
-              reference: transaction.reference,
-              formattedAmount: formatter.format(transaction.amount / 100),
-            };
-          }),
-      );
-    };
-
-    if (order?._id) {
-      fetchTransactions();
-    }
-  }, [order?._id]);
 
   useQuery(
     api.storeFront.onlineOrder.isDuplicateOrder,
@@ -334,22 +211,6 @@ export function OrderDetailsView() {
               </Badge>
             )}
           </div> */}
-
-          {/* {!isPODOrder && externalTransactions.length > 0 && (
-            <div className="space-y-4 pt-8">
-              <p className="text-sm text-sm text-muted-foreground">
-                Payment history
-              </p>
-              <div className="space-y-8">
-                {externalTransactions.map((transaction) => (
-                  <ExternalTransaction
-                    key={transaction.id}
-                    transaction={transaction}
-                  />
-                ))}
-              </div>
-            </div>
-          )} */}
 
           {/* POD Payment Instructions */}
           {isPODOrder && !order.paymentCollected && (

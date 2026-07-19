@@ -15,6 +15,7 @@ import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
 import { createServiceCaseWithCtx } from "./serviceCases";
 import { recordServiceCaseTraceBestEffort } from "./serviceCaseTracing";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
+import { requireReadySharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
 
 const NON_BLOCKING_APPOINTMENT_STATUSES = new Set([
   "cancelled",
@@ -192,6 +193,11 @@ export const createAppointment = mutation({
     storeId: v.id("store"),
   },
   handler: async (ctx, args) => {
+    await requireReadySharedDemoStoreCapabilityIfApplicable(
+      ctx,
+      "appointments.manage",
+      args.storeId,
+    );
     const [catalogItem, customerProfile, staffProfile] = await Promise.all([
       ctx.db.get("serviceCatalog", args.serviceCatalogId),
       ctx.db.get("customerProfile", args.customerProfileId),
@@ -280,6 +286,12 @@ export const rescheduleAppointment = mutation({
         message: "Appointment not found.",
       });
     }
+
+    await requireReadySharedDemoStoreCapabilityIfApplicable(
+      ctx,
+      "appointments.manage",
+      appointment.storeId,
+    );
 
     if (NON_BLOCKING_APPOINTMENT_STATUSES.has(appointment.status)) {
       return userError({
@@ -371,6 +383,12 @@ export const cancelAppointment = mutation({
       });
     }
 
+    await requireReadySharedDemoStoreCapabilityIfApplicable(
+      ctx,
+      "appointments.manage",
+      appointment.storeId,
+    );
+
     if (!appointment.organizationId) {
       return userError({
         code: "precondition_failed",
@@ -457,6 +475,12 @@ export const convertAppointmentToWalkIn = mutation({
         message: "Appointment not found.",
       });
     }
+
+    await requireReadySharedDemoStoreCapabilityIfApplicable(
+      ctx,
+      "appointments.manage",
+      appointment.storeId,
+    );
 
     if (appointment.serviceCaseId) {
       return userError({

@@ -5,7 +5,11 @@ import {
   requireSharedDemoCapabilityIfApplicable,
   requireSharedDemoStoreReadIfApplicable,
 } from "../sharedDemo/actor";
-import { decideSharedDemoEffect, requireSharedDemoOrderFulfillmentUpdate } from "../sharedDemo/policy";
+import {
+  decideSharedDemoEffect,
+  denySharedDemoAction,
+  requireSharedDemoOrderFulfillmentUpdate,
+} from "../sharedDemo/policy";
 import { requireReadySharedDemoWriteWithCtx } from "../sharedDemo/restore";
 import {
   internalMutation,
@@ -1032,7 +1036,7 @@ export const update = mutation({
           });
         }
         if (demoActor && order.storeId !== demoActor.storeId) {
-          throw new Error("This action is unavailable in the demo.");
+          denySharedDemoAction();
         }
 
         await applyOnlineOrderUpdate(ctx, order, {
@@ -1056,7 +1060,7 @@ export const update = mutation({
           });
         }
         if (demoActor && order.storeId !== demoActor.storeId) {
-          throw new Error("This action is unavailable in the demo.");
+          denySharedDemoAction();
         }
 
         const { refund_id, refund_amount, ...rest } = args.update;

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
+import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
 
 const mockedAuthServer = vi.hoisted(() => ({
   getAuthUserId: vi.fn(),
@@ -13,6 +14,7 @@ vi.mock("@convex-dev/auth/server", () => ({
 
 import {
   createVendorWithCtx,
+  createVendorCommand,
   mapCreateVendorError,
   normalizeVendorLookupKey,
 } from "./vendors";
@@ -107,5 +109,12 @@ describe("stock ops vendors", () => {
     expect(source).toContain(
       "return ok(await createVendorWithCtx(ctx, args));",
     );
+    assertConformsToExportedReturns(createVendorCommand, {
+      kind: "user_error",
+      error: {
+        code: "conflict",
+        message: "A vendor with this name already exists for this store.",
+      },
+    });
   });
 });

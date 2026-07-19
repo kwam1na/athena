@@ -17,6 +17,7 @@ import {
 import {
   SHARED_DEMO_PRODUCTS,
   SHARED_DEMO_STAFF_STORY,
+  sharedDemoProductBySlug,
 } from "~/shared/sharedDemoStory";
 
 import {
@@ -60,10 +61,10 @@ export const morningPaymentMix = [
 ] as const;
 
 export const morningTopItems = [
-  { name: "Raw Shea Butter 250g", productSku: "DEMO-SHEA-250", quantity: 3, totalSales: 18_000 },
-  { name: "Black Soap Bar", productSku: "DEMO-SOAP-BAR", quantity: 4, totalSales: 14_000 },
-  { name: "Beaded Bracelet", productSku: "DEMO-BEAD-BRACELET", quantity: 2, totalSales: 11_000 },
-  { name: "Hand-Thrown Clay Mug", productSku: "DEMO-CLAY-MUG", quantity: 1, totalSales: 9_500 },
+  { name: "Raw Shea Butter 250g", productSku: sharedDemoProductBySlug("demo-shea-butter").sku, quantity: 3, totalSales: 18_000 },
+  { name: "Black Soap Bar", productSku: sharedDemoProductBySlug("demo-black-soap").sku, quantity: 4, totalSales: 14_000 },
+  { name: "Beaded Bracelet", productSku: sharedDemoProductBySlug("demo-beaded-bracelet").sku, quantity: 2, totalSales: 11_000 },
+  { name: "Hand-Thrown Clay Mug", productSku: sharedDemoProductBySlug("demo-clay-mug").sku, quantity: 1, totalSales: 9_500 },
 ] as const;
 
 const morningTrend = [

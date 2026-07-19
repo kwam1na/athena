@@ -5,6 +5,7 @@
     {
       "name": "shared-demo-admission-restore-and-orientation-edits",
       "pathPrefixes": [
+        "packages/athena-webapp/assets/shared-demo-products",
         "packages/athena-webapp/docs/shared-demo-backend-coverage.md",
         "packages/athena-webapp/convex/sharedDemo",
         "packages/athena-webapp/convex/auth.ts",

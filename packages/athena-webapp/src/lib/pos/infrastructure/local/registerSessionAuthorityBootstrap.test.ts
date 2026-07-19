@@ -32,7 +32,10 @@ describe("register session authority bootstrap", () => {
     ).resolves.toMatchObject({ seeded: true, seedResult: "seeded" });
     await expect(
       seedRegisterSessionAuthorityBootstrap(input),
-    ).resolves.toMatchObject({ seeded: true, seedResult: "seeded" });
+    ).resolves.toMatchObject({
+      seeded: false,
+      seedResult: "already_seeded",
+    });
 
     const events = await store.listEvents();
     expect(events).toMatchObject({ ok: true });

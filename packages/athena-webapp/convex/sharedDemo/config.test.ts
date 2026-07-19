@@ -9,26 +9,22 @@ import {
 } from "./config";
 
 describe("shared demo configuration", () => {
-  it.each(["development", "qa"])("allows the explicit %s deployment", (deployment) => {
+  it.each(["dev", "qa", "prod"])("allows the explicit %s stage", (stage) => {
     expect(
       isSharedDemoEnabled({
-        ATHENA_DEPLOYMENT_ID: "demo-1",
-        ATHENA_DEPLOYMENT_ENVIRONMENT: deployment,
-        ATHENA_SHARED_DEMO_DEPLOYMENT_ALLOWLIST: "demo-1",
         ATHENA_SHARED_DEMO_ENABLED: "true",
+        STAGE: stage,
       }),
     ).toBe(true);
   });
 
-  it.each(["production", "preview", "", undefined])(
-    "fails closed for deployment %s",
-    (deployment) => {
+  it.each(["preview", "", undefined])(
+    "fails closed for stage %s",
+    (stage) => {
       expect(
         isSharedDemoEnabled({
-          ATHENA_DEPLOYMENT_ID: "demo-1",
-          ATHENA_DEPLOYMENT_ENVIRONMENT: deployment,
-          ATHENA_SHARED_DEMO_DEPLOYMENT_ALLOWLIST: "demo-1",
           ATHENA_SHARED_DEMO_ENABLED: "true",
+          STAGE: stage,
         }),
       ).toBe(false);
     },
@@ -37,21 +33,19 @@ describe("shared demo configuration", () => {
   it("requires every server-owned demo identity", () => {
     expect(() =>
       readSharedDemoConfig({
-        ATHENA_DEPLOYMENT_ID: "demo-1",
-        ATHENA_DEPLOYMENT_ENVIRONMENT: "qa",
-        ATHENA_SHARED_DEMO_DEPLOYMENT_ALLOWLIST: "demo-1",
         ATHENA_SHARED_DEMO_ENABLED: "true",
+        STAGE: "qa",
       }),
     ).toThrow("Demo configuration is incomplete");
   });
 
-  it("fails closed when the deployment ID is not explicitly allowlisted", () => {
-    expect(isSharedDemoEnabled({
-      ATHENA_DEPLOYMENT_ID: "prod-1",
-      ATHENA_DEPLOYMENT_ENVIRONMENT: "qa",
-      ATHENA_SHARED_DEMO_DEPLOYMENT_ALLOWLIST: "qa-1",
-      ATHENA_SHARED_DEMO_ENABLED: "true",
-    })).toBe(false);
+  it("does not require a deployment identifier or allowlist", () => {
+    expect(
+      isSharedDemoEnabled({
+        ATHENA_SHARED_DEMO_ENABLED: "true",
+        STAGE: "prod",
+      }),
+    ).toBe(true);
   });
 
   it("uses a one-minute ticket and three-hour admission window", () => {

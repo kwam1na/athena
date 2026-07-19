@@ -24,6 +24,8 @@ import {
   ServiceIntakeStaffOption,
 } from "./ServiceIntakeForm";
 import { validateServiceIntakeInput } from "~/shared/serviceIntake";
+import { useSharedDemoContext } from "~/src/hooks/useSharedDemoContext";
+import { ServiceWorkspaceDemoNotice } from "./ServiceWorkspaceDemoNotice";
 
 const operationsApi = api.operations;
 
@@ -47,6 +49,7 @@ type ServiceIntakeViewContentProps = {
   customerResults: ServiceIntakeCustomerResult[];
   hasFullAdminAccess: boolean;
   isLoadingPermissions: boolean;
+  isSharedDemo?: boolean;
   isSubmitting: boolean;
   onCreateIntake: (
     args: CreateServiceIntakeArgs,
@@ -88,6 +91,7 @@ export function ServiceIntakeViewContent({
   customerResults,
   hasFullAdminAccess,
   isLoadingPermissions,
+  isSharedDemo = false,
   isSubmitting,
   onCreateIntake,
   searchQuery,
@@ -200,10 +204,12 @@ export function ServiceIntakeViewContent({
             title="Service Intake"
             description="Capture walk-in or booked service work with the customer, staff owner, priority, and deposit details ready for operations."
           />
+          <ServiceWorkspaceDemoNotice isSharedDemo={isSharedDemo} />
           <ServiceIntakeForm
             catalogOptions={catalogOptions}
             customerResults={customerResults}
             form={form}
+            isActionDisabled={isSharedDemo}
             isSubmitting={isSubmitting}
             onChange={handleChange}
             onSelectCustomer={handleSelectCustomer}
@@ -228,6 +234,7 @@ export function ServiceIntakeView() {
     isLoadingAccess,
   } = useProtectedAdminPageState();
   const { user } = useAuth();
+  const isSharedDemo = Boolean(useSharedDemoContext());
   const [searchQuery, setSearchQuery] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const deferredSearchQuery = useDeferredValue(searchQuery);
@@ -296,6 +303,7 @@ export function ServiceIntakeView() {
       customerResults={customerResults ?? []}
       hasFullAdminAccess={hasFullAdminAccess}
       isLoadingPermissions={false}
+      isSharedDemo={isSharedDemo}
       isSubmitting={isSubmitting}
       onCreateIntake={handleCreateIntake}
       searchQuery={searchQuery}

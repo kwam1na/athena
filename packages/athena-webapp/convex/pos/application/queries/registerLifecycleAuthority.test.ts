@@ -266,6 +266,68 @@ describe("register lifecycle authority shadow query", () => {
 });
 
 describe("versioned register lifecycle authority query", () => {
+  it("distinguishes a claimed missing cloud session from a local-only unmapped drawer", async () => {
+    const repository = createRepository({
+      sessions: {
+        "cloud-existing": registerSession("cloud-existing", "active"),
+      },
+    });
+
+    const result = await getRegisterLifecycleAuthority(
+      {} as never,
+      {
+        candidates: [
+          {
+            cloudRegisterSessionId: "cloud-missing",
+            localRegisterSessionId: "local-stale",
+          },
+          { localRegisterSessionId: "local-only" },
+          {
+            cloudRegisterSessionId: "cloud-existing",
+            localRegisterSessionId: "local-needs-repair",
+          },
+        ],
+        storeId,
+        terminal: terminal(),
+      },
+      repository,
+    );
+
+    expect(result.results).toEqual([
+      {
+        authorityCursor: {
+          lifecycleRevision: 0,
+          mappingAuthorityRevision: 0,
+        },
+        classification: "stale_cloud_subject",
+        cloudRegisterSessionId: "cloud-missing",
+        lifecycleRevision: 0,
+        localRegisterSessionId: "local-stale",
+        mappingAuthorityRevision: 0,
+      },
+      {
+        authorityCursor: {
+          lifecycleRevision: 0,
+          mappingAuthorityRevision: 0,
+        },
+        classification: "unmapped",
+        lifecycleRevision: 0,
+        localRegisterSessionId: "local-only",
+        mappingAuthorityRevision: 0,
+      },
+      {
+        authorityCursor: {
+          lifecycleRevision: 0,
+          mappingAuthorityRevision: 0,
+        },
+        classification: "repair_required",
+        lifecycleRevision: 0,
+        localRegisterSessionId: "local-needs-repair",
+        mappingAuthorityRevision: 0,
+      },
+    ]);
+  });
+
   it("returns versioned exact authority and baseline-zero legacy authority", async () => {
     const repository = createRepository({
       authorities: {
@@ -381,6 +443,126 @@ describe("versioned register lifecycle authority query", () => {
       candidateCount: 0,
       maximumDocumentReads: 3,
       results: [],
+    });
+  });
+
+  it("keeps an exact server bootstrap identity authoritative without a sync mapping", async () => {
+    const bootstrapSession = registerSession("cloud-bootstrap", "active", {
+      lifecycleAuthorityRevision: 3,
+    });
+    const repository = createRepository({
+      sessions: { "cloud-bootstrap": bootstrapSession },
+      terminalSessions: { active: [bootstrapSession] },
+    });
+
+    const bootstrap = await getRegisterLifecycleAuthority(
+      {} as never,
+      { candidates: [], storeId, terminal: terminal() },
+      repository,
+    );
+    const bootstrappedIdentity = bootstrap.bootstrap;
+    expect(bootstrappedIdentity).toBeDefined();
+
+    await expect(
+      getRegisterLifecycleAuthority(
+        {} as never,
+        {
+          candidates: [
+            {
+              cloudRegisterSessionId:
+                bootstrappedIdentity!.cloudRegisterSessionId,
+              localRegisterSessionId:
+                bootstrappedIdentity!.localRegisterSessionId,
+            },
+          ],
+          storeId,
+          terminal: terminal(),
+        },
+        repository,
+      ),
+    ).resolves.toMatchObject({
+      results: [
+        {
+          classification: "sale_usable",
+          cloudRegisterSessionId: "cloud-bootstrap",
+          cloudStatus: "active",
+          lifecycleRevision: 3,
+          localRegisterSessionId: "cloud-bootstrap",
+          mappingAuthorityRevision: 0,
+        },
+      ],
+    });
+  });
+
+  it("keeps a mismatched exact-id claim behind the repair boundary", async () => {
+    const repository = createRepository({
+      sessions: {
+        "cloud-foreign": registerSession("cloud-foreign", "active", {
+          terminalId: "terminal-foreign" as Id<"posTerminal">,
+        }),
+      },
+    });
+
+    await expect(
+      getRegisterLifecycleAuthority(
+        {} as never,
+        {
+          candidates: [
+            {
+              cloudRegisterSessionId: "cloud-foreign",
+              localRegisterSessionId: "cloud-foreign",
+            },
+          ],
+          storeId,
+          terminal: terminal(),
+        },
+        repository,
+      ),
+    ).resolves.toMatchObject({
+      results: [
+        {
+          classification: "repair_required",
+          localRegisterSessionId: "cloud-foreign",
+        },
+      ],
+    });
+  });
+
+  it("tombstones an exact versioned mapping whose cloud session disappeared", async () => {
+    const repository = createRepository({
+      authorities: {
+        "cloud-missing": mappingAuthority("cloud-missing", 6, {
+          cloudRegisterSessionId: "cloud-missing",
+          state: "mapped",
+        }),
+      },
+    });
+
+    await expect(
+      getRegisterLifecycleAuthority(
+        {} as never,
+        {
+          candidates: [
+            {
+              cloudRegisterSessionId: "cloud-missing",
+              localRegisterSessionId: "cloud-missing",
+            },
+          ],
+          storeId,
+          terminal: terminal(),
+        },
+        repository,
+      ),
+    ).resolves.toMatchObject({
+      results: [
+        {
+          classification: "stale_cloud_subject",
+          cloudRegisterSessionId: "cloud-missing",
+          lifecycleRevision: 0,
+          localRegisterSessionId: "cloud-missing",
+          mappingAuthorityRevision: 6,
+        },
+      ],
     });
   });
 

@@ -177,6 +177,20 @@ describe("registerSessionLifecyclePolicy", () => {
     ).toBe(true);
     expect(
       canOpenReplacementDrawerForLocalBlock({
+        drawerAuthorityReason: "cloud_session_missing",
+        hasSettledCloseout: false,
+        saleBlockReason: "drawer_authority",
+      }),
+    ).toBe(true);
+    expect(
+      canOpenReplacementDrawerForLocalBlock({
+        drawerAuthorityReason: "authority_unknown",
+        hasSettledCloseout: false,
+        saleBlockReason: "drawer_authority",
+      }),
+    ).toBe(false);
+    expect(
+      canOpenReplacementDrawerForLocalBlock({
         activeRegisterSession: { status: "closing" },
         hasSettledCloseout: false,
         saleBlockReason: "drawer_closed",

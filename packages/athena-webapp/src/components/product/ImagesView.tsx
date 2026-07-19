@@ -13,12 +13,14 @@ import { usePermissions } from "~/src/hooks/usePermissions";
 import { FadeIn } from "../common/FadeIn";
 import { useEffect } from "react";
 import { ProductStatus } from "./ProductStatus";
+import { useSharedDemoContext } from "~/src/hooks/useSharedDemoContext";
 
 export function ImagesView() {
   const { activeProductVariant, activeProduct } = useProduct();
   const isArchived = activeProduct?.availability === "archived";
 
   const { hasFullAdminAccess } = usePermissions();
+  const isSharedDemo = Boolean(useSharedDemoContext());
 
   const navigate = useNavigate();
 
@@ -26,6 +28,7 @@ export function ImagesView() {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (
         event.key === "e" &&
+        !isSharedDemo &&
         hasFullAdminAccess &&
         activeProduct &&
         !isArchived
@@ -45,7 +48,12 @@ export function ImagesView() {
         });
       }
 
-      if (event.key === "v" && activeProduct && !isArchived) {
+      if (
+        event.key === "v" &&
+        !isSharedDemo &&
+        activeProduct &&
+        !isArchived
+      ) {
         window.open(
           `${config.storeFrontUrl}/shop/product/${activeProduct._id}?variant=${activeProductVariant?.sku}`,
           "_blank",
@@ -61,6 +69,7 @@ export function ImagesView() {
     activeProduct,
     activeProductVariant?.sku,
     hasFullAdminAccess,
+    isSharedDemo,
     isArchived,
   ]);
 
@@ -82,8 +91,9 @@ export function ImagesView() {
             return (
               <div className="relative">
                 {i == 0 && (
-                  <div className="font-medium text-xs absolute top-0 left-0 m-2">
+                  <div className="absolute left-0 top-0 z-10 m-2 text-xs font-medium">
                     <ProductStatus
+                      className="border-shell-foreground/20 bg-shell/90 text-shell-foreground shadow-overlay backdrop-blur-md"
                       product={activeProduct}
                       productVariant={activeProductVariant}
                     />
@@ -109,7 +119,7 @@ export function ImagesView() {
           )}
         </div>
 
-        {hasFullAdminAccess && activeProduct && !isArchived && (
+        {!isSharedDemo && hasFullAdminAccess && activeProduct && !isArchived && (
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
             <Link
               to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit"

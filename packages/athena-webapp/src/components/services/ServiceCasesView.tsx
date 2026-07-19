@@ -30,6 +30,8 @@ import {
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
 import { parseDisplayAmountInput } from "~/src/lib/pos/displayAmounts";
+import { useSharedDemoContext } from "~/src/hooks/useSharedDemoContext";
+import { ServiceWorkspaceDemoNotice } from "./ServiceWorkspaceDemoNotice";
 
 type CustomerResult = {
   _id: string;
@@ -106,6 +108,7 @@ type ServiceCasesViewContentProps = {
   customerResults: CustomerResult[];
   hasFullAdminAccess: boolean;
   isLoadingPermissions: boolean;
+  isSharedDemo?: boolean;
   isSaving: boolean;
   onAddLineItem: (args: {
     description: string;
@@ -172,6 +175,7 @@ export function ServiceCasesViewContent({
   customerResults,
   hasFullAdminAccess,
   isLoadingPermissions,
+  isSharedDemo = false,
   isSaving,
   onAddLineItem,
   onCreateCase,
@@ -295,6 +299,7 @@ export function ServiceCasesViewContent({
             title="Active Cases"
             description="Open service cases, review payment and approval pressure, and run the actions needed to move work forward."
           />
+          <ServiceWorkspaceDemoNotice isSharedDemo={isSharedDemo} />
 
           <PageWorkspaceMain>
             <div className="space-y-layout-xl">
@@ -470,7 +475,7 @@ export function ServiceCasesViewContent({
 
               <div className="flex justify-start">
                 <Button
-                  disabled={isSaving}
+                  disabled={isSharedDemo || isSaving}
                   onClick={handleCreateCase}
                   type="button"
                   variant="default"
@@ -678,6 +683,7 @@ export function ServiceCasesViewContent({
                             </Select>
                           </div>
                           <Button
+                            disabled={isSharedDemo}
                             onClick={async () => {
                               setDetailErrors([]);
                               const amount = parseDisplayAmountInput(
@@ -749,6 +755,7 @@ export function ServiceCasesViewContent({
                             </Select>
                           </div>
                           <Button
+                            disabled={isSharedDemo}
                             onClick={async () => {
                               setDetailErrors([]);
                               const result = await onUpdateStatus({
@@ -823,6 +830,7 @@ export function ServiceCasesViewContent({
                             </div>
                           </div>
                           <Button
+                            disabled={isSharedDemo}
                             onClick={async () => {
                               setDetailErrors([]);
                               const unitPrice = parseDisplayAmountInput(
@@ -892,6 +900,7 @@ export function ServiceCasesViewContent({
                             />
                           </div>
                           <Button
+                            disabled={isSharedDemo}
                             onClick={async () => {
                               setDetailErrors([]);
                               const result = await onRecordInventoryUsage({
@@ -938,6 +947,7 @@ export function ServiceCasesView() {
     isLoadingAccess,
   } = useProtectedAdminPageState();
   const [searchQuery, setSearchQuery] = useState("");
+  const isSharedDemo = Boolean(useSharedDemoContext());
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const deferredSearchQuery = useDeferredValue(searchQuery);
@@ -1034,6 +1044,7 @@ export function ServiceCasesView() {
       customerResults={customerResults ?? []}
       hasFullAdminAccess={hasFullAdminAccess}
       isLoadingPermissions={false}
+      isSharedDemo={isSharedDemo}
       isSaving={isSaving}
       onAddLineItem={(args) =>
         withSaveState(() =>

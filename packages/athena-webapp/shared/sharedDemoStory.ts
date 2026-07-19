@@ -22,7 +22,7 @@ export const SHARED_DEMO_STAFF_STORY = {
     fullName: "Kwabena Osei",
     jobTitle: "Studio Manager",
     lastName: "Osei",
-    username: "kwabena",
+    username: "kay",
   },
   owner: {
     firstName: "Studio",
@@ -52,6 +52,7 @@ export type SharedDemoSubcategoryKey =
   (typeof SHARED_DEMO_SUBCATEGORIES)[number]["key"];
 
 export type SharedDemoProductStory = {
+  imageFilename: string;
   inventoryCount: number;
   name: string;
   price: number;
@@ -61,17 +62,35 @@ export type SharedDemoProductStory = {
   unitCost: number;
 };
 
+export const SHARED_DEMO_PRODUCT_IMAGE_VERSION = "v1";
+
 // Prices and unit costs are minor units (pesewas); GH₵25.00 === 2500.
 export const SHARED_DEMO_PRODUCTS: readonly SharedDemoProductStory[] = [
-  { inventoryCount: 18, name: "Raw Shea Butter 250g", price: 6000, sku: "DEMO-SHEA-250", slug: "demo-shea-butter", subcategoryKey: "bath-body", unitCost: 3900 },
-  { inventoryCount: 30, name: "Black Soap Bar", price: 3500, sku: "DEMO-SOAP-BAR", slug: "demo-black-soap", subcategoryKey: "bath-body", unitCost: 2100 },
-  { inventoryCount: 12, name: "Hand-Thrown Clay Mug", price: 9500, sku: "DEMO-CLAY-MUG", slug: "demo-clay-mug", subcategoryKey: "home-living", unitCost: 6200 },
-  { inventoryCount: 8, name: "Bolga Woven Basket", price: 22000, sku: "DEMO-BOLGA-BASKET", slug: "demo-bolga-basket", subcategoryKey: "home-living", unitCost: 14500 },
-  { inventoryCount: 16, name: "Hibiscus Soy Candle", price: 12000, sku: "DEMO-SOY-CANDLE", slug: "demo-soy-candle", subcategoryKey: "home-living", unitCost: 7800 },
-  { inventoryCount: 6, name: "Kente Scarf", price: 35000, sku: "DEMO-KENTE-SCARF", slug: "demo-kente-scarf", subcategoryKey: "textiles", unitCost: 23000 },
-  { inventoryCount: 10, name: "Batik Tote Bag", price: 18000, sku: "DEMO-BATIK-TOTE", slug: "demo-batik-tote", subcategoryKey: "textiles", unitCost: 11700 },
-  { inventoryCount: 24, name: "Beaded Bracelet", price: 5500, sku: "DEMO-BEAD-BRACELET", slug: "demo-beaded-bracelet", subcategoryKey: "textiles", unitCost: 3300 },
+  { imageFilename: "demo-shea-250.webp", inventoryCount: 18, name: "Raw Shea Butter 250g", price: 6000, sku: "FM5W-7K2-3Q9", slug: "demo-shea-butter", subcategoryKey: "bath-body", unitCost: 3900 },
+  { imageFilename: "demo-soap-bar.webp", inventoryCount: 30, name: "Black Soap Bar", price: 3500, sku: "FM5W-4HT-8N6", slug: "demo-black-soap", subcategoryKey: "bath-body", unitCost: 2100 },
+  { imageFilename: "demo-clay-mug.webp", inventoryCount: 12, name: "Hand-Thrown Clay Mug", price: 9500, sku: "FM5W-9C3-2RD", slug: "demo-clay-mug", subcategoryKey: "home-living", unitCost: 6200 },
+  { imageFilename: "demo-bolga-basket.webp", inventoryCount: 8, name: "Bolga Woven Basket", price: 22000, sku: "FM5W-6BX-5W1", slug: "demo-bolga-basket", subcategoryKey: "home-living", unitCost: 14500 },
+  { imageFilename: "demo-soy-candle.webp", inventoryCount: 16, name: "Hibiscus Soy Candle", price: 12000, sku: "FM5W-2MP-7F4", slug: "demo-soy-candle", subcategoryKey: "home-living", unitCost: 7800 },
+  { imageFilename: "demo-kente-scarf.webp", inventoryCount: 6, name: "Kente Scarf", price: 35000, sku: "FM5W-8QJ-4K7", slug: "demo-kente-scarf", subcategoryKey: "textiles", unitCost: 23000 },
+  { imageFilename: "demo-batik-tote.webp", inventoryCount: 10, name: "Batik Tote Bag", price: 18000, sku: "FM5W-5K4-9T2", slug: "demo-batik-tote", subcategoryKey: "textiles", unitCost: 11700 },
+  { imageFilename: "demo-bead-bracelet.webp", inventoryCount: 24, name: "Beaded Bracelet", price: 5500, sku: "FM5W-3VN-6H8", slug: "demo-beaded-bracelet", subcategoryKey: "textiles", unitCost: 3300 },
 ] as const;
+
+export function sharedDemoProductImageUrl({
+  product,
+  publicUrl,
+  storeId,
+}: {
+  product: Pick<SharedDemoProductStory, "imageFilename">;
+  publicUrl: string;
+  storeId: string;
+}) {
+  const normalizedPublicUrl = publicUrl.trim().replace(/\/+$/, "");
+  if (!normalizedPublicUrl) {
+    throw new Error("The shared demo product image base URL is missing.");
+  }
+  return `${normalizedPublicUrl}/stores/${storeId}/products/shared-demo/${SHARED_DEMO_PRODUCT_IMAGE_VERSION}/${product.imageFilename}`;
+}
 
 export function sharedDemoProductBySku(sku: string) {
   const product = SHARED_DEMO_PRODUCTS.find((entry) => entry.sku === sku);
@@ -79,11 +98,18 @@ export function sharedDemoProductBySku(sku: string) {
   return product;
 }
 
+export function sharedDemoProductBySlug(slug: string) {
+  const product = SHARED_DEMO_PRODUCTS.find((entry) => entry.slug === slug);
+  if (!product) throw new Error(`Unknown shared demo product slug: ${slug}`);
+  return product;
+}
+
 // The seeded ready-for-pickup online order, paid by card.
 export const SHARED_DEMO_PICKUP_ORDER = {
+  customerEmail: "customer@osustudio.com",
   orderNumber: "DEMO-ORDER-001",
   quantity: 1,
-  sku: "DEMO-SOAP-BAR",
+  sku: sharedDemoProductBySlug("demo-black-soap").sku,
 } as const;
 
 export function sharedDemoPickupOrderAmount() {

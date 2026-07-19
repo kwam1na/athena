@@ -1,6 +1,6 @@
 import type { Id } from "../_generated/dataModel";
 import { isSharedDemoEnabled, readSharedDemoConfig } from "./config";
-import { SHARED_DEMO_UNAVAILABLE } from "./policy";
+import { denySharedDemoAction } from "./policy";
 
 type Environment = Record<string, string | undefined>;
 
@@ -19,7 +19,7 @@ export function requireNonDemoFoundationMutation(
     args.organizationId === demo.organizationId ||
     args.storeId === demo.storeId
   ) {
-    throw new Error(SHARED_DEMO_UNAVAILABLE);
+    denySharedDemoAction();
   }
 }
 
@@ -30,6 +30,6 @@ export function requireNonDemoFoundationExternalRefs(
   if (!isSharedDemoEnabled(environment)) return;
   const demo = readSharedDemoConfig(environment);
   if (refs.some((ref) => ref.includes(`/stores/${demo.storeId}/`))) {
-    throw new Error(SHARED_DEMO_UNAVAILABLE);
+    denySharedDemoAction();
   }
 }

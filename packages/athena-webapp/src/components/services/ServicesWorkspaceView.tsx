@@ -54,6 +54,8 @@ import {
   serviceStatusLabels,
   validateServiceCatalogForm,
 } from "./serviceCatalogForm";
+import { useSharedDemoContext } from "~/src/hooks/useSharedDemoContext";
+import { ServiceWorkspaceDemoNotice } from "./ServiceWorkspaceDemoNotice";
 
 const serviceStatusClasses: Record<ServiceCatalogItem["status"], string> = {
   active: "border-success/30 bg-success/10 text-success",
@@ -116,6 +118,7 @@ function ServiceEditForm({
   currency,
   form,
   isSaving,
+  isSharedDemo,
   onCancel,
   onChange,
   onSave,
@@ -124,6 +127,7 @@ function ServiceEditForm({
   currency: string;
   form: ServiceCatalogFormState;
   isSaving: boolean;
+  isSharedDemo: boolean;
   onCancel: () => void;
   onChange: <K extends keyof ServiceCatalogFormState>(
     field: K,
@@ -310,14 +314,19 @@ function ServiceEditForm({
 
       <div className="flex flex-wrap gap-3">
         <Button
-          disabled={isSaving}
+          disabled={isSharedDemo || isSaving}
           onClick={onSave}
           type="button"
           variant="default"
         >
           Save changes
         </Button>
-        <Button onClick={onCancel} type="button" variant="outline">
+        <Button
+          disabled={isSharedDemo}
+          onClick={onCancel}
+          type="button"
+          variant="outline"
+        >
           Cancel
         </Button>
       </div>
@@ -328,6 +337,7 @@ function ServiceEditForm({
 type ServicesWorkspaceViewContentProps = {
   catalogManagementHref?: string;
   currency: string;
+  isSharedDemo?: boolean;
   isSaving?: boolean;
   items: ServiceCatalogItem[];
   onUpdate?: (
@@ -338,6 +348,7 @@ type ServicesWorkspaceViewContentProps = {
 export function ServicesWorkspaceViewContent({
   catalogManagementHref = "#catalog-management",
   currency,
+  isSharedDemo = false,
   isSaving = false,
   items,
   onUpdate,
@@ -496,6 +507,7 @@ export function ServicesWorkspaceViewContent({
             title="Services"
             description="Review service definitions, pricing, deposits, and approval rules before staff book or run the work."
           />
+          <ServiceWorkspaceDemoNotice isSharedDemo={isSharedDemo} />
 
           <div className="grid gap-layout-md sm:grid-cols-3">
             <DetailRow label="Total services" value={String(sortedItems.length)} />
@@ -528,12 +540,19 @@ export function ServicesWorkspaceViewContent({
                       pricing, deposit, and workflow details.
                     </p>
                   </div>
-                  <Button asChild size="sm" variant="utility">
-                    <Link to={catalogManagementHref as never}>
+                  {isSharedDemo ? (
+                    <Button disabled size="sm" variant="utility">
                       Manage catalog
                       <ArrowUpRight aria-hidden="true" />
-                    </Link>
-                  </Button>
+                    </Button>
+                  ) : (
+                    <Button asChild size="sm" variant="utility">
+                      <Link to={catalogManagementHref as never}>
+                        Manage catalog
+                        <ArrowUpRight aria-hidden="true" />
+                      </Link>
+                    </Button>
+                  )}
                 </div>
 
                 <Input
@@ -626,6 +645,7 @@ export function ServicesWorkspaceViewContent({
                     currency={currency}
                     form={form}
                     isSaving={isSaving}
+                    isSharedDemo={isSharedDemo}
                     onCancel={handleCancelEdit}
                     onChange={handleChange}
                     onSave={handleSaveEdit}
@@ -684,6 +704,7 @@ export function ServicesWorkspaceViewContent({
                     {onUpdate ? (
                       <Button
                         className="w-full justify-center"
+                        disabled={isSharedDemo}
                         onClick={handleEdit}
                         type="button"
                         variant="default"
@@ -712,6 +733,7 @@ export function ServicesWorkspaceView() {
     isLoadingAccess,
   } = useProtectedAdminPageState();
   const [isSaving, setIsSaving] = useState(false);
+  const isSharedDemo = Boolean(useSharedDemoContext());
   const { orgUrlSlug, storeUrlSlug } = useParams({ strict: false }) as {
     orgUrlSlug?: string;
     storeUrlSlug?: string;
@@ -769,6 +791,7 @@ export function ServicesWorkspaceView() {
     <ServicesWorkspaceViewContent
       catalogManagementHref={catalogManagementHref}
       currency={activeStore.currency}
+      isSharedDemo={isSharedDemo}
       isSaving={isSaving}
       items={items ?? []}
       onUpdate={(args) =>

@@ -1,3 +1,9 @@
+import { ConvexError } from "convex/values";
+
+import {
+  SHARED_DEMO_ACTION_DENIED_CODE,
+  SHARED_DEMO_ACTION_DENIED_MESSAGE,
+} from "../../shared/sharedDemoActionError";
 import {
   ATHENA_CAPABILITY_CATALOG,
   classifyAthenaPublicWrite,
@@ -7,7 +13,14 @@ import {
 } from "./capabilityCatalog";
 
 export const SHARED_DEMO_UNAVAILABLE =
-  "This action is unavailable in the demo.";
+  SHARED_DEMO_ACTION_DENIED_MESSAGE;
+
+export function denySharedDemoAction(): never {
+  throw new ConvexError({
+    code: SHARED_DEMO_ACTION_DENIED_CODE,
+    message: SHARED_DEMO_ACTION_DENIED_MESSAGE,
+  });
+}
 
 export const SHARED_DEMO_CAPABILITY_CLASSIFICATIONS =
   ATHENA_CAPABILITY_CATALOG.map(({ id: capability }) => ({
@@ -47,7 +60,22 @@ export function requireSharedDemoOrderFulfillmentUpdate(
     typeof update.status !== "string" ||
     !SHARED_DEMO_FULFILLMENT_STATUSES.has(update.status)
   ) {
-    throw new Error(SHARED_DEMO_UNAVAILABLE);
+    denySharedDemoAction();
+  }
+}
+
+export function requireSharedDemoRegisterSessionSyncReview(args: {
+  decision: "approved" | "rejected";
+  reviewKinds: readonly string[];
+}) {
+  if (
+    args.decision !== "rejected" ||
+    args.reviewKinds.length === 0 ||
+    args.reviewKinds.some(
+      (reviewKind) => reviewKind !== "duplicate_register_open",
+    )
+  ) {
+    denySharedDemoAction();
   }
 }
 
@@ -58,6 +86,7 @@ export const SHARED_DEMO_PUBLIC_FUNCTION_INVENTORY = [
   { functionName: "pos/public/transactions:completeTransaction", capability: "pos.sale.complete" },
   { functionName: "stockOps/adjustments:submitStockAdjustmentBatch", capability: "inventory.adjust" },
   { functionName: "cashControls/deposits:recordRegisterSessionDeposit", capability: "cash.control.write" },
+  { functionName: "cashControls/deposits:resolveRegisterSessionSyncReview", capability: "cash.control.write" },
   { functionName: "cashControls/closeouts:correctRegisterSessionOpeningFloat", capability: "cash.control.write" },
   { functionName: "cashControls/closeouts:submitRegisterSessionCloseout", capability: "cash.control.write" },
   { functionName: "cashControls/closeouts:reviewRegisterSessionCloseout", capability: "cash.control.write" },
@@ -117,7 +146,7 @@ export const SHARED_DEMO_GATEWAY_ENFORCEMENT_BINDINGS = [
 
 export function requireSharedDemoCapability(capability: SharedDemoCapability) {
   if (!isSharedDemoCapabilityAllowed(capability)) {
-    throw new Error(SHARED_DEMO_UNAVAILABLE);
+    denySharedDemoAction();
   }
   return capability;
 }
