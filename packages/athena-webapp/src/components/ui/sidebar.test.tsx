@@ -83,9 +83,19 @@ describe("SidebarProvider", () => {
     expect(screen.getByTestId("sidebar-open-state")).toHaveTextContent("false");
   });
 
-  it("lets explicit defaults override persisted sidebar state", () => {
+  it("preserves persisted sidebar state over the default", () => {
     document.cookie = "sidebar_state=true; path=/";
 
+    render(
+      <SidebarProvider defaultOpen={false}>
+        <SidebarToggleProbe />
+      </SidebarProvider>,
+    );
+
+    expect(screen.getByTestId("sidebar-open-state")).toHaveTextContent("true");
+  });
+
+  it("uses the default when no persisted sidebar state exists", () => {
     render(
       <SidebarProvider defaultOpen={false}>
         <SidebarToggleProbe />

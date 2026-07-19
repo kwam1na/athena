@@ -62,6 +62,12 @@ import { Calendar } from "../ui/calendar";
 import { Checkbox } from "../ui/checkbox";
 import { LoadingButton } from "../ui/loading-button";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "../ui/accordion";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import {
   Sheet,
@@ -2117,6 +2123,12 @@ function normalizePage(value: unknown) {
   return Number.isInteger(page) && page > 0 ? page : 1;
 }
 
+function normalizeReadyPanelValues(value: unknown) {
+  if (typeof value !== "string") return [];
+
+  return value.split(",").filter(Boolean);
+}
+
 function getBucketConfigs(snapshot: DailyCloseSnapshot): BucketConfig[] {
   const readyEmptyText = isZeroActivityDailyClose(snapshot)
     ? "No activity was recorded for this operating day."
@@ -2533,6 +2545,202 @@ function DailyCloseItemCard({
   );
 }
 
+type ReadyItemGroup = {
+  id: string;
+  items: DailyCloseItem[];
+  summary: string;
+  title: string;
+};
+
+function getReadyItemGroupId(item: DailyCloseItem) {
+  const type = normalizeMetadataLabel(
+    item.category ?? item.subject?.type ?? "",
+  );
+
+  if (type === "registersession") return "register-sessions";
+  if (type === "sale") return "completed-sales";
+  if (type === "expense") return "completed-expenses";
+  return `other-${type || normalizeMetadataLabel(item.title) || "ready-item"}`;
+}
+
+function getReadyItemGroups(items: DailyCloseItem[]): ReadyItemGroup[] {
+  const groupedItems = new Map<ReadyItemGroup["id"], DailyCloseItem[]>();
+
+  for (const item of items) {
+    const id = getReadyItemGroupId(item);
+    groupedItems.set(id, [...(groupedItems.get(id) ?? []), item]);
+  }
+
+  return [...groupedItems.entries()].map(([id, groupItems]) => {
+    if (id === "register-sessions") {
+      return {
+        id,
+        items: groupItems,
+        summary: `${formatEntityCount(groupItems.length, "closed register session")}.`,
+        title: "Register sessions",
+      };
+    }
+
+    if (id === "completed-sales") {
+      const itemCount = groupItems.reduce(
+        (total, item) =>
+          total +
+          (getNumericMetadataValue(
+            getMetadataStringOrNumber(item.metadata, "itemCount"),
+          ) ?? 0),
+        0,
+      );
+      return {
+        id,
+        items: groupItems,
+        summary: `${formatEntityCount(groupItems.length, "transaction")} · ${formatEntityCount(itemCount, "item")} sold.`,
+        title: "Completed sales",
+      };
+    }
+
+    if (id === "completed-expenses") {
+      return {
+        id,
+        items: groupItems,
+        summary: `${formatEntityCount(groupItems.length, "completed expense")}.`,
+        title: "Completed expenses",
+      };
+    }
+
+    const title = getItemContextLabel(groupItems[0]);
+    return {
+      id,
+      items: groupItems,
+      summary: `${formatEntityCount(groupItems.length, title.toLowerCase())}.`,
+      title,
+    };
+  });
+}
+
+function ReadyItemGroups({
+  canViewFinancialDetails,
+  currency,
+  items,
+  openGroupIds,
+  onOpenTransactionReport,
+  onOpenGroupIdsChange,
+  onPageChange,
+  orgUrlSlug,
+  page,
+  storeUrlSlug,
+}: {
+  canViewFinancialDetails: boolean;
+  currency: string;
+  items: DailyCloseItem[];
+  openGroupIds: string[];
+  onOpenTransactionReport: () => void;
+  onOpenGroupIdsChange: (ids: string[]) => void;
+  onPageChange: (page: number) => void;
+  orgUrlSlug: string;
+  page: number;
+  storeUrlSlug: string;
+}) {
+  const groups = getReadyItemGroups(items);
+  const [activeOpenGroupIds, setActiveOpenGroupIds] = useState(openGroupIds);
+
+  useEffect(() => {
+    setActiveOpenGroupIds(openGroupIds);
+  }, [openGroupIds]);
+
+  return (
+    <Accordion
+      className="divide-y divide-border/70"
+      onValueChange={(nextOpenGroupIds) => {
+        setActiveOpenGroupIds(nextOpenGroupIds);
+        onOpenGroupIdsChange(nextOpenGroupIds);
+      }}
+      type="multiple"
+      value={activeOpenGroupIds}
+    >
+      {groups.map((group) => {
+        const pageCount = Math.max(
+          Math.ceil(group.items.length / DAILY_CLOSE_ITEMS_PER_PAGE),
+          1,
+        );
+        const clampedPage = Math.min(page, pageCount);
+        const paginatedItems = group.items.slice(
+          (clampedPage - 1) * DAILY_CLOSE_ITEMS_PER_PAGE,
+          clampedPage * DAILY_CLOSE_ITEMS_PER_PAGE,
+        );
+
+        return (
+          <AccordionItem
+            className="border-0 [&>div>h3]:w-[30%] [&>div>h3]:shrink-0"
+            key={group.id}
+            value={group.id}
+          >
+            <div className="flex items-center gap-layout-2xl px-layout-md py-layout-sm">
+              <AccordionTrigger className="min-w-0 flex-1 py-1 text-left hover:no-underline text-muted-foreground">
+                <span className="min-w-0">
+                  <span className="block font-medium text-foreground">
+                    {group.title}
+                  </span>
+                  <span className="mt-0.5 block text-sm font-normal leading-6 text-muted-foreground">
+                    {group.summary}
+                  </span>
+                </span>
+              </AccordionTrigger>
+              <div className="hidden w-48 shrink-0 justify-end sm:flex">
+                {group.id === "completed-sales" ? (
+                  <Button
+                    onClick={onOpenTransactionReport}
+                    size="sm"
+                    type="button"
+                    variant="utility"
+                  >
+                    <FileText aria-hidden="true" />
+                    View transaction report
+                  </Button>
+                ) : null}
+              </div>
+              {group.id === "completed-sales" ? (
+                <Button
+                  className="sm:hidden"
+                  onClick={onOpenTransactionReport}
+                  size="sm"
+                  type="button"
+                  variant="utility"
+                >
+                  <FileText aria-hidden="true" />
+                  View report
+                </Button>
+              ) : null}
+            </div>
+            <AccordionContent className="border-t border-border/60 px-layout-sm pt-layout-sm">
+              <div className="space-y-layout-sm">
+                {paginatedItems.map((item) => (
+                  <DailyCloseItemCard
+                    canViewFinancialDetails={canViewFinancialDetails}
+                    currency={currency}
+                    item={item}
+                    key={getItemId(item)}
+                    orgUrlSlug={orgUrlSlug}
+                    storeUrlSlug={storeUrlSlug}
+                  />
+                ))}
+              </div>
+              {group.items.length > DAILY_CLOSE_ITEMS_PER_PAGE ? (
+                <ListPagination
+                  onPageChange={onPageChange}
+                  page={clampedPage}
+                  pageCount={pageCount}
+                  pageSize={DAILY_CLOSE_ITEMS_PER_PAGE}
+                  totalItems={group.items.length}
+                />
+              ) : null}
+            </AccordionContent>
+          </AccordionItem>
+        );
+      })}
+    </Accordion>
+  );
+}
+
 function CarryForwardResolutionActions({
   isDisabled,
   resolvingOutcome,
@@ -2585,10 +2793,13 @@ function BucketSection({
   selectedIds,
   showCountBadge = true,
   page,
+  readyGroupIds,
   status,
   storeUrlSlug,
   title,
   onPageChange,
+  onOpenTransactionReport,
+  onReadyGroupIdsChange,
   onResolveCarryForward,
   onSelectedIdsChange,
   resolvingCarryForwardOutcome,
@@ -2601,6 +2812,8 @@ function BucketSection({
   emptyText: string;
   items: DailyCloseItem[];
   onPageChange: (page: number) => void;
+  onOpenTransactionReport?: () => void;
+  onReadyGroupIdsChange?: (ids: string[]) => void;
   onResolveCarryForward?: (
     item: DailyCloseItem,
     outcome: CarryForwardResolutionOutcome,
@@ -2608,6 +2821,7 @@ function BucketSection({
   onSelectedIdsChange?: (ids: string[]) => void;
   orgUrlSlug: string;
   page: number;
+  readyGroupIds?: string[];
   selectedIds?: string[];
   showCountBadge?: boolean;
   status: "blocked" | "carry-forward" | "ready" | "review";
@@ -2667,11 +2881,29 @@ function BucketSection({
         ) : null}
       </OperationReviewBucketHeader>
 
-      <OperationReviewBucketBody hasItems={items.length > 0}>
+      <OperationReviewBucketBody
+        className={status === "ready" ? "pt-layout-md" : undefined}
+        hasItems={items.length > 0}
+      >
         {items.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-border bg-surface-raised p-layout-md text-sm text-muted-foreground shadow-sm">
+          <p className="px-layout-md text-sm leading-6 text-muted-foreground">
             {emptyText}
           </p>
+        ) : status === "ready" &&
+          onOpenTransactionReport &&
+          onReadyGroupIdsChange ? (
+          <ReadyItemGroups
+            canViewFinancialDetails={canViewFinancialDetails}
+            currency={currency}
+            items={items}
+            openGroupIds={readyGroupIds ?? []}
+            onOpenTransactionReport={onOpenTransactionReport}
+            onOpenGroupIdsChange={onReadyGroupIdsChange}
+            onPageChange={onPageChange}
+            orgUrlSlug={orgUrlSlug}
+            page={page}
+            storeUrlSlug={storeUrlSlug}
+          />
         ) : (
           paginatedItems.map((item) => {
             const selectionId = getCarryForwardSelectionId(item);
@@ -2727,7 +2959,7 @@ function BucketSection({
           })
         )}
       </OperationReviewBucketBody>
-      {items.length > DAILY_CLOSE_ITEMS_PER_PAGE ? (
+      {status !== "ready" && items.length > DAILY_CLOSE_ITEMS_PER_PAGE ? (
         <ListPagination
           onPageChange={handlePageChange}
           page={clampedPage}
@@ -2747,9 +2979,12 @@ function BucketTabs({
   value,
   orgUrlSlug,
   page,
+  readyGroupIds,
   selectedIds,
   storeUrlSlug,
   onPageChange,
+  onOpenTransactionReport,
+  onReadyGroupIdsChange,
   onResolveCarryForward,
   onValueChange,
   onSelectedIdsChange,
@@ -2761,6 +2996,8 @@ function BucketTabs({
   currency: string;
   value: BucketStatus;
   onPageChange: (page: number) => void;
+  onOpenTransactionReport: () => void;
+  onReadyGroupIdsChange: (ids: string[]) => void;
   onResolveCarryForward?: (
     item: DailyCloseItem,
     outcome: CarryForwardResolutionOutcome,
@@ -2769,6 +3006,7 @@ function BucketTabs({
   onSelectedIdsChange: (ids: string[]) => void;
   orgUrlSlug: string;
   page: number;
+  readyGroupIds: string[];
   selectedIds: string[];
   resolvingCarryForwardOutcome?: CarryForwardResolutionOutcome | null;
   resolvingCarryForwardKey?: string | null;
@@ -2815,6 +3053,12 @@ function BucketTabs({
             emptyText={bucket.emptyText}
             items={bucket.items}
             onPageChange={onPageChange}
+            onOpenTransactionReport={
+              bucket.value === "ready" ? onOpenTransactionReport : undefined
+            }
+            onReadyGroupIdsChange={
+              bucket.value === "ready" ? onReadyGroupIdsChange : undefined
+            }
             onResolveCarryForward={
               bucket.value === "carry-forward"
                 ? onResolveCarryForward
@@ -2825,6 +3069,7 @@ function BucketTabs({
             }
             orgUrlSlug={orgUrlSlug}
             page={page}
+            readyGroupIds={bucket.value === "ready" ? readyGroupIds : undefined}
             selectedIds={
               bucket.value === "carry-forward" ? selectedIds : undefined
             }
@@ -3668,6 +3913,7 @@ export function DailyCloseViewContent({
   const search = useSearch({ strict: false }) as {
     o?: unknown;
     page?: unknown;
+    readyPanels?: unknown;
     report?: unknown;
     tab?: unknown;
   };
@@ -3762,6 +4008,7 @@ export function DailyCloseViewContent({
   const selectedBucketValue =
     normalizeBucketTab(search.tab) ?? defaultBucketValue;
   const selectedBucketPage = normalizePage(search.page);
+  const readyGroupIds = normalizeReadyPanelValues(search.readyPanels);
   const isTransactionReportOpen =
     search.report === TRANSACTION_REPORT_SEARCH_VALUE;
 
@@ -3966,6 +4213,22 @@ export function DailyCloseViewContent({
     });
   };
 
+  const handleReadyGroupIdsChange = (ids: string[]) => {
+    void navigate({
+      search: ((current: Record<string, unknown>) => {
+        const nextSearch = { ...current };
+
+        if (ids.length > 0) {
+          nextSearch.readyPanels = ids.join(",");
+        } else {
+          delete nextSearch.readyPanels;
+        }
+
+        return nextSearch;
+      }) as never,
+    });
+  };
+
   const handleTransactionReportOpenChange = (isOpen: boolean) => {
     void navigate({
       search: ((current: Record<string, unknown>) => {
@@ -4029,11 +4292,16 @@ export function DailyCloseViewContent({
               canViewFinancialDetails={hasFinancialDetailsAccess}
               currency={currency}
               onPageChange={handleBucketPageChange}
+              onOpenTransactionReport={() =>
+                handleTransactionReportOpenChange(true)
+              }
+              onReadyGroupIdsChange={handleReadyGroupIdsChange}
               onResolveCarryForward={handleResolveCarryForward}
               onSelectedIdsChange={setSelectedCarryForwardIds}
               onValueChange={handleBucketValueChange}
               orgUrlSlug={orgUrlSlug}
               page={selectedBucketPage}
+              readyGroupIds={readyGroupIds}
               selectedIds={selectedIds}
               resolvingCarryForwardOutcome={resolvingCarryForwardOutcome}
               resolvingCarryForwardKey={resolvingCarryForwardKey}

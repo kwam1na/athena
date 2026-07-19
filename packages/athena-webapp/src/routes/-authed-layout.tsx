@@ -845,6 +845,7 @@ export default function Layout() {
         <AppShellFullscreenContext.Provider value={{ setFullscreenOverride }}>
           <SidebarProvider
             className="fixed inset-0 h-svh !min-h-0 flex-col overflow-hidden bg-app-canvas"
+            defaultOpen={false}
           >
             <MobileSidebarRouteDismiss routeKey={routeKey} />
             {isFullscreenActive ? null : (
