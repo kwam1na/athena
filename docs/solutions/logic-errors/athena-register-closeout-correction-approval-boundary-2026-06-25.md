@@ -1,6 +1,7 @@
 ---
 title: Athena Register Closeout Correction Approval Boundary
 date: 2026-06-25
+last_updated: 2026-07-19
 category: logic-errors
 module: athena-webapp
 problem_type: authorization_and_lifecycle_state_error
@@ -52,6 +53,9 @@ Keep each closeout boundary explicit:
   manager-controlled reopen path before a corrected count can be submitted.
 - Reopened closeout correction can use the manager reopen proof as correction
   authority. Do not require that proof to also be the cashier actor.
+- A newer active drawer on the same terminal/register must not block reopening
+  the historical closed session for an authorized correction. The reopened
+  session returns to `closing`; it does not become the active sales drawer.
 - Duplicate variance submissions while an async approval is pending should be
   idempotent. If the submitted count and notes match the pending request
   metadata, return the existing approval requirement. If they differ, reject the
@@ -73,6 +77,8 @@ Keep each closeout boundary explicit:
   entering the corrected one.
 - Keep rejected-state display and submit availability keyed to
   `registerSession.status`, not only to timeline text or cached approval data.
+- Add a lifecycle regression where a later active drawer exists while the
+  historical closed session is reopened for correction.
 
 ## Related
 

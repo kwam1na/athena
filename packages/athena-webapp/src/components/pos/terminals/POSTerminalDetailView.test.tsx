@@ -324,23 +324,10 @@ describe("POSTerminalDetailViewContent", () => {
     ).not.toBeInTheDocument();
 
     expect(
-      screen
-        .getByRole("button", {
-          name: "Athena webapp Latest version. Version details.",
-        })
-        .getAttribute("title"),
-    ).toContain(
-      "Terminal version: gentle-lion-climbs (20260608193135) / b463caa2d36d.",
-    );
-    expect(
-      screen
-        .getByRole("button", {
-          name: "Athena webapp Latest version. Version details.",
-        })
-        .getAttribute("title"),
-    ).toContain(
-      "Latest version: gentle-lion-climbs (20260608193135) / b463caa2d36d.",
-    );
+      screen.getByRole("button", {
+        name: "Athena webapp Latest version. Version details.",
+      }),
+    ).not.toHaveAttribute("title");
     expect(screen.getByText("Readiness evidence")).toBeInTheDocument();
     expect(screen.getByText("Runtime report")).toBeInTheDocument();
     expect(screen.getByText("Latest terminal report")).toBeInTheDocument();

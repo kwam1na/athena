@@ -252,6 +252,16 @@ describe("CashControlsDashboardContent", () => {
       within(browserDrawers).getByText("Register 100001"),
     ).toBeInTheDocument();
     expect(within(browserDrawers).getByText("This browser")).toBeInTheDocument();
+    const activeStatus = within(browserDrawers).getByTestId(
+      "drawer-session-status-active",
+    );
+    expect(activeStatus).toHaveClass("inline-flex", "text-success");
+    expect(activeStatus).not.toHaveClass("rounded-md", "border", "bg-success/10");
+    expect(activeStatus.querySelector('[aria-hidden="true"]')).toHaveClass(
+      "size-1.5",
+      "rounded-full",
+      "bg-success",
+    );
     expect(
       within(browserDrawers).queryByText("Drawers linked to this terminal"),
     ).not.toBeInTheDocument();
@@ -462,8 +472,10 @@ describe("CashControlsDashboardContent", () => {
     expect(
       screen.getByText("Live and review drawers minus deposits"),
     ).toBeInTheDocument();
-    expect(screen.getByText("Variance to review")).toBeInTheDocument();
-    expect(screen.getAllByText("$5").length).toBeGreaterThan(0);
+    const varianceSummary = screen.getByText("Variance to review").parentElement;
+    expect(varianceSummary).toBeInTheDocument();
+    expect(varianceSummary?.querySelector("dd")).toHaveClass("text-danger");
+    expect(screen.getAllByText("-$5").length).toBeGreaterThan(0);
     expect(screen.queryByText("Recent deposits")).not.toBeInTheDocument();
     expect(screen.queryByText("No deposits recorded yet")).not.toBeInTheDocument();
     expect(screen.queryByText("Review closeouts")).not.toBeInTheDocument();
@@ -490,6 +502,26 @@ describe("CashControlsDashboardContent", () => {
     expect(screen.getByText("N-OPEN")).toBeInTheDocument();
     expect(screen.getByText("Back counter / LOSING")).toBeInTheDocument();
     expect(screen.getAllByText("Needs review").length).toBeGreaterThan(0);
+    const attentionStatus = screen.getAllByTestId("drawer-session-attention")[0];
+    expect(attentionStatus).toHaveClass("inline-flex", "text-danger");
+    expect(attentionStatus).not.toHaveClass(
+      "rounded-md",
+      "border",
+      "bg-danger/10",
+    );
+    expect(attentionStatus.querySelector('[aria-hidden="true"]')).toHaveClass(
+      "size-1.5",
+      "rounded-full",
+      "bg-danger",
+    );
+    const closingStatus = screen.getByTestId("drawer-session-status-closing");
+    expect(closingStatus).toHaveClass("inline-flex", "text-warning");
+    expect(closingStatus).not.toHaveClass("rounded-md", "border", "bg-warning/15");
+    expect(closingStatus.querySelector('[aria-hidden="true"]')).toHaveClass(
+      "size-1.5",
+      "rounded-full",
+      "bg-warning",
+    );
     expect(screen.getByText("Counted")).toBeInTheDocument();
     expect(screen.getAllByText("$171").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Deposited").length).toBeGreaterThan(0);
@@ -538,6 +570,38 @@ describe("CashControlsDashboardContent", () => {
     expect(screen.getByText(/Opened .* by Maame S\./)).toBeInTheDocument();
     expect(screen.queryByText("Midday safe drop")).not.toBeInTheDocument();
     expect(screen.queryByText("BANK-339")).not.toBeInTheDocument();
+  });
+
+  it("uses a success tone for a positive cumulative variance", () => {
+    render(
+      <CashControlsDashboardContent
+        currency="USD"
+        dashboardSnapshot={{
+          openSessions: [],
+          pendingCloseouts: [],
+          recentDeposits: [],
+          registerSessions: [],
+          unresolvedVariances: [
+            {
+              _id: "session-over",
+              expectedCash: 10000,
+              openedAt: new Date("2026-04-21T08:30:00.000Z").getTime(),
+              openingFloat: 5000,
+              registerNumber: "Register 2",
+              status: "closing",
+              totalDeposited: 0,
+              variance: 1000,
+            },
+          ],
+        }}
+        isLoading={false}
+        orgUrlSlug="v26"
+        storeUrlSlug="east-legon"
+      />,
+    );
+
+    const varianceSummary = screen.getByText("Variance to review").parentElement;
+    expect(varianceSummary?.querySelector("dd")).toHaveClass("text-success");
   });
 
   it("redacts cash amounts for POS-only users without manager access", () => {
@@ -1112,6 +1176,18 @@ describe("CashControlsDashboardContent", () => {
       ),
     ).toBeInTheDocument();
     expect(screen.getAllByText("Needs review").length).toBeGreaterThan(0);
+    const pendingSyncStatus = screen.getByTestId(
+      "drawer-session-sync-status",
+    );
+    expect(pendingSyncStatus).toHaveClass("inline-flex", "text-warning");
+    expect(pendingSyncStatus).not.toHaveClass(
+      "rounded-md",
+      "border",
+      "bg-warning/15",
+    );
+    expect(
+      pendingSyncStatus.querySelector('[aria-hidden="true"]'),
+    ).toHaveClass("size-1.5", "rounded-full", "bg-warning");
     expect(
       screen.getByText(/Payment review: Mobile money payment record needs review./i),
     ).toBeInTheDocument();

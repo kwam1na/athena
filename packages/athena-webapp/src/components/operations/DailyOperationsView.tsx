@@ -1457,7 +1457,10 @@ function OpenRegisterSessionsPanel({
   return (
     <section
       aria-labelledby="open-register-sessions-heading"
-      className={cn(showTopRule && "border-t border-border/70 pt-layout-md")}
+      className={cn(
+        "px-layout-md",
+        showTopRule && "border-t border-border/70 pt-layout-md",
+      )}
     >
       <div className="flex items-baseline gap-layout-sm">
         <Coins

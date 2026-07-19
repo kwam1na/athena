@@ -1,6 +1,7 @@
 ---
 title: Athena POS Register Session Activity Ledger
 date: 2026-07-05
+last_updated: 2026-07-19
 category: architecture-patterns
 module: athena-webapp-pos
 problem_type: architecture_pattern
@@ -12,6 +13,7 @@ applies_when:
   - "A cloud outcome is disputed but local cashier actions must remain independently inspectable"
   - "Local POS events include sensitive payload fields that must not reach support-facing views"
 tags: [pos, register-session, activity-ledger, local-sync, convex]
+delivery_diff_fingerprint: 6df7470c234b5ad4cb5f025580955a87bb3262179374745dfc6b472bfcb40b82
 related_components:
   - "pos-local-store"
   - "convex-sync"
@@ -34,6 +36,7 @@ Create a dedicated register-session activity ledger beside core sync settlement:
 - Keep activity upload state separate from core `sync` state in IndexedDB.
 - Let `mapping_pending` rows exist when local activity reaches the server before the local-to-cloud register-session mapping exists.
 - Expose the ledger through a full-admin Cash Controls query that prefers the activity read model and only falls back to existing sync evidence when no activity rows/checkpoints exist.
+- Derive presentation-only details such as item label, SKU, quantity, unit price, opening float, and a deduplicated payment-method summary from the same allowlisted metadata. A quantity of zero in a cart-item event means removal, not addition.
 
 The activity report should use the terminal sync secret and normal POS auth, but the support read surface should use stricter full-admin access. This keeps terminal reporting possible without broadening the visibility of register-session replay data.
 
@@ -52,6 +55,7 @@ The ledger also prevents a common modeling mistake: deriving activity visibility
 - Keep local `activity.status` independent from core `sync.status`; reporting activity must not mark a sale, expense, or closeout core sync event as settled.
 - Bound session reads by indexes and pagination. Support-facing replay queries should not scan store-wide sync evidence by default.
 - Add tests at every boundary: sanitizer, local activity state, runtime reporting, server ingestion/idempotency, full-admin read authorization, and UI rendering.
+- Keep the table focused on activity context and state. Do not duplicate evidence-link chips when the session detail already owns evidence navigation.
 
 ## Examples
 
