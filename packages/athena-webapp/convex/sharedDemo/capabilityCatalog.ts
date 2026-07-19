@@ -150,6 +150,7 @@ const PUBLIC_WRITE_MODULE_CAPABILITIES = {
   "pos/public/posRecoveryCodes": "pos.recovery.manage",
   "pos/public/register": "cash.control.write",
   "pos/public/sync": "pos.sync.write",
+  "pos/public/telemetry": "pos.sync.write",
   "pos/public/terminalAppSessions": "pos.terminal.manage",
   "pos/public/terminals": "pos.terminal.manage",
   "pos/public/transactions": "pos.transaction.correct",
