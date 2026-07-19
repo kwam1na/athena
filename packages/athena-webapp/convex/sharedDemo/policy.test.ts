@@ -27,6 +27,7 @@ describe("shared demo policy", () => {
       "cash.control.write",
       "catalog.quick_add",
       "daily_operations.write",
+      "expense.manage",
       "inventory.adjust",
       "orders.fulfill",
       "pos.sale.complete",
@@ -34,6 +35,7 @@ describe("shared demo policy", () => {
       "staff.authenticate",
       "staff.communication.write",
     ]);
+    expect(requireSharedDemoCapability("expense.manage")).toBe("expense.manage");
     expect(requireSharedDemoCapability("pos.sale.complete")).toBe("pos.sale.complete");
     expect(requireSharedDemoCapability("reports.read")).toBe("reports.read");
     expect(() => requireSharedDemoCapability("billing.update" as never)).toThrow(

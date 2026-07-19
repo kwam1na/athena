@@ -986,7 +986,7 @@ describe("useExpenseRegisterViewModel", () => {
     expect(source).not.toContain("usePOSBarcodeSearch");
   });
 
-  it("reuses the terminal demo bootstrap instead of subscribing again", () => {
+  it("reuses terminal demo staff and reads the restore epoch for expense sync", () => {
     const currentDir = dirname(fileURLToPath(import.meta.url));
     const source = readFileSync(
       join(currentDir, "useExpenseRegisterViewModel.ts"),
@@ -994,7 +994,11 @@ describe("useExpenseRegisterViewModel", () => {
     );
 
     expect(source).toContain("sharedDemoStaff");
-    expect(source).not.toContain("useSharedDemoContext");
+    // Demo expense uploads are rejected by ingestLocalEvents without the restore epoch,
+    // which is only available from the shared demo context (the terminal's
+    // sharedDemoStaff does not carry it). Register plumbs the same value.
+    expect(source).toContain("useSharedDemoContext");
+    expect(source).toContain("restore?.epoch");
   });
 
   it("optimistically adds expense product selections while the server mutation is pending", async () => {

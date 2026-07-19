@@ -96,6 +96,9 @@ export const SHARED_DEMO_PUBLIC_FUNCTION_INVENTORY = [
   { functionName: "operations/staffMessages:postStaffMessage", capability: "staff.communication.write" },
   { functionName: "operations/dailyOpening:startStoreDay", capability: "daily_operations.write" },
   { functionName: "pos/public/terminals:registerTerminal", capability: "daily_operations.write" },
+  // Expense recording reaches the server only through local-event sync; ingestLocalEvents
+  // enforces expense.manage for expense_recorded events.
+  { functionName: "pos/public/sync:ingestLocalEvents", capability: "expense.manage" },
   { functionName: "reporting/public:getReportsOverview", capability: "reports.read" },
   { functionName: "operations/staffCredentials:createStaffCredential", capability: "identity.manage" },
   { functionName: "operations/staffProfiles:createStaffProfile", capability: "staff.manage" },

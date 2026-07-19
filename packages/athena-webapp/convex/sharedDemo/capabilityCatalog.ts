@@ -62,6 +62,10 @@ export const SHARED_DEMO_ALLOWED_CAPABILITIES = [
   "cash.control.write",
   "catalog.quick_add",
   "daily_operations.write",
+  // Recording expenses is a first-class POS operation the demo exposes (the
+  // /pos/expense route). Without this grant, expense event sync is rejected while
+  // sales (pos.sale.complete) succeed.
+  "expense.manage",
   "inventory.adjust",
   "orders.fulfill",
   "pos.sale.complete",

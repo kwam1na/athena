@@ -29,6 +29,10 @@ function createLocalId(kind: string) {
 }
 
 export function useExpenseLocalRuntime(input: {
+  // The shared demo's restore epoch. `ingestLocalEvents` rejects demo uploads that omit
+  // it (retryable `precondition_failed`), so without it expense batches retry forever and
+  // never sync. Register plumbs the same value through — see useRegisterLocalRuntime.
+  expectedDemoEpoch?: number;
   staffProfileId?: Id<"staffProfile"> | null;
   storeId?: Id<"store"> | null;
   syncEnabled?: boolean;
@@ -70,6 +74,7 @@ export function useExpenseLocalRuntime(input: {
   const syncRuntime = usePosLocalSyncRuntimeStatus({
     drainOnAppend: syncEnabled,
     eventAppendToken,
+    expectedDemoEpoch: syncEnabled ? input.expectedDemoEpoch : undefined,
     mode: "status-only",
     // A background settle refreshes the local read model but is NOT a new append, so it
     // must not feed back into the sync trigger (`eventAppendToken`).
