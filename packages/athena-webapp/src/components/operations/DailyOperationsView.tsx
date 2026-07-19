@@ -34,6 +34,12 @@ import type { LucideIcon } from "lucide-react";
 import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { getOrigin } from "@/lib/navigationUtils";
+import {
+  getLocalDateFromOperatingDate,
+  getLocalOperatingDate,
+  getLocalOperatingDateRange,
+  getLocalOperatingDateRangeFromSearch,
+} from "@/lib/operations/operatingDate";
 import { formatStoredAmount } from "@/lib/pos/displayAmounts";
 import { cn } from "@/lib/utils";
 import { api } from "~/convex/_generated/api";
@@ -474,52 +480,6 @@ function getDailyOperationsApi(): DailyOperationsApi {
   );
 }
 
-function getLocalOperatingDate(date = new Date()) {
-  const localDate = new Date(
-    date.getTime() - date.getTimezoneOffset() * 60_000,
-  );
-
-  return localDate.toISOString().slice(0, 10);
-}
-
-function getLocalOperatingDateRange(date = new Date()) {
-  const localStart = new Date(
-    date.getFullYear(),
-    date.getMonth(),
-    date.getDate(),
-  );
-  const localEnd = new Date(
-    date.getFullYear(),
-    date.getMonth(),
-    date.getDate() + 1,
-  );
-
-  return {
-    endAt: localEnd.getTime(),
-    operatingDate: getLocalOperatingDate(date),
-    startAt: localStart.getTime(),
-  };
-}
-
-function getLocalDateFromOperatingDate(operatingDate: string) {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(operatingDate);
-
-  if (!match) return undefined;
-
-  const [, year, month, day] = match;
-  const parsed = new Date(Number(year), Number(month) - 1, Number(day));
-
-  if (
-    parsed.getFullYear() !== Number(year) ||
-    parsed.getMonth() !== Number(month) - 1 ||
-    parsed.getDate() !== Number(day)
-  ) {
-    return undefined;
-  }
-
-  return parsed;
-}
-
 function shiftLocalOperatingDate(operatingDate: string, offsetDays: number) {
   const parsed = getLocalDateFromOperatingDate(operatingDate);
 
@@ -543,18 +503,6 @@ function getSaturdayWeekEndOperatingDate(operatingDate: string) {
     getSundayWeekStartOperatingDate(operatingDate),
     6,
   );
-}
-
-function getLocalOperatingDateRangeFromSearch(operatingDate?: unknown) {
-  if (typeof operatingDate === "string") {
-    const localDate = getLocalDateFromOperatingDate(operatingDate);
-
-    if (localDate) {
-      return getLocalOperatingDateRange(localDate);
-    }
-  }
-
-  return getLocalOperatingDateRange();
 }
 
 function getOperatingTimezoneOffsetMinutes(operatingDate: string) {
