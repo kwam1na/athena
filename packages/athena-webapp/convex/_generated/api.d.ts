@@ -295,6 +295,7 @@ import type * as pos_public_customers from "../pos/public/customers.js";
 import type * as pos_public_posRecoveryCodes from "../pos/public/posRecoveryCodes.js";
 import type * as pos_public_register from "../pos/public/register.js";
 import type * as pos_public_sync from "../pos/public/sync.js";
+import type * as pos_public_telemetry from "../pos/public/telemetry.js";
 import type * as pos_public_terminalAppSessions from "../pos/public/terminalAppSessions.js";
 import type * as pos_public_terminals from "../pos/public/terminals.js";
 import type * as pos_public_transactions from "../pos/public/transactions.js";
@@ -440,6 +441,7 @@ import type * as schemas_pos_expenseTransaction from "../schemas/pos/expenseTran
 import type * as schemas_pos_expenseTransactionItem from "../schemas/pos/expenseTransactionItem.js";
 import type * as schemas_pos_index from "../schemas/pos/index.js";
 import type * as schemas_pos_posAmountMigrationRun from "../schemas/pos/posAmountMigrationRun.js";
+import type * as schemas_pos_posClientEvent from "../schemas/pos/posClientEvent.js";
 import type * as schemas_pos_posLifecycleJournal from "../schemas/pos/posLifecycleJournal.js";
 import type * as schemas_pos_posLocalStaffProof from "../schemas/pos/posLocalStaffProof.js";
 import type * as schemas_pos_posLocalSyncConflict from "../schemas/pos/posLocalSyncConflict.js";
@@ -875,6 +877,7 @@ declare const fullApi: ApiFromModules<{
   "pos/public/posRecoveryCodes": typeof pos_public_posRecoveryCodes;
   "pos/public/register": typeof pos_public_register;
   "pos/public/sync": typeof pos_public_sync;
+  "pos/public/telemetry": typeof pos_public_telemetry;
   "pos/public/terminalAppSessions": typeof pos_public_terminalAppSessions;
   "pos/public/terminals": typeof pos_public_terminals;
   "pos/public/transactions": typeof pos_public_transactions;
@@ -1020,6 +1023,7 @@ declare const fullApi: ApiFromModules<{
   "schemas/pos/expenseTransactionItem": typeof schemas_pos_expenseTransactionItem;
   "schemas/pos/index": typeof schemas_pos_index;
   "schemas/pos/posAmountMigrationRun": typeof schemas_pos_posAmountMigrationRun;
+  "schemas/pos/posClientEvent": typeof schemas_pos_posClientEvent;
   "schemas/pos/posLifecycleJournal": typeof schemas_pos_posLifecycleJournal;
   "schemas/pos/posLocalStaffProof": typeof schemas_pos_posLocalStaffProof;
   "schemas/pos/posLocalSyncConflict": typeof schemas_pos_posLocalSyncConflict;

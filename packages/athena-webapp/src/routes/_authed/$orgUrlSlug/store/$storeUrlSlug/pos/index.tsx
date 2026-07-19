@@ -1,11 +1,21 @@
 import { createFileRoute } from "@tanstack/react-router";
 import PointOfSaleView from "~/src/components/pos/PointOfSaleView";
+import { PosClientTelemetryHost } from "~/src/components/pos/PosClientTelemetryHost";
 import { NotFoundView } from "~/src/components/states/not-found/NotFoundView";
+
+function PointOfSaleRoute() {
+  return (
+    <>
+      <PosClientTelemetryHost />
+      <PointOfSaleView />
+    </>
+  );
+}
 
 export const Route = createFileRoute(
   "/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/"
 )({
-  component: PointOfSaleView,
+  component: PointOfSaleRoute,
 
   notFoundComponent: ({ data }) => {
     const { orgUrlSlug, storeUrlSlug } = Route.useParams();

@@ -26,3 +26,4 @@ export * from "./posRegisterSessionActivityCheckpoint";
 export * from "./posRegisterMappingAuthority";
 export * from "./posRegisterAuthorityReplicationStatus";
 export * from "./posLifecycleJournal";
+export * from "./posClientEvent";

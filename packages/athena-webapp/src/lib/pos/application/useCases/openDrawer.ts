@@ -9,6 +9,6 @@ export async function openDrawer(input: {
   try {
     return mapCommandResult(await input.gateway.openDrawer(input.command));
   } catch (error) {
-    return mapThrownError(error);
+    return mapThrownError(error, "openDrawer");
   }
 }
