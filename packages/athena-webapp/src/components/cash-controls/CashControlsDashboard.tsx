@@ -205,19 +205,78 @@ function getVarianceTone(variance?: number) {
   return variance > 0 ? "text-success" : "text-danger";
 }
 
-function getStatusBadgeClass(status: string) {
+type StatusMarkerTone = PosSyncStatusPresentation["tone"];
+
+function getStatusMarkerClass(tone: StatusMarkerTone) {
+  switch (tone) {
+    case "success":
+      return "text-success";
+    case "danger":
+      return "text-danger";
+    case "warning":
+      return "text-warning";
+    default:
+      return "text-muted-foreground";
+  }
+}
+
+function getStatusMarkerDotClass(tone: StatusMarkerTone) {
+  switch (tone) {
+    case "success":
+      return "bg-success";
+    case "danger":
+      return "bg-danger";
+    case "warning":
+      return "bg-warning";
+    default:
+      return "bg-muted-foreground";
+  }
+}
+
+function getSessionStatusMarkerTone(status: string): StatusMarkerTone {
   switch (status) {
     case "active":
-      return "border-transparent bg-success/10 text-success";
-    case "closing":
-      return "border-transparent bg-warning/15 text-warning";
     case "open":
-      return "border-transparent bg-success/10 text-success";
+      return "success";
+    case "closing":
+      return "warning";
     case "closed":
-      return "border-transparent bg-muted text-muted-foreground";
+      return "neutral";
     default:
-      return "border-transparent bg-muted text-muted-foreground";
+      return "neutral";
   }
+}
+
+function StatusMarker({
+  children,
+  pulse = false,
+  testId,
+  tone,
+}: {
+  children: ReactNode;
+  pulse?: boolean;
+  testId?: string;
+  tone: StatusMarkerTone;
+}) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 text-sm font-medium",
+        getStatusMarkerClass(tone),
+      )}
+      data-testid={testId}
+    >
+      <span
+        aria-hidden="true"
+        className={cn(
+          "size-1.5 shrink-0 rounded-full",
+          getStatusMarkerDotClass(tone),
+          pulse && "motion-safe:animate-pulse",
+        )}
+      />
+      {children}
+    </span>
+  );
 }
 
 function getSnapshotTotals(snapshot: CashControlsDashboardSnapshot) {
@@ -233,7 +292,7 @@ function getSnapshotTotals(snapshot: CashControlsDashboardSnapshot) {
     0,
   );
   const unresolvedVarianceTotal = snapshot.unresolvedVariances.reduce(
-    (total, session) => total + Math.abs(session.variance ?? 0),
+    (total, session) => total + (session.variance ?? 0),
     0,
   );
 
@@ -270,11 +329,8 @@ function CashPositionSummary({
   hasFinancialDetailsAccess: boolean;
   snapshot: CashControlsDashboardSnapshot;
 }) {
-  const {
-    expectedCashTotal,
-    onHandTotal,
-    unresolvedVarianceTotal,
-  } = getSnapshotTotals(snapshot);
+  const { expectedCashTotal, onHandTotal, unresolvedVarianceTotal } =
+    getSnapshotTotals(snapshot);
 
   const items = [
     {
@@ -312,10 +368,7 @@ function CashPositionSummary({
           label="Variance to review"
         />
       ),
-      valueClassName:
-        snapshot.unresolvedVariances.length > 0
-          ? "text-danger"
-          : "text-foreground",
+      valueClassName: getVarianceTone(unresolvedVarianceTotal),
     },
   ];
 
@@ -413,19 +466,6 @@ function getSessionStatusLabel(session: CashControlsDashboardSession) {
   return hasRegisterCloseoutSyncReview(session)
     ? "Closeout review pending"
     : formatStatusLabel(session.status);
-}
-
-function getSyncBadgeClass(tone: PosSyncStatusPresentation["tone"]) {
-  switch (tone) {
-    case "success":
-      return "border-transparent bg-success/10 text-success";
-    case "danger":
-      return "border-transparent bg-danger/10 text-danger";
-    case "warning":
-      return "border-transparent bg-warning/15 text-warning";
-    default:
-      return "border-border bg-background text-muted-foreground";
-  }
 }
 
 function formatStaffByline(staffName?: string | null) {
@@ -527,7 +567,7 @@ function DrawerSessionCard({
   const isCloseoutSyncReview =
     syncStatus.status === "needs_review" &&
     syncStatus.reconciliationItems.some(isRegisterCloseoutReviewItem);
-  const showSyncBadge =
+  const showSyncStatus =
     syncStatus.status !== "synced" && syncStatus.status !== "needs_review";
   const showSyncDescription =
     syncStatus.status !== "synced" && !isCloseoutSyncReview;
@@ -585,34 +625,33 @@ function DrawerSessionCard({
             {openedLine}
           </p>
         </div>
-        <div className="flex shrink-0 flex-wrap justify-start gap-1.5 sm:justify-end">
+        <div className="flex shrink-0 flex-wrap justify-start gap-x-layout-sm gap-y-layout-xs sm:justify-end">
           {needsVarianceReview(session) && !isCloseoutSyncReview ? (
-            <Badge
-              className="border-transparent bg-danger/10 text-danger"
-              size="sm"
-              variant="outline"
-            >
+            <StatusMarker testId="drawer-session-attention" tone="danger">
               Needs review
-            </Badge>
+            </StatusMarker>
           ) : null}
-          {showSyncBadge ? (
-            <Badge
-              className={getSyncBadgeClass(syncStatus.tone)}
-              size="sm"
-              variant="outline"
+          {showSyncStatus ? (
+            <StatusMarker
+              testId="drawer-session-sync-status"
+              tone={syncStatus.tone}
             >
               {syncStatus.status === "locally_closed_pending_sync"
                 ? "Pending reconciliation"
                 : syncStatus.label}
-            </Badge>
+            </StatusMarker>
           ) : null}
-          <Badge
-            className={getStatusBadgeClass(session.status)}
-            size="sm"
-            variant="outline"
+          <StatusMarker
+            testId={`drawer-session-status-${session.status}`}
+            pulse={session.status === "active" || session.status === "open"}
+            tone={
+              isCloseoutSyncReview
+                ? "danger"
+                : getSessionStatusMarkerTone(session.status)
+            }
           >
             {getSessionStatusLabel(session)}
-          </Badge>
+          </StatusMarker>
         </div>
       </div>
 

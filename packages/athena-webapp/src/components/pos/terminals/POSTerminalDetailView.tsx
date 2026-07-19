@@ -838,7 +838,6 @@ function RuntimeBuildVersionStatus({
                 "text-foreground",
             )}
             aria-label={`Athena webapp ${presentation.label}. Version details.`}
-            title={presentation.tooltipLabel}
           >
             <span className="truncate">{presentation.label}</span>
           </button>
@@ -884,7 +883,6 @@ function getRuntimeBuildVersionPresentation(
   latestVersion: string;
   status: "checking" | "latest" | "not_reported" | "stale" | "unknown";
   terminalVersion: string;
-  tooltipLabel: string;
 } {
   const terminalBuildMetadata = getTerminalBuildMetadata(runtimeStatus);
   const terminalVersion = formatRuntimeBuildVersion(terminalBuildMetadata);
@@ -895,8 +893,6 @@ function getRuntimeBuildVersionPresentation(
       latestVersion: "Not reported",
       status: "not_reported",
       terminalVersion,
-      tooltipLabel:
-        "Terminal version not reported. Latest version not reported.",
     };
   }
 
@@ -906,7 +902,6 @@ function getRuntimeBuildVersionPresentation(
       latestVersion: "Checking latest version",
       status: "checking",
       terminalVersion,
-      tooltipLabel: `Terminal version: ${terminalVersion}. Latest version: checking.`,
     };
   }
 
@@ -922,7 +917,6 @@ function getRuntimeBuildVersionPresentation(
       latestVersion,
       status: "latest",
       terminalVersion,
-      tooltipLabel: `Terminal version: ${terminalVersion}. Latest version: ${latestVersion}.`,
     };
   }
 
@@ -932,7 +926,6 @@ function getRuntimeBuildVersionPresentation(
       latestVersion,
       status: "stale",
       terminalVersion,
-      tooltipLabel: `Terminal version: ${terminalVersion}. Latest version: ${latestVersion}.`,
     };
   }
 
@@ -941,7 +934,6 @@ function getRuntimeBuildVersionPresentation(
     latestVersion,
     status: "unknown",
     terminalVersion,
-    tooltipLabel: `Terminal version: ${terminalVersion}. Latest version: ${latestVersion}.`,
   };
 }
 

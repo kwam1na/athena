@@ -2614,6 +2614,7 @@ describe("DailyOperationsViewContent", () => {
     expect(registerSessionsPanel).toHaveClass(
       "border-t",
       "pt-layout-md",
+      "px-layout-md",
     );
     expect(registerSessionsPanel).not.toHaveClass(
       "xl:border-l",

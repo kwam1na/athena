@@ -658,13 +658,22 @@ function normalizeCommandMessage(
   return result.error.message;
 }
 
-function getStatusLabelClassName(status: DailyOpeningStatus) {
+function getStatusSignatureClassName(status: DailyOpeningStatus) {
   return cn(
-    "inline-flex w-fit items-center rounded-md px-layout-sm py-1 text-base font-medium",
-    status === "blocked" && "bg-danger/10 text-danger",
-    status === "needs_attention" && "bg-warning/15 text-warning-foreground",
+    "inline-flex min-h-10 w-fit items-center gap-layout-sm",
+    status === "blocked" && "text-danger",
+    status === "needs_attention" && "text-warning-foreground",
     (status === "ready" || status === "started") &&
-      "bg-success/10 text-success",
+      "text-success",
+  );
+}
+
+function getStatusSignatureIconClassName(status: DailyOpeningStatus) {
+  return cn(
+    "inline-flex size-5 shrink-0 items-center justify-center",
+    status === "blocked" && "text-danger",
+    status === "needs_attention" && "text-warning-foreground",
+    (status === "ready" || status === "started") && "text-success",
   );
 }
 
@@ -697,13 +706,31 @@ function DailyOpeningStatusTitle({
   status: DailyOpeningStatus;
   title: string;
 }) {
+  const Icon =
+    status === "blocked"
+      ? Ban
+      : status === "needs_attention"
+        ? ClipboardCheck
+        : status === "started"
+          ? CheckCircle2
+          : Check;
+
   return (
-    <h2 className={getStatusLabelClassName(status)}>
-      {status === "started" ? (
-        <SuccessCheckIcon className="-ml-0.5 mr-1.5" />
-      ) : null}
-      {title}
-    </h2>
+    <div
+      className={getStatusSignatureClassName(status)}
+      data-status={status}
+      data-testid="daily-opening-status-signature"
+    >
+      <span
+        className={getStatusSignatureIconClassName(status)}
+        data-testid="daily-opening-status-icon"
+      >
+        <Icon aria-hidden="true" className="size-4" />
+      </span>
+      <h2 className="text-base font-semibold leading-tight tracking-[-0.01em] text-foreground">
+        {title}
+      </h2>
+    </div>
   );
 }
 

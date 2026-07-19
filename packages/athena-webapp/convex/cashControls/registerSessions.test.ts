@@ -18,6 +18,7 @@ import {
   calculateRegisterSessionCashDelta,
   recordRegisterSessionDeposit,
   recordRegisterSessionTransaction,
+  reopenClosedRegisterSessionCloseout,
 } from "../operations/registerSessions";
 import { recordRegisterSessionTraceBestEffort } from "../operations/registerSessionTracing";
 import type { StoreScheduleContext } from "../lib/storeScheduleTime";
@@ -389,6 +390,53 @@ describe("cash controls register sessions", () => {
         openingFloat: 1000,
       }),
     ).resolves.toMatchObject({ status: "open" });
+  });
+
+  it("reopens a closed session for correction while another drawer is active on the terminal", async () => {
+    const closedSession = {
+      _id: "register_session_closed" as Id<"registerSession">,
+      expectedCash: 5000,
+      lifecycleAuthorityRevision: 2,
+      registerNumber: "A1",
+      status: "closed" as const,
+      storeId: "store_1" as Id<"store">,
+      terminalId: "terminal_1" as Id<"posTerminal">,
+    };
+    const activeSession = {
+      _id: "register_session_active" as Id<"registerSession">,
+      expectedCash: 1000,
+      lifecycleAuthorityRevision: 1,
+      registerNumber: "A1",
+      status: "active" as const,
+      storeId: "store_1" as Id<"store">,
+      terminalId: "terminal_1" as Id<"posTerminal">,
+    };
+    const patch = vi.fn();
+    const ctx = {
+      db: {
+        get: vi.fn(async () => closedSession),
+        patch,
+        query: vi.fn(() => ({
+          withIndex: vi.fn(() => ({
+            order: vi.fn(() => ({
+              first: vi.fn(async () => activeSession),
+            })),
+          })),
+        })),
+      },
+    };
+
+    await expect(
+      getHandler(reopenClosedRegisterSessionCloseout)(ctx, {
+        registerSessionId: closedSession._id,
+      }),
+    ).resolves.toMatchObject({ status: "closed" });
+
+    expect(patch).toHaveBeenCalledWith(
+      "registerSession",
+      closedSession._id,
+      expect.objectContaining({ status: "closing" }),
+    );
   });
 
   it("computes closeout variance before final signoff", () => {
