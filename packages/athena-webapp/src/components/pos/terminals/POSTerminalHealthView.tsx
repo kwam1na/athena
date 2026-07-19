@@ -50,6 +50,7 @@ import type {
   TerminalHealthSummary,
   TerminalRuntimeStatus,
 } from "./terminalHealthTypes";
+import { PosClientErrorsMetricTile } from "./PosClientErrorsPanel";
 import { getOrigin } from "~/src/lib/navigationUtils";
 
 const posTerminalApi = api.inventory.posTerminal as unknown as {
@@ -67,6 +68,9 @@ type POSTerminalHealthViewContentProps = {
   isLoading: boolean;
   orgUrlSlug: string;
   queryUnavailable?: boolean;
+  // When provided, the client-errors metric tile renders and runs its own
+  // query. Omitted in tests that render the content without a Convex provider.
+  storeId?: Id<"store">;
   storeUrlSlug: string;
 };
 
@@ -403,6 +407,7 @@ export function POSTerminalHealthViewContent({
   isLoading,
   orgUrlSlug,
   queryUnavailable = false,
+  storeId,
   storeUrlSlug,
 }: POSTerminalHealthViewContentProps) {
   const currentBrowserTerminalIdSet = new Set(currentBrowserTerminalIds);
@@ -462,7 +467,12 @@ export function POSTerminalHealthViewContent({
             </div>
           ) : (
             <>
-              <section className="grid gap-layout-sm sm:grid-cols-2 xl:grid-cols-5">
+              <section
+                className={cn(
+                  "grid gap-layout-sm sm:grid-cols-2",
+                  storeId ? "xl:grid-cols-6" : "xl:grid-cols-5",
+                )}
+              >
                 <CountMetric
                   label="Terminals"
                   value={loadingMetricValue ?? healthRows.length}
@@ -483,6 +493,7 @@ export function POSTerminalHealthViewContent({
                   label="Stale or missing"
                   value={loadingMetricValue ?? staleCount}
                 />
+                {storeId ? <PosClientErrorsMetricTile storeId={storeId} /> : null}
               </section>
 
               {isLoading ? null : healthRows.length === 0 ? (
@@ -772,6 +783,7 @@ export function POSTerminalHealthView() {
       isLoading={healthSummaries === undefined}
       orgUrlSlug={params.orgUrlSlug}
       queryUnavailable={healthSummaries === null}
+      storeId={activeStore._id}
       storeUrlSlug={params.storeUrlSlug}
     />
   );

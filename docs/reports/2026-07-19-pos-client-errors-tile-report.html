@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="d665b38b25f0cb872dec0432ee2f5fa51ad5605c4a012659666fd8c3b965ec99" data-athena-report-base="origin/main" data-athena-report-head="codex/pos-client-errors-panel">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>POS Client-Errors Metric Tile: No-Swap Loading and Sheet Drill-In</title>
+    <style>
+      :root {
+        --ink: #1f2933;
+        --muted: #596674;
+        --line: #d9e2ec;
+        --paper: #ffffff;
+        --soft: #f6f8fb;
+        --accent: #1d4ed8;
+        --accent-soft: #dbeafe;
+        --good: #166534;
+        --bad: #b91c1c;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--soft); color: var(--ink); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.55; }
+      main { max-width: 1080px; margin: 0 auto; padding: 48px 24px 72px; }
+      header { border-bottom: 1px solid var(--line); margin-bottom: 28px; padding-bottom: 28px; }
+      h1, h2, h3 { line-height: 1.18; }
+      h1 { font-size: 36px; max-width: 880px; margin: 0 0 16px; }
+      h2 { font-size: 26px; margin: 0 0 16px; }
+      p { margin: 0 0 14px; }
+      .lede { color: var(--muted); font-size: 17px; max-width: 880px; }
+      .meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+      .pill { border: 1px solid var(--line); border-radius: 999px; background: var(--paper); color: var(--muted); font-size: 13px; padding: 6px 10px; }
+      .panel { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; margin: 18px 0; padding: 22px; }
+      code { background: #eef2f7; border: 1px solid #d8dee8; border-radius: 5px; padding: 1px 5px; }
+      table { width: 100%; border-collapse: collapse; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+      th, td { border-bottom: 1px solid var(--line); padding: 11px 12px; text-align: left; vertical-align: top; }
+      th { background: #eef2f7; color: var(--muted); font-size: 13px; text-transform: uppercase; }
+      tr:last-child td { border-bottom: 0; }
+      ul, ol { margin: 0 0 14px; padding-left: 22px; }
+      li { margin-bottom: 7px; }
+      .quiz-question { border-top: 1px solid var(--line); padding: 18px 0; }
+      .quiz-question:first-child { border-top: 0; }
+      fieldset { border: 0; margin: 0; padding: 0; }
+      legend { font-weight: 700; margin-bottom: 10px; }
+      label { display: block; border: 1px solid var(--line); border-radius: 8px; background: #fbfdff; margin: 8px 0; padding: 10px 12px; cursor: pointer; }
+      button { appearance: none; border: 0; border-radius: 8px; background: var(--accent); color: #ffffff; cursor: pointer; font-weight: 700; padding: 11px 16px; }
+      button.secondary { background: #e2e8f0; color: var(--ink); }
+      .quiz-actions { display: flex; align-items: center; gap: 12px; margin-top: 18px; }
+      .answer-detail { display: none; color: var(--muted); font-size: 14px; margin-top: 8px; }
+      .answer-detail.visible { display: block; }
+      .quiz-question.correct { background: #f0fdf4; border-radius: 8px; padding-left: 12px; padding-right: 12px; }
+      .quiz-question.incorrect { background: #fef2f2; border-radius: 8px; padding-left: 12px; padding-right: 12px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>POS Client-Errors Metric Tile: No-Swap Loading and Sheet Drill-In</h1>
+        <p class="lede">A follow-up to the POS observability delivery: the posClientEvent telemetry stream now has a product surface — a metric tile on Terminal Health that opens a two-level sheet, with a loading approach chosen specifically to avoid the flash a skeleton would still cause.</p>
+        <div class="meta"><span class="pill">Delivery candidate</span><span class="pill">Branch: codex/pos-client-errors-panel</span><span class="pill">Base: origin/main</span><span class="pill">Merge: pending</span></div>
+      </header>
+
+      <section class="panel"><h2>Executive Summary</h2>
+        <ul>
+          <li>A <strong>"Client errors" tile</strong> joins the existing metrics row on the POS Terminal Health page (Terminals / Healthy / Pending sync / Needs review / Stale), danger-toned when there are recent errors.</li>
+          <li>Clicking it opens a <strong>sheet</strong> with a filterable list (All / Errors / Warnings) that drills into a per-event detail view (message, error, stack trace, metadata, terminal fingerprint) with a back button.</li>
+          <li>The placement iterated twice in review: an initial panel at the bottom of the page was rejected as invisible once the terminal roster is realistically sized; the metrics-row tile fixed that.</li>
+          <li>The loading state iterated three times: a sized skeleton still produced a visible swap-flash; a label-fade approach was rejected for the same reason; the final approach has <strong>no loading placeholder at all</strong> — the count renders its true current value (0 while unresolved) and updates in place.</li>
+        </ul>
+      </section>
+
+      <section class="panel"><h2>Problem And Context</h2>
+        <p>The prior POS observability delivery added a durable client-error telemetry pipeline (<code>posClientEvent</code> table, offline-buffered ingest) but no product surface — the data was API-only. This delivery closes that gap on the existing POS Terminal Health page.</p>
+        <p>Two design questions dominated the work, both settled by iterating against actual rendering behavior rather than assumption: <em>where does a store-level signal belong on a page dominated by a per-terminal card list</em>, and <em>how do you show a Convex-query-backed metric without a loading-state flash</em>.</p>
+      </section>
+
+      <section class="panel"><h2>Key Files</h2>
+        <table>
+          <thead><tr><th>File</th><th>Why it matters</th></tr></thead>
+          <tbody>
+            <tr><td><code>src/components/pos/terminals/PosClientErrorsPanel.tsx</code></td><td>New. The metric tile, the two-level sheet (list + detail), and the level filter. No loading placeholder — count and list body render their true current state at every render.</td></tr>
+            <tr><td><code>src/components/pos/terminals/POSTerminalHealthView.tsx</code></td><td>Wires the tile into the existing metrics grid (<code>xl:grid-cols-6</code> when a store id is available, <code>xl:grid-cols-5</code> otherwise) and threads <code>storeId</code> through only when the active store resolves.</td></tr>
+            <tr><td><code>src/components/pos/terminals/PosClientErrorsPanel.test.tsx</code></td><td>New. Covers the tile count, sheet open/list/detail/back navigation, the level filter, the empty state, and — specifically — the loading→loaded transition with no placeholder and no empty-state flash.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="panel"><h2>What Intentionally Did Not Change</h2>
+        <ul>
+          <li><strong>No new Convex functions or schema.</strong> The panel consumes the existing <code>pos/public/telemetry:listClientEvents</code> query from the prior delivery unchanged.</li>
+          <li><strong>No loading skeleton.</strong> Considered and rejected twice — see Next-Time Guidance.</li>
+          <li><strong>Tile count follows the sheet's active filter</strong> rather than always showing the unfiltered total, to avoid a second query subscription just for the tile.</li>
+        </ul>
+      </section>
+
+      <section class="panel"><h2>Next-Time Guidance</h2>
+        <ul>
+          <li>Layout-shift and swap-flash are different problems. Sizing a skeleton to match final content prevents the page from jumping, but the skeleton element is still unmounted and replaced — that unmount/mount is what reads as a flash, independent of size matching.</li>
+          <li>For advisory, non-blocking metrics on a live-query UI, the simplest fix is often to stop treating "loading" as a state that needs its own visual: render the real (if temporarily default) value immediately and let it update in place when the query resolves.</li>
+          <li>When a new page signal is store-level rather than per-item, put it in the page's existing summary region (a metrics row, a header stat) rather than appending a new section after an unbounded list of item cards.</li>
+        </ul>
+      </section>
+
+      <section class="panel">
+        <h2>Subagent Evidence</h2>
+        <ul>
+          <li><strong>Delivered-diff verifier</strong> (read-only explorer): independently checked six specific implementation claims — no-swap tile loading, three-way-exclusive list rendering, two-level sheet navigation, danger-tone gating, the query/index path, and the metrics-grid wiring — against the actual source. All six passed, with one nuance surfaced: the level-filtered index (<code>by_store_level_received</code>) is used only when a level filter is active; the unfiltered "All" view uses a separate <code>by_store_received</code> index. That nuance is reflected in this report rather than overstated.</li>
+          <li><strong>Session context</strong>: supplied directly by the delivery conversation, which contains the full iteration trail — the rejected bottom-panel placement, the rejected sized-skeleton and label-fade loading treatments, and the final no-placeholder design, each with the concrete reason it was rejected.</li>
+        </ul>
+      </section>
+
+      <section id="quiz" class="panel">
+        <h2>Quiz: Pass Required</h2>
+        <p>You must score at least 4 out of 5 to pass.</p>
+        <form id="changeQuiz" data-threshold="4">
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>1. Why was a panel at the bottom of the Terminal Health page rejected as the initial placement?</legend>
+    <label><input type="radio" name="q1" value="0" /> It caused a Convex read-amplification issue</label>
+<label><input type="radio" name="q1" value="1" /> With a realistic terminal count the page renders one card per terminal, pushing the panel far below the fold and effectively out of view</label>
+<label><input type="radio" name="q1" value="2" /> It broke the existing terminal-health tests</label>
+  </fieldset>
+  <div class="answer-detail">The roster grows with terminal count, so anything appended after it scales poorly. The metrics row, by contrast, is a fixed-height summary region regardless of how many terminals exist.</div>
+</div>
+
+<div class="quiz-question" data-answer="2">
+  <fieldset>
+    <legend>2. Why did a skeleton sized to match the final content still produce a visible flash?</legend>
+    <label><input type="radio" name="q2" value="0" /> The skeleton was the wrong size</label>
+<label><input type="radio" name="q2" value="1" /> Skeletons are deprecated in the design system</label>
+<label><input type="radio" name="q2" value="2" /> Sizing prevents layout shift, but the skeleton element is still unmounted and a different element mounted in its place — that swap is what reads as a flash, independent of size matching</label>
+  </fieldset>
+  <div class="answer-detail">Layout shift and swap flash are distinct problems with distinct causes. This delivery solves the flash by never mounting a placeholder in the first place.</div>
+</div>
+
+<div class="quiz-question" data-answer="0">
+  <fieldset>
+    <legend>3. What does the tile show while its query is still loading?</legend>
+    <label><input type="radio" name="q3" value="0" /> The real count value computed from an empty events array (0), which updates in place once the query resolves</label>
+<label><input type="radio" name="q3" value="1" /> A pulsing skeleton block</label>
+<label><input type="radio" name="q3" value="2" /> A dash placeholder ("–")</label>
+  </fieldset>
+  <div class="answer-detail">No loading treatment: isLoading maps to an empty events array, so the same count element renders 0 and later renders the resolved count — nothing is swapped.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>4. In the sheet, how does the level filter (All / Errors / Warnings) affect the Convex query?</legend>
+    <label><input type="radio" name="q4" value="0" /> It filters client-side after fetching all events</label>
+<label><input type="radio" name="q4" value="1" /> Selecting Errors or Warnings re-queries via the by_store_level_received index; the default "All" view uses a separate by_store_received index with no level filter</label>
+<label><input type="radio" name="q4" value="2" /> It has no effect — filtering only changes the display</label>
+  </fieldset>
+  <div class="answer-detail">The filter drives which indexed query runs server-side. The two-index nuance was surfaced by independent verification and is worth knowing if extending the query later.</div>
+</div>
+
+<div class="quiz-question" data-answer="2">
+  <fieldset>
+    <legend>5. How does the sheet return from the error-detail view to the list?</legend>
+    <label><input type="radio" name="q5" value="0" /> Closing and reopening the sheet</label>
+<label><input type="radio" name="q5" value="1" /> There is no way back; the sheet only supports the detail view</label>
+<label><input type="radio" name="q5" value="2" /> A back button in the sheet header (visible only when a detail event is selected) clears the selection and the list renders again</label>
+  </fieldset>
+  <div class="answer-detail">The sheet is a single component with two render modes toggled by whether an event is selected, not two separate sheets.</div>
+</div>
+
+          <div class="quiz-actions">
+            <button type="button" id="gradeQuiz">Grade quiz</button>
+            <button type="button" class="secondary" id="resetQuiz">Reset</button>
+            <span id="quizResult" aria-live="polite"></span>
+          </div>
+        </form>
+      </section>
+
+    </main>
+    <script>
+      const questions = Array.from(document.querySelectorAll(".quiz-question"));
+      const result = document.getElementById("quizResult");
+      const form = document.getElementById("changeQuiz");
+      const threshold = Number(form.dataset.threshold || 0);
+      function clearGrades() {
+        questions.forEach((question) => {
+          question.classList.remove("correct", "incorrect");
+          question.querySelector(".answer-detail").classList.remove("visible");
+        });
+        result.textContent = "";
+        result.style.color = "";
+      }
+      document.getElementById("gradeQuiz").addEventListener("click", () => {
+        clearGrades();
+        let score = 0;
+        questions.forEach((question, index) => {
+          const selected = document.querySelector(`input[name="q${index + 1}"]:checked`);
+          const isCorrect = selected && Number(selected.value) === Number(question.dataset.answer);
+          if (isCorrect) score += 1;
+          question.classList.add(isCorrect ? "correct" : "incorrect");
+          question.querySelector(".answer-detail").classList.add("visible");
+        });
+        const passed = score >= threshold;
+        result.textContent = passed
+          ? `Passed: ${score}/${questions.length}.`
+          : `Not passed: ${score}/${questions.length}. Review the report and try again.`;
+        result.style.color = passed ? "var(--good)" : "var(--bad)";
+      });
+      document.getElementById("resetQuiz").addEventListener("click", () => {
+        form.reset();
+        clearGrades();
+      });
+    </script>
+  </body>
+</html>
