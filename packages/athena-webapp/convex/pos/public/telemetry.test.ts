@@ -255,6 +255,31 @@ describe("recordClientEvents", () => {
     expect(inserted).toHaveLength(POS_CLIENT_EVENT_MAX_BATCH);
   });
 
+  it("redacts secrets and PII from message, error detail, and metadata", async () => {
+    const { ctx, inserted } = createCtx();
+
+    await handler(ctx, {
+      storeId: STORE_ID,
+      events: [
+        baseEvent({
+          message: "Checkout failed for customer@example.com",
+          errorMessage: "fetch rejected with Authorization: Bearer abc.def.ghi",
+          errorStack:
+            "Error: syncSecretHash=deadbeef1234 at completeTransaction",
+          metadata: { detail: "call +233 55 123 4567 for the customer" },
+        }),
+      ],
+    });
+
+    const [row] = inserted as Array<Record<string, string>>;
+    expect(row.message).toBe("Checkout failed for [redacted]");
+    expect(row.errorMessage).not.toContain("abc.def.ghi");
+    expect(row.errorStack).not.toContain("deadbeef1234");
+    expect(
+      (row.metadata as unknown as Record<string, string>).detail,
+    ).not.toContain("123 4567");
+  });
+
   it("truncates oversized messages", async () => {
     const { ctx, inserted } = createCtx();
 

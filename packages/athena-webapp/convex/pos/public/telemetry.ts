@@ -15,6 +15,7 @@ import {
   posClientEventLevelValidator,
   posClientEventMetadataValueValidator,
 } from "../../schemas/pos/posClientEvent";
+import { redactSensitiveDiagnosticText } from "../application/diagnosticRedaction";
 
 export const POS_CLIENT_EVENT_MAX_BATCH = 50;
 export const POS_CLIENT_EVENT_MAX_MESSAGE_LENGTH = 500;
@@ -54,11 +55,18 @@ function truncate(value: string, maxLength: number): string {
   return value.length > maxLength ? value.slice(0, maxLength) : value;
 }
 
-function truncateOptional(
+// Client events carry free-form error text captured from arbitrary throws and
+// unhandled rejections — redact secrets/PII like the runtime-status
+// diagnostic path does, then truncate.
+function cleanEventText(value: string, maxLength: number): string {
+  return truncate(redactSensitiveDiagnosticText(value), maxLength);
+}
+
+function cleanOptionalEventText(
   value: string | undefined,
   maxLength: number,
 ): string | undefined {
-  return value === undefined ? undefined : truncate(value, maxLength);
+  return value === undefined ? undefined : cleanEventText(value, maxLength);
 }
 
 export function sanitizeClientEventMetadata(
@@ -74,7 +82,7 @@ export function sanitizeClientEventMetadata(
     }
     sanitized[truncate(key, 100)] =
       typeof value === "string"
-        ? truncate(value, POS_CLIENT_EVENT_MAX_METADATA_VALUE_LENGTH)
+        ? cleanEventText(value, POS_CLIENT_EVENT_MAX_METADATA_VALUE_LENGTH)
         : value;
   }
   return sanitized;
@@ -174,25 +182,31 @@ export const recordClientEvents = mutation({
       await ctx.db.insert("posClientEvent", {
         storeId: args.storeId,
         terminalId: args.terminalId,
-        terminalFingerprint: truncateOptional(args.terminalFingerprint, 200),
-        localRegisterSessionId: truncateOptional(
-          event.localRegisterSessionId,
-          200,
-        ),
+        terminalFingerprint: args.terminalFingerprint
+          ? truncate(args.terminalFingerprint, 200)
+          : undefined,
+        localRegisterSessionId: event.localRegisterSessionId
+          ? truncate(event.localRegisterSessionId, 200)
+          : undefined,
         clientEventId: truncate(event.clientEventId, 200),
         level: event.level,
         flow: event.flow,
-        message: truncate(event.message, POS_CLIENT_EVENT_MAX_MESSAGE_LENGTH),
-        errorName: truncateOptional(event.errorName, 200),
-        errorMessage: truncateOptional(
+        message: cleanEventText(
+          event.message,
+          POS_CLIENT_EVENT_MAX_MESSAGE_LENGTH,
+        ),
+        errorName: cleanOptionalEventText(event.errorName, 200),
+        errorMessage: cleanOptionalEventText(
           event.errorMessage,
           POS_CLIENT_EVENT_MAX_MESSAGE_LENGTH,
         ),
-        errorStack: truncateOptional(
+        errorStack: cleanOptionalEventText(
           event.errorStack,
           POS_CLIENT_EVENT_MAX_STACK_LENGTH,
         ),
-        appVersion: truncateOptional(event.appVersion, 100),
+        appVersion: event.appVersion
+          ? truncate(event.appVersion, 100)
+          : undefined,
         metadata: sanitizeClientEventMetadata(event.metadata),
         occurredAt: event.occurredAt,
         receivedAt,

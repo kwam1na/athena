@@ -13,6 +13,7 @@ applies_when:
   - Detecting state transitions (healthy→degraded) without an alert-state table
   - Deduplicating batched client uploads without per-item index reads
 tags: [pos, observability, telemetry, alerts, convex, read-amplification, local-first]
+delivery_diff_fingerprint: 67119d1069ab22293cf6ca55857813a3606c3415bde5a4d35c8251ae2b81398b
 ---
 
 # POS Observability via Write-Riding Telemetry and Edge-Triggered Alerts
@@ -57,7 +58,7 @@ paths — `recordOperationalEventWithCtx` collects the full subject history per
 write as its dedupe, which is read amplification; edge-triggering already
 provides the dedupe.
 
-## Key learnings
+## Prevention
 
 - A Convex `throw` rolls back the transaction, so server-side capture of
   invariant violations is impossible in-band — but the error reaches the

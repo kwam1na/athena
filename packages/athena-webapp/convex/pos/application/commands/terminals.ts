@@ -2,6 +2,7 @@ import type { Doc, Id } from "../../../_generated/dataModel";
 import type { MutationCtx } from "../../../_generated/server";
 import { internal } from "../../../_generated/api";
 import { buildOperationalEvent } from "../../../operations/operationalEvents";
+import { redactSensitiveDiagnosticText } from "../diagnosticRedaction";
 import { resolveTerminalHealthAlertTransitions } from "../terminalRuntime/terminalHealthAlerts";
 import {
   ok,
@@ -464,15 +465,6 @@ type AppUpdateBlockerCode =
 
 const TERMINAL_NOT_ACTIVE_FOR_STORE_MESSAGE =
   "This terminal is not active for this store.";
-const REDACTED_DIAGNOSTIC_VALUE = "[redacted]";
-const SENSITIVE_DIAGNOSTIC_PATTERNS = [
-  /\bauthorization\s*:\s*[^,;]+/gi,
-  /\b(?:authorization\s*:\s*)?bearer\s+[^,\s;]+/gi,
-  /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g,
-  /(?:\+?\d[\d\s().-]{7,}\d)/g,
-  /\b(?:staffProofToken|proofToken|syncSecret|syncSecretHash|token|secret|password|authorization|bearer|cookie|session)[\w-]*\s*[:=]\s*[^,\s;]+/gi,
-  /\b(?:sk|pk|ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{12,}\b/g,
-];
 
 export async function submitTerminalRuntimeStatus(
   ctx: MutationCtx,
@@ -1077,10 +1069,7 @@ function cleanDiagnosticMessage(value: string | undefined, maxLength: number) {
     return undefined;
   }
 
-  return SENSITIVE_DIAGNOSTIC_PATTERNS.reduce(
-    (message, pattern) => message.replace(pattern, REDACTED_DIAGNOSTIC_VALUE),
-    cleaned,
-  );
+  return redactSensitiveDiagnosticText(cleaned);
 }
 
 function cleanTerminalIntegrity(

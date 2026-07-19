@@ -238,6 +238,7 @@ import type * as pos_application_commands_terminals from "../pos/application/com
 import type * as pos_application_commands_transactionAdjustmentPlanner from "../pos/application/commands/transactionAdjustmentPlanner.js";
 import type * as pos_application_corrections_correctionEvents from "../pos/application/corrections/correctionEvents.js";
 import type * as pos_application_corrections_correctionPolicy from "../pos/application/corrections/correctionPolicy.js";
+import type * as pos_application_diagnosticRedaction from "../pos/application/diagnosticRedaction.js";
 import type * as pos_application_dto from "../pos/application/dto.js";
 import type * as pos_application_pendingCheckoutSkuResolution from "../pos/application/pendingCheckoutSkuResolution.js";
 import type * as pos_application_queries_getRegisterState from "../pos/application/queries/getRegisterState.js";
@@ -823,6 +824,7 @@ declare const fullApi: ApiFromModules<{
   "pos/application/commands/transactionAdjustmentPlanner": typeof pos_application_commands_transactionAdjustmentPlanner;
   "pos/application/corrections/correctionEvents": typeof pos_application_corrections_correctionEvents;
   "pos/application/corrections/correctionPolicy": typeof pos_application_corrections_correctionPolicy;
+  "pos/application/diagnosticRedaction": typeof pos_application_diagnosticRedaction;
   "pos/application/dto": typeof pos_application_dto;
   "pos/application/pendingCheckoutSkuResolution": typeof pos_application_pendingCheckoutSkuResolution;
   "pos/application/queries/getRegisterState": typeof pos_application_queries_getRegisterState;
