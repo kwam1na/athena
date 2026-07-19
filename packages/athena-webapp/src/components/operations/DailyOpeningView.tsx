@@ -663,8 +663,7 @@ function getStatusSignatureClassName(status: DailyOpeningStatus) {
     "inline-flex min-h-10 w-fit items-center gap-layout-sm",
     status === "blocked" && "text-danger",
     status === "needs_attention" && "text-warning-foreground",
-    (status === "ready" || status === "started") &&
-      "text-success",
+    (status === "ready" || status === "started") && "text-success",
   );
 }
 
@@ -1279,7 +1278,7 @@ function BucketSection({
 
       <OperationReviewBucketBody hasItems={items.length > 0}>
         {items.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-border bg-surface-raised p-layout-md text-sm text-muted-foreground shadow-sm">
+          <p className="px-layout-md text-sm leading-6 text-muted-foreground">
             {emptyText}
           </p>
         ) : (

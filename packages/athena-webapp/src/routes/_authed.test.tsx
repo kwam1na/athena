@@ -684,6 +684,7 @@ describe("Authed layout", () => {
       expect.objectContaining({
         className:
           "fixed inset-0 h-svh !min-h-0 flex-col overflow-hidden bg-app-canvas",
+        defaultOpen: false,
       }),
     );
     expect(screen.getByTestId("app-header")).toBeInTheDocument();

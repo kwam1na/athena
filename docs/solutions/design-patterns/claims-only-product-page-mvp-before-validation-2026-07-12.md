@@ -16,7 +16,7 @@ tags:
   - claims-only-mvp
   - public-proof
   - owner-led-retail
-delivery_diff_fingerprint: d75397a4a71fc0bc58dba86250fa415f2c3ef45a4b509d3aed09ce9950a87af3
+delivery_diff_fingerprint: ebbfd019e283cea27f5d4d6670769cbfeb429fea6547069269a2e3aeade64147
 ---
 
 # Release a claims-only product-page MVP before positioning validation
@@ -36,7 +36,7 @@ Release a claims-only MVP whose public story is bounded by behavior already pres
 - Keep all conversion routes functional and fail closed until the production origin, privacy contact, notification recipient, and replay-signing keys are configured.
 - Reclassify the planned owner-operator sessions as a post-release learning gate. Preserve the pre-registered four-of-five comprehension rule to decide which copy to retain, revise, or narrow.
 
-Tests should assert the core narrative, CTA paths, and prohibited overclaims. Static metadata should use the same restrained promise as the rendered page.
+Tests should assert the core narrative, cta paths, and prohibited overclaims. Static metadata should use the same restrained promise as the rendered page.
 
 ## Why This Matters
 

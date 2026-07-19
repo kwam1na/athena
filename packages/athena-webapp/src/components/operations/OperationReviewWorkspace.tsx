@@ -66,7 +66,7 @@ export function OperationReviewBucketHeader({
   return (
     <div
       className={cn(
-        "flex flex-col gap-layout-sm border-b border-border/80 px-layout-md py-layout-md md:flex-row md:items-start md:justify-between",
+        "flex flex-col gap-layout-sm border-b border-border/80 bg-surface-raised px-layout-md py-layout-md md:flex-row md:items-start md:justify-between",
         className,
       )}
       {...props}
@@ -82,7 +82,7 @@ export function OperationReviewBucketBody({
   return (
     <div
       className={cn(
-        "bg-transparent",
+        "bg-surface-raised",
         hasItems ? "space-y-layout-sm p-layout-sm" : "py-layout-md",
         className,
       )}
