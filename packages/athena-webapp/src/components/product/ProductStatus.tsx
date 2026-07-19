@@ -2,13 +2,16 @@ import { AlertOctagonIcon, AlertTriangle, Archive, EyeOff } from "lucide-react";
 import { Product } from "~/types";
 import { ProductVariant } from "../add-product/ProductStock";
 import { Badge } from "../ui/badge";
+import { cn } from "~/src/lib/utils";
 
 type ProductStatusProps = {
+  className?: string;
   product: Product;
   productVariant?: ProductVariant;
 };
 
 export const ProductStatus = ({
+  className,
   product,
   productVariant,
 }: ProductStatusProps) => {
@@ -21,59 +24,42 @@ export const ProductStatus = ({
 
   const getBadgeStyles = () => {
     if (isArchived) {
-      return {
-        bg: "bg-zinc-100 text-zinc-700",
-        text: "text-zinc-700",
-      };
+      return "border-border/80 bg-muted/60 text-muted-foreground";
     }
 
     if (isDraft) {
-      return {
-        bg: "bg-amber-100 text-amber-700",
-        text: "text-amber-700",
-      };
+      return "border-warning/30 bg-warning/10 text-warning";
     }
 
     if (!isVisible) {
-      return {
-        bg: "bg-zinc-100 text-zinc-700",
-        text: "text-zinc-700",
-      };
+      return "border-border/80 bg-muted/60 text-muted-foreground";
     }
 
     if (inventoryCount === 0 || quantityAvailable === 0) {
-      return {
-        bg: "bg-red-100 text-red-700",
-        text: "text-red-700",
-      };
+      return "border-danger/30 bg-danger/10 text-danger";
     }
 
     if (
       (inventoryCount !== undefined && inventoryCount <= 2) ||
       (quantityAvailable !== undefined && quantityAvailable <= 2)
     ) {
-      return {
-        bg: "bg-amber-100 text-amber-700",
-        text: "text-amber-700",
-      };
+      return "border-warning/30 bg-warning/10 text-warning";
     }
 
-    return {
-      bg: "bg-green-100 text-green-700",
-      text: "text-green-700",
-    };
+    return "border-success/30 bg-success/10 text-success";
   };
 
-  const { bg, text } = getBadgeStyles();
+  const badgeStyles = getBadgeStyles();
+  const badgeClassName = cn(badgeStyles, className);
 
   const visibility = isVisible ? "Live" : "Hidden";
 
   if (isArchived) {
     return (
-      <Badge variant="outline" className={`${bg}`}>
+      <Badge variant="outline" className={badgeClassName}>
         <div className="flex items-center text-xs">
-          <Archive className="w-3.5 h-3.5 mr-2 text-zinc-700" />
-          <p className={text}>Archived</p>
+          <Archive className="mr-2 h-3.5 w-3.5" />
+          <p>Archived</p>
         </div>
       </Badge>
     );
@@ -81,10 +67,10 @@ export const ProductStatus = ({
 
   if (isDraft) {
     return (
-      <Badge variant="outline" className={`${bg}`}>
+      <Badge variant="outline" className={badgeClassName}>
         <div className="flex items-center text-xs">
-          <div className="h-2 w-2 mr-2 rounded bg-amber-700" />
-          <p className={text}>Draft</p>
+          <div className="mr-2 h-2 w-2 rounded bg-current" />
+          <p>Draft</p>
         </div>
       </Badge>
     );
@@ -92,32 +78,32 @@ export const ProductStatus = ({
 
   if (!isVisible) {
     return (
-      <Badge variant="outline" className={`${bg}`}>
+      <Badge variant="outline" className={badgeClassName}>
         <div className="flex items-center text-xs">
-          <EyeOff className="w-3.5 h-3.5 mr-2 text-zinc-700" />
-          <p className={text}>Hidden online</p>
+          <EyeOff className="mr-2 h-3.5 w-3.5" />
+          <p>Hidden online</p>
         </div>
       </Badge>
     );
   }
 
   return (
-    <Badge variant="outline" className={`${bg}`}>
+    <Badge variant="outline" className={badgeClassName}>
       <div className="flex items-center text-xs">
         {inventoryCount === 0 || quantityAvailable === 0 ? (
           <>
-            <AlertTriangle className="w-3.5 h-3.5 mr-2 text-red-700" />
-            <p className={text}>Out of stock</p>
+            <AlertTriangle className="mr-2 h-3.5 w-3.5" />
+            <p>Out of stock</p>
           </>
         ) : inventoryCount <= 2 || quantityAvailable <= 2 ? (
           <>
-            <AlertOctagonIcon className="w-3.5 h-3.5 mr-2 text-amber-700" />
-            <p className={text}>Low stock</p>
+            <AlertOctagonIcon className="mr-2 h-3.5 w-3.5" />
+            <p>Low stock</p>
           </>
         ) : (
           <>
-            <div className={`h-2 w-2 mr-2 rounded bg-green-700`} />
-            <p className={text}>{visibility}</p>
+            <div className="mr-2 h-2 w-2 rounded bg-current" />
+            <p>{visibility}</p>
           </>
         )}
       </div>

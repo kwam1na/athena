@@ -20,7 +20,7 @@ tags:
   - indexeddb
   - convex
   - reconciliation
-delivery_diff_fingerprint: bbcdb20196896c7dd1d907dddb4b399da2af0e40680fd342f6eca3fc7afa2f6b
+delivery_diff_fingerprint: 62788411fde0fc6d4f209359abd7c605c0ba27f3375a0d30bb48bdbcf0fcbabb
 ---
 
 # Athena POS Register Authority Replication
@@ -105,6 +105,24 @@ authorize cashier commands or retire compatibility by themselves.
 - Do not let a reactive cloud query directly gate a local-first cashier command.
 - Preserve exact local/cloud identity and compare the full mapping fingerprint
   atomically before accepting inbound authority.
+- Distinguish a local-only unmapped drawer from an orphaned cloud-backed
+  drawer. A candidate without a cloud claim remains locally usable and eligible
+  for upload; a candidate that names a missing cloud session may accept an
+  exact-subject tombstone at the current mapping epoch. Do not apply that
+  tombstone to a different cloud subject or use it to replace generic
+  `repair_required` evidence.
+- Preserve that distinction in the local authority reason and replacement-open
+  policy. A proven missing cloud session should route to the new-drawer gate;
+  converting it to generic `authority_unknown` creates a repair loop because
+  retrying cannot make an authoritatively deleted session reappear.
+- Treat a server bootstrap identity as a distinct legacy authority shape. When
+  the server issued the same ID for both local and cloud session identity, the
+  exact store, terminal, register, and lifecycle match can remain authoritative
+  without a sync-mapping row. A different local ID claiming that cloud session
+  must still resolve to repair.
+- When an older redacted repair observation must converge back to that verified
+  subject, restore its subject only inside the atomic local mapping check. Do
+  not relax same-epoch subject comparison in the general reconciler.
 - Keep server lifecycle authority separate from local reconciliation review so
   either channel can be resolved without erasing the other.
 - Test both delivery orders for mapping and lifecycle revisions, heartbeat-off

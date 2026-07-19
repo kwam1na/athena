@@ -11,6 +11,7 @@ import {
 } from "~/shared/posTerminalLoginMode";
 
 import type { BrowserInfo } from "@/lib/browserFingerprint";
+import type { UserError } from "~/shared/commandResult";
 import { POS_LOCAL_LOGICAL_RECORD_VERSION } from "./posLocalStoreTypes";
 import type {
   PosLocalIntegrityPort,
@@ -69,7 +70,7 @@ export async function registerAndProvisionPosTerminal(input: {
     transactionCapability?: PosTerminalTransactionCapability;
   }) => Promise<
     | { kind: "ok"; data: ProvisionedTerminalRecord }
-    | { kind: "user_error"; error: { message: string } }
+    | { kind: "user_error"; error: UserError }
   >;
   storeFactory: () => PosLocalSeedPort & PosLocalIntegrityPort;
   storeUrlSlug?: string;

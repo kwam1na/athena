@@ -1,3 +1,87 @@
 #!/bin/sh
 cd "$(git rev-parse --show-toplevel)" || exit 1
-bun run pre-push:review
+
+ATHENA_PRE_PUSH_TMP_DIR=${TMPDIR:-/tmp}
+ATHENA_PRE_PUSH_HEARTBEAT_SECONDS=${ATHENA_PRE_PUSH_HEARTBEAT_SECONDS:-10}
+case "$ATHENA_PRE_PUSH_HEARTBEAT_SECONDS" in
+  ''|*[!0-9]*|0)
+    echo "[pre-push] ATHENA_PRE_PUSH_HEARTBEAT_SECONDS must be a positive integer." >&2
+    exit 1
+    ;;
+esac
+ATHENA_PRE_PUSH_LOG=$(mktemp "$ATHENA_PRE_PUSH_TMP_DIR/athena-pre-push.XXXXXX") || exit 1
+ATHENA_PRE_PUSH_HOOK_PID=$$
+
+echo "[pre-push] Full validation output is being captured in $ATHENA_PRE_PUSH_LOG"
+bun run pre-push:review >"$ATHENA_PRE_PUSH_LOG" 2>&1 &
+ATHENA_PRE_PUSH_PID=$!
+
+terminate_pre_push_tree() {
+  for ATHENA_TREE_CHILD in $(pgrep -P "$1" 2>/dev/null); do
+    terminate_pre_push_tree "$ATHENA_TREE_CHILD" "$2"
+  done
+
+  kill -s "$2" "$1" 2>/dev/null || true
+}
+
+stop_pre_push_heartbeats() {
+  if [ -n "${ATHENA_PRE_PUSH_HEARTBEAT_PID:-}" ]; then
+    terminate_pre_push_tree "$ATHENA_PRE_PUSH_HEARTBEAT_PID" TERM
+    wait "$ATHENA_PRE_PUSH_HEARTBEAT_PID" 2>/dev/null || true
+  fi
+}
+
+handle_pre_push_signal() {
+  ATHENA_SIGNAL_NAME=$1
+  ATHENA_SIGNAL_STATUS=$2
+  stop_pre_push_heartbeats
+  terminate_pre_push_tree "$ATHENA_PRE_PUSH_PID" "$ATHENA_SIGNAL_NAME"
+  wait "$ATHENA_PRE_PUSH_PID" 2>/dev/null || true
+  echo "[pre-push] Interrupted by $ATHENA_SIGNAL_NAME. Full validation log retained at $ATHENA_PRE_PUSH_LOG" >&2 || true
+  exit "$ATHENA_SIGNAL_STATUS"
+}
+
+trap 'handle_pre_push_signal HUP 129' HUP
+trap 'handle_pre_push_signal INT 130' INT
+trap 'handle_pre_push_signal TERM 143' TERM
+trap 'handle_pre_push_signal PIPE 141' PIPE
+
+emit_pre_push_heartbeats() {
+  propagate_pre_push_pipe() {
+    kill -s PIPE "$ATHENA_PRE_PUSH_HOOK_PID" 2>/dev/null || true
+    exit 141
+  }
+
+  trap 'propagate_pre_push_pipe' PIPE
+  while kill -0 "$ATHENA_PRE_PUSH_PID" 2>/dev/null; do
+    sleep "$ATHENA_PRE_PUSH_HEARTBEAT_SECONDS"
+    if kill -0 "$ATHENA_PRE_PUSH_PID" 2>/dev/null; then
+      echo "[pre-push] Validation still running; full output remains in $ATHENA_PRE_PUSH_LOG" || propagate_pre_push_pipe
+    fi
+  done
+}
+
+emit_pre_push_heartbeats &
+ATHENA_PRE_PUSH_HEARTBEAT_PID=$!
+
+wait "$ATHENA_PRE_PUSH_PID"
+ATHENA_PRE_PUSH_STATUS=$?
+stop_pre_push_heartbeats
+trap - HUP INT TERM PIPE
+
+if [ "$ATHENA_PRE_PUSH_STATUS" -eq 0 ]; then
+  if ! awk '/^\[pre-push\] (Step|Handoff|All checks)/ { print }' "$ATHENA_PRE_PUSH_LOG"; then
+    echo "[pre-push] Could not read the successful validation summary. Full validation log retained at $ATHENA_PRE_PUSH_LOG" >&2
+    exit 1
+  fi
+  if ! rm -f "$ATHENA_PRE_PUSH_LOG"; then
+    echo "[pre-push] Could not remove the successful validation log at $ATHENA_PRE_PUSH_LOG" >&2
+    exit 1
+  fi
+  exit 0
+fi
+
+echo "[pre-push] Validation failed (exit $ATHENA_PRE_PUSH_STATUS). Last 200 lines, capped at 16 KiB:" >&2
+tail -n 200 "$ATHENA_PRE_PUSH_LOG" | tail -c 16384 >&2
+echo "[pre-push] Full validation log retained at $ATHENA_PRE_PUSH_LOG" >&2
+exit "$ATHENA_PRE_PUSH_STATUS"

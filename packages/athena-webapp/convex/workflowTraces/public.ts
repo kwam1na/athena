@@ -10,7 +10,7 @@ import { getActiveManagerElevationWithCtx } from "../operations/managerElevation
 import { listWorkflowTraceEventsWithCtx } from "./core";
 import { buildWorkflowTraceViewModel } from "./presentation";
 import { requireSharedDemoStoreReadIfApplicable } from "../sharedDemo/actor";
-import { SHARED_DEMO_UNAVAILABLE } from "../sharedDemo/policy";
+import { denySharedDemoAction } from "../sharedDemo/policy";
 
 const SHARED_DEMO_READABLE_WORKFLOW_TYPES = new Set([
   "register_session",
@@ -213,7 +213,7 @@ export async function getWorkflowTraceViewByIdWithCtx(
 
   if (demoActor) {
     if (!SHARED_DEMO_READABLE_WORKFLOW_TYPES.has(trace.workflowType)) {
-      throw new Error(SHARED_DEMO_UNAVAILABLE);
+      denySharedDemoAction();
     }
   } else {
     await assertWorkflowTraceAccess(ctx, {
@@ -270,7 +270,7 @@ export async function getWorkflowTraceViewByLookupWithCtx(
     demoActor &&
     !SHARED_DEMO_READABLE_WORKFLOW_TYPES.has(args.workflowType)
   ) {
-    throw new Error(SHARED_DEMO_UNAVAILABLE);
+    denySharedDemoAction();
   }
   if (!demoActor) {
     await assertDefaultWorkflowTraceAccess(ctx, args);

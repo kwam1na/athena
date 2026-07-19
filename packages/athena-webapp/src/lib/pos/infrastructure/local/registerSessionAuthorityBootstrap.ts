@@ -17,6 +17,7 @@ export type RegisterSessionAuthorityBootstrap = {
 export type RegisterSessionAuthorityBootstrapResult = {
   seeded: boolean;
   seedResult:
+    | "already_seeded"
     | "gateway_rejected"
     | "missing_directive"
     | "missing_staff_identity"
@@ -45,17 +46,21 @@ export async function seedRegisterSessionAuthorityBootstrap(input: {
     return { seeded: false, seedResult: "missing_staff_identity" };
   }
 
+  let appended = false;
   const gateway = createLocalCommandGateway({
     allowExplicitRegisterSessionWithoutProjection: true,
     allowRegisterSessionSeedAfterSettledHistory: true,
     allowRegisterSessionSeedFromRuntimeDirective: true,
+    onEventAppended: () => {
+      appended = true;
+    },
     staffProofToken:
       staffProfileId === input.staffProfileId
         ? (input.staffProofToken ?? undefined)
         : undefined,
     store: input.store,
   });
-  const seeded = await gateway.seedRegisterSession({
+  const accepted = await gateway.seedRegisterSession({
     cloudRegisterSessionId: input.bootstrap.cloudRegisterSessionId,
     expectedCash: input.bootstrap.expectedCash,
     localRegisterSessionId: input.bootstrap.localRegisterSessionId,
@@ -72,7 +77,11 @@ export async function seedRegisterSessionAuthorityBootstrap(input: {
     status: input.bootstrap.status,
   });
   return {
-    seeded,
-    seedResult: seeded ? "seeded" : "gateway_rejected",
+    seeded: accepted && appended,
+    seedResult: !accepted
+      ? "gateway_rejected"
+      : appended
+        ? "seeded"
+        : "already_seeded",
   };
 }

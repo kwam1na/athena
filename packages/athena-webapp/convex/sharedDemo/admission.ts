@@ -11,10 +11,30 @@ import {
   SHARED_DEMO_EXCHANGE_RATE_LIMIT,
   SHARED_DEMO_MINT_RATE_LIMIT,
   SHARED_DEMO_TICKET_DURATION_MS,
+  SHARED_DEMO_BASELINE_VERSION,
 } from "./config";
 import { createOpaqueTicket, hashSharedDemoTicket } from "./crypto";
 
 const storeTicketRef = (internal as any).sharedDemo.admission.storeSharedDemoTicket;
+
+export async function requireCurrentSharedDemoAdmissionFoundationWithCtx(
+  ctx: Pick<MutationCtx, "db">,
+  storeId: Id<"store">,
+) {
+  const state = await ctx.db
+    .query("sharedDemoRestoreState")
+    .withIndex("by_storeId", (q) => q.eq("storeId", storeId))
+    .unique();
+  if (
+    !state ||
+    state.baselineVersion !== SHARED_DEMO_BASELINE_VERSION ||
+    state.completedAt === undefined ||
+    state.status !== "ready"
+  ) {
+    throw new Error("The demo store is not a current provisioned foundation.");
+  }
+  return state;
+}
 
 export async function consumeAdmissionBudgetWithCtx(
   ctx: Pick<MutationCtx, "db">,
@@ -93,7 +113,6 @@ export const storeSharedDemoTicket = internalMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const config = readRuntimeSharedDemoConfig();
-    await consumeAdmissionBudgetWithCtx(ctx, { kind: "mint", limit: SHARED_DEMO_MINT_RATE_LIMIT, now: Date.now() });
     if (
       args.athenaUserId !== config.athenaUserId ||
       args.organizationId !== config.organizationId ||
@@ -101,6 +120,11 @@ export const storeSharedDemoTicket = internalMutation({
     ) {
       throw new Error("Demo configuration changed during admission.");
     }
+    await requireCurrentSharedDemoAdmissionFoundationWithCtx(
+      ctx,
+      args.storeId,
+    );
+    await consumeAdmissionBudgetWithCtx(ctx, { kind: "mint", limit: SHARED_DEMO_MINT_RATE_LIMIT, now: Date.now() });
 
     const [athenaUser, organization, store] = await Promise.all([
       ctx.db.get("athenaUser", args.athenaUserId),

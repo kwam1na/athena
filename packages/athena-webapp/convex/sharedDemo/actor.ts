@@ -5,8 +5,9 @@ import type { Id } from "../_generated/dataModel";
 import { internalQuery } from "../_generated/server";
 import { v } from "convex/values";
 import type { SharedDemoCapability } from "./policy";
-import { requireSharedDemoCapability } from "./policy";
+import { denySharedDemoAction, requireSharedDemoCapability } from "./policy";
 import { isSharedDemoEnabled } from "./config";
+import { requireReadySharedDemoWriteWithCtx } from "./restore";
 
 type AuthCtx =
   | Pick<QueryCtx, "auth" | "db">
@@ -73,7 +74,25 @@ export async function requireSharedDemoStoreCapabilityIfApplicable(
 ) {
   const actor = await requireSharedDemoCapabilityIfApplicable(ctx, capability);
   if (actor && actor.storeId !== storeId) {
-    throw new Error("This action is unavailable in the demo.");
+    denySharedDemoAction();
+  }
+  return actor;
+}
+
+/** Apply the complete shared-demo write boundary in one place: closed
+ * capability policy, server-owned store clamp, and the current restore fence. */
+export async function requireReadySharedDemoStoreCapabilityIfApplicable(
+  ctx: Pick<MutationCtx, "auth" | "db">,
+  capability: SharedDemoCapability,
+  storeId: Id<"store">,
+) {
+  const actor = await requireSharedDemoStoreCapabilityIfApplicable(
+    ctx,
+    capability,
+    storeId,
+  );
+  if (actor) {
+    await requireReadySharedDemoWriteWithCtx(ctx, { storeId });
   }
   return actor;
 }
@@ -86,7 +105,7 @@ export async function requireSharedDemoStoreReadIfApplicable(
 ) {
   const actor = await getSharedDemoActorWithCtx(ctx);
   if (actor && actor.storeId !== storeId) {
-    throw new Error("This action is unavailable in the demo.");
+    denySharedDemoAction();
   }
   return actor;
 }
@@ -120,7 +139,7 @@ export const requireAuthenticatedNonDemoEffect = internalQuery({
     const authUserId = await getAuthUserId(ctx);
     if (!authUserId) throw new Error("Sign in again to continue.");
     const actor = await getSharedDemoActorWithCtx(ctx);
-    if (actor) throw new Error("This action is unavailable in the demo.");
+    if (actor) denySharedDemoAction();
     return null;
   },
 });
@@ -130,7 +149,7 @@ export const denySharedDemoEffectIfApplicable = internalQuery({
   returns: v.null(),
   handler: async (ctx) => {
     const actor = await getSharedDemoActorWithCtx(ctx);
-    if (actor) throw new Error("This action is unavailable in the demo.");
+    if (actor) denySharedDemoAction();
     return null;
   },
 });

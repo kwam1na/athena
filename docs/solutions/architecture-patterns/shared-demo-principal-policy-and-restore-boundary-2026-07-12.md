@@ -8,7 +8,7 @@ component: authentication
 resolution_type: code_fix
 severity: high
 applies_when:
-  - "A non-production shared demo must use real tenant workflows without inheriting full administrator effects"
+  - "A configured shared demo, including the deliberate production experience, must use real tenant workflows without inheriting full administrator effects"
   - "Many visitors write to one synthetic store that must return to an exact baseline"
 tags:
   - shared-demo
@@ -17,7 +17,7 @@ tags:
   - effect-policy
   - convex
   - restore-fence
-delivery_diff_fingerprint: 3d2dfa9bde64b83ee31bbd502efddf71d38edc986d2addf143f6aae53eba29aa
+delivery_diff_fingerprint: 62788411fde0fc6d4f209359abd7c605c0ba27f3375a0d30bb48bdbcf0fcbabb
 ---
 
 # Shared demo principal policy and atomic restore boundary
@@ -32,7 +32,7 @@ The shared store also needs a deterministic reset. A parallel manifest or UI-onl
 
 Treat shared-demo access as a distinct server-derived principal layered on top of normal authentication:
 
-- Mint a short-lived opaque admission ticket only when both the feature flag and deployment-identity allowlist match.
+- Mint a short-lived opaque admission ticket only when `ATHENA_SHARED_DEMO_ENABLED=true` and `STAGE` is one of the explicitly supported stages (`dev`, `qa`, or `prod`). Production support is deliberate. A deployment-ID allowlist and an additional environment variable were considered and rejected; the supported-stage plus explicit-feature-flag boundary is the product decision.
 - Create a distinct Convex Auth user/principal for each admission while mapping every principal to the same synthetic Athena owner, organization, and store.
 - Store only the ticket hash, consume it transactionally once, and enforce a non-renewable server-clock expiry for that exact principal.
 - Resolve demo mode from the authenticated user and durable principal row. Never accept demo kind or store authority from the client.
@@ -58,10 +58,13 @@ Per-admission auth users prevent a newer visitor from extending every older brow
 - Treat missing-state bootstrap as recovery, not permission to capture live data. Count every table in the mutable registry and validate deterministic seed markers—including credentials and their lockout state—before capturing a baseline.
 - Queue browser-terminal cleanup on the durable lease. Do not report deletion before apply processes it, and never publish `ready` while queued cleanup remains.
 - Let provisioning own baseline-version migration. Restore must reject stale state or snapshot versions before it begins, otherwise a scheduled restore can promote old seed semantics before migration runs.
+- Classify baseline migrations by operational impact. For credential or presentation-only changes, promote existing snapshots in place, transform only the affected baseline documents, and preserve the restore epoch; recapturing live state can canonize visitor activity, while restoring POS sync snapshots or incrementing the epoch can split the browser and server sequence histories. Reserve a full restore and epoch change for migrations that intentionally reset operational state.
 - Make allowed demo mutations read `sharedDemoRestoreState.epoch` in the same transaction as their write.
+- Treat the restore epoch and restore status as one frontend fence. A new epoch is published while the lease is still `restoring`, so browser-local POS reset and baseline binding must wait for `ready`, keep POS gated in the meantime, and react again when that same epoch transitions from `restoring` to `ready`. Otherwise a failed early bind can leave IndexedDB pointing at a cloud register session the restore has deleted.
 - Keep synthetic seed data coherent and avoid unsupported reporting claims. Rematerialize only existing Reports relationships.
 - Test expired-principal behavior explicitly. An expired demo principal must throw; it must never fall through as a normal actor.
-- Gate every frontend demo subscription on the Vite development runtime. A production candidate build may run against a backend that intentionally has no demo functions, so globally mounted shells must pass `"skip"` instead of querying demo APIs.
+- Gate frontend demo subscriptions on the configured shared-demo runtime state, not on a development-only assumption. The production demo is supported when its backend has `ATHENA_SHARED_DEMO_ENABLED=true`, a supported `STAGE`, and the configured synthetic Athena user, organization, and store IDs.
+- Validate those configured IDs as one synthetic foundation before admission or baseline capture: the Athena owner, organization, and store relationships must agree and the deterministic seed markers must be complete. This narrow foundation check prevents the demo principal from becoming authority over an arbitrary tenant without inventing a rejected deployment-ID allowlist.
 - Keep shared free text bounded and rate-limited, and never include visitor payloads or admission tickets in telemetry.
 
 ## Examples

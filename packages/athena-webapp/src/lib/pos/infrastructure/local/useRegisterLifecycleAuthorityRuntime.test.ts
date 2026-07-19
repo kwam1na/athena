@@ -13,8 +13,8 @@ const mocks = vi.hoisted(() => ({
   }),
   returnFreshSnapshot: false,
   seedRegisterSessionAuthorityBootstrap: vi.fn(async () => ({
-    seeded: true,
-    seedResult: "seeded" as const,
+    seeded: true as boolean,
+    seedResult: "seeded" as "already_seeded" | "seeded",
   })),
   snapshot: undefined as unknown,
   useRegisterLifecycleAuthorityAcknowledgement: vi.fn(() => mocks.acknowledge),
@@ -204,6 +204,47 @@ describe("useRegisterLifecycleAuthorityRuntime", () => {
       store,
       storeId: "store-1",
       terminalId: "local-terminal-1",
+    });
+    expect(refreshLocalRegisterReadModel).toHaveBeenCalledTimes(1);
+  });
+
+  it("refreshes after an already-seeded terminal bootstrap converges", async () => {
+    mocks.seedRegisterSessionAuthorityBootstrap.mockResolvedValue({
+      seeded: false,
+      seedResult: "already_seeded",
+    });
+    mocks.snapshot = {
+      bootstrap: {
+        authorityCursor: {
+          lifecycleRevision: 3,
+          mappingAuthorityRevision: 0,
+        },
+        classification: "sale_usable",
+        cloudRegisterSessionId: "cloud-register-2",
+        cloudStatus: "active",
+        expectedCash: 350,
+        lifecycleRevision: 3,
+        localRegisterSessionId: "cloud-register-2",
+        mappingAuthorityRevision: 0,
+        openedAt: 2,
+        openingFloat: 300,
+        registerNumber: "2",
+        staffProfileId: "staff-manager",
+      },
+      candidateCount: 0,
+      maximumDocumentReads: 3,
+      results: [],
+    };
+    const { result, refreshLocalRegisterReadModel } = renderRuntime({
+      localRegisterReadModel: {
+        activeRegisterSession: null,
+        mappings: [],
+        sourceEvents: [],
+      },
+    });
+
+    await waitFor(() => {
+      expect(result.current.persistence.status).toBe("ready");
     });
     expect(refreshLocalRegisterReadModel).toHaveBeenCalledTimes(1);
   });
@@ -875,6 +916,47 @@ describe("useRegisterLifecycleAuthorityRuntime", () => {
     );
     expect(mocks.acknowledge.mock.calls.at(-1)?.[0]).not.toHaveProperty(
       "cloudRegisterSessionId",
+    );
+  });
+
+  it("durably blocks an exact cloud subject that the server reports as missing", async () => {
+    mocks.snapshot = {
+      candidateCount: 1,
+      maximumDocumentReads: 3,
+      results: [
+        {
+          authorityCursor: {
+            lifecycleRevision: 0,
+            mappingAuthorityRevision: 2,
+          },
+          classification: "stale_cloud_subject",
+          cloudRegisterSessionId: "cloud-register-1",
+          lifecycleRevision: 0,
+          localRegisterSessionId: "local-register-1",
+          mappingAuthorityRevision: 2,
+        },
+      ],
+    };
+    const { result, store } = renderRuntime();
+
+    await waitFor(() => {
+      expect(result.current.persistence.status).toBe("ready");
+    });
+    expect(store.applyRegisterLifecycleAuthority).toHaveBeenCalledWith(
+      expect.objectContaining({
+        observation: expect.objectContaining({
+          classification: "stale_cloud_subject",
+          cloudRegisterSessionId: "cloud-register-1",
+          reason: "cloud_session_missing",
+          status: "blocked",
+        }),
+      }),
+    );
+    expect(mocks.acknowledge).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cloudRegisterSessionId: "cloud-register-1",
+        outcome: "repair_required",
+      }),
     );
   });
 });

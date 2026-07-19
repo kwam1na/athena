@@ -1553,7 +1553,7 @@ describe("registerAndProvisionPosTerminal", () => {
   it("does not write a local terminal seed when registration is rejected", async () => {
     const registerTerminalMutation = vi.fn(async () => ({
       kind: "user_error" as const,
-      error: { message: "registration rejected" },
+      error: { code: "authorization_failed" as const, message: "registration rejected" },
     }));
     const writeProvisionedTerminalSeed = vi.fn(async () => ({
       ok: true,
@@ -1576,7 +1576,7 @@ describe("registerAndProvisionPosTerminal", () => {
 
     expect(result).toEqual({
       kind: "user_error",
-      error: { message: "registration rejected" },
+      error: { code: "authorization_failed", message: "registration rejected" },
     });
     expect(writeProvisionedTerminalSeed).not.toHaveBeenCalled();
   });

@@ -1,4 +1,13 @@
-import { readFile } from "node:fs/promises";
+import {
+  chmod,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  rm,
+  writeFile,
+} from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -855,13 +864,78 @@ describe("pre-push review wiring", () => {
     expect(observedSpawnTypes).toEqual(["function"]);
   });
 
-  it("keeps the husky pre-push hook pointed at the repo review script", async () => {
+  it("bounds pre-push terminal output while preserving the full validation log", async () => {
     const hookContents = await readFile(
       path.join(ROOT_DIR, ".husky/pre-push"),
       "utf8",
     );
 
     expect(hookContents).toContain("bun run pre-push:review");
+    expect(hookContents).toContain('>"$ATHENA_PRE_PUSH_LOG" 2>&1 &');
+    expect(hookContents).toContain('kill -0 "$ATHENA_PRE_PUSH_PID"');
+    expect(hookContents).toContain('wait "$ATHENA_PRE_PUSH_PID"');
+    expect(hookContents).toContain('tail -n 200 "$ATHENA_PRE_PUSH_LOG"');
+    expect(hookContents).toContain('rm -f "$ATHENA_PRE_PUSH_LOG"');
+    expect(hookContents).toContain("Full validation log retained");
+
+    const fixtureRoot = await mkdtemp(
+      path.join(tmpdir(), "athena-bounded-pre-push-"),
+    );
+    const fixtureBin = path.join(fixtureRoot, "bin");
+    const fixtureTmp = path.join(fixtureRoot, "tmp");
+
+    try {
+      await mkdir(path.join(fixtureRoot, ".husky"), { recursive: true });
+      await mkdir(fixtureBin, { recursive: true });
+      await mkdir(fixtureTmp, { recursive: true });
+      await writeFile(
+        path.join(fixtureRoot, ".husky/pre-push"),
+        hookContents,
+      );
+      await writeFile(
+        path.join(fixtureBin, "bun"),
+        [
+          "#!/bin/sh",
+          "index=0",
+          'while [ "$index" -lt 5000 ]; do',
+          '  echo "noisy-validation-line-$index"',
+          "  index=$((index + 1))",
+          "done",
+          'echo "[pre-push] Step 7/7: complete"',
+          'echo "[pre-push] Handoff: validation=passed"',
+          'echo "[pre-push] All checks passed."',
+        ].join("\n"),
+      );
+      await chmod(path.join(fixtureBin, "bun"), 0o755);
+
+      expect(
+        Bun.spawnSync(["git", "init", "-q"], { cwd: fixtureRoot }).exitCode,
+      ).toBe(0);
+
+      const startedAt = Date.now();
+      const result = Bun.spawnSync(["sh", ".husky/pre-push"], {
+        cwd: fixtureRoot,
+        env: {
+          ...process.env,
+          ATHENA_PRE_PUSH_HEARTBEAT_SECONDS: "3",
+          PATH: `${fixtureBin}:${process.env.PATH ?? ""}`,
+          TMPDIR: fixtureTmp,
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const elapsedMs = Date.now() - startedAt;
+      const stdout = new TextDecoder().decode(result.stdout);
+
+      expect(result.exitCode).toBe(0);
+      expect(stdout).not.toContain("noisy-validation-line");
+      expect(stdout).toContain("[pre-push] All checks passed.");
+      expect(stdout.length).toBeLessThan(2_000);
+      expect(elapsedMs).toBeLessThan(2_500);
+      expect(await readdir(fixtureTmp)).toEqual([]);
+    } finally {
+      await rm(fixtureRoot, { recursive: true, force: true });
+    }
   });
 
   it("keeps the husky pre-commit hook pointed at the generated-artifact repair script", async () => {

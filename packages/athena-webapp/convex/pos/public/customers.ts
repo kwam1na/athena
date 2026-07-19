@@ -12,6 +12,7 @@ import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../../lib/athenaUserAuth";
+import { requireStoreMemberAccessWithCtx } from "../../lib/storeMemberAccess";
 import { userError } from "../../../shared/commandResult";
 import {
   createCustomer as createCustomerCommand,
@@ -86,6 +87,49 @@ async function requirePosCustomerAccessById(
   return { ...access, customer };
 }
 
+async function requirePosCustomerStoreReadAccess(
+  ctx: QueryCtx,
+  args: {
+    storeId: Id<"store">;
+    failureMessage: string;
+  },
+): Promise<PosCustomerStoreAccess> {
+  const store = await ctx.db.get("store", args.storeId);
+  if (!store) {
+    return { ok: false };
+  }
+
+  const { athenaUser, membership } = await requireStoreMemberAccessWithCtx(
+    ctx,
+    {
+      allowedRoles: ["full_admin", "pos_only"],
+      demoAccess: { kind: "read" },
+      failureMessage: args.failureMessage,
+      storeId: args.storeId,
+    },
+  );
+  return { ok: true, store, athenaUser, membership };
+}
+
+async function requirePosCustomerReadAccessById(
+  ctx: QueryCtx,
+  args: {
+    customerId: Id<"posCustomer">;
+    failureMessage: string;
+  },
+): Promise<PosCustomerStoreAccess & { customer?: Doc<"posCustomer"> }> {
+  const customer = await ctx.db.get("posCustomer", args.customerId);
+  if (!customer) {
+    return { ok: false };
+  }
+
+  const access = await requirePosCustomerStoreReadAccess(ctx, {
+    storeId: customer.storeId,
+    failureMessage: args.failureMessage,
+  });
+  return access.ok ? { ...access, customer } : { ok: false };
+}
+
 const customerAddressValidator = v.object({
   street: v.optional(v.string()),
   city: v.optional(v.string()),
@@ -149,7 +193,7 @@ export const searchCustomers = query({
   },
   returns: v.array(customerSummaryValidator),
   handler: async (ctx, args) => {
-    const access = await requirePosCustomerStoreAccess(ctx, {
+    const access = await requirePosCustomerStoreReadAccess(ctx, {
       storeId: args.storeId,
       failureMessage: "You cannot search customers for this store.",
     });
@@ -186,7 +230,7 @@ export const getCustomerById = query({
     v.null(),
   ),
   handler: async (ctx, args) => {
-    const access = await requirePosCustomerAccessById(ctx, {
+    const access = await requirePosCustomerReadAccessById(ctx, {
       customerId: args.customerId,
       failureMessage: "You cannot view this customer.",
     });
@@ -298,7 +342,7 @@ export const getCustomerTransactions = query({
     }),
   ),
   handler: async (ctx, args) => {
-    const access = await requirePosCustomerAccessById(ctx, {
+    const access = await requirePosCustomerReadAccessById(ctx, {
       customerId: args.customerId,
       failureMessage: "You cannot view this customer.",
     });
@@ -412,7 +456,7 @@ export const findByStoreFrontUser = query({
       return null;
     }
 
-    const access = await requirePosCustomerStoreAccess(ctx, {
+    const access = await requirePosCustomerStoreReadAccess(ctx, {
       storeId: storeFrontUser.storeId,
       failureMessage: "You cannot view this customer.",
     });
@@ -451,7 +495,7 @@ export const findPotentialMatches = query({
     ),
   }),
   handler: async (ctx, args) => {
-    const access = await requirePosCustomerStoreAccess(ctx, {
+    const access = await requirePosCustomerStoreReadAccess(ctx, {
       storeId: args.storeId,
       failureMessage: "You cannot view potential matches for this store.",
     });

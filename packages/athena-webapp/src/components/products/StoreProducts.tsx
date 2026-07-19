@@ -2,13 +2,14 @@ import { productColumns } from "./products-table/components/productColumns";
 import { DataTable } from "./products-table/components/data-table";
 import { EmptyState } from "../states/empty/empty-state";
 import { PackageXIcon } from "lucide-react";
-import { Link, useSearch } from "@tanstack/react-router";
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { Button } from "../ui/button";
 import { PlusIcon } from "@radix-ui/react-icons";
 import { Product } from "~/types";
 import { getOrigin } from "~/src/lib/navigationUtils";
 import { slugToWords } from "~/src/lib/utils";
 import { usePermissions } from "~/src/hooks/usePermissions";
+import { useSharedDemoContext } from "~/src/hooks/useSharedDemoContext";
 
 export default function StoreProducts({
   onPageIndexChange,
@@ -21,6 +22,8 @@ export default function StoreProducts({
 }) {
   const { categorySlug } = useSearch({ strict: false });
   const { hasFullAdminAccess } = usePermissions();
+  const isSharedDemo = Boolean(useSharedDemoContext());
+  const navigate = useNavigate();
 
   return (
     <div className="container mx-auto">
@@ -29,6 +32,18 @@ export default function StoreProducts({
           <DataTable
             data={products}
             columns={productColumns}
+            onRowClick={(row) => {
+              void navigate({
+                to: "/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug",
+                params: (prev) => ({
+                  ...prev,
+                  orgUrlSlug: prev.orgUrlSlug!,
+                  storeUrlSlug: prev.storeUrlSlug!,
+                  productSlug: row.original._id,
+                }),
+                search: { o: getOrigin() },
+              });
+            }}
             onPageIndexChange={onPageIndexChange}
             pageIndex={pageIndex}
           />
@@ -44,7 +59,7 @@ export default function StoreProducts({
               </div>
             }
             cta={
-              hasFullAdminAccess && (
+              hasFullAdminAccess && !isSharedDemo && (
                 <Link
                   to="/$orgUrlSlug/store/$storeUrlSlug/products/new"
                   params={(prev) => ({

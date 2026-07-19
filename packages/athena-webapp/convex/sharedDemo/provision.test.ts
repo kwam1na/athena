@@ -8,10 +8,12 @@ import {
   SHARED_DEMO_PRODUCTS,
   SHARED_DEMO_STAFF_STORY,
   SHARED_DEMO_STORE_IDENTITY,
+  sharedDemoProductImageUrl,
   sharedDemoPickupOrderAmount,
 } from "../../shared/sharedDemoStory";
 import {
   calculateSharedDemoExpectedCash,
+  buildSharedDemoContinuityMigrationStatePatch,
   SHARED_DEMO_CASHIER_USERNAME,
   SHARED_DEMO_CASH_SEED,
   SHARED_DEMO_MANAGER_USERNAME,
@@ -20,18 +22,42 @@ import {
   SHARED_DEMO_PRISTINE_TABLE_COUNTS,
   sharedDemoBootstrapSeedMatches,
   sharedDemoCheckoutSessionMatchesOrder,
+  planSharedDemoMigration,
   sharedDemoMigrationSkipTables,
   sharedDemoPristineTableCountsMatch,
   validateSharedDemoSeed,
 } from "./provision";
+import {
+  SHARED_DEMO_BASELINE_VERSION,
+  SHARED_DEMO_REGISTER_NUMBER,
+} from "./config";
 
 describe("shared demo provisioning", () => {
+  it("preserves POS sync continuity for the credential-only v17 migration", () => {
+    expect(planSharedDemoMigration(16)).toEqual({
+      mode: "preserve_operational_continuity",
+    });
+    for (const baselineVersion of [11, 12, 13, 14, 15]) {
+      expect(planSharedDemoMigration(baselineVersion)).toEqual({
+        mode: "reset_operational_state",
+      });
+    }
+    expect(() => planSharedDemoMigration(10)).toThrow(
+      "Shared demo baseline migration 10->17 is not registered.",
+    );
+    expect(buildSharedDemoContinuityMigrationStatePatch(123)).toEqual({
+      baselineVersion: 17,
+      completedAt: 123,
+    });
+  });
+
   it("defines one coherent synthetic six-domain narrative", () => {
     expect(validateSharedDemoSeed(SHARED_DEMO_SEED)).toEqual([]);
     expect(SHARED_DEMO_SEED.domains).toEqual([
       "pos", "inventory", "cash", "orders", "staff", "operations",
     ]);
     expect(SHARED_DEMO_SEED.organizationSlug).toBe("demo");
+    expect(SHARED_DEMO_SEED.ownerEmail).toBe("store@osustudio.com");
     expect(JSON.stringify(SHARED_DEMO_SEED)).not.toMatch(/@gmail|@yahoo|@hotmail/i);
   });
 
@@ -50,12 +76,12 @@ describe("shared demo provisioning", () => {
       .digest("hex");
 
     expect(SHARED_DEMO_CASHIER_USERNAME).toBe("efua");
-    expect(SHARED_DEMO_MANAGER_USERNAME).toBe("kwabena");
+    expect(SHARED_DEMO_MANAGER_USERNAME).toBe("kay");
     expect(SHARED_DEMO_STAFF_PIN_HASH).toBe(expectedPinHash);
     expect(source).toContain("createStaffCredentialWithCtx");
     expect(source).toContain('role: "cashier"');
     expect(source).toContain('role: "manager"');
-    expect(source.match(/await ensureDemoStaffAccessWithCtx/g)).toHaveLength(3);
+    expect(source.match(/await ensureDemoStaffAccessWithCtx/g)).toHaveLength(4);
     expect(source.lastIndexOf("await ensureDemoStaffAccessWithCtx")).toBeLessThan(
       source.lastIndexOf("captureBaselineDocumentsWithCtx"),
     );
@@ -66,17 +92,57 @@ describe("shared demo provisioning", () => {
     expect(SHARED_DEMO_STORE_IDENTITY.storeName).toBe("Osu Studio — Atelier");
     expect(SHARED_DEMO_STORE_IDENTITY.currency).toBe("GHS");
     expect(SHARED_DEMO_PRODUCTS).toHaveLength(8);
-    const kente = SHARED_DEMO_PRODUCTS.find((product) => product.sku === "DEMO-KENTE-SCARF");
+    const kente = SHARED_DEMO_PRODUCTS.find((product) => product.slug === "demo-kente-scarf");
     expect(kente).toMatchObject({ name: "Kente Scarf", price: 35000 });
-    const soap = SHARED_DEMO_PRODUCTS.find((product) => product.sku === "DEMO-SOAP-BAR");
+    const soap = SHARED_DEMO_PRODUCTS.find((product) => product.slug === "demo-black-soap");
     expect(soap).toMatchObject({ name: "Black Soap Bar", price: 3500 });
+    expect(SHARED_DEMO_PRODUCTS.map((product) => product.sku)).toEqual([
+      "FM5W-7K2-3Q9",
+      "FM5W-4HT-8N6",
+      "FM5W-9C3-2RD",
+      "FM5W-6BX-5W1",
+      "FM5W-2MP-7F4",
+      "FM5W-8QJ-4K7",
+      "FM5W-5K4-9T2",
+      "FM5W-3VN-6H8",
+    ]);
+    expect(
+      SHARED_DEMO_PRODUCTS.every((product) =>
+        /^[0-9A-Z]{4}-[0-9A-Z]{3}-[0-9A-Z]{3}$/.test(product.sku),
+      ),
+    ).toBe(true);
+    expect(new Set(SHARED_DEMO_PRODUCTS.map((product) => product.sku.split("-")[0])).size).toBe(1);
     expect(new Set(SHARED_DEMO_PRODUCTS.map((product) => product.sku)).size).toBe(8);
     expect(new Set(SHARED_DEMO_PRODUCTS.map((product) => product.slug)).size).toBe(8);
+    expect(new Set(SHARED_DEMO_PRODUCTS.map((product) => product.imageFilename)).size).toBe(8);
+    expect(
+      SHARED_DEMO_PRODUCTS.map((product) =>
+        sharedDemoProductImageUrl({
+          product,
+          publicUrl: "https://images.example.com/",
+          storeId: "store-1",
+        }),
+      ),
+    ).toEqual([
+      "https://images.example.com/stores/store-1/products/shared-demo/v1/demo-shea-250.webp",
+      "https://images.example.com/stores/store-1/products/shared-demo/v1/demo-soap-bar.webp",
+      "https://images.example.com/stores/store-1/products/shared-demo/v1/demo-clay-mug.webp",
+      "https://images.example.com/stores/store-1/products/shared-demo/v1/demo-bolga-basket.webp",
+      "https://images.example.com/stores/store-1/products/shared-demo/v1/demo-soy-candle.webp",
+      "https://images.example.com/stores/store-1/products/shared-demo/v1/demo-kente-scarf.webp",
+      "https://images.example.com/stores/store-1/products/shared-demo/v1/demo-batik-tote.webp",
+      "https://images.example.com/stores/store-1/products/shared-demo/v1/demo-bead-bracelet.webp",
+    ]);
     expect(SHARED_DEMO_PRODUCTS.every((product) => product.unitCost < product.price)).toBe(true);
     expect(sharedDemoPickupOrderAmount()).toBe(3500);
+    expect(SHARED_DEMO_PICKUP_ORDER.customerEmail).toBe(
+      "customer@osustudio.com",
+    );
     expect(SHARED_DEMO_STAFF_STORY.cashier.fullName).toBe("Efua Tetteh");
     expect(SHARED_DEMO_STAFF_STORY.manager.fullName).toBe("Kwabena Osei");
     expect(SHARED_DEMO_OPENING_MESSAGE.startsWith("Efua:")).toBe(true);
+    expect(SHARED_DEMO_REGISTER_NUMBER).toBe("01");
+    expect(SHARED_DEMO_BASELINE_VERSION).toBe(17);
   });
 
   it("refuses to capture a missing-state baseline when marker rows have drifted", () => {
@@ -89,6 +155,11 @@ describe("shared demo provisioning", () => {
       orders: [{ amount: orderAmount, hasVerifiedPayment: true, orderNumber: "DEMO-ORDER-001", paymentDue: orderAmount, status: "ready" }],
       posTransactionCount: 0,
       productSkus: SHARED_DEMO_PRODUCTS.map((product) => ({
+        images: [sharedDemoProductImageUrl({
+          product,
+          publicUrl: "https://images.example.com",
+          storeId: "store-1",
+        })],
         inventoryCount: product.inventoryCount, price: product.price, quantityAvailable: product.inventoryCount,
         sku: product.sku, unitCost: product.unitCost,
       })),
@@ -96,7 +167,7 @@ describe("shared demo provisioning", () => {
         inventoryCount: product.inventoryCount, name: product.name,
         quantityAvailable: product.inventoryCount, slug: product.slug,
       })),
-      registerSessions: [{ expectedCash: 5000, openingFloat: 5000, registerNumber: "DEMO-01", status: "active" }],
+      registerSessions: [{ expectedCash: 5000, openingFloat: 5000, registerNumber: "01", status: "active" }],
       seedEventCount: 1,
       staffCredentials: [
         { pinHash: SHARED_DEMO_STAFF_PIN_HASH, status: "active", username: SHARED_DEMO_CASHIER_USERNAME },
@@ -112,6 +183,10 @@ describe("shared demo provisioning", () => {
     expect(sharedDemoBootstrapSeedMatches({
       ...seed,
       productSkus: [{ ...seed.productSkus[0]!, quantityAvailable: 7 }, ...seed.productSkus.slice(1)],
+    })).toBe(false);
+    expect(sharedDemoBootstrapSeedMatches({
+      ...seed,
+      productSkus: [{ ...seed.productSkus[0]!, images: [] }, ...seed.productSkus.slice(1)],
     })).toBe(false);
     expect(sharedDemoBootstrapSeedMatches({
       ...seed,
@@ -178,6 +253,10 @@ describe("shared demo provisioning", () => {
     expect(source).toContain("hasVerifiedPayment: true");
     expect(source).toContain('isPODOrder: false');
     expect(source).toContain('channel: "card"');
+    expect(source).toContain(
+      "email: SHARED_DEMO_PICKUP_ORDER.customerEmail",
+    );
+    expect(source).not.toContain("shared-demo.athena.invalid");
   });
 
   it("migrates existing demo baselines to the paid-card order story", () => {
@@ -200,5 +279,12 @@ describe("shared demo provisioning", () => {
     )).toBe(false);
     expect(source).toContain('ctx.db.insert("checkoutSession"');
     expect(source).toContain('ctx.db.patch("checkoutSession", checkoutSessionId');
+    expect(source).toContain(
+      'terminal.fingerprintHash === "shared-demo-terminal"',
+    );
+    expect(source).toContain(
+      'terminal.registerNumber === SHARED_DEMO_REGISTER_NUMBER',
+    );
+    expect(source).toContain("registerNumber: undefined");
   });
 });

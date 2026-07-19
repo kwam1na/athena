@@ -1083,6 +1083,16 @@ describe("ProcurementViewContent", () => {
     );
   });
 
+  it("disables quick vendor creation in the shared demo", () => {
+    render(<ProcurementViewContent {...baseProps} isSharedDemo />);
+
+    expect(screen.getByLabelText("Vendor name")).toBeDisabled();
+    expect(screen.getByRole("button", { name: /^add$/i })).toBeDisabled();
+    expect(
+      screen.getByText("Vendor creation is unavailable in the demo."),
+    ).toBeInTheDocument();
+  });
+
   it("removes successfully created vendor groups from the draft when a later group fails", async () => {
     const { default: userEvent } = await import("@testing-library/user-event");
     const user = userEvent.setup();

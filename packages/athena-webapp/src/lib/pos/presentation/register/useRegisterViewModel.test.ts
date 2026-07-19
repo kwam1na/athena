@@ -70,6 +70,11 @@ let mockTerminal:
       registerNumber?: string;
       transactionCapability?:
         "products_and_services" | "products_only" | "services_only";
+      sharedDemoStaff?: {
+        activeRoles: string[];
+        displayName: string;
+        staffProfileId: Id<"staffProfile">;
+      };
     }
   | null
   | undefined;
@@ -2939,6 +2944,40 @@ describe("useRegisterViewModel", () => {
 
     expect(result.current.authDialog?.open).toBe(true);
     expect(result.current.cashierCard).toBeNull();
+  });
+
+  it("requires cashier authentication for the shared demo register", async () => {
+    mockRegisterState = {
+      phase: "requiresCashier",
+      terminal: { _id: "terminal-1", displayName: "Front Counter" },
+      cashier: null,
+      activeRegisterSession: null,
+      activeSession: null,
+      activeSessionConflict: null,
+      resumableSession: null,
+    };
+    mockActiveSession = null;
+    mockCashier = null;
+    mockTerminal = {
+      _id: "terminal-1" as Id<"posTerminal">,
+      displayName: "Front Counter",
+      registerNumber: "01",
+      sharedDemoStaff: {
+        activeRoles: ["cashier"],
+        displayName: "Efua Tetteh",
+        staffProfileId: "staff-demo" as Id<"staffProfile">,
+      },
+    };
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await waitForLocalRegisterEffects(result);
+
+    expect(result.current.isSharedDemo).toBe(true);
+    expect(result.current.authDialog?.open).toBe(true);
+    expect(result.current.cashierCard).toBeNull();
+    expect(result.current.onboarding.cashierSignedIn).toBe(false);
   });
 
   it("uses the local POS entry seed as store authority when the live active store is unavailable", async () => {
@@ -9036,6 +9075,40 @@ describe("useRegisterViewModel", () => {
 
     act(() => result.current.drawerGate?.onRetrySync?.());
     expect(mockRegisterLifecycleAuthorityRetry).toHaveBeenCalledOnce();
+  });
+
+  it("routes a missing cloud drawer to the replacement-opening gate", async () => {
+    mockActiveSession = null;
+    mockRegisterState = {
+      ...mockRegisterState!,
+      activeSession: null,
+    };
+    mockReadDrawerAuthorityState.mockResolvedValue({
+      ok: true,
+      value: {
+        cloudRegisterSessionId: "drawer-1",
+        localRegisterSessionId: "drawer-1",
+        observedAt: 110,
+        reason: "cloud_session_missing",
+        status: "blocked",
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      },
+    });
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        buildStaffAuthenticationResult(),
+      );
+    });
+    await waitForLocalRegisterEffects(result);
+
+    expect(result.current.drawerGate?.mode).toBe("initialSetup");
+    expect(result.current.drawerGate?.onSubmit).toBeTypeOf("function");
+    expect(result.current.drawerGate?.onRetrySync).toBeUndefined();
   });
 
   it("routes closed drawer authority blocks to the open-drawer gate", async () => {

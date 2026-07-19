@@ -2,7 +2,7 @@ import {
   SHARED_DEMO_PRODUCTS,
   SHARED_DEMO_STAFF_STORY,
   SHARED_DEMO_STORE_IDENTITY,
-  sharedDemoProductBySku,
+  sharedDemoProductBySlug,
 } from "~/shared/sharedDemoStory";
 import { formatStoredCurrencyAmount } from "@/lib/pos/displayAmounts";
 
@@ -33,8 +33,8 @@ export const dayMoments = [
 
 // The traceable sale: completed offline at the register at 3:14 PM, paid in
 // cash, then synced into the register session in Cash Controls.
-const kenteScarf = sharedDemoProductBySku("DEMO-KENTE-SCARF");
-const blackSoap = sharedDemoProductBySku("DEMO-SOAP-BAR");
+const kenteScarf = sharedDemoProductBySlug("demo-kente-scarf");
+const blackSoap = sharedDemoProductBySlug("demo-black-soap");
 
 export const tracedSale = {
   cashier: SHARED_DEMO_STAFF_STORY.cashier.firstName,
@@ -84,9 +84,9 @@ export const morningSnapshot = {
 // catalog so the amounts stay honest.
 export const topItems = [
   { name: kenteScarf.name, quantity: 2, total: kenteScarf.price * 2 },
-  { name: sharedDemoProductBySku("DEMO-SHEA-250").name, quantity: 5, total: sharedDemoProductBySku("DEMO-SHEA-250").price * 5 },
+  { name: sharedDemoProductBySlug("demo-shea-butter").name, quantity: 5, total: sharedDemoProductBySlug("demo-shea-butter").price * 5 },
   { name: blackSoap.name, quantity: 6, total: blackSoap.price * 6 },
-  { name: sharedDemoProductBySku("DEMO-CLAY-MUG").name, quantity: 3, total: sharedDemoProductBySku("DEMO-CLAY-MUG").price * 3 },
+  { name: sharedDemoProductBySlug("demo-clay-mug").name, quantity: 3, total: sharedDemoProductBySlug("demo-clay-mug").price * 3 },
 ] as const;
 
 // Kente Scarf starts the day with 6 on hand and sells 2, so the low-stock
@@ -94,7 +94,7 @@ export const topItems = [
 export const carryForward = {
   itemName: kenteScarf.name,
   remaining:
-    SHARED_DEMO_PRODUCTS.find((product) => product.sku === "DEMO-KENTE-SCARF")!
+    SHARED_DEMO_PRODUCTS.find((product) => product.slug === "demo-kente-scarf")!
       .inventoryCount - 2,
 } as const;
 

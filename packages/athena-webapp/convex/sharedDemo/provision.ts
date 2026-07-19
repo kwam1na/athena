@@ -1,11 +1,12 @@
 import { v } from "convex/values";
 
 import type { Id } from "../_generated/dataModel";
-import { internalMutation, type MutationCtx } from "../_generated/server";
+import { env, internalMutation, type MutationCtx } from "../_generated/server";
 import {
   SHARED_DEMO_CATEGORY,
   SHARED_DEMO_OPENING_MESSAGE,
   SHARED_DEMO_PICKUP_ORDER,
+  SHARED_DEMO_PRODUCT_IMAGE_VERSION,
   SHARED_DEMO_PRODUCTS,
   SHARED_DEMO_STAFF_STORY,
   SHARED_DEMO_STORE_IDENTITY,
@@ -13,6 +14,8 @@ import {
   SHARED_DEMO_TERMINAL_DISPLAY_NAME,
   sharedDemoPickupOrderAmount,
   sharedDemoProductBySku,
+  sharedDemoProductImageUrl,
+  type SharedDemoProductStory,
   type SharedDemoSubcategoryKey,
 } from "../../shared/sharedDemoStory";
 import {
@@ -45,6 +48,7 @@ export {
 import {
   captureBaselineDocumentsWithCtx,
   countMutableDemoStoreRowsWithCtx,
+  promoteBaselineDocumentsWithCtx,
   restoreMutableDemoStoreRowsWithCtx,
   SHARED_DEMO_MUTABLE_TABLES,
 } from "./domainRestore";
@@ -78,6 +82,34 @@ export function sharedDemoMigrationSkipTables(baselineVersion: number) {
   return ["registerSession"] as const;
 }
 
+export function planSharedDemoMigration(baselineVersion: number) {
+  const migrationClassifications = {
+    11: "reset_operational_state",
+    12: "reset_operational_state",
+    13: "reset_operational_state",
+    14: "reset_operational_state",
+    15: "reset_operational_state",
+    16: "preserve_operational_continuity",
+  } as const;
+  const mode =
+    migrationClassifications[
+      baselineVersion as keyof typeof migrationClassifications
+    ];
+  if (!mode || SHARED_DEMO_BASELINE_VERSION !== 17) {
+    throw new Error(
+      `Shared demo baseline migration ${baselineVersion}->${SHARED_DEMO_BASELINE_VERSION} is not registered.`,
+    );
+  }
+  return { mode };
+}
+
+export function buildSharedDemoContinuityMigrationStatePatch(now: number) {
+  return {
+    baselineVersion: SHARED_DEMO_BASELINE_VERSION,
+    completedAt: now,
+  } as const;
+}
+
 export function validateSharedDemoSeed(seed: typeof SHARED_DEMO_SEED) {
   const errors: string[] = [];
   if (new Set(seed.domains).size !== 6) errors.push("six domains required");
@@ -107,6 +139,7 @@ export function sharedDemoBootstrapSeedMatches(input: {
   }>;
   posTransactionCount: number;
   productSkus: Array<{
+    images: string[];
     inventoryCount: number;
     price: number;
     quantityAvailable: number;
@@ -173,6 +206,10 @@ export function sharedDemoBootstrapSeedMatches(input: {
         input.productSkus.some(
           (candidate) =>
             candidate.sku === storyProduct.sku &&
+            candidate.images.length === 1 &&
+            candidate.images[0]?.endsWith(
+              `/products/shared-demo/${SHARED_DEMO_PRODUCT_IMAGE_VERSION}/${storyProduct.imageFilename}`,
+            ) &&
             candidate.price === storyProduct.price &&
             candidate.unitCost === storyProduct.unitCost &&
             candidate.inventoryCount === storyProduct.inventoryCount &&
@@ -266,6 +303,17 @@ export function sharedDemoCheckoutSessionMatchesOrder(
     checkoutSession?.storeId === order.storeId &&
     checkoutSession.placedOrderId === order._id
   );
+}
+
+function sharedDemoProductImages(
+  product: SharedDemoProductStory,
+  storeId: Id<"store">,
+) {
+  const publicUrl = env.R2_PUBLIC_URL;
+  if (!publicUrl) {
+    throw new Error("The shared demo product image host is not configured.");
+  }
+  return [sharedDemoProductImageUrl({ product, publicUrl, storeId })];
 }
 
 async function ensureDemoRoleAssignmentWithCtx(
@@ -523,7 +571,7 @@ async function reconcileSharedDemoCatalogWithCtx(
       subcategoryId,
     });
     const productSkuId = await ctx.db.insert("productSku", {
-      images: [] as string[],
+      images: sharedDemoProductImages(storyProduct, args.storeId),
       inventoryCount: storyProduct.inventoryCount,
       isVisible: true,
       posVisible: true,
@@ -616,15 +664,24 @@ async function migrateSharedDemoStoryWithCtx(
     .query("posTerminal")
     .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
     .take(50);
+  const templateTerminal = terminals.find(
+    (terminal) => terminal.fingerprintHash === "shared-demo-terminal",
+  );
   for (const terminal of terminals) {
     if (
-      terminal.registerNumber === SHARED_DEMO_REGISTER_NUMBER &&
-      terminal.displayName !== SHARED_DEMO_TERMINAL_DISPLAY_NAME
+      terminal._id !== templateTerminal?._id &&
+      terminal.registerNumber === SHARED_DEMO_REGISTER_NUMBER
     ) {
       await ctx.db.patch("posTerminal", terminal._id, {
-        displayName: SHARED_DEMO_TERMINAL_DISPLAY_NAME,
+        registerNumber: undefined,
       });
     }
+  }
+  if (templateTerminal) {
+    await ctx.db.patch("posTerminal", templateTerminal._id, {
+      displayName: SHARED_DEMO_TERMINAL_DISPLAY_NAME,
+      registerNumber: SHARED_DEMO_REGISTER_NUMBER,
+    });
   }
 
   const identityBySku = await reconcileSharedDemoCatalogWithCtx(ctx, args);
@@ -642,6 +699,12 @@ async function migrateSharedDemoStoryWithCtx(
   if (!pickupOrder) throw new Error("Demo order is missing.");
   await ctx.db.patch("onlineOrder", pickupOrder._id, {
     amount: orderAmount,
+    customerDetails: {
+      email: SHARED_DEMO_PICKUP_ORDER.customerEmail,
+      firstName: pickupOrder.customerDetails?.firstName ?? "Demo",
+      lastName: pickupOrder.customerDetails?.lastName ?? "Customer",
+      phoneNumber: pickupOrder.customerDetails?.phoneNumber ?? "0000000000",
+    },
     paymentDue: orderAmount,
   });
   const orderItems = await ctx.db
@@ -858,6 +921,56 @@ export const provisionSharedDemo = internalMutation({
       if (state.baselineVersion > SHARED_DEMO_BASELINE_VERSION)
         throw new Error("Demo baseline version is invalid.");
       if (state.baselineVersion < SHARED_DEMO_BASELINE_VERSION) {
+        const migrationPlan = planSharedDemoMigration(state.baselineVersion);
+        if (migrationPlan.mode === "preserve_operational_continuity") {
+          const { manager } = await ensureDemoStaffAccessWithCtx(ctx, {
+            now,
+            organizationId: existingOrganization._id,
+            ownerUserId: owner._id,
+            storeId: existingStore._id,
+          });
+          let updatedManagerCredentialBaseline = false;
+          const promoted = await promoteBaselineDocumentsWithCtx(ctx, {
+            fromVersion: state.baselineVersion,
+            storeId: existingStore._id,
+            transformDocument: (row) => {
+              if (
+                row.tableName !== "staffCredential" ||
+                row.document.staffProfileId !== manager._id
+              ) {
+                return row.document;
+              }
+              updatedManagerCredentialBaseline = true;
+              return {
+                ...row.document,
+                username: SHARED_DEMO_MANAGER_USERNAME,
+              };
+            },
+          });
+          if (promoted.promoted === 0 || !updatedManagerCredentialBaseline) {
+            throw new Error("Demo credential baseline could not be promoted.");
+          }
+          const baselineRows = await ctx.db
+            .query("sharedDemoBaselineRow")
+            .withIndex("by_storeId", (q) =>
+              q.eq("storeId", existingStore._id),
+            )
+            .take(20);
+          for (const baselineRow of baselineRows) {
+            await ctx.db.patch("sharedDemoBaselineRow", baselineRow._id, {
+              baselineVersion: SHARED_DEMO_BASELINE_VERSION,
+            });
+          }
+          await ctx.db.patch("sharedDemoRestoreState", state._id, {
+            ...buildSharedDemoContinuityMigrationStatePatch(now),
+          });
+          return {
+            athenaUserId: owner._id,
+            kind: "migrated" as const,
+            organizationId: existingOrganization._id,
+            storeId: existingStore._id,
+          };
+        }
         await restoreMutableDemoStoreRowsWithCtx(ctx, existingStore._id, {
           baselineVersion: state.baselineVersion,
           skipTables: sharedDemoMigrationSkipTables(state.baselineVersion),
@@ -1017,9 +1130,21 @@ export const provisionSharedDemo = internalMutation({
           .take(500);
         let templateTerminal = terminals.find(
           (terminal) =>
-            terminal.registerNumber === SHARED_DEMO_REGISTER_NUMBER &&
+            terminal.fingerprintHash === "shared-demo-terminal" &&
             terminal.status === "active",
         );
+        if (
+          templateTerminal &&
+          templateTerminal.registerNumber !== SHARED_DEMO_REGISTER_NUMBER
+        ) {
+          await ctx.db.patch("posTerminal", templateTerminal._id, {
+            registerNumber: SHARED_DEMO_REGISTER_NUMBER,
+          });
+          templateTerminal = {
+            ...templateTerminal,
+            registerNumber: SHARED_DEMO_REGISTER_NUMBER,
+          };
+        }
         if (!templateTerminal) {
           const terminalId = await ctx.db.insert("posTerminal", {
             browserInfo: {
@@ -1260,7 +1385,7 @@ export const provisionSharedDemo = internalMutation({
         subcategoryId,
       });
       const productSkuId = await ctx.db.insert("productSku", {
-        images: [],
+        images: sharedDemoProductImages(storyProduct, storeId),
         inventoryCount: storyProduct.inventoryCount,
         isVisible: true,
         posVisible: true,
@@ -1362,7 +1487,7 @@ export const provisionSharedDemo = internalMutation({
       billingDetails: null,
       checkoutSessionId,
       customerDetails: {
-        email: "customer@shared-demo.athena.invalid",
+        email: SHARED_DEMO_PICKUP_ORDER.customerEmail,
         firstName: "Demo",
         lastName: "Customer",
         phoneNumber: "0000000000",

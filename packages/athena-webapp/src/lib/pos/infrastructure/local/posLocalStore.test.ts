@@ -1001,6 +1001,86 @@ describe("posLocalStore", () => {
     ).resolves.toEqual({ ok: true, value: null });
   });
 
+  it("applies an exact same-id dedicated snapshot without a legacy mapping", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+    });
+
+    await expect(
+      store.applyRegisterLifecycleAuthority({
+        observation: {
+          classification: "sale_usable",
+          cloudRegisterSessionId: "register-session-1",
+          cursor: { lifecycleRevision: 2, mappingAuthorityRevision: 0 },
+          localRegisterSessionId: "register-session-1",
+          observedAt: 3_000,
+          source: "dedicated_snapshot",
+          status: "healthy",
+        },
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: { disposition: "applied" },
+    });
+    await expect(
+      store.readDrawerAuthorityState({
+        localRegisterSessionId: "register-session-1",
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: {
+        cloudRegisterSessionId: "register-session-1",
+        serverAuthority: { source: "dedicated_snapshot", status: "healthy" },
+      },
+    });
+  });
+
+  it.each([
+    {
+      label: "different-subject dedicated",
+      observation: {
+        classification: "sale_usable" as const,
+        cloudRegisterSessionId: "cloud-register-1",
+        cursor: { lifecycleRevision: 2, mappingAuthorityRevision: 0 },
+        localRegisterSessionId: "local-register-1",
+        observedAt: 3_000,
+        source: "dedicated_snapshot" as const,
+        status: "healthy" as const,
+      },
+    },
+    {
+      label: "mappingless repair",
+      observation: {
+        classification: "repair_required" as const,
+        cursor: { lifecycleRevision: 0, mappingAuthorityRevision: 0 },
+        localRegisterSessionId: "local-register-1",
+        observedAt: 3_000,
+        reason: "authority_unknown" as const,
+        source: "dedicated_snapshot" as const,
+        status: "blocked" as const,
+      },
+    },
+  ])("rejects a $label snapshot", async ({ observation }) => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+    });
+
+    await expect(
+      store.applyRegisterLifecycleAuthority({
+        observation,
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      }),
+    ).resolves.toEqual({
+      ok: true,
+      value: { disposition: "rejected", reason: "mapping_invalidated" },
+    });
+  });
+
   it("atomically rejects authority when only mapping authority metadata changed", async () => {
     const store = createPosLocalStore({
       adapter: createMemoryPosLocalStorageAdapter(),
@@ -1108,6 +1188,70 @@ describe("posLocalStore", () => {
     ).resolves.toMatchObject({
       ok: true,
       value: { disposition: "applied" },
+    });
+  });
+
+  it("recovers a redacted repair record when the verified mapped subject becomes healthy", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+    });
+    await store.writeLocalCloudMapping({
+      cloudId: "cloud-register-1",
+      entity: "registerSession",
+      localId: "cloud-register-1",
+      mappedAt: 1_000,
+      mappingAuthorityRevision: 0,
+    });
+    const expectedMapping = {
+      cloudRegisterSessionId: "cloud-register-1",
+      mappedAt: 1_000,
+      mappingAuthorityRevision: 0,
+    };
+
+    await expect(
+      store.applyRegisterLifecycleAuthority({
+        expectedMapping,
+        observation: {
+          classification: "repair_required",
+          cursor: { lifecycleRevision: 0, mappingAuthorityRevision: 0 },
+          localRegisterSessionId: "cloud-register-1",
+          observedAt: 2_000,
+          reason: "authority_unknown",
+          source: "dedicated_snapshot",
+          status: "blocked",
+        },
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: { disposition: "applied" },
+    });
+
+    await expect(
+      store.applyRegisterLifecycleAuthority({
+        expectedMapping,
+        observation: {
+          classification: "sale_usable",
+          cloudRegisterSessionId: "cloud-register-1",
+          cursor: { lifecycleRevision: 1, mappingAuthorityRevision: 0 },
+          localRegisterSessionId: "cloud-register-1",
+          observedAt: 3_000,
+          source: "dedicated_snapshot",
+          status: "healthy",
+        },
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: {
+        disposition: "applied",
+        value: {
+          cloudRegisterSessionId: "cloud-register-1",
+          status: "healthy",
+        },
+      },
     });
   });
 

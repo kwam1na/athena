@@ -35,7 +35,10 @@ import { update as updateOrder } from "../storeFront/onlineOrder";
 import { createTransaction, refundPayment } from "../storeFront/payment";
 import { completeTransaction } from "../pos/public/transactions";
 import { submitStockAdjustmentBatch } from "../stockOps/adjustments";
-import { recordRegisterSessionDeposit } from "../cashControls/deposits";
+import {
+  recordRegisterSessionDeposit,
+  resolveRegisterSessionSyncReview,
+} from "../cashControls/deposits";
 import {
   correctRegisterSessionOpeningFloat,
   reopenRegisterSessionCloseout,
@@ -112,6 +115,12 @@ describe("actual public shared-demo enforcement boundaries", () => {
     [completeTransaction, "pos.sale.complete", { storeId: "store" }],
     [submitStockAdjustmentBatch, "inventory.adjust", { storeId: "store" }],
     [recordRegisterSessionDeposit, "cash.control.write", { storeId: "store" }],
+    [resolveRegisterSessionSyncReview, "cash.control.write", {
+      decision: "rejected",
+      registerSessionId: "register-session",
+      reviewConflictIds: ["duplicate-opening"],
+      storeId: "store",
+    }],
     [correctRegisterSessionOpeningFloat, "cash.control.write", {
       correctedOpeningFloat: 0,
       reason: "Correct the opening count.",
@@ -174,6 +183,12 @@ describe("actual public shared-demo enforcement boundaries", () => {
     [completeTransaction, { storeId: "store" }, "store"],
     [submitStockAdjustmentBatch, { storeId: "store" }, "store"],
     [recordRegisterSessionDeposit, { storeId: "store" }, "store"],
+    [resolveRegisterSessionSyncReview, {
+      decision: "rejected",
+      registerSessionId: "register-session",
+      reviewConflictIds: ["duplicate-opening"],
+      storeId: "store",
+    }, "store"],
     [correctRegisterSessionOpeningFloat, {
       correctedOpeningFloat: 0,
       reason: "Correct the opening count.",

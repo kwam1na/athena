@@ -381,9 +381,10 @@ describe("registerTerminal", () => {
 
     expect(result).toEqual(
       userError({
-        code: "validation_failed",
+        code: "conflict",
         message:
           "A terminal with this register number already exists in this store.",
+        metadata: { conflictKind: "register_number_conflict" },
       }),
     );
   });

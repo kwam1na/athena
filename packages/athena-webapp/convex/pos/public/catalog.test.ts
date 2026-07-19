@@ -126,6 +126,10 @@ function getHandler(definition: unknown) {
 }
 
 describe("POS public catalog queries", () => {
+  it("keeps the empty register catalog contract stable", () => {
+    assertConformsToExportedReturns(listRegisterCatalogSnapshot, []);
+  });
+
   beforeEach(() => {
     vi.resetAllMocks();
     mocks.requireAuthenticatedAthenaUserWithCtx.mockResolvedValue({
@@ -509,20 +513,33 @@ describe("POS public catalog queries", () => {
   });
 
   it.each([
-    [search, { searchQuery: "milk", storeId: "other-store" }, mocks.searchProducts],
-    [barcodeLookup, { barcode: "123456789012", storeId: "other-store" }, mocks.lookupByBarcode],
-  ] as const)("rejects a cross-store direct catalog read before its reader runs", async (fn, args, reader) => {
-    const denial = new Error("This action is unavailable in the demo.");
-    mocks.requireSharedDemoStoreCapabilityIfApplicable.mockRejectedValueOnce(denial);
-    const ctx = buildCtx();
-    await expect(getHandler(fn)(ctx as never, args)).rejects.toThrow(denial.message);
-    expect(mocks.requireSharedDemoStoreCapabilityIfApplicable).toHaveBeenCalledWith(
-      ctx,
-      "pos.sale.complete",
-      "other-store",
-    );
-    expect(reader).not.toHaveBeenCalled();
-  });
+    [
+      search,
+      { searchQuery: "milk", storeId: "other-store" },
+      mocks.searchProducts,
+    ],
+    [
+      barcodeLookup,
+      { barcode: "123456789012", storeId: "other-store" },
+      mocks.lookupByBarcode,
+    ],
+  ] as const)(
+    "rejects a cross-store direct catalog read before its reader runs",
+    async (fn, args, reader) => {
+      const denial = new Error("This action is unavailable in the demo.");
+      mocks.requireSharedDemoStoreCapabilityIfApplicable.mockRejectedValueOnce(
+        denial,
+      );
+      const ctx = buildCtx();
+      await expect(getHandler(fn)(ctx as never, args)).rejects.toThrow(
+        denial.message,
+      );
+      expect(
+        mocks.requireSharedDemoStoreCapabilityIfApplicable,
+      ).toHaveBeenCalledWith(ctx, "pos.sale.complete", "other-store");
+      expect(reader).not.toHaveBeenCalled();
+    },
+  );
 
   it("lists linked pending checkout aliases for trusted SKU rows", async () => {
     const ctx = buildCtx({

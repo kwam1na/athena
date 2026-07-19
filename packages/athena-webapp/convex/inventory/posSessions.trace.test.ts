@@ -108,13 +108,16 @@ describe("POS session exported return contracts", () => {
     });
     const sessionIdOnlyResult = ok({ sessionId: "pos-session-1" });
 
-    assertConformsToExportedReturns(expireSessionFromOperations, ok({
-      sessionId: "pos-session-1",
-      status: "expired",
-      priorStatus: "active",
-      releasedHoldCount: 1,
-      releasedQuantity: 2,
-    }));
+    assertConformsToExportedReturns(
+      expireSessionFromOperations,
+      ok({
+        sessionId: "pos-session-1",
+        status: "expired",
+        priorStatus: "active",
+        releasedHoldCount: 1,
+        releasedQuantity: 2,
+      }),
+    );
     assertConformsToExportedReturns(createSession, sessionOperationResult);
     assertConformsToExportedReturns(
       bindSessionToRegisterSession,
@@ -123,24 +126,33 @@ describe("POS session exported return contracts", () => {
     assertConformsToExportedReturns(updateSession, sessionOperationResult);
     assertConformsToExportedReturns(holdSession, sessionOperationResult);
     assertConformsToExportedReturns(resumeSession, sessionOperationResult);
-    assertConformsToExportedReturns(completeSession, ok({
-      sessionId: "pos-session-1",
-      transactionId: "pos-transaction-1",
-      transactionNumber: "TX-001",
-    }));
+    assertConformsToExportedReturns(
+      completeSession,
+      ok({
+        sessionId: "pos-session-1",
+        transactionId: "pos-transaction-1",
+        transactionNumber: "TX-001",
+      }),
+    );
     // Idempotent replay (U8): a retried completeSession returns the original
     // sale via the same exported ok shape instead of minting a duplicate.
-    assertConformsToExportedReturns(completeSession, ok({
-      sessionId: "pos-session-1",
-      transactionId: "pos-transaction-existing",
-      transactionNumber: "TX-EXISTING",
-    }));
+    assertConformsToExportedReturns(
+      completeSession,
+      ok({
+        sessionId: "pos-session-1",
+        transactionId: "pos-transaction-existing",
+        transactionNumber: "TX-EXISTING",
+      }),
+    );
     assertConformsToExportedReturns(voidSession, sessionIdOnlyResult);
     assertConformsToExportedReturns(
       releaseSessionInventoryHoldsAndDeleteItems,
       sessionIdOnlyResult,
     );
-    assertConformsToExportedReturns(syncSessionCheckoutState, sessionOperationResult);
+    assertConformsToExportedReturns(
+      syncSessionCheckoutState,
+      sessionOperationResult,
+    );
   });
 });
 
@@ -381,10 +393,7 @@ function createMutationCtx(seed?: {
 
         apply(builder);
 
-        if (
-          tableName === "scheduledRunLedger" &&
-          indexName === "by_runKey"
-        ) {
+        if (tableName === "scheduledRunLedger" && indexName === "by_runKey") {
           const page = scheduledRunLedger.filter(
             (entry) => entry.runKey === filters.runKey,
           );
@@ -1158,13 +1167,18 @@ describe("pos session lifecycle trace handlers", () => {
         },
       }),
     );
-    expect(mocks.requireAuthenticatedAthenaUserWithCtx).toHaveBeenCalledWith(ctx);
-    expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(ctx, {
-      allowedRoles: ["full_admin", "pos_only"],
-      failureMessage: "You cannot complete this POS sale.",
-      organizationId: "org-1",
-      userId: "user-1",
-    });
+    expect(mocks.requireAuthenticatedAthenaUserWithCtx).toHaveBeenCalledWith(
+      ctx,
+    );
+    expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
+      ctx,
+      {
+        allowedRoles: ["full_admin", "pos_only"],
+        failureMessage: "You cannot complete this POS sale.",
+        organizationId: "org-1",
+        userId: "user-1",
+      },
+    );
     expect(mocks.traceRecord).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({

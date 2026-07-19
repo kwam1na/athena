@@ -28,6 +28,7 @@ import {
   getCategoryProductQueryOptions,
   writeCategoryProductPageSearch,
 } from "./ProductsListView.logic";
+import { useSharedDemoContext } from "~/src/hooks/useSharedDemoContext";
 
 const ProductActionsToggleGroup = ({
   outOfStockProductsCount,
@@ -61,12 +62,14 @@ const CategoryWorkspaceActions = ({
   selectedProductActions,
   setSelectedProductActions,
   hasProducts,
+  isSharedDemo,
 }: {
   categorySlug: string;
   outOfStockProductsCount: number;
   selectedProductActions: string[];
   setSelectedProductActions: (actions: string[]) => void;
   hasProducts: boolean;
+  isSharedDemo: boolean;
 }) => {
   const categories = useGetCategories();
   const updateCategory = useMutation(api.inventory.categories.update);
@@ -82,7 +85,7 @@ const CategoryWorkspaceActions = ({
   const isStorefrontVisible = category?.showOnStorefront !== false;
 
   const handleStorefrontVisibilityChange = async (checked: boolean) => {
-    if (!category) return;
+    if (!category || isSharedDemo) return;
 
     setIsStorefrontVisibilityMutationPending(true);
     try {
@@ -128,7 +131,9 @@ const CategoryWorkspaceActions = ({
             <Switch
               aria-label="Show category on storefront"
               checked={isStorefrontVisible}
-              disabled={isStorefrontVisibilityMutationPending}
+              disabled={
+                isSharedDemo || isStorefrontVisibilityMutationPending
+              }
               onCheckedChange={handleStorefrontVisibilityChange}
             />
           </div>
@@ -142,7 +147,7 @@ const CategoryWorkspaceActions = ({
           />
         )}
 
-        {hasProducts && (
+        {hasProducts && !isSharedDemo && (
           <Button
             variant="ghost"
             onClick={handleClearCache}
@@ -164,6 +169,7 @@ function Body() {
     page?: number | string;
   };
   const { productsTableState } = useProductsTableState();
+  const isSharedDemo = Boolean(useSharedDemoContext());
   const { subcategorySlug } = productsTableState;
   const categoryProductQueryOptions = getCategoryProductQueryOptions(
     categorySlug ?? undefined,
@@ -237,6 +243,7 @@ function Body() {
                 selectedProductActions={selectedProductActions}
                 setSelectedProductActions={setSelectedProductActions}
                 hasProducts={products?.length != 0}
+                isSharedDemo={isSharedDemo}
               />
             ) : null}
             {isLoadingProducts ? null : (

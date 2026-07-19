@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   requireAuthenticatedAthenaUserWithCtx: vi.fn(),
   requireOrganizationMemberRoleWithCtx: vi.fn(),
+  requireStoreMemberAccessWithCtx: vi.fn(),
   searchCustomers: vi.fn(),
   getCustomerById: vi.fn(),
   getCustomerTransactions: vi.fn(),
@@ -23,6 +24,10 @@ vi.mock("../../lib/athenaUserAuth", () => ({
     mocks.requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx:
     mocks.requireOrganizationMemberRoleWithCtx,
+}));
+
+vi.mock("../../lib/storeMemberAccess", () => ({
+  requireStoreMemberAccessWithCtx: mocks.requireStoreMemberAccessWithCtx,
 }));
 
 vi.mock("../application/queries/searchCustomers", () => ({
@@ -100,6 +105,10 @@ function buildCtx(
 }
 
 describe("pos public customers authorization", () => {
+  it("keeps the empty customer search contract stable", () => {
+    assertConformsToExportedReturns(searchCustomers as never, []);
+  });
+
   beforeEach(() => {
     vi.resetAllMocks();
     mocks.requireAuthenticatedAthenaUserWithCtx.mockResolvedValue({
@@ -108,6 +117,22 @@ describe("pos public customers authorization", () => {
     mocks.requireOrganizationMemberRoleWithCtx.mockResolvedValue({
       role: "pos_only",
     });
+    mocks.requireStoreMemberAccessWithCtx.mockImplementation(
+      async (ctx, args) => {
+        const athenaUser =
+          await mocks.requireAuthenticatedAthenaUserWithCtx(ctx);
+        const membership = await mocks.requireOrganizationMemberRoleWithCtx(
+          ctx,
+          {
+            allowedRoles: args.allowedRoles,
+            failureMessage: args.failureMessage,
+            organizationId: "org-1",
+            userId: athenaUser._id,
+          },
+        );
+        return { athenaUser, membership, store: { _id: args.storeId } };
+      },
+    );
     mocks.searchCustomers.mockResolvedValue([{ _id: "customer-1" }]);
     mocks.getCustomerById.mockResolvedValue({ _id: "customer-1", name: "Ada" });
     mocks.createCustomer.mockResolvedValue({ kind: "ok", data: {} });
@@ -373,7 +398,10 @@ describe("pos public customers return contracts", () => {
     assertConformsToExportedReturns(linkToGuest as never, userErr);
   });
   it("conforms resolveStoreFrontUserMatch returns to its exported validator", () => {
-    assertConformsToExportedReturns(resolveStoreFrontUserMatch as never, userErr);
+    assertConformsToExportedReturns(
+      resolveStoreFrontUserMatch as never,
+      userErr,
+    );
   });
   it("conforms resolveGuestMatch returns to its exported validator", () => {
     assertConformsToExportedReturns(resolveGuestMatch as never, userErr);

@@ -192,6 +192,13 @@ function isScopedExpenseLocalEvent(
 export function useExpenseRegisterViewModel(): RegisterViewModel {
   const { activeStore } = useGetActiveStore();
   const terminal = useGetTerminal();
+  const sharedDemoStaff = (
+    terminal as {
+      sharedDemoStaff?: {
+        staffProfileId: Id<"staffProfile">;
+      };
+    } | null
+  )?.sharedDemoStaff;
   const store = useExpenseStore();
   const cashierStaffProfileId = store.cashier.id;
   const isCashierSignedIn = Boolean(cashierStaffProfileId);
@@ -788,6 +795,7 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
 
   return {
     workflowMode: "expense",
+    isSharedDemo: Boolean(sharedDemoStaff),
     hasActiveStore: Boolean(activeStore),
     debug: {
       activeStoreSource: activeStore ? "live" : "missing",

@@ -424,7 +424,11 @@ export async function readLatestRuntimeDrawerAuthorityState(input: {
 export function isRecoverableDrawerAuthorityReason(
   reason: PosDrawerAuthorityState["reason"] | undefined,
 ) {
-  return reason === "lifecycle_rejected" || reason === "authority_unknown";
+  return (
+    reason === "cloud_session_missing" ||
+    reason === "lifecycle_rejected" ||
+    reason === "authority_unknown"
+  );
 }
 
 function drawerAuthorityEventKey(input: {

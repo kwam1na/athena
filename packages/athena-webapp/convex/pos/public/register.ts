@@ -1,10 +1,7 @@
 import { v } from "convex/values";
 
 import { mutation, query } from "../../_generated/server";
-import {
-  requireAuthenticatedAthenaUserWithCtx,
-  requireOrganizationMemberRoleWithCtx,
-} from "../../lib/athenaUserAuth";
+import { requireStoreMemberAccessWithCtx } from "../../lib/storeMemberAccess";
 import { getRegisterState } from "../application/queries/getRegisterState";
 import { openDrawer as openDrawerCommand } from "../application/commands/register";
 
@@ -69,12 +66,11 @@ export const getState = query({
       return null;
     }
 
-    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
-    await requireOrganizationMemberRoleWithCtx(ctx, {
+    await requireStoreMemberAccessWithCtx(ctx, {
       allowedRoles: ["full_admin", "pos_only"],
+      demoAccess: { kind: "read" },
       failureMessage: "You cannot view register state for this store.",
-      organizationId: store.organizationId,
-      userId: athenaUser._id,
+      storeId: args.storeId,
     });
 
     return getRegisterState(ctx, args);

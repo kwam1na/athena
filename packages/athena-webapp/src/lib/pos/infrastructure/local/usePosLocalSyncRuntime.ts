@@ -149,6 +149,7 @@ export type PosLocalRuntimeSyncDebug = {
     directive?: RuntimeActiveRegisterSessionDirective;
     observedAt: number;
     seedResult:
+      | "already_seeded"
       | "gateway_rejected"
       | "missing_directive"
       | "missing_staff_identity"
@@ -299,6 +300,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
   const [storageHealth, setStorageHealth] =
     useState<PosLocalStorageHealth | null>(null);
   const lastEventAppendTokenRef = useRef(0);
+  const lastExpectedDemoEpochRef = useRef<number | undefined>(undefined);
   const lastManualRetryTokenRef = useRef(0);
   const { storeFactory, storeId, terminalId } = input;
   const hasInjectedStore = Boolean(storeFactory);
@@ -529,6 +531,10 @@ export function usePosLocalSyncRuntimeStatus(input: {
         setRuntimeReadiness(readiness);
         setRuntimeStatusObservationToken((current) => current + 1);
       });
+      const didDemoEpochBecomeAvailable =
+        input.expectedDemoEpoch !== undefined &&
+        lastExpectedDemoEpochRef.current === undefined;
+      lastExpectedDemoEpochRef.current = input.expectedDemoEpoch;
       const trigger = getRuntimeUploadTrigger({
         eventAppendToken,
         lastEventAppendToken: lastEventAppendTokenRef.current,
@@ -998,9 +1004,18 @@ export function usePosLocalSyncRuntimeStatus(input: {
               eventsResult.value.events,
               uploadSupport,
             );
+          const shouldDrainAfterDemoEpochRecovery =
+            drainOnAppend &&
+            didDemoEpochBecomeAvailable &&
+            hasPendingSyncablePosEvents(
+              eventsResult.value.events,
+              uploadSupport,
+            );
           if (
             drainOnAppend &&
-            (trigger === "event-appended" || shouldDrainPendingExpenseEvents)
+            (trigger === "event-appended" ||
+              shouldDrainPendingExpenseEvents ||
+              shouldDrainAfterDemoEpochRecovery)
           ) {
             const scheduler = createDrainScheduler(provisionedSeed);
             stopSchedulers.push(() => scheduler.stop());
@@ -3412,6 +3427,17 @@ function hasPendingSyncableExpenseEvents(
         event.sync.status === "syncing" ||
         event.sync.status === "failed") &&
       isSyncablePosLocalEvent(event, uploadSupport),
+  );
+}
+
+function hasPendingSyncablePosEvents(
+  events: PosLocalEventRecord[],
+  uploadSupport: PosLocalSyncUploadSupport,
+) {
+  return events.some(
+    (event) =>
+      isPosLocalRuntimeDrainCandidate(event, {}, uploadSupport) ||
+      isPosLocalRuntimeActivityReportCandidate(event),
   );
 }
 

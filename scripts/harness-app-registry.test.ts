@@ -227,6 +227,7 @@ describe("HARNESS_APP_REGISTRY", () => {
 
     expect(sharedDemoScenario).toMatchObject({
       touchedPaths: [
+        "assets/shared-demo-products",
         "docs/shared-demo-backend-coverage.md",
         "convex/sharedDemo",
         "convex/auth.ts",

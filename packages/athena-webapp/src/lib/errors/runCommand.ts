@@ -4,7 +4,12 @@ import {
   type CommandResult,
   GENERIC_UNEXPECTED_ERROR_MESSAGE,
   GENERIC_UNEXPECTED_ERROR_TITLE,
+  userError,
 } from "~/shared/commandResult";
+import {
+  isSharedDemoActionDeniedData,
+  SHARED_DEMO_ACTION_DENIED_MESSAGE,
+} from "~/shared/sharedDemoActionError";
 
 export type ApprovalRequiredCommandResult = ApprovalRequiredResult;
 
@@ -39,6 +44,18 @@ function extractTraceId(error: unknown): string | undefined {
   return error.message.match(/trace[:=]\s*([a-z0-9_-]+)/i)?.[1];
 }
 
+function getSharedDemoDenial(error: unknown): CommandResult<never> | null {
+  if (!error || typeof error !== "object" || !("data" in error)) return null;
+  if (!isSharedDemoActionDeniedData(error.data)) return null;
+
+  return userError({
+    code: "authorization_failed",
+    title: "Action unavailable",
+    message: SHARED_DEMO_ACTION_DENIED_MESSAGE,
+    retryable: false,
+  });
+}
+
 export function runCommand<T>(
   command: () => Promise<CommandResult<T>> | CommandResult<T>,
 ): Promise<NormalizedCommandResult<T>>;
@@ -51,6 +68,9 @@ export async function runCommand<T>(
   try {
     return await command();
   } catch (error) {
+    const sharedDemoDenial = getSharedDemoDenial(error);
+    if (sharedDemoDenial) return sharedDemoDenial;
+
     console.error("Unexpected command failure", error);
 
     return {

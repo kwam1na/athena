@@ -26,6 +26,7 @@ export type RegisterLifecycleAuthorityShadowClassification =
   | "unmapped"
   | "sale_usable"
   | "sale_blocked"
+  | "stale_cloud_subject"
   | "repair_required";
 
 export type RegisterLifecycleAuthorityShadowResult = {
@@ -322,6 +323,30 @@ async function classifyLegacyVersionedCandidate(
     terminalId: input.terminal._id,
   });
   if (mappings.length === 0) {
+    if (input.candidate.cloudRegisterSessionId) {
+      const claimedSession = await repository.getRegisterSession(
+        input.candidate.cloudRegisterSessionId,
+      );
+      if (
+        claimedSession &&
+        localRegisterSessionId === input.candidate.cloudRegisterSessionId
+      ) {
+        return classifyVersionedRegisterSession({
+          localRegisterSessionId,
+          mappingAuthorityRevision: 0,
+          registerSession: claimedSession,
+          storeId: input.storeId,
+          terminal: input.terminal,
+        });
+      }
+      return claimedSession
+        ? versionedRepair(localRegisterSessionId, 0)
+        : versionedStaleCloudSubject(
+            localRegisterSessionId,
+            input.candidate.cloudRegisterSessionId,
+            0,
+          );
+    }
     return versionedResult({
       classification: "unmapped",
       lifecycleRevision: 0,
@@ -366,6 +391,30 @@ async function classifyExactVersionedSession(
   const registerSession = await repository.getRegisterSession(
     input.cloudRegisterSessionId,
   );
+  if (!registerSession) {
+    return versionedStaleCloudSubject(
+      input.localRegisterSessionId,
+      input.cloudRegisterSessionId,
+      input.mappingAuthorityRevision,
+    );
+  }
+  return classifyVersionedRegisterSession({
+    localRegisterSessionId: input.localRegisterSessionId,
+    mappingAuthorityRevision: input.mappingAuthorityRevision,
+    registerSession,
+    storeId: input.storeId,
+    terminal: input.terminal,
+  });
+}
+
+function classifyVersionedRegisterSession(input: {
+  localRegisterSessionId: string;
+  mappingAuthorityRevision: number;
+  registerSession: Doc<"registerSession"> | null;
+  storeId: Id<"store">;
+  terminal: Doc<"posTerminal">;
+}) {
+  const registerSession = input.registerSession;
   if (
     !registerSession ||
     registerSession.storeId !== input.storeId ||
@@ -400,6 +449,20 @@ function versionedRepair(
 ) {
   return versionedResult({
     classification: "repair_required" as const,
+    lifecycleRevision: 0,
+    localRegisterSessionId,
+    mappingAuthorityRevision,
+  });
+}
+
+function versionedStaleCloudSubject(
+  localRegisterSessionId: string,
+  cloudRegisterSessionId: string,
+  mappingAuthorityRevision: number,
+) {
+  return versionedResult({
+    classification: "stale_cloud_subject" as const,
+    cloudRegisterSessionId: cloudRegisterSessionId as Id<"registerSession">,
     lifecycleRevision: 0,
     localRegisterSessionId,
     mappingAuthorityRevision,
@@ -455,6 +518,29 @@ async function classifyCandidate(
   });
 
   if (mappings.length === 0) {
+    if (input.candidate.cloudRegisterSessionId) {
+      const claimedSession = await repository.getRegisterSession(
+        input.candidate.cloudRegisterSessionId,
+      );
+      if (
+        claimedSession &&
+        localRegisterSessionId === input.candidate.cloudRegisterSessionId
+      ) {
+        return classifyShadowRegisterSession({
+          localRegisterSessionId,
+          registerSession: claimedSession,
+          storeId: input.storeId,
+          terminal: input.terminal,
+        });
+      }
+      return claimedSession
+        ? repairRequired(localRegisterSessionId)
+        : {
+            classification: "stale_cloud_subject" as const,
+            cloudRegisterSessionId: input.candidate.cloudRegisterSessionId,
+            localRegisterSessionId,
+          };
+    }
     return {
       classification: "unmapped" as const,
       localRegisterSessionId,
@@ -476,6 +562,21 @@ async function classifyCandidate(
   }
 
   const registerSession = await repository.getRegisterSession(mapping.cloudId);
+  return classifyShadowRegisterSession({
+    localRegisterSessionId,
+    registerSession,
+    storeId: input.storeId,
+    terminal: input.terminal,
+  });
+}
+
+function classifyShadowRegisterSession(input: {
+  localRegisterSessionId: string;
+  registerSession: Doc<"registerSession"> | null;
+  storeId: Id<"store">;
+  terminal: Doc<"posTerminal">;
+}) {
+  const registerSession = input.registerSession;
   if (
     !registerSession ||
     registerSession.storeId !== input.storeId ||
@@ -483,7 +584,7 @@ async function classifyCandidate(
     !isRegisterNumberCompatible(input.terminal, registerSession) ||
     !isRegisterSessionStatus(registerSession.status)
   ) {
-    return repairRequired(localRegisterSessionId);
+    return repairRequired(input.localRegisterSessionId);
   }
 
   return {
@@ -492,7 +593,7 @@ async function classifyCandidate(
       : ("sale_blocked" as const),
     cloudRegisterSessionId: registerSession._id,
     cloudStatus: registerSession.status,
-    localRegisterSessionId,
+    localRegisterSessionId: input.localRegisterSessionId,
   };
 }
 

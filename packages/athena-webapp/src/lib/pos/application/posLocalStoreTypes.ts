@@ -170,12 +170,13 @@ export type PosRegisterAuthorityCursor = {
   mappingAuthorityRevision: number;
 };
 export type PosRegisterLifecycleServerAuthority = {
-  classification: "sale_usable" | "sale_blocked" | "repair_required";
+  classification:
+    "sale_usable" | "sale_blocked" | "stale_cloud_subject" | "repair_required";
   cloudRegisterSessionId?: string;
   cursor?: PosRegisterAuthorityCursor;
   message?: string;
   observedAt: number;
-  reason?: "cloud_closed" | "authority_unknown";
+  reason?: "cloud_closed" | "cloud_session_missing" | "authority_unknown";
   source: "dedicated_snapshot" | "legacy_runtime_directive";
   status: "healthy" | "blocked";
 };
@@ -192,7 +193,10 @@ export type PosDrawerLocalReviewAuthority = {
 };
 export type PosDrawerAuthorityStatus = "healthy" | "blocked";
 export type PosDrawerAuthorityBlockReason =
-  "cloud_closed" | "lifecycle_rejected" | "authority_unknown";
+  | "cloud_closed"
+  | "cloud_session_missing"
+  | "lifecycle_rejected"
+  | "authority_unknown";
 export interface PosDrawerAuthorityState {
   cloudRegisterSessionId?: string;
   localRegisterSessionId: string;

@@ -12,6 +12,7 @@ export const posRegisterSessionActivityCheckpointSchema = v.object({
   reportedThroughOccurredAt: v.optional(v.number()),
   lastActivityReportedAt: v.optional(v.number()),
   lastAcceptedBatchAt: v.number(),
+  mappingReconciliationPending: v.optional(v.boolean()),
   skippedCounts: v.record(v.string(), v.number()),
   skippedLocalEventIds: v.optional(v.array(v.string())),
   lastSkipCode: v.optional(posRegisterSessionActivitySkipCodeValidator),

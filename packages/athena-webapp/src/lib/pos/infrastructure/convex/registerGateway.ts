@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useQuery } from "convex/react";
 
 import type {
@@ -68,11 +69,10 @@ export function useConvexTerminalByFingerprint(
       : "skip",
   );
 
-  if (result === undefined) {
-    return undefined;
-  }
-
-  return mapTerminalDto(result);
+  return useMemo(
+    () => (result === undefined ? undefined : mapTerminalDto(result)),
+    [result],
+  );
 }
 
 export const convexRegisterReader: PosRegisterReader = {

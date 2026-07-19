@@ -1,11 +1,69 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
 import {
   consumeAdmissionBudgetWithCtx,
   consumeSharedDemoTicketWithCtx,
   issueSharedDemoTicket,
+  storeSharedDemoTicket,
 } from "./admission";
+import { SHARED_DEMO_BASELINE_VERSION } from "./config";
+
+afterEach(() => vi.unstubAllEnvs());
+
+const invoke = (definition: unknown, ctx: unknown, args: unknown) =>
+  (definition as { _handler: Function })._handler(ctx, args);
+
+function admissionContext(restoreState: Record<string, unknown> | null) {
+  const get = vi.fn(async (table: string) => {
+    if (table === "athenaUser") return { _id: "demo-user" };
+    if (table === "organization") return { _id: "demo-org" };
+    if (table === "store") {
+      return { _id: "demo-store", organizationId: "demo-org" };
+    }
+    return null;
+  });
+  const insert = vi.fn(async (table: string) => {
+    if (table === "users") return "auth-user";
+    if (table === "sharedDemoPrincipal") return "principal";
+    return `${table}-row`;
+  });
+  const query = vi.fn((table: string) => ({
+    withIndex: vi.fn((_name: string, apply: Function) => {
+      apply({ eq: vi.fn().mockReturnThis() });
+      return {
+        unique: vi.fn().mockResolvedValue(
+          table === "sharedDemoRestoreState"
+            ? restoreState
+            : table === "organizationMember"
+              ? { role: "full_admin" }
+              : null,
+        ),
+      };
+    }),
+  }));
+  return {
+    ctx: {
+      db: {
+        get,
+        insert,
+        patch: vi.fn(),
+        query,
+        replace: vi.fn(),
+      },
+    } as never,
+    get,
+    insert,
+  };
+}
+
+function configureAdmissionEnvironment() {
+  vi.stubEnv("ATHENA_SHARED_DEMO_ENABLED", "true");
+  vi.stubEnv("STAGE", "prod");
+  vi.stubEnv("ATHENA_SHARED_DEMO_ATHENA_USER_ID", "demo-user");
+  vi.stubEnv("ATHENA_SHARED_DEMO_ORGANIZATION_ID", "demo-org");
+  vi.stubEnv("ATHENA_SHARED_DEMO_STORE_ID", "demo-store");
+}
 
 describe("shared demo admission return contract", () => {
   it("accepts the short-lived opaque ticket result", () => {
@@ -13,6 +71,49 @@ describe("shared demo admission return contract", () => {
       ticket: "opaque-ticket",
       expiresAt: 20_000,
     });
+  });
+});
+
+describe("shared demo admission foundation", () => {
+  it("rejects an otherwise valid configured tenant before reading tenant rows", async () => {
+    configureAdmissionEnvironment();
+    const { ctx, get, insert } = admissionContext(null);
+
+    await expect(
+      invoke(storeSharedDemoTicket, ctx, {
+        athenaUserId: "demo-user",
+        expiresAt: 20_000,
+        organizationId: "demo-org",
+        storeId: "demo-store",
+        ticketHash: "hash",
+      }),
+    ).rejects.toThrow("not a current provisioned foundation");
+    expect(get).not.toHaveBeenCalled();
+    expect(insert).not.toHaveBeenCalled();
+  });
+
+  it("issues admission only for the current ready provisioned foundation", async () => {
+    configureAdmissionEnvironment();
+    const { ctx, get, insert } = admissionContext({
+      baselineVersion: SHARED_DEMO_BASELINE_VERSION,
+      completedAt: 19_000,
+      status: "ready",
+    });
+
+    await expect(
+      invoke(storeSharedDemoTicket, ctx, {
+        athenaUserId: "demo-user",
+        expiresAt: 20_000,
+        organizationId: "demo-org",
+        storeId: "demo-store",
+        ticketHash: "hash",
+      }),
+    ).resolves.toBeNull();
+    expect(get).toHaveBeenCalledTimes(3);
+    expect(insert).toHaveBeenCalledWith(
+      "sharedDemoAdmissionTicket",
+      expect.objectContaining({ ticketHash: "hash" }),
+    );
   });
 });
 

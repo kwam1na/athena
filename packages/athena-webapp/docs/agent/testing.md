@@ -36,6 +36,10 @@ Current shared scenarios include:
 - `storefront-checkout-validation-blocker`
 - `storefront-checkout-verification-recovery`
 
+Shared-demo product image assets under `assets/shared-demo-products` use the
+shared-demo validation slice so asset changes remain covered by the same seed,
+restore, frontend, typecheck, and build checks as the demo runtime.
+
 Convex artifact refresh rule:
 
 - If a change needs new `convex/_generated` artifacts or refreshed client refs, start `bunx convex dev` from `packages/athena-webapp` before validation.

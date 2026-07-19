@@ -34,6 +34,22 @@ const localRuntimeMocks = vi.hoisted(() => ({
   hasListEvents: { current: false },
   eventAppendToken: { current: 0 },
 }));
+const terminalMocks = vi.hoisted(() => ({
+  terminal: {
+    _id: "terminal-1" as Id<"posTerminal">,
+    displayName: "Front Counter",
+    registerNumber: "1",
+  } as {
+    _id: Id<"posTerminal">;
+    displayName: string;
+    registerNumber: string;
+    sharedDemoStaff?: {
+      activeRoles: string[];
+      displayName: string;
+      staffProfileId: Id<"staffProfile">;
+    };
+  },
+}));
 const loadedSessionIds: string[] = [];
 const realLoadSessionData = useExpenseStore.getState().loadSessionData;
 type MockRegisterCatalogRow = {
@@ -105,11 +121,7 @@ vi.mock("@/hooks/useGetActiveStore", () => ({
 }));
 
 vi.mock("@/hooks/useGetTerminal", () => ({
-  useGetTerminal: () => ({
-    _id: "terminal-1" as Id<"posTerminal">,
-    displayName: "Front Counter",
-    registerNumber: "1",
-  }),
+  useGetTerminal: () => terminalMocks.terminal,
 }));
 
 vi.mock("@/hooks/use-navigate-back", () => ({
@@ -324,6 +336,11 @@ describe("useExpenseRegisterViewModel", () => {
     useExpenseStore.getState().setCashier("staff-1" as Id<"staffProfile">);
     mockRegisterCatalogRows = [];
     mockRegisterCatalogAvailabilityRows = [];
+    terminalMocks.terminal = {
+      _id: "terminal-1" as Id<"posTerminal">,
+      displayName: "Front Counter",
+      registerNumber: "1",
+    };
     catalogGatewayMocks.useConvexRegisterCatalog.mockImplementation(
       () => mockRegisterCatalogRows,
     );
@@ -410,6 +427,24 @@ describe("useExpenseRegisterViewModel", () => {
       ok: true,
       value: [],
     });
+  });
+
+  it("identifies the shared demo expense workspace", async () => {
+    terminalMocks.terminal = {
+      ...terminalMocks.terminal,
+      sharedDemoStaff: {
+        activeRoles: ["cashier"],
+        displayName: "Efua Tetteh",
+        staffProfileId: "staff-demo" as Id<"staffProfile">,
+      },
+    };
+
+    const { result } = renderHook(() => useExpenseRegisterViewModel());
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(result.current.isSharedDemo).toBe(true);
   });
 
   it("does not auto-create duplicate sessions while the active-session query is still empty", async () => {
@@ -912,6 +947,17 @@ describe("useExpenseRegisterViewModel", () => {
 
     expect(source).not.toContain("usePOSProductSearch");
     expect(source).not.toContain("usePOSBarcodeSearch");
+  });
+
+  it("reuses the terminal demo bootstrap instead of subscribing again", () => {
+    const currentDir = dirname(fileURLToPath(import.meta.url));
+    const source = readFileSync(
+      join(currentDir, "useExpenseRegisterViewModel.ts"),
+      "utf8",
+    );
+
+    expect(source).toContain("sharedDemoStaff");
+    expect(source).not.toContain("useSharedDemoContext");
   });
 
   it("optimistically adds expense product selections while the server mutation is pending", async () => {

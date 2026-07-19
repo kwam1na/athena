@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { Id } from "../../../_generated/dataModel";
 import {
@@ -78,6 +78,37 @@ describe("createRegisterSessionActivityIngestionService", () => {
     ]);
   });
 
+  it("binds activity when the local register-session id is already a cloud id", async () => {
+    const repository = createFakeRepository();
+    const service = createRegisterSessionActivityIngestionService({
+      now: () => 200,
+      repository,
+    });
+
+    const result = await service.ingestReport(
+      buildReport({ localRegisterSessionId: "register-session-1" }),
+    );
+
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") throw new Error("Expected ok result");
+    expect(result.data.accepted).toEqual([
+      {
+        localEventId: "event-1",
+        sequence: 1,
+        status: "terminal_reported",
+      },
+    ]);
+    expect(repository.activities[0]).toMatchObject({
+      localRegisterSessionId: "register-session-1",
+      registerSessionId: "register-session-1",
+      status: "terminal_reported",
+    });
+    expect(repository.checkpoints[0]).toMatchObject({
+      localRegisterSessionId: "register-session-1",
+      registerSessionId: "register-session-1",
+    });
+  });
+
   it("resolves existing mapping-pending rows after a register-session mapping appears", async () => {
     const repository = createFakeRepository();
     const service = createRegisterSessionActivityIngestionService({
@@ -94,10 +125,137 @@ describe("createRegisterSessionActivityIngestionService", () => {
       localRegisterSessionId: "local-register-1",
     });
 
-    expect(resolved).toEqual({ resolved: 1 });
+    expect(resolved).toEqual({ hasMore: false, resolved: 1 });
     expect(repository.activities[0]).toMatchObject({
       registerSessionId: "register-session-1",
       status: "projected",
+    });
+  });
+
+  it("does not scan mapping-pending backlog on the mapping-bound report hot path", async () => {
+    const repository = createFakeRepository();
+    const service = createRegisterSessionActivityIngestionService({
+      now: () => 200,
+      repository,
+    });
+    await service.ingestReport(buildReport());
+    repository.registerSessionMapping =
+      "register-session-1" as Id<"registerSession">;
+    repository.mappingPendingListCalls = 0;
+
+    await service.ingestReport(
+      buildReport({
+        activities: [buildActivity({ localEventId: "event-2", sequence: 2 })],
+        reportedThroughSequence: 2,
+      }),
+    );
+
+    expect(repository.mappingPendingListCalls).toBe(0);
+    expect(repository.activities).toEqual([
+      expect.objectContaining({
+        localEventId: "event-1",
+        status: "mapping_pending",
+      }),
+      expect.objectContaining({
+        localEventId: "event-2",
+        status: "terminal_reported",
+      }),
+    ]);
+  });
+
+  it("reconciles a bounded batch and checkpoints an explicit continuation", async () => {
+    const repository = createFakeRepository();
+    const scheduleMappingPendingContinuation = vi.fn(async () => null);
+    const service = createRegisterSessionActivityIngestionService({
+      now: () => 200,
+      repository,
+      scheduleMappingPendingContinuation,
+    });
+    await service.ingestReport(
+      buildReport({
+        activities: Array.from({ length: 205 }, (_, index) =>
+          buildActivity({
+            localEventId: `event-${index + 1}`,
+            sequence: index + 1,
+          }),
+        ),
+        reportedThroughSequence: 205,
+      }),
+    );
+    repository.registerSessionMapping =
+      "register-session-1" as Id<"registerSession">;
+
+    await expect(
+      service.resolveMappingPending({
+        storeId: "store-1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        localRegisterSessionId: "local-register-1",
+      }),
+    ).resolves.toEqual({ hasMore: true, resolved: 100 });
+    expect(repository.mappingPendingListCalls).toBe(1);
+    expect(
+      repository.activities.filter((activity) =>
+        activity.status === "mapping_pending"),
+    ).toHaveLength(105);
+    expect(repository.checkpoints[0]).toMatchObject({
+      mappingReconciliationPending: true,
+      registerSessionId: "register-session-1",
+    });
+    expect(scheduleMappingPendingContinuation).toHaveBeenCalledOnce();
+
+    await service.resolveMappingPending({
+      storeId: "store-1" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+      localRegisterSessionId: "local-register-1",
+    });
+    await expect(
+      service.resolveMappingPending({
+        storeId: "store-1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        localRegisterSessionId: "local-register-1",
+      }),
+    ).resolves.toEqual({ hasMore: false, resolved: 5 });
+    expect(repository.checkpoints[0]).toMatchObject({
+      mappingReconciliationPending: false,
+    });
+  });
+
+  it("recovers existing mapping-pending rows when a direct cloud binding becomes recognizable", async () => {
+    const repository = createFakeRepository();
+    repository.directRegisterSessionResolutionEnabled = false;
+    const service = createRegisterSessionActivityIngestionService({
+      now: () => 200,
+      repository,
+    });
+    await service.ingestReport(
+      buildReport({ localRegisterSessionId: "register-session-1" }),
+    );
+
+    repository.directRegisterSessionResolutionEnabled = true;
+    const result = await service.ingestReport(
+      buildReport({
+        activities: [buildActivity({ localEventId: "event-2", sequence: 2 })],
+        localRegisterSessionId: "register-session-1",
+        reportedThroughSequence: 2,
+      }),
+    );
+
+    expect(result.kind).toBe("ok");
+    expect(repository.activities).toEqual([
+      expect.objectContaining({
+        localEventId: "event-1",
+        registerSessionId: "register-session-1",
+        status: "projected",
+      }),
+      expect.objectContaining({
+        localEventId: "event-2",
+        registerSessionId: "register-session-1",
+        status: "terminal_reported",
+      }),
+    ]);
+    expect(repository.checkpoints[0]).toMatchObject({
+      registerSessionId: "register-session-1",
+      reportedThroughSequence: 2,
     });
   });
 
@@ -250,6 +408,29 @@ describe("createRegisterSessionActivityIngestionService", () => {
     });
     expect(repository.activities).toHaveLength(0);
   });
+
+  it("rejects direct cloud activity when the register-session binding belongs to another terminal", async () => {
+    const repository = createFakeRepository({
+      registerSessionTerminalId: "terminal-2" as Id<"posTerminal">,
+    });
+    const service = createRegisterSessionActivityIngestionService({
+      now: () => 200,
+      repository,
+    });
+
+    const result = await service.ingestReport(
+      buildReport({ localRegisterSessionId: "register-session-1" }),
+    );
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "validation_failed",
+        message: "POS activity report is not bound to this terminal session.",
+      },
+    });
+    expect(repository.activities).toHaveLength(0);
+  });
 });
 
 function buildReport(
@@ -309,10 +490,14 @@ function createFakeRepository(
   const repository: RegisterSessionActivityIngestionRepository & {
     activities: RegisterSessionActivityRecord[];
     checkpoints: typeof checkpoints;
+    directRegisterSessionResolutionEnabled: boolean;
+    mappingPendingListCalls: number;
     registerSessionMapping?: Id<"registerSession">;
   } = {
     activities,
     checkpoints,
+    directRegisterSessionResolutionEnabled: true,
+    mappingPendingListCalls: 0,
     registerSessionMapping: options.registerSessionMapping,
     async getTerminal(terminalId) {
       if (terminalId !== "terminal-1") return null;
@@ -333,6 +518,12 @@ function createFakeRepository(
           ("terminal-1" as Id<"posTerminal">),
         registerNumber: "R1",
       };
+    },
+    normalizeRegisterSessionId(value) {
+      return repository.directRegisterSessionResolutionEnabled &&
+        value === "register-session-1"
+        ? (value as Id<"registerSession">)
+        : null;
     },
     async getStaffProfile(staffProfileId) {
       if (staffProfileId !== "staff-1") return null;
@@ -374,13 +565,16 @@ function createFakeRepository(
       Object.assign(activity, patch);
     },
     async listMappingPendingActivity(args) {
-      return activities.filter(
-        (activity) =>
-          activity.storeId === args.storeId &&
-          activity.terminalId === args.terminalId &&
-          activity.localRegisterSessionId === args.localRegisterSessionId &&
-          activity.status === "mapping_pending",
-      );
+      repository.mappingPendingListCalls += 1;
+      return activities
+        .filter(
+          (activity) =>
+            activity.storeId === args.storeId &&
+            activity.terminalId === args.terminalId &&
+            activity.localRegisterSessionId === args.localRegisterSessionId &&
+            activity.status === "mapping_pending",
+        )
+        .slice(0, args.limit);
     },
     async findSyncEventByLocalEvent(args) {
       return {

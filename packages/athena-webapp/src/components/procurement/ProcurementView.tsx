@@ -144,6 +144,7 @@ type ReorderDraftLine = {
 type ProcurementViewContentProps = {
   hasActiveStore: boolean;
   hasFullAdminAccess: boolean;
+  isSharedDemo?: boolean;
   isLoadingPermissions: boolean;
   isLoadingProcurement: boolean;
   inventoryItems: InventorySnapshotItem[];
@@ -574,6 +575,7 @@ function matchesRecommendationSku(
 export function ProcurementViewContent({
   hasActiveStore,
   hasFullAdminAccess,
+  isSharedDemo = false,
   isLoadingPermissions,
   isLoadingProcurement,
   inventoryItems,
@@ -1001,6 +1003,10 @@ export function ProcurementViewContent({
   }
 
   async function handleQuickAddVendor() {
+    if (isSharedDemo) {
+      return;
+    }
+
     const vendorName = quickAddVendorName.trim();
 
     if (!storeId) {
@@ -1981,7 +1987,11 @@ export function ProcurementViewContent({
                 </p>
                 <div className="flex gap-2">
                   <Input
+                    aria-describedby={
+                      isSharedDemo ? "quick-add-vendor-demo-note" : undefined
+                    }
                     aria-label="Vendor name"
+                    disabled={isSharedDemo}
                     onChange={(event) =>
                       setQuickAddVendorName(event.target.value)
                     }
@@ -1989,13 +1999,21 @@ export function ProcurementViewContent({
                     value={quickAddVendorName}
                   />
                   <Button
-                    disabled={isCreatingVendor}
+                    disabled={isSharedDemo || isCreatingVendor}
                     onClick={handleQuickAddVendor}
                     variant="utility"
                   >
                     Add
                   </Button>
                 </div>
+                {isSharedDemo ? (
+                  <p
+                    className="text-xs text-muted-foreground"
+                    id="quick-add-vendor-demo-note"
+                  >
+                    Vendor creation is unavailable in the demo.
+                  </p>
+                ) : null}
               </div>
 
               <Button
@@ -2120,6 +2138,7 @@ export function ProcurementView({
     <ProcurementViewContent
       hasActiveStore={Boolean(activeStore)}
       hasFullAdminAccess={hasFullAdminAccess}
+      isSharedDemo={isSharedDemo}
       isLoadingPermissions={false}
       isLoadingProcurement={Boolean(
         canQueryProcurementData &&

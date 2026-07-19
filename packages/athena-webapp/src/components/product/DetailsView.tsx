@@ -10,6 +10,7 @@ import {
   TooltipTrigger,
 } from "../ui/tooltip";
 import { FadeIn } from "../common/FadeIn";
+import { productStockTextClass } from "./productStockPresentation";
 
 export function DetailsView() {
   const { activeStore } = useGetActiveStore();
@@ -22,16 +23,9 @@ export function DetailsView() {
 
   const formatter = currencyFormatter(activeStore.currency);
 
-  const isVariantLowStock = (activeProductVariant.quantityAvailable || 0) <= 2;
-
-  const isVariantOutOfStock =
-    (activeProductVariant.quantityAvailable || 0) <= 0;
-
-  const stockLabelColor = isVariantOutOfStock
-    ? "text-red-700"
-    : isVariantLowStock
-      ? "text-yellow-700"
-      : "text-green-700";
+  const stockLabelColor = productStockTextClass(
+    activeProductVariant.quantityAvailable,
+  );
 
   return (
     <View
@@ -75,7 +69,7 @@ export function DetailsView() {
         <div className="min-w-0 space-y-3 sm:space-y-4">
           <p className="text-sm text-muted-foreground">Stock</p>
           <div className="flex items-center gap-2">
-            <p className={`text-sm ${stockLabelColor}`}>
+            <p className={`font-numeric text-sm tabular-nums ${stockLabelColor}`}>
               {activeProductVariant.stock}
             </p>
             {/* <span className="text-xs">
@@ -86,7 +80,9 @@ export function DetailsView() {
 
         <div className="min-w-0 space-y-3 sm:space-y-4">
           <p className="text-sm text-muted-foreground">Sellable</p>
-          <p className="text-sm">{activeProductVariant.quantityAvailable}</p>
+          <p className="font-numeric text-sm tabular-nums">
+            {activeProductVariant.quantityAvailable}
+          </p>
         </div>
       </FadeIn>
     </View>
