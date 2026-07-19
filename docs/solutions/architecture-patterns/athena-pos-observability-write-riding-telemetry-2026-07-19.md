@@ -13,7 +13,7 @@ applies_when:
   - Detecting state transitions (healthy→degraded) without an alert-state table
   - Deduplicating batched client uploads without per-item index reads
 tags: [pos, observability, telemetry, alerts, convex, read-amplification, local-first]
-delivery_diff_fingerprint: 67119d1069ab22293cf6ca55857813a3606c3415bde5a4d35c8251ae2b81398b
+delivery_diff_fingerprint: c627ddc9806bba31d9f1f6e358ac765b39b9492501bfaf91e9e8e2ed35ab1c02
 ---
 
 # POS Observability via Write-Riding Telemetry and Edge-Triggered Alerts
@@ -72,3 +72,9 @@ provides the dedupe.
 - Cooldown logic: treat "never alerted" as alert-eligible, not as
   "alerted at epoch 0" — `(carried[c] ?? 0)` inverted the first-alert case
   and unit tests caught it pre-commit.
+- Any ingest of free-form terminal error text must redact secrets/PII
+  before persisting. The runtime-status path already scrubbed via
+  `SENSITIVE_DIAGNOSTIC_PATTERNS`; the new client-event ingest initially
+  did not — an independent diff review caught the asymmetry, now fixed by
+  the shared `pos/application/diagnosticRedaction` module. Reuse it for
+  any future diagnostic-text sink.
