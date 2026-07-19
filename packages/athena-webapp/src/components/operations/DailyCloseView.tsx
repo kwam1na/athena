@@ -38,6 +38,7 @@ import {
   getLocalOperatingDate,
   getLocalOperatingDateRange,
   getLocalOperatingDateRangeFromSearch,
+  getOperatingClockNow,
 } from "@/lib/operations/operatingDate";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
@@ -3526,7 +3527,7 @@ function OperatingDatePicker({
   const latestSelectableDate = useMemo(() => {
     if (latestSelectableDateProp) return latestSelectableDateProp;
 
-    const today = new Date();
+    const today = getOperatingClockNow();
 
     return new Date(today.getFullYear(), today.getMonth(), today.getDate());
   }, [latestSelectableDateProp]);

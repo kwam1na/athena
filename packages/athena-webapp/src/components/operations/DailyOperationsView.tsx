@@ -39,6 +39,7 @@ import {
   getLocalOperatingDate,
   getLocalOperatingDateRange,
   getLocalOperatingDateRangeFromSearch,
+  getOperatingClockNow,
 } from "@/lib/operations/operatingDate";
 import { formatStoredAmount } from "@/lib/pos/displayAmounts";
 import { cn } from "@/lib/utils";
@@ -2978,7 +2979,7 @@ function OperatingDatePicker({
   const latestSelectableDate = useMemo(() => {
     if (latestSelectableDateProp) return latestSelectableDateProp;
 
-    const today = new Date();
+    const today = getOperatingClockNow();
 
     return new Date(today.getFullYear(), today.getMonth(), today.getDate());
   }, [latestSelectableDateProp]);
