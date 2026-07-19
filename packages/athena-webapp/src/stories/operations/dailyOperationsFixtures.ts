@@ -40,6 +40,13 @@ const linkParams = {
 };
 
 /**
+ * Register sessions display as `{terminalName} / Register {registerNumber}` — see
+ * `formatTerminalRegisterLinkLabel` in convex/operations/dailyOperations.ts. Values are
+ * the shared demo store's terminal name and register number.
+ */
+const REGISTER_DISPLAY_LABEL = "Studio Front Register / Register 01";
+
+/**
  * A week that builds toward the weekend — quiet Sunday, steady midweek, a strong
  * Friday, and a Saturday that is already the best day of the week by mid-afternoon.
  */
@@ -162,27 +169,34 @@ const timeline: NonNullable<
   {
     createdAt: at(15, 12),
     id: "evt-sale-1184",
-    message: "Sale #1184 completed on Register 01 — GHS 350.00.",
+    message: "Sale #1184 synced: 3 sale lines, GH₵350, cash and mobile money.",
     subject: { id: "txn-1184", label: "#1184", type: "pos_transaction" },
     transactionLink: {
       label: "#1184",
       params: linkParams,
       to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/txn-1184",
     },
-    type: "pos_sale_completed",
+    type: "pos_local_sync.sale_projected",
   },
   {
+    // The stored message is "Void requested for Transaction #N."; the daily-operations
+    // snapshot splices in the requester's name at read time
+    // (`normalizeTimelineEventMessage`, convex/operations/dailyOperations.ts). This is
+    // the post-rewrite form the workspace actually renders.
     createdAt: at(14, 47),
-    id: "evt-approval-req",
-    message:
-      "Efua Tetteh requested manager approval for a 15% discount on Sale #1183.",
-    subject: { id: "apr-3391", label: "Discount approval", type: "approval" },
+    id: "evt-void-request",
+    message: "Void requested by Efua Tetteh for Transaction #1183.",
+    subject: {
+      id: "txn-1183",
+      label: "Transaction #1183",
+      type: "pos_transaction",
+    },
     transactionLink: {
       label: "#1183",
       params: linkParams,
       to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/txn-1183",
     },
-    type: "approval_requested",
+    type: "pos_transaction_void_approval_requested",
   },
   {
     createdAt: at(14, 3),
@@ -199,19 +213,19 @@ const timeline: NonNullable<
   {
     createdAt: at(13, 21),
     id: "evt-sale-1179",
-    message: "Sale #1179 completed on Register 01 — GHS 220.00.",
+    message: "Sale #1179 synced: 1 sale line, GH₵220, mobile money.",
     subject: { id: "txn-1179", label: "#1179", type: "pos_transaction" },
     transactionLink: {
       label: "#1179",
       params: linkParams,
       to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/txn-1179",
     },
-    type: "pos_sale_completed",
+    type: "pos_local_sync.sale_projected",
   },
   {
     createdAt: at(12, 40),
     id: "evt-expense",
-    message: "Kwabena Osei recorded a GHS 55.00 expense for packaging supplies.",
+    message: "Kwabena Osei recorded a GH₵55 expense for packaging supplies.",
     subject: { id: "exp-204", label: "Packaging supplies", type: "expense" },
     type: "expense_recorded",
   },
@@ -230,21 +244,49 @@ const timeline: NonNullable<
   {
     createdAt: at(9, 52),
     id: "evt-drawer-open",
-    message: "Efua Tetteh opened Register 01 with a GHS 500.00 float.",
+    message:
+      "Efua Tetteh opened Studio Front Register / Register 01 with a GH₵500 float.",
     registerLink: {
-      label: "Register 01",
+      label: REGISTER_DISPLAY_LABEL,
       params: linkParams,
       to: "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/session-9931",
     },
-    subject: { id: "session-9931", label: "Register 01", type: "register_session" },
+    subject: {
+      id: "session-9931",
+      label: REGISTER_DISPLAY_LABEL,
+      type: "register_session",
+    },
     type: "register_session_opened",
   },
   {
     createdAt: at(9, 45),
     id: "evt-day-open",
-    message: "Kwabena Osei started the store day.",
+    message: "Athena started the store day automatically.",
     subject: { id: "opening-0718", label: "Store day", type: "daily_opening" },
     type: "store_day_started",
+  },
+];
+
+/**
+ * Opening auto-start, shown in the automation band.
+ *
+ * `outcome: "applied"` is required for an opening-lane status to stay visible once the
+ * day is past `not_opened` (`getVisibleAutomationStatuses`), and `scheduled_later` is
+ * filtered out entirely.
+ */
+const automationStatuses: NonNullable<
+  NonNullable<DailyOperationsViewContentProps["snapshot"]>["automationStatuses"]
+> = [
+  {
+    bucket: "action_taken",
+    id: "auto-opening-0718",
+    lane: "opening",
+    occurredAt: at(9, 45),
+    outcome: "applied",
+    sourceLink: {
+      params: linkParams,
+      to: "/$orgUrlSlug/store/$storeUrlSlug/operations/opening",
+    },
   },
 ];
 
@@ -344,6 +386,22 @@ export const busySaturdayFixture: DailyOperationsViewContentProps = {
   isAuthenticated: true,
   isLoadingAccess: false,
   isLoadingSnapshot: false,
+  // Renders the open-drawer attention row. The workspace synthesises the row label,
+  // severity and link itself; the fixture supplies only the session identity.
+  //
+  // `displayLabel` follows the server's own `{terminalName} / Register {registerNumber}`
+  // construction (convex/operations/dailyOperations.ts), using the shared demo store's
+  // terminal name and register number so it matches what a real session would show.
+  openRegisterSessionsSnapshot: {
+    operatingDate: OPERATING_DATE,
+    sessions: [
+      { displayLabel: REGISTER_DISPLAY_LABEL, id: "session-9931" },
+    ],
+  },
+  // The operating-date trigger is rendered `disabled={disabled || !onChange}`, so the
+  // control only looks live when a handler is present. A fixture has nowhere to navigate
+  // to, so this is a no-op that exists purely to keep the trigger enabled.
+  onOperatingDateChange: () => {},
   orgUrlSlug: ORG_URL_SLUG,
   storePulseWindow: "today",
   storeUrlSlug: STORE_URL_SLUG,
@@ -359,15 +417,23 @@ export const busySaturdayFixture: DailyOperationsViewContentProps = {
     timeline,
   },
   snapshot: {
+    automationStatuses,
     attentionItems: [
       {
-        id: "att-approval",
-        label: "Discount approval waiting",
-        message: "Sale #1183 needs a manager decision before the drawer closes.",
+        // Shape and copy follow `queueAttentionItems` in
+        // convex/operations/dailyOperations.ts: the label is the approval's `reason`
+        // verbatim (set in completeTransaction.ts for a void), and the message is fixed.
+        id: "approval_request:apr-3391:pending",
+        label: "Manager approval is required to void a completed sale.",
+        message: "Resolve the pending approval in Operations.",
         owner: "operations_queue",
         params: linkParams,
-        severity: "warning",
-        source: { id: "apr-3391", label: "Discount approval", type: "approval" },
+        severity: "critical",
+        source: {
+          id: "apr-3391",
+          label: "Manager approval is required to void a completed sale.",
+          type: "approval_request",
+        },
         to: "/$orgUrlSlug/store/$storeUrlSlug/operations/approvals",
       },
       {
@@ -400,39 +466,66 @@ export const busySaturdayFixture: DailyOperationsViewContentProps = {
     },
     currency: "GHS",
     endAt: DAY_END,
+    // Lane keys, labels, descriptions and statuses follow `buildLanes` /
+    // `buildApprovalsLane` in convex/operations/dailyOperations.ts. Copy is reproduced
+    // from those branches rather than invented, so the fixture reads like real output.
     lanes: [
       {
         count: 0,
-        description: "Opening checks cleared at 9:45 AM.",
+        description: "Opening Handoff is complete.",
         key: "opening",
-        label: "Opening",
+        label: "Opening Handoff",
         status: "ready",
         to: "/$orgUrlSlug/store/$storeUrlSlug/operations/opening",
       },
       {
-        count: 1,
-        countLabel: "1 waiting",
-        description: "A discount needs a manager decision.",
-        key: "approvals",
-        label: "Store requests",
-        status: "needs_attention",
-        to: "/$orgUrlSlug/store/$storeUrlSlug/operations/approvals",
+        count: 0,
+        description: "The end of day review is available for review.",
+        key: "close",
+        label: "EOD Review",
+        status: "ready",
+        to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
       },
       {
         count: 1,
-        countLabel: "1 open",
-        description: "Register 01 is still trading.",
-        key: "registers",
-        label: "Cash controls",
+        countLabel: "1",
+        description: "1 open item.",
+        key: "queue",
+        label: "Open work",
         status: "needs_attention",
+        to: "/$orgUrlSlug/store/$storeUrlSlug/operations/open-work",
+      },
+      {
+        count: 1,
+        countLabel: "1",
+        description: "1 approval pending.",
+        key: "approvals",
+        label: "Approvals",
+        status: "blocked",
+        to: "/$orgUrlSlug/store/$storeUrlSlug/operations/approvals",
+      },
+      {
+        count: 0,
+        description: "No register blockers.",
+        key: "registers",
+        label: "Registers",
+        status: "ready",
         to: "/$orgUrlSlug/store/$storeUrlSlug/cash-controls",
       },
       {
         count: 0,
-        description: "Available once the drawer is counted.",
-        key: "close",
-        label: "EOD review",
-        status: "unknown",
+        description: "No unresolved POS sessions.",
+        key: "pos_sessions",
+        label: "POS sessions",
+        status: "ready",
+        to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
+      },
+      {
+        count: 0,
+        description: "No expense exceptions.",
+        key: "expenses",
+        label: "Expenses",
+        status: "ready",
         to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
       },
     ],
@@ -442,9 +535,11 @@ export const busySaturdayFixture: DailyOperationsViewContentProps = {
       status: "operating",
     },
     operatingDate: OPERATING_DATE,
+    // `primaryAction` in convex/operations/dailyOperations.ts maps lifecycle status to a
+    // fixed label; "operating" falls through to the default.
     primaryAction: {
-      label: "Review store requests",
-      to: "/$orgUrlSlug/store/$storeUrlSlug/operations/approvals",
+      label: "Start EOD Review",
+      to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
     },
     startAt: DAY_START,
     storeId: STORE_ID,
