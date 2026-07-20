@@ -11,7 +11,7 @@ applies_when:
   - A POS register or drawer gate briefly flickers to the wrong UI state before settling
   - A render loop or transient state bug looks explainable from reading the code alone
 tags: [pos, register-gate, debugging, instrumentation, transitional-state]
-delivery_diff_fingerprint: fcaf5e5dfd76e8298d1437d318320257df9e34d9b02dbb0b117c15b7d5b3ec2f
+delivery_diff_fingerprint: 51a63d57b7c3442e7515f02803af82060ab1c59847f19d5c4b9e5336803ea094
 ---
 
 # Athena POS Gate Flashes — Instrument the Live State Before Theorizing
