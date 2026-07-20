@@ -4257,4 +4257,59 @@ describe("DailyOperationsView", () => {
       screen.queryByText("getDailyOperationsSnapshot"),
     ).not.toBeInTheDocument();
   });
+
+  it("renders a supplied fixture without issuing any snapshot query", () => {
+    mockedHooks.useQuery.mockClear();
+
+    render(
+      <DailyOperationsView
+        fixture={{
+          currency: "GHS",
+          hasDetailSnapshot: true,
+          hasFinancialDetailsAccess: true,
+          hasFullAdminAccess: true,
+          isAuthenticated: true,
+          isLoadingAccess: false,
+          isLoadingSnapshot: false,
+          orgUrlSlug: "wigclub",
+          snapshot: operatingSnapshot,
+          storePulseWindow: "today",
+          storeUrlSlug: "osu",
+        }}
+      />,
+    );
+
+    expect(mockedHooks.useQuery).not.toHaveBeenCalled();
+    expect(
+      screen.queryByText("Daily Operations unavailable"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("prefers the fixture even when the generated API is unavailable", () => {
+    (
+      mockedApi as { getDailyOperationsSnapshot?: unknown }
+    ).getDailyOperationsSnapshot = undefined;
+
+    render(
+      <DailyOperationsView
+        fixture={{
+          currency: "GHS",
+          hasDetailSnapshot: true,
+          hasFinancialDetailsAccess: true,
+          hasFullAdminAccess: true,
+          isAuthenticated: true,
+          isLoadingAccess: false,
+          isLoadingSnapshot: false,
+          orgUrlSlug: "wigclub",
+          snapshot: operatingSnapshot,
+          storePulseWindow: "today",
+          storeUrlSlug: "osu",
+        }}
+      />,
+    );
+
+    expect(
+      screen.queryByText("Daily Operations unavailable"),
+    ).not.toBeInTheDocument();
+  });
 });

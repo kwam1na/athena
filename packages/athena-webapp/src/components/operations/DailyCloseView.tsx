@@ -33,6 +33,13 @@ import {
   type NormalizedCommandResult,
 } from "@/lib/errors/runCommand";
 import { getOrigin } from "@/lib/navigationUtils";
+import {
+  getLocalDateFromOperatingDate,
+  getLocalOperatingDate,
+  getLocalOperatingDateRange,
+  getLocalOperatingDateRangeFromSearch,
+  getOperatingClockNow,
+} from "@/lib/operations/operatingDate";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
 import type {
@@ -319,7 +326,7 @@ type BucketConfig = {
   value: BucketStatus;
 };
 
-type DailyCloseViewContentProps = {
+export type DailyCloseViewContentProps = {
   canViewSummaryComparisons?: boolean;
   currency: string;
   hasFinancialDetailsAccess: boolean;
@@ -837,33 +844,6 @@ function DailyCloseFinancialValue({
   );
 }
 
-function getLocalDateFromOperatingDate(operatingDate: string) {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(operatingDate);
-
-  if (!match) return undefined;
-
-  const [, year, month, day] = match;
-  const parsed = new Date(Number(year), Number(month) - 1, Number(day));
-
-  if (
-    parsed.getFullYear() !== Number(year) ||
-    parsed.getMonth() !== Number(month) - 1 ||
-    parsed.getDate() !== Number(day)
-  ) {
-    return undefined;
-  }
-
-  return parsed;
-}
-
-function getLocalOperatingDate(date = new Date()) {
-  const localDate = new Date(
-    date.getTime() - date.getTimezoneOffset() * 60_000,
-  );
-
-  return localDate.toISOString().slice(0, 10);
-}
-
 function buildDailyCloseTransactionSearch({
   operatingDate,
   paymentMethod,
@@ -892,37 +872,6 @@ function getDailyCloseSalesMetricLabels(operatingDate: string) {
     cash: isCurrentOperatingDate ? "Today's cash" : "Cash",
     netSales: isCurrentOperatingDate ? "Today's net sales" : "Net sales",
   };
-}
-
-function getLocalOperatingDateRange(date = new Date()) {
-  const localStart = new Date(
-    date.getFullYear(),
-    date.getMonth(),
-    date.getDate(),
-  );
-  const localEnd = new Date(
-    date.getFullYear(),
-    date.getMonth(),
-    date.getDate() + 1,
-  );
-
-  return {
-    operatingDate: getLocalOperatingDate(date),
-    startAt: localStart.getTime(),
-    endAt: localEnd.getTime(),
-  };
-}
-
-function getLocalOperatingDateRangeFromSearch(operatingDate?: unknown) {
-  if (typeof operatingDate === "string") {
-    const localDate = getLocalDateFromOperatingDate(operatingDate);
-
-    if (localDate) {
-      return getLocalOperatingDateRange(localDate);
-    }
-  }
-
-  return getLocalOperatingDateRange();
 }
 
 function normalizeCommandMessage(
@@ -3578,7 +3527,7 @@ function OperatingDatePicker({
   const latestSelectableDate = useMemo(() => {
     if (latestSelectableDateProp) return latestSelectableDateProp;
 
-    const today = new Date();
+    const today = getOperatingClockNow();
 
     return new Date(today.getFullYear(), today.getMonth(), today.getDate());
   }, [latestSelectableDateProp]);
@@ -4768,8 +4717,21 @@ function DailyCloseConnectedView({
   );
 }
 
-export function DailyCloseView() {
+export function DailyCloseView({
+  fixture,
+}: {
+  /**
+   * Renders the workspace from a supplied prop bag instead of Convex, for screenshot
+   * fixtures. When set, no snapshot query runs. Development only — see
+   * `src/stories/operations`.
+   */
+  fixture?: DailyCloseViewContentProps;
+} = {}) {
   const dailyCloseApi = getDailyCloseApi();
+
+  if (fixture) {
+    return <DailyCloseViewContent {...fixture} />;
+  }
 
   if (
     !dailyCloseApi.getDailyCloseSnapshot ||

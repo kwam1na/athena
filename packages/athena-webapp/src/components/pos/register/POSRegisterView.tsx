@@ -1643,39 +1643,58 @@ function LocalRegisterClosedWorkspace({
 }: {
   syncStatus: NonNullable<RegisterViewModel["syncStatus"]>;
 }) {
+  const [isRetrying, setIsRetrying] = useState(false);
+  const pendingCount = syncStatus.pendingEventCount ?? 0;
+  // Context-aware: reflect an in-flight sync from the runtime, or an optimistic window right
+  // after a manual retry (the gate unmounts if the sync clears; otherwise it settles back).
+  const isSyncing = isRetrying || syncStatus.status === "syncing";
+  const canRetry = Boolean(syncStatus.onRetrySync) && !isSyncing;
+
+  const handleRetry = () => {
+    if (!syncStatus.onRetrySync || isSyncing) {
+      return;
+    }
+    setIsRetrying(true);
+    syncStatus.onRetrySync();
+    window.setTimeout(() => setIsRetrying(false), 2_000);
+  };
+
+  const detail = isSyncing
+    ? "Syncing the closeout to Athena…"
+    : pendingCount > 0
+      ? `${pendingCount} ${
+          pendingCount === 1 ? "change" : "changes"
+        } waiting to reconcile once sync completes.`
+      : syncStatus.description;
+
   return (
-    <section className="flex h-full min-h-0 items-start justify-center overflow-y-auto rounded-lg border border-border bg-surface-raised px-6 py-10 text-center sm:px-8 sm:pt-20">
-      <div className="w-[min(100%,40rem)]">
-        <div className="mx-auto flex max-w-2xl flex-col rounded-lg border border-border bg-surface-raised p-8 shadow-surface">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-warning/30 bg-warning/10 text-warning">
-            <Cloud aria-hidden className="h-5 w-5" />
+    <div className="flex h-full min-h-0 items-center justify-center overflow-y-auto rounded-lg border border-border bg-background p-6">
+      <div className="w-full max-w-sm rounded-lg bg-surface-raised p-6 text-center">
+        <span className="mx-auto flex h-9 w-9 items-center justify-center rounded-full bg-muted/50 text-muted-foreground">
+          <Cloud aria-hidden className="h-4 w-4" />
+        </span>
+        <p className="mt-4 text-sm font-medium text-foreground">
+          Register closed locally
+        </p>
+        <p className="mt-1 text-xs leading-5 text-muted-foreground">{detail}</p>
+        {syncStatus.onRetrySync ? (
+          <div className="mt-4 flex justify-center">
+            <button
+              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-default disabled:opacity-60"
+              disabled={!canRetry}
+              onClick={handleRetry}
+              type="button"
+            >
+              <RefreshCw
+                aria-hidden
+                className={cn("h-3.5 w-3.5", isSyncing && "animate-spin")}
+              />
+              {isSyncing ? "Syncing…" : "Retry sync"}
+            </button>
           </div>
-          <div className="mt-6 space-y-layout-xs">
-            <p className="text-xs font-medium uppercase tracking-[0.18em] text-warning">
-              Pending sync
-            </p>
-            <h2 className="font-display text-2xl font-semibold text-foreground">
-              Register closed locally
-            </h2>
-            <p className="text-sm leading-6 text-muted-foreground">
-              {syncStatus.description}
-            </p>
-          </div>
-          {syncStatus.onRetrySync ? (
-            <div className="mt-6 flex justify-center">
-              <button
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-border bg-background px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                onClick={syncStatus.onRetrySync}
-                type="button"
-              >
-                <RefreshCw className="h-4 w-4" />
-                Retry sync
-              </button>
-            </div>
-          ) : null}
-        </div>
+        ) : null}
       </div>
-    </section>
+    </div>
   );
 }
 
@@ -1953,6 +1972,27 @@ function ResolvedPOSRegisterViewContent({
     isPosWorkflow &&
     !viewModel.checkout.isTransactionCompleted &&
     localCloseoutSyncStatus?.status === "locally_closed_pending_sync";
+  // The locally-closed notice is a resting state: it must yield to any active drawer-gate
+  // flow (closeout submit, opening a replacement drawer). Right after a closeout submit, the
+  // drawer gate briefly drops to null while it hands off from the closeout view to the "open
+  // replacement drawer" view; without a settle delay the resting notice would flash into that
+  // ~1-frame gap before the replacement gate renders.
+  const isLocalClosedRestCandidate =
+    isLocallyClosedPendingSync &&
+    Boolean(localCloseoutSyncStatus) &&
+    !viewModel.drawerGate;
+  const [isLocalClosedRestSettled, setIsLocalClosedRestSettled] =
+    useState(false);
+  useEffect(() => {
+    if (!isLocalClosedRestCandidate) {
+      setIsLocalClosedRestSettled(false);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setIsLocalClosedRestSettled(true);
+    }, 200);
+    return () => window.clearTimeout(timer);
+  }, [isLocalClosedRestCandidate]);
   const isPosRegisterLocked =
     isPosWorkflow && isAwaitingCashierAuth && !isLocallyClosedPendingSync;
   const shouldShowOnboarding =
@@ -2530,10 +2570,14 @@ function ResolvedPOSRegisterViewContent({
                   !shouldRenderWorkspaceSidebar && "lg:col-span-2",
                 )}
               >
-                {isLocallyClosedPendingSync && localCloseoutSyncStatus ? (
-                  <LocalRegisterClosedWorkspace
-                    syncStatus={localCloseoutSyncStatus}
-                  />
+                {isLocalClosedRestCandidate && localCloseoutSyncStatus ? (
+                  isLocalClosedRestSettled ? (
+                    <LocalRegisterClosedWorkspace
+                      syncStatus={localCloseoutSyncStatus}
+                    />
+                  ) : (
+                    <div className="h-full min-h-0 rounded-lg border border-border bg-background" />
+                  )
                 ) : shouldShowOnboarding ? (
                   <POSOnboardingWorkspace onboarding={onboardingState} />
                 ) : isPosReadinessGuardSettling ? (

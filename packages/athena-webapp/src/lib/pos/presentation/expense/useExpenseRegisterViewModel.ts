@@ -8,6 +8,7 @@ import { useExpenseLocalRuntime } from "@/hooks/useExpenseLocalRuntime";
 import { useExpenseStore } from "@/stores/expenseStore";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { useGetTerminal } from "@/hooks/useGetTerminal";
+import { useSharedDemoContext } from "@/hooks/useSharedDemoContext";
 import { useNavigateBack } from "@/hooks/use-navigate-back";
 import {
   useConvexRegisterCatalog,
@@ -192,6 +193,7 @@ function isScopedExpenseLocalEvent(
 export function useExpenseRegisterViewModel(): RegisterViewModel {
   const { activeStore } = useGetActiveStore();
   const terminal = useGetTerminal();
+  const sharedDemoContext = useSharedDemoContext();
   const sharedDemoStaff = (
     terminal as {
       sharedDemoStaff?: {
@@ -210,15 +212,26 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
   );
   const { eventAppendToken, expenseLocalGateway, localStore, syncRuntime } =
     useExpenseLocalRuntime({
+      // Required for demo uploads to pass the ingest epoch gate; see useExpenseLocalRuntime.
+      expectedDemoEpoch: sharedDemoContext?.restore?.epoch,
       staffProfileId: cashierStaffProfileId,
       storeId: store.storeId,
       terminalId: store.terminalId,
     });
-  const listLocalExpenseEvents = (
-    localStore as {
-      listEvents?: typeof localStore.listEvents;
-    }
-  ).listEvents;
+  // `localStore` is a Proxy facade whose `get` trap returns a *new* function on every
+  // property access (see createPosLocalStoreRuntimePort). Reading `.listEvents` inline on
+  // each render therefore produced a fresh reference, churning the read effect's
+  // dependency array into an infinite render loop. Capture a single stable reference,
+  // keyed on the stable `localStore`.
+  const listLocalExpenseEvents = useMemo(() => {
+    const candidate = (
+      localStore as {
+        listEvents?: typeof localStore.listEvents;
+      }
+    ).listEvents;
+
+    return typeof candidate === "function" ? candidate : undefined;
+  }, [localStore]);
   const [localExpenseReadState, setLocalExpenseReadState] = useState<{
     activeSession: ExpenseLocalSessionReadModel | null;
     loaded: boolean;

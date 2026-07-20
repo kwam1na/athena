@@ -16,7 +16,12 @@ const runtimeMocks = vi.hoisted(() => {
     indexedDbAdapter,
     localStore,
     memoryAdapter,
-    usePosLocalSyncRuntimeStatus: vi.fn(() => null),
+    usePosLocalSyncRuntimeStatus: vi.fn<
+      (input?: {
+        eventAppendToken?: number;
+        onLocalEventsChanged?: () => void;
+      }) => null
+    >(() => null),
   };
 });
 
@@ -155,6 +160,42 @@ describe("useExpenseLocalRuntime", () => {
         terminalId: "terminal-1",
       }),
     );
+  });
+
+  it("does not re-arm the sync trigger when the runtime reports settled events", async () => {
+    Object.defineProperty(globalThis, "indexedDB", {
+      configurable: true,
+      value: {},
+    });
+
+    // Reproduce a drain that settles events on every trigger: whenever the sync runtime
+    // receives a changed append token, it calls onLocalEventsChanged (as the real drain
+    // does). The trigger token fed to the runtime must still stabilise — if a settle
+    // re-armed it, this would loop into "Maximum update depth exceeded".
+    const seenTriggerTokens: number[] = [];
+    runtimeMocks.usePosLocalSyncRuntimeStatus.mockImplementation((input) => {
+      const token = input?.eventAppendToken ?? 0;
+      const isNewToken = seenTriggerTokens.at(-1) !== token;
+      seenTriggerTokens.push(token);
+      if (isNewToken && seenTriggerTokens.length < 200) {
+        input?.onLocalEventsChanged?.();
+      }
+      return null;
+    });
+
+    const { useExpenseLocalRuntime } = await importRuntime();
+
+    const { result } = renderRuntime(useExpenseLocalRuntime);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    // The append-only trigger token settled to 0 (no real appends), so the runtime saw a
+    // bounded number of renders rather than a runaway loop.
+    expect(seenTriggerTokens.length).toBeLessThan(50);
+    expect(seenTriggerTokens.at(-1)).toBe(0);
+    // The exposed signal still advanced from the settle refresh.
+    expect(result.current.eventAppendToken).toBeGreaterThan(0);
   });
 
   it("notifies every expense runtime consumer when any gateway appends an event", async () => {

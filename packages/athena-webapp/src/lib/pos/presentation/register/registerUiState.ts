@@ -310,6 +310,45 @@ export interface RegisterUpdateApplyBlockerState {
 export const REGISTER_UPDATE_APPLY_BLOCKER_PRIORITY: UpdateApplyBlockerPriority =
   "critical-workflow";
 
+/**
+ * Whether a register lifecycle-authority persistence failure should block the drawer
+ * (surface the "Drawer status not saved" gate).
+ *
+ * `mapping_invalidated` and `candidate_invalid` are transitional cloud-authority *re-settles*,
+ * not save failures. Opening a (replacement) drawer re-applies authority across two snapshots,
+ * and the first pass — against a transitional snapshot where the just-closed session's
+ * "current" mapping and the newly opened session coexist — reports one of these before the
+ * settled pass succeeds. `mapping_invalidated` means a newer authority superseded this mapping
+ * and `candidate_invalid` means candidates are momentarily ambiguous; in both cases the drawer
+ * is saved locally and the "Drawer status not saved" / Retry gate is the wrong, flashing
+ * surface (a genuinely superseded session is instead surfaced through the lifecycle/sync-review
+ * path, and a genuinely missing drawer through the startup/recovery gates).
+ *
+ * Only `write_failed` and `snapshot_invalid` are genuine persistence failures the operator
+ * should retry, so only those block.
+ */
+export function hasBlockingAuthorityPersistenceFailure(input: {
+  reason?:
+    | "candidate_invalid"
+    | "mapping_invalidated"
+    | "snapshot_invalid"
+    | "write_failed";
+  status: "idle" | "applying" | "ready" | "failed";
+}): boolean {
+  if (input.status !== "failed") {
+    return false;
+  }
+
+  if (
+    input.reason === "candidate_invalid" ||
+    input.reason === "mapping_invalidated"
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
 export interface RegisterOperationalIdleInput {
   hasActiveSaleWork: boolean;
   hasCheckoutMutationInFlight: boolean;

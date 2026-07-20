@@ -27,6 +27,12 @@ import {
   type NormalizedCommandResult,
 } from "@/lib/errors/runCommand";
 import { getOrigin } from "@/lib/navigationUtils";
+import {
+  getLocalDateFromOperatingDate,
+  getLocalOperatingDateRange,
+  getLocalOperatingDateRangeFromSearch,
+  getOperatingClockNow,
+} from "@/lib/operations/operatingDate";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
 import type {
@@ -181,7 +187,7 @@ type StartDayArgs = {
 
 type BucketStatus = "blocked" | "carry-forward" | "ready" | "review";
 
-type DailyOpeningViewContentProps = {
+export type DailyOpeningViewContentProps = {
   currency: string;
   hasFullAdminAccess: boolean;
   isAuthenticated: boolean;
@@ -259,64 +265,6 @@ function getDailyOpeningApi(): DailyOpeningApi {
       }
     ).dailyOpening ?? {}
   );
-}
-
-function getLocalOperatingDate(date = new Date()) {
-  const localDate = new Date(
-    date.getTime() - date.getTimezoneOffset() * 60_000,
-  );
-
-  return localDate.toISOString().slice(0, 10);
-}
-
-function getLocalOperatingDateRange(date = new Date()) {
-  const localStart = new Date(
-    date.getFullYear(),
-    date.getMonth(),
-    date.getDate(),
-  );
-  const localEnd = new Date(
-    date.getFullYear(),
-    date.getMonth(),
-    date.getDate() + 1,
-  );
-
-  return {
-    endAt: localEnd.getTime(),
-    operatingDate: getLocalOperatingDate(date),
-    startAt: localStart.getTime(),
-  };
-}
-
-function getLocalDateFromOperatingDate(operatingDate: string) {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(operatingDate);
-
-  if (!match) return undefined;
-
-  const [, year, month, day] = match;
-  const parsed = new Date(Number(year), Number(month) - 1, Number(day));
-
-  if (
-    parsed.getFullYear() !== Number(year) ||
-    parsed.getMonth() !== Number(month) - 1 ||
-    parsed.getDate() !== Number(day)
-  ) {
-    return undefined;
-  }
-
-  return parsed;
-}
-
-function getLocalOperatingDateRangeFromSearch(operatingDate?: unknown) {
-  if (typeof operatingDate === "string") {
-    const localDate = getLocalDateFromOperatingDate(operatingDate);
-
-    if (localDate) {
-      return getLocalOperatingDateRange(localDate);
-    }
-  }
-
-  return getLocalOperatingDateRange();
 }
 
 function formatOperatingDate(operatingDate?: string | null) {
@@ -589,6 +537,11 @@ function formatMetadataDisplayValue({
 
 const technicalOpeningMetadataLabels = new Set([
   "frozenmembercount",
+  // Logical work-group internals: not operator-facing, and they render as bogus currency
+  // in the numeric metadata formatter. EOD Review already omits these from carry-forward
+  // rows; keep Opening Handoff consistent.
+  "membercount",
+  "sourcecount",
   "unresolvedmembercount",
 ]);
 
@@ -1759,7 +1712,7 @@ function OperatingDatePicker({
   const latestSelectableDate = useMemo(() => {
     if (latestSelectableDateProp) return latestSelectableDateProp;
 
-    const today = new Date();
+    const today = getOperatingClockNow();
 
     return new Date(today.getFullYear(), today.getMonth(), today.getDate());
   }, [latestSelectableDateProp]);
@@ -2327,8 +2280,21 @@ function DailyOpeningConnectedView({
   );
 }
 
-export function DailyOpeningView() {
+export function DailyOpeningView({
+  fixture,
+}: {
+  /**
+   * Renders the workspace from a supplied prop bag instead of Convex, for screenshot
+   * fixtures. When set, no snapshot query runs. Development only — see
+   * `src/stories/operations`.
+   */
+  fixture?: DailyOpeningViewContentProps;
+} = {}) {
   const dailyOpeningApi = getDailyOpeningApi();
+
+  if (fixture) {
+    return <DailyOpeningViewContent {...fixture} />;
+  }
 
   if (
     !dailyOpeningApi.getDailyOpeningSnapshot ||

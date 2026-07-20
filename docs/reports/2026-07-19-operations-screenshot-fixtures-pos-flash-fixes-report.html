@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="51a63d57b7c3442e7515f02803af82060ab1c59847f19d5c4b9e5336803ea094">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Operations Screenshot Fixtures + POS Gate-Flash Fixes</title>
+    <style>
+      :root {
+        --ink: #1f2933;
+        --muted: #596674;
+        --line: #d9e2ec;
+        --paper: #ffffff;
+        --soft: #f6f8fb;
+        --accent: #1d4ed8;
+        --accent-soft: #dbeafe;
+        --good: #166534;
+        --bad: #b91c1c;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--soft);
+        color: var(--ink);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        line-height: 1.55;
+      }
+      main { max-width: 1120px; margin: 0 auto; padding: 48px 24px 72px; }
+      header { border-bottom: 1px solid var(--line); margin-bottom: 28px; padding-bottom: 28px; }
+      h1, h2, h3 { line-height: 1.18; letter-spacing: 0; }
+      h1 { font-size: 42px; max-width: 880px; margin: 0 0 16px; }
+      h2 { font-size: 28px; margin: 0 0 16px; }
+      p { margin: 0 0 14px; }
+      .lede { color: var(--muted); font-size: 18px; max-width: 880px; }
+      .meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+      .pill { border: 1px solid var(--line); border-radius: 999px; background: var(--paper); color: var(--muted); font-size: 13px; padding: 6px 10px; }
+      .panel { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; margin: 18px 0; padding: 22px; }
+      code { background: #eef2f7; border: 1px solid #d8dee8; border-radius: 5px; padding: 1px 5px; }
+      pre { overflow: auto; background: #111827; color: #e5e7eb; border-radius: 8px; padding: 16px; }
+      pre code { background: transparent; border: 0; color: inherit; padding: 0; }
+      table { width: 100%; border-collapse: collapse; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+      th, td { border-bottom: 1px solid var(--line); padding: 11px 12px; text-align: left; vertical-align: top; }
+      th { background: #eef2f7; color: var(--muted); font-size: 13px; text-transform: uppercase; }
+      tr:last-child td { border-bottom: 0; }
+      .quiz-question { border-top: 1px solid var(--line); padding: 18px 0; }
+      .quiz-question:first-child { border-top: 0; }
+      fieldset { border: 0; margin: 0; padding: 0; }
+      legend { font-weight: 700; margin-bottom: 10px; }
+      label { display: block; border: 1px solid var(--line); border-radius: 8px; background: #fbfdff; margin: 8px 0; padding: 10px 12px; cursor: pointer; }
+      @media (hover: hover) and (pointer: fine) {
+        label:hover { border-color: #b6c5d8; }
+      }
+      button {
+        appearance: none;
+        border: 0;
+        border-radius: 8px;
+        background: var(--accent);
+        color: #ffffff;
+        cursor: pointer;
+        font-weight: 700;
+        padding: 11px 16px;
+        transition: transform 140ms cubic-bezier(0.23, 1, 0.32, 1);
+      }
+      button:active { transform: scale(0.97); }
+      button.secondary { background: #475569; }
+      .quiz-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
+      #quizResult { font-weight: 700; }
+      .answer-detail { display: none; border-top: 1px dashed var(--line); color: var(--muted); margin-top: 10px; padding-top: 10px; }
+      .answer-detail.visible { display: block; }
+      .correct { border-color: #86efac !important; background: #f0fdf4 !important; }
+      .incorrect { border-color: #fecaca !important; background: #fef2f2 !important; }
+      @media (prefers-reduced-motion: reduce) { button { transition-duration: 0ms; } }
+      @media (max-width: 820px) { h1 { font-size: 32px; } main { padding: 32px 16px 56px; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Operations Screenshot Fixtures + POS Gate-Flash Fixes</h1>
+        <p class="lede">A dev-only fixture seam for Daily Operations/Opening Handoff/EOD Review screenshots, plus four unrelated POS/demo bugs found and fixed along the way</p>
+        <div class="meta"><span class="pill">Branch feat/operations-screenshot-fixtures</span><span class="pill">Delivery candidate</span><span class="pill">Not yet merged</span><span class="pill">No production deploy</span></div>
+      </header>
+      <section class="panel"><h2>What is being delivered</h2>
+<p>This branch has two parts riding together. The first is a dev-only fixture mechanism so the Daily Operations, Opening Handoff, and EOD Review workspaces can be screenshotted against fully-authored data (a plausible busy Saturday, a specific carry-forward pattern, a specific closeout variance) instead of whatever happens to be live in a dev store&#x27;s Convex data. The second is four unrelated POS/demo bugs that surfaced while driving those screenshots through the real app chrome: an Expense register infinite render loop, expense transactions silently failing to sync in the shared-demo experience, and two separate gate-flash bugs in the POS register view (drawer-not-saved, and register-closed-locally).</p>
+<p>Status: delivery candidate, not yet merged into main. No production deploy has happened or is pending — the fixture code is dev-only and inert in production builds; the bug fixes are ordinary source changes that ship on merge.</p>
+</section>
+<section class="panel"><h2>Why it mattered</h2>
+<p>Screenshots are a small ask, but doing it right required a real seam: sign in normally and let the full app chrome render from live data, then substitute only the workspace&#x27;s own data with an authored fixture. The alternative — seeding backdated rows into Convex — was explicitly rejected. Two known read-path defects (tracked separately as V26-1082/V26-1083) mean the server can read &quot;today&quot; against the wrong clock in some cases, so backdating real rows risked corrupting the very history being staged for a screenshot, in a way that would be hard to notice and easy to ship.</p>
+<p>The bug fixes matter independently of the fixture work: an infinite render loop burns CPU and can crash a worker; expenses silently failing to sync in the demo experience means a manager can add an expense that just vanishes; and both gate-flash bugs make a normal POS operator flow (closing a drawer, opening a replacement) briefly show contradictory or alarming UI before settling — exactly the kind of thing a cashier notices and a screenshot would have caught.</p>
+</section>
+<section class="panel"><h2>The mental model</h2>
+<p>Think of the fixture mechanism as a single clock plus a single data-substitution point. Before this branch, each of the three workspaces derived &quot;today&quot; independently from `new Date()` at roughly thirty call sites, and always queried Convex directly. After: every one of those thirty call sites now reads through one function, `getOperatingClockNow()`, defined in `operatingDate.ts`. A dev-only hook can override that clock and, separately, hand the view a fully-formed `fixture` prop that makes it skip the Convex query and render pre-built props directly. Production code paths never call the override — they just call the same clock function, which defaults to `new Date()` when nothing has overridden it.</p>
+<p>The gate-flash bugs share a different mental model: a UI gate (drawer-not-saved, register-closed) is meant to represent a *resting* state, but the state machine underneath briefly passes through a transitional value on its way from one resting state to the next. The bug in both cases was treating a transitional value as if it were a resting one — showing the gate during a hand-off it wasn&#x27;t built to represent.</p>
+</section>
+<section class="panel"><h2>Before vs after: the fixture seam</h2>
+<p>Before: three copies of near-identical &quot;what&#x27;s the operating date for this workspace&quot; logic across DailyOperationsView.tsx, DailyOpeningView.tsx, and DailyCloseView.tsx, each reading `new Date()` directly, with no way to freeze a moment in time or substitute the data driving the screen.</p>
+<p>After: `operatingDate.ts` is the one place that logic lives, exposing `getLocalOperatingDate`, `getLocalOperatingDateRange`, `getLocalDateFromOperatingDate`, and `getLocalOperatingDateRangeFromSearch` as pure helpers, plus a settable `operatingClockOverride` behind `setOperatingClockOverride`/`getOperatingClockNow`. A dev-only hook (`devFixtureActivation.ts`&#x27;s `useWorkspaceFixture`, wrapped per-workspace as `useDailyOperationsFixture`/`useDailyOpeningFixture`/`useDailyCloseFixture`) resolves a `?fixture=&lt;name&gt;` search param via a dynamic `import()` gated on `import.meta.env.DEV`, pins the clock to that fixture&#x27;s authored moment, and hands the view a `fixture` prop typed against the workspace&#x27;s own real content-props type. When present, the view renders directly from that prop and skips its Convex query entirely.</p>
+<p>The static-import approach was tried first and rejected: Vite folds `import.meta.env.DEV` to `false` in a production build, but Rollup still keeps a statically-imported module reachable, so the authored fixture strings would still ship in the production bundle. Switching to a dynamic `import()` behind the same dev check was verified by grepping the built `dist/` output for fixture strings — none found.</p>
+</section>
+<section class="panel"><h2>Layer-by-layer: how a fixture screenshot actually renders</h2>
+<p>1. The route (e.g. `.../operations/index.tsx`) declares `fixture: z.string().optional()` in its search schema and reads it via `Route.useSearch()`.</p>
+<p>2. It calls the workspace-specific hook (`useDailyOperationsFixture(fixtureName)`), which resolves to `{ clock, props }` from a dynamic import and calls `setOperatingClockOverride(clock)` as a side effect, then returns `{ fixture: props, isResolving }`.</p>
+<p>3. The route holds its render (`if (isResolving) return null`) so the workspace component is never mounted mid-resolution — it never takes a half-frame detour through the live Convex path before the fixture is ready.</p>
+<p>4. The workspace component (`DailyOperationsView`, etc.) receives `fixture` as a prop; when set, it renders `&lt;DailyOperationsViewContent {...fixture} /&gt;` directly instead of wiring up its normal Convex query hook.</p>
+<p>5. Anywhere in that content tree that needs &quot;today&quot; (date pickers&#x27; selectable bounds, header labels) calls `getOperatingClockNow()`, which now returns the fixture&#x27;s authored clock instead of the real wall clock — so the whole rendered screen, including date-picker constraints, is internally consistent with the fixture&#x27;s story.</p>
+</section>
+<section class="panel"><h2>The four bug fixes: root cause and mechanism</h2>
+<p>**1. Expense register infinite render loop.** Two stacked loops, the first masking the second. The POS local store&#x27;s Proxy facade returns a brand-new function object from its `get` trap on every property access — so `localStore.listEvents` is a *different* function reference every render. Reading it inline inside `useExpenseRegisterViewModel.ts` fed that ever-changing reference into an effect&#x27;s dependency array, causing re-render → new function reference → effect fires again → loop. Fixed with `useMemo(() =&gt; localStore.listEvents, [localStore])`, keyed on the stable store singleton rather than the churning Proxy trap output. Once that loop stopped, a second, previously-masked loop appeared: `eventAppendToken` was being used both as the input that triggers the sync runtime *and* as the value that runtime&#x27;s own change-notification bumped — direct self-feedback. Fixed by splitting it into an append-only `eventAppendToken` (drives the trigger) and a separate `localReadRefreshToken` (carries settle notifications), with consumers seeing their sum.</p>
+<p>**2. Demo expense transactions not syncing.** Two independent Convex-side gates, both already open for register/sale events, were never extended to expense events. First, `ingestLocalEvents` rejects any shared-demo upload missing an `expectedDemoEpoch` (a retryable `precondition_failed`) — fixed by forwarding `sharedDemoContext.restore.epoch` from the expense view model into the expense local runtime. Second, expense events map to a capability (`expense.manage`) that wasn&#x27;t yet in the shared-demo allow-list — added to `capabilityCatalog.ts`&#x27;s `SHARED_DEMO_ALLOWED_CAPABILITIES`, plus a matching entry in `policy.ts`&#x27;s function-inventory registering `pos/public/sync:ingestLocalEvents` against that capability (required by an existing coverage self-audit test).</p>
+<p>**3. Drawer-not-saved gate flashing after opening a replacement drawer.** Opening a replacement drawer re-settles cloud register authority across two snapshots in sequence. The first pass runs against a transitional snapshot — where the just-closed session&#x27;s old mapping and the brand-new session briefly coexist — and that pass reports what looks like a failure before the second, settled pass succeeds. The first attempted fix suppressed the wrong reason code (`candidate_invalid`); live browser instrumentation of the actual gate state during a real replacement-drawer open showed the transient reason was actually `mapping_invalidated`. The landed fix in `hasBlockingAuthorityPersistenceFailure` narrows blocking to exactly two genuine-failure reasons (`write_failed`, `snapshot_invalid`); `mapping_invalidated` and `candidate_invalid` are now explicitly treated as non-blocking re-settles rather than save failures.</p>
+<p>**4. Register-closed-locally gate flashing during closeout, plus a visual redesign.** During a closeout submit, the drawer-gate view model briefly returns `null` for about 21ms while it hands off from the closeout view to the &quot;open a replacement drawer&quot; view. The old code rendered the locally-closed notice unconditionally whenever sync status said `locally_closed_pending_sync`, so it filled that ~21ms gap with a full card before the replacement-drawer gate took over — a visible flash. The first hypothesis (a `canOpenReplacement` derivation flipping late) was disproven by instrumentation: that value was `false` for the entire window. The actual cause was the locally-closed notice&#x27;s render condition simply not checking whether a drawer-gate flow was already active. The fix adds `!viewModel.drawerGate` to the card&#x27;s render condition, plus a 200ms settle timer so the resting-state card only appears once the drawer-gate transition has genuinely finished (a neutral placeholder fills the brief gap instead). Alongside the flash fix, the card itself was redesigned per product review: smaller, a quieter cloud icon instead of a warning-colored one, adaptive copy that reflects pending-count or in-flight syncing, and a self-resetting retry button — while keeping the same outer workspace frame every other gate state uses.</p>
+</section>
+<section class="panel"><h2>Failure boundaries</h2>
+<p>The fixture clock override (`operatingClockOverride` in `operatingDate.ts`) is a plain module-level mutable variable with no environment guard inside the file itself. Safety rests entirely on the fact that only `devFixtureActivation.ts` ever calls `setOperatingClockOverride`, and that module&#x27;s callers are gated by `import.meta.env.DEV`. Nothing inside `operatingDate.ts` would stop a future caller outside that dev-gated path from pinning the clock in production — this is a convention, not an enforced boundary, and is worth a lint/review note if the fixture surface grows.</p>
+<p>The 200ms settle delay in the register-closed gate and the 2-second optimistic-retry window in the redesigned card are both timing heuristics, not state-driven guarantees. Under network conditions slower or faster than what was manually tested, either window could reintroduce a brief flash (settle delay too short) or show a stale &quot;Syncing…&quot; state after the real sync already finished (retry window too long/short). They were tuned against the live demo environment&#x27;s actual transition timings, not derived from a hard invariant.</p>
+<p>`hasBlockingAuthorityPersistenceFailure` now treats `mapping_invalidated` and `candidate_invalid` as always non-blocking. If a future genuine failure mode is ever represented with one of those two reason strings, it would be silently swallowed by this gate — the fix is correct for the currently-understood state machine, but it is a semantic commitment, not just a bug fix, and future authority-persistence work should treat those two reason strings as reserved for transitional re-settles.</p>
+</section>
+<section class="panel"><h2>Validation</h2>
+<p>Each of the four bug fixes was verified with direct browser instrumentation of the live demo/POS flow — console-logging the actual gate-relevant state (sync status, drawer-gate mode, blocking reasons) across the real user interaction (closeout submit, drawer-open, expense add) — rather than relying on static code reading or a subagent&#x27;s traced hypothesis. This mattered: on three separate occasions (the expense loop, the drawer-not-saved flash, and the register-closed flash) the first plausible-sounding root-cause theory was wrong, and only live instrumentation of the actual runtime state during the failing interaction surfaced the real cause.</p>
+<p>Local checks run clean on the rebased branch: `tsc --noEmit` (typecheck) passes with no errors; `bun run lint:frontend:changed` passes with no warnings on every file touched by the branch; and the full relevant unit-test set — `registerUiState.test.ts` (12 tests), `operatingDate.test.ts` (14 tests), `useExpenseRegisterViewModel.test.ts` (41 tests), `DailyOpeningView.test.tsx` (25 tests), `DailyOperationsView.test.tsx` (86 tests), and `DailyCloseView.test.tsx` (56 tests) — all pass, 234 tests total across those six files.</p>
+<p>The branch was rebased onto `origin/main` after an upstream PR (#684, &quot;clean eod/opening handoff&quot;) landed touching the same operations view files; the rebase produced one real content conflict (a route search-schema that had dropped the `fixture` search param) resolved by keeping both the upstream cleanup and the fixture param, plus a mechanical `graphify-out/graph.json` conflict resolved by taking the incoming generated artifact (regenerated automatically by the commit hook regardless). Full typecheck and the affected test suites were re-run after the rebase and remained green.</p>
+</section>
+<section class="panel"><h2>Next-time guidance</h2>
+<p>When a POS/register gate flickers between states, instrument the live runtime state directly (console-log the exact view-model fields the render condition reads, across the real interaction) before forming a theory from reading the code. All three gate-flash-style bugs on this branch had a wrong first theory that looked reasonable from the code alone, and each was only correctly diagnosed once the actual state sequence was captured from a real browser session.</p>
+<p>If you add a fourth workspace fixture (or extend these three further), route it through the same `operatingDate.ts` clock and `devFixtureActivation.ts` dynamic-import pattern rather than inventing a parallel mechanism — the dynamic-import-behind-dev-check shape exists specifically because the more obvious static-import approach was tried and found to leak fixture strings into production bundles.</p>
+<p>Treat the 200ms settle delay and 2-second retry window in the register-closed gate as tuned constants, not architectural guarantees — if either transition is observed to still flash (or to show a stale syncing state) under different network conditions, adjust the timing rather than assuming the underlying precedence fix is wrong.</p>
+</section>
+      
+<section class="panel">
+  <h2>Key Files</h2>
+  <table>
+    <thead><tr><th>File</th><th>Why It Matters</th></tr></thead>
+    <tbody><tr><td><code>packages/athena-webapp/src/lib/operations/operatingDate.ts</code></td><td>The single clock and date-derivation seam every operations workspace now reads through; holds the fixture clock override.</td></tr>
+<tr><td><code>packages/athena-webapp/src/stories/operations/devFixtureActivation.ts</code></td><td>Dev-only, dynamic-import-gated hook that resolves ?fixture= to a clock + props and pins the workspace to it.</td></tr>
+<tr><td><code>packages/athena-webapp/src/stories/operations/operationsFixtureContext.ts</code></td><td>Shared identity/dates/totals so the three authored fixtures can&#x27;t drift against each other.</td></tr>
+<tr><td><code>packages/athena-webapp/src/stories/operations/dailyOperationsFixtures.ts</code></td><td>The authored busy-Saturday Daily Operations story, including store-day timeline events and register sessions.</td></tr>
+<tr><td><code>packages/athena-webapp/src/stories/operations/openingHandoffFixtures.ts</code></td><td>Authored Opening Handoff fixture, including carry-forward row data matched to production copy/behavior.</td></tr>
+<tr><td><code>packages/athena-webapp/src/stories/operations/eodReviewFixtures.ts</code></td><td>Authored EOD Review fixture, including a specific closeout variance story.</td></tr>
+<tr><td><code>packages/athena-webapp/src/hooks/useExpenseLocalRuntime.ts</code></td><td>Splits the self-feeding token into an append-only trigger and a separate refresh signal; fixes the second, masked render loop.</td></tr>
+<tr><td><code>packages/athena-webapp/src/lib/pos/presentation/expense/useExpenseRegisterViewModel.ts</code></td><td>Memoizes the Proxy-facade method read and plumbs expectedDemoEpoch through to the local runtime.</td></tr>
+<tr><td><code>packages/athena-webapp/convex/sharedDemo/capabilityCatalog.ts</code></td><td>Adds expense.manage to the shared-demo capability allow-list, unblocking expense sync in the demo experience.</td></tr>
+<tr><td><code>packages/athena-webapp/src/lib/pos/presentation/register/registerUiState.ts</code></td><td>hasBlockingAuthorityPersistenceFailure now excludes transitional re-settle reasons from blocking the drawer gate.</td></tr>
+<tr><td><code>packages/athena-webapp/src/components/pos/register/POSRegisterView.tsx</code></td><td>Redesigns the locally-closed card and fixes its flash by yielding to an active drawer-gate flow with a settle delay.</td></tr></tbody>
+  </table>
+</section>
+
+      
+<section class="panel">
+  <h2>Subagent Evidence</h2>
+  <ul><li><strong>delivered diff analysis (Explore agent):</strong> Read the actual git diff against origin/main for all 25 substantive files, confirmed the fixture mechanism&#x27;s before/after architecture, traced the mechanism of each of the four bug fixes to specific lines, enumerated the test files added/extended, and flagged the unguarded clock-override and timing-heuristic risks used in the Failure Boundaries section.</li>
+<li><strong>session/decision-history analysis (general-purpose agent):</strong> Read the plan doc&#x27;s stated goals and rejected alternatives (no Convex data seeding, due to V26-1082/1083 clock-read defects), reconstructed the actual 12-commit decision sequence, and confirmed the three wrong-first-theory diagnoses (Proxy-facade churn, mapping_invalidated vs candidate_invalid, canOpenReplacement disproven by instrumentation) used in the Validation and Next-time Guidance sections.</li></ul>
+</section>
+
+      
+<section id="quiz" class="panel">
+  <h2>Quiz: Pass Required</h2>
+  <p>You must score at least 8 out of 10 to pass.</p>
+  <form id="changeQuiz" data-threshold="8">
+    
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>1. Why was seeding backdated Convex data rejected as an approach for authoring the Daily Operations fixture?</legend>
+    <label><input type="radio" name="q1" value="0" /> Convex doesn&#x27;t support historical timestamps</label>
+<label><input type="radio" name="q1" value="1" /> Two known server-side clock-read defects (V26-1082/1083) could corrupt the seeded history</label>
+<label><input type="radio" name="q1" value="2" /> It would have required a schema migration</label>
+<label><input type="radio" name="q1" value="3" /> The demo store doesn&#x27;t allow writes</label>
+  </fieldset>
+  <div class="answer-detail">The plan doc explicitly names this as the reason: seeding real rows into Convex risked interacting with two known behavioral clock couplings on read paths, corrupting the very history being staged.</div>
+</div>
+
+<div class="quiz-question" data-answer="2">
+  <fieldset>
+    <legend>2. Why does the fixture mechanism use a dynamic `import()` instead of a static import gated by `import.meta.env.DEV`?</legend>
+    <label><input type="radio" name="q2" value="0" /> Dynamic imports are faster at runtime</label>
+<label><input type="radio" name="q2" value="1" /> Static imports don&#x27;t support TypeScript types</label>
+<label><input type="radio" name="q2" value="2" /> Vite folds the DEV check to false, but Rollup still keeps a statically-imported module reachable, so fixture strings would still ship in production</label>
+<label><input type="radio" name="q2" value="3" /> Convex requires dynamic imports for its query hooks</label>
+  </fieldset>
+  <div class="answer-detail">This was tried and empirically disproven by grepping the built dist/ output — a static import leaked fixture strings into the production bundle despite the DEV check.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>3. What is the single seam that every &#x27;today&#x27; derivation in the three operations workspaces now reads through?</legend>
+    <label><input type="radio" name="q3" value="0" /> A Convex query field</label>
+<label><input type="radio" name="q3" value="1" /> getOperatingClockNow() in operatingDate.ts</label>
+<label><input type="radio" name="q3" value="2" /> A React context provider</label>
+<label><input type="radio" name="q3" value="3" /> The browser&#x27;s Date.now()</label>
+  </fieldset>
+  <div class="answer-detail">operatingDate.ts centralizes the previously-triplicated date logic; getOperatingClockNow() returns the real clock by default and the fixture-pinned clock only when a dev fixture has set an override.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>4. What was the actual root cause of the Expense register infinite render loop, after the first loop was fixed?</legend>
+    <label><input type="radio" name="q4" value="0" /> A missing key prop in a list</label>
+<label><input type="radio" name="q4" value="1" /> eventAppendToken feeding both the sync trigger and its own change-notification target — direct self-feedback</label>
+<label><input type="radio" name="q4" value="2" /> A Convex query re-subscribing every render</label>
+<label><input type="radio" name="q4" value="3" /> React 18 StrictMode double-invoking effects</label>
+  </fieldset>
+  <div class="answer-detail">This second, masked loop only appeared after the Proxy-facade memoization fix stopped the first loop; it was fixed by splitting the token into an append-only trigger and a separate refresh signal.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>5. What was the actual transient reason code behind the drawer-not-saved gate flash, and how was it found?</legend>
+    <label><input type="radio" name="q5" value="0" /> candidate_invalid, found by reading the state machine&#x27;s type definitions</label>
+<label><input type="radio" name="q5" value="1" /> mapping_invalidated, found by instrumenting the live gate state during a real replacement-drawer open</label>
+<label><input type="radio" name="q5" value="2" /> write_failed, found in the error logs</label>
+<label><input type="radio" name="q5" value="3" /> snapshot_invalid, found via a failing unit test</label>
+  </fieldset>
+  <div class="answer-detail">The first fix guessed candidate_invalid and didn&#x27;t work; live browser instrumentation of the actual state during the real interaction showed the transient reason was mapping_invalidated.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>6. What disproved the initial theory for the register-closed-locally gate flash?</legend>
+    <label><input type="radio" name="q6" value="0" /> A code review comment</label>
+<label><input type="radio" name="q6" value="1" /> Live instrumentation showing the canOpenReplacement derivation was false throughout the entire flash window</label>
+<label><input type="radio" name="q6" value="2" /> A failing typecheck</label>
+<label><input type="radio" name="q6" value="3" /> The bug reproduced in a unit test but not in the browser</label>
+  </fieldset>
+  <div class="answer-detail">Direct instrumentation captured the canOpenReplacement value across the whole transition and it was false the entire time, ruling out the first hypothesis and pointing to the drawer-gate null-gap instead.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>7. What actually fills the ~21ms gap where viewModel.drawerGate is null during a closeout submit, after this branch&#x27;s fix?</legend>
+    <label><input type="radio" name="q7" value="0" /> The locally-closed card, same as before</label>
+<label><input type="radio" name="q7" value="1" /> A neutral placeholder div, shown until a 200ms settle timer confirms the transition has genuinely finished</label>
+<label><input type="radio" name="q7" value="2" /> Nothing — the screen goes blank</label>
+<label><input type="radio" name="q7" value="3" /> The onboarding workspace</label>
+  </fieldset>
+  <div class="answer-detail">isLocalClosedRestCandidate requires !viewModel.drawerGate, and a 200ms settle timer delays showing the actual card so a neutral frame covers the brief gap instead.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>8. What local validation was run on this branch before it was considered ready to push?</legend>
+    <label><input type="radio" name="q8" value="0" /> Only a manual browser check, no automated tests</label>
+<label><input type="radio" name="q8" value="1" /> tsc --noEmit, lint:frontend:changed, and the full relevant unit-test set across six test files (234 tests), all passing, re-verified after a rebase onto origin/main</label>
+<label><input type="radio" name="q8" value="2" /> Only the newly-added tests, not the full suite</label>
+<label><input type="radio" name="q8" value="3" /> CI was the only validation; nothing ran locally</label>
+  </fieldset>
+  <div class="answer-detail">Typecheck, lint, and 234 tests across registerUiState, operatingDate, useExpenseRegisterViewModel, DailyOpeningView, DailyOperationsView, and DailyCloseView all passed, both before and after the rebase.</div>
+</div>
+
+<div class="quiz-question" data-answer="2">
+  <fieldset>
+    <legend>9. What is the recommended approach if a POS register gate is observed flickering between UI states in the future?</legend>
+    <label><input type="radio" name="q9" value="0" /> Read the component&#x27;s render conditions carefully and reason out the fix from the code alone</label>
+<label><input type="radio" name="q9" value="1" /> Add a longer timeout and move on</label>
+<label><input type="radio" name="q9" value="2" /> Instrument the live runtime state directly across the real interaction before forming a root-cause theory — all three gate-flash bugs here had a wrong first theory from code-reading alone</label>
+<label><input type="radio" name="q9" value="3" /> File it as low-priority since gates always flicker briefly</label>
+  </fieldset>
+  <div class="answer-detail">This branch had three separate cases where a plausible code-reading-based theory was wrong, and only direct browser instrumentation of the actual state sequence found the real cause.</div>
+</div>
+
+<div class="quiz-question" data-answer="1">
+  <fieldset>
+    <legend>10. What is the deploy/merge status of this branch as described in this report?</legend>
+    <label><input type="radio" name="q10" value="0" /> Already merged and deployed to production</label>
+<label><input type="radio" name="q10" value="1" /> A delivery candidate, not yet merged into main, with no production deploy pending</label>
+<label><input type="radio" name="q10" value="2" /> Merged but deploy is blocked on a separate approval</label>
+<label><input type="radio" name="q10" value="3" /> Abandoned in favor of a different approach</label>
+  </fieldset>
+  <div class="answer-detail">This report describes a delivery candidate. It does not claim merge, deploy, or root-alignment status that hasn&#x27;t actually occurred.</div>
+</div>
+
+    <div class="quiz-actions">
+      <button type="button" id="gradeQuiz">Grade quiz</button>
+      <button type="button" class="secondary" id="resetQuiz">Reset</button>
+      <span id="quizResult" aria-live="polite"></span>
+    </div>
+  </form>
+</section>
+
+    </main>
+    <script>
+      const questions = Array.from(document.querySelectorAll(".quiz-question"));
+      const result = document.getElementById("quizResult");
+      const form = document.getElementById("changeQuiz");
+      const threshold = Number(form.dataset.threshold || 0);
+      function clearGrades() {
+        questions.forEach((question) => {
+          question.classList.remove("correct", "incorrect");
+          question.querySelector(".answer-detail").classList.remove("visible");
+        });
+        result.textContent = "";
+        result.style.color = "";
+      }
+      document.getElementById("gradeQuiz").addEventListener("click", () => {
+        clearGrades();
+        let score = 0;
+        questions.forEach((question, index) => {
+          const selected = document.querySelector(`input[name="q${index + 1}"]:checked`);
+          const isCorrect = selected && Number(selected.value) === Number(question.dataset.answer);
+          if (isCorrect) score += 1;
+          question.classList.add(isCorrect ? "correct" : "incorrect");
+          question.querySelector(".answer-detail").classList.add("visible");
+        });
+        const passed = score >= threshold;
+        result.textContent = passed
+          ? `Passed: ${score}/${questions.length}.`
+          : `Not passed: ${score}/${questions.length}. Review the report and try again.`;
+        result.style.color = passed ? "var(--good)" : "var(--bad)";
+      });
+      document.getElementById("resetQuiz").addEventListener("click", () => {
+        form.reset();
+        clearGrades();
+      });
+    </script>
+  </body>
+</html>

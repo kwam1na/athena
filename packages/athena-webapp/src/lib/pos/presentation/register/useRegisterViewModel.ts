@@ -81,6 +81,7 @@ import {
   buildRegisterOperationalIdleState,
   buildRegisterUpdateApplyBlockerState,
   EMPTY_REGISTER_CUSTOMER_INFO,
+  hasBlockingAuthorityPersistenceFailure,
 } from "./registerUiState";
 import {
   buildRegisterHeaderState,
@@ -1782,8 +1783,18 @@ export function useRegisterViewModel(): RegisterViewModel {
   const hasLifecycleReviewDrawerBlock =
     localDrawerAuthorityReason === "lifecycle_rejected";
   const hasLocalSaleAuthorityBlock = Boolean(localSaleAuthorityBlockReason);
-  const hasAuthorityPersistenceFailure =
-    registerLifecycleAuthorityPersistence.status === "failed";
+  // Opening a (replacement) drawer re-settles cloud register authority across two snapshots;
+  // the first pass reports a transitional `mapping_invalidated` / `candidate_invalid` before
+  // the settled pass succeeds. Those re-settles are not save failures, so they must not flash
+  // the "Drawer status not saved" gate — only a genuine failure (write_failed / snapshot_invalid)
+  // should. See hasBlockingAuthorityPersistenceFailure.
+  const hasAuthorityPersistenceFailure = hasBlockingAuthorityPersistenceFailure({
+    reason:
+      registerLifecycleAuthorityPersistence.status === "failed"
+        ? registerLifecycleAuthorityPersistence.reason
+        : undefined,
+    status: registerLifecycleAuthorityPersistence.status,
+  });
   const requiresDrawerGate = Boolean(
     activeStoreId &&
     terminal?._id &&

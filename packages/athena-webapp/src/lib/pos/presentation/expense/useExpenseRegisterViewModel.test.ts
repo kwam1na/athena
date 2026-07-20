@@ -20,20 +20,32 @@ const catalogGatewayMocks = vi.hoisted(() => ({
   useConvexRegisterCatalog: vi.fn(),
   useConvexRegisterCatalogAvailability: vi.fn(),
 }));
-const localRuntimeMocks = vi.hoisted(() => ({
-  addItem: vi.fn(),
-  clearCart: vi.fn(),
-  completeExpense: vi.fn(),
-  holdSession: vi.fn(),
-  removeItem: vi.fn(),
-  resumeSession: vi.fn(),
-  startSession: vi.fn(),
-  updateItem: vi.fn(),
-  voidSession: vi.fn(),
-  listEvents: vi.fn(),
-  hasListEvents: { current: false },
-  eventAppendToken: { current: 0 },
-}));
+const localRuntimeMocks = vi.hoisted(() => {
+  const listEvents = vi.fn();
+  return {
+    addItem: vi.fn(),
+    clearCart: vi.fn(),
+    completeExpense: vi.fn(),
+    holdSession: vi.fn(),
+    removeItem: vi.fn(),
+    resumeSession: vi.fn(),
+    startSession: vi.fn(),
+    updateItem: vi.fn(),
+    voidSession: vi.fn(),
+    listEvents,
+    hasListEvents: { current: false },
+    eventAppendToken: { current: 0 },
+    // When true, `localStore` is a single stable object whose `listEvents` getter returns
+    // a *fresh* function on every access — reproducing the real Proxy port facade that
+    // caused the infinite render loop.
+    proxyListEvents: { current: false },
+    proxyLocalStore: {
+      get listEvents() {
+        return (...args: unknown[]) => listEvents(...args);
+      },
+    },
+  };
+});
 const terminalMocks = vi.hoisted(() => ({
   terminal: {
     _id: "terminal-1" as Id<"posTerminal">,
@@ -138,11 +150,13 @@ vi.mock("@/hooks/useExpenseLocalRuntime", () => ({
   useExpenseLocalRuntime: () => ({
     expenseLocalGateway: localRuntimeMocks,
     eventAppendToken: localRuntimeMocks.eventAppendToken.current,
-    localStore: localRuntimeMocks.hasListEvents.current
-      ? {
-          listEvents: localRuntimeMocks.listEvents,
-        }
-      : {},
+    localStore: localRuntimeMocks.proxyListEvents.current
+      ? localRuntimeMocks.proxyLocalStore
+      : localRuntimeMocks.hasListEvents.current
+        ? {
+            listEvents: localRuntimeMocks.listEvents,
+          }
+        : {},
     noteEventAppended: () => {
       localRuntimeMocks.eventAppendToken.current += 1;
     },
@@ -422,11 +436,34 @@ describe("useExpenseRegisterViewModel", () => {
     localRuntimeMocks.resumeSession.mockResolvedValue(true);
     localRuntimeMocks.voidSession.mockResolvedValue(true);
     localRuntimeMocks.hasListEvents.current = false;
+    localRuntimeMocks.proxyListEvents.current = false;
     localRuntimeMocks.eventAppendToken.current = 0;
     localRuntimeMocks.listEvents.mockResolvedValue({
       ok: true,
       value: [],
     });
+  });
+
+  it("does not re-render endlessly when the local store returns a fresh listEvents per access", async () => {
+    // Reproduces the real Proxy port facade: a stable `localStore` whose `.listEvents`
+    // yields a new function on every access. Read inline, that churned the read effect's
+    // dependency array into an unbounded render loop ("Maximum update depth exceeded").
+    localRuntimeMocks.proxyListEvents.current = true;
+    localRuntimeMocks.listEvents.mockResolvedValue({ ok: true, value: [] });
+
+    let renderCount = 0;
+    const { result } = renderHook(() => {
+      renderCount += 1;
+      return useExpenseRegisterViewModel();
+    });
+
+    await waitFor(() =>
+      expect(result.current.debug?.localEntryStatus).toBe("ready"),
+    );
+
+    // With the accessor memoised, the view model settles in a handful of renders. Without
+    // the fix this climbs to React's ~50-render bail-out.
+    expect(renderCount).toBeLessThan(20);
   });
 
   it("identifies the shared demo expense workspace", async () => {
@@ -949,7 +986,7 @@ describe("useExpenseRegisterViewModel", () => {
     expect(source).not.toContain("usePOSBarcodeSearch");
   });
 
-  it("reuses the terminal demo bootstrap instead of subscribing again", () => {
+  it("reuses terminal demo staff and reads the restore epoch for expense sync", () => {
     const currentDir = dirname(fileURLToPath(import.meta.url));
     const source = readFileSync(
       join(currentDir, "useExpenseRegisterViewModel.ts"),
@@ -957,7 +994,11 @@ describe("useExpenseRegisterViewModel", () => {
     );
 
     expect(source).toContain("sharedDemoStaff");
-    expect(source).not.toContain("useSharedDemoContext");
+    // Demo expense uploads are rejected by ingestLocalEvents without the restore epoch,
+    // which is only available from the shared demo context (the terminal's
+    // sharedDemoStaff does not carry it). Register plumbs the same value.
+    expect(source).toContain("useSharedDemoContext");
+    expect(source).toContain("restore?.epoch");
   });
 
   it("optimistically adds expense product selections while the server mutation is pending", async () => {

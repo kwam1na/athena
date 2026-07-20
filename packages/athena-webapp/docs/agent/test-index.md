@@ -551,6 +551,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/lib/moneyEntryAudit.test.ts`](../../src/lib/moneyEntryAudit.test.ts)
 - [`src/lib/navigation/appEntryRoutes.test.ts`](../../src/lib/navigation/appEntryRoutes.test.ts)
 - [`src/lib/navigation/storeEntryRoute.test.ts`](../../src/lib/navigation/storeEntryRoute.test.ts)
+- [`src/lib/operations/operatingDate.test.ts`](../../src/lib/operations/operatingDate.test.ts)
 - [`src/lib/pos/application/bootstrapRegister.test.ts`](../../src/lib/pos/application/bootstrapRegister.test.ts)
 - [`src/lib/pos/application/posLocalStorePort.test.ts`](../../src/lib/pos/application/posLocalStorePort.test.ts)
 - [`src/lib/pos/application/results.test.ts`](../../src/lib/pos/application/results.test.ts)

@@ -3,7 +3,40 @@ import { describe, expect, it } from "vitest";
 import {
   buildRegisterOperationalIdleState,
   buildRegisterUpdateApplyBlockerState,
+  hasBlockingAuthorityPersistenceFailure,
 } from "./registerUiState";
+
+describe("hasBlockingAuthorityPersistenceFailure", () => {
+  it("never blocks when persistence has not failed", () => {
+    for (const status of ["idle", "applying", "ready"] as const) {
+      expect(hasBlockingAuthorityPersistenceFailure({ status })).toBe(false);
+    }
+  });
+
+  it("never blocks a transitional authority re-settle", () => {
+    // The flash case: opening a replacement drawer re-settles cloud authority against a
+    // transitional snapshot. These reasons are not save failures and must not surface the gate.
+    for (const reason of ["mapping_invalidated", "candidate_invalid"] as const) {
+      expect(
+        hasBlockingAuthorityPersistenceFailure({ reason, status: "failed" }),
+      ).toBe(false);
+    }
+  });
+
+  it("blocks genuine persistence failures", () => {
+    for (const reason of ["write_failed", "snapshot_invalid"] as const) {
+      expect(
+        hasBlockingAuthorityPersistenceFailure({ reason, status: "failed" }),
+      ).toBe(true);
+    }
+  });
+
+  it("blocks a failure with no reason", () => {
+    expect(hasBlockingAuthorityPersistenceFailure({ status: "failed" })).toBe(
+      true,
+    );
+  });
+});
 
 describe("buildRegisterOperationalIdleState", () => {
   it.each([
