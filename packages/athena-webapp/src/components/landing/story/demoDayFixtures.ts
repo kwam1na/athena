@@ -34,12 +34,14 @@ import {
 // page. Everything derives from the demoDay story so the fixtures reconcile
 // with the copy around them (see demoDay.test.ts).
 
-export const STORY_OPERATING_DATE = "2026-07-17";
+// The busy Wednesday captured in the operations screenshot fixtures — the
+// same day shown in the landing page's workspace shots.
+export const STORY_OPERATING_DATE = "2026-07-15";
 
 // The story day runs in the demo store's timezone (America/New_York, UTC-4
 // on this date).
 function storyTime(hour: number, minute: number) {
-  return Date.UTC(2026, 6, 17, hour + 4, minute);
+  return Date.UTC(2026, 6, 15, hour + 4, minute);
 }
 
 export const storyMoments = {
@@ -47,7 +49,9 @@ export const storyMoments = {
   closeout: storyTime(17, 40),
   dayEnd: storyTime(24, 0),
   dayStart: storyTime(0, 0),
-  opening: storyTime(8, 47),
+  // Efua opens the drawer at 9:41 AM, a few minutes after Athena starts the
+  // store day at 9:34 (both visible in the captured workspace shots).
+  opening: storyTime(9, 41),
   sale: storyTime(15, 14),
 } as const;
 
@@ -67,14 +71,17 @@ export const morningTopItems = [
   { name: "Hand-Thrown Clay Mug", productSku: sharedDemoProductBySlug("demo-clay-mug").sku, quantity: 1, totalSales: 9_500 },
 ] as const;
 
+// The week behind the story day, matching the Daily Operations shot's trend
+// (Sun Jul 12 GH₵6,400 · Mon 4,800 · Tue 5,600), with the Wednesday still in
+// its morning state.
 const morningTrend = [
-  { date: "2026-07-11", label: "Jul 11", totalSales: 142_000, totalItemsSold: 19, transactionCount: 11 },
-  { date: "2026-07-12", label: "Jul 12", totalSales: 188_500, totalItemsSold: 24, transactionCount: 13 },
-  { date: "2026-07-13", label: "Jul 13", totalSales: 96_000, totalItemsSold: 12, transactionCount: 7 },
-  { date: "2026-07-14", label: "Jul 14", totalSales: 156_000, totalItemsSold: 21, transactionCount: 12 },
-  { date: "2026-07-15", label: "Jul 15", totalSales: 203_000, totalItemsSold: 27, transactionCount: 15 },
-  { date: "2026-07-16", label: "Jul 16", totalSales: 174_500, totalItemsSold: 22, transactionCount: 12 },
-  { date: STORY_OPERATING_DATE, label: "Jul 17", totalSales: morningSnapshot.netSales, totalItemsSold: morningSnapshot.itemsSold, transactionCount: morningSnapshot.transactions },
+  { date: "2026-07-09", label: "Jul 9", totalSales: 573_000, totalItemsSold: 46, transactionCount: 24 },
+  { date: "2026-07-10", label: "Jul 10", totalSales: 702_000, totalItemsSold: 56, transactionCount: 29 },
+  { date: "2026-07-11", label: "Jul 11", totalSales: 795_000, totalItemsSold: 63, transactionCount: 33 },
+  { date: "2026-07-12", label: "Jul 12", totalSales: 640_000, totalItemsSold: 49, transactionCount: 26 },
+  { date: "2026-07-13", label: "Jul 13", totalSales: 480_000, totalItemsSold: 37, transactionCount: 20 },
+  { date: "2026-07-14", label: "Jul 14", totalSales: 560_000, totalItemsSold: 43, transactionCount: 23 },
+  { date: STORY_OPERATING_DATE, label: "Jul 15", totalSales: morningSnapshot.netSales, totalItemsSold: morningSnapshot.itemsSold, transactionCount: morningSnapshot.transactions },
 ].map((day) => ({
   ...day,
   averageTransaction: Math.round(day.totalSales / day.transactionCount),
@@ -197,7 +204,7 @@ export const bridgeActivity: RegisterSessionActivityFixture = {
       category: saleClassification?.category ?? "sale",
       evidenceLinks: [],
       label: saleClassification?.label ?? "Sale completed",
-      localEventId: "story-evt-0041",
+      localEventId: "story-evt-1154",
       localRegisterSessionId: "story-local-session",
       occurredAt: storyMoments.sale,
       reportedAt: storyMoments.sale + 45_000,
@@ -249,7 +256,8 @@ export const bridgeActivity: RegisterSessionActivityFixture = {
 
 // At 5:40 PM the day's drawer is mid-closeout: counted, in review, with the
 // GH₵5 shortage surfaced but not yet approved (EOD Review settles it).
-// Yesterday's session sits in the closed history, priced off the Jul 16 trend.
+// Yesterday's session sits in the closed history, priced off the Jul 14 trend
+// day; its deposit leaves the GH₵500 float that carries into Wednesday.
 const closingSession = {
   _id: "story-register-session",
   countedCash: drawer.countedCash,
@@ -283,18 +291,21 @@ export const cashDashboardSnapshot: CashControlsDashboardSnapshot = {
     closingSession,
     {
       _id: "story-register-session-prev",
-      closedAt: storyMoments.opening - 43_200_000,
+      // Closed Tuesday 8:12 PM, before the prior EOD Review completed at 8:40
+      // (the completion time visible in the Opening Handoff shot).
+      closedAt: storyTime(20, 12) - 86_400_000,
       closedByStaffName: SHARED_DEMO_STAFF_STORY.manager.fullName,
-      countedCash: 116_000,
-      expectedCash: 116_000,
+      countedCash: 263_000,
+      expectedCash: 263_000,
       openedAt: storyMoments.opening - 86_400_000,
       openedByStaffName: SHARED_DEMO_STAFF_STORY.cashier.fullName,
       openingFloat: drawer.openingFloat,
       registerNumber: demoStore.registerNumber,
       status: "closed",
       terminalName: "Studio Front Register",
-      totalDeposited: 110_000,
-      totalSales: 174_500,
+      // Deposits everything but the GH₵500 float Wednesday opens with.
+      totalDeposited: 213_000,
+      totalSales: 560_000,
       variance: 0,
     },
   ],
@@ -309,7 +320,7 @@ export const eodSnapshot: DailyCloseSnapshot = {
   carryForwardItems: [
     {
       category: "inventory",
-      description: "4 left after today's sales — restock before tomorrow's opening.",
+      description: "2 left after today's sales — restock before tomorrow's opening.",
       id: "story-carry-kente",
       key: "story-carry-kente",
       severity: "carry_forward",
@@ -371,8 +382,8 @@ export const eodSnapshot: DailyCloseSnapshot = {
     netCashVariance: drawer.variance,
     paymentTotals: [
       { amount: payments.cash, method: "cash", transactionCount: 8 },
-      { amount: payments.card, method: "card", transactionCount: 4 },
-      { amount: payments.mobileMoney, method: "mobile_money", transactionCount: 2 },
+      { amount: payments.card, method: "card", transactionCount: 5 },
+      { amount: payments.mobileMoney, method: "mobile_money", transactionCount: 15 },
     ],
     registerCount: 1,
     salesTotal: dayTotals.netSales,

@@ -58,6 +58,8 @@ export function PublicLayout({
             )}
             <Link
               to={DEMO_PATH}
+              target="_blank"
+              rel="noopener noreferrer"
               onClick={
                 trackFunnelCtas
                   ? () => emitLandingFunnelEvent("demo_cta")

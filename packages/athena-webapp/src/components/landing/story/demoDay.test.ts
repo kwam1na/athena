@@ -62,7 +62,8 @@ describe("landing demo day continuity", () => {
     expect(topItemsTotal).toBeLessThanOrEqual(dayTotals.netSales);
     expect(topItemsQuantity).toBeLessThanOrEqual(dayTotals.itemsSold);
     const kente = SHARED_DEMO_PRODUCTS.find((entry) => entry.slug === "demo-kente-scarf");
-    expect(carryForward.remaining).toBe(kente!.inventoryCount - 2);
+    const kenteSold = topItems.find((item) => item.name === kente!.name)!.quantity;
+    expect(carryForward.remaining).toBe(kente!.inventoryCount - kenteSold);
   });
 
   it("keeps the real-component fixtures reconciled with the story day", () => {

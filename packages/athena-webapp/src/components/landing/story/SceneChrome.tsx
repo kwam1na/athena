@@ -132,11 +132,14 @@ export function AppShellExhibit({
   activeRailIcon,
   ariaLabel,
   children,
+  contentScale,
   zoom,
 }: {
   activeRailIcon: ShellRailIconKey;
   ariaLabel: string;
   children: ReactNode;
+  /** Scales the workspace row (sidebar + content) down within the fixed frame. */
+  contentScale?: number;
   zoom?: number;
 }) {
   const containedControlSurface =
@@ -145,7 +148,7 @@ export function AppShellExhibit({
   return (
     <figure
       aria-label={ariaLabel}
-      className="mx-auto w-full overflow-hidden rounded-xl border border-border bg-app-canvas text-left text-foreground shadow-overlay"
+      className="mx-auto w-full overflow-hidden rounded-xl border border-border bg-app-canvas text-left text-foreground shadow-surface"
       style={zoom ? ({ zoom } as CSSProperties) : undefined}
     >
       <header className="relative z-20 box-border flex h-16 shrink-0 bg-transparent px-layout-xs pt-layout-xs sm:px-layout-sm sm:pt-layout-sm">
@@ -189,7 +192,14 @@ export function AppShellExhibit({
         </div>
       </header>
 
-      <div className="flex min-h-0 px-layout-xs pb-layout-sm sm:px-layout-sm">
+      <div
+        className="flex min-h-0 px-layout-xs pb-layout-sm sm:px-layout-sm"
+        style={
+          contentScale
+            ? { transform: `scale(${contentScale})`, transformOrigin: "top left" }
+            : undefined
+        }
+      >
         <div className="hidden shrink-0 flex-col md:flex" aria-hidden="true">
           <aside className="flex w-[3rem] flex-none flex-col items-center gap-layout-xs rounded-lg border border-sidebar-border/60 bg-sidebar py-layout-xs text-sidebar-foreground shadow-surface">
             {SHELL_RAIL_GROUPS.map((group, groupIndex) => (
@@ -256,9 +266,16 @@ export function PosSyncBadge({
   );
 }
 
+// The "Athena acted on its own" beat under each act's copy. The primary dot
+// is the same motif the closing AutomationRevealScene uses for its timeline,
+// so the payoff reads as a reprise of these moments.
 export function AutomationBeat({ children }: { children: ReactNode }) {
   return (
-    <p className="mt-layout-md text-xs leading-5 text-muted-foreground/70">
+    <p className="mt-layout-md flex items-start gap-layout-sm text-sm leading-6 text-muted-foreground">
+      <span
+        aria-hidden="true"
+        className="mt-[8px] h-2 w-2 shrink-0 rounded-full bg-primary"
+      />
       {children}
     </p>
   );
