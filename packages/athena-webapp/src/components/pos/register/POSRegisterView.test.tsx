@@ -1994,7 +1994,12 @@ describe("POSRegisterView", () => {
     const { POSRegisterView } = await import("./POSRegisterView");
     render(<POSRegisterView />);
 
-    expect(screen.getByText("Register closed locally")).toBeInTheDocument();
+    // The locally closed notice only renders once a brief settle window confirms no
+    // drawer-gate transition is still in flight; see POSRegisterView's
+    // isLocalClosedRestSettled.
+    expect(
+      await screen.findByText("Register closed locally"),
+    ).toBeInTheDocument();
     expect(
       screen.getByText(
         "This register was closed locally. Athena will reconcile the closeout after sync.",
