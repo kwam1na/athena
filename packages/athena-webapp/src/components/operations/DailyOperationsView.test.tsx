@@ -15,11 +15,14 @@ const mockedHooks = vi.hoisted(() => ({
   useSearch: vi.fn(),
   useProtectedAdminPageState: vi.fn(),
   useQuery: vi.fn(),
+  useSharedDemoContext: vi.fn(),
 }));
 
 const mockedApi = vi.hoisted(() => ({
   getDailyOperationsAutomationSnapshot: "getDailyOperationsAutomationSnapshot",
   getDailyOperationsDetailSnapshot: "getDailyOperationsDetailSnapshot",
+  getDailyOperationsOpenRegisterSessionsSnapshot:
+    "getDailyOperationsOpenRegisterSessionsSnapshot",
   getDailyOperationsSnapshot: "getDailyOperationsSnapshot",
   getDailyOperationsStorePulseSnapshot: "getDailyOperationsStorePulseSnapshot",
   getDailyOperationsStoreRequestsSnapshot:
@@ -74,6 +77,10 @@ vi.mock("@/hooks/useProtectedAdminPageState", () => ({
   useProtectedAdminPageState: mockedHooks.useProtectedAdminPageState,
 }));
 
+vi.mock("@/hooks/useSharedDemoContext", () => ({
+  useSharedDemoContext: mockedHooks.useSharedDemoContext,
+}));
+
 vi.mock("@/hooks/use-mobile", () => ({
   useIsMobile: mockedHooks.useIsMobile,
 }));
@@ -123,6 +130,7 @@ vi.mock("recharts", () => ({
       displayLabel?: string;
       hasKnownItemCount?: boolean;
       totalItemsSold?: number;
+      totalSales?: number;
     }>;
     margin?: { bottom?: number; left?: number; right?: number; top?: number };
   }) => (
@@ -137,6 +145,9 @@ vi.mock("recharts", () => ({
       data-testid="store-pulse-chart"
       data-total-items-sold={data
         .map((day) => String(day.totalItemsSold ?? 0))
+        .join("|")}
+      data-total-sales={data
+        .map((day) => String(day.totalSales ?? 0))
         .join("|")}
     >
       {children}
@@ -950,6 +961,13 @@ function getCurrentLocalOperatingDate() {
   );
 
   return localDate.toISOString().slice(0, 10);
+}
+
+function getShortOperatingDateLabel(operatingDate: string) {
+  return new Date(`${operatingDate}T00:00:00.000Z`).toLocaleDateString(
+    "en-US",
+    { day: "numeric", month: "short", timeZone: "UTC" },
+  );
 }
 
 function getCurrentSaturdayWeekEndOperatingDate() {
@@ -2414,9 +2432,7 @@ describe("DailyOperationsViewContent", () => {
     expect(
       screen
         .getByRole("heading", { name: "Incomplete store-day close" })
-        .compareDocumentPosition(
-          screen.getByText("Net sales"),
-        ) &
+        .compareDocumentPosition(screen.getByText("Net sales")) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(
@@ -2659,9 +2675,9 @@ describe("DailyOperationsViewContent", () => {
       "bg-surface",
       "shadow-surface",
     );
-    expect(automationBand?.compareDocumentPosition(registerSessionsPanel!)).toBe(
-      Node.DOCUMENT_POSITION_FOLLOWING,
-    );
+    expect(
+      automationBand?.compareDocumentPosition(registerSessionsPanel!),
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(registerSessionsPanel?.compareDocumentPosition(netSalesMetric)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
     );
@@ -2910,7 +2926,9 @@ describe("DailyOperationsViewContent", () => {
 
     expect(showMoreButton).toBeDisabled();
     expect(showMoreButton).toHaveAttribute("aria-busy", "true");
-    expect(within(timeline).queryByText("Loading timeline")).not.toBeInTheDocument();
+    expect(
+      within(timeline).queryByText("Loading timeline"),
+    ).not.toBeInTheDocument();
   });
 
   it("links quick-add product names to the product detail page with origin search", () => {
@@ -3263,6 +3281,7 @@ describe("DailyOperationsView", () => {
     mockedHooks.useQuery.mockImplementation((_query, args) =>
       args === "skip" ? undefined : operatingSnapshot,
     );
+    mockedHooks.useSharedDemoContext.mockReturnValue(null);
     mockedHooks.navigate.mockReset();
     mockedHooks.useSearch.mockReturnValue({});
   });
@@ -4100,7 +4119,10 @@ describe("DailyOperationsView", () => {
 
     expect(mockedHooks.useQuery).toHaveBeenCalledWith(
       mockedApi.getDailyOperationsSnapshot,
-      "skip",
+      expect.objectContaining({
+        operatingDate: "2026-05-08",
+        storeId: "store-1",
+      }),
     );
     expect(mockedHooks.useQuery).toHaveBeenCalledWith(
       mockedApi.getDailyOperationsDetailSnapshot,
@@ -4283,6 +4305,120 @@ describe("DailyOperationsView", () => {
     expect(
       screen.queryByText("Daily Operations unavailable"),
     ).not.toBeInTheDocument();
+  });
+
+  it("uses the client-side shared-demo history without daily operations queries", () => {
+    vi.setSystemTime(new Date(2026, 6, 21, 12));
+    mockedHooks.useSharedDemoContext.mockReturnValue({
+      kind: "shared_demo",
+      storeId: "store-1",
+    });
+    mockedHooks.useSearch.mockReturnValue({
+      operatingDate: "2026-07-15",
+      weekEndOperatingDate: "2026-07-18",
+    });
+    mockedHooks.useQuery.mockClear();
+
+    render(<DailyOperationsView />);
+
+    expect(mockedHooks.useQuery).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("heading", { name: "Top items" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Opening Handoff is complete."),
+    ).toBeInTheDocument();
+    const displayDates = screen
+      .getByTestId("store-pulse-chart")
+      .dataset.displayDates?.split("|");
+
+    expect(displayDates).toHaveLength(4);
+    expect(displayDates?.[0]).toContain(
+      getShortOperatingDateLabel("2026-07-12"),
+    );
+    expect(displayDates?.at(-1)).toContain(
+      getShortOperatingDateLabel("2026-07-15"),
+    );
+    expect(
+      screen.getByRole("link", {
+        name: "Review EOD Review for Wednesday, July 15, 2026",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Open Point of Sale" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps the current shared-demo day on the live daily operations query", () => {
+    vi.setSystemTime(new Date(2026, 6, 21, 12));
+    mockedHooks.useSharedDemoContext.mockReturnValue({
+      kind: "shared_demo",
+      storeId: "store-1",
+    });
+    mockedHooks.useSearch.mockReturnValue({
+      operatingDate: "2026-07-21",
+      weekEndOperatingDate: "2026-07-25",
+    });
+    const liveWeekMetrics = Array.from({ length: 7 }, (_, index) => ({
+      ...operatingSnapshot.weekMetrics[0],
+      isClosed: index < 2,
+      isSelected: index === 2,
+      operatingDate: `2026-07-${String(19 + index).padStart(2, "0")}`,
+      paymentTotals: [],
+      salesTotal: 0,
+      transactionCount: 0,
+    }));
+    mockedHooks.useQuery.mockImplementation((query, args) => {
+      if (args === "skip") return undefined;
+      if (query === mockedApi.getDailyOperationsSnapshot) {
+        return {
+          ...operatingSnapshot,
+          operatingDate: "2026-07-21",
+          timeline: [],
+          weekMetrics: liveWeekMetrics,
+        };
+      }
+      if (query === mockedApi.getDailyOperationsTimelinePreviewSnapshot) {
+        return {
+          operatingDate: "2026-07-21",
+          timeline: [],
+          timelineHasMore: false,
+        };
+      }
+      if (query === mockedApi.getDailyOperationsAutomationSnapshot) {
+        return { automationStatuses: [], operatingDate: "2026-07-21" };
+      }
+      if (query === mockedApi.getDailyOperationsOpenRegisterSessionsSnapshot) {
+        return { operatingDate: "2026-07-21", sessions: [] };
+      }
+      return undefined;
+    });
+    mockedHooks.useQuery.mockClear();
+
+    render(<DailyOperationsView />);
+
+    expect(mockedHooks.useQuery).toHaveBeenCalledWith(
+      mockedApi.getDailyOperationsSnapshot,
+      expect.objectContaining({
+        operatingDate: "2026-07-21",
+        storeId: "store-1",
+      }),
+    );
+    expect(
+      screen.queryByText("The demo session starts at zero."),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getAllByText((_, node) => node?.textContent === "GH₵5,310")
+        .length,
+    ).toBeGreaterThan(0);
+    expect(mockedHooks.useQuery).toHaveBeenCalledWith(
+      mockedApi.getDailyOperationsWeekAnalyticsSnapshot,
+      "skip",
+    );
+    expect(screen.getByTestId("store-pulse-chart")).toHaveAttribute(
+      "data-total-sales",
+      "0|531000|0",
+    );
   });
 
   it("prefers the fixture even when the generated API is unavailable", () => {

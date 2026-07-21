@@ -54,6 +54,11 @@ describe("resolveSyncedSaleInventoryReviewWithCtx", () => {
       kind: "ok",
       data: { resolvedCount: 1, status: "completed" },
     });
+    expect(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).toHaveBeenCalledWith(ctx, {
+      sharedDemoCapability: "daily_operations.write",
+    });
     assertConformsToExportedReturns(
       resolveSyncedSaleInventoryReviewGroup,
       result,

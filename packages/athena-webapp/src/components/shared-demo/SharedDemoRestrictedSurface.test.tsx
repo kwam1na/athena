@@ -49,7 +49,6 @@ describe("shared demo restricted surfaces", () => {
   it("blocks administration routes while preserving operating routes", () => {
     for (const path of [
       "/demo/store/central/members",
-      "/demo/store/central/app-settings",
       "/demo/store/central/configuration",
       "/demo/store/central/bulk-operations",
       "/demo/store/central/products/new",
@@ -69,8 +68,25 @@ describe("shared demo restricted surfaces", () => {
       "/demo/store/central/procurement",
       "/demo/store/central/services/catalog-management",
       "/demo/store/central/pos/settings",
+      "/demo/store/central/app-settings",
       "/demo/store/central/pos/terminals",
       "/demo/store/central/pos/terminals/terminal-1",
+    ]) {
+      expect(isSharedDemoRestrictedPath(path), path).toBe(false);
+    }
+  });
+
+  it("allows every Open Work action destination in the demo", () => {
+    for (const path of [
+      "/demo/store/central/products",
+      "/demo/store/central/products/product-1/edit",
+      "/demo/store/central/operations/stock-adjustments",
+      "/demo/store/central/services/active-cases",
+      "/demo/store/central/services/appointments",
+      "/demo/store/central/procurement",
+      "/demo/store/central/operations/approvals",
+      "/demo/store/central/operations/daily-close",
+      "/demo/store/central/pos/transactions/transaction-1",
     ]) {
       expect(isSharedDemoRestrictedPath(path), path).toBe(false);
     }

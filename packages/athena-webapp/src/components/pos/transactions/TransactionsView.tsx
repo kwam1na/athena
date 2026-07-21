@@ -32,6 +32,8 @@ import { getOrigin } from "~/src/lib/navigationUtils";
 import { formatRegisterSessionCode } from "~/src/lib/pos/presentation/registerSessionCode";
 import { getRelativeTime } from "~/src/lib/utils";
 import type { Id } from "~/convex/_generated/dataModel";
+import { useSharedDemoContext } from "@/hooks/useSharedDemoContext";
+import { createSharedDemoTransactionFixtures } from "@/components/shared-demo/sharedDemoTransactionsFixture";
 
 function formatPaymentMethod(method: string | null) {
   if (!method) return "Unknown";
@@ -371,6 +373,8 @@ function TransactionMobileCard({
 
 export function TransactionsView() {
   const { activeStore } = useGetActiveStore();
+  const sharedDemoContext = useSharedDemoContext();
+  const isSharedDemo = Boolean(sharedDemoContext);
   const navigate = useNavigate();
   const { operatingDate, page, paymentMethod, registerSessionId, timeRange } =
     useSearch({
@@ -411,15 +415,17 @@ export function TransactionsView() {
     ).getTime();
   }, []);
   const completedFrom =
-    isOperatingDateFilterActive
-      ? operatingDateStartAt
-      : filter === "today"
-        ? todayStartAt
-        : undefined;
+    isSharedDemo
+      ? todayStartAt
+      : isOperatingDateFilterActive
+        ? operatingDateStartAt
+        : filter === "today"
+          ? todayStartAt
+          : undefined;
 
   const transactions = useQuery(
     api.inventory.pos.getCompletedTransactions,
-    activeStore?._id
+    activeStore?._id && sharedDemoContext !== undefined
       ? {
           limit: loadedLimit,
           storeId: activeStore._id,
@@ -469,30 +475,39 @@ export function TransactionsView() {
   const tableData: CompletedTransactionRow[] = useMemo(() => {
     if (!transactions || !formatter) return [];
 
-    return transactions.map((transaction: CompletedTransaction) => ({
-      _id: transaction._id,
-      transactionNumber: transaction.transactionNumber,
-      formattedTotal: formatStoredAmount(formatter, transaction.total),
-      paymentMethodLabel: transaction.hasMultiplePaymentMethods
-        ? "Multiple payment methods"
-        : formatPaymentMethod(transaction.paymentMethod),
-      paymentMethod: transaction.paymentMethod || "cash",
-      paymentMethods:
-        (transaction.paymentMethods?.length ?? 0) > 0
-          ? transaction.paymentMethods
-          : [transaction.paymentMethod || "cash"],
-      hasMultiplePaymentMethods: Boolean(transaction.hasMultiplePaymentMethods),
-      cashierName: transaction.cashierName,
-      customerName: transaction.customerName,
-      itemCount: transaction.itemCount + (transaction.serviceLineCount ?? 0),
-      completedAt: transaction.completedAt,
-      hasTrace: transaction.hasTrace,
-      sessionTraceId: null,
-      status: transaction.status === "void" ? "void" : "completed",
-      voidedAt: transaction.voidedAt,
-      voidReason: transaction.voidReason,
-    }));
-  }, [transactions, formatter]);
+    const fixtureTransactions =
+      isSharedDemo && !registerSessionId
+        ? createSharedDemoTransactionFixtures()
+        : [];
+
+    return [...transactions, ...fixtureTransactions]
+      .sort((first, second) => second.completedAt - first.completedAt)
+      .map((transaction: CompletedTransaction) => ({
+        _id: transaction._id,
+        transactionNumber: transaction.transactionNumber,
+        formattedTotal: formatStoredAmount(formatter, transaction.total),
+        paymentMethodLabel: transaction.hasMultiplePaymentMethods
+          ? "Multiple payment methods"
+          : formatPaymentMethod(transaction.paymentMethod),
+        paymentMethod: transaction.paymentMethod || "cash",
+        paymentMethods:
+          (transaction.paymentMethods?.length ?? 0) > 0
+            ? transaction.paymentMethods
+            : [transaction.paymentMethod || "cash"],
+        hasMultiplePaymentMethods: Boolean(
+          transaction.hasMultiplePaymentMethods,
+        ),
+        cashierName: transaction.cashierName,
+        customerName: transaction.customerName,
+        itemCount: transaction.itemCount + (transaction.serviceLineCount ?? 0),
+        completedAt: transaction.completedAt,
+        hasTrace: transaction.hasTrace,
+        sessionTraceId: null,
+        status: transaction.status === "void" ? "void" : "completed",
+        voidedAt: transaction.voidedAt,
+        voidReason: transaction.voidReason,
+      }));
+  }, [formatter, isSharedDemo, registerSessionId, transactions]);
 
   const filteredData = useMemo(() => {
     const dateFilteredData =

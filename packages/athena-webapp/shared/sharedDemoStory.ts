@@ -70,7 +70,7 @@ export type SharedDemoProductStory = {
   unitCost: number;
 };
 
-export const SHARED_DEMO_PRODUCT_IMAGE_VERSION = "v1";
+export const SHARED_DEMO_PRODUCT_IMAGE_VERSION = "v2";
 
 // Prices and unit costs are minor units (pesewas); GH₵25.00 === 2500.
 export const SHARED_DEMO_PRODUCTS: readonly SharedDemoProductStory[] = [

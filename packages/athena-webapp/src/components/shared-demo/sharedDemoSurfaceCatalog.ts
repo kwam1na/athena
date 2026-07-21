@@ -309,10 +309,12 @@ export const SHARED_DEMO_VISIBLE_SURFACES = [
   "inventory.import",
   "procurement.receiving",
   "catalog.products",
+  "catalog.product_edit",
   "catalog.complimentary",
   "reports",
   "services.operations",
   "services.catalog_management",
+  "administration.app_settings",
   "observability.logs",
   "observability.workflow_trace",
 ] as const satisfies readonly AthenaViewSurface[];

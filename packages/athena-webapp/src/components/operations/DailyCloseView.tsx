@@ -24,6 +24,8 @@ import {
 } from "lucide-react";
 
 import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
+import { useSharedDemoContext } from "@/hooks/useSharedDemoContext";
+import { createSharedDemoDailyCloseFixture } from "@/components/shared-demo/sharedDemoDailyCloseFixture";
 import { formatReviewReason } from "@/components/cash-controls/formatReviewReason";
 import { capitalizeFirstLetter, capitalizeWords, cn } from "@/lib/utils";
 import { toOperatorMessage } from "@/lib/errors/operatorMessages";
@@ -140,6 +142,7 @@ export type DailyCloseStatus =
 type CarryForwardResolutionOutcome = "completed" | "cancelled";
 
 export type DailyCloseItemLink = {
+  disabled?: boolean;
   href?: string;
   label?: string;
   params?: Record<string, string>;
@@ -1391,6 +1394,15 @@ function renderItemSourceLink({
   const className =
     "inline-flex min-w-0 items-center gap-1 text-foreground underline-offset-4 transition-colors hover:text-primary hover:underline";
 
+  if (item.link.disabled) {
+    return (
+      <span aria-disabled="true" className={className}>
+        <span className="truncate">{children}</span>
+        <ArrowUpRight aria-hidden="true" className="h-3 w-3 shrink-0" />
+      </span>
+    );
+  }
+
   if (item.link.href) {
     return (
       <a className={className} href={item.link.href}>
@@ -1545,7 +1557,11 @@ function formatMetadataDisplayValue({
       ? subjectReportId
       : undefined;
 
-  if (normalizeMetadataLabel(label) === "transaction" && transactionId) {
+  if (
+    normalizeMetadataLabel(label) === "transaction" &&
+    transactionId &&
+    !item.link?.disabled
+  ) {
     return (
       <Link
         className="inline-flex items-center gap-1 text-foreground underline-offset-4 transition-colors hover:text-primary hover:underline"
@@ -1574,7 +1590,11 @@ function formatMetadataDisplayValue({
     });
   }
 
-  if (normalizeMetadataLabel(label) === "report" && reportId) {
+  if (
+    normalizeMetadataLabel(label) === "report" &&
+    reportId &&
+    !item.link?.disabled
+  ) {
     return (
       <Link
         className="inline-flex items-center gap-1 text-foreground underline-offset-4 transition-colors hover:text-primary hover:underline"
@@ -2302,6 +2322,22 @@ function TransactionReportIdentifierLink({
     </span>
   ) : null;
 
+  if (link?.disabled) {
+    return (
+      <span className="inline-flex items-baseline gap-2">
+        <span
+          aria-disabled="true"
+          className="inline-flex items-center gap-1 font-medium text-foreground"
+        >
+          {label}
+          <ArrowUpRight aria-hidden="true" className="h-3 w-3" />
+        </span>
+        {count}
+        {voidedCue}
+      </span>
+    );
+  }
+
   if (!link?.to) {
     return (
       <span className="inline-flex items-baseline gap-2">
@@ -2353,6 +2389,15 @@ function ItemLink({
 
   const label = link.label ?? "Open source";
   const variant = label === "View session" ? "ghost" : "utility";
+
+  if (link.disabled) {
+    return (
+      <Button aria-disabled="true" disabled size="sm" variant={variant}>
+        <ArrowUpRight aria-hidden="true" />
+        {label}
+      </Button>
+    );
+  }
 
   if (link.href) {
     return (
@@ -4717,20 +4762,79 @@ function DailyCloseConnectedView({
   );
 }
 
-export function DailyCloseView({
-  fixture,
+function SharedDemoDailyCloseView({
+  dailyCloseApi,
+  storeId,
 }: {
-  /**
-   * Renders the workspace from a supplied prop bag instead of Convex, for screenshot
-   * fixtures. When set, no snapshot query runs. Development only — see
-   * `src/stories/operations`.
-   */
-  fixture?: DailyCloseViewContentProps;
-} = {}) {
+  dailyCloseApi: ReturnType<typeof getDailyCloseApi>;
+  storeId: Id<"store">;
+}) {
+  const params = useParams({ strict: false }) as
+    | { orgUrlSlug?: string; storeUrlSlug?: string }
+    | undefined;
+  const navigate = useNavigate();
+  const search = useSearch({ strict: false }) as { operatingDate?: unknown };
+  const operatingDate = getLocalOperatingDateRangeFromSearch(
+    search.operatingDate,
+  ).operatingDate;
+  const fixture = useMemo(
+    () =>
+      createSharedDemoDailyCloseFixture({
+        operatingDate,
+        orgUrlSlug: params?.orgUrlSlug ?? "",
+        storeId,
+        storeUrlSlug: params?.storeUrlSlug ?? "",
+      }),
+    [operatingDate, params?.orgUrlSlug, params?.storeUrlSlug, storeId],
+  );
+
+  if (!fixture) {
+    if (
+      !dailyCloseApi.getDailyCloseSnapshot ||
+      !dailyCloseApi.completeDailyClose
+    ) {
+      return <DailyCloseApiPendingView />;
+    }
+
+    return (
+      <DailyCloseConnectedView
+        completeDailyClose={dailyCloseApi.completeDailyClose}
+        getDailyCloseSnapshot={dailyCloseApi.getDailyCloseSnapshot}
+        reopenDailyClose={dailyCloseApi.reopenDailyClose}
+        resolveDailyCloseCarryForward={
+          dailyCloseApi.resolveDailyCloseCarryForward
+        }
+      />
+    );
+  }
+
+  return (
+    <DailyCloseViewContent
+      {...fixture}
+      onOperatingDateChange={(date) => {
+        void navigate({
+          search: ((current: Record<string, unknown>) => ({
+            ...current,
+            operatingDate: getLocalOperatingDate(date),
+            page: 1,
+          })) as never,
+        });
+      }}
+    />
+  );
+}
+
+function DailyCloseRuntimeView() {
+  const sharedDemoContext = useSharedDemoContext();
   const dailyCloseApi = getDailyCloseApi();
 
-  if (fixture) {
-    return <DailyCloseViewContent {...fixture} />;
+  if (sharedDemoContext?.kind === "shared_demo") {
+    return (
+      <SharedDemoDailyCloseView
+        dailyCloseApi={dailyCloseApi}
+        storeId={sharedDemoContext.storeId}
+      />
+    );
   }
 
   if (
@@ -4750,4 +4854,21 @@ export function DailyCloseView({
       }
     />
   );
+}
+
+export function DailyCloseView({
+  fixture,
+}: {
+  /**
+   * Renders the workspace from a supplied prop bag instead of Convex, for screenshot
+   * fixtures. When set, no snapshot query runs. Development only — see
+   * `src/stories/operations`.
+   */
+  fixture?: DailyCloseViewContentProps;
+} = {}) {
+  if (fixture) {
+    return <DailyCloseViewContent {...fixture} />;
+  }
+
+  return <DailyCloseRuntimeView />;
 }

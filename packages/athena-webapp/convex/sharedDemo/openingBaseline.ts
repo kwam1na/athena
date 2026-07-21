@@ -7,7 +7,14 @@ import {
   resolveStoreOperatingRangeForDate,
   resolveStoreScheduleContext,
 } from "../lib/storeScheduleTime";
-import { SHARED_DEMO_TIME_ZONE } from "./config";
+import {
+  SHARED_DEMO_STAFF_STORY,
+  sharedDemoStaffShortName,
+} from "../../shared/sharedDemoStory";
+import {
+  SHARED_DEMO_MANAGER_STAFF_CODE,
+  SHARED_DEMO_TIME_ZONE,
+} from "./config";
 
 const OPENING_LOOKBACK_MS = 4 * 60 * 60 * 1_000;
 
@@ -98,25 +105,27 @@ export function buildSharedDemoOpeningBaseline(args: {
 export function buildSharedDemoStoreDayEvent(args: {
   actorStaffProfileId: Id<"staffProfile">;
   actorUserId: Id<"athenaUser">;
+  dailyOpeningId: Id<"dailyOpening">;
   now: number;
   organizationId: Id<"organization">;
   schedule?: Doc<"storeSchedule"> | null;
   storeId: Id<"store">;
 }) {
   const range = sharedDemoOperatingDateRange(args.now, args.schedule);
+  const managerName = sharedDemoStaffShortName(SHARED_DEMO_STAFF_STORY.manager);
   return {
     actorStaffProfileId: args.actorStaffProfileId,
     actorType: "human" as const,
     actorUserId: args.actorUserId,
     createdAt: Math.max(range.startAt, args.now - OPENING_LOOKBACK_MS),
-    eventType: "demo.store_day_started",
-    message: "Opening Handoff is complete and the demo store day is underway.",
+    eventType: "daily_opening_acknowledged",
+    message: `Store day started by ${managerName}`,
     metadata: range,
     organizationId: args.organizationId,
     storeId: args.storeId,
-    subjectId: String(args.storeId),
-    subjectLabel: range.operatingDate,
-    subjectType: "store",
+    subjectId: String(args.dailyOpeningId),
+    subjectLabel: `Opening ${range.operatingDate}`,
+    subjectType: "daily_opening",
   };
 }
 
@@ -138,12 +147,20 @@ export async function rollSharedDemoOpeningBaselineWithCtx(
   if (!opening.actorStaffProfileId || !opening.actorUserId) {
     throw new Error("Demo Opening Handoff actor is incomplete.");
   }
+  const manager = await ctx.db
+    .query("staffProfile")
+    .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+    .filter((q) => q.eq(q.field("staffCode"), SHARED_DEMO_MANAGER_STAFF_CODE))
+    .unique();
+  if (!manager) {
+    throw new Error("Demo manager is missing.");
+  }
   const { schedule } = await getStoreScheduleContextForStoreAtWithCtx(ctx, {
     at: args.now,
     storeId: args.storeId,
   });
   const openingDocument = buildSharedDemoOpeningBaseline({
-    actorStaffProfileId: opening.actorStaffProfileId,
+    actorStaffProfileId: manager._id,
     actorUserId: opening.actorUserId,
     now: args.now,
     organizationId: opening.organizationId,
@@ -157,7 +174,9 @@ export async function rollSharedDemoOpeningBaselineWithCtx(
     .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
     .take(500);
   const storeDayEvent = events.find(
-    (event) => event.eventType === "demo.store_day_started",
+    (event) =>
+      event.eventType === "daily_opening_acknowledged" ||
+      event.eventType === "demo.store_day_started",
   );
   if (!storeDayEvent) {
     throw new Error("Demo store-day narrative is incomplete.");
@@ -168,6 +187,7 @@ export async function rollSharedDemoOpeningBaselineWithCtx(
     buildSharedDemoStoreDayEvent({
       actorStaffProfileId: openingDocument.actorStaffProfileId,
       actorUserId: openingDocument.actorUserId,
+      dailyOpeningId: opening._id,
       now: args.now,
       organizationId: openingDocument.organizationId,
       schedule,

@@ -7,7 +7,7 @@ This key-folder index highlights the main directories agents are likely to need 
 ## Core app surfaces
 
 - [`src/routes`](../../src/routes) — TanStack route entrypoints and authenticated shells. Currently 122 file(s); key children: -app-entry-route.tsx, -authed-layout.tsx, -authenticated-layout.tsx, -demo-presentation.ts, -index-route-view.tsx.
-- [`src/components`](../../src/components) — UI components, views, and package-local feature widgets. Currently 737 file(s); key children: GenericComboBox.tsx, Navbar.test.tsx, Navbar.tsx, OrganizationView.test.tsx, OrganizationView.tsx.
+- [`src/components`](../../src/components) — UI components, views, and package-local feature widgets. Currently 743 file(s); key children: GenericComboBox.tsx, Navbar.test.tsx, Navbar.tsx, OrganizationView.test.tsx, OrganizationView.tsx.
 - [`src/components/traces`](../../src/components/traces) — Shared workflow trace screens, ordered timelines, and trace detail primitives. Currently 3 file(s); key children: WorkflowTraceRouteLink.tsx, WorkflowTraceView.test.tsx, WorkflowTraceView.tsx.
 - [`src/components/operations`](../../src/components/operations) — Manager-queue and stock-adjustment workflows that share approval rails with other operational surfaces. Currently 35 file(s); key children: CommandApprovalDialog.test.tsx, CommandApprovalDialog.tsx, DailyCloseHistoryView.test.tsx, DailyCloseHistoryView.tsx, DailyCloseView.test.tsx.
 - [`src/components/procurement`](../../src/components/procurement) — Procurement planning and receiving views for replenishment pressure and purchase-order execution. Currently 4 file(s); key children: ProcurementView.test.tsx, ProcurementView.tsx, ReceivingView.test.tsx, ReceivingView.tsx.

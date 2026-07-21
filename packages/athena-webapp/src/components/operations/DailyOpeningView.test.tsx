@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { AnchorHTMLAttributes, ReactNode } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   DailyOpeningView,
@@ -250,6 +250,10 @@ const readySnapshot: DailyOpeningSnapshot = {
     reviewCount: 0,
   },
 };
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 function formatExpectedTimestamp(timestamp: number) {
   return new Date(timestamp).toLocaleString([], {
@@ -1412,6 +1416,30 @@ describe("DailyOpeningView", () => {
         storeId: "store-1",
       }),
     );
+  });
+
+  it("renders historic shared-demo Opening Handoff from the client fixture", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 6, 21, 12));
+    mockedRouter.search = { operatingDate: "2026-07-16" };
+    mockedHooks.useQuery.mockImplementation((query) =>
+      query === mockedApi.getSharedDemoContext
+        ? { kind: "shared_demo", storeId: "store-1" }
+        : readySnapshot,
+    );
+
+    render(<DailyOpeningView />);
+
+    expect(mockedHooks.useQuery).not.toHaveBeenCalledWith(
+      mockedApi.getDailyOpeningSnapshot,
+      expect.anything(),
+    );
+    expect(screen.getByText("Athena started Opening Handoff.")).toBeInTheDocument();
+    expect(screen.getByText("Store day started")).toBeInTheDocument();
+    expect(screen.getByText("Athena")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /start day/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("starts the shared demo day without exposing staff credentials", async () => {

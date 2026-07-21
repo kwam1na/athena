@@ -62,6 +62,11 @@ import type { ApprovalRequirement } from "~/shared/approvalPolicy";
 import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
 import { currencyFormatter } from "~/shared/currencyFormatter";
 import { getOrigin } from "~/src/lib/navigationUtils";
+import { useSharedDemoContext } from "@/hooks/useSharedDemoContext";
+import {
+  getSharedDemoTransactionFixture,
+  isSharedDemoTransactionFixtureId,
+} from "@/components/shared-demo/sharedDemoTransactionsFixture";
 
 type RouteParams =
   | {
@@ -356,6 +361,16 @@ export function TransactionView() {
     strict: false,
   }) as RouteSearch;
   const transactionId = params?.transactionId;
+  const sharedDemoContext = useSharedDemoContext();
+  const isFixtureTransactionId =
+    isSharedDemoTransactionFixtureId(transactionId);
+  const fixtureTransaction = useMemo(
+    () =>
+      sharedDemoContext && transactionId && isFixtureTransactionId
+        ? getSharedDemoTransactionFixture(transactionId)
+        : undefined,
+    [isFixtureTransactionId, sharedDemoContext, transactionId],
+  );
   const [correctionPanelOpen, setCorrectionPanelOpen] = useState(false);
   const [selectedCorrection, setSelectedCorrection] = useState<
     | "customer"
@@ -529,14 +544,18 @@ export function TransactionView() {
     },
   });
 
-  const transaction = useQuery(
+  const liveTransaction = useQuery(
     api.inventory.pos.getTransactionById,
-    transactionId
+    transactionId && sharedDemoContext !== undefined && !isFixtureTransactionId
       ? {
           transactionId: transactionId as Id<"posTransaction">,
         }
       : "skip",
   );
+  const transaction = fixtureTransaction
+    ? (fixtureTransaction as unknown as NonNullable<typeof liveTransaction>)
+    : liveTransaction;
+  const isFixtureTransaction = Boolean(fixtureTransaction);
 
   const cartItems: CartItem[] = useMemo(() => {
     if (!transaction) return [];
@@ -821,7 +840,8 @@ export function TransactionView() {
     description: "Authenticate to record this update",
     submitLabel: "Confirm",
   };
-  const isCompletedTransaction = transaction.status === "completed";
+  const isCompletedTransaction =
+    transaction.status === "completed" && !isFixtureTransaction;
   const hasSinglePayment = (transaction.payments?.length ?? 0) <= 1;
   const registerSessionIsClosing =
     transaction.registerSessionStatus === "closing";
@@ -2517,12 +2537,19 @@ export function TransactionView() {
                     : undefined
                 }
                 receiptNumberOverride={transaction.transactionNumber}
-                receiptMessaging={receiptMessaging}
-                receiptPrintTransactionId={transaction._id}
-                onReceiptPrinted={(printedTransactionId) =>
-                  markReceiptPrinted({
-                    transactionId: printedTransactionId,
-                  })
+                receiptMessaging={
+                  isFixtureTransaction ? undefined : receiptMessaging
+                }
+                receiptPrintTransactionId={
+                  isFixtureTransaction ? undefined : transaction._id
+                }
+                onReceiptPrinted={
+                  isFixtureTransaction
+                    ? undefined
+                    : (printedTransactionId) =>
+                        markReceiptPrinted({
+                          transactionId: printedTransactionId,
+                        })
                 }
                 pendingVoidApprovalRequestId={pendingVoidApprovalRequestId}
                 customerInfo={

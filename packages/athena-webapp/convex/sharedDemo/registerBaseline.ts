@@ -250,7 +250,9 @@ export async function bindSharedDemoRegisterBaselineWithCtx(
     .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
     .take(500);
   const storeDayEvent = events.find(
-    (event) => event.eventType === "demo.store_day_started",
+    (event) =>
+      event.eventType === "daily_opening_acknowledged" ||
+      event.eventType === "demo.store_day_started",
   );
   if (!storeDayEvent)
     throw new Error("Demo store-day narrative is incomplete.");
@@ -260,6 +262,7 @@ export async function bindSharedDemoRegisterBaselineWithCtx(
     buildSharedDemoStoreDayEvent({
       actorStaffProfileId: manager._id,
       actorUserId: args.actorUserId,
+      dailyOpeningId: openings[0]._id,
       now: args.now,
       organizationId: store.organizationId,
       schedule,

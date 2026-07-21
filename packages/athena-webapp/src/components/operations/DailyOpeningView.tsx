@@ -7,6 +7,7 @@ import {
 } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
 import { useSharedDemoContext } from "@/hooks/useSharedDemoContext";
+import { createSharedDemoDailyOpeningFixture } from "@/components/shared-demo/sharedDemoDailyOpeningFixture";
 import {
   ArrowUpRight,
   Ban,
@@ -2100,11 +2101,13 @@ function DailyOpeningApiPendingView() {
 
 type DailyOpeningConnectedViewProps = {
   getDailyOpeningSnapshot: unknown;
+  isSharedDemo?: boolean;
   startStoreDay: unknown;
 };
 
 function DailyOpeningConnectedView({
   getDailyOpeningSnapshot,
+  isSharedDemo = false,
   startStoreDay,
 }: DailyOpeningConnectedViewProps) {
   const {
@@ -2137,7 +2140,6 @@ function DailyOpeningConnectedView({
       ? { ...operatingDateRange, storeId: activeStore!._id }
       : "skip",
   ) as DailyOpeningSnapshot | undefined;
-  const sharedDemoContext = useSharedDemoContext();
   const startStoreDayMutation = useExpectedDailyOpeningMutation(startStoreDay);
   const authenticateStaffCredential = useMutation(
     api.operations.staffCredentials.authenticateStaffCredential,
@@ -2265,9 +2267,7 @@ function DailyOpeningConnectedView({
       isLoadingSnapshot={snapshot === undefined}
       isStarting={isStarting}
       onAuthenticateStaff={
-        sharedDemoContext?.kind === "shared_demo"
-          ? undefined
-          : handleAuthenticateStaff
+        isSharedDemo ? undefined : handleAuthenticateStaff
       }
       onAuthenticateForApproval={handleAuthenticateForApproval}
       onOperatingDateChange={handleOperatingDateChange}
@@ -2280,20 +2280,77 @@ function DailyOpeningConnectedView({
   );
 }
 
-export function DailyOpeningView({
-  fixture,
+function SharedDemoDailyOpeningView({
+  dailyOpeningApi,
+  storeId,
 }: {
-  /**
-   * Renders the workspace from a supplied prop bag instead of Convex, for screenshot
-   * fixtures. When set, no snapshot query runs. Development only — see
-   * `src/stories/operations`.
-   */
-  fixture?: DailyOpeningViewContentProps;
-} = {}) {
+  dailyOpeningApi: ReturnType<typeof getDailyOpeningApi>;
+  storeId: Id<"store">;
+}) {
+  const params = useParams({ strict: false }) as
+    | { orgUrlSlug?: string; storeUrlSlug?: string }
+    | undefined;
+  const navigate = useNavigate();
+  const search = useSearch({ strict: false }) as { operatingDate?: unknown };
+  const operatingDate = getLocalOperatingDateRangeFromSearch(
+    search.operatingDate,
+  ).operatingDate;
+  const fixture = useMemo(
+    () =>
+      createSharedDemoDailyOpeningFixture({
+        operatingDate,
+        orgUrlSlug: params?.orgUrlSlug ?? "",
+        storeId,
+        storeUrlSlug: params?.storeUrlSlug ?? "",
+      }),
+    [operatingDate, params?.orgUrlSlug, params?.storeUrlSlug, storeId],
+  );
+
+  if (!fixture) {
+    if (
+      !dailyOpeningApi.getDailyOpeningSnapshot ||
+      !dailyOpeningApi.startStoreDay
+    ) {
+      return <DailyOpeningApiPendingView />;
+    }
+
+    return (
+      <DailyOpeningConnectedView
+        getDailyOpeningSnapshot={dailyOpeningApi.getDailyOpeningSnapshot}
+        isSharedDemo
+        startStoreDay={dailyOpeningApi.startStoreDay}
+      />
+    );
+  }
+
+  return (
+    <DailyOpeningViewContent
+      {...fixture}
+      onOperatingDateChange={(date) => {
+        void navigate({
+          search: ((current: Record<string, unknown>) => ({
+            ...current,
+            operatingDate: getLocalOperatingDateRange(date).operatingDate,
+            page: undefined,
+            tab: undefined,
+          })) as never,
+        });
+      }}
+    />
+  );
+}
+
+function DailyOpeningRuntimeView() {
+  const sharedDemoContext = useSharedDemoContext();
   const dailyOpeningApi = getDailyOpeningApi();
 
-  if (fixture) {
-    return <DailyOpeningViewContent {...fixture} />;
+  if (sharedDemoContext?.kind === "shared_demo") {
+    return (
+      <SharedDemoDailyOpeningView
+        dailyOpeningApi={dailyOpeningApi}
+        storeId={sharedDemoContext.storeId}
+      />
+    );
   }
 
   if (
@@ -2309,4 +2366,21 @@ export function DailyOpeningView({
       startStoreDay={dailyOpeningApi.startStoreDay}
     />
   );
+}
+
+export function DailyOpeningView({
+  fixture,
+}: {
+  /**
+   * Renders the workspace from a supplied prop bag instead of Convex, for screenshot
+   * fixtures. When set, no snapshot query runs. Development only — see
+   * `src/stories/operations`.
+   */
+  fixture?: DailyOpeningViewContentProps;
+} = {}) {
+  if (fixture) {
+    return <DailyOpeningViewContent {...fixture} />;
+  }
+
+  return <DailyOpeningRuntimeView />;
 }

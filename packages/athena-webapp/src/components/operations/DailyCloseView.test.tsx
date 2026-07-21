@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { AnchorHTMLAttributes, ReactNode } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   DailyCloseView,
@@ -12,6 +12,9 @@ import type { Id } from "~/convex/_generated/dataModel";
 import { ok, userError } from "~/shared/commandResult";
 
 const mockedHooks = vi.hoisted(() => ({
+  sharedDemoContext: undefined as
+    | { kind: "shared_demo"; storeId: string }
+    | undefined,
   useMutation: vi.fn(),
   useProtectedAdminPageState: vi.fn(),
   useQuery: vi.fn(),
@@ -81,7 +84,7 @@ vi.mock("@/hooks/useProtectedAdminPageState", () => ({
 }));
 
 vi.mock("@/hooks/useSharedDemoContext", () => ({
-  useSharedDemoContext: () => undefined,
+  useSharedDemoContext: () => mockedHooks.sharedDemoContext,
 }));
 
 vi.mock("~/convex/_generated/api", () => ({
@@ -235,6 +238,10 @@ const readySnapshot: DailyCloseSnapshot = {
   startAt: Date.UTC(2026, 4, 7, 4),
   summary: baseSummary,
 };
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 const blockedSnapshot: DailyCloseSnapshot = {
   ...readySnapshot,
@@ -1441,6 +1448,48 @@ describe("DailyCloseViewContent", () => {
     );
   });
 
+  it("renders a disabled transaction affordance without a navigation target", () => {
+    mockedRouter.search = {
+      readyPanels: "completed-sales",
+      report: "transactions",
+    };
+    renderContent({
+      ...readySnapshot,
+      readyItems: [
+        {
+          category: "sale",
+          id: "demo-sale",
+          link: { disabled: true, label: "View transaction" },
+          metadata: {
+            completedAt: Date.UTC(2026, 4, 7, 14),
+            owner: "Afua Okyere",
+            paymentMethods: "Cash",
+            total: 49500,
+            transaction: "584065",
+          },
+          subject: {
+            id: "demo-sale",
+            label: "584065",
+            type: "pos_transaction",
+          },
+          title: "Completed sale",
+        },
+      ],
+    });
+
+    const identifiers = screen.getAllByText("#584065");
+    expect(identifiers).toHaveLength(2);
+    identifiers.forEach((identifier) => {
+      expect(
+        identifier.closest("[aria-disabled='true']"),
+      ).toBeInTheDocument();
+    });
+    expect(
+      screen.queryByRole("link", { name: "#584065" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getAllByText("Afua Okyere")).toHaveLength(2);
+  });
+
   it("uses sentence-case fragments in the empty transaction report summary", async () => {
     mockedRouter.search = { report: "transactions" };
 
@@ -2622,6 +2671,8 @@ describe("DailyCloseView", () => {
   beforeEach(() => {
     window.scrollTo = vi.fn();
     vi.clearAllMocks();
+    mockedHooks.sharedDemoContext = undefined;
+    mockedRouter.search = {};
     mockedHooks.useProtectedAdminPageState.mockReturnValue({
       activeStore: {
         _id: "store-1",
@@ -2665,6 +2716,31 @@ describe("DailyCloseView", () => {
         storeId: "store-1",
       },
     );
+  });
+
+  it("renders historic shared-demo EOD Review from the client fixture", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 6, 21, 12));
+    mockedHooks.sharedDemoContext = {
+      kind: "shared_demo",
+      storeId: "store-1",
+    };
+    mockedRouter.search = { operatingDate: "2026-07-15" };
+
+    render(<DailyCloseView />);
+
+    expect(mockedHooks.useQuery).not.toHaveBeenCalled();
+    expect(
+      screen.getByText("Athena completed EOD Review under store policy."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /completed sales/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Reopen EOD Review" }),
+    ).not.toBeInTheDocument();
+
+    vi.useRealTimers();
   });
 
   it("reopens the current completed close with its daily close id", async () => {
