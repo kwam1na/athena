@@ -877,6 +877,7 @@
         "packages/athena-webapp/README.md",
         "packages/athena-webapp/eslint.config.js",
         "packages/athena-webapp/scripts/frontend-lint-changed.sh",
+        "packages/athena-webapp/scripts/capture-operations-shot.mjs",
         "packages/athena-webapp/.gitignore"
       ],
       "commands": [
