@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildSharedDemoOpeningBaseline,
+  buildSharedDemoStoreDayEvent,
   sharedDemoOperatingDateRange,
 } from "./openingBaseline";
 
@@ -50,6 +51,30 @@ describe("shared demo opening baseline", () => {
       endAt: Date.parse("2026-07-14T04:00:00.000Z"),
       operatingDate: "2026-07-13",
       startAt: Date.parse("2026-07-13T04:00:00.000Z"),
+    });
+  });
+
+  it("seeds the current store-day activity with the product opening event shape", () => {
+    const now = Date.parse("2026-07-14T12:30:00.000Z");
+
+    expect(
+      buildSharedDemoStoreDayEvent({
+        actorStaffProfileId: "manager-staff" as never,
+        actorUserId: "owner-user" as never,
+        dailyOpeningId: "opening" as never,
+        now,
+        organizationId: "organization" as never,
+        storeId: "store" as never,
+      }),
+    ).toMatchObject({
+      actorStaffProfileId: "manager-staff",
+      actorType: "human",
+      actorUserId: "owner-user",
+      eventType: "daily_opening_acknowledged",
+      message: "Store day started by Kwabena A.",
+      subjectId: "opening",
+      subjectLabel: "Opening 2026-07-14",
+      subjectType: "daily_opening",
     });
   });
 });

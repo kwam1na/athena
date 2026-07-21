@@ -25,6 +25,8 @@ import {
   planSharedDemoMigration,
   sharedDemoMigrationSkipTables,
   sharedDemoPristineTableCountsMatch,
+  transformSharedDemoCatalogImageBaselineDocument,
+  transformSharedDemoStaffStoryBaselineDocument,
   validateSharedDemoSeed,
 } from "./provision";
 import {
@@ -33,8 +35,14 @@ import {
 } from "./config";
 
 describe("shared demo provisioning", () => {
-  it("preserves POS sync continuity for the credential-only v17 migration", () => {
+  it("preserves POS sync continuity through staff story migrations", () => {
     expect(planSharedDemoMigration(16)).toEqual({
+      mode: "preserve_operational_continuity",
+    });
+    expect(planSharedDemoMigration(17)).toEqual({
+      mode: "preserve_operational_continuity",
+    });
+    expect(planSharedDemoMigration(18)).toEqual({
       mode: "preserve_operational_continuity",
     });
     for (const baselineVersion of [11, 12, 13, 14, 15]) {
@@ -43,11 +51,39 @@ describe("shared demo provisioning", () => {
       });
     }
     expect(() => planSharedDemoMigration(10)).toThrow(
-      "Shared demo baseline migration 10->17 is not registered.",
+      "Shared demo baseline migration 10->19 is not registered.",
     );
     expect(buildSharedDemoContinuityMigrationStatePatch(123)).toEqual({
-      baselineVersion: 17,
+      baselineVersion: 19,
       completedAt: 123,
+    });
+  });
+
+  it("promotes restored staff identity to the current demo story", () => {
+    const ids = { cashier: "cashier-id", manager: "manager-id" };
+    expect(transformSharedDemoStaffStoryBaselineDocument({
+      tableName: "staffProfile",
+      document: { staffCode: "DEMO-001", firstName: "Efua", fullName: "Efua Tetteh", lastName: "Tetteh" },
+    }, ids)).toMatchObject({ firstName: "Afua", fullName: "Afua Okyere", lastName: "Okyere" });
+    expect(transformSharedDemoStaffStoryBaselineDocument({
+      tableName: "staffCredential",
+      document: { staffProfileId: ids.cashier, status: "disabled", username: "efua" },
+    }, ids)).toMatchObject({ pinHash: SHARED_DEMO_STAFF_PIN_HASH, status: "active", username: "afua" });
+    expect(transformSharedDemoStaffStoryBaselineDocument({
+      tableName: "staffMessage",
+      document: { body: "Efua: Morning studio count is complete." },
+    }, ids)).toMatchObject({ body: SHARED_DEMO_OPENING_MESSAGE });
+  });
+
+  it("promotes restored catalog images to the current asset version", () => {
+    expect(transformSharedDemoCatalogImageBaselineDocument({
+      tableName: "productSku",
+      document: {
+        sku: SHARED_DEMO_PRODUCTS[0]!.sku,
+        images: ["https://images.example.com/stores/store-1/products/shared-demo/v1/demo-shea-250.webp"],
+      },
+    })).toMatchObject({
+      images: ["https://images.example.com/stores/store-1/products/shared-demo/v2/demo-shea-250.webp"],
     });
   });
 
@@ -124,14 +160,14 @@ describe("shared demo provisioning", () => {
         }),
       ),
     ).toEqual([
-      "https://images.example.com/stores/store-1/products/shared-demo/v1/demo-shea-250.webp",
-      "https://images.example.com/stores/store-1/products/shared-demo/v1/demo-soap-bar.webp",
-      "https://images.example.com/stores/store-1/products/shared-demo/v1/demo-clay-mug.webp",
-      "https://images.example.com/stores/store-1/products/shared-demo/v1/demo-bolga-basket.webp",
-      "https://images.example.com/stores/store-1/products/shared-demo/v1/demo-soy-candle.webp",
-      "https://images.example.com/stores/store-1/products/shared-demo/v1/demo-kente-scarf.webp",
-      "https://images.example.com/stores/store-1/products/shared-demo/v1/demo-batik-tote.webp",
-      "https://images.example.com/stores/store-1/products/shared-demo/v1/demo-bead-bracelet.webp",
+      "https://images.example.com/stores/store-1/products/shared-demo/v2/demo-shea-250.webp",
+      "https://images.example.com/stores/store-1/products/shared-demo/v2/demo-soap-bar.webp",
+      "https://images.example.com/stores/store-1/products/shared-demo/v2/demo-clay-mug.webp",
+      "https://images.example.com/stores/store-1/products/shared-demo/v2/demo-bolga-basket.webp",
+      "https://images.example.com/stores/store-1/products/shared-demo/v2/demo-soy-candle.webp",
+      "https://images.example.com/stores/store-1/products/shared-demo/v2/demo-kente-scarf.webp",
+      "https://images.example.com/stores/store-1/products/shared-demo/v2/demo-batik-tote.webp",
+      "https://images.example.com/stores/store-1/products/shared-demo/v2/demo-bead-bracelet.webp",
     ]);
     expect(SHARED_DEMO_PRODUCTS.every((product) => product.unitCost < product.price)).toBe(true);
     expect(sharedDemoPickupOrderAmount()).toBe(3500);
@@ -142,7 +178,7 @@ describe("shared demo provisioning", () => {
     expect(SHARED_DEMO_STAFF_STORY.manager.fullName).toBe("Kwabena Agyei");
     expect(SHARED_DEMO_OPENING_MESSAGE.startsWith("Afua:")).toBe(true);
     expect(SHARED_DEMO_REGISTER_NUMBER).toBe("01");
-    expect(SHARED_DEMO_BASELINE_VERSION).toBe(17);
+    expect(SHARED_DEMO_BASELINE_VERSION).toBe(19);
   });
 
   it("refuses to capture a missing-state baseline when marker rows have drifted", () => {

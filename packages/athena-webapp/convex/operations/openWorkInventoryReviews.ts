@@ -848,7 +848,9 @@ export async function resolveSyncedSaleInventoryReviewGroupWithCtx(
   }
 
   const [athenaUser, store] = await Promise.all([
-    requireAuthenticatedAthenaUserWithCtx(ctx),
+    requireAuthenticatedAthenaUserWithCtx(ctx, {
+      sharedDemoCapability: "daily_operations.write",
+    }),
     ctx.db.get("store", args.storeId),
   ]);
   if (!store) {

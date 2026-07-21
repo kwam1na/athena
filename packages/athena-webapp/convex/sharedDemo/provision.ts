@@ -90,12 +90,14 @@ export function planSharedDemoMigration(baselineVersion: number) {
     14: "reset_operational_state",
     15: "reset_operational_state",
     16: "preserve_operational_continuity",
+    17: "preserve_operational_continuity",
+    18: "preserve_operational_continuity",
   } as const;
   const mode =
     migrationClassifications[
       baselineVersion as keyof typeof migrationClassifications
     ];
-  if (!mode || SHARED_DEMO_BASELINE_VERSION !== 17) {
+  if (!mode || SHARED_DEMO_BASELINE_VERSION !== 19) {
     throw new Error(
       `Shared demo baseline migration ${baselineVersion}->${SHARED_DEMO_BASELINE_VERSION} is not registered.`,
     );
@@ -108,6 +110,79 @@ export function buildSharedDemoContinuityMigrationStatePatch(now: number) {
     baselineVersion: SHARED_DEMO_BASELINE_VERSION,
     completedAt: now,
   } as const;
+}
+
+export function transformSharedDemoStaffStoryBaselineDocument(
+  row: {
+    document: Record<string, unknown>;
+    tableName: string;
+  },
+  staffProfileIds: { cashier: string; manager: string },
+) {
+  if (row.tableName === "staffProfile") {
+    const story =
+      row.document.staffCode === SHARED_DEMO_CASHIER_STAFF_CODE
+        ? SHARED_DEMO_STAFF_STORY.cashier
+        : row.document.staffCode === SHARED_DEMO_MANAGER_STAFF_CODE
+          ? SHARED_DEMO_STAFF_STORY.manager
+          : null;
+    if (story) {
+      return {
+        ...row.document,
+        firstName: story.firstName,
+        fullName: story.fullName,
+        jobTitle: story.jobTitle,
+        lastName: story.lastName,
+      };
+    }
+  }
+  if (row.tableName === "staffCredential") {
+    const username =
+      row.document.staffProfileId === staffProfileIds.cashier
+        ? SHARED_DEMO_CASHIER_USERNAME
+        : row.document.staffProfileId === staffProfileIds.manager
+          ? SHARED_DEMO_MANAGER_USERNAME
+          : null;
+    if (username) {
+      return {
+        ...row.document,
+        pinHash: SHARED_DEMO_STAFF_PIN_HASH,
+        status: "active",
+        username,
+      };
+    }
+  }
+  if (row.tableName === "staffMessage") {
+    return { ...row.document, body: SHARED_DEMO_OPENING_MESSAGE };
+  }
+  return row.document;
+}
+
+export function transformSharedDemoCatalogImageBaselineDocument(row: {
+  document: Record<string, unknown>;
+  tableName: string;
+}) {
+  if (
+    row.tableName !== "productSku" &&
+    row.tableName !== "productSkuSearch"
+  ) {
+    return row.document;
+  }
+  const product = SHARED_DEMO_PRODUCTS.find(
+    (candidate) => candidate.sku === row.document.sku,
+  );
+  if (!product) return row.document;
+  const images = Array.isArray(row.document.images)
+    ? row.document.images.map((image) =>
+        typeof image === "string"
+          ? image.replace(
+              /\/products\/shared-demo\/v\d+\//,
+              `/products/shared-demo/${SHARED_DEMO_PRODUCT_IMAGE_VERSION}/`,
+            )
+          : image,
+      )
+    : row.document.images;
+  return { ...row.document, images };
 }
 
 export function validateSharedDemoSeed(seed: typeof SHARED_DEMO_SEED) {
@@ -923,32 +998,75 @@ export const provisionSharedDemo = internalMutation({
       if (state.baselineVersion < SHARED_DEMO_BASELINE_VERSION) {
         const migrationPlan = planSharedDemoMigration(state.baselineVersion);
         if (migrationPlan.mode === "preserve_operational_continuity") {
-          const { manager } = await ensureDemoStaffAccessWithCtx(ctx, {
+          const { cashier, manager } = await ensureDemoStaffAccessWithCtx(ctx, {
             now,
             organizationId: existingOrganization._id,
             ownerUserId: owner._id,
             storeId: existingStore._id,
           });
-          let updatedManagerCredentialBaseline = false;
+          await ctx.db.patch("staffProfile", cashier._id, {
+            firstName: SHARED_DEMO_STAFF_STORY.cashier.firstName,
+            fullName: SHARED_DEMO_STAFF_STORY.cashier.fullName,
+            jobTitle: SHARED_DEMO_STAFF_STORY.cashier.jobTitle,
+            lastName: SHARED_DEMO_STAFF_STORY.cashier.lastName,
+          });
+          await ctx.db.patch("staffProfile", manager._id, {
+            firstName: SHARED_DEMO_STAFF_STORY.manager.firstName,
+            fullName: SHARED_DEMO_STAFF_STORY.manager.fullName,
+            jobTitle: SHARED_DEMO_STAFF_STORY.manager.jobTitle,
+            lastName: SHARED_DEMO_STAFF_STORY.manager.lastName,
+          });
+          const messages = await ctx.db
+            .query("staffMessage")
+            .withIndex("by_storeId_createdAt", (q) =>
+              q.eq("storeId", existingStore._id),
+            )
+            .take(10);
+          if (messages[0]) {
+            await ctx.db.patch("staffMessage", messages[0]._id, {
+              body: SHARED_DEMO_OPENING_MESSAGE,
+            });
+          }
+          await reconcileSharedDemoCatalogWithCtx(ctx, {
+            organizationId: existingOrganization._id,
+            ownerUserId: owner._id,
+            storeId: existingStore._id,
+          });
+          const promotedStaffStoryRows = new Set<string>();
           const promoted = await promoteBaselineDocumentsWithCtx(ctx, {
             fromVersion: state.baselineVersion,
             storeId: existingStore._id,
             transformDocument: (row) => {
-              if (
-                row.tableName !== "staffCredential" ||
-                row.document.staffProfileId !== manager._id
-              ) {
-                return row.document;
+              if (row.tableName === "staffProfile") {
+                if (row.document.staffCode === SHARED_DEMO_CASHIER_STAFF_CODE) {
+                  promotedStaffStoryRows.add("cashier-profile");
+                }
+                if (row.document.staffCode === SHARED_DEMO_MANAGER_STAFF_CODE) {
+                  promotedStaffStoryRows.add("manager-profile");
+                }
               }
-              updatedManagerCredentialBaseline = true;
-              return {
-                ...row.document,
-                username: SHARED_DEMO_MANAGER_USERNAME,
-              };
+              if (row.tableName === "staffCredential") {
+                if (row.document.staffProfileId === cashier._id) {
+                  promotedStaffStoryRows.add("cashier-credential");
+                }
+                if (row.document.staffProfileId === manager._id) {
+                  promotedStaffStoryRows.add("manager-credential");
+                }
+              }
+              if (row.tableName === "staffMessage") {
+                promotedStaffStoryRows.add("opening-message");
+              }
+              return transformSharedDemoCatalogImageBaselineDocument({
+                ...row,
+                document: transformSharedDemoStaffStoryBaselineDocument(row, {
+                  cashier: cashier._id,
+                  manager: manager._id,
+                }),
+              });
             },
           });
-          if (promoted.promoted === 0 || !updatedManagerCredentialBaseline) {
-            throw new Error("Demo credential baseline could not be promoted.");
+          if (promoted.promoted === 0 || promotedStaffStoryRows.size !== 5) {
+            throw new Error("Demo staff story baseline could not be promoted.");
           }
           const baselineRows = await ctx.db
             .query("sharedDemoBaselineRow")
@@ -1205,18 +1323,10 @@ export const provisionSharedDemo = internalMutation({
           .take(500);
         for (const opening of openings)
           await ctx.db.delete("dailyOpening", opening._id);
-        const ownerStaff = await ctx.db
-          .query("staffProfile")
-          .withIndex("by_storeId_linkedUserId", (q) =>
-            q.eq("storeId", existingStore._id).eq("linkedUserId", owner._id),
-          )
-          .unique();
-        if (!ownerStaff)
-          throw new Error("Demo owner staff profile is missing.");
-        await ctx.db.insert(
+        const dailyOpeningId = await ctx.db.insert(
           "dailyOpening",
           buildSharedDemoOpeningBaseline({
-            actorStaffProfileId: ownerStaff._id,
+            actorStaffProfileId: manager._id,
             actorUserId: owner._id,
             now,
             organizationId: existingOrganization._id,
@@ -1229,6 +1339,7 @@ export const provisionSharedDemo = internalMutation({
           .take(500);
         const seedEvent = events.find(
           (event) =>
+            event.eventType === "daily_opening_acknowledged" ||
             event.eventType === "demo.store_day_started" ||
             event.eventType === "demo.store_ready",
         );
@@ -1238,8 +1349,9 @@ export const provisionSharedDemo = internalMutation({
           "operationalEvent",
           seedEvent._id,
           buildSharedDemoStoreDayEvent({
-            actorStaffProfileId: ownerStaff._id,
+            actorStaffProfileId: manager._id,
             actorUserId: owner._id,
+            dailyOpeningId,
             now,
             organizationId: existingOrganization._id,
             storeId: existingStore._id,
@@ -1542,10 +1654,10 @@ export const provisionSharedDemo = internalMutation({
       quantity: SHARED_DEMO_PICKUP_ORDER.quantity,
       storeFrontUserId: guestId,
     });
-    await ctx.db.insert(
+    const dailyOpeningId = await ctx.db.insert(
       "dailyOpening",
       buildSharedDemoOpeningBaseline({
-        actorStaffProfileId: ownerStaffId,
+        actorStaffProfileId: manager._id,
         actorUserId: ownerUserId,
         now,
         organizationId,
@@ -1555,8 +1667,9 @@ export const provisionSharedDemo = internalMutation({
     await ctx.db.insert(
       "operationalEvent",
       buildSharedDemoStoreDayEvent({
-        actorStaffProfileId: ownerStaffId,
+        actorStaffProfileId: manager._id,
         actorUserId: ownerUserId,
+        dailyOpeningId,
         now,
         organizationId,
         storeId,

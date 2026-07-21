@@ -3,11 +3,13 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TransactionsView } from "./TransactionsView";
+import { createSharedDemoTransactionFixtures } from "@/components/shared-demo/sharedDemoTransactionsFixture";
 
 const useQueryMock = vi.fn();
 const getActiveStoreMock = vi.fn();
 const navigateMock = vi.fn();
 const useSearchMock = vi.fn();
+const sharedDemoContextMock = vi.fn();
 let tabsOnValueChange:
   | ((value: "today" | "fromDate" | "all") => void)
   | undefined;
@@ -36,6 +38,10 @@ vi.mock("convex/react", () => ({
 
 vi.mock("@/hooks/useGetActiveStore", () => ({
   default: () => getActiveStoreMock(),
+}));
+
+vi.mock("@/hooks/useSharedDemoContext", () => ({
+  useSharedDemoContext: () => sharedDemoContextMock(),
 }));
 
 vi.mock("~/src/hooks/use-navigate-back", () => ({
@@ -160,6 +166,82 @@ describe("TransactionsView", () => {
     vi.useRealTimers();
     tabsOnValueChange = undefined;
     useSearchMock.mockReturnValue({});
+    sharedDemoContextMock.mockReturnValue(null);
+  });
+
+  it("merges historical demo fixtures with today's live transactions", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 6, 21, 12));
+    sharedDemoContextMock.mockReturnValue({ storeId: "store-1" });
+    useSearchMock.mockReturnValue({ timeRange: "all" });
+    getActiveStoreMock.mockReturnValue({
+      activeStore: { _id: "store-1", currency: "GHS" },
+    });
+    useQueryMock.mockReturnValue([
+      {
+        _id: "live-txn",
+        transactionNumber: "700001",
+        total: 1000,
+        paymentMethod: "cash",
+        paymentMethods: ["cash"],
+        hasMultiplePaymentMethods: false,
+        cashierName: "Afua O.",
+        customerName: null,
+        itemCount: 1,
+        completedAt: new Date(2026, 6, 21, 11).getTime(),
+        hasTrace: false,
+        sessionTraceId: null,
+      },
+    ]);
+    const fixture = createSharedDemoTransactionFixtures("2026-07-21")[0]!;
+
+    render(<TransactionsView />);
+
+    expect(screen.getAllByText("700001").length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText(fixture.transactionNumber).length,
+    ).toBeGreaterThan(0);
+    expect(useQueryMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        completedFrom: new Date(2026, 6, 21).getTime(),
+        storeId: "store-1",
+      }),
+    );
+  });
+
+  it("keeps the demo Today filter live-only", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 6, 21, 12));
+    sharedDemoContextMock.mockReturnValue({ storeId: "store-1" });
+    useSearchMock.mockReturnValue({ timeRange: "today" });
+    getActiveStoreMock.mockReturnValue({
+      activeStore: { _id: "store-1", currency: "GHS" },
+    });
+    useQueryMock.mockReturnValue([
+      {
+        _id: "live-txn",
+        transactionNumber: "700001",
+        total: 1000,
+        paymentMethod: "cash",
+        paymentMethods: ["cash"],
+        hasMultiplePaymentMethods: false,
+        cashierName: "Afua O.",
+        customerName: null,
+        itemCount: 1,
+        completedAt: new Date(2026, 6, 21, 11).getTime(),
+        hasTrace: false,
+        sessionTraceId: null,
+      },
+    ]);
+    const fixture = createSharedDemoTransactionFixtures("2026-07-21")[0]!;
+
+    render(<TransactionsView />);
+
+    expect(screen.getAllByText("700001").length).toBeGreaterThan(0);
+    expect(
+      screen.queryByText(fixture.transactionNumber),
+    ).not.toBeInTheDocument();
   });
 
   it("keeps the workspace header visible while completed transactions load", () => {

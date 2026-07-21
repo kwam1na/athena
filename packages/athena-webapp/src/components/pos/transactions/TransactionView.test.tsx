@@ -10,6 +10,7 @@ import {
   getCorrectionHistoryChangeParts,
   TransactionView,
 } from "./TransactionView";
+import { createSharedDemoTransactionFixtures } from "@/components/shared-demo/sharedDemoTransactionsFixture";
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -25,11 +26,16 @@ const useActionMock = vi.fn();
 const useParamsMock = vi.fn();
 const useSearchMock = vi.fn();
 const useProtectedAdminPageStateMock = vi.fn();
+const sharedDemoContextMock = vi.fn();
 
 vi.mock("convex/react", () => ({
   useAction: (...args: unknown[]) => useActionMock(...args),
   useMutation: (...args: unknown[]) => useMutationMock(...args),
   useQuery: (...args: unknown[]) => useQueryMock(...args),
+}));
+
+vi.mock("@/hooks/useSharedDemoContext", () => ({
+  useSharedDemoContext: () => sharedDemoContextMock(),
 }));
 
 vi.mock("@tanstack/react-router", () => ({
@@ -540,6 +546,7 @@ describe("TransactionView", () => {
     useParamsMock.mockReset();
     useSearchMock.mockReset();
     useSearchMock.mockReturnValue({});
+    sharedDemoContextMock.mockReturnValue(null);
     useProtectedAdminPageStateMock.mockReturnValue({
       activeStore: { _id: "store_1" },
       isAuthenticated: true,
@@ -587,6 +594,38 @@ describe("TransactionView", () => {
     const { container } = render(<TransactionView />);
 
     expect(container.querySelector(".min-h-\\[50vh\\]")).toBeInTheDocument();
+  });
+
+  it("renders fixture-backed demo transactions as read-only details", () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date(2026, 6, 21, 12));
+      const fixture = createSharedDemoTransactionFixtures("2026-07-21")[0]!;
+      sharedDemoContextMock.mockReturnValue({ storeId: "store_1" });
+      useParamsMock.mockReturnValue({ transactionId: fixture._id });
+      useQueryMock.mockReturnValue(undefined);
+
+      render(<TransactionView />);
+
+      expect(
+        screen.getByText(`Transaction #${fixture.transactionNumber}`),
+      ).toBeInTheDocument();
+      expect(screen.getByText("Afua O.")).toBeInTheDocument();
+      expect(screen.queryByText("Customer")).not.toBeInTheDocument();
+      expect(screen.queryByText("Walk-in customer")).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: "Update" }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: "Void sale" }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: "Print receipt" }),
+      ).not.toBeInTheDocument();
+      expect(useQueryMock).toHaveBeenCalledWith(expect.anything(), "skip");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("renders the session trace link when the transaction has a session trace", () => {

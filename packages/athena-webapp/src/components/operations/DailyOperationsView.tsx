@@ -32,6 +32,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 
 import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
+import { useSharedDemoContext } from "@/hooks/useSharedDemoContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { getOrigin } from "@/lib/navigationUtils";
 import {
@@ -43,6 +44,7 @@ import {
 } from "@/lib/operations/operatingDate";
 import { formatStoredAmount } from "@/lib/pos/displayAmounts";
 import { cn } from "@/lib/utils";
+import { createSharedDemoDailyOperationsFixture } from "@/components/shared-demo/sharedDemoOperationsFixture";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
 import { currencyFormatter } from "~/shared/currencyFormatter";
@@ -413,6 +415,11 @@ type CachedWeekAnalytics = {
     DailyOperationsSnapshot["weekMetrics"][number] | null;
   storePulse?: StorePulseSummary | null;
 };
+
+type ClientWeekAnalytics = Pick<
+  CachedWeekAnalytics,
+  "fetchedAt" | "metrics" | "priorWeekBoundaryMetric" | "storePulse"
+>;
 
 type DailyOperationsStorePulseSnapshot = {
   operatingDate: string;
@@ -2201,7 +2208,7 @@ function DailyOperationsStorePulsePanel({
   hasFullAdminAccess: boolean;
   snapshot: DailyOperationsSnapshot;
 }) {
-  const storePulseSummary = buildWeekToDateStorePulseSummary(snapshot);
+  const storePulseSummary = buildWeekStorePulseSummary(snapshot);
   const emptyStateTimeContext =
     snapshot.operatingDate === getLocalOperatingDate()
       ? "current"
@@ -2236,7 +2243,7 @@ function DailyOperationsStorePulsePanel({
   );
 }
 
-function buildWeekToDateStorePulseSummary(
+function buildWeekStorePulseSummary(
   snapshot: DailyOperationsSnapshot,
 ): StorePulseSummary | null | undefined {
   const summary = snapshot.storePulse;
@@ -4058,6 +4065,7 @@ function DailyOperationsApiPendingView() {
 }
 
 function DailyOperationsConnectedView({
+  clientWeekAnalytics,
   getDailyOperationsAutomationSnapshot,
   getDailyOperationsDetailSnapshot,
   getDailyOperationsOpenRegisterSessionsSnapshot,
@@ -4069,6 +4077,7 @@ function DailyOperationsConnectedView({
   getDailyOperationsTimelineSnapshot,
   getDailyOperationsWeekAnalyticsSnapshot,
 }: {
+  clientWeekAnalytics?: ClientWeekAnalytics;
   getDailyOperationsAutomationSnapshot?: unknown;
   getDailyOperationsDetailSnapshot?: unknown;
   getDailyOperationsOpenRegisterSessionsSnapshot?: unknown;
@@ -4166,6 +4175,7 @@ function DailyOperationsConnectedView({
       ? undefined
       : weekAnalyticsCache[weekAnalyticsCacheKey];
   const shouldQueryWeekAnalytics =
+    !clientWeekAnalytics &&
     Boolean(getDailyOperationsWeekAnalyticsSnapshot) &&
     canQueryProtectedData &&
     weekAnalyticsCacheKey !== "skip" &&
@@ -4307,7 +4317,12 @@ function DailyOperationsConnectedView({
     queriedStorePulseSnapshot ??
     cachedStorePulseSnapshot;
   const rawCachedWeekMetrics =
-    cachedWeekAnalytics && snapshotArgs !== "skip"
+    snapshotArgs !== "skip" && clientWeekAnalytics
+      ? selectWeekMetricsForOperatingDate(
+          clientWeekAnalytics.metrics,
+          snapshotArgs.operatingDate,
+        )
+      : cachedWeekAnalytics && snapshotArgs !== "skip"
       ? selectWeekMetricsForOperatingDate(
           cachedWeekAnalytics.metrics,
           snapshotArgs.operatingDate,
@@ -4317,12 +4332,22 @@ function DailyOperationsConnectedView({
     snapshotArgs !== "skip"
       ? replaceWeekMetricForOperatingDate(
           rawCachedWeekMetrics,
-          cachedTodayRefreshSnapshot?.weekMetric,
+          cachedTodayRefreshSnapshot?.weekMetric ??
+            snapshot?.weekMetrics.find(
+              (metric) =>
+                metric.operatingDate === snapshotArgs.operatingDate,
+            ),
           snapshotArgs.operatingDate,
         )
       : rawCachedWeekMetrics;
   const cachedWeekStorePulse =
-    cachedTodayRefreshSnapshot?.storePulse && snapshot
+    clientWeekAnalytics && snapshot && cachedWeekMetrics
+      ? buildCachedWeekStorePulseSummary({
+          ...snapshot,
+          storePulse: clientWeekAnalytics.storePulse,
+          weekMetrics: cachedWeekMetrics,
+        })
+      : cachedTodayRefreshSnapshot?.storePulse && snapshot
       ? buildCachedWeekStorePulseSummary({
           ...snapshot,
           storePulse: cachedTodayRefreshSnapshot.storePulse,
@@ -4513,7 +4538,9 @@ function DailyOperationsConnectedView({
     });
   }, [canRefreshToday, snapshotRequestKey]);
   const todayRefreshLastFetchedAt =
-    cachedTodayRefreshSnapshot?.refreshedAt ?? cachedWeekAnalytics?.fetchedAt;
+    cachedTodayRefreshSnapshot?.refreshedAt ??
+    clientWeekAnalytics?.fetchedAt ??
+    cachedWeekAnalytics?.fetchedAt;
 
   useEffect(() => {
     if (
@@ -4542,9 +4569,12 @@ function DailyOperationsConnectedView({
     <DailyOperationsViewContent
       currency={activeStore?.currency ?? "GHS"}
       cachedPriorWeekBoundaryMetric={
+        clientWeekAnalytics?.priorWeekBoundaryMetric ??
         cachedWeekAnalytics?.priorWeekBoundaryMetric
       }
-      cachedWeekAnalyticsFetchedAt={cachedWeekAnalytics?.fetchedAt}
+      cachedWeekAnalyticsFetchedAt={
+        clientWeekAnalytics?.fetchedAt ?? cachedWeekAnalytics?.fetchedAt
+      }
       cachedWeekMetrics={cachedWeekMetrics}
       cachedWeekStorePulse={cachedWeekStorePulse}
       hasDetailSnapshot={
@@ -4606,28 +4636,150 @@ function DailyOperationsConnectedView({
   );
 }
 
-export function DailyOperationsView({
-  fixture,
+function SharedDemoHistoricalDailyOperationsView({
+  routeOperatingDate,
+  storeId,
+  weekEndOperatingDate,
 }: {
-  /**
-   * Renders the workspace from a supplied prop bag instead of Convex, for screenshot
-   * fixtures. When set, no snapshot query runs. Development only — see
-   * `src/stories/operations`.
-   */
-  fixture?: DailyOperationsViewContentProps;
-} = {}) {
-  const dailyOperationsApi = getDailyOperationsApi();
+  routeOperatingDate: string;
+  storeId: Id<"store">;
+  weekEndOperatingDate?: string;
+}) {
+  const params = useParams({ strict: false }) as
+    { orgUrlSlug?: string; storeUrlSlug?: string } | undefined;
+  const navigate = useNavigate();
+  const [operatingDate, setOperatingDate] = useState(routeOperatingDate);
 
-  if (fixture) {
-    return <DailyOperationsViewContent {...fixture} />;
+  useEffect(() => {
+    setOperatingDate(routeOperatingDate);
+  }, [routeOperatingDate]);
+
+  const fixture = useMemo(
+    () =>
+      createSharedDemoDailyOperationsFixture({
+        operatingDate,
+        orgUrlSlug: params?.orgUrlSlug ?? "",
+        storeId,
+        storeUrlSlug: params?.storeUrlSlug ?? "",
+        weekEndOperatingDate,
+      }),
+    [
+      operatingDate,
+      params?.orgUrlSlug,
+      params?.storeUrlSlug,
+      storeId,
+      weekEndOperatingDate,
+    ],
+  );
+
+  return (
+    <DailyOperationsViewContent
+      {...fixture}
+      onOperatingDateChange={(date) => {
+        const nextOperatingDate = getLocalOperatingDate(date);
+        void navigate({
+          search: ((current: Record<string, unknown>) => ({
+            ...current,
+            operatingDate: nextOperatingDate,
+            weekEndOperatingDate:
+              getSaturdayWeekEndOperatingDate(nextOperatingDate),
+          })) as never,
+        });
+      }}
+    />
+  );
+}
+
+function SharedDemoDailyOperationsView({ storeId }: { storeId: Id<"store"> }) {
+  const search = useSearch({ strict: false }) as {
+    operatingDate?: unknown;
+    weekEndOperatingDate?: unknown;
+  };
+  const routeOperatingDate = getLocalOperatingDateRangeFromSearch(
+    search.operatingDate,
+  ).operatingDate;
+
+  if (routeOperatingDate === getLocalOperatingDate()) {
+    return (
+      <SharedDemoCurrentDailyOperationsView
+        operatingDate={routeOperatingDate}
+        storeId={storeId}
+        weekEndOperatingDate={
+          typeof search.weekEndOperatingDate === "string"
+            ? search.weekEndOperatingDate
+            : undefined
+        }
+      />
+    );
   }
 
+  return (
+    <SharedDemoHistoricalDailyOperationsView
+      routeOperatingDate={routeOperatingDate}
+      storeId={storeId}
+      weekEndOperatingDate={
+        typeof search.weekEndOperatingDate === "string"
+          ? search.weekEndOperatingDate
+          : undefined
+      }
+    />
+  );
+}
+
+function SharedDemoCurrentDailyOperationsView({
+  operatingDate,
+  storeId,
+  weekEndOperatingDate,
+}: {
+  operatingDate: string;
+  storeId: Id<"store">;
+  weekEndOperatingDate?: string;
+}) {
+  const params = useParams({ strict: false }) as
+    { orgUrlSlug?: string; storeUrlSlug?: string } | undefined;
+  const [fetchedAt] = useState(() => Date.now());
+  const fixture = useMemo(
+    () =>
+      createSharedDemoDailyOperationsFixture({
+        operatingDate,
+        orgUrlSlug: params?.orgUrlSlug ?? "",
+        storeId,
+        storeUrlSlug: params?.storeUrlSlug ?? "",
+        weekEndOperatingDate,
+      }),
+    [
+      operatingDate,
+      params?.orgUrlSlug,
+      params?.storeUrlSlug,
+      storeId,
+      weekEndOperatingDate,
+    ],
+  );
+
+  return (
+    <DailyOperationsConnectedRuntimeView
+      clientWeekAnalytics={{
+        fetchedAt,
+        metrics: fixture.cachedWeekMetrics ?? [],
+        storePulse: fixture.cachedWeekStorePulse,
+      }}
+    />
+  );
+}
+
+function DailyOperationsConnectedRuntimeView({
+  clientWeekAnalytics,
+}: {
+  clientWeekAnalytics?: ClientWeekAnalytics;
+} = {}) {
+  const dailyOperationsApi = getDailyOperationsApi();
   if (!dailyOperationsApi.getDailyOperationsSnapshot) {
     return <DailyOperationsApiPendingView />;
   }
 
   return (
     <DailyOperationsConnectedView
+      clientWeekAnalytics={clientWeekAnalytics}
       getDailyOperationsAutomationSnapshot={
         dailyOperationsApi.getDailyOperationsAutomationSnapshot
       }
@@ -4657,5 +4809,32 @@ export function DailyOperationsView({
         dailyOperationsApi.getDailyOperationsWeekAnalyticsSnapshot
       }
     />
+  );
+}
+
+function DailyOperationsRuntimeView() {
+  const sharedDemoContext = useSharedDemoContext();
+  if (sharedDemoContext?.kind === "shared_demo") {
+    return (
+      <SharedDemoDailyOperationsView storeId={sharedDemoContext.storeId} />
+    );
+  }
+  return <DailyOperationsConnectedRuntimeView />;
+}
+
+export function DailyOperationsView({
+  fixture,
+}: {
+  /**
+   * Renders the workspace from a supplied prop bag instead of Convex, for screenshot
+   * fixtures. When set, no snapshot query runs. Development only — see
+   * `src/stories/operations`.
+   */
+  fixture?: DailyOperationsViewContentProps;
+} = {}) {
+  return fixture ? (
+    <DailyOperationsViewContent {...fixture} />
+  ) : (
+    <DailyOperationsRuntimeView />
   );
 }
