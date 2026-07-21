@@ -4,18 +4,28 @@ The shared demo is a server-side principal and store mode. Unknown writes and
 unknown external effects are denied. UI visibility is not an authorization
 control.
 
-Athena's public mutation/action surface is classified by the capability catalog
-in `convex/sharedDemo/capabilityCatalog.ts`. Module defaults cover coherent
-domains and exact-function overrides separate sensitive operations such as
-refunds, destructive administration, terminal registration, and payment
-collection. The static coverage test discovers every exported public Convex
-mutation and action and fails when any function is unclassified.
+Athena's public mutation/action surface is currently classified by the platform
+capability catalog in `convex/platform/capabilityCatalog.ts`. Module defaults
+cover coherent domains and exact-function overrides separate sensitive
+operations such as refunds, destructive administration, terminal registration,
+and payment collection. The static coverage test discovers every exported
+public Convex mutation and action and fails when any function is unclassified.
+
+The operation-admission migration will pair this platform capability catalog
+with public-write structural coverage in `convex/operationAdmission`. Shared
+demo will consume that platform catalog through its adapter instead of owning
+write-admission proof. Until the adapter and migration inventory exist, the
+legacy shared-demo policy and representative function inventory remain the
+runtime coverage source.
 
 The demo allowlist is a separate list of capability IDs. Classification does
 not grant access: every newly discovered capability remains denied until it is
 added to `SHARED_DEMO_ALLOWED_CAPABILITIES` and wired through a store-clamped,
-restore-fenced server boundary. `SHARED_DEMO_PUBLIC_FUNCTION_INVENTORY` records
-those runtime enforcement bindings; it is not the capability catalog.
+restore-fenced server boundary. `SHARED_DEMO_PUBLIC_FUNCTION_INVENTORY`
+currently records those legacy runtime enforcement bindings; it is not the
+capability catalog. After operationAdmission owns migrated public-write
+coverage, this representative inventory should be retired in favor of
+operation definitions plus explicit migration exemptions.
 
 ## Athena view surfaces
 
@@ -57,6 +67,11 @@ This surface allowlist is not an authorization boundary. It controls what the
 demo presents; the server capability allowlist below remains authoritative for
 reads, writes, and external effects.
 
+Existing shared-demo read allowlists are intentionally unchanged by the
+operation-admission cleanup. Public reads/queries, public actions, broad
+provider dispatch migration, and shared-demo seeding/restore redesign remain
+out of scope until separately planned.
+
 ## Athena capability families
 
 - Store operations: cash controls, Daily Operations, approvals, expenses,
@@ -86,8 +101,10 @@ reads, writes, and external effects.
 | Staff authentication | Shared manager sign-in and bounded approval proofs |
 
 Identity, permissions, billing, integrations, exports, refunds/payment effects,
-destructive administration, and store deletion are denied. The authoritative
-classification registry is `convex/sharedDemo/policy.ts`.
+destructive administration, and store deletion are denied. The current
+shared-demo policy registry is `convex/sharedDemo/policy.ts`; future
+public-write authority should be declared in `convex/operationAdmission` and
+adapted by `convex/sharedDemo/operationAdapter.ts`.
 
 ## External effects
 

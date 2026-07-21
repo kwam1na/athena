@@ -1,0 +1,77 @@
+---
+title: Athena Operation Admission Rail
+date: 2026-07-21
+category: docs/solutions/architecture-patterns
+module: Athena Convex public write admission
+problem_type: architecture_pattern
+component: authentication
+resolution_type: code_fix
+severity: high
+applies_when:
+  - "A public Convex mutation needs actor-specific policy before any domain write"
+  - "Shared-demo write access must use the same domain path as normal users without becoming full administrator auth"
+  - "A migration wave needs exact inventory coverage before all writes can move to a new admission layer"
+tags: [athena, convex, operation-admission, shared-demo, authz, static-checker]
+delivery_diff_fingerprint: a31dc48c55bed075973cc07cf8f81b7f5af4addea5156d69c5f6fcaecce461ca
+---
+
+# Athena Operation Admission Rail
+
+## Problem
+
+Athena had shared-demo write policy attached to helper-level demo checks while normal users continued through ordinary authentication helpers. That made the capability catalog feel demo-owned, and it made it hard to prove that future public write migrations actually enforced actor, scope, readiness, and effect policy at the exported mutation boundary.
+
+## Solution
+
+Treat public write admission as a platform rail:
+
+- Keep the Athena-wide capability catalog in `packages/athena-webapp/convex/platform/capabilityCatalog.ts`.
+- Declare migrated public writes in `packages/athena-webapp/convex/operationAdmission/definitions.ts`.
+- Wrap the exported `mutation({ handler })` with `admitPublicMutation(...)` so admission runs before domain writes.
+- Put actor-specific rules in adapters, such as `packages/athena-webapp/convex/sharedDemo/operationAdapter.ts`.
+- Keep unmigrated public writes in an exact legacy inventory under `operationAdmission/migrationInventory.ts`.
+- Enforce the structure with `scripts/convex-operation-admission-check.ts`.
+
+The important guardrail is that a definition alone is not coverage. The checker must prove both facts for a migrated public write:
+
+```ts
+export const resolveSyncedSaleInventoryReviewGroup = mutation({
+  args: { /* ... */ },
+  handler: admitPublicMutation(
+    resolveSyncedSaleInventoryReviewGroupOperationDefinition,
+    resolveSyncedSaleInventoryReviewGroupWithCtx,
+    {
+      resolveAdmission: (ctx, args, definition) =>
+        resolveOperationAdmission(ctx, args, definition, {
+          normalAdapter: createNormalUserOperationAdapter(),
+          sharedDemoAdapter: createSharedDemoOperationAdapter(),
+        }),
+    },
+  ),
+});
+```
+
+## Why This Matters
+
+Shared demo is a real-tenant workflow with a smaller authority envelope. Normal account roles answer what an operator may do; shared-demo admission answers whether this short-lived demo principal may perform this exact operation against its server-owned store while the restore epoch is still current.
+
+Putting the capability catalog at the platform layer prevents demo policy from becoming the source of truth for all Athena capabilities. Putting the shared-demo rules in an adapter lets normal users keep existing auth behavior while demo principals receive store/org clamps, capability allow/deny decisions, restore readiness checks, and stable policy denials before any mutation body runs.
+
+## Prevention
+
+- Do not remove a public write from `OPERATION_ADMISSION_LEGACY_EXEMPTIONS` until the exported mutation handler is wrapped with `admitPublicMutation`.
+- Add operation definitions with stable `functionName` values that exactly match `module/path:exportName`.
+- Test the exported mutation handler, not only the `WithCtx` domain helper, when proving admission behavior.
+- Include denial tests for shared-demo scope mismatch and stale restore readiness.
+- Run `bun scripts/convex-operation-admission-check.ts` after adding or renaming public Convex mutations.
+
+## Examples
+
+The proving mutation is `operations/openWorkInventoryReviews:resolveSyncedSaleInventoryReviewGroup`. Its backend test invokes the exported Convex `_handler` with a shared-demo principal and verifies the domain path uses `operationAdmission` rather than falling back to `requireAuthenticatedAthenaUserWithCtx`.
+
+The static checker also has a negative fixture: a public mutation with a matching operation definition but a raw `handler: async () => ...` fails. This prevents future migrations from adding definitions that document intent without enforcing runtime admission.
+
+## Related
+
+- [Shared Demo Principal Policy And Restore Boundary](shared-demo-principal-policy-and-restore-boundary-2026-07-12.md)
+- [Operation Admission Rail Plan](../../plans/2026-07-21-001-feat-operation-admission-rail-plan.md)

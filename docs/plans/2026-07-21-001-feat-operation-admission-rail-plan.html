@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>feat: Add operation admission rail</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f7f4;
+      --paper: #ffffff;
+      --ink: #20231f;
+      --muted: #5f675f;
+      --line: #d9ded6;
+      --accent: #235c55;
+      --accent-soft: #e5f0ed;
+      --warn: #7a4b14;
+      --warn-soft: #f8ecd8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    header, main {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 28px;
+    }
+    header {
+      padding-top: 36px;
+    }
+    .eyebrow {
+      color: var(--accent);
+      font-weight: 700;
+      letter-spacing: 0;
+      margin: 0 0 8px;
+      text-transform: uppercase;
+      font-size: 12px;
+    }
+    h1 {
+      margin: 0 0 10px;
+      font-size: 34px;
+      line-height: 1.15;
+      letter-spacing: 0;
+    }
+    h2 {
+      margin: 0 0 14px;
+      font-size: 21px;
+      line-height: 1.25;
+      letter-spacing: 0;
+    }
+    h3 {
+      margin: 18px 0 8px;
+      font-size: 16px;
+      letter-spacing: 0;
+    }
+    p { margin: 0 0 12px; }
+    a { color: var(--accent); }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 14px;
+    }
+    .pill {
+      border: 1px solid var(--line);
+      background: var(--paper);
+      color: var(--muted);
+      border-radius: 6px;
+      padding: 5px 8px;
+      font-size: 13px;
+    }
+    nav {
+      margin: 18px 0 0;
+      padding: 14px;
+      border: 1px solid var(--line);
+      background: var(--paper);
+      border-radius: 8px;
+    }
+    nav a {
+      display: inline-block;
+      margin: 4px 14px 4px 0;
+      font-weight: 600;
+      text-decoration: none;
+    }
+    section {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 22px;
+      margin: 0 0 18px;
+    }
+    ul { padding-left: 20px; margin: 8px 0 0; }
+    li { margin: 7px 0; }
+    .callout {
+      border-left: 4px solid var(--accent);
+      background: var(--accent-soft);
+      padding: 12px 14px;
+      margin: 12px 0;
+      border-radius: 4px;
+    }
+    .warning {
+      border-left-color: var(--warn);
+      background: var(--warn-soft);
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 12px;
+    }
+    article {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      background: #fbfcfa;
+    }
+    article h3 { margin-top: 0; }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin-top: 10px;
+      font-size: 14px;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 9px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: #f0f3ee; }
+    code {
+      background: #eef1ec;
+      border: 1px solid #dce2d9;
+      border-radius: 4px;
+      padding: 1px 4px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.92em;
+    }
+    .small { color: var(--muted); font-size: 13px; }
+  </style>
+</head>
+<body>
+  <header>
+    <p class="eyebrow">Athena Plan</p>
+    <h1>feat: Add operation admission rail</h1>
+    <p>This review artifact summarizes the canonical Markdown plan for adding a neutral Convex public write mutation admission rail.</p>
+    <div class="meta">
+      <span class="pill">Date: 2026-07-21</span>
+      <span class="pill">Type: feat</span>
+      <span class="pill">Status: active</span>
+      <span class="pill">Deepened: 2026-07-21</span>
+      <span class="pill">Source: <a href="2026-07-21-001-feat-operation-admission-rail-plan.md">Markdown plan</a></span>
+    </div>
+    <nav aria-label="Plan sections">
+      <a href="#summary">Summary</a>
+      <a href="#decisions">Decisions</a>
+      <a href="#units">Units</a>
+      <a href="#risks">Risks</a>
+      <a href="#verification">Verification</a>
+    </nav>
+  </header>
+  <main>
+    <section id="summary">
+      <h2>Summary</h2>
+      <p>The plan introduces a neutral <code>operationAdmission</code> rail while keeping Convex public exports in their normal direct <code>mutation({ ... })</code> shape. Shared demo becomes the first adapter-backed non-human consumer, with <code>operations/openWorkInventoryReviews</code> as the proving path before demo-reachable writes and migration controls for remaining public writes.</p>
+      <div class="callout">
+        <strong>Scope guardrail:</strong> public write mutation admission is in scope. Public reads, public actions, role-model redesign, a policy DSL, and broad provider migration are deferred.
+      </div>
+    </section>
+
+    <section id="decisions">
+      <h2>Key Decisions</h2>
+      <ul>
+        <li>Keep Convex exports direct and wrap handler execution, not file/export registration. Raw means a public write export without admission.</li>
+        <li>Create <code>packages/athena-webapp/convex/operationAdmission/</code> for neutral contracts and structural checks.</li>
+        <li>Move the Athena-wide capability catalog out of <code>sharedDemo</code> into a neutral platform-owned module.</li>
+        <li>Resolve actor kind before normal-user auth so recognized demo principals never fall through.</li>
+        <li>Require resource-owner scope resolvers instead of trusting caller-supplied store ids.</li>
+        <li>Require expected restore epochs for browser-originated shared-demo writes.</li>
+        <li>Use AST/source-derived public export discovery plus operation definitions and shrinking legacy exemptions.</li>
+      </ul>
+    </section>
+
+    <section id="units">
+      <h2>Implementation Units</h2>
+      <div class="grid">
+        <article>
+          <h3>U1. Neutral contract</h3>
+          <p>Define operation definitions, actor/scope/readiness/effect contracts, provenance, and handler wrapping.</p>
+        </article>
+        <article>
+          <h3>U2. Actor adapters</h3>
+          <p>Implement normal-user and shared-demo adapters with explicit non-fallback shared-demo behavior.</p>
+        </article>
+        <article>
+          <h3>U3. Structural coverage</h3>
+          <p>Add AST-backed public export checks, operation definition validation, and migration exemptions.</p>
+        </article>
+        <article>
+          <h3>U4. Proving mutation</h3>
+          <p>Migrate <code>operations/openWorkInventoryReviews</code> under <code>daily_operations.write</code>, including the Operations queue caller and expected demo restore epoch.</p>
+        </article>
+        <article>
+          <h3>U5. POS writes</h3>
+          <p>Migrate POS sale, quick-add, register, and sync write boundaries without broad POS refactors.</p>
+        </article>
+        <article>
+          <h3>U6. Ops and cash</h3>
+          <p>Migrate operations, cash-control, stock-adjustment, approval, staff-auth, and staff-message demo writes.</p>
+        </article>
+        <article>
+          <h3>U7. Storefront effects</h3>
+          <p>Declare storefront fulfillment and protected-effect boundaries without provider dispatch migration.</p>
+        </article>
+        <article>
+          <h3>U8. Migration controls</h3>
+          <p>Enforce no-new-raw public writes and track remaining waves with owner/reason exemptions.</p>
+        </article>
+        <article>
+          <h3>U9. Legacy cleanup</h3>
+          <p>Retire helper-only shared-demo admission where migrated groups no longer depend on it and update docs.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="risks">
+      <h2>Risk Highlights</h2>
+      <table>
+        <thead>
+          <tr><th>Risk</th><th>Mitigation</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Shared-demo principal falls through to normal auth.</td><td>Resolve actor first and add explicit non-fallback tests.</td></tr>
+          <tr><td>Coverage misses wrapped or aliased exports.</td><td>Use TypeScript-aware public export discovery and definition checks.</td></tr>
+          <tr><td>Big-bang migration destabilizes 228 public mutations.</td><td>Use a proving path, capability waves, and shrinking legacy exemptions.</td></tr>
+          <tr><td>Resource ids bypass store scope.</td><td>Require resource-owner scope resolvers before writes/effects.</td></tr>
+          <tr><td>Protected effects fire after admitted writes.</td><td>Declare effects at operation boundary and test existing provider guard points.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="verification">
+      <h2>Verification Strategy</h2>
+      <ul>
+        <li>Pure unit tests for operation definitions, adapter decisions, and handler non-invocation on denial.</li>
+        <li>Static AST coverage for public write mutation declarations, missing metadata, raw exports, and legacy exemptions.</li>
+        <li>Focused Convex/Vitest coverage for normal user, unauthenticated caller, valid demo, expired demo, wrong store, stale epoch, and restore-in-progress paths.</li>
+        <li>Return-contract proof with existing command-result validators for migrated public operations.</li>
+        <li>Merge readiness remains the repo-owned <code>bun run pr:athena</code> gate during implementation.</li>
+      </ul>
+      <p class="small">Canonical source: <a href="2026-07-21-001-feat-operation-admission-rail-plan.md">docs/plans/2026-07-21-001-feat-operation-admission-rail-plan.md</a></p>
+    </section>
+  </main>
+</body>
+</html>

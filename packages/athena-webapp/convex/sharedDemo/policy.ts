@@ -10,7 +10,7 @@ import {
   isSharedDemoCapabilityAllowed,
   SHARED_DEMO_ALLOWED_CAPABILITIES,
   type AthenaCapability,
-} from "./capabilityCatalog";
+} from "../platform/capabilityCatalog";
 
 export const SHARED_DEMO_UNAVAILABLE =
   SHARED_DEMO_ACTION_DENIED_MESSAGE;

@@ -1,9 +1,17 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Id } from "../_generated/dataModel";
+
+vi.mock("@convex-dev/auth/server", () => ({ getAuthUserId: vi.fn() }));
+vi.mock("../sharedDemo/actor", () => ({ getSharedDemoActorWithCtx: vi.fn() }));
+
+import { getAuthUserId } from "@convex-dev/auth/server";
+import { getSharedDemoActorWithCtx } from "../sharedDemo/actor";
 import {
   findAthenaUserByEmailIndexedWithCtx,
   findAthenaUserByEmailWithCtx,
+  getAuthenticatedAthenaUserWithCtx,
   normalizeAthenaUserEmail,
+  requireAuthenticatedAthenaUserWithCtx,
 } from "./athenaUserAuth";
 
 type User = {
@@ -42,6 +50,11 @@ function context(users: User[]) {
 }
 
 describe("Athena user normalized identity", () => {
+  beforeEach(() => {
+    vi.mocked(getAuthUserId).mockReset();
+    vi.mocked(getSharedDemoActorWithCtx).mockReset();
+  });
+
   it("normalizes case and surrounding whitespace", () => {
     expect(normalizeAthenaUserEmail("  Admin@Example.COM ")).toBe(
       "admin@example.com",
@@ -116,5 +129,89 @@ describe("Athena user normalized identity", () => {
       findAthenaUserByEmailIndexedWithCtx(ctx as never, "ADMIN@example.com"),
     ).resolves.toMatchObject({ _id: "indexed" });
     expect(collect).not.toHaveBeenCalled();
+  });
+});
+
+describe("Athena user auth boundary", () => {
+  it("keeps ordinary authenticated Athena user resolution unchanged", async () => {
+    vi.mocked(getAuthUserId).mockResolvedValue("auth-user" as never);
+    const authUser = { email: " Admin@Example.COM " };
+    const { ctx } = context([
+      {
+        _id: "athena-user" as Id<"athenaUser">,
+        email: "admin@example.com",
+        normalizedEmail: "admin@example.com",
+      },
+    ]);
+    const get = vi.fn(async (table: string) =>
+      table === "users" ? authUser : null,
+    );
+
+    const result = await requireAuthenticatedAthenaUserWithCtx({
+      ...(ctx as object),
+      auth: { getUserIdentity: vi.fn() },
+      db: {
+        ...(ctx.db as object),
+        get,
+      },
+    } as never);
+
+    expect(result).toMatchObject({ _id: "athena-user" });
+    expect(getSharedDemoActorWithCtx).not.toHaveBeenCalled();
+  });
+
+  it("does not map a shared-demo actor into Athena user semantics without an explicit legacy capability option", async () => {
+    vi.mocked(getAuthUserId).mockResolvedValue("demo-auth" as never);
+    vi.mocked(getSharedDemoActorWithCtx).mockResolvedValue({
+      athenaUserId: "demo-athena",
+      kind: "shared_demo",
+      organizationId: "demo-org",
+      storeId: "demo-store",
+    } as never);
+    const ctx = {
+      auth: { getUserIdentity: vi.fn() },
+      db: {
+        get: vi.fn(async (table: string) =>
+          table === "users" ? { email: undefined } : null,
+        ),
+        query: vi.fn(),
+      },
+    };
+
+    await expect(
+      getAuthenticatedAthenaUserWithCtx(ctx as never),
+    ).resolves.toBeNull();
+    expect(getSharedDemoActorWithCtx).not.toHaveBeenCalled();
+  });
+
+  it("characterizes the helper-only shared-demo write admission path that operationAdmission must replace before removal", async () => {
+    const demoUser = {
+      _id: "demo-athena" as Id<"athenaUser">,
+      email: "synthetic@demo.invalid",
+      normalizedEmail: "synthetic@demo.invalid",
+    };
+    vi.mocked(getAuthUserId).mockResolvedValue("demo-auth" as never);
+    vi.mocked(getSharedDemoActorWithCtx).mockResolvedValue({
+      athenaUserId: demoUser._id,
+      kind: "shared_demo",
+      organizationId: "demo-org",
+      storeId: "demo-store",
+    } as never);
+    const ctx = {
+      auth: { getUserIdentity: vi.fn() },
+      db: {
+        get: vi.fn(async (table: string, id: string) =>
+          table === "athenaUser" && id === demoUser._id ? demoUser : null,
+        ),
+        query: vi.fn(),
+      },
+    };
+
+    await expect(
+      getAuthenticatedAthenaUserWithCtx(ctx as never, {
+        sharedDemoCapability: "pos.sale.complete",
+      }),
+    ).resolves.toEqual(demoUser);
+    expect(getAuthUserId).not.toHaveBeenCalled();
   });
 });

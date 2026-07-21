@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("@convex-dev/auth/server", () => ({
+  getAuthUserId: vi.fn(),
+}));
+
 import type { Doc, Id } from "../_generated/dataModel";
+import { getAuthUserId } from "@convex-dev/auth/server";
 import * as athenaUserAuth from "../lib/athenaUserAuth";
 import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
 import {
@@ -18,6 +23,8 @@ vi.mock("../lib/athenaUserAuth", () => ({
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.stubEnv("ATHENA_SHARED_DEMO_ENABLED", "true");
+  vi.stubEnv("STAGE", "qa");
   vi.spyOn(Date, "now").mockReturnValue(1_772_550_000_000);
   vi.mocked(athenaUserAuth.requireAuthenticatedAthenaUserWithCtx).mockResolvedValue(
     {
@@ -33,6 +40,7 @@ beforeEach(() => {
       userId: "user-1",
     } as never,
   );
+  vi.mocked(getAuthUserId).mockResolvedValue(null);
 });
 
 describe("resolveSyncedSaleInventoryReviewWithCtx", () => {
@@ -42,6 +50,7 @@ describe("resolveSyncedSaleInventoryReviewWithCtx", () => {
     const result = await resolveSyncedSaleInventoryReviewGroupWithCtx(
       ctx as never,
       {
+        expectedDemoRestoreEpoch: 42,
         expectedMemberIds: ["work-item-1" as Id<"operationalWorkItem">],
         groupKey: "synced_sale_inventory_review:store-1:sku-1",
         outcome: "completed",
@@ -56,9 +65,7 @@ describe("resolveSyncedSaleInventoryReviewWithCtx", () => {
     });
     expect(
       athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
-    ).toHaveBeenCalledWith(ctx, {
-      sharedDemoCapability: "daily_operations.write",
-    });
+    ).toHaveBeenCalledWith(ctx);
     assertConformsToExportedReturns(
       resolveSyncedSaleInventoryReviewGroup,
       result,
@@ -212,6 +219,67 @@ describe("resolveSyncedSaleInventoryReviewWithCtx", () => {
 
     expect(ctx.db.query).not.toHaveBeenCalled();
     expect(ctx.db.patch).not.toHaveBeenCalled();
+  });
+
+  it("admits the exported group mutation for a ready shared-demo actor without normal-auth fallback", async () => {
+    vi.mocked(getAuthUserId).mockResolvedValue("auth-demo" as never);
+    vi.mocked(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).mockRejectedValue(new Error("normal auth should not run"));
+    const ctx = buildCtx({
+      athenaUser: {
+        _creationTime: 1,
+        _id: "demo-athena-user" as Id<"athenaUser">,
+        email: "demo@example.com",
+      } as Doc<"athenaUser">,
+      sharedDemoPrincipal: {
+        _creationTime: 1,
+        _id: "principal-1" as Id<"sharedDemoPrincipal">,
+        admissionExpiresAt: Date.now() + 60_000,
+        athenaUserId: "demo-athena-user" as Id<"athenaUser">,
+        authUserId: "auth-demo",
+        organizationId: "org-1" as Id<"organization">,
+        storeId: "store-1" as Id<"store">,
+      } as Doc<"sharedDemoPrincipal">,
+      sharedDemoRestoreState: {
+        _creationTime: 1,
+        _id: "restore-1" as Id<"sharedDemoRestoreState">,
+        baselineVersion: 17,
+        epoch: 42,
+        status: "ready",
+        storeId: "store-1" as Id<"store">,
+      } as Doc<"sharedDemoRestoreState">,
+    });
+
+    const handler = (
+      resolveSyncedSaleInventoryReviewGroup as unknown as {
+        _handler: (
+          ctx: unknown,
+          args: unknown,
+        ) => Promise<unknown>;
+      }
+    )._handler;
+    const result = await handler(ctx, {
+      expectedDemoRestoreEpoch: 42,
+      expectedMemberIds: ["work-item-1" as Id<"operationalWorkItem">],
+      groupKey: "synced_sale_inventory_review:store-1:sku-1",
+      outcome: "completed",
+      reason: "Inventory review handled from Open Work.",
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(result).toMatchObject({
+      kind: "ok",
+      data: { resolvedCount: 1, status: "completed" },
+    });
+    expect(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).not.toHaveBeenCalled();
+    expect(ctx.db.patch).toHaveBeenCalledWith(
+      "operationalWorkItem",
+      "work-item-1",
+      expect.objectContaining({ status: "completed" }),
+    );
   });
 
   it("auto-resolves matching synced sale inventory review work from applied stock movements", async () => {
@@ -808,6 +876,7 @@ function defaultArgs(
 }
 
 type BuildCtxSeed = Partial<{
+  athenaUser: Doc<"athenaUser">;
   inventoryMovement: Doc<"inventoryMovement"> | null;
   operationalWorkItem: Doc<"operationalWorkItem">;
   oversizedOperationalWorkRepair: Doc<"oversizedOperationalWorkRepair">;
@@ -818,10 +887,13 @@ type BuildCtxSeed = Partial<{
   registerSession: Doc<"registerSession">;
   staffProfile: Doc<"staffProfile">;
   store: Doc<"store">;
+  sharedDemoPrincipal: Doc<"sharedDemoPrincipal">;
+  sharedDemoRestoreState: Doc<"sharedDemoRestoreState">;
 }>;
 
 function buildCtx(seed: BuildCtxSeed = {}) {
   const rows = {
+    athenaUser: seed.athenaUser,
     inventoryMovement:
       seed.inventoryMovement === undefined
         ? buildInventoryMovement()
@@ -836,6 +908,8 @@ function buildCtx(seed: BuildCtxSeed = {}) {
     registerSession: seed.registerSession ?? buildRegisterSession(),
     staffProfile: seed.staffProfile ?? buildStaffProfile(),
     store: seed.store ?? buildStore(),
+    sharedDemoPrincipal: seed.sharedDemoPrincipal,
+    sharedDemoRestoreState: seed.sharedDemoRestoreState,
   };
   const get = vi.fn(async (tableName: string, id: string) => {
     const row = rows[tableName as keyof typeof rows];
@@ -897,6 +971,9 @@ function buildCtx(seed: BuildCtxSeed = {}) {
   }));
 
   return {
+    auth: {
+      getUserIdentity: vi.fn(async () => ({ subject: "auth-demo" })),
+    },
     db: {
       get,
       insert: vi.fn(async (tableName: string) => `${tableName}-1`),

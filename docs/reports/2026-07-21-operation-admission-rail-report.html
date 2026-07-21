@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="a31dc48c55bed075973cc07cf8f81b7f5af4addea5156d69c5f6fcaecce461ca">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Operation Admission Rail - Delivery Candidate Report</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f7f4;
+      --panel: #ffffff;
+      --ink: #1f2428;
+      --muted: #687076;
+      --line: #dfe2dc;
+      --accent: #0f766e;
+      --accent-ink: #0b4f4a;
+      --warn: #9a5b00;
+      --bad: #b42318;
+      --good: #0f7a3b;
+      --code: #f0f2ef;
+      --shadow: 0 1px 2px rgba(31, 36, 40, 0.08);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main {
+      width: min(1120px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 32px 0 56px;
+    }
+    header {
+      display: grid;
+      gap: 18px;
+      padding: 28px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+    }
+    h1, h2, h3 { margin: 0; line-height: 1.2; letter-spacing: 0; }
+    h1 { font-size: clamp(28px, 4vw, 46px); max-width: 900px; }
+    h2 { font-size: 22px; margin-bottom: 12px; }
+    h3 { font-size: 16px; margin-bottom: 8px; }
+    p { margin: 0 0 12px; }
+    a { color: var(--accent-ink); }
+    code {
+      background: var(--code);
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.92em;
+    }
+    pre {
+      overflow: auto;
+      background: #17211f;
+      color: #edf7f3;
+      border-radius: 8px;
+      padding: 14px;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    section {
+      margin-top: 18px;
+      padding: 24px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+    }
+    ul { margin: 0; padding-left: 20px; }
+    li + li { margin-top: 6px; }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      padding: 3px 10px;
+      background: #fbfbfa;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 650;
+    }
+    .pill.good { color: var(--good); border-color: #b7dfc2; background: #f0fbf3; }
+    .pill.warn { color: var(--warn); border-color: #ead09b; background: #fff8e8; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .step {
+      min-height: 102px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfbfa;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+      font-size: 14px;
+    }
+    th, td {
+      text-align: left;
+      vertical-align: top;
+      padding: 10px;
+      border-bottom: 1px solid var(--line);
+    }
+    th { color: var(--muted); font-size: 12px; text-transform: uppercase; }
+    .quiz-question {
+      padding: 16px 0;
+      border-top: 1px solid var(--line);
+    }
+    .quiz-question:first-of-type { border-top: 0; }
+    label {
+      display: block;
+      margin-top: 8px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfbfa;
+      cursor: pointer;
+      transition: border-color 140ms ease-out, background-color 140ms ease-out;
+    }
+    label:active { transform: scale(0.995); }
+    button {
+      appearance: none;
+      border: 0;
+      border-radius: 8px;
+      background: var(--accent);
+      color: white;
+      min-height: 40px;
+      padding: 0 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 120ms ease-out, background-color 160ms ease-out;
+    }
+    button:active { transform: scale(0.98); }
+    button.secondary { background: #39413f; }
+    .quiz-actions { display: flex; gap: 10px; margin-top: 14px; }
+    .result {
+      margin-top: 14px;
+      padding: 12px;
+      border-radius: 8px;
+      background: #f0f2ef;
+      min-height: 44px;
+    }
+    .correct { border-color: #91d2a6; background: #f0fbf3; }
+    .incorrect { border-color: #efb1aa; background: #fff4f2; }
+    @media (max-width: 760px) {
+      main { width: min(100vw - 20px, 1120px); padding-top: 16px; }
+      header, section { padding: 18px; }
+      .grid, .flow { grid-template-columns: 1fr; }
+      table, thead, tbody, tr, th, td { display: block; }
+      th { padding-bottom: 2px; }
+      td { padding-top: 2px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="meta">
+      <span class="pill warn">Delivery Candidate</span>
+      <span class="pill">Branch: codex/operation-admission-rail</span>
+      <span class="pill">PR: #689</span>
+      <span class="pill">Fingerprint: a31dc48</span>
+    </div>
+    <h1>Operation Admission Rail</h1>
+    <p>This candidate moves Athena public write admission toward a platform-owned rail: operation definitions declare the write, actor adapters enforce policy, and the exported Convex mutation must prove it is wrapped before it can leave the legacy inventory.</p>
+    <div class="meta">
+      <span class="pill good">Reviewer loop approved</span>
+      <span class="pill good">Focused tests passed</span>
+      <span class="pill good">Typecheck passed</span>
+      <span class="pill good">Merge gate passed</span>
+    </div>
+  </header>
+
+  <section>
+    <h2>Executive Summary</h2>
+    <p>The change introduces `operationAdmission`, a neutral Convex admission layer for public write mutations. The first migrated proof is `operations/openWorkInventoryReviews:resolveSyncedSaleInventoryReviewGroup`, used by the Operations Queue to resolve synced-sale inventory review groups.</p>
+    <p>The Athena-wide capability catalog now lives in `convex/platform/capabilityCatalog.ts`, not under `sharedDemo`. Shared demo remains an actor adapter that consumes the platform catalog and adds demo-specific constraints: server-owned principal, store/org clamp, restore epoch readiness, capability allow/deny, and stable denials before any domain write.</p>
+  </section>
+
+  <section>
+    <h2>Mental Model</h2>
+    <p>The rail is an entry checkpoint, not a replacement for domain rules. Admission answers: who is trying this operation, what capability is required, what scope is allowed, and whether the actor is ready to write. The domain handler still owns business invariants such as full-admin role, current work membership, repair conflicts, and inventory proof.</p>
+    <div class="flow" aria-label="Operation admission flow">
+      <div class="step"><h3>Public Mutation</h3><p>Convex export stays a direct `mutation({ ... })`.</p></div>
+      <div class="step"><h3>Wrapper</h3><p>`admitPublicMutation` resolves admission before handler execution.</p></div>
+      <div class="step"><h3>Definition</h3><p>Operation declares capability, scope, readiness, effects, and actor coverage.</p></div>
+      <div class="step"><h3>Adapter</h3><p>Normal and demo actors map to admitted context or stable denial.</p></div>
+      <div class="step"><h3>Domain</h3><p>Existing business validation runs with `operationAdmission` available.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Before And After</h2>
+    <table>
+      <thead><tr><th>Before</th><th>After</th></tr></thead>
+      <tbody>
+        <tr><td>Capability catalog lived under `sharedDemo`, making a platform capability list look demo-owned.</td><td>Catalog moved to `convex/platform/capabilityCatalog.ts`; shared demo imports it as a consumer.</td></tr>
+        <tr><td>Demo write admission depended on helper-level `{ sharedDemoCapability }` paths for migrated surfaces.</td><td>The proving mutation uses an operation definition plus `admitPublicMutation` at the exported handler.</td></tr>
+        <tr><td>A matching policy declaration could be confused with runtime enforcement.</td><td>The static checker fails definition-covered public writes that do not actually use the admission wrapper.</td></tr>
+        <tr><td>Remaining public writes were broad migration debt.</td><td>All remaining public mutations are named as exact legacy exemptions: 227 legacy exemptions, 1 definition.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Key Files</h2>
+    <table>
+      <thead><tr><th>File</th><th>Why it matters</th></tr></thead>
+      <tbody>
+        <tr><td><code>packages/athena-webapp/convex/operationAdmission/definitions.ts</code></td><td>Declares the proving operation with `daily_operations.write`, store scope, restore epoch readiness, no protected effects, and normal/shared-demo actor coverage.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/operationAdmission/publicMutation.ts</code></td><td>Wraps domain handlers after validating operation metadata and resolving an admitted actor context.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/sharedDemo/operationAdapter.ts</code></td><td>Adapts shared-demo principals through server-owned actor lookup, scope clamp, capability policy, and restore readiness.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/operations/openWorkInventoryReviews.ts</code></td><td>Migrates the first public mutation and keeps domain authorization inside the domain path.</td></tr>
+        <tr><td><code>scripts/convex-operation-admission-check.ts</code></td><td>Discovers public Convex mutations and requires exact coverage by either a wrapped operation definition or a named legacy exemption.</td></tr>
+        <tr><td><code>packages/athena-webapp/src/components/operations/OperationsQueueView.tsx</code></td><td>Passes `expectedDemoRestoreEpoch` for shared-demo group resolution so stale restore races are denied before writes.</td></tr>
+        <tr><td><code>docs/solutions/architecture-patterns/athena-operation-admission-rail-2026-07-21.md</code></td><td>Captures the reusable rule: a definition is not enforcement unless the exported mutation handler is wrapped.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>What Did Not Change</h2>
+    <ul>
+      <li>Public reads, queries, and public actions are not part of this migration.</li>
+      <li>Domain-specific authorization remains local to the domain handler.</li>
+      <li>Legacy `{ sharedDemoCapability }` helper paths remain for unmigrated write groups.</li>
+      <li>Provider/effect dispatch migration, future actor kinds, and broad role redesign remain follow-up work.</li>
+      <li>No production deployment or merge has happened in this report's delivery-candidate state.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Validation Evidence</h2>
+    <ul>
+      <li><code>cd packages/athena-webapp && bun run test -- convex/operationAdmission/definitions.test.ts convex/operationAdmission/adapters.test.ts convex/operationAdmission/publicMutation.test.ts convex/sharedDemo/operationAdapter.test.ts convex/operationAdmission/migrationInventory.test.ts convex/lib/athenaUserAuth.test.ts convex/sharedDemo/policy.test.ts convex/operations/openWorkInventoryReviews.test.ts src/components/operations/OperationsQueueView.test.tsx</code>: 9 files, 113 tests passed.</li>
+      <li><code>bunx vitest run scripts/convex-operation-admission-check.test.ts</code>: 9 tests passed.</li>
+      <li><code>bun scripts/convex-operation-admission-check.ts</code>: passed with 228 public mutations, 1 definition, 227 legacy exemptions.</li>
+      <li><code>cd packages/athena-webapp && bunx tsc --noEmit -p tsconfig.json</code>: passed.</li>
+      <li><code>bun run pr:athena</code>: passed after rebasing on <code>origin/main</code>; proof recorded in the repo-local delivery-run ledger.</li>
+      <li><code>bun run --filter '@athena/webapp' audit:convex</code> and <code>lint:convex:changed</code>: passed earlier in this delivery pass.</li>
+      <li><code>bun run pre-commit:generated-artifacts</code>: passed and refreshed Convex API plus graphify artifacts.</li>
+      <li>Accidental broad root test command ran the full Athena webapp suite: 651 files and 6714 tests passed; the command failed only after forwarding a root checker path to storefront where no matching test exists.</li>
+      <li>Multi-lens reviewers reached unanimous approval: security, correctness, testing, and project standards.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Subagent Evidence</h2>
+    <ul>
+      <li>Security reviewer: approved; no blocking auth/authz issue found in the rail, adapter, catalog move, or proving mutation.</li>
+      <li>Correctness reviewer: initially found that definitions alone did not prove wrapper usage; approved after the checker was tightened.</li>
+      <li>Testing reviewer: initially requested exported-handler, denial-branch, and checker-branch tests; approved after those tests were added.</li>
+      <li>Project standards reviewer: requested package-relative focused-test documentation; approved after README correction and confirmed root checkout cleanliness.</li>
+      <li>Session evidence agent: confirmed delivery-candidate status, scope boundaries, and the durable lesson that capability declarations are not runtime enforcement.</li>
+      <li>Diff analysis agent: mapped the staged diff, before/after architecture, behavior boundaries, generated artifacts, and intentionally unchanged work.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Status</h2>
+    <table>
+      <tbody>
+        <tr><th>PR</th><td>Pending. This report is part of the candidate branch before PR creation.</td></tr>
+        <tr><th>Merge</th><td>Pending. Finish line is an open, mergeable PR, not a merge.</td></tr>
+        <tr><th>Deployment</th><td>Not applicable for this request.</td></tr>
+        <tr><th>Root checkout</th><td>Root was checked clean after earlier leakage was removed; active work is in `/Users/kwamina/athena-operation-admission-rail`.</td></tr>
+        <tr><th>Linear</th><td>Foundation/proving work maps to V26-1093, V26-1094, and V26-1095. Wider write migration and legacy cleanup remain tracked follow-up scope under V26-1096 and V26-1097.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="quiz">
+    <h2>Quiz: Pass Required</h2>
+    <p>Pass threshold: 8/10. The quiz checks the operational boundaries future migrations must preserve.</p>
+    <form id="changeQuiz"></form>
+    <div class="quiz-actions">
+      <button type="button" id="gradeQuiz">Grade Quiz</button>
+      <button type="button" class="secondary" id="resetQuiz">Reset</button>
+    </div>
+    <div class="result" id="quizResult" aria-live="polite">Select answers, then grade the quiz.</div>
+  </section>
+</main>
+
+<script>
+const questions = [
+  {
+    q: "What does the operation admission rail decide before a public write runs?",
+    a: ["Only whether the user can see the UI control", "Actor, capability, scope, readiness, and effect posture", "Whether Convex generated types are up to date"],
+    correct: 1,
+    why: "Admission is an exported-mutation boundary that resolves actor policy before domain writes."
+  },
+  {
+    q: "Why was the capability catalog moved out of sharedDemo?",
+    a: ["Because shared demo no longer needs capabilities", "Because capabilities are Athena-wide platform vocabulary", "Because platform code cannot import shared demo tests"],
+    correct: 1,
+    why: "Shared demo consumes the catalog; it should not own the platform capability source of truth."
+  },
+  {
+    q: "What proves a migrated public mutation is really admitted?",
+    a: ["It has a matching operation definition and its handler uses admitPublicMutation", "It is listed in README.md", "It has a capability string in a test fixture"],
+    correct: 0,
+    why: "The checker now rejects definition-covered mutations that still use raw handlers."
+  },
+  {
+    q: "What happens when a recognized shared-demo principal is denied by adapter policy?",
+    a: ["It falls through to normal auth", "It receives a stable demo denial before normal auth runs", "It gets a temporary full-admin membership"],
+    correct: 1,
+    why: "Recognized demo principals must not escape into normal auth fallback."
+  },
+  {
+    q: "Which operation is the proving mutation in this candidate?",
+    a: ["pos/public/transactions:completeTransaction", "operations/openWorkInventoryReviews:resolveSyncedSaleInventoryReviewGroup", "sharedDemo/public:requestManualRestore"],
+    correct: 1,
+    why: "The Operations Queue synced-sale inventory review group resolver is the first migrated write."
+  },
+  {
+    q: "What does expectedDemoRestoreEpoch protect?",
+    a: ["A stale shared-demo write during or after restore", "A duplicate SKU barcode", "A missing organization member role"],
+    correct: 0,
+    why: "The adapter checks restore readiness and epoch before letting demo writes proceed."
+  },
+  {
+    q: "What remains intentionally unchanged?",
+    a: ["All public reads and unmigrated helper-only write paths", "The first proving mutation's exported handler", "The platform capability catalog location"],
+    correct: 0,
+    why: "Reads and most writes are out of this first slice and remain tracked in exact legacy exemptions."
+  },
+  {
+    q: "Where should future actor-specific policy live?",
+    a: ["Inside every React button", "Inside operation adapters", "Inside graphify generated files"],
+    correct: 1,
+    why: "The generic rail stays neutral while adapters own actor-specific policy."
+  },
+  {
+    q: "What is the current finish-line status represented by this report?",
+    a: ["Merged and deployed", "Delivery candidate before PR creation", "Production hotfix already applied"],
+    correct: 1,
+    why: "The report is created before PR opening; merge and deploy are not claimed."
+  },
+  {
+    q: "What should happen before removing a mutation from the legacy inventory?",
+    a: ["Add a definition and wrap the exported mutation handler", "Delete its tests", "Move it under sharedDemo"],
+    correct: 0,
+    why: "Legacy exemption removal is only safe when runtime admission is structurally enforced."
+  }
+];
+
+const form = document.getElementById("changeQuiz");
+questions.forEach((question, index) => {
+  const block = document.createElement("div");
+  block.className = "quiz-question";
+  const title = document.createElement("h3");
+  title.textContent = `${index + 1}. ${question.q}`;
+  block.appendChild(title);
+  question.a.forEach((answer, answerIndex) => {
+    const label = document.createElement("label");
+    const input = document.createElement("input");
+    input.type = "radio";
+    input.name = `q${index}`;
+    input.value = String(answerIndex);
+    label.appendChild(input);
+    label.append(` ${answer}`);
+    block.appendChild(label);
+  });
+  const explanation = document.createElement("p");
+  explanation.id = `explain${index}`;
+  explanation.hidden = true;
+  block.appendChild(explanation);
+  form.appendChild(block);
+});
+
+document.getElementById("gradeQuiz").addEventListener("click", () => {
+  let score = 0;
+  questions.forEach((question, index) => {
+    const selected = form.querySelector(`input[name="q${index}"]:checked`);
+    const block = form.children[index];
+    const explanation = document.getElementById(`explain${index}`);
+    const selectedValue = selected ? Number(selected.value) : -1;
+    const isCorrect = selectedValue === question.correct;
+    if (isCorrect) score += 1;
+    block.classList.toggle("correct", isCorrect);
+    block.classList.toggle("incorrect", !isCorrect);
+    explanation.hidden = false;
+    explanation.textContent = `${isCorrect ? "Correct." : "Review this."} ${question.why}`;
+  });
+  const passed = score >= 8;
+  const result = document.getElementById("quizResult");
+  result.textContent = `${score}/10 ${passed ? "passed" : "not yet passing"}. Pass threshold is 8/10.`;
+  result.className = `result ${passed ? "correct" : "incorrect"}`;
+});
+
+document.getElementById("resetQuiz").addEventListener("click", () => {
+  form.reset();
+  questions.forEach((_, index) => {
+    const block = form.children[index];
+    block.classList.remove("correct", "incorrect");
+    document.getElementById(`explain${index}`).hidden = true;
+  });
+  const result = document.getElementById("quizResult");
+  result.textContent = "Select answers, then grade the quiz.";
+  result.className = "result";
+});
+</script>
+</body>
+</html>

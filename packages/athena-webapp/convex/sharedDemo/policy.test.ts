@@ -14,7 +14,7 @@ import {
 import {
   ATHENA_CAPABILITY_CATALOG,
   SHARED_DEMO_ALLOWED_CAPABILITIES,
-} from "./capabilityCatalog";
+} from "../platform/capabilityCatalog";
 
 describe("shared demo policy", () => {
   it("keeps the demo allowlist separate from Athena's complete capability catalog", () => {
@@ -102,11 +102,11 @@ describe("shared demo policy", () => {
     expect(live).not.toHaveBeenCalled();
   });
 
-  it("keeps the classification registry complete and unique", () => {
+  it("keeps the legacy shared-demo classification registry complete and unique until operationAdmission owns structural coverage", () => {
     expect(validateSharedDemoCoverage()).toEqual([]);
   });
 
-  it("maps every classification to an actual exported Convex function", () => {
+  it("maps every legacy representative classification to an actual exported Convex function", () => {
     for (const entry of SHARED_DEMO_PUBLIC_FUNCTION_INVENTORY) {
       const [moduleName, exportName] = entry.functionName.split(":");
       const source = readFileSync(

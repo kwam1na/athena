@@ -8,6 +8,14 @@ import {
 } from "../_generated/server";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import {
+  createNormalUserOperationAdapter,
+  resolveOperationAdmission,
+} from "../operationAdmission/adapters";
+import { resolveSyncedSaleInventoryReviewGroupOperationDefinition } from "../operationAdmission/definitions";
+import { admitPublicMutation } from "../operationAdmission/publicMutation";
+import type { OperationMutationCtx } from "../operationAdmission/types";
+import { createSharedDemoOperationAdapter } from "../sharedDemo/operationAdapter";
+import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
@@ -190,6 +198,7 @@ type ResolveSyncedSaleInventoryReviewData = {
 };
 
 type ResolveSyncedSaleInventoryReviewGroupArgs = {
+  expectedDemoRestoreEpoch?: number;
   expectedMemberIds: Array<Id<"operationalWorkItem">>;
   groupKey: string;
   outcome: SyncedSaleInventoryReviewOutcome;
@@ -848,9 +857,7 @@ export async function resolveSyncedSaleInventoryReviewGroupWithCtx(
   }
 
   const [athenaUser, store] = await Promise.all([
-    requireAuthenticatedAthenaUserWithCtx(ctx, {
-      sharedDemoCapability: "daily_operations.write",
-    }),
+    getOperationAdmissionAthenaUserOrRequireAuth(ctx),
     ctx.db.get("store", args.storeId),
   ]);
   if (!store) {
@@ -1023,6 +1030,7 @@ export const resolveSyncedSaleInventoryReview = internalMutation({
 
 export const resolveSyncedSaleInventoryReviewGroup = mutation({
   args: {
+    expectedDemoRestoreEpoch: v.optional(v.number()),
     expectedMemberIds: v.array(v.id("operationalWorkItem")),
     groupKey: v.string(),
     outcome: syncedSaleInventoryReviewOutcomeValidator,
@@ -1030,5 +1038,32 @@ export const resolveSyncedSaleInventoryReviewGroup = mutation({
     storeId: v.id("store"),
   },
   returns: commandResultValidator(v.any()),
-  handler: resolveSyncedSaleInventoryReviewGroupWithCtx,
+  handler: admitPublicMutation(
+    resolveSyncedSaleInventoryReviewGroupOperationDefinition,
+    resolveSyncedSaleInventoryReviewGroupWithCtx,
+    {
+      resolveAdmission: (ctx, args, definition) =>
+        resolveOperationAdmission(ctx, args, definition, {
+          normalAdapter: createNormalUserOperationAdapter(),
+          sharedDemoAdapter: createSharedDemoOperationAdapter(),
+        }),
+    },
+  ),
 });
+
+async function getOperationAdmissionAthenaUserOrRequireAuth(ctx: MutationCtx) {
+  const operationAdmission = (ctx as Partial<OperationMutationCtx>)
+    .operationAdmission;
+  if (operationAdmission?.actor.kind !== "shared_demo") {
+    return requireAuthenticatedAthenaUserWithCtx(ctx);
+  }
+
+  const athenaUser = await ctx.db.get(
+    "athenaUser",
+    operationAdmission.actor.athenaUserId,
+  );
+  if (!athenaUser) {
+    throw new Error("Sign in again to continue.");
+  }
+  return athenaUser;
+}
