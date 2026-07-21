@@ -370,7 +370,7 @@ Run these when bootstrap, generated router state, or package build configuration
 
 ## Storybook and frontend tooling edits
 
-Touched surfaces: `.storybook`, `index.html`, `src/stories`, `src/index.css`, `src/design-system-build-config.test.ts`, `tailwind.config.js`, `postcss.config.js`, `package.json`, `README.md`, `eslint.config.js`, `scripts/frontend-lint-changed.sh`, `.gitignore`
+Touched surfaces: `.storybook`, `index.html`, `src/stories`, `src/index.css`, `src/design-system-build-config.test.ts`, `tailwind.config.js`, `postcss.config.js`, `package.json`, `README.md`, `eslint.config.js`, `scripts/frontend-lint-changed.sh`, `scripts/capture-operations-shot.mjs`, `.gitignore`
 
 Run:
 
@@ -378,5 +378,5 @@ Run:
 - `bun run --filter '@athena/webapp' build`
 - `bun run --filter '@athena/webapp' storybook:build`
 
-Use this when the document shell, Storybook config, story files, or package-level frontend tooling changes need isolated validation.
+Use this when the document shell, Storybook config, story files, package-level frontend tooling, or the operations screenshot capture script changes need isolated validation.
 

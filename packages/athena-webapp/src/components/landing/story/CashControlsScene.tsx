@@ -5,12 +5,13 @@ import { CashControlsDashboardContent } from "@/components/cash-controls/CashCon
 
 import { demoStore } from "./demoDay";
 import { cashDashboardSnapshot } from "./demoDayFixtures";
-import { AppShellExhibit, WorkspaceExhibit } from "./SceneChrome";
+import { WorkspaceExhibit } from "./SceneChrome";
 import { useSceneAnimation } from "./useSceneAnimation";
 
-// The real Cash Controls dashboard at closeout: the product's
-// CashControlsDashboardContent rendering the story day's closed register
-// session, its approved variance, and the recorded deposit.
+// The real Cash Controls dashboard at closeout, rendered chromeless (no app
+// shell) so it sits full-width against the section like the captured workspace
+// shots: the story day's closed register session, its approved variance, and the
+// recorded deposit.
 export function CashControlsScene() {
   const rootRef = useSceneAnimation(
     useCallback((root: HTMLElement) => {
@@ -24,28 +25,24 @@ export function CashControlsScene() {
     }, []),
   );
 
-  // Presented the way the owner uses it: the real dashboard inside a browser
-  // window wearing the app's shell.
   return (
-    <div ref={rootRef}>
-      <AppShellExhibit
-        activeRailIcon="cash"
-        ariaLabel="The Cash Controls dashboard mid-closeout, shown in the app as the owner sees it: the register session in review with its five-cedi shortage surfaced and the closeout deposit recorded."
-        zoom={0.9}
-      >
-        <WorkspaceExhibit>
-          <div data-cash-embed>
-            <CashControlsDashboardContent
-              currency={demoStore.currency}
-              dashboardSnapshot={cashDashboardSnapshot}
-              hasFinancialDetailsAccess
-              isLoading={false}
-              orgUrlSlug="demo"
-              storeUrlSlug="central"
-            />
-          </div>
-        </WorkspaceExhibit>
-      </AppShellExhibit>
+    <div
+      ref={rootRef}
+      aria-label="The Cash Controls dashboard mid-closeout: the register session in review with its five-cedi shortage surfaced and the closeout deposit recorded."
+      className="w-full"
+    >
+      <WorkspaceExhibit>
+        <div data-cash-embed>
+          <CashControlsDashboardContent
+            currency={demoStore.currency}
+            dashboardSnapshot={cashDashboardSnapshot}
+            hasFinancialDetailsAccess
+            isLoading={false}
+            orgUrlSlug="demo"
+            storeUrlSlug="central"
+          />
+        </div>
+      </WorkspaceExhibit>
     </div>
   );
 }

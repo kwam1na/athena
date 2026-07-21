@@ -11,17 +11,17 @@ export const SHARED_DEMO_STORE_IDENTITY = {
 
 export const SHARED_DEMO_STAFF_STORY = {
   cashier: {
-    firstName: "Efua",
-    fullName: "Efua Tetteh",
+    firstName: "Afua",
+    fullName: "Afua Okyere",
     jobTitle: "Cashier",
-    lastName: "Tetteh",
-    username: "efua",
+    lastName: "Okyere",
+    username: "afua",
   },
   manager: {
     firstName: "Kwabena",
-    fullName: "Kwabena Osei",
+    fullName: "Kwabena Agyei",
     jobTitle: "Studio Manager",
-    lastName: "Osei",
+    lastName: "Agyei",
     username: "kay",
   },
   owner: {
@@ -35,7 +35,15 @@ export const SHARED_DEMO_STAFF_STORY = {
 export const SHARED_DEMO_TERMINAL_DISPLAY_NAME = "Studio Front Register";
 
 export const SHARED_DEMO_OPENING_MESSAGE =
-  "Efua: Morning studio count is complete. The pickup order is ready at the counter.";
+  "Afua: Morning studio count is complete. The pickup order is ready at the counter.";
+
+/** "Afua O." — the abbreviated display form fixtures and screenshots use. */
+export function sharedDemoStaffShortName(staff: {
+  firstName: string;
+  lastName: string;
+}) {
+  return `${staff.firstName} ${staff.lastName.charAt(0)}.`;
+}
 
 export const SHARED_DEMO_CATEGORY = {
   name: "Handmade",

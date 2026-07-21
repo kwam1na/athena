@@ -471,7 +471,7 @@ describe("useExpenseRegisterViewModel", () => {
       ...terminalMocks.terminal,
       sharedDemoStaff: {
         activeRoles: ["cashier"],
-        displayName: "Efua Tetteh",
+        displayName: "Afua Okyere",
         staffProfileId: "staff-demo" as Id<"staffProfile">,
       },
     };

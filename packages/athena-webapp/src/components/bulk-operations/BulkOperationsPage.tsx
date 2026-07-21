@@ -7,9 +7,14 @@ import { BulkOperationsFilters } from "./BulkOperationsFilters";
 import { BulkOperationsPreview } from "./BulkOperationsPreview";
 import View from "../View";
 import { useState, useCallback, useMemo } from "react";
-import { Id } from "~/convex/_generated/dataModel";
 import { EmptyState } from "../states/empty/empty-state";
-import { PackageSearch, SearchX } from "lucide-react";
+import { SearchX } from "lucide-react";
+import { FadeIn } from "../common/FadeIn";
+import {
+  PageLevelHeader,
+  PageWorkspace,
+  PageWorkspaceMain,
+} from "../common/PageLevelHeader";
 
 export default function BulkOperationsPage() {
   const { activeStore } = useGetActiveStore();
@@ -50,7 +55,7 @@ export default function BulkOperationsPage() {
             : undefined,
           filters: { isPriceZero: true },
         }
-      : "skip"
+      : "skip",
   );
 
   // Build a category ID → name lookup from fetched categories
@@ -59,27 +64,15 @@ export default function BulkOperationsPage() {
     return new Map(categories.map((c) => [c._id, c.name]));
   }, [categories]);
 
-  // Collect all unique color IDs from loaded products to resolve names
-  const colorIds = useMemo(() => {
-    if (!products) return [];
-    const ids = new Set<Id<"color">>();
-    for (const product of products) {
-      for (const sku of product.skus) {
-        if (sku.color) ids.add(sku.color);
-      }
-    }
-    return Array.from(ids);
-  }, [products]);
-
   // Fetch color details for all referenced colors
   const colors = useQuery(
     api.inventory.colors.getAll,
-    activeStore?._id ? { storeId: activeStore._id } : "skip"
+    activeStore?._id ? { storeId: activeStore._id } : "skip",
   );
 
   const colorMap = useMemo(() => {
     if (!colors) return new Map<string, string>();
-    return new Map(colors.map((c: any) => [c._id, c.name]));
+    return new Map(colors.map((c) => [c._id, c.name]));
   }, [colors]);
 
   // When products arrive from the query, process them into the hook
@@ -93,7 +86,7 @@ export default function BulkOperationsPage() {
   const filteredProducts = productsLoaded
     ? filterParams.nameSearch
       ? products.filter((p) =>
-          p.name.toLowerCase().includes(filterParams.nameSearch!.toLowerCase())
+          p.name.toLowerCase().includes(filterParams.nameSearch!.toLowerCase()),
         )
       : products
     : null;
@@ -132,61 +125,61 @@ export default function BulkOperationsPage() {
       loadSkus([]);
       setFilterParams({ categorySlug, nameSearch });
     },
-    [loadSkus]
+    [loadSkus],
   );
 
   return (
-    <View
-      hideBorder
-      hideHeaderBottomBorder
-      header={
-        <div className="container mx-auto flex gap-2">
-          <div className="flex items-center gap-8">
-            <p className="font-medium">Bulk Operations</p>
-          </div>
-        </div>
-      }
-    >
-      <div className="container mx-auto space-y-6 py-6">
-        <BulkOperationsFilters
-          operation={operation}
-          operationValue={operationValue}
-          validationError={validationError}
-          skuCount={skus.length}
-          hasPreview={hasPreview}
-          onOperationChange={setOperation}
-          onOperationValueChange={setOperationValue}
-          onLoadProducts={handleLoadProductsWithReset}
-          onCalculatePreview={calculatePreview}
-          isLoading={isLoading}
-        />
-
-        {(noProductsFound || productsLoadedButNoSkus) && (
-          <EmptyState
-            icon={<SearchX className="w-10 h-10" />}
-            title="No products found"
-            description={
-              filterParams?.nameSearch
-                ? `No products matching "${filterParams.nameSearch}" were found. Try adjusting your filters.`
-                : "No products matched your filters. Try selecting a different category or clearing your filters."
-            }
+    <View hideBorder hideHeaderBottomBorder scrollMode="page">
+      <FadeIn className="container mx-auto py-layout-xl">
+        <PageWorkspace>
+          <PageLevelHeader
+            eyebrow="Catalog Ops"
+            title="Bulk operations"
+            description="Load a product set, preview the price change, and apply it only after reviewing the affected SKUs."
           />
-        )}
 
-        {hasPreview && previewRows.length > 0 && (
-          <BulkOperationsPreview
-            previewRows={previewRows}
-            excludedSkuIds={excludedSkuIds}
-            selectedCount={selectedPreviewRows.length}
-            validSelectedCount={validSelectedRows.length}
-            isApplying={isApplying}
-            onToggleExclusion={toggleSkuExclusion}
-            onSelectAll={selectAll}
-            onDeselectAll={deselectAll}
-            onApply={applyChanges}
-          />
-        )}
-      </div>
+          <PageWorkspaceMain>
+            <BulkOperationsFilters
+              operation={operation}
+              operationValue={operationValue}
+              validationError={validationError}
+              skuCount={skus.length}
+              hasPreview={hasPreview}
+              onOperationChange={setOperation}
+              onOperationValueChange={setOperationValue}
+              onLoadProducts={handleLoadProductsWithReset}
+              onCalculatePreview={calculatePreview}
+              isLoading={isLoading}
+            />
+
+            {(noProductsFound || productsLoadedButNoSkus) && (
+              <EmptyState
+                icon={<SearchX className="w-10 h-10" />}
+                title="No products found"
+                description={
+                  filterParams?.nameSearch
+                    ? `No products matching "${filterParams.nameSearch}" were found. Try adjusting your filters.`
+                    : "No products matched your filters. Try selecting a different category or clearing your filters."
+                }
+              />
+            )}
+
+            {hasPreview && previewRows.length > 0 && (
+              <BulkOperationsPreview
+                previewRows={previewRows}
+                excludedSkuIds={excludedSkuIds}
+                selectedCount={selectedPreviewRows.length}
+                validSelectedCount={validSelectedRows.length}
+                isApplying={isApplying}
+                onToggleExclusion={toggleSkuExclusion}
+                onSelectAll={selectAll}
+                onDeselectAll={deselectAll}
+                onApply={applyChanges}
+              />
+            )}
+          </PageWorkspaceMain>
+        </PageWorkspace>
+      </FadeIn>
     </View>
   );
 }

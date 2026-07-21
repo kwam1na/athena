@@ -522,7 +522,7 @@ describe("POSRegisterOpeningGuard", () => {
 
     expect(screen.getByText("Demo staff sign-in")).toBeInTheDocument();
     expect(screen.getByText("kay")).toBeInTheDocument();
-    expect(screen.getByText("efua")).toBeInTheDocument();
+    expect(screen.getByText("afua")).toBeInTheDocument();
     expect(screen.getByText("1111")).toBeInTheDocument();
 
     await act(async () => {

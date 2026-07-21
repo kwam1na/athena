@@ -51,18 +51,20 @@ export function BulkOperationsFilters({
   };
 
   return (
-    <div className="space-y-6 p-6 border rounded-lg">
-      <div>
-        <h3 className="text-lg font-medium">Bulk Price Update</h3>
-        <p className="text-sm text-muted-foreground mt-1">
+    <section className="space-y-layout-lg rounded-lg border border-border bg-surface p-layout-md shadow-surface md:p-layout-lg">
+      <div className="space-y-1 border-b border-border pb-layout-md">
+        <h2 className="text-xl font-semibold text-foreground">
+          Bulk price update
+        </h2>
+        <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
           Filter products, choose an operation, and preview changes before
           applying.
         </p>
       </div>
 
       {/* Filters Row */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="space-y-2">
+      <div className="flex flex-col gap-layout-md md:flex-row md:items-end">
+        <div className="w-full space-y-layout-xs md:w-52">
           <Label>Category</Label>
           <Select
             value={categorySlug || "all"}
@@ -82,7 +84,7 @@ export function BulkOperationsFilters({
           </Select>
         </div>
 
-        <div className="space-y-2">
+        <div className="w-full space-y-layout-xs md:w-72">
           <Label>Product name</Label>
           <Input
             placeholder="Search by name..."
@@ -91,11 +93,10 @@ export function BulkOperationsFilters({
           />
         </div>
 
-        <div className="space-y-2">
-          <Label className="invisible">Action</Label>
+        <div className="flex flex-col justify-end">
           <Button
             onClick={handleLoadProducts}
-            className="w-full"
+            className="w-full md:w-auto"
             disabled={isLoading}
           >
             {isLoading ? (
@@ -112,8 +113,8 @@ export function BulkOperationsFilters({
 
       {/* Operation Row — only show after products are loaded */}
       {skuCount > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-4 border-t">
-          <div className="space-y-2">
+        <div className="flex flex-col gap-layout-md border-t border-border pt-layout-lg md:flex-row md:items-start">
+          <div className="w-full space-y-layout-xs md:w-44">
             <Label>Target field</Label>
             <Select value="price" disabled>
               <SelectTrigger>
@@ -125,7 +126,7 @@ export function BulkOperationsFilters({
             </Select>
           </div>
 
-          <div className="space-y-2">
+          <div className="w-full space-y-layout-xs md:w-64">
             <Label>Operation</Label>
             <Select
               value={operation}
@@ -144,7 +145,7 @@ export function BulkOperationsFilters({
             </Select>
           </div>
 
-          <div className="space-y-2">
+          <div className="w-full space-y-layout-xs md:w-48">
             <Label>Value</Label>
             <Input
               type="number"
@@ -159,11 +160,10 @@ export function BulkOperationsFilters({
             )}
           </div>
 
-          <div className="space-y-2">
-            <Label className="invisible">Action</Label>
+          <div className="flex flex-col justify-end pt-6">
             <Button
               onClick={onCalculatePreview}
-              className="w-full"
+              className="w-full md:w-auto"
               disabled={!operationValue || !!validationError}
               variant={hasPreview ? "outline" : "default"}
             >
@@ -174,10 +174,10 @@ export function BulkOperationsFilters({
       )}
 
       {skuCount > 0 && (
-        <p className="text-sm text-muted-foreground">
+        <p className="border-t border-border pt-layout-md text-sm text-muted-foreground">
           {skuCount} SKU{skuCount !== 1 ? "s" : ""} loaded
         </p>
       )}
-    </div>
+    </section>
   );
 }

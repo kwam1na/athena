@@ -20,7 +20,7 @@ describe("shared demo public contract", () => {
       storeId: "store-1",
       staff: {
         activeRoles: ["cashier"],
-        displayName: "Efua Tetteh",
+        displayName: "Afua Okyere",
         staffProfileId: "staff-1",
       },
       terminal: {
@@ -53,7 +53,7 @@ describe("shared demo public contract", () => {
         staffProfileId: "staff-manager",
         status: "active",
       },
-      managerDisplayName: "Kwabena Osei",
+      managerDisplayName: "Kwabena Agyei",
       openedAt: 1,
       operatingDate: "2026-07-14",
       registerNumber: "213305",
@@ -85,7 +85,7 @@ describe("shared demo public contract", () => {
         staffProfiles: [
           {
             _id: "staff-1",
-            fullName: "Efua Tetteh",
+            fullName: "Afua Okyere",
             staffCode: "DEMO-001",
             status: "active",
             storeId: "store-1",

@@ -122,6 +122,10 @@ export const openedByAthenaFixture: DailyOpeningViewContentProps = {
   isLoadingAccess: false,
   isLoadingSnapshot: false,
   isStarting: false,
+  // The operating-date trigger renders `disabled={disabled || !onChange}`, so a
+  // handler must be present for the control to look live. A fixture has nowhere to
+  // navigate, so this is a no-op that only keeps the trigger enabled.
+  onOperatingDateChange: () => {},
   onStartDay: async () => ({ data: undefined, kind: "ok" }),
   orgUrlSlug: ORG_URL_SLUG,
   storeId: STORE_ID,
@@ -156,9 +160,140 @@ export const openedByAthenaFixture: DailyOpeningViewContentProps = {
     startAt: DAY_START,
     startedOpening: {
       actorType: "automation",
-      notes: "Opened automatically by Athena.",
+      notes: null,
       reviewEvidence: [kenteCarryForwardItem],
       startedAt: OPENED_AT,
+      startedByStaffName: null,
+    },
+    status: "started",
+    summary: {
+      blockerCount: 0,
+      carryForwardCount: 1,
+      readyCount: 1,
+      reviewCount: 0,
+    },
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Wednesday morning — the opening that precedes the mid-week Daily Operations
+// hero shot (see `dailyOperationsFixtures.ts` `busy-wednesday`). Athena opened
+// the store day at 9:34 AM, matching that shot's automation band. Self-contained
+// dates so it doesn't repurpose the shared Saturday story.
+// ---------------------------------------------------------------------------
+
+const WED_OPERATING_DATE = "2026-07-15";
+const WED_PRIOR_OPERATING_DATE = "2026-07-14";
+const WED_DAY_START = new Date(2026, 6, 15, 0, 0).getTime();
+const WED_DAY_END = new Date(2026, 6, 16, 0, 0).getTime();
+const wedAt = (hour: number, minute: number) =>
+  new Date(2026, 6, 15, hour, minute).getTime();
+
+/** Just after 9:34 AM, when Athena opened the mid-week day. */
+export const WEDNESDAY_OPENED_CLOCK = new Date(2026, 6, 15, 9, 40);
+
+const WED_OPENED_AT = wedAt(9, 34);
+const WED_PRIOR_CLOSED_AT = new Date(2026, 6, 14, 20, 40).getTime();
+const WED_KENTE_OPEN_SINCE = new Date(2026, 6, 14, 19, 15).getTime();
+
+const wednesdayPriorCloseReadyItem: DailyOpeningItem = {
+  category: "prior_close",
+  id: "daily_close:prior:completed",
+  key: "daily_close:prior:completed",
+  link: {
+    label: "View EOD Review",
+    params: LINK_PARAMS,
+    search: { operatingDate: WED_PRIOR_OPERATING_DATE },
+    to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
+  },
+  message: "The prior store day has a completed end of day review.",
+  metadata: {
+    completedAt: WED_PRIOR_CLOSED_AT,
+    operatingDate: WED_PRIOR_OPERATING_DATE,
+  },
+  severity: "ready",
+  subject: {
+    id: "daily_close:prior",
+    label: `EOD Review ${WED_PRIOR_OPERATING_DATE}`,
+    type: "daily_close",
+  },
+  title: "Prior EOD Review completed",
+};
+
+const wednesdayKenteCarryForwardItem: DailyOpeningItem = {
+  category: "carry_forward",
+  id: "carry_forward_group:0",
+  key: "carry_forward_group:0",
+  link: {
+    label: "View open work",
+    params: LINK_PARAMS,
+    to: "/$orgUrlSlug/store/$storeUrlSlug/operations/open-work",
+  },
+  message:
+    "This unresolved prior-close work group must be acknowledged for Opening.",
+  metadata: {
+    memberCount: 1,
+    oldestActionableAt: WED_KENTE_OPEN_SINCE,
+    priority: KENTE_CARRY_FORWARD.priority,
+    sourceCount: 1,
+    status: KENTE_CARRY_FORWARD.status,
+    type: KENTE_CARRY_FORWARD.workItemType,
+  },
+  severity: "carry_forward",
+  subject: {
+    id: KENTE_CARRY_FORWARD.groupKey,
+    label: KENTE_CARRY_FORWARD.title,
+    type: "logical_operational_work_group",
+  },
+  title: KENTE_CARRY_FORWARD.title,
+};
+
+export const wednesdayOpeningFixture: DailyOpeningViewContentProps = {
+  currency: "GHS",
+  hasFullAdminAccess: true,
+  isAuthenticated: true,
+  isLoadingAccess: false,
+  isLoadingSnapshot: false,
+  isStarting: false,
+  // Keep the operating-date trigger enabled (see openedByAthenaFixture).
+  onOperatingDateChange: () => {},
+  onStartDay: async () => ({ data: undefined, kind: "ok" }),
+  orgUrlSlug: ORG_URL_SLUG,
+  storeId: STORE_ID,
+  storeUrlSlug: STORE_URL_SLUG,
+  snapshot: {
+    automationStatus: {
+      bucket: "action_taken",
+      id: "auto-opening-0715",
+      occurredAt: WED_OPENED_AT,
+      outcome: "applied",
+      reviewEvidence: [wednesdayKenteCarryForwardItem],
+    },
+    blockers: [],
+    carryForwardItems: [wednesdayKenteCarryForwardItem],
+    endAt: WED_DAY_END,
+    operatingDate: WED_OPERATING_DATE,
+    priorClose: {
+      completedAt: WED_PRIOR_CLOSED_AT,
+      completedByStaffName: DEMO_STAFF.manager,
+      notes: null,
+      operatingDate: WED_PRIOR_OPERATING_DATE,
+    },
+    readiness: {
+      blockerCount: 0,
+      carryForwardCount: 1,
+      readyCount: 1,
+      reviewCount: 0,
+      status: "ready",
+    },
+    readyItems: [wednesdayPriorCloseReadyItem],
+    reviewItems: [],
+    startAt: WED_DAY_START,
+    startedOpening: {
+      actorType: "automation",
+      notes: null,
+      reviewEvidence: [wednesdayKenteCarryForwardItem],
+      startedAt: WED_OPENED_AT,
       startedByStaffName: null,
     },
     status: "started",
@@ -175,6 +310,10 @@ export const openingHandoffFixtures = {
   "opened-by-athena": {
     clock: OPENED_BY_ATHENA_CLOCK,
     props: openedByAthenaFixture,
+  },
+  "wednesday-opening": {
+    clock: WEDNESDAY_OPENED_CLOCK,
+    props: wednesdayOpeningFixture,
   },
 } as const;
 

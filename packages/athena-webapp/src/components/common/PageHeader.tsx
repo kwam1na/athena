@@ -118,7 +118,9 @@ export const ComposedPageHeader = ({
   return (
     <PageHeader width={width} className={className}>
       <FadeIn className="flex min-w-0 flex-1 items-center gap-4">
-        {o && (
+        {/* An explicit handler always shows the control; the `o` origin param
+            covers navigation-driven entries. */}
+        {(o || onNavigateBack) && (
           <Button
             aria-label="Go back"
             onClick={onNavigateBack ? onNavigateBack : navigateBack}

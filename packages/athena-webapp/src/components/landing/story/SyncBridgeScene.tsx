@@ -5,7 +5,7 @@ import { ArrowDown, ArrowRight } from "lucide-react";
 
 import { RegisterSessionActivitySection } from "@/components/cash-controls/RegisterSessionView";
 
-import { drawer, formatDemoMoney, tracedSale } from "./demoDay";
+import { demoStore, drawer, formatDemoMoney, tracedSale } from "./demoDay";
 import {
   bridgeActivity,
   pendingSyncPresentation,
@@ -37,8 +37,14 @@ export function SyncBridgeScene() {
     const expectedCounter = { value: drawer.expectedBeforeSale };
     const timeline = createTimeline({
       autoplay: onScroll({
-        enter: "bottom-=10% top",
-        leave: "center+=20% center",
+        // Start only once roughly two-thirds of the scene is in view — its
+        // top 45% of a viewport above the bottom edge (≈535px of the ~800px
+        // scene at a 1200px viewport) — beginning at first peek played the
+        // hand-off before the reader was looking at it. Finish just past
+        // center. Offsets must sit on the container token; the observer
+        // rejects them on the target token.
+        enter: "bottom-=45% top",
+        leave: "center+=10% center",
         sync: 0.25,
         target: root,
       }),
@@ -98,7 +104,7 @@ export function SyncBridgeScene() {
   return (
     <div
       ref={rootRef}
-      className="grid items-start gap-layout-sm lg:grid-cols-[0.7fr_minmax(5rem,auto)_1.3fr]"
+      className="grid items-start gap-layout-sm lg:grid-cols-[minmax(0,0.55fr)_minmax(4rem,auto)_minmax(0,2fr)] lg:items-center"
     >
       <figure
         aria-label="The completed sale on the register, waiting to sync."
@@ -117,7 +123,7 @@ export function SyncBridgeScene() {
             </span>
           </span>
         </div>
-        <div className="mt-layout-md rounded-md bg-surface p-layout-sm text-sm">
+        <div className="mt-layout-md rounded-md p-layout-sm text-sm">
           <p className="flex items-center justify-between gap-layout-sm">
             <span className="font-medium text-foreground">Receipt #{tracedSale.receiptNumber}</span>
             <span className="font-numeric text-xs text-muted-foreground">{tracedSale.time}</span>
@@ -168,7 +174,14 @@ export function SyncBridgeScene() {
         </div>
         <div data-bridge-books className="mt-layout-md">
           <WorkspaceExhibit>
-            <RegisterSessionActivitySection activity={bridgeActivity} />
+            {/* Slugs + currency make the rows render exactly as in-product:
+                the receipt link chip and the float amount need them. */}
+            <RegisterSessionActivitySection
+              activity={bridgeActivity}
+              currency={demoStore.currency}
+              orgUrlSlug="demo"
+              storeUrlSlug="central"
+            />
           </WorkspaceExhibit>
         </div>
         <p className="mt-layout-md flex items-center justify-between border-t border-border pt-layout-sm text-sm">

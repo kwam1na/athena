@@ -1,7 +1,10 @@
 import type { ComponentProps } from "react";
 
 import type { CashControlsDashboardSnapshot } from "@/components/cash-controls/CashControlsDashboard";
-import { RegisterSessionActivitySection } from "@/components/cash-controls/RegisterSessionView";
+import {
+  RegisterSessionActivitySection,
+  type RegisterSessionSnapshot,
+} from "@/components/cash-controls/RegisterSessionView";
 import type { DailyCloseSnapshot } from "@/components/operations/DailyCloseView";
 import type { StorePulseSummary } from "@/components/store-pulse/StorePulseSummaryView";
 import type { CartItem } from "@/components/pos/types";
@@ -18,6 +21,7 @@ import {
   SHARED_DEMO_PRODUCTS,
   SHARED_DEMO_STAFF_STORY,
   sharedDemoProductBySlug,
+  sharedDemoStaffShortName,
 } from "~/shared/sharedDemoStory";
 
 import {
@@ -34,12 +38,14 @@ import {
 // page. Everything derives from the demoDay story so the fixtures reconcile
 // with the copy around them (see demoDay.test.ts).
 
-export const STORY_OPERATING_DATE = "2026-07-17";
+// The busy Wednesday captured in the operations screenshot fixtures — the
+// same day shown in the landing page's workspace shots.
+export const STORY_OPERATING_DATE = "2026-07-15";
 
 // The story day runs in the demo store's timezone (America/New_York, UTC-4
 // on this date).
 function storyTime(hour: number, minute: number) {
-  return Date.UTC(2026, 6, 17, hour + 4, minute);
+  return Date.UTC(2026, 6, 15, hour + 4, minute);
 }
 
 export const storyMoments = {
@@ -47,9 +53,16 @@ export const storyMoments = {
   closeout: storyTime(17, 40),
   dayEnd: storyTime(24, 0),
   dayStart: storyTime(0, 0),
-  opening: storyTime(8, 47),
+  // Afua opens the drawer at 9:41 AM, a few minutes after Athena starts the
+  // store day at 9:34 (both visible in the captured workspace shots).
+  opening: storyTime(9, 41),
   sale: storyTime(15, 14),
 } as const;
+
+// Register 01's session for the story day. The _id's last six characters
+// surface as the session code in the register session view, so the tail must
+// read like one.
+const STORY_SESSION_ID = "story-register-01-9k4wqz";
 
 // ---------------------------------------------------------------------------
 // Daily Operations · StorePulseSummaryView (mid-morning)
@@ -67,14 +80,17 @@ export const morningTopItems = [
   { name: "Hand-Thrown Clay Mug", productSku: sharedDemoProductBySlug("demo-clay-mug").sku, quantity: 1, totalSales: 9_500 },
 ] as const;
 
+// The week behind the story day, matching the Daily Operations shot's trend
+// (Sun Jul 12 GH₵6,400 · Mon 4,800 · Tue 5,600), with the Wednesday still in
+// its morning state.
 const morningTrend = [
-  { date: "2026-07-11", label: "Jul 11", totalSales: 142_000, totalItemsSold: 19, transactionCount: 11 },
-  { date: "2026-07-12", label: "Jul 12", totalSales: 188_500, totalItemsSold: 24, transactionCount: 13 },
-  { date: "2026-07-13", label: "Jul 13", totalSales: 96_000, totalItemsSold: 12, transactionCount: 7 },
-  { date: "2026-07-14", label: "Jul 14", totalSales: 156_000, totalItemsSold: 21, transactionCount: 12 },
-  { date: "2026-07-15", label: "Jul 15", totalSales: 203_000, totalItemsSold: 27, transactionCount: 15 },
-  { date: "2026-07-16", label: "Jul 16", totalSales: 174_500, totalItemsSold: 22, transactionCount: 12 },
-  { date: STORY_OPERATING_DATE, label: "Jul 17", totalSales: morningSnapshot.netSales, totalItemsSold: morningSnapshot.itemsSold, transactionCount: morningSnapshot.transactions },
+  { date: "2026-07-09", label: "Jul 9", totalSales: 573_000, totalItemsSold: 46, transactionCount: 24 },
+  { date: "2026-07-10", label: "Jul 10", totalSales: 702_000, totalItemsSold: 56, transactionCount: 29 },
+  { date: "2026-07-11", label: "Jul 11", totalSales: 795_000, totalItemsSold: 63, transactionCount: 33 },
+  { date: "2026-07-12", label: "Jul 12", totalSales: 640_000, totalItemsSold: 49, transactionCount: 26 },
+  { date: "2026-07-13", label: "Jul 13", totalSales: 480_000, totalItemsSold: 37, transactionCount: 20 },
+  { date: "2026-07-14", label: "Jul 14", totalSales: 560_000, totalItemsSold: 43, transactionCount: 23 },
+  { date: STORY_OPERATING_DATE, label: "Jul 15", totalSales: morningSnapshot.netSales, totalItemsSold: morningSnapshot.itemsSold, transactionCount: morningSnapshot.transactions },
 ].map((day) => ({
   ...day,
   averageTransaction: Math.round(day.totalSales / day.transactionCount),
@@ -180,8 +196,20 @@ const registerOpenedClassification =
   classifyPosRegisterSessionLocalEventType("register.opened");
 const saleClassification =
   classifyPosRegisterSessionLocalEventType("transaction.completed");
+const sessionStartedClassification =
+  classifyPosRegisterSessionLocalEventType("session.started");
+const cartItemClassification =
+  classifyPosRegisterSessionLocalEventType("cart.item_added");
+const paymentsUpdatedClassification =
+  classifyPosRegisterSessionLocalEventType("session.payments_updated");
 const projectedStatusLabel =
   toPosRegisterSessionActivityStatusLabel("projected");
+// Fine-grained POS events surface as "Reported by terminal" until projection.
+const terminalReportedStatus = {
+  kind: "terminal_reported",
+  label: toPosRegisterSessionActivityStatusLabel("terminal_reported"),
+  tone: "default",
+} as const;
 
 export const bridgeActivity: RegisterSessionActivityFixture = {
   continueCursor: "",
@@ -193,39 +221,129 @@ export const bridgeActivity: RegisterSessionActivityFixture = {
   page: [
     {
       _id: "story-activity-sale",
-      actorStaffName: SHARED_DEMO_STAFF_STORY.cashier.fullName,
+      actorStaffName: sharedDemoStaffShortName(SHARED_DEMO_STAFF_STORY.cashier),
       category: saleClassification?.category ?? "sale",
-      evidenceLinks: [],
+      // The transaction evidence link is what turns the receipt number into
+      // the "#1154 ↗" chip the product renders in the sale row's subheader.
+      evidenceLinks: [
+        {
+          id: "story-txn-1154",
+          label: `#${tracedSale.receiptNumber}`,
+          type: "transaction" as const,
+        },
+      ],
       label: saleClassification?.label ?? "Sale completed",
-      localEventId: "story-evt-0041",
+      localEventId: "story-evt-1154",
       localRegisterSessionId: "story-local-session",
       occurredAt: storyMoments.sale,
       reportedAt: storyMoments.sale + 45_000,
-      sequence: 2,
+      sequence: 6,
       source: "activity_read_model",
       status: { kind: "projected", label: projectedStatusLabel, tone: "success" },
-      summary: `Cash sale · ${tracedSale.items.map((item) => item.name).join(" + ")}`,
+      // The product's read-model summary shape for a completed sale:
+      // "Receipt {n} - {k} sale lines - {p} payment - {method}".
+      summary: `Receipt ${tracedSale.receiptNumber} - ${tracedSale.items.length} sale lines - 1 payment - Cash`,
+      terminalName: "Studio Front Register",
+    },
+    {
+      _id: "story-activity-payment",
+      actorStaffName: sharedDemoStaffShortName(SHARED_DEMO_STAFF_STORY.cashier),
+      category: paymentsUpdatedClassification?.category ?? "payment",
+      evidenceLinks: [],
+      label: paymentsUpdatedClassification?.label ?? "Payment updated",
+      localEventId: "story-evt-1153",
+      localRegisterSessionId: "story-local-session",
+      occurredAt: storyMoments.sale - 30_000,
+      reportedAt: storyMoments.sale - 30_000 + 20_000,
+      sequence: 5,
+      source: "activity_read_model",
+      status: terminalReportedStatus,
+      summary: "1 payment - Cash",
+      terminalName: "Studio Front Register",
+    },
+    {
+      _id: "story-activity-cart-soap",
+      actorStaffName: sharedDemoStaffShortName(SHARED_DEMO_STAFF_STORY.cashier),
+      category: cartItemClassification?.category ?? "cart",
+      evidenceLinks: [],
+      // The product renders cart rows from `item`: "Black Soap Bar · GH₵35 · Qty 1".
+      item: {
+        label: tracedSale.items[1].name,
+        quantity: tracedSale.items[1].quantity,
+        unitPrice: tracedSale.items[1].price,
+      },
+      label: cartItemClassification?.label ?? "Cart item added",
+      localEventId: "story-evt-1152",
+      localRegisterSessionId: "story-local-session",
+      occurredAt: storyMoments.sale - 75_000,
+      reportedAt: storyMoments.sale - 75_000 + 20_000,
+      sequence: 4,
+      source: "activity_read_model",
+      status: terminalReportedStatus,
+      summary: null,
+      terminalName: "Studio Front Register",
+    },
+    {
+      _id: "story-activity-cart-kente",
+      actorStaffName: sharedDemoStaffShortName(SHARED_DEMO_STAFF_STORY.cashier),
+      category: cartItemClassification?.category ?? "cart",
+      evidenceLinks: [],
+      item: {
+        label: tracedSale.items[0].name,
+        quantity: tracedSale.items[0].quantity,
+        unitPrice: tracedSale.items[0].price,
+      },
+      label: cartItemClassification?.label ?? "Cart item added",
+      localEventId: "story-evt-1151",
+      localRegisterSessionId: "story-local-session",
+      occurredAt: storyMoments.sale - 120_000,
+      reportedAt: storyMoments.sale - 120_000 + 20_000,
+      sequence: 3,
+      source: "activity_read_model",
+      status: terminalReportedStatus,
+      summary: null,
+      terminalName: "Studio Front Register",
+    },
+    {
+      _id: "story-activity-session",
+      actorStaffName: sharedDemoStaffShortName(SHARED_DEMO_STAFF_STORY.cashier),
+      category: sessionStartedClassification?.category ?? "session",
+      evidenceLinks: [],
+      label: sessionStartedClassification?.label ?? "POS session started",
+      localEventId: "story-evt-1150",
+      localRegisterSessionId: "story-local-session",
+      // The checkout session begins mid-afternoon — hours after the drawer
+      // opened at 9:41 AM, which stays the oldest row below.
+      occurredAt: storyMoments.sale - 150_000,
+      reportedAt: storyMoments.sale - 150_000 + 20_000,
+      sequence: 2,
+      source: "activity_read_model",
+      status: terminalReportedStatus,
+      summary: null,
       terminalName: "Studio Front Register",
     },
     {
       _id: "story-activity-open",
-      actorStaffName: SHARED_DEMO_STAFF_STORY.cashier.fullName,
+      actorStaffName: sharedDemoStaffShortName(SHARED_DEMO_STAFF_STORY.cashier),
       category: registerOpenedClassification?.category ?? "register",
       evidenceLinks: [],
       label: registerOpenedClassification?.label ?? "Register opened",
       localEventId: "story-evt-0001",
       localRegisterSessionId: "story-local-session",
       occurredAt: storyMoments.opening,
+      // With openingFloat present the product renders the subheader as
+      // "Opening float recorded: GH₵500".
+      openingFloat: drawer.openingFloat,
       reportedAt: storyMoments.opening + 30_000,
       sequence: 1,
       source: "activity_read_model",
       status: { kind: "projected", label: projectedStatusLabel, tone: "success" },
-      summary: "Opening float confirmed",
+      summary: "Opening float recorded",
       terminalName: "Studio Front Register",
     },
   ],
   registerSession: {
-    _id: "story-register-session",
+    _id: STORY_SESSION_ID,
     registerNumber: demoStore.registerNumber,
     terminalName: "Studio Front Register",
   },
@@ -233,14 +351,17 @@ export const bridgeActivity: RegisterSessionActivityFixture = {
     attentionCounts: { ...emptyAttentionCounts },
     categoryCounts: {
       ...emptyCategoryCounts,
+      cart: 2,
+      payment: 1,
       register: 1,
       sale: 1,
+      session: 1,
     },
     coverageState: "reported",
     lastActivityReportedAt: storyMoments.sale + 45_000,
     latestCloudStatusAt: storyMoments.sale + 45_000,
-    reportedThroughSequence: 2,
-    rowCount: 2,
+    reportedThroughSequence: 6,
+    rowCount: 6,
   },
 };
 
@@ -249,20 +370,32 @@ export const bridgeActivity: RegisterSessionActivityFixture = {
 
 // At 5:40 PM the day's drawer is mid-closeout: counted, in review, with the
 // GH₵5 shortage surfaced but not yet approved (EOD Review settles it).
-// Yesterday's session sits in the closed history, priced off the Jul 16 trend.
+// Yesterday's session sits in the closed history, priced off the Jul 14 trend
+// day; its deposit leaves the GH₵500 float that carries into Wednesday.
 const closingSession = {
-  _id: "story-register-session",
+  _id: STORY_SESSION_ID,
   countedCash: drawer.countedCash,
   expectedCash: drawer.expectedCash,
   openedAt: storyMoments.opening,
-  openedByStaffName: SHARED_DEMO_STAFF_STORY.cashier.fullName,
+  openedByStaffName: sharedDemoStaffShortName(SHARED_DEMO_STAFF_STORY.cashier),
   openingFloat: drawer.openingFloat,
+  // The submitted count is GH₵5 short; store policy requires manager signoff
+  // for any variance, so the session waits in "manager approval pending" —
+  // the judgment the EOD Review act then settles. The raw reason is the
+  // backend's stored shape; the view formats the amount to currency.
+  pendingApprovalRequest: {
+    _id: "story-approval-variance",
+    reason: `Manager signoff is required for any register variance (${drawer.variance}).`,
+    requestedByStaffName: sharedDemoStaffShortName(SHARED_DEMO_STAFF_STORY.cashier),
+    status: "pending",
+  },
   registerNumber: demoStore.registerNumber,
   status: "closing",
   terminalName: "Studio Front Register",
   totalDeposited: drawer.depositAmount,
   totalSales: dayTotals.netSales,
   variance: drawer.variance,
+  workflowTraceId: "register_session:story-register-01",
 };
 
 export const cashDashboardSnapshot: CashControlsDashboardSnapshot = {
@@ -273,32 +406,117 @@ export const cashDashboardSnapshot: CashControlsDashboardSnapshot = {
       _id: "story-deposit",
       amount: drawer.depositAmount,
       recordedAt: storyMoments.closeout - 600_000,
-      recordedByStaffName: SHARED_DEMO_STAFF_STORY.manager.fullName,
+      recordedByStaffName: sharedDemoStaffShortName(SHARED_DEMO_STAFF_STORY.manager),
       reference: "Closeout deposit",
       registerNumber: demoStore.registerNumber,
-      registerSessionId: "story-register-session",
+      registerSessionId: STORY_SESSION_ID,
     },
   ],
   registerSessions: [
     closingSession,
     {
       _id: "story-register-session-prev",
-      closedAt: storyMoments.opening - 43_200_000,
-      closedByStaffName: SHARED_DEMO_STAFF_STORY.manager.fullName,
-      countedCash: 116_000,
-      expectedCash: 116_000,
+      // Closed Tuesday 8:12 PM, before the prior EOD Review completed at 8:40
+      // (the completion time visible in the Opening Handoff shot).
+      closedAt: storyTime(20, 12) - 86_400_000,
+      closedByStaffName: sharedDemoStaffShortName(SHARED_DEMO_STAFF_STORY.manager),
+      countedCash: 263_000,
+      expectedCash: 263_000,
       openedAt: storyMoments.opening - 86_400_000,
-      openedByStaffName: SHARED_DEMO_STAFF_STORY.cashier.fullName,
+      openedByStaffName: sharedDemoStaffShortName(SHARED_DEMO_STAFF_STORY.cashier),
       openingFloat: drawer.openingFloat,
       registerNumber: demoStore.registerNumber,
       status: "closed",
       terminalName: "Studio Front Register",
-      totalDeposited: 110_000,
-      totalSales: 174_500,
+      // Deposits everything but the GH₵500 float Wednesday opens with.
+      totalDeposited: 213_000,
+      totalSales: 560_000,
       variance: 0,
     },
   ],
   unresolvedVariances: [closingSession],
+};
+
+// ---------------------------------------------------------------------------
+// Cash Controls · RegisterSessionViewContent (Register 01, mid-closeout)
+
+// The same session the dashboard shows in review, opened up: the day's sales
+// summary and payment mix, the traced sale among the linked transactions, the
+// GH₵5 shortage awaiting judgment, and the closeout deposit already recorded.
+export const registerSessionSnapshot: RegisterSessionSnapshot = {
+  closeoutReview: {
+    hasVariance: true,
+    reason: null,
+    requiresApproval: true,
+    variance: drawer.variance,
+  },
+  deposits: [
+    {
+      _id: "story-deposit",
+      amount: drawer.depositAmount,
+      recordedAt: storyMoments.closeout - 600_000,
+      recordedByStaffName: sharedDemoStaffShortName(SHARED_DEMO_STAFF_STORY.manager),
+      reference: "Closeout deposit",
+      registerSessionId: STORY_SESSION_ID,
+    },
+  ],
+  financialPosition: {
+    averageTransaction: Math.round(dayTotals.netSales / dayTotals.transactions),
+    // Share of session sales value; sums to 100.
+    paymentMix: [
+      { method: "mobile_money", share: 49, total: payments.mobileMoney, transactionCount: 15 },
+      { method: "cash", share: 28, total: payments.cash, transactionCount: 8 },
+      { method: "card", share: 23, total: payments.card, transactionCount: 5 },
+    ],
+    totalSales: dayTotals.netSales,
+    transactionCount: dayTotals.transactions,
+  },
+  itemsBreakdown: topItems.map((item) => ({
+    name: item.name,
+    productSku:
+      SHARED_DEMO_PRODUCTS.find((product) => product.name === item.name)?.sku ??
+      null,
+    quantity: item.quantity,
+    totalSales: item.total,
+  })),
+  registerSession: {
+    ...closingSession,
+    netExpectedCash: drawer.expectedCash,
+  },
+  // The traced 3:14 PM sale beside the two morning sales the Daily Operations
+  // shot's timeline mentions (#1143 and #1149).
+  transactions: [
+    {
+      _id: "story-txn-1154",
+      cashierName: sharedDemoStaffShortName(SHARED_DEMO_STAFF_STORY.cashier),
+      completedAt: storyMoments.sale,
+      itemCount: tracedSale.items.length,
+      paymentMethod: "cash",
+      status: "completed",
+      total: tracedSale.total,
+      transactionNumber: tracedSale.receiptNumber,
+    },
+    {
+      _id: "story-txn-1149",
+      cashierName: sharedDemoStaffShortName(SHARED_DEMO_STAFF_STORY.cashier),
+      completedAt: storyTime(12, 58),
+      hasMultiplePaymentMethods: true,
+      itemCount: 2,
+      status: "completed",
+      total: 42_000,
+      transactionNumber: "1149",
+    },
+    {
+      _id: "story-txn-1143",
+      cashierName: sharedDemoStaffShortName(SHARED_DEMO_STAFF_STORY.cashier),
+      completedAt: storyTime(11, 15),
+      itemCount: 1,
+      paymentMethod: "mobile_money",
+      status: "completed",
+      total: 18_000,
+      transactionNumber: "1143",
+    },
+  ],
 };
 
 // ---------------------------------------------------------------------------
@@ -309,7 +527,7 @@ export const eodSnapshot: DailyCloseSnapshot = {
   carryForwardItems: [
     {
       category: "inventory",
-      description: "4 left after today's sales — restock before tomorrow's opening.",
+      description: "2 left after today's sales — restock before tomorrow's opening.",
       id: "story-carry-kente",
       key: "story-carry-kente",
       severity: "carry_forward",
@@ -371,8 +589,8 @@ export const eodSnapshot: DailyCloseSnapshot = {
     netCashVariance: drawer.variance,
     paymentTotals: [
       { amount: payments.cash, method: "cash", transactionCount: 8 },
-      { amount: payments.card, method: "card", transactionCount: 4 },
-      { amount: payments.mobileMoney, method: "mobile_money", transactionCount: 2 },
+      { amount: payments.card, method: "card", transactionCount: 5 },
+      { amount: payments.mobileMoney, method: "mobile_money", transactionCount: 15 },
     ],
     registerCount: 1,
     salesTotal: dayTotals.netSales,

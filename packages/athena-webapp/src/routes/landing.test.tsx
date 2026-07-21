@@ -76,24 +76,25 @@ describe("landing route", () => {
     render(<Index />);
 
     expect(screen.getByRole("heading", {
-      name: /one person\. a whole store\. fully in view\./i,
+      name: /the day runs itself\. only what matters reaches you\./i,
     })).toBeInTheDocument();
 
     // The five workspace acts, in day order, pinned to timestamps.
-    expect(screen.getAllByText(/8:47 AM/).length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByRole("heading", { name: /start ready, not scrambling/i })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: /one place to stand while the day moves/i })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: /sales don't wait for the internet/i })).toBeInTheDocument();
+    expect(screen.getAllByText(/9:34 AM/).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByRole("heading", { name: /today opens where yesterday closed/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /the whole day's pulse, in one read/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /network drops\. sales don't\./i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /every sale lands twice/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /know what's in every drawer/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /close the day with a clear conscience/i })).toBeInTheDocument();
 
     // The automation reveal pays off the hero's objection.
-    expect(screen.getByRole("heading", { name: /but i'm just one person/i })).toBeInTheDocument();
-    expect(screen.getByText(/you were never running it alone/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /the day didn't run itself/i })).toBeInTheDocument();
+    expect(screen.getByText(/athena did\. it started the opening/i)).toBeInTheDocument();
 
-    // The traced sale reconciles across POS, the sync bridge, and the books.
-    const saleAmounts = screen.getAllByText("GH₵385");
+    // The traced sale reconciles across the receipt, the traveling chip, and
+    // the drawer's expected-cash delta.
+    const saleAmounts = screen.getAllByText(/GH₵385/);
     expect(saleAmounts.length).toBeGreaterThanOrEqual(2);
 
     // Demo is the sole CTA (header, hero, closing band); the walkthrough and
@@ -121,15 +122,24 @@ describe("landing route", () => {
     // workspace components rendered from fixture data.
     render(<Index />);
 
-    expect(screen.getByText(/opening handoff is complete\. the store day is ready to run\./i)).toBeInTheDocument();
-    expect(screen.getByText(/sale completed · receipt #0041 · cash/i)).toBeInTheDocument();
-    expect(screen.getByText(/offline — sales continue/i)).toBeInTheDocument();
+    // Captured workspace shots for the acts that used to be live scenes.
+    expect(screen.getByAltText(/opening handoff workspace/i)).toBeInTheDocument();
+    expect(screen.getByAltText(/daily operations workspace:/i)).toBeInTheDocument();
+    expect(screen.getByAltText(/pending sync/i)).toBeInTheDocument();
+    expect(screen.getByAltText(/'synced'/i)).toBeInTheDocument();
+    expect(screen.getByAltText(/eod review workspace/i)).toBeInTheDocument();
+
+    // Sync bridge: the traced sale travels from the register into the books.
+    expect(screen.getByText(/receipt #1154/i)).toBeInTheDocument();
     expect(screen.getAllByText(/pending sync/i).length).toBeGreaterThanOrEqual(1);
-    // Real StorePulseSummaryView exhibit (Daily Operations).
-    expect(screen.getByText(/top items so far/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/how customers paid/i).length).toBeGreaterThanOrEqual(1);
     // Real RegisterSessionActivitySection exhibit (sync bridge).
     expect(screen.getAllByText(/expected in drawer/i).length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText(/carried to tomorrow's opening handoff/i)).toBeInTheDocument();
+
+    // Cash Controls: the real dashboard shows the story day's drawer.
+    expect(screen.getAllByText(/expected in drawers/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("GH₵-5").length).toBeGreaterThanOrEqual(1);
+
+    // The automation reveal replays the day's moments.
+    expect(screen.getByText(/every decision stayed with the owner/i)).toBeInTheDocument();
   });
 });
