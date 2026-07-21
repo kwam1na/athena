@@ -120,7 +120,7 @@ export const automationMoments = [
   { key: "operations", label: "Watched the registers and routed attention" },
   { key: "sale", label: "Synced every sale from the counter" },
   { key: "cash", label: "Reconciled the drawer and surfaced the variance" },
-  { key: "close", label: "Prepared the close under store policy" },
+  { key: "close", label: "Prepared the close under the rules the owner set" },
 ] as const;
 
 export function formatDemoMoney(minorUnits: number) {

@@ -527,7 +527,7 @@ export const eodSnapshot: DailyCloseSnapshot = {
   carryForwardItems: [
     {
       category: "inventory",
-      description: "2 left after today's sales — restock before tomorrow's opening.",
+      description: "2 left after today's sales; restock before tomorrow's opening.",
       id: "story-carry-kente",
       key: "story-carry-kente",
       severity: "carry_forward",

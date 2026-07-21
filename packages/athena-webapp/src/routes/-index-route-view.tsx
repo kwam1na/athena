@@ -94,7 +94,7 @@ function DemoCtaButton() {
       onClick={() => emitLandingFunnelEvent("demo_cta")}
       className="inline-flex min-h-12 items-center justify-center rounded-md bg-primary px-layout-lg text-sm font-semibold text-primary-foreground transition-[background-color,transform] duration-standard ease-standard hover:bg-primary/90 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
     >
-      Try the demo
+      Demo Athena
       <ArrowRight className="ml-layout-sm h-4 w-4" aria-hidden="true" />
     </Link>
   );
@@ -147,7 +147,11 @@ function HeroSection() {
     // shot rises from further down and lingers longest. START holds the hidden
     // frame for half a second before anything moves.
     const ease = cubicBezier(0.22, 1, 0.36, 1);
-    const rise = { opacity: [0, 1], translateY: [12, 0], filter: ["blur(8px)", "blur(0px)"] };
+    const rise = {
+      opacity: [0, 1],
+      translateY: [12, 0],
+      filter: ["blur(8px)", "blur(0px)"],
+    };
     const START = 500;
 
     const timeline = createTimeline({ defaults: { ease } });
@@ -157,7 +161,11 @@ function HeroSection() {
       .add(headline, { ...rise, duration: 1500 }, START + 280)
       .add(subhead, { ...rise, duration: 1500 }, START + 560)
       .add(cta, { ...rise, duration: 1500 }, START + 840)
-      .add(shot, { opacity: [0, 1], translateY: [40, 0], duration: 2400 }, START + 1100);
+      .add(
+        shot,
+        { opacity: [0, 1], translateY: [40, 0], duration: 2400 },
+        START + 1100,
+      );
 
     return () => {
       timeline.pause();
@@ -188,17 +196,18 @@ function HeroSection() {
             <h1
               ref={headlineRef}
               style={HERO_COPY_HIDDEN}
-              className="mt-layout-md font-display text-5xl font-light leading-[0.96] text-foreground sm:text-7xl"
+              className="mt-layout-md text-balance font-display text-5xl font-light leading-[0.96] text-foreground sm:text-7xl"
             >
-              The day runs itself. Only what matters reaches you.
+              The day runs itself. You see all of it — from anywhere.
             </h1>
             <p
               ref={subheadRef}
               style={HERO_COPY_HIDDEN}
               className="mx-auto mt-layout-lg max-w-xl text-lg leading-8 text-muted-foreground sm:text-xl"
             >
-              Athena carries the store from opening float to final count — and
-              asks for you only when something needs your judgment.
+              Athena runs the till, the stock, and the cash for your store,
+              from opening to the final count, and asks for you only when
+              something needs your judgment.
             </p>
             <div
               ref={ctaRef}
@@ -244,17 +253,17 @@ const CONTROL_LOOP_PILLARS = [
   {
     Figure: OnePlaceFigure,
     title: "One place for the whole store",
-    copy: "The counter, stockroom, orders, and cash drawer share one system — no sales notebook, no piles of receipts, no totals tallied by hand after close.",
+    copy: "The counter, stockroom, orders, and cash drawer share one system: no sales notebook, no piles of receipts, no totals tallied by hand after close.",
   },
   {
     Figure: WholeLoopFigure,
     title: "The daily loop, end to end",
-    copy: "Open the store, sell, watch the day, reconcile the drawer, close the books — one workspace for each step, and each step feeding the next.",
+    copy: "Open the store, sell, watch the day, reconcile the drawer, close the books: one workspace for each step, and each step feeding the next.",
   },
   {
     Figure: EvidenceFigure,
     title: "Evidence you can trust",
-    copy: "Register sessions, cash counts, and approvals leave a trail as the day runs — so “what happened?” always has an answer.",
+    copy: "Register sessions, cash counts, and approvals leave a trail as the day runs, so “what happened?” always has an answer.",
   },
 ] as const;
 
@@ -275,9 +284,25 @@ function LandingGrain() {
   );
 }
 
+// Faint horizontal ruling, like the feint lines of a ledger page — used behind
+// the bookkeeping acts. Masked so it breathes in from an edge rather than
+// covering the whole section.
+function LedgerRules({ className }: { className?: string }) {
+  return (
+    <div
+      aria-hidden="true"
+      className={`pointer-events-none absolute inset-0 text-foreground/[0.14] ${className ?? ""}`}
+      style={{
+        backgroundImage:
+          "repeating-linear-gradient(to bottom, currentColor 0, currentColor 1px, transparent 1px, transparent 44px)",
+      }}
+    />
+  );
+}
+
 function ControlLoopSection() {
   return (
-    <section className="relative bg-app-canvas px-layout-md pb-[8rem] pt-[8rem] sm:px-layout-xl">
+    <section className="relative overflow-hidden bg-app-canvas px-layout-md pb-[8rem] pt-[8rem] sm:px-layout-xl">
       {/* Ledger-paper dot grid, fading out from the center — a quiet nod to
           the sales notebook this section says you no longer need. */}
       <div
@@ -292,10 +317,10 @@ function ControlLoopSection() {
       <div className="relative mx-auto w-full max-w-7xl">
         <h2 className="max-w-4xl font-display text-3xl font-light leading-[1.15] sm:text-4xl md:text-5xl">
           <span className="text-foreground">
-            The daily control loop of a business, in one place.
+            A store&apos;s whole day, in one place.
           </span>{" "}
           <span className="text-muted-foreground">
-            Athena is an operating system for an owner-led store — sell in
+            Athena is an operating system for an owner-led store: sell in
             person and online, track stock, fulfill orders, and manage cash,
             with enough evidence to trust the day without watching it happen.
           </span>
@@ -320,6 +345,14 @@ function ControlLoopSection() {
             </div>
           ))}
         </div>
+
+        {/* Names the narrative device the rest of the page runs on — one
+            specific day at one specific store — and sets up the closing CTA's
+            "walk this exact day yourself." */}
+        <p className="mt-layout-2xl max-w-2xl text-lg leading-8 text-muted-foreground">
+          What follows is one day under Athena, from open to close: Wednesday,
+          July 15, at Osu Studio, a fictional artisanal store in Accra.
+        </p>
       </div>
     </section>
   );
@@ -362,6 +395,7 @@ function StoryAct({
   background,
   hideTopBorder = false,
   stackedGap = "space-y-layout-xl",
+  texture,
   children,
   ...copyProps
 }: {
@@ -373,6 +407,7 @@ function StoryAct({
   layout?: "split" | "stacked";
   reversed?: boolean;
   stackedGap?: string;
+  texture?: ReactNode;
   title: string;
   workspace: string;
 }) {
@@ -380,9 +415,10 @@ function StoryAct({
   if (layout === "stacked") {
     return (
       <section
-        className={`flex min-h-svh items-start ${topBorder} px-layout-md pb-[8rem] pt-[8rem] sm:px-layout-xl ${background ?? ""}`}
+        className={`relative flex min-h-svh items-start overflow-hidden ${topBorder} px-layout-md pb-[8rem] pt-[8rem] sm:px-layout-xl ${background ?? ""}`}
       >
-        <div className={`mx-auto w-full max-w-7xl ${stackedGap}`}>
+        {texture}
+        <div className={`relative mx-auto w-full max-w-7xl ${stackedGap}`}>
           <ActCopy {...copyProps} className="max-w-2xl" />
           {children}
         </div>
@@ -391,10 +427,11 @@ function StoryAct({
   }
   return (
     <section
-      className={`flex min-h-svh items-start ${topBorder} px-layout-md pb-[8rem] pt-[8rem] sm:px-layout-xl`}
+      className={`relative flex min-h-svh items-start overflow-hidden ${topBorder} px-layout-md pb-[8rem] pt-[8rem] sm:px-layout-xl ${background ?? ""}`}
     >
+      {texture}
       <div
-        className={`mx-auto grid w-full max-w-7xl items-center gap-layout-2xl lg:grid-cols-2 ${
+        className={`relative mx-auto grid w-full max-w-7xl items-center gap-layout-2xl lg:grid-cols-2 ${
           reversed ? "lg:[&>*:first-child]:order-2" : ""
         }`}
       >
@@ -428,7 +465,7 @@ export function Index() {
           stackedGap="space-y-layout-3xl"
           workspace="Opening Handoff"
           title="Today opens where yesterday closed."
-          copy="Yesterday doesn't leak into today unresolved. Your staff open the store; carry-forward work from last night's close arrives as their checklist, the float is confirmed, and the day starts from a known state — visible to you before you've walked in, or without walking in at all."
+          copy="Yesterday doesn't leak into today unresolved. Your staff open the store; anything left unfinished at last night's close arrives as their checklist, the opening cash is confirmed, and the day starts from a known state, visible to you before you've walked in, or without walking in at all."
           automation="Athena starts the opening and flags anything that needs a manager's eyes."
         >
           <LandingWorkspaceShot
@@ -448,8 +485,8 @@ export function Index() {
           stackedGap="space-y-layout-3xl"
           workspace="Daily Operations"
           title="The whole day's pulse, in one read."
-          copy="How the week is tracking, today's trend and best-sellers, how customers are paying, and every sale the moment it syncs — the store's rhythm in full, whether you're on the floor or nowhere near it."
-          automation="The numbers keep themselves current as sales sync from the counter — to wherever you're reading them."
+          copy="How the week is tracking, today's trend and best-sellers, how customers are paying, and every sale the moment it syncs: the store's rhythm in full, whether you're on the floor or nowhere near it."
+          automation="The numbers keep themselves current as sales sync from the counter to wherever you're reading them."
         >
           <LandingWorkspaceShot
             alt="Athena's Daily Operations workspace: today's money tiles, the week's sales at a glance, today's sales trend, top items and payment mix, and the live activity timeline."
@@ -468,13 +505,13 @@ export function Index() {
           stackedGap="space-y-layout-3xl"
           workspace="Point of Sale"
           title="The network drops. Sales don't."
-          copy="Every sale lands on the device first, instantly. Lose the connection and the counter keeps moving — the sale is held safe, then syncs itself the moment the network returns."
+          copy="Every sale lands on the device first, instantly. Lose the connection and the counter keeps moving: the sale is held safe, then syncs itself the moment the network returns."
           automation="No manual sync, no re-entry, nothing to remember."
         >
           <div className="w-full space-y-layout-xl">
             <div className="max-w-5xl">
               <LandingWorkspaceShot
-                alt="The register's POS status reading 'pending sync' — a sale just recorded on the device, held safely before it uploads."
+                alt="The register's POS status reading 'pending sync': a sale just recorded on the device, held safely before it uploads."
                 className="max-w-5xl"
                 cropHeightFraction={0.52}
                 height={853}
@@ -493,7 +530,7 @@ export function Index() {
             </div>
             <div className="ml-auto max-w-5xl">
               <LandingWorkspaceShot
-                alt="The register's POS status reading 'synced' — the sale uploaded on its own once the connection returned."
+                alt="The register's POS status reading 'synced': the sale uploaded on its own once the connection returned."
                 className="max-w-5xl"
                 cropHeightFraction={0.52}
                 height={853}
@@ -513,8 +550,11 @@ export function Index() {
           </div>
         </StoryAct>
 
-        <section className="flex min-h-svh items-start border-t border-border/70 bg-surface px-layout-md pb-[8rem] pt-[8rem] sm:px-layout-xl">
-          <div className="mx-auto w-full max-w-7xl">
+        <section className="relative flex min-h-svh items-start overflow-hidden border-t border-border/70 bg-surface px-layout-md pb-[8rem] pt-[8rem] sm:px-layout-xl">
+          {/* Ledger ruling fades in from the right edge — the "books" side of
+              the counter-to-books bridge. */}
+          <LedgerRules className="[mask-image:linear-gradient(to_left,black,transparent_20%)]" />
+          <div className="relative mx-auto w-full max-w-7xl">
             <div className="max-w-2xl">
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">
                 Counter to books
@@ -524,7 +564,7 @@ export function Index() {
               </h2>
               <p className="mt-layout-md text-lg leading-8 text-muted-foreground">
                 Made once at the counter, the same sale lands again in your
-                books — a line in the register session, counted toward the day's
+                books: a line in the register session, counted toward the day's
                 totals, with the drawer already expecting the cash. The till and
                 the ledger never fall out of step.
               </p>
@@ -538,13 +578,21 @@ export function Index() {
         <StoryAct
           layout="stacked"
           background="bg-app-canvas"
+          texture={
+            // The reconciliation act: ledger ruling in the left margin. The
+            // centered content column starts ~21% in, so the mask melts the
+            // lines away just before it — no rule ends hard against a card.
+            <LedgerRules className="[mask-image:linear-gradient(to_right,black,transparent_20%)]" />
+          }
           workspace="Cash Controls"
           title="Know what's in every drawer."
-          copy="Expected cash builds from the opening float and every synced sale. At close, counted meets expected — variance is surfaced in the moment, not discovered weeks later."
+          copy="Expected cash builds from the morning's opening cash and every synced sale, and only you see that number. Staff count the drawer without knowing what it should hold, so the count is honest; any difference is surfaced in the moment, not discovered weeks later."
           automation="Athena reconciles synced register activity before closeout is settled."
         >
           <>
-            <CashControlsScene />
+            <div className="pt-8">
+              <CashControlsScene />
+            </div>
             {/* Drill from the dashboard into the session it holds in review. */}
             <div className="max-w-2xl pt-[12rem]">
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">
@@ -554,13 +602,13 @@ export function Index() {
                 One drawer, the whole day on record.
               </h3>
               <p className="mt-layout-md text-lg leading-8 text-muted-foreground">
-                A register session isn't a loose till — it's the thread that
-                ties the day together. It opens against a float, every synced
-                sale lands on it in the moment, and its expected total builds
-                itself. At close, the count meets that record, any difference is
-                surfaced for judgment instead of buried, and the settled session
-                flows straight into the day's reconciliation and the bank
-                deposit.
+                A register session isn't a loose till; it's the thread that
+                ties the day together. It opens on the morning&apos;s counted
+                cash, every synced sale lands on it in the moment, and its
+                expected total builds itself. At close, the count meets that
+                record, any difference is surfaced for judgment instead of
+                buried, and the settled session flows straight into the day's
+                reconciliation and the bank deposit.
               </p>
             </div>
             {/* Breathing room between the blurb and the session it introduces. */}
@@ -575,8 +623,8 @@ export function Index() {
           layout="stacked"
           stackedGap="space-y-layout-3xl"
           workspace="EOD Review"
-          title="Close the day with a clear conscience."
-          copy="The close runs under store policy: totals settled, the drawer accounted for, and the one thing that needs judgment flagged for you — reviewable from the back office or from home. Anything unfinished carries forward; tomorrow's opening is already prepared, and no one waited on you to lock up."
+          title="Today closes where tomorrow begins."
+          copy="The end-of-day review runs under the rules you set: totals settled, the drawer accounted for, and the one thing that needs judgment flagged for you, reviewable from the back office or from home. Anything unfinished carries forward; tomorrow's opening is already prepared, and no one waited on you to lock up."
           automation="Athena prepared the close; you settle what needs judgment."
         >
           <LandingWorkspaceShot
@@ -590,8 +638,18 @@ export function Index() {
           />
         </StoryAct>
 
-        <section className="flex min-h-svh items-center border-t border-border bg-surface px-layout-md pb-[8rem] pt-[8rem] sm:px-layout-xl">
-          <div className="mx-auto grid w-full max-w-7xl items-center gap-layout-2xl lg:grid-cols-2">
+        <section className="relative flex min-h-svh items-center overflow-hidden border-t border-border bg-surface px-layout-md pb-[8rem] pt-[8rem] sm:px-layout-xl">
+          {/* The replay: the opening statement's dot grid returns. */}
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 text-foreground/[0.14] [mask-image:radial-gradient(90%_75%_at_72%_50%,black_25%,transparent_70%)]"
+            style={{
+              backgroundImage:
+                "radial-gradient(currentColor 1px, transparent 1.5px)",
+              backgroundSize: "26px 26px",
+            }}
+          />
+          <div className="relative mx-auto grid w-full max-w-7xl items-center gap-layout-2xl lg:grid-cols-2">
             <div className="max-w-xl">
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">
                 The day, replayed
@@ -601,18 +659,18 @@ export function Index() {
               </h2>
               <p className="mt-layout-md text-lg leading-8 text-muted-foreground">
                 Athena did. It started the opening, watched the registers,
-                synced every sale, and prepared the close — settling what store
-                policy allows, and bringing you only the calls that needed you.
-                You saw all of it, even the hours you were nowhere near the
-                store.
+                synced every sale, and prepared the close, handling whatever
+                your rules allowed, and bringing you in only for the calls that
+                needed judgment. You saw all of it, even the hours you were
+                nowhere near the store.
               </p>
             </div>
             <AutomationRevealScene />
           </div>
         </section>
 
-        <section className="flex items-start border-t border-border bg-background px-layout-md pb-[8rem] pt-[8rem] sm:px-layout-xl">
-          <div className="mx-auto flex w-full max-w-7xl flex-col gap-layout-xl lg:flex-row lg:items-end lg:justify-between">
+        <section className="relative flex items-start overflow-hidden border-t border-border bg-background px-layout-md pb-[8rem] pt-[8rem] sm:px-layout-xl">
+          <div className="relative mx-auto flex w-full max-w-7xl flex-col gap-layout-xl lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-3xl">
               <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
                 Open the store you just read about
@@ -621,7 +679,7 @@ export function Index() {
                 Walk this exact day yourself.
               </h2>
               <p className="mt-layout-md text-lg leading-8 text-muted-foreground">
-                The demo opens Osu Studio — the same store, the same registers.
+                The demo opens Osu Studio: the same store, the same registers.
                 No signup; it takes seconds.
               </p>
             </div>
