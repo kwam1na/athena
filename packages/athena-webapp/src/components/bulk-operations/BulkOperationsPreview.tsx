@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import {
   ColumnDef,
   flexRender,
@@ -53,7 +53,6 @@ export function BulkOperationsPreview({
   };
 
   const allSelected = excludedSkuIds.size === 0;
-  const noneSelected = excludedSkuIds.size === previewRows.length;
 
   const columns = useMemo<ColumnDef<PreviewRow>[]>(
     () => [

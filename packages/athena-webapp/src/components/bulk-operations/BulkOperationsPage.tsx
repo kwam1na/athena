@@ -7,7 +7,6 @@ import { BulkOperationsFilters } from "./BulkOperationsFilters";
 import { BulkOperationsPreview } from "./BulkOperationsPreview";
 import View from "../View";
 import { useState, useCallback, useMemo } from "react";
-import { Id } from "~/convex/_generated/dataModel";
 import { EmptyState } from "../states/empty/empty-state";
 import { SearchX } from "lucide-react";
 import { FadeIn } from "../common/FadeIn";
@@ -65,18 +64,6 @@ export default function BulkOperationsPage() {
     return new Map(categories.map((c) => [c._id, c.name]));
   }, [categories]);
 
-  // Collect all unique color IDs from loaded products to resolve names
-  const colorIds = useMemo(() => {
-    if (!products) return [];
-    const ids = new Set<Id<"color">>();
-    for (const product of products) {
-      for (const sku of product.skus) {
-        if (sku.color) ids.add(sku.color);
-      }
-    }
-    return Array.from(ids);
-  }, [products]);
-
   // Fetch color details for all referenced colors
   const colors = useQuery(
     api.inventory.colors.getAll,
@@ -85,7 +72,7 @@ export default function BulkOperationsPage() {
 
   const colorMap = useMemo(() => {
     if (!colors) return new Map<string, string>();
-    return new Map(colors.map((c: any) => [c._id, c.name]));
+    return new Map(colors.map((c) => [c._id, c.name]));
   }, [colors]);
 
   // When products arrive from the query, process them into the hook
