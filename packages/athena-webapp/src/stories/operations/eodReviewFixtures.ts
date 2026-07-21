@@ -189,6 +189,9 @@ export const readyToCloseFixture: DailyCloseViewContentProps = {
       transactionCount: 23,
     },
     summary: {
+      // Explicit zeros: with these absent the tile reads "Pending" instead of GH₵0.
+      carriedOverCashTotal: 0,
+      carriedOverRegisterCount: 0,
       cashDeposited: CASH_DEPOSITED,
       cashExpected: EXPECTED_CASH,
       closedRegisterSessionCount: 1,
@@ -368,6 +371,11 @@ export const wednesdayReadyToCloseFixture: DailyCloseViewContentProps = {
       transactionCount: 23,
     },
     summary: {
+      // The GH₵500 float carried into Wednesday from Tuesday's close — same
+      // register, same amount the Daily Operations shot's "carried-over cash"
+      // tile shows.
+      carriedOverCashTotal: WED_OPENING_FLOAT,
+      carriedOverRegisterCount: 1,
       cashDeposited: WED_CASH_DEPOSITED,
       cashExpected: WED_EXPECTED_CASH,
       closedRegisterSessionCount: 1,

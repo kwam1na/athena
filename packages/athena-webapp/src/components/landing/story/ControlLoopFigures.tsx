@@ -66,8 +66,8 @@ export function WholeLoopFigure({ className }: FigureProps) {
       strokeLinecap="round"
       strokeLinejoin="round"
     >
-      {/* the loop */}
-      <g className="text-primary">
+      {/* the loop — the dashed ring turns slowly, always running */}
+      <g className="control-loop-spin text-primary">
         <circle
           cx="120"
           cy="100"

@@ -75,7 +75,7 @@ describe("shared demo provisioning", () => {
       .update("athena-pos-cashier-pin-salt-v1" + "1111")
       .digest("hex");
 
-    expect(SHARED_DEMO_CASHIER_USERNAME).toBe("efua");
+    expect(SHARED_DEMO_CASHIER_USERNAME).toBe("afua");
     expect(SHARED_DEMO_MANAGER_USERNAME).toBe("kay");
     expect(SHARED_DEMO_STAFF_PIN_HASH).toBe(expectedPinHash);
     expect(source).toContain("createStaffCredentialWithCtx");
@@ -138,9 +138,9 @@ describe("shared demo provisioning", () => {
     expect(SHARED_DEMO_PICKUP_ORDER.customerEmail).toBe(
       "customer@osustudio.com",
     );
-    expect(SHARED_DEMO_STAFF_STORY.cashier.fullName).toBe("Efua Tetteh");
-    expect(SHARED_DEMO_STAFF_STORY.manager.fullName).toBe("Kwabena Osei");
-    expect(SHARED_DEMO_OPENING_MESSAGE.startsWith("Efua:")).toBe(true);
+    expect(SHARED_DEMO_STAFF_STORY.cashier.fullName).toBe("Afua Okyere");
+    expect(SHARED_DEMO_STAFF_STORY.manager.fullName).toBe("Kwabena Agyei");
+    expect(SHARED_DEMO_OPENING_MESSAGE.startsWith("Afua:")).toBe(true);
     expect(SHARED_DEMO_REGISTER_NUMBER).toBe("01");
     expect(SHARED_DEMO_BASELINE_VERSION).toBe(17);
   });
@@ -175,8 +175,8 @@ describe("shared demo provisioning", () => {
       ],
       staffProfiles: [
         { fullName: "Studio Owner", status: "active" },
-        { fullName: "Efua Tetteh", staffCode: "DEMO-001", status: "active" },
-        { fullName: "Kwabena Osei", staffCode: "DEMO-002", status: "active" },
+        { fullName: "Afua Okyere", staffCode: "DEMO-001", status: "active" },
+        { fullName: "Kwabena Agyei", staffCode: "DEMO-002", status: "active" },
       ],
     };
     expect(sharedDemoBootstrapSeedMatches(seed)).toBe(true);

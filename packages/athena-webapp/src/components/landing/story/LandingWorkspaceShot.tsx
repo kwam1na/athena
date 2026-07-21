@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import { animate } from "animejs";
 
+import { useAthenaTheme } from "@/lib/theme";
 import { useSceneAnimation } from "./useSceneAnimation";
 
 // A framed product shot of a real operations workspace, captured through the
@@ -15,6 +16,7 @@ export function LandingWorkspaceShot({
   eager = false,
   height,
   src,
+  srcDark,
   width,
 }: {
   alt: string;
@@ -31,8 +33,12 @@ export function LandingWorkspaceShot({
   eager?: boolean;
   height: number;
   src: string;
+  /** Charcoal-dark capture of the same workspace; shown when the theme is dark. */
+  srcDark?: string;
   width: number;
 }) {
+  const { resolvedTheme } = useAthenaTheme();
+  const activeSrc = resolvedTheme === "dark" && srcDark ? srcDark : src;
   const rootRef = useSceneAnimation(
     useCallback(
       (root: HTMLElement) => {
@@ -48,6 +54,11 @@ export function LandingWorkspaceShot({
     ),
   );
 
+  // Full shots render at their natural aspect (h-auto): light and dark are the
+  // same width, so they show at identical scale — never zoomed relative to one
+  // another, even if the dark capture differs by a few percent in height.
+  // Cropped shots (cropHeightFraction) keep a fixed aspect + cover so the frame
+  // shows only their top region.
   return (
     <figure
       ref={rootRef}
@@ -68,7 +79,7 @@ export function LandingWorkspaceShot({
         decoding="async"
         height={height}
         loading={eager ? "eager" : "lazy"}
-        src={src}
+        src={activeSrc}
         width={width}
       />
     </figure>

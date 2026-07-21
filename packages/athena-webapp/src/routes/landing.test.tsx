@@ -76,21 +76,21 @@ describe("landing route", () => {
     render(<Index />);
 
     expect(screen.getByRole("heading", {
-      name: /one person\. a whole store\. fully in view\./i,
+      name: /the day runs itself\. only what matters reaches you\./i,
     })).toBeInTheDocument();
 
     // The five workspace acts, in day order, pinned to timestamps.
     expect(screen.getAllByText(/9:34 AM/).length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByRole("heading", { name: /start ready, not scrambling/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /today opens where yesterday closed/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /the whole day's pulse, in one read/i })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: /sales don't wait for the internet/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /network drops\. sales don't\./i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /every sale lands twice/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /know what's in every drawer/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /close the day with a clear conscience/i })).toBeInTheDocument();
 
     // The automation reveal pays off the hero's objection.
-    expect(screen.getByRole("heading", { name: /but i'm just one person/i })).toBeInTheDocument();
-    expect(screen.getByText(/you were never running it alone/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /the day didn't run itself/i })).toBeInTheDocument();
+    expect(screen.getByText(/athena did\. it started the opening/i)).toBeInTheDocument();
 
     // The traced sale reconciles across the receipt, the traveling chip, and
     // the drawer's expected-cash delta.

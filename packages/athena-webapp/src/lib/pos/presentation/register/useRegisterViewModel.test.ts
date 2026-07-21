@@ -2964,7 +2964,7 @@ describe("useRegisterViewModel", () => {
       registerNumber: "01",
       sharedDemoStaff: {
         activeRoles: ["cashier"],
-        displayName: "Efua Tetteh",
+        displayName: "Afua Okyere",
         staffProfileId: "staff-demo" as Id<"staffProfile">,
       },
     };

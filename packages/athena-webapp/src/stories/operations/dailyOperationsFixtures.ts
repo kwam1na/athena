@@ -167,7 +167,7 @@ const timeline: NonNullable<
     // the post-rewrite form the workspace actually renders.
     createdAt: at(14, 47),
     id: "evt-void-request",
-    message: "Void requested by Efua Tetteh for Transaction #1183.",
+    message: "Void requested by Afua O. for Transaction #1183.",
     subject: {
       id: "txn-1183",
       label: "Transaction #1183",
@@ -207,7 +207,7 @@ const timeline: NonNullable<
   {
     createdAt: at(12, 40),
     id: "evt-expense",
-    message: "Kwabena Osei recorded a GH₵55 expense for packaging supplies.",
+    message: "Kwabena A. recorded a GH₵55 expense for packaging supplies.",
     subject: { id: "exp-204", label: "Packaging supplies", type: "expense" },
     type: "expense_recorded",
   },
@@ -227,7 +227,7 @@ const timeline: NonNullable<
     createdAt: at(9, 52),
     id: "evt-drawer-open",
     message:
-      "Efua Tetteh opened Studio Front Register / Register 01 with a GH₵500 float.",
+      "Afua O. opened Studio Front Register / Register 01 with a GH₵500 float.",
     registerLink: {
       label: REGISTER_DISPLAY_LABEL,
       params: linkParams,
@@ -686,7 +686,7 @@ const wednesdayTimeline: NonNullable<
     // the post-rewrite form the workspace actually renders.
     createdAt: wedAt(12, 31),
     id: "evt-void-request",
-    message: "Void requested by Efua Tetteh for Transaction #1147.",
+    message: "Void requested by Afua O. for Transaction #1147.",
     subject: {
       id: "txn-1147",
       label: "Transaction #1147",
@@ -726,7 +726,7 @@ const wednesdayTimeline: NonNullable<
   {
     createdAt: wedAt(10, 52),
     id: "evt-expense",
-    message: "Kwabena Osei recorded a GH₵65 expense for packaging supplies.",
+    message: "Kwabena A. recorded a GH₵65 expense for packaging supplies.",
     subject: { id: "exp-198", label: "Packaging supplies", type: "expense" },
     type: "expense_recorded",
   },
@@ -746,7 +746,7 @@ const wednesdayTimeline: NonNullable<
     createdAt: wedAt(9, 41),
     id: "evt-drawer-open",
     message:
-      "Efua Tetteh opened Studio Front Register / Register 01 with a GH₵500 float.",
+      "Afua O. opened Studio Front Register / Register 01 with a GH₵500 float.",
     registerLink: {
       label: REGISTER_DISPLAY_LABEL,
       params: linkParams,

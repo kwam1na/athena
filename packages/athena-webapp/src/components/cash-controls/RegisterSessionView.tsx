@@ -520,6 +520,7 @@ type RegisterSessionViewContentProps = {
   onFinalizeCloseout?: (
     args: RegisterCloseoutFinalizeArgs,
   ) => Promise<RegisterCloseoutCommandResult>;
+  onNavigateBack?: () => void;
   orgUrlSlug?: string;
   registerSessionSnapshot: RegisterSessionSnapshot | null;
   storeId?: string;
@@ -3155,6 +3156,7 @@ export function RegisterSessionViewContent({
   onCorrectOpeningFloat,
   onFinalizeCloseout,
   onReopenCloseout,
+  onNavigateBack,
   onReviewCloseout,
   onResolveSyncReview,
   onSubmitCloseout,
@@ -4283,6 +4285,7 @@ export function RegisterSessionViewContent({
       header={
         <ComposedPageHeader
           className="h-auto min-h-16 items-start gap-3 border-b border-border px-4 py-3 sm:items-center sm:border-0 sm:py-4"
+          onNavigateBack={onNavigateBack}
           leadingContent={
             <RegisterSessionHeaderIdentity
               registerSession={registerSession}

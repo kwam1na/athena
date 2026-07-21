@@ -36,12 +36,13 @@ export function momentAt(hour: number, minute: number) {
 }
 
 /**
- * Staff from the shared demo store's story (shared/sharedDemoStory.ts): Efua Tetteh
- * cashiers, Kwabena Osei manages.
+ * Staff from the shared demo store's story (shared/sharedDemoStory.ts): Afua Okyere
+ * cashiers, Kwabena Agyei manages. Fixtures and screenshots use the abbreviated
+ * display form ("Afua O.").
  */
 export const DEMO_STAFF = {
-  cashier: "Efua Tetteh",
-  manager: "Kwabena Osei",
+  cashier: "Afua O.",
+  manager: "Kwabena A.",
 } as const;
 
 /**

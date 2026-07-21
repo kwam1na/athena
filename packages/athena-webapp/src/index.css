@@ -417,12 +417,24 @@
   }
 }
 
+@keyframes control-loop-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @media (prefers-reduced-motion: no-preference) {
   ::view-transition-old(root),
   ::view-transition-new(root) {
     animation-duration: var(--motion-fast);
     animation-timing-function: var(--ease-standard);
     mix-blend-mode: normal;
+  }
+
+  /* The daily-loop figure's dashed ring turns slowly, the arrowhead riding
+     with it — a quiet sense of the cycle always running. */
+  .control-loop-spin {
+    animation: control-loop-spin 18s linear infinite;
   }
 
   ::view-transition-old(root) {
@@ -448,6 +460,12 @@
 }
 
 @layer utilities {
+  /* Rotate the loop group about the figure's center (its viewBox coords). */
+  .control-loop-spin {
+    transform-box: view-box;
+    transform-origin: 120px 100px;
+  }
+
   .dark .bg-white,
   .dark .hover\:bg-white:hover {
     background-color: hsl(var(--surface-raised));

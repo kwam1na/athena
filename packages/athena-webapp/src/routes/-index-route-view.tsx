@@ -1,13 +1,20 @@
 import { Link } from "@tanstack/react-router";
 import { useEffect, useRef, type ReactNode } from "react";
 import { ArrowRight } from "lucide-react";
+import { createTimeline, cubicBezier } from "animejs";
 
 import dailyOperationsShot from "@/assets/landing/daily-operations-hero.png";
+import dailyOperationsShotDark from "@/assets/landing/daily-operations-hero-dark.png";
 import dailyOpsMetricsShot from "@/assets/landing/daily-ops-metrics.png";
+import dailyOpsMetricsShotDark from "@/assets/landing/daily-ops-metrics-dark.png";
 import eodReviewShot from "@/assets/landing/eod-review.png";
+import eodReviewShotDark from "@/assets/landing/eod-review-dark.png";
 import openingHandoffShot from "@/assets/landing/opening-handoff.png";
+import openingHandoffShotDark from "@/assets/landing/opening-handoff-dark.png";
 import posPendingShot from "@/assets/landing/pos-pending.png";
+import posPendingShotDark from "@/assets/landing/pos-pending-dark.png";
 import posSyncedShot from "@/assets/landing/pos-synced.png";
+import posSyncedShotDark from "@/assets/landing/pos-synced-dark.png";
 import { AutomationRevealScene } from "@/components/landing/story/AutomationRevealScene";
 import { CashControlsScene } from "@/components/landing/story/CashControlsScene";
 import {
@@ -16,9 +23,10 @@ import {
   WholeLoopFigure,
 } from "@/components/landing/story/ControlLoopFigures";
 import { LandingWorkspaceShot } from "@/components/landing/story/LandingWorkspaceShot";
+import { RegisterSessionScene } from "@/components/landing/story/RegisterSessionScene";
 import { SyncBridgeScene } from "@/components/landing/story/SyncBridgeScene";
 import { AutomationBeat } from "@/components/landing/story/SceneChrome";
-import { useForcedLightTheme } from "@/components/landing/story/useForcedLightTheme";
+import { useLandingTheme } from "@/components/landing/story/useLandingTheme";
 import { emitLandingFunnelEvent } from "@/lib/marketing/landingFunnelClient";
 import { DEMO_PATH } from "@/lib/navigation/appEntryRoutes";
 import { PublicLayout } from "./-public-layout";
@@ -92,31 +100,111 @@ function DemoCtaButton() {
   );
 }
 
+// Hidden starting state for the copy layers: sunk 12px, faded, softened from an
+// 8px frost. anime.js tweens these back to rest on mount; declaring them inline
+// means no flash of the finished layout before the timeline takes over.
+const HERO_COPY_HIDDEN = {
+  opacity: 0,
+  transform: "translateY(12px)",
+  filter: "blur(8px)",
+} as const;
+
 function HeroSection() {
   const shotRef = useHeroShotRevealRef();
+  // Entrance choreography for the whole hero, driven by a single anime.js
+  // timeline: the copy cascades in top-down (eyebrow → headline → subhead →
+  // CTA), the glow breathes in behind it, and the shot arrives last as the
+  // payoff. Per-element positions on the timeline set the rhythm. Honors
+  // reduced-motion by snapping everything to its resting state.
+  const eyebrowRef = useRef<HTMLParagraphElement>(null);
+  const headlineRef = useRef<HTMLHeadingElement>(null);
+  const subheadRef = useRef<HTMLParagraphElement>(null);
+  const ctaRef = useRef<HTMLDivElement>(null);
+  const glowRef = useRef<HTMLDivElement>(null);
+  const shotWrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const eyebrow = eyebrowRef.current;
+    const headline = headlineRef.current;
+    const subhead = subheadRef.current;
+    const cta = ctaRef.current;
+    const glow = glowRef.current;
+    const shot = shotWrapRef.current;
+    if (!eyebrow || !headline || !subhead || !cta || !glow || !shot) return;
+
+    const rest = (el: HTMLElement) => {
+      el.style.opacity = "1";
+      el.style.transform = "none";
+      el.style.filter = "none";
+    };
+
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      [eyebrow, headline, subhead, cta, glow, shot].forEach(rest);
+      return;
+    }
+
+    // Rise + fade + sharpen, one shared ease. Copy staggers by ~280ms; the
+    // shot rises from further down and lingers longest. START holds the hidden
+    // frame for half a second before anything moves.
+    const ease = cubicBezier(0.22, 1, 0.36, 1);
+    const rise = { opacity: [0, 1], translateY: [12, 0], filter: ["blur(8px)", "blur(0px)"] };
+    const START = 500;
+
+    const timeline = createTimeline({ defaults: { ease } });
+    timeline
+      .add(glow, { opacity: [0, 1], duration: 3600 }, START)
+      .add(eyebrow, { ...rise, duration: 1400 }, START)
+      .add(headline, { ...rise, duration: 1500 }, START + 280)
+      .add(subhead, { ...rise, duration: 1500 }, START + 560)
+      .add(cta, { ...rise, duration: 1500 }, START + 840)
+      .add(shot, { opacity: [0, 1], translateY: [40, 0], duration: 2400 }, START + 1100);
+
+    return () => {
+      timeline.pause();
+    };
+  }, []);
 
   return (
     <section className="relative overflow-hidden bg-gradient-to-b from-background via-background to-app-canvas px-layout-md pb-layout-2xl sm:px-layout-xl">
+      {/* Primary-tinted glow breathes in slowly behind the copy. */}
       <div
+        ref={glowRef}
         className="absolute inset-0 bg-[radial-gradient(circle_at_82%_12%,hsl(var(--primary)/0.08),transparent_38%)]"
+        style={{ opacity: 0 }}
         aria-hidden="true"
       />
       {/* Hero content — blurb and shot — nudged up ~10% together. */}
       <div className="relative mx-auto w-full max-w-7xl -translate-y-[10vh]">
-        {/* Blurb centered in the first screen. */}
+        {/* Blurb centered in the first screen, cascading in top-down. */}
         <div className="flex h-[calc(100svh-4rem)] flex-col items-center justify-center text-center">
           <div className="max-w-2xl">
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
-              Athena for owner-led retail
+            <p
+              ref={eyebrowRef}
+              style={HERO_COPY_HIDDEN}
+              className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground"
+            >
+              For the owner who can&apos;t be everywhere
             </p>
-            <h1 className="mt-layout-md font-display text-5xl font-light leading-[0.96] text-foreground sm:text-7xl">
-              One person. A whole store. Fully in view.
+            <h1
+              ref={headlineRef}
+              style={HERO_COPY_HIDDEN}
+              className="mt-layout-md font-display text-5xl font-light leading-[0.96] text-foreground sm:text-7xl"
+            >
+              The day runs itself. Only what matters reaches you.
             </h1>
-            <p className="mx-auto mt-layout-lg max-w-xl text-lg leading-8 text-muted-foreground sm:text-xl">
-              Athena walks the day with you — from opening the drawer to closing
-              the books — so nothing about your store runs on memory.
+            <p
+              ref={subheadRef}
+              style={HERO_COPY_HIDDEN}
+              className="mx-auto mt-layout-lg max-w-xl text-lg leading-8 text-muted-foreground sm:text-xl"
+            >
+              Athena carries the store from opening float to final count — and
+              asks for you only when something needs your judgment.
             </p>
-            <div className="mt-layout-xl flex flex-col items-center gap-layout-sm sm:flex-row sm:justify-center">
+            <div
+              ref={ctaRef}
+              style={HERO_COPY_HIDDEN}
+              className="mt-layout-xl flex flex-col items-center gap-layout-sm sm:flex-row sm:justify-center"
+            >
               <DemoCtaButton />
               <span className="text-sm text-muted-foreground">
                 No signup. A working store, open in seconds.
@@ -126,22 +214,24 @@ function HeroSection() {
         </div>
 
         {/* Hero shot peeks above the fold, then reveals to full opacity on scroll. */}
-        <div
-          ref={shotRef}
-          className="-mt-[22vh]"
-          style={{
-            opacity: HERO_SHOT_MIN_OPACITY,
-            transform: `scale(${HERO_SHOT_MIN_SCALE})`,
-          }}
-        >
-          <LandingWorkspaceShot
-            alt="Athena's Daily Operations workspace mid-week: a pending approval, the open register, today's net sales, cash, card and mobile money, and the week at a glance."
-            className="max-w-7xl"
-            eager
-            height={2356}
-            src={dailyOperationsShot}
-            width={3840}
-          />
+        <div ref={shotWrapRef} className="-mt-[22vh]" style={{ opacity: 0 }}>
+          <div
+            ref={shotRef}
+            style={{
+              opacity: HERO_SHOT_MIN_OPACITY,
+              transform: `scale(${HERO_SHOT_MIN_SCALE})`,
+            }}
+          >
+            <LandingWorkspaceShot
+              alt="Athena's Daily Operations workspace mid-week: a pending approval, the open register, today's net sales, cash, card and mobile money, and the week at a glance."
+              className="max-w-7xl"
+              eager
+              height={2356}
+              src={dailyOperationsShot}
+              srcDark={dailyOperationsShotDark}
+              width={3840}
+            />
+          </div>
         </div>
       </div>
     </section>
@@ -153,13 +243,13 @@ function HeroSection() {
 const CONTROL_LOOP_PILLARS = [
   {
     Figure: OnePlaceFigure,
-    title: "One place, not twelve tools",
-    copy: "The counter, the stockroom, the orders, and the cash drawer share one system — no spreadsheet glue, no numbers copied between apps after close.",
+    title: "One place for the whole store",
+    copy: "The counter, stockroom, orders, and cash drawer share one system — no sales notebook, no piles of receipts, no totals tallied by hand after close.",
   },
   {
     Figure: WholeLoopFigure,
     title: "The daily loop, end to end",
-    copy: "Open the store, sell, watch the day, reconcile the drawer, close the books. The story below walks that exact loop, one workspace at a time.",
+    copy: "Open the store, sell, watch the day, reconcile the drawer, close the books — one workspace for each step, and each step feeding the next.",
   },
   {
     Figure: EvidenceFigure,
@@ -168,19 +258,46 @@ const CONTROL_LOOP_PILLARS = [
   },
 ] as const;
 
+// A tiled fractal-noise SVG, rendered once and repeated as a background. The
+// page tells a paper-to-system story, so the whole surface carries a faint
+// paper grain — fixed so copy, canvas panels, and screenshots all share it.
+const GRAIN_TILE = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.55 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E")`;
+
+function LandingGrain() {
+  return (
+    <div
+      aria-hidden="true"
+      // The tile is black noise; on charcoal it must be inverted to read as
+      // light grain, and eased down so it stays a whisper.
+      className="pointer-events-none fixed inset-0 z-[70] opacity-[0.08] dark:opacity-[0.05] dark:[filter:invert(1)]"
+      style={{ backgroundImage: GRAIN_TILE }}
+    />
+  );
+}
+
 function ControlLoopSection() {
   return (
-    <section className="bg-app-canvas px-layout-md py-32 sm:px-layout-xl">
-      <div className="mx-auto w-full max-w-7xl">
+    <section className="relative bg-app-canvas px-layout-md pb-[8rem] pt-[8rem] sm:px-layout-xl">
+      {/* Ledger-paper dot grid, fading out from the center — a quiet nod to
+          the sales notebook this section says you no longer need. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 text-foreground/[0.16] [mask-image:radial-gradient(110%_80%_at_50%_52%,black_30%,transparent_72%)]"
+        style={{
+          backgroundImage:
+            "radial-gradient(currentColor 1px, transparent 1.5px)",
+          backgroundSize: "26px 26px",
+        }}
+      />
+      <div className="relative mx-auto w-full max-w-7xl">
         <h2 className="max-w-4xl font-display text-3xl font-light leading-[1.15] sm:text-4xl md:text-5xl">
           <span className="text-foreground">
             The daily control loop of a business, in one place.
           </span>{" "}
           <span className="text-muted-foreground">
-            Athena is an operating system for a solo owner — sell in person and
-            online, track stock, fulfill orders, and manage cash, with enough
-            evidence to trust what happened without becoming a full-time systems
-            operator.
+            Athena is an operating system for an owner-led store — sell in
+            person and online, track stock, fulfill orders, and manage cash,
+            with enough evidence to trust the day without watching it happen.
           </span>
         </h2>
 
@@ -190,7 +307,8 @@ function ControlLoopSection() {
               key={title}
               className="flex flex-col border-t border-border pt-layout-md md:border-l md:border-t-0 md:pl-layout-lg md:pt-0 md:first:border-l-0 md:first:pl-0"
             >
-              <div className="flex min-h-[220px] flex-1 items-center justify-center py-layout-xl text-foreground/80">
+              {/* Fixed-height band (not flex-1) so the three titles below sit on one line. */}
+              <div className="flex h-[220px] items-center justify-center py-layout-xl text-foreground/80">
                 <Figure className="h-auto w-full max-w-[220px]" />
               </div>
               <h3 className="text-base font-semibold text-foreground">
@@ -262,7 +380,7 @@ function StoryAct({
   if (layout === "stacked") {
     return (
       <section
-        className={`flex min-h-svh items-center ${topBorder} px-layout-md pb-32 pt-32 sm:px-layout-xl ${background ?? ""}`}
+        className={`flex min-h-svh items-start ${topBorder} px-layout-md pb-[8rem] pt-[8rem] sm:px-layout-xl ${background ?? ""}`}
       >
         <div className={`mx-auto w-full max-w-7xl ${stackedGap}`}>
           <ActCopy {...copyProps} className="max-w-2xl" />
@@ -273,7 +391,7 @@ function StoryAct({
   }
   return (
     <section
-      className={`flex min-h-svh items-center ${topBorder} px-layout-md pb-32 pt-32 sm:px-layout-xl`}
+      className={`flex min-h-svh items-start ${topBorder} px-layout-md pb-[8rem] pt-[8rem] sm:px-layout-xl`}
     >
       <div
         className={`mx-auto grid w-full max-w-7xl items-center gap-layout-2xl lg:grid-cols-2 ${
@@ -288,13 +406,16 @@ function StoryAct({
 }
 
 export function Index() {
-  useForcedLightTheme();
+  // Honor the visitor's light/dark choice; pin dark to charcoal to match the
+  // captured shots. The nav's toggle (below) flips the mode.
+  useLandingTheme();
   useEffect(() => {
     emitLandingFunnelEvent("page_view");
   }, []);
 
   return (
-    <PublicLayout trackFunnelCtas hideSecondaryNav>
+    <PublicLayout trackFunnelCtas hideSecondaryNav showThemeToggle>
+      <LandingGrain />
       <main>
         <HeroSection />
 
@@ -306,8 +427,8 @@ export function Index() {
           layout="stacked"
           stackedGap="space-y-layout-3xl"
           workspace="Opening Handoff"
-          title="Start ready, not scrambling."
-          copy="Yesterday doesn't leak into today unresolved. Carry-forward work from last night's close arrives as a checklist, the float is confirmed, and the store day starts from a known state."
+          title="Today opens where yesterday closed."
+          copy="Yesterday doesn't leak into today unresolved. Your staff open the store; carry-forward work from last night's close arrives as their checklist, the float is confirmed, and the day starts from a known state — visible to you before you've walked in, or without walking in at all."
           automation="Athena starts the opening and flags anything that needs a manager's eyes."
         >
           <LandingWorkspaceShot
@@ -316,6 +437,7 @@ export function Index() {
             className="max-w-none"
             height={2624}
             src={openingHandoffShot}
+            srcDark={openingHandoffShotDark}
             width={3072}
           />
         </StoryAct>
@@ -326,15 +448,16 @@ export function Index() {
           stackedGap="space-y-layout-3xl"
           workspace="Daily Operations"
           title="The whole day's pulse, in one read."
-          copy="How the week is tracking, today's trend and best-sellers, how customers are paying, and every sale the moment it syncs — the rhythm of the day without a single spreadsheet."
-          automation="The numbers keep themselves current as sales sync from the counter."
+          copy="How the week is tracking, today's trend and best-sellers, how customers are paying, and every sale the moment it syncs — the store's rhythm in full, whether you're on the floor or nowhere near it."
+          automation="The numbers keep themselves current as sales sync from the counter — to wherever you're reading them."
         >
           <LandingWorkspaceShot
             alt="Athena's Daily Operations workspace: today's money tiles, the week's sales at a glance, today's sales trend, top items and payment mix, and the live activity timeline."
             bordered={false}
             className="max-w-none"
-            height={2792}
+            height={2720}
             src={dailyOpsMetricsShot}
+            srcDark={dailyOpsMetricsShotDark}
             width={3072}
           />
         </StoryAct>
@@ -344,9 +467,9 @@ export function Index() {
           layout="stacked"
           stackedGap="space-y-layout-3xl"
           workspace="Point of Sale"
-          title="Sales don't wait for the internet."
-          copy="Every sale is recorded on the register first — instantly, on the device. When the connection drops, the counter keeps moving; the sale is safe locally and syncs on its own when the network returns."
-          automation="Nothing to export, nothing to re-enter, nothing to remember."
+          title="The network drops. Sales don't."
+          copy="Every sale lands on the device first, instantly. Lose the connection and the counter keeps moving — the sale is held safe, then syncs itself the moment the network returns."
+          automation="No manual sync, no re-entry, nothing to remember."
         >
           <div className="w-full space-y-layout-xl">
             <div className="max-w-5xl">
@@ -356,6 +479,7 @@ export function Index() {
                 cropHeightFraction={0.52}
                 height={853}
                 src={posPendingShot}
+                srcDark={posPendingShotDark}
                 width={2000}
               />
               <p className="mt-layout-sm flex items-start gap-layout-sm text-sm leading-6 text-muted-foreground">
@@ -374,6 +498,7 @@ export function Index() {
                 cropHeightFraction={0.52}
                 height={853}
                 src={posSyncedShot}
+                srcDark={posSyncedShotDark}
                 width={2000}
               />
               <p className="mt-layout-sm flex items-start gap-layout-sm text-sm leading-6 text-muted-foreground">
@@ -388,7 +513,7 @@ export function Index() {
           </div>
         </StoryAct>
 
-        <section className="flex min-h-svh items-center border-t border-border/70 bg-surface px-layout-md py-layout-2xl sm:px-layout-xl">
+        <section className="flex min-h-svh items-start border-t border-border/70 bg-surface px-layout-md pb-[8rem] pt-[8rem] sm:px-layout-xl">
           <div className="mx-auto w-full max-w-7xl">
             <div className="max-w-2xl">
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">
@@ -418,7 +543,31 @@ export function Index() {
           copy="Expected cash builds from the opening float and every synced sale. At close, counted meets expected — variance is surfaced in the moment, not discovered weeks later."
           automation="Athena reconciles synced register activity before closeout is settled."
         >
-          <CashControlsScene />
+          <>
+            <CashControlsScene />
+            {/* Drill from the dashboard into the session it holds in review. */}
+            <div className="max-w-2xl pt-[12rem]">
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">
+                The thread of the day
+              </p>
+              <h3 className="mt-layout-sm font-display text-3xl font-light leading-[1.05] text-foreground sm:text-4xl">
+                One drawer, the whole day on record.
+              </h3>
+              <p className="mt-layout-md text-lg leading-8 text-muted-foreground">
+                A register session isn't a loose till — it's the thread that
+                ties the day together. It opens against a float, every synced
+                sale lands on it in the moment, and its expected total builds
+                itself. At close, the count meets that record, any difference is
+                surfaced for judgment instead of buried, and the settled session
+                flows straight into the day's reconciliation and the bank
+                deposit.
+              </p>
+            </div>
+            {/* Breathing room between the blurb and the session it introduces. */}
+            <div className="pt-layout-2xl">
+              <RegisterSessionScene />
+            </div>
+          </>
         </StoryAct>
 
         <StoryAct
@@ -427,39 +576,42 @@ export function Index() {
           stackedGap="space-y-layout-3xl"
           workspace="EOD Review"
           title="Close the day with a clear conscience."
-          copy="The close runs under store policy: totals settled, the drawer accounted for, and the one thing that needs judgment flagged for you. Anything unfinished carries forward — tomorrow's opening is already prepared."
+          copy="The close runs under store policy: totals settled, the drawer accounted for, and the one thing that needs judgment flagged for you — reviewable from the back office or from home. Anything unfinished carries forward; tomorrow's opening is already prepared, and no one waited on you to lock up."
           automation="Athena prepared the close; you settle what needs judgment."
         >
           <LandingWorkspaceShot
             alt="Athena's EOD Review workspace on Wednesday evening: the day's net sales, cash, card and mobile money, a small approved cash variance, and the Kente inventory review carried into tomorrow's opening."
             bordered={false}
             className="max-w-none"
-            height={2396}
+            height={2458}
             src={eodReviewShot}
+            srcDark={eodReviewShotDark}
             width={3072}
           />
         </StoryAct>
 
-        <section className="flex min-h-svh items-center border-t border-border bg-surface px-layout-md py-layout-2xl sm:px-layout-xl">
+        <section className="flex min-h-svh items-center border-t border-border bg-surface px-layout-md pb-[8rem] pt-[8rem] sm:px-layout-xl">
           <div className="mx-auto grid w-full max-w-7xl items-center gap-layout-2xl lg:grid-cols-2">
             <div className="max-w-xl">
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">
                 The day, replayed
               </p>
               <h2 className="mt-layout-sm font-display text-4xl font-light leading-[1.02] text-foreground sm:text-5xl">
-                &ldquo;But I&apos;m just one person.&rdquo;
+                The day didn&apos;t run itself.
               </h2>
               <p className="mt-layout-md text-lg leading-8 text-muted-foreground">
-                You were never running it alone. Athena started the opening,
-                watched the registers, synced every sale, flagged the variance,
-                and prepared the close — and left every decision to you.
+                Athena did. It started the opening, watched the registers,
+                synced every sale, and prepared the close — settling what store
+                policy allows, and bringing you only the calls that needed you.
+                You saw all of it, even the hours you were nowhere near the
+                store.
               </p>
             </div>
             <AutomationRevealScene />
           </div>
         </section>
 
-        <section className="flex min-h-svh items-center border-t border-border bg-background px-layout-md py-layout-2xl sm:px-layout-xl">
+        <section className="flex items-start border-t border-border bg-background px-layout-md pb-[8rem] pt-[8rem] sm:px-layout-xl">
           <div className="mx-auto flex w-full max-w-7xl flex-col gap-layout-xl lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-3xl">
               <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
