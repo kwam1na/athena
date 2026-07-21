@@ -1524,6 +1524,11 @@ async function createFixtureRepo() {
     rootDir
   );
   await write(
+    "packages/athena-webapp/scripts/capture-operations-shot.mjs",
+    "export {};\n",
+    rootDir
+  );
+  await write(
     "packages/athena-webapp/scripts/purge-reporting-dev.sh",
     "#!/usr/bin/env bash\nexit 0\n",
     rootDir
