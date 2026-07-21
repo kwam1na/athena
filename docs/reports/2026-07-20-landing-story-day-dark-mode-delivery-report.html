@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="496e3d53047c878b2c495a0b30a2321152fe9870aaafa99e051d91c97ba3ff81">
+<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="61184d6485c4bcc93e3dbbb6bf186401020207365a86f351490e675616cf562e">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -76,8 +76,8 @@
     <main>
       <header>
         <h1>Landing Story-Day: Dark Mode, Hero Motion, Cash-Policy Seed &amp; Cast Rename</h1>
-        <p class="lede">Delivery candidate on branch feat/landing-story-day-delivery, head 645709d8</p>
-        <div class="meta"><span class="pill">Delivery candidate</span><span class="pill">Branch feat/landing-story-day-delivery</span><span class="pill">Head 645709d8</span><span class="pill">Base origin/main (e48ef7c9)</span><span class="pill">Deploy: pending (merges to main, no separate deploy step tracked here)</span><span class="pill">Root alignment: not applicable (frontend/Convex feature, no root config touched)</span></div>
+        <p class="lede">Delivery candidate on branch feat/landing-story-day-delivery, head bb8e55a3</p>
+        <div class="meta"><span class="pill">Delivery candidate</span><span class="pill">Branch feat/landing-story-day-delivery</span><span class="pill">Head bb8e55a3</span><span class="pill">Base origin/main (e48ef7c9)</span><span class="pill">Deploy: pending (merges to main, no separate deploy step tracked here)</span><span class="pill">Root alignment: not applicable (frontend/Convex feature, no root config touched)</span></div>
       </header>
       <section class="panel"><h2>Executive Summary</h2>
 <p>This delivery deepens the landing page&#x27;s fixed one-day story (Wednesday 2026-07-15) that the shared demo store narrates. It adds a dark (&#x27;charcoal&#x27;) visual variant for every hero/product screenshot, gives the hero section anime.js-driven entrance motion, adds a new read-only RegisterSessionScene that renders the real register-session detail view inline, wires the demo store&#x27;s cash-controls config so the story&#x27;s GH5 drawer variance actually gates into manager-approval-pending, recasts the demo cashier/manager names, and restyles the Bulk Operations pages and RegisterSessionView around the shared PageLevelHeader/PageWorkspace components.</p>
@@ -136,6 +136,7 @@ config: {
 <li>landed-change-report-check --print-fingerprint computed against origin/main to produce the fingerprint embedded in this report and in the accompanying solution note.</li>
 <li>No dedicated end-to-end test was added asserting the demo store&#x27;s variance now actually blocks auto-clear through the real closeout flow; existing registerSessionCloseoutGate.test.ts already covers that field&#x27;s behavior in isolation, and this delivery only changes the seed value that feeds it.</li>
 <li>graphify-out/{graph.json,GRAPH_REPORT.md,wiki/index.md} were regenerated automatically by the repo&#x27;s pre-commit hook (scripts/pre-commit-generated-artifacts.ts), not hand-edited.</li>
+<li>The pre-push harness self-review initially flagged a coverage gap for the new packages/athena-webapp/scripts/capture-operations-shot.mjs; fixed by mapping it into the existing &#x27;Storybook and frontend tooling edits&#x27; validation surface in scripts/harness-app-registry.ts and regenerating validation-map.json / validation-guide.md.</li>
 </ul>
 </section>
 <section class="panel"><h2>Next-Time Guidance</h2>

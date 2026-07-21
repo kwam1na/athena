@@ -12,7 +12,7 @@ applies_when:
   - The shared demo store's staff identity or cash-controls policy needs to change and downstream fixtures/tests must be kept in sync
   - A new landing scene renders a real presentational component as an inert exhibit
 tags: [landing, shared-demo, dark-mode, cash-controls, animejs, register-session]
-delivery_diff_fingerprint: 496e3d53047c878b2c495a0b30a2321152fe9870aaafa99e051d91c97ba3ff81
+delivery_diff_fingerprint: 61184d6485c4bcc93e3dbbb6bf186401020207365a86f351490e675616cf562e
 ---
 
 # Landing Story-Day Delivery — Dark-Mode Theming, Hero Motion, and Cash-Policy Seed Must Stay Reconciled
@@ -86,3 +86,9 @@ half a dozen POS/staff-auth tests).
   it did not add a dedicated test asserting the demo store's variance now
   actually blocks auto-clear end to end. A follow-up could add one alongside
   the existing `registerSessionCloseoutGate.test.ts` coverage of that field.
+- A new dev-only script under `packages/athena-webapp/scripts/` needs an
+  explicit `touchedPaths` entry in the relevant scenario in
+  `scripts/harness-app-registry.ts` (then `bun run harness:generate`) or the
+  pre-push `harness:self-review` gate blocks with a "coverage gap" error —
+  the derived `docs/agent/validation-map.json` is generated from that
+  registry file and must not be hand-edited directly.
