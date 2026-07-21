@@ -371,7 +371,7 @@ export const bridgeActivity: RegisterSessionActivityFixture = {
 // At 5:40 PM the day's drawer is mid-closeout: counted, in review, with the
 // GH₵5 shortage surfaced but not yet approved (EOD Review settles it).
 // Yesterday's session sits in the closed history, priced off the Jul 14 trend
-// day; its deposit leaves the GH₵500 float that carries into Wednesday.
+// day; the GH₵500 float carries into Wednesday's opening.
 const closingSession = {
   _id: STORY_SESSION_ID,
   countedCash: drawer.countedCash,
@@ -401,17 +401,8 @@ const closingSession = {
 export const cashDashboardSnapshot: CashControlsDashboardSnapshot = {
   openSessions: [],
   pendingCloseouts: [closingSession],
-  recentDeposits: [
-    {
-      _id: "story-deposit",
-      amount: drawer.depositAmount,
-      recordedAt: storyMoments.closeout - 600_000,
-      recordedByStaffName: sharedDemoStaffShortName(SHARED_DEMO_STAFF_STORY.manager),
-      reference: "Closeout deposit",
-      registerNumber: demoStore.registerNumber,
-      registerSessionId: STORY_SESSION_ID,
-    },
-  ],
+  // No deposit yet in this story day — the counted cash still sits in the drawer.
+  recentDeposits: [],
   registerSessions: [
     closingSession,
     {
@@ -428,8 +419,8 @@ export const cashDashboardSnapshot: CashControlsDashboardSnapshot = {
       registerNumber: demoStore.registerNumber,
       status: "closed",
       terminalName: "Studio Front Register",
-      // Deposits everything but the GH₵500 float Wednesday opens with.
-      totalDeposited: 213_000,
+      // No deposit recorded; the counted cash carried straight into the close.
+      totalDeposited: 0,
       totalSales: 560_000,
       variance: 0,
     },
@@ -441,8 +432,9 @@ export const cashDashboardSnapshot: CashControlsDashboardSnapshot = {
 // Cash Controls · RegisterSessionViewContent (Register 01, mid-closeout)
 
 // The same session the dashboard shows in review, opened up: the day's sales
-// summary and payment mix, the traced sale among the linked transactions, the
-// GH₵5 shortage awaiting judgment, and the closeout deposit already recorded.
+// summary and payment mix, the traced sale among the linked transactions, and
+// the GH₵5 shortage awaiting judgment. No deposit is recorded yet — the counted
+// cash still sits in the drawer.
 export const registerSessionSnapshot: RegisterSessionSnapshot = {
   closeoutReview: {
     hasVariance: true,
@@ -450,16 +442,7 @@ export const registerSessionSnapshot: RegisterSessionSnapshot = {
     requiresApproval: true,
     variance: drawer.variance,
   },
-  deposits: [
-    {
-      _id: "story-deposit",
-      amount: drawer.depositAmount,
-      recordedAt: storyMoments.closeout - 600_000,
-      recordedByStaffName: sharedDemoStaffShortName(SHARED_DEMO_STAFF_STORY.manager),
-      reference: "Closeout deposit",
-      registerSessionId: STORY_SESSION_ID,
-    },
-  ],
+  deposits: [],
   financialPosition: {
     averageTransaction: Math.round(dayTotals.netSales / dayTotals.transactions),
     // Share of session sales value; sums to 100.

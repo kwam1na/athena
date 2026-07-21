@@ -205,9 +205,9 @@ function HeroSection() {
               style={HERO_COPY_HIDDEN}
               className="mx-auto mt-layout-lg max-w-xl text-lg leading-8 text-muted-foreground sm:text-xl"
             >
-              Athena runs the till, the stock, and the cash for your store,
-              from opening to the final count, and asks for you only when
-              something needs your judgment.
+              Athena runs the till, the stock, and the cash for your store, from
+              opening to the final count, and asks for you only when something
+              needs your judgment.
             </p>
             <div
               ref={ctaRef}
@@ -320,9 +320,9 @@ function ControlLoopSection() {
             A store&apos;s whole day, in one place.
           </span>{" "}
           <span className="text-muted-foreground">
-            Athena is an operating system for an owner-led store: sell in
-            person and online, track stock, fulfill orders, and manage cash,
-            with enough evidence to trust the day without watching it happen.
+            Athena is an operating system for an owner-led store: sell in person
+            and online, track stock, fulfill orders, and manage cash, with
+            enough evidence to trust the day without watching it happen.
           </span>
         </h2>
 
@@ -557,16 +557,15 @@ export function Index() {
           <div className="relative mx-auto w-full max-w-7xl">
             <div className="max-w-2xl">
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">
-                Counter to books
+                Behind every sale
               </p>
-              <h2 className="mt-layout-sm font-display text-4xl font-light leading-[1.02] text-foreground sm:text-5xl">
-                Every sale lands twice.
+              <h2 className="mt-layout-sm text-balance font-display text-4xl font-light leading-[1.02] text-foreground sm:text-5xl">
+                The books keep themselves.
               </h2>
               <p className="mt-layout-md text-lg leading-8 text-muted-foreground">
-                Made once at the counter, the same sale lands again in your
-                books: a line in the register session, counted toward the day's
-                totals, with the drawer already expecting the cash. The till and
-                the ledger never fall out of step.
+                Each sale posts to the register session as it happens. It
+                counts toward the day, and the drawer expects the cash.
+                Nothing to re-enter, nothing to chase at close.
               </p>
             </div>
             <div className="mt-layout-2xl">
@@ -602,13 +601,13 @@ export function Index() {
                 One drawer, the whole day on record.
               </h3>
               <p className="mt-layout-md text-lg leading-8 text-muted-foreground">
-                A register session isn't a loose till; it's the thread that
-                ties the day together. It opens on the morning&apos;s counted
-                cash, every synced sale lands on it in the moment, and its
-                expected total builds itself. At close, the count meets that
-                record, any difference is surfaced for judgment instead of
-                buried, and the settled session flows straight into the day's
-                reconciliation and the bank deposit.
+                A register session isn't a loose till; it's the thread that ties
+                the day together. It opens on the morning&apos;s counted cash,
+                every synced sale lands on it in the moment, and its expected
+                total builds itself. At close, the count meets that record, any
+                difference is surfaced for judgment instead of buried, and the
+                settled session flows straight into the day's reconciliation and
+                the bank deposit.
               </p>
             </div>
             {/* Breathing room between the blurb and the session it introduces. */}

@@ -58,11 +58,12 @@ export const tracedSale = {
 } as const;
 
 // Cash drawer economics. The GH₵500 float is the "carried-over cash" tile in
-// the Daily Operations shot; expected/counted/deposited match the Wednesday
-// close in the operations screenshot fixtures.
+// the Daily Operations shot; expected and counted match the Wednesday close in
+// the operations screenshot fixtures. No deposit is recorded in this story —
+// the counted cash still sits in the drawer as the closeout awaits judgment.
 export const drawer = {
   countedCash: 239_500,
-  depositAmount: 200_000,
+  depositAmount: 0,
   // float + all cash payments across the day
   expectedCash: 50_000 + 190_000,
   // drawer state either side of the 3:14 PM sale (float + cash so far)

@@ -38,7 +38,7 @@ export function RegisterSessionScene() {
   return (
     <div
       ref={rootRef}
-      aria-label="Register 01's session detail mid-closeout: opened on the GH₵500 float at 9:41 AM, GH₵6,700 through the till, counted GH₵2,395 against GH₵2,400 expected, the GH₵5 shortage in review, and the closeout deposit recorded."
+      aria-label="Register 01's session detail mid-closeout: opened on the GH₵500 float at 9:41 AM, GH₵6,700 through the till, counted GH₵2,395 against GH₵2,400 expected, the GH₵5 shortage in review, and the counted cash still in the drawer."
       className="w-full"
     >
       <WorkspaceExhibit>
