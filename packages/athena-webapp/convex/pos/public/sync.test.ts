@@ -299,6 +299,72 @@ describe("POS local sync public mutation", () => {
     );
   });
 
+  it("schedules an admin report for a policy-allowed variance register closeout in prod", async () => {
+    process.env.STAGE = "prod";
+    const ctx = buildCtx({
+      registerSessions: [
+        {
+          _id: "register-session-1",
+          countedCash: 279000,
+          expectedCash: 279100,
+          status: "closed",
+          variance: -100,
+        },
+      ],
+    });
+    mocks.ingestLocalEventsWithCtx.mockResolvedValue({
+      kind: "ok",
+      data: {
+        accepted: [],
+        held: [],
+        mappings: [
+          {
+            cloudId: "register-session-1",
+            cloudTable: "registerSession",
+            localEventId: "event-closeout-1",
+            localIdKind: "closeout",
+          },
+        ],
+        conflicts: [],
+        syncCursor: {
+          localRegisterSessionId: "local-register-1",
+          acceptedThroughSequence: 2,
+        },
+      },
+    });
+
+    await getHandler(ingestLocalEvents)(ctx as never, {
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      syncSecretHash: "sync-secret-1",
+      events: [
+        {
+          localEventId: "event-closeout-1",
+          localRegisterSessionId: "local-register-1",
+          sequence: 2,
+          eventType: "register_closed",
+          occurredAt: 123,
+          staffProfileId: "staff-1",
+          payload: { countedCash: 279000 },
+        },
+      ],
+    });
+
+    expect(ctx.db.patch).toHaveBeenCalledWith(
+      "registerSession",
+      "register-session-1",
+      {
+        closeoutNotificationLocalEventId: "event-closeout-1",
+        closeoutNotificationScheduledAt: expect.any(Number),
+      },
+    );
+    expect(ctx.scheduler.runAfter).toHaveBeenCalledWith(
+      0,
+      expect.anything(),
+      { registerSessionId: "register-session-1" },
+    );
+  });
+
   it("does not reschedule an exact-match report for the same closeout event", async () => {
     process.env.STAGE = "prod";
     const ctx = buildCtx({
