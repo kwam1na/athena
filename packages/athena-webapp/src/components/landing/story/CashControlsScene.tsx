@@ -10,8 +10,8 @@ import { useSceneAnimation } from "./useSceneAnimation";
 
 // The real Cash Controls dashboard at closeout, rendered chromeless (no app
 // shell) so it sits full-width against the section like the captured workspace
-// shots: the story day's closed register session, its approved variance, and the
-// recorded deposit.
+// shots: the story day's register session in review with its GH₵5 shortage
+// surfaced, the counted cash still sitting in the drawer.
 export function CashControlsScene() {
   const rootRef = useSceneAnimation(
     useCallback((root: HTMLElement) => {
@@ -28,7 +28,7 @@ export function CashControlsScene() {
   return (
     <div
       ref={rootRef}
-      aria-label="The Cash Controls dashboard mid-closeout: the register session in review with its five-cedi shortage surfaced and the closeout deposit recorded."
+      aria-label="The Cash Controls dashboard mid-closeout: the register session in review with its five-cedi shortage surfaced and the counted cash still in the drawer."
       className="w-full"
     >
       <WorkspaceExhibit>

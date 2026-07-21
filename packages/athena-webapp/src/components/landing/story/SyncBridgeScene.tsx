@@ -55,7 +55,11 @@ export function SyncBridgeScene() {
       opacity: [{ from: 0, to: 1 }],
       scale: { from: 0.7, to: 1 },
     });
-    timeline.add(chip, { duration: 500, translateX: { from: -36, to: 36 } }, "<<+=150");
+    timeline.add(
+      chip,
+      { duration: 500, translateX: { from: -36, to: 36 } },
+      "<<+=150",
+    );
     if (pending && synced) {
       timeline.add(pending, { duration: 150, opacity: 0 }, "<<+=300");
       timeline.add(synced, { duration: 150, opacity: 1 }, "<");
@@ -63,7 +67,12 @@ export function SyncBridgeScene() {
     timeline.add(chip, { duration: 180, opacity: 0, scale: 0.8 }, "-=120");
     timeline.add(
       books,
-      { duration: 350, ease: "outQuad", opacity: { from: 0.25, to: 1 }, translateY: { from: 10, to: 0 } },
+      {
+        duration: 350,
+        ease: "outQuad",
+        opacity: { from: 0.25, to: 1 },
+        translateY: { from: 10, to: 0 },
+      },
       "-=100",
     );
     timeline.add(
@@ -82,7 +91,12 @@ export function SyncBridgeScene() {
     if (delta) {
       timeline.add(
         delta,
-        { duration: 300, ease: "outBack", opacity: { from: 0, to: 1 }, scale: { from: 0.7, to: 1 } },
+        {
+          duration: 300,
+          ease: "outBack",
+          opacity: { from: 0, to: 1 },
+          scale: { from: 0.7, to: 1 },
+        },
         "<<+=100",
       );
     }
@@ -116,29 +130,46 @@ export function SyncBridgeScene() {
           </p>
           <span className="relative inline-flex items-center">
             <span data-bridge-pending className="absolute right-0 opacity-0">
-              <PosSyncBadge presentation={pendingSyncPresentation} chipRole="bridge-pending" />
+              <PosSyncBadge
+                presentation={pendingSyncPresentation}
+                chipRole="bridge-pending"
+              />
             </span>
             <span data-bridge-synced>
-              <PosSyncBadge presentation={syncedPresentation} chipRole="bridge-synced" />
+              <PosSyncBadge
+                presentation={syncedPresentation}
+                chipRole="bridge-synced"
+              />
             </span>
           </span>
         </div>
         <div className="mt-layout-md rounded-md p-layout-sm text-sm">
           <p className="flex items-center justify-between gap-layout-sm">
-            <span className="font-medium text-foreground">Receipt #{tracedSale.receiptNumber}</span>
-            <span className="font-numeric text-xs text-muted-foreground">{tracedSale.time}</span>
+            <span className="font-medium text-foreground">
+              Receipt #{tracedSale.receiptNumber}
+            </span>
+            <span className="font-numeric text-xs text-muted-foreground">
+              {tracedSale.time}
+            </span>
           </p>
           <ul className="mt-layout-sm space-y-1 text-muted-foreground">
             {tracedSale.items.map((item) => (
-              <li key={item.name} className="flex items-center justify-between gap-layout-sm">
+              <li
+                key={item.name}
+                className="flex items-center justify-between gap-layout-sm"
+              >
                 <span>{item.name}</span>
-                <span className="font-numeric">{formatDemoMoney(item.price)}</span>
+                <span className="font-numeric">
+                  {formatDemoMoney(item.price)}
+                </span>
               </li>
             ))}
           </ul>
           <p className="mt-layout-sm flex items-center justify-between border-t border-border pt-layout-sm text-foreground">
             <span>Cash</span>
-            <span className="font-numeric font-medium">{formatDemoMoney(tracedSale.total)}</span>
+            <span className="font-numeric font-medium">
+              {formatDemoMoney(tracedSale.total)}
+            </span>
           </p>
         </div>
         <p className="mt-layout-sm text-xs leading-5 text-muted-foreground">
@@ -166,7 +197,7 @@ export function SyncBridgeScene() {
       >
         <div className="flex items-center justify-between gap-layout-sm">
           <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-            Cash Ops · Register session
+            Cash Ops · Register session · POS Activity
           </p>
           <span className="font-numeric text-xs text-muted-foreground">
             {bridgeActivity.registerSession.registerNumber}
@@ -193,7 +224,10 @@ export function SyncBridgeScene() {
             >
               +{formatDemoMoney(tracedSale.total)}
             </span>
-            <span data-bridge-expected className="font-numeric text-lg text-foreground">
+            <span
+              data-bridge-expected
+              className="font-numeric text-lg text-foreground"
+            >
               {formatDemoMoney(drawer.expectedAfterSale)}
             </span>
           </span>

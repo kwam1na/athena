@@ -11,8 +11,9 @@ applies_when:
   - The landing page's "one-day story" needs new dark-mode assets, motion, or a scene reconciled to demo-store state
   - The shared demo store's staff identity or cash-controls policy needs to change and downstream fixtures/tests must be kept in sync
   - A new landing scene renders a real presentational component as an inert exhibit
-tags: [landing, shared-demo, dark-mode, cash-controls, animejs, register-session]
-delivery_diff_fingerprint: ceba202336a8b6a73d23baa2121e0576840774dc101c855ee88e244ff71adc01
+tags:
+  [landing, shared-demo, dark-mode, cash-controls, animejs, register-session]
+delivery_diff_fingerprint: fad25098483720e17e78586992f3712428a10a53d49593362ecfc6e67aacc4a0
 ---
 
 # Landing Story-Day Delivery — Dark-Mode Theming, Hero Motion, and Cash-Policy Seed Must Stay Reconciled
@@ -42,10 +43,10 @@ half a dozen POS/staff-auth tests).
   hard-forcing light mode, it now respects the visitor's light/dark preference
   and, only when dark is active, pins `data-theme-variant="charcoal"` (via a
   `MutationObserver` so it re-pins if the theme system reasserts a different
-  variant), restoring the prior variant on unmount. Every landing shot got a
+  variant), restoring the prior variant on component unmount. Every landing shot got a
   `-dark.png` sibling asset selected through this hook's resolved theme.
 - Seeded `store.config.operations.cashControls.requireManagerSignoffForAnyVariance
-  = true` in `convex/sharedDemo/provision.ts` — this is an existing,
+= true` in `convex/sharedDemo/provision.ts` — this is an existing,
   already-consumed config field (read by
   `convex/operations/registerSessionCloseoutGate.ts` and surfaced in
   `POSSettingsView.tsx`), not a new mechanism, so no baseline-registry or

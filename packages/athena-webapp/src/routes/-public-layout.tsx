@@ -49,8 +49,9 @@ export function PublicLayout({
   showThemeToggle?: boolean;
   trackFunnelCtas?: boolean;
 }) {
-  // Sticky nav: solid at the top, translucent (blurred) once the reader
-  // scrolls, so the page's content and paper grain read faintly through it.
+  // Sticky nav: translucent (blurred) throughout so the hero mesh, page
+  // content, and paper grain read faintly through it — with its underline
+  // always drawn, firming up a touch once the reader scrolls off the top.
   const [scrolled, setScrolled] = useState(false);
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8);
@@ -62,10 +63,10 @@ export function PublicLayout({
   return (
     <div className="min-h-svh bg-background text-foreground">
       <header
-        className={`sticky top-0 z-40 border-b border-border/70 transition-colors duration-standard ease-standard ${
+        className={`sticky top-0 z-40 border-b border-border/70 backdrop-blur-md transition-colors duration-standard ease-standard ${
           scrolled
-            ? "bg-background/70 backdrop-blur-md supports-[backdrop-filter]:bg-background/60"
-            : "bg-background"
+            ? "bg-background/70 supports-[backdrop-filter]:bg-background/60"
+            : "bg-background/40 supports-[backdrop-filter]:bg-background/25"
         }`}
       >
         <nav
