@@ -13,7 +13,7 @@ applies_when:
   - A new landing scene renders a real presentational component as an inert exhibit
 tags:
   [landing, shared-demo, dark-mode, cash-controls, animejs, register-session]
-delivery_diff_fingerprint: f90aea5ba98fc958ec63de727188fa85151dc4db62eee2d5f760d5e673ef7a49
+delivery_diff_fingerprint: fad25098483720e17e78586992f3712428a10a53d49593362ecfc6e67aacc4a0
 ---
 
 # Landing Story-Day Delivery — Dark-Mode Theming, Hero Motion, and Cash-Policy Seed Must Stay Reconciled
