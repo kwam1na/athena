@@ -12,7 +12,7 @@ applies_when:
   - The shared demo store's staff identity or cash-controls policy needs to change and downstream fixtures/tests must be kept in sync
   - A new landing scene renders a real presentational component as an inert exhibit
 tags: [landing, shared-demo, dark-mode, cash-controls, animejs, register-session]
-delivery_diff_fingerprint: 61184d6485c4bcc93e3dbbb6bf186401020207365a86f351490e675616cf562e
+delivery_diff_fingerprint: 6c94afc88c6b873575aa028833f651f04e16ec18565e16ab572493d4680876c6
 ---
 
 # Landing Story-Day Delivery — Dark-Mode Theming, Hero Motion, and Cash-Policy Seed Must Stay Reconciled
