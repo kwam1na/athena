@@ -1,7 +1,7 @@
 ---
 title: Landing Story Told With Real Product Components As Exhibits
 date: 2026-07-17
-last_updated: 2026-07-17
+last_updated: 2026-07-22
 category: design-patterns
 module: Athena marketing landing page and shared demo store
 problem_type: design_pattern
@@ -12,9 +12,10 @@ applies_when:
   - Building marketing or onboarding surfaces that should mirror the real product UI
   - Rendering authenticated workspace components on a public, unauthenticated page
   - Keeping demo/marketing copy in sync with the store the demo actually opens
-tags: [landing-page, demo-store, marketing, exhibits, animation, design-pattern]
-related_components: [athena-webapp, landing, sharedDemo, cash-controls, daily-operations]
-delivery_diff_fingerprint: e00852a3b480254e67eb6d3da244cb8a9717f73eec823963f017c7c6690f2f25
+  - Making one exhibit on an otherwise-inert marketing page genuinely interactive
+tags: [landing-page, demo-store, marketing, exhibits, animation, design-pattern, pos]
+related_components: [athena-webapp, landing, sharedDemo, cash-controls, daily-operations, pos]
+delivery_diff_fingerprint: 1e201d589c2b81c805054403237fabc8a5792f26c7e5992714d14f1d4d7824bb
 ---
 
 # Landing Story Told With Real Product Components As Exhibits
@@ -100,3 +101,59 @@ shared module the demo provisioner also reads.
 - Treat removing a marketing link (e.g. "Sign in", "Request a walkthrough") as a
   page-copy change, and update the corresponding `landing.test.tsx` assertions;
   the routes themselves stay intact.
+
+## Addendum (2026-07-22): a partially-interactive exhibit
+
+The POS section's hub act (`PosHubRoleSwitcher.tsx`) extends the pattern one
+step further: the exhibit is not fully inert. It renders `PosHubBody` (the POS
+hub split out from `PointOfSaleView` without the app's `View` chrome) live,
+scoped to two roles (manager/staff) with a role toggle, and — unlike every
+other exhibit on the page — its store-pulse window tabs (Today / This week /
+This month / All time) are genuinely clickable and re-render real charts from
+authored fixture data (`stories/operations/posHubFixtures.ts`).
+
+- **Selective inertness, not blanket `inert`.** Only the launcher-tile grid is
+  disabled (`pointer-events-none` scoped to `[data-testid=athena-pos-hub-ready]`
+  via a CSS descendant selector) — the store-pulse tabs stay interactive on
+  purpose. This is a deliberate exception to the "mark the whole subtree inert"
+  rule above: decide inertness per-control, not per-exhibit, when a scoped
+  interaction is the point of the exhibit.
+- **Author fixture data for every mode the live control can reach.** Because the
+  tabs are real, all four pulse windows need authored, story-reconciled data
+  (metrics, trend, top items, payment mix, vs-prior comparison) — not just the
+  one window a static shot would have captured. Round comparison deltas to
+  whole percents in the fixture (`Math.round((current−prior)/prior·100)`),
+  matching how `operationsMetricFormatting.tsx`'s `getDeltaPercent` computes
+  them live; authoring decimals here reads as a bug on the page. Keep
+  cross-surface numbers literally aligned — e.g. the POS hub's "Today" top
+  items must list in the same order as Daily Operations' for the same day, not
+  just match on total.
+- **A height-swapping toggle fights scroll anchoring.** Toggling between two
+  states whose rendered height differs by hundreds/thousands of px lets the
+  browser's scroll anchoring silently reposition the viewport — intermittently,
+  because the anchor node it picks depends on current scroll position, and it
+  is **not enough** to set `overflow-anchor: none` on the toggling subtree
+  alone: anchoring can pick a node in an unrelated section below the toggle
+  that also happens to move. Set `overflow-anchor: none` on the containing
+  page-level element (safe when every other exhibit reserves explicit
+  width/height). Belt-and-braces: record the toggle's `getBoundingClientRect().top`
+  before the state change and correct any drift with `window.scrollBy` in a
+  `useLayoutEffect` (runs pre-paint).
+- **Drive a click-triggered fade from state, not from an animation callback.**
+  Swap the state **synchronously** on click; treat the `animejs` fade
+  (`opacity: {from: 0}`) as a fire-and-forget entrance effect in the
+  `useLayoutEffect` that follows the state change. Do not gate the state swap
+  on an animation's `onComplete` — if that callback doesn't fire (easy to get
+  wrong when mocking `animejs` in tests, or under real browser jank), a guard
+  flag can get stuck `true` and the control stops responding to any further
+  clicks.
+- **Scale a live exhibit with `zoom`, not `transform: scale`.** `zoom` reflows
+  layout height at the scaled size, so the exhibit's footprint in the page
+  shrinks along with its rendered size (needed for a live grid + chart, which
+  `transform: scale` would leave taking full untransformed space).
+- Testing an interactive exhibit: assert the real behavior
+  (`userEvent.click` on a tab, then check the chart's own description text
+  changes) rather than an `alt` text swap — there is no captured image to key
+  off anymore. Mock `animejs`'s `animate` via `importActual` (override only
+  `animate`, keep the real `createTimeline`/`onScroll`/`stagger` other scenes
+  depend on) so a click-driven fade resolves synchronously under jsdom.

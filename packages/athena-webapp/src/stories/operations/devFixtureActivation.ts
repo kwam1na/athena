@@ -17,6 +17,7 @@ import { useEffect, useState } from "react";
 import type { DailyCloseViewContentProps } from "@/components/operations/DailyCloseView";
 import type { DailyOpeningViewContentProps } from "@/components/operations/DailyOpeningView";
 import type { DailyOperationsViewContentProps } from "@/components/operations/DailyOperationsView";
+import type { PointOfSaleViewContentProps } from "@/components/pos/PointOfSaleView";
 import { setOperatingClockOverride } from "@/lib/operations/operatingDate";
 
 type FixtureEntry<TProps> = { clock: Date; props: TProps };
@@ -101,5 +102,11 @@ export function useDailyOpeningFixture(name?: string) {
 export function useDailyCloseFixture(name?: string) {
   return useWorkspaceFixture<DailyCloseViewContentProps>(name, () =>
     import("./eodReviewFixtures").then((m) => m.eodReviewFixtures),
+  );
+}
+
+export function usePosHubFixture(name?: string) {
+  return useWorkspaceFixture<PointOfSaleViewContentProps>(name, () =>
+    import("./posHubFixtures").then((m) => m.posHubFixtures),
   );
 }
