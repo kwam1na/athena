@@ -5,7 +5,12 @@ import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
-import { requireSharedDemoStoreReadIfApplicable } from "../sharedDemo/actor";
+import { admitSharedDemoPublicQuery } from "../operationAdmission/publicQuery";
+import {
+  getSkuActivityForProductSkuReadDefinition,
+  getUntrustedSkuSaleEvidenceReadDefinition,
+} from "../operationAdmission/readDefinitions";
+import type { OperationQueryCtx } from "../operationAdmission/types";
 
 export type SkuActivityStatus =
   | "active"
@@ -545,14 +550,13 @@ async function requireSkuActivityStoreAccess(
   ctx: QueryCtx,
   storeId: Id<"store">
 ) {
-  const [store, demoActor] = await Promise.all([
-    ctx.db.get("store", storeId),
-    requireSharedDemoStoreReadIfApplicable(ctx, storeId),
-  ]);
+  const store = await ctx.db.get("store", storeId);
   if (!store) {
     throw new Error("Store not found.");
   }
-  if (demoActor) return;
+  const admittedActor = (ctx as Partial<OperationQueryCtx>).operationAdmission
+    ?.actor;
+  if (admittedActor?.kind === "shared_demo") return;
 
   const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
   await requireOrganizationMemberRoleWithCtx(ctx, {
@@ -1154,10 +1158,20 @@ export const getSkuActivityForProductSku = query({
     productSkuId: v.optional(v.id("productSku")),
     sku: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: admitSharedDemoPublicQuery(
+    getSkuActivityForProductSkuReadDefinition,
+    async (
+      ctx: OperationQueryCtx,
+      args: {
+        productSkuId?: Id<"productSku">;
+        sku?: string;
+        storeId: Id<"store">;
+      },
+    ) => {
     await requireSkuActivityStoreAccess(ctx, args.storeId);
     return getSkuActivityForProductSkuWithCtx(ctx, args);
-  },
+    },
+  ),
 });
 
 const untrustedSkuSaleEvidenceReviewStatusValidator = v.union(
@@ -1191,8 +1205,24 @@ export const getUntrustedSkuSaleEvidence = query({
       })
     ),
   },
-  handler: async (ctx, args) => {
+  handler: admitSharedDemoPublicQuery(
+    getUntrustedSkuSaleEvidenceReadDefinition,
+    async (
+      ctx: OperationQueryCtx,
+      args: {
+        limit?: number;
+        reviewStatus?: "open" | "reviewed" | "all";
+        selectedSource?: {
+          sourceId: string;
+          sourceType: "inventoryImportProvisionalSku" | "posPendingCheckoutItem";
+        };
+        sourceFilter?: "all" | "legacy_import" | "pending_checkout";
+        storeId: Id<"store">;
+        transactionLimit?: number;
+      },
+    ) => {
     await requireSkuActivityStoreAccess(ctx, args.storeId);
     return getUntrustedSkuSaleEvidenceWithCtx(ctx, args);
-  },
+    },
+  ),
 });

@@ -12,7 +12,7 @@ applies_when:
   - "A shared-demo read surface is using ad hoc store checks or write capability bridges"
   - "A migration wave needs exact read inventory coverage while reporting reads stay out of scope"
 tags: [athena, convex, read-admission, shared-demo, authz, operations, pos]
-delivery_diff_fingerprint: 7f522328f02c61beaf4a7019be3abf57caf02713f016c0c0bdddf184232f9764
+delivery_diff_fingerprint: ee57fb63b15b352657f271cfffcdd31432428a048d590d332ee48fae8b807f0a
 ---
 
 # Athena Shared Demo Read Admission Rail
@@ -36,7 +36,9 @@ The proving path is Daily Operations viewing. Its exported snapshot queries now 
 
 After that proof held, the same rail onboarded the remaining demo-visible Operations work-item and daily-close reads, cash controls dashboard/register reads, POS transaction/session/register/terminal/telemetry reads, and the Stock Adjustments cycle-count draft reads discovered during browser validation. A later POS register pass added the behind-the-scenes register catalog reads (`search`, snapshot, revision, availability, availability snapshot, and barcode lookup), active/held POS session reads, the staff roster read, the POS service catalog read, and the daily-opening snapshot used by the register opening guard.
 
-The cycle-count and register-catalog helpers keep the legacy capability bridge for write and fallback paths, but admitted read actors bypass the old ad hoc demo capability probe. Daily opening now requires store membership before building even a redacted snapshot, then derives manager evidence visibility from `membership.role === "full_admin"` so redaction remains a membership decision.
+Migrated read and write surfaces no longer call the ad hoc shared-demo capability probe after admission resolves the actor. Daily opening now requires store membership before building even a redacted snapshot, then derives manager evidence visibility from `membership.role === "full_admin"` so redaction remains a membership decision. The public storefront `onlineOrder.get` query intentionally stays customer-channel compatible; the admitted operator/demo order-detail path is `onlineOrder.getForOperations`.
+
+Protected external effects are enforced in the shared-demo operation adapter. A mutation can be admitted for the actor, scope, and readiness boundary only if its protected gateways are simulated by shared-demo policy; denied gateways such as `payment.refund` stop before the domain handler runs.
 
 ## Why This Matters
 
@@ -51,6 +53,8 @@ Keeping read intent separate from write capability prevents accidental broadenin
 - For each migrated read, test the exported query handler so admission executes before the domain helper.
 - Cover same-store non-member denial as well as shared-demo same-store admission and cross-store denial. The rail authenticates actors; domain membership checks still decide whether a normal user may read store data.
 - Keep follow-up migrations inventory-driven: prove one route, sweep linked demo routes, and onboard any remaining read crash by adding a definition, a public query wrapper, and focused shared-demo scope tests.
+- When a query also serves unauthenticated customer-channel traffic, keep that public API unchanged and add a separate admitted operator/demo query instead of forcing Athena auth onto the customer path.
+- Enforce protected gateway effects in the shared-demo adapter, not in scattered handler-local checks.
 - Keep reporting reads separate unless the hidden reporting workspace is explicitly in scope.
 
 ## Examples

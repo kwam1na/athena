@@ -5,17 +5,19 @@ import {
   updateOnlineOrderOperationDefinition,
 } from "../operationAdmission/definitions";
 import { admitSharedDemoPublicMutation } from "../operationAdmission/publicMutation";
+import { admitSharedDemoPublicQuery } from "../operationAdmission/publicQuery";
 import {
-  getSharedDemoActorWithCtx,
-  requireSharedDemoCapabilityIfApplicable,
-  requireSharedDemoStoreReadIfApplicable,
-} from "../sharedDemo/actor";
+  getNewestOnlineOrderReadDefinition,
+  getOnlineOrderMetricsReadDefinition,
+  getOnlineOrderReadDefinition,
+  listOnlineOrdersReadDefinition,
+} from "../operationAdmission/readDefinitions";
 import {
   decideSharedDemoEffect,
   denySharedDemoAction,
+  requireSharedDemoCapability,
   requireSharedDemoOrderFulfillmentUpdate,
 } from "../sharedDemo/policy";
-import { requireReadySharedDemoWriteWithCtx } from "../sharedDemo/restore";
 import {
   internalMutation,
   internalQuery,
@@ -38,7 +40,10 @@ import { recordPaymentAllocationWithCtx } from "../operations/paymentAllocations
 import { markCatalogSummaryNeedsRefresh } from "../inventory/catalogSummary";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import { requireOrganizationMemberRoleWithCtx } from "../lib/athenaUserAuth";
-import type { OperationMutationCtx } from "../operationAdmission/types";
+import type {
+  OperationMutationCtx,
+  OperationQueryCtx,
+} from "../operationAdmission/types";
 import {
   createOrderFromCheckoutSession,
   findOrderByExternalReference,
@@ -406,8 +411,9 @@ async function applyOnlineOrderUpdate(
     ].includes(nextStatus!);
 
   if (shouldSendOrderUpdateEmail) {
-    const demoActor = await getSharedDemoActorWithCtx(ctx);
-    if (demoActor) {
+    const admittedActor = (ctx as Partial<OperationMutationCtx>)
+      .operationAdmission?.actor;
+    if (admittedActor?.kind === "shared_demo") {
       await decideSharedDemoEffect("order_notification.send", {
         live: async () => ctx.scheduler.runAfter(0, internal.storeFront.onlineOrderUtilFns.sendOrderUpdateEmailInternal, { orderId: order._id, newStatus: nextStatus! }),
       });
@@ -795,119 +801,130 @@ export const get = query({
   args: {
     identifier: v.union(v.id("onlineOrder"), v.string()),
   },
-  handler: async (ctx, args) => {
-    let order: Doc<"onlineOrder"> | null = null;
+  handler: getOnlineOrderWithCtx,
+});
 
-    try {
-      order = await ctx.db.get(
-        "onlineOrder",
-        args.identifier as Id<"onlineOrder">,
-      );
-    } catch (e) {
-      order = await ctx.db
-        .query(entity)
-        .withIndex("by_externalReference", (q) =>
-          q.eq("externalReference", args.identifier as string),
-        )
-        .first();
-    }
+export const getForOperations = query({
+  args: {
+    identifier: v.union(v.id("onlineOrder"), v.string()),
+  },
+  handler: admitSharedDemoPublicQuery(
+    getOnlineOrderReadDefinition,
+    getOnlineOrderWithCtx,
+  ),
+});
 
-    if (!order) {
-      order = await ctx.db
-        .query(entity)
-        .withIndex("by_checkoutSessionId", (q) =>
-          q.eq("checkoutSessionId", args.identifier as Id<"checkoutSession">),
-        )
-        .first();
-    }
+async function getOnlineOrderWithCtx(
+  ctx: QueryCtx,
+  args: { identifier: Id<"onlineOrder"> | string },
+) {
+  let order: Doc<"onlineOrder"> | null = null;
 
-    if (!order) return null;
+  try {
+    order = await ctx.db.get(
+      "onlineOrder",
+      args.identifier as Id<"onlineOrder">,
+    );
+  } catch (e) {
+    order = await ctx.db
+      .query(entity)
+      .withIndex("by_externalReference", (q) =>
+        q.eq("externalReference", args.identifier as string),
+      )
+      .first();
+  }
 
-    await requireSharedDemoStoreReadIfApplicable(ctx, order.storeId);
+  if (!order) {
+    order = await ctx.db
+      .query(entity)
+      .withIndex("by_checkoutSessionId", (q) =>
+        q.eq("checkoutSessionId", args.identifier as Id<"checkoutSession">),
+      )
+      .first();
+  }
 
-    const items = await listOrderItems(ctx, order._id);
+  if (!order) return null;
 
-    const itemsWithImages = await Promise.all(
-      items.map(async (item) => {
-        const [product, productSku] = await Promise.all([
-          ctx.db.get("product", item.productId),
-          ctx.db.get("productSku", item.productSkuId),
-        ]);
+  const items = await listOrderItems(ctx, order._id);
 
-        let category: string | undefined;
+  const itemsWithImages = await Promise.all(
+    items.map(async (item) => {
+      const [product, productSku] = await Promise.all([
+        ctx.db.get("product", item.productId),
+        ctx.db.get("productSku", item.productSkuId),
+      ]);
 
-        let colorName;
+      let category: string | undefined;
 
-        if (productSku?.color) {
-          const color = await ctx.db.get("color", productSku.color);
-          colorName = color?.name;
-        }
+      let colorName;
 
-        if (product) {
-          const productCategory = await ctx.db.get(
-            "category",
-            product.categoryId,
-          );
-          category = productCategory?.name;
-        }
+      if (productSku?.color) {
+        const color = await ctx.db.get("color", productSku.color);
+        colorName = color?.name;
+      }
 
-        // Calculate stock status
-        const currentQuantityAvailable = productSku?.quantityAvailable ?? 0;
-        const isOutOfStock = productSku?.inventoryCount === 0;
-        const isLowStock =
-          (currentQuantityAvailable <= 2 && currentQuantityAvailable > 0) ||
-          (productSku?.inventoryCount ?? 0) <= 2;
+      if (product) {
+        const productCategory = await ctx.db.get(
+          "category",
+          product.categoryId,
+        );
+        category = productCategory?.name;
+      }
+
+      const currentQuantityAvailable = productSku?.quantityAvailable ?? 0;
+      const isOutOfStock = productSku?.inventoryCount === 0;
+      const isLowStock =
+        (currentQuantityAvailable <= 2 && currentQuantityAvailable > 0) ||
+        (productSku?.inventoryCount ?? 0) <= 2;
+
+      return {
+        ...item,
+        productCategory: category,
+        length: productSku?.length,
+        colorName,
+        productName: product?.name,
+        productImage: productSku?.images?.[0],
+        currentQuantityAvailable,
+        currentInventoryCount: productSku?.inventoryCount ?? 0,
+        isOutOfStock,
+        isLowStock,
+      };
+    }),
+  );
+
+  const [workflowTraceId, refundsWithTraceIds] = await Promise.all([
+    getWorkflowTraceIdForLookup(ctx, {
+      storeId: order.storeId,
+      workflowType: ONLINE_ORDER_WORKFLOW_TYPE,
+      lookupType: ONLINE_ORDER_LOOKUP_TYPES.orderId,
+      lookupValue: order._id,
+    }),
+    Promise.all(
+      (order.refunds ?? []).map(async (refund) => {
+        const safeRefundRef = buildSafeExternalReferenceRef(refund.id);
 
         return {
-          ...item,
-          productCategory: category,
-          length: productSku?.length,
-          colorName,
-          productName: product?.name,
-          productImage: productSku?.images?.[0],
-          // Stock information
-          currentQuantityAvailable,
-          currentInventoryCount: productSku?.inventoryCount ?? 0,
-          isOutOfStock,
-          isLowStock,
+          ...refund,
+          workflowTraceId: safeRefundRef
+            ? await getWorkflowTraceIdForLookup(ctx, {
+                storeId: order.storeId,
+                workflowType: ORDER_RETURN_EXCHANGE_WORKFLOW_TYPE,
+                lookupType: ORDER_RETURN_EXCHANGE_LOOKUP_TYPES.subflowRef,
+                lookupValue: `${order._id}:${safeRefundRef}`,
+              })
+            : undefined,
         };
       }),
-    );
+    ),
+  ]);
 
-    const [workflowTraceId, refundsWithTraceIds] = await Promise.all([
-      getWorkflowTraceIdForLookup(ctx, {
-        storeId: order.storeId,
-        workflowType: ONLINE_ORDER_WORKFLOW_TYPE,
-        lookupType: ONLINE_ORDER_LOOKUP_TYPES.orderId,
-        lookupValue: order._id,
-      }),
-      Promise.all(
-        (order.refunds ?? []).map(async (refund) => {
-          const safeRefundRef = buildSafeExternalReferenceRef(refund.id);
-
-          return {
-            ...refund,
-            workflowTraceId: safeRefundRef
-              ? await getWorkflowTraceIdForLookup(ctx, {
-                  storeId: order.storeId,
-                  workflowType: ORDER_RETURN_EXCHANGE_WORKFLOW_TYPE,
-                  lookupType: ORDER_RETURN_EXCHANGE_LOOKUP_TYPES.subflowRef,
-                  lookupValue: `${order._id}:${safeRefundRef}`,
-                })
-              : undefined,
-          };
-        }),
-      ),
-    ]);
-
-    return {
-      ...order,
-      items: itemsWithImages,
-      refunds: refundsWithTraceIds,
-      workflowTraceId,
-    };
-  },
-});
+  return {
+    ...order,
+    items: itemsWithImages,
+    refunds: refundsWithTraceIds,
+    workflowTraceId,
+  };
+}
 
 export const getInternal = internalQuery({
   args: {
@@ -1013,9 +1030,9 @@ export const getByCheckoutSessionId = query({
 
 export const getAllOnlineOrders = query({
   args: { storeId: v.id("store") },
-  handler: async (ctx, args) => {
-    const demoActor = await getSharedDemoActorWithCtx(ctx);
-    if (demoActor && args.storeId !== demoActor.storeId) return [];
+  handler: admitSharedDemoPublicQuery(
+    listOnlineOrdersReadDefinition,
+    async (ctx: OperationQueryCtx, args: { storeId: Id<"store"> }) => {
     const orders = await ctx.db
       .query(entity)
       .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
@@ -1032,7 +1049,8 @@ export const getAllOnlineOrders = query({
     );
 
     return ordersWithItems;
-  },
+    },
+  ),
 });
 
 export const getAllOnlineOrdersByStoreFrontUserId = query({
@@ -1067,15 +1085,13 @@ export const update = mutation({
   returns: commandResultValidator(v.null()),
   handler: admitSharedDemoPublicMutation(
     updateOnlineOrderOperationDefinition,
-    async (ctx, args) => {
+    async (ctx: OperationMutationCtx, args) => {
     try {
-      const demoActor = await requireSharedDemoCapabilityIfApplicable(
-        ctx,
-        "orders.fulfill",
-      );
-      if (demoActor) {
+      const admittedActor = ctx.operationAdmission.actor;
+      const isSharedDemoActor = admittedActor.kind === "shared_demo";
+      if (isSharedDemoActor) {
+        requireSharedDemoCapability("orders.fulfill");
         requireSharedDemoOrderFulfillmentUpdate(args.update);
-        await requireReadySharedDemoWriteWithCtx(ctx, { storeId: demoActor.storeId });
       }
       if (args.orderId) {
         const order = await ctx.db.get("onlineOrder", args.orderId);
@@ -1086,7 +1102,7 @@ export const update = mutation({
             message: "Order not found.",
           });
         }
-        if (demoActor && order.storeId !== demoActor.storeId) {
+        if (isSharedDemoActor && order.storeId !== admittedActor.storeId) {
           denySharedDemoAction();
         }
         const accessResult = await requireNormalOrderStoreAccessWithCtx(
@@ -1097,7 +1113,7 @@ export const update = mutation({
 
         await applyOnlineOrderUpdate(ctx, order, {
           ...args,
-          allowUncollectedPaymentOnDelivery: Boolean(demoActor),
+          allowUncollectedPaymentOnDelivery: isSharedDemoActor,
         });
         return ok(null);
       }
@@ -1115,7 +1131,7 @@ export const update = mutation({
             message: "Order not found.",
           });
         }
-        if (demoActor && order.storeId !== demoActor.storeId) {
+        if (isSharedDemoActor && order.storeId !== admittedActor.storeId) {
           denySharedDemoAction();
         }
         const accessResult = await requireNormalOrderStoreAccessWithCtx(
@@ -1143,7 +1159,7 @@ export const update = mutation({
         if (args.update.status) {
           await applyOnlineOrderUpdate(ctx, order, {
             ...args,
-            allowUncollectedPaymentOnDelivery: Boolean(demoActor),
+            allowUncollectedPaymentOnDelivery: isSharedDemoActor,
             update: {
               ...rest,
               refunds,
@@ -1665,9 +1681,8 @@ export const processReturnExchange = mutation({
   ),
   handler: admitSharedDemoPublicMutation(
     processReturnExchangeOperationDefinition,
-    async (ctx, args) => {
+    async (ctx: OperationMutationCtx, args) => {
     try {
-      await requireSharedDemoCapabilityIfApplicable(ctx, "payments.refund");
       const order = await ctx.db.get("onlineOrder", args.orderId);
 
       if (!order) {
@@ -2371,8 +2386,9 @@ export const returnAllItemsToStockInternal = internalMutation({
 
 export const newOrder = query({
   args: { storeId: v.id("store") },
-  handler: async (ctx, args) => {
-    await requireSharedDemoStoreReadIfApplicable(ctx, args.storeId);
+  handler: admitSharedDemoPublicQuery(
+    getNewestOnlineOrderReadDefinition,
+    async (ctx: OperationQueryCtx, args: { storeId: Id<"store"> }) => {
     const order = await ctx.db
       .query(entity)
       .filter((q) => q.eq(q.field("storeId"), args.storeId))
@@ -2380,7 +2396,8 @@ export const newOrder = query({
       .first();
 
     return order;
-  },
+    },
+  ),
 });
 
 export const getOrderItems = query({
@@ -2476,8 +2493,15 @@ export const getOrderMetrics = query({
     totalDiscounts: v.number(),
     netRevenue: v.number(),
   }),
-  handler: async (ctx, args) => {
-    await requireSharedDemoStoreReadIfApplicable(ctx, args.storeId);
+  handler: admitSharedDemoPublicQuery(
+    getOnlineOrderMetricsReadDefinition,
+    async (
+      ctx: OperationQueryCtx,
+      args: {
+        storeId: Id<"store">;
+        timeRange: "day" | "week" | "month" | "all";
+      },
+    ) => {
     // Calculate time filter based on time range
     let timeFilter: number | undefined;
     const now = Date.now();
@@ -2562,5 +2586,6 @@ export const getOrderMetrics = query({
       totalDiscounts,
       netRevenue,
     };
-  },
+    },
+  ),
 });

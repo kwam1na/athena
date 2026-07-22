@@ -295,6 +295,31 @@ export const authenticateStaffCredentialOperationDefinition =
     capability: "staff.authenticate",
   });
 
+export const authenticateStaffCredentialForTerminalOperationDefinition =
+  storeWriteOperation({
+    functionName:
+      "operations/staffCredentials:authenticateStaffCredentialForTerminal",
+    operationId:
+      "operations/staffCredentials.authenticateStaffCredentialForTerminal",
+    capability: "staff.authenticate",
+  });
+
+export const validateRestoredPosLocalStaffProofOperationDefinition =
+  storeWriteOperation({
+    functionName:
+      "operations/staffCredentials:validateRestoredPosLocalStaffProof",
+    operationId:
+      "operations/staffCredentials.validateRestoredPosLocalStaffProof",
+    capability: "staff.authenticate",
+  });
+
+export const refreshTerminalStaffAuthorityOperationDefinition =
+  storeWriteOperation({
+    functionName: "operations/staffCredentials:refreshTerminalStaffAuthority",
+    operationId: "operations/staffCredentials.refreshTerminalStaffAuthority",
+    capability: "staff.authenticate",
+  });
+
 export const authenticateStaffCredentialForApprovalOperationDefinition =
   storeWriteOperation({
     functionName:
@@ -419,6 +444,9 @@ export const OPERATION_ADMISSION_DEFINITIONS = [
   reviewRegisterSessionCloseoutOperationDefinition,
   startStoreDayOperationDefinition,
   authenticateStaffCredentialOperationDefinition,
+  authenticateStaffCredentialForTerminalOperationDefinition,
+  validateRestoredPosLocalStaffProofOperationDefinition,
+  refreshTerminalStaffAuthorityOperationDefinition,
   authenticateStaffCredentialForApprovalOperationDefinition,
   postStaffMessageOperationDefinition,
   submitStockAdjustmentBatchOperationDefinition,

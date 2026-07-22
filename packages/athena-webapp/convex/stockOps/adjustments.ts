@@ -10,11 +10,17 @@ import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import { submitStockAdjustmentBatchOperationDefinition } from "../operationAdmission/definitions";
 import { admitSharedDemoPublicMutation } from "../operationAdmission/publicMutation";
+import { admitSharedDemoPublicQuery } from "../operationAdmission/publicQuery";
 import {
-  requireSharedDemoStoreCapabilityIfApplicable,
-  requireSharedDemoStoreReadIfApplicable,
-} from "../sharedDemo/actor";
-import { requireReadySharedDemoWriteWithCtx } from "../sharedDemo/restore";
+  getInventoryUnitSummaryReadDefinition,
+  listInventorySnapshotForProductSkusReadDefinition,
+  listInventorySnapshotPageReadDefinition,
+  listInventorySnapshotReadDefinition,
+} from "../operationAdmission/readDefinitions";
+import type {
+  OperationMutationCtx,
+  OperationQueryCtx,
+} from "../operationAdmission/types";
 import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
@@ -1258,15 +1264,20 @@ async function requireInventorySnapshotForProductSkusAccess(
   ctx: QueryCtx,
   storeId: Id<"store">,
 ) {
-  await requireSharedDemoStoreReadIfApplicable(ctx, storeId);
   const store = await ctx.db.get("store", storeId);
   if (!store) {
     throw new Error("Store not found.");
   }
 
-  const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx, {
-    sharedDemoCapability: "inventory.adjust",
-  });
+  const admittedActor = (ctx as Partial<OperationQueryCtx>).operationAdmission
+    ?.actor;
+  const athenaUser =
+    admittedActor?.kind === "shared_demo"
+      ? await ctx.db.get("athenaUser", admittedActor.athenaUserId)
+      : await requireAuthenticatedAthenaUserWithCtx(ctx);
+  if (!athenaUser) {
+    throw new Error("Sign in again to continue.");
+  }
   await requireOrganizationMemberRoleWithCtx(ctx, {
     allowedRoles: ["full_admin", "pos_only"],
     failureMessage: "You do not have access to view stock inventory.",
@@ -1280,10 +1291,15 @@ export const listInventorySnapshot = query({
     limit: v.optional(v.number()),
     storeId: v.id("store"),
   },
-  handler: async (ctx, args) => {
-    await requireSharedDemoStoreReadIfApplicable(ctx, args.storeId);
+  handler: admitSharedDemoPublicQuery(
+    listInventorySnapshotReadDefinition,
+    async (
+      ctx: OperationQueryCtx,
+      args: { limit?: number; storeId: Id<"store"> },
+    ) => {
     return listInventorySnapshotWithCtx(ctx, args);
-  },
+    },
+  ),
 });
 
 export const listInventorySnapshotForProductSkus = query({
@@ -1291,21 +1307,29 @@ export const listInventorySnapshotForProductSkus = query({
     productSkuIds: v.array(v.id("productSku")),
     storeId: v.id("store"),
   },
-  handler: async (ctx, args) => {
+  handler: admitSharedDemoPublicQuery(
+    listInventorySnapshotForProductSkusReadDefinition,
+    async (
+      ctx: OperationQueryCtx,
+      args: { productSkuIds: Id<"productSku">[]; storeId: Id<"store"> },
+    ) => {
     await requireInventorySnapshotForProductSkusAccess(ctx, args.storeId);
 
     return listInventorySnapshotForProductSkusWithCtx(ctx, args);
-  },
+    },
+  ),
 });
 
 export const getInventoryUnitSummary = query({
   args: {
     storeId: v.id("store"),
   },
-  handler: async (ctx, args) => {
-    await requireSharedDemoStoreReadIfApplicable(ctx, args.storeId);
+  handler: admitSharedDemoPublicQuery(
+    getInventoryUnitSummaryReadDefinition,
+    async (ctx: OperationQueryCtx, args: { storeId: Id<"store"> }) => {
     return getInventoryUnitSummaryWithCtx(ctx, args);
-  },
+    },
+  ),
 });
 
 export const listInventorySnapshotPage = query({
@@ -1313,8 +1337,15 @@ export const listInventorySnapshotPage = query({
     paginationOpts: paginationOptsValidator,
     storeId: v.id("store"),
   },
-  handler: async (ctx, args) => {
-    await requireSharedDemoStoreReadIfApplicable(ctx, args.storeId);
+  handler: admitSharedDemoPublicQuery(
+    listInventorySnapshotPageReadDefinition,
+    async (
+      ctx: OperationQueryCtx,
+      args: {
+        paginationOpts: { cursor: null | string; numItems: number };
+        storeId: Id<"store">;
+      },
+    ) => {
     const productSkuPage = await ctx.db
       .query("productSku")
       .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
@@ -1331,7 +1362,8 @@ export const listInventorySnapshotPage = query({
         storeId: args.storeId,
       }),
     };
-  },
+    },
+  ),
 });
 
 export async function temporaryDeleteStockAdjustmentScopeSkusWithCtx(
@@ -1447,9 +1479,15 @@ export async function submitStockAdjustmentBatchWithCtx(
     throw new Error("Store not found.");
   }
 
-  const createdByUser = await requireAuthenticatedAthenaUserWithCtx(ctx, {
-    sharedDemoCapability: "inventory.adjust",
-  });
+  const admittedActor = (ctx as Partial<OperationMutationCtx>).operationAdmission
+    ?.actor;
+  const createdByUser =
+    admittedActor?.kind === "shared_demo"
+      ? await ctx.db.get("athenaUser", admittedActor.athenaUserId)
+      : await requireAuthenticatedAthenaUserWithCtx(ctx);
+  if (!createdByUser) {
+    throw new Error("Sign in again to continue.");
+  }
 
   await requireOrganizationMemberRoleWithCtx(ctx, {
     allowedRoles: ["full_admin", "pos_only"],
@@ -1733,10 +1771,8 @@ export const submitStockAdjustmentBatch = mutation({
   returns: commandResultValidator(v.any()),
   handler: admitSharedDemoPublicMutation(
     submitStockAdjustmentBatchOperationDefinition,
-    async (ctx, args) => {
-    const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(ctx, "inventory.adjust", args.storeId);
-    if (demoActor) await requireReadySharedDemoWriteWithCtx(ctx, { storeId: args.storeId });
-    return submitStockAdjustmentBatchCommandWithCtx(ctx, args);
+    async (ctx: OperationMutationCtx, args) => {
+      return submitStockAdjustmentBatchCommandWithCtx(ctx, args);
     },
   ),
 });

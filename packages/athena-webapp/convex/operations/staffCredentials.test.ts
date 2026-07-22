@@ -1665,8 +1665,11 @@ describe("staff credential operations", () => {
   });
 
   it("authenticates demo managers through the terminal's store-scoped read boundary", async () => {
-    sharedDemoMocks.requireSharedDemoStoreReadIfApplicable.mockResolvedValue({
+    sharedDemoMocks.getSharedDemoActorWithCtx.mockResolvedValue({
+      authUserId: "auth-user-1",
       athenaUserId: "athena-user-1",
+      kind: "shared_demo",
+      organizationId: "org_1",
       storeId: "store_1",
     });
     const { ctx } = createStaffCredentialsMutationCtx({
@@ -1722,7 +1725,7 @@ describe("staff credential operations", () => {
     });
     expect(
       sharedDemoMocks.requireSharedDemoStoreReadIfApplicable,
-    ).toHaveBeenCalledWith(ctx, "store_1");
+    ).not.toHaveBeenCalled();
     expect(authMocks.requireAuthenticatedAthenaUserWithCtx).not.toHaveBeenCalled();
   });
 
@@ -1781,7 +1784,16 @@ describe("staff credential operations", () => {
       },
     });
     expect(authMocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
-      ctx,
+      expect.objectContaining({
+        db: ctx.db,
+        operationAdmission: expect.objectContaining({
+          actor: expect.objectContaining({ kind: "normal_user" }),
+          operation: expect.objectContaining({
+            operationId:
+              "operations/staffCredentials.authenticateStaffCredentialForTerminal",
+          }),
+        }),
+      }),
       {
         allowedRoles: ["full_admin", "pos_only"],
         failureMessage: "You do not have access to this POS terminal.",
@@ -1846,7 +1858,16 @@ describe("staff credential operations", () => {
       }),
     });
     expect(authMocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
-      ctx,
+      expect.objectContaining({
+        db: ctx.db,
+        operationAdmission: expect.objectContaining({
+          actor: expect.objectContaining({ kind: "normal_user" }),
+          operation: expect.objectContaining({
+            operationId:
+              "operations/staffCredentials.authenticateStaffCredentialForTerminal",
+          }),
+        }),
+      }),
       {
         allowedRoles: ["full_admin", "pos_only"],
         failureMessage: "You do not have access to this POS terminal.",

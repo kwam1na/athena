@@ -375,8 +375,10 @@ describe("POS public catalog queries", () => {
       }),
     ]);
     expect(mocks.requireAuthenticatedAthenaUserWithCtx).toHaveBeenCalledWith(
-      ctx,
-      { sharedDemoCapability: "pos.sale.complete" },
+      expect.objectContaining({
+        db: ctx.db,
+        operationAdmission: expect.any(Object),
+      }),
     );
     expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
       ctx,
@@ -489,8 +491,10 @@ describe("POS public catalog queries", () => {
     ]);
     assertConformsToExportedReturns(listRegisterCatalogSnapshot, rows);
     expect(mocks.requireAuthenticatedAthenaUserWithCtx).toHaveBeenCalledWith(
-      ctx,
-      { sharedDemoCapability: "pos.sale.complete" },
+      expect.objectContaining({
+        db: ctx.db,
+        operationAdmission: expect.any(Object),
+      }),
     );
     expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
       ctx,
@@ -527,9 +531,12 @@ describe("POS public catalog queries", () => {
     );
     expect(
       mocks.requireAuthenticatedAthenaUserIndexedWithCtx,
-    ).toHaveBeenCalledWith(ctx, {
-      sharedDemoCapability: "pos.sale.complete",
-    });
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        db: ctx.db,
+        operationAdmission: expect.any(Object),
+      }),
+    );
     expect(mocks.requireAuthenticatedAthenaUserWithCtx).toHaveBeenCalledWith(
       ctx,
     );
@@ -915,14 +922,7 @@ describe("POS public catalog queries", () => {
 
     expect(
       mocks.requireSharedDemoStoreCapabilityIfApplicable,
-    ).toHaveBeenCalledWith(
-      expect.objectContaining({
-        db: ctx.db,
-        operationAdmission: expect.any(Object),
-      }),
-      "catalog.quick_add",
-      "store-1",
-    );
+    ).not.toHaveBeenCalled();
     expect(mocks.requireAuthenticatedAthenaUserWithCtx).toHaveBeenCalledWith(
       expect.objectContaining({
         db: ctx.db,

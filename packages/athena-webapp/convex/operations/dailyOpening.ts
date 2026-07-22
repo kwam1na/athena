@@ -10,8 +10,7 @@ import { startStoreDayOperationDefinition } from "../operationAdmission/definiti
 import { admitSharedDemoPublicMutation } from "../operationAdmission/publicMutation";
 import { admitSharedDemoPublicQuery } from "../operationAdmission/publicQuery";
 import { getDailyOpeningSnapshotReadDefinition } from "../operationAdmission/readDefinitions";
-import { requireSharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
-import { requireReadySharedDemoWriteWithCtx } from "../sharedDemo/restore";
+import type { OperationMutationCtx } from "../operationAdmission/types";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import { requireStoreMemberAccessWithCtx } from "../lib/storeMemberAccess";
 import { recordOperationalEventWithCtx } from "./operationalEvents";
@@ -1620,17 +1619,14 @@ export const startStoreDay = mutation({
   returns: commandResultValidator(v.any()),
   handler: admitSharedDemoPublicMutation(
     startStoreDayOperationDefinition,
-    async (ctx, args) => {
-      const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(
-        ctx,
-        "daily_operations.write",
-        args.storeId,
-      );
-      if (!demoActor) return startStoreDayWithCtx(ctx, args);
+    async (ctx: OperationMutationCtx, args) => {
+      const admittedActor = ctx.operationAdmission.actor;
+      if (admittedActor.kind !== "shared_demo") {
+        return startStoreDayWithCtx(ctx, args);
+      }
 
-      await requireReadySharedDemoWriteWithCtx(ctx, { storeId: args.storeId });
       const openingActor = await resolveSharedDemoOpeningActorWithCtx(ctx, {
-        athenaUserId: demoActor.athenaUserId,
+        athenaUserId: admittedActor.athenaUserId,
         storeId: args.storeId,
       });
       if (openingActor.kind !== "ok") return openingActor;

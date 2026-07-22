@@ -28,8 +28,10 @@ import {
   refreshCatalogSummaryWithCtx,
 } from "./catalogSummary";
 import { requireNonDemoFoundationMutation } from "../sharedDemo/foundation";
-import { requireSharedDemoStoreReadIfApplicable } from "../sharedDemo/actor";
 import { requireAuthenticatedAthenaUserWithCtx } from "../lib/athenaUserAuth";
+import { admitSharedDemoPublicQuery } from "../operationAdmission/publicQuery";
+import { listInventoryProductsReadDefinition } from "../operationAdmission/readDefinitions";
+import type { OperationQueryCtx } from "../operationAdmission/types";
 import {
   ensurePendingCheckoutReviewWorkForUnarchivedProduct,
   retirePendingCheckoutReviewWorkForArchivedProduct,
@@ -273,8 +275,26 @@ export const getAll = query({
       }),
     ),
   },
-  handler: async (ctx, args) => {
-    await requireSharedDemoStoreReadIfApplicable(ctx, args.storeId);
+  handler: admitSharedDemoPublicQuery(
+    listInventoryProductsReadDefinition,
+    async (
+      ctx: OperationQueryCtx,
+      args: {
+        availability?: "draft" | "live" | "archived" | "unarchived";
+        category?: string[];
+        color?: Id<"color">[];
+        excludeStorefrontHidden?: boolean;
+        filters?: {
+          isMissingImages?: boolean;
+          isMissingPrice?: boolean;
+          isPriceZero?: boolean;
+        };
+        isVisible?: boolean;
+        length?: number[];
+        storeId: Id<"store">;
+        subcategory?: string[];
+      },
+    ) => {
     let categoryId: Id<"category"> | undefined;
     let subcategoryId: Id<"subcategory"> | undefined;
 
@@ -471,7 +491,8 @@ export const getAll = query({
       .filter((product) => product.skus.length > 0);
 
     return productsWithSkus;
-  },
+    },
+  ),
 });
 
 export const getCatalogSummary = query({

@@ -10,7 +10,7 @@ import { v } from "convex/values";
 import { storeSchema } from "../schemas/inventory";
 import { listItemsInR2Directory, uploadFileToR2 } from "../cloudflare/r2";
 import { api, internal } from "../_generated/api";
-import { Doc } from "../_generated/dataModel";
+import type { Doc, Id } from "../_generated/dataModel";
 import {
   getUnknownStoreConfigRootKeys,
   isLegacyRootKey,
@@ -20,11 +20,14 @@ import {
   removeLegacyRootKeysFromConfig,
   toV2Config,
 } from "./storeConfigV2";
-import { getSharedDemoActorWithCtx, requireSharedDemoCapabilityIfApplicable } from "../sharedDemo/actor";
+import { requireSharedDemoCapabilityIfApplicable } from "../sharedDemo/actor";
 import { ok, userError } from "../../shared/commandResult";
 import { requireNonDemoFoundationMutation } from "../sharedDemo/foundation";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import { requireAuthenticatedAthenaUserWithCtx } from "../lib/athenaUserAuth";
+import { admitSharedDemoPublicQuery } from "../operationAdmission/publicQuery";
+import { listOrganizationStoresReadDefinition } from "../operationAdmission/readDefinitions";
+import type { OperationQueryCtx } from "../operationAdmission/types";
 
 const entity = "store";
 const CONFIG_MIGRATION_PAGE_SIZE = 50;
@@ -48,9 +51,18 @@ export const getAll = query({
   args: {
     organizationId: v.id("organization"),
   },
-  handler: async (ctx, args) => {
-    const demoActor = await getSharedDemoActorWithCtx(ctx);
-    if (demoActor && args.organizationId !== demoActor.organizationId) return [];
+  handler: admitSharedDemoPublicQuery(
+    listOrganizationStoresReadDefinition,
+    async (
+      ctx: OperationQueryCtx,
+      args: { organizationId: Id<"organization"> },
+    ) => {
+    const admittedActor = ctx.operationAdmission.actor;
+    if (
+      admittedActor.kind === "shared_demo" &&
+      args.organizationId !== admittedActor.organizationId
+    )
+      return [];
     const stores = await ctx.db
       .query(entity)
       .filter((q) => q.eq(q.field("organizationId"), args.organizationId))
@@ -63,7 +75,8 @@ export const getAll = query({
     // });
 
     return stores;
-  },
+    },
+  ),
 });
 
 export const getAllInternal = internalQuery({

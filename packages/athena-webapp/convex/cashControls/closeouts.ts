@@ -9,6 +9,7 @@ import {
   submitRegisterSessionCloseoutOperationDefinition,
 } from "../operationAdmission/definitions";
 import { admitSharedDemoPublicMutation } from "../operationAdmission/publicMutation";
+import type { OperationMutationCtx } from "../operationAdmission/types";
 import { buildApprovalRequest } from "../operations/approvalRequestHelpers";
 import {
   APPROVAL_ACTIONS,
@@ -58,8 +59,6 @@ import type {
   ApprovalRequesterBinding,
 } from "../../shared/approvalPolicy";
 import { formatStaffDisplayName } from "../../shared/staffDisplayName";
-import { requireSharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
-import { requireReadySharedDemoWriteWithCtx } from "../sharedDemo/restore";
 
 export {
   buildRegisterSessionCloseoutReview,
@@ -599,19 +598,21 @@ async function staffProfileCanReviewCloseoutVariance(
 async function requireCashControlsStoreAccess(
   ctx: QueryCtx | MutationCtx,
   storeId: Id<"store">,
-  options?: { allowSharedDemoWrite?: boolean },
 ) {
   const store = await ctx.db.get("store", storeId);
   if (!store) {
     throw new Error("Store not found.");
   }
 
-  const athenaUser = await requireAuthenticatedAthenaUserWithCtx(
-    ctx,
-    options?.allowSharedDemoWrite
-      ? { sharedDemoCapability: "cash.control.write" }
-      : undefined,
-  );
+  const admittedActor = (ctx as Partial<OperationMutationCtx>).operationAdmission
+    ?.actor;
+  const athenaUser =
+    admittedActor?.kind === "shared_demo"
+      ? await ctx.db.get("athenaUser", admittedActor.athenaUserId)
+      : await requireAuthenticatedAthenaUserWithCtx(ctx);
+  if (!athenaUser) {
+    throw new Error("Sign in again to continue.");
+  }
   await requireOrganizationMemberRoleWithCtx(ctx, {
     allowedRoles: ["full_admin", "pos_only"],
     failureMessage: "You do not have access to cash controls.",
@@ -863,7 +864,7 @@ export const submitRegisterSessionCloseout = mutation({
   handler: admitSharedDemoPublicMutation(
     submitRegisterSessionCloseoutOperationDefinition,
     async (
-    ctx: MutationCtx,
+    ctx: OperationMutationCtx,
     args: SubmitRegisterSessionCloseoutArgs
   ): Promise<ApprovalCommandResult<SubmitRegisterSessionCloseoutResult>> => {
     if (args.countedCash < 0) {
@@ -873,23 +874,15 @@ export const submitRegisterSessionCloseout = mutation({
       });
     }
 
-    const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(
-      ctx,
-      "cash.control.write",
-      args.storeId,
-    );
-    if (demoActor) {
-      await requireReadySharedDemoWriteWithCtx(ctx, { storeId: args.storeId });
-    }
     const { athenaUser, store } = await requireCashControlsStoreAccess(
       ctx,
       args.storeId,
-      { allowSharedDemoWrite: true },
     );
     const actorUserId = athenaUser._id;
+    const admittedActor = ctx.operationAdmission.actor;
     const submitActorStaffProfileResult = await resolveCloseoutActorStaffProfileId(ctx, {
       allowedCredentialRoles: ["cashier", "manager"],
-      allowSharedDemoStaffActor: Boolean(demoActor),
+      allowSharedDemoStaffActor: admittedActor.kind === "shared_demo",
       athenaUserId: athenaUser._id,
       staffProfileId: args.actorStaffProfileId ?? args.requestedByStaffProfileId,
       staffPinHash: args.staffPinHash,
@@ -1812,21 +1805,12 @@ export const reopenRegisterSessionCloseout = mutation({
   handler: admitSharedDemoPublicMutation(
     reopenRegisterSessionCloseoutOperationDefinition,
     async (
-    ctx: MutationCtx,
+    ctx: OperationMutationCtx,
     args: ReopenRegisterSessionCloseoutArgs
   ): Promise<CommandResult<ReopenRegisterSessionResult>> => {
-    const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(
-      ctx,
-      "cash.control.write",
-      args.storeId,
-    );
-    if (demoActor) {
-      await requireReadySharedDemoWriteWithCtx(ctx, { storeId: args.storeId });
-    }
     const { athenaUser } = await requireCashControlsStoreAccess(
       ctx,
       args.storeId,
-      { allowSharedDemoWrite: true },
     );
     const actorUserId = athenaUser._id;
     const registerSession = await ctx.db.get("registerSession", args.registerSessionId);
@@ -2108,7 +2092,7 @@ export const correctRegisterSessionOpeningFloat = mutation({
   handler: admitSharedDemoPublicMutation(
     correctRegisterSessionOpeningFloatOperationDefinition,
     async (
-    ctx: MutationCtx,
+    ctx: OperationMutationCtx,
     args: CorrectRegisterSessionOpeningFloatArgs
   ): Promise<ApprovalCommandResult<CorrectRegisterSessionOpeningFloatResult>> => {
     const reason = trimOptional(args.reason);
@@ -2127,22 +2111,14 @@ export const correctRegisterSessionOpeningFloat = mutation({
       });
     }
 
-    const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(
-      ctx,
-      "cash.control.write",
-      args.storeId,
-    );
-    if (demoActor) {
-      await requireReadySharedDemoWriteWithCtx(ctx, { storeId: args.storeId });
-    }
     const { athenaUser } = await requireCashControlsStoreAccess(
       ctx,
       args.storeId,
-      { allowSharedDemoWrite: true },
     );
     const actorUserId = athenaUser._id;
+    const admittedActor = ctx.operationAdmission.actor;
     const actorStaffProfileResult = await resolveCloseoutActorStaffProfileId(ctx, {
-      allowSharedDemoStaffActor: Boolean(demoActor),
+      allowSharedDemoStaffActor: admittedActor.kind === "shared_demo",
       athenaUserId: athenaUser._id,
       staffProfileId: args.actorStaffProfileId,
       staffProofToken: args.staffProofToken,
@@ -2302,21 +2278,12 @@ export const reviewRegisterSessionCloseout = mutation({
   handler: admitSharedDemoPublicMutation(
     reviewRegisterSessionCloseoutOperationDefinition,
     async (
-    ctx: MutationCtx,
+    ctx: OperationMutationCtx,
     args: ReviewRegisterSessionCloseoutArgs
   ): Promise<CommandResult<ReviewRegisterSessionCloseoutResult>> => {
-    const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(
-      ctx,
-      "cash.control.write",
-      args.storeId,
-    );
-    if (demoActor) {
-      await requireReadySharedDemoWriteWithCtx(ctx, { storeId: args.storeId });
-    }
     const { athenaUser } = await requireCashControlsStoreAccess(
       ctx,
       args.storeId,
-      { allowSharedDemoWrite: true },
     );
     const reviewedByUserId = athenaUser._id;
     const registerSession = await ctx.db.get("registerSession", args.registerSessionId);

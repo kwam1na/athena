@@ -305,6 +305,9 @@ function createSkuMutationCtx(seed: Partial<Record<TableName, Row[]>>) {
 function createProductsQueryCtx(seed: Partial<Record<TableName, Row[]>>) {
   const { ctx, tables } = createSkuMutationCtx(seed);
   const queryCtx = ctx as unknown as QueryCtx;
+  mocks.requireAuthenticatedAthenaUserWithCtx.mockResolvedValue({
+    _id: "athena-user-1",
+  });
 
   queryCtx.db.query = ((table: TableName) => ({
     filter(applyFilter?: (queryBuilder: unknown) => (row: Row) => boolean) {
@@ -2227,7 +2230,7 @@ describe("product archiving", () => {
 });
 
 describe("product catalog visibility", () => {
-  it("keeps product mutation return contracts executable", () => {
+  it("keeps admitted product mutation return contracts executable", () => {
     assertConformsToExportedReturns(getInventoryBySkuIds, [
       {
         _id: "productSku001",

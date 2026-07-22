@@ -268,7 +268,7 @@ function createPendingItemAdjustmentApprovalCtx(options: {
 }
 
 describe("cash control closeouts", () => {
-  it("proves operation-admitted public closeout exports conform to their return validators", () => {
+  it("proves admitted public closeout exports conform to their return validators", () => {
     const validationError = {
       kind: "user_error" as const,
       error: {

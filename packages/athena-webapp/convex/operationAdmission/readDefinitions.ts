@@ -67,6 +67,36 @@ function defineStockAdjustmentsRead(functionName: string, operationId: string) {
   });
 }
 
+function defineInventoryCatalogRead(functionName: string, operationId: string) {
+  return defineReadOperation({
+    functionName,
+    operationId,
+    access: { kind: "read", intent: "inventory.catalog.view" },
+    scope: { kind: "store", storeIdArg: "storeId" },
+    actors: { normalUser: "admit", sharedDemo: "admit" },
+  });
+}
+
+function defineOnlineOrdersRead(functionName: string, operationId: string) {
+  return defineReadOperation({
+    functionName,
+    operationId,
+    access: { kind: "read", intent: "online_orders.view" },
+    scope: { kind: "store", storeIdArg: "storeId" },
+    actors: { normalUser: "admit", sharedDemo: "admit" },
+  });
+}
+
+function defineOrganizationRead(functionName: string, operationId: string) {
+  return defineReadOperation({
+    functionName,
+    operationId,
+    access: { kind: "read", intent: "organization.view" },
+    scope: { kind: "organization", organizationIdArg: "organizationId" },
+    actors: { normalUser: "admit", sharedDemo: "admit" },
+  });
+}
+
 export const getDailyOperationsSnapshotReadDefinition =
   defineDailyOperationsRead(
     "operations/dailyOperations:getDailyOperationsSnapshot",
@@ -131,6 +161,24 @@ export const getDailyOpeningSnapshotReadDefinition = defineDailyOperationsRead(
   "operations/dailyOpening:getDailyOpeningSnapshot",
   "operations.dailyOpening.getDailyOpeningSnapshot.read",
 );
+
+export const getOpeningAutoStartPolicyReadDefinition =
+  defineDailyOperationsRead(
+    "operations/dailyOperationsAutomation:getOpeningAutoStartPolicy",
+    "operations.dailyOperationsAutomation.getOpeningAutoStartPolicy.read",
+  );
+
+export const getEodAutoCompletePolicyReadDefinition =
+  defineDailyOperationsRead(
+    "operations/dailyOperationsAutomation:getEodAutoCompletePolicy",
+    "operations.dailyOperationsAutomation.getEodAutoCompletePolicy.read",
+  );
+
+export const getRegisterCloseoutApprovalPolicyReadDefinition =
+  defineDailyOperationsRead(
+    "operations/dailyOperationsAutomation:getRegisterCloseoutApprovalPolicy",
+    "operations.dailyOperationsAutomation.getRegisterCloseoutApprovalPolicy.read",
+  );
 
 export const getOpenWorkCountSummaryReadDefinition = defineOperationalWorkRead(
   "operations/operationalWorkItems:getOpenWorkCountSummary",
@@ -197,6 +245,55 @@ export const getActiveCycleCountDraftSummaryReadDefinition =
     "stockOps/cycleCountDrafts:getActiveCycleCountDraftSummary",
     "stockOps.cycleCountDrafts.getActiveCycleCountDraftSummary.read",
   );
+
+export const listInventoryProductsReadDefinition = defineInventoryCatalogRead(
+  "inventory/products:getAll",
+  "inventory.products.getAll.read",
+);
+
+export const listInventorySnapshotReadDefinition = defineStockAdjustmentsRead(
+  "stockOps/adjustments:listInventorySnapshot",
+  "stockOps.adjustments.listInventorySnapshot.read",
+);
+
+export const listInventorySnapshotForProductSkusReadDefinition =
+  defineStockAdjustmentsRead(
+    "stockOps/adjustments:listInventorySnapshotForProductSkus",
+    "stockOps.adjustments.listInventorySnapshotForProductSkus.read",
+  );
+
+export const getInventoryUnitSummaryReadDefinition =
+  defineStockAdjustmentsRead(
+    "stockOps/adjustments:getInventoryUnitSummary",
+    "stockOps.adjustments.getInventoryUnitSummary.read",
+  );
+
+export const listInventorySnapshotPageReadDefinition =
+  defineStockAdjustmentsRead(
+    "stockOps/adjustments:listInventorySnapshotPage",
+    "stockOps.adjustments.listInventorySnapshotPage.read",
+  );
+
+export const listAthenaUserOrganizationsReadDefinition = defineReadOperation({
+  functionName: "inventory/organizations:getAll",
+  operationId: "inventory.organizations.getAll.read",
+  access: { kind: "read", intent: "organization.view" },
+  scope: { kind: "none" },
+  actors: { normalUser: "admit", sharedDemo: "admit" },
+});
+
+export const getOrganizationByIdOrSlugReadDefinition = defineReadOperation({
+  functionName: "inventory/organizations:getByIdOrSlug",
+  operationId: "inventory.organizations.getByIdOrSlug.read",
+  access: { kind: "read", intent: "organization.view" },
+  scope: { kind: "none" },
+  actors: { normalUser: "admit", sharedDemo: "admit" },
+});
+
+export const listOrganizationStoresReadDefinition = defineOrganizationRead(
+  "inventory/stores:getAll",
+  "inventory.stores.getAll.read",
+);
 
 export const getPosTodaySummaryReadDefinition = definePosRead(
   "pos/public/transactions:getTodaySummary",
@@ -270,6 +367,27 @@ export const getPosStoreSessionsReadDefinition = definePosRead(
   "inventory.posSessions.getStoreSessions.read",
 );
 
+export const getPosSessionItemsReadDefinition = defineReadOperation({
+  functionName: "inventory/posSessionItems:getSessionItems",
+  operationId: "inventory.posSessionItems.getSessionItems.read",
+  access: { kind: "read", intent: "pos.view" },
+  scope: {
+    kind: "store",
+    resolve: async (ctx, args) => {
+      const sessionId = args.sessionId;
+      if (typeof sessionId !== "string") {
+        return {};
+      }
+      const session = await ctx.db.get(
+        "posSession",
+        sessionId as Id<"posSession">,
+      );
+      return session ? { storeId: session.storeId } : {};
+    },
+  },
+  actors: { normalUser: "admit", sharedDemo: "admit" },
+});
+
 export const getPosRecentTransactionsWithCustomersReadDefinition =
   definePosRead(
     "pos/public/transactions:getRecentTransactionsWithCustomers",
@@ -323,6 +441,80 @@ export const getPosRegisterStateReadDefinition = definePosRead(
   "pos.public.register.getState.read",
 );
 
+export const searchPosCustomersReadDefinition = definePosRead(
+  "pos/public/customers:searchCustomers",
+  "pos.public.customers.searchCustomers.read",
+);
+
+export const findPotentialPosCustomerMatchesReadDefinition = definePosRead(
+  "pos/public/customers:findPotentialMatches",
+  "pos.public.customers.findPotentialMatches.read",
+);
+
+export const getPosCustomerByIdReadDefinition = defineReadOperation({
+  functionName: "pos/public/customers:getCustomerById",
+  operationId: "pos.public.customers.getCustomerById.read",
+  access: { kind: "read", intent: "pos.view" },
+  scope: {
+    kind: "store",
+    resolve: async (ctx, args) => {
+      const customerId = args.customerId;
+      if (typeof customerId !== "string") {
+        return {};
+      }
+      const customer = await ctx.db.get(
+        "posCustomer",
+        customerId as Id<"posCustomer">,
+      );
+      return customer ? { storeId: customer.storeId } : {};
+    },
+  },
+  actors: { normalUser: "admit", sharedDemo: "admit" },
+});
+
+export const getPosCustomerTransactionsReadDefinition = defineReadOperation({
+  functionName: "pos/public/customers:getCustomerTransactions",
+  operationId: "pos.public.customers.getCustomerTransactions.read",
+  access: { kind: "read", intent: "pos.view" },
+  scope: {
+    kind: "store",
+    resolve: async (ctx, args) => {
+      const customerId = args.customerId;
+      if (typeof customerId !== "string") {
+        return {};
+      }
+      const customer = await ctx.db.get(
+        "posCustomer",
+        customerId as Id<"posCustomer">,
+      );
+      return customer ? { storeId: customer.storeId } : {};
+    },
+  },
+  actors: { normalUser: "admit", sharedDemo: "admit" },
+});
+
+export const findPosCustomerByStoreFrontUserReadDefinition =
+  defineReadOperation({
+    functionName: "pos/public/customers:findByStoreFrontUser",
+    operationId: "pos.public.customers.findByStoreFrontUser.read",
+    access: { kind: "read", intent: "pos.view" },
+    scope: {
+      kind: "store",
+      resolve: async (ctx, args) => {
+        const storeFrontUserId = args.storeFrontUserId;
+        if (typeof storeFrontUserId !== "string") {
+          return {};
+        }
+        const storeFrontUser = await ctx.db.get(
+          "storeFrontUser",
+          storeFrontUserId as Id<"storeFrontUser">,
+        );
+        return storeFrontUser ? { storeId: storeFrontUser.storeId } : {};
+      },
+    },
+    actors: { normalUser: "admit", sharedDemo: "admit" },
+  });
+
 export const listPosTerminalsReadDefinition = definePosRead(
   "pos/public/terminals:listTerminals",
   "pos.public.terminals.listTerminals.read",
@@ -348,6 +540,85 @@ export const listPosStaffProfilesReadDefinition = definePosRead(
   "operations.staffProfiles.listStaffProfiles.read",
 );
 
+export const listStaffMessagesReadDefinition = definePosRead(
+  "operations/staffMessages:listStaffMessages",
+  "operations.staffMessages.listStaffMessages.read",
+);
+
+export const getSkuActivityForProductSkuReadDefinition = definePosRead(
+  "operations/skuActivity:getSkuActivityForProductSku",
+  "operations.skuActivity.getSkuActivityForProductSku.read",
+);
+
+export const getUntrustedSkuSaleEvidenceReadDefinition = definePosRead(
+  "operations/skuActivity:getUntrustedSkuSaleEvidence",
+  "operations.skuActivity.getUntrustedSkuSaleEvidence.read",
+);
+
+export const getWorkflowTraceViewByIdReadDefinition = definePosRead(
+  "workflowTraces/public:getWorkflowTraceViewById",
+  "workflowTraces.public.getWorkflowTraceViewById.read",
+);
+
+export const getWorkflowTraceByLookupReadDefinition = definePosRead(
+  "workflowTraces/public:getWorkflowTraceByLookup",
+  "workflowTraces.public.getWorkflowTraceByLookup.read",
+);
+
+export const getOnlineOrderReadDefinition = defineReadOperation({
+  functionName: "storeFront/onlineOrder:getForOperations",
+  operationId: "storeFront.onlineOrder.getForOperations.read",
+  access: { kind: "read", intent: "online_orders.view" },
+  scope: {
+    kind: "store",
+    resolve: async (ctx, args) => {
+      const identifier = args.identifier;
+      if (typeof identifier !== "string") {
+        return {};
+      }
+      const onlineOrderId = ctx.db.normalizeId("onlineOrder", identifier);
+      let order = onlineOrderId ? await ctx.db.get("onlineOrder", onlineOrderId) : null;
+      if (!order) {
+        order = await ctx.db
+          .query("onlineOrder")
+          .withIndex("by_externalReference", (q) =>
+            q.eq("externalReference", identifier),
+          )
+          .first();
+      }
+      const checkoutSessionId = ctx.db.normalizeId(
+        "checkoutSession",
+        identifier,
+      );
+      if (!order && checkoutSessionId) {
+        order = await ctx.db
+          .query("onlineOrder")
+          .withIndex("by_checkoutSessionId", (q) =>
+            q.eq("checkoutSessionId", checkoutSessionId),
+          )
+          .first();
+      }
+      return order ? { storeId: order.storeId } : {};
+    },
+  },
+  actors: { normalUser: "admit", sharedDemo: "admit" },
+});
+
+export const listOnlineOrdersReadDefinition = defineOnlineOrdersRead(
+  "storeFront/onlineOrder:getAllOnlineOrders",
+  "storeFront.onlineOrder.getAllOnlineOrders.read",
+);
+
+export const getNewestOnlineOrderReadDefinition = defineOnlineOrdersRead(
+  "storeFront/onlineOrder:newOrder",
+  "storeFront.onlineOrder.newOrder.read",
+);
+
+export const getOnlineOrderMetricsReadDefinition = defineOnlineOrdersRead(
+  "storeFront/onlineOrder:getOrderMetrics",
+  "storeFront.onlineOrder.getOrderMetrics.read",
+);
+
 export const listPosServiceCatalogSnapshotReadDefinition = definePosRead(
   "serviceOps/catalog:listPosServiceCatalogSnapshot",
   "serviceOps.catalog.listPosServiceCatalogSnapshot.read",
@@ -365,6 +636,9 @@ export const OPERATION_READ_ADMISSION_DEFINITIONS = [
   getDailyOperationsTimelineSnapshotReadDefinition,
   getDailyOperationsTimelinePreviewSnapshotReadDefinition,
   getDailyOpeningSnapshotReadDefinition,
+  getOpeningAutoStartPolicyReadDefinition,
+  getEodAutoCompletePolicyReadDefinition,
+  getRegisterCloseoutApprovalPolicyReadDefinition,
   getOpenWorkCountSummaryReadDefinition,
   getPendingApprovalCountSummaryReadDefinition,
   getQueueSnapshotReadDefinition,
@@ -377,6 +651,14 @@ export const OPERATION_READ_ADMISSION_DEFINITIONS = [
   listRegisterSessionActivityReadDefinition,
   getActiveCycleCountDraftReadDefinition,
   getActiveCycleCountDraftSummaryReadDefinition,
+  listInventoryProductsReadDefinition,
+  listInventorySnapshotReadDefinition,
+  listInventorySnapshotForProductSkusReadDefinition,
+  getInventoryUnitSummaryReadDefinition,
+  listInventorySnapshotPageReadDefinition,
+  listAthenaUserOrganizationsReadDefinition,
+  getOrganizationByIdOrSlugReadDefinition,
+  listOrganizationStoresReadDefinition,
   getPosTodaySummaryReadDefinition,
   getPosCompletedTransactionsReadDefinition,
   getPosTransactionReadDefinition,
@@ -385,6 +667,7 @@ export const OPERATION_READ_ADMISSION_DEFINITIONS = [
   getPosStoreActiveSessionOperationsReadDefinition,
   getPosActiveSessionReadDefinition,
   getPosStoreSessionsReadDefinition,
+  getPosSessionItemsReadDefinition,
   getPosRecentTransactionsWithCustomersReadDefinition,
   searchPosRegisterCatalogReadDefinition,
   listPosRegisterCatalogSnapshotReadDefinition,
@@ -395,11 +678,25 @@ export const OPERATION_READ_ADMISSION_DEFINITIONS = [
   barcodeLookupPosRegisterCatalogReadDefinition,
   listPosClientEventsReadDefinition,
   getPosRegisterStateReadDefinition,
+  searchPosCustomersReadDefinition,
+  getPosCustomerByIdReadDefinition,
+  getPosCustomerTransactionsReadDefinition,
+  findPosCustomerByStoreFrontUserReadDefinition,
+  findPotentialPosCustomerMatchesReadDefinition,
   listPosTerminalsReadDefinition,
   listPosTerminalHealthReadDefinition,
   getPosTerminalHealthReadDefinition,
   getPosTerminalByFingerprintReadDefinition,
   listPosStaffProfilesReadDefinition,
+  listStaffMessagesReadDefinition,
+  getSkuActivityForProductSkuReadDefinition,
+  getUntrustedSkuSaleEvidenceReadDefinition,
+  getWorkflowTraceViewByIdReadDefinition,
+  getWorkflowTraceByLookupReadDefinition,
+  getOnlineOrderReadDefinition,
+  listOnlineOrdersReadDefinition,
+  getNewestOnlineOrderReadDefinition,
+  getOnlineOrderMetricsReadDefinition,
   listPosServiceCatalogSnapshotReadDefinition,
 ] as const;
 

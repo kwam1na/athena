@@ -27,8 +27,6 @@ import type {
   OperationQueryCtx,
 } from "../../operationAdmission/types";
 import type { Id } from "../../_generated/dataModel";
-import { requireSharedDemoStoreCapabilityIfApplicable } from "../../sharedDemo/actor";
-import { requireReadySharedDemoWriteWithCtx } from "../../sharedDemo/restore";
 import { commandResultValidator } from "../../lib/commandResultValidators";
 import {
   requireAuthenticatedAthenaUserWithCtx,
@@ -71,16 +69,6 @@ async function requirePosTransactionStoreAccess(
   const admittedActor = (
     ctx as Partial<OperationMutationCtx | OperationQueryCtx>
   ).operationAdmission?.actor;
-  const demoActor =
-    admittedActor?.kind === "shared_demo"
-      ? { athenaUserId: admittedActor.athenaUserId }
-      : admittedActor
-        ? null
-        : await requireSharedDemoStoreCapabilityIfApplicable(
-            ctx,
-            "pos.sale.complete",
-            args.storeId,
-          );
   const store = await ctx.db.get("store", args.storeId);
   if (!store) {
     return userError({
@@ -92,10 +80,7 @@ async function requirePosTransactionStoreAccess(
   const athenaUser =
     admittedActor?.kind === "shared_demo"
       ? await ctx.db.get("athenaUser", admittedActor.athenaUserId)
-      : await requireAuthenticatedAthenaUserWithCtx(
-          ctx,
-          demoActor ? { sharedDemoCapability: "pos.sale.complete" } : undefined,
-        );
+      : await requireAuthenticatedAthenaUserWithCtx(ctx);
   if (!athenaUser) {
     throw new Error("Sign in again to continue.");
   }
@@ -487,16 +472,7 @@ export const completeTransaction = mutation({
   ),
   handler: admitSharedDemoPublicMutation(
     completeTransactionOperationDefinition,
-    async (ctx, args) => {
-      const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(
-        ctx,
-        "pos.sale.complete",
-        args.storeId,
-      );
-      if (demoActor)
-        await requireReadySharedDemoWriteWithCtx(ctx, {
-          storeId: args.storeId,
-        });
+    async (ctx: OperationMutationCtx, args) => {
       const store = await ctx.db.get("store", args.storeId);
       if (!store) {
         return userError({
@@ -505,9 +481,11 @@ export const completeTransaction = mutation({
         });
       }
 
-      const athenaUser = demoActor
-        ? await ctx.db.get("athenaUser", demoActor.athenaUserId)
-        : await requireAuthenticatedAthenaUserWithCtx(ctx);
+      const admittedActor = ctx.operationAdmission.actor;
+      const athenaUser =
+        admittedActor.kind === "shared_demo"
+          ? await ctx.db.get("athenaUser", admittedActor.athenaUserId)
+          : await requireAuthenticatedAthenaUserWithCtx(ctx);
       if (!athenaUser) throw new Error("Sign in again to continue.");
       await requireOrganizationMemberRoleWithCtx(ctx, {
         allowedRoles: ["full_admin"],

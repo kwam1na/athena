@@ -5,11 +5,6 @@ import type {
   OperationQueryCtx,
 } from "../operationAdmission/types";
 import {
-  requireSharedDemoStoreCapabilityIfApplicable,
-  requireSharedDemoStoreReadIfApplicable,
-} from "../sharedDemo/actor";
-import type { SharedDemoCapability } from "../sharedDemo/policy";
-import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "./athenaUserAuth";
@@ -17,14 +12,12 @@ import {
 type StoreMemberAccessCtx =
   Pick<QueryCtx, "auth" | "db"> | Pick<MutationCtx, "auth" | "db">;
 type OrganizationMemberRole = "full_admin" | "pos_only";
-type DemoAccess =
-  { kind: "read" } | { capability: SharedDemoCapability; kind: "capability" };
 
 export async function requireStoreMemberAccessWithCtx(
   ctx: StoreMemberAccessCtx,
   args: {
     allowedRoles: OrganizationMemberRole[];
-    demoAccess: DemoAccess;
+    demoAccess?: unknown;
     failureMessage: string;
     storeId: Id<"store">;
   },
@@ -34,17 +27,7 @@ export async function requireStoreMemberAccessWithCtx(
   ).operationAdmission;
   const admittedActor = operationAdmission?.actor;
   const demoActor =
-    admittedActor?.kind === "shared_demo"
-      ? admittedActor
-      : admittedActor
-        ? null
-        : args.demoAccess.kind === "read"
-          ? await requireSharedDemoStoreReadIfApplicable(ctx, args.storeId)
-          : await requireSharedDemoStoreCapabilityIfApplicable(
-              ctx,
-              args.demoAccess.capability,
-              args.storeId,
-            );
+    admittedActor?.kind === "shared_demo" ? admittedActor : null;
 
   const store = await ctx.db.get("store", args.storeId);
   if (!store) {
@@ -52,11 +35,9 @@ export async function requireStoreMemberAccessWithCtx(
   }
 
   const athenaUser =
-    admittedActor?.kind === "shared_demo"
-      ? await ctx.db.get("athenaUser", admittedActor.athenaUserId)
-      : demoActor
-        ? await ctx.db.get("athenaUser", demoActor.athenaUserId)
-        : await requireAuthenticatedAthenaUserWithCtx(ctx);
+    demoActor !== null
+      ? await ctx.db.get("athenaUser", demoActor.athenaUserId)
+      : await requireAuthenticatedAthenaUserWithCtx(ctx);
   if (!athenaUser) {
     throw new Error("Sign in again to continue.");
   }

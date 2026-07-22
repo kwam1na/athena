@@ -88,8 +88,12 @@ describe("staff messages", () => {
   });
 
   it("requires the current restore epoch for demo writes", async () => {
-    vi.mocked(requireSharedDemoStoreCapabilityIfApplicable).mockResolvedValue({
+    vi.mocked(getSharedDemoActorWithCtx).mockResolvedValue({
+      athenaUserId: "user-1",
+      authUserId: "auth-user-1",
       kind: "shared_demo",
+      organizationId: "org-1",
+      storeId: "store-1",
     } as never);
     const ctx = context();
     await expect(
@@ -106,9 +110,16 @@ describe("staff messages", () => {
     expect(requireReadySharedDemoWriteWithCtx).toHaveBeenCalledWith(
       expect.objectContaining({
         db: ctx.db,
-        operationAdmission: expect.any(Object),
       }),
       { expectedEpoch: 7, storeId: "store-1" },
+    );
+    expect(requireSharedDemoStoreCapabilityIfApplicable).not.toHaveBeenCalled();
+    expect(requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
+      expect.objectContaining({
+        db: ctx.db,
+        operationAdmission: expect.any(Object),
+      }),
+      expect.objectContaining({ userId: "user-1" }),
     );
   });
 

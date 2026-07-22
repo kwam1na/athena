@@ -18,7 +18,10 @@ import {
   listPosRegisterCatalogSnapshotWithRevisionReadDefinition,
   searchPosRegisterCatalogReadDefinition,
 } from "../../operationAdmission/readDefinitions";
-import type { OperationQueryCtx } from "../../operationAdmission/types";
+import type {
+  OperationMutationCtx,
+  OperationQueryCtx,
+} from "../../operationAdmission/types";
 import type { Doc, Id } from "../../_generated/dataModel";
 import { commandResultValidator } from "../../lib/commandResultValidators";
 import {
@@ -39,7 +42,6 @@ import {
 } from "../../reporting/inventory/valuation";
 import { recordOperationalEventWithCtx } from "../../operations/operationalEvents";
 import { updateOperationalWorkItemStatusWithCtx } from "../../operations/operationalWorkItems";
-import { requireSharedDemoStoreCapabilityIfApplicable } from "../../sharedDemo/actor";
 import {
   lookupByBarcode,
   searchProducts,
@@ -482,36 +484,21 @@ async function requireRegisterCatalogStoreAccess(
   const operationAdmission = (ctx as Partial<OperationQueryCtx>)
     .operationAdmission;
   const admittedActor = operationAdmission?.actor;
-  const demoActor =
-    admittedActor?.kind === "shared_demo"
-      ? admittedActor
-      : admittedActor
-        ? null
-        : await requireSharedDemoStoreCapabilityIfApplicable(
-            ctx,
-            "pos.sale.complete",
-            args.storeId,
-          );
+  const sharedDemoActor =
+    admittedActor?.kind === "shared_demo" ? admittedActor : null;
 
   const store = await ctx.db.get("store", args.storeId);
   if (!store) {
     throw new Error("Store not found.");
   }
 
-  const admittedDemoActor =
-    admittedActor?.kind === "shared_demo" ? admittedActor : null;
-  const sharedDemoActor = admittedDemoActor ?? demoActor;
   const athenaUser = options?.indexedIdentityOnly
     ? sharedDemoActor
       ? await ctx.db.get("athenaUser", sharedDemoActor.athenaUserId)
-      : await requireAuthenticatedAthenaUserIndexedWithCtx(ctx, {
-          sharedDemoCapability: "pos.sale.complete",
-        })
+      : await requireAuthenticatedAthenaUserIndexedWithCtx(ctx)
     : sharedDemoActor
       ? await ctx.db.get("athenaUser", sharedDemoActor.athenaUserId)
-      : await requireAuthenticatedAthenaUserWithCtx(ctx, {
-          sharedDemoCapability: "pos.sale.complete",
-        });
+      : await requireAuthenticatedAthenaUserWithCtx(ctx);
   if (!athenaUser) {
     throw new Error("Sign in again to continue.");
   }
@@ -854,18 +841,20 @@ export const quickAddSku = mutation({
   returns: catalogResultValidator,
   handler: admitSharedDemoPublicMutation(
     quickAddSkuOperationDefinition,
-    async (ctx, args) => {
-      await requireSharedDemoStoreCapabilityIfApplicable(
-        ctx,
-        "catalog.quick_add",
-        args.storeId,
-      );
+    async (ctx: OperationMutationCtx, args) => {
       const store = await ctx.db.get("store", args.storeId);
       if (!store) {
         throw new Error("Store not found.");
       }
 
-      const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+      const admittedActor = ctx.operationAdmission.actor;
+      const athenaUser =
+        admittedActor.kind === "shared_demo"
+          ? await ctx.db.get("athenaUser", admittedActor.athenaUserId)
+          : await requireAuthenticatedAthenaUserWithCtx(ctx);
+      if (!athenaUser) {
+        throw new Error("Sign in again to continue.");
+      }
       await requireOrganizationMemberRoleWithCtx(ctx, {
         allowedRoles: ["full_admin", "pos_only"],
         failureMessage: "You cannot quick add products for this store.",

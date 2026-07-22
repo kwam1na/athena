@@ -35,7 +35,6 @@ import {
 } from "./adjustments";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
 import { commandResultValidator } from "../lib/commandResultValidators";
-import { requireSharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
 
 type CycleCountDraftAccessCtx =
   Pick<QueryCtx, "auth" | "db"> | Pick<MutationCtx, "auth" | "db">;
@@ -75,15 +74,7 @@ async function requireCycleCountDraftAccess(
   ).operationAdmission;
   const admittedActor = operationAdmission?.actor;
   const demoActor =
-    admittedActor?.kind === "shared_demo"
-      ? admittedActor
-      : admittedActor
-        ? null
-        : await requireSharedDemoStoreCapabilityIfApplicable(
-            ctx,
-            "inventory.adjust",
-            storeId,
-          );
+    admittedActor?.kind === "shared_demo" ? admittedActor : null;
   const store = await ctx.db.get("store", storeId);
 
   if (!store) {
@@ -91,11 +82,9 @@ async function requireCycleCountDraftAccess(
   }
 
   const actorUser =
-    admittedActor?.kind === "shared_demo"
-      ? await ctx.db.get("athenaUser", admittedActor.athenaUserId)
-      : demoActor
-        ? await ctx.db.get("athenaUser", demoActor.athenaUserId)
-        : await requireAuthenticatedAthenaUserWithCtx(ctx);
+    demoActor
+      ? await ctx.db.get("athenaUser", demoActor.athenaUserId)
+      : await requireAuthenticatedAthenaUserWithCtx(ctx);
 
   if (!actorUser) {
     throw new Error("Sign in again to continue.");

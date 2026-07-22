@@ -31,6 +31,15 @@ import {
   getCustomerTransactions as getCustomerTransactionsQuery,
   searchCustomers as searchCustomersQuery,
 } from "../application/queries/searchCustomers";
+import { admitSharedDemoPublicQuery } from "../../operationAdmission/publicQuery";
+import {
+  findPotentialPosCustomerMatchesReadDefinition,
+  findPosCustomerByStoreFrontUserReadDefinition,
+  getPosCustomerByIdReadDefinition,
+  getPosCustomerTransactionsReadDefinition,
+  searchPosCustomersReadDefinition,
+} from "../../operationAdmission/readDefinitions";
+import type { OperationQueryCtx } from "../../operationAdmission/types";
 
 type PosCustomerStoreAccess =
   | {
@@ -192,7 +201,12 @@ export const searchCustomers = query({
     searchQuery: v.string(),
   },
   returns: v.array(customerSummaryValidator),
-  handler: async (ctx, args) => {
+  handler: admitSharedDemoPublicQuery(
+    searchPosCustomersReadDefinition,
+    async (
+      ctx: OperationQueryCtx,
+      args: { searchQuery: string; storeId: Id<"store"> },
+    ) => {
     const access = await requirePosCustomerStoreReadAccess(ctx, {
       storeId: args.storeId,
       failureMessage: "You cannot search customers for this store.",
@@ -202,7 +216,8 @@ export const searchCustomers = query({
     }
 
     return searchCustomersQuery(ctx, args);
-  },
+    },
+  ),
 });
 
 export const getCustomerById = query({
@@ -229,7 +244,9 @@ export const getCustomerById = query({
     }),
     v.null(),
   ),
-  handler: async (ctx, args) => {
+  handler: admitSharedDemoPublicQuery(
+    getPosCustomerByIdReadDefinition,
+    async (ctx: OperationQueryCtx, args: { customerId: Id<"posCustomer"> }) => {
     const access = await requirePosCustomerReadAccessById(ctx, {
       customerId: args.customerId,
       failureMessage: "You cannot view this customer.",
@@ -239,7 +256,8 @@ export const getCustomerById = query({
     }
 
     return getCustomerByIdQuery(ctx, args);
-  },
+    },
+  ),
 });
 
 export const createCustomer = mutation({
@@ -341,7 +359,12 @@ export const getCustomerTransactions = query({
       completedAt: v.number(),
     }),
   ),
-  handler: async (ctx, args) => {
+  handler: admitSharedDemoPublicQuery(
+    getPosCustomerTransactionsReadDefinition,
+    async (
+      ctx: OperationQueryCtx,
+      args: { customerId: Id<"posCustomer">; limit?: number },
+    ) => {
     const access = await requirePosCustomerReadAccessById(ctx, {
       customerId: args.customerId,
       failureMessage: "You cannot view this customer.",
@@ -351,7 +374,8 @@ export const getCustomerTransactions = query({
     }
 
     return getCustomerTransactionsQuery(ctx, args);
-  },
+    },
+  ),
 });
 
 export const linkToStoreFrontUser = mutation({
@@ -447,7 +471,12 @@ export const findByStoreFrontUser = query({
     }),
     v.null(),
   ),
-  handler: async (ctx, args) => {
+  handler: admitSharedDemoPublicQuery(
+    findPosCustomerByStoreFrontUserReadDefinition,
+    async (
+      ctx: OperationQueryCtx,
+      args: { storeFrontUserId: Id<"storeFrontUser"> },
+    ) => {
     const storeFrontUser = await ctx.db.get(
       "storeFrontUser",
       args.storeFrontUserId,
@@ -465,7 +494,8 @@ export const findByStoreFrontUser = query({
     }
 
     return findByStoreFrontUserQuery(ctx, args);
-  },
+    },
+  ),
 });
 
 export const findPotentialMatches = query({
@@ -494,7 +524,12 @@ export const findPotentialMatches = query({
       }),
     ),
   }),
-  handler: async (ctx, args) => {
+  handler: admitSharedDemoPublicQuery(
+    findPotentialPosCustomerMatchesReadDefinition,
+    async (
+      ctx: OperationQueryCtx,
+      args: { email?: string; phone?: string; storeId: Id<"store"> },
+    ) => {
     const access = await requirePosCustomerStoreReadAccess(ctx, {
       storeId: args.storeId,
       failureMessage: "You cannot view potential matches for this store.",
@@ -504,5 +539,6 @@ export const findPotentialMatches = query({
     }
 
     return findPotentialMatchesQuery(ctx, args);
-  },
+    },
+  ),
 });

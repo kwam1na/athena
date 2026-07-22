@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="7f522328f02c61beaf4a7019be3abf57caf02713f016c0c0bdddf184232f9764">
+<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="ee57fb63b15b352657f271cfffcdd31432428a048d590d332ee48fae8b807f0a">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -284,7 +284,7 @@
             </tr>
             <tr>
               <td><code>convex/lib/storeMemberAccess.ts</code></td>
-              <td>Lets store-membership authorization consume an already-admitted shared-demo actor while preserving legacy fallback behavior outside the rail.</td>
+              <td>Lets store-membership authorization consume an already-admitted shared-demo actor without falling back to ad hoc shared-demo helper calls in migrated surfaces.</td>
             </tr>
             <tr>
               <td><code>convex/operations/*</code>, <code>convex/cashControls/*</code>, <code>convex/pos/public/*</code>, <code>convex/stockOps/cycleCountDrafts.ts</code></td>
@@ -297,6 +297,14 @@
             <tr>
               <td><code>convex/pos/public/terminals.ts</code></td>
               <td>Accepts persisted terminal runtime health-alert metadata in public terminal-health return validation.</td>
+            </tr>
+            <tr>
+              <td><code>convex/sharedDemo/operationAdapter.ts</code></td>
+              <td>Enforces protected external effects during shared-demo mutation admission so denied gateways such as <code>payment.refund</code> stop before the domain handler.</td>
+            </tr>
+            <tr>
+              <td><code>convex/storeFront/onlineOrder.ts</code>, <code>src/components/orders/hooks/useGetActiveOnlineOrder.ts</code></td>
+              <td>Preserves the public customer-channel <code>onlineOrder.get</code> query while routing operator/demo order detail through the admitted <code>getForOperations</code> query.</td>
             </tr>
             <tr>
               <td><code>docs/plans/2026-07-22-001-feat-shared-demo-read-admission-rail-plan.md</code></td>
@@ -314,6 +322,8 @@
           <li>Normal users still enter through authenticated Athena user admission and store membership checks.</li>
           <li>Same-store authenticated non-members are denied by the domain membership gate before session, staff, service, catalog, or daily-opening rows return.</li>
           <li>Financial redaction remains membership-role based; shared-demo admission does not itself redact or unredact financial fields.</li>
+          <li>Public customer-channel order lookup remains unauthenticated until its storefront ownership check; operator/demo order detail uses a separate admitted query.</li>
+          <li>Protected external effects are denied unless shared-demo policy explicitly simulates the gateway.</li>
           <li>Reporting reads are intentionally not migrated in this branch.</li>
         </ul>
       </section>
@@ -325,7 +335,7 @@
           <li><code>bun run typecheck</code>: passed.</li>
           <li>Earlier focused suite for the broader rail covered read adapters, operational work items, daily close, cash controls, stock adjustments, POS transactions, register, terminals, telemetry, and POS session operations.</li>
           <li>In-app browser affected route sweep: Operations, inventory import, SKU activity, stock adjustments, cash controls, POS, and representative cash/POS detail routes rendered with no fresh auth errors, validator errors, crash text, or overlays. The final POS register extension specifically addressed <code>pos/public/catalog:listRegisterCatalogAvailabilitySnapshot</code> throwing <code>Sign in again to continue.</code>.</li>
-          <li><code>bun run graphify:rebuild</code>: rebuilt 10981 nodes, 13330 edges, and 2633 communities.</li>
+          <li><code>bun run graphify:rebuild</code>: rebuilt 10986 nodes, 13340 edges, and 2633 communities.</li>
           <li><code>bun run pr:athena</code>: initially blocked on stale solution/report fingerprints; this refreshed report and solution note address that gate before rerun.</li>
         </ul>
       </section>
@@ -336,7 +346,7 @@
           <li>Repo research subagents mapped the existing write admission rail, shared-demo helpers, and non-reporting read surfaces.</li>
           <li>Plan reviewer subagents checked coherence, feasibility, scope, security, and adversarial failure modes until alignment.</li>
           <li>POS inventory subagents found the register catalog family plus active register subscriptions for daily opening, staff profiles, POS service catalog, and active/held sessions.</li>
-          <li>Execution reviewers approved after looped fixes: security caught and verified the daily-opening non-member denial fix; testing required and then approved same-store non-member coverage; correctness had no findings.</li>
+          <li>Execution reviewers approved after looped fixes: correctness caught the online-order public-query split, project standards caught protected-effect enforcement, testing required custom resolver fallback coverage, and security approved the final auth boundary.</li>
         </ul>
       </section>
 

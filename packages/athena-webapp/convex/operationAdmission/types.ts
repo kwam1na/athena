@@ -102,7 +102,11 @@ export type OperationAdapterDenied = {
   kind: "denied";
   recognized: boolean;
   reason:
-    "actor_denied" | "capability_denied" | "scope_denied" | "readiness_denied";
+    | "actor_denied"
+    | "capability_denied"
+    | "effect_denied"
+    | "scope_denied"
+    | "readiness_denied";
 };
 
 export type OperationAdapterNotApplicable = {

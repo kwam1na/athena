@@ -18,6 +18,9 @@ import {
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
 import { requireStoreMemberAccessWithCtx } from "../lib/storeMemberAccess";
+import { admitSharedDemoPublicQuery } from "../operationAdmission/publicQuery";
+import { getPosSessionItemsReadDefinition } from "../operationAdmission/readDefinitions";
+import type { OperationQueryCtx } from "../operationAdmission/types";
 
 const SESSION_ITEMS_PAGE_SIZE = 200;
 
@@ -139,7 +142,9 @@ export const getSessionItems = query({
       updatedAt: v.number(),
     }),
   ),
-  handler: async (ctx, args) => {
+  handler: admitSharedDemoPublicQuery(
+    getPosSessionItemsReadDefinition,
+    async (ctx: OperationQueryCtx, args: { sessionId: Id<"posSession"> }) => {
     const accessError = await requireSessionItemReadAccess(
       ctx,
       args.sessionId,
@@ -159,7 +164,8 @@ export const getSessionItems = query({
     );
 
     return items;
-  },
+    },
+  ),
 });
 
 // Add or update an item in the session

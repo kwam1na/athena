@@ -462,19 +462,22 @@ describe("cycle count drafts", () => {
 
   it("clamps cycle-count summaries to the shared demo store", async () => {
     const { ctx } = createCycleCountDraftCtx();
-    const denial = new Error("This action is unavailable in the demo.");
-    sharedDemoMocks.requireSharedDemoStoreCapabilityIfApplicable.mockRejectedValueOnce(
-      denial,
-    );
+    sharedDemoMocks.getSharedDemoActorWithCtx.mockResolvedValue({
+      athenaUserId: "operator-1",
+      authUserId: "auth-user-1",
+      kind: "shared_demo",
+      organizationId: "org-1",
+      storeId: "store-1",
+    });
 
     await expect(
-      getActiveCycleCountDraftSummaryWithCtx(ctx, {
+      getHandler(getActiveCycleCountDraftSummary)(ctx as never, {
         storeId: "other-store" as Id<"store">,
       }),
-    ).rejects.toThrow(denial.message);
+    ).rejects.toThrow("This action isn't allowed in the demo.");
     expect(
       sharedDemoMocks.requireSharedDemoStoreCapabilityIfApplicable,
-    ).toHaveBeenCalledWith(ctx, "inventory.adjust", "other-store");
+    ).not.toHaveBeenCalled();
   });
 
   it("loads active cycle-count summaries through the demo read boundary", async () => {

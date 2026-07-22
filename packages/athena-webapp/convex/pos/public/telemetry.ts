@@ -15,7 +15,6 @@ import {
   requireOrganizationMemberRoleWithCtx,
 } from "../../lib/athenaUserAuth";
 import { ok, userError } from "../../../shared/commandResult";
-import { getSharedDemoActorWithCtx } from "../../sharedDemo/actor";
 import {
   posClientEventFlowValidator,
   posClientEventLevelValidator,
@@ -102,18 +101,10 @@ async function requirePosTelemetryAccess(
     const admittedActor = (
       ctx as Partial<OperationMutationCtx | OperationQueryCtx>
     ).operationAdmission?.actor;
-    const demoActor =
-      admittedActor?.kind === "shared_demo"
-        ? { athenaUserId: admittedActor.athenaUserId }
-        : admittedActor
-          ? null
-          : await getSharedDemoActorWithCtx(ctx);
     const athenaUser =
       admittedActor?.kind === "shared_demo"
         ? await ctx.db.get("athenaUser", admittedActor.athenaUserId)
-        : demoActor
-          ? await ctx.db.get("athenaUser", demoActor.athenaUserId)
-          : await requireAuthenticatedAthenaUserWithCtx(ctx);
+        : await requireAuthenticatedAthenaUserWithCtx(ctx);
     if (!athenaUser) {
       return false;
     }

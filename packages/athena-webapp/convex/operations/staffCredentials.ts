@@ -8,7 +8,10 @@ import {
 import type { Doc, Id } from "../_generated/dataModel";
 import {
   authenticateStaffCredentialForApprovalOperationDefinition,
+  authenticateStaffCredentialForTerminalOperationDefinition,
   authenticateStaffCredentialOperationDefinition,
+  refreshTerminalStaffAuthorityOperationDefinition,
+  validateRestoredPosLocalStaffProofOperationDefinition,
 } from "../operationAdmission/definitions";
 import { admitSharedDemoPublicMutation } from "../operationAdmission/publicMutation";
 import { operationalRoleValidator, type OperationalRole } from "./staffRoles";
@@ -36,9 +39,7 @@ import {
 import { requireStoreMemberAccessWithCtx } from "../lib/storeMemberAccess";
 import {
   requireSharedDemoCapabilityIfApplicable,
-  requireSharedDemoStoreCapabilityIfApplicable,
 } from "../sharedDemo/actor";
-import { requireReadySharedDemoWriteWithCtx } from "../sharedDemo/restore";
 
 export const STAFF_CREDENTIAL_STATUS = v.union(
   v.literal("pending"),
@@ -1266,14 +1267,6 @@ export const updateStaffCredential = mutation({
 const authenticateStaffCredentialAdmittedHandler = admitSharedDemoPublicMutation(
   authenticateStaffCredentialOperationDefinition,
   async (ctx, args) => {
-    const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(
-      ctx,
-      "staff.authenticate",
-      args.storeId,
-    );
-    if (demoActor) {
-      await requireReadySharedDemoWriteWithCtx(ctx, { storeId: args.storeId });
-    }
     try {
       await requireStaffAuthenticationStoreAccessWithCtx(ctx, args.storeId);
     } catch {
@@ -1309,7 +1302,9 @@ export const authenticateStaffCredentialForTerminal = mutation({
     terminalId: v.id("posTerminal"),
     username: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: admitSharedDemoPublicMutation(
+    authenticateStaffCredentialForTerminalOperationDefinition,
+    async (ctx, args) => {
     const terminalAuthority = await requirePosTerminalAuthorityWithCtx(ctx, {
       storeId: args.storeId,
       terminalId: args.terminalId,
@@ -1319,7 +1314,8 @@ export const authenticateStaffCredentialForTerminal = mutation({
     }
 
     return authenticateStaffCredentialForTerminalWithCtx(ctx, args);
-  },
+    },
+  ),
 });
 
 export const validateRestoredPosLocalStaffProof = mutation({
@@ -1330,7 +1326,9 @@ export const validateRestoredPosLocalStaffProof = mutation({
     terminalId: v.id("posTerminal"),
     token: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: admitSharedDemoPublicMutation(
+    validateRestoredPosLocalStaffProofOperationDefinition,
+    async (ctx, args) => {
     const terminalAuthority = await requirePosTerminalAuthorityWithCtx(ctx, {
       storeId: args.storeId,
       terminalId: args.terminalId,
@@ -1340,7 +1338,8 @@ export const validateRestoredPosLocalStaffProof = mutation({
     }
 
     return validateRestoredPosLocalStaffProofWithCtx(ctx, args);
-  },
+    },
+  ),
 });
 
 export const refreshTerminalStaffAuthority = mutation({
@@ -1349,7 +1348,9 @@ export const refreshTerminalStaffAuthority = mutation({
     terminalId: v.id("posTerminal"),
   },
   returns: commandResultValidator(v.array(localStaffAuthorityRecordValidator)),
-  handler: async (ctx, args) => {
+  handler: admitSharedDemoPublicMutation(
+    refreshTerminalStaffAuthorityOperationDefinition,
+    async (ctx, args) => {
     const terminalAuthority = await requirePosTerminalAuthorityWithCtx(ctx, {
       storeId: args.storeId,
       terminalId: args.terminalId,
@@ -1459,7 +1460,8 @@ export const refreshTerminalStaffAuthority = mutation({
     }
 
     return ok(authority);
-  },
+    },
+  ),
 });
 
 export const authenticateStaffCredentialForApproval = mutation({
@@ -1489,14 +1491,6 @@ export const authenticateStaffCredentialForApproval = mutation({
   handler: admitSharedDemoPublicMutation(
     authenticateStaffCredentialForApprovalOperationDefinition,
     async (ctx, args) => {
-    const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(
-      ctx,
-      "staff.authenticate",
-      args.storeId,
-    );
-    if (demoActor) {
-      await requireReadySharedDemoWriteWithCtx(ctx, { storeId: args.storeId });
-    }
     try {
       await requireStaffAuthenticationStoreAccessWithCtx(ctx, args.storeId);
     } catch {

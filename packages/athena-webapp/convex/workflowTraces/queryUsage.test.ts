@@ -1007,6 +1007,26 @@ describe("workflow trace core and public helpers", () => {
         storeId,
       },
     );
+    Object.assign(ctx, {
+      operationAdmission: {
+        actor: {
+          athenaUserId: "athena-user-demo",
+          authUserId: "auth-user-demo",
+          kind: "shared_demo",
+          organizationId: "org-1",
+          storeId,
+        },
+        constraints: { organizationId: "org-1", storeId },
+        decision: { adapter: "shared_demo", outcome: "admitted" },
+        operation: {
+          access: { kind: "read", intent: "workflow_traces.view" },
+          actors: { normalUser: "admit", sharedDemo: "admit" },
+          operationId: "workflowTraces.public.getWorkflowTraceViewById.read",
+          scope: { kind: "store", storeIdArg: "storeId" },
+        },
+        provenance: { kind: "shared_demo" },
+      },
+    });
 
     await createWorkflowTraceWithCtx(ctx as never, {
       storeId,
