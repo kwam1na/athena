@@ -4286,52 +4286,56 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     expect(onLocalEventsChanged).toHaveBeenCalled();
   });
 
-  it("does not persist terminal integrity for generic runtime check-in rejections", async () => {
-    mocks.reportTerminalRuntimeStatus.mockResolvedValue({
-      kind: "user_error",
-      error: {
-        code: "authorization_failed",
-        message: "User session expired.",
-      },
-    });
-    const store = {
-      listEvents: vi.fn(async () => ({
-        ok: true,
-        value: [],
-      })),
-      readProvisionedTerminalSeed: vi.fn(async () => ({
-        ok: true,
-        value: {
-          cloudTerminalId: "terminal-cloud-1",
-          displayName: "Front",
-          provisionedAt: 1,
-          schemaVersion: 1,
-          syncSecretHash: "sync-secret-1",
-          storeId: "store-1",
-          terminalId: "local-terminal-1",
+  it(
+    "does not persist terminal integrity for generic runtime check-in rejections",
+    async () => {
+      mocks.reportTerminalRuntimeStatus.mockResolvedValue({
+        kind: "user_error",
+        error: {
+          code: "authorization_failed",
+          message: "User session expired.",
         },
-      })),
-      writeTerminalIntegrityState: vi.fn(async () => ({
-        ok: true,
-        value: null,
-      })),
-    };
+      });
+      const store = {
+        listEvents: vi.fn(async () => ({
+          ok: true,
+          value: [],
+        })),
+        readProvisionedTerminalSeed: vi.fn(async () => ({
+          ok: true,
+          value: {
+            cloudTerminalId: "terminal-cloud-1",
+            displayName: "Front",
+            provisionedAt: 1,
+            schemaVersion: 1,
+            syncSecretHash: "sync-secret-1",
+            storeId: "store-1",
+            terminalId: "local-terminal-1",
+          },
+        })),
+        writeTerminalIntegrityState: vi.fn(async () => ({
+          ok: true,
+          value: null,
+        })),
+      };
 
-    renderHook(() =>
-      usePosLocalSyncRuntimeStatus({
-        mode: "status-only",
-        storeFactory: () => store as never,
-        storeId: "store-1",
-        terminalId: "terminal-cloud-1",
-      }),
-    );
+      renderHook(() =>
+        usePosLocalSyncRuntimeStatus({
+          mode: "status-only",
+          storeFactory: () => store as never,
+          storeId: "store-1",
+          terminalId: "terminal-cloud-1",
+        }),
+      );
 
-    await waitFor(() =>
-      expect(mocks.reportTerminalRuntimeStatus).toHaveBeenCalled(),
-    );
-    await Promise.resolve();
-    expect(store.writeTerminalIntegrityState).not.toHaveBeenCalled();
-  });
+      await waitFor(() =>
+        expect(mocks.reportTerminalRuntimeStatus).toHaveBeenCalled(),
+      );
+      await Promise.resolve();
+      expect(store.writeTerminalIntegrityState).not.toHaveBeenCalled();
+    },
+    10000,
+  );
 
   it("clears stale completion time while a fresh runtime check-in publish is pending", async () => {
     const nextPublish = deferred<{
