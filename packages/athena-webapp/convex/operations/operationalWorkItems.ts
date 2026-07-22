@@ -11,6 +11,12 @@ import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
+import { admitSharedDemoPublicQuery } from "../operationAdmission/publicQuery";
+import {
+  getOpenWorkCountSummaryReadDefinition,
+  getPendingApprovalCountSummaryReadDefinition,
+} from "../operationAdmission/readDefinitions";
+import type { OperationQueryCtx } from "../operationAdmission/types";
 import { requireSharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
 import { listOpenLocalSyncConflictsByRegisterSession } from "../cashControls/deposits";
 import { listOpenLocalSyncConflictsByRegisterSessionWithCompleteness } from "../pos/application/sync/registerSessionSyncReview";
@@ -51,6 +57,31 @@ const QUEUE_WORK_ITEM_TYPES = [
   "stock_adjustment_review",
   "synced_sale_inventory_review",
 ] as const;
+
+async function authorizeOperationalWorkSummaryRead(
+  ctx: QueryCtx,
+  args: { storeId: Id<"store"> },
+  failureMessage: string,
+) {
+  const store = await ctx.db.get("store", args.storeId);
+  if (!store) {
+    throw new Error("Store not found.");
+  }
+
+  const admittedActor = (ctx as Partial<OperationQueryCtx>).operationAdmission
+    ?.actor;
+  const athenaUser = admittedActor
+    ? ({ _id: admittedActor.athenaUserId } as const)
+    : await requireAuthenticatedAthenaUserWithCtx(ctx);
+
+  await requireOrganizationMemberRoleWithCtx(ctx, {
+    allowedRoles: ["full_admin", "pos_only"],
+    failureMessage,
+    organizationId: store.organizationId,
+    userId: athenaUser._id,
+  });
+}
+
 async function filterArchivedPendingCheckoutWorkItems(
   ctx: QueryCtx,
   items: Array<Doc<"operationalWorkItem">>,
@@ -110,169 +141,152 @@ export const getOpenWorkCountSummary = query({
   args: {
     storeId: v.id("store"),
   },
-  handler: async (ctx, args) => {
-    const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(
-      ctx,
-      "inventory.adjust",
-      args.storeId,
-    );
-    const store = await ctx.db.get("store", args.storeId);
-    if (!store) {
-      throw new Error("Store not found.");
-    }
+  handler: admitSharedDemoPublicQuery(
+    getOpenWorkCountSummaryReadDefinition,
+    async (ctx, args: { storeId: Id<"store"> }) => {
+      await authorizeOperationalWorkSummaryRead(
+        ctx,
+        args,
+        "Only POS operators can view open work.",
+      );
 
-    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(
-      ctx,
-      demoActor ? { sharedDemoCapability: "inventory.adjust" } : undefined,
-    );
-    await requireOrganizationMemberRoleWithCtx(ctx, {
-      allowedRoles: ["full_admin", "pos_only"],
-      failureMessage: "Only POS operators can view open work.",
-      organizationId: store.organizationId,
-      userId: athenaUser._id,
-    });
+      const rawWorkItemLanes: Array<{
+        incomplete: boolean;
+        items: Array<Doc<"operationalWorkItem">>;
+        type: string;
+      }> = [];
+      let remainingWorkItemBudget = OPEN_WORK_COUNT_ITEM_PROBE_LIMIT;
+      for (const status of OPEN_WORK_ITEM_STATUSES) {
+        for (const type of QUEUE_WORK_ITEM_TYPES) {
+          const items = await ctx.db
+            .query("operationalWorkItem")
+            .withIndex("by_storeId_type_status", (q) =>
+              q
+                .eq("storeId", args.storeId)
+                .eq("type", type)
+                .eq("status", status),
+            )
+            .take(remainingWorkItemBudget + 1);
+          const acceptedItems = items.slice(0, remainingWorkItemBudget);
 
-    const rawWorkItemLanes: Array<{
-      incomplete: boolean;
-      items: Array<Doc<"operationalWorkItem">>;
-      type: string;
-    }> = [];
-    let remainingWorkItemBudget = OPEN_WORK_COUNT_ITEM_PROBE_LIMIT;
-    for (const status of OPEN_WORK_ITEM_STATUSES) {
-      for (const type of QUEUE_WORK_ITEM_TYPES) {
-        const items = await ctx.db
-          .query("operationalWorkItem")
-          .withIndex("by_storeId_type_status", (q) =>
-            q.eq("storeId", args.storeId).eq("type", type).eq("status", status),
-          )
-          .take(remainingWorkItemBudget + 1);
-        const acceptedItems = items.slice(0, remainingWorkItemBudget);
-
-        rawWorkItemLanes.push({
-          incomplete: items.length > remainingWorkItemBudget,
-          items: acceptedItems,
-          type,
-        });
-        remainingWorkItemBudget -= acceptedItems.length;
+          rawWorkItemLanes.push({
+            incomplete: items.length > remainingWorkItemBudget,
+            items: acceptedItems,
+            type,
+          });
+          remainingWorkItemBudget -= acceptedItems.length;
+        }
       }
-    }
 
-    const activeOversizedRepairs: Array<Doc<"oversizedOperationalWorkRepair">> =
-      [];
-    let activeRepairReadIncomplete = false;
-    let remainingRepairBudget = OPEN_WORK_COUNT_REPAIR_PROBE_LIMIT;
-    for (const status of ["pending", "running", "paused"] as const) {
-      const repairs = await ctx.db
-        .query("oversizedOperationalWorkRepair")
-        .withIndex("by_storeId_status", (q) =>
-          q.eq("storeId", args.storeId).eq("status", status),
-        )
-        .take(remainingRepairBudget + 1);
-      const acceptedRepairs = repairs.slice(0, remainingRepairBudget);
+      const activeOversizedRepairs: Array<
+        Doc<"oversizedOperationalWorkRepair">
+      > = [];
+      let activeRepairReadIncomplete = false;
+      let remainingRepairBudget = OPEN_WORK_COUNT_REPAIR_PROBE_LIMIT;
+      for (const status of ["pending", "running", "paused"] as const) {
+        const repairs = await ctx.db
+          .query("oversizedOperationalWorkRepair")
+          .withIndex("by_storeId_status", (q) =>
+            q.eq("storeId", args.storeId).eq("status", status),
+          )
+          .take(remainingRepairBudget + 1);
+        const acceptedRepairs = repairs.slice(0, remainingRepairBudget);
 
-      activeRepairReadIncomplete ||= repairs.length > remainingRepairBudget;
-      activeOversizedRepairs.push(...acceptedRepairs);
-      remainingRepairBudget -= acceptedRepairs.length;
-    }
-    const workItemLanes = await Promise.all(
-      rawWorkItemLanes.map(async (lane) => ({
-        ...lane,
-        items: await filterArchivedPendingCheckoutWorkItems(ctx, lane.items),
-      })),
-    );
-    const incompleteTypes = new Set(
-      workItemLanes.filter((lane) => lane.incomplete).map((lane) => lane.type),
-    );
-    if (activeRepairReadIncomplete) {
-      incompleteTypes.add("synced_sale_inventory_review");
-    }
+        activeRepairReadIncomplete ||= repairs.length > remainingRepairBudget;
+        activeOversizedRepairs.push(...acceptedRepairs);
+        remainingRepairBudget -= acceptedRepairs.length;
+      }
+      const workItemLanes = await Promise.all(
+        rawWorkItemLanes.map(async (lane) => ({
+          ...lane,
+          items: await filterArchivedPendingCheckoutWorkItems(ctx, lane.items),
+        })),
+      );
+      const incompleteTypes = new Set(
+        workItemLanes
+          .filter((lane) => lane.incomplete)
+          .map((lane) => lane.type),
+      );
+      if (activeRepairReadIncomplete) {
+        incompleteTypes.add("synced_sale_inventory_review");
+      }
 
-    const logicalWork = projectLogicalOperationalWork({
-      incompleteTypes,
-      items: workItemLanes.flatMap((lane) => lane.items),
-      remediationSourceIdentitiesByGroupKey: new Map(
-        activeOversizedRepairs.map((repair) => [
-          repair.groupKey,
-          new Set(repair.sourceIdentities),
-        ]),
-      ),
-      sourceCompleteness: incompleteTypes.size > 0 ? "incomplete" : "complete",
-    });
+      const logicalWork = projectLogicalOperationalWork({
+        incompleteTypes,
+        items: workItemLanes.flatMap((lane) => lane.items),
+        remediationSourceIdentitiesByGroupKey: new Map(
+          activeOversizedRepairs.map((repair) => [
+            repair.groupKey,
+            new Set(repair.sourceIdentities),
+          ]),
+        ),
+        sourceCompleteness:
+          incompleteTypes.size > 0 ? "incomplete" : "complete",
+      });
 
-    return {
-      completeness: logicalWork.completeness,
-      count: logicalWork.observedCount,
-    };
-  },
+      return {
+        completeness: logicalWork.completeness,
+        count: logicalWork.observedCount,
+      };
+    },
+  ),
 });
 
 export const getPendingApprovalCountSummary = query({
   args: {
     storeId: v.id("store"),
   },
-  handler: async (ctx, args) => {
-    const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(
-      ctx,
-      "inventory.adjust",
-      args.storeId,
-    );
-    const store = await ctx.db.get("store", args.storeId);
-    if (!store) {
-      throw new Error("Store not found.");
-    }
-
-    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(
-      ctx,
-      demoActor ? { sharedDemoCapability: "inventory.adjust" } : undefined,
-    );
-    await requireOrganizationMemberRoleWithCtx(ctx, {
-      allowedRoles: ["full_admin", "pos_only"],
-      failureMessage: "Only POS operators can view approvals.",
-      organizationId: store.organizationId,
-      userId: athenaUser._id,
-    });
-
-    const [approvalRead, syncConflictRead] = await Promise.all([
-      (async () => {
-        let count = 0;
-        let incomplete = false;
-        let remainingBudget = PENDING_APPROVAL_COUNT_PROBE_LIMIT;
-
-        for (const requestType of QUEUE_APPROVAL_REQUEST_TYPES) {
-          const requests = await ctx.db
-            .query("approvalRequest")
-            .withIndex("by_storeId_status_requestType", (q) =>
-              q
-                .eq("storeId", args.storeId)
-                .eq("status", "pending")
-                .eq("requestType", requestType),
-            )
-            .take(remainingBudget + 1);
-          const acceptedCount = Math.min(requests.length, remainingBudget);
-
-          incomplete ||= requests.length > remainingBudget;
-          count += acceptedCount;
-          remainingBudget -= acceptedCount;
-        }
-
-        return { count, incomplete };
-      })(),
-      listOpenLocalSyncConflictsByRegisterSessionWithCompleteness(
+  handler: admitSharedDemoPublicQuery(
+    getPendingApprovalCountSummaryReadDefinition,
+    async (ctx, args: { storeId: Id<"store"> }) => {
+      await authorizeOperationalWorkSummaryRead(
         ctx,
-        args.storeId,
-        { limit: PENDING_APPROVAL_COUNT_PROBE_LIMIT },
-      ),
-    ]);
+        args,
+        "Only POS operators can view approvals.",
+      );
 
-    return {
-      completeness:
-        approvalRead.incomplete ||
-        syncConflictRead.completeness === "incomplete"
-          ? "incomplete"
-          : "complete",
-      count: approvalRead.count + syncConflictRead.conflictsBySessionId.size,
-    };
-  },
+      const [approvalRead, syncConflictRead] = await Promise.all([
+        (async () => {
+          let count = 0;
+          let incomplete = false;
+          let remainingBudget = PENDING_APPROVAL_COUNT_PROBE_LIMIT;
+
+          for (const requestType of QUEUE_APPROVAL_REQUEST_TYPES) {
+            const requests = await ctx.db
+              .query("approvalRequest")
+              .withIndex("by_storeId_status_requestType", (q) =>
+                q
+                  .eq("storeId", args.storeId)
+                  .eq("status", "pending")
+                  .eq("requestType", requestType),
+              )
+              .take(remainingBudget + 1);
+            const acceptedCount = Math.min(requests.length, remainingBudget);
+
+            incomplete ||= requests.length > remainingBudget;
+            count += acceptedCount;
+            remainingBudget -= acceptedCount;
+          }
+
+          return { count, incomplete };
+        })(),
+        listOpenLocalSyncConflictsByRegisterSessionWithCompleteness(
+          ctx,
+          args.storeId,
+          { limit: PENDING_APPROVAL_COUNT_PROBE_LIMIT },
+        ),
+      ]);
+
+      return {
+        completeness:
+          approvalRead.incomplete ||
+          syncConflictRead.completeness === "incomplete"
+            ? "incomplete"
+            : "complete",
+        count: approvalRead.count + syncConflictRead.conflictsBySessionId.size,
+      };
+    },
+  ),
 });
 
 function sanitizeOperationalWorkItemDetails(item: Doc<"operationalWorkItem">) {

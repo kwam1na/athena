@@ -20,8 +20,16 @@ export function createSharedDemoOperationAdapter(
       let actor;
       try {
         actor = await getSharedDemoActorWithCtx(ctx);
-      } catch {
-        return { kind: "not_applicable" };
+      } catch (error) {
+        if (isRecognizedSharedDemoActorError(error)) {
+          return {
+            error: error instanceof Error ? error : new Error(String(error)),
+            kind: "denied",
+            reason: "actor_denied",
+            recognized: true,
+          };
+        }
+        throw error;
       }
       if (!actor) return { kind: "not_applicable" };
       if (definition.actors.sharedDemo !== "admit") {
@@ -51,10 +59,9 @@ export function createSharedDemoOperationAdapter(
             ? (args[definition.readiness.expectedEpochArg] as number)
             : undefined;
         try {
-          await (options.requireReadyWrite ?? requireReadySharedDemoWriteWithCtx)(
-            ctx,
-            { expectedEpoch, storeId: actor.storeId },
-          );
+          await (
+            options.requireReadyWrite ?? requireReadySharedDemoWriteWithCtx
+          )(ctx, { expectedEpoch, storeId: actor.storeId });
         } catch {
           return sharedDemoDenied("readiness_denied");
         }
@@ -76,8 +83,17 @@ export function createSharedDemoOperationAdapter(
   };
 }
 
+function isRecognizedSharedDemoActorError(error: unknown) {
+  if (!(error instanceof Error)) return false;
+  return (
+    error.message.includes("demo session has expired") ||
+    error.message.includes("demo is unavailable in this environment")
+  );
+}
+
 function sharedDemoDenied(
-  reason: "actor_denied" | "capability_denied" | "scope_denied" | "readiness_denied",
+  reason:
+    "actor_denied" | "capability_denied" | "scope_denied" | "readiness_denied",
 ) {
   return {
     error: sharedDemoDenialError(),

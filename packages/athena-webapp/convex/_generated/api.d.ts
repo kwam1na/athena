@@ -187,6 +187,9 @@ import type * as operationAdmission_definitions from "../operationAdmission/defi
 import type * as operationAdmission_effects from "../operationAdmission/effects.js";
 import type * as operationAdmission_migrationInventory from "../operationAdmission/migrationInventory.js";
 import type * as operationAdmission_publicMutation from "../operationAdmission/publicMutation.js";
+import type * as operationAdmission_publicQuery from "../operationAdmission/publicQuery.js";
+import type * as operationAdmission_readAdapters from "../operationAdmission/readAdapters.js";
+import type * as operationAdmission_readDefinitions from "../operationAdmission/readDefinitions.js";
 import type * as operationAdmission_scopes from "../operationAdmission/scopes.js";
 import type * as operationAdmission_types from "../operationAdmission/types.js";
 import type * as operations_approvalActions from "../operations/approvalActions.js";
@@ -783,6 +786,9 @@ declare const fullApi: ApiFromModules<{
   "operationAdmission/effects": typeof operationAdmission_effects;
   "operationAdmission/migrationInventory": typeof operationAdmission_migrationInventory;
   "operationAdmission/publicMutation": typeof operationAdmission_publicMutation;
+  "operationAdmission/publicQuery": typeof operationAdmission_publicQuery;
+  "operationAdmission/readAdapters": typeof operationAdmission_readAdapters;
+  "operationAdmission/readDefinitions": typeof operationAdmission_readDefinitions;
   "operationAdmission/scopes": typeof operationAdmission_scopes;
   "operationAdmission/types": typeof operationAdmission_types;
   "operations/approvalActions": typeof operations_approvalActions;

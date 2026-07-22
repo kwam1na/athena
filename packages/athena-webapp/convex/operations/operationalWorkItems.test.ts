@@ -17,6 +17,7 @@ vi.mock("../lib/athenaUserAuth", () => ({
   requireOrganizationMemberRoleWithCtx: vi.fn(),
 }));
 vi.mock("../sharedDemo/actor", () => ({
+  getSharedDemoActorWithCtx: vi.fn(),
   requireSharedDemoStoreCapabilityIfApplicable: vi.fn(),
 }));
 
@@ -148,9 +149,78 @@ beforeEach(() => {
   ).mockResolvedValue({
     _id: "user-1",
   } as never);
+  vi.mocked(sharedDemoActor.getSharedDemoActorWithCtx).mockResolvedValue(null);
+  vi.mocked(
+    sharedDemoActor.requireSharedDemoStoreCapabilityIfApplicable,
+  ).mockResolvedValue(null);
 });
 
 describe("getOpenWorkCountSummary", () => {
+  it("admits shared-demo actors through the read rail without requiring write capability", async () => {
+    const ctx = createQueueContext({
+      workItems: [
+        workItem({
+          _id: "service-case-1" as Id<"operationalWorkItem">,
+          type: "service_case",
+        }),
+      ],
+    });
+    vi.mocked(sharedDemoActor.getSharedDemoActorWithCtx).mockResolvedValue({
+      athenaUserId: "demo-user-1" as Id<"athenaUser">,
+      authUserId: "auth-user-demo" as Id<"users">,
+      kind: "shared_demo",
+      organizationId: "org-1" as Id<"organization">,
+      storeId: "store-1" as Id<"store">,
+    });
+
+    const result = await getHandler(getOpenWorkCountSummary)(ctx, {
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(result).toEqual({
+      completeness: "complete",
+      count: 1,
+    });
+    expect(
+      sharedDemoActor.requireSharedDemoStoreCapabilityIfApplicable,
+    ).not.toHaveBeenCalled();
+    expect(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).not.toHaveBeenCalled();
+    expect(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).toHaveBeenCalledWith(ctx, {
+      allowedRoles: ["full_admin", "pos_only"],
+      failureMessage: "Only POS operators can view open work.",
+      organizationId: "org-1",
+      userId: "demo-user-1",
+    });
+  });
+
+  it("denies shared-demo open-work reads outside the admitted store without falling back to normal auth", async () => {
+    const ctx = createQueueContext();
+    vi.mocked(sharedDemoActor.getSharedDemoActorWithCtx).mockResolvedValue({
+      athenaUserId: "demo-user-1" as Id<"athenaUser">,
+      authUserId: "auth-user-demo" as Id<"users">,
+      kind: "shared_demo",
+      organizationId: "org-1" as Id<"organization">,
+      storeId: "other-store" as Id<"store">,
+    });
+
+    await expect(
+      getHandler(getOpenWorkCountSummary)(ctx, {
+        storeId: "store-1" as Id<"store">,
+      }),
+    ).rejects.toThrow(/demo/);
+
+    expect(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).not.toHaveBeenCalled();
+    expect(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).not.toHaveBeenCalled();
+  });
+
   it("returns the bounded consolidated count without loading queue evidence", async () => {
     const ctx = createQueueContext({
       workItems: [
@@ -208,6 +278,71 @@ describe("getOpenWorkCountSummary", () => {
 });
 
 describe("getPendingApprovalCountSummary", () => {
+  it("admits shared-demo actors through the read rail without requiring write capability", async () => {
+    const ctx = createQueueContext({
+      approvalRequests: [
+        approvalRequest({
+          _id: "approval-1" as Id<"approvalRequest">,
+          requestType: "variance_review",
+        }),
+      ],
+    });
+    vi.mocked(sharedDemoActor.getSharedDemoActorWithCtx).mockResolvedValue({
+      athenaUserId: "demo-user-1" as Id<"athenaUser">,
+      authUserId: "auth-user-demo" as Id<"users">,
+      kind: "shared_demo",
+      organizationId: "org-1" as Id<"organization">,
+      storeId: "store-1" as Id<"store">,
+    });
+
+    const result = await getHandler(getPendingApprovalCountSummary)(ctx, {
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(result).toEqual({
+      completeness: "complete",
+      count: 1,
+    });
+    expect(
+      sharedDemoActor.requireSharedDemoStoreCapabilityIfApplicable,
+    ).not.toHaveBeenCalled();
+    expect(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).not.toHaveBeenCalled();
+    expect(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).toHaveBeenCalledWith(ctx, {
+      allowedRoles: ["full_admin", "pos_only"],
+      failureMessage: "Only POS operators can view approvals.",
+      organizationId: "org-1",
+      userId: "demo-user-1",
+    });
+  });
+
+  it("denies shared-demo pending-approval reads outside the admitted store without falling back to normal auth", async () => {
+    const ctx = createQueueContext();
+    vi.mocked(sharedDemoActor.getSharedDemoActorWithCtx).mockResolvedValue({
+      athenaUserId: "demo-user-1" as Id<"athenaUser">,
+      authUserId: "auth-user-demo" as Id<"users">,
+      kind: "shared_demo",
+      organizationId: "org-1" as Id<"organization">,
+      storeId: "other-store" as Id<"store">,
+    });
+
+    await expect(
+      getHandler(getPendingApprovalCountSummary)(ctx, {
+        storeId: "store-1" as Id<"store">,
+      }),
+    ).rejects.toThrow(/demo/);
+
+    expect(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).not.toHaveBeenCalled();
+    expect(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).not.toHaveBeenCalled();
+  });
+
   it("counts supported pending approvals without loading queue records", async () => {
     const ctx = createQueueContext({
       approvalRequests: [

@@ -150,6 +150,31 @@ describe("shared demo operation adapter", () => {
     });
   });
 
+  it("denies expired recognized demo principals instead of falling through", async () => {
+    vi.mocked(getAuthUserId).mockResolvedValue("auth-user" as never);
+    const ctx = demoCtx({
+      principal: {
+        admissionExpiresAt: Date.now() - 1,
+        athenaUserId: "athena-user",
+        authUserId: "auth-user",
+        organizationId: "org-1",
+        storeId: "store-1",
+      },
+    });
+
+    await expect(
+      createSharedDemoOperationAdapter().resolve(
+        ctx as never,
+        { storeId: "store-1" },
+        admittedDefinition,
+      ),
+    ).resolves.toMatchObject({
+      kind: "denied",
+      recognized: true,
+      reason: "actor_denied",
+    });
+  });
+
   it("denies stale restore epochs before invoking the domain handler", async () => {
     vi.mocked(getAuthUserId).mockResolvedValue("auth-user" as never);
     const ready = vi.fn(async () => {

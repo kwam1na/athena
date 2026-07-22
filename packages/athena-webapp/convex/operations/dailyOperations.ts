@@ -18,7 +18,20 @@ import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
-import { requireSharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
+import { admitSharedDemoPublicQuery } from "../operationAdmission/publicQuery";
+import {
+  getDailyOperationsAutomationSnapshotReadDefinition,
+  getDailyOperationsDetailSnapshotReadDefinition,
+  getDailyOperationsOpenRegisterSessionsSnapshotReadDefinition,
+  getDailyOperationsSnapshotReadDefinition,
+  getDailyOperationsStorePulseSnapshotReadDefinition,
+  getDailyOperationsStoreRequestsSnapshotReadDefinition,
+  getDailyOperationsTimelinePreviewSnapshotReadDefinition,
+  getDailyOperationsTimelineSnapshotReadDefinition,
+  getDailyOperationsTodayRefreshSnapshotReadDefinition,
+  getDailyOperationsWeekAnalyticsSnapshotReadDefinition,
+} from "../operationAdmission/readDefinitions";
+import type { OperationQueryCtx } from "../operationAdmission/types";
 import { buildPaymentTotals, transactionCashDelta } from "./paymentTotals";
 import {
   projectLogicalOperationalWork,
@@ -600,28 +613,28 @@ async function listOpenQueueSnapshot(
 ) {
   const [workItemBatches, pendingApprovalRequests, activeRepairPages] =
     await Promise.all([
-    Promise.all(
-      OPEN_WORK_ITEM_STATUSES.map((status) =>
-        ctx.db
-          .query("operationalWorkItem")
-          .withIndex("by_storeId_status", (q) =>
-            q.eq("storeId", args.storeId).eq("status", status),
-          )
-          .take(MAX_OPERATIONS_LOOKAHEAD_LIMIT),
+      Promise.all(
+        OPEN_WORK_ITEM_STATUSES.map((status) =>
+          ctx.db
+            .query("operationalWorkItem")
+            .withIndex("by_storeId_status", (q) =>
+              q.eq("storeId", args.storeId).eq("status", status),
+            )
+            .take(MAX_OPERATIONS_LOOKAHEAD_LIMIT),
+        ),
       ),
-    ),
-    listPendingApprovalRequestsSnapshot(ctx, args),
-    Promise.all(
-      (["pending", "running", "paused"] as const).map((status) =>
-        ctx.db
-          .query("oversizedOperationalWorkRepair")
-          .withIndex("by_storeId_status", (q) =>
-            q.eq("storeId", args.storeId).eq("status", status),
-          )
-          .take(MAX_ACTIVE_REPAIR_QUERY_LIMIT + 1),
+      listPendingApprovalRequestsSnapshot(ctx, args),
+      Promise.all(
+        (["pending", "running", "paused"] as const).map((status) =>
+          ctx.db
+            .query("oversizedOperationalWorkRepair")
+            .withIndex("by_storeId_status", (q) =>
+              q.eq("storeId", args.storeId).eq("status", status),
+            )
+            .take(MAX_ACTIVE_REPAIR_QUERY_LIMIT + 1),
+        ),
       ),
-    ),
-  ]);
+    ]);
 
   const openWorkItems = workItemBatches.flatMap((batch) =>
     batch.slice(0, MAX_OPERATIONS_QUERY_LIMIT),
@@ -631,19 +644,16 @@ async function listOpenQueueSnapshot(
   );
   const hasMoreOpenWorkItems =
     activeRepairReadIncomplete ||
-    workItemBatches.some(
-      (batch) => batch.length > MAX_OPERATIONS_QUERY_LIMIT,
-    );
+    workItemBatches.some((batch) => batch.length > MAX_OPERATIONS_QUERY_LIMIT);
   const hasMoreApprovalRequests =
     pendingApprovalRequests.hasMoreApprovalRequests;
   const openWorkProjection = projectLogicalOperationalWork({
     items: openWorkItems,
     remediationSourceIdentitiesByGroupKey: new Map(
       activeRepairPages.flatMap((page) =>
-        page.slice(0, MAX_ACTIVE_REPAIR_QUERY_LIMIT).map((repair) => [
-          repair.groupKey,
-          new Set(repair.sourceIdentities),
-        ]),
+        page
+          .slice(0, MAX_ACTIVE_REPAIR_QUERY_LIMIT)
+          .map((repair) => [repair.groupKey, new Set(repair.sourceIdentities)]),
       ),
     ),
     sourceCompleteness: hasMoreOpenWorkItems ? "incomplete" : "complete",
@@ -2682,23 +2692,34 @@ const dailyOperationsRefreshArgsValidator = {
   refreshRequestedAt: v.optional(v.number()),
 };
 
+type DailyOperationsSnapshotArgs = {
+  endAt?: number;
+  operatingDate: string;
+  operatingTimezoneOffsetMinutes?: number;
+  startAt?: number;
+  storeId: Id<"store">;
+  storePulseWindow?: DailyOperationsStorePulseWindow;
+  weekEndOperatingDate?: string;
+};
+
+type DailyOperationsRefreshArgs = DailyOperationsSnapshotArgs & {
+  refreshRequestedAt?: number;
+};
+
 async function authorizeDailyOperationsSnapshot(
   ctx: QueryCtx,
   args: { storeId: Id<"store"> },
 ) {
-  await requireSharedDemoStoreCapabilityIfApplicable(
-    ctx,
-    "daily_operations.write",
-    args.storeId,
-  );
   const store = await ctx.db.get("store", args.storeId);
   if (!store) {
     throw new Error("Store not found.");
   }
 
-  const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx, {
-    sharedDemoCapability: "daily_operations.write",
-  });
+  const admittedActor = (ctx as Partial<OperationQueryCtx>).operationAdmission
+    ?.actor;
+  const athenaUser = admittedActor
+    ? ({ _id: admittedActor.athenaUserId } as const)
+    : await requireAuthenticatedAthenaUserWithCtx(ctx);
   const membership = await requireOrganizationMemberRoleWithCtx(ctx, {
     allowedRoles: ["full_admin", "pos_only"],
     failureMessage: "You cannot view daily operations for this store.",
@@ -2713,288 +2734,319 @@ async function authorizeDailyOperationsSnapshot(
 
 export const getDailyOperationsSnapshot = query({
   args: dailyOperationsSnapshotArgsValidator,
-  handler: async (ctx, args) => {
-    const { includeManagerReviewEvidence } =
-      await authorizeDailyOperationsSnapshot(ctx, args);
+  handler: admitSharedDemoPublicQuery(
+    getDailyOperationsSnapshotReadDefinition,
+    async (ctx, args: DailyOperationsSnapshotArgs) => {
+      const { includeManagerReviewEvidence } =
+        await authorizeDailyOperationsSnapshot(ctx, args);
 
-    return buildDailyOperationsSnapshotWithCtx(ctx, {
-      ...args,
-      includeAnalyticsDetails: false,
-      includeFinancialDetails: includeManagerReviewEvidence,
-      includeManagerReviewEvidence,
-      includeScheduledRunSummaries: includeManagerReviewEvidence,
-      scheduledRunSummariesLimit: COMPACT_SCHEDULED_RUN_SUMMARY_LIMIT,
-      timelineLimit: 0,
-      timelinePreviewLimit: 0,
-    });
-  },
+      return buildDailyOperationsSnapshotWithCtx(ctx, {
+        ...args,
+        includeAnalyticsDetails: false,
+        includeFinancialDetails: includeManagerReviewEvidence,
+        includeManagerReviewEvidence,
+        includeScheduledRunSummaries: includeManagerReviewEvidence,
+        scheduledRunSummariesLimit: COMPACT_SCHEDULED_RUN_SUMMARY_LIMIT,
+        timelineLimit: 0,
+        timelinePreviewLimit: 0,
+      });
+    },
+  ),
 });
 
 export const getDailyOperationsDetailSnapshot = query({
   args: {
     ...dailyOperationsSnapshotArgsValidator,
   },
-  handler: async (ctx, args) => {
-    const { includeManagerReviewEvidence } =
-      await authorizeDailyOperationsSnapshot(ctx, args);
+  handler: admitSharedDemoPublicQuery(
+    getDailyOperationsDetailSnapshotReadDefinition,
+    async (ctx, args: DailyOperationsSnapshotArgs) => {
+      const { includeManagerReviewEvidence } =
+        await authorizeDailyOperationsSnapshot(ctx, args);
 
-    const snapshot = await buildDailyOperationsSnapshotWithCtx(ctx, {
-      ...args,
-      includeAnalyticsDetails: false,
-      includeFinancialDetails: includeManagerReviewEvidence,
-      includeManagerReviewEvidence,
-      includeScheduledRunSummaries: false,
-      includeStorePulseDetails: false,
-      scheduledRunSummariesLimit: 0,
-      timelineLimit: 0,
-      timelinePreviewLimit: 0,
-    });
+      const snapshot = await buildDailyOperationsSnapshotWithCtx(ctx, {
+        ...args,
+        includeAnalyticsDetails: false,
+        includeFinancialDetails: includeManagerReviewEvidence,
+        includeManagerReviewEvidence,
+        includeScheduledRunSummaries: false,
+        includeStorePulseDetails: false,
+        scheduledRunSummariesLimit: 0,
+        timelineLimit: 0,
+        timelinePreviewLimit: 0,
+      });
 
-    return snapshot;
-  },
+      return snapshot;
+    },
+  ),
 });
 
 export const getDailyOperationsWeekAnalyticsSnapshot = query({
   args: dailyOperationsSnapshotArgsValidator,
-  handler: async (ctx, args) => {
-    const { includeManagerReviewEvidence } =
-      await authorizeDailyOperationsSnapshot(ctx, args);
-    const weekEndOperatingDate = saturdayWeekEndOperatingDate(
-      args.weekEndOperatingDate ?? args.operatingDate,
-    );
-    const priorWeekBoundaryOperatingDate = shiftOperatingDate(
-      weekEndOperatingDate,
-      -7,
-    );
-    const [weekMetrics, priorWeekBoundaryMetric] = includeManagerReviewEvidence
-      ? await Promise.all([
-          buildWeekMetrics(ctx, {
-            operatingDate: args.operatingDate,
-            operatingTimezoneOffsetMinutes:
-              args.operatingTimezoneOffsetMinutes,
-            storeId: args.storeId,
-            weekEndOperatingDate,
-          }),
-          buildWeekMetricForDate(ctx, {
-            isSelected: false,
-            operatingDate: priorWeekBoundaryOperatingDate,
-            operatingTimezoneOffsetMinutes:
-              args.operatingTimezoneOffsetMinutes,
-            storeId: args.storeId,
-          }),
-        ])
-      : [[], null];
+  handler: admitSharedDemoPublicQuery(
+    getDailyOperationsWeekAnalyticsSnapshotReadDefinition,
+    async (ctx, args: DailyOperationsSnapshotArgs) => {
+      const { includeManagerReviewEvidence } =
+        await authorizeDailyOperationsSnapshot(ctx, args);
+      const weekEndOperatingDate = saturdayWeekEndOperatingDate(
+        args.weekEndOperatingDate ?? args.operatingDate,
+      );
+      const priorWeekBoundaryOperatingDate = shiftOperatingDate(
+        weekEndOperatingDate,
+        -7,
+      );
+      const [weekMetrics, priorWeekBoundaryMetric] =
+        includeManagerReviewEvidence
+          ? await Promise.all([
+              buildWeekMetrics(ctx, {
+                operatingDate: args.operatingDate,
+                operatingTimezoneOffsetMinutes:
+                  args.operatingTimezoneOffsetMinutes,
+                storeId: args.storeId,
+                weekEndOperatingDate,
+              }),
+              buildWeekMetricForDate(ctx, {
+                isSelected: false,
+                operatingDate: priorWeekBoundaryOperatingDate,
+                operatingTimezoneOffsetMinutes:
+                  args.operatingTimezoneOffsetMinutes,
+                storeId: args.storeId,
+              }),
+            ])
+          : [[], null];
 
-    return {
-      operatingDate: args.operatingDate,
-      priorWeekBoundaryMetric,
-      weekEndOperatingDate,
-      weekMetrics,
-    };
-  },
+      return {
+        operatingDate: args.operatingDate,
+        priorWeekBoundaryMetric,
+        weekEndOperatingDate,
+        weekMetrics,
+      };
+    },
+  ),
 });
 
 export const getDailyOperationsStorePulseSnapshot = query({
   args: dailyOperationsSnapshotArgsValidator,
-  handler: async (ctx, args) => {
-    const { includeManagerReviewEvidence } =
-      await authorizeDailyOperationsSnapshot(ctx, args);
-    const range = resolveRange(args);
-    const storePulse = includeManagerReviewEvidence
-      ? await getStorePulseSummaryForWindow(ctx, {
-          currentDayEnd: range.endAt - 1,
-          currentDayStart: range.startAt,
-          currentOperatingDate: args.operatingDate,
-          pulseWindow: args.storePulseWindow ?? "today",
-          storeId: args.storeId,
-        })
-      : null;
+  handler: admitSharedDemoPublicQuery(
+    getDailyOperationsStorePulseSnapshotReadDefinition,
+    async (ctx, args: DailyOperationsSnapshotArgs) => {
+      const { includeManagerReviewEvidence } =
+        await authorizeDailyOperationsSnapshot(ctx, args);
+      const range = resolveRange(args);
+      const storePulse = includeManagerReviewEvidence
+        ? await getStorePulseSummaryForWindow(ctx, {
+            currentDayEnd: range.endAt - 1,
+            currentDayStart: range.startAt,
+            currentOperatingDate: args.operatingDate,
+            pulseWindow: args.storePulseWindow ?? "today",
+            storeId: args.storeId,
+          })
+        : null;
 
-    return {
-      operatingDate: args.operatingDate,
-      storePulse,
-    };
-  },
+      return {
+        operatingDate: args.operatingDate,
+        storePulse,
+      };
+    },
+  ),
 });
 
 export const getDailyOperationsStoreRequestsSnapshot = query({
   args: dailyOperationsSnapshotArgsValidator,
-  handler: async (ctx, args) => {
-    await authorizeDailyOperationsSnapshot(ctx, args);
-    const range = resolveRange(args);
-    const approvals = await listPendingApprovalRequestsSnapshot(ctx, {
-      ...range,
-      storeId: args.storeId,
-    });
+  handler: admitSharedDemoPublicQuery(
+    getDailyOperationsStoreRequestsSnapshotReadDefinition,
+    async (ctx, args: DailyOperationsSnapshotArgs) => {
+      await authorizeDailyOperationsSnapshot(ctx, args);
+      const range = resolveRange(args);
+      const approvals = await listPendingApprovalRequestsSnapshot(ctx, {
+        ...range,
+        storeId: args.storeId,
+      });
 
-    return {
-      approvalsLane: buildApprovalsLane({
-        approvalCount: approvals.approvalRequests.length,
-        approvalCountLabel: approvals.approvalRequestsCountLabel,
-      }),
-      operatingDate: args.operatingDate,
-    };
-  },
+      return {
+        approvalsLane: buildApprovalsLane({
+          approvalCount: approvals.approvalRequests.length,
+          approvalCountLabel: approvals.approvalRequestsCountLabel,
+        }),
+        operatingDate: args.operatingDate,
+      };
+    },
+  ),
 });
 
 export const getDailyOperationsOpenRegisterSessionsSnapshot = query({
   args: dailyOperationsSnapshotArgsValidator,
-  handler: async (
-    ctx,
-    args,
-  ): Promise<DailyOperationsOpenRegisterSessionsSnapshot> => {
-    await authorizeDailyOperationsSnapshot(ctx, args);
-    const statuses = ["open", "active", "closing"] as const;
-    const [sessionPages, terminalNamesById] = await Promise.all([
-      Promise.all(
-        statuses.map((status) =>
-          ctx.db
-            .query("registerSession")
-            .withIndex("by_storeId_status_openedOperatingDate", (q) =>
-              q
-                .eq("storeId", args.storeId)
-                .eq("status", status)
-                .eq("openedOperatingDate", args.operatingDate),
-            )
-            .order("asc")
-            .take(MAX_OPERATIONS_QUERY_LIMIT),
+  handler: admitSharedDemoPublicQuery(
+    getDailyOperationsOpenRegisterSessionsSnapshotReadDefinition,
+    async (
+      ctx,
+      args: DailyOperationsSnapshotArgs,
+    ): Promise<DailyOperationsOpenRegisterSessionsSnapshot> => {
+      await authorizeDailyOperationsSnapshot(ctx, args);
+      const statuses = ["open", "active", "closing"] as const;
+      const [sessionPages, terminalNamesById] = await Promise.all([
+        Promise.all(
+          statuses.map((status) =>
+            ctx.db
+              .query("registerSession")
+              .withIndex("by_storeId_status_openedOperatingDate", (q) =>
+                q
+                  .eq("storeId", args.storeId)
+                  .eq("status", status)
+                  .eq("openedOperatingDate", args.operatingDate),
+              )
+              .order("asc")
+              .take(MAX_OPERATIONS_QUERY_LIMIT),
+          ),
         ),
-      ),
-      listTerminalNames(ctx, args.storeId),
-    ]);
+        listTerminalNames(ctx, args.storeId),
+      ]);
 
-    return {
-      operatingDate: args.operatingDate,
-      sessions: sessionPages.flat().map((session) => {
-        const registerLabel = registerSessionLabel(session);
-        const terminalLabel = session.terminalId
-          ? terminalNamesById.get(session.terminalId)
-          : undefined;
+      return {
+        operatingDate: args.operatingDate,
+        sessions: sessionPages.flat().map((session) => {
+          const registerLabel = registerSessionLabel(session);
+          const terminalLabel = session.terminalId
+            ? terminalNamesById.get(session.terminalId)
+            : undefined;
 
-        return {
-          displayLabel: terminalLabel
-            ? `${terminalLabel} / ${registerLabel}`
-            : registerLabel,
-          id: session._id,
-        };
-      }),
-    };
-  },
+          return {
+            displayLabel: terminalLabel
+              ? `${terminalLabel} / ${registerLabel}`
+              : registerLabel,
+            id: session._id,
+          };
+        }),
+      };
+    },
+  ),
 });
 
 export const getDailyOperationsAutomationSnapshot = query({
   args: dailyOperationsSnapshotArgsValidator,
-  handler: async (ctx, args) => {
-    const { includeManagerReviewEvidence } =
-      await authorizeDailyOperationsSnapshot(ctx, args);
-    const dailyCloseRecord = await getDailyCloseRecordForDate(ctx, args);
+  handler: admitSharedDemoPublicQuery(
+    getDailyOperationsAutomationSnapshotReadDefinition,
+    async (ctx, args: DailyOperationsSnapshotArgs) => {
+      const { includeManagerReviewEvidence } =
+        await authorizeDailyOperationsSnapshot(ctx, args);
+      const dailyCloseRecord = await getDailyCloseRecordForDate(ctx, args);
 
-    return {
-      automationStatuses: await listDailyOperationsAutomationStatuses(ctx, {
-        ...args,
-        closeCompletion: dailyCloseRecord
-          ? {
-              actorType: dailyCloseRecord.actorType,
-              automationRunId: dailyCloseRecord.automationRunId,
-            }
-          : null,
-        includeManagerReviewEvidence,
-      }),
-      operatingDate: args.operatingDate,
-    };
-  },
+      return {
+        automationStatuses: await listDailyOperationsAutomationStatuses(ctx, {
+          ...args,
+          closeCompletion: dailyCloseRecord
+            ? {
+                actorType: dailyCloseRecord.actorType,
+                automationRunId: dailyCloseRecord.automationRunId,
+              }
+            : null,
+          includeManagerReviewEvidence,
+        }),
+        operatingDate: args.operatingDate,
+      };
+    },
+  ),
 });
 
 export const getDailyOperationsTodayRefreshSnapshot = query({
   args: dailyOperationsRefreshArgsValidator,
-  handler: async (ctx, args) => {
-    const { includeManagerReviewEvidence } =
-      await authorizeDailyOperationsSnapshot(ctx, args);
-    const snapshot = await buildDailyOperationsSnapshotWithCtx(ctx, {
-      ...args,
-      includeAnalyticsDetails: false,
-      includeFinancialDetails: includeManagerReviewEvidence,
-      includeManagerReviewEvidence,
-      includeScheduledRunSummaries: false,
-      includeStorePulseDetails: includeManagerReviewEvidence,
-      scheduledRunSummariesLimit: 0,
-      timelineLimit: 0,
-      timelinePreviewLimit: 0,
-    });
-    const weekMetric = includeManagerReviewEvidence
-      ? await buildWeekMetricForDate(ctx, {
-          isSelected: true,
-          operatingDate: args.operatingDate,
-          operatingTimezoneOffsetMinutes: args.operatingTimezoneOffsetMinutes,
-          storeId: args.storeId,
-        })
-      : null;
-    const priorDayMetric = includeManagerReviewEvidence
-      ? await buildWeekMetricForDate(ctx, {
-          isSelected: false,
-          operatingDate: shiftOperatingDate(args.operatingDate, -1),
-          operatingTimezoneOffsetMinutes: args.operatingTimezoneOffsetMinutes,
-          storeId: args.storeId,
-        })
-      : null;
+  handler: admitSharedDemoPublicQuery(
+    getDailyOperationsTodayRefreshSnapshotReadDefinition,
+    async (ctx, args: DailyOperationsRefreshArgs) => {
+      const { includeManagerReviewEvidence } =
+        await authorizeDailyOperationsSnapshot(ctx, args);
+      const snapshot = await buildDailyOperationsSnapshotWithCtx(ctx, {
+        ...args,
+        includeAnalyticsDetails: false,
+        includeFinancialDetails: includeManagerReviewEvidence,
+        includeManagerReviewEvidence,
+        includeScheduledRunSummaries: false,
+        includeStorePulseDetails: includeManagerReviewEvidence,
+        scheduledRunSummariesLimit: 0,
+        timelineLimit: 0,
+        timelinePreviewLimit: 0,
+      });
+      const weekMetric = includeManagerReviewEvidence
+        ? await buildWeekMetricForDate(ctx, {
+            isSelected: true,
+            operatingDate: args.operatingDate,
+            operatingTimezoneOffsetMinutes: args.operatingTimezoneOffsetMinutes,
+            storeId: args.storeId,
+          })
+        : null;
+      const priorDayMetric = includeManagerReviewEvidence
+        ? await buildWeekMetricForDate(ctx, {
+            isSelected: false,
+            operatingDate: shiftOperatingDate(args.operatingDate, -1),
+            operatingTimezoneOffsetMinutes: args.operatingTimezoneOffsetMinutes,
+            storeId: args.storeId,
+          })
+        : null;
 
-    return {
-      attentionItems: snapshot.attentionItems,
-      closeSummary: snapshot.closeSummary,
-      completedClose: snapshot.completedClose ?? null,
-      currency: snapshot.currency,
-      endAt: snapshot.endAt,
-      lanes: snapshot.lanes,
-      lifecycle: snapshot.lifecycle,
-      operatingDate: snapshot.operatingDate,
-      primaryAction: snapshot.primaryAction,
-      priorDayMetric,
-      refreshedAt: Date.now(),
-      refreshRequestedAt: args.refreshRequestedAt ?? null,
-      startAt: snapshot.startAt,
-      storeId: snapshot.storeId,
-      storePulse: snapshot.storePulse ?? null,
-      weekMetric,
-    };
-  },
+      return {
+        attentionItems: snapshot.attentionItems,
+        closeSummary: snapshot.closeSummary,
+        completedClose: snapshot.completedClose ?? null,
+        currency: snapshot.currency,
+        endAt: snapshot.endAt,
+        lanes: snapshot.lanes,
+        lifecycle: snapshot.lifecycle,
+        operatingDate: snapshot.operatingDate,
+        primaryAction: snapshot.primaryAction,
+        priorDayMetric,
+        refreshedAt: Date.now(),
+        refreshRequestedAt: args.refreshRequestedAt ?? null,
+        startAt: snapshot.startAt,
+        storeId: snapshot.storeId,
+        storePulse: snapshot.storePulse ?? null,
+        weekMetric,
+      };
+    },
+  ),
 });
 
 export const getDailyOperationsTimelineSnapshot = query({
   args: dailyOperationsSnapshotArgsValidator,
-  handler: async (ctx, args) => {
-    const { includeManagerReviewEvidence } =
-      await authorizeDailyOperationsSnapshot(ctx, args);
-    const range = resolveRange(args);
+  handler: admitSharedDemoPublicQuery(
+    getDailyOperationsTimelineSnapshotReadDefinition,
+    async (ctx, args: DailyOperationsSnapshotArgs) => {
+      const { includeManagerReviewEvidence } =
+        await authorizeDailyOperationsSnapshot(ctx, args);
+      const range = resolveRange(args);
 
-    return {
-      operatingDate: args.operatingDate,
-      timeline: await listTimelineEvents(ctx, {
-        ...range,
-        includeManagerReviewEvidence,
-        limit: MAX_OPERATIONS_QUERY_LIMIT,
-        storeId: args.storeId,
-      }),
-    };
-  },
+      return {
+        operatingDate: args.operatingDate,
+        timeline: await listTimelineEvents(ctx, {
+          ...range,
+          includeManagerReviewEvidence,
+          limit: MAX_OPERATIONS_QUERY_LIMIT,
+          storeId: args.storeId,
+        }),
+      };
+    },
+  ),
 });
 
 export const getDailyOperationsTimelinePreviewSnapshot = query({
   args: dailyOperationsSnapshotArgsValidator,
-  handler: async (ctx, args) => {
-    const { includeManagerReviewEvidence } =
-      await authorizeDailyOperationsSnapshot(ctx, args);
-    const range = resolveRange(args);
-    const timeline = await listTimelineEvents(ctx, {
-      ...range,
-      includeManagerReviewEvidence,
-      limit: COMPACT_OPERATIONS_TIMELINE_LIMIT + 1,
-      storeId: args.storeId,
-    });
+  handler: admitSharedDemoPublicQuery(
+    getDailyOperationsTimelinePreviewSnapshotReadDefinition,
+    async (ctx, args: DailyOperationsSnapshotArgs) => {
+      const { includeManagerReviewEvidence } =
+        await authorizeDailyOperationsSnapshot(ctx, args);
+      const range = resolveRange(args);
+      const timeline = await listTimelineEvents(ctx, {
+        ...range,
+        includeManagerReviewEvidence,
+        limit: COMPACT_OPERATIONS_TIMELINE_LIMIT + 1,
+        storeId: args.storeId,
+      });
 
-    return {
-      operatingDate: args.operatingDate,
-      timeline: timeline.slice(0, COMPACT_OPERATIONS_TIMELINE_LIMIT),
-      timelineHasMore: timeline.length > COMPACT_OPERATIONS_TIMELINE_LIMIT,
-    };
-  },
+      return {
+        operatingDate: args.operatingDate,
+        timeline: timeline.slice(0, COMPACT_OPERATIONS_TIMELINE_LIMIT),
+        timelineHasMore: timeline.length > COMPACT_OPERATIONS_TIMELINE_LIMIT,
+      };
+    },
+  ),
 });

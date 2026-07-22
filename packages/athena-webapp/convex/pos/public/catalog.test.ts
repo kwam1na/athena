@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   requireAuthenticatedAthenaUserIndexedWithCtx: vi.fn(),
   requireAuthenticatedAthenaUserWithCtx: vi.fn(),
   requireOrganizationMemberRoleWithCtx: vi.fn(),
+  getSharedDemoActorWithCtx: vi.fn(),
   requireSharedDemoStoreCapabilityIfApplicable: vi.fn(),
   searchProducts: vi.fn(),
   updateOperationalWorkItemStatusWithCtx: vi.fn(),
@@ -47,6 +48,7 @@ vi.mock("../../inventory/skuSearch", () => ({
 }));
 
 vi.mock("../../sharedDemo/actor", () => ({
+  getSharedDemoActorWithCtx: mocks.getSharedDemoActorWithCtx,
   requireSharedDemoStoreCapabilityIfApplicable:
     mocks.requireSharedDemoStoreCapabilityIfApplicable,
 }));
@@ -139,6 +141,7 @@ describe("POS public catalog queries", () => {
       _id: "athena-user-1",
     });
     mocks.requireOrganizationMemberRoleWithCtx.mockResolvedValue(undefined);
+    mocks.getSharedDemoActorWithCtx.mockResolvedValue(null);
     mocks.requireSharedDemoStoreCapabilityIfApplicable.mockResolvedValue(null);
     mocks.listRegisterCatalogAvailabilitySnapshot.mockResolvedValue([
       {

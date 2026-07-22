@@ -7,6 +7,7 @@ import {
   buildDailyOperationsSnapshotWithCtx,
   getDailyOperationsAutomationSnapshot,
   getDailyOperationsDetailSnapshot,
+  getDailyOperationsOpenRegisterSessionsSnapshot,
   getDailyOperationsSnapshot,
   getDailyOperationsStorePulseSnapshot,
   getDailyOperationsStoreRequestsSnapshot,
@@ -22,6 +23,7 @@ vi.mock("../lib/athenaUserAuth", () => ({
 }));
 
 vi.mock("../sharedDemo/actor", () => ({
+  getSharedDemoActorWithCtx: vi.fn(),
   requireSharedDemoStoreCapabilityIfApplicable: vi.fn(),
 }));
 
@@ -2064,16 +2066,103 @@ describe("daily operations overview read model", () => {
     ).rejects.toThrow("You cannot view daily operations for this store.");
     expect(
       sharedDemoActor.requireSharedDemoStoreCapabilityIfApplicable,
-    ).toHaveBeenCalledWith(
-      expect.anything(),
-      "daily_operations.write",
-      "store-1",
-    );
+    ).not.toHaveBeenCalled();
     expect(
       athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
-    ).toHaveBeenCalledWith(expect.anything(), {
-      sharedDemoCapability: "daily_operations.write",
+    ).toHaveBeenCalledWith(expect.anything());
+  });
+
+  it("admits shared-demo actors through the daily operations read rail", async () => {
+    vi.mocked(sharedDemoActor.getSharedDemoActorWithCtx).mockResolvedValue({
+      kind: "shared_demo",
+      authUserId: "auth-user-demo" as Id<"users">,
+      athenaUserId: "demo-user-1" as Id<"athenaUser">,
+      organizationId: "org-1" as Id<"organization">,
+      storeId: "store-1" as Id<"store">,
     });
+    vi.mocked(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).mockResolvedValue({
+      _creationTime: 0,
+      _id: "member-demo" as Id<"organizationMember">,
+      organizationId: "org-1" as Id<"organization">,
+      role: "pos_only",
+      userId: "demo-user-1" as Id<"athenaUser">,
+    });
+
+    const snapshot = await getHandler(getDailyOperationsSnapshot)(
+      buildCtx({
+        dailyOpening: [
+          {
+            ...startedOpening,
+            _id: "opening-current",
+            operatingDate: "2026-06-21",
+          },
+        ],
+        store: [store],
+      }) as never,
+      {
+        operatingDate: "2026-06-21",
+        storeId: "store-1" as Id<"store">,
+        weekEndOperatingDate: "2026-06-27",
+      },
+    );
+
+    expect(snapshot.operatingDate).toBe("2026-06-21");
+    expect(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).not.toHaveBeenCalled();
+    expect(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).toHaveBeenCalledWith(expect.anything(), {
+      allowedRoles: ["full_admin", "pos_only"],
+      failureMessage: "You cannot view daily operations for this store.",
+      organizationId: "org-1",
+      userId: "demo-user-1",
+    });
+    expect(
+      sharedDemoActor.requireSharedDemoStoreCapabilityIfApplicable,
+    ).not.toHaveBeenCalled();
+  });
+
+  it("denies shared-demo store mismatches across daily operations read exports without falling back to normal auth", async () => {
+    vi.mocked(sharedDemoActor.getSharedDemoActorWithCtx).mockResolvedValue({
+      kind: "shared_demo",
+      authUserId: "auth-user-demo" as Id<"users">,
+      athenaUserId: "demo-user-1" as Id<"athenaUser">,
+      organizationId: "org-1" as Id<"organization">,
+      storeId: "demo-store" as Id<"store">,
+    });
+    const readQueries = [
+      getDailyOperationsSnapshot,
+      getDailyOperationsDetailSnapshot,
+      getDailyOperationsWeekAnalyticsSnapshot,
+      getDailyOperationsStorePulseSnapshot,
+      getDailyOperationsStoreRequestsSnapshot,
+      getDailyOperationsOpenRegisterSessionsSnapshot,
+      getDailyOperationsAutomationSnapshot,
+      getDailyOperationsTodayRefreshSnapshot,
+      getDailyOperationsTimelineSnapshot,
+      getDailyOperationsTimelinePreviewSnapshot,
+    ];
+
+    for (const readQuery of readQueries) {
+      await expect(
+        getHandler(readQuery)(buildCtx({ store: [store] }) as never, {
+          operatingDate: "2026-06-21",
+          refreshRequestedAt: Date.UTC(2026, 5, 21, 12),
+          storeId: "store-1" as Id<"store">,
+          weekEndOperatingDate: "2026-06-27",
+        }),
+      ).rejects.toThrow("This action isn't allowed in the demo.");
+    }
+
+    expect(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).not.toHaveBeenCalled();
+    expect(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).not.toHaveBeenCalled();
   });
 
   it("returns a redacted daily operations snapshot for POS-only store members", async () => {
@@ -2323,9 +2412,7 @@ describe("daily operations overview read model", () => {
       userId: "user-1" as Id<"athenaUser">,
     });
 
-    const snapshot = await getHandler(
-      getDailyOperationsWeekAnalyticsSnapshot,
-    )(
+    const snapshot = await getHandler(getDailyOperationsWeekAnalyticsSnapshot)(
       buildCtx({
         dailyClose: [priorClose],
         dailyOpening: [startedOpening],
@@ -3244,7 +3331,8 @@ describe("daily operations overview read model", () => {
     ).toEqual([
       expect.objectContaining({
         label: "Open Work count is still updating",
-        message: "Open Work is still loading the complete inventory review set.",
+        message:
+          "Open Work is still loading the complete inventory review set.",
         to: "/$orgUrlSlug/store/$storeUrlSlug/operations/open-work",
       }),
     ]);
