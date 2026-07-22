@@ -15,7 +15,7 @@ applies_when:
   - Making one exhibit on an otherwise-inert marketing page genuinely interactive
 tags: [landing-page, demo-store, marketing, exhibits, animation, design-pattern, pos]
 related_components: [athena-webapp, landing, sharedDemo, cash-controls, daily-operations, pos]
-delivery_diff_fingerprint: 1684292bf43b3a665593532121c315280754bbe7592a62b658e159a9849a8330
+delivery_diff_fingerprint: 7a06ee03911d066800400c200f57df751b3d3f04a196de648b38ea8bdd4cd9a4
 ---
 
 # Landing Story Told With Real Product Components As Exhibits
