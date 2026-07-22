@@ -9,8 +9,13 @@ import { getAuthenticatedAthenaUserWithCtx } from "../lib/athenaUserAuth";
 import { getActiveManagerElevationWithCtx } from "../operations/managerElevations";
 import { listWorkflowTraceEventsWithCtx } from "./core";
 import { buildWorkflowTraceViewModel } from "./presentation";
-import { requireSharedDemoStoreReadIfApplicable } from "../sharedDemo/actor";
 import { denySharedDemoAction } from "../sharedDemo/policy";
+import { admitSharedDemoPublicQuery } from "../operationAdmission/publicQuery";
+import {
+  getWorkflowTraceByLookupReadDefinition,
+  getWorkflowTraceViewByIdReadDefinition,
+} from "../operationAdmission/readDefinitions";
+import type { OperationQueryCtx } from "../operationAdmission/types";
 
 const SHARED_DEMO_READABLE_WORKFLOW_TYPES = new Set([
   "register_session",
@@ -192,11 +197,9 @@ export async function getWorkflowTraceViewByIdWithCtx(
     accessAuthorizers?: WorkflowTraceAccessAuthorizers;
   },
 ) {
-  const demoActor = await requireSharedDemoStoreReadIfApplicable(
-    ctx,
-    args.storeId,
-  );
-  if (!demoActor) {
+  const admittedActor = (ctx as Partial<OperationQueryCtx>).operationAdmission
+    ?.actor;
+  if (admittedActor?.kind !== "shared_demo") {
     await assertDefaultWorkflowTraceAccess(ctx, args);
   }
 
@@ -211,7 +214,7 @@ export async function getWorkflowTraceViewByIdWithCtx(
     return null;
   }
 
-  if (demoActor) {
+  if (admittedActor?.kind === "shared_demo") {
     if (!SHARED_DEMO_READABLE_WORKFLOW_TYPES.has(trace.workflowType)) {
       denySharedDemoAction();
     }
@@ -248,7 +251,17 @@ export const getWorkflowTraceViewById = query({
     terminalId: v.optional(v.id("posTerminal")),
     traceId: v.string(),
   },
-  handler: (ctx, args) => getWorkflowTraceViewByIdWithCtx(ctx, args),
+  handler: admitSharedDemoPublicQuery(
+    getWorkflowTraceViewByIdReadDefinition,
+    async (
+      ctx: OperationQueryCtx,
+      args: {
+        storeId: Id<"store">;
+        terminalId?: Id<"posTerminal">;
+        traceId: string;
+      },
+    ) => getWorkflowTraceViewByIdWithCtx(ctx, args),
+  ),
 });
 
 export async function getWorkflowTraceViewByLookupWithCtx(
@@ -262,17 +275,15 @@ export async function getWorkflowTraceViewByLookupWithCtx(
     accessAuthorizers?: WorkflowTraceAccessAuthorizers;
   },
 ) {
-  const demoActor = await requireSharedDemoStoreReadIfApplicable(
-    ctx,
-    args.storeId,
-  );
+  const admittedActor = (ctx as Partial<OperationQueryCtx>).operationAdmission
+    ?.actor;
   if (
-    demoActor &&
+    admittedActor?.kind === "shared_demo" &&
     !SHARED_DEMO_READABLE_WORKFLOW_TYPES.has(args.workflowType)
   ) {
     denySharedDemoAction();
   }
-  if (!demoActor) {
+  if (admittedActor?.kind !== "shared_demo") {
     await assertDefaultWorkflowTraceAccess(ctx, args);
   }
 
@@ -307,5 +318,17 @@ export const getWorkflowTraceByLookup = query({
     lookupType: v.string(),
     lookupValue: v.string(),
   },
-  handler: (ctx, args) => getWorkflowTraceViewByLookupWithCtx(ctx, args),
+  handler: admitSharedDemoPublicQuery(
+    getWorkflowTraceByLookupReadDefinition,
+    async (
+      ctx: OperationQueryCtx,
+      args: {
+        lookupType: string;
+        lookupValue: string;
+        storeId: Id<"store">;
+        terminalId?: Id<"posTerminal">;
+        workflowType: string;
+      },
+    ) => getWorkflowTraceViewByLookupWithCtx(ctx, args),
+  ),
 });

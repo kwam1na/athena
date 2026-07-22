@@ -1,6 +1,9 @@
 import type { Id } from "../_generated/dataModel";
-import type { MutationCtx } from "../_generated/server";
+import type { MutationCtx, QueryCtx } from "../_generated/server";
 import type { AthenaCapability } from "../platform/capabilityCatalog";
+
+export type OperationAdmissionCtx =
+  Pick<QueryCtx, "auth" | "db"> | Pick<MutationCtx, "auth" | "db">;
 
 export type OperationActorKind = "normal_user" | "shared_demo";
 
@@ -27,12 +30,10 @@ export type OperationScope =
     };
 
 export type OperationReadiness =
-  | { kind: "none" }
-  | { kind: "store_write"; expectedEpochArg?: string };
+  { kind: "none" } | { kind: "store_write"; expectedEpochArg?: string };
 
 export type OperationEffects =
-  | { mode: "none" }
-  | { mode: "protected"; gateways: readonly string[] };
+  { mode: "none" } | { mode: "protected"; gateways: readonly string[] };
 
 export type OperationActorCoverage = {
   normalUser: "admit" | "deny";
@@ -49,13 +50,24 @@ export type OperationDefinition = {
   actors: OperationActorCoverage;
 };
 
+export type OperationReadDefinition = {
+  functionName?: string;
+  operationId: string;
+  access: {
+    intent: string;
+    kind: "read";
+  };
+  scope: OperationScope;
+  actors: OperationActorCoverage;
+};
+
 export type OperationScopeConstraints = {
   organizationId?: Id<"organization">;
   storeId?: Id<"store">;
 };
 
 export type OperationScopeResolver = (
-  ctx: MutationCtx,
+  ctx: OperationAdmissionCtx,
   args: Record<string, unknown>,
 ) => Promise<OperationScopeConstraints> | OperationScopeConstraints;
 
@@ -68,11 +80,15 @@ export type OperationAdmissionContext = {
   actor: OperationActor;
   constraints: OperationScopeConstraints;
   decision: OperationAdmissionDecision;
-  operation: OperationDefinition;
+  operation: OperationDefinition | OperationReadDefinition;
   provenance: Record<string, unknown>;
 };
 
 export type OperationMutationCtx = MutationCtx & {
+  operationAdmission: OperationAdmissionContext;
+};
+
+export type OperationQueryCtx = QueryCtx & {
   operationAdmission: OperationAdmissionContext;
 };
 
@@ -88,6 +104,7 @@ export type OperationAdapterDenied = {
   reason:
     | "actor_denied"
     | "capability_denied"
+    | "effect_denied"
     | "scope_denied"
     | "readiness_denied";
 };
@@ -107,5 +124,14 @@ export type OperationAdapter = {
     ctx: MutationCtx,
     args: Record<string, unknown>,
     definition: OperationDefinition,
+  ) => Promise<OperationAdapterOutcome>;
+};
+
+export type OperationReadAdapter = {
+  kind: OperationActorKind;
+  resolve: (
+    ctx: QueryCtx,
+    args: Record<string, unknown>,
+    definition: OperationReadDefinition,
   ) => Promise<OperationAdapterOutcome>;
 };

@@ -35,12 +35,13 @@ describe("shared demo static coverage", () => {
   it("wires order notification simulation before the real scheduler gateway", () => {
     const source = readFileSync("convex/storeFront/onlineOrder.ts", "utf8");
     expect(source).toContain('decideSharedDemoEffect("order_notification.send"');
-    expect(source).toContain("if (demoActor)");
+    expect(source).toContain('admittedActor?.kind === "shared_demo"');
   });
 
-  it("clamps both order lookup paths to the demo store before fulfillment", () => {
+  it("routes operation order lookup through admitted shared-demo scope", () => {
     const source = readFileSync("convex/storeFront/onlineOrder.ts", "utf8");
-    expect(source.match(/order\.storeId !== demoActor\.storeId/g)).toHaveLength(2);
+    expect(source).toContain("getForOperations");
+    expect(source).toContain("getOnlineOrderReadDefinition");
   });
 
   it("classifies every exported public mutation and action", () => {

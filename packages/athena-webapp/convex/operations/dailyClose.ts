@@ -53,6 +53,13 @@ import {
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
 import { requireStoreMemberAccessWithCtx } from "../lib/storeMemberAccess";
+import { admitSharedDemoPublicQuery } from "../operationAdmission/publicQuery";
+import {
+  getCompletedDailyCloseHistoryDetailReadDefinition,
+  getDailyCloseLifecycleGateReadDefinition,
+  getDailyCloseSnapshotReadDefinition,
+  listCompletedDailyCloseHistoryReadDefinition,
+} from "../operationAdmission/readDefinitions";
 import { buildPaymentTotals, transactionCashDelta } from "./paymentTotals";
 import type { AutomationDecisionEvidence } from "../automation/runLedger";
 import { appendReportingIngressWithCtx } from "../reporting/ingress";
@@ -5203,19 +5210,30 @@ export const getDailyCloseSnapshot = query({
     startAt: v.optional(v.number()),
     storeId: v.id("store"),
   },
-  handler: async (ctx, args) => {
-    const { membership } = await requireStoreMemberAccessWithCtx(ctx, {
-      allowedRoles: ["full_admin", "pos_only"],
-      demoAccess: { kind: "read" },
-      failureMessage: "You cannot view EOD Review for this store.",
-      storeId: args.storeId,
-    });
+  handler: admitSharedDemoPublicQuery(
+    getDailyCloseSnapshotReadDefinition,
+    async (
+      ctx,
+      args: {
+        endAt?: number;
+        operatingDate: string;
+        startAt?: number;
+        storeId: Id<"store">;
+      },
+    ) => {
+      const { membership } = await requireStoreMemberAccessWithCtx(ctx, {
+        allowedRoles: ["full_admin", "pos_only"],
+        demoAccess: { kind: "read" },
+        failureMessage: "You cannot view EOD Review for this store.",
+        storeId: args.storeId,
+      });
 
-    return buildDailyCloseSnapshotWithCtx(ctx, {
-      ...args,
-      includeManagerReviewEvidence: membership.role === "full_admin",
-    });
-  },
+      return buildDailyCloseSnapshotWithCtx(ctx, {
+        ...args,
+        includeManagerReviewEvidence: membership.role === "full_admin",
+      });
+    },
+  ),
 });
 
 export const getDailyCloseLifecycleGate = query({
@@ -5225,16 +5243,27 @@ export const getDailyCloseLifecycleGate = query({
     startAt: v.optional(v.number()),
     storeId: v.id("store"),
   },
-  handler: async (ctx, args) => {
-    await requireStoreMemberAccessWithCtx(ctx, {
-      allowedRoles: ["full_admin", "pos_only"],
-      demoAccess: { kind: "read" },
-      failureMessage: "You cannot view EOD Review for this store.",
-      storeId: args.storeId,
-    });
+  handler: admitSharedDemoPublicQuery(
+    getDailyCloseLifecycleGateReadDefinition,
+    async (
+      ctx,
+      args: {
+        endAt?: number;
+        operatingDate: string;
+        startAt?: number;
+        storeId: Id<"store">;
+      },
+    ) => {
+      await requireStoreMemberAccessWithCtx(ctx, {
+        allowedRoles: ["full_admin", "pos_only"],
+        demoAccess: { kind: "read" },
+        failureMessage: "You cannot view EOD Review for this store.",
+        storeId: args.storeId,
+      });
 
-    return buildDailyCloseLifecycleGateWithCtx(ctx, args);
-  },
+      return buildDailyCloseLifecycleGateWithCtx(ctx, args);
+    },
+  ),
 });
 
 export const completeDailyClose = mutation({
@@ -5433,11 +5462,28 @@ export const listCompletedDailyCloseHistory = query({
     limit: v.optional(v.number()),
     storeId: v.id("store"),
   },
-  handler: (ctx, args) =>
-    listCompletedDailyCloseHistoryWithCtx(ctx, {
-      ...args,
-      includeManagerReviewEvidence: false,
-    }),
+  handler: admitSharedDemoPublicQuery(
+    listCompletedDailyCloseHistoryReadDefinition,
+    async (
+      ctx,
+      args: {
+        limit?: number;
+        storeId: Id<"store">;
+      },
+    ) => {
+      const { membership } = await requireStoreMemberAccessWithCtx(ctx, {
+        allowedRoles: ["full_admin", "pos_only"],
+        demoAccess: { kind: "read" },
+        failureMessage: "You cannot view Daily Close history for this store.",
+        storeId: args.storeId,
+      });
+
+      return listCompletedDailyCloseHistoryWithCtx(ctx, {
+        ...args,
+        includeManagerReviewEvidence: membership.role === "full_admin",
+      });
+    },
+  ),
 });
 
 export const getCompletedDailyCloseHistoryDetail = query({
@@ -5445,9 +5491,26 @@ export const getCompletedDailyCloseHistoryDetail = query({
     dailyCloseId: v.id("dailyClose"),
     storeId: v.id("store"),
   },
-  handler: (ctx, args) =>
-    getCompletedDailyCloseHistoryDetailWithCtx(ctx, {
-      ...args,
-      includeManagerReviewEvidence: false,
-    }),
+  handler: admitSharedDemoPublicQuery(
+    getCompletedDailyCloseHistoryDetailReadDefinition,
+    async (
+      ctx,
+      args: {
+        dailyCloseId: Id<"dailyClose">;
+        storeId: Id<"store">;
+      },
+    ) => {
+      const { membership } = await requireStoreMemberAccessWithCtx(ctx, {
+        allowedRoles: ["full_admin", "pos_only"],
+        demoAccess: { kind: "read" },
+        failureMessage: "You cannot view Daily Close history for this store.",
+        storeId: args.storeId,
+      });
+
+      return getCompletedDailyCloseHistoryDetailWithCtx(ctx, {
+        ...args,
+        includeManagerReviewEvidence: membership.role === "full_admin",
+      });
+    },
+  ),
 });

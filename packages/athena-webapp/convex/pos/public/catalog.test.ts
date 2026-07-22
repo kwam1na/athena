@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   requireAuthenticatedAthenaUserIndexedWithCtx: vi.fn(),
   requireAuthenticatedAthenaUserWithCtx: vi.fn(),
   requireOrganizationMemberRoleWithCtx: vi.fn(),
+  getSharedDemoActorWithCtx: vi.fn(),
   requireSharedDemoStoreCapabilityIfApplicable: vi.fn(),
   searchProducts: vi.fn(),
   updateOperationalWorkItemStatusWithCtx: vi.fn(),
@@ -47,6 +48,7 @@ vi.mock("../../inventory/skuSearch", () => ({
 }));
 
 vi.mock("../../sharedDemo/actor", () => ({
+  getSharedDemoActorWithCtx: mocks.getSharedDemoActorWithCtx,
   requireSharedDemoStoreCapabilityIfApplicable:
     mocks.requireSharedDemoStoreCapabilityIfApplicable,
 }));
@@ -139,6 +141,7 @@ describe("POS public catalog queries", () => {
       _id: "athena-user-1",
     });
     mocks.requireOrganizationMemberRoleWithCtx.mockResolvedValue(undefined);
+    mocks.getSharedDemoActorWithCtx.mockResolvedValue(null);
     mocks.requireSharedDemoStoreCapabilityIfApplicable.mockResolvedValue(null);
     mocks.listRegisterCatalogAvailabilitySnapshot.mockResolvedValue([
       {
@@ -372,8 +375,10 @@ describe("POS public catalog queries", () => {
       }),
     ]);
     expect(mocks.requireAuthenticatedAthenaUserWithCtx).toHaveBeenCalledWith(
-      ctx,
-      { sharedDemoCapability: "pos.sale.complete" },
+      expect.objectContaining({
+        db: ctx.db,
+        operationAdmission: expect.any(Object),
+      }),
     );
     expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
       ctx,
@@ -387,6 +392,62 @@ describe("POS public catalog queries", () => {
     );
     expect(mocks.listRegisterCatalogAvailabilitySnapshot).toHaveBeenCalledWith(
       ctx,
+      { storeId: "store-1" },
+    );
+  });
+
+  it("admits shared-demo register catalog availability reads without falling back to user auth", async () => {
+    mocks.getSharedDemoActorWithCtx.mockResolvedValueOnce({
+      authUserId: "auth-user-1",
+      athenaUserId: "athena-user-1",
+      kind: "shared_demo",
+      organizationId: "org-1",
+      storeId: "store-1",
+    });
+    const ctx = buildCtx();
+
+    const rows = await getHandler(listRegisterCatalogAvailabilitySnapshot)(
+      ctx as never,
+      { storeId: "store-1" },
+    );
+
+    expect(rows).toEqual([
+      expect.objectContaining({
+        productSkuId: "sku-1",
+        quantityAvailable: 3,
+      }),
+    ]);
+    expect(mocks.requireAuthenticatedAthenaUserWithCtx).not.toHaveBeenCalled();
+    expect(
+      mocks.requireAuthenticatedAthenaUserIndexedWithCtx,
+    ).not.toHaveBeenCalled();
+    expect(
+      mocks.requireSharedDemoStoreCapabilityIfApplicable,
+    ).not.toHaveBeenCalled();
+    expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
+      expect.objectContaining({
+        db: ctx.db,
+        operationAdmission: expect.objectContaining({
+          actor: expect.objectContaining({
+            athenaUserId: "athena-user-1",
+            kind: "shared_demo",
+            storeId: "store-1",
+          }),
+        }),
+      }),
+      {
+        allowedRoles: ["full_admin", "pos_only"],
+        failureMessage:
+          "You cannot view register catalog availability for this store.",
+        organizationId: "org-1",
+        userId: "athena-user-1",
+      },
+    );
+    expect(mocks.listRegisterCatalogAvailabilitySnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        db: ctx.db,
+        operationAdmission: expect.any(Object),
+      }),
       { storeId: "store-1" },
     );
   });
@@ -430,8 +491,10 @@ describe("POS public catalog queries", () => {
     ]);
     assertConformsToExportedReturns(listRegisterCatalogSnapshot, rows);
     expect(mocks.requireAuthenticatedAthenaUserWithCtx).toHaveBeenCalledWith(
-      ctx,
-      { sharedDemoCapability: "pos.sale.complete" },
+      expect.objectContaining({
+        db: ctx.db,
+        operationAdmission: expect.any(Object),
+      }),
     );
     expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
       ctx,
@@ -468,10 +531,15 @@ describe("POS public catalog queries", () => {
     );
     expect(
       mocks.requireAuthenticatedAthenaUserIndexedWithCtx,
-    ).toHaveBeenCalledWith(ctx, {
-      sharedDemoCapability: "pos.sale.complete",
-    });
-    expect(mocks.requireAuthenticatedAthenaUserWithCtx).not.toHaveBeenCalled();
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        db: ctx.db,
+        operationAdmission: expect.any(Object),
+      }),
+    );
+    expect(mocks.requireAuthenticatedAthenaUserWithCtx).toHaveBeenCalledWith(
+      ctx,
+    );
     expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalled();
   });
 
@@ -526,17 +594,20 @@ describe("POS public catalog queries", () => {
   ] as const)(
     "rejects a cross-store direct catalog read before its reader runs",
     async (fn, args, reader) => {
-      const denial = new Error("This action is unavailable in the demo.");
-      mocks.requireSharedDemoStoreCapabilityIfApplicable.mockRejectedValueOnce(
-        denial,
-      );
+      mocks.getSharedDemoActorWithCtx.mockResolvedValueOnce({
+        authUserId: "auth-user-1",
+        athenaUserId: "athena-user-1",
+        kind: "shared_demo",
+        organizationId: "org-1",
+        storeId: "store-1",
+      });
       const ctx = buildCtx();
       await expect(getHandler(fn)(ctx as never, args)).rejects.toThrow(
-        denial.message,
+        "This action isn't allowed in the demo.",
       );
       expect(
         mocks.requireSharedDemoStoreCapabilityIfApplicable,
-      ).toHaveBeenCalledWith(ctx, "pos.sale.complete", "other-store");
+      ).not.toHaveBeenCalled();
       expect(reader).not.toHaveBeenCalled();
     },
   );
@@ -796,6 +867,27 @@ describe("POS public catalog queries", () => {
     ).not.toHaveBeenCalled();
   });
 
+  it("does not return full-store availability when store membership is denied", async () => {
+    mocks.requireOrganizationMemberRoleWithCtx.mockRejectedValueOnce(
+      new Error(
+        "You cannot view register catalog availability for this store.",
+      ),
+    );
+    const ctx = buildCtx();
+
+    await expect(
+      getHandler(listRegisterCatalogAvailabilitySnapshot)(ctx as never, {
+        storeId: "store-1",
+      }),
+    ).rejects.toThrow(
+      "You cannot view register catalog availability for this store.",
+    );
+
+    expect(
+      mocks.listRegisterCatalogAvailabilitySnapshot,
+    ).not.toHaveBeenCalled();
+  });
+
   it("does not return bounded availability when the caller is unauthenticated", async () => {
     const readRegisterCatalogAvailability =
       await import("../application/queries/listRegisterCatalog");
@@ -830,14 +922,7 @@ describe("POS public catalog queries", () => {
 
     expect(
       mocks.requireSharedDemoStoreCapabilityIfApplicable,
-    ).toHaveBeenCalledWith(
-      expect.objectContaining({
-        db: ctx.db,
-        operationAdmission: expect.any(Object),
-      }),
-      "catalog.quick_add",
-      "store-1",
-    );
+    ).not.toHaveBeenCalled();
     expect(mocks.requireAuthenticatedAthenaUserWithCtx).toHaveBeenCalledWith(
       expect.objectContaining({
         db: ctx.db,
@@ -2587,6 +2672,11 @@ function buildCtx(seed?: {
           return {
             _id: "store-1",
             organizationId: "org-1",
+          };
+        }
+        if (tableName === "athenaUser" && id === "athena-user-1") {
+          return {
+            _id: "athena-user-1",
           };
         }
         if (tableName === "staffProfile" && staffProfile?._id === id) {

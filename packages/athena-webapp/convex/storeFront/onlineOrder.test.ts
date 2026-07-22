@@ -79,7 +79,7 @@ function createUnauthorizedNormalOrderCtx() {
 }
 
 describe("online order checkout money wiring", () => {
-  it("accepts representative operation-admitted public return contracts", () => {
+  it("accepts representative admitted public return contracts", () => {
     assertConformsToExportedReturns(update, ok(null));
     assertConformsToExportedReturns(getReturnExchangeOverview, {
       balanceCollectedTotal: 0,

@@ -209,7 +209,12 @@ describe("pos public customers authorization", () => {
     });
 
     expect(result).toBeNull();
-    expect(mocks.requireAuthenticatedAthenaUserWithCtx).not.toHaveBeenCalled();
+    expect(mocks.requireAuthenticatedAthenaUserWithCtx).toHaveBeenCalledWith(
+      expect.objectContaining({
+        db: ctx.db,
+        operationAdmission: expect.any(Object),
+      }),
+    );
     expect(mocks.getCustomerById).not.toHaveBeenCalled();
   });
 

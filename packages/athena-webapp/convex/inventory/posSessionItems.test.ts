@@ -179,7 +179,7 @@ describe("posSessionItems public mutations", () => {
     );
   });
 
-  it("proves public exports conform to their return validators", () => {
+  it("proves admitted public exports conform to their return validators", () => {
     assertConformsToExportedReturns(getSessionItems, [
       {
         _id: "item-1" as Id<"posSessionItem">,

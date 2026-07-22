@@ -12,10 +12,21 @@ import {
   correctTransactionPaymentMethodOperationDefinition,
   markReceiptPrintedOperationDefinition,
 } from "../../operationAdmission/definitions";
+import {
+  getPosCompletedTransactionsReadDefinition,
+  getPosRecentTransactionsWithCustomersReadDefinition,
+  getPosTodaySummaryReadDefinition,
+  getPosTransactionReadDefinition,
+  getPosTransactionByIdReadDefinition,
+  getPosTransactionsByStoreReadDefinition,
+} from "../../operationAdmission/readDefinitions";
 import { admitSharedDemoPublicMutation } from "../../operationAdmission/publicMutation";
+import { admitSharedDemoPublicQuery } from "../../operationAdmission/publicQuery";
+import type {
+  OperationMutationCtx,
+  OperationQueryCtx,
+} from "../../operationAdmission/types";
 import type { Id } from "../../_generated/dataModel";
-import { requireSharedDemoStoreCapabilityIfApplicable } from "../../sharedDemo/actor";
-import { requireReadySharedDemoWriteWithCtx } from "../../sharedDemo/restore";
 import { commandResultValidator } from "../../lib/commandResultValidators";
 import {
   requireAuthenticatedAthenaUserWithCtx,
@@ -55,11 +66,9 @@ async function requirePosTransactionStoreAccess(
     failureMessage: string;
   },
 ) {
-  const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(
-    ctx,
-    "pos.sale.complete",
-    args.storeId,
-  );
+  const admittedActor = (
+    ctx as Partial<OperationMutationCtx | OperationQueryCtx>
+  ).operationAdmission?.actor;
   const store = await ctx.db.get("store", args.storeId);
   if (!store) {
     return userError({
@@ -68,10 +77,13 @@ async function requirePosTransactionStoreAccess(
     });
   }
 
-  const athenaUser = await requireAuthenticatedAthenaUserWithCtx(
-    ctx,
-    demoActor ? { sharedDemoCapability: "pos.sale.complete" } : undefined,
-  );
+  const athenaUser =
+    admittedActor?.kind === "shared_demo"
+      ? await ctx.db.get("athenaUser", admittedActor.athenaUserId)
+      : await requireAuthenticatedAthenaUserWithCtx(ctx);
+  if (!athenaUser) {
+    throw new Error("Sign in again to continue.");
+  }
   const membership = await requireOrganizationMemberRoleWithCtx(ctx, {
     allowedRoles: ["full_admin", "pos_only"],
     failureMessage: args.failureMessage,
@@ -460,42 +472,37 @@ export const completeTransaction = mutation({
   ),
   handler: admitSharedDemoPublicMutation(
     completeTransactionOperationDefinition,
-    async (ctx, args) => {
-    const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(
-      ctx,
-      "pos.sale.complete",
-      args.storeId,
-    );
-    if (demoActor)
-      await requireReadySharedDemoWriteWithCtx(ctx, { storeId: args.storeId });
-    const store = await ctx.db.get("store", args.storeId);
-    if (!store) {
-      return userError({
-        code: "not_found",
-        message: "Store not found.",
+    async (ctx: OperationMutationCtx, args) => {
+      const store = await ctx.db.get("store", args.storeId);
+      if (!store) {
+        return userError({
+          code: "not_found",
+          message: "Store not found.",
+        });
+      }
+
+      const admittedActor = ctx.operationAdmission.actor;
+      const athenaUser =
+        admittedActor.kind === "shared_demo"
+          ? await ctx.db.get("athenaUser", admittedActor.athenaUserId)
+          : await requireAuthenticatedAthenaUserWithCtx(ctx);
+      if (!athenaUser) throw new Error("Sign in again to continue.");
+      await requireOrganizationMemberRoleWithCtx(ctx, {
+        allowedRoles: ["full_admin"],
+        failureMessage: "You cannot complete this POS sale.",
+        organizationId: store.organizationId,
+        userId: athenaUser._id,
       });
-    }
 
-    const athenaUser = demoActor
-      ? await ctx.db.get("athenaUser", demoActor.athenaUserId)
-      : await requireAuthenticatedAthenaUserWithCtx(ctx);
-    if (!athenaUser) throw new Error("Sign in again to continue.");
-    await requireOrganizationMemberRoleWithCtx(ctx, {
-      allowedRoles: ["full_admin"],
-      failureMessage: "You cannot complete this POS sale.",
-      organizationId: store.organizationId,
-      userId: athenaUser._id,
-    });
+      if (!args.staffProfileId || !args.terminalId || !args.registerSessionId) {
+        return userError({
+          code: "validation_failed",
+          message:
+            "Complete POS sales from an active register session with staff and terminal context.",
+        });
+      }
 
-    if (!args.staffProfileId || !args.terminalId || !args.registerSessionId) {
-      return userError({
-        code: "validation_failed",
-        message:
-          "Complete POS sales from an active register session with staff and terminal context.",
-      });
-    }
-
-    return completeTransactionCommand(ctx, args);
+      return completeTransactionCommand(ctx, args);
     },
   ),
 });
@@ -504,17 +511,20 @@ export const getTransaction = query({
   args: {
     transactionId: v.id("posTransaction"),
   },
-  handler: async (ctx, args) => {
-    const access = await requirePosTransactionAccess(ctx, {
-      transactionId: args.transactionId,
-      failureMessage: "You cannot view this transaction.",
-    });
-    if ("kind" in access) {
-      return null;
-    }
+  handler: admitSharedDemoPublicQuery(
+    getPosTransactionReadDefinition,
+    async (ctx, args: { transactionId: Id<"posTransaction"> }) => {
+      const access = await requirePosTransactionAccess(ctx, {
+        transactionId: args.transactionId,
+        failureMessage: "You cannot view this transaction.",
+      });
+      if ("kind" in access) {
+        return null;
+      }
 
-    return access.transaction;
-  },
+      return access.transaction;
+    },
+  ),
 });
 
 export const getTransactionsByStore = query({
@@ -522,17 +532,26 @@ export const getTransactionsByStore = query({
     storeId: v.id("store"),
     limit: v.optional(v.number()),
   },
-  handler: async (ctx, args) => {
-    const access = await requirePosTransactionStoreAccess(ctx, {
-      storeId: args.storeId,
-      failureMessage: "You cannot view POS transactions for this store.",
-    });
-    if ("kind" in access) {
-      return [];
-    }
+  handler: admitSharedDemoPublicQuery(
+    getPosTransactionsByStoreReadDefinition,
+    async (
+      ctx,
+      args: {
+        limit?: number;
+        storeId: Id<"store">;
+      },
+    ) => {
+      const access = await requirePosTransactionStoreAccess(ctx, {
+        storeId: args.storeId,
+        failureMessage: "You cannot view POS transactions for this store.",
+      });
+      if ("kind" in access) {
+        return [];
+      }
 
-    return getTransactionsByStoreQuery(ctx, args);
-  },
+      return getTransactionsByStoreQuery(ctx, args);
+    },
+  ),
 });
 
 export const getCompletedTransactions = query({
@@ -567,17 +586,28 @@ export const getCompletedTransactions = query({
       servicePaymentTotal: v.number(),
     }),
   ),
-  handler: async (ctx, args) => {
-    const access = await requirePosTransactionStoreAccess(ctx, {
-      storeId: args.storeId,
-      failureMessage: "You cannot view POS transactions for this store.",
-    });
-    if ("kind" in access) {
-      return [];
-    }
+  handler: admitSharedDemoPublicQuery(
+    getPosCompletedTransactionsReadDefinition,
+    async (
+      ctx,
+      args: {
+        completedFrom?: number;
+        limit?: number;
+        registerSessionId?: Id<"registerSession">;
+        storeId: Id<"store">;
+      },
+    ) => {
+      const access = await requirePosTransactionStoreAccess(ctx, {
+        storeId: args.storeId,
+        failureMessage: "You cannot view POS transactions for this store.",
+      });
+      if ("kind" in access) {
+        return [];
+      }
 
-    return getCompletedTransactionsQuery(ctx, args);
-  },
+      return getCompletedTransactionsQuery(ctx, args);
+    },
+  ),
 });
 
 export const getTransactionById = query({
@@ -710,17 +740,20 @@ export const getTransactionById = query({
       ),
     }),
   ),
-  handler: async (ctx, args) => {
-    const access = await requirePosTransactionAccess(ctx, {
-      transactionId: args.transactionId,
-      failureMessage: "You cannot view this transaction.",
-    });
-    if ("kind" in access) {
-      return null;
-    }
+  handler: admitSharedDemoPublicQuery(
+    getPosTransactionByIdReadDefinition,
+    async (ctx, args: { transactionId: Id<"posTransaction"> }) => {
+      const access = await requirePosTransactionAccess(ctx, {
+        transactionId: args.transactionId,
+        failureMessage: "You cannot view this transaction.",
+      });
+      if ("kind" in access) {
+        return null;
+      }
 
-    return getTransactionByIdQuery(ctx, args);
-  },
+      return getTransactionByIdQuery(ctx, args);
+    },
+  ),
 });
 
 export const voidTransaction = mutation({
@@ -859,23 +892,23 @@ export const markReceiptPrinted = mutation({
   handler: admitSharedDemoPublicMutation(
     markReceiptPrintedOperationDefinition,
     async (ctx, args) => {
-    const access = await requirePosTransactionAccess(ctx, {
-      transactionId: args.transactionId,
-      failureMessage: "You cannot update this transaction.",
-    });
-    if ("kind" in access) {
-      return access;
-    }
+      const access = await requirePosTransactionAccess(ctx, {
+        transactionId: args.transactionId,
+        failureMessage: "You cannot update this transaction.",
+      });
+      if ("kind" in access) {
+        return access;
+      }
 
-    if (access.transaction.receiptPrinted === true) {
+      if (access.transaction.receiptPrinted === true) {
+        return ok(null);
+      }
+
+      await ctx.db.patch("posTransaction", args.transactionId, {
+        receiptPrinted: true,
+      });
+
       return ok(null);
-    }
-
-    await ctx.db.patch("posTransaction", args.transactionId, {
-      receiptPrinted: true,
-    });
-
-    return ok(null);
     },
   ),
 });
@@ -945,81 +978,81 @@ export const correctTransactionCustomer = mutation({
   handler: admitSharedDemoPublicMutation(
     correctTransactionCustomerOperationDefinition,
     async (ctx, args) => {
-    if (!args.actorStaffProfileId) {
-      return userError({
-        code: "authentication_failed",
-        message:
-          "Staff sign-in is required before correcting customer attribution.",
-      });
-    }
-
-    if (!args.reason.trim()) {
-      return userError({
-        code: "validation_failed",
-        message: "Reason is required to correct customer attribution.",
-      });
-    }
-
-    try {
-      const access = await requirePosTransactionAccess(ctx, {
-        transactionId: args.transactionId,
-        failureMessage: "You cannot correct this transaction.",
-      });
-      if ("kind" in access) {
-        return access;
-      }
-
-      const staffProfile = await ctx.db.get(
-        "staffProfile",
-        args.actorStaffProfileId,
-      );
-      if (
-        !staffProfile ||
-        staffProfile.status !== "active" ||
-        staffProfile.storeId !== access.transaction.storeId
-      ) {
+      if (!args.actorStaffProfileId) {
         return userError({
           code: "authentication_failed",
           message:
-            "Customer correction staff profile is not active for this store.",
+            "Staff sign-in is required before correcting customer attribution.",
         });
       }
 
-      if (args.customerProfileId) {
-        const customerProfile = await ctx.db.get(
-          "customerProfile",
-          args.customerProfileId,
-        );
-        if (!customerProfile) {
-          return userError({
-            code: "not_found",
-            message: "Customer profile not found.",
-          });
-        }
-        if (
-          customerProfile.storeId &&
-          customerProfile.storeId !== access.transaction.storeId
-        ) {
-          return userError({
-            code: "precondition_failed",
-            message: "Customer profile is not available for this store.",
-          });
-        }
+      if (!args.reason.trim()) {
+        return userError({
+          code: "validation_failed",
+          message: "Reason is required to correct customer attribution.",
+        });
       }
 
-      return ok(
-        await correctTransactionCustomerCommand(ctx, {
-          ...args,
-          actorUserId: access.athenaUser._id,
-        }),
-      );
-    } catch (error) {
-      const mappedError = mapCorrectionError(error);
-      if (mappedError) {
-        return mappedError;
+      try {
+        const access = await requirePosTransactionAccess(ctx, {
+          transactionId: args.transactionId,
+          failureMessage: "You cannot correct this transaction.",
+        });
+        if ("kind" in access) {
+          return access;
+        }
+
+        const staffProfile = await ctx.db.get(
+          "staffProfile",
+          args.actorStaffProfileId,
+        );
+        if (
+          !staffProfile ||
+          staffProfile.status !== "active" ||
+          staffProfile.storeId !== access.transaction.storeId
+        ) {
+          return userError({
+            code: "authentication_failed",
+            message:
+              "Customer correction staff profile is not active for this store.",
+          });
+        }
+
+        if (args.customerProfileId) {
+          const customerProfile = await ctx.db.get(
+            "customerProfile",
+            args.customerProfileId,
+          );
+          if (!customerProfile) {
+            return userError({
+              code: "not_found",
+              message: "Customer profile not found.",
+            });
+          }
+          if (
+            customerProfile.storeId &&
+            customerProfile.storeId !== access.transaction.storeId
+          ) {
+            return userError({
+              code: "precondition_failed",
+              message: "Customer profile is not available for this store.",
+            });
+          }
+        }
+
+        return ok(
+          await correctTransactionCustomerCommand(ctx, {
+            ...args,
+            actorUserId: access.athenaUser._id,
+          }),
+        );
+      } catch (error) {
+        const mappedError = mapCorrectionError(error);
+        if (mappedError) {
+          return mappedError;
+        }
+        throw error;
       }
-      throw error;
-    }
     },
   ),
 });
@@ -1039,126 +1072,126 @@ export const correctTransactionPaymentMethod = mutation({
   handler: admitSharedDemoPublicMutation(
     correctTransactionPaymentMethodOperationDefinition,
     async (ctx, args) => {
-    if (!args.reason.trim()) {
-      return userError({
-        code: "validation_failed",
-        message: "Reason is required to correct payment method.",
-      });
-    }
-
-    try {
-      const access = await requirePosTransactionAccess(ctx, {
-        transactionId: args.transactionId,
-        failureMessage: "You cannot correct this transaction.",
-      });
-      if ("kind" in access) {
-        return access;
-      }
-
-      if (!args.actorStaffProfileId) {
+      if (!args.reason.trim()) {
         return userError({
-          code: "authentication_failed",
-          message:
-            "Staff sign-in is required before correcting payment method.",
+          code: "validation_failed",
+          message: "Reason is required to correct payment method.",
         });
       }
 
-      if (!args.staffProofToken) {
-        return userError({
-          code: "authentication_failed",
-          message:
-            "Payment correction staff proof is required for requester attribution.",
+      try {
+        const access = await requirePosTransactionAccess(ctx, {
+          transactionId: args.transactionId,
+          failureMessage: "You cannot correct this transaction.",
         });
-      }
+        if ("kind" in access) {
+          return access;
+        }
 
-      const staffProfile = await ctx.db.get(
-        "staffProfile",
-        args.actorStaffProfileId,
-      );
-      if (
-        !staffProfile ||
-        staffProfile.status !== "active" ||
-        staffProfile.storeId !== access.transaction.storeId
-      ) {
-        return userError({
-          code: "authentication_failed",
-          message:
-            "Payment correction staff profile is not active for this store.",
+        if (!args.actorStaffProfileId) {
+          return userError({
+            code: "authentication_failed",
+            message:
+              "Staff sign-in is required before correcting payment method.",
+          });
+        }
+
+        if (!args.staffProofToken) {
+          return userError({
+            code: "authentication_failed",
+            message:
+              "Payment correction staff proof is required for requester attribution.",
+          });
+        }
+
+        const staffProfile = await ctx.db.get(
+          "staffProfile",
+          args.actorStaffProfileId,
+        );
+        if (
+          !staffProfile ||
+          staffProfile.status !== "active" ||
+          staffProfile.storeId !== access.transaction.storeId
+        ) {
+          return userError({
+            code: "authentication_failed",
+            message:
+              "Payment correction staff profile is not active for this store.",
+          });
+        }
+
+        const staffProofTokenHash = await hashPosLocalStaffProofToken(
+          args.staffProofToken,
+        );
+        const proof = await ctx.db
+          .query("posLocalStaffProof")
+          .withIndex("by_tokenHash", (q) =>
+            q.eq("tokenHash", staffProofTokenHash),
+          )
+          .unique();
+        if (
+          !proof ||
+          proof.status !== "active" ||
+          proof.staffProfileId !== args.actorStaffProfileId ||
+          proof.storeId !== access.transaction.storeId ||
+          proof.expiresAt <= Date.now()
+        ) {
+          return userError({
+            code: "authentication_failed",
+            message: "Payment correction staff proof is invalid or expired.",
+          });
+        }
+
+        if (
+          access.transaction.terminalId &&
+          proof.terminalId !== access.transaction.terminalId
+        ) {
+          return userError({
+            code: "authentication_failed",
+            message:
+              "Payment correction staff proof is invalid for this terminal.",
+          });
+        }
+
+        const credential = await ctx.db.get(
+          "staffCredential",
+          proof.credentialId,
+        );
+        if (
+          !credential ||
+          credential.status !== "active" ||
+          credential.staffProfileId !== args.actorStaffProfileId ||
+          credential.storeId !== access.transaction.storeId ||
+          credential.localVerifierVersion !== proof.credentialVersion
+        ) {
+          return userError({
+            code: "authentication_failed",
+            message: "Payment correction staff proof is invalid or expired.",
+          });
+        }
+
+        await ctx.db.patch("posLocalStaffProof", proof._id, {
+          lastUsedAt: Date.now(),
         });
-      }
 
-      const staffProofTokenHash = await hashPosLocalStaffProofToken(
-        args.staffProofToken,
-      );
-      const proof = await ctx.db
-        .query("posLocalStaffProof")
-        .withIndex("by_tokenHash", (q) =>
-          q.eq("tokenHash", staffProofTokenHash),
-        )
-        .unique();
-      if (
-        !proof ||
-        proof.status !== "active" ||
-        proof.staffProfileId !== args.actorStaffProfileId ||
-        proof.storeId !== access.transaction.storeId ||
-        proof.expiresAt <= Date.now()
-      ) {
-        return userError({
-          code: "authentication_failed",
-          message: "Payment correction staff proof is invalid or expired.",
+        const { staffProofToken: _staffProofToken, ...commandArgs } = args;
+        const result = await correctTransactionPaymentMethodCommand(ctx, {
+          ...commandArgs,
+          actorUserId: access.athenaUser._id,
         });
+
+        if ("action" in result && result.action === "approval_required") {
+          return approvalRequired(result.approval);
+        }
+
+        return ok(result);
+      } catch (error) {
+        const mappedError = mapCorrectionError(error);
+        if (mappedError) {
+          return mappedError;
+        }
+        throw error;
       }
-
-      if (
-        access.transaction.terminalId &&
-        proof.terminalId !== access.transaction.terminalId
-      ) {
-        return userError({
-          code: "authentication_failed",
-          message:
-            "Payment correction staff proof is invalid for this terminal.",
-        });
-      }
-
-      const credential = await ctx.db.get(
-        "staffCredential",
-        proof.credentialId,
-      );
-      if (
-        !credential ||
-        credential.status !== "active" ||
-        credential.staffProfileId !== args.actorStaffProfileId ||
-        credential.storeId !== access.transaction.storeId ||
-        credential.localVerifierVersion !== proof.credentialVersion
-      ) {
-        return userError({
-          code: "authentication_failed",
-          message: "Payment correction staff proof is invalid or expired.",
-        });
-      }
-
-      await ctx.db.patch("posLocalStaffProof", proof._id, {
-        lastUsedAt: Date.now(),
-      });
-
-      const { staffProofToken: _staffProofToken, ...commandArgs } = args;
-      const result = await correctTransactionPaymentMethodCommand(ctx, {
-        ...commandArgs,
-        actorUserId: access.athenaUser._id,
-      });
-
-      if ("action" in result && result.action === "approval_required") {
-        return approvalRequired(result.approval);
-      }
-
-      return ok(result);
-    } catch (error) {
-      const mappedError = mapCorrectionError(error);
-      if (mappedError) {
-        return mappedError;
-      }
-      throw error;
-    }
     },
   ),
 });
@@ -1315,17 +1348,20 @@ export const getRecentTransactionsWithCustomers = query({
       hasCustomerLink: v.boolean(),
     }),
   ),
-  handler: async (ctx, args) => {
-    const access = await requirePosTransactionStoreAccess(ctx, {
-      storeId: args.storeId,
-      failureMessage: "You cannot view POS transactions for this store.",
-    });
-    if ("kind" in access) {
-      return [];
-    }
+  handler: admitSharedDemoPublicQuery(
+    getPosRecentTransactionsWithCustomersReadDefinition,
+    async (ctx, args: { limit?: number; storeId: Id<"store"> }) => {
+      const access = await requirePosTransactionStoreAccess(ctx, {
+        storeId: args.storeId,
+        failureMessage: "You cannot view POS transactions for this store.",
+      });
+      if ("kind" in access) {
+        return [];
+      }
 
-    return getRecentTransactionsWithCustomersQuery(ctx, args);
-  },
+      return getRecentTransactionsWithCustomersQuery(ctx, args);
+    },
+  ),
 });
 
 export const getTodaySummary = query({
@@ -1351,50 +1387,66 @@ export const getTodaySummary = query({
     date: v.string(),
     operatorSnapshot: posOperatorSnapshotValidator,
   }),
-  handler: async (ctx, args) => {
-    const access = await requirePosTransactionStoreAccess(ctx, {
-      storeId: args.storeId,
-      failureMessage: "You cannot view POS summaries for this store.",
-    });
-    if ("kind" in access) {
-      return {
-        averageTransaction: 0,
-        date: new Date().toISOString().split("T")[0],
-        operatorSnapshot: {
-          busiestHour: null,
-          comparison: {
-            averageTransactionDeltaPercent: 0,
-            currentAverageTransaction: 0,
-            currentItemsSold: 0,
-            currentSales: 0,
-            currentTransactions: 0,
-            itemsSoldDeltaPercent: 0,
-            salesDeltaPercent: 0,
-            transactionDeltaPercent: 0,
-            yesterdayAverageTransaction: 0,
-            yesterdayItemsSold: 0,
-            yesterdaySales: 0,
-            yesterdayTransactions: 0,
+  handler: admitSharedDemoPublicQuery(
+    getPosTodaySummaryReadDefinition,
+    async (
+      ctx,
+      args: {
+        pulseWindow?:
+          | "today"
+          | "yesterday"
+          | "this_week"
+          | "this_month"
+          | "all_time"
+          | "last_week"
+          | "last_month";
+        storeId: Id<"store">;
+      },
+    ) => {
+      const access = await requirePosTransactionStoreAccess(ctx, {
+        storeId: args.storeId,
+        failureMessage: "You cannot view POS summaries for this store.",
+      });
+      if ("kind" in access) {
+        return {
+          averageTransaction: 0,
+          date: new Date().toISOString().split("T")[0],
+          operatorSnapshot: {
+            busiestHour: null,
+            comparison: {
+              averageTransactionDeltaPercent: 0,
+              currentAverageTransaction: 0,
+              currentItemsSold: 0,
+              currentSales: 0,
+              currentTransactions: 0,
+              itemsSoldDeltaPercent: 0,
+              salesDeltaPercent: 0,
+              transactionDeltaPercent: 0,
+              yesterdayAverageTransaction: 0,
+              yesterdayItemsSold: 0,
+              yesterdaySales: 0,
+              yesterdayTransactions: 0,
+            },
+            historyDays: 14,
+            isLimited: false,
+            paymentMix: [],
+            topItems: [],
+            trend: [],
+            usableHistoryDays: 0,
           },
-          historyDays: 14,
-          isLimited: false,
-          paymentMix: [],
-          topItems: [],
-          trend: [],
-          usableHistoryDays: 0,
-        },
-        totalItemsSold: 0,
-        totalSales: 0,
-        totalTransactions: 0,
-      };
-    }
+          totalItemsSold: 0,
+          totalSales: 0,
+          totalTransactions: 0,
+        };
+      }
 
-    const hasFullAdminAccess = access.membership.role === "full_admin";
-    const summary = await getTodaySummaryQuery(ctx, {
-      ...args,
-      pulseWindow: hasFullAdminAccess ? args.pulseWindow : "today",
-    });
+      const hasFullAdminAccess = access.membership.role === "full_admin";
+      const summary = await getTodaySummaryQuery(ctx, {
+        ...args,
+        pulseWindow: hasFullAdminAccess ? args.pulseWindow : "today",
+      });
 
-    return hasFullAdminAccess ? summary : redactPosPulseSummary(summary);
-  },
+      return hasFullAdminAccess ? summary : redactPosPulseSummary(summary);
+    },
+  ),
 });

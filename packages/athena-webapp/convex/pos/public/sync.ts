@@ -9,6 +9,7 @@ import {
   ingestRegisterSessionActivityOperationDefinition,
 } from "../../operationAdmission/definitions";
 import { admitSharedDemoPublicMutation } from "../../operationAdmission/publicMutation";
+import type { OperationMutationCtx } from "../../operationAdmission/types";
 import { commandResultValidator } from "../../lib/commandResultValidators";
 import {
   requireAuthenticatedAthenaUserWithCtx,
@@ -16,11 +17,9 @@ import {
 } from "../../lib/athenaUserAuth";
 import { ok, userError } from "../../../shared/commandResult";
 import {
-  getSharedDemoActorWithCtx,
-  requireSharedDemoStoreCapabilityIfApplicable,
-} from "../../sharedDemo/actor";
-import type { SharedDemoCapability } from "../../sharedDemo/policy";
-import { requireReadySharedDemoWriteWithCtx } from "../../sharedDemo/restore";
+  requireSharedDemoCapability,
+  type SharedDemoCapability,
+} from "../../sharedDemo/policy";
 import { ingestLocalEventsWithCtx } from "../application/sync/ingestLocalEvents";
 import { hashPosTerminalSyncSecret } from "../application/sync/terminalSyncSecret";
 import { posLocalSyncMappingKindValidator } from "../../schemas/pos/posLocalSyncMapping";
@@ -209,23 +208,19 @@ export const ingestLocalEvents = mutation({
     }
 
     let athenaUser;
-    let demoActor: Awaited<ReturnType<typeof getSharedDemoActorWithCtx>> = null;
     try {
-      demoActor = await getSharedDemoActorWithCtx(ctx);
-      if (demoActor) {
+      const admittedActor = (ctx as OperationMutationCtx).operationAdmission
+        .actor;
+      if (admittedActor.kind === "shared_demo") {
         const capabilities = new Set<SharedDemoCapability>(
           args.events.map((event: (typeof args.events)[number]) =>
             sharedDemoCapabilityForSyncEvent(event.eventType),
           ),
         );
         for (const capability of capabilities) {
-          await requireSharedDemoStoreCapabilityIfApplicable(
-            ctx,
-            capability,
-            args.storeId,
-          );
+          requireSharedDemoCapability(capability);
         }
-        athenaUser = await ctx.db.get("athenaUser", demoActor.athenaUserId);
+        athenaUser = await ctx.db.get("athenaUser", admittedActor.athenaUserId);
         if (!athenaUser) throw new Error("Sign in again to continue.");
       } else {
         athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
@@ -241,27 +236,6 @@ export const ingestLocalEvents = mutation({
         code: "authorization_failed",
         message: "You do not have access to sync this POS terminal.",
       });
-    }
-    if (demoActor) {
-      if (args.expectedDemoEpoch === undefined) {
-        return userError({
-          code: "precondition_failed",
-          message: "The demo register is refreshing. Try again shortly.",
-          retryable: true,
-        });
-      }
-      try {
-        await requireReadySharedDemoWriteWithCtx(ctx, {
-          expectedEpoch: args.expectedDemoEpoch,
-          storeId: args.storeId,
-        });
-      } catch {
-        return userError({
-          code: "precondition_failed",
-          message: "The demo register is refreshing. Try again shortly.",
-          retryable: true,
-        });
-      }
     }
     const terminal = await ctx.db.get("posTerminal", args.terminalId);
     const submittedSyncSecretHash = await hashPosTerminalSyncSecret(
@@ -437,16 +411,11 @@ export const ingestRegisterSessionActivity = mutation({
     }
 
     let athenaUser;
-    let demoActor: Awaited<ReturnType<typeof getSharedDemoActorWithCtx>> = null;
     try {
-      demoActor = await getSharedDemoActorWithCtx(ctx);
-      if (demoActor) {
-        await requireSharedDemoStoreCapabilityIfApplicable(
-          ctx,
-          "cash.control.write",
-          args.storeId,
-        );
-        athenaUser = await ctx.db.get("athenaUser", demoActor.athenaUserId);
+      const admittedActor = (ctx as OperationMutationCtx).operationAdmission
+        .actor;
+      if (admittedActor.kind === "shared_demo") {
+        athenaUser = await ctx.db.get("athenaUser", admittedActor.athenaUserId);
         if (!athenaUser) throw new Error("Sign in again to continue.");
       } else {
         athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
@@ -462,28 +431,6 @@ export const ingestRegisterSessionActivity = mutation({
         code: "authorization_failed",
         message: "You do not have access to sync this POS terminal.",
       });
-    }
-
-    if (demoActor) {
-      if (args.expectedDemoEpoch === undefined) {
-        return userError({
-          code: "precondition_failed",
-          message: "The demo register is refreshing. Try again shortly.",
-          retryable: true,
-        });
-      }
-      try {
-        await requireReadySharedDemoWriteWithCtx(ctx, {
-          expectedEpoch: args.expectedDemoEpoch,
-          storeId: args.storeId,
-        });
-      } catch {
-        return userError({
-          code: "precondition_failed",
-          message: "The demo register is refreshing. Try again shortly.",
-          retryable: true,
-        });
-      }
     }
 
     const terminal = await ctx.db.get("posTerminal", args.terminalId);

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Id } from "../_generated/dataModel";
 import * as athenaUserAuth from "../lib/athenaUserAuth";
+import * as sharedDemoActor from "../sharedDemo/actor";
 import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
 import {
   buildPosServiceCatalogRow,
@@ -22,23 +23,36 @@ vi.mock("../lib/athenaUserAuth", () => ({
   requireOrganizationMemberRoleWithCtx: vi.fn(),
 }));
 
+vi.mock("../sharedDemo/actor", () => ({
+  getSharedDemoActorWithCtx: vi.fn(),
+  requireReadySharedDemoStoreCapabilityIfApplicable: vi.fn(),
+  requireSharedDemoStoreCapabilityIfApplicable: vi.fn(),
+  requireSharedDemoStoreReadIfApplicable: vi.fn(),
+}));
+
 function getHandler(definition: unknown) {
   return (definition as { _handler: Function })._handler;
 }
 
 beforeEach(() => {
   vi.resetAllMocks();
-  vi.mocked(athenaUserAuth.requireAuthenticatedAthenaUserWithCtx).mockResolvedValue({
+  vi.mocked(sharedDemoActor.getSharedDemoActorWithCtx).mockResolvedValue(null);
+  vi.mocked(
+    sharedDemoActor.requireReadySharedDemoStoreCapabilityIfApplicable,
+  ).mockResolvedValue(null);
+  vi.mocked(
+    athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+  ).mockResolvedValue({
     _id: "user-admin" as Id<"athenaUser">,
   } as never);
-  vi.mocked(athenaUserAuth.requireOrganizationMemberRoleWithCtx).mockResolvedValue(
-    {
-      _id: "member-1",
-      organizationId: "org-1",
-      role: "full_admin",
-      userId: "user-admin",
-    } as never,
-  );
+  vi.mocked(
+    athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+  ).mockResolvedValue({
+    _id: "member-1",
+    organizationId: "org-1",
+    role: "full_admin",
+    userId: "user-admin",
+  } as never);
 });
 
 describe("service catalog and appointment helpers", () => {
@@ -109,6 +123,141 @@ describe("service catalog and appointment helpers", () => {
     assertConformsToExportedReturns(listPosServiceCatalogSnapshot, rows);
   });
 
+  it("admits same-store shared-demo POS service catalog snapshot reads without normal auth fallback", async () => {
+    const storeId = "store_1" as Id<"store">;
+    vi.mocked(sharedDemoActor.getSharedDemoActorWithCtx).mockResolvedValueOnce({
+      authUserId: "auth-demo" as Id<"users">,
+      athenaUserId: "demo-owner" as Id<"athenaUser">,
+      kind: "shared_demo",
+      organizationId: "org_1" as Id<"organization">,
+      storeId,
+    });
+    const activeRows = [
+      {
+        _id: "catalog-fixed" as Id<"serviceCatalog">,
+        basePrice: 4_500,
+        createdAt: 900,
+        depositType: "flat" as const,
+        depositValue: 1_000,
+        durationMinutes: 90,
+        name: "Closure Repair",
+        pricingModel: "fixed" as const,
+        requiresManagerApproval: false,
+        serviceMode: "repair" as const,
+        slug: "closure-repair",
+        status: "active" as const,
+        storeId,
+        updatedAt: 1_000,
+      },
+    ];
+    const queryBuilder = {
+      eq: vi.fn(),
+    };
+    queryBuilder.eq.mockReturnValue(queryBuilder);
+    const collect = vi.fn(async () => activeRows);
+    const withIndex = vi.fn((_indexName, callback) => {
+      callback(queryBuilder);
+      return { collect };
+    });
+    const query = vi.fn(() => ({ withIndex }));
+    const get = vi.fn(async (tableName, id) => {
+      if (tableName === "store" && id === storeId) {
+        return {
+          _id: storeId,
+          organizationId: "org_1" as Id<"organization">,
+        };
+      }
+      if (tableName === "athenaUser" && id === "demo-owner") {
+        return { _id: "demo-owner" as Id<"athenaUser"> };
+      }
+
+      return null;
+    });
+
+    const rows = await getHandler(listPosServiceCatalogSnapshot)(
+      { auth: { getUserIdentity: vi.fn() }, db: { get, query } } as never,
+      { storeId },
+    );
+
+    expect(rows).toEqual([
+      expect.objectContaining({
+        name: "Closure Repair",
+        serviceCatalogId: "catalog-fixed",
+      }),
+    ]);
+    expect(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).not.toHaveBeenCalled();
+    expect(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operationAdmission: expect.objectContaining({
+          actor: expect.objectContaining({ kind: "shared_demo" }),
+        }),
+      }),
+      {
+        allowedRoles: ["full_admin", "pos_only"],
+        failureMessage: "You cannot view POS services for this store.",
+        organizationId: "org_1",
+        userId: "demo-owner",
+      },
+    );
+  });
+
+  it("denies cross-store shared-demo POS service catalog snapshot reads before querying services", async () => {
+    vi.mocked(sharedDemoActor.getSharedDemoActorWithCtx).mockResolvedValueOnce({
+      authUserId: "auth-demo" as Id<"users">,
+      athenaUserId: "demo-owner" as Id<"athenaUser">,
+      kind: "shared_demo",
+      organizationId: "org_1" as Id<"organization">,
+      storeId: "store_1" as Id<"store">,
+    });
+    const query = vi.fn();
+
+    await expect(
+      getHandler(listPosServiceCatalogSnapshot)(
+        {
+          auth: { getUserIdentity: vi.fn() },
+          db: { get: vi.fn(), query },
+        } as never,
+        { storeId: "store_2" as Id<"store"> },
+      ),
+    ).rejects.toThrow("This action isn't allowed in the demo.");
+    expect(query).not.toHaveBeenCalled();
+    expect(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).not.toHaveBeenCalled();
+  });
+
+  it("does not return same-store POS service catalog rows when store membership is denied", async () => {
+    vi.mocked(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).mockRejectedValueOnce(
+      new Error("You cannot view POS services for this store."),
+    );
+    const storeId = "store_1" as Id<"store">;
+    const query = vi.fn();
+    const get = vi.fn(async (tableName, id) => {
+      if (tableName === "store" && id === storeId) {
+        return {
+          _id: storeId,
+          organizationId: "org_1" as Id<"organization">,
+        };
+      }
+
+      return null;
+    });
+
+    await expect(
+      getHandler(listPosServiceCatalogSnapshot)(
+        { auth: { getUserIdentity: vi.fn() }, db: { get, query } } as never,
+        { storeId },
+      ),
+    ).rejects.toThrow("You cannot view POS services for this store.");
+    expect(query).not.toHaveBeenCalled();
+  });
+
   it("normalizes service catalog names case-insensitively for uniqueness", () => {
     expect(normalizeServiceCatalogNameKey("Tokin")).toBe("tokin");
     expect(normalizeServiceCatalogNameKey("tokin")).toBe("tokin");
@@ -126,7 +275,7 @@ describe("service catalog and appointment helpers", () => {
         requiresManagerApproval: false,
         serviceMode: "repair",
         storeId: "store_1" as Id<"store">,
-      })
+      }),
     ).toEqual({
       kind: "user_error",
       error: {
@@ -146,7 +295,7 @@ describe("service catalog and appointment helpers", () => {
         requiresManagerApproval: false,
         serviceMode: "repair",
         storeId: "store_1" as Id<"store">,
-      })
+      }),
     ).toEqual({
       kind: "user_error",
       error: {
@@ -166,7 +315,7 @@ describe("service catalog and appointment helpers", () => {
         requiresManagerApproval: false,
         serviceMode: "repair",
         storeId: "store_1" as Id<"store">,
-      })
+      }),
     ).toMatchObject({
       kind: "ok",
       data: {
@@ -266,7 +415,7 @@ describe("service catalog and appointment helpers", () => {
         serviceCatalogId: "catalog_1" as Id<"serviceCatalog">,
         startAt: 1_000,
         storeId: "store_1" as Id<"store">,
-      })
+      }),
     ).toEqual({
       kind: "user_error",
       error: {
@@ -285,7 +434,7 @@ describe("service catalog and appointment helpers", () => {
         serviceCatalogId: "catalog_1" as Id<"serviceCatalog">,
         startAt: 1_000,
         storeId: "store_1" as Id<"store">,
-      })
+      }),
     ).toMatchObject({
       kind: "ok",
       data: {
@@ -314,7 +463,7 @@ describe("service catalog and appointment helpers", () => {
       {
         endAt: 250,
         startAt: 150,
-      }
+      },
     );
 
     expect(overlap?._id).toBe("appointment_1");
@@ -331,8 +480,8 @@ describe("service catalog and appointment helpers", () => {
         {
           endAt: 250,
           startAt: 150,
-        }
-      )
+        },
+      ),
     ).toBeNull();
   });
 
@@ -433,7 +582,9 @@ describe("service catalog and appointment helpers", () => {
   });
 
   it("requires full-admin access before terminal appointment mutations write", async () => {
-    vi.mocked(athenaUserAuth.requireOrganizationMemberRoleWithCtx).mockRejectedValue(
+    vi.mocked(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).mockRejectedValue(
       new Error("Only store admins can update service appointments."),
     );
     const cancelCtx = createAppointmentMutationCtx();
@@ -446,7 +597,9 @@ describe("service catalog and appointment helpers", () => {
     expect(cancelCtx.db.patch).not.toHaveBeenCalled();
     expect(cancelCtx.db.insert).not.toHaveBeenCalled();
 
-    vi.mocked(athenaUserAuth.requireOrganizationMemberRoleWithCtx).mockRejectedValue(
+    vi.mocked(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).mockRejectedValue(
       new Error("Only store admins can convert service appointments to cases."),
     );
     const convertCtx = createAppointmentMutationCtx();
@@ -719,20 +872,26 @@ function createAppointmentMutationCtx() {
     return rows[tableName]?.get(id) ?? null;
   });
   const patch = vi.fn(
-    async (tableName: string, id: string, patchValue: Record<string, unknown>) => {
+    async (
+      tableName: string,
+      id: string,
+      patchValue: Record<string, unknown>,
+    ) => {
       const row = rows[tableName]?.get(id);
       if (row) {
         rows[tableName].set(id, { ...row, ...patchValue });
       }
     },
   );
-  const insert = vi.fn(async (tableName: string, value: Record<string, unknown>) => {
-    const id = `${tableName}-1`;
-    inserts.push({ table: tableName, value });
-    rows[tableName] ??= new Map();
-    rows[tableName].set(id, { _id: id, ...value });
-    return id;
-  });
+  const insert = vi.fn(
+    async (tableName: string, value: Record<string, unknown>) => {
+      const id = `${tableName}-1`;
+      inserts.push({ table: tableName, value });
+      rows[tableName] ??= new Map();
+      rows[tableName].set(id, { _id: id, ...value });
+      return id;
+    },
+  );
   const query = vi.fn((tableName: string) => ({
     withIndex: vi.fn((_indexName: string, applyIndex: Function) => {
       const constraints: Record<string, unknown> = {};
@@ -750,7 +909,9 @@ function createAppointmentMutationCtx() {
 
       const matchingRows = () =>
         Array.from(rows[tableName]?.values() ?? []).filter((row) =>
-          Object.entries(constraints).every(([field, value]) => row[field] === value),
+          Object.entries(constraints).every(
+            ([field, value]) => row[field] === value,
+          ),
         );
 
       return {

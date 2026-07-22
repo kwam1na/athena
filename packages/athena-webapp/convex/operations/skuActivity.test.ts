@@ -9,6 +9,7 @@ vi.mock("../lib/athenaUserAuth", () => ({
   requireOrganizationMemberRoleWithCtx: vi.fn(),
 }));
 vi.mock("../sharedDemo/actor", () => ({
+  getSharedDemoActorWithCtx: vi.fn(),
   requireSharedDemoStoreReadIfApplicable: vi.fn(),
 }));
 
@@ -47,12 +48,14 @@ describe("SKU activity public read access", () => {
     } as never);
     vi.mocked(athenaUserAuth.requireOrganizationMemberRoleWithCtx).mockResolvedValue({} as never);
     vi.mocked(sharedDemoActor.requireSharedDemoStoreReadIfApplicable).mockResolvedValue(null);
+    vi.mocked(sharedDemoActor.getSharedDemoActorWithCtx).mockResolvedValue(null);
   });
 
   it("allows the shared demo to read untrusted SKU sale evidence without normal-user auth", async () => {
-    vi.mocked(sharedDemoActor.requireSharedDemoStoreReadIfApplicable).mockResolvedValueOnce({
+    vi.mocked(sharedDemoActor.getSharedDemoActorWithCtx).mockResolvedValueOnce({
       athenaUserId: "demo-user-1",
       kind: "shared_demo",
+      organizationId: "org-1",
       storeId: "store-1",
     } as never);
     const { ctx } = createIndexedDb({});
@@ -72,8 +75,11 @@ describe("SKU activity public read access", () => {
     });
 
     expect(
+      sharedDemoActor.getSharedDemoActorWithCtx,
+    ).toHaveBeenCalledWith(demoCtx);
+    expect(
       sharedDemoActor.requireSharedDemoStoreReadIfApplicable,
-    ).toHaveBeenCalledWith(demoCtx, "store-1");
+    ).not.toHaveBeenCalled();
     expect(
       athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
     ).not.toHaveBeenCalled();

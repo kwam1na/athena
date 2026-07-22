@@ -56,7 +56,7 @@ function admittedCtx(ctx: { db: unknown; scheduler?: unknown }) {
   });
 }
 
-describe("POS local sync public mutation", () => {
+describe("admitted POS local sync public mutation", () => {
   afterEach(() => {
     process.env.STAGE = originalStage;
   });

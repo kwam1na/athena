@@ -30,12 +30,7 @@ describe("store member access", () => {
     } as never);
   });
 
-  it("resolves demo identity only after read-store clamping", async () => {
-    vi.mocked(requireSharedDemoStoreReadIfApplicable).mockResolvedValue({
-      athenaUserId: "athena-user-1",
-      kind: "shared_demo",
-      storeId: "store-1",
-    } as never);
+  it("resolves shared-demo identity from operation admission", async () => {
     const store = { _id: "store-1", organizationId: "org-1" };
     const demoUser = { _id: "athena-user-1" };
     const ctx = {
@@ -43,6 +38,13 @@ describe("store member access", () => {
         get: vi.fn(async (_table: string, id: string) =>
           id === "athena-user-1" ? demoUser : store,
         ),
+      },
+      operationAdmission: {
+        actor: {
+          athenaUserId: "athena-user-1",
+          kind: "shared_demo",
+          storeId: "store-1",
+        },
       },
     } as never;
 
@@ -55,10 +57,8 @@ describe("store member access", () => {
       }),
     ).resolves.toMatchObject({ athenaUser: { _id: "athena-user-1" }, store });
 
-    expect(requireSharedDemoStoreReadIfApplicable).toHaveBeenCalledWith(
-      ctx,
-      "store-1",
-    );
+    expect(requireSharedDemoStoreReadIfApplicable).not.toHaveBeenCalled();
+    expect(requireSharedDemoStoreCapabilityIfApplicable).not.toHaveBeenCalled();
     expect(requireAuthenticatedAthenaUserWithCtx).not.toHaveBeenCalled();
     expect(requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(ctx, {
       allowedRoles: ["full_admin", "pos_only"],
@@ -68,12 +68,7 @@ describe("store member access", () => {
     });
   });
 
-  it("requires an allowed capability before resolving demo identity for writes", async () => {
-    vi.mocked(requireSharedDemoStoreCapabilityIfApplicable).mockResolvedValue({
-      athenaUserId: "athena-user-1",
-      kind: "shared_demo",
-      storeId: "store-1",
-    } as never);
+  it("ignores legacy demo access options when no operation admission exists", async () => {
     const ctx = {
       db: {
         get: vi.fn(async (_table: string, id: string) =>
@@ -94,15 +89,46 @@ describe("store member access", () => {
       storeId: "store-1" as never,
     });
 
-    expect(requireSharedDemoStoreCapabilityIfApplicable).toHaveBeenCalledWith(
-      ctx,
-      "daily_operations.write",
-      "store-1",
+    expect(requireSharedDemoStoreCapabilityIfApplicable).not.toHaveBeenCalled();
+    expect(requireSharedDemoStoreReadIfApplicable).not.toHaveBeenCalled();
+    expect(requireAuthenticatedAthenaUserWithCtx).toHaveBeenCalledWith(ctx);
+  });
+
+  it("preserves ordinary Athena authentication when no admitted demo actor is present", async () => {
+    const ctx = {
+      db: {
+        get: vi.fn().mockResolvedValue({
+          _id: "store-1",
+          organizationId: "org-1",
+        }),
+      },
+      operationAdmission: {
+        actor: {
+          athenaUserId: "athena-user-1",
+          kind: "normal_user",
+        },
+      },
+    } as never;
+
+    await requireStoreMemberAccessWithCtx(ctx, {
+      allowedRoles: ["full_admin"],
+      failureMessage: "Access denied.",
+      demoAccess: { kind: "read" },
+      storeId: "store-1" as never,
+    });
+
+    expect(requireSharedDemoStoreCapabilityIfApplicable).not.toHaveBeenCalled();
+    expect(requireSharedDemoStoreReadIfApplicable).not.toHaveBeenCalled();
+    expect(requireAuthenticatedAthenaUserWithCtx).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operationAdmission: expect.objectContaining({
+          actor: expect.objectContaining({ kind: "normal_user" }),
+        }),
+      }),
     );
   });
 
-  it("preserves ordinary Athena authentication when no demo actor is present", async () => {
-    vi.mocked(requireSharedDemoStoreReadIfApplicable).mockResolvedValue(null);
+  it("preserves ordinary Athena authentication when no operation admission is present", async () => {
     const ctx = {
       db: {
         get: vi.fn().mockResolvedValue({

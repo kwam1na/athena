@@ -8,6 +8,20 @@ import {
 } from "../../_generated/server";
 import { quickAddSkuOperationDefinition } from "../../operationAdmission/definitions";
 import { admitSharedDemoPublicMutation } from "../../operationAdmission/publicMutation";
+import { admitSharedDemoPublicQuery } from "../../operationAdmission/publicQuery";
+import {
+  barcodeLookupPosRegisterCatalogReadDefinition,
+  getPosRegisterCatalogRevisionReadDefinition,
+  listPosRegisterCatalogAvailabilityReadDefinition,
+  listPosRegisterCatalogAvailabilitySnapshotReadDefinition,
+  listPosRegisterCatalogSnapshotReadDefinition,
+  listPosRegisterCatalogSnapshotWithRevisionReadDefinition,
+  searchPosRegisterCatalogReadDefinition,
+} from "../../operationAdmission/readDefinitions";
+import type {
+  OperationMutationCtx,
+  OperationQueryCtx,
+} from "../../operationAdmission/types";
 import type { Doc, Id } from "../../_generated/dataModel";
 import { commandResultValidator } from "../../lib/commandResultValidators";
 import {
@@ -28,7 +42,6 @@ import {
 } from "../../reporting/inventory/valuation";
 import { recordOperationalEventWithCtx } from "../../operations/operationalEvents";
 import { updateOperationalWorkItemStatusWithCtx } from "../../operations/operationalWorkItems";
-import { requireSharedDemoStoreCapabilityIfApplicable } from "../../sharedDemo/actor";
 import {
   lookupByBarcode,
   searchProducts,
@@ -468,23 +481,28 @@ async function requireRegisterCatalogStoreAccess(
     indexedIdentityOnly?: boolean;
   },
 ) {
-  await requireSharedDemoStoreCapabilityIfApplicable(
-    ctx,
-    "pos.sale.complete",
-    args.storeId,
-  );
+  const operationAdmission = (ctx as Partial<OperationQueryCtx>)
+    .operationAdmission;
+  const admittedActor = operationAdmission?.actor;
+  const sharedDemoActor =
+    admittedActor?.kind === "shared_demo" ? admittedActor : null;
+
   const store = await ctx.db.get("store", args.storeId);
   if (!store) {
     throw new Error("Store not found.");
   }
 
   const athenaUser = options?.indexedIdentityOnly
-    ? await requireAuthenticatedAthenaUserIndexedWithCtx(ctx, {
-        sharedDemoCapability: "pos.sale.complete",
-      })
-    : await requireAuthenticatedAthenaUserWithCtx(ctx, {
-        sharedDemoCapability: "pos.sale.complete",
-      });
+    ? sharedDemoActor
+      ? await ctx.db.get("athenaUser", sharedDemoActor.athenaUserId)
+      : await requireAuthenticatedAthenaUserIndexedWithCtx(ctx)
+    : sharedDemoActor
+      ? await ctx.db.get("athenaUser", sharedDemoActor.athenaUserId)
+      : await requireAuthenticatedAthenaUserWithCtx(ctx);
+  if (!athenaUser) {
+    throw new Error("Sign in again to continue.");
+  }
+
   await requireOrganizationMemberRoleWithCtx(ctx, {
     allowedRoles: ["full_admin", "pos_only"],
     failureMessage:
@@ -678,10 +696,13 @@ export const search = query({
     storeId: v.id("store"),
     searchQuery: v.string(),
   },
-  handler: async (ctx, args) => {
-    await requireRegisterCatalogStoreAccess(ctx, args);
-    return searchProducts(ctx, args);
-  },
+  handler: admitSharedDemoPublicQuery(
+    searchPosRegisterCatalogReadDefinition,
+    async (ctx, args: { searchQuery: string; storeId: Id<"store"> }) => {
+      await requireRegisterCatalogStoreAccess(ctx, args);
+      return searchProducts(ctx, args);
+    },
+  ),
 });
 
 export const listRegisterCatalogSnapshot = query({
@@ -689,11 +710,14 @@ export const listRegisterCatalogSnapshot = query({
     storeId: v.id("store"),
   },
   returns: v.array(registerCatalogRowValidator),
-  handler: async (ctx, args) => {
-    await requireRegisterCatalogStoreAccess(ctx, args);
+  handler: admitSharedDemoPublicQuery(
+    listPosRegisterCatalogSnapshotReadDefinition,
+    async (ctx, args: { storeId: Id<"store"> }) => {
+      await requireRegisterCatalogStoreAccess(ctx, args);
 
-    return listRegisterCatalog(ctx, args);
-  },
+      return listRegisterCatalog(ctx, args);
+    },
+  ),
 });
 
 export const getRegisterCatalogRevision = query({
@@ -704,20 +728,23 @@ export const getRegisterCatalogRevision = query({
     v.object({ status: v.literal("authorization-paused") }),
     v.object({ revision: v.number(), status: v.literal("ready") }),
   ),
-  handler: async (ctx, args) => {
-    try {
-      await requireRegisterCatalogStoreAccess(ctx, args, {
-        indexedIdentityOnly: true,
-      });
-    } catch {
-      return { status: "authorization-paused" as const };
-    }
+  handler: admitSharedDemoPublicQuery(
+    getPosRegisterCatalogRevisionReadDefinition,
+    async (ctx, args: { storeId: Id<"store"> }) => {
+      try {
+        await requireRegisterCatalogStoreAccess(ctx, args, {
+          indexedIdentityOnly: true,
+        });
+      } catch {
+        return { status: "authorization-paused" as const };
+      }
 
-    return {
-      revision: await readRegisterCatalogRevision(ctx, args.storeId),
-      status: "ready" as const,
-    };
-  },
+      return {
+        revision: await readRegisterCatalogRevision(ctx, args.storeId),
+        status: "ready" as const,
+      };
+    },
+  ),
 });
 
 export const listRegisterCatalogSnapshotWithRevision = query({
@@ -728,11 +755,14 @@ export const listRegisterCatalogSnapshotWithRevision = query({
     revision: v.number(),
     rows: v.array(registerCatalogRowValidator),
   }),
-  handler: async (ctx, args) => {
-    await requireRegisterCatalogStoreAccess(ctx, args);
+  handler: admitSharedDemoPublicQuery(
+    listPosRegisterCatalogSnapshotWithRevisionReadDefinition,
+    async (ctx, args: { storeId: Id<"store"> }) => {
+      await requireRegisterCatalogStoreAccess(ctx, args);
 
-    return listRegisterCatalogWithRevision(ctx, args);
-  },
+      return listRegisterCatalogWithRevision(ctx, args);
+    },
+  ),
 });
 
 export const listRegisterCatalogAvailability = query({
@@ -741,17 +771,23 @@ export const listRegisterCatalogAvailability = query({
     productSkuIds: v.array(v.id("productSku")),
   },
   returns: v.array(registerCatalogAvailabilityValidator),
-  handler: async (ctx, args) => {
-    await requireRegisterCatalogStoreAccess(ctx, args);
+  handler: admitSharedDemoPublicQuery(
+    listPosRegisterCatalogAvailabilityReadDefinition,
+    async (
+      ctx,
+      args: { productSkuIds: Id<"productSku">[]; storeId: Id<"store"> },
+    ) => {
+      await requireRegisterCatalogStoreAccess(ctx, args);
 
-    return readRegisterCatalogAvailability(ctx, {
-      storeId: args.storeId,
-      productSkuIds: args.productSkuIds.slice(
-        0,
-        REGISTER_CATALOG_AVAILABILITY_LIMIT,
-      ),
-    });
-  },
+      return readRegisterCatalogAvailability(ctx, {
+        storeId: args.storeId,
+        productSkuIds: args.productSkuIds.slice(
+          0,
+          REGISTER_CATALOG_AVAILABILITY_LIMIT,
+        ),
+      });
+    },
+  ),
 });
 
 export const listRegisterCatalogAvailabilitySnapshot = query({
@@ -759,11 +795,14 @@ export const listRegisterCatalogAvailabilitySnapshot = query({
     storeId: v.id("store"),
   },
   returns: v.array(registerCatalogAvailabilityValidator),
-  handler: async (ctx, args) => {
-    await requireRegisterCatalogStoreAccess(ctx, args);
+  handler: admitSharedDemoPublicQuery(
+    listPosRegisterCatalogAvailabilitySnapshotReadDefinition,
+    async (ctx, args: { storeId: Id<"store"> }) => {
+      await requireRegisterCatalogStoreAccess(ctx, args);
 
-    return readRegisterCatalogAvailabilitySnapshot(ctx, args);
-  },
+      return readRegisterCatalogAvailabilitySnapshot(ctx, args);
+    },
+  ),
 });
 
 export const barcodeLookup = query({
@@ -776,10 +815,13 @@ export const barcodeLookup = query({
     catalogResultValidator,
     v.array(catalogResultValidator),
   ),
-  handler: async (ctx, args) => {
-    await requireRegisterCatalogStoreAccess(ctx, args);
-    return lookupByBarcode(ctx, args);
-  },
+  handler: admitSharedDemoPublicQuery(
+    barcodeLookupPosRegisterCatalogReadDefinition,
+    async (ctx, args: { barcode: string; storeId: Id<"store"> }) => {
+      await requireRegisterCatalogStoreAccess(ctx, args);
+      return lookupByBarcode(ctx, args);
+    },
+  ),
 });
 
 export const quickAddSku = mutation({
@@ -799,29 +841,31 @@ export const quickAddSku = mutation({
   returns: catalogResultValidator,
   handler: admitSharedDemoPublicMutation(
     quickAddSkuOperationDefinition,
-    async (ctx, args) => {
-    await requireSharedDemoStoreCapabilityIfApplicable(
-      ctx,
-      "catalog.quick_add",
-      args.storeId,
-    );
-    const store = await ctx.db.get("store", args.storeId);
-    if (!store) {
-      throw new Error("Store not found.");
-    }
+    async (ctx: OperationMutationCtx, args) => {
+      const store = await ctx.db.get("store", args.storeId);
+      if (!store) {
+        throw new Error("Store not found.");
+      }
 
-    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
-    await requireOrganizationMemberRoleWithCtx(ctx, {
-      allowedRoles: ["full_admin", "pos_only"],
-      failureMessage: "You cannot quick add products for this store.",
-      organizationId: store.organizationId,
-      userId: athenaUser._id,
-    });
+      const admittedActor = ctx.operationAdmission.actor;
+      const athenaUser =
+        admittedActor.kind === "shared_demo"
+          ? await ctx.db.get("athenaUser", admittedActor.athenaUserId)
+          : await requireAuthenticatedAthenaUserWithCtx(ctx);
+      if (!athenaUser) {
+        throw new Error("Sign in again to continue.");
+      }
+      await requireOrganizationMemberRoleWithCtx(ctx, {
+        allowedRoles: ["full_admin", "pos_only"],
+        failureMessage: "You cannot quick add products for this store.",
+        organizationId: store.organizationId,
+        userId: athenaUser._id,
+      });
 
-    return quickAddCatalogItem(ctx, {
-      ...args,
-      createdByUserId: athenaUser._id,
-    });
+      return quickAddCatalogItem(ctx, {
+        ...args,
+        createdByUserId: athenaUser._id,
+      });
     },
   ),
 });

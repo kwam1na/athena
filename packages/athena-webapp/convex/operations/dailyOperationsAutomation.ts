@@ -37,7 +37,13 @@ import {
   completeDailyCloseForAutomationWithCtx,
 } from "./dailyClose";
 import { requireStoreFullAdminAccess } from "../stockOps/access";
-import { requireSharedDemoStoreReadIfApplicable } from "../sharedDemo/actor";
+import { admitSharedDemoPublicQuery } from "../operationAdmission/publicQuery";
+import {
+  getEodAutoCompletePolicyReadDefinition,
+  getOpeningAutoStartPolicyReadDefinition,
+  getRegisterCloseoutApprovalPolicyReadDefinition,
+} from "../operationAdmission/readDefinitions";
+import type { OperationQueryCtx } from "../operationAdmission/types";
 import { getCashControlsConfig } from "./registerSessionCloseoutGate";
 import {
   getStoreScheduleContextForStoreAtWithCtx,
@@ -63,8 +69,9 @@ async function requireAutomationPolicyReadAccess(
   ctx: QueryCtx,
   storeId: Id<"store">,
 ) {
-  const demoActor = await requireSharedDemoStoreReadIfApplicable(ctx, storeId);
-  if (!demoActor) {
+  const admittedActor = (ctx as Partial<OperationQueryCtx>).operationAdmission
+    ?.actor;
+  if (admittedActor?.kind !== "shared_demo") {
     return requireStoreFullAdminAccess(ctx, storeId);
   }
 
@@ -2287,14 +2294,22 @@ export const getOpeningAutoStartPolicy = query({
   args: {
     storeId: v.id("store"),
   },
-  handler: (ctx, args) => getOpeningAutoStartPolicyForApi(ctx, args),
+  handler: admitSharedDemoPublicQuery(
+    getOpeningAutoStartPolicyReadDefinition,
+    async (ctx: OperationQueryCtx, args: { storeId: Id<"store"> }) =>
+      getOpeningAutoStartPolicyForApi(ctx, args),
+  ),
 });
 
 export const getEodAutoCompletePolicy = query({
   args: {
     storeId: v.id("store"),
   },
-  handler: (ctx, args) => getEodAutoCompletePolicyForApi(ctx, args),
+  handler: admitSharedDemoPublicQuery(
+    getEodAutoCompletePolicyReadDefinition,
+    async (ctx: OperationQueryCtx, args: { storeId: Id<"store"> }) =>
+      getEodAutoCompletePolicyForApi(ctx, args),
+  ),
 });
 
 export const updateOpeningAutoStartPolicy = mutation({
@@ -2414,7 +2429,9 @@ export const getRegisterCloseoutApprovalPolicy = query({
   args: {
     storeId: v.id("store"),
   },
-  handler: async (ctx, args) => {
+  handler: admitSharedDemoPublicQuery(
+    getRegisterCloseoutApprovalPolicyReadDefinition,
+    async (ctx: OperationQueryCtx, args: { storeId: Id<"store"> }) => {
     const { store } = await requireAutomationPolicyReadAccess(
       ctx,
       args.storeId,
@@ -2428,7 +2445,8 @@ export const getRegisterCloseoutApprovalPolicy = query({
       requireManagerSignoffForShorts: config.requireManagerSignoffForShorts,
       varianceApprovalThreshold: config.varianceApprovalThreshold,
     };
-  },
+    },
+  ),
 });
 
 export const updateRegisterCloseoutApprovalPolicy = mutation({

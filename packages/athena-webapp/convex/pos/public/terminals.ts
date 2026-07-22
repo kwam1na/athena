@@ -1,19 +1,29 @@
 import { v } from "convex/values";
 
-import { mutation, query, type MutationCtx, type QueryCtx } from "../../_generated/server";
+import {
+  mutation,
+  query,
+  type MutationCtx,
+  type QueryCtx,
+} from "../../_generated/server";
 import type { Id } from "../../_generated/dataModel";
 import { commandResultValidator } from "../../lib/commandResultValidators";
 import { registerTerminalOperationDefinition } from "../../operationAdmission/definitions";
 import { admitSharedDemoPublicMutation } from "../../operationAdmission/publicMutation";
+import { admitSharedDemoPublicQuery } from "../../operationAdmission/publicQuery";
+import {
+  getPosTerminalByFingerprintReadDefinition,
+  getPosTerminalHealthReadDefinition,
+  listPosTerminalHealthReadDefinition,
+  listPosTerminalsReadDefinition,
+} from "../../operationAdmission/readDefinitions";
 import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../../lib/athenaUserAuth";
 import { requireStoreMemberAccessWithCtx } from "../../lib/storeMemberAccess";
 import { ok, userError } from "../../../shared/commandResult";
-import {
-  acknowledgeRegisterLifecycleAuthority as acknowledgeRegisterLifecycleAuthorityService,
-} from "../application/commands/registerLifecycleAuthority";
+import { acknowledgeRegisterLifecycleAuthority as acknowledgeRegisterLifecycleAuthorityService } from "../application/commands/registerLifecycleAuthority";
 import {
   deleteTerminal as deleteTerminalCommand,
   registerTerminal as registerTerminalCommand,
@@ -49,9 +59,7 @@ import {
   createTerminalRecoveryCommandRepository,
 } from "../infrastructure/repositories/terminalRecoveryRepository";
 import { getLatestRuntimeStatusForTerminal } from "../infrastructure/repositories/terminalRepository";
-import {
-  disconnectRemoteAssistRuntimeSession,
-} from "../../remoteAssist/application/sessionService";
+import { disconnectRemoteAssistRuntimeSession } from "../../remoteAssist/application/sessionService";
 import { createRemoteAssistReadRepository } from "../../remoteAssist/infrastructure/remoteAssistReadRepository";
 import { createRemoteAssistRepository } from "../../remoteAssist/infrastructure/remoteAssistRepository";
 import {
@@ -149,9 +157,7 @@ const runtimeStatusInputValidator = v.object({
   appVersion: v.optional(v.string()),
   buildSha: v.optional(v.string()),
   browserInfo: v.optional(posTerminalRuntimeBrowserInfoValidator),
-  appSessionRecovery: v.optional(
-    posTerminalRuntimeAppSessionRecoveryValidator,
-  ),
+  appSessionRecovery: v.optional(posTerminalRuntimeAppSessionRecoveryValidator),
   appShell: v.optional(posTerminalRuntimeAppShellValidator),
   appUpdate: v.optional(posTerminalRuntimeAppUpdateValidator),
   localStore: posTerminalRuntimeLocalStoreValidator,
@@ -213,6 +219,8 @@ const terminalRemoteAssistSessionReturnValidator = v.object({
 
 const runtimeStatusSnapshotReturnValidator = v.object({
   ...runtimeStatusInputValidator.fields,
+  recoveryVerificationCursor: v.optional(v.string()),
+  healthAlerts: v.optional(v.record(v.string(), v.number())),
   receivedAt: v.number(),
 });
 
@@ -378,48 +386,58 @@ const terminalSyncEvidenceReturnValidator = v.object({
     }),
     v.null(),
   ),
-  latestReviewEvent: v.optional(v.union(
+  latestReviewEvent: v.optional(
+    v.union(
+      v.object({
+        localEventId: v.string(),
+        localRegisterSessionId: v.string(),
+        sequence: v.number(),
+        eventType: v.string(),
+        status: v.string(),
+      }),
+      v.null(),
+    ),
+  ),
+  latestReviewEventsByStatus: v.optional(
     v.object({
-      localEventId: v.string(),
-      localRegisterSessionId: v.string(),
-      sequence: v.number(),
-      eventType: v.string(),
-      status: v.string(),
+      conflicted: v.optional(
+        v.union(
+          v.object({
+            localEventId: v.string(),
+            localRegisterSessionId: v.string(),
+            sequence: v.number(),
+            eventType: v.string(),
+            status: v.string(),
+          }),
+          v.null(),
+        ),
+      ),
+      held: v.optional(
+        v.union(
+          v.object({
+            localEventId: v.string(),
+            localRegisterSessionId: v.string(),
+            sequence: v.number(),
+            eventType: v.string(),
+            status: v.string(),
+          }),
+          v.null(),
+        ),
+      ),
+      rejected: v.optional(
+        v.union(
+          v.object({
+            localEventId: v.string(),
+            localRegisterSessionId: v.string(),
+            sequence: v.number(),
+            eventType: v.string(),
+            status: v.string(),
+          }),
+          v.null(),
+        ),
+      ),
     }),
-    v.null(),
-  )),
-  latestReviewEventsByStatus: v.optional(v.object({
-    conflicted: v.optional(v.union(
-      v.object({
-        localEventId: v.string(),
-        localRegisterSessionId: v.string(),
-        sequence: v.number(),
-        eventType: v.string(),
-        status: v.string(),
-      }),
-      v.null(),
-    )),
-    held: v.optional(v.union(
-      v.object({
-        localEventId: v.string(),
-        localRegisterSessionId: v.string(),
-        sequence: v.number(),
-        eventType: v.string(),
-        status: v.string(),
-      }),
-      v.null(),
-    )),
-    rejected: v.optional(v.union(
-      v.object({
-        localEventId: v.string(),
-        localRegisterSessionId: v.string(),
-        sequence: v.number(),
-        eventType: v.string(),
-        status: v.string(),
-      }),
-      v.null(),
-    )),
-  })),
+  ),
   sampledEventCount: v.number(),
   acceptedCount: v.number(),
   projectedCount: v.number(),
@@ -427,16 +445,20 @@ const terminalSyncEvidenceReturnValidator = v.object({
   heldCount: v.number(),
   rejectedCount: v.number(),
   unresolvedConflictCount: v.optional(v.number()),
-  unresolvedConflicts: v.optional(v.array(v.object({
-    _id: v.id("posLocalSyncConflict"),
-    conflictType: v.string(),
-    createdAt: v.number(),
-    localEventId: v.string(),
-    localRegisterSessionId: v.string(),
-    reviewTarget: v.optional(terminalSyncReviewTargetReturnValidator),
-    sequence: v.number(),
-    summary: v.string(),
-  }))),
+  unresolvedConflicts: v.optional(
+    v.array(
+      v.object({
+        _id: v.id("posLocalSyncConflict"),
+        conflictType: v.string(),
+        createdAt: v.number(),
+        localEventId: v.string(),
+        localRegisterSessionId: v.string(),
+        reviewTarget: v.optional(terminalSyncReviewTargetReturnValidator),
+        sequence: v.number(),
+        summary: v.string(),
+      }),
+    ),
+  ),
   reviewSummary: terminalSyncReviewSummaryReturnValidator,
   acceptedThroughSequence: v.optional(v.number()),
   cursorUpdatedAt: v.optional(v.number()),
@@ -691,10 +713,7 @@ const terminalHealthSummaryReturnValidator = v.object({
   registerSessionLink: v.union(
     v.object({
       registerSessionId: v.id("registerSession"),
-      status: v.union(
-        v.literal("open"),
-        v.literal("active"),
-      ),
+      status: v.union(v.literal("open"), v.literal("active")),
     }),
     v.null(),
   ),
@@ -763,7 +782,7 @@ function stripRuntimeStatusInput(
           platform: status.browserInfo.platform,
           language: status.browserInfo.language,
           online: status.browserInfo.online,
-      }
+        }
       : undefined,
     appSessionRecovery: status.appSessionRecovery
       ? {
@@ -960,16 +979,19 @@ export const listTerminals = query({
     storeId: v.id("store"),
   },
   returns: v.array(terminalReturnValidator),
-  handler: async (ctx, args) => {
-    await requireStoreMemberAccessWithCtx(ctx, {
-      allowedRoles: ["full_admin", "pos_only"],
-      demoAccess: { kind: "read" },
-      failureMessage: "You do not have access to view POS terminals.",
-      storeId: args.storeId,
-    });
-    const terminals = await listTerminalsQuery(ctx, args);
-    return terminals.map(stripTerminalSyncSecret);
-  },
+  handler: admitSharedDemoPublicQuery(
+    listPosTerminalsReadDefinition,
+    async (ctx, args: { storeId: Id<"store"> }) => {
+      await requireStoreMemberAccessWithCtx(ctx, {
+        allowedRoles: ["full_admin", "pos_only"],
+        demoAccess: { kind: "read" },
+        failureMessage: "You do not have access to view POS terminals.",
+        storeId: args.storeId,
+      });
+      const terminals = await listTerminalsQuery(ctx, args);
+      return terminals.map(stripTerminalSyncSecret);
+    },
+  ),
 });
 
 export const getTerminalByFingerprint = query({
@@ -978,16 +1000,19 @@ export const getTerminalByFingerprint = query({
     fingerprintHash: v.string(),
   },
   returns: v.union(terminalReturnValidator, v.null()),
-  handler: async (ctx, args) => {
-    await requireStoreMemberAccessWithCtx(ctx, {
-      allowedRoles: ["full_admin", "pos_only"],
-      demoAccess: { kind: "read" },
-      failureMessage: "You do not have access to view POS terminals.",
-      storeId: args.storeId,
-    });
-    const terminal = await getTerminalByFingerprintQuery(ctx, args);
-    return terminal ? stripTerminalSyncSecret(terminal) : null;
-  },
+  handler: admitSharedDemoPublicQuery(
+    getPosTerminalByFingerprintReadDefinition,
+    async (ctx, args: { fingerprintHash: string; storeId: Id<"store"> }) => {
+      await requireStoreMemberAccessWithCtx(ctx, {
+        allowedRoles: ["full_admin", "pos_only"],
+        demoAccess: { kind: "read" },
+        failureMessage: "You do not have access to view POS terminals.",
+        storeId: args.storeId,
+      });
+      const terminal = await getTerminalByFingerprintQuery(ctx, args);
+      return terminal ? stripTerminalSyncSecret(terminal) : null;
+    },
+  ),
 });
 
 export const listTerminalHealthSummaries = query({
@@ -995,15 +1020,18 @@ export const listTerminalHealthSummaries = query({
     storeId: v.id("store"),
   },
   returns: v.array(terminalHealthSummaryReturnValidator),
-  handler: async (ctx, args) => {
-    await requireStoreMemberAccessWithCtx(ctx, {
-      allowedRoles: ["full_admin", "pos_only"],
-      demoAccess: { kind: "read" },
-      failureMessage: "You do not have access to view POS terminal health.",
-      storeId: args.storeId,
-    });
-    return listTerminalHealthSummariesQuery(ctx, args);
-  },
+  handler: admitSharedDemoPublicQuery(
+    listPosTerminalHealthReadDefinition,
+    async (ctx, args: { storeId: Id<"store"> }) => {
+      await requireStoreMemberAccessWithCtx(ctx, {
+        allowedRoles: ["full_admin", "pos_only"],
+        demoAccess: { kind: "read" },
+        failureMessage: "You do not have access to view POS terminal health.",
+        storeId: args.storeId,
+      });
+      return listTerminalHealthSummariesQuery(ctx, args);
+    },
+  ),
 });
 
 export const getTerminalHealthSummary = query({
@@ -1012,15 +1040,21 @@ export const getTerminalHealthSummary = query({
     terminalId: v.id("posTerminal"),
   },
   returns: v.union(terminalHealthSummaryReturnValidator, v.null()),
-  handler: async (ctx, args) => {
-    await requireStoreMemberAccessWithCtx(ctx, {
-      allowedRoles: ["full_admin", "pos_only"],
-      demoAccess: { kind: "read" },
-      failureMessage: "You do not have access to view POS terminal health.",
-      storeId: args.storeId,
-    });
-    return getTerminalHealthSummaryQuery(ctx, args);
-  },
+  handler: admitSharedDemoPublicQuery(
+    getPosTerminalHealthReadDefinition,
+    async (
+      ctx,
+      args: { storeId: Id<"store">; terminalId: Id<"posTerminal"> },
+    ) => {
+      await requireStoreMemberAccessWithCtx(ctx, {
+        allowedRoles: ["full_admin", "pos_only"],
+        demoAccess: { kind: "read" },
+        failureMessage: "You do not have access to view POS terminal health.",
+        storeId: args.storeId,
+      });
+      return getTerminalHealthSummaryQuery(ctx, args);
+    },
+  ),
 });
 
 export const getRegisterLifecycleAuthorityAcknowledgement = query({
@@ -1358,37 +1392,41 @@ export const registerTerminal = mutation({
   handler: admitSharedDemoPublicMutation(
     registerTerminalOperationDefinition,
     async (ctx, args) => {
-    try {
-      const { athenaUser, demoActor } = await requireStoreMemberAccessWithCtx(ctx, {
-        allowedRoles: ["full_admin", "pos_only"],
-        demoAccess: {
-          capability: "daily_operations.write",
-          kind: "capability",
-        },
-        failureMessage: "You do not have access to register this POS terminal.",
-        storeId: args.storeId,
-      });
-      const result = await registerTerminalCommand(ctx, {
-        ...args,
-        allowRegisterNumberChange: Boolean(demoActor),
-        syncSecretHash: await hashPosTerminalSyncSecret(args.syncSecretHash),
-        registeredByUserId: athenaUser._id,
-      });
-      return result.kind === "ok"
-        ? {
-            ...result,
-            data: {
-              ...result.data,
-              syncSecretHash: args.syncSecretHash,
+      try {
+        const { athenaUser, demoActor } = await requireStoreMemberAccessWithCtx(
+          ctx,
+          {
+            allowedRoles: ["full_admin", "pos_only"],
+            demoAccess: {
+              capability: "daily_operations.write",
+              kind: "capability",
             },
-          }
-        : result;
-    } catch {
-      return userError({
-        code: "authorization_failed",
-        message: "You do not have access to register this POS terminal.",
-      });
-    }
+            failureMessage:
+              "You do not have access to register this POS terminal.",
+            storeId: args.storeId,
+          },
+        );
+        const result = await registerTerminalCommand(ctx, {
+          ...args,
+          allowRegisterNumberChange: Boolean(demoActor),
+          syncSecretHash: await hashPosTerminalSyncSecret(args.syncSecretHash),
+          registeredByUserId: athenaUser._id,
+        });
+        return result.kind === "ok"
+          ? {
+              ...result,
+              data: {
+                ...result.data,
+                syncSecretHash: args.syncSecretHash,
+              },
+            }
+          : result;
+      } catch {
+        return userError({
+          code: "authorization_failed",
+          message: "You do not have access to register this POS terminal.",
+        });
+      }
     },
   ),
 });
@@ -1459,7 +1497,11 @@ export const resolveTerminalCloudRepair = mutation({
         userId: athenaUser._id,
       });
       const terminal = await ctx.db.get("posTerminal", args.terminalId);
-      if (!terminal || terminal.storeId !== args.storeId || terminal.status !== "active") {
+      if (
+        !terminal ||
+        terminal.storeId !== args.storeId ||
+        terminal.status !== "active"
+      ) {
         return userError({
           code: "precondition_failed",
           message: "This terminal is not active for this store.",
@@ -1501,7 +1543,11 @@ export const issueTerminalRecoveryCommand = mutation({
         userId: athenaUser._id,
       });
       const terminal = await ctx.db.get("posTerminal", args.terminalId);
-      if (!terminal || terminal.storeId !== args.storeId || terminal.status !== "active") {
+      if (
+        !terminal ||
+        terminal.storeId !== args.storeId ||
+        terminal.status !== "active"
+      ) {
         return userError({
           code: "precondition_failed",
           message: "This terminal is not active for this store.",
@@ -1514,11 +1560,14 @@ export const issueTerminalRecoveryCommand = mutation({
       });
       const matchingAction =
         args.commandType === "clear_local_review_items" && recoveryPreview
-          ? findMatchingTerminalRecoveryAction(recoveryPreview.terminalActions, {
-              commandContext: args.commandContext,
-              commandType: args.commandType,
-              expectedEvidence: args.expectedEvidence,
-            })
+          ? findMatchingTerminalRecoveryAction(
+              recoveryPreview.terminalActions,
+              {
+                commandContext: args.commandContext,
+                commandType: args.commandType,
+                expectedEvidence: args.expectedEvidence,
+              },
+            )
           : null;
       if (args.commandType === "clear_local_review_items" && !matchingAction) {
         return userError({
@@ -1591,7 +1640,9 @@ export const listTerminalRecoveryCommands = query({
     terminalId: v.id("posTerminal"),
     syncSecretHash: v.string(),
   },
-  returns: commandResultValidator(v.array(terminalRecoveryCommandReturnValidator)),
+  returns: commandResultValidator(
+    v.array(terminalRecoveryCommandReturnValidator),
+  ),
   handler: async (ctx, args) => {
     const terminal = await requireActiveTerminalSyncSecret(ctx, args);
     if (!terminal) {

@@ -1,7 +1,10 @@
 import { v } from "convex/values";
 
 import { mutation, query } from "../../_generated/server";
+import type { Id } from "../../_generated/dataModel";
 import { requireStoreMemberAccessWithCtx } from "../../lib/storeMemberAccess";
+import { admitSharedDemoPublicQuery } from "../../operationAdmission/publicQuery";
+import { getPosRegisterStateReadDefinition } from "../../operationAdmission/readDefinitions";
 import { getRegisterState } from "../application/queries/getRegisterState";
 import { openDrawer as openDrawerCommand } from "../application/commands/register";
 
@@ -60,21 +63,32 @@ export const getState = query({
     staffProfileId: v.optional(v.id("staffProfile")),
     registerNumber: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
-    const store = await ctx.db.get("store", args.storeId);
-    if (!store) {
-      return null;
-    }
+  handler: admitSharedDemoPublicQuery(
+    getPosRegisterStateReadDefinition,
+    async (
+      ctx,
+      args: {
+        registerNumber?: string;
+        staffProfileId?: Id<"staffProfile">;
+        storeId: Id<"store">;
+        terminalId?: Id<"posTerminal">;
+      },
+    ) => {
+      const store = await ctx.db.get("store", args.storeId);
+      if (!store) {
+        return null;
+      }
 
-    await requireStoreMemberAccessWithCtx(ctx, {
-      allowedRoles: ["full_admin", "pos_only"],
-      demoAccess: { kind: "read" },
-      failureMessage: "You cannot view register state for this store.",
-      storeId: args.storeId,
-    });
+      await requireStoreMemberAccessWithCtx(ctx, {
+        allowedRoles: ["full_admin", "pos_only"],
+        demoAccess: { kind: "read" },
+        failureMessage: "You cannot view register state for this store.",
+        storeId: args.storeId,
+      });
 
-    return getRegisterState(ctx, args);
-  },
+      return getRegisterState(ctx, args);
+    },
+  ),
 });
 
 export const openDrawer = mutation({

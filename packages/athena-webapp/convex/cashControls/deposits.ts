@@ -14,9 +14,16 @@ import {
   admitSharedDemoPublicMutation,
   resolveSharedDemoOperationAdmission,
 } from "../operationAdmission/publicMutation";
-import { requireSharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
+import { admitSharedDemoPublicQuery } from "../operationAdmission/publicQuery";
+import {
+  getCashControlsDashboardSnapshotReadDefinition,
+  getRegisterSessionSnapshotReadDefinition,
+} from "../operationAdmission/readDefinitions";
+import type {
+  OperationMutationCtx,
+  OperationQueryCtx,
+} from "../operationAdmission/types";
 import { requireSharedDemoRegisterSessionSyncReview } from "../sharedDemo/policy";
-import { requireReadySharedDemoWriteWithCtx } from "../sharedDemo/restore";
 import {
   buildRegisterSessionCloseoutReview,
   getCashControlsConfig,
@@ -235,19 +242,23 @@ type ResolveRegisterSessionSyncReviewResult = {
 async function requireCashControlsStoreAccess(
   ctx: QueryCtx | MutationCtx,
   storeId: Id<"store">,
-  options?: { allowSharedDemoCashControl?: boolean },
 ) {
   const store = await ctx.db.get("store", storeId);
   if (!store) {
     throw new Error("Store not found.");
   }
 
-  const athenaUser = await requireAuthenticatedAthenaUserWithCtx(
-    ctx,
-    options?.allowSharedDemoCashControl
-      ? { sharedDemoCapability: "cash.control.write" }
-      : undefined,
-  );
+  const operationAdmission = (
+    ctx as Partial<OperationMutationCtx | OperationQueryCtx>
+  ).operationAdmission;
+  const admittedActor = operationAdmission?.actor;
+  const athenaUser =
+    admittedActor?.kind === "shared_demo"
+      ? await ctx.db.get("athenaUser", admittedActor.athenaUserId)
+      : await requireAuthenticatedAthenaUserWithCtx(ctx);
+  if (!athenaUser) {
+    throw new Error("Sign in again to continue.");
+  }
   await requireOrganizationMemberRoleWithCtx(ctx, {
     allowedRoles: ["full_admin", "pos_only"],
     failureMessage: "You do not have access to cash controls.",
@@ -1110,92 +1121,93 @@ export const getDashboardSnapshot = query({
   args: {
     storeId: v.id("store"),
   },
-  handler: async (ctx, args) => {
-    await requireCashControlsStoreAccess(ctx, args.storeId, {
-      allowSharedDemoCashControl: true,
-    });
+  handler: admitSharedDemoPublicQuery(
+    getCashControlsDashboardSnapshotReadDefinition,
+    async (ctx, args: { storeId: Id<"store"> }) => {
+      await requireCashControlsStoreAccess(ctx, args.storeId);
 
-    const [
-      registerSessions,
-      pendingApprovalRequests,
-      deposits,
-      syncConflictsBySessionId,
-    ] = await Promise.all([
-      listRegisterSessionsForDashboard(ctx, args.storeId),
-      ctx.db
-        .query("approvalRequest")
-        .withIndex("by_storeId_status", (q) =>
-          q.eq("storeId", args.storeId).eq("status", "pending"),
-        )
-        .order("desc")
-        .take(SESSION_LIMIT),
-      listStoreDeposits(ctx, args.storeId),
-      listRegisterSessionSyncReviewConflicts(ctx, args.storeId, {
-        includeRejectedEvidence: true,
-      }),
-    ]);
-
-    const dashboardRegisterSessions =
-      await appendRegisterSessionsForSyncConflicts(
-        ctx,
+      const [
         registerSessions,
-        syncConflictsBySessionId,
-      );
-    const dashboardRegisterSessionsWithTraceIds =
-      await appendRegisterSessionWorkflowTraceIds(
-        ctx,
-        dashboardRegisterSessions,
-      );
-    const pendingVoidApprovalsBySessionId =
-      await listPendingVoidApprovalSummariesBySessionId(ctx, {
-        registerSessions: dashboardRegisterSessionsWithTraceIds,
-        storeId: args.storeId,
-      });
-    const totalSalesBySessionId =
-      await listRegisterSessionTotalSalesBySessionId(ctx, {
-        registerSessions: dashboardRegisterSessionsWithTraceIds,
-        storeId: args.storeId,
-      });
-    const relevantApprovalRequests = pendingApprovalRequests.filter(
-      (approvalRequest) =>
-        approvalRequest.requestType === "variance_review" &&
-        Boolean(approvalRequest.registerSessionId),
-    );
-    const approvalRequestsBySessionId = new Map(
-      relevantApprovalRequests.map((approvalRequest) => [
-        approvalRequest.registerSessionId!,
-        approvalRequest,
-      ]),
-    );
-    const staffNamesById = await listStaffNames(
-      ctx,
-      collectStaffProfileIds({
-        approvalRequests: relevantApprovalRequests,
+        pendingApprovalRequests,
         deposits,
-        registerSessions: dashboardRegisterSessionsWithTraceIds,
         syncConflictsBySessionId,
-      }),
-    );
-    const terminalNamesById = await listTerminalNames(
-      ctx,
-      new Set(
-        dashboardRegisterSessionsWithTraceIds
-          .map((registerSession) => registerSession.terminalId)
-          .filter(Boolean) as Id<"posTerminal">[],
-      ),
-    );
+      ] = await Promise.all([
+        listRegisterSessionsForDashboard(ctx, args.storeId),
+        ctx.db
+          .query("approvalRequest")
+          .withIndex("by_storeId_status", (q) =>
+            q.eq("storeId", args.storeId).eq("status", "pending"),
+          )
+          .order("desc")
+          .take(SESSION_LIMIT),
+        listStoreDeposits(ctx, args.storeId),
+        listRegisterSessionSyncReviewConflicts(ctx, args.storeId, {
+          includeRejectedEvidence: true,
+        }),
+      ]);
 
-    return buildCashControlsDashboardSnapshot({
-      approvalRequestsBySessionId,
-      deposits,
-      pendingVoidApprovalsBySessionId,
-      registerSessions: dashboardRegisterSessionsWithTraceIds,
-      staffNamesById,
-      syncConflictsBySessionId,
-      terminalNamesById,
-      totalSalesBySessionId,
-    });
-  },
+      const dashboardRegisterSessions =
+        await appendRegisterSessionsForSyncConflicts(
+          ctx,
+          registerSessions,
+          syncConflictsBySessionId,
+        );
+      const dashboardRegisterSessionsWithTraceIds =
+        await appendRegisterSessionWorkflowTraceIds(
+          ctx,
+          dashboardRegisterSessions,
+        );
+      const pendingVoidApprovalsBySessionId =
+        await listPendingVoidApprovalSummariesBySessionId(ctx, {
+          registerSessions: dashboardRegisterSessionsWithTraceIds,
+          storeId: args.storeId,
+        });
+      const totalSalesBySessionId =
+        await listRegisterSessionTotalSalesBySessionId(ctx, {
+          registerSessions: dashboardRegisterSessionsWithTraceIds,
+          storeId: args.storeId,
+        });
+      const relevantApprovalRequests = pendingApprovalRequests.filter(
+        (approvalRequest) =>
+          approvalRequest.requestType === "variance_review" &&
+          Boolean(approvalRequest.registerSessionId),
+      );
+      const approvalRequestsBySessionId = new Map(
+        relevantApprovalRequests.map((approvalRequest) => [
+          approvalRequest.registerSessionId!,
+          approvalRequest,
+        ]),
+      );
+      const staffNamesById = await listStaffNames(
+        ctx,
+        collectStaffProfileIds({
+          approvalRequests: relevantApprovalRequests,
+          deposits,
+          registerSessions: dashboardRegisterSessionsWithTraceIds,
+          syncConflictsBySessionId,
+        }),
+      );
+      const terminalNamesById = await listTerminalNames(
+        ctx,
+        new Set(
+          dashboardRegisterSessionsWithTraceIds
+            .map((registerSession) => registerSession.terminalId)
+            .filter(Boolean) as Id<"posTerminal">[],
+        ),
+      );
+
+      return buildCashControlsDashboardSnapshot({
+        approvalRequestsBySessionId,
+        deposits,
+        pendingVoidApprovalsBySessionId,
+        registerSessions: dashboardRegisterSessionsWithTraceIds,
+        staffNamesById,
+        syncConflictsBySessionId,
+        terminalNamesById,
+        totalSalesBySessionId,
+      });
+    },
+  ),
 });
 
 export const getRegisterSessionSnapshot = query({
@@ -1203,239 +1215,250 @@ export const getRegisterSessionSnapshot = query({
     registerSessionId: v.id("registerSession"),
     storeId: v.id("store"),
   },
-  handler: async (ctx, args) => {
-    const { store } = await requireCashControlsStoreAccess(ctx, args.storeId, {
-      allowSharedDemoCashControl: true,
-    });
-    const registerSession = await ctx.db.get(
-      "registerSession",
-      args.registerSessionId,
-    );
-
-    if (!registerSession || registerSession.storeId !== args.storeId) {
-      throw new Error("Register session not found for this store.");
-    }
-
-    const [
-      deposits,
-      timeline,
-      transactions,
-      approvalRequest,
-      pendingVoidApprovals,
-      syncConflictsBySessionId,
-      workflowTraceId,
-      financialPosition,
-    ] = await Promise.all([
-      listSessionDeposits(ctx, args.registerSessionId),
-      listRegisterSessionTimeline(ctx, args.registerSessionId),
-      listRegisterSessionTransactions(ctx, {
-        registerSessionId: args.registerSessionId,
-        storeId: args.storeId,
-      }),
-      registerSession.managerApprovalRequestId
-        ? ctx.db.get(
-            "approvalRequest",
-            registerSession.managerApprovalRequestId,
-          )
-        : Promise.resolve(null),
-      listPendingRegisterSessionApprovalRequests(ctx, {
-        registerSessionId: args.registerSessionId,
-        storeId: args.storeId,
-      }),
-      listRegisterSessionSyncReviewConflicts(ctx, args.storeId, {
-        includeRejectedEvidence: true,
-        registerSessionIds: [args.registerSessionId],
-      }),
-      resolveRegisterSessionWorkflowTraceId(ctx, registerSession),
-      buildRegisterSessionFinancialPosition(ctx, {
-        registerSessionId: args.registerSessionId,
-        storeId: args.storeId,
-      }),
-    ]);
-    const registerSessionWithTraceId = {
-      ...registerSession,
-      workflowTraceId,
-    };
-    const approvalRequests = approvalRequest ? [approvalRequest] : [];
-    const staffNamesById = await listStaffNames(
+  handler: admitSharedDemoPublicQuery(
+    getRegisterSessionSnapshotReadDefinition,
+    async (
       ctx,
-      collectStaffProfileIds({
-        approvalRequests,
+      args: {
+        registerSessionId: Id<"registerSession">;
+        storeId: Id<"store">;
+      },
+    ) => {
+      const { store } = await requireCashControlsStoreAccess(
+        ctx,
+        args.storeId,
+      );
+      const registerSession = await ctx.db.get(
+        "registerSession",
+        args.registerSessionId,
+      );
+
+      if (!registerSession || registerSession.storeId !== args.storeId) {
+        throw new Error("Register session not found for this store.");
+      }
+
+      const [
         deposits,
-        registerSessions: [registerSessionWithTraceId],
-        syncConflictsBySessionId,
         timeline,
         transactions,
-      }),
-    );
-    const transactionItemsById = new Map(
-      await Promise.all(
-        transactions.map(async (transaction) => {
-          const transactionItems = await listTransactionItems(
-            ctx,
-            transaction._id,
-          );
-          return [transaction._id, transactionItems] as const;
+        approvalRequest,
+        pendingVoidApprovals,
+        syncConflictsBySessionId,
+        workflowTraceId,
+        financialPosition,
+      ] = await Promise.all([
+        listSessionDeposits(ctx, args.registerSessionId),
+        listRegisterSessionTimeline(ctx, args.registerSessionId),
+        listRegisterSessionTransactions(ctx, {
+          registerSessionId: args.registerSessionId,
+          storeId: args.storeId,
         }),
-      ),
-    );
-    const customerNamesById = new Map(
-      (
+        registerSession.managerApprovalRequestId
+          ? ctx.db.get(
+              "approvalRequest",
+              registerSession.managerApprovalRequestId,
+            )
+          : Promise.resolve(null),
+        listPendingRegisterSessionApprovalRequests(ctx, {
+          registerSessionId: args.registerSessionId,
+          storeId: args.storeId,
+        }),
+        listRegisterSessionSyncReviewConflicts(ctx, args.storeId, {
+          includeRejectedEvidence: true,
+          registerSessionIds: [args.registerSessionId],
+        }),
+        resolveRegisterSessionWorkflowTraceId(ctx, registerSession),
+        buildRegisterSessionFinancialPosition(ctx, {
+          registerSessionId: args.registerSessionId,
+          storeId: args.storeId,
+        }),
+      ]);
+      const registerSessionWithTraceId = {
+        ...registerSession,
+        workflowTraceId,
+      };
+      const approvalRequests = approvalRequest ? [approvalRequest] : [];
+      const staffNamesById = await listStaffNames(
+        ctx,
+        collectStaffProfileIds({
+          approvalRequests,
+          deposits,
+          registerSessions: [registerSessionWithTraceId],
+          syncConflictsBySessionId,
+          timeline,
+          transactions,
+        }),
+      );
+      const transactionItemsById = new Map(
         await Promise.all(
           transactions.map(async (transaction) => {
-            if (!transaction.customerProfileId) {
-              return null;
-            }
-
-            const customerProfile = await ctx.db.get(
-              "customerProfile",
-              transaction.customerProfileId,
+            const transactionItems = await listTransactionItems(
+              ctx,
+              transaction._id,
             );
-
-            return customerProfile
-              ? [transaction.customerProfileId, customerProfile.fullName]
-              : null;
+            return [transaction._id, transactionItems] as const;
           }),
-        )
-      ).filter(Boolean) as Array<[Id<"customerProfile">, string | undefined]>,
-    );
-    const totalDeposited = deposits.reduce(
-      (sum, deposit) => sum + deposit.amount,
-      0,
-    );
-    const itemBreakdownByProduct = new Map<
-      string,
-      {
-        name: string;
-        productSku: string | null;
-        quantity: number;
-        totalSales: number;
-      }
-    >();
-    for (const transaction of transactions) {
-      if (transaction.status !== "completed") {
-        continue;
-      }
+        ),
+      );
+      const customerNamesById = new Map(
+        (
+          await Promise.all(
+            transactions.map(async (transaction) => {
+              if (!transaction.customerProfileId) {
+                return null;
+              }
 
-      for (const item of transactionItemsById.get(transaction._id) ?? []) {
-        const key = `${item.productId}:${item.productSkuId}`;
-        const aggregate = itemBreakdownByProduct.get(key) ?? {
-          name: item.productName,
-          productSku: item.productSku || null,
-          quantity: 0,
-          totalSales: 0,
-        };
-        aggregate.quantity += item.quantity;
-        aggregate.totalSales += item.totalPrice;
-        itemBreakdownByProduct.set(key, aggregate);
-      }
-    }
-    const itemsBreakdown = Array.from(itemBreakdownByProduct.values()).sort(
-      (left, right) =>
-        right.quantity - left.quantity || right.totalSales - left.totalSales,
-    );
-    const terminalNamesById = await listTerminalNames(
-      ctx,
-      new Set(registerSession.terminalId ? [registerSession.terminalId] : []),
-    );
-    const closeoutReview =
-      registerSession.countedCash !== undefined
-        ? buildRegisterSessionCloseoutReview({
-            countedCash: registerSession.countedCash,
-            config: getCashControlsConfig(store),
-            expectedCash: registerSession.expectedCash,
-          })
-        : null;
+              const customerProfile = await ctx.db.get(
+                "customerProfile",
+                transaction.customerProfileId,
+              );
 
-    return {
-      closeoutReview,
-      financialPosition,
-      itemsBreakdown,
-      deposits: deposits
-        .sort((left, right) => right.recordedAt - left.recordedAt)
-        .map((deposit) => ({
-          _id: deposit._id,
-          amount: deposit.amount,
-          notes: deposit.notes,
-          recordedAt: deposit.recordedAt,
-          recordedByStaffName: deposit.actorStaffProfileId
-            ? (staffNamesById.get(deposit.actorStaffProfileId) ?? null)
-            : null,
-          reference: deposit.externalReference,
-          registerSessionId: deposit.registerSessionId ?? null,
-        })),
-      transactions: transactions.map((transaction) => {
-        const transactionItems =
-          transactionItemsById.get(transaction._id) ?? [];
-        const paymentMethods = transaction.payments?.length
-          ? Array.from(
-              new Set(transaction.payments.map((payment) => payment.method)),
-            )
-          : transaction.paymentMethod
-            ? [transaction.paymentMethod]
-            : [];
-
-        return {
-          _id: transaction._id,
-          cashierName: transaction.staffProfileId
-            ? (staffNamesById.get(transaction.staffProfileId) ?? null)
-            : null,
-          completedAt: transaction.completedAt,
-          customerName:
-            (transaction.customerProfileId
-              ? customerNamesById.get(transaction.customerProfileId)
-              : null) ??
-            transaction.customerInfo?.name ??
-            null,
-          hasMultiplePaymentMethods: paymentMethods.length > 1,
-          itemCount: transactionItems.reduce(
-            (sum, item) => sum + item.quantity,
-            0,
-          ),
-          paymentMethod: transaction.paymentMethod ?? paymentMethods[0] ?? null,
-          status: transaction.status,
-          total: transaction.total,
-          transactionNumber: transaction.transactionNumber,
-          voidedAt: transaction.voidedAt ?? null,
-          workflowTraceId: transaction.workflowTraceId ?? null,
-        };
-      }),
-      registerSession: {
-        ...buildRegisterSessionSummary({
-          approvalRequest,
-          pendingVoidApprovals:
-            await buildPendingCompletedSaleVoidApprovalSummary(ctx, {
-              approvalRequests:
-                filterPendingCompletedSaleVoidApprovals(pendingVoidApprovals),
-              itemAdjustmentApprovalRequests:
-                filterPendingTransactionItemAdjustmentApprovals(
-                  pendingVoidApprovals,
-                ),
-              registerSessionId: args.registerSessionId,
-              storeId: args.storeId,
+              return customerProfile
+                ? [transaction.customerProfileId, customerProfile.fullName]
+                : null;
             }),
-          registerSession: registerSessionWithTraceId,
-          staffNamesById,
-          syncConflicts:
-            syncConflictsBySessionId.get(args.registerSessionId) ?? [],
-          terminalNamesById,
-          totalDeposited,
+          )
+        ).filter(Boolean) as Array<[Id<"customerProfile">, string | undefined]>,
+      );
+      const totalDeposited = deposits.reduce(
+        (sum, deposit) => sum + deposit.amount,
+        0,
+      );
+      const itemBreakdownByProduct = new Map<
+        string,
+        {
+          name: string;
+          productSku: string | null;
+          quantity: number;
+          totalSales: number;
+        }
+      >();
+      for (const transaction of transactions) {
+        if (transaction.status !== "completed") {
+          continue;
+        }
+
+        for (const item of transactionItemsById.get(transaction._id) ?? []) {
+          const key = `${item.productId}:${item.productSkuId}`;
+          const aggregate = itemBreakdownByProduct.get(key) ?? {
+            name: item.productName,
+            productSku: item.productSku || null,
+            quantity: 0,
+            totalSales: 0,
+          };
+          aggregate.quantity += item.quantity;
+          aggregate.totalSales += item.totalPrice;
+          itemBreakdownByProduct.set(key, aggregate);
+        }
+      }
+      const itemsBreakdown = Array.from(itemBreakdownByProduct.values()).sort(
+        (left, right) =>
+          right.quantity - left.quantity || right.totalSales - left.totalSales,
+      );
+      const terminalNamesById = await listTerminalNames(
+        ctx,
+        new Set(registerSession.terminalId ? [registerSession.terminalId] : []),
+      );
+      const closeoutReview =
+        registerSession.countedCash !== undefined
+          ? buildRegisterSessionCloseoutReview({
+              countedCash: registerSession.countedCash,
+              config: getCashControlsConfig(store),
+              expectedCash: registerSession.expectedCash,
+            })
+          : null;
+
+      return {
+        closeoutReview,
+        financialPosition,
+        itemsBreakdown,
+        deposits: deposits
+          .sort((left, right) => right.recordedAt - left.recordedAt)
+          .map((deposit) => ({
+            _id: deposit._id,
+            amount: deposit.amount,
+            notes: deposit.notes,
+            recordedAt: deposit.recordedAt,
+            recordedByStaffName: deposit.actorStaffProfileId
+              ? (staffNamesById.get(deposit.actorStaffProfileId) ?? null)
+              : null,
+            reference: deposit.externalReference,
+            registerSessionId: deposit.registerSessionId ?? null,
+          })),
+        transactions: transactions.map((transaction) => {
+          const transactionItems =
+            transactionItemsById.get(transaction._id) ?? [];
+          const paymentMethods = transaction.payments?.length
+            ? Array.from(
+                new Set(transaction.payments.map((payment) => payment.method)),
+              )
+            : transaction.paymentMethod
+              ? [transaction.paymentMethod]
+              : [];
+
+          return {
+            _id: transaction._id,
+            cashierName: transaction.staffProfileId
+              ? (staffNamesById.get(transaction.staffProfileId) ?? null)
+              : null,
+            completedAt: transaction.completedAt,
+            customerName:
+              (transaction.customerProfileId
+                ? customerNamesById.get(transaction.customerProfileId)
+                : null) ??
+              transaction.customerInfo?.name ??
+              null,
+            hasMultiplePaymentMethods: paymentMethods.length > 1,
+            itemCount: transactionItems.reduce(
+              (sum, item) => sum + item.quantity,
+              0,
+            ),
+            paymentMethod:
+              transaction.paymentMethod ?? paymentMethods[0] ?? null,
+            status: transaction.status,
+            total: transaction.total,
+            transactionNumber: transaction.transactionNumber,
+            voidedAt: transaction.voidedAt ?? null,
+            workflowTraceId: transaction.workflowTraceId ?? null,
+          };
         }),
-        netExpectedCash: registerSession.expectedCash,
-      },
-      timeline: timeline.map((event) => ({
-        _id: event._id,
-        actorStaffName: event.actorStaffProfileId
-          ? (staffNamesById.get(event.actorStaffProfileId) ?? null)
-          : null,
-        createdAt: event.createdAt,
-        eventType: event.eventType,
-        metadata: sanitizeCashControlTimelineMetadata(event.metadata),
-        message: event.message,
-        reason: event.reason,
-      })),
-    };
-  },
+        registerSession: {
+          ...buildRegisterSessionSummary({
+            approvalRequest,
+            pendingVoidApprovals:
+              await buildPendingCompletedSaleVoidApprovalSummary(ctx, {
+                approvalRequests:
+                  filterPendingCompletedSaleVoidApprovals(pendingVoidApprovals),
+                itemAdjustmentApprovalRequests:
+                  filterPendingTransactionItemAdjustmentApprovals(
+                    pendingVoidApprovals,
+                  ),
+                registerSessionId: args.registerSessionId,
+                storeId: args.storeId,
+              }),
+            registerSession: registerSessionWithTraceId,
+            staffNamesById,
+            syncConflicts:
+              syncConflictsBySessionId.get(args.registerSessionId) ?? [],
+            terminalNamesById,
+            totalDeposited,
+          }),
+          netExpectedCash: registerSession.expectedCash,
+        },
+        timeline: timeline.map((event) => ({
+          _id: event._id,
+          actorStaffName: event.actorStaffProfileId
+            ? (staffNamesById.get(event.actorStaffProfileId) ?? null)
+            : null,
+          createdAt: event.createdAt,
+          eventType: event.eventType,
+          metadata: sanitizeCashControlTimelineMetadata(event.metadata),
+          message: event.message,
+          reason: event.reason,
+        })),
+      };
+    },
+  ),
 });
 
 export const recordRegisterSessionDeposit = mutation({
@@ -1468,216 +1491,215 @@ export const recordRegisterSessionDeposit = mutation({
     }
 
     return admitSharedDemoPublicMutation(
-        recordRegisterSessionDepositOperationDefinition,
-        async (
-          admittedCtx,
-          admittedArgs,
-        ): Promise<CommandResult<RecordRegisterSessionDepositResult>> => {
-    const ctx = admittedCtx;
-    const args = admittedArgs;
-    const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(ctx, "cash.control.write", args.storeId);
-    if (demoActor) await requireReadySharedDemoWriteWithCtx(ctx, { storeId: args.storeId });
-    let athenaUserId: Id<"athenaUser">;
-    try {
-      const { athenaUser } = await requireCashControlsStoreAccess(
-        ctx,
-        args.storeId,
-        { allowSharedDemoCashControl: true },
-      );
-      athenaUserId = athenaUser._id;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "";
-      if (
-        message !== "Sign in again to continue." &&
-        message !== "You do not have access to cash controls." &&
-        !message.includes("shared_demo_action_denied")
-      ) {
-        throw error;
-      }
-      return userError({
-        code: "authorization_failed",
-        message: "You do not have access to cash controls.",
-      });
-    }
+      recordRegisterSessionDepositOperationDefinition,
+      async (
+        admittedCtx,
+        admittedArgs,
+      ): Promise<CommandResult<RecordRegisterSessionDepositResult>> => {
+        const ctx = admittedCtx;
+        const args = admittedArgs;
+        let athenaUserId: Id<"athenaUser">;
+        try {
+          const { athenaUser } = await requireCashControlsStoreAccess(
+            ctx,
+            args.storeId,
+          );
+          athenaUserId = athenaUser._id;
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "";
+          if (
+            message !== "Sign in again to continue." &&
+            message !== "You do not have access to cash controls." &&
+            !message.includes("shared_demo_action_denied")
+          ) {
+            throw error;
+          }
+          return userError({
+            code: "authorization_failed",
+            message: "You do not have access to cash controls.",
+          });
+        }
 
-    if (args.actorUserId && args.actorUserId !== athenaUserId) {
-      return userError({
-        code: "authorization_failed",
-        message: "Deposit actor does not match the signed-in user.",
-      });
-    }
+        if (args.actorUserId && args.actorUserId !== athenaUserId) {
+          return userError({
+            code: "authorization_failed",
+            message: "Deposit actor does not match the signed-in user.",
+          });
+        }
 
-    let actorStaffProfileId: Id<"staffProfile"> | undefined;
-    try {
-      actorStaffProfileId = await resolveDepositActorStaffProfileId(ctx, {
-        athenaUserId,
-        staffProfileId: args.actorStaffProfileId,
-        storeId: args.storeId,
-      });
-    } catch {
-      return userError({
-        code: "authorization_failed",
-        message: "Deposit staff actor does not match the signed-in user.",
-      });
-    }
+        let actorStaffProfileId: Id<"staffProfile"> | undefined;
+        try {
+          actorStaffProfileId = await resolveDepositActorStaffProfileId(ctx, {
+            athenaUserId,
+            staffProfileId: args.actorStaffProfileId,
+            storeId: args.storeId,
+          });
+        } catch {
+          return userError({
+            code: "authorization_failed",
+            message: "Deposit staff actor does not match the signed-in user.",
+          });
+        }
 
-    if (!Number.isFinite(args.amount) || args.amount <= 0) {
-      return userError({
-        code: "validation_failed",
-        message: "Deposit amount must be positive.",
-      });
-    }
+        if (!Number.isFinite(args.amount) || args.amount <= 0) {
+          return userError({
+            code: "validation_failed",
+            message: "Deposit amount must be positive.",
+          });
+        }
 
-    const storedAmount = toPesewas(args.amount);
+        const storedAmount = toPesewas(args.amount);
 
-    const submissionKey = trimOptional(args.submissionKey);
+        const submissionKey = trimOptional(args.submissionKey);
 
-    if (!submissionKey) {
-      return userError({
-        code: "validation_failed",
-        message: "A submission key is required to record a register deposit.",
-      });
-    }
+        if (!submissionKey) {
+          return userError({
+            code: "validation_failed",
+            message:
+              "A submission key is required to record a register deposit.",
+          });
+        }
 
-    const registerSession = await ctx.db.get(
-      "registerSession",
-      args.registerSessionId,
-    );
+        const registerSession = await ctx.db.get(
+          "registerSession",
+          args.registerSessionId,
+        );
 
-    if (!registerSession || registerSession.storeId !== args.storeId) {
-      return userError({
-        code: "not_found",
-        message: "Register session not found for this store.",
-      });
-    }
+        if (!registerSession || registerSession.storeId !== args.storeId) {
+          return userError({
+            code: "not_found",
+            message: "Register session not found for this store.",
+          });
+        }
 
-    const targetId = buildRegisterSessionDepositTargetId({
-      registerSessionId: args.registerSessionId,
-      submissionKey,
-    });
-    const businessEventKey = `cash_deposit:${args.registerSessionId}:${submissionKey}`;
-    const paymentAllocationArgs = {
-      actorStaffProfileId,
-      actorUserId: athenaUserId,
-      allocationType: CASH_DEPOSIT_ALLOCATION_TYPE,
-      amount: storedAmount,
-      businessEventKey,
-      collectedInStore: true,
-      direction: "out" as const,
-      externalReference: trimOptional(args.reference),
-      method: "cash",
-      notes: trimOptional(args.notes),
-      organizationId: registerSession.organizationId,
-      registerSessionId: args.registerSessionId,
-      storeId: args.storeId,
-      targetId,
-      targetType: CASH_DEPOSIT_SUBJECT_TYPE,
-    };
-    const existingDeposit = await ctx.db
-      .query("paymentAllocation")
-      .withIndex("by_storeId_target", (q) =>
-        q
-          .eq("storeId", args.storeId)
-          .eq("targetType", CASH_DEPOSIT_SUBJECT_TYPE)
-          .eq("targetId", targetId),
-      )
-      .first();
+        const targetId = buildRegisterSessionDepositTargetId({
+          registerSessionId: args.registerSessionId,
+          submissionKey,
+        });
+        const businessEventKey = `cash_deposit:${args.registerSessionId}:${submissionKey}`;
+        const paymentAllocationArgs = {
+          actorStaffProfileId,
+          actorUserId: athenaUserId,
+          allocationType: CASH_DEPOSIT_ALLOCATION_TYPE,
+          amount: storedAmount,
+          businessEventKey,
+          collectedInStore: true,
+          direction: "out" as const,
+          externalReference: trimOptional(args.reference),
+          method: "cash",
+          notes: trimOptional(args.notes),
+          organizationId: registerSession.organizationId,
+          registerSessionId: args.registerSessionId,
+          storeId: args.storeId,
+          targetId,
+          targetType: CASH_DEPOSIT_SUBJECT_TYPE,
+        };
+        const existingDeposit = await ctx.db
+          .query("paymentAllocation")
+          .withIndex("by_storeId_target", (q) =>
+            q
+              .eq("storeId", args.storeId)
+              .eq("targetType", CASH_DEPOSIT_SUBJECT_TYPE)
+              .eq("targetId", targetId),
+          )
+          .first();
 
-    if (existingDeposit && isCashControlDepositAllocation(existingDeposit)) {
-      const validatedDeposit = existingDeposit.businessEventKey
-        ? await recordPaymentAllocationWithCtx(ctx, paymentAllocationArgs)
-        : existingDeposit;
-      return ok({
-        action: "duplicate" as const,
-        deposit: validatedDeposit,
-        registerSession,
-      });
-    }
+        if (
+          existingDeposit &&
+          isCashControlDepositAllocation(existingDeposit)
+        ) {
+          const validatedDeposit = existingDeposit.businessEventKey
+            ? await recordPaymentAllocationWithCtx(ctx, paymentAllocationArgs)
+            : existingDeposit;
+          return ok({
+            action: "duplicate" as const,
+            deposit: validatedDeposit,
+            registerSession,
+          });
+        }
 
-    if (!isRegisterSessionSaleUsable(registerSession)) {
-      return userError({
-        code: "precondition_failed",
-        message: "Register session is not accepting new deposits.",
-      });
-    }
+        if (!isRegisterSessionSaleUsable(registerSession)) {
+          return userError({
+            code: "precondition_failed",
+            message: "Register session is not accepting new deposits.",
+          });
+        }
 
-    const closeoutHolds = await listRegisterSessionCloseoutHolds(ctx, {
-      registerSessionId: registerSession._id,
-      storeId: args.storeId,
-    });
+        const closeoutHolds = await listRegisterSessionCloseoutHolds(ctx, {
+          registerSessionId: registerSession._id,
+          storeId: args.storeId,
+        });
 
-    if (hasCashAffectingCloseoutHolds(closeoutHolds)) {
-      return userError({
-        code: "precondition_failed",
-        message:
-          getCloseoutHoldOperatorMessage(closeoutHolds, "deposit") ??
-          "Resolve pending register corrections before recording a deposit.",
-      });
-    }
+        if (hasCashAffectingCloseoutHolds(closeoutHolds)) {
+          return userError({
+            code: "precondition_failed",
+            message:
+              getCloseoutHoldOperatorMessage(closeoutHolds, "deposit") ??
+              "Resolve pending register corrections before recording a deposit.",
+          });
+        }
 
-    const deposit = await recordPaymentAllocationWithCtx(
-      ctx,
-      paymentAllocationArgs,
-    );
-    const updatedRegisterSession = await recordRegisterSessionDepositWithCtx(
-      ctx,
-      {
-        amount: storedAmount,
-        registerSessionId: args.registerSessionId,
+        const deposit = await recordPaymentAllocationWithCtx(
+          ctx,
+          paymentAllocationArgs,
+        );
+        const updatedRegisterSession =
+          await recordRegisterSessionDepositWithCtx(ctx, {
+            amount: storedAmount,
+            registerSessionId: args.registerSessionId,
+          });
+
+        if (!updatedRegisterSession) {
+          return userError({
+            code: "unavailable",
+            message: "Register session deposit was recorded without a session.",
+          });
+        }
+
+        await recordOperationalEventWithCtx(ctx, {
+          actorStaffProfileId,
+          actorUserId: athenaUserId,
+          eventType: "register_session_cash_deposit_recorded",
+          message: `Recorded cash deposit of ${args.amount}.`,
+          metadata: {
+            amount: storedAmount,
+            reference: trimOptional(args.reference),
+            submissionKey,
+          },
+          organizationId: registerSession.organizationId,
+          paymentAllocationId: deposit?._id,
+          reason: trimOptional(args.notes),
+          registerSessionId: args.registerSessionId,
+          storeId: args.storeId,
+          subjectId: targetId,
+          subjectLabel: registerSession.registerNumber,
+          subjectType: CASH_DEPOSIT_SUBJECT_TYPE,
+        });
+
+        const occurredAt = Date.now();
+        const traceResult = await recordRegisterSessionTraceBestEffort(ctx, {
+          stage: "deposit_recorded",
+          session: updatedRegisterSession,
+          occurredAt,
+          amount: storedAmount,
+          actorStaffProfileId,
+          actorUserId: athenaUserId,
+        });
+
+        await persistRegisterSessionWorkflowTraceIdBestEffort(ctx, {
+          registerSessionId: args.registerSessionId,
+          traceCreated: traceResult.traceCreated,
+          traceId: traceResult.traceId,
+          workflowTraceId: updatedRegisterSession.workflowTraceId,
+        });
+
+        return ok({
+          action: "recorded" as const,
+          deposit,
+          registerSession: updatedRegisterSession,
+        });
       },
-    );
-
-    if (!updatedRegisterSession) {
-      return userError({
-        code: "unavailable",
-        message: "Register session deposit was recorded without a session.",
-      });
-    }
-
-    await recordOperationalEventWithCtx(ctx, {
-      actorStaffProfileId,
-      actorUserId: athenaUserId,
-      eventType: "register_session_cash_deposit_recorded",
-      message: `Recorded cash deposit of ${args.amount}.`,
-      metadata: {
-        amount: storedAmount,
-        reference: trimOptional(args.reference),
-        submissionKey,
-      },
-      organizationId: registerSession.organizationId,
-      paymentAllocationId: deposit?._id,
-      reason: trimOptional(args.notes),
-      registerSessionId: args.registerSessionId,
-      storeId: args.storeId,
-      subjectId: targetId,
-      subjectLabel: registerSession.registerNumber,
-      subjectType: CASH_DEPOSIT_SUBJECT_TYPE,
-    });
-
-    const occurredAt = Date.now();
-    const traceResult = await recordRegisterSessionTraceBestEffort(ctx, {
-      stage: "deposit_recorded",
-      session: updatedRegisterSession,
-      occurredAt,
-      amount: storedAmount,
-      actorStaffProfileId,
-      actorUserId: athenaUserId,
-    });
-
-    await persistRegisterSessionWorkflowTraceIdBestEffort(ctx, {
-      registerSessionId: args.registerSessionId,
-      traceCreated: traceResult.traceCreated,
-      traceId: traceResult.traceId,
-      workflowTraceId: updatedRegisterSession.workflowTraceId,
-    });
-
-    return ok({
-      action: "recorded" as const,
-      deposit,
-      registerSession: updatedRegisterSession,
-    });
-        },
-      )(ctx, args);
+    )(ctx, args);
   },
 });
 
@@ -1695,470 +1717,602 @@ export const resolveRegisterSessionSyncReview = mutation({
   handler: admitSharedDemoPublicMutation(
     resolveRegisterSessionSyncReviewOperationDefinition,
     async (
-    ctx,
-    args,
-  ): Promise<CommandResult<ResolveRegisterSessionSyncReviewResult>> => {
-    const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(
-      ctx,
-      "cash.control.write",
-      args.storeId,
-    );
-    if (demoActor) {
-      await requireReadySharedDemoWriteWithCtx(ctx, { storeId: args.storeId });
-    }
-    const { athenaUser, store } = await requireCashControlsStoreAccess(
-      ctx,
-      args.storeId,
-      { allowSharedDemoCashControl: true },
-    );
-    const registerSession = await ctx.db.get(
-      "registerSession",
-      args.registerSessionId,
-    );
-    if (!registerSession || registerSession.storeId !== args.storeId) {
-      return userError({
-        code: "not_found",
-        message: "Register session not found for this store.",
-      });
-    }
-
-    const decision = args.decision ?? "approved";
-    const isAutomaticResolution =
-      !args.actorStaffProfileId && !args.approvalProofId;
-    let reviewActorStaffProfileId: Id<"staffProfile"> | undefined;
-    if (decision === "rejected" && isAutomaticResolution) {
-      return userError({
-        code: "precondition_failed",
-        message:
-          "Automatic sync repair can only apply eligible register activity.",
-      });
-    }
-    if (args.approvalProofId) {
-      const approvalProof = await consumeApprovalProofWithCtx(ctx, {
-        actionKey: REGISTER_SESSION_SYNC_REVIEW_APPROVAL_ACTION_KEY,
-        approvalProofId: args.approvalProofId,
-        requestedByStaffProfileId: args.requestedByStaffProfileId,
-        requiredRole: "manager",
-        storeId: args.storeId,
-        subject: {
-          id: args.registerSessionId,
-          label: registerSession.registerNumber,
-          type: "register_session",
-        },
-      });
-
-      if (approvalProof.kind !== "ok") {
-        return approvalProof;
+      ctx: OperationMutationCtx,
+      args,
+    ): Promise<CommandResult<ResolveRegisterSessionSyncReviewResult>> => {
+      const { athenaUser, store } = await requireCashControlsStoreAccess(
+        ctx,
+        args.storeId,
+      );
+      const registerSession = await ctx.db.get(
+        "registerSession",
+        args.registerSessionId,
+      );
+      if (!registerSession || registerSession.storeId !== args.storeId) {
+        return userError({
+          code: "not_found",
+          message: "Register session not found for this store.",
+        });
       }
 
-      reviewActorStaffProfileId = approvalProof.data.approvedByStaffProfileId;
-    } else if (args.actorStaffProfileId) {
-      try {
-        reviewActorStaffProfileId = await resolveDepositActorStaffProfileId(
-          ctx,
-          {
-            athenaUserId: athenaUser._id,
-            staffProfileId: args.actorStaffProfileId,
-            storeId: args.storeId,
+      const decision = args.decision ?? "approved";
+      const isAutomaticResolution =
+        !args.actorStaffProfileId && !args.approvalProofId;
+      let reviewActorStaffProfileId: Id<"staffProfile"> | undefined;
+      if (decision === "rejected" && isAutomaticResolution) {
+        return userError({
+          code: "precondition_failed",
+          message:
+            "Automatic sync repair can only apply eligible register activity.",
+        });
+      }
+      if (args.approvalProofId) {
+        const approvalProof = await consumeApprovalProofWithCtx(ctx, {
+          actionKey: REGISTER_SESSION_SYNC_REVIEW_APPROVAL_ACTION_KEY,
+          approvalProofId: args.approvalProofId,
+          requestedByStaffProfileId: args.requestedByStaffProfileId,
+          requiredRole: "manager",
+          storeId: args.storeId,
+          subject: {
+            id: args.registerSessionId,
+            label: registerSession.registerNumber,
+            type: "register_session",
           },
-        );
-      } catch {
-        return userError({
-          code: "authorization_failed",
-          message: "Only managers can resolve synced register reviews.",
         });
-      }
-      const canResolveReview = await staffProfileCanResolveSyncReview(ctx, {
-        organizationId: store.organizationId,
-        staffProfileId: reviewActorStaffProfileId,
-        storeId: args.storeId,
-      });
-      if (!canResolveReview) {
-        return userError({
-          code: "authorization_failed",
-          message: "Only managers can resolve synced register reviews.",
-        });
-      }
-    }
 
-    const conflictsBySessionId = await listRegisterSessionSyncReviewConflicts(
-      ctx,
-      args.storeId,
-      {
-        includeRejectedEvidence: true,
-        includeTransactionMappingEvidence: true,
-        registerSessionIds: [args.registerSessionId],
-      },
-    );
-    const allConflicts = conflictsBySessionId.get(args.registerSessionId) ?? [];
-    const requestedConflictIds = new Set<string>(args.reviewConflictIds ?? []);
-    const conflicts =
-      requestedConflictIds.size > 0
-        ? allConflicts.filter(
-            (conflict) =>
-              requestedConflictIds.has(conflict._id) ||
-              requestedConflictIds.has(conflict.localEventId),
-          )
-        : allConflicts;
-    if (
-      requestedConflictIds.size > 0 &&
-      allConflicts.length > 0 &&
-      conflicts.length === 0
-    ) {
-      return userError({
-        code: "precondition_failed",
-        message:
-          "This register review changed before the action completed. Refresh the register session and try again.",
-      });
-    }
-    if (conflicts.length === 0) {
-      return ok({
-        action: "already_resolved",
-        registerSession,
-        projectedCount: 0,
-        resolvedCount: 0,
-      });
-    }
-
-    if (demoActor) {
-      requireSharedDemoRegisterSessionSyncReview({
-        decision,
-        reviewKinds: conflicts.map(
-          (conflict) => classifyRegisterSessionSyncReview(conflict).reviewKind,
-        ),
-      });
-    }
-
-    const resolvedAt = Date.now();
-    const localSyncRepository = createConvexLocalSyncRepository(ctx);
-    const projectedTransactionIds: string[] = [];
-    const resolvedConflictIds = new Set<Id<"posLocalSyncConflict">>();
-    const localEventIds: string[] = [];
-    const originalStatuses: string[] = [];
-    const rejectedCloseoutLocalEventIds = new Set<string>();
-    const sequences: number[] = [];
-    let managerOverrideCount = 0;
-    let projectedCloseoutCount = 0;
-
-    function syncReviewConflictsMatch(
-      left: CashControlSyncConflict,
-      right: CashControlSyncConflict,
-    ) {
-      if (left._id === right._id) return true;
-      if (left.summary !== right.summary) return false;
-
-      const leftDetails = left.details ?? {};
-      const rightDetails = right.details ?? {};
-      const identityKeys = [
-        "localIdKind",
-        "localId",
-        "localTransactionId",
-        "localRegisterSessionId",
-      ];
-
-      return identityKeys.every(
-        (key) => leftDetails[key] === rightDetails[key],
-      );
-    }
-
-    function addResolvedMatchingLoadedConflicts(
-      selectedConflict: (typeof conflicts)[number],
-      terminalId: Id<"posTerminal">,
-    ) {
-      for (const candidate of allConflicts) {
-        if (
-          candidate.status === "needs_review" &&
-          candidate.localEventId === selectedConflict.localEventId &&
-          candidate.terminalId === terminalId &&
-          candidate.conflictType === selectedConflict.conflictType &&
-          syncReviewConflictsMatch(selectedConflict, candidate)
-        ) {
-          resolvedConflictIds.add(candidate._id as Id<"posLocalSyncConflict">);
+        if (approvalProof.kind !== "ok") {
+          return approvalProof;
         }
-      }
-    }
 
-    function getOpenEventConflicts(
-      selectedConflict: (typeof conflicts)[number],
-      terminalId: Id<"posTerminal">,
-    ) {
-      return allConflicts.filter(
-        (candidate) =>
-          candidate.status === "needs_review" &&
-          candidate.localEventId === selectedConflict.localEventId &&
-          candidate.terminalId === terminalId,
-      );
-    }
-
-    async function hasProjectedSaleTransactionMapping(
-      syncEvent: StoredLocalSyncEvent,
-      terminalId: Id<"posTerminal">,
-    ) {
-      const payload = recordDetail(syncEvent.payload) ?? {};
-      const localTransactionId = stringDetail(payload, "localTransactionId");
-      const localReceiptNumber = stringDetail(payload, "localReceiptNumber");
-      const mappingInputs = [
-        localTransactionId
-          ? { localIdKind: "transaction" as const, localId: localTransactionId }
-          : null,
-        localReceiptNumber
-          ? { localIdKind: "receipt" as const, localId: localReceiptNumber }
-          : null,
-      ].filter((input): input is NonNullable<typeof input> => Boolean(input));
-
-      for (const mappingInput of mappingInputs) {
-        const mapping = await localSyncRepository.findMapping({
-          storeId: syncEvent.storeId,
-          terminalId,
-          localRegisterSessionId: syncEvent.localRegisterSessionId,
-          ...mappingInput,
-        });
-        if (mapping?.cloudTable !== "posTransaction") continue;
-
-        const transaction = await ctx.db.get(
-          "posTransaction",
-          mapping.cloudId as Id<"posTransaction">,
-        );
-        if (
-          transaction?.status === "completed" &&
-          transaction.storeId === syncEvent.storeId &&
-          transaction.registerSessionId === args.registerSessionId
-        ) {
-          return true;
-        }
-      }
-
-      return false;
-    }
-
-    for (const conflict of conflicts) {
-      if (resolvedConflictIds.has(conflict._id as Id<"posLocalSyncConflict">)) {
-        continue;
-      }
-      const terminalId = conflict.terminalId ?? registerSession.terminalId;
-      if (!terminalId) {
-        return userError({
-          code: "precondition_failed",
-          message:
-            "This register review can no longer be applied because the terminal link was not found.",
-        });
-      }
-      const syncEvent = await localSyncRepository.findEvent({
-        storeId: args.storeId,
-        terminalId,
-        localEventId: conflict.localEventId,
-      });
-      if (!syncEvent) {
-        return userError({
-          code: "precondition_failed",
-          message:
-            "This register review can no longer be applied because the synced activity was not found.",
-        });
-      }
-      const hasConflictRecord = !(
-        conflict.status === "rejected" && conflict._id === syncEvent._id
-      );
-      localEventIds.push(syncEvent.localEventId);
-      originalStatuses.push(syncEvent.status);
-      sequences.push(syncEvent.sequence);
-
-      if (decision === "rejected") {
-        const review = classifyRegisterSessionSyncReview(conflict);
-        const hasUnselectedOpenConflictForEvent =
-          requestedConflictIds.size > 0 &&
-          allConflicts.some(
-            (candidate) =>
-              candidate.localEventId === syncEvent.localEventId &&
-              candidate.terminalId === terminalId &&
-              candidate.conflictType !== conflict.conflictType &&
-              candidate.status === "needs_review" &&
-              !requestedConflictIds.has(candidate._id) &&
-              !requestedConflictIds.has(candidate.localEventId),
+        reviewActorStaffProfileId = approvalProof.data.approvedByStaffProfileId;
+      } else if (args.actorStaffProfileId) {
+        try {
+          reviewActorStaffProfileId = await resolveDepositActorStaffProfileId(
+            ctx,
+            {
+              athenaUserId: athenaUser._id,
+              staffProfileId: args.actorStaffProfileId,
+              storeId: args.storeId,
+            },
           );
-        const shouldPreserveProjectedSaleEvent =
-          syncEvent.eventType === "sale_completed" &&
-          typeof syncEvent.projectedAt === "number" &&
-          (review.reviewKind === "duplicate_register_open" ||
-            (review.reviewKind === "duplicate_pos_session_sale" &&
-              (await hasProjectedSaleTransactionMapping(
-                syncEvent,
-                terminalId,
-              ))));
+        } catch {
+          return userError({
+            code: "authorization_failed",
+            message: "Only managers can resolve synced register reviews.",
+          });
+        }
+        const canResolveReview = await staffProfileCanResolveSyncReview(ctx, {
+          organizationId: store.organizationId,
+          staffProfileId: reviewActorStaffProfileId,
+          storeId: args.storeId,
+        });
+        if (!canResolveReview) {
+          return userError({
+            code: "authorization_failed",
+            message: "Only managers can resolve synced register reviews.",
+          });
+        }
+      }
+
+      const conflictsBySessionId = await listRegisterSessionSyncReviewConflicts(
+        ctx,
+        args.storeId,
+        {
+          includeRejectedEvidence: true,
+          includeTransactionMappingEvidence: true,
+          registerSessionIds: [args.registerSessionId],
+        },
+      );
+      const allConflicts =
+        conflictsBySessionId.get(args.registerSessionId) ?? [];
+      const requestedConflictIds = new Set<string>(
+        args.reviewConflictIds ?? [],
+      );
+      const conflicts =
+        requestedConflictIds.size > 0
+          ? allConflicts.filter(
+              (conflict) =>
+                requestedConflictIds.has(conflict._id) ||
+                requestedConflictIds.has(conflict.localEventId),
+            )
+          : allConflicts;
+      if (
+        requestedConflictIds.size > 0 &&
+        allConflicts.length > 0 &&
+        conflicts.length === 0
+      ) {
+        return userError({
+          code: "precondition_failed",
+          message:
+            "This register review changed before the action completed. Refresh the register session and try again.",
+        });
+      }
+      if (conflicts.length === 0) {
+        return ok({
+          action: "already_resolved",
+          registerSession,
+          projectedCount: 0,
+          resolvedCount: 0,
+        });
+      }
+
+      if (ctx.operationAdmission.actor.kind === "shared_demo") {
+        requireSharedDemoRegisterSessionSyncReview({
+          decision,
+          reviewKinds: conflicts.map(
+            (conflict) =>
+              classifyRegisterSessionSyncReview(conflict).reviewKind,
+          ),
+        });
+      }
+
+      const resolvedAt = Date.now();
+      const localSyncRepository = createConvexLocalSyncRepository(ctx);
+      const projectedTransactionIds: string[] = [];
+      const resolvedConflictIds = new Set<Id<"posLocalSyncConflict">>();
+      const localEventIds: string[] = [];
+      const originalStatuses: string[] = [];
+      const rejectedCloseoutLocalEventIds = new Set<string>();
+      const sequences: number[] = [];
+      let managerOverrideCount = 0;
+      let projectedCloseoutCount = 0;
+
+      function syncReviewConflictsMatch(
+        left: CashControlSyncConflict,
+        right: CashControlSyncConflict,
+      ) {
+        if (left._id === right._id) return true;
+        if (left.summary !== right.summary) return false;
+
+        const leftDetails = left.details ?? {};
+        const rightDetails = right.details ?? {};
+        const identityKeys = [
+          "localIdKind",
+          "localId",
+          "localTransactionId",
+          "localRegisterSessionId",
+        ];
+
+        return identityKeys.every(
+          (key) => leftDetails[key] === rightDetails[key],
+        );
+      }
+
+      function addResolvedMatchingLoadedConflicts(
+        selectedConflict: (typeof conflicts)[number],
+        terminalId: Id<"posTerminal">,
+      ) {
+        for (const candidate of allConflicts) {
+          if (
+            candidate.status === "needs_review" &&
+            candidate.localEventId === selectedConflict.localEventId &&
+            candidate.terminalId === terminalId &&
+            candidate.conflictType === selectedConflict.conflictType &&
+            syncReviewConflictsMatch(selectedConflict, candidate)
+          ) {
+            resolvedConflictIds.add(
+              candidate._id as Id<"posLocalSyncConflict">,
+            );
+          }
+        }
+      }
+
+      function getOpenEventConflicts(
+        selectedConflict: (typeof conflicts)[number],
+        terminalId: Id<"posTerminal">,
+      ) {
+        return allConflicts.filter(
+          (candidate) =>
+            candidate.status === "needs_review" &&
+            candidate.localEventId === selectedConflict.localEventId &&
+            candidate.terminalId === terminalId,
+        );
+      }
+
+      async function hasProjectedSaleTransactionMapping(
+        syncEvent: StoredLocalSyncEvent,
+        terminalId: Id<"posTerminal">,
+      ) {
+        const payload = recordDetail(syncEvent.payload) ?? {};
+        const localTransactionId = stringDetail(payload, "localTransactionId");
+        const localReceiptNumber = stringDetail(payload, "localReceiptNumber");
+        const mappingInputs = [
+          localTransactionId
+            ? {
+                localIdKind: "transaction" as const,
+                localId: localTransactionId,
+              }
+            : null,
+          localReceiptNumber
+            ? { localIdKind: "receipt" as const, localId: localReceiptNumber }
+            : null,
+        ].filter((input): input is NonNullable<typeof input> => Boolean(input));
+
+        for (const mappingInput of mappingInputs) {
+          const mapping = await localSyncRepository.findMapping({
+            storeId: syncEvent.storeId,
+            terminalId,
+            localRegisterSessionId: syncEvent.localRegisterSessionId,
+            ...mappingInput,
+          });
+          if (mapping?.cloudTable !== "posTransaction") continue;
+
+          const transaction = await ctx.db.get(
+            "posTransaction",
+            mapping.cloudId as Id<"posTransaction">,
+          );
+          if (
+            transaction?.status === "completed" &&
+            transaction.storeId === syncEvent.storeId &&
+            transaction.registerSessionId === args.registerSessionId
+          ) {
+            return true;
+          }
+        }
+
+        return false;
+      }
+
+      for (const conflict of conflicts) {
         if (
-          !hasUnselectedOpenConflictForEvent &&
-          !shouldPreserveProjectedSaleEvent &&
-          (syncEvent.status === "conflicted" || syncEvent.status === "rejected")
+          resolvedConflictIds.has(conflict._id as Id<"posLocalSyncConflict">)
         ) {
+          continue;
+        }
+        const terminalId = conflict.terminalId ?? registerSession.terminalId;
+        if (!terminalId) {
+          return userError({
+            code: "precondition_failed",
+            message:
+              "This register review can no longer be applied because the terminal link was not found.",
+          });
+        }
+        const syncEvent = await localSyncRepository.findEvent({
+          storeId: args.storeId,
+          terminalId,
+          localEventId: conflict.localEventId,
+        });
+        if (!syncEvent) {
+          return userError({
+            code: "precondition_failed",
+            message:
+              "This register review can no longer be applied because the synced activity was not found.",
+          });
+        }
+        const hasConflictRecord = !(
+          conflict.status === "rejected" && conflict._id === syncEvent._id
+        );
+        localEventIds.push(syncEvent.localEventId);
+        originalStatuses.push(syncEvent.status);
+        sequences.push(syncEvent.sequence);
+
+        if (decision === "rejected") {
+          const review = classifyRegisterSessionSyncReview(conflict);
+          const hasUnselectedOpenConflictForEvent =
+            requestedConflictIds.size > 0 &&
+            allConflicts.some(
+              (candidate) =>
+                candidate.localEventId === syncEvent.localEventId &&
+                candidate.terminalId === terminalId &&
+                candidate.conflictType !== conflict.conflictType &&
+                candidate.status === "needs_review" &&
+                !requestedConflictIds.has(candidate._id) &&
+                !requestedConflictIds.has(candidate.localEventId),
+            );
+          const shouldPreserveProjectedSaleEvent =
+            syncEvent.eventType === "sale_completed" &&
+            typeof syncEvent.projectedAt === "number" &&
+            (review.reviewKind === "duplicate_register_open" ||
+              (review.reviewKind === "duplicate_pos_session_sale" &&
+                (await hasProjectedSaleTransactionMapping(
+                  syncEvent,
+                  terminalId,
+                ))));
+          if (
+            !hasUnselectedOpenConflictForEvent &&
+            !shouldPreserveProjectedSaleEvent &&
+            (syncEvent.status === "conflicted" ||
+              syncEvent.status === "rejected")
+          ) {
+            if (
+              syncEvent.eventType === "register_closed" &&
+              review.reviewKind === "register_closeout_variance" &&
+              !rejectedCloseoutLocalEventIds.has(syncEvent.localEventId)
+            ) {
+              const conflictDetails = conflict.details ?? {};
+              const syncPayload = recordDetail(syncEvent.payload);
+              const reviewedCountedCash =
+                numberDetail(conflictDetails, "countedCash") ??
+                numberDetail(syncPayload ?? undefined, "countedCash") ??
+                registerSession.countedCash;
+              const reviewedVariance =
+                numberDetail(conflictDetails, "variance") ??
+                (reviewedCountedCash !== undefined
+                  ? reviewedCountedCash - registerSession.expectedCash
+                  : registerSession.variance);
+              const reviewedNotes =
+                typeof conflictDetails.notes === "string"
+                  ? conflictDetails.notes
+                  : typeof syncPayload?.notes === "string"
+                    ? syncPayload.notes
+                    : undefined;
+
+              await rejectRegisterSessionCloseoutWithCtx(ctx, {
+                allowActiveReviewedCloseoutEvidence: true,
+                countedCash: reviewedCountedCash,
+                notes: reviewedNotes,
+                registerSessionId: args.registerSessionId,
+                variance: reviewedVariance,
+              });
+            }
+            await localSyncRepository.patchEvent(syncEvent._id, {
+              rejectionCode: "manager_rejected",
+              rejectionMessage:
+                "Manager rejected synced register activity during cash-controls review.",
+              status: "rejected",
+            });
+          } else if (
+            shouldPreserveProjectedSaleEvent &&
+            syncEvent.status === "conflicted" &&
+            typeof syncEvent.projectedAt === "number"
+          ) {
+            await localSyncRepository.patchEvent(syncEvent._id, {
+              status: "projected",
+            });
+          }
+          if (hasConflictRecord) {
+            resolvedConflictIds.add(conflict._id as Id<"posLocalSyncConflict">);
+            addResolvedMatchingLoadedConflicts(conflict, terminalId);
+          }
           if (
             syncEvent.eventType === "register_closed" &&
-            review.reviewKind === "register_closeout_variance" &&
+            (review.reviewKind === "register_closeout_variance" ||
+              review.reviewKind === "duplicate_register_closeout") &&
             !rejectedCloseoutLocalEventIds.has(syncEvent.localEventId)
           ) {
             const conflictDetails = conflict.details ?? {};
-            const syncPayload = recordDetail(syncEvent.payload);
-            const reviewedCountedCash =
-              numberDetail(conflictDetails, "countedCash") ??
-              numberDetail(syncPayload ?? undefined, "countedCash") ??
-              registerSession.countedCash;
-            const reviewedVariance =
-              numberDetail(conflictDetails, "variance") ??
-              (reviewedCountedCash !== undefined
-                ? reviewedCountedCash - registerSession.expectedCash
-                : registerSession.variance);
-            const reviewedNotes =
-              typeof conflictDetails.notes === "string"
-                ? conflictDetails.notes
-                : typeof syncPayload?.notes === "string"
-                  ? syncPayload.notes
-                  : undefined;
-
-            await rejectRegisterSessionCloseoutWithCtx(ctx, {
-              allowActiveReviewedCloseoutEvidence: true,
-              countedCash: reviewedCountedCash,
-              notes: reviewedNotes,
+            rejectedCloseoutLocalEventIds.add(syncEvent.localEventId);
+            await recordOperationalEventWithCtx(ctx, {
+              ...(reviewActorStaffProfileId
+                ? { actorStaffProfileId: reviewActorStaffProfileId }
+                : {}),
+              actorUserId: athenaUser._id,
+              eventType: "register_session_sync_closeout_rejected",
+              localEventId: syncEvent.localEventId,
+              message: registerSession.registerNumber
+                ? `Rejected synced closeout for Register ${registerSession.registerNumber}.`
+                : "Rejected synced register closeout.",
+              metadata: {
+                conflictId: conflict._id,
+                conflictType: conflict.conflictType,
+                countedCash: conflictDetails.countedCash,
+                decision: "rejected",
+                expectedCash: conflictDetails.expectedCash,
+                localEventId: syncEvent.localEventId,
+                notes: conflictDetails.notes ?? syncEvent.payload?.notes,
+                originalStatus: syncEvent.status,
+                sequence: syncEvent.sequence,
+                syncOrigin: "local_sync",
+                variance: conflictDetails.variance,
+              },
+              organizationId: store.organizationId,
               registerSessionId: args.registerSessionId,
-              variance: reviewedVariance,
+              storeId: args.storeId,
+              subjectId: args.registerSessionId,
+              subjectLabel: registerSession.registerNumber,
+              subjectType: "register_session",
+              terminalId,
             });
           }
-          await localSyncRepository.patchEvent(syncEvent._id, {
-            rejectionCode: "manager_rejected",
-            rejectionMessage:
-              "Manager rejected synced register activity during cash-controls review.",
-            status: "rejected",
-          });
-        } else if (
-          shouldPreserveProjectedSaleEvent &&
-          syncEvent.status === "conflicted" &&
-          typeof syncEvent.projectedAt === "number"
-        ) {
-          await localSyncRepository.patchEvent(syncEvent._id, {
-            status: "projected",
-          });
+          continue;
         }
-        if (hasConflictRecord) {
-          resolvedConflictIds.add(conflict._id as Id<"posLocalSyncConflict">);
-          addResolvedMatchingLoadedConflicts(conflict, terminalId);
-        }
-        if (
-          syncEvent.eventType === "register_closed" &&
-          (review.reviewKind === "register_closeout_variance" ||
-            review.reviewKind === "duplicate_register_closeout") &&
-          !rejectedCloseoutLocalEventIds.has(syncEvent.localEventId)
-        ) {
-          const conflictDetails = conflict.details ?? {};
-          rejectedCloseoutLocalEventIds.add(syncEvent.localEventId);
-          await recordOperationalEventWithCtx(ctx, {
-            ...(reviewActorStaffProfileId
-              ? { actorStaffProfileId: reviewActorStaffProfileId }
-              : {}),
-            actorUserId: athenaUser._id,
-            eventType: "register_session_sync_closeout_rejected",
-            localEventId: syncEvent.localEventId,
-            message: registerSession.registerNumber
-              ? `Rejected synced closeout for Register ${registerSession.registerNumber}.`
-              : "Rejected synced register closeout.",
-            metadata: {
-              conflictId: conflict._id,
-              conflictType: conflict.conflictType,
-              countedCash: conflictDetails.countedCash,
-              decision: "rejected",
-              expectedCash: conflictDetails.expectedCash,
-              localEventId: syncEvent.localEventId,
-              notes: conflictDetails.notes ?? syncEvent.payload?.notes,
-              originalStatus: syncEvent.status,
-              sequence: syncEvent.sequence,
-              syncOrigin: "local_sync",
-              variance: conflictDetails.variance,
-            },
-            organizationId: store.organizationId,
-            registerSessionId: args.registerSessionId,
-            storeId: args.storeId,
-            subjectId: args.registerSessionId,
-            subjectLabel: registerSession.registerNumber,
-            subjectType: "register_session",
-            terminalId,
-          });
-        }
-        continue;
-      }
 
-      const shouldApplyManagerOverride =
-        !isAutomaticResolution &&
-        syncEvent.status === "rejected" &&
-        conflict.conflictType === "server_rejected";
-      if (shouldApplyManagerOverride) {
-        managerOverrideCount += 1;
-      }
-      const review = classifyRegisterSessionSyncReview(conflict);
-      const matchesLocalRegisterSession =
-        !conflict.localRegisterSessionId ||
-        syncEvent.localRegisterSessionId === conflict.localRegisterSessionId;
-      const shouldApplyProoflessStaffAccessEvent =
-        isProoflessStaffAccessSyncReview(conflict) &&
-        (syncEvent.eventType === "register_opened" ||
-          syncEvent.eventType === "sale_completed");
-      const shouldApplyReviewedSale =
-        (syncEvent.eventType === "sale_completed" &&
-          matchesLocalRegisterSession &&
-          (review.reviewKind === "register_not_open_sale" ||
-            review.reviewKind === "inventory_review" ||
-            review.reviewKind === "duplicate_pos_session_sale")) ||
-        (shouldApplyManagerOverride &&
-          syncEvent.eventType === "sale_completed");
-      const openEventConflicts = shouldApplyReviewedSale
-        ? getOpenEventConflicts(conflict, terminalId)
-        : [];
-      const selectedEventConflicts = openEventConflicts.filter(
-        (candidate) =>
-          requestedConflictIds.size === 0 ||
-          requestedConflictIds.has(candidate._id) ||
-          requestedConflictIds.has(candidate.localEventId),
-      );
-      const selectedEventReviewKinds = new Set(
-        selectedEventConflicts.map(
+        const shouldApplyManagerOverride =
+          !isAutomaticResolution &&
+          syncEvent.status === "rejected" &&
+          conflict.conflictType === "server_rejected";
+        if (shouldApplyManagerOverride) {
+          managerOverrideCount += 1;
+        }
+        const review = classifyRegisterSessionSyncReview(conflict);
+        const matchesLocalRegisterSession =
+          !conflict.localRegisterSessionId ||
+          syncEvent.localRegisterSessionId === conflict.localRegisterSessionId;
+        const shouldApplyProoflessStaffAccessEvent =
+          isProoflessStaffAccessSyncReview(conflict) &&
+          (syncEvent.eventType === "register_opened" ||
+            syncEvent.eventType === "sale_completed");
+        const shouldApplyReviewedSale =
+          (syncEvent.eventType === "sale_completed" &&
+            matchesLocalRegisterSession &&
+            (review.reviewKind === "register_not_open_sale" ||
+              review.reviewKind === "inventory_review" ||
+              review.reviewKind === "duplicate_pos_session_sale")) ||
+          (shouldApplyManagerOverride &&
+            syncEvent.eventType === "sale_completed");
+        const openEventConflicts = shouldApplyReviewedSale
+          ? getOpenEventConflicts(conflict, terminalId)
+          : [];
+        const selectedEventConflicts = openEventConflicts.filter(
           (candidate) =>
-            classifyRegisterSessionSyncReview(candidate).reviewKind,
-        ),
-      );
-      const hasUnselectedOpenSaleConflict =
-        shouldApplyReviewedSale &&
-        requestedConflictIds.size > 0 &&
-        openEventConflicts.some(
-          (candidate) =>
-            !requestedConflictIds.has(candidate._id) &&
-            !requestedConflictIds.has(candidate.localEventId),
+            requestedConflictIds.size === 0 ||
+            requestedConflictIds.has(candidate._id) ||
+            requestedConflictIds.has(candidate.localEventId),
         );
-      if (hasUnselectedOpenSaleConflict) {
-        return userError({
-          code: "precondition_failed",
-          message:
-            "This synced sale has multiple review items. Resolve them together so Athena can apply the sale once.",
-        });
-      }
-      const shouldPreserveDuplicatePosSessionSale =
-        shouldApplyReviewedSale &&
-        selectedEventReviewKinds.has("duplicate_pos_session_sale");
-      const shouldApplyReviewedInventorySale =
-        shouldApplyReviewedSale &&
-        selectedEventReviewKinds.has("inventory_review");
-      const shouldApplyReviewedSaleCashOverride =
-        shouldApplyReviewedSale &&
-        (selectedEventReviewKinds.has("register_not_open_sale") ||
-          selectedEventReviewKinds.has("inventory_review"));
-      const shouldApplyReviewedCloseout =
-        (syncEvent.eventType === "register_closed" &&
+        const selectedEventReviewKinds = new Set(
+          selectedEventConflicts.map(
+            (candidate) =>
+              classifyRegisterSessionSyncReview(candidate).reviewKind,
+          ),
+        );
+        const hasUnselectedOpenSaleConflict =
+          shouldApplyReviewedSale &&
+          requestedConflictIds.size > 0 &&
+          openEventConflicts.some(
+            (candidate) =>
+              !requestedConflictIds.has(candidate._id) &&
+              !requestedConflictIds.has(candidate.localEventId),
+          );
+        if (hasUnselectedOpenSaleConflict) {
+          return userError({
+            code: "precondition_failed",
+            message:
+              "This synced sale has multiple review items. Resolve them together so Athena can apply the sale once.",
+          });
+        }
+        const shouldPreserveDuplicatePosSessionSale =
+          shouldApplyReviewedSale &&
+          selectedEventReviewKinds.has("duplicate_pos_session_sale");
+        const shouldApplyReviewedInventorySale =
+          shouldApplyReviewedSale &&
+          selectedEventReviewKinds.has("inventory_review");
+        const shouldApplyReviewedSaleCashOverride =
+          shouldApplyReviewedSale &&
+          (selectedEventReviewKinds.has("register_not_open_sale") ||
+            selectedEventReviewKinds.has("inventory_review"));
+        const shouldApplyReviewedCloseout =
+          (syncEvent.eventType === "register_closed" &&
+            matchesLocalRegisterSession &&
+            conflict.conflictType === "permission" &&
+            review.reviewKind === "register_closeout_variance") ||
+          (shouldApplyManagerOverride &&
+            syncEvent.eventType === "register_closed");
+        const shouldRepairMissingRegisterSessionMapping =
+          syncEvent.eventType === "sale_completed" &&
           matchesLocalRegisterSession &&
-          conflict.conflictType === "permission" &&
-          review.reviewKind === "register_closeout_variance") ||
-        (shouldApplyManagerOverride &&
-          syncEvent.eventType === "register_closed");
-      const shouldRepairMissingRegisterSessionMapping =
-        syncEvent.eventType === "sale_completed" &&
-        matchesLocalRegisterSession &&
-        review.reviewKind === "missing_register_session_mapping";
+          review.reviewKind === "missing_register_session_mapping";
 
-      if (shouldRepairMissingRegisterSessionMapping) {
-        if (isAutomaticResolution) {
+        if (shouldRepairMissingRegisterSessionMapping) {
+          if (isAutomaticResolution) {
+            return userError({
+              code: "precondition_failed",
+              message:
+                "This register review is not eligible for automatic sync repair.",
+            });
+          }
+
+          if (!isRepairableRegisterSessionStatus(registerSession.status)) {
+            return userError({
+              code: "precondition_failed",
+              message:
+                "This synced sale can only be repaired before the register session is closed.",
+            });
+          }
+
+          if (registerSession.status === "closing") {
+            const closeoutHolds = await listRegisterSessionCloseoutHolds(ctx, {
+              registerSessionId: registerSession._id,
+              storeId: args.storeId,
+            });
+            const hasMappingRepairHold = closeoutHolds.some(
+              (hold) =>
+                hold.kind ===
+                  "repairable_missing_register_session_mapping_sales" &&
+                hold.count > 0,
+            );
+            const salePrecedesCloseout =
+              await salePrecedesLocalCloseoutIfPresent(ctx, {
+                storeId: args.storeId,
+                syncEvent,
+                terminalId,
+              });
+            if (!hasMappingRepairHold || !salePrecedesCloseout) {
+              return userError({
+                code: "precondition_failed",
+                message:
+                  "This synced sale can no longer be repaired for this closeout.",
+              });
+            }
+          }
+
+          const completedTransaction =
+            await getCompletedTransactionForRegisterMappingRepair(
+              ctx,
+              localSyncRepository,
+              {
+                conflict,
+                registerSessionId: args.registerSessionId,
+                syncEvent,
+                terminalId,
+              },
+            );
+          if (completedTransaction.kind === "mismatch") {
+            return userError({
+              code: "precondition_failed",
+              message:
+                "This synced sale could not be matched to a completed sale for this register session.",
+            });
+          }
+
+          try {
+            const mappingResult =
+              await createOrReuseRegisterSessionRepairMapping(
+                localSyncRepository,
+                {
+                  localEventId: syncEvent.localEventId,
+                  localRegisterSessionId: syncEvent.localRegisterSessionId,
+                  now: resolvedAt,
+                  registerSessionId: args.registerSessionId,
+                  storeId: args.storeId,
+                  terminalId,
+                },
+              );
+            if (
+              "status" in mappingResult &&
+              mappingResult.status === "conflict"
+            ) {
+              return userError({
+                code: "precondition_failed",
+                message:
+                  "This synced sale is already mapped to a different register session.",
+              });
+            }
+          } catch {
+            return userError({
+              code: "precondition_failed",
+              message:
+                "This synced sale is already mapped to a different register session.",
+            });
+          }
+
+          const hasUnselectedOpenConflictForEvent =
+            requestedConflictIds.size > 0 &&
+            allConflicts.some(
+              (candidate) =>
+                candidate.localEventId === syncEvent.localEventId &&
+                candidate.terminalId === terminalId &&
+                candidate.conflictType !== conflict.conflictType &&
+                candidate.status === "needs_review" &&
+                !requestedConflictIds.has(candidate._id) &&
+                !requestedConflictIds.has(candidate.localEventId),
+            );
+          if (completedTransaction.kind === "matched") {
+            if (!hasUnselectedOpenConflictForEvent) {
+              await localSyncRepository.patchEvent(syncEvent._id, {
+                status: "projected",
+                projectedAt: resolvedAt,
+              });
+            }
+            if (hasConflictRecord) {
+              resolvedConflictIds.add(
+                conflict._id as Id<"posLocalSyncConflict">,
+              );
+            }
+            projectedTransactionIds.push(completedTransaction.transaction._id);
+            continue;
+          }
+
+          if (hasUnselectedOpenConflictForEvent) {
+            if (hasConflictRecord) {
+              resolvedConflictIds.add(
+                conflict._id as Id<"posLocalSyncConflict">,
+              );
+            }
+            continue;
+          }
+        }
+
+        if (isAutomaticResolution && !shouldApplyProoflessStaffAccessEvent) {
           return userError({
             code: "precondition_failed",
             message:
@@ -2166,165 +2320,137 @@ export const resolveRegisterSessionSyncReview = mutation({
           });
         }
 
-        if (!isRepairableRegisterSessionStatus(registerSession.status)) {
-          return userError({
-            code: "precondition_failed",
-            message:
-              "This synced sale can only be repaired before the register session is closed.",
-          });
-        }
-
-        if (registerSession.status === "closing") {
-          const closeoutHolds = await listRegisterSessionCloseoutHolds(ctx, {
-            registerSessionId: registerSession._id,
-            storeId: args.storeId,
-          });
-          const hasMappingRepairHold = closeoutHolds.some(
-            (hold) =>
-              hold.kind ===
-                "repairable_missing_register_session_mapping_sales" &&
-              hold.count > 0,
-          );
-          const salePrecedesCloseout = await salePrecedesLocalCloseoutIfPresent(
-            ctx,
-            {
-              storeId: args.storeId,
-              syncEvent,
-              terminalId,
-            },
-          );
-          if (!hasMappingRepairHold || !salePrecedesCloseout) {
-            return userError({
-              code: "precondition_failed",
-              message:
-                "This synced sale can no longer be repaired for this closeout.",
-            });
-          }
-        }
-
-        const completedTransaction =
-          await getCompletedTransactionForRegisterMappingRepair(
-            ctx,
-            localSyncRepository,
-            {
-              conflict,
-              registerSessionId: args.registerSessionId,
-              syncEvent,
-              terminalId,
-            },
-          );
-        if (completedTransaction.kind === "mismatch") {
-          return userError({
-            code: "precondition_failed",
-            message:
-              "This synced sale could not be matched to a completed sale for this register session.",
-          });
-        }
-
-        try {
-          const mappingResult = await createOrReuseRegisterSessionRepairMapping(
-            localSyncRepository,
-            {
-              localEventId: syncEvent.localEventId,
-              localRegisterSessionId: syncEvent.localRegisterSessionId,
-              now: resolvedAt,
-              registerSessionId: args.registerSessionId,
-              storeId: args.storeId,
-              terminalId,
-            },
-          );
+        if (
+          !shouldApplyReviewedSale &&
+          !shouldApplyReviewedCloseout &&
+          !shouldApplyProoflessStaffAccessEvent &&
+          !shouldRepairMissingRegisterSessionMapping
+        ) {
           if (
-            "status" in mappingResult &&
-            mappingResult.status === "conflict"
+            syncEvent.eventType === "register_closed" &&
+            review.reviewKind === "duplicate_register_closeout"
           ) {
             return userError({
               code: "precondition_failed",
               message:
-                "This synced sale is already mapped to a different register session.",
+                "This synced closeout cannot be applied because the register is already closed. Reject the synced activity to discard it.",
             });
           }
-        } catch {
+
+          if (review.reviewKind === "service_customer_attribution") {
+            return userError({
+              code: "precondition_failed",
+              message:
+                "This synced service sale is missing customer attribution. Reject the synced activity to clear this review, then recreate the service work with a customer if needed.",
+            });
+          }
+
           return userError({
             code: "precondition_failed",
             message:
-              "This synced sale is already mapped to a different register session.",
+              "This register review still needs attention before the synced activity can be applied.",
           });
         }
 
-        const hasUnselectedOpenConflictForEvent =
-          requestedConflictIds.size > 0 &&
-          allConflicts.some(
-            (candidate) =>
-              candidate.localEventId === syncEvent.localEventId &&
-              candidate.terminalId === terminalId &&
-              candidate.conflictType !== conflict.conflictType &&
-              candidate.status === "needs_review" &&
-              !requestedConflictIds.has(candidate._id) &&
-              !requestedConflictIds.has(candidate.localEventId),
-          );
-        if (completedTransaction.kind === "matched") {
-          if (!hasUnselectedOpenConflictForEvent) {
-            await localSyncRepository.patchEvent(syncEvent._id, {
-              status: "projected",
-              projectedAt: resolvedAt,
-            });
-          }
+        if (syncEvent.status === "projected") {
           if (hasConflictRecord) {
-            resolvedConflictIds.add(conflict._id as Id<"posLocalSyncConflict">);
+            if (shouldApplyReviewedSale && selectedEventConflicts.length > 0) {
+              for (const selectedEventConflict of selectedEventConflicts) {
+                resolvedConflictIds.add(
+                  selectedEventConflict._id as Id<"posLocalSyncConflict">,
+                );
+              }
+            } else {
+              resolvedConflictIds.add(
+                conflict._id as Id<"posLocalSyncConflict">,
+              );
+              addResolvedMatchingLoadedConflicts(conflict, terminalId);
+            }
           }
-          projectedTransactionIds.push(completedTransaction.transaction._id);
           continue;
         }
 
-        if (hasUnselectedOpenConflictForEvent) {
-          if (hasConflictRecord) {
-            resolvedConflictIds.add(conflict._id as Id<"posLocalSyncConflict">);
-          }
-          continue;
+        if (syncEvent.status !== "conflicted" && !shouldApplyManagerOverride) {
+          return userError({
+            code: "precondition_failed",
+            message:
+              "This register review is not ready to apply. Refresh the register session and try again.",
+          });
         }
-      }
 
-      if (isAutomaticResolution && !shouldApplyProoflessStaffAccessEvent) {
-        return userError({
-          code: "precondition_failed",
-          message:
-            "This register review is not eligible for automatic sync repair.",
-        });
-      }
-
-      if (
-        !shouldApplyReviewedSale &&
-        !shouldApplyReviewedCloseout &&
-        !shouldApplyProoflessStaffAccessEvent &&
-        !shouldRepairMissingRegisterSessionMapping
-      ) {
+        const parsedEvent = parseStoredLocalSyncEvent(
+          localSyncRepository,
+          shouldApplyManagerOverride && syncEvent.eventType === "sale_completed"
+            ? buildReviewedSaleProjectionEvent(syncEvent)
+            : syncEvent,
+        );
         if (
-          syncEvent.eventType === "register_closed" &&
-          review.reviewKind === "duplicate_register_closeout"
+          !parsedEvent.ok ||
+          (shouldApplyReviewedSale &&
+            parsedEvent.event.eventType !== "sale_completed") ||
+          (shouldRepairMissingRegisterSessionMapping &&
+            parsedEvent.event.eventType !== "sale_completed") ||
+          (shouldApplyProoflessStaffAccessEvent &&
+            parsedEvent.event.eventType !== "register_opened" &&
+            parsedEvent.event.eventType !== "sale_completed") ||
+          (shouldApplyReviewedCloseout &&
+            parsedEvent.event.eventType !== "register_closed")
         ) {
           return userError({
             code: "precondition_failed",
             message:
-              "This synced closeout cannot be applied because the register is already closed. Reject the synced activity to discard it.",
+              "This register review could not be applied because the synced activity details are incomplete.",
           });
         }
 
-        if (review.reviewKind === "service_customer_attribution") {
+        const projection = await projectLocalSyncEvent(localSyncRepository, {
+          storeId: args.storeId,
+          terminalId,
+          event: parsedEvent.event,
+          syncEventId: syncEvent._id,
+          submittedByUserId: athenaUser._id,
+          now: resolvedAt,
+          options: {
+            allowClosedRegisterSaleProjection: true,
+            allowReviewedClosingRegisterSaleProjection:
+              shouldRepairMissingRegisterSessionMapping,
+            applyExpectedTotalForReviewedNonCashOverpayment:
+              shouldApplyManagerOverride || shouldApplyReviewedSaleCashOverride,
+            allowReviewedInventorySaleProjection:
+              shouldApplyReviewedInventorySale,
+            allowReviewedDuplicatePosSessionSaleProjection:
+              shouldPreserveDuplicatePosSessionSale,
+            allowRegisterCloseoutVarianceProjection:
+              shouldApplyReviewedCloseout,
+            reviewedConflictIds:
+              shouldApplyReviewedSale && selectedEventConflicts.length > 0
+                ? selectedEventConflicts.map(
+                    (reviewConflict) => reviewConflict._id,
+                  )
+                : requestedConflictIds.size > 0
+                  ? Array.from(requestedConflictIds)
+                  : conflicts.map((reviewConflict) => reviewConflict._id),
+            reviewActorStaffProfileId,
+            trustStoredStaffProof: true,
+          },
+        });
+        if (projection.status !== "projected") {
           return userError({
             code: "precondition_failed",
             message:
-              "This synced service sale is missing customer attribution. Reject the synced activity to clear this review, then recreate the service work with a customer if needed.",
+              "This register review still needs attention before the synced sales can be applied.",
+            metadata: {
+              conflictSummaries: projection.conflicts.map(
+                (projectionConflict) => projectionConflict.summary,
+              ),
+            },
           });
         }
 
-        return userError({
-          code: "precondition_failed",
-          message:
-            "This register review still needs attention before the synced activity can be applied.",
+        await localSyncRepository.patchEvent(syncEvent._id, {
+          status: "projected",
+          projectedAt: resolvedAt,
         });
-      }
-
-      if (syncEvent.status === "projected") {
         if (hasConflictRecord) {
           if (shouldApplyReviewedSale && selectedEventConflicts.length > 0) {
             for (const selectedEventConflict of selectedEventConflicts) {
@@ -2337,195 +2463,100 @@ export const resolveRegisterSessionSyncReview = mutation({
             addResolvedMatchingLoadedConflicts(conflict, terminalId);
           }
         }
-        continue;
-      }
-
-      if (syncEvent.status !== "conflicted" && !shouldApplyManagerOverride) {
-        return userError({
-          code: "precondition_failed",
-          message:
-            "This register review is not ready to apply. Refresh the register session and try again.",
-        });
-      }
-
-      const parsedEvent = parseStoredLocalSyncEvent(
-        localSyncRepository,
-        shouldApplyManagerOverride && syncEvent.eventType === "sale_completed"
-          ? buildReviewedSaleProjectionEvent(syncEvent)
-          : syncEvent,
-      );
-      if (
-        !parsedEvent.ok ||
-        (shouldApplyReviewedSale &&
-          parsedEvent.event.eventType !== "sale_completed") ||
-        (shouldRepairMissingRegisterSessionMapping &&
-          parsedEvent.event.eventType !== "sale_completed") ||
-        (shouldApplyProoflessStaffAccessEvent &&
-          parsedEvent.event.eventType !== "register_opened" &&
-          parsedEvent.event.eventType !== "sale_completed") ||
-        (shouldApplyReviewedCloseout &&
-          parsedEvent.event.eventType !== "register_closed")
-      ) {
-        return userError({
-          code: "precondition_failed",
-          message:
-            "This register review could not be applied because the synced activity details are incomplete.",
-        });
-      }
-
-      const projection = await projectLocalSyncEvent(localSyncRepository, {
-        storeId: args.storeId,
-        terminalId,
-        event: parsedEvent.event,
-        syncEventId: syncEvent._id,
-        submittedByUserId: athenaUser._id,
-        now: resolvedAt,
-        options: {
-          allowClosedRegisterSaleProjection: true,
-          allowReviewedClosingRegisterSaleProjection:
-            shouldRepairMissingRegisterSessionMapping,
-          applyExpectedTotalForReviewedNonCashOverpayment:
-            shouldApplyManagerOverride || shouldApplyReviewedSaleCashOverride,
-          allowReviewedInventorySaleProjection:
-            shouldApplyReviewedInventorySale,
-          allowReviewedDuplicatePosSessionSaleProjection:
-            shouldPreserveDuplicatePosSessionSale,
-          allowRegisterCloseoutVarianceProjection: shouldApplyReviewedCloseout,
-          reviewedConflictIds:
-            shouldApplyReviewedSale && selectedEventConflicts.length > 0
-              ? selectedEventConflicts.map(
-                  (reviewConflict) => reviewConflict._id,
-                )
-              : requestedConflictIds.size > 0
-                ? Array.from(requestedConflictIds)
-                : conflicts.map((reviewConflict) => reviewConflict._id),
-          reviewActorStaffProfileId,
-          trustStoredStaffProof: true,
-        },
-      });
-      if (projection.status !== "projected") {
-        return userError({
-          code: "precondition_failed",
-          message:
-            "This register review still needs attention before the synced sales can be applied.",
-          metadata: {
-            conflictSummaries: projection.conflicts.map(
-              (projectionConflict) => projectionConflict.summary,
-            ),
-          },
-        });
-      }
-
-      await localSyncRepository.patchEvent(syncEvent._id, {
-        status: "projected",
-        projectedAt: resolvedAt,
-      });
-      if (hasConflictRecord) {
-        if (shouldApplyReviewedSale && selectedEventConflicts.length > 0) {
-          for (const selectedEventConflict of selectedEventConflicts) {
-            resolvedConflictIds.add(
-              selectedEventConflict._id as Id<"posLocalSyncConflict">,
-            );
-          }
-        } else {
-          resolvedConflictIds.add(conflict._id as Id<"posLocalSyncConflict">);
-          addResolvedMatchingLoadedConflicts(conflict, terminalId);
+        if (shouldApplyReviewedCloseout) {
+          projectedCloseoutCount += 1;
         }
+        projectedTransactionIds.push(
+          ...projection.mappings
+            .filter(
+              (mapping) =>
+                mapping.localIdKind === "transaction" &&
+                mapping.cloudTable === "posTransaction",
+            )
+            .map((mapping) => mapping.cloudId),
+        );
       }
-      if (shouldApplyReviewedCloseout) {
-        projectedCloseoutCount += 1;
-      }
-      projectedTransactionIds.push(
-        ...projection.mappings
-          .filter(
-            (mapping) =>
-              mapping.localIdKind === "transaction" &&
-              mapping.cloudTable === "posTransaction",
-          )
-          .map((mapping) => mapping.cloudId),
+
+      await Promise.all(
+        Array.from(resolvedConflictIds).map((conflictId) =>
+          ctx.db.patch("posLocalSyncConflict", conflictId, {
+            resolvedAt,
+            ...(reviewActorStaffProfileId
+              ? { resolvedByStaffProfileId: reviewActorStaffProfileId }
+              : {}),
+            status: "resolved",
+          }),
+        ),
       );
-    }
 
-    await Promise.all(
-      Array.from(resolvedConflictIds).map((conflictId) =>
-        ctx.db.patch("posLocalSyncConflict", conflictId, {
-          resolvedAt,
-          ...(reviewActorStaffProfileId
-            ? { resolvedByStaffProfileId: reviewActorStaffProfileId }
-            : {}),
-          status: "resolved",
-        }),
-      ),
-    );
-
-    await recordOperationalEventWithCtx(ctx, {
-      ...(reviewActorStaffProfileId
-        ? { actorStaffProfileId: reviewActorStaffProfileId }
-        : {}),
-      actorUserId: athenaUser._id,
-      eventType: "register_session_sync_review_resolved",
-      message:
-        decision === "rejected"
-          ? conflicts.length === 1
-            ? "Rejected synced register review."
-            : `Rejected ${conflicts.length} synced register reviews.`
-          : isAutomaticResolution
-            ? projectedTransactionIds.length === 0
-              ? conflicts.length === 1
-                ? "Automatically resolved proofless synced register review."
-                : `Automatically resolved ${conflicts.length} proofless synced register reviews.`
-              : projectedTransactionIds.length === 1
-                ? "Automatically applied proofless synced register sale."
-                : `Automatically applied ${projectedTransactionIds.length} proofless synced register sales.`
-            : managerOverrideCount > 0
-              ? managerOverrideCount === 1
-                ? projectedTransactionIds.length === 1
-                  ? "Manager override applied rejected synced register sale."
-                  : "Manager override applied rejected synced register activity."
-                : `Manager override applied ${managerOverrideCount} rejected synced register events.`
-              : projectedCloseoutCount > 0
-                ? projectedCloseoutCount === 1
-                  ? "Applied reviewed synced register closeout."
-                  : `Applied ${projectedCloseoutCount} reviewed synced register closeouts.`
-                : projectedTransactionIds.length === 0
-                  ? conflicts.length === 1
-                    ? "Resolved synced register review."
-                    : `Resolved ${conflicts.length} synced register reviews.`
-                  : projectedTransactionIds.length === 1
-                    ? "Applied reviewed synced register sale."
-                    : `Applied ${projectedTransactionIds.length} reviewed synced register sales.`,
-      metadata: {
-        ...(args.approvalProofId
-          ? { approvalProofId: args.approvalProofId }
+      await recordOperationalEventWithCtx(ctx, {
+        ...(reviewActorStaffProfileId
+          ? { actorStaffProfileId: reviewActorStaffProfileId }
           : {}),
-        conflictIds: conflicts.map((conflict) => conflict._id),
-        conflictTypes: conflicts.map((conflict) => conflict.conflictType),
-        decision,
-        localEventIds,
-        managerOverride: managerOverrideCount > 0,
-        managerOverrideCount,
-        originalStatuses,
-        projectedCloseoutCount,
-        projectedTransactionIds,
-        sequences,
-      },
-      organizationId: store.organizationId,
-      registerSessionId: args.registerSessionId,
-      storeId: args.storeId,
-      subjectId: args.registerSessionId,
-      subjectLabel: registerSession.registerNumber,
-      subjectType: "register_session",
-    });
+        actorUserId: athenaUser._id,
+        eventType: "register_session_sync_review_resolved",
+        message:
+          decision === "rejected"
+            ? conflicts.length === 1
+              ? "Rejected synced register review."
+              : `Rejected ${conflicts.length} synced register reviews.`
+            : isAutomaticResolution
+              ? projectedTransactionIds.length === 0
+                ? conflicts.length === 1
+                  ? "Automatically resolved proofless synced register review."
+                  : `Automatically resolved ${conflicts.length} proofless synced register reviews.`
+                : projectedTransactionIds.length === 1
+                  ? "Automatically applied proofless synced register sale."
+                  : `Automatically applied ${projectedTransactionIds.length} proofless synced register sales.`
+              : managerOverrideCount > 0
+                ? managerOverrideCount === 1
+                  ? projectedTransactionIds.length === 1
+                    ? "Manager override applied rejected synced register sale."
+                    : "Manager override applied rejected synced register activity."
+                  : `Manager override applied ${managerOverrideCount} rejected synced register events.`
+                : projectedCloseoutCount > 0
+                  ? projectedCloseoutCount === 1
+                    ? "Applied reviewed synced register closeout."
+                    : `Applied ${projectedCloseoutCount} reviewed synced register closeouts.`
+                  : projectedTransactionIds.length === 0
+                    ? conflicts.length === 1
+                      ? "Resolved synced register review."
+                      : `Resolved ${conflicts.length} synced register reviews.`
+                    : projectedTransactionIds.length === 1
+                      ? "Applied reviewed synced register sale."
+                      : `Applied ${projectedTransactionIds.length} reviewed synced register sales.`,
+        metadata: {
+          ...(args.approvalProofId
+            ? { approvalProofId: args.approvalProofId }
+            : {}),
+          conflictIds: conflicts.map((conflict) => conflict._id),
+          conflictTypes: conflicts.map((conflict) => conflict.conflictType),
+          decision,
+          localEventIds,
+          managerOverride: managerOverrideCount > 0,
+          managerOverrideCount,
+          originalStatuses,
+          projectedCloseoutCount,
+          projectedTransactionIds,
+          sequences,
+        },
+        organizationId: store.organizationId,
+        registerSessionId: args.registerSessionId,
+        storeId: args.storeId,
+        subjectId: args.registerSessionId,
+        subjectLabel: registerSession.registerNumber,
+        subjectType: "register_session",
+      });
 
-    return ok({
-      action: decision === "rejected" ? "rejected" : "resolved",
-      registerSession: await ctx.db.get(
-        "registerSession",
-        args.registerSessionId,
-      ),
-      projectedCount: projectedTransactionIds.length,
-      resolvedCount: conflicts.length,
-    });
+      return ok({
+        action: decision === "rejected" ? "rejected" : "resolved",
+        registerSession: await ctx.db.get(
+          "registerSession",
+          args.registerSessionId,
+        ),
+        projectedCount: projectedTransactionIds.length,
+        resolvedCount: conflicts.length,
+      });
     },
   ),
 });

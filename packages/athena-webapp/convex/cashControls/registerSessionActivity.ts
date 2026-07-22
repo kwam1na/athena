@@ -7,7 +7,9 @@ import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
-import { requireSharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
+import { admitSharedDemoPublicQuery } from "../operationAdmission/publicQuery";
+import { listRegisterSessionActivityReadDefinition } from "../operationAdmission/readDefinitions";
+import type { OperationQueryCtx } from "../operationAdmission/types";
 import { formatStaffDisplayName } from "../../shared/staffDisplayName";
 
 const DEFAULT_ACTIVITY_PAGE_SIZE = 25;
@@ -430,10 +432,10 @@ function buildActivitySummary(activity: ActivityReadModelRow) {
     typeof metadata.paymentMethods === "string"
       ? metadata.paymentMethods
       : typeof metadata.paymentMethodLabel === "string"
-      ? metadata.paymentMethodLabel
-      : typeof metadata.paymentMethod === "string"
-        ? metadata.paymentMethod
-        : null;
+        ? metadata.paymentMethodLabel
+        : typeof metadata.paymentMethod === "string"
+          ? metadata.paymentMethod
+          : null;
   const parts = [
     typeof metadata.itemLabel === "string" ? metadata.itemLabel : null,
     typeof metadata.productSku === "string"
@@ -476,11 +478,13 @@ function buildItemDetails(metadata: {
   return {
     label,
     quantity:
-      typeof metadata.quantity === "number" && Number.isFinite(metadata.quantity)
+      typeof metadata.quantity === "number" &&
+      Number.isFinite(metadata.quantity)
         ? metadata.quantity
         : null,
     unitPrice:
-      typeof metadata.unitPrice === "number" && Number.isFinite(metadata.unitPrice)
+      typeof metadata.unitPrice === "number" &&
+      Number.isFinite(metadata.unitPrice)
         ? metadata.unitPrice
         : null,
   };
@@ -756,9 +760,15 @@ export function buildRegisterSessionActivityPage(args: {
       category,
       evidenceLinks: addConflictLink(links, conflict),
       item: buildItemDetails({
-        itemLabel: stringDetail(event.payload, "productName") ?? stringDetail(event.payload, "name"),
-        quantity: numberDetail(event.payload, "quantity") ?? numberDetail(event.payload, "quantitySold"),
-        unitPrice: numberDetail(event.payload, "unitPrice") ?? numberDetail(event.payload, "price"),
+        itemLabel:
+          stringDetail(event.payload, "productName") ??
+          stringDetail(event.payload, "name"),
+        quantity:
+          numberDetail(event.payload, "quantity") ??
+          numberDetail(event.payload, "quantitySold"),
+        unitPrice:
+          numberDetail(event.payload, "unitPrice") ??
+          numberDetail(event.payload, "price"),
       }),
       label: eventLabel(event.eventType, event.payload),
       localEventId: event.localEventId,
@@ -851,15 +861,15 @@ async function requireFullAdminRegisterSessionAccess(
     throw new Error("Store not found.");
   }
 
-  const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(
-    ctx,
-    "cash.control.write",
-    args.storeId,
-  );
-  const athenaUser = await requireAuthenticatedAthenaUserWithCtx(
-    ctx,
-    demoActor ? { sharedDemoCapability: "cash.control.write" } : undefined,
-  );
+  const admittedActor = (ctx as Partial<OperationQueryCtx>).operationAdmission
+    ?.actor;
+  const athenaUser =
+    admittedActor?.kind === "shared_demo"
+      ? await ctx.db.get("athenaUser", admittedActor.athenaUserId)
+      : await requireAuthenticatedAthenaUserWithCtx(ctx);
+  if (!athenaUser) {
+    throw new Error("Sign in again to continue.");
+  }
   await requireOrganizationMemberRoleWithCtx(ctx, {
     allowedRoles: ["full_admin"],
     failureMessage: "You do not have access to POS activity.",
@@ -1184,64 +1194,128 @@ export const listRegisterSessionActivity = query({
     registerSessionId: v.id("registerSession"),
     storeId: v.id("store"),
   },
-  handler: async (ctx, args) => {
-    const { registerSession } = await requireFullAdminRegisterSessionAccess(
+  handler: admitSharedDemoPublicQuery(
+    listRegisterSessionActivityReadDefinition,
+    async (
       ctx,
-      args,
-    );
-
-    const terminalName = await getTerminalName(
-      ctx,
-      registerSession.terminalId,
-      registerSession.storeId,
-    );
-
-    if (!registerSession.terminalId) {
-      return attachRegisterSessionHeader(
-        buildRegisterSessionActivityPage({
-          conflictsByLocalEventId: new Map(),
-          cursors: [],
-          events: [],
-          isDone: true,
-          mappingsByLocalEventId: new Map(),
-          staffNamesById: new Map(),
-          terminalName: null,
-        }),
-        registerSession,
-        null,
+      args: {
+        paginationOpts: { numItems: number; cursor: string | null };
+        registerSessionId: Id<"registerSession">;
+        storeId: Id<"store">;
+      },
+    ) => {
+      const { registerSession } = await requireFullAdminRegisterSessionAccess(
+        ctx,
+        args,
       );
-    }
 
-    const pageSize = clampPageSize(args.paginationOpts.numItems);
-    const cursorSequence = parseSequenceCursor(args.paginationOpts.cursor);
-    const [activityRowsWithExtra, activityCheckpoints] = await Promise.all([
-      listReadModelActivity(ctx, {
-        cursorSequence,
-        pageSize,
-        registerSessionId: args.registerSessionId,
-        storeId: args.storeId,
-      }),
-      listReadModelCheckpoints(ctx, {
-        registerSessionId: args.registerSessionId,
-        storeId: args.storeId,
-      }),
-    ]);
-    const activityRows = activityRowsWithExtra.slice(0, pageSize);
+      const terminalName = await getTerminalName(
+        ctx,
+        registerSession.terminalId,
+        registerSession.storeId,
+      );
 
-    if (activityRows.length > 0 || activityCheckpoints.length > 0) {
-      const [mappingsByLocalEventId, conflictsByLocalEventId, staffNamesById] =
-        await Promise.all([
+      if (!registerSession.terminalId) {
+        return attachRegisterSessionHeader(
+          buildRegisterSessionActivityPage({
+            conflictsByLocalEventId: new Map(),
+            cursors: [],
+            events: [],
+            isDone: true,
+            mappingsByLocalEventId: new Map(),
+            staffNamesById: new Map(),
+            terminalName: null,
+          }),
+          registerSession,
+          null,
+        );
+      }
+
+      const pageSize = clampPageSize(args.paginationOpts.numItems);
+      const cursorSequence = parseSequenceCursor(args.paginationOpts.cursor);
+      const [activityRowsWithExtra, activityCheckpoints] = await Promise.all([
+        listReadModelActivity(ctx, {
+          cursorSequence,
+          pageSize,
+          registerSessionId: args.registerSessionId,
+          storeId: args.storeId,
+        }),
+        listReadModelCheckpoints(ctx, {
+          registerSessionId: args.registerSessionId,
+          storeId: args.storeId,
+        }),
+      ]);
+      const activityRows = activityRowsWithExtra.slice(0, pageSize);
+
+      if (activityRows.length > 0 || activityCheckpoints.length > 0) {
+        const [
+          mappingsByLocalEventId,
+          conflictsByLocalEventId,
+          staffNamesById,
+        ] = await Promise.all([
           listActivityMappings(ctx, activityRows),
           listActivityConflicts(ctx, activityRows),
           listActivityStaffNames(ctx, activityRows),
         ]);
 
+        return attachRegisterSessionHeader(
+          buildActivityReadModelPage({
+            activities: activityRows,
+            checkpoints: activityCheckpoints,
+            conflictsByLocalEventId,
+            isDone: activityRowsWithExtra.length <= pageSize,
+            mappingsByLocalEventId,
+            staffNamesById,
+            terminalName,
+          }),
+          registerSession,
+          terminalName,
+        );
+      }
+
+      const registerSessionMappings = await listLocalSessionMappings(ctx, {
+        registerSessionId: args.registerSessionId,
+        storeId: args.storeId,
+        terminalId: registerSession.terminalId,
+      });
+      const localRegisterSessionIds = Array.from(
+        new Set(
+          registerSessionMappings.length
+            ? registerSessionMappings.map(
+                (mapping) => mapping.localRegisterSessionId,
+              )
+            : [args.registerSessionId],
+        ),
+      );
+
+      const [eventsWithExtra, cursors] = await Promise.all([
+        listEventsForLocalSessions(ctx, {
+          cursorSequence,
+          localRegisterSessionIds,
+          pageSize,
+          storeId: args.storeId,
+          terminalId: registerSession.terminalId,
+        }),
+        listCursorsForLocalSessions(ctx, {
+          localRegisterSessionIds,
+          storeId: args.storeId,
+          terminalId: registerSession.terminalId,
+        }),
+      ]);
+      const events = eventsWithExtra.slice(0, pageSize);
+      const [mappingsByLocalEventId, conflictsByLocalEventId, staffNamesById] =
+        await Promise.all([
+          listEventMappings(ctx, events),
+          listEventConflicts(ctx, events),
+          listStaffNames(ctx, events),
+        ]);
+
       return attachRegisterSessionHeader(
-        buildActivityReadModelPage({
-          activities: activityRows,
-          checkpoints: activityCheckpoints,
+        buildRegisterSessionActivityPage({
           conflictsByLocalEventId,
-          isDone: activityRowsWithExtra.length <= pageSize,
+          cursors,
+          events,
+          isDone: eventsWithExtra.length <= pageSize,
           mappingsByLocalEventId,
           staffNamesById,
           terminalName,
@@ -1249,57 +1323,6 @@ export const listRegisterSessionActivity = query({
         registerSession,
         terminalName,
       );
-    }
-
-    const registerSessionMappings = await listLocalSessionMappings(ctx, {
-      registerSessionId: args.registerSessionId,
-      storeId: args.storeId,
-      terminalId: registerSession.terminalId,
-    });
-    const localRegisterSessionIds = Array.from(
-      new Set(
-        registerSessionMappings.length
-          ? registerSessionMappings.map(
-              (mapping) => mapping.localRegisterSessionId,
-            )
-          : [args.registerSessionId],
-      ),
-    );
-
-    const [eventsWithExtra, cursors] = await Promise.all([
-      listEventsForLocalSessions(ctx, {
-        cursorSequence,
-        localRegisterSessionIds,
-        pageSize,
-        storeId: args.storeId,
-        terminalId: registerSession.terminalId,
-      }),
-      listCursorsForLocalSessions(ctx, {
-        localRegisterSessionIds,
-        storeId: args.storeId,
-        terminalId: registerSession.terminalId,
-      }),
-    ]);
-    const events = eventsWithExtra.slice(0, pageSize);
-    const [mappingsByLocalEventId, conflictsByLocalEventId, staffNamesById] =
-      await Promise.all([
-        listEventMappings(ctx, events),
-        listEventConflicts(ctx, events),
-        listStaffNames(ctx, events),
-      ]);
-
-    return attachRegisterSessionHeader(
-      buildRegisterSessionActivityPage({
-        conflictsByLocalEventId,
-        cursors,
-        events,
-        isDone: eventsWithExtra.length <= pageSize,
-        mappingsByLocalEventId,
-        staffNamesById,
-        terminalName,
-      }),
-      registerSession,
-      terminalName,
-    );
-  },
+    },
+  ),
 });

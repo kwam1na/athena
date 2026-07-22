@@ -5,6 +5,7 @@ vi.mock("../lib/athenaUserAuth", () => ({
   requireOrganizationMemberRoleWithCtx: vi.fn(),
 }));
 vi.mock("../sharedDemo/actor", () => ({
+  getSharedDemoActorWithCtx: vi.fn(),
   requireSharedDemoStoreCapabilityIfApplicable: vi.fn(),
 }));
 vi.mock("../sharedDemo/restore", () => ({
@@ -15,7 +16,10 @@ import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
-import { requireSharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
+import {
+  getSharedDemoActorWithCtx,
+  requireSharedDemoStoreCapabilityIfApplicable,
+} from "../sharedDemo/actor";
 import { requireReadySharedDemoWriteWithCtx } from "../sharedDemo/restore";
 import {
   listStaffMessages,
@@ -54,45 +58,97 @@ function context(recent: unknown[] = []) {
 describe("staff messages", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(requireAuthenticatedAthenaUserWithCtx).mockResolvedValue({ _id: "user-1" } as never);
-    vi.mocked(requireOrganizationMemberRoleWithCtx).mockResolvedValue({} as never);
-    vi.mocked(requireSharedDemoStoreCapabilityIfApplicable).mockResolvedValue(null);
+    vi.mocked(requireAuthenticatedAthenaUserWithCtx).mockResolvedValue({
+      _id: "user-1",
+    } as never);
+    vi.mocked(requireOrganizationMemberRoleWithCtx).mockResolvedValue(
+      {} as never,
+    );
+    vi.mocked(getSharedDemoActorWithCtx).mockResolvedValue(null);
+    vi.mocked(requireSharedDemoStoreCapabilityIfApplicable).mockResolvedValue(
+      null,
+    );
   });
 
   it("allows a normal member to post a bounded internal message", async () => {
     const ctx = context();
-    await invoke(postStaffMessage, ctx, { body: "  Stock count is complete.  ", storeId: "store-1" });
-    expect(ctx.db.insert).toHaveBeenCalledWith("staffMessage", expect.objectContaining({
-      organizationId: "org-1", storeId: "store-1", authorUserId: "user-1", body: "Stock count is complete.",
-    }));
+    await invoke(postStaffMessage, ctx, {
+      body: "  Stock count is complete.  ",
+      storeId: "store-1",
+    });
+    expect(ctx.db.insert).toHaveBeenCalledWith(
+      "staffMessage",
+      expect.objectContaining({
+        organizationId: "org-1",
+        storeId: "store-1",
+        authorUserId: "user-1",
+        body: "Stock count is complete.",
+      }),
+    );
   });
 
   it("requires the current restore epoch for demo writes", async () => {
-    vi.mocked(requireSharedDemoStoreCapabilityIfApplicable).mockResolvedValue({ kind: "shared_demo" } as never);
+    vi.mocked(getSharedDemoActorWithCtx).mockResolvedValue({
+      athenaUserId: "user-1",
+      authUserId: "auth-user-1",
+      kind: "shared_demo",
+      organizationId: "org-1",
+      storeId: "store-1",
+    } as never);
     const ctx = context();
-    await expect(invoke(postStaffMessage, ctx, { body: "Opening complete", storeId: "store-1" })).rejects.toThrow("Refresh the demo");
-    await invoke(postStaffMessage, ctx, { body: "Opening complete", expectedDemoRestoreEpoch: 7, storeId: "store-1" });
+    await expect(
+      invoke(postStaffMessage, ctx, {
+        body: "Opening complete",
+        storeId: "store-1",
+      }),
+    ).rejects.toThrow("Refresh the demo");
+    await invoke(postStaffMessage, ctx, {
+      body: "Opening complete",
+      expectedDemoRestoreEpoch: 7,
+      storeId: "store-1",
+    });
     expect(requireReadySharedDemoWriteWithCtx).toHaveBeenCalledWith(
+      expect.objectContaining({
+        db: ctx.db,
+      }),
+      { expectedEpoch: 7, storeId: "store-1" },
+    );
+    expect(requireSharedDemoStoreCapabilityIfApplicable).not.toHaveBeenCalled();
+    expect(requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
       expect.objectContaining({
         db: ctx.db,
         operationAdmission: expect.any(Object),
       }),
-      { expectedEpoch: 7, storeId: "store-1" },
+      expect.objectContaining({ userId: "user-1" }),
     );
   });
 
   it("rejects cross-store membership before reading or writing messages", async () => {
-    vi.mocked(requireOrganizationMemberRoleWithCtx).mockRejectedValue(new Error("You do not have access to staff messages."));
+    vi.mocked(requireOrganizationMemberRoleWithCtx).mockRejectedValue(
+      new Error("You do not have access to staff messages."),
+    );
     const ctx = context();
-    await expect(invoke(listStaffMessages, ctx, { storeId: "store-1" })).rejects.toThrow("You do not have access");
+    await expect(
+      invoke(listStaffMessages, ctx, { storeId: "store-1" }),
+    ).rejects.toThrow("You do not have access");
     expect(ctx.db.insert).not.toHaveBeenCalled();
   });
 
-  it.each(["", " ", "x".repeat(STAFF_MESSAGE_MAX_LENGTH + 1)])("rejects invalid bounded input", async (body) => {
-    await expect(invoke(postStaffMessage, context(), { body, storeId: "store-1" })).rejects.toThrow("between 1 and 500");
-  });
+  it.each(["", " ", "x".repeat(STAFF_MESSAGE_MAX_LENGTH + 1)])(
+    "rejects invalid bounded input",
+    async (body) => {
+      await expect(
+        invoke(postStaffMessage, context(), { body, storeId: "store-1" }),
+      ).rejects.toThrow("between 1 and 500");
+    },
+  );
 
   it("rate limits an author within the same store", async () => {
-    await expect(invoke(postStaffMessage, context([1, 2, 3, 4, 5]), { body: "Another update", storeId: "store-1" })).rejects.toThrow("Wait a moment");
+    await expect(
+      invoke(postStaffMessage, context([1, 2, 3, 4, 5]), {
+        body: "Another update",
+        storeId: "store-1",
+      }),
+    ).rejects.toThrow("Wait a moment");
   });
 });

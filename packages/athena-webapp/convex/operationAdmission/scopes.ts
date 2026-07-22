@@ -1,14 +1,15 @@
 import type { Id } from "../_generated/dataModel";
-import type { MutationCtx } from "../_generated/server";
 import type {
+  OperationAdmissionCtx,
   OperationDefinition,
+  OperationReadDefinition,
   OperationScopeConstraints,
 } from "./types";
 
 export async function resolveOperationScope(
-  ctx: MutationCtx,
+  ctx: OperationAdmissionCtx,
   args: Record<string, unknown>,
-  definition: OperationDefinition,
+  definition: OperationDefinition | OperationReadDefinition,
 ): Promise<OperationScopeConstraints> {
   if (definition.scope.kind === "none") return {};
   if (definition.scope.resolve) return definition.scope.resolve(ctx, args);

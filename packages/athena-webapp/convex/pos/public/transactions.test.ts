@@ -420,6 +420,9 @@ describe("POS public transaction read and correction authorization", () => {
           if (tableName === "store" && id === "store-1") {
             return { _id: "store-1", organizationId: "org-1" };
           }
+          if (tableName === "athenaUser" && id === "demo-user-1") {
+            return { _id: "demo-user-1" };
+          }
           if (tableName === "staffProfile" && id === "staff-1") {
             return {
               _id: "staff-1",
@@ -668,11 +671,13 @@ describe("POS public transaction read and correction authorization", () => {
     expect(result).toBe(summary);
   });
 
-  it("loads the POS pulse through the shared demo sale capability", async () => {
+  it("loads the POS pulse through the shared demo read rail", async () => {
     const summary = createStorePulseSummary();
-    vi.mocked(
-      sharedDemoActor.requireSharedDemoStoreCapabilityIfApplicable,
-    ).mockResolvedValueOnce({ kind: "shared_demo" } as never);
+    vi.mocked(sharedDemoActor.getSharedDemoActorWithCtx).mockResolvedValueOnce({
+      athenaUserId: "demo-user-1",
+      kind: "shared_demo",
+      storeId: "store-1",
+    } as never);
     vi.mocked(
       athenaUserAuth.requireOrganizationMemberRoleWithCtx,
     ).mockResolvedValue(createMembership("full_admin"));
@@ -683,14 +688,19 @@ describe("POS public transaction read and correction authorization", () => {
       storeId: "store-1" as Id<"store">,
     });
 
+    expect(sharedDemoActor.getSharedDemoActorWithCtx).toHaveBeenCalledWith(ctx);
     expect(
       sharedDemoActor.requireSharedDemoStoreCapabilityIfApplicable,
-    ).toHaveBeenCalledWith(ctx, "pos.sale.complete", "store-1");
+    ).not.toHaveBeenCalled();
     expect(
       athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
-    ).toHaveBeenCalledWith(ctx, {
-      sharedDemoCapability: "pos.sale.complete",
-    });
+    ).not.toHaveBeenCalled();
+    expect(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ userId: "demo-user-1" }),
+    );
   });
 
   it.each([
@@ -1031,15 +1041,18 @@ describe("legacy POS public checkout mutations", () => {
 
     expect(
       athenaUserAuth.requireOrganizationMemberRoleWithCtx,
-    ).toHaveBeenCalledWith(expect.objectContaining({
-      db: ctx.db,
-      operationAdmission: expect.any(Object),
-    }), {
-      allowedRoles: ["full_admin"],
-      failureMessage: "You cannot complete this POS sale.",
-      organizationId: "org-1",
-      userId: "user-1",
-    });
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        db: ctx.db,
+        operationAdmission: expect.any(Object),
+      }),
+      {
+        allowedRoles: ["full_admin"],
+        failureMessage: "You cannot complete this POS sale.",
+        organizationId: "org-1",
+        userId: "user-1",
+      },
+    );
     expect(completeTransactionCommands.completeTransaction).toHaveBeenCalled();
   });
 
@@ -1122,15 +1135,18 @@ describe("legacy POS public checkout mutations", () => {
     });
     expect(
       athenaUserAuth.requireOrganizationMemberRoleWithCtx,
-    ).toHaveBeenCalledWith(expect.objectContaining({
-      db: ctx.db,
-      operationAdmission: expect.any(Object),
-    }), {
-      allowedRoles: ["full_admin", "pos_only"],
-      failureMessage: "You cannot update this transaction.",
-      organizationId: "org-1",
-      userId: "user-1",
-    });
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        db: ctx.db,
+        operationAdmission: expect.any(Object),
+      }),
+      {
+        allowedRoles: ["full_admin", "pos_only"],
+        failureMessage: "You cannot update this transaction.",
+        organizationId: "org-1",
+        userId: "user-1",
+      },
+    );
   });
 
   it("does not patch a transaction whose receipt was already printed", async () => {
@@ -1865,7 +1881,7 @@ describe("adjustTransactionItems public mutation", () => {
 });
 
 describe("getTransactionById public query authorization", () => {
-  it("shared-demo-transaction-detail uses only the transaction store capability", async () => {
+  it("shared-demo-transaction-detail resolves the transaction store through the read rail", async () => {
     vi.mocked(transactionQueries.getTransaction).mockResolvedValue({
       _id: "txn-1",
       storeId: "store-1",
@@ -1874,18 +1890,25 @@ describe("getTransactionById public query authorization", () => {
       _id: "txn-1",
       receiptDeliveryHistory: [],
     } as never);
-    vi.mocked(
-      sharedDemoActor.requireSharedDemoStoreCapabilityIfApplicable,
-    ).mockResolvedValue({ storeId: "store-1" } as never);
-    vi.mocked(
-      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
-    ).mockResolvedValue({ _id: "demo-user-1" } as never);
+    vi.mocked(sharedDemoActor.getSharedDemoActorWithCtx).mockResolvedValue({
+      athenaUserId: "demo-user-1",
+      kind: "shared_demo",
+      storeId: "store-1",
+    } as never);
 
     const ctx = {
       db: {
-        get: vi.fn().mockResolvedValue({
-          _id: "store-1",
-          organizationId: "org-1",
+        get: vi.fn(async (tableName: string, id: string) => {
+          if (tableName === "posTransaction" && id === "txn-1") {
+            return { _id: "txn-1", storeId: "store-1" };
+          }
+          if (tableName === "store" && id === "store-1") {
+            return { _id: "store-1", organizationId: "org-1" };
+          }
+          if (tableName === "athenaUser" && id === "demo-user-1") {
+            return { _id: "demo-user-1" };
+          }
+          return null;
         }),
       },
     };
@@ -1893,14 +1916,13 @@ describe("getTransactionById public query authorization", () => {
     await expect(
       getHandler(getTransactionById)(ctx, { transactionId: "txn-1" }),
     ).resolves.toEqual(expect.objectContaining({ _id: "txn-1" }));
+    expect(sharedDemoActor.getSharedDemoActorWithCtx).toHaveBeenCalledWith(ctx);
     expect(
       sharedDemoActor.requireSharedDemoStoreCapabilityIfApplicable,
-    ).toHaveBeenCalledWith(ctx, "pos.sale.complete", "store-1");
+    ).not.toHaveBeenCalled();
     expect(
       athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
-    ).toHaveBeenCalledWith(ctx, {
-      sharedDemoCapability: "pos.sale.complete",
-    });
+    ).not.toHaveBeenCalled();
   });
 
   it("requires a same-organization POS role before returning receipt delivery metadata", async () => {

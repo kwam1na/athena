@@ -1,8 +1,14 @@
 import { mutation, query } from "../_generated/server";
 import { v } from "convex/values";
 import { organizationSchema } from "../schemas/inventory";
-import { getSharedDemoActorWithCtx } from "../sharedDemo/actor";
 import { requireNonDemoFoundationMutation } from "../sharedDemo/foundation";
+import { admitSharedDemoPublicQuery } from "../operationAdmission/publicQuery";
+import {
+  getOrganizationByIdOrSlugReadDefinition,
+  listAthenaUserOrganizationsReadDefinition,
+} from "../operationAdmission/readDefinitions";
+import type { OperationQueryCtx } from "../operationAdmission/types";
+import type { Id } from "../_generated/dataModel";
 
 const entity = "organization";
 
@@ -10,9 +16,15 @@ export const getAll = query({
   args: {
     userId: v.id("athenaUser"),
   },
-  handler: async (ctx, args) => {
-    const demoActor = await getSharedDemoActorWithCtx(ctx);
-    if (demoActor && args.userId !== demoActor.athenaUserId) return [];
+  handler: admitSharedDemoPublicQuery(
+    listAthenaUserOrganizationsReadDefinition,
+    async (ctx: OperationQueryCtx, args: { userId: Id<"athenaUser"> }) => {
+    const admittedActor = ctx.operationAdmission.actor;
+    if (
+      admittedActor.kind === "shared_demo" &&
+      args.userId !== admittedActor.athenaUserId
+    )
+      return [];
     const memberOrgs = await ctx.db
       .query("organizationMember")
       .withIndex("by_userId", (q) => q.eq("userId", args.userId))
@@ -25,7 +37,8 @@ export const getAll = query({
     );
 
     return organizations.filter((o) => !!o);
-  },
+    },
+  ),
 });
 
 export const getById = query({
@@ -42,8 +55,12 @@ export const getByIdOrSlug = query({
   args: {
     identifier: v.union(v.id(entity), v.string()),
   },
-  handler: async (ctx, args) => {
-    const demoActor = await getSharedDemoActorWithCtx(ctx);
+  handler: admitSharedDemoPublicQuery(
+    getOrganizationByIdOrSlugReadDefinition,
+    async (
+      ctx: OperationQueryCtx,
+      args: { identifier: Id<"organization"> | string },
+    ) => {
     const organization = await ctx.db
       .query(entity)
       .filter((q) =>
@@ -57,10 +74,16 @@ export const getByIdOrSlug = query({
     if (!organization) {
       return null;
     }
-    if (demoActor && organization._id !== demoActor.organizationId) return null;
+    const admittedActor = ctx.operationAdmission.actor;
+    if (
+      admittedActor.kind === "shared_demo" &&
+      organization._id !== admittedActor.organizationId
+    )
+      return null;
 
     return organization;
-  },
+    },
+  ),
 });
 
 export const create = mutation({

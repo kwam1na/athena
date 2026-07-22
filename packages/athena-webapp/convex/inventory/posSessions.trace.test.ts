@@ -4,6 +4,7 @@ import { assertConformsToExportedReturns } from "../lib/returnValidatorContract"
 
 const mocks = vi.hoisted(() => ({
   createTransactionFromSessionHandler: vi.fn(),
+  getSharedDemoActorWithCtx: vi.fn(),
   readActiveInventoryHoldDetailsForSession: vi.fn(),
   recordOperationalEventWithCtx: vi.fn(),
   recordRegisterSessionSale: vi.fn(),
@@ -46,6 +47,10 @@ vi.mock("../lib/athenaUserAuth", () => ({
     mocks.requireOrganizationMemberRoleWithCtx,
 }));
 
+vi.mock("../sharedDemo/actor", () => ({
+  getSharedDemoActorWithCtx: mocks.getSharedDemoActorWithCtx,
+}));
+
 vi.mock("../pos/application/commands/posSessionTracing", () => ({
   createPosSessionTraceRecorder: vi.fn(() => ({
     record: mocks.traceRecord,
@@ -58,6 +63,8 @@ import {
   createSession,
   expireSessionFromOperations,
   expireAllSessionsForStaff,
+  getActiveSession,
+  getStoreSessions,
   getStoreActiveSessionOperations,
   holdSession,
   releaseSessionInventoryHoldsAndDeleteItems,
@@ -227,6 +234,7 @@ type QueryBuilderFilters = {
   expiresBefore?: number;
   staffProfileId?: string;
   sessionId?: string;
+  terminalId?: string;
 };
 
 function createMutationCtx(seed?: {
@@ -307,6 +315,10 @@ function createMutationCtx(seed?: {
         };
       }
 
+      if (tableName === "athenaUser" && id === "demo-user-1") {
+        return { _id: "demo-user-1" };
+      }
+
       if (tableName === "customerProfile") {
         return customerProfiles.find((profile) => profile._id === id) ?? null;
       }
@@ -376,6 +388,9 @@ function createMutationCtx(seed?: {
             if (field === "sessionId") {
               filters.sessionId = String(value);
             }
+            if (field === "terminalId") {
+              filters.terminalId = String(value);
+            }
             if (field === "runKey") {
               filters.runKey = String(value);
             }
@@ -418,6 +433,88 @@ function createMutationCtx(seed?: {
               take: async (limit: number) => page.slice(0, limit),
             }),
             take: async (limit: number) => page.slice(0, limit),
+          };
+        }
+
+        if (tableName === "posSession" && indexName === "by_storeId") {
+          const page = sessions.filter(
+            (session) => session.storeId === filters.storeId,
+          );
+
+          return {
+            order: () => ({
+              take: async (limit: number) => page.slice(0, limit),
+            }),
+          };
+        }
+
+        if (
+          tableName === "posSession" &&
+          indexName === "by_storeId_status_terminalId"
+        ) {
+          const page = sessions.filter(
+            (session) =>
+              session.storeId === filters.storeId &&
+              session.status === filters.status &&
+              session.terminalId === filters.terminalId,
+          );
+
+          return {
+            order: () => ({
+              take: async (limit: number) => page.slice(0, limit),
+            }),
+          };
+        }
+
+        if (
+          tableName === "posSession" &&
+          indexName === "by_storeId_status_staffProfileId"
+        ) {
+          const page = sessions.filter(
+            (session) =>
+              session.storeId === filters.storeId &&
+              session.status === filters.status &&
+              session.staffProfileId === filters.staffProfileId,
+          );
+
+          return {
+            order: () => ({
+              take: async (limit: number) => page.slice(0, limit),
+            }),
+          };
+        }
+
+        if (
+          tableName === "posSession" &&
+          indexName === "by_storeId_terminalId"
+        ) {
+          const page = sessions.filter(
+            (session) =>
+              session.storeId === filters.storeId &&
+              session.terminalId === filters.terminalId,
+          );
+
+          return {
+            order: () => ({
+              take: async (limit: number) => page.slice(0, limit),
+            }),
+          };
+        }
+
+        if (
+          tableName === "posSession" &&
+          indexName === "by_storeId_staffProfileId"
+        ) {
+          const page = sessions.filter(
+            (session) =>
+              session.storeId === filters.storeId &&
+              session.staffProfileId === filters.staffProfileId,
+          );
+
+          return {
+            order: () => ({
+              take: async (limit: number) => page.slice(0, limit),
+            }),
           };
         }
 
@@ -546,6 +643,7 @@ describe("pos session lifecycle trace handlers", () => {
     mocks.requireAuthenticatedAthenaUserWithCtx.mockResolvedValue({
       _id: "user-1",
     });
+    mocks.getSharedDemoActorWithCtx.mockResolvedValue(null);
     mocks.requireOrganizationMemberRoleWithCtx.mockResolvedValue(undefined);
     mocks.releaseActiveInventoryHoldsForSession.mockResolvedValue({
       releasedHoldCount: 0,
@@ -747,6 +845,198 @@ describe("pos session lifecycle trace handlers", () => {
       }),
     );
   });
+
+  it("admits shared-demo active session operations through the read rail", async () => {
+    mocks.getSharedDemoActorWithCtx.mockResolvedValue({
+      athenaUserId: "demo-user-1",
+      kind: "shared_demo",
+      storeId: "store-1",
+    });
+    const ctx = createMutationCtx({
+      sessions: [
+        buildSession({
+          _id: "session-active",
+          sessionNumber: "SES-100",
+          status: "active",
+        }),
+      ],
+    });
+
+    const result = await getHandler(getStoreActiveSessionOperations)(
+      ctx as never,
+      {
+        storeId: "store-1",
+        limit: 10,
+      },
+    );
+
+    expect(result.rows).toHaveLength(1);
+    expect(mocks.getSharedDemoActorWithCtx).toHaveBeenCalledWith(ctx);
+    expect(mocks.requireAuthenticatedAthenaUserWithCtx).not.toHaveBeenCalled();
+    expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        allowedRoles: ["full_admin", "pos_only"],
+        userId: "demo-user-1",
+      }),
+    );
+  });
+
+  it("denies shared-demo active session operations outside the admitted store", async () => {
+    mocks.getSharedDemoActorWithCtx.mockResolvedValue({
+      athenaUserId: "demo-user-1",
+      kind: "shared_demo",
+      storeId: "other-store",
+    });
+    const ctx = createMutationCtx({
+      sessions: [
+        buildSession({
+          _id: "session-active",
+          sessionNumber: "SES-100",
+          status: "active",
+        }),
+      ],
+    });
+
+    await expect(
+      getHandler(getStoreActiveSessionOperations)(ctx as never, {
+        storeId: "store-1",
+        limit: 10,
+      }),
+    ).rejects.toThrow("This action isn't allowed in the demo.");
+    expect(mocks.requireAuthenticatedAthenaUserWithCtx).not.toHaveBeenCalled();
+  });
+
+  it("admits shared-demo store session reads through the read rail", async () => {
+    mocks.getSharedDemoActorWithCtx.mockResolvedValue({
+      athenaUserId: "demo-user-1",
+      kind: "shared_demo",
+      storeId: "store-1",
+    });
+    const ctx = createMutationCtx({
+      sessions: [
+        buildSession({
+          _id: "session-active",
+          sessionNumber: "SES-100",
+          status: "active",
+        }),
+      ],
+    });
+
+    const result = await getHandler(getStoreSessions)(ctx as never, {
+      storeId: "store-1",
+      status: "active",
+      limit: 10,
+    });
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        _id: "session-active",
+        sessionNumber: "SES-100",
+      }),
+    ]);
+    expect(mocks.requireAuthenticatedAthenaUserWithCtx).not.toHaveBeenCalled();
+    expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        allowedRoles: ["full_admin", "pos_only"],
+        userId: "demo-user-1",
+      }),
+    );
+  });
+
+  it("admits shared-demo active session reads through the read rail", async () => {
+    mocks.getSharedDemoActorWithCtx.mockResolvedValue({
+      athenaUserId: "demo-user-1",
+      kind: "shared_demo",
+      storeId: "store-1",
+    });
+    const ctx = createMutationCtx({
+      sessions: [
+        buildSession({
+          _id: "session-active",
+          sessionNumber: "SES-100",
+          status: "active",
+          terminalId: "terminal-1",
+        }),
+      ],
+    });
+
+    const result = await getHandler(getActiveSession)(ctx as never, {
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        _id: "session-active",
+        sessionNumber: "SES-100",
+      }),
+    );
+    expect(mocks.requireAuthenticatedAthenaUserWithCtx).not.toHaveBeenCalled();
+    expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        allowedRoles: ["full_admin", "pos_only"],
+        userId: "demo-user-1",
+      }),
+    );
+  });
+
+  it.each([
+    [getStoreSessions, { storeId: "store-1", status: "active" }],
+    [getActiveSession, { storeId: "store-1", terminalId: "terminal-1" }],
+  ] as const)(
+    "denies shared-demo session reads outside the admitted store",
+    async (fn, args) => {
+      mocks.getSharedDemoActorWithCtx.mockResolvedValue({
+        athenaUserId: "demo-user-1",
+        kind: "shared_demo",
+        storeId: "other-store",
+      });
+      const ctx = createMutationCtx({
+        sessions: [
+          buildSession({
+            _id: "session-active",
+            sessionNumber: "SES-100",
+            status: "active",
+          }),
+        ],
+      });
+
+      await expect(getHandler(fn)(ctx as never, args)).rejects.toThrow(
+        "This action isn't allowed in the demo.",
+      );
+      expect(
+        mocks.requireAuthenticatedAthenaUserWithCtx,
+      ).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    [getStoreSessions, { storeId: "store-1", status: "active" }],
+    [getActiveSession, { storeId: "store-1", terminalId: "terminal-1" }],
+  ] as const)(
+    "does not return same-store session rows when store membership is denied",
+    async (fn, args) => {
+      mocks.requireOrganizationMemberRoleWithCtx.mockRejectedValueOnce(
+        new Error("You cannot view POS sessions for this store."),
+      );
+      const ctx = createMutationCtx({
+        sessions: [
+          buildSession({
+            _id: "session-active",
+            sessionNumber: "SES-100",
+            status: "active",
+          }),
+        ],
+      });
+
+      await expect(getHandler(fn)(ctx as never, args)).rejects.toThrow(
+        "You cannot view POS sessions for this store.",
+      );
+    },
+  );
 
   it.each(["active", "held"] as const)(
     "lets a manager expire a %s POS session, release active holds, and record audit plus trace evidence",

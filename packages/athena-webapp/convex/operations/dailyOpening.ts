@@ -8,9 +8,11 @@ import type { Doc, Id } from "../_generated/dataModel";
 import { v } from "convex/values";
 import { startStoreDayOperationDefinition } from "../operationAdmission/definitions";
 import { admitSharedDemoPublicMutation } from "../operationAdmission/publicMutation";
-import { requireSharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
-import { requireReadySharedDemoWriteWithCtx } from "../sharedDemo/restore";
+import { admitSharedDemoPublicQuery } from "../operationAdmission/publicQuery";
+import { getDailyOpeningSnapshotReadDefinition } from "../operationAdmission/readDefinitions";
+import type { OperationMutationCtx } from "../operationAdmission/types";
 import { commandResultValidator } from "../lib/commandResultValidators";
+import { requireStoreMemberAccessWithCtx } from "../lib/storeMemberAccess";
 import { recordOperationalEventWithCtx } from "./operationalEvents";
 import { getDailyCloseOpeningContextWithCtx } from "./dailyClose";
 import {
@@ -1573,21 +1575,32 @@ export const getDailyOpeningSnapshot = query({
     startAt: v.optional(v.number()),
     storeId: v.id("store"),
   },
-  handler: async (ctx, args) => {
-    let includeManagerReviewEvidence = false;
+  handler: admitSharedDemoPublicQuery(
+    getDailyOpeningSnapshotReadDefinition,
+    async (
+      ctx,
+      args: {
+        endAt?: number;
+        operatingDate: string;
+        startAt?: number;
+        storeId: Id<"store">;
+      },
+    ) => {
+      const { membership } = await requireStoreMemberAccessWithCtx(ctx, {
+        allowedRoles: ["full_admin", "pos_only"],
+        demoAccess: { kind: "read" },
+        failureMessage:
+          "You cannot view the daily opening snapshot for this store.",
+        storeId: args.storeId,
+      });
+      const includeManagerReviewEvidence = membership.role === "full_admin";
 
-    try {
-      await requireStoreFullAdminAccess(ctx, args.storeId);
-      includeManagerReviewEvidence = true;
-    } catch {
-      includeManagerReviewEvidence = false;
-    }
-
-    return buildDailyOpeningSnapshotWithCtx(ctx, {
-      ...args,
-      includeManagerReviewEvidence,
-    });
-  },
+      return buildDailyOpeningSnapshotWithCtx(ctx, {
+        ...args,
+        includeManagerReviewEvidence,
+      });
+    },
+  ),
 });
 
 export const startStoreDay = mutation({
@@ -1606,25 +1619,22 @@ export const startStoreDay = mutation({
   returns: commandResultValidator(v.any()),
   handler: admitSharedDemoPublicMutation(
     startStoreDayOperationDefinition,
-    async (ctx, args) => {
-    const demoActor = await requireSharedDemoStoreCapabilityIfApplicable(
-      ctx,
-      "daily_operations.write",
-      args.storeId,
-    );
-    if (!demoActor) return startStoreDayWithCtx(ctx, args);
+    async (ctx: OperationMutationCtx, args) => {
+      const admittedActor = ctx.operationAdmission.actor;
+      if (admittedActor.kind !== "shared_demo") {
+        return startStoreDayWithCtx(ctx, args);
+      }
 
-    await requireReadySharedDemoWriteWithCtx(ctx, { storeId: args.storeId });
-    const openingActor = await resolveSharedDemoOpeningActorWithCtx(ctx, {
-      athenaUserId: demoActor.athenaUserId,
-      storeId: args.storeId,
-    });
-    if (openingActor.kind !== "ok") return openingActor;
+      const openingActor = await resolveSharedDemoOpeningActorWithCtx(ctx, {
+        athenaUserId: admittedActor.athenaUserId,
+        storeId: args.storeId,
+      });
+      if (openingActor.kind !== "ok") return openingActor;
 
-    return startStoreDayWithCtx(ctx, {
-      ...args,
-      ...openingActor.data,
-    });
+      return startStoreDayWithCtx(ctx, {
+        ...args,
+        ...openingActor.data,
+      });
     },
   ),
 });

@@ -55,12 +55,23 @@ export function admitPublicMutation<
   };
 }
 
+type SharedDemoMutationHandler = (
+  ctx: OperationMutationCtx,
+  args: any,
+) => Promise<any>;
+
 export function admitSharedDemoPublicMutation<
-  Handler extends (ctx: MutationCtx, args: any) => Promise<any>,
->(definition: OperationDefinition, handler: Handler): Handler {
+  Handler extends SharedDemoMutationHandler,
+>(
+  definition: OperationDefinition,
+  handler: Handler,
+) {
   return admitPublicMutation(definition, handler, {
     resolveAdmission: resolveSharedDemoOperationAdmission,
-  }) as Handler;
+  }) as (
+    ctx: MutationCtx,
+    args: Parameters<Handler>[1],
+  ) => ReturnType<Handler>;
 }
 
 export function resolveSharedDemoOperationAdmission<

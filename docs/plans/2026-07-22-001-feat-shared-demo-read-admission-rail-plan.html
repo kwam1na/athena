@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Shared Demo Read Admission Rail Plan</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #1d2433;
+      --muted: #5a6577;
+      --line: #d9dee7;
+      --panel: #f6f8fb;
+      --accent: #315c96;
+      --risk: #8a4b16;
+    }
+    body {
+      margin: 0;
+      background: #ffffff;
+      color: var(--ink);
+      font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 40px 28px 56px;
+    }
+    header {
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 28px;
+      padding-bottom: 20px;
+    }
+    h1 {
+      font-size: 32px;
+      line-height: 1.15;
+      margin: 0 0 12px;
+    }
+    h2 {
+      border-top: 1px solid var(--line);
+      font-size: 21px;
+      margin: 30px 0 12px;
+      padding-top: 22px;
+    }
+    h3 {
+      font-size: 16px;
+      margin: 20px 0 8px;
+    }
+    a { color: var(--accent); }
+    .meta {
+      color: var(--muted);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin: 0;
+    }
+    .summary {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px 18px;
+    }
+    .grid {
+      display: grid;
+      gap: 14px;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px 16px;
+    }
+    .card h3 { margin-top: 0; }
+    ul, ol { padding-left: 22px; }
+    li { margin: 5px 0; }
+    table {
+      border-collapse: collapse;
+      margin: 12px 0;
+      width: 100%;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 9px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: var(--panel); }
+    code {
+      background: #eef2f7;
+      border-radius: 4px;
+      padding: 1px 4px;
+    }
+    .callout {
+      border-left: 4px solid var(--accent);
+      background: var(--panel);
+      padding: 10px 14px;
+    }
+    .risk {
+      border-left-color: var(--risk);
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Shared Demo Read Admission Rail</h1>
+      <p class="meta">
+        <span>Type: feat</span>
+        <span>Status: active</span>
+        <span>Date: 2026-07-22</span>
+        <span>Source: <a href="./2026-07-22-001-feat-shared-demo-read-admission-rail-plan.md">markdown plan</a></span>
+      </p>
+    </header>
+
+    <section class="summary">
+      <strong>Summary.</strong> Build a query-side counterpart to the operations admission rail for shared-demo reads, prove it first on Operations viewing, and leave a checker-backed inventory for follow-up onboarding waves.
+    </section>
+
+    <section>
+      <h2>Scope</h2>
+      <div class="grid">
+        <article class="card">
+          <h3>Must Land</h3>
+          <ul>
+            <li>Read admission definitions and wrapper for public Convex queries.</li>
+            <li>Shared-demo read adapter with server-owned store/org clamp.</li>
+            <li>Operations viewing proof via Daily Operations snapshot reads.</li>
+            <li>Complete checker-backed inventory for every non-reporting ad hoc shared-demo read surface.</li>
+          </ul>
+        </article>
+        <article class="card">
+          <h3>Excluded</h3>
+          <ul>
+            <li>No migration under <code>packages/athena-webapp/convex/reporting/**</code> or <code>reports.read</code> bridges.</li>
+            <li>No generic auth expansion for write-shaped read capabilities.</li>
+            <li>No change to write admission, protected effects, or demo history fixtures.</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <h2>Key Decisions</h2>
+      <ul>
+        <li>Proving path is Operations viewing, not Open Work.</li>
+        <li>Open Work follows as the first tracked onboarding wave after the first PR.</li>
+        <li>Read semantics remain separate from write readiness and effects.</li>
+        <li>Expired or wrong-store shared-demo reads are recognized denials with no normal-auth fallback.</li>
+        <li>Reporting reads remain unmanaged by this migration.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Implementation Units</h2>
+      <div class="grid">
+        <article class="card">
+          <h3>U1. Inventory and Checker Foundation</h3>
+          <p>Create exact non-reporting read inventory and a checker that distinguishes legacy, migrated, and untracked query states.</p>
+        </article>
+        <article class="card">
+          <h3>U2. Read Admission Rail Core</h3>
+          <p>Add query wrapper, read definitions, context injection, and shared-demo read adapter tests.</p>
+        </article>
+        <article class="card">
+          <h3>U3. Operations Viewing Proving Path</h3>
+          <p>Migrate Daily Operations snapshot reads off write-shaped demo capabilities and prove current-day shared-demo viewing.</p>
+        </article>
+        <article class="card">
+          <h3>U4. Open Work and Operations Queue</h3>
+          <p>Migrate queue and count reads in a follow-up after the Operations viewing proof.</p>
+        </article>
+        <article class="card">
+          <h3>U5. Remaining Read Waves</h3>
+          <p>Onboard shell, catalog, stock, POS, evidence, storefront, and telemetry reads in bounded follow-up waves.</p>
+        </article>
+        <article class="card">
+          <h3>U6. Docs and Delivery Proof</h3>
+          <p>Document the pattern, rebuild graphify, and include delivery evidence for the PR.</p>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <h2>Migration Waves</h2>
+      <table>
+        <thead>
+          <tr><th>Wave</th><th>Scope</th><th>Examples</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Proof</td><td>Operations viewing</td><td><code>operations/dailyOperations.ts</code></td></tr>
+          <tr><td>Wave 1</td><td>Open Work and shell/POS reads</td><td><code>operations/operationalWorkItems.ts</code>, POS terminal/register reads</td></tr>
+          <tr><td>Wave 2</td><td>Catalog, stock, SKU activity, workflow evidence</td><td><code>inventory/products.ts</code>, <code>stockOps/adjustments.ts</code></td></tr>
+          <tr><td>Wave 3</td><td>Operations-adjacent and cash/POS financial reads</td><td>Daily Close, automation policies, transactions, cash controls</td></tr>
+          <tr><td>Wave 4</td><td>Storefront/order and telemetry reads</td><td><code>storeFront/onlineOrder.ts</code>, POS telemetry</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Verification Strategy</h2>
+      <ul>
+        <li>Focused tests for read wrapper sequencing, shared-demo admission, wrong-store denial, expired admission, and normal-user fallback.</li>
+        <li>Daily Operations exported-query tests proving Operations viewing uses read admission at exported query boundaries.</li>
+        <li>Read checker tests proving definition plus wrapper coverage and reporting path/capability exclusion.</li>
+        <li>Repo-level validation with <code>bun run pr:athena</code> before the PR is marked mergeable.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Risks</h2>
+      <div class="callout risk">
+        Main risk is accidental shared-demo overreach. The mitigation is to make every migrated read declare scope, test wrong-store denial, keep reporting excluded, and prevent recognized demo actors from falling through to normal auth.
+      </div>
+    </section>
+  </main>
+</body>
+</html>

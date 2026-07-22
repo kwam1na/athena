@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import {
@@ -24,9 +24,20 @@ import {
 const accessMocks = vi.hoisted(() => ({
   requireStoreFullAdminAccess: vi.fn(),
 }));
+const admissionMocks = vi.hoisted(() => ({
+  getSharedDemoActorWithCtx: vi.fn(),
+  requireAuthenticatedAthenaUserWithCtx: vi.fn(),
+}));
 
 vi.mock("../stockOps/access", () => ({
   requireStoreFullAdminAccess: accessMocks.requireStoreFullAdminAccess,
+}));
+vi.mock("../lib/athenaUserAuth", () => ({
+  requireAuthenticatedAthenaUserWithCtx:
+    admissionMocks.requireAuthenticatedAthenaUserWithCtx,
+}));
+vi.mock("../sharedDemo/actor", () => ({
+  getSharedDemoActorWithCtx: admissionMocks.getSharedDemoActorWithCtx,
 }));
 
 type TableName =
@@ -342,9 +353,18 @@ function restoreStageEnv(originalStage: string | undefined) {
 }
 
 describe("daily operations automation adapter", () => {
+  beforeEach(() => {
+    admissionMocks.getSharedDemoActorWithCtx.mockResolvedValue(null);
+    admissionMocks.requireAuthenticatedAthenaUserWithCtx.mockResolvedValue({
+      _id: "user-1",
+    });
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
     accessMocks.requireStoreFullAdminAccess.mockReset();
+    admissionMocks.getSharedDemoActorWithCtx.mockReset();
+    admissionMocks.requireAuthenticatedAthenaUserWithCtx.mockReset();
   });
 
   it("requires full-admin access for Opening auto-start policy reads", async () => {
