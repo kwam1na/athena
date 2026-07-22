@@ -1715,6 +1715,13 @@ export const processReturnExchange = mutation({
             message: "Order not found.",
           });
         }
+
+        await requireReadySharedDemoStoreCapabilityIfApplicable(
+          ctx,
+          "payments.refund",
+          order.storeId,
+        );
+
         const accessResult = await requireNormalOrderStoreAccessWithCtx(
           ctx,
           order,
@@ -1776,12 +1783,6 @@ export const processReturnExchange = mutation({
           restockReturnedItems: args.restockReturnedItems,
           returnItemIds: args.returnItemIds,
         });
-
-        await requireReadySharedDemoStoreCapabilityIfApplicable(
-          ctx,
-          "payments.refund",
-          order.storeId,
-        );
 
         if (plan.requiresApproval) {
           const approvalRequestId = await ctx.db.insert(

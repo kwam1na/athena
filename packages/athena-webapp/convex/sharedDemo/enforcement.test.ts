@@ -20,6 +20,8 @@ vi.mock("../operationAdmission/publicMutation", async (importOriginal) => {
     ...actual,
     admitSharedDemoPublicMutation:
       (_definition: unknown, handler: Function) => handler,
+    withOperationMutationAdmission:
+      (_definition: unknown, handler: Function) => handler,
   };
 });
 

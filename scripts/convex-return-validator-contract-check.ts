@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -15,6 +16,12 @@ export type ConvexReturnValidatorContractFinding = {
 type ConvexPublicFunctionExport = {
   exportName: string;
   kind: "action" | "mutation" | "query";
+  returnsSignature: string;
+};
+
+type ConvexReturnValidatorContractOptions = {
+  baseRef?: string;
+  readBaseFile?: (filePath: string) => Promise<string | null>;
 };
 
 function normalizeRepoPath(repoPath: string) {
@@ -77,6 +84,74 @@ function findMatchingDefinitionEnd(contents: string, startIndex: number) {
   return contents.length;
 }
 
+function findValidatorExpressionEnd(contents: string, startIndex: number) {
+  let parenDepth = 0;
+  let braceDepth = 0;
+  let bracketDepth = 0;
+  let quote: '"' | "'" | "`" | null = null;
+
+  for (let index = startIndex; index < contents.length; index += 1) {
+    const char = contents[index];
+    const next = contents[index + 1];
+
+    if (quote) {
+      if (char === "\\" && next !== undefined) {
+        index += 1;
+        continue;
+      }
+      if (char === quote) {
+        quote = null;
+      }
+      continue;
+    }
+
+    if (char === '"' || char === "'" || char === "`") {
+      quote = char;
+      continue;
+    }
+
+    if (char === "(") parenDepth += 1;
+    if (char === ")") parenDepth -= 1;
+    if (char === "{") braceDepth += 1;
+    if (char === "}") {
+      if (braceDepth === 0 && parenDepth === 0 && bracketDepth === 0) {
+        return index;
+      }
+      braceDepth -= 1;
+    }
+    if (char === "[") bracketDepth += 1;
+    if (char === "]") bracketDepth -= 1;
+
+    if (
+      char === "," &&
+      parenDepth === 0 &&
+      braceDepth === 0 &&
+      bracketDepth === 0
+    ) {
+      return index;
+    }
+  }
+
+  return contents.length;
+}
+
+function normalizeValidatorExpression(expression: string) {
+  return stripTypeScriptNonCode(expression).replace(/\s+/g, "");
+}
+
+function extractReturnsSignature(definitionBody: string) {
+  const returnsMatch = /\breturns\s*:/.exec(definitionBody);
+  if (!returnsMatch) {
+    return null;
+  }
+
+  const validatorStart = returnsMatch.index + returnsMatch[0].length;
+  const validatorEnd = findValidatorExpressionEnd(definitionBody, validatorStart);
+  return normalizeValidatorExpression(
+    definitionBody.slice(validatorStart, validatorEnd),
+  );
+}
+
 function extractConvexPublicFunctionsWithReturns(contents: string) {
   const exports: ConvexPublicFunctionExport[] = [];
   const functionPattern =
@@ -93,13 +168,15 @@ function extractConvexPublicFunctionsWithReturns(contents: string) {
       bodyEnd === -1
         ? contents.slice(bodyStart)
         : contents.slice(bodyStart, bodyEnd);
-    if (!/\breturns\s*:/.test(definitionBody)) {
+    const returnsSignature = extractReturnsSignature(definitionBody);
+    if (!returnsSignature) {
       continue;
     }
 
     exports.push({
       exportName: match[1],
       kind: match[2] as ConvexPublicFunctionExport["kind"],
+      returnsSignature,
     });
   }
 
@@ -192,9 +269,67 @@ function hasConvexReturnContractProofForExport(
   ).test(executableContents);
 }
 
+async function readGitFileAtRef(
+  rootDir: string,
+  baseRef: string,
+  filePath: string,
+) {
+  const { stdout, exitCode } = await new Promise<{
+    stdout: string;
+    exitCode: number | null;
+  }>((resolve, reject) => {
+    const child = spawn(
+      "git",
+      ["-C", rootDir, "show", `${baseRef}:${normalizeRepoPath(filePath)}`],
+      {
+        stdio: ["ignore", "pipe", "ignore"],
+      },
+    );
+    let stdout = "";
+
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
+    });
+    child.on("error", reject);
+    child.on("close", (exitCode) => {
+      resolve({ stdout, exitCode });
+    });
+  });
+  if (exitCode !== 0) {
+    return null;
+  }
+  return stdout;
+}
+
+async function loadBasePublicFunctionMap(
+  rootDir: string,
+  sourcePath: string,
+  options: ConvexReturnValidatorContractOptions,
+) {
+  if (!options.baseRef && !options.readBaseFile) {
+    return null;
+  }
+
+  const baseContents = options.readBaseFile
+    ? await options.readBaseFile(sourcePath)
+    : await readGitFileAtRef(rootDir, options.baseRef!, sourcePath);
+  if (!baseContents) {
+    return new Map<string, ConvexPublicFunctionExport>();
+  }
+
+  return new Map(
+    extractConvexPublicFunctionsWithReturns(baseContents).map((entry) => [
+      entry.exportName,
+      entry,
+    ]),
+  );
+}
+
 export async function collectConvexReturnValidatorContractFindings(
   rootDir: string,
   changedFiles: string[],
+  options: ConvexReturnValidatorContractOptions = {},
 ) {
   const changedFileSet = new Set(sortUnique(changedFiles));
   const findings: ConvexReturnValidatorContractFinding[] = [];
@@ -248,9 +383,25 @@ export async function collectConvexReturnValidatorContractFindings(
     if (publicFunctions.length === 0) {
       continue;
     }
+    const basePublicFunctions = await loadBasePublicFunctionMap(
+      rootDir,
+      changedFile,
+      options,
+    );
 
     const publicFunctionsWithoutProof: ConvexPublicFunctionExport[] = [];
     for (const publicFunction of publicFunctions) {
+      const basePublicFunction = basePublicFunctions?.get(
+        publicFunction.exportName,
+      );
+      if (
+        basePublicFunction &&
+        basePublicFunction.kind === publicFunction.kind &&
+        basePublicFunction.returnsSignature === publicFunction.returnsSignature
+      ) {
+        continue;
+      }
+
       if (!(await hasChangedProofForPublicFunction(changedFile, publicFunction))) {
         publicFunctionsWithoutProof.push(publicFunction);
       }
@@ -279,6 +430,7 @@ export async function collectConvexReturnValidatorContractFindings(
 
 function parseCliArgs(argv: string[]) {
   let rootDir = process.cwd();
+  let baseRef: string | undefined;
   const changedFiles: string[] = [];
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -296,6 +448,19 @@ function parseCliArgs(argv: string[]) {
       rootDir = arg.slice("--root=".length);
       continue;
     }
+    if (arg === "--base") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) {
+        throw new Error("Missing value for --base.");
+      }
+      baseRef = value;
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith("--base=")) {
+      baseRef = arg.slice("--base=".length);
+      continue;
+    }
     if (arg === "--help" || arg === "-h") {
       return { rootDir, changedFiles, help: true };
     }
@@ -305,7 +470,7 @@ function parseCliArgs(argv: string[]) {
     changedFiles.push(arg);
   }
 
-  return { rootDir, changedFiles, help: false };
+  return { rootDir, baseRef, changedFiles, help: false };
 }
 
 function formatFindings(findings: ConvexReturnValidatorContractFinding[]) {
@@ -334,6 +499,7 @@ if (import.meta.main) {
     const findings = await collectConvexReturnValidatorContractFindings(
       parsed.rootDir,
       parsed.changedFiles,
+      { baseRef: parsed.baseRef },
     );
     if (findings.length > 0) {
       console.error(formatFindings(findings));

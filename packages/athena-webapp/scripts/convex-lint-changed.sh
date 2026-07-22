@@ -73,4 +73,5 @@ python3 \
 bun \
   "$REPO_ROOT/scripts/convex-return-validator-contract-check.ts" \
   --root "$REPO_ROOT" \
+  --base "$BASE_REF" \
   "${repo_changed_files[@]}"

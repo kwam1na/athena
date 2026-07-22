@@ -550,8 +550,8 @@ describe("cash control closeouts", () => {
     expect(source).toContain("requestedByStaffProfileId: actorStaffProfileId");
     expect(source).toContain("REGISTER_CLOSEOUT_MODIFICATION_SUBMIT_ACTION");
     expect(source).toContain("closeoutModificationApprovalProofId");
-    expect(source).toContain(
-      "proof.data.approvedByStaffProfileId !==\n        latestReopenedCloseout.actorStaffProfileId",
+    expect(source.replace(/\s+/g, " ")).toContain(
+      "proof.data.approvedByStaffProfileId !== latestReopenedCloseout.actorStaffProfileId",
     );
   });
 

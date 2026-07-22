@@ -93,6 +93,60 @@ describe("collectConvexReturnValidatorContractFindings", () => {
     expect(findings).toEqual([]);
   });
 
+  it("does not require changed proof when the public return validator is unchanged from the base", async () => {
+    const rootDir = await createFixtureRepo();
+    await writePublicQueryWithReturns(rootDir);
+
+    const findings = await collectConvexReturnValidatorContractFindings(
+      rootDir,
+      ["packages/athena-webapp/convex/pos/public/example.ts"],
+      {
+        readBaseFile: async (filePath) =>
+          filePath === "packages/athena-webapp/convex/pos/public/example.ts"
+            ? [
+                'import { query } from "../../../_generated/server";',
+                'import { v } from "convex/values";',
+                "",
+                "export const listExample = query({",
+                "  args: { storeId: v.id(\"store\") },",
+                "  returns: v.object({ status: v.string() }),",
+                "  handler: async () => ({ status: \"base\" }),",
+                "});",
+              ].join("\n")
+            : null,
+      },
+    );
+
+    expect(findings).toEqual([]);
+  });
+
+  it("still requires changed proof when the public return validator changes from the base", async () => {
+    const rootDir = await createFixtureRepo();
+    await writePublicQueryWithReturns(rootDir);
+
+    const findings = await collectConvexReturnValidatorContractFindings(
+      rootDir,
+      ["packages/athena-webapp/convex/pos/public/example.ts"],
+      {
+        readBaseFile: async (filePath) =>
+          filePath === "packages/athena-webapp/convex/pos/public/example.ts"
+            ? [
+                'import { query } from "../../../_generated/server";',
+                'import { v } from "convex/values";',
+                "",
+                "export const listExample = query({",
+                "  args: { storeId: v.id(\"store\") },",
+                "  returns: v.object({ ok: v.boolean() }),",
+                "  handler: async () => ({ ok: true }),",
+                "});",
+              ].join("\n")
+            : null,
+      },
+    );
+
+    expect(findings).toHaveLength(1);
+  });
+
   it("does not accept loose exportReturns string checks as proof", async () => {
     const rootDir = await createFixtureRepo();
     await writePublicQueryWithReturns(rootDir);

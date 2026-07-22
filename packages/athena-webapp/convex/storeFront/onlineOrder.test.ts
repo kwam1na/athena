@@ -104,6 +104,17 @@ describe("online order checkout money wiring", () => {
         success: true,
       }),
     );
+    assertConformsToExportedReturns(
+      processReturnExchange,
+      ok({
+        approvalRequestId: "approval-request-1",
+        balanceDueAmount: 0,
+        message: "Return review requested.",
+        refundAmount: 0,
+        requiresApproval: true,
+        success: true,
+      }),
+    );
     assertConformsToExportedReturns(getOrderMetrics, {
       grossSales: 0,
       netRevenue: 0,

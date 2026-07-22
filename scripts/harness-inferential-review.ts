@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { spawn as spawnChildProcess } from "node:child_process";
 import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -136,43 +137,37 @@ async function readUtf8OrNull(filePath: string) {
   return readFile(filePath, "utf8");
 }
 
-type SpawnedProcess = {
-  exited: Promise<number>;
-  stdout?: ReadableStream | null;
-  stderr?: ReadableStream | null;
-};
+async function runCommand(rootDir: string, command: string[]) {
+  const [executable, ...args] = command;
+  if (!executable) {
+    throw new Error("Command must include an executable.");
+  }
 
-async function runCommand(
-  rootDir: string,
-  command: string[],
-  spawn: (
-    command: string[],
-    options: {
-      cwd: string;
-      stdout: "pipe";
-      stderr: "pipe";
-      env: Record<string, string | undefined>;
-    },
-  ) => SpawnedProcess = Bun.spawn,
-) {
-  const process = spawn(command, {
-    cwd: rootDir,
-    stdout: "pipe",
-    stderr: "pipe",
-    env: buildGitProcessEnv(),
+  return new Promise<{
+    stdout: string;
+    stderr: string;
+    exitCode: number | null;
+  }>((resolve, reject) => {
+    const child = spawnChildProcess(executable, args, {
+      cwd: rootDir,
+      env: buildGitProcessEnv(),
+    });
+    let stdout = "";
+    let stderr = "";
+
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    child.on("error", reject);
+    child.on("close", (exitCode) => {
+      resolve({ stdout, stderr, exitCode });
+    });
   });
-
-  const [stdout, stderr, exitCode] = await Promise.all([
-    new Response(process.stdout).text(),
-    new Response(process.stderr).text(),
-    process.exited,
-  ]);
-
-  return {
-    stdout,
-    stderr,
-    exitCode,
-  };
 }
 
 function buildGitProcessEnv(env: NodeJS.ProcessEnv = process.env) {
@@ -1720,6 +1715,7 @@ async function runDeterministicSemanticAnalysis(
     ...(await collectSharedConvexReturnValidatorContractFindings(
       input.rootDir,
       input.changedFiles,
+      { baseRef: input.baseRef },
     )),
     ...(await collectConvexQueryWriteBoundaryFindings(
       input.rootDir,

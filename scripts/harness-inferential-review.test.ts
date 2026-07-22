@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -18,17 +19,35 @@ async function write(relativePath: string, contents: string, rootDir: string) {
 }
 
 async function runFixtureCommand(rootDir: string, command: string[]) {
-  const process = Bun.spawn(command, {
-    cwd: rootDir,
-    stdout: "pipe",
-    stderr: "pipe",
-    env: gitFixtureEnv(),
+  const [executable, ...args] = command;
+  if (!executable) {
+    throw new Error("Fixture command must include an executable.");
+  }
+  const { stdout, stderr, exitCode } = await new Promise<{
+    stdout: string;
+    stderr: string;
+    exitCode: number | null;
+  }>((resolve, reject) => {
+    const child = spawn(executable, args, {
+      cwd: rootDir,
+      env: gitFixtureEnv(),
+    });
+    let stdout = "";
+    let stderr = "";
+
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    child.on("error", reject);
+    child.on("close", (exitCode) => {
+      resolve({ stdout, stderr, exitCode });
+    });
   });
-  const [stdout, stderr, exitCode] = await Promise.all([
-    new Response(process.stdout).text(),
-    new Response(process.stderr).text(),
-    process.exited,
-  ]);
 
   if (exitCode !== 0) {
     throw new Error(
@@ -325,7 +344,7 @@ describe("runHarnessInferentialReview", () => {
       nowIso: () => "2026-04-12T05:00:00.000Z",
     });
 
-    expect(result.exitCode).toBe(0);
+    expect(result.exitCode, JSON.stringify(result.machine)).toBe(0);
     expect(result.machine.status).toBe("pass");
     expect(result.machine.findings).toEqual([]);
   });
@@ -352,7 +371,7 @@ describe("runHarnessInferentialReview", () => {
       nowIso: () => "2026-04-12T05:00:00.000Z",
     });
 
-    expect(result.exitCode).toBe(0);
+    expect(result.exitCode, JSON.stringify(result.machine)).toBe(0);
     expect(result.machine.status).toBe("pass");
     expect(result.machine.findings).toEqual([]);
   });
@@ -977,6 +996,51 @@ describe("runHarnessInferentialReview", () => {
     });
 
     expect(result.exitCode).toBe(0);
+    expect(result.machine.status).toBe("pass");
+    expect(result.machine.findings).toEqual([]);
+  });
+
+  it("does not require changed proof when a public Convex return validator is unchanged from the base", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "packages/athena-webapp/convex/pos/public/example.ts",
+      [
+        'import { query } from "../../../_generated/server";',
+        'import { v } from "convex/values";',
+        "",
+        "export const listExample = query({",
+        "  args: { storeId: v.id(\"store\") },",
+        "  returns: v.object({ status: v.string() }),",
+        "  handler: async () => ({ status: \"base\" }),",
+        "});",
+      ].join("\n"),
+      rootDir,
+    );
+    await commitFixtureRepo(rootDir);
+    await write(
+      "packages/athena-webapp/convex/pos/public/example.ts",
+      [
+        'import { query } from "../../../_generated/server";',
+        'import { v } from "convex/values";',
+        "",
+        "export const listExample = query({",
+        "  args: { storeId: v.id(\"store\") },",
+        "  returns: v.object({ status: v.string() }),",
+        "  handler: async () => ({ status: \"current\" }),",
+        "});",
+      ].join("\n"),
+      rootDir,
+    );
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      baseRef: "HEAD",
+      getChangedFiles: async () => [
+        "packages/athena-webapp/convex/pos/public/example.ts",
+      ],
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode, JSON.stringify(result.machine)).toBe(0);
     expect(result.machine.status).toBe("pass");
     expect(result.machine.findings).toEqual([]);
   });
