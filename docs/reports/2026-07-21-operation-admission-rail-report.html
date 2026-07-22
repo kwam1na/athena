@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="a4f97cd08951c6d2877979d29b8e65ba729bf54ced683f9e3fc05663135d60bf" data-athena-report-base="origin/main" data-athena-report-head="pending-final-review-fix">
+<html lang="en" data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="a4f97cd08951c6d2877979d29b8e65ba729bf54ced683f9e3fc05663135d60bf" data-athena-report-base="origin/main" data-athena-report-head="eb42c0768e93b2714a132ab9ff18ec94fd635e40">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -77,7 +77,7 @@
       <header>
         <h1>Operation Admission Rail Delivery Candidate</h1>
         <p class="lede">PR #689 now includes the proving rail plus V26-1096 and V26-1097: demo-reachable write migrations and retirement of the migrated legacy shared-demo write paths.</p>
-        <div class="meta"><span class="pill">Delivery candidate</span><span class="pill">PR #689</span><span class="pill">Linear V26-1096</span><span class="pill">Linear V26-1097</span><span class="pill">Head pending final review fix</span><span class="pill">Base origin/main 6568ee37</span><span class="pill">No production deploy in scope</span><span class="pill">Root alignment pending</span><span class="pill">Report fingerprint a4f97cd0</span></div>
+        <div class="meta"><span class="pill">Delivery candidate</span><span class="pill">PR #689</span><span class="pill">Linear V26-1096</span><span class="pill">Linear V26-1097</span><span class="pill">Head eb42c076</span><span class="pill">Base origin/main 6568ee37</span><span class="pill">Review loop approved</span><span class="pill">Remote checks green</span><span class="pill">No production deploy in scope</span><span class="pill">Report fingerprint a4f97cd0</span></div>
       </header>
       <section class="panel"><h2>Executive Summary</h2>
 <p>This PR moves the operation admission rail from a single proving mutation to the V26-1096 shared-demo reachable write slice: POS sale/corrections/sync, operations, cash-control, inventory adjustment, staff authentication/messages, storefront fulfillment, return/exchange, and protected-effect declaration writes.</p>
@@ -85,7 +85,7 @@
 <ul>
 <li>V26-1096 migrates the next demo-reachable writes through operation admission definitions and adapters.</li>
 <li>V26-1097 removes the migrated shared-demo write paths from generic auth helper admission and legacy policy inventories while preserving the explicit read bridge.</li>
-<li>The candidate is not merged, deployed, or root-aligned yet; those states remain pending because this report is included before final PR readiness.</li>
+<li>The candidate is open and mergeable at PR #689; merge and production deployment remain out of scope.</li>
 </ul>
 </section>
 <section class="panel"><h2>Why This Mattered</h2>
@@ -122,27 +122,28 @@ After: operation definition -&gt; operation admission actor -&gt; command</code>
 <p>The protected effect gateway is present in the rail foundation, but this V26-1096/V26-1097 slice does not turn every migrated operation into an effect-gateway consumer. That is a later hardening boundary, not a hidden claim in this candidate.</p>
 </section>
 <section class="panel"><h2>Validation Evidence</h2>
-<p>Focused tests passed across operationAdmission, sharedDemo policy/auth, and the operation-admission checker. TypeScript passed for the webapp package. The structural checker reported 228 public mutations, 32 operation definitions, and 196 legacy exemptions. Convex changed-file lint, Convex audit, pre-commit generated-artifact repair, graphify rebuild, and diff whitespace checks are pending for the final candidate commit.</p>
-<p>The broad merge-level gate bun run pr:athena passed before the final reviewer-loop compatibility fix. After that fix is committed, it must rerun before the PR is treated as mergeable. Remote GitHub checks also need to rerun after the branch is pushed because the open PR currently reflects the previous head.</p>
+<p>Focused tests passed across operationAdmission, cash controls, operations, storefront fulfillment, and the operation-admission checker before the heavy repo sensor ran. TypeScript passed for the webapp package. The structural checker reported 228 public mutations, 32 operation definitions, and 196 legacy exemptions.</p>
+<p>After unanimous reviewer-loop approval, the broad merge-level gate bun run pr:athena passed locally. Remote GitHub checks for PR #689 are green, and GitHub reports the PR merge state as clean.</p>
 <ul>
-<li>Focused webapp suite: 12 files, 124 tests passed.</li>
-<li>Checker unit suite: 11 tests passed.</li>
-<li>bun scripts/convex-operation-admission-check.ts passed with 228/5/223 coverage counts.</li>
-<li>bun run --filter &#x27;@athena/webapp&#x27; audit:convex passed.</li>
+<li>Focused webapp suite: 5 files, 129 tests passed.</li>
+<li>Checker unit suite: 14 tests passed.</li>
+<li>bun scripts/convex-operation-admission-check.ts passed with 228/32/196 coverage counts.</li>
+<li>bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json passed.</li>
 <li>bun run --filter &#x27;@athena/webapp&#x27; lint:convex:changed passed.</li>
-<li>bun run pre-commit:generated-artifacts passed and refreshed graphify artifacts.</li>
-<li>Reviewer-loop fix focused suite passed: 5 files, 58 tests.</li>
+<li>bun run delivery:documentation-check passed.</li>
+<li>bun run pr:athena passed after unanimous reviewer-loop approval.</li>
+<li>GitHub PR checks passed: Harness Implementation Tests, Harness and Architecture Validation, Athena and Storefront Webapp Validation, Storefront Webapp Validation Context, Athena POS E2E against Production Backend, and GitGuardian.</li>
 </ul>
 </section>
 <section class="panel"><h2>Reviewer And Subagent Evidence</h2>
-<p>Implementation subagents split the work by boundary: one migrated shared-demo lifecycle admission, while another retired generic shared-demo write helper paths and documentation. Report evidence subagents then checked the prior context and delivered diff. Final reviewer agents must still approve the final post-report candidate before the PR is called mergeable.</p>
+<p>Implementation subagents split the work by boundary: one migrated shared-demo lifecycle admission, while another retired generic shared-demo write helper paths and documentation. Report evidence subagents then checked the prior context and delivered diff. Final reviewer agents looped on security, correctness, and testing findings until all three approved the candidate.</p>
 </section>
 <section class="panel"><h2>Operational Guidance</h2>
 <p>When the next public write migrates, start by adding the operation definition and test coverage, then wrap the public handler with operation admission, and only then remove the function from the legacy exemption inventory. If a command surface expects user_error results instead of thrown Convex errors, normalize admission denial at that boundary and test the shape explicitly.</p>
 <p>Do not reintroduce generic shared-demo write capability options into Athena user auth. That helper is no longer the write-admission switch for migrated operations.</p>
 </section>
 <section class="panel"><h2>Current Finish Line Status</h2>
-<p>This is a delivery candidate for an already-open PR. The requested finish line is an open and mergeable PR, so merge, production deployment, root checkout fast-forward, and branch cleanup are intentionally pending. Linear should move to In Review once this refreshed report, final local gate, reviewer loop, PR body update, and push are complete.</p>
+<p>This is a delivery candidate for an already-open and mergeable PR. The requested finish line is PR readiness, so merge, production deployment, and branch cleanup remain intentionally pending.</p>
 </section>
 
 <section class="panel">
@@ -168,7 +169,7 @@ After: operation definition -&gt; operation admission actor -&gt; command</code>
   <h2>Subagent Evidence</h2>
   <ul><li><strong>Lorentz, implementation worker:</strong> Migrated sharedDemo/public lifecycle mutations to operation admission definitions and tests.</li>
 <li><strong>Curie, implementation worker:</strong> Retired migrated generic shared-demo write helper paths, updated auth boundary tests, and refreshed documentation.</li>
-<li><strong>Archimedes, session context evidence:</strong> Confirmed the candidate head adds approval and lifecycle definitions, removes legacy exemptions, and still needed push, checks, and final reviews.</li>
+<li><strong>Archimedes, session context evidence:</strong> Confirmed the candidate head adds approval and lifecycle definitions, removes migrated legacy exemptions, and preserves remaining unmigrated public-write scope.</li>
 <li><strong>Parfit, delivered diff evidence:</strong> Mapped the diff across operationAdmission, sharedDemo, operations, checker, docs, generated artifacts, and called out residual unmigrated public-write scope.</li></ul>
 </section>
 
