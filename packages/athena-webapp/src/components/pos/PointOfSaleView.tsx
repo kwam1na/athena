@@ -33,6 +33,7 @@ import { usePrewarmRegisterCatalogOfflineSnapshots } from "@/lib/pos/infrastruct
 import type { Id } from "~/convex/_generated/dataModel";
 import {
   POSStorePulseSection,
+  type POSStorePulseSummary,
   type POSStorePulseWindow,
 } from "./sales-pulse/POSSalesPulseView";
 
@@ -155,12 +156,17 @@ function useMinuteNow() {
 }
 
 function StoreLocalTime({
+  nowOverride,
   scheduleSummary,
 }: {
+  nowOverride?: Date;
   scheduleSummary: StoreScheduleSummaryResult | undefined;
 }) {
   const shouldReduceMotion = useReducedMotion();
-  const now = useMinuteNow();
+  const tickingNow = useMinuteNow();
+  // Screenshot fixtures pin the clock so the captured header is deterministic;
+  // the live page always uses the ticking wall clock.
+  const now = nowOverride ?? tickingNow;
   const timezone =
     scheduleSummary?.context?.timezone ?? scheduleSummary?.schedule?.timezone;
   const formattedTime = useMemo(
@@ -206,7 +212,109 @@ function StoreLocalTime({
   );
 }
 
-export default function PointOfSaleView() {
+/**
+ * Builds the POS hub's launcher tiles. Shared by the live wrapper and the
+ * screenshot fixtures so the authored hub can't drift from the real one.
+ */
+export function buildPosFeatures({
+  canAccessPOS,
+  hasFinancialDetailsAccess,
+  liveLinkParams,
+  posLinkParams,
+  setupRequired,
+}: {
+  canAccessPOS: boolean;
+  hasFinancialDetailsAccess: boolean;
+  liveLinkParams: { orgUrlSlug: string; storeUrlSlug: string } | null;
+  posLinkParams: { orgUrlSlug: string; storeUrlSlug: string } | null;
+  setupRequired: boolean;
+}): PosFeatureConfig[] {
+  return [
+    {
+      title: "POS",
+      description: setupRequired
+        ? "Connect this terminal before starting sales"
+        : "Transact in-store sales",
+      icon: ScanBarcode,
+      href: "/$orgUrlSlug/store/$storeUrlSlug/pos/register",
+      params: posLinkParams,
+      color: "bg-blue-500",
+      available: true,
+      enabled: Boolean(posLinkParams),
+      badge: setupRequired ? "Setup required" : undefined,
+    },
+    {
+      title: "Expense Products",
+      description: "Track products expensed",
+      icon: HandCoins,
+      href: "/$orgUrlSlug/store/$storeUrlSlug/pos/expense",
+      params: liveLinkParams,
+      color: "bg-rose-500",
+      available: Boolean(liveLinkParams),
+      enabled: Boolean(liveLinkParams),
+    },
+    {
+      title: "Product Lookup",
+      description: "Search and scan products for quick reference",
+      icon: Search,
+      href: "/$orgUrlSlug/store/$storeUrlSlug/products",
+      params: liveLinkParams,
+      color: "bg-green-500",
+      available: hasFinancialDetailsAccess && Boolean(liveLinkParams),
+    },
+
+    {
+      title: "Transactions",
+      description: "View completed transaction history",
+      icon: Receipt,
+      href: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions",
+      params: liveLinkParams,
+      color: "bg-orange-500",
+      available: Boolean(liveLinkParams),
+    },
+    {
+      title: "Expense Reports",
+      description: "View expense reports",
+      icon: Receipt,
+      href: "/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports",
+      params: liveLinkParams,
+      color: "bg-yellow-500",
+      available: Boolean(liveLinkParams),
+    },
+    {
+      title: "Terminal Health",
+      description:
+        "Review checkout station sync, staff authority, and support signals",
+      icon: MonitorCheck,
+      href: "/$orgUrlSlug/store/$storeUrlSlug/pos/terminals",
+      params: liveLinkParams,
+      color: "bg-emerald-600",
+      available:
+        canAccessPOS && hasFinancialDetailsAccess && Boolean(liveLinkParams),
+    },
+    {
+      title: "Customers",
+      description: "Manage customer information and purchase history",
+      icon: Users,
+      href: null,
+      params: null,
+      color: "bg-pink-500",
+      available: false,
+    },
+    {
+      title: "POS Settings",
+      description: "Configure terminal settings",
+      icon: Settings,
+      href: "/$orgUrlSlug/store/$storeUrlSlug/pos/settings",
+      params: liveLinkParams,
+      color: "bg-gray-500",
+      available:
+        canAccessPOS && hasFinancialDetailsAccess && Boolean(liveLinkParams),
+    },
+  ];
+}
+
+function PointOfSaleViewLive() {
   const { activeStore } = useGetActiveStore();
   const { activeOrganization } = useGetActiveOrganization();
   const [storePulseWindow, setStorePulseWindow] =
@@ -267,98 +375,77 @@ export default function PointOfSaleView() {
   const setupRequired =
     localEntryContext.status !== "loading" &&
     localEntryContext.status !== "ready";
-  const posFeatures = [
-    {
-      title: "POS",
-      description: setupRequired
-        ? "Connect this terminal before starting sales"
-        : "Transact in-store sales",
-      icon: ScanBarcode,
-      href: "/$orgUrlSlug/store/$storeUrlSlug/pos/register" as const,
-      params: posLinkParams,
-      color: "bg-blue-500",
-      available: true,
-      enabled: Boolean(posLinkParams),
-      badge: setupRequired ? "Setup required" : undefined,
-    },
-    {
-      title: "Expense Products",
-      description: "Track products expensed",
-      icon: HandCoins,
-      href: "/$orgUrlSlug/store/$storeUrlSlug/pos/expense" as const,
-      params: liveLinkParams,
-      color: "bg-rose-500",
-      available: Boolean(liveLinkParams),
-      enabled: Boolean(liveLinkParams),
-    },
-    {
-      title: "Product Lookup",
-      description: "Search and scan products for quick reference",
-      icon: Search,
-      href: "/$orgUrlSlug/store/$storeUrlSlug/products" as const,
-      params: liveLinkParams,
-      color: "bg-green-500",
-      available: hasFinancialDetailsAccess && Boolean(liveLinkParams),
-    },
-
-    {
-      title: "Transactions",
-      description: "View completed transaction history",
-      icon: Receipt,
-      href: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions" as const,
-      params: liveLinkParams,
-      color: "bg-orange-500",
-      available: Boolean(liveLinkParams),
-    },
-    {
-      title: "Expense Reports",
-      description: "View expense reports",
-      icon: Receipt,
-      href: "/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports" as const,
-      params: liveLinkParams,
-      color: "bg-yellow-500",
-      available: Boolean(liveLinkParams),
-    },
-    {
-      title: "Terminal Health",
-      description:
-        "Review checkout station sync, staff authority, and support signals",
-      icon: MonitorCheck,
-      href: "/$orgUrlSlug/store/$storeUrlSlug/pos/terminals" as const,
-      params: liveLinkParams,
-      color: "bg-emerald-600",
-      available:
-        canAccessPOS() && hasFinancialDetailsAccess && Boolean(liveLinkParams),
-    },
-    {
-      title: "Customers",
-      description: "Manage customer information and purchase history",
-      icon: Users,
-      href: null,
-      params: null,
-      color: "bg-pink-500",
-      available: false,
-    },
-    {
-      title: "POS Settings",
-      description: "Configure terminal settings",
-      icon: Settings,
-      href: "/$orgUrlSlug/store/$storeUrlSlug/pos/settings" as const,
-      params: liveLinkParams,
-      color: "bg-gray-500",
-      available:
-        canAccessPOS() && hasFinancialDetailsAccess && Boolean(liveLinkParams),
-    },
-  ];
+  const posFeatures = buildPosFeatures({
+    canAccessPOS: canAccessPOS(),
+    hasFinancialDetailsAccess,
+    liveLinkParams,
+    posLinkParams,
+    setupRequired,
+  });
 
   return (
-    <View hideBorder hideHeaderBottomBorder>
-      <FadeIn className="container mx-auto py-layout-xl">
+    <PointOfSaleViewContent
+      currencyFormatter={currencyFormatter}
+      hasFullAdminAccess={hasFullAdminAccess}
+      onPulseWindowChange={setStorePulseWindow}
+      posFeatures={posFeatures}
+      pulseWindow={visibleStorePulseWindow}
+      scheduleSummary={storeScheduleSummary}
+      todaySummary={todaySummary}
+    />
+  );
+}
+
+export type PosFeatureConfig = {
+  available: boolean;
+  badge?: string;
+  color: string;
+  description: string;
+  enabled?: boolean;
+  href: string | null;
+  icon: ComponentType<{ className?: string }>;
+  params: { orgUrlSlug: string; storeUrlSlug: string } | null;
+  title: string;
+};
+
+export type PointOfSaleViewContentProps = {
+  currencyFormatter: Intl.NumberFormat;
+  hasFullAdminAccess: boolean;
+  /** Pin the header's store clock; screenshot fixtures only. */
+  nowOverride?: Date;
+  onPulseWindowChange: (pulseWindow: POSStorePulseWindow) => void;
+  posFeatures: PosFeatureConfig[];
+  pulseWindow: POSStorePulseWindow;
+  scheduleSummary: StoreScheduleSummaryResult | undefined;
+  todaySummary: POSStorePulseSummary | undefined;
+};
+
+/**
+ * The POS hub's inner content — the feature launchers and the store-pulse
+ * summary — without the {@link View} chrome. Split out so it can be embedded
+ * on its own (e.g. the marketing landing renders a live, interactive pulse
+ * from this) without View's mount-time `window.scrollTo`.
+ */
+export function PosHubBody({
+  currencyFormatter,
+  hasFullAdminAccess,
+  nowOverride,
+  onPulseWindowChange,
+  posFeatures,
+  pulseWindow,
+  scheduleSummary,
+  todaySummary,
+}: PointOfSaleViewContentProps) {
+  return (
+    <>
         <PageWorkspace>
           <PageLevelHeader
             title="Point of Sale"
             description={
-              <StoreLocalTime scheduleSummary={storeScheduleSummary} />
+              <StoreLocalTime
+                nowOverride={nowOverride}
+                scheduleSummary={scheduleSummary}
+              />
             }
           />
 
@@ -452,12 +539,39 @@ export default function PointOfSaleView() {
           <POSStorePulseSection
             currencyFormatter={currencyFormatter}
             hasFullAdminAccess={hasFullAdminAccess}
-            onPulseWindowChange={setStorePulseWindow}
-            pulseWindow={visibleStorePulseWindow}
+            onPulseWindowChange={onPulseWindowChange}
+            pulseWindow={pulseWindow}
             todaySummary={todaySummary}
           />
         </PageWorkspace>
+    </>
+  );
+}
+
+/**
+ * Presentational POS hub inside the app's {@link View} chrome. Rendered live
+ * from Convex by {@link PointOfSaleViewLive}, or from authored screenshot
+ * fixtures via the `fixture` prop on the default export.
+ */
+export function PointOfSaleViewContent(props: PointOfSaleViewContentProps) {
+  return (
+    <View hideBorder hideHeaderBottomBorder>
+      <FadeIn className="container mx-auto py-layout-xl">
+        <PosHubBody {...props} />
       </FadeIn>
     </View>
+  );
+}
+
+export default function PointOfSaleView({
+  fixture,
+}: {
+  /** Authored screenshot fixture; dev-only, bypasses all live queries. */
+  fixture?: PointOfSaleViewContentProps;
+} = {}) {
+  return fixture ? (
+    <PointOfSaleViewContent {...fixture} />
+  ) : (
+    <PointOfSaleViewLive />
   );
 }

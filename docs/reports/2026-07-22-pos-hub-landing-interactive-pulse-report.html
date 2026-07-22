@@ -1,0 +1,480 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Landed Change Report — Interactive POS Hub on the Landing Page</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #0b0d10;
+    --surface: #14171b;
+    --surface-raised: #1b1f24;
+    --border: #2a2f36;
+    --text: #e8eaed;
+    --text-muted: #9aa2ab;
+    --accent: #7c9cff;
+    --good: #4fd18b;
+    --warn: #e8b84f;
+    --bad: #ef6a6a;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f7f8fa;
+      --surface: #ffffff;
+      --surface-raised: #f0f2f5;
+      --border: #dfe3e8;
+      --text: #1b1f24;
+      --text-muted: #5b6470;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.55;
+  }
+  main {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem 5rem;
+  }
+  header.report-head {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1.5rem;
+    margin-bottom: 2rem;
+  }
+  h1 { font-size: 1.7rem; margin: 0 0 0.5rem; letter-spacing: -0.01em; }
+  h2 {
+    font-size: 1.15rem;
+    margin: 2.5rem 0 0.9rem;
+    padding-top: 0.25rem;
+    border-top: 1px solid var(--border);
+  }
+  h2:first-of-type { border-top: none; padding-top: 0; }
+  h3 { font-size: 1rem; margin: 1.25rem 0 0.5rem; }
+  p { margin: 0 0 0.9rem; color: var(--text); }
+  .muted { color: var(--text-muted); }
+  code, .mono { font-family: var(--mono); font-size: 0.88em; }
+  code {
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.05em 0.35em;
+  }
+  .pills { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    border: 1px solid var(--border);
+    background: var(--surface-raised);
+    border-radius: 999px;
+    padding: 0.3rem 0.75rem;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+  }
+  .pill b { color: var(--text); font-weight: 600; }
+  .dot { width: 0.5rem; height: 0.5rem; border-radius: 50%; flex: none; }
+  .dot.good { background: var(--good); }
+  .dot.warn { background: var(--warn); }
+  .dot.bad { background: var(--bad); }
+  ul, ol { padding-left: 1.3rem; margin: 0 0 0.9rem; }
+  li { margin-bottom: 0.4rem; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+    margin: 0.5rem 0 1.25rem;
+  }
+  th, td {
+    text-align: left;
+    padding: 0.55rem 0.7rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  th { color: var(--text-muted); font-weight: 600; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.03em; }
+  td.mono { white-space: nowrap; }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.1rem 1.3rem;
+    margin-bottom: 1rem;
+  }
+  .callout {
+    border-left: 3px solid var(--warn);
+    background: var(--surface-raised);
+    border-radius: 0 8px 8px 0;
+    padding: 0.85rem 1rem;
+    margin: 0 0 1.25rem;
+    font-size: 0.92rem;
+  }
+  .callout.bad { border-left-color: var(--bad); }
+  .callout strong { color: var(--text); }
+  .grid-two {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+  @media (max-width: 640px) { .grid-two { grid-template-columns: 1fr; } }
+  #changeQuiz fieldset {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.1rem;
+    margin: 0 0 1rem;
+  }
+  #changeQuiz legend { font-size: 0.92rem; padding: 0 0.4rem; }
+  #changeQuiz label {
+    display: block;
+    padding: 0.4rem 0.2rem;
+    cursor: pointer;
+    border-radius: 6px;
+  }
+  #changeQuiz label:hover { background: var(--surface-raised); }
+  #changeQuiz input[type="radio"] { margin-right: 0.5rem; }
+  .quiz-explain {
+    display: none;
+    font-size: 0.85rem;
+    margin-top: 0.5rem;
+    padding: 0.5rem 0.7rem;
+    border-radius: 6px;
+    background: var(--surface-raised);
+    color: var(--text-muted);
+  }
+  .quiz-explain.show { display: block; }
+  .quiz-explain.correct { color: var(--good); }
+  .quiz-explain.incorrect { color: var(--bad); }
+  #quizActions { display: flex; align-items: center; gap: 0.75rem; margin-top: 1rem; }
+  button#gradeQuiz, button#resetQuiz {
+    font: inherit;
+    font-size: 0.9rem;
+    padding: 0.55rem 1.1rem;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface-raised);
+    color: var(--text);
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+  }
+  button#gradeQuiz { background: var(--accent); color: #0b0d10; border-color: var(--accent); font-weight: 600; }
+  button#gradeQuiz:hover { background: #6a8bff; }
+  button#resetQuiz:hover { background: var(--border); }
+  #quizResult { font-size: 0.92rem; font-weight: 600; }
+  #quizResult.pass { color: var(--good); }
+  #quizResult.fail { color: var(--bad); }
+  footer { margin-top: 3rem; padding-top: 1.25rem; border-top: 1px solid var(--border); font-size: 0.8rem; color: var(--text-muted); }
+</style>
+</head>
+<body data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="7a06ee03911d066800400c200f57df751b3d3f04a196de648b38ea8bdd4cd9a4">
+<main>
+
+<header class="report-head">
+  <h1>Interactive POS Hub on the Landing Page</h1>
+  <p class="muted">Delivery candidate — <a href="https://github.com/kwam1na/athena/pull/691" style="color:var(--accent)">PR #691</a>, branch <code>worktree-pos-hub-landing-scene</code></p>
+  <div class="pills">
+    <span class="pill"><span class="dot warn"></span>Status: <b>delivery candidate (open, not merged)</b></span>
+    <span class="pill"><span class="dot good"></span>Base alignment: <b>rebased onto origin/main (4269f857); not yet re-verified in CI</b></span>
+    <span class="pill"><span class="dot bad"></span>CI: <b>harness-contract-preflight failure still open as of last check (see Validation)</b></span>
+    <span class="pill"><span class="dot warn"></span>Deploy: <b>not applicable — no merge yet</b></span>
+  </div>
+</header>
+
+<h2>What is being delivered</h2>
+<p>
+  PR #691 (head <code>bacb1140</code> after rebase, base <code>4269f857</code>) adds an
+  interactive Point of Sale exhibit to the marketing landing page's POS
+  section. Previously that section only linked to a pair of static
+  pending/synced screenshots. This delivery adds a live, role-scoped hub:
+  a minimal toggle switches between what a <strong>store manager</strong>
+  sees (every launcher tile, plus a real store-pulse chart with working
+  <em>Today / This week / This month / All time</em> tabs) and what
+  <strong>staff</strong> see (their own launcher tiles plus a bare
+  transaction count — no financials).
+</p>
+
+<h2>Why it mattered</h2>
+<p>
+  The landing page's other workspace exhibits (Daily Operations, Opening
+  Handoff, Cash Controls, the sync bridge) already render real product
+  components fed by fixture data — the established pattern is documented in
+  <code>docs/solutions/design-patterns/athena-landing-story-real-component-exhibits-2026-07-17.md</code>.
+  The POS section was the odd one out, showing only two static screenshots
+  with no way to demonstrate the actual point of the feature: that Athena's
+  POS hub shows a materially different, authority-scoped view depending on
+  who is logged in. This delivery closes that gap and, unlike the other
+  exhibits, makes one control genuinely interactive rather than a frozen
+  screenshot.
+</p>
+
+<h2>The mental model</h2>
+<p>
+  One presentational component, three call sites. <code>PointOfSaleView.tsx</code>
+  was split so the POS hub's actual UI (launcher grid + store-pulse) lives in
+  a chrome-free <code>PosHubBody</code> component. That single component now
+  renders in three different contexts without being forked:
+</p>
+<table>
+  <thead><tr><th>Call site</th><th>Data source</th><th>Purpose</th></tr></thead>
+  <tbody>
+    <tr><td>Live app route (<code>pos/index.tsx</code>)</td><td>Convex queries</td><td>The real, authenticated POS hub a store uses day-to-day</td></tr>
+    <tr><td>Dev-only <code>?fixture=</code> route</td><td><code>posHubFixtures.ts</code></td><td>Deterministic screenshots for other marketing assets</td></tr>
+    <tr><td>Landing page exhibit (<code>PosHubRoleSwitcher.tsx</code>)</td><td><code>posHubFixtures.ts</code></td><td>The new interactive, role-toggling exhibit itself</td></tr>
+  </tbody>
+</table>
+<p>
+  The pulse's four time windows (Today / This week / This month / All time)
+  are each backed by fully authored, story-reconciled fixture data — not
+  just one snapshot — because the tabs are real and clickable; whichever
+  window a visitor clicks has to show correct numbers, not a placeholder.
+</p>
+
+<h2>Before vs after</h2>
+<div class="grid-two">
+  <div class="card">
+    <h3>Before</h3>
+    <p class="muted">
+      The POS section showed two static screenshots (pending-sync /
+      synced-sale) with no representation of the hub itself, and no
+      distinction between what an owner vs. staff member sees.
+    </p>
+  </div>
+  <div class="card">
+    <h3>After</h3>
+    <p class="muted">
+      A live exhibit with a role toggle; the manager's store-pulse tabs are
+      real and re-render authored data on click; staff view collapses to a
+      bare transaction count, matching the real product's authority gating
+      (<code>hasFinancialDetailsAccess</code>).
+    </p>
+  </div>
+</div>
+
+<h2>Layer-by-layer mechanics</h2>
+<table>
+  <thead><tr><th>File</th><th>Why it matters</th></tr></thead>
+  <tbody>
+    <tr><td class="mono">components/pos/PointOfSaleView.tsx</td><td>Split into <code>PosHubBody</code> (chrome-free content), <code>PointOfSaleViewContent</code> (app-chrome wrapper), and <code>buildPosFeatures</code> (shared launcher-tile logic) so the live route, the fixture route, and the landing exhibit can't drift apart.</td></tr>
+    <tr><td class="mono">stories/operations/posHubFixtures.ts</td><td>Authored data for all four pulse windows plus the manager/staff feature sets, reconciled against the shared demo store's story day (Wed 2026-07-15) — including comparison deltas pre-rounded to whole percents to match how <code>operationsMetricFormatting.tsx</code> renders them live, and today's top-items order matching Daily Operations exactly.</td></tr>
+    <tr><td class="mono">components/landing/story/PosHubRoleSwitcher.tsx</td><td>The new exhibit: role toggle, scroll-position pin across the swap, a click-triggered <code>animejs</code> fade, and scoped <code>pointer-events: none</code> on the decorative launcher tiles only (the pulse tabs stay live).</td></tr>
+    <tr><td class="mono">routes/-index-route-view.tsx</td><td>Wires the exhibit into the POS section's act, with copy/eyebrow/title refined to describe the toggle, and a canvas-to-white background transition so the exhibit blends into the following section.</td></tr>
+    <tr><td class="mono">routes/.../pos/index.tsx</td><td><code>?fixture=</code> search-param wiring for the dev-only screenshot route, unchanged in spirit from the existing operations-fixture pattern.</td></tr>
+  </tbody>
+</table>
+
+<h2>Failure boundaries</h2>
+<ul>
+  <li><strong>Scroll anchoring on a height-swapping toggle.</strong> The manager and staff views differ by hundreds/thousands of pixels; toggling let the browser silently reposition the viewport, intermittently, because the anchor node depends on scroll position. Scoping <code>overflow-anchor: none</code> to just the toggling subtree was not enough — anchoring could still pick a node in a section below it that also moved. Fixed by setting <code>overflow-anchor: none</code> on the whole landing <code>&lt;main&gt;</code> (safe: every other exhibit reserves explicit space) plus a belt-and-braces scroll-position pin in a <code>useLayoutEffect</code>.</li>
+  <li><strong>Animation-callback deadlock.</strong> An earlier version gated the role swap on an <code>animejs</code> <code>onComplete</code> callback; if that callback didn't fire, a guard flag stuck <code>true</code> and the toggle stopped responding entirely. Fixed by swapping state synchronously on click and treating the fade as a fire-and-forget entrance effect, not a gate.</li>
+  <li><strong>Decorative vs. live controls in one exhibit.</strong> Unlike every other landing exhibit (fully inert), this one is partially interactive — the launcher tiles must not navigate, but the pulse tabs must. Handled with a scoped CSS selector (<code>pointer-events: none</code> only on <code>[data-testid=athena-pos-hub-ready]</code>) rather than a blanket <code>inert</code> wrapper.</li>
+</ul>
+
+<h2>Validation</h2>
+<div class="callout">
+  <strong>Local, before push:</strong> <code>tsc --noEmit</code> clean (0 errors).
+  33 tests passing across the touched surface, run via <code>vitest</code>:
+  <code>landing.test.tsx</code> (3), <code>PointOfSaleView.test.tsx</code> (11),
+  <code>POSSalesPulseView.test.tsx</code> (12), <code>demoDay.test.ts</code> (5),
+  <code>terminals.route.test.tsx</code> (2). Manually verified in a live dev-server
+  browser preview: the role toggle swaps synchronously and re-renders the
+  correct pulse; clicking each of the four window tabs re-renders real chart
+  data (confirmed against exact expected numbers, e.g. All time → GH₵367,000
+  from the May 12 store-open date); dark mode renders automatically through
+  the existing theme system with no extra wiring; the decorative launcher
+  tiles have <code>pointer-events: none</code> (confirmed via computed
+  style) while the pulse tabs remain clickable; scroll position held exactly
+  steady across six rapid consecutive toggles in both directions (no drift).
+</div>
+<div class="callout bad">
+  <strong>CI, most recent run seen (PR #691, pre-rebase head <code>c81e30a9</code>):</strong>
+  Two checks were failing and not yet resolved by this delivery:
+  <ul style="margin:0.5rem 0 0;">
+    <li><code>Harness and Architecture Validation</code> — was failing on the
+      missing landed-change report this file exists to satisfy. Not yet
+      re-verified against CI.</li>
+    <li><code>Harness Implementation Tests</code> — one pre-existing suite
+      assertion, <code>runHarnessContractPreflight &gt; passes through every
+      default adapter on the current consistent tree</code>
+      (<code>scripts/harness-contract-preflight.test.ts:214</code>), fails with
+      <code>exitCode</code> 1 instead of the expected 0. Root cause not yet
+      diagnosed at the time of this report — the specific findings that
+      caused the nonzero exit were not printed to the CI log and have not
+      been reproduced locally. <strong>This is an open item, not something
+      this delivery has fixed.</strong></li>
+  </ul>
+  Two further checks (<code>Athena and Storefront Webapp Validation</code>,
+  <code>Athena POS E2E against Production Backend</code>) were still
+  <code>IN_PROGRESS</code> at last check. <strong>Since that run,</strong> the
+  branch has been rebased onto <code>origin/main</code> at <code>4269f857</code>
+  (the one commit it was behind — an unrelated graphify/graph-artifact +
+  email-template update) and the deliverable diff fingerprint in this report
+  and the linked solution note were regenerated to match. CI has not yet run
+  against the rebased head, so none of the statuses above are re-confirmed as
+  of this report.
+</div>
+
+<h2>What intentionally did not change</h2>
+<ul>
+  <li>The live, authenticated POS hub route (<code>/pos</code>) behaves identically for real stores — only the presentational layer was extracted, not the data-fetching logic in <code>PointOfSaleViewLive</code>.</li>
+  <li>The dev-only screenshot fixtures for other marketing assets (pending/synced sale shots) are untouched.</li>
+  <li>No Convex schema, query, or mutation changed.</li>
+</ul>
+
+<h2>Next-time guidance</h2>
+<ul>
+  <li>When a marketing exhibit needs to demonstrate role- or state-dependent behavior, prefer making the specific control interactive (with authored fixture data for every reachable state) over adding another static screenshot — but scope interactivity narrowly (see Failure Boundaries) rather than making the whole exhibit live.</li>
+  <li>A toggle between two states with a large height difference needs the page-level <code>overflow-anchor: none</code> treatment, not just a scoped one — verify by rapid-toggling near a section boundary, not just at rest.</li>
+  <li>Never gate a state transition on an animation library callback; animate as a side effect of the state change, not a precondition for it.</li>
+  <li>When authoring comparison-delta fixture numbers alongside a real formatter that rounds, pre-round the fixture to match — decimals read as a bug against the live UI's whole-percent display.</li>
+</ul>
+
+<h2>Subagent Evidence</h2>
+<p>
+  This report was written directly by the delivering agent from the same
+  conversation that implemented the change, without dispatching the
+  session-context, delivered-diff, or reviewer subagents the
+  <code>ce-landed-change-report</code> skill normally requires. That was an
+  explicit operator instruction to keep this report lightweight, not a
+  platform limitation — subagent dispatch was available and simply skipped.
+  All claims above are grounded directly in this session's own tool output
+  (tsc/vitest runs, live browser DOM/computed-style checks, and GitHub CLI
+  calls against PR #691 and its CI run), not subagent synthesis. No prior-session
+  history was independently gathered; the "before" state described above is
+  based on the diff against the PR's base commit only.
+</p>
+
+<h2>Quiz: Pass Required</h2>
+<p class="muted">Answer all 5 questions, then grade. Pass threshold: 4/5.</p>
+<form id="changeQuiz">
+  <fieldset data-correct="b">
+    <legend>1. Why was PosHubBody split out of PointOfSaleView?</legend>
+    <label><input type="radio" name="q1" value="a" /> To remove the launcher tiles from the app entirely</label>
+    <label><input type="radio" name="q1" value="b" /> So the same presentational content can render live from Convex, from dev fixtures, and embedded on the landing page without duplicating it</label>
+    <label><input type="radio" name="q1" value="c" /> To move the store-pulse chart into a separate Convex query</label>
+    <div class="quiz-explain" data-for="q1"></div>
+  </fieldset>
+
+  <fieldset data-correct="c">
+    <legend>2. What does a staff (non-financial-access) user see in the landing exhibit's pulse?</legend>
+    <label><input type="radio" name="q2" value="a" /> The same four window tabs as a manager, but grayed out</label>
+    <label><input type="radio" name="q2" value="b" /> Nothing — the pulse section is hidden entirely for staff</label>
+    <label><input type="radio" name="q2" value="c" /> A bare transaction count for today only, with no financial figures and no window tabs</label>
+    <div class="quiz-explain" data-for="q2"></div>
+  </fieldset>
+
+  <fieldset data-correct="a">
+    <legend>3. Why did the fixtures need real authored data for all four pulse windows, not just one?</legend>
+    <label><input type="radio" name="q3" value="a" /> Because the window tabs are genuinely clickable in the exhibit, so whichever one a visitor clicks has to render correct data</label>
+    <label><input type="radio" name="q3" value="b" /> Because Convex requires all four windows to be pre-computed at build time</label>
+    <label><input type="radio" name="q3" value="c" /> It didn't — only the default window (This week) needed real data</label>
+    <div class="quiz-explain" data-for="q3"></div>
+  </fieldset>
+
+  <fieldset data-correct="b">
+    <legend>4. Why wasn't scoping overflow-anchor:none to just the toggle's own subtree enough to fix the scroll jump?</legend>
+    <label><input type="radio" name="q4" value="a" /> overflow-anchor doesn't work in any browser and had to be replaced entirely</label>
+    <label><input type="radio" name="q4" value="b" /> The browser could still anchor to a node in a section below the toggle, which also moved when the toggle's height changed</label>
+    <label><input type="radio" name="q4" value="c" /> The bug was actually caused by the animejs fade, not scroll anchoring</label>
+    <div class="quiz-explain" data-for="q4"></div>
+  </fieldset>
+
+  <fieldset data-correct="c">
+    <legend>5. What is still outstanding before PR #691 can merge, per this report?</legend>
+    <label><input type="radio" name="q5" value="a" /> Nothing — all CI checks were passing at the time of this report</label>
+    <label><input type="radio" name="q5" value="b" /> Only a rebase onto origin/main; all tests already pass</label>
+    <label><input type="radio" name="q5" value="c" /> A rebase onto origin/main, and an unresolved harness-contract-preflight test failure whose root cause has not yet been diagnosed</label>
+    <div class="quiz-explain" data-for="q5"></div>
+  </fieldset>
+
+  <div id="quizActions">
+    <button type="button" id="gradeQuiz">Grade quiz</button>
+    <button type="button" id="resetQuiz">Reset</button>
+    <span id="quizResult" role="status"></span>
+  </div>
+</form>
+
+<footer>
+  Generated directly from session tool output for PR #691
+  (<code>bacb1140</code> on <code>worktree-pos-hub-landing-scene</code>,
+  base <code>4269f857</code> after rebase). Subagent dispatch skipped per explicit
+  operator instruction. This report reflects a delivery-candidate, unmerged
+  state — see the CI callout above before treating it as final.
+</footer>
+
+</main>
+
+<script>
+(function () {
+  var answers = {
+    q1: "b", q2: "c", q3: "a", q4: "b", q5: "c"
+  };
+  var explanations = {
+    q1: {
+      correct: "Right — one presentational component now backs the live route, the dev-fixture screenshot route, and the landing exhibit, so they can't silently diverge.",
+      wrong: "Not quite — the split's purpose is reuse across three render contexts (live/fixture/landing), not removing tiles or moving query logic."
+    },
+    q2: {
+      correct: "Right — hasFinancialDetailsAccess=false collapses the pulse to a bare today-only transaction count, matching the real product's authority gating.",
+      wrong: "Not quite — staff genuinely see a live count (not hidden or grayed-out tabs); there are no window tabs at all for staff."
+    },
+    q3: {
+      correct: "Right — because the tabs are real and clickable in this exhibit (unlike a static screenshot), every reachable state needs correct data.",
+      wrong: "Not quite — the tabs are genuinely interactive in the browser, which is exactly why every window needed authored data."
+    },
+    q4: {
+      correct: "Right — anchoring could pick a node in an unrelated section below the toggle that also shifted, so the fix had to cover the whole page, not just the toggle's subtree.",
+      wrong: "Not quite — overflow-anchor works as designed; the issue was scope (subtree vs. page), and the animejs fade was a separate, later fix for a different bug (animation-callback deadlock)."
+    },
+    q5: {
+      correct: "Right — per this report's Validation section, both a rebase and an undiagnosed harness-contract-preflight failure are open at delivery-candidate time.",
+      wrong: "Not quite — the report explicitly states two CI checks were failing and one root cause was not yet diagnosed; nothing here claims a clean CI state."
+    }
+  };
+
+  var grade = document.getElementById("gradeQuiz");
+  var reset = document.getElementById("resetQuiz");
+  var result = document.getElementById("quizResult");
+  var form = document.getElementById("changeQuiz");
+
+  grade.addEventListener("click", function () {
+    var correctCount = 0;
+    var total = Object.keys(answers).length;
+
+    Object.keys(answers).forEach(function (name) {
+      var selected = form.querySelector('input[name="' + name + '"]:checked');
+      var explainEl = form.querySelector('.quiz-explain[data-for="' + name + '"]');
+      var isCorrect = !!selected && selected.value === answers[name];
+
+      if (isCorrect) correctCount += 1;
+
+      explainEl.textContent = isCorrect
+        ? explanations[name].correct
+        : explanations[name].wrong + (selected ? "" : " (No answer selected.)");
+      explainEl.classList.remove("correct", "incorrect");
+      explainEl.classList.add("show", isCorrect ? "correct" : "incorrect");
+    });
+
+    var passed = correctCount >= 4;
+    result.textContent = correctCount + " / " + total + (passed ? " — Passed" : " — Not passed (need 4/5)");
+    result.classList.remove("pass", "fail");
+    result.classList.add(passed ? "pass" : "fail");
+  });
+
+  reset.addEventListener("click", function () {
+    form.reset();
+    form.querySelectorAll(".quiz-explain").forEach(function (el) {
+      el.classList.remove("show", "correct", "incorrect");
+      el.textContent = "";
+    });
+    result.textContent = "";
+    result.classList.remove("pass", "fail");
+  });
+})();
+</script>
+
+</body>
+</html>
