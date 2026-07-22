@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -12,6 +12,24 @@ const mocked = vi.hoisted(() => ({
 vi.mock("@/lib/marketing/landingFunnelClient", () => ({
   emitLandingFunnelEvent: mocked.emitLandingFunnelEvent,
 }));
+
+// Keep the real anime.js (the scenes build timelines with it), but resolve the
+// POS hub role switcher's click-driven fade synchronously so the swap is
+// deterministic under test — anime's rAF loop never settles in jsdom.
+vi.mock("animejs", async (importActual) => {
+  const actual = await importActual<typeof import("animejs")>();
+  return {
+    ...actual,
+    animate: (
+      _targets: unknown,
+      params?: { onComplete?: () => void; onUpdate?: () => void },
+    ) => {
+      params?.onUpdate?.();
+      params?.onComplete?.();
+      return { pause() {}, revert() {} };
+    },
+  };
+});
 
 // The POS cart exhibit resolves the store currency through this hook; on the
 // public landing page there is no active store and it falls back to GHS.
@@ -167,6 +185,13 @@ describe("landing route", () => {
     expect(
       screen.getByAltText(/daily operations workspace:/i),
     ).toBeInTheDocument();
+    // The POS hub is a live exhibit (not a shot); its manager pulse defaults to
+    // the this-week window.
+    expect(
+      within(screen.getByTestId("pos-hub-exhibit")).getByText(
+        "This week's completed POS sales.",
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByAltText(/pending sync/i)).toBeInTheDocument();
     expect(screen.getByAltText(/'synced'/i)).toBeInTheDocument();
     expect(screen.getByAltText(/eod review workspace/i)).toBeInTheDocument();
@@ -191,5 +216,27 @@ describe("landing route", () => {
     expect(
       screen.getByText(/every decision stayed with the owner/i),
     ).toBeInTheDocument();
+  });
+
+  it("filters the manager pulse and toggles to the staff view", async () => {
+    const user = userEvent.setup();
+    render(<Index />);
+    const hub = within(screen.getByTestId("pos-hub-exhibit"));
+
+    // Manager (default): the financial pulse, on the this-week window, with the
+    // real window tabs.
+    expect(hub.getByText("This week's completed POS sales.")).toBeInTheDocument();
+    expect(hub.getByRole("tab", { name: "This month" })).toBeInTheDocument();
+
+    // The tabs actually filter the live pulse.
+    await user.click(hub.getByRole("tab", { name: "Today" }));
+    expect(hub.getByText("Today's completed POS sales.")).toBeInTheDocument();
+
+    // Staff: launchers plus a bare count — no financial pulse, no window tabs.
+    await user.click(hub.getByRole("button", { name: "Staff" }));
+    expect(
+      hub.queryByRole("tab", { name: "This month" }),
+    ).not.toBeInTheDocument();
+    expect(hub.queryByText(/completed POS sales\./)).not.toBeInTheDocument();
   });
 });

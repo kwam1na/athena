@@ -23,6 +23,7 @@ import {
   WholeLoopFigure,
 } from "@/components/landing/story/ControlLoopFigures";
 import { LandingWorkspaceShot } from "@/components/landing/story/LandingWorkspaceShot";
+import { PosHubRoleSwitcher } from "@/components/landing/story/PosHubRoleSwitcher";
 import { RegisterSessionScene } from "@/components/landing/story/RegisterSessionScene";
 import { SyncBridgeScene } from "@/components/landing/story/SyncBridgeScene";
 import { AutomationBeat } from "@/components/landing/story/SceneChrome";
@@ -453,7 +454,12 @@ export function Index() {
   return (
     <PublicLayout trackFunnelCtas hideSecondaryNav showThemeToggle>
       <LandingGrain />
-      <main>
+      {/* Every exhibit on this page reserves its space (explicit width/height),
+          so browser scroll anchoring has nothing to protect against — but it
+          does misfire on the POS hub role switcher, whose two shots differ by
+          ~2400px: with an anchor node picked from a section below the act, the
+          swap yanks the viewport. Exclude the whole page from anchor selection. */}
+      <main className="[overflow-anchor:none]">
         <HeroSection />
 
         <ControlLoopSection />
@@ -500,10 +506,29 @@ export function Index() {
         </StoryAct>
 
         <StoryAct
-          background="bg-background"
+          background="bg-app-canvas"
           layout="stacked"
           stackedGap="space-y-layout-3xl"
           workspace="Point of Sale"
+          title="One register, two views."
+          copy="Everything the counter needs, in one hub. Staff see their tools; you see the whole pulse — today to all time."
+          automation="Every synced sale updates the pulse on its own; nothing to refresh, nothing to tally."
+          texture={
+            // The hub shot's own canvas backdrop sits flush on the canvas
+            // section so it reads as the page, not a card; the section's foot
+            // then melts into white so the next act's background flows in.
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-40 bg-gradient-to-b from-transparent to-background" />
+          }
+        >
+          <PosHubRoleSwitcher />
+        </StoryAct>
+
+        <StoryAct
+          hideTopBorder
+          background="bg-background"
+          layout="stacked"
+          stackedGap="space-y-layout-3xl"
+          workspace="Device-first"
           title="The network drops. Sales don't."
           copy="Every sale lands on the device first, instantly. Lose the connection and the counter keeps moving: the sale is held safe, then syncs itself the moment the network returns."
           automation="No manual sync, no re-entry, nothing to remember."
