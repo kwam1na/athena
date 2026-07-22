@@ -5048,7 +5048,7 @@ Nodes (3): createNormalUserOperationAdapter(), isAdmitted(), resolveOperationAdm
 
 ### Community 594 - "Community 594"
 Cohesion: 0.67
-Nodes (2): admitPublicMutation(), admitSharedDemoPublicMutation()
+Nodes (2): admitPublicMutation(), withOperationMutationAdmission()
 
 ### Community 595 - "Community 595"
 Cohesion: 0.67
@@ -5708,7 +5708,7 @@ Nodes (0):
 
 ### Community 759 - "Community 759"
 Cohesion: 1.0
-Nodes (2): admitPublicQuery(), admitSharedDemoPublicQuery()
+Nodes (2): admitPublicQuery(), withOperationReadAdmission()
 
 ### Community 760 - "Community 760"
 Cohesion: 0.67
