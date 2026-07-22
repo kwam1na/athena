@@ -170,7 +170,7 @@
   footer { margin-top: 3rem; padding-top: 1.25rem; border-top: 1px solid var(--border); font-size: 0.8rem; color: var(--text-muted); }
 </style>
 </head>
-<body data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="1e201d589c2b81c805054403237fabc8a5792f26c7e5992714d14f1d4d7824bb">
+<body data-athena-landed-change-report="v1" data-athena-report-diff-fingerprint="1684292bf43b3a665593532121c315280754bbe7592a62b658e159a9849a8330">
 <main>
 
 <header class="report-head">
@@ -178,15 +178,15 @@
   <p class="muted">Delivery candidate — <a href="https://github.com/kwam1na/athena/pull/691" style="color:var(--accent)">PR #691</a>, branch <code>worktree-pos-hub-landing-scene</code></p>
   <div class="pills">
     <span class="pill"><span class="dot warn"></span>Status: <b>delivery candidate (open, not merged)</b></span>
-    <span class="pill"><span class="dot warn"></span>Base alignment: <b>pending rebase — 1 commit behind origin/main</b></span>
-    <span class="pill"><span class="dot bad"></span>CI: <b>2 checks failing, 2 in progress (see Validation)</b></span>
+    <span class="pill"><span class="dot good"></span>Base alignment: <b>rebased onto origin/main (4269f857); not yet re-verified in CI</b></span>
+    <span class="pill"><span class="dot bad"></span>CI: <b>harness-contract-preflight failure still open as of last check (see Validation)</b></span>
     <span class="pill"><span class="dot warn"></span>Deploy: <b>not applicable — no merge yet</b></span>
   </div>
 </header>
 
 <h2>What is being delivered</h2>
 <p>
-  PR #691 (head <code>c81e30a9</code>, base <code>6568ee37</code>) adds an
+  PR #691 (head <code>bacb1140</code> after rebase, base <code>4269f857</code>) adds an
   interactive Point of Sale exhibit to the marketing landing page's POS
   section. Previously that section only linked to a pair of static
   pending/synced screenshots. This delivery adds a live, role-scoped hub:
@@ -290,12 +290,12 @@
   steady across six rapid consecutive toggles in both directions (no drift).
 </div>
 <div class="callout bad">
-  <strong>CI, as of this report (PR #691, head <code>c81e30a9</code>):</strong> Two
-  checks are currently failing and not yet resolved by this delivery:
+  <strong>CI, most recent run seen (PR #691, pre-rebase head <code>c81e30a9</code>):</strong>
+  Two checks were failing and not yet resolved by this delivery:
   <ul style="margin:0.5rem 0 0;">
     <li><code>Harness and Architecture Validation</code> — was failing on the
       missing landed-change report this file exists to satisfy. Not yet
-      re-verified against CI after this file was added.</li>
+      re-verified against CI.</li>
     <li><code>Harness Implementation Tests</code> — one pre-existing suite
       assertion, <code>runHarnessContractPreflight &gt; passes through every
       default adapter on the current consistent tree</code>
@@ -308,11 +308,13 @@
   </ul>
   Two further checks (<code>Athena and Storefront Webapp Validation</code>,
   <code>Athena POS E2E against Production Backend</code>) were still
-  <code>IN_PROGRESS</code> at last check. The PR's <code>mergeStateStatus</code>
-  is <code>BEHIND</code> — one commit landed on <code>origin/main</code>
-  (<code>4269f857</code>, an unrelated graphify/graph-artifact + email-template
-  update) after this branch was cut. A rebase onto current <code>origin/main</code>
-  is expected and has not been performed as of this report.
+  <code>IN_PROGRESS</code> at last check. <strong>Since that run,</strong> the
+  branch has been rebased onto <code>origin/main</code> at <code>4269f857</code>
+  (the one commit it was behind — an unrelated graphify/graph-artifact +
+  email-template update) and the deliverable diff fingerprint in this report
+  and the linked solution note were regenerated to match. CI has not yet run
+  against the rebased head, so none of the statuses above are re-confirmed as
+  of this report.
 </div>
 
 <h2>What intentionally did not change</h2>
@@ -397,8 +399,8 @@
 
 <footer>
   Generated directly from session tool output for PR #691
-  (<code>c81e30a9</code> on <code>worktree-pos-hub-landing-scene</code>,
-  base <code>6568ee37</code>). Subagent dispatch skipped per explicit
+  (<code>bacb1140</code> on <code>worktree-pos-hub-landing-scene</code>,
+  base <code>4269f857</code> after rebase). Subagent dispatch skipped per explicit
   operator instruction. This report reflects a delivery-candidate, unmerged
   state — see the CI callout above before treating it as final.
 </footer>
