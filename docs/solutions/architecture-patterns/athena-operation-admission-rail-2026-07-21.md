@@ -1,6 +1,7 @@
 ---
 title: Athena Operation Admission Rail
 date: 2026-07-21
+last_updated: 2026-07-21
 category: docs/solutions/architecture-patterns
 module: Athena Convex public write admission
 problem_type: architecture_pattern
@@ -12,7 +13,7 @@ applies_when:
   - "Shared-demo write access must use the same domain path as normal users without becoming full administrator auth"
   - "A migration wave needs exact inventory coverage before all writes can move to a new admission layer"
 tags: [athena, convex, operation-admission, shared-demo, authz, static-checker]
-delivery_diff_fingerprint: a31dc48c55bed075973cc07cf8f81b7f5af4addea5156d69c5f6fcaecce461ca
+delivery_diff_fingerprint: ec3655e2f7130d9b34f23dc6cad07d1cfbae060caa28d84626ed94c5cc0f067f
 ---
 
 # Athena Operation Admission Rail
@@ -51,6 +52,20 @@ export const resolveSyncedSaleInventoryReviewGroup = mutation({
 });
 ```
 
+After the first proving mutation, the same pattern was extended to approval
+decisions and shared-demo lifecycle writes:
+
+- `operations/approvalRequests:decideApprovalRequest` derives the reviewer from
+  the admitted operation actor when the rail admits the write.
+- `sharedDemo/public:requestManualRestore`,
+  `sharedDemo/public:resetBrowserExperience`, and
+  `sharedDemo/public:bindRegisterBaselineToTerminal` are declared as
+  `demo.lifecycle` operations instead of remaining legacy shared-demo public
+  function entries.
+- Generic Athena user auth preserves the explicit `reports.read` demo bridge but
+  no longer accepts helper-only shared-demo write capability options for migrated
+  writes.
+
 ## Why This Matters
 
 Shared demo is a real-tenant workflow with a smaller authority envelope. Normal account roles answer what an operator may do; shared-demo admission answers whether this short-lived demo principal may perform this exact operation against its server-owned store while the restore epoch is still current.
@@ -64,10 +79,25 @@ Putting the capability catalog at the platform layer prevents demo policy from b
 - Test the exported mutation handler, not only the `WithCtx` domain helper, when proving admission behavior.
 - Include denial tests for shared-demo scope mismatch and stale restore readiness.
 - Run `bun scripts/convex-operation-admission-check.ts` after adding or renaming public Convex mutations.
+- When a command-style public mutation expects `{ status: "user_error" }`
+  results, normalize admission denial at the public handler boundary and test
+  that shape instead of leaking raw shared-demo readiness errors.
+- Do not reintroduce shared-demo write capability options into generic auth
+  helpers for migrated writes; operation admission is the write source of truth.
 
 ## Examples
 
-The proving mutation is `operations/openWorkInventoryReviews:resolveSyncedSaleInventoryReviewGroup`. Its backend test invokes the exported Convex `_handler` with a shared-demo principal and verifies the domain path uses `operationAdmission` rather than falling back to `requireAuthenticatedAthenaUserWithCtx`.
+The initial proving mutation was
+`operations/openWorkInventoryReviews:resolveSyncedSaleInventoryReviewGroup`. Its
+backend test invokes the exported Convex `_handler` with a shared-demo principal
+and verifies the domain path uses `operationAdmission` rather than falling back
+to `requireAuthenticatedAthenaUserWithCtx`.
+
+The wider migration adds coverage for approval decisions and shared-demo
+lifecycle operations. Tests assert that approval reviewers come from
+`ctx.operationAdmission.actor`, that generic auth no longer receives
+helper-only demo write options, and that lifecycle operations leave the legacy
+shared-demo public-function inventory once operation definitions own them.
 
 The static checker also has a negative fixture: a public mutation with a matching operation definition but a raw `handler: async () => ...` fails. This prevents future migrations from adding definitions that document intent without enforcing runtime admission.
 
