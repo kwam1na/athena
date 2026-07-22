@@ -157,6 +157,65 @@ describe("collectPublicMutationExportsFromSource", () => {
     ]);
   });
 
+  it("does not accept public writes before a named admission wrapper call", () => {
+    const exports = collectPublicMutationExportsFromSource(
+      "packages/athena-webapp/convex/example/preWriteThenAdmitted.ts",
+      `
+        import { mutation } from "../_generated/server";
+        import { admitPublicMutation } from "../operationAdmission/publicMutation";
+        import { definition } from "../operationAdmission/definitions";
+
+        const admittedHandler = admitPublicMutation(definition, async () => null);
+
+        export const admittedWrite = mutation({
+          args: {},
+          handler: async (ctx, args) => {
+            await ctx.db.insert("auditLog", { action: "pre-admission" });
+            return admittedHandler(ctx, args);
+          },
+        });
+      `,
+    );
+
+    expect(exports).toEqual([
+      expect.objectContaining({
+        functionName: "example/preWriteThenAdmitted:admittedWrite",
+        hasOperationAdmissionWrapper: false,
+      }),
+    ]);
+  });
+
+  it("does not accept branch-local public writes next to a named admission wrapper call", () => {
+    const exports = collectPublicMutationExportsFromSource(
+      "packages/athena-webapp/convex/example/branchedWriteAdmitted.ts",
+      `
+        import { mutation } from "../_generated/server";
+        import { admitPublicMutation } from "../operationAdmission/publicMutation";
+        import { definition } from "../operationAdmission/definitions";
+
+        const admittedHandler = admitPublicMutation(definition, async () => null);
+
+        export const admittedWrite = mutation({
+          args: {},
+          handler: async (ctx, args) => {
+            if (args.useAdmission) {
+              return admittedHandler(ctx, args);
+            }
+            await ctx.db.insert("auditLog", { action: "branch-write" });
+            return null;
+          },
+        });
+      `,
+    );
+
+    expect(exports).toEqual([
+      expect.objectContaining({
+        functionName: "example/branchedWriteAdmitted:admittedWrite",
+        hasOperationAdmissionWrapper: false,
+      }),
+    ]);
+  });
+
   it("supports aliased and namespace imports from generated server", () => {
     expect(
       collectPublicMutationExportsFromSource(

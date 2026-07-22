@@ -10,7 +10,10 @@ import {
   recordRegisterSessionDepositOperationDefinition,
   resolveRegisterSessionSyncReviewOperationDefinition,
 } from "../operationAdmission/definitions";
-import { admitSharedDemoPublicMutation } from "../operationAdmission/publicMutation";
+import {
+  admitSharedDemoPublicMutation,
+  resolveSharedDemoOperationAdmission,
+} from "../operationAdmission/publicMutation";
 import { requireSharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
 import { requireSharedDemoRegisterSessionSyncReview } from "../sharedDemo/policy";
 import { requireReadySharedDemoWriteWithCtx } from "../sharedDemo/restore";
@@ -74,6 +77,16 @@ const RECENT_DEPOSIT_LIMIT = 10;
 const SESSION_LIMIT = 100;
 const STAFF_ROLE_LOOKUP_LIMIT = 20;
 const TIMELINE_LIMIT = 200;
+
+function isDepositAdmissionAuthorizationError(error: unknown) {
+  const message = error instanceof Error ? error.message : "";
+  return (
+    message === "Sign in again to continue." ||
+    message === "You do not have access to this operation." ||
+    message === "You do not have access to cash controls." ||
+    message.includes("shared_demo_action_denied")
+  );
+}
 
 const userErrorValidator = v.object({
   code: v.union(
@@ -1439,7 +1452,22 @@ export const recordRegisterSessionDeposit = mutation({
   returns: registerSessionDepositResultValidator,
   handler: async (ctx, args) => {
     try {
-      return await admitSharedDemoPublicMutation(
+      await resolveSharedDemoOperationAdmission(
+        ctx,
+        args,
+        recordRegisterSessionDepositOperationDefinition,
+      );
+    } catch (error) {
+      if (!isDepositAdmissionAuthorizationError(error)) {
+        throw error;
+      }
+      return userError({
+        code: "authorization_failed",
+        message: "You do not have access to cash controls.",
+      });
+    }
+
+    return admitSharedDemoPublicMutation(
         recordRegisterSessionDepositOperationDefinition,
         async (
           admittedCtx,
@@ -1650,12 +1678,6 @@ export const recordRegisterSessionDeposit = mutation({
     });
         },
       )(ctx, args);
-    } catch {
-      return userError({
-        code: "authorization_failed",
-        message: "You do not have access to cash controls.",
-      });
-    }
   },
 });
 

@@ -7677,10 +7677,9 @@ describe("cash control deposits", () => {
         ...args,
         amount: 200,
       }),
-    ).resolves.toMatchObject({
-      error: { code: "authorization_failed" },
-      kind: "user_error",
-    });
+    ).rejects.toThrow(
+      "Payment business event conflicts with an existing allocation.",
+    );
     expect(ctx.tables.get("paymentAllocation")).toHaveLength(1);
   });
 

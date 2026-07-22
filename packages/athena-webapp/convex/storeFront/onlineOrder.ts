@@ -37,6 +37,8 @@ import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
 import { recordPaymentAllocationWithCtx } from "../operations/paymentAllocations";
 import { markCatalogSummaryNeedsRefresh } from "../inventory/catalogSummary";
 import { commandResultValidator } from "../lib/commandResultValidators";
+import { requireOrganizationMemberRoleWithCtx } from "../lib/athenaUserAuth";
+import type { OperationMutationCtx } from "../operationAdmission/types";
 import {
   createOrderFromCheckoutSession,
   findOrderByExternalReference,
@@ -616,6 +618,48 @@ function mapUpdateOrderError(error: unknown): CommandResult<never> | null {
   return null;
 }
 
+async function requireNormalOrderStoreAccessWithCtx(
+  ctx: MutationCtx,
+  order: Doc<"onlineOrder">,
+) {
+  const operationAdmission = (ctx as Partial<OperationMutationCtx>)
+    .operationAdmission;
+  if (operationAdmission?.actor.kind !== "normal_user") {
+    return ok(null);
+  }
+
+  const store = await ctx.db.get("store", order.storeId);
+  if (!store) {
+    return userError({
+      code: "not_found",
+      message: "Store not found.",
+    });
+  }
+
+  try {
+    await requireOrganizationMemberRoleWithCtx(ctx, {
+      allowedRoles: ["full_admin", "pos_only"],
+      failureMessage: "You do not have access to this order.",
+      organizationId: store.organizationId,
+      userId: operationAdmission.actor.athenaUserId,
+    });
+  } catch {
+    return userError({
+      code: "authorization_failed",
+      message: "You do not have access to this order.",
+    });
+  }
+
+  return ok(null);
+}
+
+function isCommandUserError(result: CommandResult<unknown>): result is Extract<
+  CommandResult<unknown>,
+  { kind: "user_error" }
+> {
+  return result.kind === "user_error";
+}
+
 export const create = mutation({
   args: {
     checkoutSessionId: v.id("checkoutSession"),
@@ -1045,6 +1089,11 @@ export const update = mutation({
         if (demoActor && order.storeId !== demoActor.storeId) {
           denySharedDemoAction();
         }
+        const accessResult = await requireNormalOrderStoreAccessWithCtx(
+          ctx,
+          order,
+        );
+        if (isCommandUserError(accessResult)) return accessResult;
 
         await applyOnlineOrderUpdate(ctx, order, {
           ...args,
@@ -1069,6 +1118,11 @@ export const update = mutation({
         if (demoActor && order.storeId !== demoActor.storeId) {
           denySharedDemoAction();
         }
+        const accessResult = await requireNormalOrderStoreAccessWithCtx(
+          ctx,
+          order,
+        );
+        if (isCommandUserError(accessResult)) return accessResult;
 
         const { refund_id, refund_amount, ...rest } = args.update;
 
@@ -1622,6 +1676,11 @@ export const processReturnExchange = mutation({
           message: "Order not found.",
         });
       }
+      const accessResult = await requireNormalOrderStoreAccessWithCtx(
+        ctx,
+        order,
+      );
+      if (isCommandUserError(accessResult)) return accessResult;
 
       const store = await ctx.db.get("store", order.storeId);
       const orderItems = await listOrderItems(ctx, order._id);

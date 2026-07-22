@@ -59,10 +59,15 @@ export function admitSharedDemoPublicMutation<
   Handler extends (ctx: MutationCtx, args: any) => Promise<any>,
 >(definition: OperationDefinition, handler: Handler): Handler {
   return admitPublicMutation(definition, handler, {
-    resolveAdmission: (ctx, args, resolverDefinition) =>
-      resolveOperationAdmission(ctx, args, resolverDefinition, {
-        normalAdapter: createNormalUserOperationAdapter(),
-        sharedDemoAdapter: createSharedDemoOperationAdapter(),
-      }),
+    resolveAdmission: resolveSharedDemoOperationAdmission,
   }) as Handler;
+}
+
+export function resolveSharedDemoOperationAdmission<
+  Args extends Record<string, unknown>,
+>(ctx: MutationCtx, args: Args, definition: OperationDefinition) {
+  return resolveOperationAdmission(ctx, args, definition, {
+    normalAdapter: createNormalUserOperationAdapter(),
+    sharedDemoAdapter: createSharedDemoOperationAdapter(),
+  });
 }

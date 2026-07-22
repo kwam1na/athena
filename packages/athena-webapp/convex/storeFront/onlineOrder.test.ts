@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 
 // Shared-demo fulfillment limits preserve public order result envelopes.
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ok } from "../../shared/commandResult";
 import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
 import {
@@ -13,6 +13,69 @@ import {
 
 function getSource(relativePath: string) {
   return readFileSync(new URL(relativePath, import.meta.url), "utf8");
+}
+
+function getHandler(definition: unknown) {
+  return (definition as { _handler: Function })._handler;
+}
+
+function createUnauthorizedNormalOrderCtx() {
+  const order = {
+    _id: "order-1",
+    orderNumber: "ORDER-1",
+    storeId: "store-1",
+  };
+
+  return {
+    auth: {
+      getUserIdentity: vi.fn(async () => ({ subject: "auth-user-1" })),
+    },
+    db: {
+      get: vi.fn(async (table: string, id: string) => {
+        if (table === "users" && id === "auth-user-1") {
+          return { _id: "auth-user-1", email: "operator@example.com" };
+        }
+        if (table === "onlineOrder" && id === "order-1") {
+          return order;
+        }
+        if (table === "store" && id === "store-1") {
+          return { _id: "store-1", organizationId: "org-1" };
+        }
+        return null;
+      }),
+      query: vi.fn((table: string) => {
+        if (table === "athenaUser") {
+          return {
+            withIndex: vi.fn(() => ({
+              first: vi.fn(async () => null),
+              take: vi.fn(async () => [
+                {
+                  _id: "athena-user-1",
+                  email: "operator@example.com",
+                  normalizedEmail: "operator@example.com",
+                },
+              ]),
+            })),
+          };
+        }
+        if (table === "organizationMember") {
+          return {
+            withIndex: vi.fn(() => ({
+              first: vi.fn(async () => null),
+            })),
+          };
+        }
+        if (table === "sharedDemoPrincipal") {
+          return {
+            withIndex: vi.fn(() => ({
+              unique: vi.fn(async () => null),
+            })),
+          };
+        }
+        throw new Error(`Unexpected query table: ${table}`);
+      }),
+    },
+  };
 }
 
 describe("online order checkout money wiring", () => {
@@ -45,6 +108,44 @@ describe("online order checkout money wiring", () => {
       error: {
         code: "not_found",
         message: "Order not found.",
+      },
+    });
+  });
+
+  it("returns authorization failure when a normal user updates another store's order", async () => {
+    const result = await getHandler(update)(
+      createUnauthorizedNormalOrderCtx() as never,
+      {
+        orderId: "order-1",
+        update: { status: "cancelled" },
+      } as never,
+    );
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "authorization_failed",
+        message: "You do not have access to this order.",
+      },
+    });
+  });
+
+  it("returns authorization failure when a normal user processes another store's return", async () => {
+    const result = await getHandler(processReturnExchange)(
+      createUnauthorizedNormalOrderCtx() as never,
+      {
+        operationType: "return",
+        orderId: "order-1",
+        restockReturnedItems: false,
+        returnItemIds: [],
+      } as never,
+    );
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "authorization_failed",
+        message: "You do not have access to this order.",
       },
     });
   });

@@ -220,8 +220,12 @@ function handlerCallsOperationAdmissionWrapper(
   }
 
   let found = false;
+  let foundPublicWrite = false;
   function visit(node: ts.Node) {
-    if (found) return;
+    if (isPublicDbWriteCall(node)) {
+      foundPublicWrite = true;
+      return;
+    }
     if (
       ts.isCallExpression(node) &&
       ((ts.isIdentifier(node.expression) &&
@@ -234,7 +238,18 @@ function handlerCallsOperationAdmissionWrapper(
     ts.forEachChild(node, visit);
   }
   visit(expression.body);
-  return found;
+  return found && !foundPublicWrite;
+}
+
+function isPublicDbWriteCall(node: ts.Node) {
+  if (!ts.isCallExpression(node)) return false;
+  const expression = node.expression;
+  if (!ts.isPropertyAccessExpression(expression)) return false;
+  if (!["delete", "insert", "patch", "replace"].includes(expression.name.text)) {
+    return false;
+  }
+  const target = expression.expression;
+  return ts.isPropertyAccessExpression(target) && target.name.text === "db";
 }
 
 function hasExportModifier(node: ts.Node) {

@@ -1585,6 +1585,7 @@ export const getDailyOpeningSnapshot = query({
 
     return buildDailyOpeningSnapshotWithCtx(ctx, {
       ...args,
+      includeManagerReviewEvidence,
     });
   },
 });
