@@ -30,8 +30,87 @@ export const resolveSyncedSaleInventoryReviewGroupOperationDefinition =
     actors: { normalUser: "admit", sharedDemo: "admit" },
   });
 
+export const decideApprovalRequestOperationDefinition = defineOperation({
+  functionName: "operations/approvalRequests:decideApprovalRequest",
+  operationId: "operations/approvalRequests.decideApprovalRequest",
+  capability: "approvals.manage",
+  scope: {
+    kind: "store",
+    resolve: async (ctx, args) => {
+      const approvalRequestId = args.approvalRequestId;
+      if (typeof approvalRequestId !== "string") return {};
+      const approvalRequest = await ctx.db.get(
+        "approvalRequest",
+        approvalRequestId as never,
+      );
+      if (!approvalRequest) return {};
+      return {
+        organizationId: approvalRequest.organizationId,
+        storeId: approvalRequest.storeId,
+      };
+    },
+  },
+  readiness: { kind: "store_write" },
+  effects: { mode: "none" },
+  actors: { normalUser: "admit", sharedDemo: "admit" },
+});
+
+export const requestManualRestoreOperationDefinition = defineOperation({
+  functionName: "sharedDemo/public:requestManualRestore",
+  operationId: "sharedDemo/public.requestManualRestore",
+  capability: "demo.lifecycle",
+  scope: { kind: "none" },
+  readiness: { kind: "none" },
+  effects: { mode: "none" },
+  actors: { normalUser: "deny", sharedDemo: "admit" },
+});
+
+export const resetBrowserExperienceOperationDefinition = defineOperation({
+  functionName: "sharedDemo/public:resetBrowserExperience",
+  operationId: "sharedDemo/public.resetBrowserExperience",
+  capability: "demo.lifecycle",
+  scope: {
+    kind: "store",
+    resolve: async (ctx, args) => {
+      const terminalId = args.terminalId;
+      if (typeof terminalId !== "string") return {};
+      const terminal = await ctx.db.get("posTerminal", terminalId as never);
+      return terminal ? { storeId: terminal.storeId } : {};
+    },
+  },
+  readiness: { kind: "none" },
+  effects: { mode: "none" },
+  actors: { normalUser: "deny", sharedDemo: "admit" },
+});
+
+export const bindRegisterBaselineToTerminalOperationDefinition =
+  defineOperation({
+    functionName: "sharedDemo/public:bindRegisterBaselineToTerminal",
+    operationId: "sharedDemo/public.bindRegisterBaselineToTerminal",
+    capability: "demo.lifecycle",
+    scope: {
+      kind: "store",
+      resolve: async (ctx, args) => {
+        const terminalId = args.terminalId;
+        if (typeof terminalId !== "string") return {};
+        const terminal = await ctx.db.get("posTerminal", terminalId as never);
+        return terminal ? { storeId: terminal.storeId } : {};
+      },
+    },
+    readiness: {
+      kind: "store_write",
+      expectedEpochArg: "expectedEpoch",
+    },
+    effects: { mode: "none" },
+    actors: { normalUser: "deny", sharedDemo: "admit" },
+  });
+
 export const OPERATION_ADMISSION_DEFINITIONS = [
   resolveSyncedSaleInventoryReviewGroupOperationDefinition,
+  decideApprovalRequestOperationDefinition,
+  requestManualRestoreOperationDefinition,
+  resetBrowserExperienceOperationDefinition,
+  bindRegisterBaselineToTerminalOperationDefinition,
 ] as const satisfies readonly OperationDefinition[];
 
 export function validateOperationDefinition(
@@ -52,11 +131,14 @@ export function validateOperationDefinition(
   }
   if (definition.scope.kind === "organization") {
     if (!definition.scope.organizationIdArg && !definition.scope.resolve) {
-      errors.push("Organization scope must declare organizationIdArg or resolve.");
+      errors.push(
+        "Organization scope must declare organizationIdArg or resolve.",
+      );
     }
   }
   if (
     definition.actors.sharedDemo === "admit" &&
+    definition.capability !== "demo.lifecycle" &&
     definition.readiness.kind !== "store_write"
   ) {
     errors.push(

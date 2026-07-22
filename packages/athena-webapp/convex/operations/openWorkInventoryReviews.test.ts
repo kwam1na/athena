@@ -282,6 +282,68 @@ describe("resolveSyncedSaleInventoryReviewWithCtx", () => {
     );
   });
 
+  it("returns a command error instead of throwing when shared-demo admission denies the exported group mutation", async () => {
+    vi.mocked(getAuthUserId).mockResolvedValue("auth-demo" as never);
+    vi.mocked(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).mockRejectedValue(new Error("normal auth should not run"));
+    const ctx = buildCtx({
+      athenaUser: {
+        _creationTime: 1,
+        _id: "demo-athena-user" as Id<"athenaUser">,
+        email: "demo@example.com",
+      } as Doc<"athenaUser">,
+      sharedDemoPrincipal: {
+        _creationTime: 1,
+        _id: "principal-1" as Id<"sharedDemoPrincipal">,
+        admissionExpiresAt: Date.now() + 60_000,
+        athenaUserId: "demo-athena-user" as Id<"athenaUser">,
+        authUserId: "auth-demo",
+        organizationId: "org-1" as Id<"organization">,
+        storeId: "foreign-store" as Id<"store">,
+      } as Doc<"sharedDemoPrincipal">,
+      sharedDemoRestoreState: {
+        _creationTime: 1,
+        _id: "restore-1" as Id<"sharedDemoRestoreState">,
+        baselineVersion: 17,
+        epoch: 42,
+        status: "ready",
+        storeId: "foreign-store" as Id<"store">,
+      } as Doc<"sharedDemoRestoreState">,
+    });
+
+    const handler = (
+      resolveSyncedSaleInventoryReviewGroup as unknown as {
+        _handler: (
+          ctx: unknown,
+          args: unknown,
+        ) => Promise<unknown>;
+      }
+    )._handler;
+    await expect(
+      handler(ctx, {
+        expectedDemoRestoreEpoch: 42,
+        expectedMemberIds: ["work-item-1" as Id<"operationalWorkItem">],
+        groupKey: "synced_sale_inventory_review:store-1:sku-1",
+        outcome: "completed",
+        reason: "Inventory review handled from Open Work.",
+        storeId: "store-1" as Id<"store">,
+      }),
+    ).resolves.toEqual({
+      kind: "user_error",
+      error: {
+        code: "authorization_failed",
+        message: "This action isn't allowed in the demo.",
+        retryable: false,
+        title: "Action unavailable",
+      },
+    });
+    expect(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).not.toHaveBeenCalled();
+    expect(ctx.db.patch).not.toHaveBeenCalled();
+  });
+
   it("auto-resolves matching synced sale inventory review work from applied stock movements", async () => {
     const ctx = buildCtx();
 

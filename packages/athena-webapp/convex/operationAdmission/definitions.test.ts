@@ -2,10 +2,45 @@ import { describe, expect, it } from "vitest";
 
 import {
   defineOperation,
+  OPERATION_ADMISSION_DEFINITIONS,
   validateOperationDefinition,
 } from "./definitions";
 
 describe("operation admission definitions", () => {
+  it("keeps exported operation definitions valid", () => {
+    for (const definition of OPERATION_ADMISSION_DEFINITIONS) {
+      expect(validateOperationDefinition(definition)).toEqual([]);
+    }
+  });
+
+  it("defines the shared-demo lifecycle public writes on the admission rail", () => {
+    expect(OPERATION_ADMISSION_DEFINITIONS).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          actors: { normalUser: "deny", sharedDemo: "admit" },
+          capability: "demo.lifecycle",
+          functionName: "sharedDemo/public:requestManualRestore",
+          readiness: { kind: "none" },
+        }),
+        expect.objectContaining({
+          actors: { normalUser: "deny", sharedDemo: "admit" },
+          capability: "demo.lifecycle",
+          functionName: "sharedDemo/public:resetBrowserExperience",
+          readiness: { kind: "none" },
+        }),
+        expect.objectContaining({
+          actors: { normalUser: "deny", sharedDemo: "admit" },
+          capability: "demo.lifecycle",
+          functionName: "sharedDemo/public:bindRegisterBaselineToTerminal",
+          readiness: {
+            kind: "store_write",
+            expectedEpochArg: "expectedEpoch",
+          },
+        }),
+      ]),
+    );
+  });
+
   it("accepts a valid store-scoped write definition", () => {
     const definition = defineOperation({
       operationId: "operations/openWorkInventoryReviews.resolveGroup",
@@ -56,5 +91,18 @@ describe("operation admission definitions", () => {
     ).toContain(
       "Shared-demo writable operations must declare store_write readiness.",
     );
+  });
+
+  it("allows demo lifecycle operations to manage the restore readiness fence", () => {
+    expect(
+      validateOperationDefinition({
+        operationId: "demo.lifecycle",
+        capability: "demo.lifecycle",
+        scope: { kind: "none" },
+        readiness: { kind: "none" },
+        effects: { mode: "none" },
+        actors: { normalUser: "deny", sharedDemo: "admit" },
+      }),
+    ).toEqual([]);
   });
 });

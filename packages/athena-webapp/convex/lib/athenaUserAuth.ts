@@ -1,14 +1,19 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
-import type { SharedDemoCapability } from "../sharedDemo/policy";
+import type { AthenaCapability } from "../platform/capabilityCatalog";
 import { getSharedDemoActorWithCtx } from "../sharedDemo/actor";
-import { requireSharedDemoCapability } from "../sharedDemo/policy";
 
 type AthenaAuthCtx =
   | Pick<QueryCtx, "auth" | "db">
   | Pick<MutationCtx, "auth" | "db">;
 type OrganizationMemberRole = "full_admin" | "pos_only";
+type AthenaUserAuthOptions = { sharedDemoCapability: AthenaCapability };
+type AthenaUserAuthReadCapability = "reports.read";
+
+const SHARED_DEMO_ATHENA_USER_READ_CAPABILITIES = new Set<AthenaCapability>([
+  "reports.read",
+]);
 
 export function normalizeAthenaUserEmail(email: string) {
   return email.trim().toLowerCase();
@@ -97,14 +102,22 @@ async function getAuthenticatedUserRecord(ctx: AthenaAuthCtx) {
   };
 }
 
+function isSharedDemoAthenaUserReadCapability(
+  capability: AthenaCapability,
+): capability is AthenaUserAuthReadCapability {
+  return SHARED_DEMO_ATHENA_USER_READ_CAPABILITIES.has(capability);
+}
+
 export async function getAuthenticatedAthenaUserWithCtx(
   ctx: AthenaAuthCtx,
-  options?: { sharedDemoCapability: SharedDemoCapability },
+  options?: AthenaUserAuthOptions,
 ) {
-  if (options) {
+  if (
+    options &&
+    isSharedDemoAthenaUserReadCapability(options.sharedDemoCapability)
+  ) {
     const demoActor = await getSharedDemoActorWithCtx(ctx);
     if (demoActor) {
-      requireSharedDemoCapability(options.sharedDemoCapability);
       return ctx.db.get("athenaUser", demoActor.athenaUserId);
     }
   }
@@ -119,7 +132,7 @@ export async function getAuthenticatedAthenaUserWithCtx(
 
 export async function requireAuthenticatedAthenaUserWithCtx(
   ctx: AthenaAuthCtx,
-  options?: { sharedDemoCapability: SharedDemoCapability },
+  options?: AthenaUserAuthOptions,
 ) {
   const athenaUser = await getAuthenticatedAthenaUserWithCtx(ctx, options);
 
@@ -132,12 +145,14 @@ export async function requireAuthenticatedAthenaUserWithCtx(
 
 export async function requireAuthenticatedAthenaUserIndexedWithCtx(
   ctx: AthenaAuthCtx,
-  options?: { sharedDemoCapability: SharedDemoCapability },
+  options?: AthenaUserAuthOptions,
 ) {
-  if (options) {
+  if (
+    options &&
+    isSharedDemoAthenaUserReadCapability(options.sharedDemoCapability)
+  ) {
     const demoActor = await getSharedDemoActorWithCtx(ctx);
     if (demoActor) {
-      requireSharedDemoCapability(options.sharedDemoCapability);
       const athenaUser = await ctx.db.get("athenaUser", demoActor.athenaUserId);
       if (!athenaUser) throw new Error("Sign in again to continue.");
       return athenaUser;

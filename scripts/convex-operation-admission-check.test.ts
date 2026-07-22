@@ -78,6 +78,62 @@ describe("collectPublicMutationExportsFromSource", () => {
     ]);
   });
 
+  it("detects public mutations routed through a named operation admission wrapper", () => {
+    const exports = collectPublicMutationExportsFromSource(
+      "packages/athena-webapp/convex/example/namedAdmitted.ts",
+      `
+        import { mutation } from "../_generated/server";
+        import { admitPublicMutation } from "../operationAdmission/publicMutation";
+        import { definition } from "../operationAdmission/definitions";
+
+        const admittedHandler = admitPublicMutation(definition, async () => null);
+
+        export const admittedWrite = mutation({
+          args: {},
+          handler: admittedHandler,
+        });
+      `,
+    );
+
+    expect(exports).toEqual([
+      expect.objectContaining({
+        functionName: "example/namedAdmitted:admittedWrite",
+        hasOperationAdmissionWrapper: true,
+      }),
+    ]);
+  });
+
+  it("detects handlers that call a named admission wrapper before mapping errors", () => {
+    const exports = collectPublicMutationExportsFromSource(
+      "packages/athena-webapp/convex/example/caughtAdmitted.ts",
+      `
+        import { mutation } from "../_generated/server";
+        import { admitPublicMutation } from "../operationAdmission/publicMutation";
+        import { definition } from "../operationAdmission/definitions";
+
+        const admittedHandler = admitPublicMutation(definition, async () => null);
+
+        export const admittedWrite = mutation({
+          args: {},
+          handler: async (ctx, args) => {
+            try {
+              return await admittedHandler(ctx, args);
+            } catch (error) {
+              return { kind: "user_error", error: String(error) };
+            }
+          },
+        });
+      `,
+    );
+
+    expect(exports).toEqual([
+      expect.objectContaining({
+        functionName: "example/caughtAdmitted:admittedWrite",
+        hasOperationAdmissionWrapper: true,
+      }),
+    ]);
+  });
+
   it("supports aliased and namespace imports from generated server", () => {
     expect(
       collectPublicMutationExportsFromSource(

@@ -164,8 +164,28 @@ function isOperationAdmissionWrapperCall(expression: ts.Expression) {
   );
 }
 
+function getOperationAdmissionWrapperNames(sourceFile: ts.SourceFile) {
+  const names = new Set<string>();
+
+  for (const statement of sourceFile.statements) {
+    if (!ts.isVariableStatement(statement)) continue;
+    for (const declaration of statement.declarationList.declarations) {
+      if (
+        ts.isIdentifier(declaration.name) &&
+        declaration.initializer &&
+        isOperationAdmissionWrapperCall(declaration.initializer)
+      ) {
+        names.add(declaration.name.text);
+      }
+    }
+  }
+
+  return names;
+}
+
 function mutationCallHasOperationAdmissionWrapper(
   callExpression: ts.CallExpression,
+  wrapperNames: ReadonlySet<string>,
 ) {
   const [config] = callExpression.arguments;
   if (!config || !ts.isObjectLiteralExpression(config)) {
@@ -180,8 +200,38 @@ function mutationCallHasOperationAdmissionWrapper(
     ) {
       return false;
     }
-    return isOperationAdmissionWrapperCall(property.initializer);
+    return (
+      isOperationAdmissionWrapperCall(property.initializer) ||
+      (ts.isIdentifier(property.initializer) &&
+        wrapperNames.has(property.initializer.text)) ||
+      handlerCallsOperationAdmissionWrapper(property.initializer, wrapperNames)
+    );
   });
+}
+
+function handlerCallsOperationAdmissionWrapper(
+  expression: ts.Expression,
+  wrapperNames: ReadonlySet<string>,
+) {
+  if (!ts.isArrowFunction(expression) && !ts.isFunctionExpression(expression)) {
+    return false;
+  }
+
+  let found = false;
+  function visit(node: ts.Node) {
+    if (found) return;
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      wrapperNames.has(node.expression.text)
+    ) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(expression.body);
+  return found;
 }
 
 function hasExportModifier(node: ts.Node) {
@@ -210,6 +260,7 @@ export function collectPublicMutationExportsFromSource(
   );
   const { mutationNames, serverNamespaces } =
     getImportedConvexRegistrationNames(sourceFile);
+  const wrapperNames = getOperationAdmissionWrapperNames(sourceFile);
   const moduleName = toConvexModuleName(filePath);
   const exports: PublicMutationExport[] = [];
 
@@ -224,7 +275,7 @@ export function collectPublicMutationExportsFromSource(
     exports.push({
       functionName: `${moduleName}:${exportName}`,
       hasOperationAdmissionWrapper:
-        mutationCallHasOperationAdmissionWrapper(mutationCall),
+        mutationCallHasOperationAdmissionWrapper(mutationCall, wrapperNames),
       moduleName,
       exportName,
       filePath: normalizeRepoPath(filePath),

@@ -51,30 +51,76 @@ describe("operation admission migration inventory", () => {
     expect(legacyFunctionNames).not.toContain(
       "operations/openWorkInventoryReviews:resolveSyncedSaleInventoryReviewGroup",
     );
+    expect(legacyFunctionNames).not.toContain(
+      "sharedDemo/public:requestManualRestore",
+    );
+    expect(legacyFunctionNames).not.toContain(
+      "sharedDemo/public:resetBrowserExperience",
+    );
+    expect(legacyFunctionNames).not.toContain(
+      "sharedDemo/public:bindRegisterBaselineToTerminal",
+    );
   });
 
-  it(
-    "covers every current public mutation until operation definitions replace exemptions",
-    async () => {
-      const discovered = await discoverPublicMutationExports(REPO_ROOT);
-      const inventoried = new Set<string>(
-        [
-          ...OPERATION_ADMISSION_DEFINITIONS.map(
-            (definition) => definition.functionName,
-          ),
-          ...OPERATION_ADMISSION_LEGACY_EXEMPTIONS.map(
-            (exemption) => exemption.functionName,
-          ),
-        ].filter((functionName): functionName is string =>
-          typeof functionName === "string",
-        ),
-      );
-      const missing = discovered
-        .map((entry) => entry.functionName)
-        .filter((functionName) => !inventoried.has(functionName));
+  it("keeps demo-reachable follow-up groups inventoried until their handlers migrate", () => {
+    expect(OPERATION_ADMISSION_MIGRATION_INVENTORY).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          capability: "pos.sale.complete",
+          functions: expect.arrayContaining([
+            "pos/public/transactions:completeTransaction",
+          ]),
+          wave: "pos",
+        }),
+        expect.objectContaining({
+          capability: "cash.control.write",
+          functions: expect.arrayContaining([
+            "cashControls/deposits:recordRegisterSessionDeposit",
+          ]),
+          wave: "cash-controls",
+        }),
+        expect.objectContaining({
+          capability: "inventory.adjust",
+          functions: expect.arrayContaining([
+            "stockOps/adjustments:submitStockAdjustmentBatch",
+          ]),
+          wave: "catalog",
+        }),
+        expect.objectContaining({
+          capability: "orders.fulfill",
+          functions: expect.arrayContaining(["storeFront/onlineOrder:update"]),
+          wave: "storefront",
+        }),
+        expect.objectContaining({
+          capability: "staff.communication.write",
+          functions: expect.arrayContaining([
+            "operations/staffMessages:postStaffMessage",
+          ]),
+          wave: "identity-and-staff",
+        }),
+      ]),
+    );
+  });
 
-      expect(missing).toEqual([]);
-    },
-    30_000,
-  );
+  it("covers every current public mutation until operation definitions replace exemptions", async () => {
+    const discovered = await discoverPublicMutationExports(REPO_ROOT);
+    const inventoried = new Set<string>(
+      [
+        ...OPERATION_ADMISSION_DEFINITIONS.map(
+          (definition) => definition.functionName,
+        ),
+        ...OPERATION_ADMISSION_LEGACY_EXEMPTIONS.map(
+          (exemption) => exemption.functionName,
+        ),
+      ].filter(
+        (functionName): functionName is string =>
+          typeof functionName === "string",
+      ),
+    );
+    const missing = discovered
+      .map((entry) => entry.functionName)
+      .filter((functionName) => !inventoried.has(functionName));
+
+    expect(missing).toEqual([]);
+  }, 30_000);
 });

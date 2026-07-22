@@ -21,6 +21,10 @@ import {
 } from "../lib/athenaUserAuth";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
 import {
+  isSharedDemoActionDeniedData,
+  SHARED_DEMO_ACTION_DENIED_MESSAGE,
+} from "../../shared/sharedDemoActionError";
+import {
   buildOperationalEvent,
   recordOperationalEventWithCtx,
 } from "./operationalEvents";
@@ -1028,6 +1032,19 @@ export const resolveSyncedSaleInventoryReview = internalMutation({
   handler: resolveSyncedSaleInventoryReviewWithCtx,
 });
 
+const resolveSyncedSaleInventoryReviewGroupAdmittedHandler =
+  admitPublicMutation(
+    resolveSyncedSaleInventoryReviewGroupOperationDefinition,
+    resolveSyncedSaleInventoryReviewGroupWithCtx,
+    {
+      resolveAdmission: (ctx, args, definition) =>
+        resolveOperationAdmission(ctx, args, definition, {
+          normalAdapter: createNormalUserOperationAdapter(),
+          sharedDemoAdapter: createSharedDemoOperationAdapter(),
+        }),
+    },
+  );
+
 export const resolveSyncedSaleInventoryReviewGroup = mutation({
   args: {
     expectedDemoRestoreEpoch: v.optional(v.number()),
@@ -1038,18 +1055,35 @@ export const resolveSyncedSaleInventoryReviewGroup = mutation({
     storeId: v.id("store"),
   },
   returns: commandResultValidator(v.any()),
-  handler: admitPublicMutation(
-    resolveSyncedSaleInventoryReviewGroupOperationDefinition,
-    resolveSyncedSaleInventoryReviewGroupWithCtx,
-    {
-      resolveAdmission: (ctx, args, definition) =>
-        resolveOperationAdmission(ctx, args, definition, {
-          normalAdapter: createNormalUserOperationAdapter(),
-          sharedDemoAdapter: createSharedDemoOperationAdapter(),
-        }),
-    },
-  ),
+  handler: async (ctx, args) => {
+    try {
+      return await resolveSyncedSaleInventoryReviewGroupAdmittedHandler(
+        ctx,
+        args,
+      );
+    } catch (error) {
+      const sharedDemoDenial = sharedDemoActionDeniedCommandResult(error);
+      if (sharedDemoDenial) return sharedDemoDenial;
+      throw error;
+    }
+  },
 });
+
+function sharedDemoActionDeniedCommandResult(
+  error: unknown,
+): CommandResult<never> | null {
+  if (!error || typeof error !== "object" || !("data" in error)) {
+    return null;
+  }
+  if (!isSharedDemoActionDeniedData(error.data)) return null;
+
+  return userError({
+    code: "authorization_failed",
+    title: "Action unavailable",
+    message: SHARED_DEMO_ACTION_DENIED_MESSAGE,
+    retryable: false,
+  });
+}
 
 async function getOperationAdmissionAthenaUserOrRequireAuth(ctx: MutationCtx) {
   const operationAdmission = (ctx as Partial<OperationMutationCtx>)

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("@convex-dev/auth/server", () => ({ getAuthUserId: vi.fn() }));
 vi.mock("./actor", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./actor")>();
   return {
@@ -13,6 +14,7 @@ vi.mock("./restore", async (importOriginal) => {
   return { ...actual, requireReadySharedDemoWriteWithCtx: vi.fn() };
 });
 
+import { getAuthUserId } from "@convex-dev/auth/server";
 import {
   requireSharedDemoCapabilityIfApplicable,
   requireSharedDemoStoreCapabilityIfApplicable,
@@ -59,7 +61,10 @@ const invoke = (fn: unknown, ctx: unknown, args: unknown) =>
   );
 
 describe("actual public shared-demo enforcement boundaries", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(getAuthUserId).mockResolvedValue(null as never);
+  });
 
   it.each([
     [createStaffCredential, "identity.manage", {}],
@@ -245,20 +250,45 @@ describe("actual public shared-demo enforcement boundaries", () => {
   });
 
   it("clamps and fences approval decisions to the request's demo store", async () => {
-    vi.mocked(requireSharedDemoStoreCapabilityIfApplicable).mockResolvedValueOnce({
-      kind: "shared_demo",
-      storeId: "store",
-    } as never);
+    vi.stubEnv("ATHENA_SHARED_DEMO_ENABLED", "true");
+    vi.stubEnv("STAGE", "qa");
+    vi.mocked(getAuthUserId).mockResolvedValue("auth-demo" as never);
     const sentinel = new Error("restore fence reached");
     vi.mocked(requireReadySharedDemoWriteWithCtx).mockRejectedValueOnce(sentinel);
     const ctx = {
+      auth: { getUserIdentity: vi.fn() },
       db: {
-        get: vi.fn().mockResolvedValue({
-          _id: "approval",
-          storeId: "store",
+        get: vi.fn(async (table: string, id: string) => {
+          if (table === "approvalRequest" && id === "approval") {
+            return {
+              _id: "approval",
+              organizationId: "org",
+              status: "pending",
+              storeId: "store",
+            };
+          }
+          return null;
         }),
         insert: vi.fn(),
         patch: vi.fn(),
+        query: vi.fn((table: string) => ({
+          withIndex: vi.fn((_index: string, apply: Function) => {
+            apply({ eq: vi.fn().mockReturnThis() });
+            return {
+              unique: vi.fn(async () =>
+                table === "sharedDemoPrincipal"
+                  ? {
+                      admissionExpiresAt: Date.now() + 60_000,
+                      athenaUserId: "demo-athena",
+                      authUserId: "auth-demo",
+                      organizationId: "org",
+                      storeId: "store",
+                    }
+                  : null,
+              ),
+            };
+          }),
+        })),
       },
     };
 
@@ -267,12 +297,8 @@ describe("actual public shared-demo enforcement boundaries", () => {
         approvalRequestId: "approval",
         decision: "approved",
       }),
-    ).rejects.toThrow(sentinel.message);
-    expect(requireSharedDemoStoreCapabilityIfApplicable).toHaveBeenCalledWith(
-      ctx,
-      "approvals.manage",
-      "store",
-    );
+    ).rejects.toThrow("This action isn't allowed in the demo.");
+    expect(requireSharedDemoStoreCapabilityIfApplicable).not.toHaveBeenCalled();
     expect(requireReadySharedDemoWriteWithCtx).toHaveBeenCalledWith(ctx, {
       storeId: "store",
     });

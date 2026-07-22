@@ -140,9 +140,7 @@ export const OPERATION_ADMISSION_MIGRATION_INVENTORY = [
     capability: "catalog.quick_add",
     owner: "V26-1094",
     reason: LEGACY_REASON,
-    functions: [
-      "pos/public/catalog:quickAddSku",
-    ],
+    functions: ["pos/public/catalog:quickAddSku"],
   },
   {
     wave: "catalog",
@@ -175,15 +173,6 @@ export const OPERATION_ADMISSION_MIGRATION_INVENTORY = [
   },
   {
     wave: "daily-operations",
-    capability: "approvals.manage",
-    owner: "V26-1094",
-    reason: LEGACY_REASON,
-    functions: [
-      "operations/approvalRequests:decideApprovalRequest",
-    ],
-  },
-  {
-    wave: "daily-operations",
     capability: "daily_operations.write",
     owner: "V26-1094",
     reason: LEGACY_REASON,
@@ -193,17 +182,6 @@ export const OPERATION_ADMISSION_MIGRATION_INVENTORY = [
       "operations/dailyClose:resolveDailyCloseCarryForward",
       "operations/dailyOpening:startStoreDay",
       "pos/public/terminals:registerTerminal",
-    ],
-  },
-  {
-    wave: "demo-lifecycle",
-    capability: "demo.lifecycle",
-    owner: "V26-1094",
-    reason: LEGACY_REASON,
-    functions: [
-      "sharedDemo/public:bindRegisterBaselineToTerminal",
-      "sharedDemo/public:requestManualRestore",
-      "sharedDemo/public:resetBrowserExperience",
     ],
   },
   {
@@ -251,10 +229,7 @@ export const OPERATION_ADMISSION_MIGRATION_INVENTORY = [
     capability: "permissions.manage",
     owner: "V26-1094",
     reason: LEGACY_REASON,
-    functions: [
-      "inventory/inviteCode:create",
-      "inventory/inviteCode:redeem",
-    ],
+    functions: ["inventory/inviteCode:create", "inventory/inviteCode:redeem"],
   },
   {
     wave: "identity-and-staff",
@@ -276,9 +251,7 @@ export const OPERATION_ADMISSION_MIGRATION_INVENTORY = [
     capability: "staff.communication.write",
     owner: "V26-1094",
     reason: LEGACY_REASON,
-    functions: [
-      "operations/staffMessages:postStaffMessage",
-    ],
+    functions: ["operations/staffMessages:postStaffMessage"],
   },
   {
     wave: "identity-and-staff",
@@ -295,9 +268,7 @@ export const OPERATION_ADMISSION_MIGRATION_INVENTORY = [
     capability: "intelligence.manage",
     owner: "V26-1094",
     reason: LEGACY_REASON,
-    functions: [
-      "intelligence/runs:dismissArtifact",
-    ],
+    functions: ["intelligence/runs:dismissArtifact"],
   },
   {
     wave: "operations-support",
@@ -316,9 +287,7 @@ export const OPERATION_ADMISSION_MIGRATION_INVENTORY = [
     capability: "integrations.manage",
     owner: "V26-1094",
     reason: LEGACY_REASON,
-    functions: [
-      "inventory/stores:patchConfigV2Command",
-    ],
+    functions: ["inventory/stores:patchConfigV2Command"],
   },
   {
     wave: "operations-support",
@@ -474,9 +443,7 @@ export const OPERATION_ADMISSION_MIGRATION_INVENTORY = [
     capability: "pos.transaction.void",
     owner: "V26-1094",
     reason: LEGACY_REASON,
-    functions: [
-      "pos/public/transactions:voidTransaction",
-    ],
+    functions: ["pos/public/transactions:voidTransaction"],
   },
   {
     wave: "procurement",
@@ -499,18 +466,14 @@ export const OPERATION_ADMISSION_MIGRATION_INVENTORY = [
     capability: "exports.generate",
     owner: "V26-1094",
     reason: LEGACY_REASON,
-    functions: [
-      "reporting/export:requestExport",
-    ],
+    functions: ["reporting/export:requestExport"],
   },
   {
     wave: "reporting",
     capability: "reporting.generate",
     owner: "V26-1094",
     reason: LEGACY_REASON,
-    functions: [
-      "reporting/customRangeRequests:requestCustomRange",
-    ],
+    functions: ["reporting/customRangeRequests:requestCustomRange"],
   },
   {
     wave: "reporting",
@@ -554,45 +517,35 @@ export const OPERATION_ADMISSION_MIGRATION_INVENTORY = [
     capability: "service.intake.write",
     owner: "V26-1094",
     reason: LEGACY_REASON,
-    functions: [
-      "operations/serviceIntake:createServiceIntake",
-    ],
+    functions: ["operations/serviceIntake:createServiceIntake"],
   },
   {
     wave: "storefront",
     capability: "billing.manage",
     owner: "V26-1094",
     reason: LEGACY_REASON,
-    functions: [
-      "serviceOps/serviceCases:recordServicePayment",
-    ],
+    functions: ["serviceOps/serviceCases:recordServicePayment"],
   },
   {
     wave: "storefront",
     capability: "customer.messaging.send",
     owner: "V26-1094",
     reason: LEGACY_REASON,
-    functions: [
-      "storeFront/supportTicket:create",
-    ],
+    functions: ["storeFront/supportTicket:create"],
   },
   {
     wave: "storefront",
     capability: "orders.create",
     owner: "V26-1094",
     reason: LEGACY_REASON,
-    functions: [
-      "storeFront/checkoutSession:create",
-    ],
+    functions: ["storeFront/checkoutSession:create"],
   },
   {
     wave: "storefront",
     capability: "orders.fulfill",
     owner: "V26-1094",
     reason: LEGACY_REASON,
-    functions: [
-      "storeFront/onlineOrder:update",
-    ],
+    functions: ["storeFront/onlineOrder:update"],
   },
   {
     wave: "storefront",
@@ -621,9 +574,7 @@ export const OPERATION_ADMISSION_MIGRATION_INVENTORY = [
     capability: "payments.refund",
     owner: "V26-1094",
     reason: LEGACY_REASON,
-    functions: [
-      "storeFront/onlineOrder:processReturnExchange",
-    ],
+    functions: ["storeFront/onlineOrder:processReturnExchange"],
   },
   {
     wave: "storefront",

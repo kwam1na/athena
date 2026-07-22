@@ -11,12 +11,15 @@ operations such as refunds, destructive administration, terminal registration,
 and payment collection. The static coverage test discovers every exported
 public Convex mutation and action and fails when any function is unclassified.
 
-The operation-admission migration will pair this platform capability catalog
-with public-write structural coverage in `convex/operationAdmission`. Shared
-demo will consume that platform catalog through its adapter instead of owning
-write-admission proof. Until the adapter and migration inventory exist, the
-legacy shared-demo policy and representative function inventory remain the
-runtime coverage source.
+The operation-admission migration pairs this platform capability catalog with
+public-write structural coverage in `convex/operationAdmission`. Shared demo
+consumes that platform catalog through its adapter instead of owning
+write-admission proof. The generic Athena-user auth helper no longer admits
+shared-demo write capabilities; it preserves only explicit read allowlists such
+as `reports.read`. Migrated shared-demo writes must now enter through an
+operation definition plus adapter-backed admission context. Remaining legacy
+write groups stay tracked by migration inventory and domain-specific policy
+until they receive operation definitions.
 
 The demo allowlist is a separate list of capability IDs. Classification does
 not grant access: every newly discovered capability remains denied until it is
@@ -70,7 +73,9 @@ reads, writes, and external effects.
 Existing shared-demo read allowlists are intentionally unchanged by the
 operation-admission cleanup. Public reads/queries, public actions, broad
 provider dispatch migration, and shared-demo seeding/restore redesign remain
-out of scope until separately planned.
+out of scope until separately planned. Write admission should not be added back
+to `convex/lib/athenaUserAuth.ts`; use `convex/operationAdmission` and the
+shared-demo operation adapter for migrated public writes.
 
 ## Athena capability families
 

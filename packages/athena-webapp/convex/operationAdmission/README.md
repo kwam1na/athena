@@ -10,10 +10,11 @@ public write mutations are intentionally tracked as exact legacy exemptions in
 `migrationInventory.ts` until each follow-up wave receives operation
 definitions.
 
-Legacy `{ sharedDemoCapability }` compatibility options still remain in
-`convex/lib/athenaUserAuth.ts` for unmigrated write groups. Remove them only
-after migrated write groups no longer depend on helper-only admission and the
-remaining exemptions have explicit follow-up coverage.
+The generic Athena-user auth helper keeps a compatibility
+`{ sharedDemoCapability }` parameter while callers migrate, but it no longer
+admits shared-demo write capabilities. It only preserves explicit read
+allowlists such as `reports.read`; write admission belongs in this directory
+and the shared-demo operation adapter.
 
 ## Required platform shape
 
@@ -52,15 +53,15 @@ proves migrated writes no longer depend on helper-only admission.
    operationAdmission definition and adapter-backed handler context.
 4. Keep public read allowlists unchanged. `reports.read` and other read/query
    paths are explicitly out of scope for this cleanup.
-5. Remove the optional `options?: { sharedDemoCapability: ... }` parameters
-   from `getAuthenticatedAthenaUserWithCtx`,
-   `requireAuthenticatedAthenaUserWithCtx`, and
-   `requireAuthenticatedAthenaUserIndexedWithCtx`.
-6. Delete the `SharedDemoCapability`, `getSharedDemoActorWithCtx`, and
-   `requireSharedDemoCapability` imports from `convex/lib/athenaUserAuth.ts`.
-7. Update `convex/lib/athenaUserAuth.test.ts` so a shared-demo principal is
-   denied by generic auth and admitted only through operationAdmission adapter
-   tests.
+5. Keep the temporary `options?: { sharedDemoCapability: ... }` parameter only
+   as caller compatibility while unmigrated write groups are converted. Generic
+   auth may use it only for explicit read allowlists such as `reports.read`.
+6. Do not import `requireSharedDemoCapability` from
+   `convex/lib/athenaUserAuth.ts`; capability checks for writes must live in
+   the shared-demo operation adapter or domain-specific policy.
+7. Keep `convex/lib/athenaUserAuth.test.ts` proving that a shared-demo write
+   capability is denied by generic auth and admitted only through
+   operationAdmission adapter tests.
 8. Retire `SHARED_DEMO_PUBLIC_FUNCTION_INVENTORY` and the source-containment
    test in `convex/sharedDemo/policy.test.ts` after
    `operationAdmission/migrationInventory.test.ts` proves every migrated public

@@ -1,6 +1,15 @@
 import { v } from "convex/values";
 
+import type { Id } from "../_generated/dataModel";
 import { mutation, query } from "../_generated/server";
+import { resolveOperationAdmission } from "../operationAdmission/adapters";
+import {
+  bindRegisterBaselineToTerminalOperationDefinition,
+  requestManualRestoreOperationDefinition,
+  resetBrowserExperienceOperationDefinition,
+} from "../operationAdmission/definitions";
+import { admitPublicMutation } from "../operationAdmission/publicMutation";
+import { createSharedDemoOperationAdapter } from "./operationAdapter";
 import { requireSharedDemoActorWithCtx } from "./actor";
 import {
   assertSharedDemoWriteEpoch,
@@ -69,6 +78,29 @@ const contextResult = v.union(
     storeId: v.id("store"),
   }),
 );
+
+type RequestManualRestoreArgs = {
+  idempotencyKey: string;
+};
+
+type ResetBrowserExperienceArgs = {
+  syncSecretHash?: string;
+  terminalId?: Id<"posTerminal">;
+};
+
+type BindRegisterBaselineToTerminalArgs = {
+  expectedEpoch: number;
+  terminalId: Id<"posTerminal">;
+};
+
+const resolveSharedDemoLifecycleAdmission = (
+  ctx: Parameters<typeof resolveOperationAdmission>[0],
+  args: Record<string, unknown>,
+  definition: Parameters<typeof resolveOperationAdmission>[2],
+) =>
+  resolveOperationAdmission(ctx, args, definition, {
+    sharedDemoAdapter: createSharedDemoOperationAdapter(),
+  });
 
 export const getContext = query({
   args: {},
@@ -189,43 +221,49 @@ export const requestManualRestore = mutation({
       v.literal("rate_limited"),
     ),
   }),
-  handler: async (ctx, args) => {
-    const actor = await requireSharedDemoActorWithCtx(ctx);
-    if (!/^[A-Za-z0-9_-]{8,100}$/.test(args.idempotencyKey))
-      throw new Error("Restore request is invalid.");
-    const latest = await ctx.db
-      .query("sharedDemoRestoreAudit")
-      .withIndex("by_storeId_occurredAt", (q) => q.eq("storeId", actor.storeId))
-      .order("desc")
-      .first();
-    if (
-      latest?.source === "manual" &&
-      latest.occurredAt > Date.now() - 60_000
-    ) {
-      const state = await ctx.db
-        .query("sharedDemoRestoreState")
-        .withIndex("by_storeId", (q) => q.eq("storeId", actor.storeId))
-        .unique();
+  handler: admitPublicMutation(
+    requestManualRestoreOperationDefinition,
+    async (ctx, args: RequestManualRestoreArgs) => {
+      const actor = await requireSharedDemoActorWithCtx(ctx);
+      if (!/^[A-Za-z0-9_-]{8,100}$/.test(args.idempotencyKey))
+        throw new Error("Restore request is invalid.");
+      const latest = await ctx.db
+        .query("sharedDemoRestoreAudit")
+        .withIndex("by_storeId_occurredAt", (q) =>
+          q.eq("storeId", actor.storeId),
+        )
+        .order("desc")
+        .first();
+      if (
+        latest?.source === "manual" &&
+        latest.occurredAt > Date.now() - 60_000
+      ) {
+        const state = await ctx.db
+          .query("sharedDemoRestoreState")
+          .withIndex("by_storeId", (q) => q.eq("storeId", actor.storeId))
+          .unique();
+        return {
+          baselineVersion: state?.baselineVersion ?? 1,
+          epoch: state?.epoch ?? 0,
+          kind: "rate_limited" as const,
+        };
+      }
+      const result = await beginRestoreLeaseWithCtx(ctx, {
+        idempotencyKey: args.idempotencyKey,
+        source: "manual",
+        storeId: actor.storeId,
+      });
       return {
-        baselineVersion: state?.baselineVersion ?? 1,
-        epoch: state?.epoch ?? 0,
-        kind: "rate_limited" as const,
+        baselineVersion: result.baselineVersion,
+        epoch: result.epoch,
+        kind:
+          result.kind === "started"
+            ? ("started" as const)
+            : ("already_running" as const),
       };
-    }
-    const result = await beginRestoreLeaseWithCtx(ctx, {
-      idempotencyKey: args.idempotencyKey,
-      source: "manual",
-      storeId: actor.storeId,
-    });
-    return {
-      baselineVersion: result.baselineVersion,
-      epoch: result.epoch,
-      kind:
-        result.kind === "started"
-          ? ("started" as const)
-          : ("already_running" as const),
-    };
-  },
+    },
+    { resolveAdmission: resolveSharedDemoLifecycleAdmission },
+  ),
 });
 
 export const resetBrowserExperience = mutation({
@@ -238,44 +276,50 @@ export const resetBrowserExperience = mutation({
     epoch: v.number(),
     terminalDeleted: v.boolean(),
   }),
-  handler: async (ctx, args) => {
-    const actor = await requireSharedDemoActorWithCtx(ctx);
-    if (Boolean(args.terminalId) !== Boolean(args.syncSecretHash)) {
-      throw new Error("The demo browser terminal proof is incomplete.");
-    }
-
-    let terminalCleanupRequested = false;
-    if (args.terminalId && args.syncSecretHash) {
-      const terminal = await ctx.db.get("posTerminal", args.terminalId);
-      if (terminal) {
-        const submittedSecret = await hashPosTerminalSyncSecret(
-          args.syncSecretHash,
-        );
-        if (
-          terminal.storeId !== actor.storeId ||
-          terminal.registerNumber === SHARED_DEMO_REGISTER_NUMBER ||
-          !terminal.syncSecretHash ||
-          terminal.syncSecretHash !== submittedSecret
-        ) {
-          throw new Error("The demo browser terminal could not be verified.");
-        }
-        terminalCleanupRequested = true;
+  handler: admitPublicMutation(
+    resetBrowserExperienceOperationDefinition,
+    async (ctx, args: ResetBrowserExperienceArgs) => {
+      const actor = await requireSharedDemoActorWithCtx(ctx);
+      if (Boolean(args.terminalId) !== Boolean(args.syncSecretHash)) {
+        throw new Error("The demo browser terminal proof is incomplete.");
       }
-    }
 
-    const result = await beginRestoreLeaseWithCtx(ctx, {
-      cleanupTerminalId: terminalCleanupRequested ? args.terminalId : undefined,
-      idempotencyKey: crypto.randomUUID(),
-      source: "manual",
-      storeId: actor.storeId,
-    });
+      let terminalCleanupRequested = false;
+      if (args.terminalId && args.syncSecretHash) {
+        const terminal = await ctx.db.get("posTerminal", args.terminalId);
+        if (terminal) {
+          const submittedSecret = await hashPosTerminalSyncSecret(
+            args.syncSecretHash,
+          );
+          if (
+            terminal.storeId !== actor.storeId ||
+            terminal.registerNumber === SHARED_DEMO_REGISTER_NUMBER ||
+            !terminal.syncSecretHash ||
+            terminal.syncSecretHash !== submittedSecret
+          ) {
+            throw new Error("The demo browser terminal could not be verified.");
+          }
+          terminalCleanupRequested = true;
+        }
+      }
 
-    return {
-      baselineVersion: result.baselineVersion,
-      epoch: result.epoch,
-      terminalDeleted: false,
-    };
-  },
+      const result = await beginRestoreLeaseWithCtx(ctx, {
+        cleanupTerminalId: terminalCleanupRequested
+          ? args.terminalId
+          : undefined,
+        idempotencyKey: crypto.randomUUID(),
+        source: "manual",
+        storeId: actor.storeId,
+      });
+
+      return {
+        baselineVersion: result.baselineVersion,
+        epoch: result.epoch,
+        terminalDeleted: false,
+      };
+    },
+    { resolveAdmission: resolveSharedDemoLifecycleAdmission },
+  ),
 });
 
 export const bindRegisterBaselineToTerminal = mutation({
@@ -298,25 +342,29 @@ export const bindRegisterBaselineToTerminal = mutation({
     terminalId: v.id("posTerminal"),
     timezone: v.string(),
   }),
-  handler: async (ctx, args) => {
-    const actor = await requireSharedDemoActorWithCtx(ctx);
-    const restoreState = await ctx.db
-      .query("sharedDemoRestoreState")
-      .withIndex("by_storeId", (q) => q.eq("storeId", actor.storeId))
-      .unique();
-    assertSharedDemoWriteEpoch(
-      requireCurrentSharedDemoBaseline(restoreState),
-      args.expectedEpoch,
-    );
-    const terminal = await ctx.db.get("posTerminal", args.terminalId);
-    if (!terminal || terminal.storeId !== actor.storeId) {
-      throw new Error("The demo register is unavailable on this browser.");
-    }
-    return bindSharedDemoRegisterBaselineWithCtx(ctx, {
-      actorUserId: actor.athenaUserId,
-      now: Date.now(),
-      storeId: actor.storeId,
-      terminal,
-    });
-  },
+  handler: admitPublicMutation(
+    bindRegisterBaselineToTerminalOperationDefinition,
+    async (ctx, args: BindRegisterBaselineToTerminalArgs) => {
+      const actor = await requireSharedDemoActorWithCtx(ctx);
+      const restoreState = await ctx.db
+        .query("sharedDemoRestoreState")
+        .withIndex("by_storeId", (q) => q.eq("storeId", actor.storeId))
+        .unique();
+      assertSharedDemoWriteEpoch(
+        requireCurrentSharedDemoBaseline(restoreState),
+        args.expectedEpoch,
+      );
+      const terminal = await ctx.db.get("posTerminal", args.terminalId);
+      if (!terminal || terminal.storeId !== actor.storeId) {
+        throw new Error("The demo register is unavailable on this browser.");
+      }
+      return bindSharedDemoRegisterBaselineWithCtx(ctx, {
+        actorUserId: actor.athenaUserId,
+        now: Date.now(),
+        storeId: actor.storeId,
+        terminal,
+      });
+    },
+    { resolveAdmission: resolveSharedDemoLifecycleAdmission },
+  ),
 });

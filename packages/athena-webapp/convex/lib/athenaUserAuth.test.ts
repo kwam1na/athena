@@ -184,7 +184,7 @@ describe("Athena user auth boundary", () => {
     expect(getSharedDemoActorWithCtx).not.toHaveBeenCalled();
   });
 
-  it("characterizes the helper-only shared-demo write admission path that operationAdmission must replace before removal", async () => {
+  it("preserves the shared-demo Athena user bridge for explicit read allowlists", async () => {
     const demoUser = {
       _id: "demo-athena" as Id<"athenaUser">,
       email: "synthetic@demo.invalid",
@@ -209,9 +209,35 @@ describe("Athena user auth boundary", () => {
 
     await expect(
       getAuthenticatedAthenaUserWithCtx(ctx as never, {
-        sharedDemoCapability: "pos.sale.complete",
+        sharedDemoCapability: "reports.read",
       }),
     ).resolves.toEqual(demoUser);
     expect(getAuthUserId).not.toHaveBeenCalled();
+  });
+
+  it("does not admit shared-demo write capabilities through the generic Athena user helper", async () => {
+    vi.mocked(getAuthUserId).mockResolvedValue("demo-auth" as never);
+    vi.mocked(getSharedDemoActorWithCtx).mockResolvedValue({
+      athenaUserId: "demo-athena",
+      kind: "shared_demo",
+      organizationId: "demo-org",
+      storeId: "demo-store",
+    } as never);
+    const ctx = {
+      auth: { getUserIdentity: vi.fn() },
+      db: {
+        get: vi.fn(async (table: string) =>
+          table === "users" ? { email: undefined } : null,
+        ),
+        query: vi.fn(),
+      },
+    };
+
+    await expect(
+      getAuthenticatedAthenaUserWithCtx(ctx as never, {
+        sharedDemoCapability: "pos.sale.complete",
+      }),
+    ).resolves.toBeNull();
+    expect(getSharedDemoActorWithCtx).not.toHaveBeenCalled();
   });
 });
